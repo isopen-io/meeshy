@@ -1,4 +1,4 @@
-name: iOS optimisation probe (-O)
+name: iOS · build Release optimisé (-O)
 
 # Mesure comparative des deux modes de compilation Swift en Release, sur des
 # runners identiques, pour trancher une question restée ouverte depuis avril.
@@ -52,7 +52,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        mode: [wholemodule, incremental]
+        # Poussée sur main : le mode LIVRÉ seul (wholemodule, project.yml). La mesure comparative reste manuelle.
+        mode: ${{ github.event_name == 'workflow_dispatch' && fromJSON('["wholemodule","incremental"]') || fromJSON('["wholemodule"]') }}
 
     steps:
       - uses: actions/checkout@v7

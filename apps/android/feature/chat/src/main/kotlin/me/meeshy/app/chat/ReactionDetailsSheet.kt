@@ -172,7 +172,7 @@ private fun ReactionReactorRow(reactor: ReactionReactor, accentColor: Color) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
     ) {
-        MeeshyAvatar(name = reactor.displayName ?: reactor.userId, size = 36.dp, containerColor = accentColor)
+        MeeshyAvatar(name = reactor.displayName ?: reactor.userId, size = 36.dp, containerColor = accentColor, imageUrl = reactor.avatarUrl)
         Text(
             text = when {
                 reactor.isSelf -> stringResource(R.string.chat_reactions_you)

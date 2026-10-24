@@ -84,7 +84,8 @@ class CallPeerVisualResolverTest {
         every { catalog.ring("lumieres", "aurore") } returns ring
 
         resolver().visualFor(outgoingAudio).test {
-            assertThat(awaitItem()).isEqualTo(CallPeerVisual(avatarUrl = "https://staging.meeshy.me/u/bob-thumb.jpg"))
+            assertThat(awaitItem())
+                .isEqualTo(CallPeerVisual(avatarUrl = "https://staging.meeshy.me/u/bob-thumb.jpg", selfName = "moi"))
             val full = awaitItem()
             assertThat(full.avatarUrl).isEqualTo("https://staging.meeshy.me/u/bob.jpg")
             assertThat(full.bannerUrl).isEqualTo("https://staging.meeshy.me/u/bob-banner.jpg")
@@ -101,6 +102,7 @@ class CallPeerVisualResolverTest {
         coEvery { users.getProfile(PEER) } returns NetworkResult.Success(bob(decor = null))
 
         resolver().visualFor(outgoingAudio).test {
+            assertThat(awaitItem()).isEqualTo(CallPeerVisual(selfName = "moi"))
             val full = awaitItem()
             assertThat(full.avatarUrl).isEqualTo("https://staging.meeshy.me/u/bob.jpg")
             assertThat(full.ring).isNull()
@@ -125,6 +127,7 @@ class CallPeerVisualResolverTest {
         val incoming = CallConfig(peerId = PEER, peerName = "Bob", isVideo = false, isOutgoing = false, callId = "c1")
 
         resolver().visualFor(incoming).test {
+            assertThat(awaitItem()).isEqualTo(CallPeerVisual(selfName = "moi"))
             assertThat(awaitItem().bannerUrl).isEqualTo("https://staging.meeshy.me/u/bob-banner.jpg")
             awaitComplete()
         }
@@ -139,7 +142,29 @@ class CallPeerVisualResolverTest {
         )
 
         resolver().visualFor(outgoingAudio).test {
-            assertThat(awaitItem()).isEqualTo(CallPeerVisual.EMPTY)
+            val cached = awaitItem()
+            val profiled = awaitItem()
+            listOf(cached, profiled).forEach { shown ->
+                assertThat(shown.avatarUrl).isNull()
+                assertThat(shown.bannerUrl).isNull()
+                assertThat(shown.ring).isNull()
+            }
+            awaitComplete()
+        }
+    }
+
+    @Test
+    fun `without any peer visual my badge still carries my name and my photo`() = runTest {
+        every { session.currentUser } returns MutableStateFlow(
+            MeeshyUser(id = SELF, username = "moi", avatar = "https://staging.meeshy.me/u/me.jpg"),
+        )
+        coEvery { conversations.cachedById(CONVERSATION) } returns ApiConversation(id = CONVERSATION, type = "group")
+
+        resolver().visualFor(outgoingAudio).test {
+            val shown = awaitItem()
+            assertThat(shown.avatarUrl).isNull()
+            assertThat(shown.selfName).isEqualTo("moi")
+            assertThat(shown.selfAvatarUrl).isEqualTo("https://staging.meeshy.me/u/me.jpg")
             awaitComplete()
         }
     }

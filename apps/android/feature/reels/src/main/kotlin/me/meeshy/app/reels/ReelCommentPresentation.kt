@@ -16,6 +16,7 @@ data class ReelCommentPresentation(
     val id: String,
     val clientId: String? = null,
     val authorName: String,
+    val avatarUrl: String? = null,
     val content: String,
     val createdAt: String?,
     val status: ReelCommentStatus = ReelCommentStatus.Sent,
@@ -26,6 +27,7 @@ fun ApiPostComment.toReelComment(prefs: LanguageResolver.ContentLanguagePreferen
     ReelCommentPresentation(
         id = id,
         authorName = (author?.displayName ?: author?.username)?.takeIf { it.isNotBlank() } ?: "",
+        avatarUrl = author?.avatar?.takeIf { it.isNotBlank() },
         content = displayContent(prefs),
         createdAt = createdAt,
         status = ReelCommentStatus.Sent,

@@ -384,6 +384,52 @@ class NotificationBannerViewModelTest {
     }
 
     @Test
+    fun aDirectBannerWhoseSenderHasNoPhotoNeverBorrowsTheConversationPhoto() = runTest(dispatcher.scheduler) {
+        val vm = viewModel()
+        runCurrent()
+
+        received.emit(
+            ApiNotification(
+                id = "n1",
+                type = "new_message",
+                actor = NotificationActor(id = "a1", displayName = "Alice"),
+                context = NotificationContext(conversationId = "c1", conversationType = "dm", conversationAvatar = "legacy.png"),
+            ),
+        )
+        runCurrent()
+
+        assertThat(vm.banner.value?.avatarUrl).isNull()
+        assertThat(vm.banner.value?.avatarName).isEqualTo("Alice")
+    }
+
+    @Test
+    fun aGroupBannerFallsBackToTheGroupPhotoUnderTheLocalGroupName() = runTest(dispatcher.scheduler) {
+        every { conversationRepository.conversationStream("c1") } returns flowOf(
+            ApiConversation(
+                id = "c1",
+                type = "group",
+                title = "Équipe Tech",
+                preferences = ApiConversationPreferences(customName = "Mon équipe"),
+            ),
+        )
+        val vm = viewModel()
+        runCurrent()
+
+        received.emit(
+            ApiNotification(
+                id = "n1",
+                type = "new_message",
+                actor = NotificationActor(id = "a1", displayName = "Alice"),
+                context = NotificationContext(conversationId = "c1", conversationType = "group", conversationAvatar = "2026/09/g.png"),
+            ),
+        )
+        runCurrent()
+
+        assertThat(vm.banner.value?.avatarUrl).isEqualTo("2026/09/g.png")
+        assertThat(vm.banner.value?.avatarName).isEqualTo("Mon équipe")
+    }
+
+    @Test
     fun dismissClearsTheCurrentBanner() = runTest(dispatcher.scheduler) {
         val vm = viewModel()
         runCurrent()

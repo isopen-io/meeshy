@@ -13,8 +13,8 @@ import type { ShareLinkStats } from './link-stats';
 /**
  * LA LISTE COMPLÈTE DES ARRIVÉES D'UN LIEN (#7813) — `GET
  * /api/v1/links/:linkId/arrivals?cursor=&limit=`, réservée aux lecteurs des
- * statistiques. Une arrivée n'y porte que nom, badge sans compte, pays,
- * langue et date.
+ * statistiques. Une arrivée n'y porte que nom, visage, badge sans compte,
+ * pays, langue et date.
  */
 
 function fakeTransport(results: ReadonlyArray<ApiResult<unknown>>) {
@@ -29,8 +29,8 @@ function fakeTransport(results: ReadonlyArray<ApiResult<unknown>>) {
 
 const served = (nextCursor: string | null = 'c2') => ({
   arrivals: [
-    { displayName: 'Priya', isAnonymous: true, country: 'in', language: 'EN', joinedAt: '2026-09-24T11:58:00.000Z' },
-    { displayName: 'Kwame', isAnonymous: false, country: null, language: null, joinedAt: '2026-09-24T11:00:00.000Z' },
+    { displayName: 'Priya', avatar: '2026/09/priya/photo.png', isAnonymous: true, country: 'in', language: 'EN', joinedAt: '2026-09-24T11:58:00.000Z' },
+    { displayName: 'Kwame', avatar: null, isAnonymous: false, country: null, language: null, joinedAt: '2026-09-24T11:00:00.000Z' },
   ],
   nextCursor,
 });
@@ -39,8 +39,8 @@ describe('decodeShareLinkArrivalsPage', () => {
   test('décode les arrivées et la suite', () => {
     expect(decodeShareLinkArrivalsPage(served())).toEqual({
       arrivals: [
-        { displayName: 'Priya', isAnonymous: true, country: 'IN', language: 'en', joinedAt: '2026-09-24T11:58:00.000Z' },
-        { displayName: 'Kwame', isAnonymous: false, country: null, language: null, joinedAt: '2026-09-24T11:00:00.000Z' },
+        { displayName: 'Priya', avatar: '2026/09/priya/photo.png', isAnonymous: true, country: 'IN', language: 'en', joinedAt: '2026-09-24T11:58:00.000Z' },
+        { displayName: 'Kwame', avatar: null, isAnonymous: false, country: null, language: null, joinedAt: '2026-09-24T11:00:00.000Z' },
       ],
       nextCursor: 'c2',
     });
@@ -55,16 +55,33 @@ describe('decodeShareLinkArrivalsPage', () => {
       ],
       nextCursor: null,
     });
-    expect(decoded?.arrivals).toEqual([{ displayName: 'Lou', isAnonymous: true, country: null, language: 'pt', joinedAt: '2026-09-24T11:00:00.000Z' }]);
+    expect(decoded?.arrivals).toEqual([{ displayName: 'Lou', avatar: null, isAnonymous: true, country: null, language: 'pt', joinedAt: '2026-09-24T11:00:00.000Z' }]);
     expect(decoded?.nextCursor).toBeNull();
   });
 
-  test('ne garde de la charge que les cinq champs affichés', () => {
+  test('ne garde de la charge que les six champs affichés, le visage compris', () => {
     const decoded = decodeShareLinkArrivalsPage({
-      arrivals: [{ ...served().arrivals[0], avatar: 'u/p.png', participantId: 'p1', isOnline: true }],
+      arrivals: [{ ...served().arrivals[0], participantId: 'p1', isOnline: true }],
       nextCursor: null,
     });
-    expect(Object.keys(decoded?.arrivals[0] ?? {}).sort()).toEqual(['country', 'displayName', 'isAnonymous', 'joinedAt', 'language']);
+    expect(Object.keys(decoded?.arrivals[0] ?? {}).sort()).toEqual(['avatar', 'country', 'displayName', 'isAnonymous', 'joinedAt', 'language']);
+    expect(decoded?.arrivals[0]?.avatar).toBe('2026/09/priya/photo.png');
+  });
+
+  test('une passerelle qui ne sert pas encore le visage (ancienne) donne `null`, la page reste lisible (#12571)', () => {
+    const decoded = decodeShareLinkArrivalsPage({
+      arrivals: [{ displayName: 'Lou', isAnonymous: true, country: null, language: null, joinedAt: '2026-09-24T11:00:00.000Z' }],
+      nextCursor: null,
+    });
+    expect(decoded?.arrivals[0]?.avatar).toBeNull();
+  });
+
+  test('un visage blanc n’est pas une photo', () => {
+    const decoded = decodeShareLinkArrivalsPage({
+      arrivals: [{ displayName: 'Lou', avatar: '   ', isAnonymous: true, country: null, language: null, joinedAt: '2026-09-24T11:00:00.000Z' }],
+      nextCursor: null,
+    });
+    expect(decoded?.arrivals[0]?.avatar).toBeNull();
   });
 
   test('une charge qui n’a pas la forme attendue est illisible', () => {
@@ -127,9 +144,9 @@ describe('seedArrivalsFromStats — ce qu’on a déjà en main se peint tout de
     ...overrides,
   });
 
-  test('les arrivées récentes deviennent une première page, sans identifiant ni visage', () => {
+  test('les arrivées récentes deviennent une première page, avec leur visage et sans identifiant', () => {
     expect(seedArrivalsFromStats(stats())).toEqual({
-      arrivals: [{ displayName: 'Priya', isAnonymous: true, country: 'IN', language: 'en', joinedAt: '2026-09-24T11:58:00.000Z' }],
+      arrivals: [{ displayName: 'Priya', avatar: 'u/p.png', isAnonymous: true, country: 'IN', language: 'en', joinedAt: '2026-09-24T11:58:00.000Z' }],
     });
   });
 

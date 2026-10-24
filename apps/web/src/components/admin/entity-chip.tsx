@@ -10,10 +10,9 @@ import {
   type AdminSpace,
   type AdminTarget,
 } from '@/lib/admin/admin-routes';
-import { personInitials } from '@/lib/admin/interpret/labels';
 import { useAdminReach } from '@/lib/admin/use-admin-reach';
 import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
-import { participantAvatarOf } from '@/lib/view/conversation';
+import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
 import { Link } from '@/routes/route-table';
 
 import { AdminGlyph, type AdminGlyphName } from './admin-glyph';
@@ -265,7 +264,7 @@ function ChipVisual({ entity, size }: { readonly entity: AdminEntityRef; readonl
   const photo = participantAvatarOf({ avatar: entity.avatarUrl ?? '' });
   return (
     <Avatar
-      initials={personInitials(entity.label)}
+      initials={initialsOf(entity.label)}
       color="var(--color-ios-brand)"
       size={size}
       name={entity.label}

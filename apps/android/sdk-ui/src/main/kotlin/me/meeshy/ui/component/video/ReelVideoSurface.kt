@@ -50,6 +50,11 @@ fun ReelVideoSurface(
      */
     sourceStartMs: Long? = null,
     sourceEndMs: Long? = null,
+    /**
+     * `false` : le média se joue sans surface d'image (une piste audio) — un `PlayerView`
+     * sans vidéo n'est qu'un rectangle noir posé sur le fond que l'appelant dessine.
+     */
+    showsPicture: Boolean = true,
 ) {
     val context = LocalContext.current
     val mediaCache = remember(context) { MeeshyMediaCache.get(context) }
@@ -110,6 +115,8 @@ fun ReelVideoSurface(
             player.release()
         }
     }
+
+    if (!showsPicture) return
 
     AndroidView(
         modifier = modifier,

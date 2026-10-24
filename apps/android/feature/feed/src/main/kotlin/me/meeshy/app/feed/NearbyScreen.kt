@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -47,10 +46,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -59,7 +56,6 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import coil.compose.AsyncImage
 import kotlinx.coroutines.launch
 import me.meeshy.feature.feed.R
 import me.meeshy.sdk.location.awaitFreshLocationFix
@@ -280,19 +276,7 @@ private fun NearbyPostCard(
     ) {
         Column(Modifier.padding(MeeshySpacing.lg)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(contentAlignment = Alignment.Center) {
-                    MeeshyAvatar(name = post.authorName ?: unknownAuthor, size = 40.dp)
-                    if (!post.authorAvatarUrl.isNullOrBlank()) {
-                        AsyncImage(
-                            model = post.authorAvatarUrl,
-                            contentDescription = post.authorName ?: unknownAuthor,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(CircleShape),
-                        )
-                    }
-                }
+                MeeshyAvatar(name = post.authorName ?: unknownAuthor, size = 40.dp, imageUrl = post.authorAvatarUrl)
                 Spacer(Modifier.width(MeeshySpacing.md))
                 Text(
                     text = post.authorName ?: unknownAuthor,

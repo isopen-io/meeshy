@@ -13,8 +13,10 @@ import type { ShareLinkStats } from './link-stats';
  * détail n'en montre que les vingt dernières ; celle-ci les rend toutes, page
  * par page, sous un curseur opaque que la passerelle tient stable.
  *
- * Une arrivée n'y porte que nom, badge « sans compte », pays, langue et date —
- * le décodeur ne garde rien d'autre, même si une charge en portait plus.
+ * Une arrivée n'y porte que nom, visage, badge « sans compte », pays, langue et
+ * date — le décodeur ne garde rien d'autre, même si une charge en portait plus.
+ * Le visage (#12571) est une référence de média que `Avatar` résout ; une
+ * passerelle plus ancienne qui ne le sert pas donne `null`, la page reste lisible.
  *
  * **Cache d'abord** : l'entrée est persistée avec la famille `['share-links']`
  * (`query-client.ts`) ; à la première ouverture, les arrivées récentes déjà en
@@ -25,6 +27,7 @@ export type ShareLinkArrivalsDeps = { readonly source: DataSource; readonly tran
 
 export type LinkArrival = {
   readonly displayName: string;
+  readonly avatar: string | null;
   readonly isAnonymous: boolean;
   readonly country: string | null;
   readonly language: string | null;
@@ -47,6 +50,7 @@ const WirePage = z.object({
   arrivals: z.array(
     z.object({
       displayName: optionalText,
+      avatar: optionalText,
       isAnonymous: z.optional(z.nullable(z.boolean())),
       country: optionalText,
       language: optionalText,
@@ -69,6 +73,7 @@ const countryOf = (value: string | null | undefined): string | null => {
 
 const toArrival = (row: {
   readonly displayName?: string | null | undefined;
+  readonly avatar?: string | null | undefined;
   readonly isAnonymous?: boolean | null | undefined;
   readonly country?: string | null | undefined;
   readonly language?: string | null | undefined;
@@ -80,6 +85,7 @@ const toArrival = (row: {
   return [
     {
       displayName,
+      avatar: textOrNull(row.avatar),
       isAnonymous: row.isAnonymous === true,
       country: countryOf(row.country),
       language: textOrNull(row.language)?.toLowerCase() ?? null,

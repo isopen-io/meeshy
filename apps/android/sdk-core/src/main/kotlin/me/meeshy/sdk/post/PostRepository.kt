@@ -31,7 +31,6 @@ import me.meeshy.sdk.net.api.MobileTranscriptionPayload
 import me.meeshy.sdk.net.api.PostApi
 import me.meeshy.sdk.net.api.PostLikeRequest
 import me.meeshy.sdk.model.EmojiCatalog
-import me.meeshy.sdk.net.api.PostImpressionsRequest
 import me.meeshy.sdk.net.api.PostTranslationRequest
 import me.meeshy.sdk.net.api.PostViewRequest
 import me.meeshy.sdk.net.api.RepostPostRequest
@@ -791,12 +790,6 @@ class PostRepository @Inject constructor(
     ): NetworkResult<List<ApiPost>> =
         apiCall { postApi.getCommunityPosts(communityId, cursor, limit) }
 
-    suspend fun recordImpressions(
-        postIds: List<String>,
-        source: String = "feed",
-    ): NetworkResult<Unit> =
-        apiCall { postApi.recordImpressions(PostImpressionsRequest(postIds, source)) }
-
     suspend fun getComments(
         postId: String,
         cursor: String? = null,
@@ -810,8 +803,11 @@ class PostRepository @Inject constructor(
         parentId: String? = null,
         effectFlags: Int? = null,
         clientMutationId: String? = null,
+        originalLanguage: String? = null,
     ): NetworkResult<ApiPostComment> =
-        apiCall { postApi.addComment(postId, CreateCommentRequest(content, parentId, effectFlags), clientMutationId) }
+        apiCall {
+            postApi.addComment(postId, CreateCommentRequest(content, parentId, effectFlags, originalLanguage), clientMutationId)
+        }
 
     suspend fun updateComment(
         postId: String,

@@ -3,15 +3,19 @@ import type { AppearanceDesign } from '@meeshy/shared/types/appearance-design';
 import type { ConversationAppearance } from '@meeshy/shared/types/conversation-appearance';
 import { APPEARANCE_GAMUT, GAMUT_KEYS } from '@meeshy/shared/utils/appearance-gamut';
 
+import { withAccent as withAccentVars } from '@/lib/accent';
 import { designStyle } from '@/lib/appearance/backdrop-view';
 import { type AppearanceChange, designBackground, isChosen, signatureBackground, solidBackground, withAccent, withBackground } from '@/lib/appearance/picker-model';
 import type { WallpaperNames, WallpaperPack } from '@/lib/appearance/wallpaper-catalog';
 import { appearanceText, type AppearanceCatalogKey } from '@/lib/i18n-appearance-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import type { ColorScheme } from '@/lib/scheme';
+import { backdropStyleVars } from '@/lib/view/thread-backdrop';
 
 import { ChoiceGroup, PickerSection, type ChoiceItem } from './appearance-picker-parts';
 import { PackLottieLayer } from './pack-lottie-layer';
+
+import '@/styles/appearance-picker.css';
 
 /**
  * **LES RANGÉES DU SÉLECTEUR** (#10631, § 9) : Signature et les modèles des
@@ -59,7 +63,12 @@ export function BackgroundSection({
     selected: background.kind === 'signature',
     onSelect: () => onChoose((current) => withBackground(current, signatureBackground())),
     content: (
-      <span aria-hidden className="grid place-items-center rounded-chip text-caption font-semibold" style={{ width: 52, height: 68, background: 'linear-gradient(135deg, color-mix(in srgb, var(--accent) 30%, #0F0C29), #24243E)', color: '#fff' }}>
+      <span
+        aria-hidden
+        data-appearance-signature-thumb
+        className="appearance-signature-thumb grid place-items-center rounded-chip text-caption font-semibold"
+        style={withAccentVars(accent, { width: 52, height: 68, ...backdropStyleVars() })}
+      >
         S
       </span>
     ),

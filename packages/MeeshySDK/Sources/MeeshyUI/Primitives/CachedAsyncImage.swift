@@ -286,12 +286,14 @@ public struct CachedAvatarImage: View {
     public let name: String
     public let size: CGFloat
     public let accentColor: String
+    public let secondaryColor: String?
 
     @State private var image: UIImage?
     @State private var thumbHashImage: UIImage?
 
-    public init(urlString: String?, thumbHash: String? = nil, name: String, size: CGFloat, accentColor: String) {
+    public init(urlString: String?, thumbHash: String? = nil, name: String, size: CGFloat, accentColor: String, secondaryColor: String? = nil) {
         self.urlString = urlString; self.thumbHash = thumbHash; self.name = name; self.size = size; self.accentColor = accentColor
+        self.secondaryColor = secondaryColor
 
         let cachedFull: UIImage?
         if let urlString, !urlString.isEmpty {
@@ -301,10 +303,7 @@ public struct CachedAvatarImage: View {
             cachedFull = nil
         }
         _image = State(initialValue: cachedFull)
-
-        if cachedFull == nil, let thumbHash, !thumbHash.isEmpty {
-            _thumbHashImage = State(initialValue: UIImage.fromThumbHash(thumbHash))
-        }
+        _thumbHashImage = State(initialValue: cachedFull == nil ? Self.waitingBlur(urlString: urlString, thumbHash: thumbHash) : nil)
     }
 
     public var body: some View {
@@ -318,21 +317,36 @@ public struct CachedAvatarImage: View {
         .frame(width: size, height: size).clipShape(Circle())
         .task(id: urlString) { await loadAvatar(for: urlString) }
         .adaptiveOnChange(of: urlString) { _, newUrl in
-            guard let newUrl, !newUrl.isEmpty else { image = nil; return }
+            guard let newUrl, !newUrl.isEmpty else {
+                image = nil
+                thumbHashImage = nil
+                return
+            }
             let resolved = MeeshyConfig.resolveMediaURL(newUrl)?.absoluteString ?? newUrl
             image = WarmImageProbe.warmedImage(for: resolved, maxPixelSize: DecodeBudget.maxPixelWidth(for: .fitting(CGSize(width: size, height: size))))
+            thumbHashImage = image == nil ? Self.waitingBlur(urlString: newUrl, thumbHash: thumbHash) : nil
         }
     }
 
+    /// Le flou d'attente n'annonce qu'une photo À VENIR : sans URL, la personne
+    /// n'a pas de photo et le cercle montre ses initiales (#12568).
+    static func waitingBlur(urlString: String?, thumbHash: String?) -> UIImage? {
+        guard let urlString, !urlString.isEmpty, let thumbHash, !thumbHash.isEmpty else { return nil }
+        return UIImage.fromThumbHash(thumbHash)
+    }
+
+    /// Les initiales d'attente ET d'échec sont celles d'un avatar sans photo :
+    /// une seule dérivation, `MeeshyAvatar.initials(for:)`.
+    nonisolated public static func fallbackInitials(for name: String) -> String {
+        MeeshyAvatar.initials(for: name)
+    }
+
     private var initialsFallback: some View {
-        let initials = name.components(separatedBy: " ").prefix(2).compactMap(\.first).map(String.init).joined().uppercased()
-        let color = Color(hex: accentColor)
-        return ZStack {
-            LinearGradient(colors: [color, color.opacity(MeeshyOpacity.heavy)], startPoint: .topLeading, endPoint: .bottomTrailing)
-            Text(initials.isEmpty ? "?" : initials)
-                .font(.system(size: size * 0.38, weight: .semibold, design: .rounded))
-                .foregroundStyle(Color.white)
-        }
+        AvatarInitialsFace(
+            initials: Self.fallbackInitials(for: name),
+            accent: accentColor, secondary: secondaryColor,
+            size: size, fontSize: size * 0.38
+        )
     }
 
     private func loadAvatar(for currentUrlString: String?) async {

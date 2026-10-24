@@ -174,6 +174,7 @@ struct RootStatusBubbleLayer: ViewModifier {
                     accountDisplayName: AuthManager.shared.currentUser?.displayName
                         ?? AuthManager.shared.currentUser?.username
                         ?? "",
+                    accountAvatarURL: AuthManager.shared.currentUser?.avatar,
                     onContinueWithAccount: { onContinueWithAccount(choice.identifier) },
                     // La session invitée est portée par `MeeshyApp`, au-dessus de
                     // cette vue : on lui passe l'intention plutôt que d'essayer de

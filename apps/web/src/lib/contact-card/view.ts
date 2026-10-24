@@ -104,15 +104,3 @@ export function vcardFieldRows(card: ParsedVCard, language: InterfaceLanguage): 
     ...single('note', card.note),
   ];
 }
-
-/** Deux initiales au plus — « Awa Diallo » → « AD », « +33… » → « # ». */
-export function contactInitials(name: string): string {
-  const letters = name
-    .split(/\s+/)
-    .map((word) => word.match(/\p{L}/u)?.[0] ?? '')
-    .filter(Boolean);
-  if (letters.length === 0) return '#';
-  const first = letters[0] ?? '';
-  const last = letters.length > 1 ? (letters[letters.length - 1] ?? '') : '';
-  return `${first}${last}`.toUpperCase();
-}

@@ -5,9 +5,10 @@ package me.meeshy.sdk.model.security
  * `KeychainManager`. Values are addressed by (account, key); a call with no
  * account never reaches a namespaced value (see [SecureKeyNamespace]).
  *
- * Contract: a Keystore failure (invalidated key, restored backup, bad tag) is
+ * Contract: for [get], a Keystore failure (invalidated key, restored backup, bad tag) is
  * an absent value, never an exception — the app starts with an empty vault and
- * falls back to the sign-in screen. Implementations never log a value.
+ * falls back to the sign-in screen. [read] does not confuse the two: a failure is
+ * [SecureRead.Unreadable]. Implementations never log a value.
  *
  * The suspend variants are the ones to use at startup: Keystore-backed
  * implementations run them off the main thread.

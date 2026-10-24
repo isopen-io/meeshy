@@ -26,6 +26,7 @@ import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import { translateProfileDecor } from '@/lib/i18n-profile-decor-catalog';
 import { NO_DESIGNS, type DecorDesigns } from '@/lib/profile-decor/use-decor-designs';
 import type { InterfaceLanguage } from '@/lib/interface-language';
+import { initialsOf } from '@/lib/view/conversation';
 import type { ProfileDraft } from '@/lib/view/profile-draft';
 import { Link } from '@/routes/route-table';
 
@@ -184,17 +185,6 @@ export function ProfileHeaderBar({
       )}
     </header>
   );
-}
-
-export function initialsOf(name: string): string {
-  const letters = name
-    .trim()
-    .split(/\s+/)
-    .map((word) => [...word][0]?.toUpperCase() ?? '')
-    .filter((letter) => letter !== '')
-    .slice(0, 2)
-    .join('');
-  return letters === '' ? '?' : letters;
 }
 
 export type PendingImages = Partial<Readonly<Record<ProfileImageKind, string>>>;

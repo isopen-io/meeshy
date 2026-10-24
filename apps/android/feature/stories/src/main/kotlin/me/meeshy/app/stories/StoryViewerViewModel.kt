@@ -1,6 +1,7 @@
 package me.meeshy.app.stories
 
 import me.meeshy.sdk.util.resolveMediaUrl
+import me.meeshy.sdk.util.resolveServedImageUrl
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -633,7 +634,7 @@ class StoryViewerViewModel @Inject constructor(
             userId = id,
             authorName = username,
             slides = stories.map { it.toSlideView(avatarColor, prefs) },
-            avatarUrl = avatarURL?.takeIf { it.isNotBlank() }?.let { resolveMediaUrl(it, config.apiBaseUrl) },
+            avatarUrl = resolveServedImageUrl(avatarURL, config.apiBaseUrl),
         )
     }
 

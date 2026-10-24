@@ -57,14 +57,15 @@ nonisolated enum StoryTextAttributeCycle {
 
     // MARK: - Avance
 
-    static func advance(_ tool: TextEditTool, on text: inout StoryTextObject) {
+    static func advance(_ tool: TextEditTool, on text: inout StoryTextObject,
+                        backgrounds: [StoryTextBackgroundStyle] = StoryTextBackgroundPresets.all) {
         switch tool {
         case .align:      advanceAlign(on: &text)
         case .border:     advanceBorder(on: &text)
         case .frame:      advanceFrame(on: &text)
         case .style:      advanceStyle(on: &text)
         case .color:      advanceColor(on: &text)
-        case .background: advanceBackground(on: &text)
+        case .background: advanceBackground(on: &text, steps: backgrounds)
         case .language:   advanceLanguage(on: &text)
         case .effect:     advanceEffect(on: &text)
         }
@@ -97,8 +98,8 @@ nonisolated enum StoryTextAttributeCycle {
     /// Purge `textBg` en même temps : le renderer préfère `backgroundStyle`
     /// mais retombe encore sur ce champ legacy, qui laisserait sinon un fond
     /// fantôme derrière un `.none` fraîchement choisi.
-    private static func advanceBackground(on text: inout StoryTextObject) {
-        let steps = StoryTextBackgroundPresets.all
+    private static func advanceBackground(on text: inout StoryTextObject, steps: [StoryTextBackgroundStyle]) {
+        guard !steps.isEmpty else { return }
         let index = steps.firstIndex(of: text.resolvedBackgroundStyle) ?? 0
         text.backgroundStyle = steps[(index + 1) % steps.count]
         text.textBg = nil

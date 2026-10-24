@@ -13,7 +13,7 @@ import { AdminSummaryCard, AdminSummaryGrid } from '@/components/admin/summary-c
 import { BRAND, INK2 } from '@/components/admin/tone';
 import { adminGroupOf } from '@/lib/admin/admin-routes';
 import { interpretPostState, interpretPostType, interpretPostVisibility } from '@/lib/admin/interpret/enums';
-import { personInitials, personLabel, personSecondary, postLabel } from '@/lib/admin/interpret/labels';
+import { personLabel, personSecondary, postLabel } from '@/lib/admin/interpret/labels';
 import { formatCount } from '@/lib/admin/interpret/numbers';
 import { adminMomentOf } from '@/lib/admin/interpret/time';
 import { communityRef, personRef, postRef } from '@/lib/admin/post-entities';
@@ -28,7 +28,7 @@ import { ApiError, unwrap } from '@/lib/api/client';
 import { apiDeps } from '@/lib/api/deps';
 import { currentAdminLanguage, suspendForAdminInterfaceCatalog, translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { useParams } from '@/lib/router';
-import { participantAvatarOf } from '@/lib/view/conversation';
+import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
 import { gestureEffect } from '@/lib/admin/post-gestures';
 
@@ -319,7 +319,7 @@ export function AdminPostPanel({
             {...(secondary === null ? {} : { secondary })}
             {...(fiche.author === null
               ? { glyph: 'newspaper' as const }
-              : { avatar: { initials: personInitials(personLabel(fiche.author, language)), color: 'var(--color-ios-brand)', ...(photo === undefined ? {} : { src: photo }) } })}
+              : { avatar: { initials: initialsOf(personLabel(fiche.author, language)), color: 'var(--color-ios-brand)', ...(photo === undefined ? {} : { src: photo }) } })}
             badges={
               <>
                 <AdminInterpretedBadge value={interpretPostType(fiche.type, language)} />

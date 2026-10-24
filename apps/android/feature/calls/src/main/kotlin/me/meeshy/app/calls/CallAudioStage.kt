@@ -80,9 +80,9 @@ internal fun CallAvatarPair(name: String, peer: CallPeerVisual, size: Dp, modifi
     Box(modifier = modifier.clearAndSetSemantics { }) {
         CallAvatarDisc(name = name, size = size, avatarUrl = peer.avatarUrl, ring = peer.ring)
         CallAvatarDisc(
-            name = stringResource(R.string.call_avatar_you),
+            name = peer.localBadgeName(stringResource(R.string.call_avatar_you)),
             size = badge,
-            avatarUrl = null,
+            avatarUrl = peer.selfAvatarUrl,
             modifier = Modifier.align(Alignment.BottomEnd).offset(x = badge * 0.22f, y = badge * 0.12f),
         )
     }

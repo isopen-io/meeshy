@@ -293,6 +293,7 @@ private fun NotificationItem(
                     name = notification.actor?.displayName ?: notification.actor?.username ?: "?",
                     modifier = Modifier.size(44.dp),
                     containerColor = accent,
+                    imageUrl = notification.actor?.avatar,
                 )
                 Spacer(Modifier.width(MeeshySpacing.md))
                 Column(modifier = Modifier.weight(1f)) {

@@ -32,6 +32,8 @@ object ComposeLanguageDetector {
     private val URL: Regex = Regex("""https?://\S+""")
     private val LETTER: Regex = Regex("""\p{L}""")
 
+    private val ONE_LETTER_WORDS: Set<String> = setOf("a", "e", "o", "y")
+
     private data class LanguagePatterns(val code: String, val patterns: List<Regex>)
 
     /**
@@ -127,7 +129,7 @@ object ComposeLanguageDetector {
         var best: String? = null
         var bestScore = 0
         for (entry in PATTERNS) {
-            val score = entry.patterns.sumOf { it.findAll(lower).count() }
+            val score = score(entry, lower)
             if (score > bestScore) {
                 bestScore = score
                 best = entry.code
@@ -136,6 +138,43 @@ object ComposeLanguageDetector {
 
         val detected = best ?: return fallback
         return if (LanguageData.info(detected) != null) detected else fallback
+    }
+
+    /**
+     * Les indices d'une langue ; une langue dont les SEULS indices sont des mots d'une lettre
+     * (`o`, `a`, `e`, `y`) n'en a aucun (#12484) : « Recette o » est le début de « Recette offline »,
+     * pas du portugais. C'est l'équivalent, pour cette heuristique sans confiance, du plancher
+     * d'iOS (`ComposerLanguageResolver.confidenceFloor`) qui ignore le bruit de deux ou trois lettres.
+     */
+    private fun score(entry: LanguagePatterns, lower: String): Int {
+        val hits = entry.patterns.flatMap { pattern -> pattern.findAll(lower).map { it.value }.toList() }
+        return if (hits.all { it in ONE_LETTER_WORDS }) 0 else hits.size
+    }
+
+    /**
+     * La langue d'origine gravée à l'envoi d'un message ou d'un commentaire : le choix manuel
+     * prime toujours ; sinon l'identification de [text], dont le repli est la langue de
+     * l'EXPÉDITEUR ([senderLanguage], sa langue résolue) — jamais une détection partielle de la
+     * frappe (#12484).
+     */
+    suspend fun originalLanguageAtSend(
+        text: String,
+        manual: String?,
+        senderLanguage: String,
+        identifier: LanguageIdentifying,
+    ): String = manual ?: detect(text, senderLanguage, identifier)
+
+    /**
+     * [originalLanguageAtSend] pour un contenu sans sélecteur de langue (un commentaire) : la langue
+     * de repli est la langue résolue de [author] ; sans auteur connu, `null` laisse la passerelle
+     * décider comme avant.
+     */
+    suspend fun authoredLanguage(
+        text: String,
+        author: LanguageResolver.ContentLanguagePreferences?,
+        identifier: LanguageIdentifying,
+    ): String? = author?.let {
+        originalLanguageAtSend(text, manual = null, senderLanguage = LanguageResolver.resolveUserLanguage(it), identifier = identifier)
     }
 
     /**

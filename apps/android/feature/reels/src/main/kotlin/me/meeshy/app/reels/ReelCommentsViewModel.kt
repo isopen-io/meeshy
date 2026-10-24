@@ -11,6 +11,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import me.meeshy.sdk.lang.ComposeLanguageDetector
+import me.meeshy.sdk.lang.LanguageIdentifying
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.post.PostRepository
@@ -55,6 +57,7 @@ class ReelCommentsViewModel @Inject constructor(
     private val postRepository: PostRepository,
     private val sessionRepository: SessionRepository,
     private val socialSocket: SocialSocketManager,
+    private val languageIdentifier: LanguageIdentifying = LanguageIdentifying.Unavailable,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ReelCommentsUiState())
@@ -191,7 +194,8 @@ class ReelCommentsViewModel @Inject constructor(
     private fun send(reel: String, clientId: String, content: String) {
         viewModelScope.launch {
             try {
-                when (val result = postRepository.addComment(reel, content)) {
+                val language = ComposeLanguageDetector.authoredLanguage(content, sessionRepository.currentUser.value, languageIdentifier)
+                when (val result = postRepository.addComment(reel, content, originalLanguage = language)) {
                     is NetworkResult.Success -> {
                         val server = result.data.toReelComment(prefs())
                         _state.update {

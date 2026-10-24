@@ -57,8 +57,9 @@ public class RoomLocalSearchSource @Inject constructor(
     override suspend fun messages(query: String): List<MessageSearchHit> {
         val hits = index.searchMessages(query)
         if (hits.isEmpty()) return emptyList()
-        val titles = hydrated(hits.map { it.conversationId }.distinct()).associate { it.id to titleOf(it) }
+        val conversations = hydrated(hits.map { it.conversationId }.distinct()).associateBy { it.id }
         return hits.map { hit ->
+            val conversation = conversations[hit.conversationId]
             MessageSearchHit(
                 message = ApiMessage(
                     id = hit.messageId,
@@ -66,7 +67,8 @@ public class RoomLocalSearchSource @Inject constructor(
                     content = hit.text,
                     createdAt = Instant.ofEpochMilli(hit.createdAt).toString(),
                 ),
-                conversationTitle = titles[hit.conversationId].orEmpty(),
+                conversationTitle = conversation?.let(::titleOf).orEmpty(),
+                conversation = conversation,
             )
         }
     }

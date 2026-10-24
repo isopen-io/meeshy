@@ -85,7 +85,7 @@ public class E2eeKeyStore(
     private fun stableId(name: String): Int = synchronized(lock) {
         when (val stored = vault.read(name, account)) {
             SecureRead.Unreadable -> throw E2eeIdentityUnreadableException()
-            is SecureRead.Present -> StableIdCodec.decode(stored.value)?.let { return it }
+            is SecureRead.Present -> return StableIdCodec.decode(stored.value) ?: throw E2eeIdentityUnreadableException()
             SecureRead.Absent -> Unit
         }
         val fresh = ids.nextId()

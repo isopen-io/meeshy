@@ -125,6 +125,8 @@ data class CreateCommentRequest(
     val content: String,
     val parentId: String? = null,
     val effectFlags: Int? = null,
+    /** La langue dans laquelle le commentaire est écrit ; absente, la passerelle la devine (#12484). */
+    val originalLanguage: String? = null,
 )
 
 /** Repost a post — port of RepostRequest (StoryModels.swift). */
@@ -156,13 +158,6 @@ data class PostViewRequest(
 @Serializable
 data class PostLikeRequest(
     val emoji: String,
-)
-
-/** Batch impression-tracking body for a feed slice. */
-@Serializable
-data class PostImpressionsRequest(
-    val postIds: List<String>,
-    val source: String = "feed",
 )
 
 /** Le corps d'un retrait par la modération : `{ "reason": … }` (#11151). */
@@ -358,9 +353,6 @@ interface PostApi {
         @Query("cursor") cursor: String? = null,
         @Query("limit") limit: Int? = null,
     ): ApiResponse<List<ApiPost>>
-
-    @POST("posts/impressions/batch")
-    suspend fun recordImpressions(@Body body: PostImpressionsRequest): ApiResponse<Unit>
 
     @GET("posts/{id}/comments")
     suspend fun getComments(

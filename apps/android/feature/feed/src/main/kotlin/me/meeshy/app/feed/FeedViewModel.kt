@@ -22,6 +22,9 @@ import me.meeshy.sdk.model.UploadedMedia
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.outbox.OutboxFlushWorker
+import me.meeshy.sdk.model.analytics.ContentSurface
+import me.meeshy.sdk.model.analytics.ImpressionSource
+import me.meeshy.sdk.post.FeedEngagementRepository
 import me.meeshy.sdk.post.ImpressionBatcher
 import me.meeshy.sdk.post.PostRepository
 import me.meeshy.sdk.report.ReportRepository
@@ -95,6 +98,7 @@ class FeedViewModel @Inject constructor(
     private val feedMediaUploader: FeedMediaUploader,
     private val reportRepository: ReportRepository,
     private val workManager: WorkManager,
+    engagement: FeedEngagementRepository,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(FeedUiState())
@@ -125,7 +129,11 @@ class FeedViewModel @Inject constructor(
      * than [viewModelScope] — see [ImpressionBatcher]'s own doc for why [onCleared]'s flush
      * would otherwise race the ViewModel's own teardown.
      */
-    private val impressionBatcher = ImpressionBatcher(source = "feed", postRepository = postRepository)
+    private val impressionBatcher = ImpressionBatcher(
+        source = ImpressionSource.FEED,
+        surface = ContentSurface.FEED,
+        deliver = engagement::deliver,
+    )
 
     /** [postId] just appeared on screen — call once per composition entry. */
     fun trackImpression(postId: String) {

@@ -3,6 +3,7 @@ package me.meeshy.sdk.conversation
 import java.time.Instant
 import kotlinx.serialization.encodeToString
 import me.meeshy.sdk.cache.CacheClock
+import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.net.api.EditMessageRequest
 import me.meeshy.sdk.outbox.OutboxKind
@@ -51,6 +52,17 @@ internal class MessageMutationWriter(
             message.copy(reactionSummary = message.reactionSummary.shifted(emoji, delta))
         }
     }
+
+    /**
+     * Applies a `message:edited` frame — the gateway's FULL message, edited in place
+     * (a text edit, or a live call notice turned terminal) — over the cached row. The
+     * forward-watermark refresh never re-reads a message whose `createdAt` did not move,
+     * so without this the cached copy stays the old one. Returns `false` (nothing
+     * written) when this device never cached the message or only holds its optimistic
+     * local bubble.
+     */
+    suspend fun applyServerEdit(message: ApiMessage): Boolean =
+        updater.update(message.id, requireSynced = true) { message } != null
 
     /**
      * Optimistic edit of a server-acked message: the cached content flips

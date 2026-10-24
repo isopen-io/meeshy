@@ -11,7 +11,7 @@ import { AdminDeniedInline, AdminErrorState, AdminOfflineNotice, AdminSkeleton }
 import { AdminDetailSheet } from '@/components/admin/detail-sheet';
 import { AdminSummaryCard, AdminSummaryGrid } from '@/components/admin/summary-card';
 import { accountStateOf } from '@/lib/admin/interpret/enums';
-import { personInitials } from '@/lib/admin/interpret/labels';
+import { initialsOf } from '@/lib/view/conversation';
 import {
   ADMIN_MEMBER_SECTION_GLYPHS,
   ADMIN_MEMBER_SECTION_TITLES,
@@ -245,7 +245,7 @@ export function AdminUserFiche({
             title={entity.label}
             {...(entity.secondary === undefined || entity.secondary === null ? {} : { secondary: entity.secondary })}
             avatar={{
-              initials: personInitials(entity.label),
+              initials: initialsOf(entity.label),
               color: 'var(--color-ios-brand)',
               src: entity.avatarUrl ?? null,
               ...(entity.presence === undefined ? {} : { presence: entity.presence }),

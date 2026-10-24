@@ -73,7 +73,7 @@ internal fun TypingAvatarCluster(stack: TypingAvatarStack, accentColor: Color) {
                     .background(ringColor)
                     .padding(1.5.dp),
             ) {
-                MeeshyAvatar(name = chip.name, size = 20.dp, containerColor = accentColor)
+                MeeshyAvatar(name = chip.name, size = 20.dp, containerColor = accentColor, imageUrl = chip.avatarUrl)
             }
         }
         if (stack.overflow > 0) {

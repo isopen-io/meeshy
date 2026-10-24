@@ -6,6 +6,7 @@ import MeeshyUI
 struct ConversationEncryptionDetailSheet: View {
     let conversationId: String
     let accentColor: String
+    let mayActivate: Bool
 
     @Environment(\.dismiss) private var dismiss
     @State private var status: E2EAPI.ConversationEncryptionStatus?
@@ -19,7 +20,12 @@ struct ConversationEncryptionDetailSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                if isLoading {
+                switch ConversationEncryptionDetailContent.resolve(
+                    isLoading: isLoading,
+                    isEncrypted: status?.isEncrypted == true && status?.mode != nil,
+                    mayActivate: mayActivate
+                ) {
+                case .loading:
                     Section {
                         HStack {
                             ProgressView()
@@ -30,10 +36,15 @@ struct ConversationEncryptionDetailSheet: View {
                                 .foregroundColor(.secondary)
                         }
                     }
-                } else if let status, status.isEncrypted, let mode = status.mode {
-                    activeStateSections(mode: mode, status: status)
-                } else {
+                case .active:
+                    if let status, let mode = status.mode {
+                        activeStateSections(mode: mode, status: status)
+                    }
+                case .activation:
+                    inactiveStateSection
                     enableStateSections
+                case .inactiveReadOnly:
+                    inactiveStateSection
                 }
 
                 if let errorMessage {
@@ -138,8 +149,7 @@ struct ConversationEncryptionDetailSheet: View {
 
     // MARK: - Enable state
 
-    @ViewBuilder
-    private var enableStateSections: some View {
+    private var inactiveStateSection: some View {
         Section {
             HStack(spacing: MeeshySpacing.md) {
                 Image(systemName: "lock.open")
@@ -162,7 +172,10 @@ struct ConversationEncryptionDetailSheet: View {
             }
             .padding(.vertical, MeeshySpacing.xs)
         }
+    }
 
+    @ViewBuilder
+    private var enableStateSections: some View {
         Section {
             Picker(String(localized: "conversation.encryption.detail.modeLabel",
                           defaultValue: "Mode",

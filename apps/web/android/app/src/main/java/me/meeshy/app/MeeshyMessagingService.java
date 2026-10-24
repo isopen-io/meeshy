@@ -158,6 +158,20 @@ public class MeeshyMessagingService extends FirebaseMessagingService {
         return value == null ? null : value.toString();
     }
 
+    /** #12523 — sous le tag d'une conversation, la banniere d'un message plus recent reste. */
+    private static void cancelUnmarkedConversations(NotificationManager manager, Map<String, String> data) {
+        try {
+            for (String tag : NotificationRevocation.conversationTags(data)) {
+                Notification shown = NotificationVoiceBanner.find(manager, tag);
+                String marked = shown == null || shown.extras == null
+                    ? null : shown.extras.getString(NotificationCorrectionRules.EXTRA_NOTIFICATION_ID);
+                if (shown != null && NotificationRevocation.closesConversationBanner(marked)) manager.cancel(tag, 0);
+            }
+        } catch (RuntimeException failure) {
+            Log.w(TAG, "bannieres de conversation non revoquees", failure);
+        }
+    }
+
     /** #11032 — la banniere marquee d'une notification revoquee, sous quelque tag que ce soit. */
     private static void cancelMarked(NotificationManager manager, Map<String, String> data) {
         try {
@@ -179,6 +193,7 @@ public class MeeshyMessagingService extends FirebaseMessagingService {
             NotificationManager manager = getSystemService(NotificationManager.class);
             if (manager != null) {
                 for (String tag : revoked) manager.cancel(tag, 0);
+                cancelUnmarkedConversations(manager, message.getData());
                 cancelMarked(manager, message.getData());
             }
             return;
@@ -209,13 +224,17 @@ public class MeeshyMessagingService extends FirebaseMessagingService {
     /**
      * Best-effort, comme `sw-push.js` : un accuse manque (pas de credential,
      * reseau coupe) laisse le message « envoye » jusqu'a la reconnexion — l'etat
-     * d'avant #8124, jamais pire. `onMessageReceived` et `handleIntent` tournent
-     * deja hors du fil principal : l'appel reseau y est permis.
+     * d'avant #8124, jamais pire. Il part hors du fil des pushs (#12623) : un
+     * reseau lent ne retarde plus la banniere du message suivant.
      */
     private void acknowledgeDelivery(PushDeliveryReceipt receipt) {
         if (receipt == null) return;
         String[] header = CallShellStore.credentialHeader(this);
         if (header == null) return;
+        ReceiptDispatch.run(() -> post(receipt, header));
+    }
+
+    private static void post(PushDeliveryReceipt receipt, String[] header) {
         HttpURLConnection connection = null;
         try {
             connection = (HttpURLConnection) URI.create(receipt.url).toURL().openConnection();

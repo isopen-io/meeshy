@@ -127,6 +127,7 @@ private fun CommentRow(comment: StoryComment, onRetry: (String) -> Unit) {
             name = comment.authorName,
             size = 36.dp,
             containerColor = hexColor(DynamicColorGenerator.colorForName(comment.authorName)),
+            imageUrl = comment.avatarUrl,
         )
         Column(modifier = Modifier.weight(1f)) {
             Text(
