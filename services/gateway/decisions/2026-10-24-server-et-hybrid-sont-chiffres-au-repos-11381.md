@@ -53,6 +53,43 @@ serveur », jamais « de bout en bout » (réservé à `e2ee`).
   clair. L'édition d'un message au repos est refusée
   (`SERVER_AT_REST_EDIT_REFUSED`) tant qu'aucun transport ne rechiffre.
 
+### Après revue adversariale (2026-10-24)
+
+- **Une clé ne parle que pour SA conversation** (oracle de déchiffrement
+  fermé). `ServerKeyVault.getKeyFor(keyId, conversationId)` ne rend une clé
+  que si sa ligne est rattachée à la conversation ou si la conversation la
+  désigne (`serverEncryptionKeyId`). Sans ce contrôle, une copie de la base
+  plus un compte gratuit suffisaient : recopier l'enveloppe d'une traduction
+  d'une conversation X dans un envoi `server` de sa propre conversation, et
+  la lecture l'ouvrait sous la clé de X. L'activation rattache désormais sa
+  clé à la conversation (`getOrCreateConversationKey(conversationId)`).
+- **Seule la passerelle écrit un chiffré au repos.** Un chiffré client
+  déclaré `server`/`hybrid`, ou apporté dans une conversation
+  `server`/`hybrid`, est refusé à l'admission (400
+  `SERVER_AT_REST_CIPHERTEXT_REFUSED`). Aucun client ne l'émet (mesuré).
+- **Une clé de conversation qui ne s'ouvre plus est remplacée**, jamais un
+  verrou à vie : clé désignée absente ou enveloppée sous une ancienne clé
+  maîtresse ⇒ clé neuve rattachée, désignée en compare-et-échange
+  (`redesignate`), l'ancienne rattachée à sa conversation. Les messages
+  d'avant restent scellés. Une panne de base ne remplace rien (503).
+- **Toutes les lectures ouvrent** : le rejeu d'un `clientMessageId` (dédup
+  précoce de `MessagingService`), les citations de `message:new` et des deux
+  dédups, et la retraduction à la demande (`POST /translate-blocking`,
+  `POST /translate`, `translation:request`) — une ligne scellée y est
+  refusée (409 `SERVER_AT_REST_UNREADABLE`), jamais traduite vide.
+- **Le lien de partage anonyme scelle aussi** (`routes/links/messages.ts`,
+  qui contourne `saveMessage`) : il rangeait le clair dans une conversation
+  `server`/`hybrid`. Site d'écriture unique : `services/messaging/atRestWrite.ts`.
+- **Un message sans texte n'est pas scellé** (photo, vocal) : il se range
+  `isEncrypted: false`, mode gardé, et n'est plus masqué « Message chiffré ».
+- **« Modifier » n'est plus offert** sur un message `server`/`hybrid` par la
+  loi d'actions partagée et son miroir Swift, comme la passerelle le refuse.
+- **iOS** : l'écran d'activation ne dit plus « Hybride (E2EE + serveur) » —
+  `hybrid` et `server` y sont « chiffré sur le serveur », sept langues.
+- Les traductions ne portent pas d'`aad` : la liaison de la clé à sa
+  conversation suffit à fermer la recopie inter-conversations ; dans la même
+  conversation, ses membres lisent déjà le texte.
+
 ### Ce que ça ne couvre pas
 
 - Modèle de menace : une copie de la base sans l'environnement de la passerelle

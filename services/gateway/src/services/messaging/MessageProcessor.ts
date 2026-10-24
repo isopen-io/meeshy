@@ -12,7 +12,8 @@ import { declaredReplyProtection } from './replyProtectionContagion';
 import { assertPlaintextAdmitted, E2EE_CONTENT_PLACEHOLDER, type EncryptionRegime } from './e2eePlaintextAdmission';
 import { admitSendUnderRegime } from './e2eeSendAdmission';
 import { persistAdmittedEnvelopes } from './e2eeEnvelopePersistence';
-import { isSealedAtRest, isServerAtRestMode, revealAtRest, servedClearAtRest, ServerAtRestUnavailableError } from './serverAtRest';
+import { atRestModeOf, sealsAtRest, sealTextAtRest } from './atRestWrite';
+import { isSealedAtRest, isServerAtRestMode, revealAtRestWithQuote, servedClearAtRest, ServerAtRestUnavailableError } from './serverAtRest';
 import type { E2EERelayRequest } from '@meeshy/shared/types/e2ee-directory';
 import { PrismaClient, Message, type Prisma } from '@meeshy/shared/prisma/client';
 import { TrackingLinkService } from '../TrackingLinkService';
@@ -215,18 +216,24 @@ export class MessageProcessor {
       throw new ServerAtRestUnavailableError('unknown-mode');
     }
 
-    const servedMode: EncryptionMode = mode.toLowerCase() === 'hybrid' ? 'hybrid' : 'server';
-    const sealed = await this.encryptionService.sealAtRest({
-      plaintext: content,
+    const sealed = await sealTextAtRest({
+      sealer: this.encryptionService,
+      mode,
       conversationId,
+      plaintext: content,
       preferredKeyId: conversation.serverEncryptionKeyId ?? null,
     });
-    return {
-      isEncrypted: true,
-      mode: servedMode,
-      encryptedContent: sealed.ciphertext,
-      encryptionMetadata: { mode: servedMode, ...sealed.metadata, canTranslate: true } as Prisma.InputJsonValue
-    };
+    // Un message sans texte n'a rien à sceller : il se range non chiffré, mode gardé.
+    if (!sealed) return { isEncrypted: false, mode: atRestModeOf(mode), encryptedContent: null, encryptionMetadata: null };
+    return { isEncrypted: true, mode: sealed.mode, encryptedContent: sealed.encryptedContent, encryptionMetadata: sealed.encryptionMetadata };
+  }
+
+  /**
+   * #11381 — une ligne LUE en base (rejeu d'un `clientMessageId`, doublon) et
+   * sa citation, servies en clair comme la liste les sert.
+   */
+  revealStored<T extends Parameters<typeof revealAtRestWithQuote>[0]>(row: T): Promise<T> {
+    return revealAtRestWithQuote(row, this.encryptionService);
   }
 
   private readEncryptionRegime(conversationId: string): Promise<EncryptionRegime | null> {
@@ -314,7 +321,7 @@ export class MessageProcessor {
     // Un expéditeur non inscrit (invité anonyme, participant introuvable) ne
     // voit aucune adresse suivie (#10286) : ni réécriture, ni carte.
     // #11381 — au repos, aucune adresse ne se range en clair à côté du chiffré.
-    const sealedAtRest = Boolean(regime?.encryptionEnabledAt) && isServerAtRestMode(regime?.encryptionMode);
+    const sealedAtRest = sealsAtRest(regime);
     const linkAuthor = !endToEnd && !sealedAtRest && this.containsLinks(data.content)
       ? await this.resolveLinkTrackingAuthor(data.senderId)
       : UNTRACKED_LINK_AUTHOR;
@@ -447,7 +454,7 @@ export class MessageProcessor {
     });
 
     if (alreadySent) {
-      const servedDuplicate = await revealAtRest(alreadySent, this.encryptionService);
+      const servedDuplicate = await this.revealStored(alreadySent);
       return { ...servedDuplicate, isDuplicate: true, timestamp: alreadySent.createdAt } as Message;
     }
 
@@ -534,7 +541,7 @@ export class MessageProcessor {
         });
         throw e;
       }
-      message = await revealAtRest(existing, this.encryptionService);
+      message = await this.revealStored(existing);
       isDuplicate = true;
       logger.info('Idempotent dedup hit on clientMessageId', {
         conversationId: data.conversationId,
@@ -645,7 +652,8 @@ export class MessageProcessor {
 
     // #11381 — l'expéditeur, `message:new` et la traduction reçoivent le CLAIR ;
     // la base n'a reçu que le chiffré (ÉTAPE 3) et la notification (ÉTAPE 6) son placeholder.
-    const served = isSealedAtRest(message) ? servedClearAtRest(message, processedContent.trim()) : message;
+    const opened = isSealedAtRest(message) ? servedClearAtRest(message, processedContent.trim()) : message;
+    const served = await this.revealStored(opened);
     return {
       ...served,
       timestamp: message.createdAt

@@ -117,6 +117,7 @@ import { syncConversationListOnNewMessage } from './postMessageSyncFanOut';
 import { wireCallMessageBroadcasters } from './callMessageBroadcasters';
 import { attachSocketIORedisAdapter, type SocketIORedisAdapterHandle } from './redis-adapter';
 import { creditTranslationRequest, lazyTranslationRequestEngagement } from '../services/messaging/translationRequestCredit';
+import { loadTranslatableMessage } from '../services/messaging/atRestTranslationSource';
 
 // Logger dédié pour SocketIOManager
 const logger = enhancedLogger.child({ module: 'SocketIOManager' });
@@ -2109,10 +2110,8 @@ export class MeeshySocketIOManager {
       // traduit à un non-participant : le contrôle n'existait que côté on-demand,
       // donc un message déjà mis en cache fuitait vers n'importe quel socket
       // connaissant son id (IDOR / message-content disclosure).
-      const message = await this.prisma.message.findUnique({
-        where: { id: messageId },
-        select: { id: true, conversationId: true, content: true, originalLanguage: true, senderId: true, encryptionMode: true }
-      });
+      // #11381 — le texte d'un message `server`/`hybrid` est ouvert par la passerelle ; scellé, il reste vide.
+      const message = await loadTranslatableMessage(this.prisma, messageId);
 
       if (!message || !message.content) {
         socket.emit(SERVER_EVENTS.ERROR, {
