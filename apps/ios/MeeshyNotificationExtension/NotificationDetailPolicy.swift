@@ -95,6 +95,7 @@ nonisolated enum NotificationDetailPolicy {
         case "png": return "image/png"
         case "webp": return "image/webp"
         case "heic": return "image/heic"
+        case "avif": return "image/avif"
         default: return "image/jpeg"
         }
     }

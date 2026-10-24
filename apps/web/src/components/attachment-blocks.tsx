@@ -335,6 +335,7 @@ function VoiceAttachment({
       <div className="flex items-center gap-2.5">
         <button
           type="button"
+          data-voice-play
           onClick={toggle}
           /* `tap-target-34` (`app.css`) porte la zone tactile de ce bouton de
              34 px de dessin a 44x44, meme dispositif que `tap-target-22`. */

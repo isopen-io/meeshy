@@ -63,6 +63,42 @@ public enum StoryStaticSnapshot {
         }.cgImage
     }
 
+    /// **Les vitres des textes à fond Verre** (#12602) : pour chacun, la découpe exacte de son
+    /// fond (blanc opaque sur transparent, même pipeline que `foreground`), la boîte qui l'englobe
+    /// et le flou demandé, en pixels de `size`. Un peintre qui pose `foreground` sur un média
+    /// floute ce média sous chaque vitre : `render(in:)` ne voit pas le flou d'une couche.
+    public static func glassPanes(slide: StorySlide, size: CGSize) -> [StoryGlassPane] {
+        guard size.width >= 1, size.height >= 1 else { return [] }
+        let geometry = CanvasGeometry(renderSize: size)
+        return (slide.effects.textObjects ?? []).compactMap { texte in
+            guard case .glass(let radius) = texte.resolvedBackgroundStyle else { return nil }
+            return glassPane(of: texte, sigma: geometry.render(CGFloat(radius)), geometry: geometry)
+        }
+    }
+
+    /// La vitre d'UN texte : la slide réduite à lui, son calque réduit à son fond.
+    private static func glassPane(of texte: StoryTextObject, sigma: CGFloat, geometry: CanvasGeometry) -> StoryGlassPane? {
+        let seul = StorySlide(effects: StoryEffects(textObjects: [texte]))
+        let racine = foregroundLayer(slide: seul, loadedImages: [:], geometry: geometry)
+        guard let calque = textLayers(in: racine).first(where: { $0.textObject?.id == texte.id }),
+              calque.isolateGlassPane() else { return nil }
+        let boite = calque.convert(calque.bounds, to: racine).intersection(racine.bounds)
+        guard !boite.isNull, !boite.isEmpty else { return nil }
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = false
+        let masque = UIGraphicsImageRenderer(size: geometry.renderSize, format: format).image { ctx in
+            racine.render(in: ctx.cgContext)
+        }.cgImage
+        return masque.map { StoryGlassPane(mask: $0, bounds: boite, sigma: sigma) }
+    }
+
+    private static func textLayers(in layer: CALayer) -> [StoryTextLayer] {
+        let enfants = (layer.sublayers ?? []).flatMap { textLayers(in: $0) }
+        guard let texte = layer as? StoryTextLayer else { return enfants }
+        return [texte] + enfants
+    }
+
     /// Le rendu est UN COUP : un bitmap qu'une tâche poserait une frame plus tard n'atteindrait
     /// jamais l'image. `ComposerImageCacheReader` est le seul lecteur que les couches lisent de
     /// façon SYNCHRONE — c'est par lui que le bitmap d'un sticker collé et celui d'un média de
@@ -130,5 +166,20 @@ public enum StoryStaticSnapshot {
         ctx.clip(to: rect)
         image.draw(in: CGRect(origin: origin, size: scaledSize))
         ctx.restoreGState()
+    }
+}
+
+/// **Une vitre** (#12602) : là où un texte à fond Verre floute ce qu'il y a dessous.
+/// `mask` : la découpe (alpha), à la taille demandée ; `bounds` : sa boîte englobante, en
+/// pixels, origine en HAUT à gauche ; `sigma` : le flou, en pixels de la même taille.
+public nonisolated struct StoryGlassPane: Sendable {
+    public let mask: CGImage
+    public let bounds: CGRect
+    public let sigma: CGFloat
+
+    public init(mask: CGImage, bounds: CGRect, sigma: CGFloat) {
+        self.mask = mask
+        self.bounds = bounds
+        self.sigma = sigma
     }
 }

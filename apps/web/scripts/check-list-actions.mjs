@@ -88,6 +88,7 @@ import { checkLensRowMetaRest } from './lib/check-lens-row-meta.mjs';
 import { checkRowMenuMore } from './lib/check-row-menu-more.mjs';
 import { reportFailures } from './lib/ci-annotation.mjs';
 import { awaitCondition } from './lib/await-fact.mjs';
+import { watchRowExit } from './lib/row-exit-witness.mjs';
 
 const DIST = new URL('../dist/', import.meta.url).pathname;
 /* Le serveur vit dans `lib/` depuis #6988 : celui qui était écrit ici
@@ -460,8 +461,17 @@ check(
 );
 await act(SUBJECT, 'Lu');
 
+/* LA RANGÉE ARCHIVÉE SE REPLIE AVANT DE PARTIR (#11574) — attendre l'ÉTAT,
+   jamais un délai : elle reste montée le temps de sa sortie. */
+const archiveExit = await watchRowExit(page, SUBJECT);
 await act(SUBJECT, 'Archiver');
-check(!(await rowIds(page)).includes(SUBJECT), 'après « Archiver », la rangée quitte le corpus « Tous »');
+const departed = await archiveExit.departed();
+check(departed && !(await rowIds(page)).includes(SUBJECT), 'après « Archiver », la rangée quitte le corpus « Tous »');
+const exit = await archiveExit.seen();
+check(
+  exit.exiting && exit.inert && exit.hidden,
+  `avant de partir, la rangée archivée se replie, inerte et retirée au lecteur d'écran (${JSON.stringify(exit)})`,
+);
 
 // ------------------------------------------------------- 5. les chips filtrent
 /* Les puces se repèrent par `data-list-filter`, jamais par leur nom, qui suit

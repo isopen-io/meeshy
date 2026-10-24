@@ -47,7 +47,7 @@ public protocol E2EESessionCipherProviding: Sendable {
     func decrypt(_ ciphertext: E2EECiphertext, from address: E2EEDeviceAddress) throws -> Data
 }
 
-public final class E2EESessionCipher: E2EESessionCipherProviding, @unchecked Sendable {
+public final class E2EESessionCipher: E2EESessionCipherProviding {
     private let local: E2EEDeviceAddress
     private let store: MeeshySignalProtocolStore
     private let vault: any E2EERecordVaultProviding

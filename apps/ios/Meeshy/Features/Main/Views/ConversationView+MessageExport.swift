@@ -16,8 +16,8 @@ extension ConversationView {
         let user = AuthManager.shared.currentUser
         guard let request = MessageCardExportMenu.request(
             message: message,
-            translations: viewModel.messageTranslations[message.id] ?? [],
-            servedText: viewModel.preferredTranslation(for: message.id)?.translatedContent,
+            translations: UnencryptedMessageGate.translations(of: message, in: viewModel),
+            servedText: UnencryptedMessageGate.preferredTranslation(of: message, in: viewModel)?.translatedContent,
             viewer: MessageCardSubject.Viewer(id: user?.id ?? "", displayName: user?.displayName, username: user?.username),
             handle: user?.username,
             quotedMessage: message.replyTo.flatMap { reference in viewModel.messages.first { $0.id == reference.messageId } },

@@ -11,56 +11,69 @@
       ],
       "base": {
         "layout": {
-          "arrangement": "arch",
-          "margin": 0.06,
-          "gap": 0.03,
-          "top": 0.16,
+          "arrangement": "grid",
+          "margin": 0.07,
+          "gap": 0.035,
+          "top": 0.17,
           "bottom": 0.1
         },
         "slot": {
           "shape": "round",
-          "radius": 0.14,
+          "radius": 0.16,
           "stroke": {
             "color": "#FFFFFF",
-            "width": 0.035
+            "width": 0.03
           },
           "shadow": true,
-          "tilt": "gentle",
-          "tone": "warm"
+          "tilt": "wild",
+          "tone": "color"
         },
         "background": {
-          "kind": "solid",
-          "color": "#FFF8E7"
+          "kind": "radial",
+          "colors": [
+            "#FFE45E",
+            "#FF9F43",
+            "#FF3D7F"
+          ]
         },
         "pattern": {
-          "kind": "confetti",
-          "color": "#EF476F",
-          "opacity": 0.12
+          "kind": "sunburst",
+          "color": "#FFFFFF",
+          "opacity": 0.2
         },
         "ornaments": [
           {
             "kind": "confetti",
-            "color": "#FFD166",
+            "color": "#7B2FF7",
+            "density": "high",
+            "layer": "back",
+            "motion": "loop"
+          },
+          {
+            "kind": "confetti",
+            "color": "#00D4FF",
             "density": "mid",
-            "layer": "back"
+            "layer": "back",
+            "motion": "loop"
           },
           {
             "kind": "ribbon",
-            "color": "#06D6A0",
+            "color": "#7B2FF7",
             "density": "low",
             "layer": "front"
           },
           {
             "kind": "sparkles",
-            "color": "#EF476F",
-            "density": "low",
-            "layer": "front"
+            "color": "#FFFFFF",
+            "density": "mid",
+            "layer": "front",
+            "motion": "loop"
           }
         ],
         "brand": {
           "mark": "both",
           "place": "bottom",
-          "color": "#EF476F",
+          "color": "#FFFFFF",
           "size": "m",
           "font": "bubble"
         },
@@ -69,12 +82,12 @@
           "style": "badge",
           "font": "bubble",
           "color": "#FFFFFF",
-          "fill": "#D6335A"
+          "fill": "#7B2FF7"
         },
         "title": {
           "source": "group",
           "font": "bubble",
-          "color": "#EF476F",
+          "color": "#FFFFFF",
           "place": "top",
           "size": "l",
           "effect": "shadow"
@@ -86,7 +99,7 @@
             "arrangement": "diagonal",
             "margin": 0.07,
             "gap": 0.03,
-            "top": 0.15,
+            "top": 0.16,
             "bottom": 0.1
           },
           "slot": {
@@ -94,23 +107,23 @@
             "radius": 0.16,
             "stroke": {
               "color": "#FFFFFF",
-              "width": 0.04
+              "width": 0.035
             },
             "shadow": true,
             "tilt": "wild",
-            "tone": "warm"
+            "tone": "color"
           },
           "names": {
             "show": "name",
             "style": "bubble",
             "font": "bubble",
-            "color": "#073B4C",
+            "color": "#7B2FF7",
             "fill": "#FFFFFF"
           },
           "title": {
             "source": "names",
             "font": "bubble",
-            "color": "#EF476F",
+            "color": "#FFFFFF",
             "place": "top",
             "size": "l",
             "effect": "shadow"
@@ -122,55 +135,8 @@
             "arrangement": "mosaic",
             "margin": 0.05,
             "gap": 0.025,
-            "top": 0.14,
+            "top": 0.16,
             "bottom": 0.1
-          },
-          "slot": {
-            "shape": "round",
-            "radius": 0.1,
-            "stroke": {
-              "color": "#FFFFFF",
-              "width": 0.03
-            },
-            "shadow": true,
-            "tilt": "gentle",
-            "tone": "warm"
-          },
-          "ornaments": [
-            {
-              "kind": "confetti",
-              "color": "#FFD166",
-              "density": "high",
-              "layer": "back"
-            },
-            {
-              "kind": "balloons",
-              "color": "#118AB2",
-              "density": "low",
-              "layer": "back"
-            },
-            {
-              "kind": "sparkles",
-              "color": "#EF476F",
-              "density": "low",
-              "layer": "front"
-            }
-          ],
-          "names": {
-            "show": "name",
-            "style": "badge",
-            "font": "bubble",
-            "color": "#073B4C",
-            "fill": "#FFD166"
-          }
-        },
-        "tablee": {
-          "layout": {
-            "arrangement": "grid",
-            "margin": 0.05,
-            "gap": 0.02,
-            "top": 0.12,
-            "bottom": 0.08
           },
           "slot": {
             "shape": "round",
@@ -179,27 +145,62 @@
               "color": "#FFFFFF",
               "width": 0.025
             },
+            "shadow": true,
             "tilt": "gentle",
-            "tone": "warm"
+            "tone": "color"
           },
           "ornaments": [
             {
               "kind": "confetti",
-              "color": "#FFD166",
+              "color": "#7B2FF7",
               "density": "high",
-              "layer": "back"
+              "layer": "back",
+              "motion": "loop"
+            },
+            {
+              "kind": "balloons",
+              "color": "#00D4FF",
+              "density": "low",
+              "layer": "back",
+              "motion": "loop"
             },
             {
               "kind": "ribbon",
-              "color": "#06D6A0",
+              "color": "#7B2FF7",
               "density": "low",
               "layer": "front"
+            },
+            {
+              "kind": "sparkles",
+              "color": "#FFFFFF",
+              "density": "mid",
+              "layer": "front",
+              "motion": "loop"
             }
-          ],
+          ]
+        },
+        "tablee": {
+          "layout": {
+            "arrangement": "grid",
+            "margin": 0.05,
+            "gap": 0.02,
+            "top": 0.14,
+            "bottom": 0.08
+          },
+          "slot": {
+            "shape": "round",
+            "radius": 0.14,
+            "stroke": {
+              "color": "#FFFFFF",
+              "width": 0.018
+            },
+            "tilt": "gentle",
+            "tone": "color"
+          },
           "brand": {
             "mark": "both",
             "place": "bottom",
-            "color": "#EF476F",
+            "color": "#FFFFFF",
             "size": "s",
             "font": "bubble"
           },
@@ -208,18 +209,85 @@
             "style": "badge",
             "font": "bubble",
             "color": "#FFFFFF",
-            "fill": "#EF476F"
+            "fill": "#7B2FF7"
           },
           "title": {
             "source": "group",
             "font": "bubble",
-            "color": "#EF476F",
+            "color": "#FFFFFF",
             "place": "top",
             "size": "m",
             "effect": "shadow"
           }
         }
-      }
+      },
+      "styles": [
+        {
+          "id": "relief",
+          "name": "Relief",
+          "look": {
+            "background": {
+              "kind": "radial",
+              "colors": [
+                "#FF4F9A",
+                "#B5176B",
+                "#5E0C3A"
+              ]
+            },
+            "slot": {
+              "shape": "round",
+              "radius": 0.16,
+              "stroke": {
+                "color": "#FFE08A",
+                "width": 0.026
+              },
+              "glow": "#FFD24A88",
+              "shadow": true,
+              "tilt": "wild",
+              "tone": "color"
+            },
+            "ornaments": [
+              {
+                "kind": "confetti",
+                "color": "#FFE08A",
+                "density": "mid",
+                "layer": "back",
+                "motion": "loop"
+              },
+              {
+                "kind": "sparkles",
+                "color": "#FFFFFF",
+                "density": "low",
+                "layer": "front",
+                "motion": "loop"
+              }
+            ],
+            "title": {
+              "source": "group",
+              "font": "bubble",
+              "color": "#FFF1B8",
+              "place": "top",
+              "size": "l",
+              "effect": "shadow"
+            },
+            "scene": [
+              {
+                "id": "matiere",
+                "kind": "image",
+                "depth": "back",
+                "src": "assets/call-frames/jovial_fete_back.webp"
+              },
+              {
+                "id": "moulure",
+                "kind": "image",
+                "depth": "front",
+                "src": "assets/call-frames/jovial_fete_front.webp",
+                "slice": 0.18
+              }
+            ]
+          }
+        }
+      ]
     },
     {
       "id": "jovial.fanfare",
@@ -424,98 +492,119 @@
           "arrangement": "scatter",
           "margin": 0.07,
           "gap": 0.03,
-          "top": 0.15,
+          "top": 0.16,
           "bottom": 0.1
         },
         "slot": {
           "shape": "oval",
           "stroke": {
             "color": "#FFFFFF",
-            "width": 0.03
+            "width": 0.024
           },
-          "glow": "#FFFFFFAA",
+          "glow": "#FFFFFFB0",
           "tilt": "gentle",
           "tone": "color"
         },
         "background": {
           "kind": "linear",
           "colors": [
-            "#BDE8F5",
-            "#E8F7FB",
-            "#FFF8E7"
+            "#9BB8FF",
+            "#C8B6FF",
+            "#FFC8F0",
+            "#FFE0B8"
           ],
           "angle": 0
         },
         "ornaments": [
           {
             "kind": "balloons",
-            "color": "#EF476F",
-            "density": "mid",
-            "layer": "back"
+            "color": "#FF4D8D",
+            "density": "high",
+            "layer": "back",
+            "motion": "loop"
           },
           {
             "kind": "balloons",
-            "color": "#FFD166",
-            "density": "low",
-            "layer": "back"
+            "color": "#FFD23F",
+            "density": "mid",
+            "layer": "back",
+            "motion": "loop"
+          },
+          {
+            "kind": "balloons",
+            "color": "#3DDCFF",
+            "density": "mid",
+            "layer": "back",
+            "motion": "loop"
           },
           {
             "kind": "clouds",
             "color": "#FFFFFF",
+            "density": "mid",
+            "layer": "back",
+            "motion": "loop"
+          },
+          {
+            "kind": "sparkles",
+            "color": "#FFFFFF",
             "density": "low",
-            "layer": "back"
+            "layer": "front",
+            "motion": "loop"
           }
         ],
         "brand": {
           "mark": "logo",
           "place": "top-left",
-          "color": "#118AB2",
+          "color": "#FFFFFF",
           "size": "m"
         },
         "names": {
           "show": "name",
           "style": "tag",
           "font": "brush",
-          "color": "#073B4C"
+          "color": "#3A0CA3",
+          "fill": "#FFFFFF"
         },
         "title": {
           "source": "group",
           "font": "brush",
-          "color": "#118AB2",
+          "color": "#3A0CA3",
           "place": "top",
-          "size": "l"
+          "size": "l",
+          "effect": "outline"
         }
       },
       "variants": {
         "duo": {
           "layout": {
-            "arrangement": "column",
+            "arrangement": "row",
             "margin": 0.07,
-            "gap": 0.05,
-            "top": 0.16,
+            "gap": 0.04,
+            "top": 0.17,
             "bottom": 0.1
           },
           "slot": {
             "shape": "oval",
             "stroke": {
               "color": "#FFFFFF",
-              "width": 0.035
+              "width": 0.028
             },
-            "glow": "#FFFFFFAA",
+            "glow": "#FFFFFFB0",
             "tilt": "wild",
             "tone": "color"
           },
           "title": {
             "source": "names",
             "font": "brush",
-            "color": "#118AB2",
+            "color": "#3A0CA3",
             "place": "top",
-            "size": "l"
+            "size": "l",
+            "effect": "outline"
           },
           "subtitle": {
             "source": "date",
             "font": "bubble",
-            "color": "#B5294E",
+            "color": "#FF4D8D",
             "place": "top",
             "size": "s"
           }
@@ -526,53 +615,89 @@
             "arrangement": "grid",
             "margin": 0.06,
             "gap": 0.03,
-            "top": 0.14,
+            "top": 0.15,
             "bottom": 0.1
           },
           "slot": {
             "shape": "circle",
             "stroke": {
               "color": "#FFFFFF",
-              "width": 0.03
+              "width": 0.022
             },
             "tilt": "wild",
             "tone": "color"
           },
-          "ornaments": [
-            {
-              "kind": "balloons",
-              "color": "#EF476F",
-              "density": "mid",
-              "layer": "back"
-            },
-            {
-              "kind": "balloons",
-              "color": "#06D6A0",
-              "density": "mid",
-              "layer": "back"
-            },
-            {
-              "kind": "balloons",
-              "color": "#FFD166",
-              "density": "low",
-              "layer": "back"
-            },
-            {
-              "kind": "clouds",
-              "color": "#FFFFFF",
-              "density": "low",
-              "layer": "back"
-            }
-          ],
           "names": {
             "show": "name",
             "style": "badge",
             "font": "bubble",
             "color": "#FFFFFF",
-            "fill": "#0B6E8F"
+            "fill": "#3A0CA3"
           }
         }
-      }
+      },
+      "styles": [
+        {
+          "id": "relief",
+          "name": "Relief",
+          "look": {
+            "background": {
+              "kind": "linear",
+              "colors": [
+                "#BFE4FF",
+                "#FFD6E8"
+              ],
+              "angle": 0
+            },
+            "ornaments": [
+              {
+                "kind": "balloons",
+                "color": "#FF5C8A",
+                "density": "low",
+                "layer": "back",
+                "motion": "loop"
+              },
+              {
+                "kind": "clouds",
+                "color": "#FFFFFF",
+                "density": "low",
+                "layer": "back",
+                "motion": "loop"
+              },
+              {
+                "kind": "sparkles",
+                "color": "#FFFFFF",
+                "density": "low",
+                "layer": "front",
+                "motion": "loop"
+              }
+            ],
+            "title": {
+              "source": "group",
+              "font": "brush",
+              "color": "#2E1E8A",
+              "place": "top",
+              "size": "l",
+              "effect": "outline"
+            },
+            "scene": [
+              {
+                "id": "matiere",
+                "kind": "image",
+                "depth": "back",
+                "src": "assets/call-frames/jovial_ballons_back.webp"
+              },
+              {
+                "id": "moulure",
+                "kind": "image",
+                "depth": "front",
+                "src": "assets/call-frames/jovial_ballons_front.webp",
+                "slice": 0.16
+              }
+            ]
+          }
+        }
+      ]
     },
     {
       "id": "jovial.grimaces",
@@ -586,69 +711,155 @@
         "layout": {
           "arrangement": "split",
           "margin": 0.08,
-          "gap": 0.04,
-          "top": 0.12,
+          "gap": 0.05,
+          "top": 0.13,
           "bottom": 0.12
         },
         "slot": {
           "shape": "rect",
+          "shadow": true,
           "card": {
             "color": "#FFFFFF",
             "pad": 0.05,
-            "foot": 0.16
+            "foot": 0.17
           },
-          "shadow": true,
           "tilt": "wild",
           "tone": "color"
         },
         "background": {
           "kind": "solid",
-          "color": "#EF476F"
+          "color": "#FFE600"
         },
         "pattern": {
-          "kind": "dots",
-          "color": "#FFFFFF",
-          "opacity": 0.18
+          "kind": "checker",
+          "color": "#000000",
+          "opacity": 0.07
         },
         "ornaments": [
           {
-            "kind": "stars",
-            "color": "#FFD166",
+            "kind": "tape",
+            "color": "#FF4FA3",
             "density": "low",
             "layer": "front"
           },
           {
-            "kind": "confetti",
-            "color": "#FFFFFF",
+            "kind": "lightning",
+            "color": "#FF2E93",
+            "density": "mid",
+            "layer": "back",
+            "motion": "loop"
+          },
+          {
+            "kind": "stars",
+            "color": "#000000",
             "density": "low",
-            "layer": "back"
+            "layer": "front",
+            "motion": "loop"
           }
         ],
         "brand": {
           "mark": "logo",
           "place": "bottom-right",
-          "color": "#FFFFFF",
+          "color": "#000000",
           "size": "m"
         },
         "names": {
-          "show": "both",
+          "show": "handle",
           "style": "caption",
-          "font": "cartoon",
-          "color": "#073B4C"
+          "font": "tag",
+          "color": "#111111"
         },
         "title": {
-          "source": "date",
-          "font": "cartoon",
+          "source": "names",
+          "font": "poster",
           "color": "#FFFFFF",
           "place": "top",
+          "size": "l",
+          "effect": "outline",
+          "case": "upper"
+        },
+        "subtitle": {
+          "source": "date",
+          "font": "poster",
+          "color": "#FFFFFF",
+          "place": "bottom",
           "size": "m",
-          "effect": "shadow",
+          "effect": "outline",
           "case": "upper"
         }
       },
       "variants": {
         "duo": {}
-      }
+      },
+      "styles": [
+        {
+          "id": "relief",
+          "name": "Relief",
+          "look": {
+            "background": {
+              "kind": "solid",
+              "color": "#FFD93B"
+            },
+            "slot": {
+              "shape": "rect",
+              "shadow": true,
+              "card": {
+                "color": "#FFFFFF",
+                "pad": 0.05,
+                "foot": 0.17
+              },
+              "tilt": "wild",
+              "tone": "color"
+            },
+            "ornaments": [
+              {
+                "kind": "lightning",
+                "color": "#FF4FA3",
+                "density": "low",
+                "layer": "back",
+                "motion": "loop"
+              },
+              {
+                "kind": "stars",
+                "color": "#FFFFFF",
+                "density": "low",
+                "layer": "front",
+                "motion": "loop"
+              }
+            ],
+            "title": {
+              "source": "names",
+              "font": "poster",
+              "color": "#FFFFFF",
+              "place": "top",
+              "size": "l",
+              "effect": "outline",
+              "case": "upper"
+            },
+            "names": {
+              "show": "handle",
+              "style": "caption",
+              "font": "tag",
+              "color": "#111111"
+            },
+            "scene": [
+              {
+                "id": "matiere",
+                "kind": "image",
+                "depth": "back",
+                "src": "assets/call-frames/jovial_grimaces_back.webp"
+              },
+              {
+                "id": "moulure",
+                "kind": "image",
+                "depth": "front",
+                "src": "assets/call-frames/jovial_grimaces_front.webp",
+                "slice": 0.18
+              }
+            ]
+          }
+        }
+      ]
     }
   ]
 }

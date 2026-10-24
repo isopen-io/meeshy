@@ -1,5 +1,6 @@
 import CryptoKit
 import Foundation
+import os
 import Security
 
 /// Les secrets de l'appareil E2EE gardés dans le TROUSSEAU (spec § 4.4) : la clé
@@ -68,22 +69,21 @@ public final class E2EEKeychainSecretStore: E2EESecretStoreProviding {
 }
 
 /// Un magasin de secrets en mémoire, pour les tests et les aperçus.
-public final class E2EEInMemorySecretStore: E2EESecretStoreProviding, @unchecked Sendable {
-    private let lock = NSLock()
-    private var secrets: [String: Data] = [:]
+public final class E2EEInMemorySecretStore: E2EESecretStoreProviding {
+    private let secrets = OSAllocatedUnfairLock<[String: Data]>(initialState: [:])
 
     public init() {}
 
     public func load(_ name: String) throws -> Data? {
-        lock.withLock { secrets[name] }
+        secrets.withLock { $0[name] }
     }
 
     public func save(_ data: Data, as name: String) throws {
-        lock.withLock { secrets[name] = data }
+        secrets.withLock { $0[name] = data }
     }
 
     public func erase(_ name: String) throws {
-        lock.withLock { _ = secrets.removeValue(forKey: name) }
+        secrets.withLock { _ = $0.removeValue(forKey: name) }
     }
 }
 

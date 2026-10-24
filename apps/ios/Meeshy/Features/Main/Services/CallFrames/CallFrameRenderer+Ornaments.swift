@@ -19,6 +19,17 @@ nonisolated struct CallFrameOrnamentStage {
     let headline: CGRect?
 }
 
+/// #12683 — un groupe d'un ornement semé : les tirages `draw` dont le reste vaut `index`. Peints en
+/// groupes séparés, ils s'animent décalés.
+nonisolated struct CallFrameOrnamentPartition: Equatable, Sendable {
+    let index: Int
+    let count: Int
+
+    func includes(_ draw: Int) -> Bool {
+        count <= 1 || draw % count == index
+    }
+}
+
 /// Les trente-quatre ornements (§ 4.4) — le port de `frame-paint-ornaments.ts`. Placement DÉTERMINISTE
 /// (graine = rang de l'ornement dans le cadre) : l'aperçu ne scintille pas. Un ornement `back` dispose de
 /// toute la toile ; un ornement `front` ne se pose que dans les marges et les réserves de texte, sauf
@@ -45,7 +56,7 @@ nonisolated extension CallFrameRenderer {
     static func paintOrnaments(_ context: CGContext, stage: CallFrameStage, layer: CallFrameLayer, text: CallFrameTextLayout, fonts: CallFrameFontBook) {
         let scene = ornamentStage(stage, front: layer == .front, text: text)
         stage.look.ornaments.enumerated()
-            .filter { $0.element.layer == layer }
+            .filter { $0.element.layer == layer && !(stage.excludesMotion && CallFrameMotionPlan.animatedRanks(for: stage.look).contains($0.offset)) }
             .forEach { rank, ornament in paintOrnament(context, ornament: ornament, scene: scene, rank: rank, fonts: fonts) }
     }
 
@@ -198,7 +209,7 @@ nonisolated extension CallFrameRenderer {
 
     // MARK: - L'ornement
 
-    static func paintOrnament(_ context: CGContext, ornament: CallFrameOrnament, scene: CallFrameOrnamentStage, rank: Int, fonts: CallFrameFontBook) {
+    static func paintOrnament(_ context: CGContext, ornament: CallFrameOrnament, scene: CallFrameOrnamentStage, rank: Int, fonts: CallFrameFontBook, partition: CallFrameOrnamentPartition? = nil) {
         let u = scene.unit
         let w = scene.size.width
         let h = scene.size.height
@@ -207,7 +218,7 @@ nonisolated extension CallFrameRenderer {
         let seed = Double(1000 + rank * 131)
         func between(_ draw: Int, _ low: CGFloat, _ high: CGFloat) -> CGFloat { u * (low + rand(seed + 5, Double(draw)) * (high - low)) }
         func scattered(_ base: Double, size: (Int) -> CGFloat, _ body: (Spot) -> Void) {
-            spots(zones: scene.zones, avoid: scene.avoid, text: scene.text, front: scene.front, seed: seed, count: count(base, ornament.density), radius: size).forEach(body)
+            spots(zones: scene.zones, avoid: scene.avoid, text: scene.text, front: scene.front, seed: seed, count: count(base, ornament.density), radius: size).filter { partition?.includes($0.draw) ?? true }.forEach(body)
         }
         let dressing = ornament.kind == .crown || ornament.kind == .tape
         context.saveGState()

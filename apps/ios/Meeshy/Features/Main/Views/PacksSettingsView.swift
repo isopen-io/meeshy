@@ -131,7 +131,7 @@ struct PackShopScreen: View {
             // La vitrine unique (#10632, #10711) : prix en Meeshes, possession, achat optimiste —
             // les stickers y passent comme les fonds, plus de seconde Boutique.
             UnifiedShopView(initialDomain: domain, domains: [domain], focusedSlug: focusedPack,
-                            language: PackShopScreen.language)
+                            language: PackShopScreen.language, rankName: GameCopy.rankName)
                 .id(domain)
                 .padding(.horizontal, MeeshySpacing.lg)
         case .unknown:

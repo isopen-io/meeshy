@@ -108,7 +108,8 @@ struct StoryCardView: View {
     let onReplyToStory: ((ReplyContext) -> Void)?
     /// Prisme « Exploration » : appelé quand l'utilisateur choisit une langue dans le
     /// picker/strip pour afficher le contenu dans cette langue (override éphémère).
-    let onSelectLanguageOverride: (String) -> Void
+    /// `nil` revient à la chaîne préférée (#12646).
+    let onSelectLanguageOverride: (String?) -> Void
 
     // Header inputs
     let composerAccentColor: String
@@ -249,7 +250,6 @@ struct StoryCardView: View {
     let sendComment: (_ text: String, _ effectFlags: Int?, _ parentId: String?, _ pendingMedia: PendingCommentMedia?, _ place: SharedPlace?) -> Void
     let makeStoryCommentRow: (FeedComment, [String]) -> StoryCommentRowView
     let toggleStoryCommentThread: @MainActor (String) async -> Void
-    let makeStoryExternalShareURL: (String) -> URL?
     let storyWithdrawal: StoryWithdrawalActions
     let dismissViewer: () -> Void
     let reportStory: @MainActor (_ storyId: String, _ reportType: String, _ reason: String?) async throws -> Void

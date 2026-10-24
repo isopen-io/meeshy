@@ -73,6 +73,18 @@ const hiddenAt = (lens: Lens, level: LensLevel): ReadonlySet<string> => {
 const particleCount = (density: ParticlesLayer['density'], level: LensLevel): number =>
   level === 'minimal' ? 0 : level === 'reduced' ? Math.ceil(PARTICLE_COUNT[density] / 2) : PARTICLE_COUNT[density];
 
+/**
+ * Une couche JOUÉE à ce palier s'ancre-t-elle au VISAGE ? Sinon la lens se joue
+ * sans chercher de visage (W15, #11321) — une couche que le palier masque, ou
+ * une nuée que `minimal` retire, ne réveille pas le modèle à 478 points.
+ */
+export function lensUsesFace(lens: Lens, level: LensLevel = 'full'): boolean {
+  const hidden = hiddenAt(lens, level);
+  return lens.layers.some(
+    (layer) => !hidden.has(layer.id) && 'anchor' in layer && layer.anchor?.type === 'face' && (layer.kind !== 'particles' || particleCount(layer.density, level) > 0),
+  );
+}
+
 type Field = { readonly left: number; readonly top: number; readonly width: number; readonly height: number; readonly scale: number };
 
 const fieldOf = (anchor: LensAnchor | undefined, frame: FrameSize, face: Box): Field => {

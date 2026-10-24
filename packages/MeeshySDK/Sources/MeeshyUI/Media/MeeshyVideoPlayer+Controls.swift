@@ -16,6 +16,8 @@ internal struct _InlineOverlayControls: View {
     let accentColor: String
     let controls: MeeshyVideoPlayer.ControlSet
     let onExpand: (() -> Void)?
+    /// La pièce dont le lecture/pause déclare son cadre (`MediaPlayControlAnchorKey`).
+    let attachmentId: String
 
     /// `@GestureState` (pas `@State`) : remis à `false` automatiquement par
     /// SwiftUI si le drag est interrompu, même sans `.onEnded` — voir la
@@ -266,6 +268,7 @@ internal struct _InlineOverlayControls: View {
         .accessibilityLabel(manager.isPlaying
             ? String(localized: "media.video.pause", defaultValue: "Pause", bundle: .module)
             : String(localized: "media.video.play", defaultValue: "Lire la vidéo", bundle: .module))
+        .mediaPlayControlAnchor(attachmentId: attachmentId)
     }
 
     /// Cross-fade entre `play.fill` et `pause.fill`. Gestion versionnée

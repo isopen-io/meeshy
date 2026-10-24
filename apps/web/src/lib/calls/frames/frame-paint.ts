@@ -7,6 +7,7 @@ import { paintBorder, paintPattern } from './frame-paint-decor';
 import { enterSlot, footprint, insetRect, mix, photoRect, rectOf, tint, type OrnamentStage, type Surface2D } from './frame-paint-kit';
 import { paintOrnament } from './frame-paint-ornaments';
 import { slotPath } from './frame-paint-shapes';
+import { NO_IMAGES, paintSceneImages, type FrameImageStore } from './frame-scene-image';
 import { nameRoom, paintFrameTexts, textLayout, type TextLayout, type TextScene } from './frame-paint-text';
 import type { FrameLook, SlotTone } from './frame-spec';
 import type { FramePerson, FrameTexts } from './frame-text';
@@ -21,6 +22,10 @@ import type { FramePerson, FrameTexts } from './frame-text';
  *
  * Une capture n'est JAMAIS en miroir (loi de #8719) : l'image d'un visage se
  * peint telle que la source la donne, sans retournement.
+ *
+ * Les illustrations de la scène (#12683) s'intercalent : la matière du fond
+ * juste après le fond et le motif, la moulure du devant juste après la
+ * bordure — l'une sous les visages, l'autre sous les ornements et les textes.
  */
 
 /** Le visage d'une personne : sa source vidéo ou image, `null` caméra coupée (le cadre peint alors son initiale). */
@@ -35,6 +40,7 @@ export type FrameScene = {
   readonly size: Size;
   readonly areas: FrameAreas;
   readonly slots: readonly FrameSlotBox[];
+  readonly images: FrameImageStore;
 };
 
 export const MEESHY_ACCENT = { primary: '#6366F1', secondary: '#4338CA' } as const;
@@ -45,9 +51,9 @@ export function frameSlotsFor(frame: FramePaintable, people: number, size: Size,
   return leavingRoomBelow(frameSlots(frame, people, size, reserve), nameRoom(frame, areas.unit), areas.content.y + areas.content.height);
 }
 
-/** La scène d'un cadre ; sous des contrôles (`reserve`, #10481), aucun texte ni visage ne se pose dans leurs bandes. */
-export function frameScene(frame: FramePaintable, people: readonly FramePerson[], texts: FrameTexts, size: Size, reserve: FrameChromeReserve = NO_CHROME_RESERVE): FrameScene {
-  return { frame, people, texts, size, areas: frameAreas(frame.layout, size, reserve), slots: frameSlotsFor(frame, people.length, size, reserve) };
+/** La scène d'un cadre ; sous des contrôles (`reserve`, #10481), aucun texte ni visage ne se pose dans leurs bandes ; `images` sert ses illustrations. */
+export function frameScene(frame: FramePaintable, people: readonly FramePerson[], texts: FrameTexts, size: Size, reserve: FrameChromeReserve = NO_CHROME_RESERVE, images: FrameImageStore = NO_IMAGES): FrameScene {
+  return { frame, people, texts, size, areas: frameAreas(frame.layout, size, reserve), slots: frameSlotsFor(frame, people.length, size, reserve), images };
 }
 
 function paintBackground(context: Surface2D, scene: FrameScene): void {
@@ -271,20 +277,22 @@ function paintSlotStrokes(context: Surface2D, scene: FrameScene): void {
   });
 }
 
-/** Ce qui précède les visages : fond, motif, ornements du fond, cartes, ombres et halos. */
+/** Ce qui précède les visages : fond, motif, matière illustrée, ornements du fond, cartes, ombres et halos. */
 export function paintBackdrop(context: Surface2D, scene: FrameScene): void {
   paintBackground(context, scene);
   if (scene.frame.pattern !== undefined) paintPattern(context, scene.frame.pattern, scene.size);
+  paintSceneImages(context, scene.frame.scene, 'back', scene.size, scene.images);
   paintOrnaments(context, scene, 'back', textLayout(context, textSceneOf(scene)));
   paintSlotGrounds(context, scene);
 }
 
-/** Ce qui suit les visages : traits de case, bordure, ornements du premier plan, noms, titres, signature. */
+/** Ce qui suit les visages : traits de case, bordure, moulure illustrée, ornements du premier plan, noms, titres, signature. */
 export function paintOverlay(context: Surface2D, scene: FrameScene): void {
   const text = textSceneOf(scene);
   const layout = textLayout(context, text);
   paintSlotStrokes(context, scene);
   if (scene.frame.border !== undefined) paintBorder(context, scene.frame.border, scene.size);
+  paintSceneImages(context, scene.frame.scene, 'front', scene.size, scene.images);
   paintOrnaments(context, scene, 'front', layout);
   paintFrameTexts(context, text, layout.plan);
 }
@@ -293,8 +301,8 @@ export function paintOverlay(context: Surface2D, scene: FrameScene): void {
  * **LE CADRE ENTIER, SANS CACHE** — pour une vignette, un témoin, la planche
  * de design. `faces[i]` est le visage de `people[i]` (absent ⇒ son initiale).
  */
-export function paintFrame(context: Surface2D, frame: FramePaintable, people: readonly FramePerson[], faces: readonly (FrameFace | null)[], texts: FrameTexts, size: Size): FrameScene {
-  const scene = frameScene(frame, people, texts, size);
+export function paintFrame(context: Surface2D, frame: FramePaintable, people: readonly FramePerson[], faces: readonly (FrameFace | null)[], texts: FrameTexts, size: Size, images: FrameImageStore = NO_IMAGES): FrameScene {
+  const scene = frameScene(frame, people, texts, size, NO_CHROME_RESERVE, images);
   context.save();
   paintBackdrop(context, scene);
   paintFaces(context, scene, faces);

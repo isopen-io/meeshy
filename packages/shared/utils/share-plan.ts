@@ -234,7 +234,9 @@ type Draft = {
 
 const CARD_OFFERS: Record<'post' | 'story' | 'reel' | 'profile' | 'invitation', Offer> = {
   post: plain('send', 'caption', 'publish-post', 'publish-story', 'copy-link', 'share-out'),
-  story: plain('send', 'caption', 'copy-link', 'share-out'),
+  // D14, revue par le porteur le 2026-10-24 (#12644) : une story se republie en
+  // story, post ou réel, et se recompose au studio.
+  story: plain('send', 'caption', 'publish-post', 'publish-story', 'publish-reel', 'studio', 'copy-link', 'share-out'),
   reel: plain('send', 'caption', 'publish-post', 'publish-story', 'copy-link', 'share-out'),
   profile: plain('send', 'caption', 'copy-link', 'share-out'),
   invitation: plain('send', 'caption', 'copy-link', 'share-out'),

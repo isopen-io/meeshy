@@ -175,7 +175,10 @@ final class StoryExportShareSheetPaletteTests: XCTestCase {
         }
 
         let expectedBridges: Set<String> = [
-            "ConversationMediaViews.swift"   // définit ShareSheet — LE pont légitime
+            "ConversationMediaViews.swift",   // définit ShareSheet — LE pont légitime
+            // L'écran de partage unique est AUSSI compilé dans l'extension de
+            // partage, qui n'a pas le `ShareSheet` de l'app (#12644).
+            "ShareSheetView+Actions.swift",
         ]
 
         var offenders: Set<String> = []

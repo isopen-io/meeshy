@@ -13,20 +13,23 @@ nonisolated extension CallFrameCatalogue {
             name: "Faire-part",
             bucket: .duo,
             look: CallFrameLook(
-                layout: CallFrameLayout(arrangement: .column, margin: 0.1, gap: 0.04, top: 0.22, bottom: 0.14),
-                slot: CallFrameSlotStyle(shape: .rect, radius: nil, stroke: CallFrameStroke(color: "#1A1A1A", width: 0.004), double: false, glow: nil, shadow: true, card: nil, tilt: .none, tone: .mono, duotone: nil),
+                layout: CallFrameLayout(arrangement: .row, margin: 0.1, gap: 0.05, top: 0.17, bottom: 0.12),
+                slot: CallFrameSlotStyle(shape: .rect, radius: nil, stroke: CallFrameStroke(color: "#111111", width: 0.006), double: false, glow: nil, shadow: true, card: CallFrameCard(color: "#FFFFFF", pad: 0.05, foot: 0.05), tilt: .none, tone: .mono, duotone: nil),
                 background: .solid(color: "#F4F0E8"),
-                pattern: CallFramePattern(kind: .grain, color: "#5A4A3A", opacity: 0.08),
-                border: CallFrameBorder(kind: .mourning, color: "#0A0A0A", width: 0.045, inset: 0.0),
+                pattern: CallFramePattern(kind: .grain, color: "#3A3530", opacity: 0.12),
+                border: CallFrameBorder(kind: .mourning, color: "#111111", width: 0.05, inset: 0.0),
                 ornaments: [
-                    CallFrameOrnament(kind: .roses, color: "#2A2A2A", density: .low, layer: .front)
+                    CallFrameOrnament(kind: .roses, color: "#151515", density: .low, layer: .front),
+                    CallFrameOrnament(kind: .petals, color: "#9B111E", density: .mid, layer: .back, motion: .loop),
+                    CallFrameOrnament(kind: .candles, color: "#FFB347", density: .low, layer: .front, motion: .loop)
                 ],
-                brand: CallFrameBrand(mark: .wordmark, place: .bottom, color: "#4A4A4A", size: .s, font: StoryTextStyle.classic),
-                names: CallFrameNames(show: .name, style: .caption, font: .elegant, color: "#1A1A1A", fill: nil),
-                title: CallFrameTitle(source: .names, font: .elegant, color: "#1A1A1A", place: .top, size: .l, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.asIs),
-                subtitle: CallFrameTitle(source: .date, font: .classic, color: "#4A4A4A", place: .top, size: .s, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.upper)
+                brand: CallFrameBrand(mark: .wordmark, place: .bottom, color: "#111111", size: .s, font: StoryTextStyle.elegant),
+                names: CallFrameNames(show: .name, style: .caption, font: .italic, color: "#111111", fill: nil),
+                title: CallFrameTitle(source: .names, font: .elegant, color: "#111111", place: .top, size: .l, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.upper),
+                subtitle: CallFrameTitle(source: .date, font: .italic, color: "#3A3530", place: .top, size: .s, effect: nil, letterCase: nil)
             ),
-            surfaces: [.capture, .live]
+            surfaces: [.capture, .live],
+            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .rect, radius: nil, stroke: CallFrameStroke(color: "#141216", width: 0.006), double: false, glow: nil, shadow: true, card: CallFrameCard(color: "#FFFFFF", pad: 0.05, foot: 0.05), tilt: .none, tone: .mono, duotone: nil), background: .solid(color: "#EFE6D6"), ornaments: [CallFrameOrnament(kind: .petals, color: "#8E939B", density: .low, layer: .back, motion: .loop), CallFrameOrnament(kind: .candles, color: "#D9C8A8", density: .low, layer: .front, motion: .loop)], names: CallFrameNames(show: .name, style: .caption, font: .italic, color: "#141216", fill: nil), title: CallFrameTitle(source: .group, font: .elegant, color: "#141216", place: .top, size: .l, effect: nil, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/morbide_faire-part_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/morbide_faire-part_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.16)]))]
         ),
         CallFrameDesign(
             id: "morbide.faire-part.comite",
@@ -35,20 +38,23 @@ nonisolated extension CallFrameCatalogue {
             name: "Faire-part",
             bucket: .comite,
             look: CallFrameLook(
-                layout: CallFrameLayout(arrangement: .arch, margin: 0.1, gap: 0.035, top: 0.2, bottom: 0.14),
-                slot: CallFrameSlotStyle(shape: .rect, radius: nil, stroke: CallFrameStroke(color: "#1A1A1A", width: 0.004), double: false, glow: nil, shadow: true, card: nil, tilt: .none, tone: .mono, duotone: nil),
+                layout: CallFrameLayout(arrangement: .grid, margin: 0.1, gap: 0.035, top: 0.17, bottom: 0.12),
+                slot: CallFrameSlotStyle(shape: .rect, radius: nil, stroke: CallFrameStroke(color: "#111111", width: 0.006), double: false, glow: nil, shadow: true, card: CallFrameCard(color: "#FFFFFF", pad: 0.05, foot: 0.05), tilt: .none, tone: .mono, duotone: nil),
                 background: .solid(color: "#F4F0E8"),
-                pattern: CallFramePattern(kind: .grain, color: "#5A4A3A", opacity: 0.08),
-                border: CallFrameBorder(kind: .mourning, color: "#0A0A0A", width: 0.045, inset: 0.0),
+                pattern: CallFramePattern(kind: .grain, color: "#3A3530", opacity: 0.12),
+                border: CallFrameBorder(kind: .mourning, color: "#111111", width: 0.05, inset: 0.0),
                 ornaments: [
-                    CallFrameOrnament(kind: .roses, color: "#2A2A2A", density: .low, layer: .front)
+                    CallFrameOrnament(kind: .roses, color: "#151515", density: .low, layer: .front),
+                    CallFrameOrnament(kind: .petals, color: "#9B111E", density: .mid, layer: .back, motion: .loop),
+                    CallFrameOrnament(kind: .candles, color: "#FFB347", density: .low, layer: .front, motion: .loop)
                 ],
-                brand: CallFrameBrand(mark: .wordmark, place: .bottom, color: "#4A4A4A", size: .s, font: StoryTextStyle.classic),
-                names: CallFrameNames(show: .name, style: .caption, font: .elegant, color: "#1A1A1A", fill: nil),
-                title: CallFrameTitle(source: .group, font: .elegant, color: "#1A1A1A", place: .top, size: .l, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.asIs),
-                subtitle: CallFrameTitle(source: .date, font: .classic, color: "#4A4A4A", place: .top, size: .s, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.upper)
+                brand: CallFrameBrand(mark: .wordmark, place: .bottom, color: "#111111", size: .s, font: StoryTextStyle.elegant),
+                names: CallFrameNames(show: .name, style: .caption, font: .italic, color: "#111111", fill: nil),
+                title: CallFrameTitle(source: .group, font: .elegant, color: "#111111", place: .top, size: .l, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.upper),
+                subtitle: CallFrameTitle(source: .date, font: .italic, color: "#3A3530", place: .top, size: .s, effect: nil, letterCase: nil)
             ),
-            surfaces: [.capture, .live]
+            surfaces: [.capture, .live],
+            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .rect, radius: nil, stroke: CallFrameStroke(color: "#141216", width: 0.006), double: false, glow: nil, shadow: true, card: CallFrameCard(color: "#FFFFFF", pad: 0.05, foot: 0.05), tilt: .none, tone: .mono, duotone: nil), background: .solid(color: "#EFE6D6"), ornaments: [CallFrameOrnament(kind: .petals, color: "#8E939B", density: .low, layer: .back, motion: .loop), CallFrameOrnament(kind: .candles, color: "#D9C8A8", density: .low, layer: .front, motion: .loop)], names: CallFrameNames(show: .name, style: .caption, font: .italic, color: "#141216", fill: nil), title: CallFrameTitle(source: .group, font: .elegant, color: "#141216", place: .top, size: .l, effect: nil, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/morbide_faire-part_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/morbide_faire-part_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.16)]))]
         ),
         CallFrameDesign(
             id: "morbide.faire-part.groupe",
@@ -57,20 +63,23 @@ nonisolated extension CallFrameCatalogue {
             name: "Faire-part",
             bucket: .groupe,
             look: CallFrameLook(
-                layout: CallFrameLayout(arrangement: .grid, margin: 0.09, gap: 0.03, top: 0.18, bottom: 0.16),
-                slot: CallFrameSlotStyle(shape: .rect, radius: nil, stroke: CallFrameStroke(color: "#1A1A1A", width: 0.003), double: false, glow: nil, shadow: false, card: nil, tilt: .none, tone: .mono, duotone: nil),
+                layout: CallFrameLayout(arrangement: .grid, margin: 0.09, gap: 0.03, top: 0.16, bottom: 0.12),
+                slot: CallFrameSlotStyle(shape: .rect, radius: nil, stroke: CallFrameStroke(color: "#111111", width: 0.005), double: false, glow: nil, shadow: true, card: CallFrameCard(color: "#FFFFFF", pad: 0.05, foot: 0.05), tilt: .none, tone: .mono, duotone: nil),
                 background: .solid(color: "#F4F0E8"),
-                pattern: CallFramePattern(kind: .grain, color: "#5A4A3A", opacity: 0.08),
-                border: CallFrameBorder(kind: .mourning, color: "#0A0A0A", width: 0.045, inset: 0.0),
+                pattern: CallFramePattern(kind: .grain, color: "#3A3530", opacity: 0.12),
+                border: CallFrameBorder(kind: .mourning, color: "#111111", width: 0.05, inset: 0.0),
                 ornaments: [
-                    CallFrameOrnament(kind: .roses, color: "#2A2A2A", density: .low, layer: .front)
+                    CallFrameOrnament(kind: .roses, color: "#151515", density: .low, layer: .front),
+                    CallFrameOrnament(kind: .petals, color: "#9B111E", density: .mid, layer: .back, motion: .loop),
+                    CallFrameOrnament(kind: .candles, color: "#FFB347", density: .low, layer: .front, motion: .loop)
                 ],
-                brand: CallFrameBrand(mark: .wordmark, place: .bottom, color: "#4A4A4A", size: .s, font: StoryTextStyle.classic),
-                names: CallFrameNames(show: .name, style: .list, font: .elegant, color: "#1A1A1A", fill: nil),
-                title: CallFrameTitle(source: .group, font: .elegant, color: "#1A1A1A", place: .top, size: .l, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.asIs),
-                subtitle: CallFrameTitle(source: .date, font: .classic, color: "#4A4A4A", place: .top, size: .s, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.upper)
+                brand: CallFrameBrand(mark: .wordmark, place: .bottom, color: "#111111", size: .s, font: StoryTextStyle.elegant),
+                names: CallFrameNames(show: .name, style: .caption, font: .italic, color: "#111111", fill: nil),
+                title: CallFrameTitle(source: .group, font: .elegant, color: "#111111", place: .top, size: .l, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.upper),
+                subtitle: CallFrameTitle(source: .date, font: .italic, color: "#3A3530", place: .top, size: .s, effect: nil, letterCase: nil)
             ),
-            surfaces: [.capture, .live]
+            surfaces: [.capture, .live],
+            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .rect, radius: nil, stroke: CallFrameStroke(color: "#141216", width: 0.006), double: false, glow: nil, shadow: true, card: CallFrameCard(color: "#FFFFFF", pad: 0.05, foot: 0.05), tilt: .none, tone: .mono, duotone: nil), background: .solid(color: "#EFE6D6"), ornaments: [CallFrameOrnament(kind: .petals, color: "#8E939B", density: .low, layer: .back, motion: .loop), CallFrameOrnament(kind: .candles, color: "#D9C8A8", density: .low, layer: .front, motion: .loop)], names: CallFrameNames(show: .name, style: .caption, font: .italic, color: "#141216", fill: nil), title: CallFrameTitle(source: .group, font: .elegant, color: "#141216", place: .top, size: .l, effect: nil, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/morbide_faire-part_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/morbide_faire-part_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.16)]))]
         ),
         CallFrameDesign(
             id: "morbide.memento.duo",
@@ -79,23 +88,25 @@ nonisolated extension CallFrameCatalogue {
             name: "Memento",
             bucket: .duo,
             look: CallFrameLook(
-                layout: CallFrameLayout(arrangement: .diagonal, margin: 0.07, gap: 0.03, top: 0.17, bottom: 0.12),
-                slot: CallFrameSlotStyle(shape: .rect, radius: nil, stroke: CallFrameStroke(color: "#B08D57", width: 0.008), double: false, glow: nil, shadow: true, card: CallFrameCard(color: "#1A0A0B", pad: 0.04, foot: 0.04), tilt: .none, tone: .duotone, duotone: CallFrameDuotone(shadow: "#1A0205", light: "#E8C9A0")),
-                background: .radial(colors: ["#2B1E14", "#140D08", "#060403"]),
-                pattern: CallFramePattern(kind: .grain, color: "#E8C9A0", opacity: 0.06),
-                border: nil,
+                layout: CallFrameLayout(arrangement: .row, margin: 0.08, gap: 0.04, top: 0.17, bottom: 0.11),
+                slot: CallFrameSlotStyle(shape: .frameOval, radius: nil, stroke: CallFrameStroke(color: "#D4AF37", width: 0.01), double: true, glow: nil, shadow: false, card: nil, tilt: .none, tone: .duotone, duotone: CallFrameDuotone(shadow: "#1A0606", light: "#F2E3C6")),
+                background: .radial(colors: ["#3D0A0A", "#1A0505", "#070202"]),
+                pattern: CallFramePattern(kind: .damask, color: "#D4AF37", opacity: 0.07),
+                border: CallFrameBorder(kind: .baroque, color: "#D4AF37", width: 0.008, inset: 0.025),
                 ornaments: [
-                    CallFrameOrnament(kind: .vignette, color: "#000000AA", density: .mid, layer: .back),
-                    CallFrameOrnament(kind: .roses, color: "#8E1B24", density: .mid, layer: .back),
-                    CallFrameOrnament(kind: .skulls, color: "#E8C9A0", density: .low, layer: .front),
-                    CallFrameOrnament(kind: .candles, color: "#F2C46D", density: .low, layer: .front)
+                    CallFrameOrnament(kind: .lightleak, color: "#C1121F", density: .low, layer: .back, motion: .loop),
+                    CallFrameOrnament(kind: .vignette, color: "#000000", density: .mid, layer: .back),
+                    CallFrameOrnament(kind: .skulls, color: "#EDE4D0", density: .low, layer: .front),
+                    CallFrameOrnament(kind: .roses, color: "#C1121F", density: .mid, layer: .front),
+                    CallFrameOrnament(kind: .candles, color: "#FF9F1C", density: .low, layer: .front, motion: .loop)
                 ],
-                brand: CallFrameBrand(mark: .both, place: .bottom, color: "#E8C9A0", size: .m, font: StoryTextStyle.classic),
-                names: CallFrameNames(show: .handle, style: .ribbon, font: .classic, color: "#1A0205", fill: "#E8C9A0"),
-                title: CallFrameTitle(source: .names, font: .fantasy, color: "#E8C9A0", place: .top, size: .l, effect: CallFrameTextEffect.shadow, letterCase: CallFrameLetterCase.asIs),
-                subtitle: CallFrameTitle(source: .date, font: .classic, color: "#B08D57", place: .top, size: .s, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.upper)
+                brand: CallFrameBrand(mark: .both, place: .bottom, color: "#D4AF37", size: .s, font: StoryTextStyle.fantasy),
+                names: CallFrameNames(show: .name, style: .caption, font: .fantasy, color: "#F2E3C6", fill: nil),
+                title: CallFrameTitle(source: .names, font: .fantasy, color: "#D4AF37", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper),
+                subtitle: nil
             ),
-            surfaces: [.capture, .live]
+            surfaces: [.capture, .live],
+            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(background: .radial(colors: ["#4A2520", "#140B09"]), ornaments: [CallFrameOrnament(kind: .vignette, color: "#000000", density: .mid, layer: .back), CallFrameOrnament(kind: .candles, color: "#FFD08A", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .fantasy, color: "#E3BE5A", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/morbide_memento_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/morbide_memento_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.2)]))]
         ),
         CallFrameDesign(
             id: "morbide.memento.comite",
@@ -104,23 +115,25 @@ nonisolated extension CallFrameCatalogue {
             name: "Memento",
             bucket: .comite,
             look: CallFrameLook(
-                layout: CallFrameLayout(arrangement: .hero, margin: 0.07, gap: 0.03, top: 0.17, bottom: 0.12),
-                slot: CallFrameSlotStyle(shape: .rect, radius: nil, stroke: CallFrameStroke(color: "#B08D57", width: 0.008), double: false, glow: nil, shadow: true, card: CallFrameCard(color: "#1A0A0B", pad: 0.04, foot: 0.04), tilt: .none, tone: .duotone, duotone: CallFrameDuotone(shadow: "#1A0205", light: "#E8C9A0")),
-                background: .radial(colors: ["#2B1E14", "#140D08", "#060403"]),
-                pattern: CallFramePattern(kind: .grain, color: "#E8C9A0", opacity: 0.06),
-                border: nil,
+                layout: CallFrameLayout(arrangement: .grid, margin: 0.07, gap: 0.03, top: 0.16, bottom: 0.11),
+                slot: CallFrameSlotStyle(shape: .frameOval, radius: nil, stroke: CallFrameStroke(color: "#D4AF37", width: 0.01), double: true, glow: nil, shadow: false, card: nil, tilt: .none, tone: .duotone, duotone: CallFrameDuotone(shadow: "#1A0606", light: "#F2E3C6")),
+                background: .radial(colors: ["#3D0A0A", "#1A0505", "#070202"]),
+                pattern: CallFramePattern(kind: .damask, color: "#D4AF37", opacity: 0.07),
+                border: CallFrameBorder(kind: .baroque, color: "#D4AF37", width: 0.008, inset: 0.025),
                 ornaments: [
-                    CallFrameOrnament(kind: .vignette, color: "#000000AA", density: .mid, layer: .back),
-                    CallFrameOrnament(kind: .roses, color: "#8E1B24", density: .mid, layer: .back),
-                    CallFrameOrnament(kind: .skulls, color: "#E8C9A0", density: .low, layer: .front),
-                    CallFrameOrnament(kind: .candles, color: "#F2C46D", density: .low, layer: .front)
+                    CallFrameOrnament(kind: .lightleak, color: "#C1121F", density: .low, layer: .back, motion: .loop),
+                    CallFrameOrnament(kind: .vignette, color: "#000000", density: .mid, layer: .back),
+                    CallFrameOrnament(kind: .skulls, color: "#EDE4D0", density: .low, layer: .front),
+                    CallFrameOrnament(kind: .roses, color: "#C1121F", density: .mid, layer: .front),
+                    CallFrameOrnament(kind: .candles, color: "#FF9F1C", density: .low, layer: .front, motion: .loop)
                 ],
-                brand: CallFrameBrand(mark: .both, place: .bottom, color: "#E8C9A0", size: .m, font: StoryTextStyle.classic),
-                names: CallFrameNames(show: .handle, style: .plate, font: .classic, color: "#E8C9A0", fill: "#1A0205D9"),
-                title: CallFrameTitle(source: .group, font: .fantasy, color: "#E8C9A0", place: .top, size: .l, effect: CallFrameTextEffect.shadow, letterCase: CallFrameLetterCase.asIs),
-                subtitle: CallFrameTitle(source: .date, font: .classic, color: "#B08D57", place: .top, size: .s, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.upper)
+                brand: CallFrameBrand(mark: .both, place: .bottom, color: "#D4AF37", size: .s, font: StoryTextStyle.fantasy),
+                names: CallFrameNames(show: .name, style: .caption, font: .fantasy, color: "#F2E3C6", fill: nil),
+                title: CallFrameTitle(source: .group, font: .fantasy, color: "#D4AF37", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper),
+                subtitle: nil
             ),
-            surfaces: [.capture, .live]
+            surfaces: [.capture, .live],
+            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(background: .radial(colors: ["#4A2520", "#140B09"]), ornaments: [CallFrameOrnament(kind: .vignette, color: "#000000", density: .mid, layer: .back), CallFrameOrnament(kind: .candles, color: "#FFD08A", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .fantasy, color: "#E3BE5A", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/morbide_memento_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/morbide_memento_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.2)]))]
         ),
         CallFrameDesign(
             id: "morbide.memento.groupe",
@@ -129,22 +142,24 @@ nonisolated extension CallFrameCatalogue {
             name: "Memento",
             bucket: .groupe,
             look: CallFrameLook(
-                layout: CallFrameLayout(arrangement: .mosaic, margin: 0.06, gap: 0.025, top: 0.16, bottom: 0.11),
-                slot: CallFrameSlotStyle(shape: .rect, radius: nil, stroke: CallFrameStroke(color: "#B08D57", width: 0.008), double: false, glow: nil, shadow: true, card: CallFrameCard(color: "#1A0A0B", pad: 0.04, foot: 0.04), tilt: .none, tone: .duotone, duotone: CallFrameDuotone(shadow: "#1A0205", light: "#E8C9A0")),
-                background: .radial(colors: ["#2B1E14", "#140D08", "#060403"]),
-                pattern: CallFramePattern(kind: .grain, color: "#E8C9A0", opacity: 0.06),
-                border: nil,
+                layout: CallFrameLayout(arrangement: .grid, margin: 0.06, gap: 0.025, top: 0.15, bottom: 0.11),
+                slot: CallFrameSlotStyle(shape: .frameOval, radius: nil, stroke: CallFrameStroke(color: "#D4AF37", width: 0.01), double: true, glow: nil, shadow: false, card: nil, tilt: .none, tone: .duotone, duotone: CallFrameDuotone(shadow: "#1A0606", light: "#F2E3C6")),
+                background: .radial(colors: ["#3D0A0A", "#1A0505", "#070202"]),
+                pattern: CallFramePattern(kind: .damask, color: "#D4AF37", opacity: 0.07),
+                border: CallFrameBorder(kind: .baroque, color: "#D4AF37", width: 0.008, inset: 0.025),
                 ornaments: [
-                    CallFrameOrnament(kind: .vignette, color: "#000000AA", density: .mid, layer: .back),
-                    CallFrameOrnament(kind: .roses, color: "#8E1B24", density: .low, layer: .back),
-                    CallFrameOrnament(kind: .skulls, color: "#E8C9A0", density: .low, layer: .front)
+                    CallFrameOrnament(kind: .lightleak, color: "#C1121F", density: .low, layer: .back, motion: .loop),
+                    CallFrameOrnament(kind: .vignette, color: "#000000", density: .mid, layer: .back),
+                    CallFrameOrnament(kind: .skulls, color: "#EDE4D0", density: .low, layer: .front),
+                    CallFrameOrnament(kind: .candles, color: "#FF9F1C", density: .low, layer: .front, motion: .loop)
                 ],
-                brand: CallFrameBrand(mark: .both, place: .bottom, color: "#E8C9A0", size: .m, font: StoryTextStyle.classic),
-                names: CallFrameNames(show: .handle, style: .plate, font: .classic, color: "#E8C9A0", fill: "#1A0205D9"),
-                title: CallFrameTitle(source: .group, font: .fantasy, color: "#E8C9A0", place: .top, size: .l, effect: CallFrameTextEffect.shadow, letterCase: CallFrameLetterCase.asIs),
-                subtitle: CallFrameTitle(source: .date, font: .classic, color: "#B08D57", place: .top, size: .s, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.upper)
+                brand: CallFrameBrand(mark: .both, place: .bottom, color: "#D4AF37", size: .s, font: StoryTextStyle.fantasy),
+                names: CallFrameNames(show: .name, style: .caption, font: .fantasy, color: "#F2E3C6", fill: nil),
+                title: CallFrameTitle(source: .group, font: .fantasy, color: "#D4AF37", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper),
+                subtitle: nil
             ),
-            surfaces: [.capture, .live]
+            surfaces: [.capture, .live],
+            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(background: .radial(colors: ["#4A2520", "#140B09"]), ornaments: [CallFrameOrnament(kind: .vignette, color: "#000000", density: .mid, layer: .back), CallFrameOrnament(kind: .candles, color: "#FFD08A", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .fantasy, color: "#E3BE5A", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/morbide_memento_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/morbide_memento_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.2)]))]
         ),
         CallFrameDesign(
             id: "morbide.memento.tablee",
@@ -153,23 +168,25 @@ nonisolated extension CallFrameCatalogue {
             name: "Memento",
             bucket: .tablee,
             look: CallFrameLook(
-                layout: CallFrameLayout(arrangement: .grid, margin: 0.05, gap: 0.018, top: 0.15, bottom: 0.1),
-                slot: CallFrameSlotStyle(shape: .rect, radius: nil, stroke: CallFrameStroke(color: "#B08D57", width: 0.006), double: false, glow: nil, shadow: false, card: nil, tilt: .none, tone: .duotone, duotone: CallFrameDuotone(shadow: "#1A0205", light: "#E8C9A0")),
-                background: .radial(colors: ["#2B1E14", "#140D08", "#060403"]),
-                pattern: CallFramePattern(kind: .grain, color: "#E8C9A0", opacity: 0.06),
-                border: nil,
+                layout: CallFrameLayout(arrangement: .grid, margin: 0.05, gap: 0.02, top: 0.14, bottom: 0.12),
+                slot: CallFrameSlotStyle(shape: .oval, radius: nil, stroke: CallFrameStroke(color: "#D4AF37", width: 0.006), double: false, glow: nil, shadow: false, card: nil, tilt: .none, tone: .duotone, duotone: CallFrameDuotone(shadow: "#1A0606", light: "#F2E3C6")),
+                background: .radial(colors: ["#3D0A0A", "#1A0505", "#070202"]),
+                pattern: CallFramePattern(kind: .damask, color: "#D4AF37", opacity: 0.07),
+                border: CallFrameBorder(kind: .baroque, color: "#D4AF37", width: 0.008, inset: 0.025),
                 ornaments: [
-                    CallFrameOrnament(kind: .vignette, color: "#000000AA", density: .mid, layer: .back),
-                    CallFrameOrnament(kind: .roses, color: "#8E1B24", density: .mid, layer: .back),
-                    CallFrameOrnament(kind: .skulls, color: "#E8C9A0", density: .low, layer: .front),
-                    CallFrameOrnament(kind: .candles, color: "#F2C46D", density: .low, layer: .front)
+                    CallFrameOrnament(kind: .lightleak, color: "#C1121F", density: .low, layer: .back, motion: .loop),
+                    CallFrameOrnament(kind: .vignette, color: "#000000", density: .mid, layer: .back),
+                    CallFrameOrnament(kind: .skulls, color: "#EDE4D0", density: .low, layer: .front),
+                    CallFrameOrnament(kind: .roses, color: "#C1121F", density: .mid, layer: .front),
+                    CallFrameOrnament(kind: .candles, color: "#FF9F1C", density: .low, layer: .front, motion: .loop)
                 ],
-                brand: CallFrameBrand(mark: .both, place: .bottom, color: "#E8C9A0", size: .m, font: StoryTextStyle.classic),
-                names: CallFrameNames(show: .none, style: .plate, font: .classic, color: "#E8C9A0", fill: "#1A0205D9"),
-                title: CallFrameTitle(source: .group, font: .fantasy, color: "#E8C9A0", place: .top, size: .l, effect: CallFrameTextEffect.shadow, letterCase: CallFrameLetterCase.asIs),
-                subtitle: CallFrameTitle(source: .date, font: .classic, color: "#B08D57", place: .top, size: .s, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.upper)
+                brand: CallFrameBrand(mark: .both, place: .bottom, color: "#D4AF37", size: .s, font: StoryTextStyle.fantasy),
+                names: CallFrameNames(show: .name, style: .list, font: .fantasy, color: "#F2E3C6", fill: nil),
+                title: CallFrameTitle(source: .group, font: .fantasy, color: "#D4AF37", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper),
+                subtitle: nil
             ),
-            surfaces: [.capture, .live]
+            surfaces: [.capture, .live],
+            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(background: .radial(colors: ["#4A2520", "#140B09"]), ornaments: [CallFrameOrnament(kind: .vignette, color: "#000000", density: .mid, layer: .back), CallFrameOrnament(kind: .candles, color: "#FFD08A", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .fantasy, color: "#E3BE5A", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/morbide_memento_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/morbide_memento_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.2)]))]
         ),
         CallFrameDesign(
             id: "morbide.crypte.duo",
@@ -178,23 +195,24 @@ nonisolated extension CallFrameCatalogue {
             name: "Crypte",
             bucket: .duo,
             look: CallFrameLook(
-                layout: CallFrameLayout(arrangement: .split, margin: 0.08, gap: 0.04, top: 0.16, bottom: 0.1),
-                slot: CallFrameSlotStyle(shape: .arch, radius: nil, stroke: CallFrameStroke(color: "#5C6474", width: 0.01), double: false, glow: "#9FB4D855", shadow: false, card: nil, tilt: .none, tone: .mono, duotone: nil),
-                background: .linear(colors: ["#1A2233", "#0B0F18", "#05070C"], angle: 0.0),
-                pattern: CallFramePattern(kind: .grain, color: "#FFFFFF", opacity: 0.06),
-                border: CallFrameBorder(kind: .hairline, color: "#5C6474", width: 0.004, inset: 0.035),
+                layout: CallFrameLayout(arrangement: .split, margin: 0.08, gap: 0.04, top: 0.16, bottom: 0.11),
+                slot: CallFrameSlotStyle(shape: .circle, radius: nil, stroke: CallFrameStroke(color: "#9D7BD8", width: 0.008), double: false, glow: "#7B2CBFAA", shadow: false, card: nil, tilt: .none, tone: .mono, duotone: nil),
+                background: .linear(colors: ["#1E0F33", "#0E0718", "#050208"], angle: 0.0),
+                pattern: CallFramePattern(kind: .damask, color: "#7B2CBF", opacity: 0.18),
+                border: nil,
                 ornaments: [
-                    CallFrameOrnament(kind: .cobwebs, color: "#C9D1DC59", density: .mid, layer: .back),
-                    CallFrameOrnament(kind: .bats, color: "#3E4860", density: .low, layer: .back),
-                    CallFrameOrnament(kind: .moon, color: "#E6EDF5", density: .low, layer: .front),
-                    CallFrameOrnament(kind: .candles, color: "#F2C46D", density: .low, layer: .front)
+                    CallFrameOrnament(kind: .cobwebs, color: "#CDBDF0", density: .mid, layer: .front),
+                    CallFrameOrnament(kind: .runes, color: "#B388FF", density: .low, layer: .back, motion: .loop),
+                    CallFrameOrnament(kind: .candles, color: "#C084FC", density: .mid, layer: .front, motion: .loop),
+                    CallFrameOrnament(kind: .bats, color: "#B388FF", density: .low, layer: .front, motion: .loop)
                 ],
-                brand: CallFrameBrand(mark: .logo, place: .topLeft, color: "#AEB8C8", size: .s, font: nil),
-                names: CallFrameNames(show: .both, style: .plate, font: .classic, color: "#D8DEE9", fill: "#05070CCC"),
-                title: CallFrameTitle(source: .names, font: .fantasy, color: "#D8DEE9", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.asIs),
+                brand: CallFrameBrand(mark: .both, place: .bottom, color: "#CDBDF0", size: .s, font: StoryTextStyle.fantasy),
+                names: CallFrameNames(show: .handle, style: .badge, font: .fantasy, color: "#F3E8FF", fill: "#1E0F33D9"),
+                title: CallFrameTitle(source: .names, font: .fantasy, color: "#E9D5FF", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper),
                 subtitle: nil
             ),
-            surfaces: [.capture, .live]
+            surfaces: [.capture, .live],
+            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(background: .linear(colors: ["#3A3A38", "#0E0D0C"], angle: 0.0), ornaments: [CallFrameOrnament(kind: .runes, color: "#8A6A3A", density: .low, layer: .back, motion: .loop), CallFrameOrnament(kind: .candles, color: "#FFB45A", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .bats, color: "#0A0A0A", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .fantasy, color: "#D9CDBE", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/morbide_crypte_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/morbide_crypte_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.2)]))]
         ),
         CallFrameDesign(
             id: "morbide.crypte.comite",
@@ -203,23 +221,24 @@ nonisolated extension CallFrameCatalogue {
             name: "Crypte",
             bucket: .comite,
             look: CallFrameLook(
-                layout: CallFrameLayout(arrangement: .grid, margin: 0.07, gap: 0.03, top: 0.17, bottom: 0.12),
-                slot: CallFrameSlotStyle(shape: .arch, radius: nil, stroke: CallFrameStroke(color: "#5C6474", width: 0.01), double: false, glow: "#9FB4D855", shadow: false, card: nil, tilt: .none, tone: .mono, duotone: nil),
-                background: .linear(colors: ["#1A2233", "#0B0F18", "#05070C"], angle: 0.0),
-                pattern: CallFramePattern(kind: .grain, color: "#FFFFFF", opacity: 0.06),
-                border: CallFrameBorder(kind: .hairline, color: "#5C6474", width: 0.004, inset: 0.035),
+                layout: CallFrameLayout(arrangement: .grid, margin: 0.07, gap: 0.03, top: 0.17, bottom: 0.11),
+                slot: CallFrameSlotStyle(shape: .circle, radius: nil, stroke: CallFrameStroke(color: "#9D7BD8", width: 0.008), double: false, glow: "#7B2CBFAA", shadow: false, card: nil, tilt: .none, tone: .mono, duotone: nil),
+                background: .linear(colors: ["#1E0F33", "#0E0718", "#050208"], angle: 0.0),
+                pattern: CallFramePattern(kind: .damask, color: "#7B2CBF", opacity: 0.18),
+                border: nil,
                 ornaments: [
-                    CallFrameOrnament(kind: .cobwebs, color: "#C9D1DC59", density: .mid, layer: .back),
-                    CallFrameOrnament(kind: .bats, color: "#3E4860", density: .low, layer: .back),
-                    CallFrameOrnament(kind: .moon, color: "#E6EDF5", density: .low, layer: .front),
-                    CallFrameOrnament(kind: .candles, color: "#F2C46D", density: .low, layer: .front)
+                    CallFrameOrnament(kind: .cobwebs, color: "#CDBDF0", density: .mid, layer: .front),
+                    CallFrameOrnament(kind: .runes, color: "#B388FF", density: .low, layer: .back, motion: .loop),
+                    CallFrameOrnament(kind: .candles, color: "#C084FC", density: .mid, layer: .front, motion: .loop),
+                    CallFrameOrnament(kind: .bats, color: "#B388FF", density: .low, layer: .front, motion: .loop)
                 ],
-                brand: CallFrameBrand(mark: .logo, place: .topLeft, color: "#AEB8C8", size: .s, font: nil),
-                names: CallFrameNames(show: .both, style: .caption, font: .classic, color: "#AEB8C8", fill: nil),
-                title: CallFrameTitle(source: .group, font: .fantasy, color: "#D8DEE9", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.asIs),
+                brand: CallFrameBrand(mark: .both, place: .bottom, color: "#CDBDF0", size: .s, font: StoryTextStyle.fantasy),
+                names: CallFrameNames(show: .handle, style: .badge, font: .fantasy, color: "#F3E8FF", fill: "#1E0F33D9"),
+                title: CallFrameTitle(source: .group, font: .fantasy, color: "#E9D5FF", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper),
                 subtitle: nil
             ),
-            surfaces: [.capture, .live]
+            surfaces: [.capture, .live],
+            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(background: .linear(colors: ["#3A3A38", "#0E0D0C"], angle: 0.0), ornaments: [CallFrameOrnament(kind: .runes, color: "#8A6A3A", density: .low, layer: .back, motion: .loop), CallFrameOrnament(kind: .candles, color: "#FFB45A", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .bats, color: "#0A0A0A", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .fantasy, color: "#D9CDBE", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/morbide_crypte_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/morbide_crypte_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.2)]))]
         ),
         CallFrameDesign(
             id: "morbide.crypte.groupe",
@@ -228,23 +247,24 @@ nonisolated extension CallFrameCatalogue {
             name: "Crypte",
             bucket: .groupe,
             look: CallFrameLook(
-                layout: CallFrameLayout(arrangement: .tiers, margin: 0.06, gap: 0.025, top: 0.16, bottom: 0.12),
-                slot: CallFrameSlotStyle(shape: .arch, radius: nil, stroke: CallFrameStroke(color: "#5C6474", width: 0.008), double: false, glow: "#9FB4D855", shadow: false, card: nil, tilt: .none, tone: .mono, duotone: nil),
-                background: .linear(colors: ["#1A2233", "#0B0F18", "#05070C"], angle: 0.0),
-                pattern: CallFramePattern(kind: .grain, color: "#FFFFFF", opacity: 0.06),
-                border: CallFrameBorder(kind: .hairline, color: "#5C6474", width: 0.004, inset: 0.035),
+                layout: CallFrameLayout(arrangement: .tiers, margin: 0.06, gap: 0.025, top: 0.16, bottom: 0.11),
+                slot: CallFrameSlotStyle(shape: .circle, radius: nil, stroke: CallFrameStroke(color: "#9D7BD8", width: 0.006), double: false, glow: "#7B2CBFAA", shadow: false, card: nil, tilt: .none, tone: .mono, duotone: nil),
+                background: .linear(colors: ["#1E0F33", "#0E0718", "#050208"], angle: 0.0),
+                pattern: CallFramePattern(kind: .damask, color: "#7B2CBF", opacity: 0.18),
+                border: nil,
                 ornaments: [
-                    CallFrameOrnament(kind: .cobwebs, color: "#C9D1DC59", density: .mid, layer: .back),
-                    CallFrameOrnament(kind: .bats, color: "#3E4860", density: .low, layer: .back),
-                    CallFrameOrnament(kind: .moon, color: "#E6EDF5", density: .low, layer: .front),
-                    CallFrameOrnament(kind: .candles, color: "#F2C46D", density: .low, layer: .front)
+                    CallFrameOrnament(kind: .cobwebs, color: "#CDBDF0", density: .mid, layer: .front),
+                    CallFrameOrnament(kind: .runes, color: "#B388FF", density: .low, layer: .back, motion: .loop),
+                    CallFrameOrnament(kind: .candles, color: "#C084FC", density: .mid, layer: .front, motion: .loop),
+                    CallFrameOrnament(kind: .bats, color: "#B388FF", density: .low, layer: .front, motion: .loop)
                 ],
-                brand: CallFrameBrand(mark: .logo, place: .topLeft, color: "#AEB8C8", size: .s, font: nil),
-                names: CallFrameNames(show: .handle, style: .badge, font: .classic, color: "#D8DEE9", fill: "#05070CCC"),
-                title: CallFrameTitle(source: .group, font: .fantasy, color: "#D8DEE9", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.asIs),
+                brand: CallFrameBrand(mark: .both, place: .bottom, color: "#CDBDF0", size: .s, font: StoryTextStyle.fantasy),
+                names: CallFrameNames(show: .handle, style: .badge, font: .fantasy, color: "#F3E8FF", fill: "#1E0F33D9"),
+                title: CallFrameTitle(source: .group, font: .fantasy, color: "#E9D5FF", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper),
                 subtitle: nil
             ),
-            surfaces: [.capture, .live]
+            surfaces: [.capture, .live],
+            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(background: .linear(colors: ["#3A3A38", "#0E0D0C"], angle: 0.0), ornaments: [CallFrameOrnament(kind: .runes, color: "#8A6A3A", density: .low, layer: .back, motion: .loop), CallFrameOrnament(kind: .candles, color: "#FFB45A", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .bats, color: "#0A0A0A", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .fantasy, color: "#D9CDBE", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/morbide_crypte_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/morbide_crypte_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.2)]))]
         ),
         CallFrameDesign(
             id: "morbide.crypte.tablee",
@@ -253,23 +273,23 @@ nonisolated extension CallFrameCatalogue {
             name: "Crypte",
             bucket: .tablee,
             look: CallFrameLook(
-                layout: CallFrameLayout(arrangement: .tiers, margin: 0.05, gap: 0.018, top: 0.15, bottom: 0.1),
-                slot: CallFrameSlotStyle(shape: .arch, radius: nil, stroke: CallFrameStroke(color: "#5C6474", width: 0.006), double: false, glow: "#9FB4D855", shadow: false, card: nil, tilt: .none, tone: .mono, duotone: nil),
-                background: .linear(colors: ["#1A2233", "#0B0F18", "#05070C"], angle: 0.0),
-                pattern: CallFramePattern(kind: .grain, color: "#FFFFFF", opacity: 0.06),
-                border: CallFrameBorder(kind: .hairline, color: "#5C6474", width: 0.004, inset: 0.035),
+                layout: CallFrameLayout(arrangement: .grid, margin: 0.05, gap: 0.02, top: 0.15, bottom: 0.12),
+                slot: CallFrameSlotStyle(shape: .circle, radius: nil, stroke: CallFrameStroke(color: "#9D7BD8", width: 0.005), double: false, glow: "#7B2CBF88", shadow: false, card: nil, tilt: .none, tone: .mono, duotone: nil),
+                background: .linear(colors: ["#1E0F33", "#0E0718", "#050208"], angle: 0.0),
+                pattern: CallFramePattern(kind: .damask, color: "#7B2CBF", opacity: 0.18),
+                border: nil,
                 ornaments: [
-                    CallFrameOrnament(kind: .cobwebs, color: "#C9D1DC59", density: .mid, layer: .back),
-                    CallFrameOrnament(kind: .bats, color: "#3E4860", density: .low, layer: .back),
-                    CallFrameOrnament(kind: .moon, color: "#E6EDF5", density: .low, layer: .front),
-                    CallFrameOrnament(kind: .candles, color: "#F2C46D", density: .low, layer: .front)
+                    CallFrameOrnament(kind: .cobwebs, color: "#CDBDF0", density: .mid, layer: .front),
+                    CallFrameOrnament(kind: .runes, color: "#B388FF", density: .low, layer: .back, motion: .loop),
+                    CallFrameOrnament(kind: .bats, color: "#B388FF", density: .low, layer: .front, motion: .loop)
                 ],
-                brand: CallFrameBrand(mark: .logo, place: .topLeft, color: "#AEB8C8", size: .s, font: nil),
-                names: CallFrameNames(show: .none, style: .badge, font: .classic, color: "#D8DEE9", fill: nil),
-                title: CallFrameTitle(source: .group, font: .fantasy, color: "#D8DEE9", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.asIs),
+                brand: CallFrameBrand(mark: .both, place: .bottom, color: "#CDBDF0", size: .s, font: StoryTextStyle.fantasy),
+                names: CallFrameNames(show: .handle, style: .list, font: .fantasy, color: "#E9D5FF", fill: nil),
+                title: CallFrameTitle(source: .group, font: .fantasy, color: "#E9D5FF", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper),
                 subtitle: nil
             ),
-            surfaces: [.capture, .live]
+            surfaces: [.capture, .live],
+            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(background: .linear(colors: ["#3A3A38", "#0E0D0C"], angle: 0.0), ornaments: [CallFrameOrnament(kind: .runes, color: "#8A6A3A", density: .low, layer: .back, motion: .loop), CallFrameOrnament(kind: .candles, color: "#FFB45A", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .bats, color: "#0A0A0A", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .fantasy, color: "#D9CDBE", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/morbide_crypte_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/morbide_crypte_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.2)]))]
         ),
         CallFrameDesign(
             id: "morbide.veillee.duo",
@@ -294,6 +314,110 @@ nonisolated extension CallFrameCatalogue {
                 subtitle: CallFrameTitle(source: .date, font: .classic, color: "#C9A56B", place: .top, size: .s, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.upper)
             ),
             surfaces: [.capture, .live]
+        ),
+        CallFrameDesign(
+            id: "morbide.tombe.duo",
+            motif: "morbide.tombe",
+            mood: .morbide,
+            name: "Tombe",
+            bucket: .duo,
+            look: CallFrameLook(
+                layout: CallFrameLayout(arrangement: .row, margin: 0.08, gap: 0.06, top: 0.17, bottom: 0.11),
+                slot: CallFrameSlotStyle(shape: .arch, radius: nil, stroke: CallFrameStroke(color: "#9AA3AB", width: 0.026), double: true, glow: nil, shadow: true, card: nil, tilt: .none, tone: .mono, duotone: nil),
+                background: .linear(colors: ["#6B6F8E", "#2C2F4A", "#14172A", "#1E2B20"], angle: 0.0),
+                pattern: CallFramePattern(kind: .grain, color: "#FFFFFF", opacity: 0.06),
+                border: CallFrameBorder(kind: .vines, color: "#4E6B3C", width: 0.008, inset: 0.02),
+                ornaments: [
+                    CallFrameOrnament(kind: .moon, color: "#F4ECCF", density: .low, layer: .front, motion: .loop),
+                    CallFrameOrnament(kind: .bats, color: "#0A0B14", density: .mid, layer: .front, motion: .loop),
+                    CallFrameOrnament(kind: .fireflies, color: "#BFFFD9", density: .low, layer: .back, motion: .loop),
+                    CallFrameOrnament(kind: .candles, color: "#FFB347", density: .mid, layer: .front, motion: .loop)
+                ],
+                brand: CallFrameBrand(mark: .both, place: .bottom, color: "#C9D0D6", size: .s, font: StoryTextStyle.elegant),
+                names: CallFrameNames(show: .name, style: .plate, font: .elegant, color: "#1F2326", fill: "#B8C0C7E6"),
+                title: CallFrameTitle(source: .names, font: .fantasy, color: "#E3E7EA", place: .top, size: .m, effect: CallFrameTextEffect.shadow, letterCase: CallFrameLetterCase.upper),
+                subtitle: CallFrameTitle(source: .date, font: .elegant, color: "#AEB6BD", place: .top, size: .s, effect: nil, letterCase: CallFrameLetterCase.upper)
+            ),
+            surfaces: [.capture, .live],
+            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .arch, radius: nil, stroke: CallFrameStroke(color: "#C9CCC8", width: 0.02), double: true, glow: nil, shadow: true, card: nil, tilt: .none, tone: .mono, duotone: nil), background: .linear(colors: ["#8C8B86", "#3F3E3B"], angle: 0.0), ornaments: [CallFrameOrnament(kind: .bats, color: "#111111", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .fireflies, color: "#9FB3C8", density: .low, layer: .back, motion: .loop), CallFrameOrnament(kind: .candles, color: "#FFD08A", density: .low, layer: .front, motion: .loop)], names: CallFrameNames(show: .name, style: .plate, font: .elegant, color: "#1F2326", fill: "#C9CCC8E6"), title: CallFrameTitle(source: .group, font: .fantasy, color: "#F2F2EE", place: .top, size: .m, effect: CallFrameTextEffect.shadow, letterCase: CallFrameLetterCase.upper), subtitle: CallFrameTitle(source: .date, font: .elegant, color: "#E6E6E2", place: .top, size: .s, effect: CallFrameTextEffect.shadow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/morbide_tombe_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/morbide_tombe_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.2)]))]
+        ),
+        CallFrameDesign(
+            id: "morbide.tombe.comite",
+            motif: "morbide.tombe",
+            mood: .morbide,
+            name: "Tombe",
+            bucket: .comite,
+            look: CallFrameLook(
+                layout: CallFrameLayout(arrangement: .grid, margin: 0.07, gap: 0.035, top: 0.17, bottom: 0.11),
+                slot: CallFrameSlotStyle(shape: .arch, radius: nil, stroke: CallFrameStroke(color: "#9AA3AB", width: 0.026), double: true, glow: nil, shadow: true, card: nil, tilt: .none, tone: .mono, duotone: nil),
+                background: .linear(colors: ["#6B6F8E", "#2C2F4A", "#14172A", "#1E2B20"], angle: 0.0),
+                pattern: CallFramePattern(kind: .grain, color: "#FFFFFF", opacity: 0.06),
+                border: CallFrameBorder(kind: .vines, color: "#4E6B3C", width: 0.008, inset: 0.02),
+                ornaments: [
+                    CallFrameOrnament(kind: .moon, color: "#F4ECCF", density: .low, layer: .front, motion: .loop),
+                    CallFrameOrnament(kind: .bats, color: "#0A0B14", density: .mid, layer: .front, motion: .loop),
+                    CallFrameOrnament(kind: .fireflies, color: "#BFFFD9", density: .low, layer: .back, motion: .loop),
+                    CallFrameOrnament(kind: .candles, color: "#FFB347", density: .mid, layer: .front, motion: .loop)
+                ],
+                brand: CallFrameBrand(mark: .both, place: .bottom, color: "#C9D0D6", size: .s, font: StoryTextStyle.elegant),
+                names: CallFrameNames(show: .name, style: .plate, font: .elegant, color: "#1F2326", fill: "#B8C0C7E6"),
+                title: CallFrameTitle(source: .group, font: .fantasy, color: "#E3E7EA", place: .top, size: .m, effect: CallFrameTextEffect.shadow, letterCase: CallFrameLetterCase.upper),
+                subtitle: CallFrameTitle(source: .date, font: .elegant, color: "#AEB6BD", place: .top, size: .s, effect: nil, letterCase: CallFrameLetterCase.upper)
+            ),
+            surfaces: [.capture, .live],
+            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .arch, radius: nil, stroke: CallFrameStroke(color: "#C9CCC8", width: 0.02), double: true, glow: nil, shadow: true, card: nil, tilt: .none, tone: .mono, duotone: nil), background: .linear(colors: ["#8C8B86", "#3F3E3B"], angle: 0.0), ornaments: [CallFrameOrnament(kind: .bats, color: "#111111", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .fireflies, color: "#9FB3C8", density: .low, layer: .back, motion: .loop), CallFrameOrnament(kind: .candles, color: "#FFD08A", density: .low, layer: .front, motion: .loop)], names: CallFrameNames(show: .name, style: .plate, font: .elegant, color: "#1F2326", fill: "#C9CCC8E6"), title: CallFrameTitle(source: .group, font: .fantasy, color: "#F2F2EE", place: .top, size: .m, effect: CallFrameTextEffect.shadow, letterCase: CallFrameLetterCase.upper), subtitle: CallFrameTitle(source: .date, font: .elegant, color: "#E6E6E2", place: .top, size: .s, effect: CallFrameTextEffect.shadow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/morbide_tombe_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/morbide_tombe_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.2)]))]
+        ),
+        CallFrameDesign(
+            id: "morbide.tombe.groupe",
+            motif: "morbide.tombe",
+            mood: .morbide,
+            name: "Tombe",
+            bucket: .groupe,
+            look: CallFrameLook(
+                layout: CallFrameLayout(arrangement: .grid, margin: 0.06, gap: 0.03, top: 0.16, bottom: 0.11),
+                slot: CallFrameSlotStyle(shape: .arch, radius: nil, stroke: CallFrameStroke(color: "#9AA3AB", width: 0.018), double: true, glow: nil, shadow: true, card: nil, tilt: .none, tone: .mono, duotone: nil),
+                background: .linear(colors: ["#6B6F8E", "#2C2F4A", "#14172A", "#1E2B20"], angle: 0.0),
+                pattern: CallFramePattern(kind: .grain, color: "#FFFFFF", opacity: 0.06),
+                border: CallFrameBorder(kind: .vines, color: "#4E6B3C", width: 0.008, inset: 0.02),
+                ornaments: [
+                    CallFrameOrnament(kind: .moon, color: "#F4ECCF", density: .low, layer: .front, motion: .loop),
+                    CallFrameOrnament(kind: .bats, color: "#0A0B14", density: .mid, layer: .front, motion: .loop),
+                    CallFrameOrnament(kind: .fireflies, color: "#BFFFD9", density: .low, layer: .back, motion: .loop),
+                    CallFrameOrnament(kind: .candles, color: "#FFB347", density: .mid, layer: .front, motion: .loop)
+                ],
+                brand: CallFrameBrand(mark: .both, place: .bottom, color: "#C9D0D6", size: .s, font: StoryTextStyle.elegant),
+                names: CallFrameNames(show: .name, style: .plate, font: .elegant, color: "#1F2326", fill: "#B8C0C7E6"),
+                title: CallFrameTitle(source: .group, font: .fantasy, color: "#E3E7EA", place: .top, size: .m, effect: CallFrameTextEffect.shadow, letterCase: CallFrameLetterCase.upper),
+                subtitle: CallFrameTitle(source: .date, font: .elegant, color: "#AEB6BD", place: .top, size: .s, effect: nil, letterCase: CallFrameLetterCase.upper)
+            ),
+            surfaces: [.capture, .live],
+            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .arch, radius: nil, stroke: CallFrameStroke(color: "#C9CCC8", width: 0.02), double: true, glow: nil, shadow: true, card: nil, tilt: .none, tone: .mono, duotone: nil), background: .linear(colors: ["#8C8B86", "#3F3E3B"], angle: 0.0), ornaments: [CallFrameOrnament(kind: .bats, color: "#111111", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .fireflies, color: "#9FB3C8", density: .low, layer: .back, motion: .loop), CallFrameOrnament(kind: .candles, color: "#FFD08A", density: .low, layer: .front, motion: .loop)], names: CallFrameNames(show: .name, style: .plate, font: .elegant, color: "#1F2326", fill: "#C9CCC8E6"), title: CallFrameTitle(source: .group, font: .fantasy, color: "#F2F2EE", place: .top, size: .m, effect: CallFrameTextEffect.shadow, letterCase: CallFrameLetterCase.upper), subtitle: CallFrameTitle(source: .date, font: .elegant, color: "#E6E6E2", place: .top, size: .s, effect: CallFrameTextEffect.shadow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/morbide_tombe_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/morbide_tombe_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.2)]))]
+        ),
+        CallFrameDesign(
+            id: "morbide.tombe.tablee",
+            motif: "morbide.tombe",
+            mood: .morbide,
+            name: "Tombe",
+            bucket: .tablee,
+            look: CallFrameLook(
+                layout: CallFrameLayout(arrangement: .grid, margin: 0.05, gap: 0.025, top: 0.15, bottom: 0.12),
+                slot: CallFrameSlotStyle(shape: .arch, radius: nil, stroke: CallFrameStroke(color: "#9AA3AB", width: 0.012), double: false, glow: nil, shadow: true, card: nil, tilt: .none, tone: .mono, duotone: nil),
+                background: .linear(colors: ["#6B6F8E", "#2C2F4A", "#14172A", "#1E2B20"], angle: 0.0),
+                pattern: CallFramePattern(kind: .grain, color: "#FFFFFF", opacity: 0.06),
+                border: CallFrameBorder(kind: .vines, color: "#4E6B3C", width: 0.008, inset: 0.02),
+                ornaments: [
+                    CallFrameOrnament(kind: .moon, color: "#F4ECCF", density: .low, layer: .front, motion: .loop),
+                    CallFrameOrnament(kind: .bats, color: "#0A0B14", density: .mid, layer: .front, motion: .loop),
+                    CallFrameOrnament(kind: .fireflies, color: "#BFFFD9", density: .low, layer: .back, motion: .loop),
+                    CallFrameOrnament(kind: .candles, color: "#FFB347", density: .mid, layer: .front, motion: .loop)
+                ],
+                brand: CallFrameBrand(mark: .both, place: .bottom, color: "#C9D0D6", size: .s, font: StoryTextStyle.elegant),
+                names: CallFrameNames(show: .name, style: .plate, font: .elegant, color: "#1F2326", fill: "#B8C0C7E6"),
+                title: CallFrameTitle(source: .group, font: .fantasy, color: "#E3E7EA", place: .top, size: .m, effect: CallFrameTextEffect.shadow, letterCase: CallFrameLetterCase.upper),
+                subtitle: CallFrameTitle(source: .date, font: .elegant, color: "#AEB6BD", place: .top, size: .s, effect: nil, letterCase: CallFrameLetterCase.upper)
+            ),
+            surfaces: [.capture, .live],
+            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .arch, radius: nil, stroke: CallFrameStroke(color: "#C9CCC8", width: 0.02), double: true, glow: nil, shadow: true, card: nil, tilt: .none, tone: .mono, duotone: nil), background: .linear(colors: ["#8C8B86", "#3F3E3B"], angle: 0.0), ornaments: [CallFrameOrnament(kind: .bats, color: "#111111", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .fireflies, color: "#9FB3C8", density: .low, layer: .back, motion: .loop), CallFrameOrnament(kind: .candles, color: "#FFD08A", density: .low, layer: .front, motion: .loop)], names: CallFrameNames(show: .name, style: .plate, font: .elegant, color: "#1F2326", fill: "#C9CCC8E6"), title: CallFrameTitle(source: .group, font: .fantasy, color: "#F2F2EE", place: .top, size: .m, effect: CallFrameTextEffect.shadow, letterCase: CallFrameLetterCase.upper), subtitle: CallFrameTitle(source: .date, font: .elegant, color: "#E6E6E2", place: .top, size: .s, effect: CallFrameTextEffect.shadow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/morbide_tombe_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/morbide_tombe_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.2)]))]
         )
     ]
 }

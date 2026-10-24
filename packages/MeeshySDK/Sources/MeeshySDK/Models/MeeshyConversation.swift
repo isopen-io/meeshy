@@ -20,6 +20,12 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
     public var memberCountCapped: Bool = false
     public var lastMessageAt: Date
     public var encryptionMode: String?
+    /// L'instant où le chiffrement de bout en bout a été activé (#9224, #11380).
+    /// Un message antérieur est de l'HISTORIQUE en clair, légitime ; un message
+    /// en clair postérieur se signale (`EndToEndPlaintextLaw`). Servi par la
+    /// liste et le détail ; absent d'une ligne mise en cache par une version
+    /// antérieure, jusqu'au prochain rafraîchissement.
+    public var encryptionEnabledAt: Date? = nil
     public let createdAt: Date
     public var updatedAt: Date
 
@@ -518,7 +524,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
     private enum CodingKeys: String, CodingKey {
         // Conversation-level
         case id, identifier, type, title, description, avatar, avatarThumbHash, banner, bannerThumbHash
-        case communityId, isActive, memberCount, memberCountCapped, lastMessageAt, encryptionMode, createdAt, updatedAt
+        case communityId, isActive, memberCount, memberCountCapped, lastMessageAt, encryptionMode, encryptionEnabledAt, createdAt, updatedAt
         case lastMessagePreview, lastMessageTranslations, lastMessageOriginalLanguage
         case lastMessageAttachments, lastMessageAttachmentCount, lastMessageId
         case lastMessageSenderName, lastMessageSenderUserId, lastMessageIsBlurred, lastMessageIsViewOnce, lastMessageExpiresAt
@@ -566,7 +572,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         self.memberCount = try c.decodeIfPresent(Int.self, forKey: .memberCount) ?? 0
         self.memberCountCapped = try c.decodeIfPresent(Bool.self, forKey: .memberCountCapped) ?? false
         self.lastMessageAt = try c.decode(Date.self, forKey: .lastMessageAt)
-        self.encryptionMode = try c.decodeIfPresent(String.self, forKey: .encryptionMode)
+        self.encryptionMode = try c.decodeIfPresent(String.self, forKey: .encryptionMode); self.encryptionEnabledAt = (try? c.decodeIfPresent(Date.self, forKey: .encryptionEnabledAt)) ?? nil
         self.createdAt = try c.decode(Date.self, forKey: .createdAt)
         self.updatedAt = try c.decode(Date.self, forKey: .updatedAt)
 
@@ -675,7 +681,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         try c.encode(memberCount, forKey: .memberCount)
         try c.encode(memberCountCapped, forKey: .memberCountCapped)
         try c.encode(lastMessageAt, forKey: .lastMessageAt)
-        try c.encodeIfPresent(encryptionMode, forKey: .encryptionMode)
+        try c.encodeIfPresent(encryptionMode, forKey: .encryptionMode); try c.encodeIfPresent(encryptionEnabledAt, forKey: .encryptionEnabledAt)
         try c.encode(createdAt, forKey: .createdAt)
         try c.encode(updatedAt, forKey: .updatedAt)
 
