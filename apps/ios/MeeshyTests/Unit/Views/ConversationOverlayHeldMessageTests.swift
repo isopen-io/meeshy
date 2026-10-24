@@ -141,20 +141,23 @@ final class ConversationOverlayHeldMessageTests: XCTestCase {
         let acknowledged = message(mine: true)
         let resolve = resolver(thread: [acknowledged], pendingServerIds: [optimisticId: serverId])
 
-        let live = try XCTUnwrap(resolve(held).live, "l'accusé change l'id : le message se relit par son identité stable")
+        let live = try XCTUnwrap(resolve(held).liveMessage, "l'accusé change l'id : le message se relit par son identité stable")
 
         XCTAssertEqual(live.id, serverId)
         XCTAssertFalse(MessageActionResolver.primaryActions(menu(held)).contains(.reply), "prémisse : un `cid_` ne se cite pas")
         XCTAssertTrue(MessageActionResolver.primaryActions(menu(live)).contains(.reply), "accusé, il s'offre à la réponse")
-        XCTAssertEqual(openMenu(on: held).reconciled(resolve).state.overlayMessage?.id, serverId,
+        let outcome = openMenu(on: held).reconciled(resolve)
+        XCTAssertEqual(outcome.state.overlayMessage?.id, serverId,
                        "la surcouche se réancre sur l'id servi : la cellule masquée sous l'aperçu est la bonne")
+        XCTAssertTrue(outcome.changesState)
+        XCTAssertTrue(outcome.state.showOverlayMenu, "l'accusé ne referme pas le menu")
     }
 
     func test_aReceivedPin_turnsPinIntoUnpin() throws {
         let held = message()
         let resolve = resolver(thread: [message(pinnedAt: now)])
 
-        let live = try XCTUnwrap(resolve(held).live)
+        let live = try XCTUnwrap(resolve(held).liveMessage)
 
         XCTAssertTrue(moreActions(menu(held)).contains(.pin), "prémisse : la copie du geste n'est pas épinglée")
         XCTAssertTrue(moreActions(menu(live)).contains(.unpin), "l'épingle reçue se lit dans le menu ouvert")
@@ -166,6 +169,7 @@ final class ConversationOverlayHeldMessageTests: XCTestCase {
 
         XCTAssertTrue(outcome.state.showOverlayMenu, "un changement vivant recompose sans refermer")
         XCTAssertFalse(outcome.announcesWithdrawal)
+        XCTAssertFalse(outcome.changesState, "rien à réécrire : le rendu relit le message, l'entrée ne se rejoue pas")
     }
 
     /// La signature que l'hôte observe : elle ne change qu'au retrait ou au
@@ -187,7 +191,7 @@ final class ConversationOverlayHeldMessageTests: XCTestCase {
             .appendingPathComponent("Meeshy/Features/Main/Views/ConversationLayers/ConversationBodyPresentations.swift")
         let code = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
 
-        XCTAssertTrue(code.contains("viewModel.resolveHeld(held).live"), "le menu se monte depuis le message relu, jamais depuis la copie du geste")
+        XCTAssertTrue(code.contains("OverlayHeldMessage.resolve(held, in: viewModel).liveMessage"), "le menu se monte depuis le message relu, jamais depuis la copie du geste")
         XCTAssertTrue(code.contains(".adaptiveOnChange(of: overlayState.heldSlots"), "l'hôte suit le retrait du message tenu")
         XCTAssertTrue(code.contains("AdaptiveAccessibility.announce("), "la fermeture s'annonce à VoiceOver")
     }
