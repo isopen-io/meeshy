@@ -47,7 +47,7 @@ export const REORDER_FLIP_DURATION_MS = 320;
 /** Un défilement vu il y a moins que ça est encore ACTIF. */
 export const REORDER_SCROLL_SETTLE_MS = 160;
 const REORDER_OVERSCAN_PX = 240;
-const EASING = 'cubic-bezier(0.2, 0, 0, 1)';
+export const REORDER_FLIP_EASING = 'cubic-bezier(0.2, 0, 0, 1)';
 const MIN_SHIFT_PX = 0.5;
 /** Au-delà, c'est un filtre qui remplace la liste, pas des conversations qui arrivent. */
 const MAX_ENTERING = 3;
@@ -117,13 +117,13 @@ const play = (node: HTMLElement, dy: number): void => {
   if (typeof node.animate !== 'function') return;
   node.animate([{ transform: `translateY(${dy}px)` }, { transform: 'translateY(0px)' }], {
     duration: REORDER_FLIP_DURATION_MS,
-    easing: EASING,
+    easing: REORDER_FLIP_EASING,
   });
 };
 
 const fadeIn = (node: HTMLElement): void => {
   if (typeof node.animate !== 'function') return;
-  node.animate([{ opacity: 0 }, { opacity: 1 }], { duration: REORDER_FLIP_DURATION_MS, easing: EASING });
+  node.animate([{ opacity: 0 }, { opacity: 1 }], { duration: REORDER_FLIP_DURATION_MS, easing: REORDER_FLIP_EASING });
 };
 
 export const ENTERING_CLASS = 'lens-row-entering';

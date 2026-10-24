@@ -92,6 +92,11 @@ final class AttachmentSendRunner: AttachmentSendRunning {
     }
 
     func run(_ batch: AttachmentSendBatch) async {
+        if await EndToEndPieceGuard.refuses(batch.mediaGroupSends.map(\.tempId), on: host, toast: { feedback.showError($0) }) {
+            _ = await sendTrailing(batch)
+            cleanUp(batch)
+            return
+        }
         guard let session = uploadSession(batch) else {
             abortWithoutCredential(batch)
             return
@@ -227,15 +232,19 @@ final class AttachmentSendRunner: AttachmentSendRunning {
     /// Les vocaux gardent leur fichier un moment : la ligne optimiste porte l'URL `file://`
     /// jusqu'à l'écho socket, et le tap de lecture lit le disque dans cette fenêtre.
     private func finish(_ batch: AttachmentSendBatch, anySuccess: Bool) {
-        let urls = batch.cleanupURLs()
-        for url in urls.visual { try? FileManager.default.removeItem(at: url) }
-        if !urls.audio.isEmpty { removeAfterRetention(urls.audio) }
+        cleanUp(batch)
         if anySuccess {
             feedback.sendSucceeded()
             return
         }
         feedback.sendFailed()
         feedback.showError(Self.failureToast)
+    }
+
+    private func cleanUp(_ batch: AttachmentSendBatch) {
+        let urls = batch.cleanupURLs()
+        for url in urls.visual { try? FileManager.default.removeItem(at: url) }
+        if !urls.audio.isEmpty { removeAfterRetention(urls.audio) }
     }
 
     private func removeAfterRetention(_ urls: [URL]) {

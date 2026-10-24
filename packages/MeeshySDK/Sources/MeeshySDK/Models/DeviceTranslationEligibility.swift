@@ -30,13 +30,20 @@ public enum DeviceTranslationEligibility {
 
     /// La disposition d'un message. `conversationEncryptionMode` est le mode de
     /// la conversation (`nil`, `"server"`, `"hybrid"`, `"e2ee"`).
+    ///
+    /// Là où le serveur ne lit pas le message, seul le clair que CET appareil a
+    /// déchiffré se traduit — reconnu par sa PROVENANCE
+    /// (`isContentDecryptedOnDevice`, #11402), jamais par sa forme : un clair
+    /// réel en base64 se traduit, un cryptogramme pas encore déchiffré, un
+    /// texte que la passerelle forge ou un texte réécrit après déchiffrement
+    /// ne se traduisent pas (fail-closed, #9229).
     public static func disposition(
         of message: MeeshyMessage,
         conversationEncryptionMode: String?
     ) -> DeviceTranslationDisposition {
         guard isOffered(message) else { return .skip }
         guard isEndToEnd(message, conversationEncryptionMode: conversationEncryptionMode) else { return .shareable }
-        return looksLikeCiphertext(message.content) ? .skip : .ephemeral
+        return message.isContentDecryptedOnDevice ? .ephemeral : .skip
     }
 
     /// Mes propres messages sont écrits dans une langue que je lis. Un message
@@ -91,16 +98,6 @@ public enum DeviceTranslationEligibility {
             isEncrypted: message.isEncrypted,
             encryptionMode: message.encryptionMode
         )
-    }
-
-    /// Un message chiffré de bout en bout est persisté chiffré et déchiffré en
-    /// mémoire : tant que le déchiffrement n'a pas eu lieu, son contenu est
-    /// l'enveloppe en base64, que traduire ne rendrait qu'un charabia.
-    public static func looksLikeCiphertext(_ content: String) -> Bool {
-        guard content.utf8.count >= SharedTranslationLimits.payloadMinLength,
-              !content.contains(where: \.isWhitespace)
-        else { return false }
-        return Data(base64Encoded: content) != nil
     }
 
     private static let serverReadableModes: Set<String> = ["server", "hybrid"]

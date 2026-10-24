@@ -441,7 +441,7 @@ jobs:
     needs: scope
     name: ${{ needs.scope.outputs.run_tests == 'true' && 'File d''attente Mac' || 'File d''attente Mac (compilation seule)' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 160
+    timeout-minutes: 30
     permissions:
       contents: read
       actions: read
@@ -455,7 +455,7 @@ jobs:
         if: needs.scope.outputs.run_tests == 'true'
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: node scripts/ci/ios-mac-queue.mjs --poll-seconds 120 --max-minutes 150
+        run: node scripts/ci/ios-mac-queue.mjs --poll-seconds 120 --max-minutes 20
 
   ios-build:
     needs: [scope, file-mac]
