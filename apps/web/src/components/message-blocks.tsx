@@ -903,10 +903,11 @@ export function Quote({
  *
  * `onRetry === undefined` ⇒ REFUS PERMANENT (`permanentOf`,
  * `lib/view/use-send.ts`, dérivé d'`isPermanentFailure`,
- * `lib/api/outcome.ts`) : la CAUSE reste affichée, le GESTE disparaît —
+ * `lib/api/outcome.ts`) : la CAUSE reste affichée, le REJEU disparaît —
  * jamais un bouton qui promet un rejeu impossible (403/401 ne peuvent pas
  * aboutir en rejouant le MÊME appel, quel que soit le nombre de tentatives).
- * La bande devient un `<div>` sans `Réessayer`, jamais un `<button>` inerte.
+ * La bande devient un `<div>` sans `Réessayer`, jamais un `<button>` inerte ;
+ * seul « Abandonner » y reste (`onDiscard`, ci-dessous).
  *
  * `min-height: 44` est la cible tactile du dépôt (dimension 5, « cibles
  * >= 44 px ») — la bande était mesurée à 27 px, le seul contrôle de
