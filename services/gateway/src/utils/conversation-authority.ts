@@ -23,7 +23,16 @@ import { isPrivilegedPlatformRole } from '@meeshy/shared/utils/platform-privileg
  * - **« une fois dans »** — le bypass suppose une APPARTENANCE, jamais un
  *   passe-partout. Cette loi ne charge rien : c'est l'appelant qui lui remet le
  *   rang d'une ligne de participation qu'il a déjà trouvée. Un administrateur
- *   de la plateforme étranger à la conversation reste étranger.
+ *   de la plateforme étranger à la conversation reste étranger — et la loi le
+ *   fait respecter ELLE-MÊME : `Participant.role` est une colonne requise, donc
+ *   un `conversationRole` absent signifie « aucune ligne », et alors aucun rôle
+ *   de plateforme ne vaut un rang. Trois routes de membre (`PUT|PATCH` et
+ *   `DELETE /conversations/:id`, `PATCH …/rights`) remettaient l'acteur sans
+ *   avoir vérifié l'appartenance ; confier la garde à chacune aurait laissé le
+ *   prochain appelant rouvrir le trou (#11217). Configurer une conversation
+ *   dont on n'est pas membre passe par la route souveraine
+ *   (`routes/admin/conversation-settings-sovereign.ts` : rang ADMIN, motif
+ *   écrit, journal d'audit).
  * - **« avec les droits DU CRÉATEUR »** — au niveau du créateur, jamais
  *   au-dessus. Un administrateur de la plateforme n'hérite donc pas d'un rang
  *   qui lui permettrait de bannir ou de rétrograder le créateur : la règle du
@@ -46,15 +55,23 @@ import { isPrivilegedPlatformRole } from '@meeshy/shared/utils/platform-privileg
  * remettent deux chaînes.
  */
 export type ConversationActor = {
-  /** `Participant.role` de l'appelant DANS cette conversation. */
+  /**
+   * `Participant.role` de l'appelant DANS cette conversation ; `null` ou absent
+   * quand aucune ligne de participation active n'a été trouvée.
+   */
   readonly conversationRole?: string | null;
   /** `User.role` de l'appelant — le rôle de PLATEFORME, en majuscules. */
   readonly platformRole?: string | null;
 };
 
-/** L'acteur tient-il ses droits de la plateforme plutôt que de la conversation ? */
+/** L'acteur a-t-il une ligne de participation — un rang, même illisible ? */
+function isMember(actor: ConversationActor): boolean {
+  return typeof actor.conversationRole === 'string';
+}
+
+/** L'acteur, MEMBRE, tient-il ses droits de la plateforme plutôt que de la conversation ? */
 export function actsWithCreatorRights(actor: ConversationActor): boolean {
-  return isPrivilegedPlatformRole(actor.platformRole);
+  return isMember(actor) && isPrivilegedPlatformRole(actor.platformRole);
 }
 
 /**

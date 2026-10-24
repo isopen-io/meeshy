@@ -9,7 +9,9 @@ import Foundation
 /// Deux LECTURES, comme la loi des actions (#11205) qui en fait foi :
 /// - `init?(raw:)` compare EXACTEMENT : c'est ainsi que la passerelle décide qui
 ///   est PRIVILÉGIÉ (`PRIVILEGED_PLATFORM_ROLES`, `packages/shared/utils/
-///   platform-privilege.ts`), donc un « moderator » en minuscules ne modère pas ;
+///   platform-privilege.ts`), donc un « moderator » en minuscules ne modère pas —
+///   toute lecture de `isPrivileged` passe par elle (`ContentRemovalPolicy`,
+///   `NearbyDiscoverAccess`, `ConversationViewerAuthority.moderatesPlatform`) ;
 /// - `init?(caseFolding:)` plie la casse : c'est ainsi que `isGlobalAdmin` et
 ///   `globalRoleLevel` décident qui ADMINISTRE et à quel niveau.
 ///
@@ -17,8 +19,8 @@ import Foundation
 /// `minimumLevel`, sous le plus bas des rôles connus. AUDIT et ANALYST lisent ;
 /// ils n'ont aucun privilège d'ACTION — pour la loi des actions, ils valent USER.
 ///
-/// `privileged` est le miroir de la table partagée (#11217, décision porteur du
-/// 2026-10-24 : MODERATOR est privilégié partout, comme ADMIN et BIGBOSS) ;
+/// `privileged` est le miroir de la table partagée (#11217, décision porteur :
+/// MODERATOR est privilégié partout, comme ADMIN et BIGBOSS) ;
 /// `administers` ne garde que la console (`isGlobalAdmin`).
 public enum PlatformRole: String, CaseIterable, Sendable, Comparable {
     case bigboss = "BIGBOSS"

@@ -56,6 +56,28 @@ describe('L’autorité d’un acteur dans une conversation (#3941)', () => {
       },
     );
 
+    // « une fois DANS » (#3941) : le bypass suppose une ligne de participation.
+    // Sans elle, l'appelant n'a pas de rang à remettre — `conversationRole`
+    // absent — et un rôle de plateforme ne l'en dispense pas. Avant #11217, ce
+    // trou ne concernait qu'ADMIN et BIGBOSS ; la table l'aurait ouvert à
+    // MODERATOR, qui fermait alors n'importe quel tête-à-tête sans audit.
+    it.each(['MODERATOR', 'ADMIN', 'BIGBOSS'])(
+      '%s de la plateforme ÉTRANGER à la conversation n’y a aucun rang',
+      (platformRole) => {
+        for (const conversationRole of [undefined, null]) {
+          const stranger = { conversationRole, platformRole };
+          expect(actsWithCreatorRights(stranger)).toBe(false);
+          expect(effectiveConversationRole(stranger)).toBeNull();
+          expect(actorRoleLevel(stranger)).toBe(0);
+          expect(actorHasMinimumRole(stranger, 'member')).toBe(false);
+        }
+      },
+    );
+
+    it('une ligne au rang illisible reste une appartenance : le bypass s’y applique', () => {
+      expect(actsWithCreatorRights({ conversationRole: 'owner', platformRole: 'MODERATOR' })).toBe(true);
+    });
+
     it('un rôle de plateforme absent ne donne rien', () => {
       expect(actsWithCreatorRights({ conversationRole: 'member', platformRole: null })).toBe(false);
       expect(actsWithCreatorRights({ conversationRole: 'member' })).toBe(false);

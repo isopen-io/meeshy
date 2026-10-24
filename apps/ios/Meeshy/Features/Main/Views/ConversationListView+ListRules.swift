@@ -137,7 +137,7 @@ nonisolated struct ConversationRowMenuCapabilities: Equatable, Sendable {
     }
 
     /// Le rang auquel s'ouvrent les réglages : le rang EFFECTIF de la loi, celui
-    /// qui a fait offrir l'entrée (ADMIN/BIGBOSS de plateforme membre ⇒
+    /// qui a fait offrir l'entrée (MODERATOR/ADMIN/BIGBOSS de plateforme membre ⇒
     /// créateur, comme `actorHasMinimumRole` côté passerelle). Le rang servi
     /// retiendrait ce que l'entrée a promis.
     static func settingsRole(of conversation: MeeshyConversation, currentUser: MeeshyUser?) -> MemberRole {

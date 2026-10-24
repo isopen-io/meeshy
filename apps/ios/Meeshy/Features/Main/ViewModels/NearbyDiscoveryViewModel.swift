@@ -48,7 +48,7 @@ enum NearbyDiscoverySection: String, CaseIterable, Sendable {
 /// `nonisolated`.
 nonisolated enum NearbyDiscoverAccess {
     static func isAllowed(role: String?) -> Bool {
-        PlatformRole(caseFolding: role)?.isPrivileged ?? false
+        PlatformRole(raw: role)?.isPrivileged ?? false
     }
 }
 

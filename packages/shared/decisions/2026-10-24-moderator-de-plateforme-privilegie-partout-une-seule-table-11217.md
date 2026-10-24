@@ -23,20 +23,31 @@ admissions. AUDIT et ANALYST restent ordinaires.
   vaut le créateur, jamais au-dessus), `messageEditAdmission`, `messageDeleteAdmission`,
   `conversationWriteAdmission` (écriture, mode lent, épinglage), `historyFloor`,
   `mayMintShareLink` (Global), `ensureGlobalConversationMembership` (effectif exact),
-  `PostService.deletePost`, `requireModerator`, `canEditMessage`, et la loi d'actions
+  `PostService.deletePost`, `requireModerator`, `canEditMessage`, `DELETE
+  /attachments/:id`, `mayRemoveSound`, `permissions.canModerateContent` du contrat
+  participant (`serializeConversationParticipant`), et la loi d'actions
   des clients (`platformModerates`, rang effectif et invitation Global de
   `conversationActionsFor`).
 - Miroir Swift : `PlatformRole.privileged` / `isPrivileged`, lu par
   `ConversationViewerAuthority.effectiveRole`, `ConversationActionPolicy` (invitation
-  Global), `ContentRemovalPolicy` et `NearbyDiscoverAccess`. Les vecteurs de
+  Global), `ContentRemovalPolicy` et `NearbyDiscoverAccess` — tous par la lecture
+  EXACTE `PlatformRole(raw:)`, comme la passerelle et le web. Les vecteurs de
   `fixtures/action-policy/` sont régénérés et rejoués par le SDK.
 - Garde : `__tests__/platform-privilege.test.ts` refuse toute autre liste littérale
-  des trois rôles (et d'eux seuls) dans `packages/shared`, la passerelle et le web.
+  des trois rôles (et d'eux seuls) dans `packages/shared`, la passerelle et le web —
+  et, depuis la revue du lot, toute liste ou chaîne de `===` qui nomme ADMIN et
+  BIGBOSS en OUBLIANT MODERATOR, hors d'une liste de sites d'administration motivés
+  (console, exploitation, sauvegardes, amorçage), chacun avec sa raison, et que la
+  garde vérifie encore vivants.
+- L'autorité de plateforme suppose une APPARTENANCE : `actsWithCreatorRights` refuse le
+  surclassement sans ligne de participation (détail :
+  `services/gateway/decisions/2026-10-24-moderator-de-plateforme-agit-avec-les-droits-du-createur-11217.md`).
 
 **Ce que la table ne gouverne pas.**
 
 D'autres décisions gardent leur loi : la console d'administration (`adminOpen`,
 `isGlobalAdmin`), la visibilité de la présence (directive 2026-08-25, ADMIN/BIGBOSS),
 le lancement d'un appel dans une conversation publique (`canStartCall`, directive
-2026-10-11) et l'effectif exact côté client (`canViewExactMemberCount`, qui lit un
+2026-10-11), la liste des spectateurs d'un post (`viewerListAccess`, #9727, lecture
+journalisée d'ADMIN/BIGBOSS) et l'effectif exact côté client (`canViewExactMemberCount`, qui lit un
 seuil de niveau à casse pliée et rend le même ensemble).

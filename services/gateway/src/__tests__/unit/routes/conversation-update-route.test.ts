@@ -542,6 +542,26 @@ describe('Autorité de plateforme sur une conversation (#3941)', () => {
       await app.close();
     });
 
+    // « une fois DANS » (#3941, #11217) : sans ligne de participation, un rôle
+    // de plateforme n'a aucun rang ici. Configurer une conversation dont on
+    // n'est pas membre passe par la route souveraine (`requireAdminRank`,
+    // motif écrit, `AdminAuditLog`), jamais par la route de membre.
+    it.each(['MODERATOR', 'ADMIN', 'BIGBOSS'])(
+      'refuse un %s de la plateforme ÉTRANGER à la conversation',
+      async (platformRole) => {
+        const { prisma, conversationUpdate } = createMockPrisma(null);
+        const app = await buildApp(prisma, platformRole);
+
+        const res = await update(app, 'PUT', { title: 'Renommé du dehors' });
+        const patch = await update(app, 'PATCH', { slowModeSeconds: 30 });
+
+        expect(res.statusCode).toBe(403);
+        expect(patch.statusCode).toBe(403);
+        expect(conversationUpdate).not.toHaveBeenCalled();
+        await app.close();
+      },
+    );
+
     it.each(['AUDIT', 'ANALYST'])('un %s de la plateforme reste un participant ordinaire', async (platformRole) => {
       const { prisma, conversationUpdate } = createMockPrisma('member');
       const app = await buildApp(prisma, platformRole);
@@ -604,6 +624,20 @@ describe('Autorité de plateforme sur une conversation (#3941)', () => {
       expect(res.statusCode).toBe(403);
       await app.close();
     });
+
+    it.each(['MODERATOR', 'ADMIN', 'BIGBOSS'])(
+      'refuse de fermer pour un %s de la plateforme ÉTRANGER à la conversation (#11217)',
+      async (platformRole) => {
+        const { prisma, conversationUpdate } = createMockPrisma(null);
+        const app = await buildApp(prisma, platformRole);
+
+        const res = await remove(app);
+
+        expect(res.statusCode).toBe(403);
+        expect(conversationUpdate).not.toHaveBeenCalled();
+        await app.close();
+      },
+    );
 
     it('laisse supprimer un ADMIN de la plateforme simple membre', async () => {
       const { prisma, conversationUpdate } = createMockPrisma('member');

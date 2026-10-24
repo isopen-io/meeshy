@@ -96,6 +96,75 @@ describe('la garde : aucune autre liste de rôles privilégiés', () => {
   });
 });
 
+/**
+ * La forme du défaut d'ORIGINE de #11217 n'était pas le trio : c'était une
+ * liste — ou une chaîne de `===` — qui nomme ADMIN et BIGBOSS et OUBLIE
+ * MODERATOR. La garde ci-dessus ne la voyait pas ; le retrait d'une pièce
+ * jointe d'autrui et celui d'un son l'ont traversée après le lot.
+ *
+ * Le rang d'ADMINISTRATION reste légitime là où une AUTRE décision le garde :
+ * chaque fichier de la liste ci-dessous porte son motif. Un nouveau site qui
+ * écrit `role === 'ADMIN' || role === 'BIGBOSS'` fait tomber ce témoin : il lit
+ * la table (`isPrivilegedPlatformRole`) s'il modère du contenu, ou il rejoint
+ * cette liste, avec sa décision, s'il administre la plateforme.
+ */
+const ADMINISTRATION_RANK_SITES: Readonly<Record<string, string>> = {
+  'packages/shared/types/role-types.ts': '`isGlobalAdmin` — console et visibilité de la présence (directive 2026-08-25)',
+  'packages/shared/utils/participant-helpers.ts': 'champs de console du contrat participant (`canAccessAdmin`, `canViewAuditLogs`…)',
+  'services/gateway/src/jobs/backup-status-check.ts': 'alertes de sauvegarde, exploitation',
+  'services/gateway/src/middleware/auth.ts': '`requireAdmin` — console d’administration',
+  'services/gateway/src/middleware/authorize.ts': '`requireAdminRank` — rang d’administration (directive 2026-09-16)',
+  'services/gateway/src/routes/admin/dashboard.ts': 'console d’administration',
+  'services/gateway/src/routes/admin/oversight-viewer.ts': 'lecture de supervision journalisée (rang d’administration)',
+  'services/gateway/src/routes/notifications.ts': 'purge de TOUTES les notifications de l’instance, exploitation',
+  'services/gateway/src/services/world/worldReservedMembers.ts': 'identités réservées de l’amorçage',
+  'services/gateway/src/socketio/evictFromAdminRooms.ts': 'rooms de la console d’administration',
+  'services/gateway/src/socketio/handlers/AdminAgentHandler.ts': 'agent de la console d’administration',
+  'apps/web/src/lib/admin/sections.ts': 'sections de la console d’administration',
+};
+
+const MODERATOR_ROLE = new RegExp(ROLE('MODERATOR'));
+const ADMIN_ROLE = new RegExp(ROLE('ADMIN'));
+const BIGBOSS_ROLE = new RegExp(ROLE('BIGBOSS'));
+const COMPARED = (name: string): RegExp => new RegExp(`[!=]==\\s*${ROLE(name)}|${ROLE(name)}\\s*[!=]==`);
+
+/** Les listes et chaînes de comparaison qui privilégient ADMIN et BIGBOSS en oubliant MODERATOR. */
+function adminOnlyPrivilegesIn(source: string): readonly string[] {
+  const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  const lists = (code.match(/\[[^[\]]*\]/g) ?? []).filter(
+    (list) => ADMIN_ROLE.test(list) && BIGBOSS_ROLE.test(list) && !MODERATOR_ROLE.test(list) && !ORDINARY_ROLE.test(list),
+  );
+  const chains = code.split(/[;{}]/).filter(
+    (statement) => COMPARED('ADMIN').test(statement) && COMPARED('BIGBOSS').test(statement) && !COMPARED('MODERATOR').test(statement),
+  );
+  return [...lists, ...chains];
+}
+
+describe('la garde : aucun privilège ADMIN/BIGBOSS qui oublie MODERATOR hors des sites d’administration', () => {
+  it('la garde attrape les deux formes du défaut d’origine', () => {
+    expect(adminOnlyPrivilegesIn("const ROLES = new Set(['ADMIN', 'BIGBOSS']);")).toHaveLength(1);
+    expect(adminOnlyPrivilegesIn("const ok = role === 'ADMIN' || role === 'BIGBOSS';")).toHaveLength(1);
+    expect(adminOnlyPrivilegesIn("if (u.role !== UserRoleEnum.BIGBOSS && u.role !== UserRoleEnum.ADMIN) {")).toHaveLength(1);
+    expect(adminOnlyPrivilegesIn("const ok = isPrivilegedPlatformRole(role);")).toHaveLength(0);
+    expect(adminOnlyPrivilegesIn("z.enum(['USER', 'ADMIN', 'BIGBOSS'])")).toHaveLength(0);
+    expect(adminOnlyPrivilegesIn("const sovereign = role === 'BIGBOSS';")).toHaveLength(0);
+  });
+
+  it('seuls les sites d’administration motivés gardent ADMIN et BIGBOSS sans MODERATOR', () => {
+    const offenders = SCANNED_ROOTS.flatMap((root) => sourcesUnder(join(REPO, root)))
+      .map((path) => relative(REPO, path))
+      .filter((path) => !isTestPath(path) && !(path in ADMINISTRATION_RANK_SITES))
+      .filter((path) => adminOnlyPrivilegesIn(readFileSync(join(REPO, path), 'utf-8')).length > 0);
+    expect(offenders).toEqual([]);
+  });
+
+  it('chaque site d’administration motivé en porte encore un — la liste ne garde pas de mort', () => {
+    const stale = Object.keys(ADMINISTRATION_RANK_SITES)
+      .filter((path) => adminOnlyPrivilegesIn(readFileSync(join(REPO, path), 'utf-8')).length === 0);
+    expect(stale).toEqual([]);
+  });
+});
+
 const reader = (overrides: Partial<ActionViewer> = {}): ActionViewer => ({
   id: 'user-viewer', participantId: 'part-viewer', hasAccount: true, isAnonymous: false, platformRole: 'USER',
   conversationRole: 'member', isActiveMember: true, canSendMessages: true, isDeclaredMinor: false, ...overrides,

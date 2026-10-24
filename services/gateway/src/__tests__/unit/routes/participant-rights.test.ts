@@ -79,7 +79,7 @@ const registeredRow = {
 
 type Ctx = ReturnType<typeof setup>;
 
-function setup(viewerRole: string = 'admin', targetRow: any = anonymousRow, hosts: any[] = []) {
+function setup(viewerRole: string | null = 'admin', targetRow: any = anonymousRow, hosts: any[] = []) {
   const routes: { method: string; path: string; handler: any }[] = [];
   const register = (method: string) =>
     jest.fn<any>((path: string, options: any, handler: any) => {
@@ -93,6 +93,7 @@ function setup(viewerRole: string = 'admin', targetRow: any = anonymousRow, host
       findFirst: jest.fn<any>(async ({ where }: any) => {
         if (where?.id === targetRow.id) return targetRow;
         if (where?.userId === HOST_ID) {
+          if (viewerRole === null) return null;
           return { id: 'host-row', role: viewerRole, type: 'user', user: { role: 'USER' } };
         }
         return null;
@@ -723,6 +724,18 @@ describe('PATCH …/rights — l’administrateur de plateforme agit avec les dr
 
     expect(ctx.reply._status).toBe(200);
   });
+
+  it.each(['MODERATOR', 'ADMIN', 'BIGBOSS'])(
+    'un %s de la plateforme ÉTRANGER à la conversation ne pose aucun droit (#11217)',
+    async (platformRole) => {
+      const ctx = setup(null);
+
+      await patchRightsAs(ctx, platformRole, { canSendFiles: true });
+
+      expect(ctx.reply._status).toBe(403);
+      expect(ctx.prisma.participant.update).not.toHaveBeenCalled();
+    },
+  );
 
   it.each(['AUDIT', 'ANALYST'])('un %s de la plateforme reste un participant ordinaire (#11217)', async (platformRole) => {
     const ctx = setup('member');
