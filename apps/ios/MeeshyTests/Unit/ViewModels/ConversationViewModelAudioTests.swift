@@ -248,6 +248,41 @@ final class ConversationViewModelAudioTests: XCTestCase {
         XCTAssertEqual(coordinator.activeContext?.attachmentId, "a1")
     }
 
+    // MARK: - 2 bis. #11339 — un vocal lu depuis l'aperçu d'appui long joue seul
+
+    /// La même entrée de file que le fil (`queuedAudio`, nom et image de la
+    /// conversation), mais aucune auto-avance derrière : fermer le menu arrête
+    /// ce que l'aperçu a lancé, et rien d'autre ne part après lui.
+    func test_playAudio_withoutQueue_playsOnlyThisVoice_withTheThreadEntry() async {
+        let (vm, engine, coordinator) = makeSUT()
+        let head = makeAudioMessage(
+            id: "m1",
+            senderId: otherUserId,
+            conversationId: testConversationId,
+            attachments: [makeAudioAttachment(id: "a1", fileUrl: "https://cdn/a1.m4a")],
+            createdAt: date(1_000)
+        )
+        let next = makeAudioMessage(
+            id: "m2",
+            senderId: otherUserId,
+            conversationId: testConversationId,
+            attachments: [makeAudioAttachment(id: "a2")],
+            createdAt: date(2_000)
+        )
+        vm.messages = [head, next]
+        await Task.yield()
+
+        vm.playAudio(attachmentId: "a1", continuesQueue: false)
+        await Task.yield()
+
+        XCTAssertEqual(coordinator.activeContext?.attachmentId, "a1")
+        XCTAssertEqual(coordinator.queueCount, 1, "aucune auto-avance derrière le vocal de l'aperçu")
+        XCTAssertEqual(engine.lastPlayedUrl, "https://cdn/a1.m4a")
+        XCTAssertEqual(coordinator.activeContext?.conversationName, vm.currentConversationName,
+                       "le mini-lecteur et Now Playing nomment la conversation, pas l'expéditeur")
+        XCTAssertEqual(coordinator.activeContext?.conversationArtworkURL, vm.currentConversationArtworkURL)
+    }
+
     // MARK: - 3. Realtime: a new audio for the active conv appends to the queue
 
     func test_newMessage_audioInActiveConv_appendsToQueue() async {
