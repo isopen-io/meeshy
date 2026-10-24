@@ -248,6 +248,22 @@ time.sleep(30)`, file], { stdio: ['ignore', 'pipe', 'inherit'] });
   });
 });
 
+describe('les chemins par défaut de la production (#11509)', () => {
+  it('la production lit le verdict de SA sauvegarde là où la sauvegarde l’écrit, et lance SON unité à la demande', () => {
+    const python = spawnSync(
+      'python3',
+      ['-I', '-c', 'import importlib.util,json,os,sys; [os.environ.pop(k, None) for k in list(os.environ) if k.startswith("OPS_")]; s=importlib.util.spec_from_file_location("r", sys.argv[1]); m=importlib.util.module_from_spec(s); s.loader.exec_module(m); print(json.dumps({e: [m.Paths(e).backup_status, m.Paths(e).backup_unit, m.Paths(e).base, m.Paths(e).compose_dir] for e in ("production", "staging")}))', RUNNER],
+      { encoding: 'utf8', env: { PATH: process.env.PATH } },
+    );
+    assert.equal(python.status, 0, python.stderr);
+    assert.deepEqual(JSON.parse(python.stdout), {
+      // Le dossier que la passerelle de production monte déjà (BACKUP_STATUS_HOST_DIR).
+      production: ['/opt/meeshy/backups/nightly-status/etat.json', 'meeshy-production-backup@on-demand.service', '/opt/meeshy/production/ops', '/opt/meeshy/production'],
+      staging: ['/opt/meeshy/staging/backup-status/etat.json', 'meeshy-staging-backup@on-demand.service', '/opt/meeshy/staging/ops', '/opt/meeshy/staging'],
+    });
+  });
+});
+
 describe('la purge n’est permise qu’aux heures creuses : de 02:00 à 06:00, heure de Paris (#11452)', () => {
   it('la fenêtre et le délai d’attente du runner sont ceux de la passerelle (packages/shared, confrontés)', () => {
     // Sans ce témoin, changer la fenêtre d'un seul côté laisse tous les tests verts, et

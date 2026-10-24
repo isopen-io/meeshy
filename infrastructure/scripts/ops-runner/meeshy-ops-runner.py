@@ -62,6 +62,10 @@ COOLDOWN_SECONDS = {"backup": 6 * 3600, "image-prune": 3600}
 WINDOWS = {"image-prune": ("Europe/Paris", 2, 6)}
 # Une demande acceptee a 05:59:58 et traitee juste apres 06:00 n'est pas refusee a tort.
 WINDOW_GRACE_SECONDS = 10 * 60
+# Le verdict de la sauvegarde de la production vit a cote de ses sauvegardes, pas dans son
+# dossier d'environnement (#9668) : c'est le dossier que sa passerelle monte deja en
+# lecture seule (BACKUP_STATUS_HOST_DIR, docker-compose.prod.yml).
+BACKUP_STATUS_FILES = {"production": "/opt/meeshy/backups/nightly-status/etat.json"}
 MAX_REQUEST_BYTES = 1024
 IN_PROGRESS_HORIZON_SECONDS = 2 * 3600
 STALE_TEMP_SECONDS = 60
@@ -126,7 +130,7 @@ class Paths:
         self.containers_file = os.path.join(self.state, "containers.json")
         self.compose_dir = os.environ.get("OPS_COMPOSE_DIR") or "/opt/meeshy/%s" % env
         self.backup_unit = os.environ.get("OPS_BACKUP_UNIT") or "meeshy-%s-backup@on-demand.service" % env
-        self.backup_status = os.environ.get("OPS_BACKUP_STATUS_FILE") or "/opt/meeshy/%s/backup-status/etat.json" % env
+        self.backup_status = os.environ.get("OPS_BACKUP_STATUS_FILE") or BACKUP_STATUS_FILES.get(env) or "/opt/meeshy/%s/backup-status/etat.json" % env
 
 
 def write_json_atomic(path, payload):
