@@ -160,6 +160,62 @@ describe('l’aperçu lit le vocal (#11339)', () => {
     expect(items.length).toBeGreaterThan(0);
     expect(document.activeElement).toBe(previewPlay());
   });
+
+  test('Tab depuis le bouton de lecture boucle sur la première entrée, puis avance — jamais coincé', async () => {
+    const { row } = liveRow(VOICE);
+    mountMenu(row);
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 30));
+    });
+    const menu = () => document.querySelector<HTMLElement>('[role="menu"]')!;
+    const tab = () =>
+      act(() => {
+        (document.activeElement as HTMLElement).dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Tab' }));
+      });
+    act(() => {
+      menu().dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Home' }));
+    });
+    const first = document.activeElement;
+    act(() => {
+      menu().dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'ArrowDown' }));
+    });
+    const second = document.activeElement;
+    act(() => {
+      menu().dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'End' }));
+    });
+    const last = document.activeElement;
+    expect(new Set([first, second, last]).size).toBe(3);
+    tab();
+    expect(document.activeElement).toBe(previewPlay());
+    tab();
+    expect(document.activeElement).toBe(first);
+    tab();
+    expect(document.activeElement).toBe(second);
+  });
+
+  test('Maj+Tab depuis la première entrée passe par le bouton de lecture puis revient à la dernière', async () => {
+    const { row } = liveRow(VOICE);
+    mountMenu(row);
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 30));
+    });
+    const menu = () => document.querySelector<HTMLElement>('[role="menu"]')!;
+    const shiftTab = () =>
+      act(() => {
+        (document.activeElement as HTMLElement).dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Tab', shiftKey: true }));
+      });
+    act(() => {
+      menu().dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'End' }));
+    });
+    const last = document.activeElement;
+    act(() => {
+      menu().dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Home' }));
+    });
+    shiftTab();
+    expect(document.activeElement).toBe(previewPlay());
+    shiftTab();
+    expect(document.activeElement).toBe(last);
+  });
 });
 
 describe('vue unique : l’aperçu ne lit rien (#11339)', () => {

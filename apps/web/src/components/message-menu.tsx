@@ -583,7 +583,8 @@ export function MessageMenu({
       }
       if (next.kind === 'roving') {
         event.preventDefault();
-        roving.itemRefs.current[roving.activeIndex]?.focus();
+        roving.setActiveIndex(next.index);
+        roving.itemRefs.current[next.index]?.focus();
         return;
       }
       if (roving.handleKey(event.shiftKey ? 'ArrowUp' : 'ArrowDown')) event.preventDefault();

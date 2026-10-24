@@ -151,6 +151,29 @@ describe('armPreviewPlayback — le clone relaie au lecteur vivant', () => {
     expect(media[0]!.pauses()).toBe(0);
   });
 
+  test('une lecture démarrée PENDANT le menu hors du clic de l’aperçu (file du fil) s’arrête aussi à la fermeture', () => {
+    const { source, clone, media } = liveAndClone(VOICE('a1'));
+    const playback = armPreviewPlayback(clone, { source })!;
+    void media[0]!.element.play();
+    media[0]!.element.dispatchEvent(new Event('play'));
+    playback.dispose();
+    expect(media[0]!.element.paused).toBe(true);
+  });
+
+  test('une vidéo qui JOUAIT déjà dans le fil se peint dans le clone dès l’armement', () => {
+    const html = VIDEO('v1').replace('<video preload="none"></video>', '<video preload="none"></video><img data-preview-frame alt="" />');
+    const { source, clone, media } = liveAndClone(html);
+    const video = media[0]!.element as HTMLVideoElement;
+    void video.play();
+    Object.defineProperty(video, 'readyState', { configurable: true, get: () => 4 });
+    Object.defineProperty(video, 'videoWidth', { configurable: true, get: () => 320 });
+    Object.defineProperty(video, 'videoHeight', { configurable: true, get: () => 180 });
+    const playback = armPreviewPlayback(clone, { source })!;
+    expect(clone.querySelector('[data-preview-frame]')!.tagName).toBe('CANVAS');
+    playback.dispose();
+    expect(video.paused).toBe(false);
+  });
+
   test('aucune pièce lisible : rien n’est armé, le clone reste une image', () => {
     const source = build('<p>Bonjour</p>');
     const clone = build('<p>Bonjour</p>');
@@ -169,8 +192,23 @@ describe('previewTabTarget — le clavier atteint le bouton de lecture', () => {
     expect(previewTabTarget({ controlCount: 2, focusedControl: null, rovingIndex: 4, itemCount: 5, backwards: false })).toEqual({ kind: 'control', index: 0 });
   });
 
-  test('Tab depuis le dernier bouton de l’aperçu rend la main au menu', () => {
-    expect(previewTabTarget({ controlCount: 2, focusedControl: 1, rovingIndex: 4, itemCount: 5, backwards: false })).toEqual({ kind: 'roving' });
+  test('Tab depuis le dernier bouton de l’aperçu boucle sur la PREMIÈRE entrée du menu', () => {
+    expect(previewTabTarget({ controlCount: 2, focusedControl: 1, rovingIndex: 4, itemCount: 5, backwards: false })).toEqual({ kind: 'roving', index: 0 });
+  });
+
+  test('Maj+Tab depuis le premier bouton de l’aperçu revient à la DERNIÈRE entrée du menu', () => {
+    expect(previewTabTarget({ controlCount: 2, focusedControl: 0, rovingIndex: 0, itemCount: 5, backwards: true })).toEqual({ kind: 'roving', index: 4 });
+  });
+
+  test('une dernière entrée désactivée n’empêche pas Tab d’atteindre l’aperçu', () => {
+    const isDisabledAt = (index: number) => index === 4;
+    expect(previewTabTarget({ controlCount: 1, focusedControl: null, rovingIndex: 3, itemCount: 5, backwards: false, isDisabledAt })).toEqual({ kind: 'control', index: 0 });
+  });
+
+  test('une première entrée désactivée : Tab hors de l’aperçu va à la première entrée ATTEIGNABLE', () => {
+    const isDisabledAt = (index: number) => index === 0;
+    expect(previewTabTarget({ controlCount: 1, focusedControl: 0, rovingIndex: 4, itemCount: 5, backwards: false, isDisabledAt })).toEqual({ kind: 'roving', index: 1 });
+    expect(previewTabTarget({ controlCount: 1, focusedControl: null, rovingIndex: 1, itemCount: 5, backwards: true, isDisabledAt })).toEqual({ kind: 'control', index: 0 });
   });
 
   test('Tab entre deux boutons de l’aperçu passe au suivant', () => {

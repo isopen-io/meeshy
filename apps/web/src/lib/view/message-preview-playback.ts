@@ -17,6 +17,8 @@
  * ne lit jamais ce que le fil retient.
  */
 
+import { findFocusableIndex } from './roving-menu';
+
 const PLAY_CONTROL_SELECTOR = '[data-voice-play], [data-video-control="play-pause"]';
 const PROTECTED_SELECTOR = '[data-protected], [data-protected-rest]';
 const ZONE_SELECTOR = '[data-attachment]';
@@ -118,8 +120,13 @@ function relay(copy: HTMLElement, live: HTMLElement, started: Set<HTMLMediaEleme
     if (media !== null && media.paused) started.add(media);
     live.click();
   };
+  const onPlay = () => {
+    if (media !== null) started.add(media);
+    loop();
+  };
   copy.addEventListener('click', onClick);
-  media?.addEventListener('play', loop);
+  media?.addEventListener('play', onPlay);
+  if (media !== null && !media.paused) loop();
   const observer = new MutationObserver(() => mirror(live, copy));
   const liveZone = live.closest(ZONE_SELECTOR) ?? live;
   observer.observe(liveZone, { attributes: true, childList: true, subtree: true, characterData: true });
@@ -127,7 +134,7 @@ function relay(copy: HTMLElement, live: HTMLElement, started: Set<HTMLMediaEleme
     observer.disconnect();
     cancelAnimationFrame(frame);
     copy.removeEventListener('click', onClick);
-    media?.removeEventListener('play', loop);
+    media?.removeEventListener('play', onPlay);
   };
 }
 
@@ -152,13 +159,18 @@ export function armPreviewPlayback(clone: HTMLElement, options: { readonly sourc
   };
 }
 
-export type PreviewTabTarget = { readonly kind: 'control'; readonly index: number } | { readonly kind: 'roving' } | { readonly kind: 'step' };
+export type PreviewTabTarget =
+  | { readonly kind: 'control'; readonly index: number }
+  | { readonly kind: 'roving'; readonly index: number }
+  | { readonly kind: 'step' };
 
 /**
  * LE CLAVIER ATTEINT LE BOUTON DE LECTURE — le menu piège Tab dans son
- * parcours (`message-menu.tsx`) ; les boutons de l'aperçu s'y insèrent AVANT
- * la première entrée : Tab depuis la dernière entrée y mène, Tab depuis le
- * dernier bouton rend la main au menu.
+ * parcours (`message-menu.tsx`) ; les boutons de l'aperçu s'y insèrent ENTRE
+ * la dernière entrée ATTEIGNABLE et la première : Tab depuis la dernière y
+ * mène, Tab depuis le dernier bouton boucle sur la PREMIÈRE entrée (Maj+Tab,
+ * symétriquement, sur la dernière). Le parcours reste un anneau — rendre la
+ * main à l'entrée QUITTÉE coinçait Tab entre elle et le bouton.
  */
 export function previewTabTarget(input: {
   readonly controlCount: number;
@@ -166,14 +178,18 @@ export function previewTabTarget(input: {
   readonly rovingIndex: number;
   readonly itemCount: number;
   readonly backwards: boolean;
+  readonly isDisabledAt?: (index: number) => boolean;
 }): PreviewTabTarget {
-  const { controlCount, focusedControl, rovingIndex, itemCount, backwards } = input;
+  const { controlCount, focusedControl, rovingIndex, itemCount, backwards, isDisabledAt = () => false } = input;
   if (controlCount === 0) return { kind: 'step' };
+  const firstItem = findFocusableIndex(itemCount, -1, 1, isDisabledAt);
+  const lastItem = findFocusableIndex(itemCount, itemCount, -1, isDisabledAt);
   if (focusedControl !== null) {
     const next = focusedControl + (backwards ? -1 : 1);
-    return next >= 0 && next < controlCount ? { kind: 'control', index: next } : { kind: 'roving' };
+    if (next >= 0 && next < controlCount) return { kind: 'control', index: next };
+    return { kind: 'roving', index: backwards ? lastItem : firstItem };
   }
-  if (!backwards && rovingIndex === itemCount - 1) return { kind: 'control', index: 0 };
-  if (backwards && rovingIndex === 0) return { kind: 'control', index: controlCount - 1 };
+  if (!backwards && rovingIndex === lastItem) return { kind: 'control', index: 0 };
+  if (backwards && rovingIndex === firstItem) return { kind: 'control', index: controlCount - 1 };
   return { kind: 'step' };
 }
