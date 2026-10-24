@@ -39,9 +39,11 @@ nonisolated struct CallFrameStage {
     let texts: CallFrameTexts
     /// Les bandes que des contrôles couvrent à l'écran (#9777) : aucun texte du cadre ne s'y pose.
     let reserve: CallFrameChromeReserve
+    /// #12683 — les ornements animés se peignent à part (`renderMotion`) : les couches fixes les omettent.
+    let excludesMotion: Bool
 
     init(frame: CallFrameDesign, people: [CallFramePerson], texts: CallFrameTexts, size: CGSize,
-         reserve: CallFrameChromeReserve = .none) {
+         reserve: CallFrameChromeReserve = .none, excludesMotion: Bool = false) {
         self.frame = frame
         self.size = size
         self.bounds = CGRect(origin: .zero, size: size)
@@ -50,6 +52,7 @@ nonisolated struct CallFrameStage {
         self.people = people
         self.texts = texts
         self.reserve = reserve
+        self.excludesMotion = excludesMotion
     }
 
     var look: CallFrameLook { frame.look }
@@ -129,7 +132,7 @@ nonisolated enum CallFrameRenderer {
             texts.date,
             texts.accentHex.map { "\($0.primary)/\($0.secondary)" } ?? "\u{2205}",
             "\(stage.reserve.top)/\(stage.reserve.bottom)",
-        ]
+        ] + (stage.excludesMotion ? ["motion"] : [])
         let people = stage.people.map { "\($0.id)\u{1E}\($0.name)\u{1E}\($0.handle ?? "")\u{1E}\($0.isSelf ? 1 : 0)" }
         return (head + people).joined(separator: "\u{1F}")
     }

@@ -21,19 +21,27 @@ nonisolated enum CallMontageFrameRule {
     /// Le dernier recours : le premier classique.
     static let fallback: CallMontageChoice = .classic(.screen)
 
-    /// « Classiques » d'abord, puis les seules ambiances qui ont au moins un cadre pour `n`.
-    static func chips(forPeople people: Int, in frames: [CallFrameDesign] = CallFrameCatalogue.all) -> [CallMontageMoodChip] {
-        [.classics] + CallFrameCatalogue.moods(forPeople: people, in: frames).map { CallMontageMoodChip.mood($0) }
+    /// « Classiques » d'abord, puis les seules ambiances qui ont au moins un cadre pour `n` :
+    /// toutes (`.all`, ordre canonique), ou celles ouvertes d'office et leur ordre (`.spotlight`, #12683).
+    static func chips(forPeople people: Int, scope: CallFrameScope = .all, in frames: [CallFrameDesign] = CallFrameCatalogue.all) -> [CallMontageMoodChip] {
+        [.classics] + CallFrameSpotlightRule.moods(forPeople: people, scope: scope, in: frames).map { CallMontageMoodChip.mood($0) }
     }
 
-    /// Le carrousel d'une puce : les classiques, ou les cadres de l'ambiance qui servent `n`.
-    static func items(for chip: CallMontageMoodChip, people: Int, in frames: [CallFrameDesign] = CallFrameCatalogue.all) -> [CallMontageChoice] {
+    /// Le carrousel d'une puce : les classiques, ou les cadres de l'ambiance qui servent `n` —
+    /// tous (`.all`), ou ses seules vedettes (`.spotlight`, #12683).
+    static func items(for chip: CallMontageMoodChip, people: Int, scope: CallFrameScope = .all, in frames: [CallFrameDesign] = CallFrameCatalogue.all) -> [CallMontageChoice] {
         switch chip {
         case .classics:
             return CallMontageStyle.allCases.map { CallMontageChoice.classic($0) }
         case .mood(let mood):
-            return CallFrameCatalogue.frames(forPeople: people, mood: mood, in: frames).map { CallMontageChoice.frame($0.id) }
+            return CallFrameSpotlightRule.frames(forPeople: people, mood: mood, scope: scope, in: frames).map { CallMontageChoice.frame($0.id) }
         }
+    }
+
+    /// La portée montrée pour un choix : celle demandée, sauf si le cadre choisi n'y figure pas.
+    static func scope(of choice: CallMontageChoice, people: Int, requested: CallFrameScope, in frames: [CallFrameDesign] = CallFrameCatalogue.all) -> CallFrameScope {
+        guard case .frame(let id) = choice else { return requested }
+        return CallFrameSpotlightRule.scope(showing: id, people: people, requested: requested, in: frames)
     }
 
     /// La puce qui porte un choix. Un cadre inconnu du catalogue retombe sur les classiques.
@@ -59,8 +67,9 @@ nonisolated enum CallMontageFrameRule {
 
     /// Toucher une puce : le dernier choix fait dans cette ambiance s'il sert encore `n`,
     /// sinon le premier élément de son carrousel.
-    static func entering(_ chip: CallMontageMoodChip, people: Int, remembered: CallMontageChoice?, in frames: [CallFrameDesign] = CallFrameCatalogue.all) -> CallMontageChoice {
-        let offered = items(for: chip, people: people, in: frames)
+    static func entering(_ chip: CallMontageMoodChip, people: Int, remembered: CallMontageChoice?, scope: CallFrameScope = .all,
+                         in frames: [CallFrameDesign] = CallFrameCatalogue.all) -> CallMontageChoice {
+        let offered = items(for: chip, people: people, scope: scope, in: frames)
         if let remembered, offered.contains(remembered) { return remembered }
         return offered.first ?? fallback
     }

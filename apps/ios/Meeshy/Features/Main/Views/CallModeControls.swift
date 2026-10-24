@@ -263,16 +263,18 @@ struct CallMontageModeControls: View {
         let people = subjects.count
         let selection = CallMontageFrameRule.reconcile(capture.choice, people: people)
         let chip = CallMontageFrameRule.chip(of: selection)
+        let scope = CallMontageFrameRule.scope(of: selection, people: people, requested: capture.requestedFrameScope)
         VStack(spacing: MeeshySpacing.mdPlus) {
             CallFrameMoodChips(
-                chips: CallMontageFrameRule.chips(forPeople: people),
+                chips: CallMontageFrameRule.chips(forPeople: people, scope: scope),
                 selected: chip,
-                isEnabled: !capture.isRecording
+                isEnabled: !capture.isRecording,
+                scopeToggle: scopeToggle(scope: scope, people: people)
             ) { tapped in
                 capture.show(tapped, people: people)
             }
             CallModeCarousel(
-                items: CallMontageFrameRule.items(for: chip, people: people),
+                items: CallMontageFrameRule.items(for: chip, people: people, scope: scope),
                 selection: choiceBinding(people: people),
                 title: CallModeCopy.montageTitle,
                 name: CallFrameCopy.choiceName,
@@ -285,7 +287,7 @@ struct CallMontageModeControls: View {
             ) { item, isSelected in
                 CallModeThumbnail(image: thumbnail(item), symbol: CallFrameCopy.choiceSymbol(item), isSelected: isSelected)
             }
-            .id(CallMontageCarouselKey(chip: chip, people: people))
+            .id(CallMontageCarouselKey(chip: chip, people: people, scope: scope))
             CallModeActionBar(
                 exitHint: CallModeCopy.quitMontageHint,
                 onExit: onExit,
@@ -319,6 +321,15 @@ struct CallMontageModeControls: View {
         .onDisappear {
             hasSeenGestureHint = true
             capture.stop()
+        }
+    }
+
+    /// #12683 — « Plus d'ambiances » en fin de rangée, tant que la mise en avant cache quelque chose pour `n`.
+    private func scopeToggle(scope: CallFrameScope, people: Int) -> CallFrameScopeToggle? {
+        guard CallFrameSpotlightRule.hidesFrames(forPeople: people) else { return nil }
+        let showsAll = scope == .all
+        return CallFrameScopeToggle(showsAll: showsAll) {
+            capture.setFrameScope(showsAll ? .spotlight : .all, people: people)
         }
     }
 
@@ -382,6 +393,7 @@ struct CallLiveFrameHold {
 private struct CallMontageCarouselKey: Hashable {
     let chip: CallMontageMoodChip
     let people: Int
+    let scope: CallFrameScope
 }
 
 /// #8625 — la scène du Montage lit l'aperçu sur son flux : à chaque trame,

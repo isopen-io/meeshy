@@ -519,6 +519,60 @@ export function renderSwift(files: readonly unknown[]): readonly GeneratedSwiftF
   return [indexFile(), ...FRAME_MOODS.map((mood) => moodFile(mood, frames.filter((frame) => frame.mood === mood)))];
 }
 
+/*
+ * **LES AMBIANCES OUVERTES PAR DÉFAUT** (#12683) — `spotlight.json` range les ambiances que le
+ * carrousel d'appel montre d'office, dans leur ordre, chacune avec ses cadres vedettes ; les
+ * autres restent dans l'app derrière « Plus d'ambiances ». Le fichier Swift généré porte un
+ * nom hors du motif `CallFrameCatalogue+*.swift` : il ne compte pas parmi les fichiers par ambiance.
+ */
+
+export const SPOTLIGHT_FILE = 'CallFrameSpotlight+Generated.swift';
+export const SPOTLIGHT_MAX_FEATURED = 6;
+
+export type SpotlightEntry = { readonly mood: string; readonly featured: readonly string[] };
+
+const spotlightEntry = (value: unknown, path: string, motifs: ReadonlyMap<string, string>, seen: Set<string>): SpotlightEntry => {
+  const it = record(value, path);
+  const mood = typeof it.mood === 'string' && (FRAME_MOODS as readonly string[]).includes(it.mood) && !seen.has(it.mood)
+    ? it.mood
+    : fail(`${path}.mood`, `ambiance inconnue ou déjà déclarée ${JSON.stringify(it.mood)}`);
+  seen.add(mood);
+  const list = items(it.featured, `${path}.featured`, SPOTLIGHT_MAX_FEATURED);
+  if (list.length === 0) return fail(`${path}.featured`, 'au moins un cadre vedette');
+  const featured = list.map((motif, index) => {
+    const at = `${path}.featured[${index}]`;
+    if (typeof motif !== 'string' || motifs.get(motif) !== mood) return fail(at, `motif inconnu de l'ambiance « ${mood} » ${JSON.stringify(motif)}`);
+    return list.indexOf(motif) === index ? motif : fail(at, `cadre vedette en double ${JSON.stringify(motif)}`);
+  });
+  return { mood, featured };
+};
+
+/** Les ambiances ouvertes par défaut, vérifiées contre le catalogue déplié : chaque vedette est un motif de SON ambiance. */
+export function spotlightOf(spotlight: unknown, frames: readonly ExpandedFrame[]): readonly SpotlightEntry[] {
+  const motifs = new Map(frames.map((frame) => [frame.motif, frame.mood]));
+  const seen = new Set<string>();
+  const it = record(spotlight, 'spotlight.json');
+  return items(it.moods, 'moods').map((entry, index) => spotlightEntry(entry, `moods[${index}]`, motifs, seen));
+}
+
+export function renderSpotlightSwift(spotlight: unknown, frames: readonly ExpandedFrame[]): GeneratedSwiftFile {
+  const entries = spotlightOf(spotlight, frames).map(
+    (entry) => `        CallFrameSpotlight(mood: ${member(entry.mood, FRAME_MOODS, entry.mood)}, featured: [${entry.featured.map(quote).join(', ')}])`,
+  );
+  const body = entries.length === 0 ? '[]' : `[\n${entries.join(',\n')}\n    ]`;
+  return {
+    name: SPOTLIGHT_FILE,
+    content: [
+      HEADER,
+      '/// Les ambiances que le carrousel d\'appel ouvre d\'office (#12683), dans leur ordre, et leurs cadres vedettes.',
+      'nonisolated extension CallFrameCatalogue {',
+      `    static let spotlight: [CallFrameSpotlight] = ${body}`,
+      '}',
+      '',
+    ].join('\n'),
+  };
+}
+
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const REPO_ROOT = resolve(HERE, '../../..');
 export const SOURCE_DIR = resolve(REPO_ROOT, 'packages/shared/design/call-capture-frames');
@@ -526,6 +580,10 @@ export const OUTPUT_DIR = resolve(REPO_ROOT, OUTPUT_RELATIVE_DIR);
 
 export function readMoodFiles(directory: string = SOURCE_DIR): readonly unknown[] {
   return FRAME_MOODS.map((mood): unknown => JSON.parse(readFileSync(join(directory, `${mood}.json`), 'utf8')));
+}
+
+export function readSpotlight(directory: string = SOURCE_DIR): unknown {
+  return JSON.parse(readFileSync(join(directory, 'spotlight.json'), 'utf8'));
 }
 
 /** Les fichiers générés présents sur disque — ceux que le générateur possède (`CallFrameCatalogue+*.swift`). */
@@ -542,6 +600,8 @@ if (isMain) {
   const expected = new Set(generated.map((file) => file.name));
   generatedFilesOnDisk().filter((name) => !expected.has(name)).forEach((name) => rmSync(join(OUTPUT_DIR, name)));
   generated.forEach((file) => writeFileSync(join(OUTPUT_DIR, file.name), file.content));
+  const spotlight = renderSpotlightSwift(readSpotlight(), expandFiles(readMoodFiles()));
+  writeFileSync(join(OUTPUT_DIR, spotlight.name), spotlight.content);
   const count = generated.reduce((sum, file) => sum + (file.content.match(/^ {8}CallFrameDesign\($/gm) ?? []).length, 0);
   process.stdout.write(`${OUTPUT_RELATIVE_DIR} — ${generated.length} fichiers, ${count} cadres\n`);
 }

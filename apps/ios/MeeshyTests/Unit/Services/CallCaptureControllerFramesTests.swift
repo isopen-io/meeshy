@@ -244,6 +244,35 @@ final class CallCaptureControllerFramesTests: XCTestCase {
         XCTAssertEqual(sut.choice, .classic(.film))
     }
 
+    // MARK: - La mise en avant (#12683)
+
+    func test_frameScope_opensOnTheSpotlight() {
+        let (sut, _) = makeSUT(people: 2)
+        XCTAssertEqual(sut.requestedFrameScope, .spotlight)
+        XCTAssertEqual(sut.frameScope(people: 2), .spotlight)
+    }
+
+    func test_show_spotlightMood_landsOnItsFirstFeaturedFrame() throws {
+        let (sut, _) = makeSUT(people: 2)
+        let first = try XCTUnwrap(CallFrameSpotlightRule.frames(forPeople: 2, mood: .morbide, scope: .spotlight).first)
+        sut.show(.mood(.morbide), people: 2)
+        XCTAssertEqual(sut.choice, .frame(first.id))
+    }
+
+    func test_setFrameScope_backToSpotlight_movesAHiddenChoiceToTheFirstFeaturedFrame() throws {
+        let (sut, _) = makeSUT(people: 2)
+        let featured = CallFrameSpotlightRule.frames(forPeople: 2, mood: .jovial, scope: .spotlight)
+        let hidden = try XCTUnwrap(CallFrameCatalogue.frames(forPeople: 2, mood: .jovial).first { design in !featured.contains(design) })
+        sut.setFrameScope(.all, people: 2)
+        sut.select(choice: .frame(hidden.id))
+        XCTAssertEqual(sut.frameScope(people: 2), .all)
+
+        sut.setFrameScope(.spotlight, people: 2)
+
+        XCTAssertEqual(sut.choice, .frame(try XCTUnwrap(featured.first).id))
+        XCTAssertEqual(sut.frameScope(people: 2), .spotlight)
+    }
+
     func test_reconcileFrame_peopleChange_takesTheSameMotifInTheNewBucket() throws {
         let all = CallFrameCatalogue.all
         let duo = try XCTUnwrap(all.first { duo in

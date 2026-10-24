@@ -8,6 +8,19 @@ enum CallFrameCopy {
         String(localized: "call.frames.classics", defaultValue: "Classiques", bundle: .main)
     }
 
+    /// #12683 — l'interrupteur qui ouvre tout le catalogue, ou revient aux ambiances mises en avant.
+    static func scopeToggle(showsAll: Bool) -> String {
+        showsAll
+            ? String(localized: "call.frames.less", defaultValue: "Moins d'ambiances", bundle: .main)
+            : String(localized: "call.frames.more", defaultValue: "Plus d'ambiances", bundle: .main)
+    }
+
+    static func scopeToggleHint(showsAll: Bool) -> String {
+        showsAll
+            ? String(localized: "call.frames.less.hint", defaultValue: "Revient aux ambiances mises en avant", bundle: .main)
+            : String(localized: "call.frames.more.hint", defaultValue: "Montre toutes les ambiances et tous les cadres", bundle: .main)
+    }
+
     static func moodName(_ mood: CallFrameMood) -> String {
         switch mood {
         case .signature: return String(localized: "call.frames.mood.signature", defaultValue: "Signature", bundle: .main)
@@ -76,6 +89,8 @@ struct CallFrameMoodChips: View {
     let chips: [CallMontageMoodChip]
     let selected: CallMontageMoodChip
     var isEnabled = true
+    /// #12683 — l'interrupteur « Plus d'ambiances » en fin de rangée ; `nil` : rien de caché.
+    var scopeToggle: CallFrameScopeToggle? = nil
     let onSelect: (CallMontageMoodChip) -> Void
 
     static let spacing: CGFloat = 8
@@ -95,6 +110,9 @@ struct CallFrameMoodChips: View {
                             }
                             .id(chip)
                         }
+                        if let scopeToggle {
+                            CallFrameScopeChip(toggle: scopeToggle)
+                        }
                     }
                     .padding(.horizontal, MeeshySpacing.lg)
                 }
@@ -110,6 +128,30 @@ struct CallFrameMoodChips: View {
                 }
             }
         }
+    }
+}
+
+/// #12683 — ce que l'interrupteur de portée affiche et fait : `showsAll` vrai, il replie.
+struct CallFrameScopeToggle {
+    let showsAll: Bool
+    let toggle: () -> Void
+}
+
+private struct CallFrameScopeChip: View {
+    let toggle: CallFrameScopeToggle
+
+    var body: some View {
+        Button {
+            HapticFeedback.light()
+            toggle.toggle()
+        } label: {
+            CallFrameMoodChipLabel(title: CallFrameCopy.scopeToggle(showsAll: toggle.showsAll), isSelected: false,
+                                   symbol: toggle.showsAll ? "chevron.left" : "ellipsis")
+        }
+        .buttonStyle(CallPressButtonStyle())
+        .accessibilityLabel(CallFrameCopy.scopeToggle(showsAll: toggle.showsAll))
+        .accessibilityHint(CallFrameCopy.scopeToggleHint(showsAll: toggle.showsAll))
+        .accessibilityIdentifier("call.frames.scope-toggle")
     }
 }
 
@@ -131,6 +173,7 @@ private struct CallFrameMoodChip: View {
 private struct CallFrameMoodChipLabel: View {
     let title: String
     let isSelected: Bool
+    var symbol: String? = nil
 
     static let capsuleHeight: CGFloat = 36
     static let minimumTarget: CGFloat = 44
@@ -138,7 +181,12 @@ private struct CallFrameMoodChipLabel: View {
     @Environment(\.callButtonIsPressed) private var isPressed
 
     var body: some View {
-        Text(title)
+        HStack(spacing: MeeshySpacing.xs) {
+            if let symbol {
+                Image(systemName: symbol).accessibilityHidden(true)
+            }
+            Text(title)
+        }
             .font(.footnote.weight(.semibold))
             .foregroundColor(isSelected ? MeeshyColors.indigo950 : .white)
             .lineLimit(1)

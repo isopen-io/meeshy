@@ -95,7 +95,8 @@ extension CallCaptureController {
     /// Les cadres de l'ambiance choisie pour `n`, à `thumbnailRadius` du cadre choisi — jamais tout le catalogue.
     func frameWindow(for choice: CallMontageChoice) -> [CallFrameDesign] {
         guard case .frame(let id) = choice, case .mood(let mood) = CallMontageFrameRule.chip(of: choice) else { return [] }
-        let frames = CallFrameCatalogue.frames(forPeople: subjects.count, mood: mood)
+        let people = subjects.count
+        let frames = CallFrameSpotlightRule.frames(forPeople: people, mood: mood, scope: frameScope(people: people))
         let ids = Self.thumbnailWindow(around: id, in: frames.map(\.id), radius: Self.thumbnailRadius)
         return frames.filter { ids.contains($0.id) }
     }
