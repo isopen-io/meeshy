@@ -7,7 +7,6 @@ import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { initialsOf } from '@/lib/view/conversation';
 
-import { Avatar } from './avatar';
 import { PeerAvatar } from './peer-avatar';
 import { ContactGameStripSlot } from './game-profile-slots';
 
@@ -30,17 +29,18 @@ export function ContactFace({
   readonly size: number;
   readonly language: InterfaceLanguage;
 }) {
-  if (account === undefined) {
-    return <Avatar initials={initialsOf(card.formattedName)} color={colorForName(card.formattedName)} size={size} />;
-  }
+  /* UN SEUL montage pour les deux cas : sans compte associé, seul le nom du
+     carnet existe (la vCard n'est lue que pour ses champs de texte) — pas de
+     photo, pas de présence ; avec un compte, tout vient du compte. */
+  const named = account === undefined ? card.formattedName : account.displayName;
   return (
     <PeerAvatar
-      presenceKey={account.relation === 'self' ? undefined : account.userId}
-      initials={initialsOf(account.displayName)}
-      color={authorAccentColor(account.userId, account.displayName)}
+      presenceKey={account === undefined || account.relation === 'self' ? undefined : account.userId}
+      initials={initialsOf(named)}
+      color={account === undefined ? colorForName(named) : authorAccentColor(account.userId, named)}
       size={size}
-      name={translate(language, 'contactCard.avatar', { name: account.displayName })}
-      {...(account.avatarUrl !== null ? { src: account.avatarUrl } : {})}
+      {...(account === undefined ? {} : { name: translate(language, 'contactCard.avatar', { name: account.displayName }) })}
+      {...(account === undefined || account.avatarUrl === null ? {} : { src: account.avatarUrl })}
     />
   );
 }

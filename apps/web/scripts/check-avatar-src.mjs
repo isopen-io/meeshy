@@ -42,14 +42,7 @@ const SRC = new URL('../src/', import.meta.url).pathname;
  * Une surface ne peut revenir ici que si la donnée n'existe PAS, jamais parce
  * qu'on ne l'a pas branchée, et avec l'endroit EXACT où la chaîne s'arrête.
  */
-const EXEMPTIONS = [
-  {
-    fichier: 'components/contact-card-account.tsx',
-    combien: 1,
-    pourquoi:
-      "ContactFace sans compte Meeshy associé : seule la vCard du carnet de l'auteur existe, et sa PHOTO n'est pas lue (vcard.ts ne garde ni PHOTO ni LOGO) — la chaîne s'arrête à l'analyse de la carte (#12571)",
-  },
-];
+const EXEMPTIONS = [];
 
 /**
  * LES RELAIS (#7828) — un composant qui ENVELOPPE `Avatar` et lui RÉPAND ses
