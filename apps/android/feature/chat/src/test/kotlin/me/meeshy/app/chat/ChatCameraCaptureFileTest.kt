@@ -27,4 +27,10 @@ class ChatCameraCaptureFileTest {
     fun `photo and video names never collide for the same instant`() {
         assertThat(ChatCameraCaptureFile.next(1_000L)).isNotEqualTo(ChatCameraCaptureFile.nextVideo(1_000L))
     }
+
+    @Test
+    fun `nextRetouched names the rendered photo apart from the raw capture`() {
+        assertThat(ChatCameraCaptureFile.nextRetouched(1_700_000_000_000L)).isEqualTo("chat_retouch_1700000000000.jpg")
+        assertThat(ChatCameraCaptureFile.nextRetouched(1_000L)).isNotEqualTo(ChatCameraCaptureFile.next(1_000L))
+    }
 }

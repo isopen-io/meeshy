@@ -118,18 +118,37 @@ internal fun ChatComposer(
     LaunchedEffect(externalAttachments?.nonce) {
         externalAttachments?.takeIf { it.uris.isNotEmpty() }?.let { onPickUris?.invoke(it.uris) }
     }
+    var retouch by remember { mutableStateOf<ChatRetouchPending?>(null) }
+    suspend fun deliverCapture(file: ChatRetouchedFile) {
+        val stage = onStageCapturedUris ?: return onPickFile(file.bytes, file.fileName, file.mimeType)
+        val uri = context.writeRetouchedCapture(file)
+        stage(listOf(uri))
+        withContext(Dispatchers.IO) { runCatching { context.contentResolver.delete(uri, null, null) } }
+    }
     val chatCameraCapture = rememberChatCameraCapture(
-        onCaptured = { uri, _ ->
+        onCaptured = { uri, isVideo ->
             val stage = onStageCapturedUris
-            if (stage != null) {
-                stage(listOf(uri))
-            } else {
-                withContext(Dispatchers.IO) { readPickedAttachment(context, uri) }?.let { picked ->
-                    onPickFile(picked.bytes, picked.fileName, picked.mimeType)
+            val picked = if (isVideo) null else withContext(Dispatchers.IO) { readPickedAttachment(context, uri) }
+            val pending = picked?.let { withContext(Dispatchers.Default) { ChatRetouchPending.of(it.bytes, it.fileName, it.mimeType) } }
+            when {
+                pending != null -> retouch = pending
+                stage != null -> stage(listOf(uri))
+                else -> (picked ?: withContext(Dispatchers.IO) { readPickedAttachment(context, uri) })?.let { file ->
+                    onPickFile(file.bytes, file.fileName, file.mimeType)
                 }
             }
         },
     )
+    retouch?.let { pending ->
+        ChatCaptureRetouchHost(
+            pending = pending,
+            onDeliver = { file ->
+                ioScope.launch { deliverCapture(file) }
+                retouch = null
+            },
+            onDismiss = { retouch = null },
+        )
+    }
     val showMic = !isEditing && draft.isBlank() && clipboardContent == null && !hasPendingAttachments && affordances.canSendAudios
     val interact = hostCallbacks.onAnyInteraction
 
