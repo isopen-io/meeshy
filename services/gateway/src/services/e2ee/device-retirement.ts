@@ -15,6 +15,8 @@ export type RetirementPrisma = Pick<PrismaClient, 'e2EEDevice' | 'e2EEOneTimePre
 
 type RowsPrisma = Pick<PrismaClient, 'e2EEDevice' | 'e2EEOneTimePreKey' | 'messageEnvelope'>;
 
+type ErasurePrisma = RowsPrisma & Pick<PrismaClient, 'e2EERevokedIdentity'>;
+
 /**
  * Un appareil tel qu'un retrait l'a LU. Une place `(userId, deviceId)` se
  * reprend : le retrait ne vise que la génération lue (sa `registrationId`) liée
@@ -121,13 +123,14 @@ export async function sweepDevicesOfEndedSessions(
 
 /** La purge du compte : ses appareils, ses pré-clés et les enveloppes qui lui sont adressées disparaissent. */
 export async function eraseE2EEDataOfUser(
-  prisma: RowsPrisma,
+  prisma: ErasurePrisma,
   userId: string,
 ): Promise<{ devices: number; preKeys: number; envelopes: number }> {
   const [devices, preKeys, envelopes] = await Promise.all([
     prisma.e2EEDevice.deleteMany({ where: { userId } }),
     prisma.e2EEOneTimePreKey.deleteMany({ where: { userId } }),
     prisma.messageEnvelope.deleteMany({ where: { recipientUserId: userId } }),
+    prisma.e2EERevokedIdentity.deleteMany({ where: { userId } }),
   ]);
   return { devices: devices.count, preKeys: preKeys.count, envelopes: envelopes.count };
 }

@@ -3308,6 +3308,20 @@ model E2EEDevice {
   @@index([userId, retiredAt])
 }
 
+/// Une identité d'appareil RETIRÉE par le propriétaire du compte (DELETE
+/// /e2ee/devices/:id) : elle ne se réenrôle plus jamais sur ce compte, même avec
+/// une preuve de liaison fraîche. Distincte de E2EEDevice, dont la ligne se
+/// reprend par une autre installation : la révocation survit à la reprise.
+model E2EERevokedIdentity {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String   @db.ObjectId
+  /// Clé d'identité publique révoquée, base64.
+  identityKey String
+  revokedAt   DateTime @default(now())
+
+  @@unique([userId, identityKey])
+}
+
 /// Une pré-clé à usage unique (EC ou Kyber), un document par clé. Réservée UNE
 /// fois, atomiquement (findAndModify sur usedAt: null).
 model E2EEOneTimePreKey {

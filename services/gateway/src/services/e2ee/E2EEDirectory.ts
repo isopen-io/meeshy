@@ -35,7 +35,10 @@ import {
 import { RETIRABLE_DEVICE, retireDeviceRows, retireDevicesOfEndedSessions } from './device-retirement';
 import type { SignatureVerifier } from './signature-verifier';
 
-export type DirectoryPrisma = Pick<PrismaClient, 'e2EEDevice' | 'e2EEOneTimePreKey' | 'messageEnvelope' | 'userSession' | '$runCommandRaw'>;
+export type DirectoryPrisma = Pick<
+  PrismaClient,
+  'e2EEDevice' | 'e2EEOneTimePreKey' | 'messageEnvelope' | 'userSession' | 'e2EERevokedIdentity' | '$runCommandRaw'
+>;
 
 export type E2EEDirectoryDeps = {
   readonly prisma: DirectoryPrisma;
@@ -199,6 +202,7 @@ export class E2EEDirectory {
     const at = this.now();
     await assertBinding(this.verifier, { userId, request, now: at });
     await assertSigned(this.verifier, request.identityKey, signedKeysOf(request));
+    await this.assertNotRevoked(userId, request.identityKey);
     const keyFields = { ...signedPreKeyFields(request.signedPreKey, at), ...kyberLastResortFields(request.kyberLastResort) };
     const profile = { platform: request.platform, label: request.label ?? null, lastSeenAt: at };
 
@@ -262,10 +266,36 @@ export class E2EEDirectory {
     return devices.map((device) => ({ deviceId: device.deviceId, registrationId: device.registrationId }));
   }
 
+  /**
+   * Le retrait par le propriétaire du compte RÉVOQUE l'identité : elle ne
+   * reprend jamais sa place et ne se réenrôle plus sur ce compte, même avec une
+   * preuve de liaison fraîche — un appareil révoqué, ou un jeton volé qui l'a
+   * révoqué, ne la ramène pas. L'installation doit tirer une nouvelle identité.
+   */
   async retireDevice(params: { userId: string; deviceId: number }): Promise<void> {
-    const retired = await this.retireDevices({ userId: params.userId, deviceId: params.deviceId });
-    if (retired.length === 0) {
+    const device = await this.prisma.e2EEDevice.findFirst({
+      where: { userId: params.userId, deviceId: params.deviceId, ...ACTIVE },
+      select: { identityKey: true },
+    });
+    if (!device) {
       throw new E2EEDirectoryError(E2EE_ERROR_CODES.DEVICE_NOT_BOUND, 404, 'Appareil chiffré introuvable sur ce compte');
+    }
+    await this.prisma.e2EERevokedIdentity.upsert({
+      where: { userId_identityKey: { userId: params.userId, identityKey: device.identityKey } },
+      create: { userId: params.userId, identityKey: device.identityKey, revokedAt: this.now() },
+      update: {},
+    });
+    await this.retireDevices({ userId: params.userId, deviceId: params.deviceId });
+  }
+
+  private async assertNotRevoked(userId: string, identityKey: string): Promise<void> {
+    const revoked = await this.prisma.e2EERevokedIdentity.findFirst({ where: { userId, identityKey }, select: { id: true } });
+    if (revoked) {
+      throw new E2EEDirectoryError(
+        E2EE_ERROR_CODES.IDENTITY_REVOKED,
+        409,
+        'Cet appareil chiffré a été retiré du compte : il doit générer une nouvelle identité pour chiffrer à nouveau',
+      );
     }
   }
 

@@ -121,6 +121,13 @@ class FakeCollection {
         this.assertUnique(row);
         return row;
       },
+      upsert: async (args: { where: Where; create: Record<string, unknown>; update: Record<string, unknown> }) => {
+        await tick();
+        const [unique] = Object.values(args.where) as Where[];
+        const row = this.rows.find((candidate) => matches(candidate, unique));
+        if (row) return Object.assign(row, args.update);
+        return this.insert(args.create);
+      },
       updateMany: async (args: { where: Where; data: Record<string, unknown> }) => {
         await tick();
         const found = this.rows.filter((row) => matches(row, args.where));
@@ -166,6 +173,7 @@ export function createFakeE2EEStore() {
     })),
     E2EEOneTimePreKey: new FakeCollection([['userId', 'deviceId', 'registrationId', 'kind', 'keyId']], () => ({ usedAt: null, usedBy: null, signature: null, createdAt: new Date() })),
     MessageEnvelope: new FakeCollection([['messageId', 'recipientUserId', 'recipientDeviceId']], () => ({ createdAt: new Date() })),
+    E2EERevokedIdentity: new FakeCollection([['userId', 'identityKey']], () => ({ revokedAt: new Date() })),
     Participant: new FakeCollection([], () => ({ isActive: true, type: 'user' })),
     UserSession: new FakeCollection([], () => ({ isValid: true, invalidatedAt: null, expiresAt: new Date(Date.now() + 86_400_000) })),
   };
@@ -200,6 +208,7 @@ export function createFakeE2EEStore() {
     e2EEDevice: collections.E2EEDevice.delegate(),
     e2EEOneTimePreKey: collections.E2EEOneTimePreKey.delegate(),
     messageEnvelope: collections.MessageEnvelope.delegate(),
+    e2EERevokedIdentity: collections.E2EERevokedIdentity.delegate(),
     participant: collections.Participant.delegate(),
     userSession: collections.UserSession.delegate(),
     $runCommandRaw: async (command: unknown) => {
