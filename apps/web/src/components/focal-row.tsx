@@ -51,15 +51,8 @@ import { ConversationLinkCards } from './conversation-link-cards';
 import { SystemNotice } from './system-notice';
 import { linkRenderingOf } from '@/lib/view/sender-links';
 import { callNoticeTarget } from '@/lib/calls/call-notice';
-import {
-  Badges,
-  Check,
-  EditedMark,
-  FailedSendBand,
-  Quote,
-  reactionEntries,
-  RowQuote,
-} from './message-blocks';
+import { Badges, Check, EditedMark, Quote, reactionEntries, RowQuote } from './message-blocks';
+import { FailedSendBand } from './failed-send-band';
 
 const defaultNow = (): number => Date.now();
 
@@ -130,6 +123,7 @@ export const FocalRow = memo(function FocalRow({
   sendStartedAt,
   sendFailureReason,
   onRetry,
+  onDiscard,
   revealable = true,
   onJumpToMessage,
   onOpenStory,
@@ -202,6 +196,7 @@ export const FocalRow = memo(function FocalRow({
    * bande elle-même : `lastError` était capturé et lu par PERSONNE. */
   sendFailureReason?: string;
   onRetry?: () => void;
+  onDiscard?: () => void;
   /**
    * LE CONTENU EST-IL SEULEMENT LA ? (#6862) — `false` quand la charge ne
    * PORTE PAS le texte : la lecture souveraine de l'administration retient
@@ -841,6 +836,7 @@ export const FocalRow = memo(function FocalRow({
               <FailedSendBand
                 {...(sendFailureReason === undefined ? {} : { reason: sendFailureReason })}
                 {...(onRetry === undefined ? {} : { onRetry })}
+                {...(onDiscard === undefined ? {} : { onDiscard })}
                 textColor="var(--color-error)"
               />
             ) : null}
