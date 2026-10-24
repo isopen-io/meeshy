@@ -99,7 +99,7 @@ final class LentilleRowMuxSourceGuardTests: XCTestCase {
     func test_rowCore_offBranch_buildsThemedConversationRow_withUnchangedArguments() throws {
         let code = normalizedCode(try rowsSource())
         let expectedCall = """
-        } else { ThemedConversationRow( conversation: conversation, community: community, availableWidth: rowWidth, isDragging: isDragging, presenceState: presenceState, isPeerHere: isPeerHere, onViewStory: onViewStory, onViewProfile: onViewProfile, onViewConversationInfo: onViewConversationInfo, onMoodBadgeTap: onMoodBadgeTap, onCreateShareLink: onCreateShareLink, isDark: isDark, storyRingState: storyRingState, moodStatus: moodStatus, typingUsername: typingUsername, isSelected: isSelected, draftSummary: draftSummary, preferredContentLanguages: preferredContentLanguages, onJoinLiveCall: { joinLiveCall() } ) .equatable() }
+        } else { ThemedConversationRow( conversation: conversation, community: community, availableWidth: rowWidth, isDragging: isDragging, presenceState: presenceState, isPeerHere: isPeerHere, onViewStory: onViewStory, onViewProfile: onViewProfile, onViewConversationInfo: onViewConversationInfo, onMoodBadgeTap: onMoodBadgeTap, onCreateShareLink: onCreateShareLink, isDark: isDark, storyRingState: storyRingState, moodStatus: moodStatus, typingUsername: typingUsername, isSelected: isSelected, draftSummary: draftSummary, isContentLocked: isContentLocked, preferredContentLanguages: preferredContentLanguages, onJoinLiveCall: { joinLiveCall() } ) .equatable() }
         """
         .split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.joined(separator: " ")
 
@@ -123,7 +123,7 @@ final class LentilleRowMuxSourceGuardTests: XCTestCase {
     func test_rowCore_onBranch_buildsLentilleConversationRow_withSameArgumentSet() throws {
         let code = normalizedCode(try rowsSource())
         let expectedCall = """
-        LentilleConversationRow( conversation: conversation, community: community, availableWidth: rowWidth, isDragging: isDragging, presenceState: presenceState, isPeerHere: isPeerHere, onViewStory: onViewStory, onViewProfile: onViewProfile, onViewConversationInfo: onViewConversationInfo, onMoodBadgeTap: onMoodBadgeTap, onCreateShareLink: onCreateShareLink, isDark: isDark, storyRingState: storyRingState, moodStatus: moodStatus, typingUsername: typingUsername, isSelected: isSelected, draftSummary: draftSummary, preferredContentLanguages: preferredContentLanguages, onJoinLiveCall: { joinLiveCall() }, magnification: context )
+        LentilleConversationRow( conversation: conversation, community: community, availableWidth: rowWidth, isDragging: isDragging, presenceState: presenceState, isPeerHere: isPeerHere, onViewStory: onViewStory, onViewProfile: onViewProfile, onViewConversationInfo: onViewConversationInfo, onMoodBadgeTap: onMoodBadgeTap, onCreateShareLink: onCreateShareLink, isDark: isDark, storyRingState: storyRingState, moodStatus: moodStatus, typingUsername: typingUsername, isSelected: isSelected, draftSummary: draftSummary, isContentLocked: isContentLocked, preferredContentLanguages: preferredContentLanguages, onJoinLiveCall: { joinLiveCall() }, magnification: context )
         """
         .split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.joined(separator: " ")
 

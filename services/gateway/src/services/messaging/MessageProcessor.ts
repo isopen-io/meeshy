@@ -9,8 +9,10 @@ import { copiedAttachmentFields } from './copiedAttachmentFields';
 import { exitProtectedCopy } from './copyExitProtection';
 import type { ForwardImposition } from './forwardAdmission';
 import { declaredReplyProtection } from './replyProtectionContagion';
-import { assertPlaintextAdmitted, type EncryptionRegime } from './e2eePlaintextAdmission';
+import { assertPlaintextAdmitted, E2EE_CONTENT_PLACEHOLDER, type EncryptionRegime } from './e2eePlaintextAdmission';
 import { admitSendUnderRegime } from './e2eeSendAdmission';
+import { persistAdmittedEnvelopes } from './e2eeEnvelopePersistence';
+import type { E2EERelayRequest } from '@meeshy/shared/types/e2ee-directory';
 import { PrismaClient, Message, type Prisma } from '@meeshy/shared/prisma/client';
 import { TrackingLinkService } from '../TrackingLinkService';
 import { processExplicitLinks } from './messageLinks';
@@ -322,9 +324,11 @@ export class MessageProcessor {
     sticker?: unknown;
     /** Pièce NOMMÉE citée (#6164) — même doctrine : admise par `admitAttachmentReply`, forme gardée par `parseAttachmentReplyTo`. */
     attachmentReplyTo?: unknown;
+    /** Envoi libsignal par appareil (#3706) : admis par `admitSendUnderRegime`, rangé par `persistAdmittedEnvelopes`. */
+    e2eeRelay?: E2EERelayRequest;
   }): Promise<Message> {
     // #11216, #12518 — refusé AVANT tout le reste ; `endToEnd` éteint les pipelines serveur.
-    const { regime, carriesCiphertext, endToEnd } = await admitSendUnderRegime(this.prisma, request);
+    const { regime, carriesCiphertext, endToEnd, relay } = await admitSendUnderRegime(this.prisma, request);
 
     const data = await exitProtectedCopy(this.prisma, await declaredReplyProtection(this.prisma, request));
     const corr: Record<string, any> = {
@@ -426,7 +430,7 @@ export class MessageProcessor {
     const messageData = {
       conversationId: data.conversationId,
       senderId: data.senderId,
-      content: encryptionContext.isEncrypted ? '' : processedContent.trim(),
+      content: encryptionContext.isEncrypted ? (relay ? E2EE_CONTENT_PLACEHOLDER : '') : processedContent.trim(),
       originalLanguage: data.originalLanguage,
       messageType: data.messageType || 'text',
       messageSource: data.messageSource || 'user',
@@ -469,7 +473,8 @@ export class MessageProcessor {
       candidate: {
         conversationId: messageData.conversationId,
         senderId: messageData.senderId,
-        content: messageData.content,
+        // Le littéral d'un envoi libsignal n'est pas son contenu : deux messages chiffrés ne se confondent jamais.
+        content: relay ? '' : messageData.content,
         ...(data.attachmentIds ? { attachmentIds: data.attachmentIds } : {})
       },
       ...(data.clientMessageId ? { clientMessageId: data.clientMessageId } : {}),
@@ -590,6 +595,8 @@ export class MessageProcessor {
     }
 
     const corrWithMsg = { ...corr, messageId: message.id };
+
+    if (relay) await persistAdmittedEnvelopes(this.prisma, { message, relay });
 
     // ÉTAPE 4: Gérer les attachments (Lier ou Copier pour forward)
     await performanceLogger.withTiming(

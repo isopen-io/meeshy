@@ -250,7 +250,9 @@ describe('ROUTE_TABLE (#4278)', () => {
     // route retirée ni renommée.
     // 91 : #11275 ajoute `admin-packs-registry` (`/api/v1/admin/packs/registry`,
     // les surcharges du registre des packs sans déploiement). Aucun alias.
-    expect(ROUTE_TABLE.length).toBe(91);
+    // 92 : #3706 ajoute `e2ee` (l'annuaire E2EE par appareil et le relais
+    // d'enveloppes sous `/api/v1/e2ee`). `/signal/*` reste monté, inchangé.
+    expect(ROUTE_TABLE.length).toBe(92);
   });
 });
 

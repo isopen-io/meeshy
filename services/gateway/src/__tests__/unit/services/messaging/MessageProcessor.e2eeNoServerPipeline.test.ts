@@ -77,11 +77,14 @@ jest.mock('../../../../utils/transcription', () => ({
 
 import { MessageProcessor } from '../../../../services/messaging/MessageProcessor';
 import { E2EE_PLAINTEXT_REFUSED } from '../../../../services/messaging/e2eePlaintextAdmission';
+import { createFakeE2EEStore } from '../../../../services/e2ee/__tests__/fake-e2ee-store';
 
 const CONV_ID = '507f1f77bcf86cd799439011';
 const SENDER_ID = '507f1f77bcf86cd799439022';
 const MSG_ID = '507f1f77bcf86cd799439033';
 const SOURCE_ID = '507f1f77bcf86cd799439044';
+const SENDER_USER_ID = '507f1f77bcf86cd799439055';
+const SENDER_SESSION = '507f1f77bcf86cd799439066';
 
 const E2EE = { encryptionMode: 'e2ee', encryptionEnabledAt: new Date('2026-01-01T00:00:00Z'), serverEncryptionKeyId: null };
 const CLEAR = { encryptionMode: null, encryptionEnabledAt: null, serverEncryptionKeyId: null };
@@ -96,7 +99,11 @@ function harness(regime: typeof E2EE | typeof CLEAR, sourceAttachments: unknown[
     id: MSG_ID, conversationId: CONV_ID, senderId: SENDER_ID, messageType: 'text', attachments: [],
     createdAt: new Date(), ...data,
   }) as unknown as Message;
+  const store = createFakeE2EEStore();
+  store.collections.E2EEDevice.insert({ userId: SENDER_USER_ID, deviceId: 1, registrationId: 7, sessionId: SENDER_SESSION });
   const prisma = {
+    e2EEDevice: store.prisma.e2EEDevice,
+    messageEnvelope: store.prisma.messageEnvelope,
     conversation: { findUnique: jest.fn<any>().mockResolvedValue(regime) },
     message: {
       create: jest.fn<any>().mockImplementation(async ({ data }: any) => created(data)),
@@ -112,7 +119,7 @@ function harness(regime: typeof E2EE | typeof CLEAR, sourceAttachments: unknown[
       updateMany: jest.fn<any>().mockResolvedValue({}),
     },
     participant: {
-      findUnique: jest.fn<any>().mockResolvedValue({ userId: 'u1' }),
+      findUnique: jest.fn<any>().mockResolvedValue({ userId: SENDER_USER_ID }),
       findFirst: jest.fn<any>().mockResolvedValue(null),
       findMany: jest.fn<any>().mockResolvedValue([]),
     },
@@ -126,7 +133,14 @@ function harness(regime: typeof E2EE | typeof CLEAR, sourceAttachments: unknown[
 }
 
 const send = { conversationId: CONV_ID, senderId: SENDER_ID, content: '', originalLanguage: 'fr' } as const;
-const sealed = { encryptedContent: 'c2lnbmFs', encryptionMetadata: { mode: 'e2ee', ciphertext: 'c2lnbmFs' } } as const;
+// #3706 — le seul chiffré admis en e2ee est un envoi libsignal par appareil. Ici
+// aucun autre appareil n'existe dans la conversation : l'envoi n'adresse personne
+// et Sesame l'admet tel quel.
+const sealed = {
+  encryptedContent: 'libsignal-v1',
+  encryptionMetadata: { mode: 'e2ee', ciphertext: 'libsignal-v1', protocol: 'libsignal-v1', senderDeviceId: 1 },
+  e2eeRelay: { protocol: 'libsignal-v1', senderDeviceId: 1, sessionId: SENDER_SESSION, envelopes: [], unapprovedOwnDevices: [] },
+} as const;
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 
 beforeEach(() => {
@@ -198,14 +212,14 @@ describe('conversation e2ee — rien du texte ne quitte la garde', () => {
     expect(prisma.message.create).not.toHaveBeenCalled();
   });
 
-  it('admet le littéral « [Encrypted] » que les clients posent à côté du chiffré', async () => {
+  it('admet le littéral « [Encrypted] » que les clients posent à côté du chiffré, et ne persiste que lui', async () => {
     const { prisma, processor } = harness(E2EE);
 
     await processor.saveMessage({ ...send, ...sealed, content: '[Encrypted]' });
 
     const written = prisma.message.create.mock.calls[0][0].data;
-    expect(written.content).toBe('');
-    expect(written.encryptedContent).toBe('c2lnbmFs');
+    expect(written.content).toBe('[Encrypted]');
+    expect(written.encryptedContent).toBe('libsignal-v1');
     expect(mockProcessExplicitLinksInContent).not.toHaveBeenCalled();
   });
 
@@ -214,8 +228,8 @@ describe('conversation e2ee — rien du texte ne quitte la garde', () => {
 
     await processor.saveMessage({
       ...send,
-      encryptedContent: 'c2lnbmFs',
-      encryptionMetadata: { mode: 'server', ciphertext: 'c2lnbmFs' },
+      ...sealed,
+      encryptionMetadata: { ...sealed.encryptionMetadata, mode: 'server' },
     });
 
     expect(prisma.message.create.mock.calls[0][0].data.encryptionMode).toBe('e2ee');
