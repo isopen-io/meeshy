@@ -26,6 +26,9 @@ import me.meeshy.sdk.model.UpdateConversationResponse
 import me.meeshy.sdk.model.UpdateConversationSettingsRequest
 import me.meeshy.sdk.model.UserPreferencesConversationUpdatedSocketData
 import me.meeshy.sdk.model.applyRemote
+import me.meeshy.sdk.model.conversationlist.RecentlyCreatedMerge
+import me.meeshy.sdk.model.conversationlist.UnreadReconciliation
+import me.meeshy.sdk.model.conversationlist.UnreadRow
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.net.NetworkResult
@@ -45,6 +48,7 @@ import me.meeshy.sdk.search.LocalSearchIndex
 import me.meeshy.sdk.sync.SyncAccountProvider
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.CancellationException
 
 @Singleton
 class ConversationRepository @Inject constructor(
@@ -55,6 +59,9 @@ class ConversationRepository @Inject constructor(
     private val outboxRepository: OutboxRepository,
     syncAccountProvider: SyncAccountProvider = SyncAccountProvider.None,
 ) {
+    /** conversationId → instant this client created it ([RecentlyCreatedMerge]); guarded by itself. */
+    private val recentlyCreated = mutableMapOf<String, Long>()
+
     private val cacheSource = ConversationCacheSource(
         database = database,
         conversationDao = conversationDao,
@@ -63,6 +70,7 @@ class ConversationRepository @Inject constructor(
         clock = SystemCacheClock,
         searchIndex = LocalSearchIndex(SearchIndexDao(database)),
         accountProvider = syncAccountProvider,
+        protectedIds = ::recentlyCreatedIds,
     )
 
     /**
@@ -127,6 +135,66 @@ class ConversationRepository @Inject constructor(
         cacheSource.revalidate()
     }
 
+    /**
+     * Silent sync (launch prewarm, cached-fresh first frame, return to the foreground): the same
+     * revalidation as [refresh], but a failure is reported as `false` — the cache stays on screen.
+     */
+    suspend fun syncSilently(): Boolean =
+        try {
+            cacheSource.revalidate()
+            true
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            false
+        }
+
+    /**
+     * After a COMPLETE sync, reconciles the unread counters the server just served with what this
+     * device knows better ([UnreadReconciliation]): the conversation open on screen reads 0, an
+     * explicit « mark unread » keeps its badge. Only the rows that change are rewritten. Returns
+     * how many were.
+     */
+    suspend fun reconcileUnreads(openConversationId: String?, explicitlyUnread: Set<String>): Int {
+        val ids = (explicitlyUnread + listOfNotNull(openConversationId)).filterTo(HashSet()) { it.isNotBlank() }
+        if (ids.isEmpty()) return 0
+        return database.withTransaction {
+            val rows = ids.mapNotNull { conversationDao.find(it) }
+            val fixes = UnreadReconciliation.corrections(
+                rows.map { UnreadRow(it.id, it.unreadCount) },
+                openConversationId,
+                explicitlyUnread,
+            )
+            val byId = rows.associateBy { it.id }
+            val updated = fixes.mapNotNull { fix ->
+                val row = byId[fix.conversationId] ?: return@mapNotNull null
+                val conversation = runCatching {
+                    MeeshyApi.json.decodeFromString<ApiConversation>(row.payload)
+                }.getOrNull() ?: return@mapNotNull null
+                row.copy(
+                    payload = MeeshyApi.json.encodeToString(conversation.copy(unreadCount = fix.unreadCount)),
+                    unreadCount = fix.unreadCount,
+                )
+            }
+            if (updated.isNotEmpty()) conversationDao.upsertAll(updated)
+            updated.size
+        }
+    }
+
+    private fun noteCreated(id: String) {
+        synchronized(recentlyCreated) {
+            val now = SystemCacheClock.nowMillis()
+            val live = RecentlyCreatedMerge.evictExpired(recentlyCreated, now)
+            recentlyCreated.clear()
+            recentlyCreated.putAll(live)
+            recentlyCreated[id] = now
+        }
+    }
+
+    private fun recentlyCreatedIds(): Set<String> = synchronized(recentlyCreated) {
+        RecentlyCreatedMerge.protectedIds(recentlyCreated, SystemCacheClock.nowMillis())
+    }
+
     suspend fun getById(id: String): NetworkResult<ApiConversation> =
         apiCall { conversationApi.getById(id) }
 
@@ -147,6 +215,7 @@ class ConversationRepository @Inject constructor(
         participantIds: List<String>,
     ): NetworkResult<ApiConversation> =
         apiCall { conversationApi.create(CreateConversationRequest(type, title, participantIds)) }
+            .also { if (it is NetworkResult.Success) noteCreated(it.data.id) }
 
     /**
      * La conversation directe la plus récente avec [userId] qui existe DÉJÀ dans le cache local —

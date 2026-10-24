@@ -4,15 +4,14 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.work.WorkManager
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -24,11 +23,13 @@ import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.lock.ConversationLockStore
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ConversationFilter
+import me.meeshy.sdk.model.conversationlist.ConversationListLoadState
 import me.meeshy.sdk.network.NetworkMonitor
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.CategorySocketManager
 import me.meeshy.sdk.socket.MessageSocketManager
 import me.meeshy.sdk.socket.PreferencesSocketManager
+import me.meeshy.sdk.socket.SocketConnectionState
 import me.meeshy.sdk.socket.SocketManager
 import me.meeshy.sdk.socket.TypingPresenceRelay
 import me.meeshy.sdk.status.StatusBarCache
@@ -62,6 +63,7 @@ class ConversationListViewModel @Inject constructor(
     networkMonitor: NetworkMonitor,
     statusRepository: StatusRepository,
     rowSignalsSource: ConversationListRowSignals,
+    private val loadingDeps: ConversationListLoadingDeps = ConversationListLoadingDeps.detached(),
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ConversationListUiState())
@@ -126,16 +128,26 @@ class ConversationListViewModel @Inject constructor(
         statusBarCache = statusBarCache,
     )
 
+    private val loader = ConversationListLoader(viewModelScope, repository, loadingDeps) { rawConversations.isNotEmpty() }
+
+    /** The explicit cache-first load state (fresh, stale, loading, offline, loaded, error). */
+    val loadState: StateFlow<ConversationListLoadState> = loader.loadState
+
+    /** One event per successful pull-to-refresh — the screen plays the success haptic. */
+    val pullRefreshSucceeded: Flow<Unit> = loader.pullRefreshSucceeded
+
     init {
         viewModelScope.launch {
             repository.conversationsStream(
                 onSyncError = { error ->
+                    loader.onSyncFailed(error)
                     _state.update {
                         it.copy(errorMessage = syncErrorFor(error), showSkeleton = false, isSyncing = false)
                     }
                 },
             ).collect { result ->
                 rawConversations = result.rawListOr(rawConversations)
+                loader.onStreamResult(result)
                 messagePrefetch.onListLoaded(sessionRepository, rawConversations)
                 _state.update { it.applyResultFlags(result, rawConversations).withVisible(rawConversations) }
             }
@@ -162,6 +174,7 @@ class ConversationListViewModel @Inject constructor(
             }
         }
 
+        loader.start(networkMonitor.isOnline, socketManager.connectionState.map { it == SocketConnectionState.CONNECTED })
         viewModelScope.launch { lock.observe() }
         observers.startCategories()
         realtime.start()
@@ -198,7 +211,10 @@ class ConversationListViewModel @Inject constructor(
 
     fun setTags(id: String, tags: List<String>) = actions.setTags(id, tags)
     fun markRead(id: String) = actions.markRead(id)
-    fun markUnread(id: String) = actions.markUnread(id)
+    fun markUnread(id: String) {
+        loadingDeps.explicitUnreadMarks.note(id)
+        actions.markUnread(id)
+    }
     fun reassignCategory(id: String, targetCategoryId: String) = actions.reassignCategory(id, targetCategoryId)
     fun createCategoryAndAssign(id: String, name: String) = actions.createCategoryAndAssign(id, name)
     fun leaveConversation(id: String) = actions.leaveConversation(id)
@@ -210,7 +226,10 @@ class ConversationListViewModel @Inject constructor(
     fun loadPreviewMessages(conversationId: String) = actions.loadPreviewMessages(conversationId)
 
     /** Row tap: opens straight through, or gates behind the lock code when locked. */
-    fun onConversationTap(id: String) = lock.onConversationTap(id)
+    fun onConversationTap(id: String) {
+        loadingDeps.explicitUnreadMarks.clear(id)
+        lock.onConversationTap(id)
+    }
     fun onLockToggle(id: String) = lock.onLockToggle(id)
     fun onUnlockAll() = lock.onUnlockAll()
     fun onChangeMasterPin() = lock.onChangeMasterPin()
@@ -222,24 +241,17 @@ class ConversationListViewModel @Inject constructor(
     /**
      * Pull-to-refresh: the visible spinner tracks the user gesture only —
      * background SWR revalidations stay silent ([ConversationListUiState.isSyncing]).
-     * The gesture also reloads the stories tray, the moods and the categories (iOS
-     * `onRefresh`), and ends once all of them are back.
+     * The gesture reloads the conversations, the stories tray, the moods and the categories in
+     * parallel (iOS `pullToRefresh`), invalidates the neighbour caches only when all of them came
+     * back, and ends once every one of them is back.
      */
     fun refresh() {
         _state.update { it.copy(errorMessage = null, isSyncing = true, isUserRefreshing = true) }
         viewModelScope.launch {
             try {
-                coroutineScope {
-                    launch {
-                        pullRefresh.refreshSurroundings { moods -> _state.update { it.copy(moodStatuses = moods) } }
-                    }
-                    repository.refresh()
-                }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                _state.update {
-                    it.copy(errorMessage = syncErrorFor(e), showSkeleton = false)
+                val surroundings = pullRefresh.reloads { moods -> _state.update { it.copy(moodStatuses = moods) } }
+                loader.pullToRefresh(surroundings)?.let { failure ->
+                    _state.update { it.copy(errorMessage = syncErrorFor(failure), showSkeleton = false) }
                 }
             } finally {
                 _state.update { it.copy(isUserRefreshing = false, isSyncing = false) }
