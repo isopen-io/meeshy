@@ -159,6 +159,9 @@ function OperationCard({
           ? translateAdmin(language, 'admin.ops.action.never')
           : [
               translateAdmin(language, 'admin.ops.action.last', { status: translateAdmin(language, `admin.ops.run.${run.status}`) }),
+              // Un refus du runner pour la fenêtre se dit : une purge acceptée à 05:59 et
+              // traitée après la tolérance est refusée APRÈS le 202 (audit de #12743).
+              run.status === 'rejected' && run.code === 'outside-window' ? translateAdmin(language, 'admin.ops.run.outsideWindow') : null,
               finished?.relative ?? null,
               run.reclaimedBytes === null ? null : translateAdmin(language, 'admin.ops.action.reclaimed', { bytes: formatBytes(run.reclaimedBytes, language) }),
             ]

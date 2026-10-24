@@ -58,6 +58,7 @@ const f = {
   'admin.ops.run.running': 'em andamento',
   'admin.ops.run.succeeded': 'concluída',
   'admin.ops.run.failed': 'falhou',
+  'admin.ops.run.outsideWindow': 'fora do horário de menor movimento',
   'admin.ops.run.rejected': 'recusada',
   'admin.ops.run.throttled': 'cedo demais',
   'admin.ops.refused.cooldown': 'Cedo demais: esta operação foi executada recentemente.',

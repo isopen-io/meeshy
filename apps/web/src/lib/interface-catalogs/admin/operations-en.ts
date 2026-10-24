@@ -58,6 +58,7 @@ const f = {
   'admin.ops.run.running': 'running',
   'admin.ops.run.succeeded': 'succeeded',
   'admin.ops.run.failed': 'failed',
+  'admin.ops.run.outsideWindow': 'outside off-peak hours',
   'admin.ops.run.rejected': 'rejected',
   'admin.ops.run.throttled': 'too early',
   'admin.ops.refused.cooldown': 'Too early: this operation ran recently.',

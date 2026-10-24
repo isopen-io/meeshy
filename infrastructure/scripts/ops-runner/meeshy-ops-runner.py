@@ -268,7 +268,11 @@ def window_refusal(request, moment):
         if start <= local_hour(window, moment) < end:
             return None
         requested = parse_iso(request["requestedAt"])
-        if start <= local_hour(window, requested) < end and (moment - window_close(window, requested)).total_seconds() <= WINDOW_GRACE_SECONDS:
+        # Bornee des DEUX cotes : la tolerance ne court qu'APRES la fermeture. Sans la
+        # borne basse, une demande datee dans le futur (jusqu'aux 5 min que tolere
+        # timeliness) ouvrait la fenetre avant 02:00 (audit de #12743).
+        late = (moment - window_close(window, requested)).total_seconds()
+        if start <= local_hour(window, requested) < end and 0 <= late <= WINDOW_GRACE_SECONDS:
             return None
     except (ValueError, OSError, zoneinfo.ZoneInfoNotFoundError):
         pass

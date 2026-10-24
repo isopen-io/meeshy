@@ -249,6 +249,26 @@ time.sleep(30)`, file], { stdio: ['ignore', 'pipe', 'inherit'] });
 });
 
 describe('la purge n’est permise qu’aux heures creuses : de 02:00 à 06:00, heure de Paris (#11452)', () => {
+  it('la fenêtre et le délai d’attente du runner sont ceux de la passerelle (packages/shared, confrontés)', () => {
+    // Sans ce témoin, changer la fenêtre d'un seul côté laisse tous les tests verts, et
+    // le runner refuse en silence ce que la passerelle accepte (audit de #12743).
+    const python = spawnSync(
+      'python3',
+      ['-I', '-c', 'import importlib.util,json,sys; s=importlib.util.spec_from_file_location("r", sys.argv[1]); m=importlib.util.module_from_spec(s); s.loader.exec_module(m); print(json.dumps({"windows": {k: list(v) for k, v in m.WINDOWS.items()}, "cooldownSeconds": m.COOLDOWN_SECONDS}))', RUNNER],
+      { encoding: 'utf8' },
+    );
+    assert.equal(python.status, 0, python.stderr);
+    const typescript = spawnSync(
+      'bun',
+      ['-e', `import { SERVER_OPERATIONS, SERVER_OPERATION_WINDOWS, SERVER_OPERATION_COOLDOWN_MS } from '${path.join(here, '../../../packages/shared/types/admin-ops.ts')}'; const windows = {}; const cooldownSeconds = {}; for (const op of SERVER_OPERATIONS) { const w = SERVER_OPERATION_WINDOWS[op]; if (w) windows[op] = [w.timeZone, w.startHour, w.endHour]; cooldownSeconds[op] = SERVER_OPERATION_COOLDOWN_MS[op] / 1000; } console.log(JSON.stringify({ windows, cooldownSeconds }));`],
+      { encoding: 'utf8' },
+    );
+    // En CI, bun est installé : son absence y est un échec, jamais un témoin sauté.
+    if (typescript.error?.code === 'ENOENT' && !process.env.CI) return;
+    assert.equal(typescript.status, 0, typescript.stdout + typescript.stderr);
+    assert.deepEqual(JSON.parse(python.stdout), JSON.parse(typescript.stdout));
+  });
+
   const pruned = () => calls().some((call) => call.includes('prune'));
   const outcome = ({ requestedAt, at }) => {
     rmSync(path.join(base, 'state'), { recursive: true, force: true });
@@ -288,6 +308,11 @@ describe('la purge n’est permise qu’aux heures creuses : de 02:00 à 06:00, 
     assert.equal(outcome({ requestedAt: '2026-10-13T03:59:58.000Z', at: '2026-10-13T04:10:01.000Z' }).code, 'outside-window');
     assert.equal(outcome({ requestedAt: '2026-10-13T04:00:01.000Z', at: '2026-10-13T04:00:30.000Z' }).code, 'outside-window');
     assert.equal(outcome({ requestedAt: '2026-10-12T23:59:00.000Z', at: '2026-10-13T00:01:00.000Z' }).status, 'succeeded', 'traitée dans la fenêtre, elle part');
+  });
+
+  it('une demande datée dans le futur n’ouvre jamais la fenêtre avant 02:00 (audit de #12743)', () => {
+    assert.equal(outcome({ requestedAt: '2026-10-13T00:04:59.000Z', at: '2026-10-12T23:59:59.000Z' }).code, 'outside-window');
+    assert.equal(outcome({ requestedAt: '2026-10-13T00:00:00.000Z', at: '2026-10-12T23:55:00.000Z' }).code, 'outside-window');
   });
 
   it('passage à l’heure d’été (dimanche 29 mars 2026, 02:00 → 03:00) : la fenêtre va de 01:00 à 04:00 UTC', () => {
