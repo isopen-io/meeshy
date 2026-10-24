@@ -17,6 +17,7 @@ final class ComposerMediaSwapRunTests: XCTestCase {
         }
     }
 
+    @MainActor
     private struct Montage {
         let store = ComposerMediaPorterStore()
         let preUploads: ComposerPreUploadRegistry

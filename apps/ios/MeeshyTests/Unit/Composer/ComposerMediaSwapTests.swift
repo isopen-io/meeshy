@@ -1,4 +1,5 @@
 import XCTest
+import MeeshySDK
 @testable import Meeshy
 
 /// #12590 — **la règle pure du remplacement d'une source** : les huit porteurs suivent le média
