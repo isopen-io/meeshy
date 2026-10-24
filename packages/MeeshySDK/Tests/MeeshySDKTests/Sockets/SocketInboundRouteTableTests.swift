@@ -36,7 +36,7 @@ final class SocketInboundRouteTableTests: XCTestCase {
         "conversation:join-error", "conversation:joined", "conversation:left", "conversation:new",
         "conversation:participant-banned", "conversation:participant-joined", "conversation:participant-left",
         "conversation:participant-unbanned", "conversation:restored", "conversation:stats",
-        "conversation:unread-updated", "conversation:updated", "engagement:conversation-updated",
+        "conversation:unread-updated", "conversation:updated", "e2ee:envelope", "engagement:conversation-updated",
         "engagement:post-updated", "friend-request:cancelled", "friend-request:rejected", "game:updated",
         "heartbeat:ack", "location:live-started", "location:live-stopped", "location:live-updated",
         "mention:created", "message:attachment-updated", "message:cited-post-withdrawn", "message:consumed",
@@ -124,6 +124,19 @@ final class SocketInboundRouteTableTests: XCTestCase {
 
         await expectOneValue(from: MessageSocketManager.shared.messageReceived, where: { $0.id == id }) {
             registrar.deliver("message:new", payload)
+        }
+    }
+
+    func test_e2eeEnvelopeRoute_deliversTheOpaqueEnvelopeOfThisDevice() async {
+        let registrar = installed(MessageSocketRoutes.all(for: .shared))
+        let id = "envelope-\(UUID().uuidString)"
+        let payload: [String: Any] = [
+            "id": id, "messageId": "m1", "conversationId": "c1", "recipientRegistrationId": 7,
+            "senderUserId": "u1", "senderDeviceId": 2, "type": 3, "body": "Y2lwaGVy", "createdAt": "2026-10-24T10:00:00.000Z",
+        ]
+
+        await expectOneValue(from: E2EEEnvelopeChannel.shared.received, where: { $0.id == id && $0.senderDeviceId == 2 }) {
+            registrar.deliver("e2ee:envelope", payload)
         }
     }
 

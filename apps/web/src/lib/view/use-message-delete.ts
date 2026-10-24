@@ -11,6 +11,7 @@ import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { moderationReasonOf } from './content-removal';
 import type { ActionScope } from './message-action-scope';
 import { deleteOfferOf, offersDeletion, removalOfferOf, type DeleteOffer } from './message-deletion';
+import { threadRowExit, type RowExit } from './row-exit-motion';
 
 /**
  * LA SUPPRESSION D'UN OU PLUSIEURS MESSAGES (#10582) — l'état du dialogue et
@@ -60,8 +61,11 @@ export function useMessageDelete(params: {
   readonly transport: Transport;
   /** Le geste est parti : l'hôte referme ce qui l'a ouvert (la sélection). */
   readonly onConfirmed: () => void;
+  /** La sortie des rangées masquées « pour moi » (#12634) — celle du fil par défaut. */
+  readonly rowExit?: RowExit;
 }) {
   const { conversationId, messageOf, scope, announce, queryClient, transport, onConfirmed } = params;
+  const rowExit = params.rowExit ?? threadRowExit;
   const [request, setRequest] = useState<MessageDeleteRequest | null>(null);
 
   /** L'offre pour ces messages — `null` : rien ne s'offre (ou le catalogue du fil n'est pas chargé, et le dialogue n'aurait pas ses mots). */
@@ -98,13 +102,13 @@ export function useMessageDelete(params: {
       onConfirmed();
       const params = { queryClient, conversationId, messages, transport };
       const performed =
-        mode === 'me' ? performDeleteForMe(params) : performDeleteForEveryone({ ...params, ...(reason === null ? {} : { reason }) });
+        mode === 'me' ? performDeleteForMe({ ...params, rowExit }) : performDeleteForEveryone({ ...params, ...(reason === null ? {} : { reason }) });
       void performed.then((result) => {
         const notice = noticeOf(result);
         if (notice !== null) announce(notice);
       });
     },
-    [request, messageOf, onConfirmed, queryClient, conversationId, transport, announce],
+    [request, messageOf, onConfirmed, queryClient, conversationId, transport, announce, rowExit],
   );
 
   return { request, offerOf, ask, askRemove, dismiss, confirm };
