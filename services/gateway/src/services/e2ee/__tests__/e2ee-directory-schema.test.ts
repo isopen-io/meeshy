@@ -33,13 +33,14 @@ describe("l'annuaire E2EE par appareil (schéma)", () => {
     expect(offending).toEqual([]);
   });
 
-  it('garantit un appareil par (utilisateur, deviceId) et une pré-clé par (appareil, nature, keyId)', () => {
+  it('garantit un appareil par (utilisateur, deviceId) et une pré-clé par (génération d’appareil, nature, keyId)', () => {
     expect(modelBody('E2EEDevice')).toMatch(/@@unique\(\[userId, deviceId\]\)/);
-    expect(modelBody('E2EEOneTimePreKey')).toMatch(/@@unique\(\[userId, deviceId, kind, keyId\]\)/);
+    expect(modelBody('E2EEOneTimePreKey')).toMatch(/@@unique\(\[userId, deviceId, registrationId, kind, keyId\]\)/);
   });
 
   it('indexe la réservation sur usedAt et la lecture des enveloppes par appareil destinataire', () => {
-    expect(modelBody('E2EEOneTimePreKey')).toMatch(/@@index\(\[userId, deviceId, kind, usedAt\]\)/);
+    expect(modelBody('E2EEOneTimePreKey')).toMatch(/@@index\(\[userId, deviceId, registrationId, kind, usedAt\]\)/);
+    expect(modelBody('MessageEnvelope')).toMatch(/recipientRegistrationId\s+Int/);
     expect(modelBody('MessageEnvelope')).toMatch(/@@index\(\[recipientUserId, recipientDeviceId, createdAt\]\)/);
     expect(modelBody('MessageEnvelope')).toMatch(/@@unique\(\[messageId, recipientUserId, recipientDeviceId\]\)/);
   });

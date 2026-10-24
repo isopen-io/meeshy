@@ -164,7 +164,7 @@ export function createFakeE2EEStore() {
       lastSeenAt: new Date(),
       signedPreKeyRotatedAt: new Date(),
     })),
-    E2EEOneTimePreKey: new FakeCollection([['userId', 'deviceId', 'kind', 'keyId']], () => ({ usedAt: null, usedBy: null, signature: null, createdAt: new Date() })),
+    E2EEOneTimePreKey: new FakeCollection([['userId', 'deviceId', 'registrationId', 'kind', 'keyId']], () => ({ usedAt: null, usedBy: null, signature: null, createdAt: new Date() })),
     MessageEnvelope: new FakeCollection([['messageId', 'recipientUserId', 'recipientDeviceId']], () => ({ createdAt: new Date() })),
     Participant: new FakeCollection([], () => ({ isActive: true, type: 'user' })),
     UserSession: new FakeCollection([], () => ({ isValid: true, invalidatedAt: null, expiresAt: new Date(Date.now() + 86_400_000) })),

@@ -209,6 +209,8 @@ export type E2EEServedEnvelope = {
   readonly id: string;
   readonly messageId: string;
   readonly conversationId: string;
+  /** La génération destinataire : un appareil écarte une enveloppe qui n'est pas pour SA registrationId (#12592). */
+  readonly recipientRegistrationId: number;
   readonly senderUserId: string;
   readonly senderDeviceId: number;
   readonly type: 2 | 3;

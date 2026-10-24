@@ -3314,6 +3314,9 @@ model E2EEOneTimePreKey {
   id        String  @id @default(auto()) @map("_id") @db.ObjectId
   userId    String  @db.ObjectId
   deviceId  Int
+  /// La génération de l'appareil qui l'a publiée : une place reprise par une
+  /// autre installation ne sert ni n'efface jamais les pré-clés de la précédente.
+  registrationId Int
   /// "ec" | "kyber"
   kind      String
   keyId     Int
@@ -3326,8 +3329,8 @@ model E2EEOneTimePreKey {
   /// User.id du demandeur qui a reçu la clé.
   usedBy    String?   @db.ObjectId
 
-  @@unique([userId, deviceId, kind, keyId])
-  @@index([userId, deviceId, kind, usedAt])
+  @@unique([userId, deviceId, registrationId, kind, keyId])
+  @@index([userId, deviceId, registrationId, kind, usedAt])
 }
 
 /// Une enveloppe libsignal opaque adressée à UN appareil destinataire. Effacée à
@@ -3338,6 +3341,8 @@ model MessageEnvelope {
   conversationId    String   @db.ObjectId
   recipientUserId   String   @db.ObjectId
   recipientDeviceId Int
+  /// La génération destinataire : seul l'appareil de cette registrationId la lit.
+  recipientRegistrationId Int
   senderUserId      String   @db.ObjectId
   senderDeviceId    Int
   /// 2 = SignalMessage, 3 = PreKeySignalMessage

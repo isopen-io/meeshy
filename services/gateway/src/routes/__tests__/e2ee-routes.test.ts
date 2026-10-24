@@ -112,8 +112,9 @@ describe('routes /e2ee', () => {
   it("sert à un appareil ses enveloppes, puis les efface à l'accusé", async () => {
     const { app, store } = await buildApp();
     await app.inject({ method: 'POST', url: '/e2ee/devices', headers: { 'x-test-user': 'bob' }, payload: enrollment(BOB) });
+    const [bobDevice] = store.collections.E2EEDevice.rows;
     store.collections.MessageEnvelope.insert({
-      messageId: '0a'.repeat(12), conversationId: '0b'.repeat(12), recipientUserId: BOB, recipientDeviceId: 1,
+      messageId: '0a'.repeat(12), conversationId: '0b'.repeat(12), recipientUserId: BOB, recipientDeviceId: 1, recipientRegistrationId: bobDevice.registrationId,
       senderUserId: ALICE, senderDeviceId: 1, type: 3, body: 'Y2lwaGVy',
     });
 

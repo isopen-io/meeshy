@@ -23,9 +23,9 @@ function storeWith(devices: { userId: string; deviceId: number; session: 'live' 
       });
     }
     store.collections.E2EEDevice.insert({ userId: device.userId, deviceId: device.deviceId, registrationId: 10 + index, sessionId, identityKey: 'ik', platform: 'ios' });
-    store.collections.E2EEOneTimePreKey.insert({ userId: device.userId, deviceId: device.deviceId, kind: 'ec', keyId: 1, publicKey: 'cGs=' });
+    store.collections.E2EEOneTimePreKey.insert({ userId: device.userId, deviceId: device.deviceId, registrationId: 10 + index, kind: 'ec', keyId: 1, publicKey: 'cGs=' });
     store.collections.MessageEnvelope.insert({
-      messageId: `${index + 1}`.padStart(24, '0'), conversationId: 'f'.repeat(24), recipientUserId: device.userId, recipientDeviceId: device.deviceId,
+      messageId: `${index + 1}`.padStart(24, '0'), conversationId: 'f'.repeat(24), recipientUserId: device.userId, recipientDeviceId: device.deviceId, recipientRegistrationId: 10 + index,
       senderUserId: BOB, senderDeviceId: 1, type: 3, body: 'Y2lwaGVy',
     });
   });

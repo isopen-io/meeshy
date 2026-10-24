@@ -329,9 +329,10 @@ describe("l'annuaire E2EE par appareil", () => {
 
     it("efface les enveloppes encore en attente de l'appareil retiré, et seulement les siennes", async () => {
       const { directory, store } = directoryWith();
-      const { deviceId } = await enroll(directory, ALICE, SESSION_1);
+      const { deviceId, keys } = await enroll(directory, ALICE, SESSION_1);
       const envelope = (recipientDeviceId: number) => store.collections.MessageEnvelope.insert({
         messageId: `${recipientDeviceId}`.repeat(24).slice(0, 24), conversationId: 'f'.repeat(24), recipientUserId: ALICE, recipientDeviceId,
+        recipientRegistrationId: keys.registrationId,
         senderUserId: BOB, senderDeviceId: 1, type: 3, body: 'Y2lwaGVy',
       });
       envelope(deviceId);

@@ -4,7 +4,8 @@
  * La passerelle ne voit ni ne produit aucun clair : elle vérifie qu'un envoi
  * s'adresse exactement aux appareils que l'annuaire connaît (Sesame), range une
  * enveloppe par appareil destinataire, ne la sert qu'à CET appareil (sa
- * session), l'efface à son accusé de réception et au plus tard à 30 jours.
+ * session et sa génération : la `registrationId` visée, car une place se
+ * reprend — #12592), l'efface à son accusé de réception et au plus tard à 30 jours.
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import {
@@ -40,6 +41,7 @@ type EnvelopeRow = {
   id: string;
   messageId: string;
   conversationId: string;
+  recipientRegistrationId: number;
   senderUserId: string;
   senderDeviceId: number;
   type: number;
@@ -51,6 +53,7 @@ const served = (row: EnvelopeRow): E2EEServedEnvelope => ({
   id: row.id,
   messageId: row.messageId,
   conversationId: row.conversationId,
+  recipientRegistrationId: row.recipientRegistrationId,
   senderUserId: row.senderUserId,
   senderDeviceId: row.senderDeviceId,
   type: row.type === 2 ? 2 : 3,
@@ -67,12 +70,12 @@ export class E2EEEnvelopeRelay {
     this.now = deps.now ?? (() => new Date());
   }
 
-  /** L'appareil ACTIF lié à cette session (et, s'il est nommé, portant ce numéro). */
-  async deviceOfSession(userId: string, sessionId: string | null, deviceId?: number): Promise<{ deviceId: number }> {
+  /** L'appareil ACTIF lié à cette session (et, s'il est nommé, portant ce numéro), avec sa génération. */
+  async deviceOfSession(userId: string, sessionId: string | null, deviceId?: number): Promise<{ deviceId: number; registrationId: number }> {
     if (!sessionId) throw notBound();
     const device = await this.prisma.e2EEDevice.findFirst({
       where: { userId, sessionId, retiredAt: null, ...(deviceId === undefined ? {} : { deviceId }) },
-      select: { deviceId: true },
+      select: { deviceId: true, registrationId: true },
     });
     if (!device) throw notBound();
     return device;
@@ -107,6 +110,7 @@ export class E2EEEnvelopeRelay {
         conversationId,
         recipientUserId: envelope.userId,
         recipientDeviceId: envelope.deviceId,
+        recipientRegistrationId: envelope.registrationId,
         senderUserId: admitted.senderUserId,
         senderDeviceId: admitted.senderDeviceId,
         type: envelope.type,
@@ -123,7 +127,12 @@ export class E2EEEnvelopeRelay {
   async listFor(params: { userId: string; sessionId: string | null; after?: string; limit?: number }): Promise<E2EEServedEnvelope[]> {
     const device = await this.deviceOfSession(params.userId, params.sessionId);
     const rows = await this.prisma.messageEnvelope.findMany({
-      where: { recipientUserId: params.userId, recipientDeviceId: device.deviceId, ...(params.after ? { id: { gt: params.after } } : {}) },
+      where: {
+        recipientUserId: params.userId,
+        recipientDeviceId: device.deviceId,
+        recipientRegistrationId: device.registrationId,
+        ...(params.after ? { id: { gt: params.after } } : {}),
+      },
       orderBy: { id: 'asc' },
       take: Math.min(Math.max(params.limit ?? 100, 1), LIST_LIMIT_MAX),
     });
@@ -133,7 +142,12 @@ export class E2EEEnvelopeRelay {
   async ack(params: { userId: string; sessionId: string | null; ids: readonly string[] }): Promise<number> {
     const device = await this.deviceOfSession(params.userId, params.sessionId);
     const { count } = await this.prisma.messageEnvelope.deleteMany({
-      where: { id: { in: [...params.ids] }, recipientUserId: params.userId, recipientDeviceId: device.deviceId },
+      where: {
+        id: { in: [...params.ids] },
+        recipientUserId: params.userId,
+        recipientDeviceId: device.deviceId,
+        recipientRegistrationId: device.registrationId,
+      },
     });
     return count;
   }

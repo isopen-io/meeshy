@@ -11,14 +11,19 @@
  * seule elle publie ses clés, et il est retiré quand elle finit
  * (`device-retirement.ts`). Un compte a au plus `E2EE_MAX_ACTIVE_DEVICES`
  * appareils actifs, sur les places 1…borne : un nouvel appareil prend la plus
- * petite place libre, jamais sous la `registrationId` de l'appareil retiré qui
- * l'occupait — c'est elle qui rend le 409 `stale` à l'émetteur dont la session
- * libsignal visait l'ancien occupant (#12543).
+ * petite place libre, jamais sous la `registrationId` d'une AUTRE identité
+ * retirée qui l'occupait — c'est elle qui rend le 409 `stale` à l'émetteur dont
+ * la session libsignal visait l'ancien occupant (#12543). Une installation qui
+ * revient (même identité, même `registrationId`) reprend SA place : les sessions
+ * de ses pairs restent valides et ses reconnexions ne consomment rien (#12593).
+ * La `registrationId` désigne la GÉNÉRATION d'une place : pré-clés et
+ * enveloppes lui appartiennent, jamais à la place (#12592).
  */
 import type { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
 import {
   deviceBindingMessage,
   E2EE_DEVICE_BINDING_MAX_SKEW_MS,
+  E2EE_DEVICE_ID_MAX,
   E2EE_ERROR_CODES,
   E2EE_MAX_ACTIVE_DEVICES,
   E2EE_ONE_TIME_PREKEY_STOCK_MAX,
@@ -27,7 +32,7 @@ import {
   type E2EEErrorCode,
   type E2EEPublishKeysRequest,
 } from '@meeshy/shared/types/e2ee-directory';
-import { retireDeviceRows, retireDevicesOfEndedSessions } from './device-retirement';
+import { RETIRABLE_DEVICE, retireDeviceRows, retireDevicesOfEndedSessions } from './device-retirement';
 import type { SignatureVerifier } from './signature-verifier';
 
 export type DirectoryPrisma = Pick<PrismaClient, 'e2EEDevice' | 'e2EEOneTimePreKey' | 'messageEnvelope' | 'userSession' | '$runCommandRaw'>;
@@ -129,6 +134,15 @@ const oneTimeRowsOf = (batches: OneTimeBatches): OneTimeRow[] => [
 
 const rowKey = (key: { kind: string; keyId: number }): string => `${key.kind}:${key.keyId}`;
 
+/** La génération d'une place : ce qu'une installation y a publié n'appartient qu'à elle. */
+type Generation = { readonly userId: string; readonly deviceId: number; readonly registrationId: number };
+
+const generationOf = (generation: Generation): Generation => ({
+  userId: generation.userId,
+  deviceId: generation.deviceId,
+  registrationId: generation.registrationId,
+});
+
 const deviceLimitReached = () =>
   new E2EEDirectoryError(
     E2EE_ERROR_CODES.DEVICE_LIMIT_REACHED,
@@ -139,14 +153,31 @@ const deviceLimitReached = () =>
 const isUniqueViolation = (error: unknown): boolean =>
   typeof error === 'object' && error !== null && (error as { code?: unknown }).code === 'P2002';
 
-type SlotRow = { deviceId: number; registrationId: number; retiredAt: Date | null };
+type SlotRow = { deviceId: number; registrationId: number; identityKey: string; retiredAt: Date | null };
 
-/** La plus petite place libre : ni occupée, ni tenue par un appareil retiré de même `registrationId`. */
-function freeSlot(rows: readonly SlotRow[], registrationId: number): number | null {
-  const active = rows.filter((row) => row.retiredAt === null);
-  if (active.length >= E2EE_MAX_ACTIVE_DEVICES) return null;
-  const blocked = new Set(rows.filter((row) => row.retiredAt === null || row.registrationId === registrationId).map((row) => row.deviceId));
-  const slot = Array.from({ length: E2EE_MAX_ACTIVE_DEVICES }, (_, index) => index + 1).find((candidate) => !blocked.has(candidate));
+type Installation = { readonly registrationId: number; readonly identityKey: string };
+
+const isSameInstallation = (row: SlotRow, installation: Installation): boolean =>
+  row.registrationId === installation.registrationId && row.identityKey === installation.identityKey;
+
+/** Une place retirée sous la même `registrationId` qu'une AUTRE identité masquerait l'appareil périmé (409 `stale`). */
+const isBlocked = (row: SlotRow, installation: Installation): boolean =>
+  row.retiredAt === null || (row.registrationId === installation.registrationId && !isSameInstallation(row, installation));
+
+const SLOTS = (from: number, to: number): number[] => Array.from({ length: to - from + 1 }, (_, index) => from + index);
+
+/**
+ * La place de cette installation : la sienne si elle revient, sinon la plus
+ * petite place libre parmi 1…borne, puis — seulement si des places retirées
+ * d'autres identités sous la même `registrationId` les bloquent toutes — au-delà.
+ * Seul le nombre d'appareils ACTIFS fait refuser.
+ */
+function freeSlot(rows: readonly SlotRow[], installation: Installation): number | null {
+  if (rows.filter((row) => row.retiredAt === null).length >= E2EE_MAX_ACTIVE_DEVICES) return null;
+  const own = rows.find((row) => row.retiredAt !== null && isSameInstallation(row, installation));
+  if (own) return own.deviceId;
+  const blocked = new Set(rows.filter((row) => isBlocked(row, installation)).map((row) => row.deviceId));
+  const slot = [...SLOTS(1, E2EE_MAX_ACTIVE_DEVICES), ...SLOTS(E2EE_MAX_ACTIVE_DEVICES + 1, E2EE_DEVICE_ID_MAX)].find((candidate) => !blocked.has(candidate));
   return slot ?? null;
 }
 
@@ -177,17 +208,17 @@ export class E2EEDirectory {
     if (existing) {
       await this.retireDevices({ userId, sessionId, id: { not: existing.id } });
       await this.prisma.e2EEDevice.update({ where: { id: existing.id }, data: { sessionId, ...keyFields, ...profile } });
-      await this.addOneTimeKeys(userId, existing.deviceId, request);
+      await this.addOneTimeKeys(existing, request);
       return { deviceId: existing.deviceId, created: false };
     }
 
     await retireDevicesOfEndedSessions(this.prisma, { userId, now: at });
     await this.retireDevices({ userId, sessionId });
-    const deviceId = await this.claimSlot(userId, {
+    const claimed = await this.claimSlot(userId, {
       registrationId: request.registrationId, identityKey: request.identityKey, sessionId, ...keyFields, ...profile,
     });
-    await this.addOneTimeKeys(userId, deviceId, request);
-    return { deviceId, created: true };
+    await this.addOneTimeKeys({ userId, deviceId: claimed.deviceId, registrationId: request.registrationId }, request);
+    return { deviceId: claimed.deviceId, created: !claimed.returning };
   }
 
   async publishKeys(params: { userId: string; sessionId: string; deviceId: number; request: E2EEPublishKeysRequest }): Promise<PreKeyStock> {
@@ -203,13 +234,12 @@ export class E2EEDirectory {
         ...(request.kyberLastResort ? kyberLastResortFields(request.kyberLastResort) : {}),
       },
     });
-    await this.addOneTimeKeys(params.userId, device.deviceId, request);
-    return this.stockOf(params.userId, device.deviceId);
+    await this.addOneTimeKeys(device, request);
+    return this.stockOf(device);
   }
 
   async prekeyStock(params: { userId: string; sessionId: string }): Promise<PreKeyStock> {
-    const device = await this.boundDevice(params);
-    return this.stockOf(params.userId, device.deviceId);
+    return this.stockOf(await this.boundDevice(params));
   }
 
   async boundDevice(params: { userId: string; sessionId: string; deviceId?: number }): Promise<ActiveDevice> {
@@ -246,25 +276,25 @@ export class E2EEDirectory {
     });
   }
 
-  private async addOneTimeKeys(userId: string, deviceId: number, batches: OneTimeBatches): Promise<void> {
+  private async addOneTimeKeys(generation: Generation, batches: OneTimeBatches): Promise<void> {
     const candidates = oneTimeRowsOf(batches);
     if (candidates.length === 0) return;
     const existing = await this.prisma.e2EEOneTimePreKey.findMany({
-      where: { userId, deviceId, keyId: { in: candidates.map((key) => key.keyId) } },
+      where: { ...generationOf(generation), keyId: { in: candidates.map((key) => key.keyId) } },
       select: { kind: true, keyId: true },
     });
     const taken = new Set(existing.map(rowKey));
     const fresh = [...new Map(candidates.filter((key) => !taken.has(rowKey(key))).map((key) => [rowKey(key), key])).values()];
     if (fresh.length === 0) return;
-    await this.assertStockRoom(userId, deviceId, fresh);
-    await this.prisma.e2EEOneTimePreKey.createMany({ data: fresh.map((key) => ({ userId, deviceId, ...key })) });
+    await this.assertStockRoom(generation, fresh);
+    await this.prisma.e2EEOneTimePreKey.createMany({ data: fresh.map((key) => ({ ...generationOf(generation), ...key })) });
   }
 
-  private async assertStockRoom(userId: string, deviceId: number, fresh: readonly OneTimeRow[]): Promise<void> {
+  private async assertStockRoom(generation: Generation, fresh: readonly OneTimeRow[]): Promise<void> {
     const kinds = [...new Set(fresh.map((key) => key.kind))];
     const overflowing = await Promise.all(
       kinds.map(async (kind) => {
-        const unused = await this.prisma.e2EEOneTimePreKey.count({ where: { userId, deviceId, kind, usedAt: null } });
+        const unused = await this.prisma.e2EEOneTimePreKey.count({ where: { ...generationOf(generation), kind, usedAt: null } });
         return unused + fresh.filter((key) => key.kind === kind).length > E2EE_ONE_TIME_PREKEY_STOCK_MAX;
       }),
     );
@@ -274,31 +304,37 @@ export class E2EEDirectory {
   }
 
   private async retireDevices(where: { userId: string; deviceId?: number; sessionId?: string; id?: { not: string } }): Promise<number[]> {
-    const doomed = await this.prisma.e2EEDevice.findMany({ where: { ...where, ...ACTIVE }, select: { deviceId: true } });
-    const deviceIds = doomed.map((device) => device.deviceId);
-    await retireDeviceRows(this.prisma, { userId: where.userId, deviceIds, now: this.now() });
-    return deviceIds;
+    const doomed = await this.prisma.e2EEDevice.findMany({ where: { ...where, ...ACTIVE }, select: RETIRABLE_DEVICE });
+    const retired = await retireDeviceRows(this.prisma, { devices: doomed, now: this.now() });
+    return retired.map((device) => device.deviceId);
   }
 
   /**
-   * Prend une place pour ce nouvel appareil, sans lecture-puis-écriture fautive :
+   * Prend une place pour cet appareil, sans lecture-puis-écriture fautive :
    * une place jamais servie se prend par `create` (l'index unique
    * `(userId, deviceId)` départage deux enrôlements simultanés), une place
    * retirée par un `updateMany` conditionné à `retiredAt` non nul, atomique sur
    * son document. Le perdant relit et prend la suivante, ou bute sur la borne.
    */
-  private async claimSlot(userId: string, fields: DeviceFields): Promise<number> {
+  private async claimSlot(userId: string, fields: DeviceFields): Promise<{ deviceId: number; returning: boolean }> {
+    const installation = { registrationId: fields.registrationId, identityKey: fields.identityKey };
     for (let attempt = 0; attempt <= E2EE_MAX_ACTIVE_DEVICES; attempt += 1) {
-      const rows = await this.prisma.e2EEDevice.findMany({ where: { userId }, select: { deviceId: true, registrationId: true, retiredAt: true } });
-      const slot = freeSlot(rows, fields.registrationId);
+      const rows = await this.prisma.e2EEDevice.findMany({
+        where: { userId },
+        select: { deviceId: true, registrationId: true, identityKey: true, retiredAt: true },
+      });
+      const slot = freeSlot(rows, installation);
       if (slot === null) throw deviceLimitReached();
-      if (await this.takeSlot(userId, slot, fields, rows)) return slot;
+      const previous = rows.find((row) => row.deviceId === slot);
+      if (await this.takeSlot(userId, slot, fields, previous)) {
+        return { deviceId: slot, returning: previous !== undefined && isSameInstallation(previous, installation) };
+      }
     }
     throw deviceLimitReached();
   }
 
-  private async takeSlot(userId: string, deviceId: number, fields: DeviceFields, rows: readonly SlotRow[]): Promise<boolean> {
-    if (!rows.some((row) => row.deviceId === deviceId)) {
+  private async takeSlot(userId: string, deviceId: number, fields: DeviceFields, previous: SlotRow | undefined): Promise<boolean> {
+    if (!previous) {
       return this.prisma.e2EEDevice.create({ data: { userId, deviceId, ...fields } }).then(
         () => true,
         (error: unknown) => {
@@ -309,26 +345,34 @@ export class E2EEDirectory {
     }
     const at = this.now();
     const { count } = await this.prisma.e2EEDevice.updateMany({
-      where: { userId, deviceId, retiredAt: { not: null }, registrationId: { not: fields.registrationId } },
+      where: {
+        userId,
+        deviceId,
+        retiredAt: { not: null },
+        registrationId: previous.registrationId,
+        identityKey: previous.identityKey,
+      },
       data: { ...fields, pushTokenId: null, createdAt: at, retiredAt: null },
     });
     if (count === 0) return false;
     await this.prisma.e2EEOneTimePreKey.deleteMany({ where: { userId, deviceId } });
-    await this.prisma.messageEnvelope.deleteMany({ where: { recipientUserId: userId, recipientDeviceId: deviceId } });
+    await this.prisma.messageEnvelope.deleteMany({
+      where: { recipientUserId: userId, recipientDeviceId: deviceId, recipientRegistrationId: { not: fields.registrationId } },
+    });
     return true;
   }
 
-  private async stockOf(userId: string, deviceId: number): Promise<PreKeyStock> {
-    const unused = (kind: string) => this.prisma.e2EEOneTimePreKey.count({ where: { userId, deviceId, kind, usedAt: null } });
+  private async stockOf(generation: Generation): Promise<PreKeyStock> {
+    const unused = (kind: string) => this.prisma.e2EEOneTimePreKey.count({ where: { ...generationOf(generation), kind, usedAt: null } });
     const [oneTimePreKeys, kyberPreKeys] = await Promise.all([unused('ec'), unused('kyber')]);
-    return { deviceId, oneTimePreKeys, kyberPreKeys };
+    return { deviceId: generation.deviceId, oneTimePreKeys, kyberPreKeys };
   }
 
   /** UNE commande atomique : la pré-clé n'est jamais lue puis écrite, elle est prise. */
-  private async reserveOneTimeKey(params: { userId: string; deviceId: number; kind: 'ec' | 'kyber'; requesterUserId: string }) {
+  private async reserveOneTimeKey(params: Generation & { kind: 'ec' | 'kyber'; requesterUserId: string }) {
     const result = (await this.prisma.$runCommandRaw({
       findAndModify: 'E2EEOneTimePreKey',
-      query: { userId: { $oid: params.userId }, deviceId: params.deviceId, kind: params.kind, usedAt: null },
+      query: { userId: { $oid: params.userId }, deviceId: params.deviceId, registrationId: params.registrationId, kind: params.kind, usedAt: null },
       sort: { keyId: 1 },
       update: { $set: { usedAt: { $date: this.now().toISOString() }, usedBy: { $oid: params.requesterUserId } } },
       new: true,
@@ -340,7 +384,7 @@ export class E2EEDirectory {
   }
 
   private async bundleOf(device: ActiveDevice, requesterUserId: string): Promise<E2EEDeviceBundle> {
-    const address = { userId: device.userId, deviceId: device.deviceId, requesterUserId };
+    const address = { userId: device.userId, deviceId: device.deviceId, registrationId: device.registrationId, requesterUserId };
     const [ec, kyber] = await Promise.all([
       this.reserveOneTimeKey({ ...address, kind: 'ec' }),
       this.reserveOneTimeKey({ ...address, kind: 'kyber' }),
