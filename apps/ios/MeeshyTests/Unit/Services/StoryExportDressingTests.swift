@@ -165,6 +165,41 @@ final class StoryExportAuthorIdentityTests: XCTestCase {
         XCTAssertEqual(source.avatarURL, "/a/group.jpg")
         XCTAssertEqual(source.backgroundThumbHash, "avatar-hash")
     }
+
+    // MARK: Contour de l'avatar — la règle de la carte d'identité de la visionneuse
+
+    private static let filet = ServedProfileDecorItem(pack: "contours-essentiels", item: "filet", origin: .builtin)
+    private static let perle = ServedProfileDecorItem(pack: "contours-essentiels", item: "perle", origin: .builtin)
+
+    func test_source_profileRing_beatsTheGroupRing() {
+        let author = StoryExportAuthor(userId: "u-grace", name: "Grace", avatarRing: Self.perle)
+        let profile = MeeshyUser(id: "u-grace", username: "grace",
+                                 profileDecor: ServedProfileDecor(avatarRing: Self.filet))
+
+        XCTAssertEqual(StoryExportAuthorIdentity.source(for: author, profile: profile).avatarRing, Self.filet)
+    }
+
+    func test_source_profileWithoutRing_fallsBackOnTheGroupRing() {
+        let author = StoryExportAuthor(userId: "u-grace", name: "Grace", avatarRing: Self.perle)
+        let profile = MeeshyUser(id: "u-grace", username: "grace")
+
+        XCTAssertEqual(StoryExportAuthorIdentity.source(for: author, profile: profile).avatarRing, Self.perle)
+    }
+
+    func test_source_withoutProfile_keepsTheGroupRing() {
+        let author = StoryExportAuthor(userId: "u-grace", name: "Grace", avatarRing: Self.perle)
+
+        XCTAssertEqual(StoryExportAuthorIdentity.source(for: author, profile: nil).avatarRing, Self.perle)
+    }
+
+    func test_initGroup_copiesTheAuthorRing() {
+        let group = StoryGroup(id: "u-grace", username: "Grace Hopper", avatarColor: "6366F1",
+                               avatarURL: "/a/grace.jpg", stories: [], authorRing: Self.filet)
+
+        XCTAssertEqual(StoryExportAuthor(group: group),
+                       StoryExportAuthor(userId: "u-grace", name: "Grace Hopper",
+                                         avatarURL: "/a/grace.jpg", avatarRing: Self.filet))
+    }
 }
 
 // MARK: - StoryExportPathsDressingTests

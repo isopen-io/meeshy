@@ -56,6 +56,8 @@ final class ShareSheetViewModel: ObservableObject {
     /// message à publier.
     private let composableAttachment: (Message) -> MessageAttachment?
     private var searchToken = 0
+    /// La frappe du lien suivi d'une story, une seule par feuille (#12644).
+    private var cardLinkMint: Task<URL?, Never>?
 
     static let recentsCount = 8
     static let searchMinimumLength = 2
@@ -104,18 +106,33 @@ final class ShareSheetViewModel: ObservableObject {
         }
     }
 
-    /// « Modifier dans le studio » a de la matière : la pièce désignée, ou ce
-    /// qu'une autre app a remis (l'extension relaie la fiche au studio).
+    /// « Modifier dans le studio » a de la matière : la pièce désignée, ce
+    /// qu'une autre app a remis (l'extension relaie la fiche au studio), ou une
+    /// story, que le studio recrée à l'identique (#12644).
     var studioHasMatter: Bool {
         if case .incoming = subject { return true }
-        return publishableAttachment != nil
+        return publishableAttachment != nil || republishableStory != nil
+    }
+
+    /// La story que les pastilles de publication REPUBLIENT (#12644).
+    var republishableStory: ShareCard? {
+        guard case .card(let card) = subject, card.kind == .story else { return nil }
+        return card
     }
 
     /// Les publications offertes : ce que le plan permet ET que la passerelle
-    /// sait publier pour cette pièce (`PublicationTargetRule`).
+    /// sait publier — pour une pièce, `PublicationTargetRule` ; pour une story,
+    /// la republication directe, jamais en story pour son propre auteur (le
+    /// rail ne la lui offre pas non plus).
     var offeredPublications: [PublicationTarget] {
-        guard let attachment = publishableAttachment else { return [] }
-        let served = PublicationTargetRule.targets(forMimeType: attachment.mimeType)
+        let served: [PublicationTarget]
+        if let story = republishableStory {
+            served = story.authorId == currentUserId() ? [.post, .reel] : [.story, .post, .reel]
+        } else if let attachment = publishableAttachment {
+            served = PublicationTargetRule.targets(forMimeType: attachment.mimeType)
+        } else {
+            return []
+        }
         let order: [PublicationTarget] = [.story, .post, .reel]
         return order.filter { target in served.contains(target) && plan.offers(Self.action(for: target)) }
     }
@@ -185,7 +202,6 @@ final class ShareSheetViewModel: ObservableObject {
         communities = groups
         loadState = conversations.isEmpty ? .loading : .cachedStale
         preselectRelayedConversations()
-        await resolveCardLink()
         do {
             let fresh = try await directory.freshConversations(currentUserId: userId)
             conversations = ShareRecipientMerge.merge(conversations: fresh + conversations, people: [])
@@ -196,14 +212,43 @@ final class ShareSheetViewModel: ObservableObject {
         }
     }
 
-    /// Le lien suivi remplace l'adresse directe d'une story dès qu'il est
-    /// prêt — l'envoi ne l'attend jamais.
-    private func resolveCardLink() async {
-        guard case .card(var card) = subject, let link = await dispatcher.resolvedLink(for: card) else { return }
-        guard case .card = subject, !hasSent else { return }
-        card.url = link
-        subject = .card(card)
+    /// **Le lien suivi d'une story n'est frappé qu'au moment où elle PART**
+    /// (#12644) — un envoi, une copie, un partage hors de Meeshy — jamais à
+    /// l'ouverture de la feuille : un lien frappé pour rien compterait un
+    /// partage qui n'a pas eu lieu. Une seule frappe réussie par feuille, que
+    /// les gestes suivants réutilisent ; un échec se retente au geste suivant.
+    /// Une story qui n'est pas publique garde son adresse directe, qui exige
+    /// un compte et l'audience de la story.
+    func ensureCardLink() async -> URL? {
+        guard let story = republishableStory, story.isPublicStory else {
+            guard case .card(let card) = subject else { return nil }
+            return card.url
+        }
+        let mint = cardLinkMint ?? mintLink(for: story)
+        cardLinkMint = mint
+        guard let link = await mint.value else {
+            cardLinkMint = nil
+            return republishableStory?.url
+        }
+        if var card = republishableStory, card.url != link {
+            card.url = link
+            subject = .card(card)
+        }
+        return link
     }
+
+    /// Un réseau lent ne retient pas l'envoi plus de `linkMintDeadline` : la
+    /// frappe est annulée, et l'adresse directe part.
+    private func mintLink(for story: ShareCard) -> Task<URL?, Never> {
+        let mint = Task { await self.dispatcher.resolvedLink(for: story) }
+        Task {
+            guard await cancellableSleep(for: Self.linkMintDeadline) else { return }
+            mint.cancel()
+        }
+        return mint
+    }
+
+    static let linkMintDeadline: Duration = .milliseconds(1500)
 
     /// Recherche : le filtre local suit chaque frappe ; dès deux caractères, la
     /// recherche serveur (personnes, conversations, communautés) s'y fusionne.
@@ -309,6 +354,12 @@ final class ShareSheetViewModel: ObservableObject {
         let plan = plan
         guard plan.canSend, !hasSent else { return }
         hasSent = true
+        // Chaque ligne passe « en cours » AVANT toute attente : sans quoi
+        // `isFinished` serait vrai pendant la frappe du lien, et la feuille se
+        // refermerait avant d'avoir rien envoyé.
+        for recipient in selection { deliveries[recipient.id] = .sending }
+        for target in publications { deliveries["pub:\(target.rawValue)"] = .sending }
+        if !selection.isEmpty { _ = await ensureCardLink() }
         let request = ShareSendRequest(
             subject: subject,
             keptMessageIds: plan.kept,
@@ -320,8 +371,6 @@ final class ShareSheetViewModel: ObservableObject {
         )
         let grouped = createsGroup && offersGroupCreation ? groupCandidates : []
         let individual = selection.filter { recipient in !grouped.contains { $0.id == recipient.id } }
-        for recipient in selection { deliveries[recipient.id] = .sending }
-        for target in publications { deliveries["pub:\(target.rawValue)"] = .sending }
 
         if !grouped.isEmpty { await deliverToNewGroup(grouped, request: request) }
         for recipient in individual { await deliver(request, to: recipient) }
@@ -384,6 +433,15 @@ final class ShareSheetViewModel: ObservableObject {
     }
 
     private func publishSelected() async {
+        if let story = republishableStory {
+            for target in publications {
+                switch await dispatcher.republish(card: story, to: target) {
+                case .published: deliveries["pub:\(target.rawValue)"] = .sent
+                case .refused(let reason): deliveries["pub:\(target.rawValue)"] = .failed(reason)
+                }
+            }
+            return
+        }
         guard let attachment = publishableAttachment else { return }
         for target in publications {
             let published = await dispatcher.publish(attachment: attachment, to: target)
