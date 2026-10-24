@@ -33,7 +33,7 @@ const conversationOf = (id: string) =>
 
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 const mounted: { root: Root; host: HTMLElement }[] = [];
-const saved: { animate?: PropertyDescriptor } = {};
+const saved: { animate?: PropertyDescriptor | undefined } = {};
 
 beforeAll(async () => {
   ensureHappyDomRegistered({ url: 'http://localhost/chats' });
@@ -74,7 +74,7 @@ const screenOf = (sections: readonly (readonly string[])[]) => (
   <ul>
     <ExitPresence scope="all">
       {sections.map((ids, i) => (
-        <LensSection key={i === 0 ? 'today' : 'yesterday'} id={i === 0 ? 'today' : 'yesterday'}>
+        <LensSection key={i === 0 ? 'lentille.today' : 'lentille.yesterday'} id={i === 0 ? 'lentille.today' : 'lentille.yesterday'}>
           <ExitPresence scope="all">{ids.map(rowOf)}</ExitPresence>
         </LensSection>
       ))}
@@ -104,6 +104,31 @@ describe('LensRow sous ExitPresence — la ligne archivée se replie à sa place
   test('la section que la dernière ligne vidait se replie avec elle', () => {
     const { host, rerender } = mount([['c-a'], ['c-b']]);
     rerender([['c-a']]);
-    expect(host.querySelector('[data-section="yesterday"]')?.hasAttribute('data-row-exiting')).toBe(true);
+    expect(host.querySelector('[data-section="lentille.yesterday"]')?.hasAttribute('data-row-exiting')).toBe(true);
+  });
+});
+
+describe('LensRow — sa pastille de non-lus se lit dans la langue de la rangée (#11575)', () => {
+  test('une rangée rendue en anglais dit « 5 unread messages », quelle que soit la langue globale', () => {
+    const host = document.createElement('div');
+    document.body.append(host);
+    const root = createRoot(host);
+    mounted.push({ root, host });
+    act(() =>
+      root.render(
+        <ul>
+          <LensRow
+            conversation={conversationOf('c-en')}
+            languages={['en']}
+            viewerId="u-moi"
+            flags={{ isPinned: false, isMuted: false, isArchived: false }}
+            unreadCount={5}
+            interfaceLanguage="en"
+            onRowAction={() => {}}
+          />
+        </ul>,
+      ),
+    );
+    expect(host.querySelector('[data-unread]')?.getAttribute('aria-label')).toBe('5 unread messages');
   });
 });

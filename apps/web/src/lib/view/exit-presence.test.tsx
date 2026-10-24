@@ -41,6 +41,11 @@ describe('retainDepartures — la loi pure', () => {
     expect(next.map((p) => p.key)).toEqual(['a']);
   });
 
+  test('une clé déjà sortante qui reparaît AILLEURS pendant sa sortie ne laisse plus de fantôme : elle part tout de suite', () => {
+    const next = retainDepartures({ ...base, mayLeave: (key) => key !== 'b', shown: shownOf(['a', 'b', 'c'], ['b']), next: [entry('a'), entry('c')] });
+    expect(next.map((p) => p.key)).toEqual(['a', 'c']);
+  });
+
   test('au-delà de trois départs d’un coup, c’est un filtre : rien ne se met en scène', () => {
     const next = retainDepartures({ ...base, shown: shownOf(['a', 'b', 'c', 'd', 'e']), next: [entry('a')] });
     expect(next.map((p) => p.key)).toEqual(['a']);

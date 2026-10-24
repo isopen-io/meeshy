@@ -31,7 +31,8 @@ import { prefersReducedMotion } from './reduced-motion';
  * liste, ils ne retirent pas une conversation), ni au-delà de
  * {@link MAX_DEPARTURES} départs d'un coup. Une clé qui vit encore AILLEURS
  * (`mayExit` faux : une conversation passée d'« Hier » à « Aujourd'hui ») ne
- * laisse aucun fantôme derrière elle.
+ * laisse aucun fantôme derrière elle — y compris quand elle y reparaît
+ * PENDANT sa sortie : la question se repose à chaque rendu.
  *
  * Seuls les enfants À CLÉ sont suivis : la clé est l'identité d'une rangée.
  */
@@ -60,7 +61,7 @@ export function retainDepartures<T>(input: {
   const nextKeys = new Set(next.map(({ key }) => key));
   const gone = shown.filter((p) => !nextKeys.has(p.key) && !settled.has(p.key));
   const fresh = gone.filter((p) => !p.leaving && mayLeave(p.key));
-  const kept = new Set([...gone.filter((p) => p.leaving), ...(fresh.length > max ? [] : fresh)].map((p) => p.key));
+  const kept = new Set([...gone.filter((p) => p.leaving && mayLeave(p.key)), ...(fresh.length > max ? [] : fresh)].map((p) => p.key));
   if (kept.size === 0) return staying;
   return shown.reduce<{ readonly list: readonly Presence<T>[]; readonly anchor: string | null }>(
     ({ list, anchor }, p) => {

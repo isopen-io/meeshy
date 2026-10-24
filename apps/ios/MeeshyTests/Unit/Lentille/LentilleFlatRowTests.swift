@@ -1,5 +1,6 @@
 import XCTest
 import MeeshySDK
+import MeeshyUI
 @testable import Meeshy
 
 /// Tests MINIMAUX embarqués de `LentilleConversationRow` (contrat LWS-7,
@@ -104,13 +105,18 @@ final class LentilleFlatRowTests: XCTestCase {
         XCTAssertTrue(row.accessibilityLabel.contains(UnreadCountLabel.messages(5)))
     }
 
-    /// Au-delà de 99, la pastille AFFICHE « 99+ » ; l'oreille, elle, n'entend
-    /// jamais ce texte de pastille comme s'il était un nombre.
-    func test_accessibilityLabel_beyondNinetyNine_neverSaysTheBadgeText() {
+    /// Au-delà de 99, la pastille AFFICHE « 99+ » (`NotificationBadge.displayed`) ;
+    /// le libellé de rangée d'iOS, lui, dit le compte EXACT — jamais le texte
+    /// plafonné de la pastille, jamais un compte rabattu à 99. Le web dit
+    /// « plus de 99 messages non lus » : l'écart est consigné par une issue.
+    func test_accessibilityLabel_beyondNinetyNine_saysTheExactCountNeverTheBadgeCap() {
         let row = LentilleConversationRow(conversation: makeConversation(unreadCount: 120), preferredContentLanguages: ["fr"])
+        let label = row.accessibilityLabel
 
-        XCTAssertTrue(row.accessibilityLabel.contains(UnreadCountLabel.messages(120)))
-        XCTAssertFalse(row.accessibilityLabel.contains("99+"))
+        XCTAssertEqual(NotificationBadge.displayed(120), "99+", "témoin de contrôle : la pastille plafonne bien")
+        XCTAssertFalse(label.contains(NotificationBadge.displayed(120)), "l'oreille n'entend pas le texte de la pastille")
+        XCTAssertTrue(label.contains(UnreadCountLabel.messages(120)), "le compte exact est dit")
+        XCTAssertFalse(label.contains(UnreadCountLabel.messages(99)), "le compte n'est pas rabattu à 99")
     }
 
     // MARK: - `==` — COPIÉ depuis `ThemedConversationRow.==` puis ÉTENDU au bridge

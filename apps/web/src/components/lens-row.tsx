@@ -717,7 +717,7 @@ function LensRowImpl({
               droite que le « 1 min » de la rangée suivante. Rien ne
               s'alignait, parce que rien n'avait de colonne.
             */}
-            <UnreadBadge count={unreadCount} opacity={chromeFade} />
+            <UnreadBadge count={unreadCount} opacity={chromeFade} language={labelLanguage} />
           </span>
 
           {/*
