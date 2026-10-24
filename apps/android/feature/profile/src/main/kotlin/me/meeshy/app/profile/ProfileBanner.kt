@@ -27,6 +27,8 @@ import me.meeshy.ui.appearance.BannerDesignView
 import me.meeshy.ui.appearance.BannerFrameView
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
+import me.meeshy.sdk.util.resolveMediaUrl
+import me.meeshy.ui.component.LocalMediaBaseUrl
 import me.meeshy.ui.theme.MeeshyTheme
 
 /** Ce que l'en-tête d'un profil peint en bannière : le fond (photo, design ou uni) et le cadre posé dessus. */
@@ -55,6 +57,7 @@ internal fun ProfileBanner(user: MeeshyUser, modifier: Modifier = Modifier, view
     val catalog by viewModel.catalog.collectAsStateWithLifecycle()
     val content = remember(user.banner, user.profileDecor, catalog) { catalog?.let { ProfileBannerContent.of(user, it) } } ?: return
     val isDark = MeeshyTheme.isDark
+    val apiBaseUrl = LocalMediaBaseUrl.current
     val accent = remember { String.format("#%06X", MeeshyPalette.Indigo500.toArgb() and 0xFFFFFF) }
     Box(
         modifier
@@ -64,7 +67,7 @@ internal fun ProfileBanner(user: MeeshyUser, modifier: Modifier = Modifier, view
     ) {
         when (val paint = content.paint) {
             is ProfileBannerPaint.Photo -> AsyncImage(
-                model = paint.url,
+                model = resolveMediaUrl(paint.url, apiBaseUrl),
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),

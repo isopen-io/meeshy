@@ -46,10 +46,33 @@ class AvatarFaceTest {
     }
 
     @Test
-    fun `une photo locale du telephone reste telle quelle`() {
-        val face = AvatarFace.resolve("Alice", imageUrl = "content://media/picker/1", apiBaseUrl = base)
+    fun `une reference serveur file ou content ne charge jamais un fichier local`() {
+        listOf("file:///data/user/0/me.meeshy/secret.png", "FILE:///etc/hosts", "content://media/picker/1", " content://x/1").forEach { served ->
+            assertThat(AvatarFace.resolve("Alice", imageUrl = served, apiBaseUrl = base))
+                .isEqualTo(AvatarFace.Initials("A"))
+        }
+    }
+
+    @Test
+    fun `un hote hors politique ne declenche aucune requete et rend les initiales`() {
+        listOf("http://evil.example/a.png", "https://10.0.0.5/a.png", "ftp://host/a.png").forEach { served ->
+            assertThat(AvatarFace.resolve("Alice", imageUrl = served, apiBaseUrl = base))
+                .isEqualTo(AvatarFace.Initials("A"))
+        }
+    }
+
+    @Test
+    fun `une photo choisie localement par l'utilisateur passe par son propre parametre`() {
+        val face = AvatarFace.resolve("Alice", imageUrl = null, apiBaseUrl = base, localPhotoUri = "content://media/picker/1")
 
         assertThat((face as AvatarFace.Photo).model).isEqualTo("content://media/picker/1")
+    }
+
+    @Test
+    fun `la photo locale ne prend que file ou content, jamais une adresse reseau`() {
+        val face = AvatarFace.resolve("Alice", imageUrl = null, apiBaseUrl = base, localPhotoUri = "https://evil.example/a.png")
+
+        assertThat(face).isEqualTo(AvatarFace.Initials("A"))
     }
 
     @Test

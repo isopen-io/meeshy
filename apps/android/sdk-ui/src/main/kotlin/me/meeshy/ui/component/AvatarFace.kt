@@ -1,6 +1,6 @@
 package me.meeshy.ui.component
 
-import me.meeshy.sdk.util.resolveMediaUrl
+import me.meeshy.sdk.util.resolveSafeMediaUrl
 
 /**
  * L'état du chargement d'une photo d'avatar, tel que le moteur d'image le rapporte. Aucun état
@@ -41,21 +41,41 @@ public sealed interface AvatarFace {
 
     public companion object {
         /**
-         * @param imageUrl ce que la base porte : clé de stockage, `static:`, URL complète héritée, ou
-         *   adresse locale (`content:` / `file:`) d'une photo en cours de choix.
+         * @param imageUrl ce que la base SERT : clé de stockage, `static:`, URL complète héritée. Jamais
+         *   un URI local : `file:` / `content:` venus du serveur rendent les initiales.
+         * @param localPhotoUri la photo que l'UTILISATEUR vient de choisir sur son appareil (`file:` / `content:`),
+         *   seul chemin d'un URI local ; jamais alimenté par la charge serveur.
          * @param apiBaseUrl la base d'API configurée (cf. [LocalMediaBaseUrl]) ; `null` hors composition.
          */
-        public fun resolve(name: String, imageUrl: String?, apiBaseUrl: String?): AvatarFace {
+        public fun resolve(
+            name: String,
+            imageUrl: String?,
+            apiBaseUrl: String?,
+            localPhotoUri: String? = null,
+        ): AvatarFace {
             val initials = avatarInitials(name)
-            val model = avatarPhotoModel(imageUrl, apiBaseUrl) ?: return Initials(initials)
+            val model = avatarLocalPhotoModel(localPhotoUri)
+                ?: avatarPhotoModel(imageUrl, apiBaseUrl)
+                ?: return Initials(initials)
             return Photo(model = model, initials = initials)
         }
     }
 }
 
-/** L'adresse chargeable d'une référence d'avatar, ou `null` quand rien n'est servi. Pur. */
+private val LOCAL_URI_SCHEMES = listOf("file:", "content:")
+
+private fun String.isLocalUri(): Boolean = LOCAL_URI_SCHEMES.any { startsWith(it, ignoreCase = true) }
+
+/**
+ * L'adresse chargeable d'une référence SERVIE, ou `null` (⇒ initiales) quand rien n'est servi, quand
+ * c'est un URI local, ou quand la politique d'URL média (https, pas d'adresse privée) la refuse. Pur.
+ */
 internal fun avatarPhotoModel(imageUrl: String?, apiBaseUrl: String?): String? {
     val raw = imageUrl?.trim()?.takeIf { it.isNotEmpty() } ?: return null
-    if (raw.startsWith("file:") || raw.startsWith("content:")) return raw
-    return resolveMediaUrl(raw, apiBaseUrl)
+    if (raw.isLocalUri()) return null
+    return resolveSafeMediaUrl(raw, apiBaseUrl)
 }
+
+/** Une photo choisie localement : `file:` / `content:` seulement. */
+internal fun avatarLocalPhotoModel(localPhotoUri: String?): String? =
+    localPhotoUri?.trim()?.takeIf { it.isLocalUri() }

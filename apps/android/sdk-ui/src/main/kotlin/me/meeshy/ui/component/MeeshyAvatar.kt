@@ -2,6 +2,7 @@ package me.meeshy.ui.component
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.ContentTransform
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -24,6 +25,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -292,16 +294,24 @@ private fun AvatarDisc(
             )
         }
         if (face is AvatarFace.Photo) {
+            val photoAlpha by animateFloatAsState(
+                targetValue = if (photoState == AvatarPhotoState.Success) 1f else 0f,
+                animationSpec = tween(PHOTO_FADE_MILLIS),
+                label = "avatarPhotoFade",
+            )
             AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current).data(face.model).crossfade(true).build(),
+                model = ImageRequest.Builder(LocalContext.current).data(face.model).build(),
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 onState = { state -> photoState = state.toPhotoState() },
-                modifier = Modifier.size(size),
+                modifier = Modifier.size(size).alpha(photoAlpha),
             )
         }
     }
 }
+
+/** Le fondu de la photo qui remplace les initiales (iOS : 0,15 s). */
+private const val PHOTO_FADE_MILLIS = 150
 
 private fun AsyncImagePainter.State.toPhotoState(): AvatarPhotoState = when (this) {
     is AsyncImagePainter.State.Success -> AvatarPhotoState.Success
