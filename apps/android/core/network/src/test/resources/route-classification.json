@@ -274,7 +274,6 @@
     "DELETE /api/v1/user-preferences/communities/:communityId",
     "DELETE /api/v1/user-preferences/conversations/:conversationId",
     "DELETE /api/v1/users/:userId/block",
-    "DELETE /api/v1/users/register-device-token",
     "DELETE /api/v1/voice/job/:jobId",
     "DELETE /api/v1/voice/profile",
     "GET /api/v1/app/min-version",
