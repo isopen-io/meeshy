@@ -2,13 +2,15 @@ import Foundation
 import MeeshySDK
 import os
 
-/// Les trois effets que la reprise demande à l'hôte : retirer la bulle d'un
-/// refus fermant le composeur, tenir la bulle d'un mode lent, et poser le
-/// `tempId → serverId` que `message:new` réconcilie.
+/// Les effets que la reprise demande à l'hôte : retirer la bulle d'un refus
+/// fermant le composeur, tenir la bulle d'un mode lent, poser le
+/// `tempId → serverId` que `message:new` réconcilie, et retenir que la
+/// conversation est chiffrée quand la passerelle refuse son clair (#11379).
 struct SendRecoveryHooks {
     let withdraw: @MainActor (String, ConversationWriteRestriction) async -> Void
     let holdSlowMode: @MainActor (String, NewcomerSlowMode, any Error) async -> Void
     let registerServerId: (String, String) -> Void
+    var adoptEndToEnd: @MainActor () -> Void = {}
 }
 
 protocol SendFailureRecoveryProviding {
@@ -41,6 +43,9 @@ struct SendFailureRecovery: SendFailureRecoveryProviding {
         if let refusal = await classifyRefusal(error, tempId: tempId, coordinator: coordinator, hooks: hooks) {
             return .failure(refusal)
         }
+        if payload.isEncrypted, EndToEndSendGate.isServerEnvelopeRefusal(error) {
+            return .failure(await refuseEndToEnd(.envelopeRefusedByServer, tempId: tempId, coordinator: coordinator))
+        }
 
         let failElapsedMs = Int(Date().timeIntervalSince(context.startedAt) * 1000)
         Logger.messages.warning("perf:ios.send.fail clientMessageId=\(tempId, privacy: .public) durationMs=\(failElapsedMs, privacy: .public) error=\(error.localizedDescription, privacy: .public)")
@@ -53,8 +58,25 @@ struct SendFailureRecovery: SendFailureRecoveryProviding {
             return .success(receipt)
         }
 
+        // #11379 — la file de relance porte `outgoing`, donc le texte EN CLAIR :
+        // un envoi qui était scellé n'y entre jamais. La bulle reste en échec,
+        // et « Réessayer » rescelle le texte au renvoi.
+        guard !payload.isEncrypted else {
+            return .failure(await refuseEndToEnd(.outboxUnsealable, tempId: tempId, coordinator: coordinator))
+        }
         await coordinator.recordFailure(error, localId: tempId)
         return .failure(await coordinator.enqueueForRetry(outgoing, context: context, cause: error))
+    }
+
+    private func refuseEndToEnd(
+        _ refusal: EndToEndSendRefusal,
+        tempId: String,
+        coordinator: any ConversationSendCoordinatorProviding
+    ) async -> SendFailure {
+        Logger.messages.warning("perf:ios.send.fail.e2ee clientMessageId=\(tempId, privacy: .public) reason=\(refusal.rawValue, privacy: .public) — never replayed in clear")
+        await coordinator.markFailed(localId: tempId, reason: refusal.userMessage)
+        toast.showError(refusal.userMessage)
+        return .endToEndUnsealed(refusal)
     }
 
     /// Refus DÉFINITIFS : retenter ne réussirait jamais, donc ni repli socket
@@ -68,6 +90,13 @@ struct SendFailureRecovery: SendFailureRecoveryProviding {
         if let restriction = ConversationWriteRestriction(refusal: error), restriction.closesComposer {
             await hooks.withdraw(tempId, restriction)
             return .writeRestricted(restriction)
+        }
+        // #11379 — la passerelle refuse le clair : la conversation est chiffrée
+        // sans que le fil le sût. Ni repli socket ni outbox — l'un et l'autre
+        // réémettraient le même clair —, et l'envoi suivant se scelle.
+        if EndToEndSendGate.isServerPlaintextRefusal(error) {
+            hooks.adoptEndToEnd()
+            return await refuseEndToEnd(.plaintextRefusedByServer, tempId: tempId, coordinator: coordinator)
         }
         if let slowMode = NewcomerSlowMode.from(error) {
             await hooks.holdSlowMode(tempId, slowMode, error)

@@ -20,8 +20,16 @@
 // La file ne bloque jamais la CI : une erreur d'API ou une attente qui passe
 // `--max-minutes` laisse passer le run, avec un avertissement.
 //
+// L'ATTENTE COÛTE UN RUNNER LINUX, et l'offre Free en plafonne 20 pour tout le
+// compte, macOS compris (#12706). Avec 150 min d'attente permise, une dizaine de
+// files en attente bloquaient le 2026-10-24 la construction Docker, la CI et la
+// promotion en production plus de 40 min. Le plafond est donc de 20 min : au-delà,
+// le run laisse ses jobs macOS dans la file NATIVE de GitHub, qui n'occupe aucun
+// runner Linux — l'ordre premier arrivé premier servi n'est plus garanti, mais le
+// reste de la CI n'est plus pris en otage.
+//
 // Usage (dans le job, GITHUB_TOKEN / GITHUB_REPOSITORY / GITHUB_RUN_ID posés) :
-//   node scripts/ci/ios-mac-queue.mjs [--poll-seconds 90] [--max-minutes 150]
+//   node scripts/ci/ios-mac-queue.mjs [--poll-seconds 90] [--max-minutes 20]
 
 export const QUEUE_JOB = "File d'attente Mac";
 export const QUEUE_WORKFLOWS = ['ios.yml', 'sdk-tests.yml'];
@@ -74,7 +82,7 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const main = async () => {
   const myRunId = Number(process.env.GITHUB_RUN_ID);
   const pollMs = option('poll-seconds', 90) * 1000;
-  const deadline = Date.now() + option('max-minutes', 150) * 60_000;
+  const deadline = Date.now() + option('max-minutes', 20) * 60_000;
   const started = Date.now();
   for (;;) {
     const blocking = await ahead(myRunId).catch((error) => {

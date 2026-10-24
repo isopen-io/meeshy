@@ -35,7 +35,7 @@ final class LiveShareDispatcherTests: XCTestCase {
         let forward: SpyForward
     }
 
-    private func makeSUT(online: Bool = true, decrypted: Set<String> = []) -> SUT {
+    private func makeSUT(online: Bool = true) -> SUT {
         let api = MockAPIClientForApp()
         let queue = FakeOfflineMessageQueue()
         let creator = MockConversationCreator()
@@ -43,7 +43,7 @@ final class LiveShareDispatcherTests: XCTestCase {
         let dispatcher = LiveShareDispatcher(
             forwardService: forward, api: api, queue: queue, isOnline: { online },
             conversationCreator: creator, postService: MockPostService(),
-            currentUserId: { "me" }, isDecryptedOnDevice: { decrypted.contains($0) }
+            currentUserId: { "me" }
         )
         return SUT(dispatcher: dispatcher, api: api, queue: queue, creator: creator, forward: forward)
     }
@@ -81,10 +81,14 @@ final class LiveShareDispatcherTests: XCTestCase {
                          grouping: .together, chosenDurationSeconds: nil, copyOnDevice: false)
     }
 
-    private func encryptedMessage(_ id: String, content: String, attachments: [MessageAttachment] = []) -> Message {
+    /// Un message de la source chiffrée ; `decryptedOnDevice` passe son texte
+    /// par l'UNIQUE porte du clair déchiffré (`adoptDecryptedContent`).
+    private func encryptedMessage(_ id: String, content: String, attachments: [MessageAttachment] = [],
+                                  decryptedOnDevice: Bool = true) -> Message {
         var message = Message(id: id, conversationId: Self.source, senderId: "peer", content: content,
                               isEncrypted: true, encryptionMode: "e2ee", createdAt: Date(), updatedAt: Date())
         message.attachments = attachments
+        if decryptedOnDevice { message.adoptDecryptedContent(content) }
         return message
     }
 
@@ -195,18 +199,60 @@ final class LiveShareDispatcherTests: XCTestCase {
     // MARK: - La copie sur l'appareil ne recopie que du clair PROUVÉ
 
     func test_copyOnDevice_refusesAMessageWhoseDecryptionIsNotProven() async {
-        let sut = makeSUT(decrypted: [])
+        let sut = makeSUT()
         stubSend(sut.api, to: "c-clear")
         let cipher = "QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVphYmNkZWZnaGlqa2xtbm9w"
 
-        let outcome = await sut.dispatcher.deliver(copy([encryptedMessage("m1", content: cipher)]), to: conversation("c-clear"))
+        let outcome = await sut.dispatcher.deliver(copy([encryptedMessage("m1", content: cipher, decryptedOnDevice: false)]),
+                                                   to: conversation("c-clear"))
 
         guard case .failed = outcome else { return XCTFail("un chiffré non déchiffré ne sort jamais comme texte, reçu \(outcome)") }
         XCTAssertTrue(sut.api.lastPostBodies.isEmpty)
     }
 
+    // MARK: - Le clair se reconnaît par sa PROVENANCE, jamais par un registre (#11402)
+
+    /// Un texte que la passerelle forge dans une conversation chiffrée n'a pas
+    /// de provenance : il ne sort jamais de l'appareil comme un clair déchiffré.
+    func test_copyOnDevice_refusesAForgedClearWithoutProvenance() async {
+        let sut = makeSUT()
+        stubSend(sut.api, to: "c-clear")
+
+        let outcome = await sut.dispatcher.deliver(copy([encryptedMessage("g1", content: "Texte forgé", decryptedOnDevice: false)]),
+                                                   to: conversation("c-clear"))
+
+        guard case .failed = outcome else { return XCTFail("un texte sans provenance ne se recopie pas, reçu \(outcome)") }
+        XCTAssertTrue(sut.api.lastPostBodies.isEmpty)
+    }
+
+    /// Le registre en mémoire prouvait qu'un cryptogramme de CET id avait été
+    /// déchiffré un jour, pas que le texte remis en était la sortie.
+    func test_copyOnDevice_refusesAContentRewrittenAfterDecryption() async {
+        let sut = makeSUT()
+        stubSend(sut.api, to: "c-clear")
+        var rewritten = encryptedMessage("w1", content: "Rendez-vous à midi")
+        rewritten.content = "Rendez-vous à minuit"
+
+        let outcome = await sut.dispatcher.deliver(copy([rewritten]), to: conversation("c-clear"))
+
+        guard case .failed = outcome else { return XCTFail("un texte réécrit après déchiffrement ne se recopie pas, reçu \(outcome)") }
+        XCTAssertTrue(sut.api.lastPostBodies.isEmpty)
+    }
+
+    /// Un clair réel en base64 valide, déchiffré sur l'appareil, se recopie.
+    func test_copyOnDevice_postsABase64LookingClear_decryptedOnTheDevice() async throws {
+        let sut = makeSUT()
+        stubSend(sut.api, to: "c-clear")
+        let base64Clear = Data(repeating: 0x78, count: 40).base64EncodedString()
+
+        let outcome = await sut.dispatcher.deliver(copy([encryptedMessage("b64", content: base64Clear)]), to: conversation("c-clear"))
+
+        XCTAssertEqual(outcome, .sent(conversationId: "c-clear"))
+        XCTAssertEqual(try body(sut.api)["content"] as? String, base64Clear)
+    }
+
     func test_copyOnDevice_refusesAMessageWithPieces_ratherThanDroppingThemSilently() async {
-        let sut = makeSUT(decrypted: ["m2"])
+        let sut = makeSUT()
         stubSend(sut.api, to: "c-clear")
         let photo = MeeshyMessageAttachment(id: "att-1", mimeType: "image/jpeg", fileUrl: "https://x/a.jpg", uploadedBy: "peer")
 
@@ -217,7 +263,7 @@ final class LiveShareDispatcherTests: XCTestCase {
     }
 
     func test_copyOnDevice_postsTheProvenPlaintext_withItsProvenance() async throws {
-        let sut = makeSUT(decrypted: ["m3"])
+        let sut = makeSUT()
         stubSend(sut.api, to: "c-clear")
 
         let outcome = await sut.dispatcher.deliver(copy([encryptedMessage("m3", content: "Bonjour")]), to: conversation("c-clear"))
@@ -233,7 +279,7 @@ final class LiveShareDispatcherTests: XCTestCase {
     // MARK: - La copie sur l'appareil garde la protection de la source (#10958)
 
     func test_copyOnDevice_ofATimedFlame_carriesTheSourceDuration() async throws {
-        let sut = makeSUT(decrypted: ["f1"])
+        let sut = makeSUT()
         stubSend(sut.api, to: "c-clear")
 
         _ = await sut.dispatcher.deliver(copy([protected("f1", flags: .ephemeral, duration: 30)]), to: conversation("c-clear"))
@@ -242,7 +288,7 @@ final class LiveShareDispatcherTests: XCTestCase {
     }
 
     func test_copyOnDevice_ofATimedFlame_neverOutlivesItsSource() async throws {
-        let sut = makeSUT(decrypted: ["f2", "f3"])
+        let sut = makeSUT()
         stubSend(sut.api, to: "c-clear")
 
         _ = await sut.dispatcher.deliver(copy([protected("f2", flags: .ephemeral, duration: 30)], chosenDurationSeconds: 3_600), to: conversation("c-clear"))
@@ -253,7 +299,7 @@ final class LiveShareDispatcherTests: XCTestCase {
     }
 
     func test_copyOnDevice_ofABlurredMessage_staysBlurred() async throws {
-        let sut = makeSUT(decrypted: ["b1"])
+        let sut = makeSUT()
         stubSend(sut.api, to: "c-clear")
 
         _ = await sut.dispatcher.deliver(copy([protected("b1", flags: .blurred)]), to: conversation("c-clear"))
@@ -262,7 +308,7 @@ final class LiveShareDispatcherTests: XCTestCase {
     }
 
     func test_copyOnDevice_ofAnOrdinaryMessage_carriesNoProtection() async throws {
-        let sut = makeSUT(decrypted: ["o1"])
+        let sut = makeSUT()
         stubSend(sut.api, to: "c-clear")
 
         _ = await sut.dispatcher.deliver(copy([encryptedMessage("o1", content: "Bonjour")]), to: conversation("c-clear"))
@@ -273,7 +319,7 @@ final class LiveShareDispatcherTests: XCTestCase {
     }
 
     func test_copyOnDevice_refusesAViewOnceOrAfterReadMessage() async {
-        let sut = makeSUT(decrypted: ["v1", "r1"])
+        let sut = makeSUT()
         stubSend(sut.api, to: "c-clear")
 
         let viewOnce = await sut.dispatcher.deliver(copy([protected("v1", flags: .viewOnce)]), to: conversation("c-clear"))
@@ -286,7 +332,7 @@ final class LiveShareDispatcherTests: XCTestCase {
     }
 
     func test_copyOnDevice_offline_queuesTheFlameWithItsProtection() async throws {
-        let sut = makeSUT(online: false, decrypted: ["q1"])
+        let sut = makeSUT(online: false)
 
         let outcome = await sut.dispatcher.deliver(copy([protected("q1", flags: [.ephemeral, .blurred], duration: 30)]), to: conversation("c-clear"))
 
@@ -299,7 +345,7 @@ final class LiveShareDispatcherTests: XCTestCase {
     }
 
     func test_theCaptionOfACopiedFlame_carriesTheSameProtection() async throws {
-        let sut = makeSUT(decrypted: ["c1"])
+        let sut = makeSUT()
         stubSend(sut.api, to: "c-clear")
 
         _ = await sut.dispatcher.deliver(copy([protected("c1", flags: [.ephemeral, .blurred], duration: 30)], caption: "Regarde vite"),
@@ -312,7 +358,7 @@ final class LiveShareDispatcherTests: XCTestCase {
     }
 
     func test_theCaptionOfACopy_neverGoesInClearToAnEncryptedConversation() async {
-        let sut = makeSUT(decrypted: ["e1"])
+        let sut = makeSUT()
         sut.creator.result = .success(MeeshyConversation(id: "dm-7", identifier: "dm-7", type: .direct, encryptionMode: "e2ee"))
         stubSend(sut.api, to: "dm-7")
         stubSend(sut.api, to: "dm-8")
@@ -327,42 +373,12 @@ final class LiveShareDispatcherTests: XCTestCase {
     }
 
     func test_copyOnDevice_towardAnEncryptedConversation_sendsNothing() async {
-        let sut = makeSUT(decrypted: ["m4"])
+        let sut = makeSUT()
         stubSend(sut.api, to: "dm-5")
 
         let outcome = await sut.dispatcher.deliver(copy([encryptedMessage("m4", content: "Bonjour")]), to: conversation("dm-5", encrypted: true))
 
         guard case .failed = outcome else { return XCTFail("reçu \(outcome)") }
         XCTAssertTrue(sut.api.lastPostBodies.isEmpty)
-    }
-}
-
-/// Le registre des messages DÉCHIFFRÉS sur l'appareil — la preuve que la copie
-/// sur l'appareil exige, borné.
-@MainActor
-final class DecryptedMessageLedgerTests: XCTestCase {
-
-    func test_aRecordedMessage_isProven_anOtherIsNot() {
-        let ledger = DecryptedMessageLedger(capacity: 10)
-        ledger.record(["a", "b"])
-        XCTAssertTrue(ledger.contains("a"))
-        XCTAssertFalse(ledger.contains("z"))
-    }
-
-    func test_theLedgerIsBounded_theOldestProofIsForgottenFirst() {
-        let ledger = DecryptedMessageLedger(capacity: 2)
-        ledger.record(["a"])
-        ledger.record(["b"])
-        ledger.record(["c"])
-        XCTAssertFalse(ledger.contains("a"))
-        XCTAssertTrue(ledger.contains("b"))
-        XCTAssertTrue(ledger.contains("c"))
-    }
-
-    func test_removeAll_forgetsEveryProof() {
-        let ledger = DecryptedMessageLedger(capacity: 10)
-        ledger.record(["a"])
-        ledger.removeAll()
-        XCTAssertFalse(ledger.contains("a"))
     }
 }

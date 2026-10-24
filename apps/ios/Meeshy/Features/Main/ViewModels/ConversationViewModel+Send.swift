@@ -230,7 +230,13 @@ extension ConversationViewModel {
 
         let context = makeSendContext(outgoing, intent: intent)
         await stageOptimistic(outgoing, context: context)
-        let payload = await prepareUpload(outgoing, context: context)
+        let payload: SealedOutgoingPayload
+        switch await prepareUpload(outgoing, context: context) {
+        case .success(let sealed): payload = sealed
+        case .failure(let refusal):
+            return .failure(await endToEndSealer.refuse(refusal, localId: context.clientMessageId.rawValue, coordinator: sendCoordinator))
+        }
+        markDeparture()
         let outcome: Result<SentMessageReceipt, any Error>
         do {
             outcome = .success(try await emit(outgoing, payload: payload, context: context))
@@ -240,18 +246,19 @@ extension ConversationViewModel {
         return await reconcile(outcome, outgoing: outgoing, payload: payload, context: context)
     }
 
-    /// Garde d'éligibilité partagée avec le composeur (`SendEligibility`) : un
-    /// message « lieu seul » est un envoi valide. Le geste du jour (#5902) et
-    /// le rejeu de la flamme ne se posent que pour un message qui PART — par le
-    /// réseau ou par l'outbox.
+    /// Garde d'éligibilité partagée avec le composeur (`SendEligibility`) : un message « lieu seul » est valide.
     func validate(_ outgoing: OutgoingMessage) -> SendFailure? {
         guard SendEligibility.canSend(text: outgoing.text, attachmentIds: outgoing.attachments.ids ?? [], location: outgoing.location) else {
             Logger.messages.error("SendFlow EARLY-RETURN guard=emptyContent convId=\(self.conversationId, privacy: .public)")
             return .ineligible
         }
+        return nil
+    }
+
+    /// Le geste du jour (#5902) et la flamme : seulement pour un message qui PART, donc après le scellement (#11379).
+    private func markDeparture() {
         StreakActivityMark.marquer()
         HeaderFlameReplay.messageSent(in: conversationId)
-        return nil
     }
 
     private func composedLanguage(of outgoing: OutgoingMessage) -> String {
@@ -275,8 +282,9 @@ extension ConversationViewModel {
 
     /// Hors ligne : la ligne optimiste, l'aperçu de liste, puis l'écriture
     /// AWAITED dans l'outbox. Seul l'état du réseau décide — pas celui du
-    /// socket, encore en poignée de main au démarrage. Si l'outbox échoue, la
-    /// bulle passe en `.failed` : l'utilisateur peut renvoyer.
+    /// socket, encore en poignée de main au démarrage. Si l'outbox échoue, ou
+    /// si la conversation est chiffrée (l'outbox ne garde que du clair, #11379),
+    /// la bulle passe en `.failed` : l'utilisateur peut renvoyer.
     func stageOffline(_ outgoing: OutgoingMessage, intent: MessageProtectionIntent) async -> Result<SentMessageReceipt, SendFailure> {
         let clientMessageId = outgoing.reusedClientMessageId ?? MessageID(ClientMessageId.generate())
         _ = await collaborators.stager.stageOffline(
@@ -284,6 +292,10 @@ extension ConversationViewModel {
             conversationId: conversationId, language: composedLanguage(of: outgoing),
             effectFlags: optimisticEffectFlags(intent).rawValue
         )
+        if let refusal = endToEndSealer.offlineRefusal(for: outgoing) {
+            return .failure(await endToEndSealer.refuse(refusal, localId: clientMessageId.rawValue, coordinator: sendCoordinator))
+        }
+        markDeparture()
         return await sendCoordinator.enqueueOffline(outgoing, clientMessageId: clientMessageId, intent: intent)
     }
 
@@ -309,34 +321,14 @@ extension ConversationViewModel {
         OptimisticAuthor(senderId: currentUserId, sender: authManager.currentUser)
     }
 
-    /// Prépare ce qui quitte l'appareil : le chiffrement E2EE d'une
-    /// conversation directe et la requête REST. Ne lève jamais.
-    ///
-    /// #8221 — une session E2EE indisponible (pair sans bundle Signal) n'est
-    /// PAS un envoi raté : le message part en clair, dans tous les builds.
-    func prepareUpload(_ outgoing: OutgoingMessage, context: SendAttemptContext) async -> SealedOutgoingPayload {
-        var content: String? = outgoing.text.isEmpty ? nil : outgoing.text
-        var isEncrypted = false
-        var encryptionMode: String? = nil
-        if isDirect, let targetUserId = participantUserId, let textContent = content {
-            do {
-                let encrypted = try await messageEncryptor.encryptMessage(Data(textContent.utf8), for: targetUserId, conversationId: conversationId)
-                content = encrypted.base64EncodedString()
-                isEncrypted = true
-                encryptionMode = "E2EE"
-            } catch {
-                Logger.messages.warning("E2EE session unavailable, sending in plaintext: \(error.localizedDescription, privacy: .public)")
-            }
-        }
-        let request = outgoing.wireRequest(
-            content: content,
-            isEncrypted: isEncrypted,
-            encryptionMode: encryptionMode,
-            context: context,
-            wireEffectFlags: wireEffectFlags(context.intent)
-        )
-        return SealedOutgoingPayload(request: request, content: content, isEncrypted: isEncrypted)
+    /// Ce qui quitte l'appareil selon le RÉGIME (#11379) : en E2EE, scellé ou
+    /// refusé — jamais de repli en clair. Ne touche aucun transport.
+    func prepareUpload(_ outgoing: OutgoingMessage, context: SendAttemptContext) async -> Result<SealedOutgoingPayload, EndToEndSendRefusal> {
+        await endToEndSealer.seal(outgoing, context: context, wireEffectFlags: wireEffectFlags(context.intent))
     }
+
+    var endToEndSealer: EndToEndSendSealer { EndToEndSendSealer(self) }
+    var endToEndPieceRefusal: EndToEndSendRefusal? { endToEndSealer.pieceRefusal }
 
     // MARK: Transport
 
@@ -397,7 +389,8 @@ extension ConversationViewModel {
             hooks: SendRecoveryHooks(
                 withdraw: { [weak self] in await self?.withdrawRefusedMessage(tempId: $0, restriction: $1) },
                 holdSlowMode: { [weak self] in await self?.holdForSlowMode(tempId: $0, slowMode: $1, error: $2) },
-                registerServerId: { [weak self] in self?.pendingServerIds[$0] = $1 }
+                registerServerId: { [weak self] in self?.pendingServerIds[$0] = $1 },
+                adoptEndToEnd: { [ledger = collaborators.regimeLedger, id = conversationId] in ledger.learnEndToEnd(for: id) }
             )
         )
     }
@@ -416,6 +409,10 @@ extension ConversationViewModel {
         guard failedMsg.deliveryStatus == .failed else { return }
 
         guard failedMsg.attachments.isEmpty else {
+            if let refusal = endToEndPieceRefusal {
+                _ = await endToEndSealer.refuse(refusal, localId: messageId, coordinator: sendCoordinator)
+                return
+            }
             await resetOutboxRowForRetry(messageId: messageId)
             return
         }
