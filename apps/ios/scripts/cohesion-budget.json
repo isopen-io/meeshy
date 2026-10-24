@@ -31,7 +31,7 @@
     "apps/ios/Meeshy/Features/Main/Components/UniversalComposerBar+Recording.swift::UniversalComposerBar.recordingBar": 136,
     "apps/ios/Meeshy/Features/Main/Components/UniversalComposerBar+Recording.swift::UniversalComposerBar.textInputField": 145,
     "apps/ios/Meeshy/Features/Main/Composer/ComposerCaptureViews.swift::ComposerCaptureChrome.body": 91,
-    "apps/ios/Meeshy/Features/Main/Composer/ComposerCaptureViews.swift::ComposerCapturePreview.body": 90,
+    "apps/ios/Meeshy/Features/Main/Composer/ComposerCaptureViews.swift::ComposerCapturePreview.body": 86,
     "apps/ios/Meeshy/Features/Main/Composer/ComposerIntent.swift::ComposerProfile.profile": 348,
     "apps/ios/Meeshy/Features/Main/Composer/ComposerObjectEditorView.swift::ComposerObjectEditorView.scene": 82,
     "apps/ios/Meeshy/Features/Main/Composer/ComposerSceneSurface.swift::ComposerSceneSurface.sceneLayer": 96,
