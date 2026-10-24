@@ -1,6 +1,7 @@
 import Foundation
 import MeeshyE2EE
 import MeeshySDK
+import os
 
 /// L'installation libsignal RÉELLE de cette app (#3707) : la base scellée et le
 /// verrou du groupe d'apps (partagés avec l'extension de notification), le
@@ -8,8 +9,7 @@ import MeeshySDK
 /// seul site qui les touche ; le reste de l'app parle à
 /// `EndToEndMessagingProviding`.
 nonisolated final class LibsignalDeviceProvisioning: EndToEndDeviceProvisioning, @unchecked Sendable {
-    private let lock = NSLock()
-    private var opened: (vault: E2EEGRDBRecordVault, lock: E2EEProcessLock)?
+    private let opened = OSAllocatedUnfairLock<(vault: E2EEGRDBRecordVault, lock: E2EEProcessLock)?>(uncheckedState: nil)
     private let secrets = E2EEKeychainSecretStore()
     private let directory: any E2EEDirectoryClientProviding
 
@@ -19,11 +19,11 @@ nonisolated final class LibsignalDeviceProvisioning: EndToEndDeviceProvisioning,
 
     /// La base et son verrou, ouverts une fois par processus.
     private func storage() throws -> (vault: E2EEGRDBRecordVault, lock: E2EEProcessLock) {
-        try lock.withLock {
-            if let opened { return opened }
+        try opened.withLockUnchecked { slot in
+            if let slot { return slot }
             let processLock = try E2EEProcessLock.shared()
             let vault = try E2EEGRDBRecordVault.shared(secrets: secrets, lock: processLock)
-            opened = (vault, processLock)
+            slot = (vault, processLock)
             return (vault, processLock)
         }
     }

@@ -80,7 +80,7 @@ struct EndToEndDeviceLimitSheet: View {
                                 defaultValue: "Votre compte utilise déjà le nombre maximal d’appareils pour le chiffrement de bout en bout. Retirez-en un pour écrire depuis celui-ci. Un appareil retiré ne lit plus les nouveaux messages chiffrés.",
                                 bundle: .main))
                         .font(.subheadline)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                 }
                 content
             }
@@ -126,7 +126,7 @@ struct EndToEndDeviceLimitSheet: View {
             Section {
                 Label(String(localized: "e2ee.deviceLimit.enrolled", defaultValue: "Cet appareil chiffre de nouveau. Vous pouvez renvoyer votre message.", bundle: .main),
                       systemImage: "lock.shield.fill")
-                    .foregroundColor(MeeshyColors.success)
+                    .foregroundStyle(MeeshyColors.success)
             }
         }
     }
