@@ -3924,6 +3924,7 @@
 		FFF3E2F99B328BFE708786E8 /* BookmarksViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C61914589B7116F0DE7CFBF /* BookmarksViewModelTests.swift */; };
 		FFFE290EDA21A3CEDDBADCDF /* ProfileProgressionEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A3E9D78B88F61BF4C7FADAA /* ProfileProgressionEntry.swift */; };
 		AA0297F32D1D454ECE18D1F7 /* CallMontageSoloLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78C0F2D35D6F4AD4775925D9 /* CallMontageSoloLayout.swift */; };
+		911C2709E654B78057FFF210 /* CallMontageRenderer+Solo.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4B8E7D8F63890A188863A81 /* CallMontageRenderer+Solo.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -7862,6 +7863,7 @@
 		FFE35EB51741DD3569F763C1 /* FeedViewStoryPullToRefreshGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedViewStoryPullToRefreshGuardTests.swift; sourceTree = "<group>"; };
 		FFFC803B0ED32FFFC97F7416 /* ConversationDashboardView+Sentiment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ConversationDashboardView+Sentiment.swift"; sourceTree = "<group>"; };
 		78C0F2D35D6F4AD4775925D9 /* CallMontageSoloLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallMontageSoloLayout.swift; sourceTree = "<group>"; };
+		E4B8E7D8F63890A188863A81 /* CallMontageRenderer+Solo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CallMontageRenderer+Solo.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -11911,6 +11913,7 @@
 				94CB18D282A0F42BE1CAD4D3 /* CallMontageRenderer.swift */,
 				0F28569855387EA77CE1F57D /* CallMontageRenderer+Glamour.swift */,
 				772EA521E619E71BD8FDA897 /* CallMontageRenderer+Layers.swift */,
+				E4B8E7D8F63890A188863A81 /* CallMontageRenderer+Solo.swift */,
 				96AC73C559E158169CBC00FF /* CallNetworkJournalBinding.swift */,
 				B9A575494C063F767244DFA9 /* CallNetworkJournalRecorder.swift */,
 				4F21074C0D38A49EE530A7F0 /* CallPlaybackInterruptionBinding.swift */,
@@ -13589,6 +13592,7 @@
 				5D4F600C632B19E0B4D32DA8 /* CallMontageRecorder.swift in Sources */,
 				597019C31BB4DCC5EF78F7AD /* CallMontageRenderer+Glamour.swift in Sources */,
 				83AF1D4C1E5911519DE2BFDE /* CallMontageRenderer+Layers.swift in Sources */,
+				911C2709E654B78057FFF210 /* CallMontageRenderer+Solo.swift in Sources */,
 				59921C87FEF1D9DAA8E4E891 /* CallMontageRenderer.swift in Sources */,
 				AA0297F32D1D454ECE18D1F7 /* CallMontageSoloLayout.swift in Sources */,
 				8EA23AA60C52B104DDDC206B /* CallNetworkJournalBinding.swift in Sources */,

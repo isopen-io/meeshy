@@ -28,6 +28,10 @@ nonisolated enum CallMontageRenderer {
         let unit = canvas.width / 1080
 
         switch style {
+        case .screen where portraits.count == 1:
+            drawScreenSolo(context, bounds: bounds, placed: placed, caption: caption)
+        case .grid where portraits.count == 1:
+            drawMosaicSolo(context, bounds: bounds, placed: placed)
         case .screen:
             fill(context, bounds, gray: 0)
             placed.enumerated().forEach { index, pair in
