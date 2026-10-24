@@ -42,12 +42,13 @@ extension ConversationListView {
         ))
     }
 
-    /// Le sous-menu « Mode de lecture » (contrat LWS-8/I-072) — l'une des DEUX
-    /// portes d'UNE préférence, avec l'encoche de la focus card I-071.
-    func readingModeSubmenu(for conversation: Conversation) -> LentilleReadingModeSubmenu {
+    /// Le sous-menu « Mode de lecture » (LWS-8/I-072), l'une des DEUX portes d'UNE
+    /// préférence avec l'encoche I-071 ; `onSelected` ferme le menu custom.
+    func readingModeSubmenu(for conversation: Conversation, onSelected: @escaping () -> Void = {}) -> LentilleReadingModeSubmenu {
         LentilleReadingModeSubmenu(
             conversation: conversation,
-            isAnonymous: ConversationListReaderAnonymity.isAnonymous(currentUser: AuthManager.shared.currentUser)
+            isAnonymous: ConversationListReaderAnonymity.isAnonymous(currentUser: AuthManager.shared.currentUser),
+            onSelected: onSelected
         )
     }
 
@@ -75,37 +76,31 @@ extension ConversationListView {
         let catalog = rowMenuCatalog(for: conversation)
         let actions = ConversationRowMenuActions.make(for: conversation, in: self)
 
-        // La tête compacte : Épingler, Sourdine et Lu côte à côte, le geste
-        // le plus fréquent à portée de pouce sans descendre la liste. Ce
-        // chemin ne monte qu'à partir d'iOS 26, où le `ControlGroup` d'un menu
-        // contextuel se rend toujours en rangée ; avant, le menu custom
-        // dessine la même tête en trois tuiles.
-        ControlGroup {
-            nativeMenuItems(catalog.header, of: conversation, actions: actions)
+        // LA séquence de groupes que le menu custom parcourt aussi.
+        ForEach(catalog.groups) { group in
+            if group.section.opensWithDivider { Divider() }
+            nativeGroup(group, of: conversation, actions: actions)
         }
+    }
 
-        nativeMenuItems(catalog.reach, of: conversation, actions: actions)
-
-        Divider()
-
-        nativeMenuItems(catalog.organize, of: conversation, actions: actions)
-
-        // Actions secondaires — groupées pour garder le menu court.
-        if !catalog.more.isEmpty {
-            Divider()
+    /// Une section du catalogue en menu natif : la tête en `ControlGroup` (rangée
+    /// compacte dès iOS 26, seul OS de ce chemin), « Plus d'options » en sous-menu.
+    @ViewBuilder
+    private func nativeGroup(_ group: ConversationMenuGroup, of conversation: Conversation, actions: ConversationRowMenuActions) -> some View {
+        switch group.section {
+        case .header:
+            ControlGroup {
+                nativeMenuItems(group.entries, of: conversation, actions: actions)
+            }
+        case .more:
             Menu {
-                nativeMenuItems(catalog.more, of: conversation, actions: actions)
+                nativeMenuItems(group.entries, of: conversation, actions: actions)
             } label: {
                 Label(ConversationMenuCatalog.moreLabel, systemImage: ConversationMenuCatalog.moreSymbol)
             }
-        }
-
-        // Quitter, puis Supprimer ou Masquer : ce qui retire, en dernier, et
-        // toujours derrière une confirmation — leurs gestes arment une cible,
-        // jamais l'effet.
-        if !catalog.departure.isEmpty {
-            Divider()
-            nativeMenuItems(catalog.departure, of: conversation, actions: actions)
+        case .reach, .organize, .departure:
+            // Le départ arme une confirmation, jamais l'effet.
+            nativeMenuItems(group.entries, of: conversation, actions: actions)
         }
     }
 
@@ -259,10 +254,10 @@ extension ConversationListView {
         }
     }
 
-    /// L'appel de l'en-tête de l'aperçu — conversation directe à pair connu,
-    /// le MÊME chemin que l'entrée « Appeler » du catalogue.
+    /// L'appel de l'en-tête de l'aperçu : le verdict ET le chemin de l'entrée
+    /// « Appeler » (ni soi-même, ni conversation terminée, ni invité).
     func previewCallAction(for conversation: Conversation) -> (() -> Void)? {
-        guard conversation.type == .direct, conversation.participantUserId != nil else { return nil }
+        guard rowMenuCatalog(for: conversation).reach.contains(.call) else { return nil }
         return {
             dismissContextMenu()
             ConversationRowMenuActions.startCall(to: conversation, isVideo: false)
@@ -381,7 +376,7 @@ extension ConversationListView {
                             },
                             currentSectionId: conversation.userState.sectionId,
                             actions: ConversationRowMenuActions.make(for: conversation, in: self),
-                            readingModeMenu: readingModeSubmenu(for: conversation),
+                            readingModeMenu: readingModeSubmenu(for: conversation, onSelected: { dismissContextMenu() }),
                             onDismiss: { dismissContextMenu() }
                         )
                         // Menu : slide-up 70 pt + fondu + dé-blur, dans la MÊME

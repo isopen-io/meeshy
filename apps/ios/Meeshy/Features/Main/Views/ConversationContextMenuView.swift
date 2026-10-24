@@ -87,26 +87,29 @@ struct ConversationContextMenuView: View {
 
     private var rootPanel: some View {
         VStack(spacing: 0) {
-            headerTiles
-            entryRows(catalog.reach)
-            entryRows(catalog.organize)
-            if !catalog.more.isEmpty {
-                divider
-                actionRow(
-                    icon: "ellipsis",
-                    label: ConversationMenuCatalog.moreLabel,
-                    showsChevron: true
-                ) { navigate(to: .more) }
+            // LA séquence de groupes du catalogue, la même que le menu natif
+            // parcourt : aucun groupe ne s'énumère ici à la main.
+            ForEach(catalog.groups) { group in
+                switch group.section {
+                case .header: headerTiles(group.entries)
+                case .more:
+                    divider
+                    actionRow(
+                        icon: ConversationMenuCatalog.moreSymbol,
+                        label: ConversationMenuCatalog.moreLabel,
+                        showsChevron: true
+                    ) { navigate(to: .more) }
+                case .reach, .organize, .departure: entryRows(group.entries)
+                }
             }
-            entryRows(catalog.departure)
         }
     }
 
     /// La tête compacte : Épingler, Sourdine et Lu côte à côte, comme le
     /// `ControlGroup` du menu natif.
-    private var headerTiles: some View {
+    private func headerTiles(_ entries: [ConversationMenuEntry]) -> some View {
         HStack(spacing: MeeshySpacing.xs) {
-            ForEach(catalog.header, id: \.self) { entry in
+            ForEach(entries, id: \.self) { entry in
                 Button {
                     select(entry)
                 } label: {
@@ -133,14 +136,21 @@ struct ConversationContextMenuView: View {
         .padding(.horizontal, MeeshySpacing.sm)
     }
 
+    /// Les entrées que ce menu DESSINE : celles du catalogue, moins « Mode de
+    /// lecture » quand aucun sous-menu n'est monté — jamais une rangée vide.
+    func drawnEntries(_ entries: [ConversationMenuEntry]) -> [ConversationMenuEntry] {
+        entries.filter { $0 != .readingMode || readingModeMenu != nil }
+    }
+
     /// Un groupe du catalogue, ouvert par un trait plein, ses entrées séparées
     /// par un trait fin.
     @ViewBuilder
     private func entryRows(_ entries: [ConversationMenuEntry]) -> some View {
-        if !entries.isEmpty {
+        let drawn = drawnEntries(entries)
+        if !drawn.isEmpty {
             divider
         }
-        ForEach(Array(entries.enumerated()), id: \.element) { index, entry in
+        ForEach(Array(drawn.enumerated()), id: \.element) { index, entry in
             if index > 0 { separator }
             entryRow(entry)
         }
@@ -148,12 +158,17 @@ struct ConversationContextMenuView: View {
 
     @ViewBuilder
     private func entryRow(_ entry: ConversationMenuEntry) -> some View {
-        if entry == .readingMode {
+        if entry == .readingMode, let readingModeMenu {
+            // Le sous-menu porte sa liste de modes ; son étiquette prend la
+            // colonne d'icône et les marges des autres rangées, et le choix
+            // ferme le menu (`onSelected`, câblé par la liste).
             readingModeMenu
-                .font(MeeshyFont.relative(MeeshyFont.calloutSize))
+                .labelStyle(MenuRowLabelStyle(iconColumnWidth: iconColumnWidth))
                 .foregroundStyle(accent)
+                .tint(accent)
                 .padding(.horizontal, MeeshySpacing.lg)
                 .frame(maxWidth: .infinity, minHeight: rowMinHeight, alignment: .leading)
+                .contentShape(Rectangle())
         } else {
             actionRow(
                 icon: entry.displayedSymbol(hasFavorite: currentReaction != nil),
@@ -249,7 +264,7 @@ struct ConversationContextMenuView: View {
     private var morePanel: some View {
         VStack(spacing: 0) {
             backHeader(ConversationMenuCatalog.moreLabel)
-            ForEach(Array(catalog.more.enumerated()), id: \.element) { index, entry in
+            ForEach(Array(drawnEntries(catalog.more).enumerated()), id: \.element) { index, entry in
                 if index == 0 { divider } else { separator }
                 entryRow(entry)
             }
@@ -266,9 +281,18 @@ struct ConversationContextMenuView: View {
             switch entry {
             case .favorite: return favoriteEntries
             case .move: return moveEntries
-            case .readingMode: return []
+            case .readingMode: return readingModeEntries
             default: return [self.entry(entry.rawValue, entry.label, { actions.perform(entry) })]
             }
+        }
+    }
+
+    /// Le sous-menu « Mode de lecture », à plat : chaque mode qu'on peut
+    /// choisir. Rien sans sous-menu monté — comme la rangée visible.
+    private var readingModeEntries: [ConversationMenuAccessibilityEntry] {
+        guard let readingModeMenu else { return [] }
+        return readingModeMenu.selectableModes.map { mode in
+            entry("readingMode.\(mode.id.rawValue)", Self.readingModeLabel(mode.title), { readingModeMenu.select(mode.id) })
         }
     }
 
@@ -309,6 +333,11 @@ struct ConversationContextMenuView: View {
 
     static func favoriteLabel(_ emoji: String) -> String {
         String(format: String(localized: "context.favorite_named", defaultValue: "Favori %@", bundle: .main), emoji)
+    }
+
+    /// « Mode de lecture, Focal » — deux libellés déjà traduits, sans clé de plus.
+    static func readingModeLabel(_ mode: String) -> String {
+        "\(ConversationMenuEntry.readingMode.label), \(mode)"
     }
 
     static func moveLabel(_ destination: String) -> String {
@@ -451,6 +480,30 @@ struct ConversationMenuAccessibilityEntry: Identifiable {
     let id: String
     let label: String
     let perform: () -> Void
+}
+
+// MARK: - Étiquette de rangée pour un sous-menu monté dans le menu custom
+
+/// L'étiquette d'un `Menu` posé parmi les rangées du menu custom : même colonne
+/// d'icône, même typographie, même chevron que `actionRow`.
+private struct MenuRowLabelStyle: LabelStyle {
+    let iconColumnWidth: CGFloat
+
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: MeeshySpacing.mdPlus) {
+            configuration.icon
+                .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .medium))
+                .symbolRenderingMode(.hierarchical)
+                .frame(width: iconColumnWidth)
+            configuration.title
+                .font(MeeshyFont.relative(MeeshyFont.calloutSize))
+                .multilineTextAlignment(.leading)
+            Spacer(minLength: 0)
+            Image(systemName: "chevron.forward")
+                .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
+                .opacity(0.4)
+        }
+    }
 }
 
 // MARK: - Row Highlight (parité menus système)

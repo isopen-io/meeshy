@@ -388,7 +388,9 @@ final class ConversationMenuCatalogDispatchTests: XCTestCase {
             categories: [],
             currentSectionId: nil,
             actions: makeActions(Recorder()),
-            readingModeMenu: mountsSubmenu ? LentilleReadingModeSubmenu(conversation: conversation) : nil,
+            readingModeMenu: mountsSubmenu
+                ? LentilleReadingModeSubmenu(conversation: conversation, preferenceStore: NullReadingModePreferenceStore())
+                : nil,
             onDismiss: onDismiss
         )
     }
@@ -425,4 +427,12 @@ final class ConversationMenuCatalogDispatchTests: XCTestCase {
         auto?.perform()
         XCTAssertEqual(dismissed, 1)
     }
+}
+
+/// Un magasin de préférence qui n'écrit nulle part : les témoins du menu
+/// choisissent un mode sans toucher la préférence réelle de l'appareil.
+nonisolated private final class NullReadingModePreferenceStore: ReadingModePreferenceStoring, @unchecked Sendable {
+    func get(conversationId: String) async -> ReadingModePreference { .auto }
+    func set(conversationId: String, value: ReadingModePreference, optimistic: Bool) async {}
+    func onChange(_ callback: @escaping @Sendable (String, ReadingModePreference) -> Void) -> @Sendable () -> Void { {} }
 }

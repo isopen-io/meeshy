@@ -101,7 +101,10 @@ nonisolated struct ConversationRowMenuCapabilities: Equatable, Sendable {
     /// jamais un groupe ni soi-même (`CallPermission.canStartCall`).
     let call: Bool
     let videoCall: Bool
-    /// « Paramètres du groupe » — MODERATOR+ sur un type qui se gère (#11230).
+    /// « Paramètres du groupe » (#11230) — l'écran édite titre, description,
+    /// avatar et bannière : il se lit sur `rename` (MODERATOR+ d'un type à
+    /// autorité, ouvert), jamais sur `manageMembers`, qui couvre aussi Global,
+    /// où la passerelle refuse toute modification (403).
     let groupSettings: Bool
 
     static func make(conversation: MeeshyConversation, currentUser: MeeshyUser?) -> ConversationRowMenuCapabilities {
@@ -129,8 +132,16 @@ nonisolated struct ConversationRowMenuCapabilities: Equatable, Sendable {
             removal: actions.hide ? (conversation.type == .direct ? .delete : .hide) : nil,
             call: actions.call && talksToPeer,
             videoCall: actions.videoCall && talksToPeer,
-            groupSettings: actions.manageMembers && conversation.type != .direct
+            groupSettings: actions.rename
         )
+    }
+
+    /// Le rang auquel s'ouvrent les réglages : le rang EFFECTIF de la loi, celui
+    /// qui a fait offrir l'entrée (ADMIN/BIGBOSS de plateforme membre ⇒
+    /// créateur, comme `actorHasMinimumRole` côté passerelle). Le rang servi
+    /// retiendrait ce que l'entrée a promis.
+    static func settingsRole(of conversation: MeeshyConversation, currentUser: MeeshyUser?) -> MemberRole {
+        viewer(of: conversation, currentUser: currentUser).effectiveRole ?? .member
     }
 
     /// Le lecteur tel que la loi le lit, pour une rangée de SA liste.

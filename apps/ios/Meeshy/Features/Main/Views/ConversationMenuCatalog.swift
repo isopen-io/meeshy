@@ -127,6 +127,29 @@ nonisolated enum ConversationMenuHaptic: Sendable {
     case light, medium, heavy
 }
 
+/// Les cinq sections du menu d'une rangée, dans l'ordre où elles se lisent.
+nonisolated enum ConversationMenuSection: Sendable {
+    case header, reach, organize, more, departure
+
+    /// Un trait sépare la section de la précédente — sauf la tête, et ce qui
+    /// la suit : le `ControlGroup` natif et les tuiles custom portent déjà
+    /// leur propre séparation.
+    var opensWithDivider: Bool {
+        switch self {
+        case .header, .reach: return false
+        case .organize, .more, .departure: return true
+        }
+    }
+}
+
+/// Une section non vide du catalogue et ses entrées.
+nonisolated struct ConversationMenuGroup: Equatable, Identifiable, Sendable {
+    let section: ConversationMenuSection
+    let entries: [ConversationMenuEntry]
+
+    var id: ConversationMenuSection { section }
+}
+
 /// Le menu d'une rangée, en cinq groupes que les deux chemins posent dans le
 /// même ordre :
 /// - `header` — Épingler, Sourdine, Lu : la tête COMPACTE (un `ControlGroup`
@@ -162,8 +185,21 @@ nonisolated struct ConversationMenuCatalog: Equatable, Sendable {
     let more: [ConversationMenuEntry]
     let departure: [ConversationMenuEntry]
 
+    /// LA séquence que les deux chemins d'OS parcourent : les sections non
+    /// vides, dans l'ordre. Aucun chemin n'énumère ses groupes à la main, donc
+    /// aucun ne peut en oublier un en silence.
+    var groups: [ConversationMenuGroup] {
+        [
+            ConversationMenuGroup(section: .header, entries: header),
+            ConversationMenuGroup(section: .reach, entries: reach),
+            ConversationMenuGroup(section: .organize, entries: organize),
+            ConversationMenuGroup(section: .more, entries: more),
+            ConversationMenuGroup(section: .departure, entries: departure)
+        ].filter { !$0.entries.isEmpty }
+    }
+
     /// Toutes les entrées, dans l'ordre où elles se lisent.
-    var entries: [ConversationMenuEntry] { header + reach + organize + more + departure }
+    var entries: [ConversationMenuEntry] { groups.flatMap(\.entries) }
 
     static var moreLabel: String {
         String(localized: "context.more_options", defaultValue: "Plus d'options", bundle: .main)

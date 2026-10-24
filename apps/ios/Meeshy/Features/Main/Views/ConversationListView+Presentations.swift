@@ -29,7 +29,7 @@ struct ConversationListCreationSheets: ViewModifier {
             .sheet(item: $sheetTargets.settings) { conversation in
                 ConversationSettingsView(
                     conversation: conversation,
-                    currentUserRole: MemberRole(rawValue: conversation.currentUserRole?.lowercased() ?? "member") ?? .member,
+                    currentUserRole: ConversationRowMenuCapabilities.settingsRole(of: conversation, currentUser: AuthManager.shared.currentUser),
                     onUpdated: { _ in sheetTargets.settings = nil },
                     onLeft: { sheetTargets.settings = nil }
                 )
