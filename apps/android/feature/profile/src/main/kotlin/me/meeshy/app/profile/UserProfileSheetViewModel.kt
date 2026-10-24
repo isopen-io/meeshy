@@ -19,11 +19,13 @@ import me.meeshy.sdk.model.profile.ProfileAccentRules
 import me.meeshy.sdk.model.profile.ProfileLoadEvent
 import me.meeshy.sdk.model.profile.ProfileLoadReducer
 import me.meeshy.sdk.model.profile.ProfileLoadState
+import me.meeshy.sdk.model.profile.ProfileSelfRule
 import me.meeshy.sdk.model.profile.ProfileSheetUser
 import me.meeshy.sdk.model.profile.from
 import me.meeshy.sdk.model.profile.repainted
 import me.meeshy.sdk.profile.ProfileCacheRepository
 import me.meeshy.sdk.profile.ProfileSheetLoader
+import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.MessageSocketManager
 import me.meeshy.sdk.theme.DynamicColorGenerator
 
@@ -37,12 +39,40 @@ data class UserProfileSheetUiState(
     val isLoadingStats: Boolean = false,
     val isBlockedByTarget: Boolean = false,
     val loadFailed: Boolean = false,
+    val isSelf: Boolean = false,
 ) {
     /** « Réessayer » n'est offert qu'à une panne : un refus (bloqué par la cible) ne se rejoue pas. */
     val canRetry: Boolean get() = loadFailed && !isBlockedByTarget
 
     /** Gris neutre quand la cible nous bloque, sinon l'accent déjà dérivé de la fiche. */
     val accentHex: String get() = ProfileAccentRules.accentHex(isBlockedByTarget, user.accentColor)
+
+    /** Ce que la feuille peint : un squelette sur cache vide, jamais un spinner sur un contenu peint. */
+    val content: ProfileSheetContent get() = when {
+        isBlockedByTarget -> ProfileSheetContent.Close
+        profile != null -> ProfileSheetContent.Loaded
+        isLoadingProfile -> ProfileSheetContent.Skeleton
+        loadFailed -> ProfileSheetContent.Failed
+        else -> ProfileSheetContent.Refused
+    }
+}
+
+/** Les quatre façons dont la feuille se présente, plus sa fermeture d'elle-même. */
+enum class ProfileSheetContent {
+    /** Cache vide, synchronisation en cours : en-tête et onglets en squelette. */
+    Skeleton,
+
+    /** Panne sur cache vide : « Ce profil n'a pas pu se charger. » et Réessayer. */
+    Failed,
+
+    /** Refus typé de la passerelle : le même message, sans Réessayer (rejouer ne changerait rien). */
+    Refused,
+
+    /** La cible m'a bloqué (403, ou 404 sur fiche peinte) : la feuille se ferme d'elle-même. */
+    Close,
+
+    /** Un profil est peint, du cache ou du réseau. */
+    Loaded,
 }
 
 sealed interface UserProfileSheetEvent {
@@ -55,6 +85,7 @@ class UserProfileSheetViewModel @Inject constructor(
     private val loader: ProfileSheetLoader,
     private val cache: ProfileCacheRepository,
     socket: MessageSocketManager,
+    private val session: SessionRepository,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(UserProfileSheetUiState())
@@ -91,11 +122,21 @@ class UserProfileSheetViewModel @Inject constructor(
     }
 
     private fun open(user: ProfileSheetUser, retry: Boolean) {
-        val accented = user.copy(accentColor = user.accentColor.ifEmpty { derivedAccent(user) })
+        val accented = if (retry) user else user.copy(accentColor = derivedAccent(user))
         if (!retry && accented == _state.value.user && loadJob?.isActive == true) return
         loadJob?.cancel()
         if (!retry) load = ProfileLoadState()
-        _state.update { it.copy(user = accented) }
+        _state.update { shown ->
+            val samePerson = accented.id.isNotEmpty() && accented.id == shown.user.id
+            val base = if (retry || samePerson) shown else UserProfileSheetUiState()
+            base.copy(
+                user = accented,
+                isLoadingProfile = base.profile == null,
+                loadFailed = false,
+                isBlockedByTarget = false,
+                isSelf = isSelf(accented),
+            )
+        }
         loadJob = viewModelScope.launch {
             loader.open(accented.userId, accented.username, retry).collect { next ->
                 load = next
@@ -128,10 +169,19 @@ class UserProfileSheetViewModel @Inject constructor(
                 isLoadingStats = load.isLoadingStats,
                 isBlockedByTarget = load.isBlockedByTarget,
                 loadFailed = load.profileLoadFailed,
+                isSelf = isSelf(user),
             )
         }
     }
 
+    /** La couleur du PROFIL, jamais celle de l'écran d'où la fiche s'ouvre (miroir de `profileAccent` iOS). */
     private fun derivedAccent(user: ProfileSheetUser): String =
-        DynamicColorGenerator.profileAccentHex(user.userId, user.username)
+        DynamicColorGenerator.profileAccentHex(user.userId, user.resolvedDisplayName)
+
+    /** « C'est moi » par id OU par pseudo : la feuille n'offre alors aucune action. */
+    private fun isSelf(user: ProfileSheetUser): Boolean = ProfileSelfRule.isSelf(
+        sessionUserId = session.currentUserId,
+        sessionUsername = session.currentUser.value?.username,
+        user = user,
+    )
 }

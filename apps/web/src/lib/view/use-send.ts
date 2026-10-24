@@ -2,9 +2,10 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useStore } from 'zustand/react';
 
 import { isPermanentFailure } from '@/lib/api/outcome';
-import { retrySendAction, sendAction } from '@/lib/api/query';
+import { discardSendAction, retrySendAction, sendAction } from '@/lib/api/query';
 import type { Message, Participant } from '@/lib/api/types';
 import { translate } from '@/lib/i18n-catalog';
+import { isMessagePiecesCatalogLoaded, translateMessagePieces } from '@/lib/i18n-message-pieces-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
 import type { PendingAttachment } from '@/lib/send/attachments';
@@ -91,6 +92,15 @@ export function useSend(params: {
     sticker?: MessageSticker | null,
   ) => void;
   readonly retry: (messageId: string) => void;
+  /**
+   * ABANDONNER UN ENVOI EN ÉCHEC (#12632) — la règle vit dans `discardSend`
+   * (`send/discard-send.ts`) : l'entrée quitte l'outbox sans compter de
+   * confirmation, la bulle quitte le fil ET la ligne de liste rend sa place au
+   * message qui précède. Un envoi encore EN VOL ne s'abandonne pas. L'issue se
+   * dit dans la région vivante ; après un échec AMBIGU (coupure, délai, 5xx),
+   * elle ne promet pas que le message n'est pas parti.
+   */
+  readonly discard: (messageId: string) => void;
 } {
   const { conversationId, viewerId, sender, announce } = params;
   const online = useOnline();
@@ -167,6 +177,17 @@ export function useSend(params: {
     [conversationId, online],
   );
 
+  const discard = useCallback(
+    (messageId: string) => {
+      const outcome = discardSendAction({ conversationId, clientMessageId: messageId });
+      if (outcome === null) return;
+      const language = currentInterfaceLanguage();
+      if (!isMessagePiecesCatalogLoaded(language)) return;
+      announce(translateMessagePieces(language, outcome.uncertain ? 'message.send.discarded.uncertain' : 'message.send.discarded'));
+    },
+    [conversationId, announce],
+  );
+
   const failedCount = useMemo(
     () => entries.reduce((count, entry) => (entry.delivery === 'failed' ? count + 1 : count), 0),
     [entries],
@@ -202,5 +223,5 @@ export function useSend(params: {
     previousConfirmedCount.current = confirmedCount;
   }, [failedCount, confirmedCount, entries, announce]);
 
-  return { pending, deliveryOf, startedAtOf, reasonOf, permanentOf, send, retry };
+  return { pending, deliveryOf, startedAtOf, reasonOf, permanentOf, send, retry, discard };
 }

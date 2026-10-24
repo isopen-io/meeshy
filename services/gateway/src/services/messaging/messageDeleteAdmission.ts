@@ -1,5 +1,5 @@
 import { captureNoticeOf } from './captureNoticeVisibility.js';
-import { PRIVILEGED_GLOBAL_ROLES } from './messageEditAdmission.js';
+import { isPrivilegedPlatformRole } from '@meeshy/shared/utils/platform-privilege';
 
 /**
  * L'unique énoncé de « qui peut supprimer ce message ».
@@ -197,7 +197,7 @@ export async function admitMessageDelete(
     const globalRole = membership.user?.role ?? undefined;
     const privileged =
       (Boolean(conversationRole) && PRIVILEGED_CONVERSATION_ROLES.has(conversationRole)) ||
-      (Boolean(globalRole) && PRIVILEGED_GLOBAL_ROLES.has(globalRole));
+      isPrivilegedPlatformRole(globalRole);
     if (privileged) return moderationAdmission(prisma, message.conversationId, actorParticipantId, onError);
 
     const admitted =
@@ -208,7 +208,7 @@ export async function admitMessageDelete(
   try {
     const record = await prisma.user.findUnique({ where: { id: deleterUserId }, select: { role: true } });
     const globalRole = record?.role ?? undefined;
-    if (!globalRole || !PRIVILEGED_GLOBAL_ROLES.has(globalRole)) return REFUSED_OR_ADMITTED(false);
+    if (!isPrivilegedPlatformRole(globalRole)) return REFUSED_OR_ADMITTED(false);
   } catch (error) {
     onError?.(error);
     return REFUSED_OR_ADMITTED(false);

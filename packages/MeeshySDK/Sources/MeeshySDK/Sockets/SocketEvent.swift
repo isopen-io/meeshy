@@ -97,6 +97,7 @@ public enum SocketEvent: String, CaseIterable, Sendable {
     case conversationStats = "conversation:stats"
     case conversationUnreadUpdated = "conversation:unread-updated"
     case conversationUpdated = "conversation:updated"
+    case e2eeEnvelope = "e2ee:envelope"
     case engagementConversationUpdated = "engagement:conversation-updated"
     case engagementPostUpdated = "engagement:post-updated"
     case feedSubscribe = "feed:subscribe"

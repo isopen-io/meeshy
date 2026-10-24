@@ -410,6 +410,15 @@ services:
       - SESSION_EXPIRY_TRUSTED_DAYS=${SESSION_EXPIRY_TRUSTED_DAYS:-365}
       - MAX_SESSIONS_PER_USER=${MAX_SESSIONS_PER_USER:-10}
       - BRAND_LOGO_URL=${BRAND_LOGO_URL:-}
+      # #11509 — le relais des opérations serveur, ouvert à la production sur feu vert du
+      # porteur (2026-10-24) : les demandes de sauvegarde / purge des images sont DÉPOSÉES
+      # dans OPS_REQUESTS_DIR pour le runner de l'hôte (infrastructure/scripts/ops-runner/,
+      # `install.sh production`), qui publie son état dans OPS_STATE_DIR, monté en lecture
+      # seule. Ni socket Docker ni systemd dans la passerelle. Hôte partagé avec le staging.
+      - OPS_ENVIRONMENT=production
+      - OPS_SHARED_HOST=true
+      - OPS_REQUESTS_DIR=/ops-requests
+      - OPS_STATE_DIR=/ops-state
     volumes:
       - gateway_uploads:/app/uploads
       # NE PAS monter dans le service nginx : ce montage rendrait les sons publics.
@@ -422,6 +431,10 @@ services:
       # #9668 — le SEUL dossier du verdict de sauvegarde, en lecture seule : la passerelle
       # ne voit jamais les sauvegardes elles-mêmes (/opt/meeshy/backups/nightly).
       - ${BACKUP_STATUS_HOST_DIR:-/opt/meeshy/backups/nightly-status}:/backup-status:ro
+      # #11509 — les demandes d'opérations (écrites par la passerelle, uid 1001) et l'état
+      # publié par le runner de l'hôte (lecture seule).
+      - /opt/meeshy/production/ops/requests:/ops-requests
+      - /opt/meeshy/production/ops/state:/ops-state:ro
     depends_on:
       database:
         condition: service_healthy

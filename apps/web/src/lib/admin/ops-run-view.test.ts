@@ -89,3 +89,26 @@ describe('les délais se lisent contre l’heure du rendu (#10467)', () => {
     expect(later.lastAt).toBe(PREVIOUS.finishedAt);
   });
 });
+
+describe('hors de sa fenêtre horaire, le nettoyage attend comme sous le délai (#11452)', () => {
+  const PRUNE_WINDOW = { timeZone: 'Europe/Paris', startHour: 2, endHour: 6 } as const;
+  const closed = {
+    ...status({ availableAt: { backup: null, 'image-prune': '2026-10-14T00:00:00.000Z' } }),
+    windows: { backup: null, 'image-prune': { ...PRUNE_WINDOW, open: false } },
+  };
+
+  test('fenêtre fermée : bouton fermé, l’attente se dit « fenêtre » et non « délai », jusqu’à l’ouverture servie', () => {
+    const card = operationCardOf({ operation: 'image-prune', status: closed, awaited: null, now: NOW, online: true });
+    expect(card.canPress).toBe(false);
+    expect(card.outsideWindow).toBe(true);
+    const opened = operationCardOf({ operation: 'image-prune', status: closed, awaited: null, now: new Date('2026-10-14T00:00:00.000Z'), online: true });
+    expect(opened.canPress).toBe(true);
+    expect(opened.outsideWindow).toBe(false);
+  });
+
+  test('fenêtre ouverte sous un délai : c’est le délai qui attend ; une passerelle sans fenêtre ne change rien', () => {
+    const cooled = { ...closed, windows: { backup: null, 'image-prune': { ...PRUNE_WINDOW, open: true } } };
+    expect(operationCardOf({ operation: 'image-prune', status: cooled, awaited: null, now: NOW, online: true })).toMatchObject({ canPress: false, outsideWindow: false });
+    expect(operationCardOf({ operation: 'backup', status: status(), awaited: null, now: NOW, online: true })).toMatchObject({ canPress: true, outsideWindow: false });
+  });
+});

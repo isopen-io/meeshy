@@ -13,7 +13,10 @@
  * Les routes de MEMBRE (`PUT|PATCH /conversations/:id`,
  * `PATCH …/participants/:userId/role`, `DELETE …/participants/:userId`)
  * exigent que l'acteur soit DANS la conversation — « une fois dans »
- * (`packages/shared/utils/conversation-authority.ts`). C'est juste pour elles : le rang de
+ * (`packages/shared/utils/conversation-authority.ts`, qui le fait respecter lui-même : sans
+ * ligne de participation, aucun rôle de plateforme ne vaut un rang — #11217 ;
+ * `PUT|PATCH` et `DELETE /conversations/:id` ne le vérifiaient pas
+ * auparavant). C'est juste pour elles : le rang de
  * plateforme n'y est qu'un surclassement d'un membre. Mais un administrateur
  * qui instruit un signalement sur un groupe dont il n'est pas membre y
  * recevait 403, et n'avait d'autre recours que de s'y inviter — c'est-à-dire

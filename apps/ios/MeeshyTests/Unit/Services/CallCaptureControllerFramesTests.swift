@@ -152,7 +152,9 @@ final class CallCaptureControllerFramesTests: XCTestCase {
 
         let ids = sut.frameWindow(for: sut.choice).map(\.id)
 
-        XCTAssertEqual(ids, CallCaptureController.thumbnailWindow(around: selected.id, in: frames.map(\.id), radius: CallCaptureController.thumbnailRadius))
+        let window = CallCaptureController.thumbnailWindow(around: selected.id, in: frames.map(\.id), radius: CallCaptureController.thumbnailRadius)
+        let declinations = CallMontageFrameRule.declinations(of: .frame(selected.id)).dropFirst()
+        XCTAssertEqual(ids, window + declinations)
     }
 
     func test_frameWindow_classicChoice_isEmpty() {
@@ -242,6 +244,35 @@ final class CallCaptureControllerFramesTests: XCTestCase {
 
         sut.show(.classics, people: 3)
         XCTAssertEqual(sut.choice, .classic(.film))
+    }
+
+    // MARK: - La mise en avant (#12683)
+
+    func test_frameScope_opensOnTheSpotlight() {
+        let (sut, _) = makeSUT(people: 2)
+        XCTAssertEqual(sut.requestedFrameScope, .spotlight)
+        XCTAssertEqual(sut.frameScope(people: 2), .spotlight)
+    }
+
+    func test_show_spotlightMood_landsOnItsFirstFeaturedFrame() throws {
+        let (sut, _) = makeSUT(people: 2)
+        let first = try XCTUnwrap(CallFrameSpotlightRule.frames(forPeople: 2, mood: .morbide, scope: .spotlight).first)
+        sut.show(.mood(.morbide), people: 2)
+        XCTAssertEqual(sut.choice, .frame(first.id))
+    }
+
+    func test_setFrameScope_backToSpotlight_movesAHiddenChoiceToTheFirstFeaturedFrame() throws {
+        let (sut, _) = makeSUT(people: 2)
+        let featured = CallFrameSpotlightRule.frames(forPeople: 2, mood: .jovial, scope: .spotlight)
+        let hidden = try XCTUnwrap(CallFrameCatalogue.frames(forPeople: 2, mood: .jovial).first { design in !featured.contains(design) })
+        sut.setFrameScope(.all, people: 2)
+        sut.select(choice: .frame(hidden.id))
+        XCTAssertEqual(sut.frameScope(people: 2), .all)
+
+        sut.setFrameScope(.spotlight, people: 2)
+
+        XCTAssertEqual(sut.choice, .frame(try XCTUnwrap(featured.first).id))
+        XCTAssertEqual(sut.frameScope(people: 2), .spotlight)
     }
 
     func test_reconcileFrame_peopleChange_takesTheSameMotifInTheNewBucket() throws {

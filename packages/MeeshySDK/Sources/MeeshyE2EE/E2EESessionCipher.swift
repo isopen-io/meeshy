@@ -43,8 +43,22 @@ public enum E2EESessionCipherError: Error, Equatable {
 public protocol E2EESessionCipherProviding: Sendable {
     func startSession(with bundle: E2EEDeviceBundle, of userId: String) throws
     func hasSession(with address: E2EEDeviceAddress) throws -> Bool
+    /// La `registrationId` de la génération avec laquelle la session courante a
+    /// été ouverte ; `nil` sans session. Une génération différente de celle
+    /// que l'annuaire annonce est une session périmée (Sesame § 3).
+    func remoteRegistrationId(of address: E2EEDeviceAddress) throws -> UInt32?
+    /// La clé d'identité que cet appareil connaît pour l'adresse (TOFU).
+    func remoteIdentity(of address: E2EEDeviceAddress) throws -> Data?
+    func deleteSession(with address: E2EEDeviceAddress) throws
     func encrypt(_ plaintext: Data, for address: E2EEDeviceAddress) throws -> E2EECiphertext
     func decrypt(_ ciphertext: E2EECiphertext, from address: E2EEDeviceAddress) throws -> Data
+    /// Déchiffre ET range ce que `persist` tire du clair dans la MÊME
+    /// transaction que le nouvel état du ratchet : ou les deux, ou rien.
+    func decrypt<T>(
+        _ ciphertext: E2EECiphertext,
+        from address: E2EEDeviceAddress,
+        persisting persist: (Data, any E2EERecordTransaction) throws -> T
+    ) throws -> T
 }
 
 public final class E2EESessionCipher: E2EESessionCipherProviding {
@@ -80,6 +94,24 @@ public final class E2EESessionCipher: E2EESessionCipherProviding {
         return try vault.read { transaction in try store.loadSession(for: remote, context: transaction)?.hasCurrentState ?? false }
     }
 
+    public func remoteRegistrationId(of address: E2EEDeviceAddress) throws -> UInt32? {
+        let remote = try address.protocolAddress()
+        return try vault.read { transaction in
+            guard let session = try store.loadSession(for: remote, context: transaction), session.hasCurrentState else { return nil }
+            return try session.remoteRegistrationId()
+        }
+    }
+
+    public func remoteIdentity(of address: E2EEDeviceAddress) throws -> Data? {
+        let remote = try address.protocolAddress()
+        return try vault.read { transaction in try store.identity(for: remote, context: transaction)?.serialize() }
+    }
+
+    public func deleteSession(with address: E2EEDeviceAddress) throws {
+        let remote = try address.protocolAddress()
+        try underLock { transaction in try store.deleteSession(for: remote, context: transaction) }
+    }
+
     public func encrypt(_ plaintext: Data, for address: E2EEDeviceAddress) throws -> E2EECiphertext {
         let remote = try address.protocolAddress()
         let ours = try local.protocolAddress()
@@ -90,24 +122,36 @@ public final class E2EESessionCipher: E2EESessionCipherProviding {
     }
 
     public func decrypt(_ ciphertext: E2EECiphertext, from address: E2EEDeviceAddress) throws -> Data {
+        try decrypt(ciphertext, from: address) { plaintext, _ in plaintext }
+    }
+
+    public func decrypt<T>(
+        _ ciphertext: E2EECiphertext,
+        from address: E2EEDeviceAddress,
+        persisting persist: (Data, any E2EERecordTransaction) throws -> T
+    ) throws -> T {
         let remote = try address.protocolAddress()
         let ours = try local.protocolAddress()
         return try underLock { transaction in
-            switch ciphertext.type {
-            case E2EECiphertext.preKeyType:
-                return try signalDecryptPreKey(
-                    message: PreKeySignalMessage(bytes: ciphertext.body), from: remote, localAddress: ours,
-                    sessionStore: store, identityStore: store, preKeyStore: store, signedPreKeyStore: store,
-                    kyberPreKeyStore: store, context: transaction
-                )
-            case E2EECiphertext.whisperType:
-                return try signalDecrypt(
-                    message: SignalMessage(bytes: ciphertext.body), from: remote, to: ours,
-                    sessionStore: store, identityStore: store, context: transaction
-                )
-            default:
-                throw E2EESessionCipherError.unknownMessageType(ciphertext.type)
-            }
+            try persist(try open(ciphertext, from: remote, ours: ours, transaction: transaction), transaction)
+        }
+    }
+
+    private func open(_ ciphertext: E2EECiphertext, from remote: ProtocolAddress, ours: ProtocolAddress, transaction: any E2EERecordTransaction) throws -> Data {
+        switch ciphertext.type {
+        case E2EECiphertext.preKeyType:
+            return try signalDecryptPreKey(
+                message: PreKeySignalMessage(bytes: ciphertext.body), from: remote, localAddress: ours,
+                sessionStore: store, identityStore: store, preKeyStore: store, signedPreKeyStore: store,
+                kyberPreKeyStore: store, context: transaction
+            )
+        case E2EECiphertext.whisperType:
+            return try signalDecrypt(
+                message: SignalMessage(bytes: ciphertext.body), from: remote, to: ours,
+                sessionStore: store, identityStore: store, context: transaction
+            )
+        default:
+            throw E2EESessionCipherError.unknownMessageType(ciphertext.type)
         }
     }
 
