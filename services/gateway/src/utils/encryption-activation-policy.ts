@@ -15,8 +15,9 @@ import { GlobalUserRole, globalRoleLevel } from '@meeshy/shared/types/role-types
  *
  * Cette politique s'AJOUTE aux règles d'appartenance et de rang de la route :
  * un rôle de plateforme étranger à la conversation reste étranger, et sous
- * `ADMIN` le rôle de plateforme n'apporte, DANS un groupe, aucun rang de
- * conversation (`conversation-authority.ts`). La relâcher se fait ICI, et
+ * `MODERATOR` le rôle de plateforme n'apporte, DANS un groupe, aucun rang de
+ * conversation ; `MODERATOR`, `ADMIN` et `BIGBOSS` membres y agissent avec les
+ * droits du créateur (`conversation-authority.ts`, #11217). La relâcher se fait ICI, et
  * nulle part ailleurs ; son miroir iOS est `ConversationEncryptionActivationPolicy`.
  *
  * Fermée par défaut : un rôle absent ou illisible vaut le niveau 0

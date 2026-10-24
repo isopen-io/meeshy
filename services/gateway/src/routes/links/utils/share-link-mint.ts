@@ -1,7 +1,7 @@
 import type { FastifyReply } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import { MemberRole, isGlobalAdmin } from '@meeshy/shared/types/role-types';
-import { actorHasMinimumRole, type ConversationActor } from '../../../utils/conversation-authority';
+import { MemberRole } from '@meeshy/shared/types/role-types';
+import { actorHasMinimumRole, actsWithCreatorRights, type ConversationActor } from '../../../utils/conversation-authority';
 import { isConversationClosed } from '../../../services/messaging/conversationWriteAdmission';
 import { resolveConversationId } from '../../../utils/conversation-id-cache';
 import { SecuritySanitizer } from '../../../utils/sanitize';
@@ -60,12 +60,13 @@ export type ShareLinkMintEngagement = Pick<EngagementService, 'recordActivity'>;
  * - `public` : n'importe quel membre (déjà vérifié en amont — être SERVI ce
  *   prédicat suppose une ligne `Participant` active). Une conversation
  *   publique n'a rien à protéger de plus que son appartenance.
- * - `global` : ADMIN ou BIGBOSS de la PLATEFORME, jamais le rang de
+ * - `global` : un rôle de PLATEFORME privilégié (MODERATOR, ADMIN, BIGBOSS —
+ *   `actsWithCreatorRights`, #11217), jamais le rang de
  *   conversation — c'est `user.role`, pas `Participant.role`, qui décide ici,
  *   parce que le salon global n'a pas de hiérarchie de modération propre.
  * - tout le reste (`group`, `direct`, un type futur) : au moins MODERATOR
  *   DANS la conversation — `actorHasMinimumRole` fait aussi bénéficier un
- *   ADMIN/BIGBOSS de plateforme des droits du créateur (§ `conversation-
+ *   rôle de plateforme privilégié des droits du créateur (§ `conversation-
  *   authority.ts`), donc un administrateur de passage n'est jamais bloqué.
  *   `direct` retombe ici en théorie ; en pratique la conversation directe est
  *   refusée AVANT cet appel (aucune notion de modérateur n'y a de sens), mais
@@ -78,7 +79,7 @@ export function mayMintShareLink(
   conversation: { readonly type: string }
 ): boolean {
   if (conversation.type === 'public') return true;
-  if (conversation.type === 'global') return isGlobalAdmin(actor.platformRole ?? '');
+  if (conversation.type === 'global') return actsWithCreatorRights(actor);
   return actorHasMinimumRole(actor, MemberRole.MODERATOR);
 }
 
