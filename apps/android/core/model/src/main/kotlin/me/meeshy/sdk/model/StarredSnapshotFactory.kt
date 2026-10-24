@@ -32,7 +32,7 @@ public object StarredSnapshotFactory {
             conversationName = conversationName,
             conversationAccentColor = conversationAccentColor,
             senderName = message.sender?.name?.takeIf { it.isNotBlank() },
-            senderAvatarUrl = message.authorAvatarUrl?.takeIf { it.isNotBlank() },
+            senderAvatarUrl = message.sender?.resolvedAvatar?.takeIf { it.isNotBlank() },
             contentPreview = previewOf(message, kind, preferredLanguages, mediaStrings),
             attachmentKind = kind,
             starredAtMillis = nowMillis,
