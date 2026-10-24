@@ -31,6 +31,7 @@ import { execFileSync } from 'node:child_process';
 
 export const GLOBAUX = [
   '.github/workflows/ci.yml',
+  '.github/actions/',
   'scripts/ci-affected.mjs',
   'package.json',
   'bun.lock',
@@ -124,6 +125,7 @@ const CAS = [
   ['docs hors marketing', ['docs/product/roadmap.md', 'tasks/lessons.md'], { translator: false, shell_android: false, glory_frames: false }],
   ['ce workflow', ['apps/ios/x.swift', '.github/workflows/ci.yml'], { translator: true, shell_android: true, glory_frames: true }],
   ['lockfile', ['bun.lock'], { translator: true, shell_android: true, glory_frames: true }],
+  ['action composite de la CI', ['.github/actions/preparer-js/action.yml'], { translator: true, shell_android: true, glory_frames: true }],
   ['diff illisible', null, { translator: true, shell_android: true, glory_frames: true }],
   ['diff vide', [], { translator: true, shell_android: true, glory_frames: true }],
   ['préfixe trompeur', ['services/translator-old/x.py', 'packages/shared-legacy/x.ts'], { translator: false, shell_android: false, glory_frames: false }],

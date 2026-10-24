@@ -505,7 +505,7 @@ Sois FACTUEL : chaque verdict porte sa preuve (fichier:ligne, commande, sortie).
   // fusionne sur-le-champ sur ce dépôt sans protection de branche.
   const FUSION = {
     type: 'object', additionalProperties: false, required: ['fusionnee', 'rapport'],
-    properties: { fusionnee: { type: 'boolean' }, sha: { type: 'string' }, checks: { type: 'string', description: 'la sortie de gh pr checks, tronquée' }, rapport: { type: 'string' } },
+    properties: { fusionnee: { type: 'boolean' }, sha: { type: 'string' }, checks: { type: 'string', description: 'la sortie de scripts/ci/pr-verte.mjs' }, rapport: { type: 'string' } },
   }
   const fusions = AUTO_MERGE && enPr.length ? await parallel(enPr.map((l) => async () => {
     const num = verdicts.get(l.cle).pr_numero
@@ -516,7 +516,7 @@ Tu es l'agent de LIVRAISON de ce tour : tu es le seul autorisé à fusionner, et
 1. \`cd ${REPO_PAR_CHAINE[l.chaine]} && gh pr view ${num} --json state,mergeStateStatus,headRefName,baseRefName\` — la PR doit être OPEN vers ${BASE}.
    Si mergeStateStatus est DIRTY/BEHIND : \`git fetch origin && git checkout <headRefName> && git merge origin/${BASE}\`
    (jamais rebase), résous en gardant les deux apports, rejoue les gates rapides de la plateforme, pousse.
-2. \`gh pr checks ${num} --watch --fail-fast\` (bloquant ; au plus ~45 min). Rends la sortie tronquée.
+2. \`node scripts/ci/pr-verte.mjs ${num} --attendre 45\` (l'outil UNIQUE du dépôt, #12559 : 0 vert, 1 rouge avec les checks nommés, 3 encore en cours ; une annulation n'est jamais verte, « Verdict CI » doit être présent). Rends la sortie.
 3. Pour une PR iOS (branche d'un lot I<n>) : \`gh pr view ${num} --json headRefOid,commits -q '.commits[-1].messageHeadline'\` — si le sujet de la TÊTE ne contient pas « run test », le vert n'est qu'une compilation : pose un commit VIDE \`test(ios): … — run test (Refs #<issue>)\` sur la branche (par \`git commit-tree\` + \`git push origin <sha>:refs/heads/<branche>\`, sans checkout), puis REVIENS à l'étape 2 sur la nouvelle tête. TOUT VERT ⇒ \`gh pr merge ${num} --merge\` (JAMAIS --auto, JAMAIS --squash) puis \`gh pr view ${num} --json mergedAt,mergeCommit\`.
    UN ROUGE ⇒ ne fusionne pas ; lis le job (\`gh run view <id> --log-failed | tail -60\`) ; si le rouge est CAUSÉ
    par le lot, corrige-le en TDD sur la branche, pousse, et reprends à l'étape 2 (une fois) ; s'il est
@@ -680,7 +680,7 @@ ${restants.length ? `RESTANTS (ils voyagent avec le lot et se DISENT dans la PR)
    gates et leurs chiffres, le rouge préexistant s'il y en a, \`Closes #${num || 'n'}\`, dimensions mûres et
    restantes ; ligne vide puis
    🤖 Generated with [Claude Code](https://claude.com/claude-code)
-   ${AUTO_MERGE ? `Puis ATTENDS LE VERT et fusionne toi-même — JAMAIS \`--auto\` (sur ce dépôt sans protection de branche, \`--auto\` fusionne sur-le-champ, avant tout verdict) : \`gh pr checks <n> --watch --fail-fast\` (au plus ~45 min), puis, tout vert, \`gh pr merge <n> --merge\` ; un rouge CAUSÉ par le lot se corrige en TDD sur la branche puis on recommence (une fois) ; un rouge PRÉEXISTANT (même job rouge sur origin/${BASE}) se dit dans la PR et n'empêche pas la fusion ; si le vert n'est pas venu dans le délai, laisse la PR ouverte et dis-le (elle sera fusionnée au tour suivant).` : `NE FUSIONNE PAS ET N'ARME RIEN — \`gh pr merge\` interdit sous toutes ses formes ce tour (voir le socle) ; la PR reste OUVERTE, rends auto_merge=false, et écris dans son corps « auto-merge à armer après le feu vert de la veille de dev ».`} Si GitHub dit CONFLICTING sur une fusion propre, \`git merge-tree\`
+   ${AUTO_MERGE ? `Puis ATTENDS LE VERT et fusionne toi-même — JAMAIS \`--auto\` (sur ce dépôt sans protection de branche, \`--auto\` fusionne sur-le-champ, avant tout verdict) : \`node scripts/ci/pr-verte.mjs <n> --attendre 45\` (l'outil UNIQUE du dépôt, #12559), puis, sortie 0, \`gh pr merge <n> --merge\` ; un rouge CAUSÉ par le lot se corrige en TDD sur la branche puis on recommence (une fois) ; un rouge PRÉEXISTANT (même job rouge sur origin/${BASE}) se dit dans la PR et n'empêche pas la fusion ; si le vert n'est pas venu dans le délai, laisse la PR ouverte et dis-le (elle sera fusionnée au tour suivant).` : `NE FUSIONNE PAS ET N'ARME RIEN — \`gh pr merge\` interdit sous toutes ses formes ce tour (voir le socle) ; la PR reste OUVERTE, rends auto_merge=false, et écris dans son corps « auto-merge à armer après le feu vert de la veille de dev ».`} Si GitHub dit CONFLICTING sur une fusion propre, \`git merge-tree\`
    arbitre ; fusionne origin/${BASE} dans la branche et repousse.
 6. Commentaire sur l'issue #${num || 'n'} : la PR, les preuves (gates, témoins, captures décrites), dimensions
    MÛRES / RESTANTES, et une issue par dimension non mûre (même milestone) si elle n'existe pas. Termine par
@@ -739,8 +739,8 @@ LES PR DU TOUR :
 ${livres.map((r) => `- ${r.cle}${r.issue ? ` (#${r.issue})` : ''} : ${r.livraison && r.livraison.pr_url ? r.livraison.pr_url : '(pas de PR)'} — ${r.livraison && r.livraison.pousse ? 'livré' : 'non livré'}`).join('\n')}
 
 A. FUSIONNER AU VERT, PUIS ATTENDRE LE DÉPLOIEMENT (jamais de push sur ${BASE}, jamais \`--auto\`) :
-1. Pour chaque PR de lot encore ouverte (\`gh pr list --state open --search "head:lot/"\`) : \`gh pr checks <n> --watch --fail-fast\`
-   (bloquant, jusqu'au verdict, ~40 min au plus). Pour une PR iOS, un vert ne compte que si le SUJET du commit de
+1. Pour chaque PR de lot encore ouverte (\`gh pr list --state open --search "head:lot/"\`) : \`node scripts/ci/pr-verte.mjs <n> --attendre 40\`
+   (l'outil UNIQUE du dépôt, #12559 : 0 vert, 1 rouge, 3 encore en cours). Pour une PR iOS, un vert ne compte que si le SUJET du commit de
    tête contient « run test » (sinon commit vide \`test(ios): … — run test\`, et on rattend). TOUT VERT ⇒ \`gh pr merge <n> --merge\` puis
    \`gh pr view <n> --json mergedAt\` → fusionnees. Une PR ROUGE : lis le job rouge
    (\`gh run view <id> --log-failed | tail -80\`) ; rouge PRÉEXISTANT (même job rouge sur origin/${BASE}) ⇒
@@ -831,7 +831,7 @@ TA MISSION — LIVRER LE CHANTIER EN PRODUCTION, sur feu vert EXPLICITE du porte
 1. \`cd ${REPO_WEB} && git fetch origin ${BASE} main\` ; vérifie que ${BASE} est VERT à sa tête
    (\`gh run list --branch ${BASE} --limit 6 --json headSha,name,status,conclusion\`) — un ${BASE} rouge ne part pas.
 2. Ouvre la PR ${BASE} → main (\`gh pr create --base main --head ${BASE} --title "..." --body "..."\`), corps = le
-   bilan du chantier (les lots, les PR, la recette staging), attends ses checks (\`gh pr checks --watch\`),
+   bilan du chantier (les lots, les PR, la recette staging), attends son vert (\`node scripts/ci/pr-verte.mjs <n> --attendre 45\`),
    fusionne par \`gh pr merge --merge\`. Si le lot touche .changeset/** ou un package.json, une release part
    et main prend de l'avance : back-merge main → ${BASE} ensuite (PR, jamais un push direct).
 3. Xcode Cloud : lis .github/workflows/ios-release.yml et apps/ios/meeshy.sh (« distribute » / lane beta) —
