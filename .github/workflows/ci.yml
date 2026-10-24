@@ -651,7 +651,10 @@ jobs:
   web-navigateur:
     name: Web · gardes navigateur (Playwright)
     runs-on: ubuntu-latest
-    needs: [quality, changes]
+    # #12600 — il ne lit rien de `quality` : l'attendre retardait de ~3,5 min
+    # le job qui fixe la durée de tout le run. Le verdict n'y perd rien, le
+    # job « Verdict CI » attend les deux.
+    needs: [changes]
     if: needs.changes.outputs.web_navigateur == 'true'
     # #8580 — 53 gates Playwright en série : le job franchissait ses 25 min
     # (24 min 23 s puis annulé à 25 min 15 s sur #8593) dès que les gates
