@@ -6,7 +6,7 @@
  */
 import { FastifyInstance } from 'fastify';
 import { isMemberCreator, MemberRole } from '@meeshy/shared/types/role-types';
-import { actorHasMinimumRole } from '../../utils/conversation-authority';
+import { actorHasMinimumRole } from '@meeshy/shared/utils/conversation-authority';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { ErrorCode } from '@meeshy/shared/types';

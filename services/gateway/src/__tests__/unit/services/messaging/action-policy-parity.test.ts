@@ -33,7 +33,7 @@ import { verifierCible } from '../../../../routes/reports/target';
 import { admitMessageDelete, type DeleteAdmissionReader } from '../../../../services/messaging/messageDeleteAdmission';
 import { admitMessageEdit, type EditAdmissionReader } from '../../../../services/messaging/messageEditAdmission';
 import { mayMintShareLink } from '../../../../routes/links/utils/share-link-mint';
-import { actorHasMinimumRole } from '../../../../utils/conversation-authority';
+import { actorHasMinimumRole } from '@meeshy/shared/utils/conversation-authority';
 import type { ConversationActionInput, ConversationActions } from '@meeshy/shared/utils/conversation-action-policy';
 import type { ActionViewer, MessageActionInput, MessageActions } from '@meeshy/shared/utils/message-action-policy';
 
