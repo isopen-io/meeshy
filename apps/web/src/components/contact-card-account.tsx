@@ -1,13 +1,49 @@
 import type { PublicContactAccount } from '@meeshy/shared/types/contact-card';
-import { authorAccentColor } from '@meeshy/shared/utils/conversation-colors';
+import { authorAccentColor, colorForName } from '@meeshy/shared/utils/conversation-colors';
 
 import { attachmentSrc } from '@/lib/api/media-url';
-import { contactInitials, contactRelationView, type ContactAction } from '@/lib/contact-card/view';
+import { contactRelationView, type ContactAction } from '@/lib/contact-card/view';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
+import { initialsOf } from '@/lib/view/conversation';
 
+import { Avatar } from './avatar';
 import { PeerAvatar } from './peer-avatar';
 import { ContactGameStripSlot } from './game-profile-slots';
+
+/**
+ * **LE VISAGE D'UNE CARTE DE VISITE** (#12571) — UN seul : la photo du compte
+ * Meeshy principal quand il y en a un (sinon ses initiales), et, sans compte
+ * associé, les initiales du nom du carnet. iOS (`ContactCardView`) ne montre
+ * qu'un visage ; ici la bulle peignait un disque d'initiales PUIS la photo du
+ * même compte juste dessous. La rangée du compte principal ne remonte donc plus
+ * le sien (`showAvatar`).
+ */
+export function ContactFace({
+  card,
+  account,
+  size,
+  language,
+}: {
+  readonly card: { readonly formattedName: string };
+  readonly account: PublicContactAccount | undefined;
+  readonly size: number;
+  readonly language: InterfaceLanguage;
+}) {
+  if (account === undefined) {
+    return <Avatar initials={initialsOf(card.formattedName)} color={colorForName(card.formattedName)} size={size} />;
+  }
+  return (
+    <PeerAvatar
+      presenceKey={account.relation === 'self' ? undefined : account.userId}
+      initials={initialsOf(account.displayName)}
+      color={authorAccentColor(account.userId, account.displayName)}
+      size={size}
+      name={translate(language, 'contactCard.avatar', { name: account.displayName })}
+      {...(account.avatarUrl !== null ? { src: account.avatarUrl } : {})}
+    />
+  );
+}
 
 /**
  * **LE COMPTE MEESHY D'UNE CARTE DE VISITE** (#8101) — une seule écriture,
@@ -22,7 +58,9 @@ export function ContactAccountRow({
   variant,
   busy,
   onAction,
+  showAvatar = true,
 }: {
+  readonly showAvatar?: boolean;
   readonly account: PublicContactAccount;
   readonly language: InterfaceLanguage;
   readonly variant: 'compact' | 'full';
@@ -46,14 +84,7 @@ export function ContactAccountRow({
         />
       ) : null}
       <div className="flex items-center gap-3">
-        <PeerAvatar
-          presenceKey={account.relation === 'self' ? undefined : account.userId}
-          initials={contactInitials(account.displayName)}
-          color={accent}
-          size={full ? 48 : 32}
-          name={translate(language, 'contactCard.avatar', { name: account.displayName })}
-          {...(account.avatarUrl !== null ? { src: account.avatarUrl } : {})}
-        />
+        {showAvatar ? <ContactFace card={{ formattedName: account.displayName }} account={account} size={full ? 48 : 32} language={language} /> : null}
         <div className="min-w-0 flex-1">
           <p className="truncate text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
             {account.displayName}

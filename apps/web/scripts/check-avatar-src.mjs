@@ -49,6 +49,12 @@ const SRC = new URL('../src/', import.meta.url).pathname;
  */
 const EXEMPTIONS = [
   {
+    fichier: 'components/contact-card-account.tsx',
+    combien: 1,
+    pourquoi:
+      "ContactFace sans compte Meeshy associé : seule la vCard du carnet de l'auteur existe, et sa PHOTO n'est pas lue (vcard.ts ne garde ni PHOTO ni LOGO) — la chaîne s'arrête à l'analyse de la carte (#12571)",
+  },
+  {
     fichier: 'routes/share-link-arrivals-parts.tsx',
     combien: 1,
     pourquoi:
