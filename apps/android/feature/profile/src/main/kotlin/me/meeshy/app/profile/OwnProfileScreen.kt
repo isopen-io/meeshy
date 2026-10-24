@@ -17,9 +17,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -50,6 +47,7 @@ import me.meeshy.feature.profile.R
 import me.meeshy.sdk.model.ImageUploadTarget
 import me.meeshy.ui.component.MeeshySkeletonBox
 import me.meeshy.ui.component.chrome.MeeshyBackground
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 
@@ -194,11 +192,11 @@ private fun OwnProfileTopBarActions(
         else -> {
             if (state.user?.let(ProfileShareBuilder::build) != null) {
                 IconButton(onClick = onShare) {
-                    Icon(Icons.Default.Share, contentDescription = stringResource(R.string.profile_share_action))
+                    Icon(MeeshyIcons.Share, contentDescription = stringResource(R.string.profile_share_action))
                 }
             }
             IconButton(onClick = { onEvent(OwnProfileUiEvent.StartEditing) }) {
-                Icon(Icons.Default.Edit, contentDescription = stringResource(R.string.profile_edit))
+                Icon(MeeshyIcons.EditFilled, contentDescription = stringResource(R.string.profile_edit))
             }
         }
     }

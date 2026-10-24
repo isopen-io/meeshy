@@ -9,8 +9,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -37,6 +35,7 @@ import me.meeshy.ui.component.FeedbackKind
 import me.meeshy.ui.component.FeedbackToastHost
 import me.meeshy.ui.component.FeedbackToastRequest
 import me.meeshy.ui.component.chrome.MeeshyBackground
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshySpacing
 
 /**
@@ -84,7 +83,7 @@ fun PublicProfileScreen(
                 ProfileTopBar(onBack = onBack) {
                     if (state.user?.let(ProfileShareBuilder::build) != null) {
                         IconButton(onClick = { isSharing = true }) {
-                            Icon(Icons.Default.Share, contentDescription = stringResource(R.string.profile_share_action))
+                            Icon(MeeshyIcons.Share, contentDescription = stringResource(R.string.profile_share_action))
                         }
                     }
                 }
