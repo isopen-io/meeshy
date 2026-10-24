@@ -19,12 +19,9 @@ public nonisolated struct StoryTextEditProfile: Equatable, Sendable {
                                                       backgrounds: StoryTextBackgroundPresets.all)
 
     /// **Un texte cuit dans un média** : pas de « Langue » (une langue source ne traduit rien d'un
-    /// texte gravé dans les pixels), pas de fond « Verre » (il floute ce qu'il y a dessous, et le
-    /// peintre du média ne le floute pas — D3.2).
+    /// texte gravé dans les pixels). Le fond « Verre » reste : le peintre du média floute ce qu'il y
+    /// a sous sa boîte (`StoryStaticSnapshot.glassPanes`, #12602).
     public static let bakedIntoMedia = StoryTextEditProfile(
         tools: TextEditTool.all.filter { $0 != .language },
-        backgrounds: StoryTextBackgroundPresets.all.filter { style in
-            if case .glass = style { return false }
-            return true
-        })
+        backgrounds: StoryTextBackgroundPresets.all)
 }
