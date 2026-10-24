@@ -63,6 +63,7 @@
     <string name="presence_offline">Offline</string>
     <string name="presence_online">Online</string>
     <string name="reactions_more">Weitere Reaktionen</string>
+    <string name="retouch_crop_original">Original</string>
     <string name="retouch_family_effects">Effekte</string>
     <string name="retouch_family_filters">Filter</string>
     <string name="retouch_family_frames">Rahmen</string>
@@ -74,6 +75,9 @@
     <string name="retouch_no_filter">Kein Filter</string>
     <string name="retouch_no_frame">Kein Rahmen</string>
     <string name="retouch_rendering">Filter wird angewendet…</string>
+    <string name="retouch_sound_mute">Ton stummschalten</string>
+    <string name="retouch_sound_unmute">Ton wieder einschalten</string>
+    <string name="retouch_sound_volume">Lautstärke</string>
     <string name="retouch_style_comic">Comic</string>
     <string name="retouch_style_cover">Titelseite</string>
     <string name="retouch_style_film">Film</string>
@@ -87,6 +91,10 @@
     <string name="retouch_style_redcarpet">Roter Teppich</string>
     <string name="retouch_style_screen">Bildschirm</string>
     <string name="retouch_style_strip">Fotoautomat</string>
+    <string name="retouch_tool_crop">Ausschnitt</string>
+    <string name="retouch_tool_sound">Ton</string>
+    <string name="retouch_tool_text">Text</string>
+    <string name="retouch_tool_trim">Kürzen</string>
     <string name="settings_info_button_label">Mehr über %s erfahren</string>
     <string name="sticker_sheet_close">Schließen</string>
     <string name="sticker_sheet_favorites_empty">Halte eine Dekoration gedrückt, um sie hier anzuheften.</string>

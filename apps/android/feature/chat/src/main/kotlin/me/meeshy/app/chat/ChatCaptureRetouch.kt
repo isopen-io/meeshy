@@ -18,6 +18,9 @@ import me.meeshy.sdk.model.call.montage.CallMontageCaption
 import me.meeshy.ui.component.retouch.ComposerLookAuthor
 import me.meeshy.ui.component.retouch.ComposerRetouchResult
 import me.meeshy.ui.component.retouch.ComposerRetouchScreen
+import me.meeshy.ui.component.retouch.ComposerVideoRetouchResult
+import me.meeshy.ui.component.retouch.ComposerVideoRetouchScreen
+import me.meeshy.ui.component.retouch.RetouchVideoProbe
 import me.meeshy.ui.component.retouch.RetouchSourceDecoder
 
 /** Une photo prise, en attente de sa retouche : ses octets d'origine et ses pixels debout. */
@@ -41,6 +44,7 @@ internal data class ChatRetouchedFile(val bytes: ByteArray, val fileName: String
 internal object ChatRetouchDelivery {
     const val JPEG_QUALITY = 92
     const val JPEG_MIME = "image/jpeg"
+    const val VIDEO_MIME = "video/mp4"
 
     fun file(pending: ChatRetouchPending, result: ComposerRetouchResult, nowMillis: Long): ChatRetouchedFile = when (result) {
         ComposerRetouchResult.Original -> ChatRetouchedFile(pending.bytes, pending.fileName, pending.mimeType)
@@ -95,3 +99,57 @@ internal suspend fun Context.writeRetouchedCapture(file: ChatRetouchedFile): Uri
     val written = File(capturesDir, file.fileName).apply { writeBytes(file.bytes) }
     androidx.core.content.FileProvider.getUriForFile(this@writeRetouchedCapture, "$packageName.fileprovider", written)
 }
+
+/** Une vidéo prise, copiée hors de l'intention système, en attente de sa retouche. */
+internal class ChatVideoRetouchPending(val source: File, val output: File, val probe: RetouchVideoProbe) {
+    /** Les deux fichiers de la retouche quittent le cache une fois la vidéo mise en attente ou abandonnée. */
+    fun discard() {
+        runCatching { source.delete() }
+        runCatching { output.delete() }
+    }
+
+    companion object {
+        /** La vidéo copiée dans le dossier de prises ; `null` si elle ne se lit pas (elle part alors telle quelle). */
+        suspend fun of(context: Context, uri: Uri, nowMillis: Long): ChatVideoRetouchPending? = withContext(Dispatchers.IO) {
+            val dir = File(context.cacheDir, "captures").apply { mkdirs() }
+            val source = File(dir, ChatCameraCaptureFile.nextVideoSource(nowMillis))
+            val copied = runCatching {
+                context.contentResolver.openInputStream(uri)?.use { input -> source.outputStream().use { input.copyTo(it) } }
+            }.getOrNull()
+            val probe = copied?.let { RetouchVideoProbe.of(source) }
+            if (probe == null) {
+                source.delete()
+                return@withContext null
+            }
+            ChatVideoRetouchPending(source, File(dir, ChatCameraCaptureFile.nextRetouchedVideo(nowMillis)), probe)
+        }
+    }
+}
+
+/** La retouche unique d'une vidéo prise depuis le composer (#12650) : [onDeliver] reçoit le fichier qui part. */
+@Composable
+internal fun ChatVideoRetouchHost(pending: ChatVideoRetouchPending, onDeliver: suspend (File) -> Unit, onDismiss: () -> Unit) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnBackPress = false, dismissOnClickOutside = false, decorFitsSystemWindows = false),
+    ) {
+        ComposerVideoRetouchScreen(
+            source = pending.source,
+            probe = pending.probe,
+            output = pending.output,
+            onDone = { result ->
+                onDeliver(
+                    when (result) {
+                        ComposerVideoRetouchResult.Original -> pending.source
+                        is ComposerVideoRetouchResult.Rendered -> result.file
+                    },
+                )
+            },
+            onCancel = onDismiss,
+        )
+    }
+}
+
+/** Une vidéo du dossier de prises, offerte par le `FileProvider` à la mise en attente par adresse. */
+internal fun Context.captureUri(file: File): Uri =
+    androidx.core.content.FileProvider.getUriForFile(this, "$packageName.fileprovider", file)

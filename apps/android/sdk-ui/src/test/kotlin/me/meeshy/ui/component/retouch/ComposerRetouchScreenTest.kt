@@ -91,4 +91,28 @@ class ComposerRetouchScreenTest {
         assertThat(cancelled).isEqualTo(1)
         assertThat(delivered).isEmpty()
     }
+
+    @Test
+    fun `Recadrer montre ses presets et cache Termine, et le carre part carre`() {
+        show()
+        compose.onNodeWithText("Crop").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithText("Done").assertDoesNotExist()
+        compose.onNodeWithText("Original").assertHeightIsAtLeast(48.dp)
+        compose.onNodeWithText("1:1").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithText("1:1").assertIsSelected()
+        compose.onNodeWithText("Crop").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithText("Done").performClick()
+        compose.waitUntil(10_000) { delivered.isNotEmpty() }
+        val rendered = delivered.single() as ComposerRetouchResult.Rendered
+        assertThat(rendered.bitmap.width).isEqualTo(rendered.bitmap.height)
+        assertThat(rendered.bitmap.width).isEqualTo(90)
+    }
+
+    @Test
+    fun `une video illisible ne s ouvre pas en retouche`() {
+        assertThat(RetouchVideoProbe.of(java.io.File("/nonexistent/clip.mp4"))).isNull()
+    }
 }

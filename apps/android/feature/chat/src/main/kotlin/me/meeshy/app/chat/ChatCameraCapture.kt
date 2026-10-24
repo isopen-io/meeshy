@@ -49,6 +49,12 @@ object ChatCameraCaptureFile {
 
     /** The rendered photo a retouch hands back (#12614), e.g. `"chat_retouch_1700000000000.jpg"`. */
     fun nextRetouched(nowMillis: Long): String = "$RETOUCHED_PREFIX$nowMillis$PHOTO_EXTENSION"
+
+    /** The copy of a captured video a retouch reads (#12650), e.g. `"chat_video_source_1700000000000.mp4"`. */
+    fun nextVideoSource(nowMillis: Long): String = "${VIDEO_PREFIX}source_$nowMillis$VIDEO_EXTENSION"
+
+    /** The rendered video a retouch hands back (#12650), e.g. `"chat_retouch_1700000000000.mp4"`. */
+    fun nextRetouchedVideo(nowMillis: Long): String = "$RETOUCHED_PREFIX$nowMillis$VIDEO_EXTENSION"
 }
 
 /** The two capture launchers the composer's Camera tile chooser offers. */

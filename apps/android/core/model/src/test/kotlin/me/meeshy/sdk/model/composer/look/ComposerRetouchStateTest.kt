@@ -4,6 +4,9 @@ import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.call.VideoFilterPreset
 import me.meeshy.sdk.model.call.montage.CallMontageChoice
 import me.meeshy.sdk.model.call.montage.CallMontageStyle
+import me.meeshy.sdk.model.imageedit.CropRect
+import me.meeshy.sdk.model.imageedit.NormalizedCrop
+import me.meeshy.sdk.model.media.MediaTrimBounds
 import org.junit.Test
 
 /** La retouche unique Android : l'état de l'écran, en loi pure (#12614). */
@@ -79,5 +82,68 @@ class ComposerRetouchStateTest {
         assertThat(ComposerLookCanvas.fitted(1081, 1921, 2560)).isEqualTo(ComposerLookSize(1080, 1920))
         assertThat(ComposerLookCanvas.fitted(3024, 4032, ComposerLookCanvas.PREVIEW_LONG_SIDE)).isEqualTo(ComposerLookSize(960, 1280))
         assertThat(ComposerLookCanvas.fitted(0, 100, 2560)).isNull()
+    }
+
+    private fun video(hasAudio: Boolean = true) = ComposerRetouchState.opening(
+        ComposerEditTake.Video(hasAudio),
+        renderableEffects = emptyList(),
+        tools = ComposerEditTool.entries,
+        durationSeconds = 12.0,
+        lookFamilies = false,
+    )
+
+    @Test
+    fun `un preset recadre au plus grand centre, et Original sur la prise entiere ne recadre rien`() {
+        val square = photo(listOf(ComposerEditTool.CROP)).choosingPreset(ComposerCropPreset.SQUARE, 4000, 3000)
+        assertThat(square.cropPreset).isEqualTo(ComposerCropPreset.SQUARE)
+        assertThat(square.crop!!.width.toDouble()).isWithin(1e-6).of(0.75)
+        assertThat(square.delivery).isEqualTo(ComposerRetouchDelivery.RENDERED)
+        val original = square.choosingPreset(ComposerCropPreset.ORIGINAL, 4000, 3000)
+        assertThat(original.crop).isNull()
+        assertThat(original.delivery).isEqualTo(ComposerRetouchDelivery.ORIGINAL)
+    }
+
+    @Test
+    fun `des equerres tirees a la main font un recadrage libre, sauf si elles realisent un preset`() {
+        val free = photo().cropping(NormalizedCrop(0.1f, 0.1f, 0.5f, 0.7f), 2000, 1000)
+        assertThat(free.cropPreset).isNull()
+        val square = photo().cropping(NormalizedCrop(0f, 0f, 0.25f, 0.5f), 2000, 1000)
+        assertThat(square.cropPreset).isEqualTo(ComposerCropPreset.SQUARE)
+        val whole = photo().cropping(NormalizedCrop(0f, 0f, 0.5f, 0.5f), 1000, 1000)
+        assertThat(whole.cropPreset).isEqualTo(ComposerCropPreset.ORIGINAL)
+    }
+
+    @Test
+    fun `une video offre recadrer, couper et le son, et sans look elle n a pas de familles`() {
+        val clip = video()
+        assertThat(clip.tools).containsExactly(ComposerEditTool.CROP, ComposerEditTool.TEXT, ComposerEditTool.TRIM, ComposerEditTool.SOUND).inOrder()
+        assertThat(clip.families).isEmpty()
+        assertThat(video(hasAudio = false).tools).doesNotContain(ComposerEditTool.SOUND)
+        assertThat(clip.delivery).isEqualTo(ComposerRetouchDelivery.ORIGINAL)
+    }
+
+    @Test
+    fun `couper grave une fenetre valide, une fenetre trop courte vaut la video entiere`() {
+        val cut = video().trimming(MediaTrimBounds(2.0, 8.0))
+        assertThat(cut.video!!.window).isEqualTo(MediaTrimBounds(2.0, 8.0))
+        assertThat(cut.delivery).isEqualTo(ComposerRetouchDelivery.RENDERED)
+        assertThat(video().trimming(MediaTrimBounds(3.0, 3.1)).video!!.isTrimmed).isFalse()
+        assertThat(photo().trimming(MediaTrimBounds(2.0, 8.0)).video).isNull()
+    }
+
+    @Test
+    fun `le son se regle et se coupe, le muet garde le gain`() {
+        val louder = video().settingGain(1.6)
+        assertThat(louder.video!!.sound.effectiveGain).isEqualTo(1.6)
+        val muted = louder.togglingMute()
+        assertThat(muted.video!!.sound.effectiveGain).isEqualTo(0.0)
+        assertThat(muted.togglingMute().video!!.sound.effectiveGain).isEqualTo(1.6)
+        assertThat(video().settingGain(5.0).video!!.sound.gain).isEqualTo(ComposerTakeSound.MAX_GAIN)
+    }
+
+    @Test
+    fun `l image se pose entiere et centree dans son conteneur`() {
+        assertThat(ComposerLookCanvas.displayRect(400f, 800f, 200, 100)).isEqualTo(CropRect(0f, 300f, 400f, 200f))
+        assertThat(ComposerLookCanvas.displayRect(0f, 800f, 200, 100).width).isEqualTo(0f)
     }
 }
