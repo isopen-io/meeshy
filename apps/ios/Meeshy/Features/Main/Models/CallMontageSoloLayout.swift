@@ -77,17 +77,24 @@ nonisolated enum CallMontageSoloLayout {
         let width = bounds.width
         let margin = width * mosaicMargin
         let bandHeight = min(width, bounds.height) * mosaicBand
+        let slotHeight: CGFloat = bounds.height - margin - bandHeight
         let slot = CGRect(x: bounds.minX + margin, y: bounds.minY + margin,
-                          width: width - margin * 2, height: bounds.height - margin - bandHeight)
+                          width: width - margin * 2, height: slotHeight)
         let (columns, rows) = tiling(of: slot)
         let joint = width * jointWidth
-        let tileWidth = (slot.width - joint * CGFloat(columns - 1)) / CGFloat(columns)
-        let tileHeight = (slot.height - joint * CGFloat(rows - 1)) / CGFloat(rows)
-        let tiles = (0 ..< rows).flatMap { row in
-            (0 ..< columns).map { column in
-                CGRect(x: slot.minX + CGFloat(column) * (tileWidth + joint),
-                       y: slot.minY + CGFloat(row) * (tileHeight + joint),
-                       width: tileWidth, height: tileHeight)
+        let columnCount = CGFloat(columns)
+        let rowCount = CGFloat(rows)
+        let tileWidth: CGFloat = (slot.width - joint * (columnCount - 1)) / columnCount
+        let tileHeight: CGFloat = (slot.height - joint * (rowCount - 1)) / rowCount
+        // Des boucles aux étapes typées, pas un `flatMap { map { CGRect(…) } }` : le
+        // compilateur d'Xcode Cloud renonçait à typer l'expression imbriquée (archive).
+        var tiles: [CGRect] = []
+        tiles.reserveCapacity(rows * columns)
+        for row in 0 ..< rows {
+            let y: CGFloat = slot.minY + CGFloat(row) * (tileHeight + joint)
+            for column in 0 ..< columns {
+                let x: CGFloat = slot.minX + CGFloat(column) * (tileWidth + joint)
+                tiles.append(CGRect(x: x, y: y, width: tileWidth, height: tileHeight))
             }
         }
         let band = CGRect(x: bounds.minX, y: slot.maxY, width: width, height: bounds.maxY - slot.maxY)
