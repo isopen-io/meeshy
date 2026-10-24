@@ -67,6 +67,8 @@ extension APIMessageUpsert {
         if !guards.pendingEdit {
             next.isEdited = api.isEdited ?? false
             next.editedAt = api.editedAt
+            // #11375 — la charge qui dit l'état d'édition dit aussi son auteur.
+            next.editedById = api.editedById
         }
         if !guards.pendingDelete {
             next.deletedAt = api.deletedAt
@@ -243,7 +245,8 @@ extension APIMessageUpsert {
             ephemeralDuration: api.ephemeralDuration,
             trackedLinksJson: columns.trackedLinksJson,
             senderIsAnonymous: api.sender.map(\.isAnonymous), senderHasAccount: api.sender.map(\.hasAccount),
-            senderRingJson: MessageRecord.servedSenderRingJson(api.sender, id: api.id) ?? nil
+            senderRingJson: MessageRecord.servedSenderRingJson(api.sender, id: api.id) ?? nil,
+            editedById: api.editedById
         )
         if api.consumedByMe == true {
             record.sealAsOpenedViewOnce(at: Date())

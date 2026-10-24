@@ -163,14 +163,32 @@ extension BubbleFooterModel {
 }
 
 /// L'état « modifié » tel que le pied le dit : le crayon, ou la rotation
-/// pendant que l'édition part au serveur.
+/// pendant que l'édition part au serveur. #11375 — `editedByModerator` : la
+/// dernière modification est celle d'un modérateur de plateforme, dite à tous
+/// en MOTS (« modifié par un modérateur »), jamais par le crayon seul.
 enum BubbleEditMark: Equatable, Sendable {
     case edited
+    case editedByModerator
     case saving
 
-    static func resolve(editedAt: Date?, isSaving: Bool) -> BubbleEditMark? {
+    static func resolve(editedAt: Date?, isSaving: Bool, byModerator: Bool = false) -> BubbleEditMark? {
         if isSaving { return .saving }
-        return editedAt == nil ? nil : .edited
+        guard editedAt != nil else { return nil }
+        return byModerator ? .editedByModerator : .edited
+    }
+
+    /// Ce que l'œil lit et l'oreille entend — UN site pour la bulle, la rangée
+    /// plate et les deux compositeurs VoiceOver.
+    static func spokenLabel(byModerator: Bool) -> String {
+        byModerator
+            ? String(localized: "bubble.meta.editedByModerator", defaultValue: "modifié par un modérateur", bundle: .main)
+            : String(localized: "bubble.meta.edited", defaultValue: "modifié", bundle: .main)
+    }
+
+    /// La phrase VoiceOver d'un message modifié — la clé `a11y.message.edited`
+    /// de l'auteur, inchangée ; celle du modérateur, dite comme elle se voit.
+    static func accessibilityLabel(byModerator: Bool) -> String {
+        byModerator ? spokenLabel(byModerator: true) : String(localized: "a11y.message.edited", bundle: .main)
     }
 }
 

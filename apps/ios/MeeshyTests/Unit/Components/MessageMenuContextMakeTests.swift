@@ -120,6 +120,23 @@ final class MessageMenuContextMakeTests: XCTestCase {
         XCTAssertFalse(MessageActionResolver.primaryActions(ctx).contains(.edit))
     }
 
+    /// #11375 — décision porteur du 2026-10-24 : un modérateur de PLATEFORME
+    /// modifie le message d'un autre à visage découvert. « Modifier » lui est
+    /// réoffert, au menu comme dans « Plus… ».
+    func test_make_platformModerator_editsSomeoneElsesMessage() {
+        let ctx = make(message(mine: false), authority(viewer(platformRole: "MODERATOR")))
+        XCTAssertTrue(ctx.canEdit)
+        XCTAssertTrue(MessageActionResolver.primaryActions(ctx).contains(.edit)
+            || actionItems(ctx).contains(.edit), "« Modifier » est offert au modérateur de plateforme")
+        XCTAssertTrue(actionItems(ctx).contains(.edit))
+    }
+
+    func test_make_platformModerator_endToEnd_doesNotEditSomeoneElsesMessage() {
+        let ctx = make(message(mine: false), authority(viewer(platformRole: "MODERATOR"), encryptionMode: "e2ee"))
+        XCTAssertFalse(ctx.canEdit, "le serveur ne lit pas le clair : personne ne l'édite")
+        XCTAssertFalse(actionItems(ctx).contains(.edit))
+    }
+
     func test_make_conversationAdmin_doesNotEditSomeoneElsesMessage() {
         let ctx = make(message(mine: false), authority(viewer(conversationRole: "admin")))
         XCTAssertFalse(ctx.canEdit, "un rang de conversation n'ouvre pas l'édition du message d'autrui")

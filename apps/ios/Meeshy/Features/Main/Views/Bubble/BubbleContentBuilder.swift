@@ -329,7 +329,7 @@ extension BubbleContent {
         self.forwardAttribution = message.forwardedFromId == nil
             ? nil
             : ForwardBadgePolicy.attribution(for: message.forwardedFrom)
-        self.editedAt = message.isEdited ? message.updatedAt : nil
+        self.editedAt = message.isEdited ? message.updatedAt : nil; self.editedByModerator = message.editedByModerator
         self.isEditSaving = isEditSaving
         self.hasEditHistory = hasEditHistory
 

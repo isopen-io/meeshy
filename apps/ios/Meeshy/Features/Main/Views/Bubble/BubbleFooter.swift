@@ -230,7 +230,8 @@ struct BubbleFooter: View, Equatable {
     @ViewBuilder
     private var editMark: some View {
         if let edit = model.edit {
-            BubbleEditedIndicator(isMe: model.isMe, isSaving: edit == .saving, hasEditHistory: false, isDark: isDark)
+            BubbleEditedIndicator(isMe: model.isMe, isSaving: edit == .saving, hasEditHistory: false, isDark: isDark,
+                                  byModerator: edit == .editedByModerator)
         }
     }
 

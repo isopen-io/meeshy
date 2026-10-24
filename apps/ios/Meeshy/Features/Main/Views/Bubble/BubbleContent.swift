@@ -397,6 +397,8 @@ nonisolated struct BubbleContent: Equatable {
     /// Lecture de commodité — dérivée, jamais stockée à côté.
     var isForwarded: Bool { forwardAttribution != nil }
     let editedAt: Date?
+    /// #11375 — la dernière modification est celle d'un modérateur de plateforme.
+    let editedByModerator: Bool
     let isEditSaving: Bool
     let hasEditHistory: Bool
     let reactions: [MeeshyReactionSummary]
@@ -509,6 +511,7 @@ nonisolated struct BubbleContent: Equatable {
             && lhs.isPinned == rhs.isPinned
             && lhs.forwardAttribution == rhs.forwardAttribution
             && lhs.editedAt == rhs.editedAt
+            && lhs.editedByModerator == rhs.editedByModerator
             && lhs.isEditSaving == rhs.isEditSaving
             && lhs.hasEditHistory == rhs.hasEditHistory
             && lhs.reactions.map(\.emoji) == rhs.reactions.map(\.emoji)

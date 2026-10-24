@@ -108,6 +108,12 @@ public struct APIMessage: Sendable {
     /// feature — the renderer then falls back to the raw URLs. Defaulted so the
     /// memberwise initializer stays source-compatible with existing call sites.
     public var trackingLinks: [TrackedLink]? = nil
+    /// #11375 — `User.id` du modérateur de plateforme qui a fait la dernière
+    /// modification ; `nil` quand c'est l'auteur, ou sur une charge d'une
+    /// passerelle antérieure. Sa présence dit « modifié par un modérateur ».
+    /// Même patron `var`/`= nil` que `trackingLinks` : l'init memberwise reste
+    /// source-compatible.
+    public var editedById: String? = nil
 
     /// `[rawURL: token]` lookup derived from `trackingLinks`. Empty when no
     /// tracking data is present. Consumed by `MessageTextRenderer` (tappable
@@ -118,7 +124,7 @@ public struct APIMessage: Sendable {
 extension APIMessage: Decodable {
     private enum CodingKeys: String, CodingKey {
         case id, clientMessageId, conversationId, senderId, content, originalLanguage
-        case messageType, messageSource, isEdited, editedAt, deletedAt
+        case messageType, messageSource, isEdited, editedAt, editedById, deletedAt
         case replyToId, storyReplyToId, postReplyTo, storyReplyTo, forwardedFromId, forwardedFromConversationId
         case pinnedAt, pinnedBy, isViewOnce, isBlurred, expiresAt, ephemeralDuration, location, sticker, consumedByMe
         case isEncrypted, encryptionMode, createdAt, updatedAt
@@ -165,6 +171,7 @@ extension APIMessage: Decodable {
         messageSource = try c.decodeIfPresent(String.self, forKey: .messageSource)
         isEdited = try c.decodeIfPresent(Bool.self, forKey: .isEdited)
         editedAt = try c.decodeIfPresent(Date.self, forKey: .editedAt)
+        editedById = (try? c.decodeIfPresent(String.self, forKey: .editedById)) ?? nil
         deletedAt = try c.decodeIfPresent(Date.self, forKey: .deletedAt)
         replyToId = try c.decodeIfPresent(String.self, forKey: .replyToId)
         storyReplyToId = try c.decodeIfPresent(String.self, forKey: .storyReplyToId)
@@ -182,10 +189,9 @@ extension APIMessage: Decodable {
         ephemeralDuration = try c.decodeIfPresent(Int.self, forKey: .ephemeralDuration)
         consumedByMe = try c.decodeIfPresent(Bool.self, forKey: .consumedByMe)
         location = try c.decodeIfPresent(SharedPlace.self, forKey: .location)
-        // Sticker : la racine d'abord (les deux producteurs le hissent), sinon
-        // l'enveloppe `metadata`. Les deux lectures sont tolérantes — une forme
-        // inattendue laisse le champ nil sans faire tomber le message — et un
-        // sticker non rendable vaut absence (règle de `MessageSticker`).
+        // Sticker : la racine d'abord (les deux producteurs le hissent), sinon `metadata`.
+        // Lectures tolérantes (une forme inattendue laisse nil sans faire tomber le
+        // message) ; un sticker non rendable vaut absence (règle de `MessageSticker`).
         let rootSticker: MessageSticker? = try? c.decodeIfPresent(MessageSticker.self, forKey: .sticker)
         let metadataSticker: MessageSticker? = (try? c.decodeIfPresent(MessageStickerEnvelope.self, forKey: .metadata))?.sticker
         sticker = rootSticker?.ifWireWorthy ?? metadataSticker?.ifWireWorthy
