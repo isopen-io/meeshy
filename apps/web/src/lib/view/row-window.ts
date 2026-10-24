@@ -107,6 +107,27 @@ export function rowSlices(input: { readonly count: number; readonly range: RowRa
   return [lead, ...body];
 }
 
+/**
+ * Les fenêtres d'ENTRÉE, avant que la moindre tête de section n'ait été
+ * mesurée : les blocs se suivent, donc le premier écran (`rows` rangées,
+ * réserve comprise) se partage dans l'ordre, et un bloc qui commence au-delà
+ * n'entre avec RIEN. Donner un écran entier à chaque section montait, au
+ * démarrage à froid, une poignée de rangées par section — dix sections, cent
+ * soixante rangées — que la mesure démontait aussitôt.
+ */
+export function entryRanges(blocks: readonly { readonly id: string; readonly count: number }[], input: { readonly rows: number }): ReadonlyMap<string, RowRange> {
+  const { rows } = input;
+  return new Map(
+    blocks.reduce<{ readonly before: number; readonly entries: readonly (readonly [string, RowRange])[] }>(
+      ({ before, entries }, block) => {
+        const end = Math.min(block.count, Math.max(0, rows - before));
+        return { before: before + block.count, entries: [...entries, [block.id, end > 0 ? { start: 0, end } : EMPTY_RANGE] as const] };
+      },
+      { before: 0, entries: [] },
+    ).entries,
+  );
+}
+
 /** Les rangées que la fenêtre ne démonte jamais — voir la règle 2 du doc-comment. */
 export function keptRowIds(input: { readonly order: readonly string[]; readonly active: string | null }): ReadonlySet<string> {
   const { order, active } = input;

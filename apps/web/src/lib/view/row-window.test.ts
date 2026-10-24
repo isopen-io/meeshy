@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { EMPTY_RANGE, keptRowIds, rowSlices, rowsInView, settleRange } from './row-window';
+import { EMPTY_RANGE, entryRanges, keptRowIds, rowSlices, rowsInView, settleRange } from './row-window';
 
 /**
  * LA FENÊTRE DE RANGÉES (#11228) — la loi pure qui dit, pour une liste de
@@ -111,5 +111,29 @@ describe('keptRowIds — ce que la fenêtre ne démonte jamais', () => {
 
   test('une liste vide ne retient rien', () => {
     expect(keptRowIds({ order: [], active: null }).size).toBe(0);
+  });
+});
+
+describe('entryRanges — avant toute mesure, seul le premier écran se monte', () => {
+  test('une section qui commence sous le premier écran n’entre avec RIEN', () => {
+    const blocks = [
+      { id: 'pinned', count: 2 },
+      { id: 'today', count: 5 },
+      { id: 'week', count: 40 },
+      { id: 'older', count: 300 },
+      { id: 'cat-a', count: 20 },
+    ];
+    const ranges = entryRanges(blocks, { rows: 19 });
+    expect(ranges.get('pinned')).toEqual({ start: 0, end: 2 });
+    expect(ranges.get('today')).toEqual({ start: 0, end: 5 });
+    expect(ranges.get('week')).toEqual({ start: 0, end: 12 });
+    expect(ranges.get('older')).toBe(EMPTY_RANGE);
+    expect(ranges.get('cat-a')).toBe(EMPTY_RANGE);
+  });
+
+  test('le total monté avant mesure ne dépasse jamais un écran et sa réserve, quel que soit le nombre de sections', () => {
+    const blocks = Array.from({ length: 10 }, (_, i) => ({ id: `s-${i}`, count: 50 }));
+    const total = [...entryRanges(blocks, { rows: 19 }).values()].reduce((sum, range) => sum + (range.end - range.start), 0);
+    expect(total).toBe(19);
   });
 });

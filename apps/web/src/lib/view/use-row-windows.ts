@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 
-import { rowsInView, settleRange, type RowRange } from './row-window';
+import { EMPTY_RANGE, entryRanges, rowsInView, settleRange, type RowRange } from './row-window';
 
 /**
  * LES FENÊTRES DE RANGÉES D'UN DÉFILEUR (#11228) — une par BLOC (une section
@@ -15,8 +15,20 @@ import { rowsInView, settleRange, type RowRange } from './row-window';
  *
  * La tête d'un bloc est la cale d'ancrage que `rowSlices` ouvre toujours :
  * l'appelant la marque de `ROW_ANCHOR_ATTRIBUTE`, l'identifiant du bloc pour valeur. Un bloc dont l'ancre n'est pas encore
- * montée reçoit une fenêtre d'ENTRÉE (le haut de la liste, une hauteur
- * d'écran), corrigée par la mesure avant la première peinture.
+ * montée reçoit une fenêtre d'ENTRÉE (`entryRanges` : sa part du premier
+ * écran, RIEN s'il commence plus bas), corrigée par la mesure avant la
+ * première peinture.
+ *
+ * LE RETOUR SUR LA LISTE : la position mémorisée est reposée par l'effet de
+ * mise en page du PARENT (`useScrollportMemory`), qui court APRÈS celui-ci —
+ * la mesure du montage lit donc un défileur encore en haut. L'écouteur de
+ * défilement est posé dès l'effet de MISE EN PAGE (il entend la restauration
+ * dans la même image), et une passe est réservée pour l'image suivante dès
+ * qu'il est posé : sous Preact (le build par défaut), les rangées de la
+ * position restaurée sont montées avant la première peinture, jamais une
+ * image de cales vides. Sous React, la référence du défileur n'est posée
+ * qu'APRÈS les effets de mise en page de ses enfants : l'effet passif prend
+ * alors le relais, et la même passe court à l'image suivante.
  *
  * La passe court aussi après CHAQUE rendu : une section qui se déplie, un rail
  * qui change de hauteur ou une page qui arrive déplacent les sections sans
@@ -46,8 +58,9 @@ export function useRowWindows(input: {
   const blocksRef = useRef(blocks);
   blocksRef.current = blocks;
 
-  const entryRange = (count: number): RowRange => ({ start: 0, end: Math.min(count, Math.ceil(screenHeight() / rowHeight) + extraRows) });
-  const rangeOf = (block: RowBlock): RowRange => ranges.get(block.id) ?? entryRange(block.count);
+  const entries = entryRanges(blocks, { rows: Math.ceil(screenHeight() / rowHeight) + extraRows });
+  const entryOf = (block: RowBlock): RowRange => entries.get(block.id) ?? EMPTY_RANGE;
+  const rangeOf = (block: RowBlock): RowRange => ranges.get(block.id) ?? entryOf(block);
 
   const measure = () => {
     const element = frame.current;
@@ -57,7 +70,7 @@ export function useRowWindows(input: {
     const anchors = new Map([...element.querySelectorAll<HTMLElement>(`[${ROW_ANCHOR_ATTRIBUTE}]`)].map((node) => [node.getAttribute(ROW_ANCHOR_ATTRIBUTE), node] as const));
     const previous = measured.current;
     const entries = blocksRef.current.map((block): readonly [string, RowRange] => {
-      const current = previous.get(block.id) ?? entryRange(block.count);
+      const current = previous.get(block.id) ?? entryOf(block);
       const anchor = anchors.get(block.id);
       if (anchor === undefined) return [block.id, current];
       const need = rowsInView({ top: anchor.getBoundingClientRect().top - frameTop, viewport, rowHeight, count: block.count, marginPx });
@@ -75,9 +88,11 @@ export function useRowWindows(input: {
     measureRef.current();
   });
 
-  useEffect(() => {
+  const listening = useRef<{ readonly element: HTMLElement; readonly stop: () => void } | null>(null);
+  const listen = () => {
     const element = frame.current;
-    if (element === null) return undefined;
+    if (element === null || listening.current?.element === element) return;
+    listening.current?.stop();
     const pending = { request: 0 };
     const schedule = () => {
       if (pending.request !== 0) return;
@@ -89,12 +104,26 @@ export function useRowWindows(input: {
     element.addEventListener('scroll', schedule, { passive: true });
     const resize = typeof ResizeObserver === 'function' ? new ResizeObserver(schedule) : null;
     resize?.observe(element);
-    return () => {
-      element.removeEventListener('scroll', schedule);
-      resize?.disconnect();
-      cancelAnimationFrame(pending.request);
+    schedule();
+    listening.current = {
+      element,
+      stop: () => {
+        element.removeEventListener('scroll', schedule);
+        resize?.disconnect();
+        cancelAnimationFrame(pending.request);
+      },
     };
-  }, [frame]);
+  };
+
+  useLayoutEffect(listen);
+  useEffect(listen);
+  useEffect(
+    () => () => {
+      listening.current?.stop();
+      listening.current = null;
+    },
+    [],
+  );
 
   return rangeOf;
 }

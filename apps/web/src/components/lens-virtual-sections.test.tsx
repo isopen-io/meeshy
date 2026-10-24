@@ -8,6 +8,7 @@ import { loadRowMenuCatalog } from '@/lib/i18n-row-menu-catalog';
 import { resolveLensSections, type LensSection as LensSectionData } from '@/lib/lens/sections';
 import { LONG_PRESS_MS } from '@/lib/view/long-press';
 import { rowRoving } from '@/lib/view/row-roving';
+import { ScrollportKeyScope, useScrollportMemory } from '@/lib/view/use-scrollport-memory';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import { LensRow, ROW_HEIGHT } from './lens-row';
@@ -99,6 +100,49 @@ function List({ sections }: { readonly sections: readonly LensSectionData[] }) {
     </ul>
   );
 }
+
+function RememberedList({ sections }: { readonly sections: readonly LensSectionData[] }) {
+  const frame = useRef<HTMLUListElement | null>(null);
+  useScrollportMemory(frame);
+  return (
+    <ul ref={frame} id="contenu">
+      <LensVirtualSections
+        frame={frame}
+        sections={sections}
+        folds={sections.map(() => undefined)}
+        rowOf={(c) => (
+          <LensRow
+            key={c.id}
+            conversation={c}
+            languages={['fr']}
+            viewerId="u-moi"
+            flags={{ isPinned: false, isMuted: false, isArchived: false }}
+            unreadCount={0}
+            onRowAction={() => {}}
+          />
+        )}
+      />
+    </ul>
+  );
+}
+
+function mountRemembered(sections: readonly LensSectionData[]) {
+  container = document.createElement('div');
+  document.body.appendChild(container);
+  root = createRoot(container);
+  act(() => {
+    root.render(
+      <ScrollportKeyScope.Provider value="/chats#retour">
+        <RememberedList sections={sections} />
+      </ScrollportKeyScope.Provider>,
+    );
+  });
+}
+
+const oneFrame = () =>
+  act(async () => {
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+  });
 
 function mount(sections: readonly LensSectionData[]) {
   container = document.createElement('div');
@@ -206,6 +250,28 @@ describe('LensVirtualSections — la liste ne monte que les rangées visibles', 
     expect(document.activeElement).toBe(primaryOf('c-499'));
     act(() => primaryOf('c-499').blur());
     act(() => rowRoving.release('c-499'));
+  });
+
+  test('au retour, la position restaurée est peuplée dès la première image, sans attendre un défilement', async () => {
+    const restored = 200 * ROW_HEIGHT;
+    mountRemembered(sectionsOf(CORPUS));
+    act(() => {
+      frame().scrollTop = restored;
+    });
+    act(() => root.unmount());
+    container.remove();
+
+    mountRemembered(sectionsOf(CORPUS));
+    expect(frame().scrollTop).toBe(restored);
+    const anchor = section('lentille.older').querySelector<HTMLElement>('[data-row-anchor]');
+    if (anchor === null) throw new Error('ancre de lentille.older introuvable');
+    anchor.getBoundingClientRect = () => {
+      const top = -frame().scrollTop;
+      return { top, bottom: top, left: 0, right: 0, width: 0, height: 0, x: 0, y: top, toJSON: () => ({}) } as DOMRect;
+    };
+    await oneFrame();
+    expect(mountedRows()).toContain('c-200');
+    expect(mountedRows()).toContain('c-205');
   });
 
   test('l’appui long ouvre l’aperçu sur une rangée virtualisée', async () => {
