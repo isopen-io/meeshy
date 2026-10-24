@@ -106,6 +106,7 @@ internal fun ConversationMembersSheet(
             displayName = member.displayLabel,
             accentColor = accentColor,
             onDismiss = { openProfileFor = null },
+            avatarUrl = member.avatar,
         )
     }
 
