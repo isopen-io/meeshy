@@ -74,7 +74,8 @@ export const SendMessageBodySchema = z.object({
     .regex(CLIENT_MESSAGE_ID_REGEX, 'Invalid clientMessageId format (expected cid_<uuid v4 lowercase>)')
     .optional(),
   originalLanguage: CommonSchemas.language.optional(),
-  messageType: CommonSchemas.messageType.optional(),
+  // #12822 — `system` n'est écrit que par la passerelle.
+  messageType: CommonSchemas.messageType.exclude(['system']).optional(),
   replyToId: z.string().optional(),
   // #6164 — la PIÈCE NOMMÉE que cette réponse vise. Champ DÉDIÉ, jamais un
   // `metadata` brut (même doctrine que `location` / `sticker`) : le serveur

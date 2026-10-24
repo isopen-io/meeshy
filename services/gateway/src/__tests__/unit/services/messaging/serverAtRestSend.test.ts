@@ -280,3 +280,15 @@ describe('une clé maîtresse ERRONÉE (bonne longueur) au déploiement', () => 
     expect({ keysCreated: h.keys.size - keysBefore, formerKept: h.keys.has(former) }).toEqual({ keysCreated: 0, formerKept: true });
   });
 });
+
+describe('un messageType déclaré « system » ne dispense jamais du scellement', () => {
+  it.each(['server', 'hybrid'] as const)('en %s, la base ne reçoit que le chiffré', async (mode) => {
+    const h = harness({ encryptionMode: mode, encryptionEnabledAt: new Date(), serverEncryptionKeyId: null });
+    const served = await new MessageProcessor(h.prisma).saveMessage({
+      conversationId: CONV_ID, senderId: SENDER_ID, content: SECRET, originalLanguage: 'fr', messageType: 'system',
+    });
+    expect(h.created[0].data).toMatchObject({ content: '', isEncrypted: true, encryptionMode: mode });
+    expect(JSON.stringify(h.created[0].data)).not.toContain('4471');
+    expect(served.content).toBe(SECRET);
+  });
+});

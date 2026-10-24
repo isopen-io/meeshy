@@ -165,25 +165,16 @@ export class MessageProcessor {
   }
 
   /**
-   * Get encryption context for a conversation
-   * Determines if and how a message should be encrypted
+   * Le chiffrement d'un message, décidé par le RÉGIME de sa conversation et par
+   * lui seul : un `messageType` déclaré n'en dispense jamais (#12822 — un
+   * `system` venu d'un client rangeait le clair dans une conversation
+   * `server`/`hybrid`). Les avis de la passerelle ne passent pas par ici.
    */
   async getEncryptionContext(
     conversationId: string,
     content: string,
-    messageType: string,
     knownRegime?: EncryptionRegime | null
   ): Promise<MessageEncryptionContext> {
-    // System messages are NEVER encrypted
-    if (messageType === 'system') {
-      return {
-        isEncrypted: false,
-        mode: null,
-        encryptedContent: null,
-        encryptionMetadata: null
-      };
-    }
-
     const conversation = knownRegime === undefined ? await this.readEncryptionRegime(conversationId) : knownRegime;
 
     // No encryption enabled
@@ -356,7 +347,6 @@ export class MessageProcessor {
         () => this.getEncryptionContext(
           data.conversationId,
           processedContent.trim(),
-          data.messageType || 'text',
           regime
         ),
         corr
