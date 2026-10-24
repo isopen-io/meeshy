@@ -1,15 +1,18 @@
 import type { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
 import type { MessageEditorColumns } from '@meeshy/shared/utils/message-edit-attribution';
 import { editAttributionOf, type MessageEditAdmission } from './messageEditAdmission';
+import { applyMessageEditEffects, type EditedMessageRecord } from './messageEditEffects';
 
 export type GuardedMessageEdit = {
-  readonly prisma: Pick<PrismaClient, 'message'>;
+  readonly prisma: PrismaClient;
   readonly messageId: string;
   readonly content: string;
   readonly admission: MessageEditAdmission;
   readonly editorUserId: string;
   /** `{ metadata }` quand la réconciliation des liens a établi une carte, `{}` sinon. */
   readonly nextMetadata: { readonly metadata?: Prisma.MessageUpdateManyMutationInput['metadata'] };
+  /** Le message d'AVANT l'écriture, tel que les effets durables le lisent. */
+  readonly previous: Omit<EditedMessageRecord, 'content' | 'editedAt'>;
 };
 
 export type GuardedMessageEditResult = {
@@ -33,6 +36,11 @@ export type GuardedMessageEditResult = {
  *
  * #11375 — le modérateur de plateforme qui modifie le message d'autrui est
  * enregistré avec son rôle ; l'auteur qui réécrit efface la mention.
+ *
+ * L'écriture vide `translations` : ses effets DURABLES (compteurs,
+ * notifications, traductions partagées d'avant, #9899) la suivent ici même,
+ * par `applyMessageEditEffects`, avec l'instant ÉCRIT — la version de source
+ * d'une traduction partagée en est l'ISO.
  */
 export async function writeGuardedMessageEdit(edit: GuardedMessageEdit): Promise<GuardedMessageEditResult> {
   const editedAt = new Date();
@@ -48,5 +56,7 @@ export async function writeGuardedMessageEdit(edit: GuardedMessageEdit): Promise
       ...edit.nextMetadata,
     },
   });
-  return { written: result.count > 0, editedAt, editedBy };
+  if (result.count === 0) return { written: false, editedAt, editedBy };
+  await applyMessageEditEffects(edit.prisma, { ...edit.previous, content: edit.content, editedAt });
+  return { written: true, editedAt, editedBy };
 }

@@ -106,7 +106,6 @@ import { admitMessageDelete } from '../../services/messaging/messageDeleteAdmiss
 import { writeGuardedMessageEdit } from '../../services/messaging/messageEditWrite';
 import { completeModeratedMessageRemoval, moderationReasonOf, MODERATION_REASON_MESSAGE, MODERATION_REASON_REQUIRED } from '../../services/moderation/contentRemoval';
 import { applyMessageRemovalEffects } from '../../services/messaging/messageRemovalEffects';
-import { applyMessageEditEffects } from '../../services/messaging/messageEditEffects';
 import {
   admitEditedContent,
   isEditedContentRefused,
@@ -854,26 +853,19 @@ export class MessageHandler {
         admission,
         editorUserId: userId,
         nextMetadata,
+        previous: {
+          id: message.id,
+          conversationId: message.conversationId,
+          senderId: message.senderId,
+          senderUserId: message.sender?.userId ?? null,
+          previousContent: message.content,
+        },
       });
 
       if (!written) {
         this._sendGenericError(callback, 'Message not found or you are not authorized to edit it', socket);
         return;
       }
-
-      // Les effets DURABLES de l'édition (compteurs, notifications, traductions
-      // partagées d'avant) vivent dans `applyMessageEditEffects`, une fois pour
-      // les quatre transports. `editedAt` est l'instant ÉCRIT ci-dessus, remis
-      // tel quel : la version de source d'une traduction partagée en est l'ISO.
-      await applyMessageEditEffects(this.prisma, {
-        id: message.id,
-        conversationId: message.conversationId,
-        senderId: message.senderId,
-        senderUserId: message.sender?.userId ?? null,
-        previousContent: message.content,
-        content: editedContent,
-        editedAt,
-      });
 
       // Ce que ce message doit à ceux qu'il NOMME, après édition. Ce chemin
       // n'écrivait AUCUNE mention : ni ligne `Mention`, ni `validatedMentions`,
