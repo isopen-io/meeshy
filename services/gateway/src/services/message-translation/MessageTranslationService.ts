@@ -19,6 +19,8 @@ import { ConversationLanguages } from './ConversationLanguages';
 import { ArrivalHistoryBackfill } from './ArrivalHistoryBackfill';
 import { TranslationStats, TranslationServiceStats } from './TranslationStats';
 import { EncryptionHelper } from './EncryptionHelper';
+import { gatewayKeyring, translatableTextOf } from '../messaging/atRestTranslationSource';
+import type { AtRestKeyring } from '../messaging/serverAtRest';
 import { ConsentValidationService } from '../ConsentValidationService';
 import { MultiLevelJobMappingCache } from '../MultiLevelJobMappingCache';
 import type { AttachmentTranscription, AttachmentTranslations, TranscriptionSegment } from '@meeshy/shared/types/attachment-audio';
@@ -78,6 +80,7 @@ export class MessageTranslationService extends EventEmitter {
   private readonly messageTranslationMutex = new KeyedMutex();
   private readonly stats: TranslationStats;
   private readonly encryptionHelper: EncryptionHelper;
+  private readonly atRestKeyring: AtRestKeyring;
 
   // Déduplication — Map<key, timestampMs> avec TTL 1h pour éviter la fuite mémoire
   private readonly processedTasks = new Map<string, number>();
@@ -122,6 +125,7 @@ export class MessageTranslationService extends EventEmitter {
     });
     this.stats = new TranslationStats();
     this.encryptionHelper = new EncryptionHelper(prisma);
+    this.atRestKeyring = gatewayKeyring(prisma);
 
     // Utiliser le cache partagé si fourni, sinon en créer un (rétro-compatibilité)
     this.jobMappingService = jobMappingCache || new MultiLevelJobMappingCache();
@@ -516,9 +520,10 @@ export class MessageTranslationService extends EventEmitter {
         return;
       }
 
-      // Valider que le texte n'est pas vide
-      if (!message.content || message.content.trim().length === 0) {
-        logger.warn(`⚠️ [TRANSLATION] Message ${message.id} ignoré: contenu vide`);
+      // #12822 — le clair de la ligne, ouvert par la passerelle si elle est scellée au repos.
+      const text = await translatableTextOf(message, this.atRestKeyring);
+      if (!text) {
+        logger.warn(`⚠️ [TRANSLATION] Message ${message.id} ignoré: aucun texte lisible`);
         return;
       }
 
@@ -609,12 +614,12 @@ export class MessageTranslationService extends EventEmitter {
       logger.info(`📤 [PARTIAL CACHE] Message ${message.id}: ${cacheResults.length} cached, ${cacheMisses.length} to translate`);
 
       // Déterminer le model type
-      const finalModelType = modelType ?? ((message.content?.length ?? 0) < 80 ? 'medium' : 'premium');
+      const finalModelType = modelType ?? (text.length < 80 ? 'medium' : 'premium');
 
       // 6. ENVOYER LA REQUÊTE DE TRADUCTION VIA ZMQ (seulement pour cache misses)
       const request: TranslationRequest = {
         messageId: message.id,
-        text: message.content,
+        text,
         sourceLanguage: this._normalizeSourceLanguage(message.originalLanguage),
         targetLanguages: cacheMisses,  // ✨ Seulement les langues non cachées
         conversationId: message.conversationId,
@@ -697,9 +702,10 @@ export class MessageTranslationService extends EventEmitter {
         throw new Error(`Message ${messageId} non trouvé pour retraduction`);
       }
 
-      // Valider que le texte n'est pas vide
-      if (!existingMessage.content || existingMessage.content.trim().length === 0) {
-        logger.warn(`⚠️ [RETRANSLATION] Message ${messageId} ignoré: contenu vide`);
+      // #12822 — le clair de la ligne (scellée au repos en server/hybrid), jamais `content: ''`.
+      const text = await translatableTextOf(existingMessage, this.atRestKeyring);
+      if (!text) {
+        logger.warn(`⚠️ [RETRANSLATION] Message ${messageId} ignoré: aucun texte lisible`);
         return;
       }
 
@@ -732,7 +738,7 @@ export class MessageTranslationService extends EventEmitter {
       
       // 2. DÉTERMINER LE MODEL TYPE
       // Priorité: 1) modelType du messageData (demandé par l'utilisateur), 2) auto-détection
-      const autoModelType = (existingMessage.content?.length ?? 0) < 80 ? 'medium' : 'premium';
+      const autoModelType = text.length < 80 ? 'medium' : 'premium';
       const finalModelType = messageData.modelType ?? autoModelType;
       
       
@@ -759,7 +765,7 @@ export class MessageTranslationService extends EventEmitter {
       // 4. ENVOYER LA REQUÊTE DE RETRADUCTION VIA ZMQ
       const request: TranslationRequest = {
         messageId: messageId,
-        text: existingMessage.content,
+        text,
         sourceLanguage: this._normalizeSourceLanguage(existingMessage.originalLanguage),
         targetLanguages: filteredTargetLanguages,
         conversationId: existingMessage.conversationId,

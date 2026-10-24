@@ -34,6 +34,19 @@ export async function translationSourceOf<T extends AtRestReadableRow>(row: T, k
   return opened.isEncrypted === true ? { readable: false } : { readable: true, row: opened };
 }
 
+/**
+ * #12822 — le texte que le translator lit d'une ligne `Message` : son clair,
+ * ouvert par la passerelle quand la ligne est scellée au repos ; `null` quand
+ * il n'y a rien à traduire (texte vide, ligne qu'aucune clé n'ouvre). La ligne
+ * fait foi, jamais le texte qu'un appelant affirme être le sien.
+ */
+export async function translatableTextOf(row: AtRestReadableRow, keyring: AtRestKeyring): Promise<string | null> {
+  const source = await translationSourceOf(row, keyring);
+  if (!source.readable) return null;
+  const text = source.row.content;
+  return typeof text === 'string' && text.trim().length > 0 ? text : null;
+}
+
 /** Le message que `translation:request` retraduit, son texte ouvert ; `content` vide s'il reste scellé. */
 export async function loadTranslatableMessage(prisma: PrismaClient, messageId: string) {
   const row = await prisma.message.findUnique({
