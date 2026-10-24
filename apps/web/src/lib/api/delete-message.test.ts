@@ -256,3 +256,89 @@ describe('performDeleteForMe — la route unitaire pour un, la route de masse po
     expect(me).toEqual({ deleted: 0, failed: 0, offline: false });
   });
 });
+
+/**
+ * #12634 — LA SORTIE SE JOUE AVANT LE RETRAIT. La rangée reste dans le cache
+ * (donc montée) le temps que `rowExit` joue son repli ; la requête, elle, part
+ * tout de suite. Un refus la rend ET la déplie à sa place.
+ */
+describe('performDeleteForMe — la rangée sort en se repliant, et revient de même', () => {
+  const heldExit = () => {
+    const calls: { readonly collapsed: (readonly string[])[]; readonly unfolded: (readonly string[])[] } = { collapsed: [], unfolded: [] };
+    const gate: { open: () => void } = { open: () => {} };
+    const exit = {
+      collapse: (rows: ReadonlySet<string>) => {
+        calls.collapsed.push([...rows]);
+        return new Promise<void>((resolve) => {
+          gate.open = resolve;
+        });
+      },
+      unfold: (rows: ReadonlySet<string>) => {
+        calls.unfolded.push([...rows]);
+      },
+    };
+    return { exit, calls, open: () => gate.open() };
+  };
+
+  test('pendant le repli, la rangée reste au fil et la requête est déjà partie ; puis elle quitte le cache', async () => {
+    const queryClient = threadWith();
+    const seen: HttpRequest[] = [];
+    const held = heldExit();
+    const performed = performDeleteForMe({ queryClient, conversationId: 'c-a', messages: [M2], transport: transportBy(() => OK, seen), rowExit: held.exit });
+    await Promise.resolve();
+    expect(held.calls.collapsed).toEqual([['m-2']]);
+    expect(ids(queryClient)).toEqual([['m-3', 'm-4'], ['m-1', 'm-2']]);
+    expect(seen).toEqual([{ method: 'DELETE', path: '/api/v1/messages/m-2/delete-for-me' }]);
+    held.open();
+    expect(await performed).toEqual({ deleted: 1, failed: 0, offline: false });
+    expect(ids(queryClient)).toEqual([['m-3', 'm-4'], ['m-1']]);
+    expect(held.calls.unfolded).toEqual([]);
+  });
+
+  test('une sélection : toutes les rangées se replient ensemble', async () => {
+    const queryClient = threadWith();
+    const held = heldExit();
+    const performed = performDeleteForMe({
+      queryClient,
+      conversationId: 'c-a',
+      messages: [M1, M3],
+      transport: transportBy(() => ({ ok: true, data: { deletedCount: 2, requestedCount: 2 } }), []),
+      rowExit: held.exit,
+    });
+    expect(held.calls.collapsed).toEqual([['m-1', 'm-3']]);
+    held.open();
+    await performed;
+    expect(ids(queryClient)).toEqual([['m-4'], ['m-2']]);
+  });
+
+  test('un refus ou une coupure : les rangées reviennent à leur place et se déplient', async () => {
+    const queryClient = threadWith();
+    const held = heldExit();
+    const performed = performDeleteForMe({
+      queryClient,
+      conversationId: 'c-a',
+      messages: [M1, M3],
+      transport: transportBy(() => ({ ok: false, status: 0, error: 'offline' }), []),
+      rowExit: held.exit,
+    });
+    held.open();
+    expect(await performed).toEqual({ deleted: 0, failed: 2, offline: true });
+    expect(ids(queryClient)).toEqual([['m-3', 'm-4'], ['m-1', 'm-2']]);
+    expect(held.calls.unfolded).toEqual([['m-1', 'm-3']]);
+  });
+
+  test('aucune sortie à jouer (« Réduire les animations ») : la rangée quitte le fil tout de suite', async () => {
+    const queryClient = threadWith();
+    let during: readonly (readonly string[])[] = [];
+    await performDeleteForMe({
+      queryClient,
+      conversationId: 'c-a',
+      messages: [M2],
+      transport: transportBy(() => OK, [], () => {
+        during = ids(queryClient);
+      }),
+      rowExit: { collapse: () => null, unfold: () => {} },
+    });
+    expect(during).toEqual([['m-3', 'm-4'], ['m-1']]);
+  });
+});
