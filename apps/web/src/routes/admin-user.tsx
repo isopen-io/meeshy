@@ -217,12 +217,8 @@ export function AdminUserFiche({
       <AuthAmbient />
       <AdminPageHeader
         language={language}
-        title={translateAdmin(language, 'admin.user.title')}
-        crumbs={[
-          { label: translateAdmin(language, 'admin.group.people') },
-          { label: translateAdmin(language, 'admin.nav.users'), target: { kind: 'section', section: 'users' } },
-          { label: entity.label },
-        ]}
+        title={entity.label}
+        place={{ section: 'users', fiche: true }}
         actions={
           reach.opens('audit') ? (
             <AdminLink

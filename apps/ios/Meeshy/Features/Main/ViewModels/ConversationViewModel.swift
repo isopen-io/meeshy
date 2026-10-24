@@ -380,6 +380,8 @@ class ConversationViewModel: ObservableObject, AttachmentSendHosting, Transcript
     let lastReadMessageCreatedAt: Date?
     let isDirect: Bool
     let participantUserId: String?
+    /// Le régime de la ligne qui a ouvert le fil (#11379), lu SYNCHRONE comme `memberJoinedAt`.
+    let encryptionModeAtOpening: String?
     let initialUnreadCount: Int
     let limit = 30
     var nextMessageCursor: String?
@@ -468,7 +470,7 @@ class ConversationViewModel: ObservableObject, AttachmentSendHosting, Transcript
         conversationId: String,
         unreadCount: Int = 0,
         isDirect: Bool = false,
-        participantUserId: String? = nil,
+        participantUserId: String? = nil, encryptionMode: String? = nil,
         memberJoinedAt: Date? = nil,
         lastReadMessageId: String? = nil,
         lastReadAt: Date? = nil,
@@ -515,7 +517,7 @@ class ConversationViewModel: ObservableObject, AttachmentSendHosting, Transcript
         self.lastReadMessageCreatedAt = lastReadMessageCreatedAt
         self.initialUnreadCount = unreadCount
         self.isDirect = isDirect
-        self.participantUserId = participantUserId
+        self.participantUserId = participantUserId; self.encryptionModeAtOpening = encryptionMode
         self.isConversationClosed = closedAt != nil
         self.authManager = authManager
         self.messageService = messageService

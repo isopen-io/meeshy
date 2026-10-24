@@ -23,7 +23,6 @@ final class LiveShareDispatcher: ShareDispatching {
     private let conversationCreator: ConversationCreating
     private let postService: PostServiceProviding
     private let currentUserId: () -> String
-    private let isDecryptedOnDevice: (String) -> Bool
 
     init(
         forwardService: MessageForwardServiceProviding = MessageForwardService.shared,
@@ -32,8 +31,7 @@ final class LiveShareDispatcher: ShareDispatching {
         isOnline: @escaping () -> Bool = { NetworkMonitor.shared.isOnline },
         conversationCreator: ConversationCreating = ConversationCreator(),
         postService: PostServiceProviding = PostService.shared,
-        currentUserId: @escaping () -> String = { AuthManager.shared.currentUser?.id ?? "" },
-        isDecryptedOnDevice: @escaping (String) -> Bool = { DecryptedMessageLedger.shared.contains($0) }
+        currentUserId: @escaping () -> String = { AuthManager.shared.currentUser?.id ?? "" }
     ) {
         self.forwardService = forwardService
         self.api = api
@@ -42,7 +40,6 @@ final class LiveShareDispatcher: ShareDispatching {
         self.conversationCreator = conversationCreator
         self.postService = postService
         self.currentUserId = currentUserId
-        self.isDecryptedOnDevice = isDecryptedOnDevice
     }
 
     func deliver(_ request: ShareSendRequest, to recipient: ShareRecipient) async -> ShareDeliveryOutcome {
@@ -115,9 +112,11 @@ final class LiveShareDispatcher: ShareDispatching {
 
     /// **La copie d'un contenu chiffré se fait sur l'appareil** (D7, #9224) : la
     /// passerelle ne recopie rien d'une source chiffrée. Ne repart que du texte
-    /// dont le déchiffrement est PROUVÉ (`DecryptedMessageLedger`) — un échec de
-    /// déchiffrement laisse le chiffré dans `content`, qui ne sort jamais comme
-    /// texte —, avec `forwardedFromId` (la provenance). Un message qui porte des
+    /// que CET appareil a déchiffré, reconnu par sa provenance
+    /// (`isContentDecryptedOnDevice`, #11402) : un échec de déchiffrement laisse
+    /// le chiffré dans `content`, un texte forgé par la passerelle ou réécrit
+    /// après déchiffrement n'a pas de provenance — aucun ne sort comme texte —,
+    /// avec `forwardedFromId` (l'origine du transfert). Un message qui porte des
     /// pièces est refusé en bloc : les pièces d'une source chiffrée ne se
     /// recopient pas encore depuis l'appareil, et un envoi partiel ne s'annonce
     /// jamais « Envoyé ».
@@ -129,7 +128,7 @@ final class LiveShareDispatcher: ShareDispatching {
     private func copyOnDevice(_ message: Message, chosenDurationSeconds: Int?, to recipient: ShareRecipient) async -> ShareDeliveryOutcome {
         if let refusal = ForwardRefusalReason.local(for: message) { return .failed(reason: refusal.explanation) }
         guard message.attachments.isEmpty else { return .failed(reason: Self.encryptedPiecesRefusal) }
-        guard !message.content.isEmpty, isDecryptedOnDevice(message.id) else { return .failed(reason: Self.undecryptedRefusal) }
+        guard !message.content.isEmpty, message.isContentDecryptedOnDevice else { return .failed(reason: Self.undecryptedRefusal) }
         guard let destination = await resolveConversation(recipient) else { return .failed(reason: Self.unreachable) }
         return await postText(message.content, forwardedFromId: message.id,
                               protection: Self.copyProtection(of: [message], chosenDurationSeconds: chosenDurationSeconds), to: destination)

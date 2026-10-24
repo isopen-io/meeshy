@@ -817,7 +817,7 @@ struct GalleryVideoPage: View, Equatable {
     private var playOrDownloadButton: some View {
         Button {
             switch availability {
-            case .ready, .downloading where isReadyForAutoplay:
+            case .downloading where isReadyForAutoplay, .ready:
                 // #12027 : un téléchargement lisible se joue dès sa tête.
                 // Défense en profondeur : la galerie n'exprime jamais de mute
                 // forcé — si une autre surface (le feed) a laissé `isForceMuted`
@@ -852,7 +852,7 @@ struct GalleryVideoPage: View, Equatable {
     /// / progression). Les glyphes internes sont décoratifs.
     private var playOrDownloadAccessibilityLabel: String {
         switch availability {
-        case .ready, .downloading where isReadyForAutoplay:
+        case .downloading where isReadyForAutoplay, .ready:
             return String(localized: "media.playVideo", defaultValue: "Lire la vidéo", bundle: .main)
         case .needsDownload:
             return String(localized: "media.downloadVideo", defaultValue: "Télécharger la vidéo", bundle: .main)
@@ -867,7 +867,7 @@ struct GalleryVideoPage: View, Equatable {
         // fixe (56/64pt) — les scaler déborderait le cercle. État porté par
         // `playOrDownloadAccessibilityLabel` sur le bouton parent.
         switch availability {
-        case .ready, .downloading where isReadyForAutoplay:
+        case .downloading where isReadyForAutoplay, .ready:
             Image(systemName: "play.fill")
                 .font(.system(size: MeeshyIconSize.xxl, weight: .bold))
                 .foregroundStyle(MeeshyColors.mediaChromeForeground)

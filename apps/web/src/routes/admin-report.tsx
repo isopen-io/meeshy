@@ -211,11 +211,7 @@ export function AdminReportPanel({ language, reportId, deps = apiDeps, now = def
       <AdminPageHeader
         language={language}
         title={title}
-        crumbs={[
-          { label: translateAdmin(language, 'admin.group.moderation') },
-          { label: translateAdmin(language, 'admin.nav.reports'), target: listTarget },
-          { label: title },
-        ]}
+        place={{ section: 'reports', fiche: true }}
       />
       <AdminOfflineNotice language={language} />
       <AdminFiche

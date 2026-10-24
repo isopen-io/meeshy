@@ -271,6 +271,9 @@ targets:
         product: MeeshySDK
       - package: MeeshySDK
         product: MeeshyUI
+      # #12536 — l'E2EE libsignal : l'app et l'extension de notification seules.
+      - package: MeeshySDK
+        product: MeeshyE2EE
       - package: Firebase
         product: FirebaseCore
       - package: Firebase
@@ -352,6 +355,9 @@ targets:
       # NotificationService.swift imports MeeshySDK (and GRDB transitively).
       - package: MeeshySDK
         product: MeeshySDK
+      # #12536 — la NSE déchiffrera sous le verrou du groupe d'apps (#12537).
+      - package: MeeshySDK
+        product: MeeshyE2EE
 
   # #8859 — Notification Content Extension : la notification DÉPLOYÉE (appui
   # long) fait écouter un vocal, explorer une position, lire une carte de

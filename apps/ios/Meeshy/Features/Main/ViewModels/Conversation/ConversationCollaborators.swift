@@ -11,6 +11,8 @@ struct ConversationCollaborators {
     let windowFetcher: any ConversationWindowFetcherProviding
     let stager: any OptimisticMessageStagerProviding
     let failureRecovery: any SendFailureRecoveryProviding
+    /// Le régime appris APRÈS l'ouverture du fil (#11379).
+    let regimeLedger: EndToEndRegimeLedger
 
     init(
         persistence: MessagePersistenceActor,
@@ -21,7 +23,8 @@ struct ConversationCollaborators {
         cacheReader: (any ConversationCacheReaderProviding)? = nil,
         windowFetcher: (any ConversationWindowFetcherProviding)? = nil,
         stager: (any OptimisticMessageStagerProviding)? = nil,
-        failureRecovery: (any SendFailureRecoveryProviding)? = nil
+        failureRecovery: (any SendFailureRecoveryProviding)? = nil,
+        regimeLedger: EndToEndRegimeLedger? = nil
     ) {
         self.readReceipts = readReceipts ?? ConversationReadReceiptSender(syncEngine: syncEngine)
         self.voiceConsent = voiceConsent ?? VoiceConsentGate()
@@ -29,5 +32,6 @@ struct ConversationCollaborators {
         self.windowFetcher = windowFetcher ?? ConversationWindowFetcher(messageService: messageService, persistence: persistence)
         self.stager = stager ?? OptimisticMessageStager(persistence: persistence)
         self.failureRecovery = failureRecovery ?? SendFailureRecovery()
+        self.regimeLedger = regimeLedger ?? .shared
     }
 }
