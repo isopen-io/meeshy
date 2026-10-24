@@ -22,7 +22,11 @@ struct ConversationOverlayMenu: View {
     let mediaSaveCoordinator: MediaSaveCoordinator
     let actions: ConversationMessageActions
 
-    var body: some View {
+    var body: some View { overlay }
+
+    /// Le menu tel que l'hôte le monte, rappels compris : les témoins lisent
+    /// ce qui est CÂBLÉ ici, pas une liste recomposée à part (#12625).
+    var overlay: MessageOverlayMenu {
         MessageOverlayMenu(
             message: msg,
             contactColor: accentColor,
@@ -65,6 +69,10 @@ struct ConversationOverlayMenu: View {
                 actions.compose(msg)
             },
             onSelect: { actions.beginSelection(msg.id) },
+            // « Supprimer » à un geste (#12625) : `requestDeleteMessage`
+            // abandonne un envoi raté tout de suite et ouvre, sinon, la
+            // confirmation des verdicts (pour tous / retirer / pour moi).
+            onDelete: { actions.requestDelete(msg.id) },
             isDirect: isDirect,
             preferredTranslation: UnencryptedMessageGate.preferredTranslation(of: msg, in: viewModel),
             mentionDisplayNames: viewModel.mentionDisplayNames,
@@ -86,7 +94,12 @@ struct ConversationOverlayMenu: View {
             onExpandFullPicker: {
                 overlayState.fullReactionPickerMessage = msg
             },
-            isUnencrypted: UnencryptedMessageGate.isUnencrypted(msg, in: viewModel)
+            isUnencrypted: UnencryptedMessageGate.isUnencrypted(msg, in: viewModel),
+            // #11339 — un vocal lu depuis l'aperçu : la même entrée de file
+            // que le fil, sans auto-avance derrière lui.
+            onPlayAudio: { attachmentId in
+                viewModel.playAudio(attachmentId: attachmentId, continuesQueue: false)
+            }
         )
     }
 }

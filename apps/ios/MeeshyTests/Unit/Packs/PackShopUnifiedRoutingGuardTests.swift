@@ -25,10 +25,17 @@ final class PackShopUnifiedRoutingGuardTests: XCTestCase {
                        "les cadres ne s'installent plus par l'ancien magasin, sans prix ni possession (#10711)")
         XCTAssertTrue(source.contains("usageText: FrameUsageCopy.text"),
                       "la vitrine des cadres dit où chaque pack sert, comme le magasin qu'elle remplace (#10711)")
-        XCTAssertTrue(source.contains("focusedSlug: focusedPack,\n                            language: PackShopScreen.language)"),
+        XCTAssertTrue(source.contains("focusedSlug: focusedPack,\n                            language: PackShopScreen.language"),
                       "la vitrine des Réglages nomme ses packs dans la langue du lecteur (#10711)")
         XCTAssertTrue(source.contains("focusedSlug: focusedPack, language: language,"),
                       "la vitrine des cadres nomme ses packs dans la langue du lecteur (#10711)")
+    }
+
+    /// #11306 — la vitrine nomme le rang d'un pack à gagner avec le nom du jeu (`GameCopy`), pas une copie.
+    func test_laVitrineDesReglagesNommeLesRangsAvecLeNomDuJeu() throws {
+        let source = AppSourceGuard.stripComments(try AppSourceGuard.unit(Self.path))
+        XCTAssertTrue(source.contains("rankName: GameCopy.rankName)"),
+                      "« Rang Voix — Gloire manquante » : le nom du rang est celui que le jeu affiche (#11306)")
     }
 
     func test_lesOngletsDeCadresSuiventCeQueLaVitrineInstalle() {

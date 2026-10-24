@@ -13,6 +13,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -24,6 +25,7 @@ import me.meeshy.feature.conversations.R
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.conversationlist.SectionFoldedUnread
 import me.meeshy.ui.component.CollapsibleSection
+import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.theme.MeeshyPalette
 
 /** The populated list: pull-to-refresh over the pinned / category / all sections. */
@@ -37,9 +39,12 @@ internal fun ConversationListBody(
     rowNavigation: ConversationRowNavigation = ConversationRowNavigation.None,
 ) {
     val signals by viewModel.rowSignals.collectAsStateWithLifecycle()
+    val haptics = rememberMeeshyHaptics()
+    LaunchedEffect(viewModel) { viewModel.pullRefreshSucceeded.collect { haptics.success() } }
     PullToRefreshBox(
         isRefreshing = state.isUserRefreshing,
         onRefresh = {
+            haptics.light()
             viewModel.refresh()
             onRefresh()
         },

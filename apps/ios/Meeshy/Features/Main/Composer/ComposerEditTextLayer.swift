@@ -8,7 +8,9 @@ import MeeshyUI
 /// la scène comme les crochets du recadrage, et la barre d'outils de texte du composer au-dessus
 /// du clavier. Aucun second éditeur de texte : `StoryComposerCanvasView` saisit, déplace, pince et
 /// tourne ; `StoryTextEditToolbar` règle police, effet, couleur, alignement, fond, cadre et
-/// contour — sans « Langue » ni fond « Verre », qui n'ont aucun effet sur un texte cuit.
+/// contour — sans « Langue », qui n'a aucun effet sur un texte cuit. Le fond « Verre » floute la
+/// prise sous sa boîte : c'est le peintre de la retouche qui la floute (#12602), l'aperçu comme
+/// l'export.
 ///
 /// Le canvas ne se manipule que l'outil Texte montré. Rangé, les textes restent peints (par le
 /// média lui-même) mais ne répondent plus au doigt.
