@@ -249,6 +249,24 @@ time.sleep(30)`, file], { stdio: ['ignore', 'pipe', 'inherit'] });
 });
 
 describe('les chemins par défaut de la production (#11509)', () => {
+  it('le gabarit de la production sauvegarde là où la NOCTURNE sauvegarde, sous le MÊME verrou', () => {
+    // La nocturne (meeshy-nightly-backup.service) ne pose aucune variable : elle prend les
+    // valeurs par défaut du script. Le gabarit lancé par le relais doit les reprendre à
+    // l'identique — sinon les deux tournent ensemble, ou sur deux séries de sauvegardes.
+    const unit = readFileSync(path.join(here, 'meeshy-production-backup@.service'), 'utf8');
+    const script = readFileSync(path.join(here, '../production-backup/meeshy-nightly-backup.sh'), 'utf8');
+    const fromUnit = (name) => new RegExp(`^Environment="?${name}=([^"\\n]*)"?$`, 'm').exec(unit)?.[1];
+    const fromScript = (name) => new RegExp(`^${name}="\\$\\{${name}:-([^}]*)\\}"$`, 'm').exec(script)?.[1];
+    for (const name of ['COMPOSE_DIR', 'BACKUP_ROOT', 'DB_CONTAINER', 'VOLUMES', 'STATUS_DIR', 'LOCK_FILE']) {
+      assert.ok(fromScript(name), `valeur par défaut de ${name} introuvable dans le script`);
+      assert.equal(fromUnit(name), fromScript(name), name);
+    }
+    assert.equal(fromUnit('BACKUP_ORIGIN'), '%i');
+    // Le verdict que le runner de la production lit est celui que ce gabarit écrit.
+    const python = spawnSync('python3', ['-I', '-c', 'import importlib.util,sys; s=importlib.util.spec_from_file_location("r", sys.argv[1]); m=importlib.util.module_from_spec(s); s.loader.exec_module(m); print(m.BACKUP_STATUS_FILES["production"])', RUNNER], { encoding: 'utf8' });
+    assert.equal(python.stdout.trim(), `${fromUnit('STATUS_DIR')}/etat.json`);
+  });
+
   it('la production lit le verdict de SA sauvegarde là où la sauvegarde l’écrit, et lance SON unité à la demande', () => {
     const python = spawnSync(
       'python3',
