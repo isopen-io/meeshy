@@ -1,6 +1,8 @@
-import { describe, expect, test } from 'bun:test';
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 
-import { createRowRoving, rowKeyMove } from './row-roving';
+import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
+
+import { createRowRoving, moveRowFocus, ROW_PRIMARY_ATTRIBUTE, rowKeyMove } from './row-roving';
 
 /**
  * LA LISTE SE PARCOURT AU CLAVIER, UN ARRÊT DE TABULATION (#11227) — la loi
@@ -54,5 +56,47 @@ describe('createRowRoving — qui tient l’arrêt de tabulation', () => {
     expect(roving.holds('a')).toBe(false);
     roving.release('b');
     expect(roving.holds('a')).toBe(true);
+  });
+});
+
+describe('moveRowFocus — une rangée qui sort n’est plus au parcours (#11574)', () => {
+  beforeAll(() => ensureHappyDomRegistered());
+  afterAll(() => releaseHappyDomIfRegistered());
+
+  const listOf = (ids: readonly string[], leaving: string) => {
+    const list = document.createElement('ul');
+    list.id = 'contenu';
+    ids.forEach((id) => {
+      const row = document.createElement('li');
+      row.setAttribute('data-row', id);
+      if (id === leaving) {
+        row.setAttribute('data-row-exiting', '');
+        row.setAttribute('inert', '');
+        row.setAttribute('aria-hidden', 'true');
+      }
+      const link = document.createElement('a');
+      link.href = `#${id}`;
+      link.setAttribute(ROW_PRIMARY_ATTRIBUTE, '');
+      row.append(link);
+      list.append(row);
+    });
+    document.body.replaceChildren(list);
+    const rowOf = (id: string) => list.querySelector<HTMLElement>(`[data-row="${id}"]`)!;
+    return rowOf;
+  };
+
+  test('bas saute la rangée en train de partir et pose le focus sur la suivante', () => {
+    const rowOf = listOf(['a', 'b', 'c'], 'b');
+    rowOf('a').querySelector<HTMLElement>('a')!.focus();
+    const taken = moveRowFocus({ row: rowOf('a'), from: document.activeElement, move: { kind: 'row', to: 'next' } });
+    expect(taken).toBe(true);
+    expect(document.activeElement?.closest('[data-row]')?.getAttribute('data-row')).toBe('c');
+  });
+
+  test('Fin ne vise jamais la dernière rangée si elle part', () => {
+    const rowOf = listOf(['a', 'b', 'c'], 'c');
+    rowOf('a').querySelector<HTMLElement>('a')!.focus();
+    moveRowFocus({ row: rowOf('a'), from: document.activeElement, move: { kind: 'row', to: 'last' } });
+    expect(document.activeElement?.closest('[data-row]')?.getAttribute('data-row')).toBe('b');
   });
 });

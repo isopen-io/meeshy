@@ -87,9 +87,12 @@ const CONTROLS = 'a[href], button:not([disabled])';
 const controlsOf = (row: HTMLElement): readonly HTMLElement[] =>
   [...row.querySelectorAll<HTMLElement>(CONTROLS)].filter((control) => control.closest('[aria-hidden="true"]') === null);
 
+/** Une rangée INERTE est en train de quitter la liste (#11574) : le focus ne peut plus s'y poser. */
+const reachable = (candidate: HTMLElement): boolean => candidate.querySelector(PRIMARY) !== null && candidate.closest('[inert]') === null;
+
 const rowsAround = (row: HTMLElement): readonly HTMLElement[] => {
   const list = row.closest('#contenu') ?? row.parentElement;
-  return list === null ? [row] : [...list.querySelectorAll<HTMLElement>('[data-row]')].filter((candidate) => candidate.querySelector(PRIMARY) !== null);
+  return list === null ? [row] : [...list.querySelectorAll<HTMLElement>('[data-row]')].filter(reachable);
 };
 
 const targetRow = (rows: readonly HTMLElement[], row: HTMLElement, to: 'previous' | 'next' | 'first' | 'last'): HTMLElement | undefined => {
