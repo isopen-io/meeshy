@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode, type RefObject } from 'react';
 
 import { CHROME_ACTION_HIT_CLASS, ChromeActionDisc } from '@/components/chrome-action';
 import { AdminGlyph } from '@/components/admin/admin-glyph';
@@ -105,7 +105,36 @@ function AdminNavItem({
 }
 
 /**
- * LE MENU GROUPÉ (#8876) — sept groupes titrés, dans l'ordre où ils se lisent ;
+ * ↑ ↓ DÉBUT FIN DANS LE MENU (#12670) — on parcourt les entrées comme une liste, sans
+ * tabuler une à une ; ↑ depuis la première remonte au champ « Aller à… ».
+ */
+function moveInMenu(event: ReactKeyboardEvent<HTMLElement>, nav: HTMLElement | null, filter: HTMLInputElement | null): void {
+  if (nav === null || !['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+  const links = [...nav.querySelectorAll<HTMLAnchorElement>('a[data-admin-nav]')];
+  const index = links.findIndex((link) => link === document.activeElement);
+  if (index === -1 || links.length === 0) return;
+  event.preventDefault();
+  if (event.key === 'Home') return links[0]?.focus();
+  if (event.key === 'End') return links.at(-1)?.focus();
+  if (event.key === 'ArrowDown') return links[Math.min(index + 1, links.length - 1)]?.focus();
+  if (index === 0 && filter !== null) return filter.focus();
+  links[Math.max(index - 1, 0)]?.focus();
+}
+
+/** Le raccourci vers « Aller à… » : `Ctrl/⌘ K` partout, `/` hors d'un champ de saisie. */
+function isMenuShortcut(event: KeyboardEvent): boolean {
+  if (event.altKey) return false;
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') return true;
+  if (event.key !== '/' || event.ctrlKey || event.metaKey) return false;
+  const target = event.target instanceof HTMLElement ? event.target : null;
+  return target === null || !(target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName));
+}
+
+/** Le menu latéral est-il à l'écran ? — dès `md` (48rem), sinon c'est le tiroir. */
+const sidebarShown = (): boolean => window.matchMedia?.('(min-width: 48rem)').matches ?? true;
+
+/**
+ * LE MENU GROUPÉ (#8876) — huit groupes titrés, dans l'ordre où ils se lisent ;
  * un groupe sans section visible n'est pas rendu. Replié en rail d'icônes, le
  * titre cède la place à un séparateur : les groupes restent lisibles sans mot.
  *
@@ -113,6 +142,10 @@ function AdminNavItem({
  * groupe, sans casse ni accents : `matchesNavQuery`) ; Entrée suit la première
  * section trouvée, Échap efface la recherche (et seulement elle : le tiroir reste
  * ouvert). Replié, le rail n'a pas la place d'un champ : il n'en porte pas.
+ *
+ * Le clavier y va sans détour (#12670) : `Ctrl/⌘ K` ou `/` depuis n'importe quel écran
+ * (le rail se déplie, le tiroir s'ouvre), ↓ du champ à la première entrée, puis
+ * ↑ ↓ Début Fin d'une entrée à l'autre (`moveInMenu`).
  */
 function AdminNav({
   language,
@@ -121,6 +154,7 @@ function AdminNav({
   active,
   folded,
   onNavigate,
+  filterRef,
 }: {
   readonly language: AdminLanguage;
   readonly sections: readonly ServedAdminSection[];
@@ -128,6 +162,8 @@ function AdminNav({
   readonly active: string | null;
   readonly folded: boolean;
   readonly onNavigate?: () => void;
+  /** Le champ « Aller à… », que le raccourci clavier du cadre vient chercher (#12670). */
+  readonly filterRef?: RefObject<HTMLInputElement | null>;
 }) {
   const [query, setQuery] = useState('');
   const nav = useRef<HTMLElement>(null);
@@ -145,8 +181,10 @@ function AdminNav({
           <label className="flex items-center gap-2 rounded-chip px-3" style={{ minHeight: 44, border: `1px solid ${EDGE}`, color: INK3 }}>
             <AdminGlyph name="magnifyingGlass" size={16} />
             <input
+              ref={filterRef}
               type="search"
               data-admin-nav-filter
+              aria-keyshortcuts="Control+K Meta+K /"
               value={query}
               aria-label={translateAdmin(language, 'admin.navFilter.label')}
               aria-controls={navId}
@@ -156,6 +194,11 @@ function AdminNav({
               onInput={(event) => setQuery(event.currentTarget.value)}
               onChange={() => undefined}
               onKeyDown={(event) => {
+                if (event.key === 'ArrowDown') {
+                  event.preventDefault();
+                  nav.current?.querySelector<HTMLAnchorElement>('a[data-admin-nav]')?.focus();
+                  return;
+                }
                 if (event.key === 'Enter') {
                   event.preventDefault();
                   nav.current?.querySelector<HTMLAnchorElement>('a[data-admin-nav]')?.click();
@@ -169,10 +212,21 @@ function AdminNav({
               className="min-w-0 flex-1 bg-transparent text-body outline-none"
               style={{ minHeight: 42, color: INK }}
             />
+            {query === '' ? (
+              <kbd aria-hidden="true" className="shrink-0 rounded-chip px-1.5 text-caption" style={{ border: `1px solid ${EDGE}`, color: INK3 }}>
+                /
+              </kbd>
+            ) : null}
           </label>
         </div>
       )}
-      <nav ref={nav} id={navId} aria-label={translateAdmin(language, 'admin.shell.menu')} className="min-h-0 flex-1 overflow-y-auto px-2">
+      <nav
+        ref={nav}
+        id={navId}
+        aria-label={translateAdmin(language, 'admin.shell.menu')}
+        className="min-h-0 flex-1 overflow-y-auto px-2"
+        onKeyDown={(event) => moveInMenu(event, nav.current, filterRef?.current ?? null)}
+      >
         {groupes.length === 0 && search.trim() !== '' ? (
           <p role="status" data-admin-nav-empty className="px-3 pt-4 text-caption" style={{ color: INK2 }}>
             {translateAdmin(language, 'admin.navFilter.empty')}
@@ -265,9 +319,15 @@ export function AdminHeader({
   readonly actions?: ReactNode;
 }) {
   const titreDansLeContenu = heading === 'content';
+  /* L'EMPLACEMENT NE SE DIT QU'UNE FOIS (#12670) : quand l'écran pose son titre et son fil
+     d'Ariane dans le contenu, le menu latéral et le fil couvrent le retour dès `md` — la
+     barre ne garde alors que l'action de l'écran, et disparaît s'il n'en a pas. */
+  const retourSurTelephoneSeul = titreDansLeContenu ? 'md:hidden' : '';
+  const barreSurTelephoneSeule = titreDansLeContenu && actions === undefined ? 'md:hidden' : '';
   return (
     <header
-      className="flex shrink-0 items-center gap-1 px-2 md:px-6"
+      data-admin-header
+      className={`flex shrink-0 items-center gap-1 px-2 md:px-6 ${barreSurTelephoneSeule}`.trim()}
       style={{ height: ADMIN_HEADER_HEIGHT, borderBottom: `1px solid ${EDGE}` }}
     >
       {onMenu === undefined ? null : (
@@ -288,7 +348,7 @@ export function AdminHeader({
         to={back}
         aria-label={translate(language, 'pending.back')}
         data-admin-back
-        className={`${CHROME_ACTION_HIT_CLASS} focus-visible:outline-2 focus-visible:outline-offset-2`}
+        className={`${CHROME_ACTION_HIT_CLASS} ${retourSurTelephoneSeul} focus-visible:outline-2 focus-visible:outline-offset-2`}
         style={{ color: BRAND, outlineColor: BRAND }}
       >
         <ChromeActionDisc>
@@ -296,7 +356,7 @@ export function AdminHeader({
         </ChromeActionDisc>
       </Link>
       {titreDansLeContenu ? (
-        <span data-admin-back-label className="min-w-0 flex-1 truncate text-body font-semibold" style={{ color: BRAND }}>
+        <span data-admin-back-label className={`min-w-0 flex-1 truncate text-body font-semibold ${retourSurTelephoneSeul}`} style={{ color: BRAND }}>
           {backLabel ?? title}
         </span>
       ) : (
@@ -307,7 +367,7 @@ export function AdminHeader({
       {actions === undefined ? (
         titreDansLeContenu ? null : <span aria-hidden="true" className="block shrink-0 md:hidden" style={{ width: 44 }} />
       ) : (
-        <div className="flex shrink-0 items-center gap-2" data-admin-header-actions>
+        <div className="flex shrink-0 items-center gap-2 md:ml-auto" data-admin-header-actions>
           {actions}
         </div>
       )}
@@ -327,20 +387,25 @@ function AdminDrawer({
   space,
   active,
   onClose,
+  focusFilter = false,
 }: {
   readonly language: AdminLanguage;
   readonly sections: readonly ServedAdminSection[];
   readonly space: AdminSpace;
   readonly active: string | null;
   readonly onClose: () => void;
+  /** Ouvert par le raccourci clavier (#12670) : le focus entre dans « Aller à… », pas sur la fermeture. */
+  readonly focusFilter?: boolean;
 }) {
   useBackDismiss(onClose);
   const dialog = useRef<HTMLDivElement>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
+  const filter = useRef<HTMLInputElement>(null);
   const followed = useRef(false);
 
   useEffect(() => {
-    closeButton.current?.focus();
+    if (focusFilter && filter.current !== null) filter.current.focus();
+    else closeButton.current?.focus();
     return () => {
       const trigger = document.querySelector<HTMLElement>('[data-admin-menu-open]');
       if (!followed.current) {
@@ -409,6 +474,7 @@ function AdminDrawer({
           active={active}
           folded={false}
           onNavigate={follow}
+          filterRef={filter}
         />
         <BackToApp language={language} folded={false} />
       </div>
@@ -454,11 +520,40 @@ export function AdminScreenFrame({
 }) {
   const { sections, space, active } = useAdminMenu();
   const [folded, setFolded] = useState(readSidebarFolded);
-  const [drawer, setDrawer] = useState(false);
+  const [drawer, setDrawer] = useState<false | 'menu' | 'filter'>(false);
+  const [filterRequest, setFilterRequest] = useState(0);
+  const sidebarFilter = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (takeMainHeadingFocusRequest()) focusMainHeading();
   }, []);
+
+  /* LE RACCOURCI VERS « ALLER À… » (#12670) — dès `md`, le menu latéral (déplié s'il
+     était en rail) reçoit le focus dans son champ ; sur un téléphone, le tiroir s'ouvre
+     dessus, ou s'y place s'il est déjà ouvert. */
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (!isMenuShortcut(event)) return;
+      event.preventDefault();
+      if (sidebarShown()) {
+        setFolded((replie) => {
+          if (replie) writeSidebarFolded(false);
+          return false;
+        });
+        setFilterRequest((demande) => demande + 1);
+        return;
+      }
+      const ouvert = document.querySelector<HTMLInputElement>('[data-admin-drawer] [data-admin-nav-filter]');
+      if (ouvert !== null) ouvert.focus();
+      else setDrawer('filter');
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  useEffect(() => {
+    if (filterRequest > 0) sidebarFilter.current?.focus();
+  }, [filterRequest]);
 
   const basculer = () => {
     const suivant = !folded;
@@ -492,26 +587,27 @@ export function AdminScreenFrame({
             <Glyph name="caretLeft" size={16} style={{ transform: folded ? 'scaleX(-1)' : 'none' }} />
           </button>
         </div>
-        <AdminNav language={language} sections={sections} space={space} active={active} folded={folded} />
+        <AdminNav language={language} sections={sections} space={space} active={active} folded={folded} filterRef={sidebarFilter} />
         <BackToApp language={language} folded={folded} />
       </aside>
 
-      {drawer ? (
+      {drawer === false ? null : (
         <AdminDrawer
           language={language}
           sections={sections}
           space={space}
           active={active}
           onClose={() => setDrawer(false)}
+          focusFilter={drawer === 'filter'}
         />
-      ) : null}
+      )}
 
       <div className="flex min-w-0 flex-1 flex-col">
         <AdminHeader
           language={language}
           title={title}
           back={back}
-          onMenu={() => setDrawer(true)}
+          onMenu={() => setDrawer('menu')}
           heading={heading}
           {...(backLabel === undefined ? {} : { backLabel })}
           {...(actions === undefined ? {} : { actions })}

@@ -6,6 +6,7 @@
  * - Server: Server-encrypted with translation support
  * - Hybrid: Double encryption (E2EE + server layer) - translation supported
  */
+import type { E2EERelayRequest } from './e2ee-directory.js';
 
 export type EncryptionMode = 'e2ee' | 'server' | 'hybrid' | null;
 export type EncryptionProtocol = 'signal_v3' | 'aes-256-gcm';
@@ -46,6 +47,11 @@ export type EncryptionMetadata = {
 export interface EncryptedPayload {
   ciphertext: string;      // Base64 encoded encrypted content
   metadata: EncryptionMetadata;
+  /**
+   * Envoi libsignal (#3706) : enveloppes par appareil et appareil émetteur.
+   * Retiré par la passerelle AVANT toute persistance de la charge.
+   */
+  relay?: E2EERelayRequest;
 }
 
 /**

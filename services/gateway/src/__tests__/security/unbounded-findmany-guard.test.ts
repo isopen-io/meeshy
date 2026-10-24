@@ -320,7 +320,6 @@ const FROZEN_UNBOUNDED_FINDMANY: Readonly<Record<string, number>> = {
   'posts/postConsumptionGate.ts': 1,
   'posts/nearby.ts': 1,
   'push-tokens.ts': 1,
-  'signal-protocol.ts': 1,
   'sync/membership.ts': 1,
   'user-deletions.ts': 2,
   // #10643 — les statistiques d'un profil lisent les identités du compte

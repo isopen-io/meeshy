@@ -3,6 +3,7 @@
  * Point d'entrée pour configurer Socket.IO sur le serveur Fastify
  */
 
+import { setE2EEEnvelopeIOProvider } from '../services/e2ee/envelope-delivery';
 import { FastifyInstance } from 'fastify';
 import { Server as HTTPServer } from 'http';
 import { MeeshySocketIOManager } from './MeeshySocketIOManager';
@@ -57,6 +58,8 @@ export class MeeshySocketIOHandler {
     await this.socketIOManager.initialize();
     // Les crédits d'engagement annoncent « N (M) 🔥 » au crédité (#8906).
     setEngagementEmitIOProvider(() => this.socketIOManager?.getIO());
+    // Les enveloppes libsignal partent vers la room de LEUR appareil (#3706).
+    setE2EEEnvelopeIOProvider(() => this.socketIOManager?.getIO());
     // L'état du jeu se propage aux appareils du compte après chaque écriture (#10900).
     setGameStateBroadcast(
       new GameStateBroadcast({

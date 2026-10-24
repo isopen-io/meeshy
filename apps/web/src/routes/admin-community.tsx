@@ -11,7 +11,7 @@ import { AdminSectionScreen } from '@/components/admin/section-screen';
 import { AdminDeniedInline, AdminEmptyState, AdminErrorState, AdminInlineNotice, AdminOfflineNotice, AdminSkeleton } from '@/components/admin/states';
 import { AdminSummaryCard, AdminSummaryGrid } from '@/components/admin/summary-card';
 import { BRAND, EDGE, INK2 } from '@/components/admin/tone';
-import { adminGroupOf, type AdminTarget } from '@/lib/admin/admin-routes';
+import type { AdminTarget } from '@/lib/admin/admin-routes';
 import { withoutMembersList } from '@/lib/admin/community-members-list';
 import {
   ADMIN_COMMUNITY_SECTION_GLYPHS,
@@ -283,11 +283,7 @@ export function AdminCommunityPanel({
     <AdminPageHeader
       language={language}
       title={name ?? section}
-      crumbs={[
-        { label: translateAdmin(language, `admin.group.${adminGroupOf('communities')}`) },
-        { label: section, target: { kind: 'section', section: 'communities' } },
-        ...(name === null ? [] : [{ label: name }]),
-      ]}
+      place={{ section: 'communities', fiche: true }}
     />
   );
 
