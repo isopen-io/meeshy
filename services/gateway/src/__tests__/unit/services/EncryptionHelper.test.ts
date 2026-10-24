@@ -198,16 +198,11 @@ describe('EncryptionHelper', () => {
       expect(decrypted.toString('utf8')).toBe(plaintext);
     });
 
-    it('should return unencrypted content when encryption key is not available', async () => {
+    it('#11381 — refuse de ranger une traduction en clair quand la clé de la conversation manque (fail-closed)', async () => {
       mockPrisma.conversation.findUnique.mockResolvedValue(null);
 
-      const result = await encryptionHelper.encryptTranslation(plaintext, conversationId);
-
-      expect(result.isEncrypted).toBe(false);
-      expect(result.encryptionKeyId).toBeNull();
-      expect(result.encryptionIv).toBeNull();
-      expect(result.encryptionAuthTag).toBeNull();
-      expect(result.encryptedContent).toBe(plaintext);
+      await expect(encryptionHelper.encryptTranslation(plaintext, conversationId))
+        .rejects.toMatchObject({ code: 'SERVER_AT_REST_UNAVAILABLE' });
     });
 
     it('should handle empty plaintext', async () => {
