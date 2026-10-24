@@ -99,7 +99,7 @@ final class MessageOverlayPreviewKindTests: XCTestCase {
 }
 
 /// **L'aperçu d'appui long LIT les vocaux et les vidéos, dans les TROIS modes**
-/// (#11339, décision porteur du 2026-10-24, option B).
+/// (#11339, décision porteur, option B).
 ///
 /// Seule la zone de lecture d'une pièce se touche ; le reste de l'aperçu garde
 /// le glissement du cluster. La loi ne dépend PAS du mode de lecture : Bulles,

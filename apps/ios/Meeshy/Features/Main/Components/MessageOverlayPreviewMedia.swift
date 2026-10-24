@@ -348,7 +348,7 @@ struct ProtectedFormChip: View {
 // MARK: - Ce que l'aperçu laisse toucher (#11339)
 
 /// **L'aperçu d'appui long LIT les vocaux et les vidéos, dans les TROIS modes**
-/// (#11339, décision porteur du 2026-10-24, option B).
+/// (#11339, décision porteur, option B).
 ///
 /// L'aperçu reste une image de la cellule : seul le BOUTON de lecture / pause
 /// d'une pièce lisible se touche (celui du vocal, celui de la vidéo) ; partout ailleurs,
