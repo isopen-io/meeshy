@@ -19,7 +19,7 @@ import {
 } from '@/lib/admin/conversation-list';
 import { conversationRefOf, conversationStateOf, participantName } from '@/lib/admin/conversation-model';
 import { interpretConversationType } from '@/lib/admin/interpret/enums';
-import { personInitials } from '@/lib/admin/interpret/labels';
+import { initialsOf } from '@/lib/view/initials';
 import { formatCount } from '@/lib/admin/interpret/numbers';
 import { adminMomentOf } from '@/lib/admin/interpret/time';
 import { ADMIN_PERIODS } from '@/lib/admin/period';
@@ -84,7 +84,7 @@ function MemberStack({ language, participants }: { readonly language: AdminLangu
         return (
           <Avatar
             key={participant.id}
-            initials={personInitials(name)}
+            initials={initialsOf(name)}
             color="var(--color-ios-brand)"
             size={24}
             name={name}

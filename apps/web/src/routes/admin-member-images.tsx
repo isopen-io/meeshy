@@ -3,7 +3,8 @@ import { useEffect, useRef, useState } from 'react';
 
 import { AdminButton } from '@/components/admin/button';
 import { Avatar } from '@/components/avatar';
-import { personInitials, personLabel } from '@/lib/admin/interpret/labels';
+import { personLabel } from '@/lib/admin/interpret/labels';
+import { initialsOf } from '@/lib/view/initials';
 import type { AdminDeps } from '@/lib/api/admin';
 import { adminUserDetailQueryKey, type AdminUserDetail } from '@/lib/api/admin-user-detail';
 import { apiDeps } from '@/lib/api/deps';
@@ -72,7 +73,7 @@ export function AdminMemberImagesSection({
         <Banniere url={banniere ?? ''} language={language} />
         <div className="absolute bottom-0 translate-y-1/2 rounded-full p-1" style={{ insetInlineStart: 16, backgroundColor: 'var(--color-ios-surface)' }}>
           <Avatar
-            initials={personInitials(personLabel(membre, language))}
+            initials={initialsOf(personLabel(membre, language))}
             color="var(--color-ios-brand)"
             size={88}
             name={translateAdmin(language, 'admin.gallery.avatar')}

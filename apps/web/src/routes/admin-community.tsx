@@ -22,7 +22,7 @@ import {
 } from '@/lib/admin/community-summaries';
 import { communityStateOf, communityVisibilityOf } from '@/lib/admin/community-state';
 import { interpretConversationType, interpretParticipantRole } from '@/lib/admin/interpret/enums';
-import { personInitials } from '@/lib/admin/interpret/labels';
+import { initialsOf } from '@/lib/view/initials';
 import { formatCount } from '@/lib/admin/interpret/numbers';
 import { adminMomentOf } from '@/lib/admin/interpret/time';
 import { communityRef, conversationRef, personRef } from '@/lib/admin/post-entities';
@@ -359,7 +359,7 @@ export function AdminCommunityPanel({
               language={language}
               title={ref.label}
               {...(ref.secondary === null || ref.secondary === undefined ? {} : { secondary: ref.secondary })}
-              avatar={{ initials: personInitials(ref.label), color: 'var(--color-ios-brand)', ...(photo === undefined ? {} : { src: photo }) }}
+              avatar={{ initials: initialsOf(ref.label), color: 'var(--color-ios-brand)', ...(photo === undefined ? {} : { src: photo }) }}
               badges={
                 <>
                   <AdminInterpretedBadge value={communityVisibilityOf(fiche.isPrivate, language)} />

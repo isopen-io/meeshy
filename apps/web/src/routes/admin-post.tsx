@@ -13,7 +13,8 @@ import { AdminSummaryCard, AdminSummaryGrid } from '@/components/admin/summary-c
 import { BRAND, INK2 } from '@/components/admin/tone';
 import { adminGroupOf } from '@/lib/admin/admin-routes';
 import { interpretPostState, interpretPostType, interpretPostVisibility } from '@/lib/admin/interpret/enums';
-import { personInitials, personLabel, personSecondary, postLabel } from '@/lib/admin/interpret/labels';
+import { personLabel, personSecondary, postLabel } from '@/lib/admin/interpret/labels';
+import { initialsOf } from '@/lib/view/initials';
 import { formatCount } from '@/lib/admin/interpret/numbers';
 import { adminMomentOf } from '@/lib/admin/interpret/time';
 import { communityRef, personRef, postRef } from '@/lib/admin/post-entities';
@@ -319,7 +320,7 @@ export function AdminPostPanel({
             {...(secondary === null ? {} : { secondary })}
             {...(fiche.author === null
               ? { glyph: 'newspaper' as const }
-              : { avatar: { initials: personInitials(personLabel(fiche.author, language)), color: 'var(--color-ios-brand)', ...(photo === undefined ? {} : { src: photo }) } })}
+              : { avatar: { initials: initialsOf(personLabel(fiche.author, language)), color: 'var(--color-ios-brand)', ...(photo === undefined ? {} : { src: photo }) } })}
             badges={
               <>
                 <AdminInterpretedBadge value={interpretPostType(fiche.type, language)} />

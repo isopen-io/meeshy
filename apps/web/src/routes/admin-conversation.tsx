@@ -20,7 +20,7 @@ import {
   type AdminConversationSection,
 } from '@/lib/admin/conversation-summaries';
 import { interpretConversationType, interpretEncryption } from '@/lib/admin/interpret/enums';
-import { personInitials } from '@/lib/admin/interpret/labels';
+import { initialsOf } from '@/lib/view/initials';
 import { formatCount } from '@/lib/admin/interpret/numbers';
 import { useAdminOpen } from '@/lib/admin/use-admin-open';
 import { useAdminReach } from '@/lib/admin/use-admin-reach';
@@ -317,7 +317,7 @@ export function AdminConversationPanel({ language, conversationId, deps = apiDep
             secondary={fiche.community === null ? typeLabel : `${typeLabel} · ${fiche.community.name}`}
             {...(fiche.avatar === null
               ? { glyph: 'chats' as const }
-              : { avatar: { initials: personInitials(name), color: 'var(--color-ios-brand)', src: fiche.avatar } })}
+              : { avatar: { initials: initialsOf(name), color: 'var(--color-ios-brand)', src: fiche.avatar } })}
             badges={
               <>
                 <AdminInterpretedBadge value={state} />
