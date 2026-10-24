@@ -56,7 +56,7 @@ public enum class PushChannelCategory {
             "report_resolved", "content_removed",
         )
 
-        public fun of(rawType: String?): PushChannelCategory = when (rawType) {
+        public fun of(rawType: String?): PushChannelCategory = when (rawType.orEmpty()) {
             in SOCIAL_TYPES -> SOCIAL
             in SYSTEM_TYPES -> SYSTEM
             else -> MESSAGES
