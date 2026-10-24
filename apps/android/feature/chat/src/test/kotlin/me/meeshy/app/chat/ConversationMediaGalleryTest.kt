@@ -21,6 +21,7 @@ class ConversationMediaGalleryTest {
         isViewOnce: Boolean = false,
         isViewOnceOpenedByMe: Boolean = false,
         isBlurred: Boolean = false,
+        exitOffer: me.meeshy.sdk.model.MessageExitOffer = me.meeshy.sdk.model.MessageExitOffer.Unrestricted,
     ) = BubbleContent(
         messageId = id,
         text = text,
@@ -36,6 +37,7 @@ class ConversationMediaGalleryTest {
         isViewOnce = isViewOnce,
         isViewOnceOpenedByMe = isViewOnceOpenedByMe,
         isBlurred = isBlurred,
+        exitOffer = exitOffer,
         blurReveal = if (isViewOnce || isBlurred) BubbleBlurRevealSpec(isViewOnce = isViewOnce) else null,
     )
 
@@ -681,6 +683,23 @@ class ConversationMediaGalleryTest {
         )
 
         assertThat(gallery.imageUrls).containsExactly("u1")
+    }
+
+    @Test
+    fun a_flame_photo_is_in_the_series_but_the_exit_offer_makes_it_not_exportable() {
+        val flame = me.meeshy.sdk.model.MessageExitOffer(
+            me.meeshy.sdk.model.ContentExitLaw.timedFlame(60), holdsBlur = false, isEncrypted = false,
+        )
+        val gallery = ConversationMediaGallery.of(
+            listOf(
+                bubble("m1", images = listOf(img("a1", "https://x/1.jpg"))),
+                bubble("m2", images = listOf(img("a2", "https://x/2.jpg")), exitOffer = flame),
+            ),
+            messageId = "m1",
+            imageIndex = 0,
+        )
+
+        assertThat(gallery.exportable).containsExactly(true, false).inOrder()
     }
 
     @Test

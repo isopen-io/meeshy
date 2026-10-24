@@ -1,25 +1,20 @@
 package me.meeshy.app.navigation.graph
 
-import androidx.compose.runtime.remember
-import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
-import androidx.navigation.navDeepLink
 import me.meeshy.app.contacts.ContactsScreen
 import me.meeshy.app.feed.UserPostsScreen
-import me.meeshy.app.navigation.ProfileRouteGateViewModel
 import me.meeshy.app.navigation.ProfileRoutes
 import me.meeshy.app.navigation.Routes
 import me.meeshy.app.notifications.NotificationsScreen
 import me.meeshy.app.profile.OwnProfileScreen
-import me.meeshy.app.profile.PublicProfileScreen
 import me.meeshy.app.profile.ReportUserScreen
 import me.meeshy.app.profile.ReportUserViewModel
 
-/** Contacts, notifications, profils et signalement. */
+/** Contacts, notifications, ma page et signalement ; la fiche d'un tiers vit dans [ProfileNavGraph]. */
 internal fun NavGraphBuilder.socialNavGraph(
     navController: NavHostController,
 ) {
@@ -58,36 +53,6 @@ internal fun NavGraphBuilder.socialNavGraph(
             onViewPosts = { userId -> navController.navigate(Routes.userPosts(userId)) },
             onOpenFriendRequests = { navController.navigate(FriendRequestsDestinations.ROUTE) },
         )
-    }
-    composable(
-        route = Routes.PROFILE_USER,
-        arguments = listOf(navArgument("userId") { type = NavType.StringType }),
-        deepLinks = listOf(
-            navDeepLink { uriPattern = Routes.PROFILE_DEEP_LINK },
-            navDeepLink { uriPattern = Routes.PROFILE_SHARE_APP_DEEP_LINK },
-            navDeepLink { uriPattern = Routes.PROFILE_SHARE_WEB_DEEP_LINK },
-        ),
-    ) { entry ->
-        // Regle unique : une cible qui me designe (id ou pseudo) ouvre MA page.
-        val gate: ProfileRouteGateViewModel = hiltViewModel()
-        val target = entry.arguments?.getString("userId").orEmpty()
-        val isSelf = remember(target) { gate.resolvesToSelf(target) }
-        if (isSelf) {
-            OwnProfileScreen(
-                onBack = { navController.popBackStack() },
-                onViewPosts = { userId -> navController.navigate(Routes.userPosts(userId)) },
-                onOpenFriendRequests = { navController.navigate(FriendRequestsDestinations.ROUTE) },
-            )
-        } else {
-            PublicProfileScreen(
-                onBack = { navController.popBackStack() },
-                onReport = { userId, username ->
-                    navController.navigate(Routes.reportUser(userId, username))
-                },
-                onViewPosts = { userId -> navController.navigate(Routes.userPosts(userId)) },
-                onOpenConversation = { conversationId -> navController.navigate(Routes.chat(conversationId)) },
-            )
-        }
     }
     composable(
         route = Routes.USER_POSTS,

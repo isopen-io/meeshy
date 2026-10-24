@@ -1,5 +1,7 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="common_close">Close</string>
+    <string name="common_retry">Retry</string>
     <string name="profile_action_accept_connection">Accept connection</string>
     <string name="profile_action_block_user">Block this user</string>
     <string name="profile_action_cancel_request">Cancel request</string>
@@ -16,6 +18,7 @@
     <string name="profile_bio_placeholder">Tell us about yourself...</string>
     <string name="profile_blocked_by_me">You have blocked this user</string>
     <string name="profile_blocked_unblock">Unblock</string>
+    <string name="profile_close_hint">Closes the profile</string>
     <string name="profile_connection_context_received">%s wants to connect with you. Accept to exchange messages.</string>
     <string name="profile_connection_context_sent">You sent a connection request to %s. Waiting for their reply.</string>
     <string name="profile_decor_subtitle">Visible to everyone on your profile</string>
@@ -37,6 +40,7 @@
     <string name="profile_language_regional">Regional language</string>
     <string name="profile_language_unset">Not set</string>
     <string name="profile_last_name_label">Last name</string>
+    <string name="profile_loadFailed_message">This profile couldn\'t be loaded.</string>
     <string name="profile_not_verified">Not verified</string>
     <string name="profile_open_conversation_error">Unable to open the conversation</string>
     <string name="profile_phone">Phone</string>
@@ -66,6 +70,9 @@
     <string name="profile_stats_title">Statistics</string>
     <string name="profile_status_connected">Connected</string>
     <string name="profile_system_language_label">Primary language</string>
+    <string name="profile_tab_conversations">Conversations</string>
+    <string name="profile_tab_details">Details</string>
+    <string name="profile_tab_posts">Posts</string>
     <string name="profile_title">Profile</string>
     <string name="profile_toast_block_failed">Unable to block</string>
     <string name="profile_toast_unblock_failed">Unable to unblock</string>

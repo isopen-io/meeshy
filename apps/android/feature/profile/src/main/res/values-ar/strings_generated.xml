@@ -1,5 +1,7 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="common_close">إغلاق</string>
+    <string name="common_retry">إعادة المحاولة</string>
     <string name="profile_action_accept_connection">قبول الاتصال</string>
     <string name="profile_action_block_user">حظر هذا المستخدم</string>
     <string name="profile_action_cancel_request">إلغاء الطلب</string>
@@ -16,6 +18,7 @@
     <string name="profile_bio_placeholder">عرّفنا بنفسك...</string>
     <string name="profile_blocked_by_me">لقد حظرت هذا المستخدم</string>
     <string name="profile_blocked_unblock">إلغاء الحظر</string>
+    <string name="profile_close_hint">يغلق الملف الشخصي</string>
     <string name="profile_connection_context_received">يرغب %s في التواصل معك. اقبل لتبادل الرسائل.</string>
     <string name="profile_connection_context_sent">أرسلت طلب اتصال إلى %s. في انتظار ردّه.</string>
     <string name="profile_decor_subtitle">ظاهران للجميع على ملفك الشخصي</string>
@@ -37,6 +40,7 @@
     <string name="profile_language_regional">اللغة الإقليمية</string>
     <string name="profile_language_unset">غير محدّد</string>
     <string name="profile_last_name_label">اسم العائلة</string>
+    <string name="profile_loadFailed_message">تعذّر تحميل هذا الملف الشخصي.</string>
     <string name="profile_not_verified">غير موثّق</string>
     <string name="profile_open_conversation_error">تعذر فتح المحادثة</string>
     <string name="profile_phone">الهاتف</string>
@@ -66,6 +70,9 @@
     <string name="profile_stats_title">الإحصائيات</string>
     <string name="profile_status_connected">متصلون</string>
     <string name="profile_system_language_label">اللغة الأساسية</string>
+    <string name="profile_tab_conversations">المحادثات</string>
+    <string name="profile_tab_details">التفاصيل</string>
+    <string name="profile_tab_posts">المنشورات</string>
     <string name="profile_title">الملف الشخصي</string>
     <string name="profile_toast_block_failed">تعذّر الحظر</string>
     <string name="profile_toast_unblock_failed">تعذّر إلغاء الحظر</string>

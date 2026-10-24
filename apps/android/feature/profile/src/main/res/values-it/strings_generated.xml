@@ -1,5 +1,7 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="common_close">Chiudi</string>
+    <string name="common_retry">Riprova</string>
     <string name="profile_action_accept_connection">Accetta la connessione</string>
     <string name="profile_action_block_user">Blocca questo utente</string>
     <string name="profile_action_cancel_request">Annulla la richiesta</string>
@@ -16,6 +18,7 @@
     <string name="profile_bio_placeholder">Raccontaci di te...</string>
     <string name="profile_blocked_by_me">Hai bloccato questo utente</string>
     <string name="profile_blocked_unblock">Sblocca</string>
+    <string name="profile_close_hint">Chiude il profilo</string>
     <string name="profile_connection_context_received">%s desidera mettersi in contatto con te. Accetta per scambiare messaggi.</string>
     <string name="profile_connection_context_sent">Hai inviato una richiesta di connessione a %s. In attesa della sua risposta.</string>
     <string name="profile_decor_subtitle">Visibili a tutti sul tuo profilo</string>
@@ -37,6 +40,7 @@
     <string name="profile_language_regional">Lingua regionale</string>
     <string name="profile_language_unset">Non impostato</string>
     <string name="profile_last_name_label">Cognome</string>
+    <string name="profile_loadFailed_message">Impossibile caricare questo profilo.</string>
     <string name="profile_not_verified">Non verificato</string>
     <string name="profile_open_conversation_error">Impossibile aprire la conversazione</string>
     <string name="profile_phone">Telefono</string>
@@ -66,6 +70,9 @@
     <string name="profile_stats_title">Statistiche</string>
     <string name="profile_status_connected">Collegati</string>
     <string name="profile_system_language_label">Lingua principale</string>
+    <string name="profile_tab_conversations">Conversazioni</string>
+    <string name="profile_tab_details">Dettagli</string>
+    <string name="profile_tab_posts">Post</string>
     <string name="profile_title">Profilo</string>
     <string name="profile_toast_block_failed">Impossibile bloccare</string>
     <string name="profile_toast_unblock_failed">Impossibile sbloccare</string>
