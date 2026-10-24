@@ -62,7 +62,7 @@
     "apps/ios/Meeshy/Features/Main/Services/BackgroundTransitionCoordinator.swift::BackgroundTransitionCoordinator.enterBackground": 113,
     "apps/ios/Meeshy/Features/Main/Services/BackgroundTransitionCoordinator.swift::BackgroundTransitionCoordinator.resumeFromBackground": 109,
     "apps/ios/Meeshy/Features/Main/Services/CallFrames/CallFrameRenderer+Decor.swift::CallFrameRenderer.paintBorder": 91,
-    "apps/ios/Meeshy/Features/Main/Services/CallFrames/CallFrameRenderer+Decor.swift::CallFrameRenderer.paintPattern": 147,
+    "apps/ios/Meeshy/Features/Main/Services/CallFrames/CallFrameRenderer+Decor.swift::CallFrameRenderer.paintPattern": 145,
     "apps/ios/Meeshy/Features/Main/Services/CallFrames/CallFrameRenderer+Ornaments.swift::CallFrameRenderer.paintOrnament": 265,
     "apps/ios/Meeshy/Features/Main/Services/CallManager+Answer.swift::CallManager.answerCall": 94,
     "apps/ios/Meeshy/Features/Main/Services/CallManager+Answer.swift::CallManager.answerCallReady": 82,

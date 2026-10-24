@@ -1,0 +1,11 @@
+{
+  "moods": [
+    { "mood": "signature", "featured": ["signature.aurore", "signature.prisme", "signature.bulle"] },
+    { "mood": "jovial", "featured": ["jovial.fete", "jovial.ballons", "jovial.grimaces"] },
+    { "mood": "feerique", "featured": ["feerique.lucioles", "feerique.clair-de-lune", "feerique.coeur-de-rose"] },
+    { "mood": "futuriste", "featured": ["futuriste.hologramme", "futuriste.hud", "futuriste.orbite"] },
+    { "mood": "hors-norme", "featured": ["hors-norme.pop-art", "hors-norme.collage", "hors-norme.tete-d-affiche"] },
+    { "mood": "glauque", "featured": ["glauque.vhs", "glauque.prison", "glauque.videosurveillance"] },
+    { "mood": "morbide", "featured": ["morbide.tombe", "morbide.memento", "morbide.crypte", "morbide.faire-part"] }
+  ]
+}

@@ -176,8 +176,8 @@ sdk-ui/src/main/kotlin/me/meeshy/ui/component/bubble/BubbleAudioPlayer.kt
 sdk-ui/src/main/kotlin/me/meeshy/ui/component/bubble/BubbleBlurReveal.kt
 sdk-ui/src/main/kotlin/me/meeshy/ui/component/bubble/BubbleFooterRow.kt
 sdk-ui/src/main/kotlin/me/meeshy/ui/component/bubble/BubblePinnedIndicator.kt
+sdk-ui/src/main/kotlin/me/meeshy/ui/component/bubble/BubbleStoryReplyPreview.kt
 sdk-ui/src/main/kotlin/me/meeshy/ui/component/bubble/EphemeralCountdownBadge.kt
-sdk-ui/src/main/kotlin/me/meeshy/ui/component/bubble/MessageBubble.kt
 sdk-ui/src/main/kotlin/me/meeshy/ui/component/chrome/FloatingGradientFab.kt
 sdk-ui/src/main/kotlin/me/meeshy/ui/component/chrome/MeeshyMenuFab.kt
 sdk-ui/src/main/kotlin/me/meeshy/ui/component/fullscreen/FullscreenChromeDisc.kt

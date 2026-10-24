@@ -45,8 +45,13 @@ internal fun ForwardPickerSheet(
     accentColor: Color,
     onQueryChange: (String) -> Unit,
     onForwardTo: (String) -> Unit,
+    onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    if (forward.refusal != null) {
+        ForwardRefusalCard(forward.refusal, accentColor, onDismiss, modifier.padding(bottom = MeeshySpacing.lg))
+        return
+    }
     Column(
         modifier = modifier
             .fillMaxWidth()

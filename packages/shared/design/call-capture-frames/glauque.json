@@ -13,9 +13,9 @@
         "layout": {
           "arrangement": "grid",
           "margin": 0.05,
-          "gap": 0.02,
-          "top": 0.12,
-          "bottom": 0.1
+          "gap": 0.025,
+          "top": 0.13,
+          "bottom": 0.13
         },
         "slot": {
           "shape": "rect",
@@ -24,62 +24,62 @@
         },
         "background": {
           "kind": "solid",
-          "color": "#0D0D10"
+          "color": "#0A0A10"
         },
         "pattern": {
           "kind": "scanlines",
-          "color": "#FFFFFF",
-          "opacity": 0.07
+          "color": "#000000",
+          "opacity": 0.5
         },
         "ornaments": [
           {
-            "kind": "glitch",
-            "color": "#3FE0D080",
+            "kind": "lightleak",
+            "color": "#FF3EA5",
             "density": "low",
-            "layer": "back"
+            "layer": "back",
+            "motion": "loop"
           },
           {
-            "kind": "grain",
-            "color": "#FFFFFF33",
+            "kind": "glitch",
+            "color": "#E8E8F0",
             "density": "mid",
-            "layer": "back"
+            "layer": "front",
+            "motion": "loop"
           },
           {
             "kind": "rec",
-            "color": "#D7263D",
+            "color": "#F5F5F5",
             "density": "low",
-            "layer": "front"
+            "layer": "front",
+            "motion": "loop"
+          },
+          {
+            "kind": "grain",
+            "color": "#FFFFFF",
+            "density": "low",
+            "layer": "back"
           }
         ],
         "brand": {
           "mark": "wordmark",
-          "place": "top-right",
-          "color": "#D9D4C0",
+          "place": "top-left",
+          "color": "#F5F5F5",
           "size": "s",
-          "font": "retro"
+          "font": "typewriter"
         },
         "names": {
           "show": "name",
           "style": "caption",
           "font": "typewriter",
-          "color": "#D9D4C0"
+          "color": "#E8E8F0"
         },
         "title": {
           "source": "date",
           "font": "typewriter",
-          "color": "#D9D4C0",
+          "color": "#FFB000",
           "place": "bottom",
-          "size": "m",
-          "effect": "shadow",
-          "case": "upper"
-        },
-        "subtitle": {
-          "source": "group",
-          "font": "typewriter",
-          "color": "#C8C27A",
-          "place": "bottom",
-          "size": "s",
-          "effect": "none",
+          "size": "l",
+          "effect": "glow",
           "case": "upper"
         }
       },
@@ -88,38 +88,98 @@
           "layout": {
             "arrangement": "split",
             "margin": 0.05,
-            "gap": 0.02,
+            "gap": 0.035,
             "top": 0.12,
-            "bottom": 0.1
+            "bottom": 0.14
           },
           "subtitle": {
             "source": "names",
             "font": "typewriter",
-            "color": "#C8C27A",
+            "color": "#E8E8F0",
             "place": "bottom",
             "size": "s",
-            "effect": "none",
             "case": "upper"
           }
         },
         "comite": {},
         "groupe": {
           "layout": {
-            "arrangement": "mosaic",
-            "margin": 0.05,
-            "gap": 0.015,
+            "arrangement": "grid",
+            "margin": 0.04,
+            "gap": 0.02,
             "top": 0.12,
-            "bottom": 0.1
+            "bottom": 0.14
           },
           "names": {
             "show": "name",
             "style": "plate",
             "font": "typewriter",
-            "color": "#D9D4C0",
-            "fill": "#0D0D10CC"
+            "color": "#E8E8F0",
+            "fill": "#0A0A10B3"
           }
         }
-      }
+      },
+      "styles": [
+        {
+          "id": "relief",
+          "name": "Relief",
+          "look": {
+            "background": {
+              "kind": "solid",
+              "color": "#0B0D11"
+            },
+            "slot": {
+              "shape": "rect",
+              "stroke": {
+                "color": "#E7DECB",
+                "width": 0.004
+              },
+              "tilt": "none",
+              "tone": "faded"
+            },
+            "ornaments": [
+              {
+                "kind": "glitch",
+                "color": "#AFC3D3",
+                "density": "low",
+                "layer": "front",
+                "motion": "loop"
+              },
+              {
+                "kind": "rec",
+                "color": "#FF3B30",
+                "density": "low",
+                "layer": "front",
+                "motion": "loop"
+              }
+            ],
+            "title": {
+              "source": "date",
+              "font": "typewriter",
+              "color": "#FFB000",
+              "place": "bottom",
+              "size": "l",
+              "effect": "glow",
+              "case": "upper"
+            },
+            "scene": [
+              {
+                "id": "matiere",
+                "kind": "image",
+                "depth": "back",
+                "src": "assets/call-frames/glauque_vhs_back.webp"
+              },
+              {
+                "id": "moulure",
+                "kind": "image",
+                "depth": "front",
+                "src": "assets/call-frames/glauque_vhs_front.webp",
+                "slice": 0.18
+              }
+            ]
+          }
+        }
+      ]
     },
     {
       "id": "glauque.videosurveillance",
@@ -132,140 +192,229 @@
       "base": {
         "layout": {
           "arrangement": "grid",
-          "margin": 0.04,
-          "gap": 0.008,
-          "top": 0.08,
-          "bottom": 0.06
+          "margin": 0.05,
+          "gap": 0.015,
+          "top": 0.12,
+          "bottom": 0.1
         },
         "slot": {
           "shape": "rect",
           "stroke": {
-            "color": "#2C3A28",
+            "color": "#7CFF6B",
             "width": 0.003
           },
           "tilt": "none",
           "tone": "duotone",
           "duotone": [
-            "#0A1208",
-            "#A8D08D"
+            "#021A05",
+            "#9DFF8A"
           ]
         },
         "background": {
           "kind": "solid",
-          "color": "#0C0F0B"
+          "color": "#050A05"
         },
         "pattern": {
           "kind": "scanlines",
-          "color": "#9FB88A",
-          "opacity": 0.12
+          "color": "#7CFF6B",
+          "opacity": 0.08
         },
         "border": {
-          "kind": "hairline",
-          "color": "#2C3A28",
-          "width": 0.003,
-          "inset": 0.02
+          "kind": "brackets",
+          "color": "#7CFF6B",
+          "width": 0.006,
+          "inset": 0.025
         },
         "ornaments": [
           {
             "kind": "vignette",
-            "color": "#000000B3",
+            "color": "#000000",
             "density": "mid",
             "layer": "back"
           },
           {
             "kind": "crosshair",
-            "color": "#9FB88A",
-            "density": "low",
-            "layer": "front"
+            "color": "#7CFF6B",
+            "density": "mid",
+            "layer": "front",
+            "motion": "loop"
           },
           {
             "kind": "rec",
-            "color": "#D7263D",
+            "color": "#9DFF8A",
             "density": "low",
-            "layer": "front"
+            "layer": "front",
+            "motion": "loop"
+          },
+          {
+            "kind": "scanlines",
+            "color": "#7CFF6B10",
+            "density": "low",
+            "layer": "back",
+            "motion": "loop"
           }
         ],
         "brand": {
           "mark": "logo",
-          "place": "bottom-right",
-          "color": "#9FB88A",
+          "place": "top-right",
+          "color": "#7CFF6B",
           "size": "s"
         },
         "names": {
           "show": "handle",
           "style": "plate",
           "font": "typewriter",
-          "color": "#B5E3A0",
-          "fill": "#0C0F0BD9"
+          "color": "#9DFF8A",
+          "fill": "#021A05CC"
         },
         "title": {
           "source": "date",
           "font": "typewriter",
-          "color": "#B5E3A0",
+          "color": "#9DFF8A",
           "place": "top",
-          "size": "s",
-          "effect": "none",
+          "size": "m",
+          "effect": "glow",
           "case": "upper"
         }
       },
       "variants": {
         "duo": {
           "layout": {
-            "arrangement": "column",
-            "margin": 0.04,
-            "gap": 0.01,
-            "top": 0.08,
-            "bottom": 0.06
+            "arrangement": "split",
+            "margin": 0.05,
+            "gap": 0.015,
+            "top": 0.12,
+            "bottom": 0.1
+          },
+          "subtitle": {
+            "source": "names",
+            "font": "typewriter",
+            "color": "#7CFF6B",
+            "place": "top",
+            "size": "s",
+            "case": "upper"
           }
         },
         "comite": {},
         "groupe": {
           "layout": {
-            "arrangement": "hero",
-            "margin": 0.035,
-            "gap": 0.006,
-            "top": 0.08,
-            "bottom": 0.06
+            "arrangement": "grid",
+            "margin": 0.04,
+            "gap": 0.012,
+            "top": 0.12,
+            "bottom": 0.1
           },
           "names": {
             "show": "handle",
-            "style": "badge",
+            "style": "plate",
             "font": "typewriter",
-            "color": "#B5E3A0",
-            "fill": "#0C0F0BD9"
+            "color": "#9DFF8A",
+            "fill": "#021A05CC"
           }
         },
         "tablee": {
           "layout": {
             "arrangement": "grid",
-            "margin": 0.03,
-            "gap": 0.005,
-            "top": 0.07,
-            "bottom": 0.05
+            "margin": 0.04,
+            "gap": 0.01,
+            "top": 0.11,
+            "bottom": 0.12
           },
           "names": {
             "show": "handle",
-            "style": "badge",
+            "style": "list",
             "font": "typewriter",
-            "color": "#B5E3A0",
-            "fill": "#0C0F0BD9"
+            "color": "#9DFF8A"
           },
           "ornaments": [
             {
               "kind": "vignette",
-              "color": "#000000B3",
+              "color": "#000000",
               "density": "mid",
               "layer": "back"
             },
             {
               "kind": "rec",
-              "color": "#D7263D",
+              "color": "#9DFF8A",
               "density": "low",
-              "layer": "front"
+              "layer": "front",
+              "motion": "loop"
+            },
+            {
+              "kind": "scanlines",
+              "color": "#7CFF6B10",
+              "density": "low",
+              "layer": "back",
+              "motion": "loop"
             }
           ]
         }
-      }
+      },
+      "styles": [
+        {
+          "id": "relief",
+          "name": "Relief",
+          "look": {
+            "background": {
+              "kind": "solid",
+              "color": "#061009"
+            },
+            "slot": {
+              "shape": "rect",
+              "stroke": {
+                "color": "#7CFF6B",
+                "width": 0.003
+              },
+              "tilt": "none",
+              "tone": "duotone",
+              "duotone": [
+                "#021A05",
+                "#9DFF8A"
+              ]
+            },
+            "ornaments": [
+              {
+                "kind": "crosshair",
+                "color": "#7CFF6B",
+                "density": "low",
+                "layer": "front",
+                "motion": "loop"
+              },
+              {
+                "kind": "rec",
+                "color": "#FF2A1A",
+                "density": "low",
+                "layer": "front",
+                "motion": "loop"
+              }
+            ],
+            "title": {
+              "source": "date",
+              "font": "typewriter",
+              "color": "#9DFF8A",
+              "place": "top",
+              "size": "m",
+              "effect": "glow",
+              "case": "upper"
+            },
+            "scene": [
+              {
+                "id": "matiere",
+                "kind": "image",
+                "depth": "back",
+                "src": "assets/call-frames/glauque_videosurveillance_back.webp"
+              },
+              {
+                "id": "moulure",
+                "kind": "image",
+                "depth": "front",
+                "src": "assets/call-frames/glauque_videosurveillance_front.webp",
+                "slice": 0.17
+              }
+            ]
+          }
+        }
+      ]
     },
     {
       "id": "glauque.sous-sol",
@@ -508,6 +657,225 @@
           }
         }
       }
+    },
+    {
+      "id": "glauque.prison",
+      "mood": "glauque",
+      "name": "Prison",
+      "surfaces": [
+        "capture",
+        "live"
+      ],
+      "base": {
+        "layout": {
+          "arrangement": "grid",
+          "margin": 0.06,
+          "gap": 0.03,
+          "top": 0.15,
+          "bottom": 0.12
+        },
+        "slot": {
+          "shape": "rect",
+          "stroke": {
+            "color": "#16181B",
+            "width": 0.008
+          },
+          "tilt": "none",
+          "tone": "noir"
+        },
+        "background": {
+          "kind": "linear",
+          "colors": [
+            "#C9CDD2",
+            "#A9AFB6"
+          ],
+          "angle": 0
+        },
+        "pattern": {
+          "kind": "grid",
+          "color": "#16181B",
+          "opacity": 0.3
+        },
+        "border": {
+          "kind": "brackets",
+          "color": "#16181B",
+          "width": 0.008,
+          "inset": 0.03
+        },
+        "ornaments": [
+          {
+            "kind": "lightleak",
+            "color": "#FFFFFF",
+            "density": "low",
+            "layer": "back",
+            "motion": "loop"
+          },
+          {
+            "kind": "scanlines",
+            "color": "#16181B1A",
+            "density": "low",
+            "layer": "front",
+            "motion": "loop"
+          },
+          {
+            "kind": "vignette",
+            "color": "#0B0C0E",
+            "density": "mid",
+            "layer": "back"
+          }
+        ],
+        "brand": {
+          "mark": "wordmark",
+          "place": "bottom",
+          "color": "#FF7A1A",
+          "size": "s",
+          "font": "typewriter"
+        },
+        "names": {
+          "show": "name",
+          "style": "plate",
+          "font": "typewriter",
+          "color": "#111111",
+          "fill": "#FF7A1A"
+        },
+        "title": {
+          "source": "group",
+          "font": "poster",
+          "color": "#16181B",
+          "place": "top",
+          "size": "l",
+          "effect": "none",
+          "case": "upper"
+        },
+        "subtitle": {
+          "source": "date",
+          "font": "typewriter",
+          "color": "#16181B",
+          "place": "top",
+          "size": "s",
+          "case": "upper"
+        }
+      },
+      "variants": {
+        "duo": {
+          "layout": {
+            "arrangement": "split",
+            "margin": 0.07,
+            "gap": 0.035,
+            "top": 0.15,
+            "bottom": 0.1
+          },
+          "title": {
+            "source": "names",
+            "font": "poster",
+            "color": "#16181B",
+            "place": "top",
+            "size": "l",
+            "effect": "none",
+            "case": "upper"
+          }
+        },
+        "comite": {},
+        "groupe": {
+          "layout": {
+            "arrangement": "grid",
+            "margin": 0.05,
+            "gap": 0.025,
+            "top": 0.15,
+            "bottom": 0.1
+          }
+        },
+        "tablee": {
+          "layout": {
+            "arrangement": "grid",
+            "margin": 0.05,
+            "gap": 0.02,
+            "top": 0.14,
+            "bottom": 0.12
+          },
+          "names": {
+            "show": "name",
+            "style": "list",
+            "font": "typewriter",
+            "color": "#16181B"
+          }
+        }
+      },
+      "styles": [
+        {
+          "id": "relief",
+          "name": "Relief",
+          "look": {
+            "background": {
+              "kind": "linear",
+              "colors": [
+                "#9EA2A6",
+                "#53585E"
+              ],
+              "angle": 0
+            },
+            "slot": {
+              "shape": "rect",
+              "stroke": {
+                "color": "#2E3338",
+                "width": 0.01
+              },
+              "double": true,
+              "shadow": true,
+              "tilt": "none",
+              "tone": "noir"
+            },
+            "ornaments": [
+              {
+                "kind": "scanlines",
+                "color": "#16181B1A",
+                "density": "low",
+                "layer": "front",
+                "motion": "loop"
+              },
+              {
+                "kind": "vignette",
+                "color": "#0B0C0E",
+                "density": "mid",
+                "layer": "back"
+              }
+            ],
+            "title": {
+              "source": "group",
+              "font": "poster",
+              "color": "#F4F4F2",
+              "place": "top",
+              "size": "l",
+              "effect": "shadow",
+              "case": "upper"
+            },
+            "subtitle": {
+              "source": "date",
+              "font": "typewriter",
+              "color": "#F4F4F2",
+              "place": "top",
+              "size": "s",
+              "effect": "shadow",
+              "case": "upper"
+            },
+            "scene": [
+              {
+                "id": "matiere",
+                "kind": "image",
+                "depth": "back",
+                "src": "assets/call-frames/glauque_prison_back.webp"
+              },
+              {
+                "id": "moulure",
+                "kind": "image",
+                "depth": "front",
+                "src": "assets/call-frames/glauque_prison_front.webp",
+                "slice": 0.17
+              }
+            ]
+          }
+        }
+      ]
     }
   ]
 }

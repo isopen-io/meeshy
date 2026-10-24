@@ -41,7 +41,7 @@ data class AvatarBannerUploadUiState(
  * generalised to a banner). Kept a dedicated ViewModel hosted inside the profile
  * edit form so the upload flow stays isolated and fully testable; the confirmed
  * identity re-paints every surface via [SessionRepository.currentUser], which
- * [ProfileViewModel] already observes.
+ * [OwnProfileViewModel] already observes.
  *
  * The flow: validate the pick (pure [ImageUploadValidator]) → reject with a typed
  * [ImageUploadError] without touching the network → upload the bytes

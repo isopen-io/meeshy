@@ -95,13 +95,25 @@ const CONTAINERS = {
   ],
 };
 
-function depsOf(trigger: () => ApiResult<unknown> = () => ({ ok: true, data: { requestId: 'r2', operation: 'backup', status: 'queued', queuedAt: NOW.toISOString() } })) {
+/** La fenêtre du nettoyage telle que la passerelle la sert (#11452) ; STATUS, lui, vient d'une passerelle qui ne la connaît pas. */
+const PRUNE_WINDOW = { timeZone: 'Europe/Paris', startHour: 2, endHour: 6 } as const;
+const WINDOW_OPEN = { ...STATUS, windows: { backup: null, 'image-prune': { ...PRUNE_WINDOW, open: true } } };
+const WINDOW_CLOSED = {
+  ...STATUS,
+  availableAt: { ...STATUS.availableAt, 'image-prune': '2026-10-13T00:00:00.000Z' },
+  windows: { backup: null, 'image-prune': { ...PRUNE_WINDOW, open: false } },
+};
+
+function depsOf(
+  trigger: () => ApiResult<unknown> = () => ({ ok: true, data: { requestId: 'r2', operation: 'backup', status: 'queued', queuedAt: NOW.toISOString() } }),
+  status: unknown = STATUS,
+) {
   const calls: HttpRequest[] = [];
   const transport: AdminDeps['transport'] = Object.assign(async () => ({ ok: false as const, status: 0, error: 'jamais appelé' }), {
     request: async <T,>(req: HttpRequest): Promise<ApiResult<T>> => {
       calls.push(req);
       if (req.method === 'POST') return trigger() as ApiResult<T>;
-      if (req.path.includes('/ops/status')) return { ok: true, data: STATUS } as ApiResult<T>;
+      if (req.path.includes('/ops/status')) return { ok: true, data: status } as ApiResult<T>;
       if (req.path.includes('/ops/containers')) return { ok: true, data: CONTAINERS } as ApiResult<T>;
       return { ok: true, data: SNAPSHOT } as ApiResult<T>;
     },
@@ -111,9 +123,9 @@ function depsOf(trigger: () => ApiResult<unknown> = () => ({ ok: true, data: { r
 
 async function open(
   identity = adminIdentityFixture({ role: 'BIGBOSS' }),
-  options: { readonly liveSource?: LiveSource | null; readonly trigger?: () => ApiResult<unknown>; readonly now?: () => Date; readonly language?: 'fr' | 'en' } = {},
+  options: { readonly liveSource?: LiveSource | null; readonly trigger?: () => ApiResult<unknown>; readonly now?: () => Date; readonly language?: 'fr' | 'en'; readonly status?: unknown } = {},
 ) {
-  const { deps, calls } = depsOf(options.trigger);
+  const { deps, calls } = depsOf(options.trigger, options.status);
   const host = await mount(<AdminOperationsPanel language={options.language ?? 'fr'} deps={deps} liveSource={options.liveSource ?? null} now={options.now ?? (() => NOW)} />, identity);
   for (let attempt = 0; attempt < 20 && host.querySelector('[data-admin-ops-operation]') === null; attempt += 1) await mounter.settle();
   return { host, calls };
@@ -257,6 +269,48 @@ describe('la sauvegarde et la purge', () => {
     const body = document.querySelector('[data-admin-ops-confirm="image-prune"]')?.textContent ?? '';
     expect(body).toContain('cache de construction');
     expect(body).toContain('volumes ne sont pas touchés');
+  });
+});
+
+describe('le nettoyage aux heures creuses seulement : de 2 h à 6 h, heure de Paris (#11452)', () => {
+  const prune = (host: ParentNode) => host.querySelector('[data-admin-ops-operation="image-prune"]');
+  const trigger = (host: ParentNode) => host.querySelector<HTMLButtonElement>('[data-admin-ops-trigger="image-prune"]');
+
+  test('la carte dit la fenêtre servie, en mots ; la sauvegarde n’en a pas ; fenêtre ouverte, le bouton s’offre', async () => {
+    const { host } = await open(undefined, { status: WINDOW_OPEN });
+    expect(prune(host)?.querySelector('[data-admin-ops-window]')?.textContent).toBe('Possible seulement de 2 h à 6 h, heure de Paris.');
+    expect(host.querySelector('[data-admin-ops-operation="backup"] [data-admin-ops-window]')).toBeNull();
+    expect(prune(host)?.querySelector('[data-admin-ops-window-closed]')).toBeNull();
+    expect(trigger(host)?.disabled).toBe(false);
+  });
+
+  test('hors fenêtre : la prochaine ouverture se dit, le bouton est indisponible, et ce n’est pas le délai qui parle', async () => {
+    const { host } = await open(undefined, { status: WINDOW_CLOSED });
+    expect(prune(host)?.querySelector('[data-admin-ops-window-closed]')?.textContent).toBe('Hors des heures creuses : prochaine ouverture dans 14 heures');
+    expect(prune(host)?.querySelector('[data-admin-ops-cooldown]')).toBeNull();
+    expect(trigger(host)?.disabled).toBe(true);
+  });
+
+  test('en anglais aussi', async () => {
+    const { host } = await open(undefined, { status: WINDOW_CLOSED, language: 'en' });
+    expect(prune(host)?.querySelector('[data-admin-ops-window]')?.textContent).toBe('Only possible from 2:00 to 6:00, Paris time.');
+    expect(prune(host)?.querySelector('[data-admin-ops-window-closed]')?.textContent).toContain('Outside off-peak hours: next opening');
+  });
+
+  test('un refus OPERATION_OUTSIDE_WINDOW a son propre texte, jamais celui du délai', async () => {
+    const { host } = await open(undefined, { status: WINDOW_OPEN, trigger: () => ({ ok: false, status: 409, error: 'x', code: 'OPERATION_OUTSIDE_WINDOW' }) });
+    await click(trigger(host));
+    mounter.type(document, '[data-admin-ops-typed]', 'image-prune');
+    await click(document.querySelector('[data-admin-ops-go="image-prune"]'));
+    const text = document.querySelector('[data-admin-ops-error]')?.textContent ?? '';
+    expect(text).toContain('Hors des heures creuses');
+    expect(text).not.toContain('Trop tôt');
+  });
+
+  test('une passerelle qui ne sert pas encore la fenêtre : l’écran n’en dit rien et reste utilisable', async () => {
+    const { host } = await open();
+    expect(prune(host)?.querySelector('[data-admin-ops-window]')).toBeNull();
+    expect(trigger(host)?.disabled).toBe(false);
   });
 });
 

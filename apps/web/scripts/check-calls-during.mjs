@@ -44,6 +44,7 @@ import { join } from 'node:path';
 
 import { launchChromium } from './lib/browser.mjs';
 import { startDistServer } from './lib/gate-server.mjs';
+import { revealRow } from './lib/reveal-row.mjs';
 
 const DIST = new URL('../dist/', import.meta.url).pathname;
 const served = await startDistServer(DIST, { serviceWorker: false });
@@ -158,6 +159,10 @@ try {
 
       // ------------------------------------------------ 4. naviguer et écrire sous la bulle
       await page.goBack();
+      /* La liste est virtualisée (#11228) : à 320 × 568, la conversation où l’on écrit est plus
+         bas que la première fenêtre. On y défile, comme le doigt. */
+      await page.waitForSelector('[data-row] a');
+      check(await revealRow(page, WRITE_TO), `${label} : la liste amène « ${WRITE_TO} » à l'écran`);
       await page.waitForSelector(`[data-row="${WRITE_TO}"] a`);
       await page.click(`[data-row="${WRITE_TO}"] a`);
       await page.waitForURL(`**/c/${WRITE_TO}`);
