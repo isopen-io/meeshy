@@ -12,7 +12,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 // @ts-expect-error — module ESM JavaScript sans déclarations, exécuté tel quel par la CI
-import { runsAhead, holdsMac, QUEUE_JOB } from '../../../../scripts/ci/ios-mac-queue.mjs';
+import { runsAhead, holdsMac, QUEUE_JOB, QUEUE_WORKFLOWS } from '../../../../scripts/ci/ios-mac-queue.mjs';
 
 type Job = { readonly name: string; readonly status: string };
 type Run = { readonly id: number; readonly status: string };
@@ -23,6 +23,7 @@ const ahead = (runs: readonly Run[], jobs: ReadonlyArray<readonly [number, reado
   runsAhead({ myRunId: 100, runs, jobsByRun: new Map(jobs) });
 
 const IOS_YML = readFileSync(fileURLToPath(new URL('../../../../.github/workflows/ios.yml', import.meta.url)), 'utf8');
+const SDK_YML = readFileSync(fileURLToPath(new URL('../../../../.github/workflows/sdk-tests.yml', import.meta.url)), 'utf8');
 
 describe('file d’attente des suites iOS complètes', () => {
   it('une suite plus ancienne dont les tranches tournent passe devant', () => {
@@ -39,6 +40,20 @@ describe('file d’attente des suites iOS complètes', () => {
 
   it('une compilation seule ne bloque personne', () => {
     expect(ahead([run(90)], [[90, [job('Build app (app + cibles de test)'), job(`${QUEUE_JOB} (compilation seule)`, 'completed')]]])).toEqual([]);
+  });
+
+  it('une suite SDK plus ancienne passe devant une suite iOS, et inversement', () => {
+    expect(ahead([run(90)], [[90, [job('Build SDK (produits de test)')]]])).toEqual([90]);
+    expect(ahead([run(90)], [[90, [job('Tests SDK — tranche 3', 'queued')]]])).toEqual([90]);
+    expect(ahead([run(90)], [[90, [job('Tests unitaires — tranche 1')]]])).toEqual([90]);
+  });
+
+  it('le verdict SDK ne bloque pas', () => {
+    expect(ahead([run(90)], [[90, [job('Tests SDK — tranche 1', 'completed'), job('Verdict iOS SDK')]]])).toEqual([]);
+  });
+
+  it('la file lit les runs des deux workflows', () => {
+    expect(QUEUE_WORKFLOWS).toEqual(['ios.yml', 'sdk-tests.yml']);
   });
 
   it('un run plus récent ne bloque pas un run plus ancien', () => {
@@ -73,5 +88,18 @@ describe('ios.yml pose les noms que la file reconnaît', () => {
 
   it('le build attend la file', () => {
     expect(IOS_YML).toMatch(/ios-build:\n {4}needs: \[scope, file-mac\]/);
+  });
+});
+
+describe('sdk-tests.yml pose les noms que la file reconnaît', () => {
+  it('le job de file porte le nom de la file et le build l’attend', () => {
+    expect(SDK_YML).toMatch(new RegExp(`file-mac:\\n {4}name: ${QUEUE_JOB}`));
+    expect(SDK_YML).toMatch(/sdk-build:\n {4}name: Build SDK \(produits de test\)\n {4}needs: file-mac/);
+    expect(holdsMac([job('Build SDK (produits de test)')])).toBe(true);
+  });
+
+  it('les tranches portent le nom qui bloque', () => {
+    expect(SDK_YML).toMatch(/name: Tests SDK — tranche \$\{\{ matrix\.\w+ \}\}/);
+    expect(holdsMac([job('Tests SDK — tranche 2')])).toBe(true);
   });
 });

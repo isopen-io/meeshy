@@ -116,19 +116,24 @@ concurrency:
 
 jobs:
   # ===========================================================================
-  # CHANGES: ce que la poussée touche (#7711)
-  # Les quatre jobs du traducteur ne tournent que si un fichier qu'ils lisent
-  # a changé ; tout le reste tourne toujours. La règle et ses cas vivent dans
-  # `scripts/ci-affected.mjs` (en cas de doute, tout tourne).
+  # CHANGES: ce que la poussée touche (#7711, #12531)
+  # Quatre zones ne tournent que si un fichier qu'elles lisent a changé : les
+  # quatre jobs du traducteur, la coque Android, les cadres de gloire et les
+  # gardes navigateur du web. Tout le reste tourne toujours. La règle et ses cas
+  # vivent dans `scripts/ci-affected.mjs` (en cas de doute, tout tourne).
   # ===========================================================================
   changes:
     name: Zones touchées
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
     outputs:
       translator: ${{ steps.affected.outputs.translator }}
       shell_android: ${{ steps.affected.outputs.shell_android }}
       glory_frames: ${{ steps.affected.outputs.glory_frames }}
+      web_navigateur: ${{ steps.affected.outputs.web_navigateur }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -139,11 +144,43 @@ jobs:
       - name: Self-test
         run: node scripts/ci-affected.mjs --self-test
 
+      # La base de comparaison d'une POUSSÉE est le dernier run VERT de ce workflow sur
+      # cette branche, pas la poussée précédente : une poussée évincée par la suivante,
+      # ou un run resté rouge, emporterait sinon son diff avec lui et une zone serait
+      # sautée à tort. Même résolveur que `docker.yml` (#6551). Tant que la branche est
+      # rouge, la base recule et davantage de zones tournent : sûr par construction.
+      # `--event push` écarte les runs de PR, qui ont testé un commit de fusion.
+      # Le résolveur ne reçoit JAMAIS `github.event.before` : son repli sur la poussée
+      # précédente, juste pour une image, ferait ici sauter une zone sans preuve. Relevé
+      # en échec, aucun vert connu ou SHA disparu de l'historique : aucune base, tout tourne.
+      - name: Dernier run vert de ce workflow sur cette branche
+        id: dernier_vert
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if SHA=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow ci.yml --branch "$GITHUB_REF_NAME" \
+            --event push --status success --limit 1 --json headSha --jq '.[0].headSha // empty'); then
+            [ -n "$SHA" ] || echo "::notice title=Zones touchées::aucun run vert connu sur $GITHUB_REF_NAME, tout tourne."
+          else
+            SHA=""
+            echo "::warning title=Zones touchées::relevé du dernier run vert impossible, tout tourne."
+          fi
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Base de comparaison
+        id: base
+        if: github.event_name == 'push'
+        env:
+          LAST_SUCCESSFUL_SHA: ${{ steps.dernier_vert.outputs.sha }}
+        run: |
+          node scripts/resolve-docker-detect-base.mjs | tee -a "$GITHUB_OUTPUT"
+
       - name: Detect affected domains
         id: affected
         env:
           CI_EVENT: ${{ github.event_name }}
-          CI_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          CI_BASE: ${{ github.event.pull_request.base.sha || steps.base.outputs.base }}
           CI_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
         run: node scripts/ci-affected.mjs >> "$GITHUB_OUTPUT"
 
@@ -497,6 +534,9 @@ jobs:
       - name: CI verdict witness
         run: node scripts/ci/needs-verdict.mjs --self-test
 
+      - name: Web navigator zone read-set guard
+        run: node scripts/ci/check-web-navigateur-read-set.mjs --self-test && node scripts/ci/check-web-navigateur-read-set.mjs
+
       # Pas de mode « balayage du dépôt » ici : `resolve-docker-detect-base.mjs`
       # est une fonction de décision PURE (docker.yml § job `detect`, #6551),
       # invoquée à l'exécution avec le SHA du dernier run réussi et
@@ -611,7 +651,8 @@ jobs:
   web-navigateur:
     name: Web · gardes navigateur (Playwright)
     runs-on: ubuntu-latest
-    needs: quality
+    needs: [quality, changes]
+    if: needs.changes.outputs.web_navigateur == 'true'
     # #8580 — 53 gates Playwright en série : le job franchissait ses 25 min
     # (24 min 23 s puis annulé à 25 min 15 s sur #8593) dès que les gates
     # d'appel ont gagné leurs témoins. Le plafond suit la charge mesurée.
@@ -2654,7 +2695,7 @@ jobs:
           echo "| Zones touchées (translator: ${{ needs.changes.outputs.translator }}) | ${{ needs.changes.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Qualité TS | ${{ needs.quality.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Gardes du dépôt | ${{ needs.gardes-depot.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Web · gardes navigateur | ${{ needs.web-navigateur.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Web · gardes navigateur (web_navigateur: ${{ needs.changes.outputs.web_navigateur }}) | ${{ needs.web-navigateur.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Android coque (shell_android: ${{ needs.changes.outputs.shell_android }}) | ${{ needs.shell-android.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Cadres de gloire (glory_frames: ${{ needs.changes.outputs.glory_frames }}) | ${{ needs.glory-frames.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Tests · paquets Node | ${{ needs.test.result }} |" >> $GITHUB_STEP_SUMMARY

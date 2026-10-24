@@ -14,10 +14,11 @@
 // chemins. Les chemins d'un domaine sont ceux que ses tests LISENT, pas
 // seulement son répertoire : `test_marketing_language_count_consistency.py`
 // lit `docs/marketing/` et `apps/web/src/institutional/`, donc le domaine les
-// porte. Un domaine absent de `DOMAINES` tourne toujours — c'est le cas de la
-// passerelle et du web, dont les gardes lisent des dizaines de fichiers iOS,
-// Android et `tasks/` : les sauter exige d'abord une carte de ce qu'ils
-// lisent, tenue par un cliquet (suivi de #7711).
+// porte. Un domaine absent de `DOMAINES` tourne toujours — c'est le cas des
+// « Tests · » de la passerelle et du web, dont les gardes lisent des dizaines
+// de fichiers iOS, Android et `tasks/` (suivi de #7711). Les gardes NAVIGATEUR
+// (`web_navigateur`) ont, elles, leur carte, tenue par
+// `scripts/ci/check-web-navigateur-read-set.mjs`.
 //
 // En cas de doute, TOUT tourne : `workflow_dispatch`, un push sans parent
 // connu (branche neuve, force-push), un diff illisible, ou un fichier
@@ -65,11 +66,25 @@ export const DOMAINES = {
   // Les sources de design des cadres de gloire (lot L2, #10153) : la garde d'empiètement régénère les SVG des
   // ateliers et mesure Mee et Meo contre la fenêtre photo. Rien d'autre ne lit ces fichiers.
   glory_frames: ['docs/product/cadres-de-gloire/'],
+  // Les gardes navigateur de `ci.yml` (job `web-navigateur`) : l'application, ce qu'elle importe
+  // (`packages/shared`, `packages/design-tokens`), la passerelle dont les gardes lisent les routes et les
+  // schémas (zone PRUDENTE : la passerelle entière), et les rares fichiers hors d'`apps/web` que leurs scripts
+  // lisent. Carte mesurée le 2026-10-23 et TENUE par `scripts/ci/check-web-navigateur-read-set.mjs`.
+  web_navigateur: [
+    'apps/web/',
+    'packages/shared/',
+    'packages/design-tokens/',
+    'services/gateway/',
+    'docs/product/cadres-de-gloire/',
+    'apps/ios/decisions.md',
+    'scripts/check-web-api-literals.mjs',
+    'scripts/lib/',
+  ],
 };
 
 const toutVrai = () => Object.fromEntries(Object.keys(DOMAINES).map((domaine) => [domaine, true]));
 
-const couvre = (chemins, fichier) =>
+export const couvre = (chemins, fichier) =>
   chemins.some((chemin) => (chemin.endsWith('/') ? fichier.startsWith(chemin) : fichier === chemin));
 
 export const domainesTouches = (fichiers) => {
@@ -122,6 +137,23 @@ const CAS = [
   ['autre doc produit', ['docs/product/cadres-de-gloire-old/x.md', 'docs/product/roadmap.md'], { translator: false, shell_android: false, glory_frames: false }],
 ];
 
+const CAS_NAVIGATEUR = [
+  ['navigateur : iOS seul', ['apps/ios/Meeshy/App.swift'], false],
+  ['navigateur : Android natif seul', ['apps/android/app/src/main/Foo.kt'], false],
+  ['navigateur : SDK seul', ['packages/MeeshySDK/Sources/MeeshySDK/X.swift'], false],
+  ['navigateur : documentation', ['docs/product/roadmap.md', 'tasks/lessons.md'], false],
+  ['navigateur : traducteur seul', ['services/translator/src/main.py'], false],
+  ['navigateur : préfixe trompeur', ['packages/shared-legacy/x.ts', 'apps/web-old/x.ts'], false],
+  ['navigateur : application web', ['apps/web/src/routes/thread.tsx'], true],
+  ['navigateur : schéma partagé', ['packages/shared/types/user.ts'], true],
+  ['navigateur : jetons de design', ['packages/design-tokens/ios.css'], true],
+  ['navigateur : passerelle', ['services/gateway/src/routes/x.ts'], true],
+  ['navigateur : cadres de gloire', ['docs/product/cadres-de-gloire/generateur/lib/overlap.mjs'], true],
+  ['navigateur : décisions iOS lues par le web', ['apps/ios/decisions.md'], true],
+  ['navigateur : fichier global', ['bun.lock'], true],
+  ['navigateur : diff illisible', null, true],
+];
+
 const selfTest = () => {
   const echecs = CAS.filter(([, fichiers, attendu]) =>
     Object.entries(attendu).some(([domaine, valeur]) => domainesTouches(fichiers)[domaine] !== valeur),
@@ -129,11 +161,16 @@ const selfTest = () => {
   echecs.forEach(([titre, fichiers]) =>
     console.error(`ÉCHEC : « ${titre} » rend ${JSON.stringify(domainesTouches(fichiers))}`),
   );
+  const echecsNavigateur = CAS_NAVIGATEUR.filter(([, fichiers, attendu]) => domainesTouches(fichiers).web_navigateur !== attendu);
+  echecsNavigateur.forEach(([titre, fichiers]) =>
+    console.error(`ÉCHEC : « ${titre} » rend web_navigateur=${domainesTouches(fichiers).web_navigateur}`),
+  );
+  if (echecsNavigateur.length > 0) return 1;
   const nonDispatch = fichiersChanges({ event: 'workflow_dispatch', base: 'a', head: 'b' }) === null;
   const nouvelleBranche = fichiersChanges({ event: 'push', base: '0'.repeat(40), head: 'b' }) === null;
   if (!nonDispatch || !nouvelleBranche) console.error('ÉCHEC : un dispatch ou une branche neuve ne fait pas tout tourner');
   if (echecs.length > 0 || !nonDispatch || !nouvelleBranche) return 1;
-  console.log(`self-test : ${CAS.length} cas tenus, dispatch et branche neuve font tout tourner`);
+  console.log(`self-test : ${CAS.length + CAS_NAVIGATEUR.length} cas tenus, dispatch et branche neuve font tout tourner`);
   return 0;
 };
 

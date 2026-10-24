@@ -57,6 +57,8 @@ on:
       - 'packages/shared/fixtures/device-tier-vectors.json'
       # Le contrat MeeshyLens v1 (#11270) : LensFormatVectorsTests rejoue ses vecteurs.
       - 'packages/shared/fixtures/lens-v1/**'
+      - '.github/workflows/sdk-tests.yml'
+      - 'scripts/ci/**'
   pull_request:
     branches:
       - dev
@@ -87,9 +89,11 @@ on:
       # partagés avec le web — une régénération seule doit rejouer le miroir Swift.
       - 'packages/shared/fixtures/device-tier-vectors.json'
       - 'packages/shared/fixtures/lens-v1/**'
-  # Intentionally NOT triggered by changes to this workflow file itself: an
-  # app-only PR that merely touches CI config must not be gated by the SDK suite.
-  # Use workflow_dispatch (Actions tab) to exercise CI changes on demand.
+      - '.github/workflows/sdk-tests.yml'
+      - 'scripts/ci/**'
+  # Un workflow se déclenche quand son OUTILLAGE change (2026-10-23) : ce fichier et
+  # `scripts/ci/**` (répartition, file Mac, verdict) font rejouer la suite, sans quoi une
+  # modification de la chaîne ne serait éprouvée que par un `workflow_dispatch` oublié.
   workflow_dispatch:
     # Suites ciblées (noms de classes séparés par des virgules, « Cible/Classe »
     # ou « Classe » nu, rattaché à la cible qui la déclare) — vide = tout.
@@ -113,7 +117,11 @@ on:
 # ref cancels stale in-progress runs so we never accumulate multi-hour zombies.
 concurrency:
   group: sdk-tests-${{ github.ref }}
-  cancel-in-progress: true
+  # Même règle que ci.yml (#4395) : sur `dev` et `main`, le run EN COURS va au bout et seul le
+  # run en attente est remplacé. Sinon une rafale de poussées n'obtenait presque jamais de
+  # conclusion (mesuré le 2026-10-23 sur 9 à 61 poussées de `dev` : 1 conclusion pour le SDK,
+  # 11 pour Android, 5 pour iOS), donc aucun verdict de ces chaînes sur le commit promu.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/dev' && github.ref != 'refs/heads/main' }}
 
 env:
   # Tranches parallèles (#9692) et bascule du runtime (même script qu'ios.yml) :
@@ -152,8 +160,29 @@ jobs:
           node scripts/ci/ios-test-shards.mjs --suite sdk --plan --shards "$SDK_TEST_SHARDS" --only "$ONLY_TESTING"
           echo "matrix=$(node scripts/ci/ios-test-shards.mjs --suite sdk --matrix --shards "$SDK_TEST_SHARDS" --only "$ONLY_TESTING")" >> "$GITHUB_OUTPUT"
 
+  # Les Mac sont partagés avec ios.yml (#9751) : une seule file, premier arrivé premier servi,
+  # tenue depuis ubuntu (`scripts/ci/ios-mac-queue.mjs`) — deux suites macOS ne s'entrelacent plus.
+  # Le NOM du job est lu par la file des autres runs.
+  file-mac:
+    name: File d'attente Mac
+    runs-on: ubuntu-latest
+    timeout-minutes: 160
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: scripts/ci
+          fetch-depth: 1
+      - name: Attendre que les suites plus anciennes libèrent les Mac
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/ci/ios-mac-queue.mjs --poll-seconds 120 --max-minutes 150
+
   sdk-build:
     name: Build SDK (produits de test)
+    needs: file-mac
     runs-on: macos-15
     # Compilation seule, mesurée à 4m20 dans l'ancien job (run #30546762282) ;
     # 30 couvre une résolution SPM froide et un runner lent.
