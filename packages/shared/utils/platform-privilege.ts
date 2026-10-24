@@ -18,16 +18,22 @@
  * Ce que la table ne gouverne PAS, par d'autres décisions : la console
  * d'administration et la visibilité de la présence (`isGlobalAdmin`, ADMIN et
  * BIGBOSS), le lancement d'un appel public (`call-permission`).
+ *
+ * Les valeurs sont écrites en littéraux, vérifiés contre `GlobalUserRole` par
+ * `satisfies`, et l'enum n'est importé qu'en type : un import d'exécution ferait
+ * entrer `role-types` dans la première peinture du web, par
+ * `conversation-helpers` (mesuré : 92,89 → 93,42 Ko, au-dessus du plafond de
+ * 93 Ko).
  */
 
-import { GlobalUserRole } from '../types/role-types.js';
+import type { GlobalUserRole } from '../types/role-types.js';
 
-export const PRIVILEGED_PLATFORM_ROLES: readonly GlobalUserRole[] = Object.freeze([
-  GlobalUserRole.BIGBOSS,
-  GlobalUserRole.ADMIN,
-  GlobalUserRole.MODERATOR,
-]);
+export const PRIVILEGED_PLATFORM_ROLES = /* @__PURE__ */ Object.freeze([
+  'BIGBOSS',
+  'ADMIN',
+  'MODERATOR',
+] as const) satisfies readonly `${GlobalUserRole}`[];
 
-const PRIVILEGED: ReadonlySet<string> = new Set(PRIVILEGED_PLATFORM_ROLES);
+const PRIVILEGED: ReadonlySet<string> = /* @__PURE__ */ new Set<string>(PRIVILEGED_PLATFORM_ROLES);
 
 export const isPrivilegedPlatformRole = (role: string | null | undefined): boolean => PRIVILEGED.has(role ?? '');
