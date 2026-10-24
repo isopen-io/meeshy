@@ -1267,6 +1267,17 @@ jobs:
           cd apps/web
           node scripts/check-animated-properties.mjs
 
+      # #12633 — l'aperçu d'une conversation tenue se peint sur son fond : la
+      # couche passe DEVANT la surface de la carte et DERRIÈRE son contenu, la
+      # carte garde sa surface tant que la photo est en route, et l'en-tête
+      # tient AA sur une photo noire puis blanche, en clair et en sombre —
+      # mesuré sur les PIXELS rendus par Chromium, avec les feuilles du dépôt.
+      - name: Gate fond de l'aperçu de conversation (contraste de l'en-tête)
+        if: ${{ !cancelled() && matrix.tranche == 3 }}
+        run: |
+          cd apps/web
+          node scripts/check-peek-backdrop.mjs
+
       # #6458 — le barreau « Administration » du menu flottant, sur un dist
       # gateway (l'administration n'a pas de fixtures) : sept barreaux dans
       # l'écran aux deux poses (deux schémas, 390×844 et 320×568), parcours
