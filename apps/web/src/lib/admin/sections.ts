@@ -22,13 +22,14 @@ export type { AdminRoute };
  * La liste part de la barre latérale du legacy
  * (`apps/web/components/admin/AdminLayout.tsx`, onze entrées), rangée depuis
  * #8876 en sept groupes et dix-neuf sections (`docs/superpowers/specs/
- * 2026-09-30-admin-vue-de-dieu-design.md`, § 1).
+ * 2026-09-30-admin-vue-de-dieu-design.md`, § 1) ; huit groupes et vingt sections
+ * depuis le Système et ses Opérations (#10391).
  *
  * ## Une section que l'administration ne sert pas encore est MASQUÉE (#6702, #8876)
  *
  * Le legacy est décommissionné (directive porteur 2026-09-15) : la v2 sert tout
  * `meeshy.me`. Une section dont `ready` est faux n'est ni au menu, ni au hub,
- * ni en lien d'entité : ce serait un contrôle qui ment (loi 4). Les dix-neuf
+ * ni en lien d'entité : ce serait un contrôle qui ment (loi 4). Les vingt
  * sections sont servies depuis l'intégration du chantier #8876 ; le drapeau
  * reste la porte d'une section qu'on livrerait écran par écran.
  *
@@ -85,7 +86,7 @@ export type AdminPermissions = {
 export type AdminPermissionKey = keyof AdminPermissions;
 
 /**
- * Les clés de catalogue des dix-neuf sections — une UNION littérale, jamais
+ * Les clés de catalogue des vingt sections — une UNION littérale, jamais
  * `string`.
  *
  * `translate` est générique sur sa clé : il exige un troisième argument dès
