@@ -16,6 +16,9 @@ struct FaceRampView: View {
     let entries: [FaceRampEntry]
     let isDark: Bool
     var onTap: (FaceRampEntry) -> Void
+    /// #11225 — l'appui long d'un visage : Aller au message · Répondre, sur sa
+    /// première preuve (celle où le toucher mène).
+    var menu: SummaryEntryMenu? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
@@ -27,6 +30,7 @@ struct FaceRampView: View {
                 HStack(spacing: MeeshySpacing.md) {
                     ForEach(entries) { entry in
                         FaceRampEntryButton(entry: entry, isDark: isDark) { onTap(entry) }
+                            .modifier(SummaryEntryMenuModifier(target: SummaryEntryAction.target(of: entry), menu: menu))
                     }
                 }
                 .padding(.horizontal, MeeshySpacing.xxs) // laisse respirer l'anneau de la première/dernière pastille
