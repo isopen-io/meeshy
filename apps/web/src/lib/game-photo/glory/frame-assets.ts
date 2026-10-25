@@ -1,5 +1,5 @@
 import type { PackAssetRef } from '@meeshy/shared/types/content-pack';
-import { gloryFramePainterAssets, type GloryFrameLayer } from '@meeshy/shared/types/glory-frame-format';
+import { gloryFrameFormatAssets, gloryFramePainterAssets, type GloryFrameLayer } from '@meeshy/shared/types/glory-frame-format';
 
 import { loadGloryFonts, type GloryFontRequest } from '../glory-fonts';
 import { anchorsOf, birdLayoutOf, type GloryFrameBirdLayout, type GloryFrameBirdTable, type GloryFrameFormat } from './frame-spec';
@@ -21,6 +21,13 @@ import type { GloryBirdImages, GloryLayerImages } from './paint-glory-frame';
  * (`createImageBitmap(blob, { resizeWidth })`), l'image finale en pleine taille ;
  * le peintre pose chaque couche dans la boîte du contrat, la résolution de la
  * bitmap ne change pas la géométrie.
+ *
+ * La fenêtre (#10254) : c'est ICI que se décide chemin ou masque, une fois par
+ * chargement. Le `Path2D` du chemin se construit au chargement et voyage avec
+ * les couches (le peintre ne le reconstruit pas à chaque image de la
+ * chorégraphie) ; un moteur sans `Path2D`, ou qui refuse de le construire,
+ * reçoit le masque à la place — la présence (`missingGloryFrameAssets`) le
+ * compte alors, et le peintre découpe par lui, jamais au seul rectangle.
  */
 
 /** Une image décodée qui sait rendre sa mémoire — `ImageBitmap` en production. */
@@ -40,6 +47,8 @@ export type GloryAssetDeps = {
   /** Le SVG d'un sticker du catalogue embarqué ; `null` pour un identifiant inconnu. */
   readonly stickerMarkup: (sticker: string) => string | null;
   readonly fonts?: Pick<FontFaceSet, 'load'>;
+  /** Construit le chemin de la fenêtre ; absent : le `Path2D` du navigateur s'il existe ; `null` : un moteur sans lui. */
+  readonly path2d?: ((d: string) => Path2D) | null;
 };
 
 export type GloryFrameImages = {
@@ -52,8 +61,25 @@ export type GloryFrameImages = {
 /** Le rendu d'un sticker : le double de la plus grande ancre des contrats (180 px), comme les dessins du cadre simple. */
 const STICKER_SIZE = 512;
 
-/** Ce que le peintre lit : le masque de la fenêtre seulement quand le contrat n'en porte pas le chemin (#10254). */
-const layerRefs = (format: GloryFrameFormat): readonly PackAssetRef[] => gloryFramePainterAssets(format);
+const browserPath2d = (d: string): Path2D => new Path2D(d);
+
+const builderOf = (deps: Pick<GloryAssetDeps, 'path2d'>): ((d: string) => Path2D) | null =>
+  deps.path2d !== undefined ? deps.path2d : typeof Path2D === 'function' ? browserPath2d : null;
+
+/** Le chemin de la fenêtre construit pour ce moteur ; `null` : le peintre découpe par le masque. */
+export function gloryWindowPath(format: GloryFrameFormat, deps: Pick<GloryAssetDeps, 'path2d'> = {}): Path2D | null {
+  const build = builderOf(deps);
+  if (format.window.path === undefined || build === null) return null;
+  try {
+    return build(format.window.path);
+  } catch {
+    return null;
+  }
+}
+
+/** Ce que le peintre lit : le masque de la fenêtre seulement quand il ne découpera pas au chemin (#10254). */
+const layerRefs = (format: GloryFrameFormat, deps: GloryAssetDeps): readonly PackAssetRef[] =>
+  builderOf(deps) === null ? gloryFrameFormatAssets(format) : gloryFramePainterAssets(format);
 
 /** Les polices que ce format demande, une requête par face. */
 export const fontRequestsOf = (format: GloryFrameFormat): readonly GloryFontRequest[] =>
@@ -80,7 +106,7 @@ const present = async (ref: PackAssetRef, deps: GloryAssetDeps): Promise<boolean
  * prêt ; sinon leur somme d'octets est le poids que la tuile annonce.
  */
 export async function missingGloryFrameAssets(format: GloryFrameFormat, deps: GloryAssetDeps): Promise<readonly PackAssetRef[]> {
-  const refs = layerRefs(format);
+  const refs = layerRefs(format, deps);
   const presence = await Promise.all(refs.map((ref) => present(ref, deps)));
   return refs.filter((_, index) => !presence[index]);
 }
@@ -124,8 +150,9 @@ export async function loadGloryFrameImages(
 ): Promise<GloryFrameImages | null> {
   const { decor, windowFill, grade, front, plate } = format.layers;
   const optional = (layer: GloryFrameLayer | undefined): Promise<Decoded | null> => (layer === undefined ? Promise.resolve(null) : decodeLayer(layer, deps, scale));
+  const windowPath = gloryWindowPath(format, deps);
   const [maskD, decorD, fillD, grades, under, over, plain, message, birds] = await Promise.all([
-    format.window.path === undefined ? decodeLayer(format.window.mask, deps, scale) : Promise.resolve(null),
+    windowPath === null ? decodeLayer(format.window.mask, deps, scale) : Promise.resolve(null),
     decodeLayer(decor, deps, scale),
     decodeLayer(windowFill, deps, scale),
     Promise.all(grade.map((layer) => decodeLayer(layer, deps, scale))),
@@ -140,13 +167,14 @@ export async function loadGloryFrameImages(
   const missing = all.filter((entry) => entry.image === null).map((entry) => entry.ref);
   if (missing.length > 0 || decorD.image === null || fillD.image === null) {
     closeAll([...all.map((entry) => entry.image), ...Object.values(birds)]);
-    deps.request(missing.length > 0 ? missing : layerRefs(format));
+    deps.request(missing.length > 0 ? missing : layerRefs(format, deps));
     return null;
   }
   const images = [maskD?.image, decorD.image, fillD.image, ...grades.map((entry) => entry.image), under?.image, over?.image, plain?.image, message?.image];
   return {
     layers: {
       mask: maskD?.image ?? null,
+      windowPath,
       decor: decorD.image,
       windowFill: fillD.image,
       grade: grades.map((entry) => entry.image).filter((image): image is ClosableImage => image !== null),

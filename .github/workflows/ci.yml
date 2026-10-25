@@ -1474,6 +1474,9 @@ jobs:
   # la fenêtre (`--mutate bird-in-window`). Playwright est ÉPINGLÉ, donc
   # Chromium ; seul ce job lit `docs/product/cadres-de-gloire/` (domaine
   # `glory_frames`, `scripts/ci-affected.mjs`), il n'installe rien du monorepo.
+  # Le domaine porte aussi les contrats (`packages/shared/design/glory-frames/`)
+  # et le magasin des masques (`services/gateway/assets/packs/`) : le témoin
+  # chemin ↔ masque les lit, une réimportation seule doit le lancer (#10254).
   glory-frames:
     name: Cadres de gloire · empiètement
     runs-on: ubuntu-latest

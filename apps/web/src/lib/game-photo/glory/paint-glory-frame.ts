@@ -15,11 +15,12 @@ import { anchorsOf, birdLayoutOf, boxArgs, plateVariantOf, rectOf, type GloryFra
  * d'affichage, image vidéo courante) et l'image finale (still développé).
  *
  *  - `photo` : la photo couvre la BOÎTE de la fenêtre, décalée et zoomée par le
- *    recadrage, découpée par le CHEMIN de la fenêtre (#10254, un `clip` sur un
- *    `Path2D`, sans image à décoder) ; un contrat sans chemin, ou un moteur sans
- *    `Path2D`, la découpe par son masque sur une surface de travail puis la pose
- *    sous un `clip` au rectangle ; toujours bornée par `save`/`restore` ; sans
- *    photo, `windowFill` et l'emblème du moment en grand ;
+ *    recadrage, découpée par le CHEMIN de la fenêtre (#10254, un `clip` sur le
+ *    `Path2D` que le chargeur a construit UNE fois, sans image à décoder) ; sans
+ *    chemin construit (contrat d'avant le chemin, moteur sans `Path2D`), le
+ *    chargeur fournit le masque, qui la découpe sur une surface de travail
+ *    posée sous un `clip` au rectangle ; toujours bornée par `save`/`restore` ;
+ *    sans photo, `windowFill` et l'emblème du moment en grand ;
  *  - `grade:n` : sur la photo, avec son mode de fusion, borné à la passe ;
  *  - `crest` : l'emblème du moment (le blason, la pièce…) dans son ancre — la
  *    frappe de la chorégraphie s'y rejoue ;
@@ -34,6 +35,8 @@ import { anchorsOf, birdLayoutOf, boxArgs, plateVariantOf, rectOf, type GloryFra
 
 export type GloryLayerImages = {
   readonly mask: CanvasImageSource | null;
+  /** Le chemin de la fenêtre, construit au chargement (#10254) ; `null` : la découpe passe par `mask`. */
+  readonly windowPath: Path2D | null;
   readonly decor: CanvasImageSource;
   readonly windowFill: CanvasImageSource;
   readonly grade: readonly CanvasImageSource[];
@@ -63,22 +66,7 @@ export type GloryPaintInput = {
   readonly language: string;
   /** `null` : pas de surface hors écran (vieux moteur) — la photo se découpe au rectangle de la fenêtre. */
   readonly scratch: (width: number, height: number) => PaintSurface | null;
-  /** Construit le chemin de la fenêtre (#10254) ; absent : le `Path2D` du navigateur ; `null` : un moteur sans lui. */
-  readonly path2d?: (d: string) => Path2D | null;
 };
-
-const browserPath2d = (d: string): Path2D | null => (typeof Path2D === 'function' ? new Path2D(d) : null);
-
-/** Le chemin de la fenêtre que ce contexte sait découper ; `null` : rectangle, puis masque. */
-function windowClipOf(ctx: PaintContext, input: GloryPaintInput): Path2D | null {
-  const d = input.format.window.path;
-  if (d === undefined || ctx.clip === undefined) return null;
-  try {
-    return (input.path2d ?? browserPath2d)(d);
-  } catch {
-    return null;
-  }
-}
 
 const degrees = (value: number): number => (value * Math.PI) / 180;
 
@@ -114,7 +102,7 @@ function paintWindow(ctx: PaintContext, input: GloryPaintInput): void {
     drawContained(ctx, input.art.emblem, { x: window.x + inset, y: window.y + inset, w: window.w - inset * 2, h: window.h - inset * 2 });
     return;
   }
-  const path = windowClipOf(ctx, input);
+  const path = layers.windowPath;
   if (path !== null && ctx.clip !== undefined) {
     ctx.save();
     ctx.clip(path);

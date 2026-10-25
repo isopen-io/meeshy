@@ -26,7 +26,7 @@ const withPath: GloryFrameFormat = { ...format, window: { ...rectangular, path: 
 
 type Fake = { readonly name: string; closed: boolean; readonly close: () => void };
 
-function deps(options: { readonly missing?: readonly string[]; readonly fonts?: string[] } = {}) {
+function deps(options: { readonly missing?: readonly string[]; readonly fonts?: string[]; readonly path2d?: GloryAssetDeps['path2d'] } = {}) {
   const requested: PackAssetRef[][] = [];
   const decoded: Fake[] = [];
   const rasters: string[] = [];
@@ -49,6 +49,7 @@ function deps(options: { readonly missing?: readonly string[]; readonly fonts?: 
     },
     stickerMarkup: (sticker) => (sticker === 'meo-salut' ? null : `<svg>${sticker}</svg>`),
     fonts: { load: async (font: string) => ((options.fonts ?? []).push(font), []) },
+    path2d: options.path2d === undefined ? (d) => ({ d }) as unknown as Path2D : options.path2d,
   };
   return { value, requested, decoded, rasters, scales };
 }
@@ -144,5 +145,34 @@ describe('la fenêtre découpée par son chemin (#10254)', () => {
     expect(await loadGloryFrameImages(withoutPath, null, d.value)).toBeNull();
     expect(d.requested.flat().map((ref) => ref.src)).toEqual([format.window.mask.src]);
     expect((await missingGloryFrameAssets(withoutPath, d.value)).map((ref) => ref.src)).toEqual([format.window.mask.src]);
+  });
+});
+
+describe('le chemin construit au chargement, ou le masque quand le moteur ne sait pas (#10254)', () => {
+  test('le chemin est construit UNE fois, au chargement, et remis au peintre avec les couches', async () => {
+    const built: string[] = [];
+    const d = deps({ path2d: (path) => (built.push(path), { d: path }) as unknown as Path2D });
+    const images = await loadGloryFrameImages(withPath, null, d.value);
+    expect(built).toEqual(['M128 528h824v948h-824Z']);
+    expect((images?.layers.windowPath as { readonly d: string } | null | undefined)?.d).toBe('M128 528h824v948h-824Z');
+    expect(images?.layers.mask).toBeNull();
+  });
+
+  test('un moteur sans Path2D : le masque est demandé, lu et décodé même quand le contrat porte le chemin', async () => {
+    const absent = deps({ missing: [format.window.mask.src], path2d: null });
+    expect((await missingGloryFrameAssets(withPath, absent.value)).map((ref) => ref.src)).toEqual([format.window.mask.src]);
+    expect(await loadGloryFrameImages(withPath, null, absent.value)).toBeNull();
+    expect(absent.requested.flat().map((ref) => ref.src)).toEqual([format.window.mask.src]);
+    const d = deps({ path2d: null });
+    const images = await loadGloryFrameImages(withPath, null, d.value);
+    expect(images?.layers.windowPath).toBeNull();
+    expect((images?.layers.mask as { readonly name: string } | null | undefined)?.name).toBe(format.window.mask.src);
+  });
+
+  test('un chemin que le moteur refuse de construire retombe sur le masque, jamais sur le seul rectangle', async () => {
+    const d = deps({ path2d: () => { throw new Error('Path2D'); } });
+    const images = await loadGloryFrameImages(withPath, null, d.value);
+    expect(images?.layers.windowPath).toBeNull();
+    expect((images?.layers.mask as { readonly name: string } | null | undefined)?.name).toBe(format.window.mask.src);
   });
 });
