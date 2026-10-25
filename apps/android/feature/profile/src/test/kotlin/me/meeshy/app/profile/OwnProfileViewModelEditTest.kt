@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -319,7 +320,7 @@ class OwnProfileViewModelEditTest {
         val userRepo = mockk<UserRepository>(relaxed = true)
         val vm = ownProfileVm(MutableStateFlow(user()), userRepo)
         val effects = mutableListOf<OwnProfileUiEffect>()
-        backgroundScope.launch { vm.effects.toList(effects) }
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.effects.toList(effects) }
         advanceUntilIdle()
         vm.onEvent(OwnProfileUiEvent.StartEditing)
 
@@ -342,7 +343,7 @@ class OwnProfileViewModelEditTest {
             networkMonitor = InMemoryNetworkMonitor(initialOnline = false),
         )
         val effects = mutableListOf<OwnProfileUiEffect>()
-        backgroundScope.launch { vm.effects.toList(effects) }
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.effects.toList(effects) }
         advanceUntilIdle()
         vm.onEvent(OwnProfileUiEvent.StartEditing)
         vm.onEvent(OwnProfileUiEvent.BioChanged("offline bio"))
@@ -362,7 +363,7 @@ class OwnProfileViewModelEditTest {
         coEvery { userRepo.awaitProfileEditAbandoned("cmid_1") } returns false
         val vm = ownProfileVm(MutableStateFlow(user()), userRepo)
         val effects = mutableListOf<OwnProfileUiEffect>()
-        backgroundScope.launch { vm.effects.toList(effects) }
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.effects.toList(effects) }
         advanceUntilIdle()
         vm.onEvent(OwnProfileUiEvent.StartEditing)
         vm.onEvent(OwnProfileUiEvent.BioChanged("online bio"))
@@ -382,7 +383,7 @@ class OwnProfileViewModelEditTest {
         val before = user()
         val vm = ownProfileVm(MutableStateFlow(before), userRepo, session = session)
         val effects = mutableListOf<OwnProfileUiEffect>()
-        backgroundScope.launch { vm.effects.toList(effects) }
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.effects.toList(effects) }
         advanceUntilIdle()
         vm.onEvent(OwnProfileUiEvent.StartEditing)
         vm.onEvent(OwnProfileUiEvent.BioChanged(""))
