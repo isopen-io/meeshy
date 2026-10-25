@@ -352,7 +352,7 @@ describe('SendSheet — ce qui part', () => {
     const files = Array.from({ length: 102 }, (_, i) => new File(['x'], `${i}.jpg`, { type: 'image/jpeg' }));
     const host = await mount({ request: { payload: { kind: 'files', files }, intent: 'share' } });
     await mounter.click(row(host, 'conversation:c-lyon'));
-    expect(host.querySelector('[data-send-over-limit]')?.textContent).toContain('Un partage emporte au plus 100 fichiers et 5 Go');
+    expect(host.querySelector('[data-send-over-limit]')?.textContent?.replace(/\s/gu, ' ')).toContain('Un partage emporte au plus 100 fichiers et 5 Go.');
     expect(host.querySelectorAll('[data-send-piece][data-over]')).toHaveLength(2);
     expect(sendButton(host)?.disabled).toBe(true);
     expect(sendButton(host)?.textContent).toBe('Retirez 2 fichiers pour envoyer');
