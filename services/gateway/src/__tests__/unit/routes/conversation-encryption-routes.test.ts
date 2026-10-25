@@ -36,11 +36,12 @@ import Fastify, { FastifyInstance } from 'fastify';
 
 // ─── Module-level mock controls ───────────────────────────────────────────────
 
+// #12822 (M1) — l'activation passe par `activationKeyId`, qui reprend la clé déjà désignée.
 const mockGetOrCreateConversationKey = jest.fn<any>().mockResolvedValue('server-key-id');
 
 jest.mock('../../../services/EncryptionService', () => ({
   getEncryptionService: jest.fn().mockResolvedValue({
-    getOrCreateConversationKey: (...a: unknown[]) => mockGetOrCreateConversationKey(...a),
+    activationKeyId: (...a: unknown[]) => mockGetOrCreateConversationKey(...a),
   }),
 }));
 
@@ -101,6 +102,7 @@ type ConvShape = {
   encryptionEnabledBy?: string | null;
   participants?: Array<{ userId: string; role?: string; user?: { role: string } | null }>;
   type?: string;
+  serverEncryptionKeyId?: string | null;
 } | null;
 
 function makeConversation(conv: ConvShape) {
@@ -112,6 +114,7 @@ function makeConversation(conv: ConvShape) {
     encryptionEnabledBy: conv.encryptionEnabledBy ?? null,
     participants: conv.participants ?? [{ userId: USER_ID, role: 'MEMBER' }],
     type: conv.type ?? 'group',
+    serverEncryptionKeyId: conv.serverEncryptionKeyId ?? null,
   };
 }
 
@@ -424,7 +427,18 @@ describe('POST /conversations/:conversationId/encryption', () => {
     const res = await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/encryption`, headers: AUTH, payload: { mode: 'server' } });
     expect(res.statusCode).toBe(200);
     expect(mockGetOrCreateConversationKey).toHaveBeenCalledTimes(1);
-    expect(mockGetOrCreateConversationKey).toHaveBeenCalledWith(CONV_ID);
+    expect(mockGetOrCreateConversationKey).toHaveBeenCalledWith(CONV_ID, null);
+    await app.close();
+  });
+
+  it('reprend la clé que la conversation désigne déjà (désactivée puis réactivée, #12822)', async () => {
+    const app = await buildApp({
+      conversation: { participants: [{ userId: USER_ID, role: 'admin', user: { role: 'ADMIN' } }], type: 'group', serverEncryptionKeyId: 'legacy-key-id' },
+      senderParticipant: { id: PARTICIPANT_ID },
+    });
+    const res = await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/encryption`, headers: AUTH, payload: { mode: 'server' } });
+    expect(res.statusCode).toBe(200);
+    expect(mockGetOrCreateConversationKey).toHaveBeenCalledWith(CONV_ID, 'legacy-key-id');
     await app.close();
   });
 

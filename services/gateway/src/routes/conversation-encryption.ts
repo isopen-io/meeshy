@@ -90,6 +90,8 @@ type RegimeConversation = {
   readonly encryptionMode: string | null;
   readonly encryptionEnabledBy: string | null;
   readonly encryptionEpoch?: number | null;
+  /** #12822 — la clé que la conversation désigne déjà ; l'activation la reprend si elle s'ouvre. */
+  readonly serverEncryptionKeyId?: string | null;
   readonly participants: readonly RegimeMember[];
 };
 
@@ -101,6 +103,7 @@ const REGIME_SELECT = {
   encryptionMode: true,
   encryptionEnabledBy: true,
   encryptionEpoch: true,
+  serverEncryptionKeyId: true,
   participants: {
     where: { isActive: true },
     select: {
@@ -316,7 +319,8 @@ export default async function encryptionRoutes(fastify: FastifyInstance) {
         let serverEncryptionKeyId: string | null = null;
         if (mode === 'server' || mode === 'hybrid') {
           // #11381 — la clé est RATTACHÉE à sa conversation : elle n'ouvre rien ailleurs.
-          serverEncryptionKeyId = await encryptionService.getOrCreateConversationKey(conversationId);
+          // #12822 — la clé déjà désignée, qui s'ouvre encore, est reprise.
+          serverEncryptionKeyId = await encryptionService.activationKeyId(conversationId, conversation.serverEncryptionKeyId ?? null);
         }
 
         // #12521 — UNE écriture conditionnelle sur l'époque lue.

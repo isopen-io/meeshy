@@ -13,7 +13,8 @@
  * faisait l'activation, laissait deux activations poser deux modes.
  *
  * Désactiver ne touche ni `serverEncryptionKeyId` (les messages `server` ou
- * `hybrid` déjà écrits restent lisibles par leur clé), ni les messages `e2ee`
+ * `hybrid` déjà écrits restent lisibles par leur clé — et une activation e2ee
+ * ne l'efface pas davantage, #12822), ni les messages `e2ee`
  * déjà envoyés : ils restent chiffrés à jamais, et la désactivation n'envoie
  * aucun clair au serveur (§ 5.2).
  */
@@ -86,7 +87,10 @@ function switchData(change: RegimeSwitch): Record<string, unknown> {
     encryptionProtocol: change.target.protocol,
     encryptionEnabledAt: change.at,
     encryptionEnabledBy: change.target.enabledBy,
-    serverEncryptionKeyId: change.target.serverEncryptionKeyId,
+    // #12822 (M1) — une activation sans clé (e2ee) ne remet jamais la
+    // désignation à null : les messages `server`/`hybrid` déjà scellés sous
+    // elle doivent rester lisibles, et une réactivation la reprendra.
+    ...(change.target.serverEncryptionKeyId ? { serverEncryptionKeyId: change.target.serverEncryptionKeyId } : {}),
     encryptionEpoch: epoch,
   };
 }

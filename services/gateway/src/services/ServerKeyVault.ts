@@ -174,7 +174,10 @@ export class ServerKeyVault {
     const loaded = await this.loadKey(keyId);
     if (loaded.status !== 'ok') return undefined;
     if (loaded.owner === conversationId) return loaded.key;
-    if ((await this.designatedKeyId(conversationId)) === keyId) return loaded.key;
+    if ((await this.designatedKeyId(conversationId)) === keyId) {
+      if (loaded.owner === null) await this.claimDesignatedKey(conversationId, keyId);
+      return loaded.key;
+    }
     logger.warn('clé de chiffrement au repos refusée : elle n’appartient pas à cette conversation', { keyId, conversationId });
     return undefined;
   }
@@ -256,6 +259,37 @@ export class ServerKeyVault {
       if (oldest !== undefined) this.designationCache.delete(oldest);
     }
     this.designationCache.set(conversationId, keyId);
+  }
+
+  /**
+   * #12822 (M1) — rattache à sa conversation une clé qu'elle DÉSIGNE et qui
+   * n'a pas de propriétaire : l'activation d'avant #11381 créait sa clé sans
+   * conversation (`conversationId: null`). Tant qu'elle n'est que désignée,
+   * une re-désignation (réactivation, bascule) la rendrait muette, et avec
+   * elle tous les messages scellés dessous. Rattachée, elle s'ouvre par sa
+   * ligne, quelle que soit la désignation.
+   *
+   * Compare-et-échange sur l'absence de propriétaire : une clé déjà rattachée
+   * à une AUTRE conversation n'est jamais reprise. Un échec n'empêche ni
+   * l'écriture ni la lecture en cours (la désignation suffit encore) : il est
+   * journalisé, et le prochain usage réessaie.
+   */
+  async claimDesignatedKey(conversationId: string, keyId: string): Promise<void> {
+    try {
+      const { count } = await this.prisma.serverEncryptionKey.updateMany({
+        where: { id: keyId, OR: [{ conversationId: null }, { conversationId: { isSet: false } }] },
+        data: { conversationId, purpose: 'conversation' },
+      });
+      if (count === 0) return;
+      this.conversationKeyMap.set(conversationId, keyId);
+      const cached = this.keyCache.get(keyId);
+      if (cached) cached.owner = conversationId;
+      logger.info('clé de conversation d’avant le chiffrement au repos rattachée à sa conversation', { conversationId, keyId });
+    } catch (error) {
+      logger.warn('rattachement de la clé désignée impossible pour le moment', {
+        conversationId, keyId, error: error instanceof Error ? error.message : 'unknown',
+      });
+    }
   }
 
   /**

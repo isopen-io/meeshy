@@ -280,7 +280,10 @@ export class EncryptionService implements AtRestKeyring {
   private async writableConversationKey(conversationId: string, preferredKeyId: string | null): Promise<{ keyId: string; key: Buffer }> {
     const keyId = preferredKeyId || await this.getOrCreateConversationKey(conversationId);
     const loaded = await this.keyVault.loadKey(keyId);
-    if (loaded.status === 'ok') return { keyId, key: loaded.key };
+    if (loaded.status === 'ok') {
+      if (loaded.owner === null && keyId === preferredKeyId) await this.keyVault.claimDesignatedKey(conversationId, keyId);
+      return { keyId, key: loaded.key };
+    }
     if (loaded.status === 'unavailable') throw new ServerAtRestUnavailableError('key-unavailable');
     if (loaded.status === 'unwrap-failed') {
       logger.error('clé de conversation illisible sous la clé maîtresse présente : envoi refusé, rien n’est remplacé', undefined, {
@@ -299,6 +302,35 @@ export class EncryptionService implements AtRestKeyring {
     const winner = await this.keyVault.getKeyFor(designated, conversationId);
     if (!winner) throw new ServerAtRestUnavailableError('key-unavailable');
     return { keyId: designated, key: winner };
+  }
+
+  /**
+   * #12822 (M1) — la clé qu'une ACTIVATION `server`/`hybrid` désigne.
+   *
+   * La conversation qui désigne déjà une clé qui s'ouvre (la sienne, ou une
+   * clé sans propriétaire d'avant #11381) la REPREND, rattachée : désactiver
+   * puis réactiver ne laisse aucun message scellé sous une clé que plus rien
+   * ne désigne. Seule une clé ABSENTE de la base (ou rattachée à une autre
+   * conversation) cède la place à une clé neuve. Une clé qui existe mais ne se
+   * désenveloppe pas sous la clé maîtresse présente refuse l'activation, comme
+   * elle refuse l'envoi : remplacer scellerait l'historique en silence.
+   */
+  async activationKeyId(conversationId: string, designatedKeyId: string | null): Promise<string> {
+    if (!this.keyVault.masterKeyAvailable) throw new ServerAtRestUnavailableError('missing');
+    if (!designatedKeyId) return this.getOrCreateConversationKey(conversationId);
+    const loaded = await this.keyVault.loadKey(designatedKeyId);
+    if (loaded.status === 'unavailable') throw new ServerAtRestUnavailableError('key-unavailable');
+    if (loaded.status === 'unwrap-failed') {
+      logger.error('clé désignée illisible sous la clé maîtresse présente : activation refusée, rien n’est remplacé', undefined, {
+        conversationId, keyId: designatedKeyId, code: 'SERVER_AT_REST_UNAVAILABLE', reason: 'key-unwrap-failed',
+      });
+      throw new ServerAtRestUnavailableError('key-unwrap-failed');
+    }
+    if (loaded.status === 'ok' && (loaded.owner === null || loaded.owner === conversationId)) {
+      if (loaded.owner === null) await this.keyVault.claimDesignatedKey(conversationId, designatedKeyId);
+      return designatedKeyId;
+    }
+    return this.getOrCreateConversationKey(conversationId);
   }
 
   /** Ouvre un chiffré au repos ; tout échec est EXPLICITE (`ServerAtRestUnreadableError`). */
