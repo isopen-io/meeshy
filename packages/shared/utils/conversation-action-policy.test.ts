@@ -25,19 +25,26 @@ describe('conversationActionsFor — rôles de plateforme et de conversation (#1
     expect(actionsOf({ conversation: { type: 'global' }, viewer: { platformRole: 'BIGBOSS' } }).rename).toBe(false);
   });
 
-  it('un creator invite ; dans Global, seuls ADMIN et BIGBOSS de plateforme', () => {
+  it('un creator invite ; dans Global, seuls les rôles de plateforme privilégiés (#11217)', () => {
     expect(actionsOf({ viewer: { conversationRole: 'creator' } }).invite).toBe(true);
     expect(actionsOf({ conversation: { type: 'global' }, viewer: { conversationRole: 'creator' } }).invite).toBe(false);
     expect(actionsOf({ conversation: { type: 'global' }, viewer: { platformRole: 'ADMIN' } }).invite).toBe(true);
+    expect(actionsOf({ conversation: { type: 'global' }, viewer: { platformRole: 'MODERATOR' } }).invite).toBe(true);
+    expect(actionsOf({ conversation: { type: 'global' }, viewer: { platformRole: 'AUDIT' } }).invite).toBe(false);
   });
 
-  it.each(['AUDIT', 'ANALYST', 'MODERATOR', 'inconnu'])('%s de plateforme vaut USER dans une conversation', (platformRole) => {
+  it.each(['AUDIT', 'ANALYST', 'moderator', 'inconnu'])('%s de plateforme vaut USER dans une conversation', (platformRole) => {
     expect(actionsOf({ viewer: { platformRole } })).toEqual(actionsOf());
   });
 
   it('un ADMIN de plateforme membre agit avec les droits du créateur', () => {
     const actions = actionsOf({ viewer: { platformRole: 'ADMIN' } });
     expect([actions.rename, actions.deleteForAll, actions.manageMembers, actions.adminOpen]).toEqual([true, true, true, true]);
+  });
+
+  it('un MODERATOR de plateforme membre agit avec les droits du créateur, sans ouvrir la console (#11217)', () => {
+    const actions = actionsOf({ viewer: { platformRole: 'MODERATOR' } });
+    expect([actions.rename, actions.deleteForAll, actions.manageMembers, actions.adminOpen]).toEqual([true, true, true, false]);
   });
 
   it('un rang de conversation inconnu échoue fermé', () => {

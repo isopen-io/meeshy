@@ -11,10 +11,14 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import me.meeshy.sdk.cache.valueOrNull
+import me.meeshy.sdk.friend.FriendshipCache
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.outbox.OutboxFlushWorker
 import me.meeshy.sdk.session.SessionRepository
+import me.meeshy.sdk.status.StatusBarCache
+import me.meeshy.sdk.status.StatusFeedMode
 import me.meeshy.sdk.user.ProfileStatsCacheRepository
 import me.meeshy.sdk.user.UserRepository
 import javax.inject.Inject
@@ -35,6 +39,8 @@ data class OwnProfileUiState(
     val isSaving: Boolean = false,
     val stats: UserStatsPresentation? = null,
     val timeline: StatsTimelinePresentation? = null,
+    val pendingFriendRequests: Int = 0,
+    val moodEmoji: String? = null,
 )
 
 /** Les intentions de MA page de profil — le puits unique [OwnProfileViewModel.onEvent]. */
@@ -59,10 +65,12 @@ sealed interface OwnProfileUiEvent {
  */
 @HiltViewModel
 class OwnProfileViewModel @Inject constructor(
-    sessionRepository: SessionRepository,
+    private val sessionRepository: SessionRepository,
     private val userRepository: UserRepository,
     private val statsCache: ProfileStatsCacheRepository,
     private val workManager: WorkManager,
+    private val friendshipCache: FriendshipCache,
+    private val statusBarCache: StatusBarCache,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(OwnProfileUiState())
@@ -79,11 +87,40 @@ class OwnProfileViewModel @Inject constructor(
                 // background session emission.
                 _state.update { s -> if (s.isEditing) s.copy(user = user) else s.withBuffersFrom(user) }
                 user?.id?.takeIf { it.isNotBlank() }?.let {
+                    paintMoodFromCache(it)
                     loadStatsOnce(it)
                     loadTimelineOnce()
                 }
             }
         }
+        viewModelScope.launch {
+            friendshipCache.version.collect {
+                _state.update { s -> s.copy(pendingFriendRequests = friendshipCache.pendingReceivedCount) }
+            }
+        }
+        refreshSilently()
+    }
+
+    /**
+     * Relit mon profil a l'ouverture, en silence (iOS `refreshCurrentUserProfile`) : la session
+     * republie l'identite fraiche, et un echec garde l'affiche — jamais de squelette ni d'erreur.
+     */
+    private fun refreshSilently() {
+        viewModelScope.launch {
+            try {
+                sessionRepository.refresh()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // Hors ligne : la page garde l'identite deja peinte.
+            }
+        }
+    }
+
+    /** Mon humeur, lue dans le cache des statuts deja servi — aucune requete (iOS `ProfileOwnAvatar`). */
+    private fun paintMoodFromCache(userId: String) {
+        val statuses = statusBarCache.load(StatusFeedMode.FRIENDS).valueOrNull.orEmpty()
+        _state.update { it.copy(moodEmoji = OwnProfileMood.resolve(statuses, userId)) }
     }
 
     fun onEvent(event: OwnProfileUiEvent) {

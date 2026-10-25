@@ -99,6 +99,8 @@ struct AdaptiveRootView: View {
             regular: { iPadRootView(scope: $0) }
         )
         .environment(\.rootNavigationHandoff, navigationHandoff)
+        // #3707 — un envoi chiffré qui bute sur la limite d'appareils du compte ouvre l'écran de retrait.
+        .modifier(EndToEndDeviceLimitPresenter())
         // Le composer de story démonté avec sa racine (compact ↔ regular) : son brouillon est tenu ICI, au-dessus
         // des deux racines, jusqu'à ce que la suivante le rouvre (`RootIntentRoutingLayer`).
         .onReceive(NotificationCenter.default.publisher(for: .storyComposerTornDown)) { note in

@@ -13,6 +13,9 @@ struct ConversationCollaborators {
     let failureRecovery: any SendFailureRecoveryProviding
     /// Le régime appris APRÈS l'ouverture du fil (#11379).
     let regimeLedger: EndToEndRegimeLedger
+    /// Le régime relu à la passerelle quand elle dit qu'il a changé (#12522).
+    let encryptionService: any ConversationEncryptionServiceProviding
+    let regimeRefresher: EndToEndRegimeRefresher
 
     init(
         persistence: MessagePersistenceActor,
@@ -24,7 +27,8 @@ struct ConversationCollaborators {
         windowFetcher: (any ConversationWindowFetcherProviding)? = nil,
         stager: (any OptimisticMessageStagerProviding)? = nil,
         failureRecovery: (any SendFailureRecoveryProviding)? = nil,
-        regimeLedger: EndToEndRegimeLedger? = nil
+        regimeLedger: EndToEndRegimeLedger? = nil,
+        encryptionService: (any ConversationEncryptionServiceProviding)? = nil
     ) {
         self.readReceipts = readReceipts ?? ConversationReadReceiptSender(syncEngine: syncEngine)
         self.voiceConsent = voiceConsent ?? VoiceConsentGate()
@@ -33,5 +37,7 @@ struct ConversationCollaborators {
         self.stager = stager ?? OptimisticMessageStager(persistence: persistence)
         self.failureRecovery = failureRecovery ?? SendFailureRecovery()
         self.regimeLedger = regimeLedger ?? .shared
+        self.encryptionService = encryptionService ?? ConversationEncryptionService.shared
+        self.regimeRefresher = EndToEndRegimeRefresher(ledger: self.regimeLedger, service: self.encryptionService)
     }
 }

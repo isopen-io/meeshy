@@ -37,7 +37,7 @@ final class SessionTransitionPlanTests: XCTestCase {
             .promptPushPermission,
             .refreshUnreadCount,
             .reRegisterPushTokens,
-            .uploadE2EEBundle,
+            .startEndToEnd(userId: "u1"),
             .migrateKeychain,
         ])
     }
@@ -67,6 +67,7 @@ final class SessionTransitionPlanTests: XCTestCase {
             .resetNotifications,
             .clearFriendships,
             .clearE2EESessions,
+            .stopEndToEnd,
             .unbindCache,
             .unregisterVoIP,
             .endActiveCall,
