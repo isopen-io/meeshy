@@ -22,6 +22,10 @@ import type { ApiResult, HttpTransport } from './http';
  *  - `notification.gameEnabled` — les notifications du JEU (invitation et
  *    acceptation de duo, résultat de ligue, étape de saison), que `GameNotifier`
  *    lit avant tout autre garde (#9490) ; absente côté serveur : reçues ;
+ *  - `notification.gamePhotoEnabled` — « Moments à immortaliser » (#10268) : le
+ *    PUSH d'une étape franchie app fermée, que la porte du type
+ *    `game_photo_moment` (`notifications/type-preference.ts`) lit après
+ *    `gameEnabled` ; absente côté serveur : reçus ;
  *  - `privacy.showOnlineStatus` / `showLastSeen` — `PresenceVisibilityService`
  *    et l'audience de `user:status` (`socketio/presence-audience.ts`) ;
  *  - `privacy.showReadReceipts` — `MessageReadStatusService`,
@@ -42,7 +46,7 @@ import type { ApiResult, HttpTransport } from './http';
  * Les vibrations (aucun lecteur serveur, aucun effet web) et le téléchargement
  * automatique des médias (#5563, issue dédiée) n'y sont PAS.
  *
- * **La lecture est une PROJECTION** : `?fields=` ne demande que ces treize
+ * **La lecture est une PROJECTION** : `?fields=` ne demande que ces quatorze
  * valeurs, et le décodeur n'en laisse entrer aucune autre — le cache de
  * requêtes est persisté dans le `localStorage` (`query-client.ts`). Une valeur
  * de mauvais type rend la lecture ILLISIBLE plutôt qu'une valeur devinée : une
@@ -57,12 +61,13 @@ export type AppPreferencesDeps = { readonly source: DataSource; readonly transpo
 const ThemeMode = z.enum(['light', 'dark', 'auto']);
 
 const Application = z.object({ theme: ThemeMode });
-/** `gameEnabled` est OPTIONNEL à la lecture : un serveur qui ne le sert pas (avant #9490) veut dire « reçu ». */
+/** `gameEnabled` et `gamePhotoEnabled` sont OPTIONNELS à la lecture : un serveur qui ne les sert pas (avant #9490, #10175) veut dire « reçu ». */
 const Notification = z.object({
   pushEnabled: z.boolean(),
   soundEnabled: z.boolean(),
   contactActivityEnabled: z.boolean(),
   gameEnabled: z.optional(z.boolean()),
+  gamePhotoEnabled: z.optional(z.boolean()),
 });
 const Privacy = z.object({
   showOnlineStatus: z.boolean(),
@@ -86,8 +91,8 @@ export type ThemeMode = z.infer<typeof ThemeMode>;
 
 export type AppPreferences = Readonly<
   z.infer<typeof Application> &
-    Omit<z.infer<typeof Notification>, 'gameEnabled'> &
-    z.infer<typeof Privacy> & { readonly gameEnabled: boolean }
+    Omit<z.infer<typeof Notification>, 'gameEnabled' | 'gamePhotoEnabled'> &
+    z.infer<typeof Privacy> & { readonly gameEnabled: boolean; readonly gamePhotoEnabled: boolean }
 >;
 
 export type PreferencesPatch = Partial<AppPreferences>;
@@ -101,6 +106,7 @@ export const APP_PREFERENCE_FIELDS = {
   soundEnabled: 'notification',
   contactActivityEnabled: 'notification',
   gameEnabled: 'notification',
+  gamePhotoEnabled: 'notification',
   showOnlineStatus: 'privacy',
   showLastSeen: 'privacy',
   showReadReceipts: 'privacy',
@@ -127,18 +133,20 @@ export function decodeAppPreferences(raw: unknown): AppPreferences | null {
     ...privacy,
     ...(allowAnalytics === undefined ? {} : { allowAnalytics }),
     gameEnabled: parsed.data.notification.gameEnabled ?? true,
+    gamePhotoEnabled: parsed.data.notification.gamePhotoEnabled ?? true,
   };
 }
 
 export function decodeServedPreferences(raw: unknown): PreferencesPatch | null {
   const parsed = Served.safeParse(raw);
   if (!parsed.success) return null;
-  const { gameEnabled, ...notification } = parsed.data.notification ?? {};
+  const { gameEnabled, gamePhotoEnabled, ...notification } = parsed.data.notification ?? {};
   const { allowAnalytics, ...privacy } = parsed.data.privacy ?? {};
   return {
     ...parsed.data.application,
     ...notification,
     ...(gameEnabled === undefined ? {} : { gameEnabled }),
+    ...(gamePhotoEnabled === undefined ? {} : { gamePhotoEnabled }),
     ...privacy,
     ...(allowAnalytics === undefined ? {} : { allowAnalytics }),
   };
