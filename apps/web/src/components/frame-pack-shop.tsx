@@ -1,14 +1,20 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { QueryClient } from '@tanstack/react-query';
 import { Suspense, lazy, useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 
+import type { GloryAtmosphere } from '@meeshy/shared/types/glory-atmospheres';
 import { parseGloryFramePackContract, parsePackStrings, type GloryFramePackFrame, type PackStrings } from '@meeshy/shared/types/glory-frame-pack';
 import type { PackAssetRef } from '@meeshy/shared/types/content-pack';
 
 import type { PackShopAdapter } from './pack-shop';
 import type { ConversationsDeps } from '@/lib/api/conversations';
 import { apiDeps } from '@/lib/api/deps';
+import { ENGAGEMENT_PROGRESS_QUERY_KEY, loadEngagementProgress } from '@/lib/api/engagement';
+import { appQueryClient } from '@/lib/api/query-client';
+import type { AtmosphereGate } from '@/lib/game/atmosphere';
+import { useAtmosphereGate } from '@/lib/game/use-atmosphere-gate';
+import { gameErrorMessage } from '@/lib/view/game-copy';
 import { packQueryKeys } from '@/lib/api/pack-query-keys';
 import {
   loadFramePack,
@@ -40,9 +46,28 @@ import type { PackAssetStoreDeps } from '@/lib/packs/pack-asset-store';
  * (`describeFrameUsage`, loi d'usage #10146). Un contrat d'une version
  * inconnue ne télécharge rien et dit « Mettre à jour Meeshy ». Un ancien
  * serveur (404 sur `/packs/…`) rend une boutique vide, sans erreur.
+ *
+ * **Le pack de l'atmosphère CHOISIE ne se retire pas** (#10163, PP7 de #10184) :
+ * sa rangée dit « Votre atmosphère » et offre « Changer d'atmosphère », qui
+ * ouvre le même choix que les réglages du jeu. Un pack inclus dit « Inclus ».
+ * Un retrait que la passerelle refuse (409 : l'atmosphère a été choisie sur un
+ * autre appareil) se dit en mots, et l'atmosphère du compte se relit.
  */
 
 const PackShop = lazy(() => import('./pack-shop').then((m) => ({ default: m.PackShop })));
+const GameAtmosphereChoice = lazy(() => import('./game-atmosphere-choice').then((m) => ({ default: m.GameAtmosphereChoice })));
+
+/** Ce que la boutique lit de la porte d'atmosphère : l'atmosphère du compte, les tuiles du choix, le geste de choisir. */
+export type FrameShopAtmosphere = Pick<AtmosphereGate, 'current' | 'tiles' | 'choose'>;
+
+/** Ce que l'adaptateur sait du compte : l'atmosphère tenue en place, le geste qui en change, la relecture après un refus. */
+export type FrameShopHold = {
+  readonly atmosphere: GloryAtmosphere | null;
+  readonly change: () => void;
+  readonly reread: () => void;
+};
+
+const NO_HOLD: FrameShopHold = { atmosphere: null, change: () => {}, reread: () => {} };
 
 const FRAME_KEYS = packQueryKeys('glory-frame');
 const STALE_TIME = 5 * 60 * 1000;
@@ -89,18 +114,28 @@ const writeInstalled = (queryClient: QueryClient, pack: FramePackSummary, instal
     return installed ? [...others, { ...pack, installed: true }] : others;
   });
 
-export const frameShopAdapter = (language: InterfaceLanguage, deps: ConversationsDeps, origin: string): PackShopAdapter<FramePackSummary> => ({
+const isHeld = (pack: FramePackSummary, hold: FrameShopHold): boolean => hold.atmosphere !== null && pack.slug === hold.atmosphere;
+
+export const frameShopAdapter = (language: InterfaceLanguage, deps: ConversationsDeps, origin: string, hold: FrameShopHold = NO_HOLD): PackShopAdapter<FramePackSummary> => ({
   domain: 'glory-frame',
   catalogueKey: FRAME_KEYS.catalogue,
   installedKey: FRAME_KEYS.installed,
   loadCatalogue: (signal) => loadFramePackCatalogue({ ...deps, signal }),
-  setInstalled: (pack, installed) => setFramePackInstalled(deps, pack.slug, installed),
+  setInstalled: async (pack, installed) => {
+    const result = await setFramePackInstalled(deps, pack.slug, installed);
+    if (!result.ok && result.status === 409) hold.reread();
+    return result;
+  },
   applyInstalled: writeInstalled,
+  removable: (pack) => pack.removable,
+  swap: (pack) => (isHeld(pack, hold) ? { label: translateStickerPacks(language, 'packs.frames.changeAtmosphere'), run: hold.change } : null),
+  keptText: () => translateStickerPacks(language, 'packs.frames.atmosphereKept'),
   price: (pack) => pack.price ?? null,
   owned: (pack) => pack.owned ?? true,
   title: (pack) => nameOf(pack, language).name,
   description: (pack) => nameOf(pack, language).description,
   meta: (pack) => [
+    ...(isHeld(pack, hold) ? [translateStickerPacks(language, 'packs.frames.yourAtmosphere')] : []),
     translateStickerPacks(language, 'stickerPacks.by', { author: pack.author }),
     translateStickerPacks(language, 'packs.frames.count', { count: String(pack.itemCount) }),
     ...(pack.downloadBytes === null ? [] : [translateStickerPacks(language, 'packs.frames.weight', { size: weightOf(language, pack.downloadBytes.story) })]),
@@ -122,18 +157,57 @@ export const frameShopAdapter = (language: InterfaceLanguage, deps: Conversation
     ),
 });
 
-export function FramePackShop({
-  language,
-  deps = apiDeps,
-  assets,
-}: {
+type FramePackShopProps = {
   readonly language: InterfaceLanguage;
   readonly deps?: ConversationsDeps;
   /** Le magasin des fichiers — l'origine de la passerelle par défaut. */
   readonly assets?: PackAssetStoreDeps;
-}) {
+  /** La porte d'atmosphère ; absente : celle du compte connecté ; `null` : aucune atmosphère tenue en place. */
+  readonly atmosphere?: FrameShopAtmosphere | null;
+};
+
+export function FramePackShop(props: FramePackShopProps) {
+  return props.atmosphere === undefined ? <AccountFramePackShop {...props} /> : <FramePackShopBody {...props} atmosphere={props.atmosphere} />;
+}
+
+/** L'atmosphère du compte : lue dans le bloc `game` de Progression (cache d'abord), la même porte que les réglages du jeu. */
+function AccountFramePackShop(props: FramePackShopProps) {
+  const deps = props.deps ?? apiDeps;
+  const progress = useQuery(
+    {
+      queryKey: ENGAGEMENT_PROGRESS_QUERY_KEY,
+      queryFn: async ({ signal }) => {
+        const result = await loadEngagementProgress({ ...deps, signal });
+        if (!result.ok) throw new Error(result.error);
+        return result.data;
+      },
+      staleTime: STALE_TIME,
+    },
+    appQueryClient,
+  );
+  const gate = useAtmosphereGate(progress.data?.game, { tiles: true });
+  return <FramePackShopBody {...props} atmosphere={gate} />;
+}
+
+function FramePackShopBody({ language, deps = apiDeps, assets, atmosphere }: FramePackShopProps & { readonly atmosphere: FrameShopAtmosphere | null }) {
   const store: PackAssetStoreDeps = assets ?? { origin: apiOrigin() };
+  const queryClient = useQueryClient();
   const [chosen, setChosen] = useState<string>(SHOP_TAB);
+  const [choosing, setChoosing] = useState(false);
+  const [atmosphereNotice, setAtmosphereNotice] = useState('');
+  const hold: FrameShopHold = {
+    atmosphere: atmosphere?.current ?? null,
+    change: () => setChoosing(true),
+    reread: () => void queryClient.invalidateQueries({ queryKey: ENGAGEMENT_PROGRESS_QUERY_KEY }),
+  };
+  const choose = (picked: GloryAtmosphere): void => {
+    setChoosing(false);
+    setAtmosphereNotice('');
+    void atmosphere?.choose(picked).then((outcome) => {
+      if (outcome.status === 'queued') setAtmosphereNotice(translateStickerPacks(language, 'packs.frames.atmosphereQueued'));
+      if (outcome.status === 'refused') setAtmosphereNotice(gameErrorMessage(outcome.code, language));
+    });
+  };
 
   const installed = useQuery({
     queryKey: FRAME_KEYS.installed,
@@ -161,10 +235,13 @@ export function FramePackShop({
         onSelect={setChosen}
         ariaLabel={translateStickerPacks(language, 'packs.frames.tabs')}
       />
+      <p data-frame-atmosphere-notice className="text-caption empty:hidden" role="status" aria-live="polite" style={{ color: 'var(--color-ios-ink-2)' }}>
+        {atmosphereNotice}
+      </p>
       {pack === undefined ? (
         <Suspense fallback={null}>
           <PackShop
-            adapter={frameShopAdapter(language, deps, store.origin)}
+            adapter={frameShopAdapter(language, deps, store.origin, hold)}
             language={language}
             hint={translateStickerPacks(language, 'packs.frames.hint')}
             empty={translateStickerPacks(language, 'packs.frames.empty')}
@@ -173,6 +250,11 @@ export function FramePackShop({
       ) : (
         <FramePackFrames key={pack.slug} slug={pack.slug} language={language} deps={deps} store={store} />
       )}
+      {choosing && atmosphere !== null ? (
+        <Suspense fallback={null}>
+          <GameAtmosphereChoice current={atmosphere.current} tiles={atmosphere.tiles} onChoose={choose} onClose={() => setChoosing(false)} />
+        </Suspense>
+      ) : null}
     </div>
   );
 }

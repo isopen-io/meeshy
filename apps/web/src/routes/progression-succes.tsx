@@ -14,8 +14,6 @@ import { suspendForGameCatalog } from '@/lib/i18n-game-catalog';
 import { ProgressionPage } from '@/routes/progression-page';
 import { AchievementsSection, UNLOCKED_TINT } from '@/routes/progression-parts';
 
-import type { EngagementProgress } from '@meeshy/shared/utils/engagement-progress';
-
 /**
  * LA PAGE DÉDIÉE DES SUCCÈS (#5843) — les succès COMPOSÉS, nommés un par un.
  *
@@ -34,14 +32,14 @@ export function SuccesBody({
   flameDays = null,
   rarities,
 }: {
-  readonly progress: EngagementProgress;
+  readonly progress: EngagementWithGame;
   readonly env: PhotoEnv;
   readonly flameDays?: number | null;
   /** La rareté mesurée de chaque succès (#9390) ; absente : l'écran d'avant. */
   readonly rarities?: AchievementRarityMap | undefined;
 }) {
   const [taking, setTaking] = useState<PhotoMoment | null>(null);
-  const atmosphere = useAtmosphereGate((progress as EngagementWithGame).game);
+  const atmosphere = useAtmosphereGate(progress.game);
   return (
     <>
       <AchievementsSection progress={progress} rarities={rarities} onPhoto={(key) => setTaking(achievementMoment(key, visibleRarity(rarities?.[key])))} />

@@ -8,7 +8,9 @@ import { ACHIEVEMENT_RARITIES } from '@meeshy/shared/utils/game/glory';
 
 import type { ConversationsDeps } from '@/lib/api/conversations';
 import type { ApiResult, HttpRequest, HttpTransport } from '@/lib/api/http';
+import { ENGAGEMENT_PROGRESS_QUERY_KEY } from '@/lib/api/engagement';
 import { appQueryClient } from '@/lib/api/query-client';
+import type { AtmosphereOutcome, AtmosphereTile } from '@/lib/game/atmosphere';
 import { frameUsageText } from '@/lib/i18n-frame-usage-catalog';
 import { loadStickerPacksCatalog } from '@/lib/i18n-sticker-packs-catalog';
 import { SUPPORTED_INTERFACE_LANGUAGES } from '@/lib/inline-interface-language-bootstrap.js';
@@ -16,7 +18,7 @@ import { packAssetUrl, sha256Hex } from '@/lib/packs/pack-asset-store';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
-import { FramePackShop, prepareFramePackShop, usageText } from './frame-pack-shop';
+import { FramePackShop, prepareFramePackShop, usageText, type FrameShopAtmosphere } from './frame-pack-shop';
 
 /**
  * **LA BOUTIQUE DES CADRES** (#10149, demande porteur 2026-10-11) — installer
@@ -72,8 +74,10 @@ const asset = async (bytes: Uint8Array<ArrayBuffer>, ext: string): Promise<{ ref
   return { ref: { src: `${sha256.slice(0, 16)}.${ext}`, bytes: bytes.byteLength, sha256 }, bytes };
 };
 
-const summary = (installed: boolean) => ({
-  slug: 'exemple-savane',
+type PackShape = { readonly slug?: string; readonly removable?: boolean };
+
+const summary = (installed: boolean, shape: PackShape = {}) => ({
+  slug: shape.slug ?? 'exemple-savane',
   name: 'Savane (exemple)',
   description: 'Quatre cadres Ambassadeur',
   author: 'Meeshy',
@@ -87,7 +91,7 @@ const summary = (installed: boolean) => ({
   origin: 'official',
   version: 1,
   downloadBytes: { story: 48_000, square: null },
-  removable: true,
+  removable: shape.removable ?? true,
   names: { fr: { name: 'Savane', description: 'Quatre cadres du rang Ambassadeur' } },
   preview: null,
   usage: { kind: 'rank', rank: 'ambassadeur' },
@@ -96,7 +100,11 @@ const summary = (installed: boolean) => ({
 type Fixture = { deps: ConversationsDeps; fetcher: typeof fetch; calls: HttpRequest[] };
 
 /** Une passerelle en mémoire : la boutique, les installés, le détail, l'installation — et les fichiers du pack. */
-const gateway = async (options: { readonly absent?: boolean; readonly schema?: number; readonly installed?: boolean } = {}): Promise<Fixture> => {
+const gateway = async (
+  options: { readonly absent?: boolean; readonly schema?: number; readonly installed?: boolean; readonly pack?: PackShape; readonly refuseRemoval?: boolean } = {},
+): Promise<Fixture> => {
+  const slug = options.pack?.slug ?? 'exemple-savane';
+  const row = (on: boolean) => summary(on, options.pack);
   let installed = options.installed ?? false;
   const thumbs = await Promise.all([4, 3, 2, 1].map((division) => asset(new Uint8Array([division, 7, 7, 7]), 'webp')));
   const frames = [4, 3, 2, 1].map((division, index) => ({
@@ -115,14 +123,15 @@ const gateway = async (options: { readonly absent?: boolean; readonly schema?: n
   const calls: HttpRequest[] = [];
   const answer = (request: HttpRequest): ApiResult<unknown> => {
     if (options.absent === true) return { ok: false, status: 404, error: 'Not Found' };
-    if (request.path === '/api/v1/packs/glory-frame') return { ok: true, data: [summary(installed)] };
-    if (request.path === '/api/v1/packs/glory-frame/installed') return { ok: true, data: installed ? [summary(true)] : [] };
-    if (request.path === '/api/v1/packs/glory-frame/exemple-savane/install') {
+    if (request.path === '/api/v1/packs/glory-frame') return { ok: true, data: [row(installed)] };
+    if (request.path === '/api/v1/packs/glory-frame/installed') return { ok: true, data: installed ? [row(true)] : [] };
+    if (request.path === `/api/v1/packs/glory-frame/${slug}/install`) {
+      if (request.method === 'DELETE' && options.refuseRemoval === true) return { ok: false, status: 409, error: 'This pack cannot be removed', code: 'PACK_NOT_REMOVABLE' };
       installed = request.method === 'PUT';
-      return { ok: true, data: summary(installed) };
+      return { ok: true, data: row(installed) };
     }
-    if (request.path === '/api/v1/packs/glory-frame/exemple-savane') {
-      return { ok: true, data: { ...summary(installed), contractSchema: 1, contract: contract.ref, strings: { fr: strings.ref }, collections: [] } };
+    if (request.path === `/api/v1/packs/glory-frame/${slug}`) {
+      return { ok: true, data: { ...row(installed), contractSchema: 1, contract: contract.ref, strings: { fr: strings.ref }, collections: [] } };
     }
     return { ok: false, status: 404, error: 'Not Found' };
   };
@@ -139,12 +148,28 @@ const gateway = async (options: { readonly absent?: boolean; readonly schema?: n
   return { deps: { source: 'gateway', transport }, fetcher, calls };
 };
 
-const mount = (fixture: Fixture) =>
+const mount = (fixture: Fixture, atmosphere: FrameShopAtmosphere | null = null) =>
   mounter.mount(
     <QueryClientProvider client={appQueryClient}>
-      <FramePackShop language="fr" deps={fixture.deps} assets={{ origin: ORIGIN, fetcher: fixture.fetcher, cacheStorage: null }} />
+      <FramePackShop language="fr" deps={fixture.deps} assets={{ origin: ORIGIN, fetcher: fixture.fetcher, cacheStorage: null }} atmosphere={atmosphere} />
     </QueryClientProvider>,
   );
+
+const tileOf = (atmosphere: AtmosphereTile['atmosphere']): AtmosphereTile => ({ atmosphere, cover: null, installed: null, removable: atmosphere !== 'afrique', downloadBytes: null });
+
+/** La porte d'atmosphère d'un compte qui a choisi `current` ; `chosen` relève chaque choix, `outcome` dit ce que la porte répond. */
+const atmosphereGate = (current: FrameShopAtmosphere['current'], outcome: AtmosphereOutcome = { status: 'saved', packInstalled: true }) => {
+  const chosen: string[] = [];
+  const gate: FrameShopAtmosphere = {
+    current,
+    tiles: (['afrique', 'egypte', 'nord'] as const).map(tileOf),
+    choose: async (atmosphere) => {
+      chosen.push(atmosphere);
+      return outcome;
+    },
+  };
+  return { gate, chosen };
+};
 
 const tab = (host: HTMLElement, slug: string) => host.querySelector<HTMLElement>(`[data-frame-pack-tab="${slug}"]`);
 
@@ -199,6 +224,56 @@ describe('FramePackShop', () => {
     await mounter.click(tab(host, 'exemple-savane'));
     await until(() => host.querySelector('[data-frame-pack-update]') !== null);
     expect(host.querySelectorAll('[data-frame]').length).toBe(0);
+  });
+
+  test('un pack INCLUS (non retirable) dit « Inclus », jamais « Retirer »', async () => {
+    const host = await mount(await gateway({ installed: true, pack: { slug: 'moments', removable: false } }));
+    await until(() => host.querySelector('[data-shop-included="moments"]') !== null);
+    expect(host.querySelector('[data-shop-toggle="moments"]')).toBe(null);
+  });
+
+  test('le pack de l’atmosphère CHOISIE offre « Changer d’atmosphère » au lieu de « Retirer », et le dit dans sa rangée', async () => {
+    const { gate } = atmosphereGate('egypte');
+    const host = await mount(await gateway({ installed: true, pack: { slug: 'egypte' } }), gate);
+    await until(() => host.querySelector('[data-shop-swap="egypte"]') !== null);
+    expect(host.querySelector('[data-shop-toggle="egypte"]')).toBe(null);
+    expect(host.querySelector('[data-shop-swap="egypte"]')?.textContent).toBe('Changer d’atmosphère');
+    expect(host.querySelector('[data-shop-pack="egypte"]')?.textContent).toContain('Votre atmosphère');
+  });
+
+  test('« Changer d’atmosphère » ouvre le choix des atmosphères, et choisir passe par la porte du compte', async () => {
+    const { gate, chosen } = atmosphereGate('egypte');
+    const host = await mount(await gateway({ installed: true, pack: { slug: 'egypte' } }), gate);
+    await until(() => host.querySelector('[data-shop-swap="egypte"]') !== null);
+    await mounter.click(host.querySelector<HTMLElement>('[data-shop-swap="egypte"]'));
+    await until(() => host.ownerDocument.querySelector('[data-atmosphere-choice]') !== null);
+    await mounter.click(host.ownerDocument.querySelector<HTMLElement>('[data-atmosphere-option="nord"]'));
+    await mounter.click(host.ownerDocument.querySelector<HTMLElement>('[data-atmosphere-continue]'));
+    await until(() => host.ownerDocument.querySelector('[data-atmosphere-choice]') === null);
+    expect(chosen).toEqual(['nord']);
+  });
+
+  test('un choix parti hors ligne le dit dans la boutique', async () => {
+    const { gate } = atmosphereGate('egypte', { status: 'queued' });
+    const host = await mount(await gateway({ installed: true, pack: { slug: 'egypte' } }), gate);
+    await until(() => host.querySelector('[data-shop-swap="egypte"]') !== null);
+    await mounter.click(host.querySelector<HTMLElement>('[data-shop-swap="egypte"]'));
+    await until(() => host.ownerDocument.querySelector('[data-atmosphere-continue]') !== null);
+    await mounter.click(host.ownerDocument.querySelector<HTMLElement>('[data-atmosphere-continue]'));
+    await until(() => host.querySelector('[data-frame-atmosphere-notice]')?.textContent === 'Hors ligne : votre choix partira avec la connexion.');
+  });
+
+  test('un retrait refusé (409 : l’atmosphère a été choisie ailleurs) se dit en mots, garde le pack et relit le compte', async () => {
+    appQueryClient.setQueryData(ENGAGEMENT_PROGRESS_QUERY_KEY, { stale: true });
+    const host = await mount(await gateway({ installed: true, pack: { slug: 'nord' }, refuseRemoval: true }), atmosphereGate('egypte').gate);
+    await until(() => host.querySelector('[data-shop-toggle="nord"]') !== null);
+    await mounter.click(host.querySelector<HTMLElement>('[data-shop-toggle="nord"]'));
+    const status = () => host.querySelector('[data-pack-shop] [role="status"]')?.textContent ?? '';
+    await until(() => status() !== '');
+    expect(status()).toBe('Ce pack porte votre atmosphère : il reste installé. Changez d’atmosphère pour le retirer.');
+    expect(host.querySelector('[data-shop-toggle="nord"]')?.getAttribute('aria-pressed')).toBe('true');
+    expect(tab(host, 'nord')).not.toBe(null);
+    expect(appQueryClient.getQueryState(ENGAGEMENT_PROGRESS_QUERY_KEY)?.isInvalidated).toBe(true);
   });
 
   test('un ANCIEN serveur (404 sur /packs/…) rend une boutique vide, sans erreur', async () => {
