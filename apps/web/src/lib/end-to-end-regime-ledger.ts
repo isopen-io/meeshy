@@ -1,6 +1,5 @@
 import { createStore, type StoreApi } from 'zustand/vanilla';
 
-import type { Message } from '@/lib/api/types';
 
 /**
  * **UNE CONVERSATION VUE CHIFFRÉE DE BOUT EN BOUT RESTE FERMÉE AU CLAIR**
@@ -14,13 +13,19 @@ import type { Message } from '@/lib/api/types';
  * parole du serveur — un serveur compromis qui servirait la conversation sans
  * mode. Ce registre retient donc, par compte, les conversations que ce
  * navigateur a vues `e2ee` (mode servi, bascule temps réel, fil qui montre
- * l'avis système d'activation) et toute rétrogradation servie est ignorée : ni
- * confirmation, ni époque à départager, ni oubli.
+ * l'avis système d'activation ou un message chiffré de bout en bout) et toute
+ * rétrogradation servie est ignorée : ni confirmation, ni époque à départager,
+ * ni oubli.
  *
- * Un message isolé marqué `e2ee` n'est PAS un signal de régime : mesuré sur
- * staging le 2026-10-25, trois tête-à-tête sans aucun régime portent un ancien
- * message iOS marqué `e2ee` suivi de clair ; les fermer au composeur
- * fermerait des conversations qui n'ont jamais été chiffrées.
+ * #12986 (décision porteur du 2026-10-25, option 2) — un message chiffré de
+ * bout en bout AFFICHÉ dans le fil scelle l'envoi, même servi sans régime,
+ * dès qu'il porte un marqueur que la passerelle a admis comme tel
+ * (`carriesEndToEnd`). Cela couvre une conversation dont le mode se perd en
+ * route alors que ses messages le gardent ; une passerelle compromise qui
+ * retirerait aussi les marques des messages n'est arrêtée que là où ce compte
+ * a déjà vu la conversation chiffrée. Les trois tête-à-tête du staging qui
+ * portaient de faux chiffrés de recette sans régime en ont été retirés d'abord ;
+ * la production n'en comptait aucun.
  *
  * Il survit au rechargement : la liste est rangée dans le stockage du
  * navigateur sous la clé du compte (`bind`). Un stockage absent, plein ou
@@ -104,35 +109,18 @@ export const endToEndRegimeLedger = createEndToEndRegimeLedger();
 
 export const isEndToEndMode = (mode: string | null | undefined): boolean => typeof mode === 'string' && mode.trim().toLowerCase() === 'e2ee';
 
-type SignalSource = Pick<Message, 'messageType' | 'metadata'> & { readonly systemEvent?: unknown };
-
-const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> => typeof value === 'object' && value !== null;
-
-/** L'avis d'ACTIVATION du bout en bout, sur un message système seulement : un texte d'utilisateur qui l'imiterait ne dit rien. */
-function announcesEndToEnd(message: SignalSource): boolean {
-  if (message.messageType !== 'system') return false;
-  const { metadata, systemEvent } = message;
-  if (isRecord(metadata) && metadata.kind === 'encryption-enabled') return isEndToEndMode(typeof metadata.mode === 'string' ? metadata.mode : null);
-  if (isRecord(systemEvent) && systemEvent.key === 'system.encryption-enabled' && isRecord(systemEvent.params)) {
-    return isEndToEndMode(typeof systemEvent.params.mode === 'string' ? systemEvent.params.mode : null);
-  }
-  return false;
-}
-
-/** Le fil chargé montre-t-il l'activation du bout en bout ? Un avis de désactivation n'y retire rien. */
-export function threadShowsEndToEnd(messages: readonly SignalSource[]): boolean {
-  return messages.some(announcesEndToEnd);
-}
-
 type SealedInput = {
   readonly conversationId: string;
   readonly servedMode?: string | null | undefined;
-  readonly messages?: readonly SignalSource[] | undefined;
 };
 
-/** La conversation est-elle fermée au clair ? Servie e2ee, apprise e2ee, ou montrée e2ee par le fil. */
+/**
+ * La conversation est-elle fermée au clair ? Servie e2ee, ou apprise e2ee — ce
+ * que le fil a montré (`threadShowsEndToEnd`, `lib/end-to-end-thread-signal.ts`)
+ * y est inscrit par le fil ouvert et par la surveillance du cache.
+ */
 export function endToEndSealed(state: Pick<EndToEndRegimeState, 'sealed'>, input: SealedInput): boolean {
-  return isEndToEndMode(input.servedMode) || state.sealed[input.conversationId] === true || threadShowsEndToEnd(input.messages ?? []);
+  return isEndToEndMode(input.servedMode) || state.sealed[input.conversationId] === true;
 }
 
 /** Le refus local d'un envoi en clair vers une conversation vue e2ee : rien ne part au réseau. */

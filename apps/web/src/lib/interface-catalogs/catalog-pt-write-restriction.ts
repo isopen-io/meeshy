@@ -3,7 +3,8 @@ import type { WriteRestrictionCatalogSlice } from './catalog-fr-write-restrictio
 /** La restriction d'écriture servie (#9928) — voir `catalog-fr-write-restriction.ts`. */
 const ptWriteRestriction = {
   'composer.writeRestriction.minorGlobal': 'O Global abre-se à escrita quando fizeres 18 anos',
-  'composer.writeRestriction.endToEnd': 'Conversa encriptada de ponta a ponta: a web ainda não pode escrever aqui',
+  'composer.writeRestriction.endToEnd': 'Conversa criptografada de ponta a ponta: escreva pelo app Meeshy',
+  'composer.writeRestriction.endToEnd.shell': 'Conversa criptografada de ponta a ponta: escreva em um dos seus dispositivos criptografados',
   'age.blocked.title': 'O Meeshy é para maiores de 13 anos',
   'age.blocked.body': 'Esta conta não pode ser usada antes dos teus 13 anos.',
   'age.blocked.confirm': 'Percebi',

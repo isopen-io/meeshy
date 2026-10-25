@@ -157,7 +157,7 @@ struct EncryptedDevicesView: View {
         VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             if let current = model.currentDevice {
                 sectionTitle(String(localized: "e2ee.devices.section.current", defaultValue: "Cet appareil", bundle: .main))
-                EncryptedDeviceRow(device: current, isBusy: false)
+                EncryptedDeviceRow(device: current, isBusy: false, opens: false)
             }
             sectionTitle(String(localized: "e2ee.devices.section.others", defaultValue: "Mes autres appareils", bundle: .main))
                 .padding(.top, MeeshySpacing.sm)

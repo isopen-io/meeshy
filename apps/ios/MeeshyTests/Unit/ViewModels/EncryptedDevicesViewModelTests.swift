@@ -236,4 +236,13 @@ final class EncryptedDevicesViewModelTests: XCTestCase {
         XCTAssertTrue(linking.scannedPayloads.isEmpty)
         XCTAssertEqual(model.loadState, .failed)
     }
+
+    func test_twoDevicesOfTheSameModel_areToldApartByTheirNumber() {
+        let first = EncryptedDevicePresentation(device(1, trust: .pending, label: "iPhone"))
+        let second = EncryptedDevicePresentation(device(3, trust: .pending, label: "iPhone"))
+
+        XCTAssertEqual(first.title, second.title)
+        XCTAssertNotEqual(first.detail, second.detail)
+        XCTAssertTrue(second.accessibilityLabel.contains("3"), "VoiceOver lit aussi le numéro")
+    }
 }
