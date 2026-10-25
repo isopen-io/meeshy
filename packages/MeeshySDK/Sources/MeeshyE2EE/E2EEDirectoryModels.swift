@@ -136,33 +136,33 @@ public struct E2EEUserDevices: Decodable, Equatable, Sendable {
 /// Un appareil chiffré de MON compte (`GET /e2ee/devices`, #13009) : des
 /// métadonnées que la passerelle sert au seul propriétaire, jamais une clé.
 /// L'approbation ne s'y lit pas : elle vit sur chaque appareil (spec § 3.5).
-/// Une plateforme qu'un ancien client ne connaît pas se lit `nil`, et une
+/// Une plateforme qu'un ancien client ne connaît pas (ou `unknown`) se lit `nil`, et une
 /// date illisible aussi : la liste ne tombe pas pour une métadonnée.
 public struct E2EEOwnDeviceDetails: Decodable, Equatable, Sendable {
     public let deviceId: UInt32
     public let registrationId: UInt32
     public let platform: E2EEPlatform?
     public let label: String?
-    public let createdAt: Date?
+    public let enrolledAt: Date?
     public let lastSeenAt: Date?
     /// L'appareil de la session qui demande.
     public let current: Bool
 
     public init(
         deviceId: UInt32, registrationId: UInt32, platform: E2EEPlatform?, label: String?,
-        createdAt: Date?, lastSeenAt: Date?, current: Bool
+        enrolledAt: Date?, lastSeenAt: Date?, current: Bool
     ) {
         self.deviceId = deviceId
         self.registrationId = registrationId
         self.platform = platform
         self.label = label
-        self.createdAt = createdAt
+        self.enrolledAt = enrolledAt
         self.lastSeenAt = lastSeenAt
         self.current = current
     }
 
     private enum CodingKeys: String, CodingKey {
-        case deviceId, registrationId, platform, label, createdAt, lastSeenAt, current
+        case deviceId, registrationId, platform, label, enrolledAt, lastSeenAt, current
     }
 
     public init(from decoder: any Decoder) throws {
@@ -171,7 +171,7 @@ public struct E2EEOwnDeviceDetails: Decodable, Equatable, Sendable {
         registrationId = try container.decode(UInt32.self, forKey: .registrationId)
         platform = Self.text(container, .platform).flatMap(E2EEPlatform.init(rawValue:))
         label = Self.text(container, .label)
-        createdAt = Self.text(container, .createdAt).flatMap(Self.instant)
+        enrolledAt = Self.text(container, .enrolledAt).flatMap(Self.instant)
         lastSeenAt = Self.text(container, .lastSeenAt).flatMap(Self.instant)
         current = (try? container.decodeIfPresent(Bool.self, forKey: .current)) ?? false
     }

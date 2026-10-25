@@ -46,7 +46,7 @@ nonisolated final class LibsignalTestGateway: @unchecked Sendable {
                     id: "env\(nextEnvelope)", messageId: messageId, conversationId: conversationId,
                     recipientRegistrationId: envelope.registrationId, senderUserId: sender,
                     senderDeviceId: sealed.senderDeviceId, type: envelope.type, body: envelope.body,
-                    createdAt: "2026-10-25T12:00:00.000Z"
+                    enrolledAt: "2026-10-25T12:00:00.000Z"
                 ))
             }
         }
@@ -125,7 +125,7 @@ nonisolated final class LibsignalTestGateway: @unchecked Sendable {
         lock.withLock { devices.filter { $0.userId == userId } }.map {
             E2EEOwnDeviceDetails(
                 deviceId: $0.deviceId, registrationId: $0.registrationId, platform: $0.platform, label: $0.label,
-                createdAt: Date(timeIntervalSince1970: 1_792_929_600), lastSeenAt: nil, current: $0.sessionId == sessionId
+                enrolledAt: Date(timeIntervalSince1970: 1_792_929_600), lastSeenAt: nil, current: $0.sessionId == sessionId
             )
         }
     }

@@ -53,7 +53,7 @@ nonisolated struct EndToEndOwnDevice: Equatable, Sendable, Identifiable {
         self.registrationId = registrationId
         self.platform = details?.platform
         self.label = details?.label
-        self.enrolledAt = details?.createdAt
+        self.enrolledAt = details?.enrolledAt
         self.lastSeenAt = details?.lastSeenAt
         self.trust = trust
     }

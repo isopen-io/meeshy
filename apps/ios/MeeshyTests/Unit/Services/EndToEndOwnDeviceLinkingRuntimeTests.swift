@@ -135,9 +135,9 @@ final class EndToEndOwnDeviceLinkingRuntimeTests: XCTestCase {
             E2EEOwnDeviceStatus(deviceId: 2, registrationId: 20, approved: false),
         ]
         let details = [
-            E2EEOwnDeviceDetails(deviceId: 1, registrationId: 11, platform: .web, label: "ancien", createdAt: nil, lastSeenAt: nil, current: false),
-            E2EEOwnDeviceDetails(deviceId: 2, registrationId: 20, platform: .macos, label: "Mac", createdAt: nil, lastSeenAt: nil, current: true),
-            E2EEOwnDeviceDetails(deviceId: 3, registrationId: 30, platform: .ios, label: "iPhone", createdAt: nil, lastSeenAt: nil, current: false),
+            E2EEOwnDeviceDetails(deviceId: 1, registrationId: 11, platform: .web, label: "ancien", enrolledAt: nil, lastSeenAt: nil, current: false),
+            E2EEOwnDeviceDetails(deviceId: 2, registrationId: 20, platform: .macos, label: "Mac", enrolledAt: nil, lastSeenAt: nil, current: true),
+            E2EEOwnDeviceDetails(deviceId: 3, registrationId: 30, platform: .ios, label: "iPhone", enrolledAt: nil, lastSeenAt: nil, current: false),
         ]
 
         let listed = EndToEndOwnDevice.list(current: current, others: others, details: details)

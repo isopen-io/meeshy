@@ -64,7 +64,7 @@ final class FakeE2EEServer: @unchecked Sendable {
                     id: "env\(nextEnvelope)", messageId: messageId, conversationId: conversationId,
                     recipientRegistrationId: envelope.registrationId, senderUserId: sender,
                     senderDeviceId: sealed.senderDeviceId, type: envelope.type, body: envelope.body,
-                    createdAt: "2026-10-24T12:00:00.000Z"
+                    enrolledAt: "2026-10-24T12:00:00.000Z"
                 )
                 queued["\(envelope.userId).\(envelope.deviceId)", default: []].append(served)
             }
@@ -244,7 +244,7 @@ final class FakeE2EEDirectoryClient: E2EEDirectoryClientProviding, @unchecked Se
         return server.activeDevices(of: userId).map {
             E2EEOwnDeviceDetails(
                 deviceId: $0.deviceId, registrationId: $0.registrationId, platform: .ios, label: nil,
-                createdAt: nil, lastSeenAt: nil, current: $0.deviceId == bound?.deviceId
+                enrolledAt: nil, lastSeenAt: nil, current: $0.deviceId == bound?.deviceId
             )
         }
     }
