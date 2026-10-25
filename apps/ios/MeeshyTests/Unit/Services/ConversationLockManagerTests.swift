@@ -306,6 +306,20 @@ final class ConversationLockManagerTests: XCTestCase {
         XCTAssertEqual(NSELockedConversationMirror.readFile(at: fixture.mirrorFile), .ids([]))
     }
 
+    /// Une fois écrite, la liste l'est toujours, vide comprise : une clé
+    /// ABSENTE ne dit plus « aucun verrou », elle dit « illisible »
+    /// (`CFPreferences` sert encore le domaine vide d'avant le premier
+    /// déverrouillage). Le miroir de fichier fait alors foi, et ne se réécrit pas.
+    func test_aListThatReadsAbsent_withProtectedData_keepsTheMirroredLocks() throws {
+        let fixture = try makeLaunchFixture()
+        NSELockedConversationMirror.mirror(["coffre"], toFile: fixture.mirrorFile, defaults: fixture.mirror)
+
+        let sut = makeLaunchedManager(fixture, protectedData: ProtectedData(available: true))
+
+        XCTAssertTrue(sut.isLocked("coffre"))
+        XCTAssertEqual(NSELockedConversationMirror.readFile(at: fixture.mirrorFile), .ids(["coffre"]))
+    }
+
     func test_aLaunchWithProtectedData_readsTheListAndMirrorsIt() throws {
         let fixture = try makeLaunchFixture()
         fixture.standard.set(["coffre"], forKey: lockedIdsKey)
