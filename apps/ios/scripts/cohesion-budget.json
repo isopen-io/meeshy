@@ -394,7 +394,7 @@
     "Meeshy::FeedPostCard": 1765,
     "Meeshy::FeedViewModel": 1900,
     "Meeshy::MeeshyComposerHost": 7804,
-    "Meeshy::MessageListViewController": 4297,
+    "Meeshy::MessageListViewController": 4299,
     "Meeshy::OutboxDispatcher": 1591,
     "Meeshy::PostDetailView": 2963,
     "Meeshy::StoryCardView": 2038,
