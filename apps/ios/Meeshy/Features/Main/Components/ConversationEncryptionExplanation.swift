@@ -51,6 +51,9 @@ enum ConversationEncryptionRegime: Equatable {
 ///   aperçu de notification protégé (`messageNotificationFanOut`), recherche
 ///   qui écarte les messages chiffrés, file hors ligne refusée et traduction sur
 ///   l'appareil seulement (`EndToEndSendRefusal`, `DeviceTranslationEligibility`) ;
+/// - pièces jointes `e2ee` (#10789) : blob opaque, ni TTS ni média dans le push
+///   (`la-passerelle-garde-une-piece-e2ee-comme-un-blob-opaque`), web qui ne
+///   les ouvre pas, aucune modération serveur ;
 /// - appareils : 16 au plus (`E2EE_MAX_ACTIVE_DEVICES`), clés du trousseau
 ///   `ThisDeviceOnly` ;
 /// - bascule : `mayActivateConversationEncryption`, avis système ; le bout en
@@ -65,12 +68,13 @@ struct ConversationEncryptionExplanation: Equatable {
 
     enum Fact: CaseIterable, Equatable {
         case transitProtected, storedWithoutEncryption, encryptedOnServerServerReads, hybridIsServerToday
-        case onlyParticipantsRead, everyServerFeature, translatedOnDevice
+        case onlyParticipantsRead, everyServerFeature, translatedOnDevice, attachmentsEncryptedOnDevice
         case noServerTranscription, noNotificationPreview, noSearch, noEdit, noForward, noOfflineSending
-        case notYetAttachments, notYetDecryptedNotifications, notYetGroups, groupSendingUnavailable, notYetSafetyNumbers
+        case notYetPlacesAndStickers, notYetDecryptedNotifications, notYetGroups, groupSendingUnavailable, notYetSafetyNumbers
         case oneKeyPerDevice, deviceLimit, restoredDeviceIsNew
         case whoMayToggle, switchKeepsHistory, switchIsShownInThread, endToEndIsFinal
         case endToEndNeverTurnedOff, endToEndNeverTurnedOffDirect, serverCannotTurnItOff
+        case voiceTranslatedAsTextOnDevice, noLockScreenMediaPreview, noWebPlayback, noServerModeration
     }
 
     struct Section: Equatable {
@@ -100,6 +104,18 @@ struct ConversationEncryptionExplanation: Equatable {
         }
     }
 
+    /// Ce que le bout en bout retire aux pièces jointes (#10789) : le vocal
+    /// se traduit en texte sur l'appareil sans voix clonée (aucun TTS serveur),
+    /// le push n'attache aucun média (`maskedAttachment`), le web n'ouvre pas
+    /// la pièce (#10788), et le serveur, aveugle, ne modère rien.
+    static let attachmentTradeOffs: [Fact] = [.voiceTranslatedAsTextOnDevice, .noLockScreenMediaPreview, .noWebPlayback, .noServerModeration]
+
+    /// Ce que le choix d'un mode annonce AVANT l'activation : seul le bout en
+    /// bout retire quelque chose aux pièces jointes.
+    static func activationTradeOffs(for mode: ConversationEncryptionModeChoice) -> [Fact] {
+        mode == .e2ee ? attachmentTradeOffs : []
+    }
+
     private static let switchingFacts: [Fact] = [.whoMayToggle, .switchKeepsHistory, .switchIsShownInThread, .endToEndIsFinal]
 
     private static func readable(whoReads: [Fact]) -> [Section] {
@@ -113,9 +129,10 @@ struct ConversationEncryptionExplanation: Equatable {
     private static func endToEnd(isDirect: Bool) -> [Section] {
         [
             Section(topic: .whoReads, facts: [.onlyParticipantsRead]),
-            Section(topic: .available, facts: [.translatedOnDevice]),
-            Section(topic: .absent, facts: [.noServerTranscription, .noNotificationPreview, .noSearch, .noEdit, .noForward, .noOfflineSending]),
-            Section(topic: .notYet, facts: [.notYetAttachments, .notYetDecryptedNotifications]
+            Section(topic: .available, facts: [.translatedOnDevice, .attachmentsEncryptedOnDevice]),
+            Section(topic: .absent, facts: [.noServerTranscription, .noNotificationPreview, .noSearch, .noEdit, .noForward, .noOfflineSending]
+                + attachmentTradeOffs),
+            Section(topic: .notYet, facts: [.notYetPlacesAndStickers, .notYetDecryptedNotifications]
                 + (isDirect ? [.notYetGroups] : [.notYetGroups, .groupSendingUnavailable])
                 + [.notYetSafetyNumbers]),
             Section(topic: .devices, facts: [.oneKeyPerDevice, .deviceLimit, .restoredDeviceIsNew]),

@@ -40,7 +40,8 @@ extension ConversationEncryptionExplanation.Fact {
         case .noEdit: "pencil.slash"
         case .noForward: "arrowshape.turn.up.right"
         case .noOfflineSending: "wifi.slash"
-        case .notYetAttachments: "paperclip"
+        case .notYetPlacesAndStickers: "mappin.and.ellipse"
+        case .attachmentsEncryptedOnDevice: "paperclip"
         case .notYetDecryptedNotifications: "bell"
         case .notYetGroups: "person.3"
         case .groupSendingUnavailable: "person.3.fill"
@@ -54,6 +55,10 @@ extension ConversationEncryptionExplanation.Fact {
         case .endToEndIsFinal: "lock.fill"
         case .endToEndNeverTurnedOff, .endToEndNeverTurnedOffDirect: "lock.shield"
         case .serverCannotTurnItOff: "iphone"
+        case .voiceTranslatedAsTextOnDevice: "captions.bubble"
+        case .noLockScreenMediaPreview: "lock.iphone"
+        case .noWebPlayback: "desktopcomputer"
+        case .noServerModeration: "flag"
         }
     }
 
@@ -76,6 +81,8 @@ extension ConversationEncryptionExplanation.Fact {
             String(localized: "conversation.encryption.fact.everyServerFeature", defaultValue: "Toutes les fonctions sont disponibles : traduction automatique, transcription des vocaux, aperçu des notifications, recherche.", bundle: .main)
         case .translatedOnDevice:
             String(localized: "conversation.encryption.fact.translatedOnDevice", defaultValue: "La traduction automatique se fait sur votre appareil, jamais sur le serveur.", bundle: .main)
+        case .attachmentsEncryptedOnDevice:
+            String(localized: "conversation.encryption.fact.attachmentsEncryptedOnDevice", defaultValue: "Photos, vidéos, fichiers et vocaux sont chiffrés sur votre appareil avant l’envoi : le serveur n’en garde qu’une copie illisible.", bundle: .main)
         case .noServerTranscription:
             String(localized: "conversation.encryption.fact.noServerTranscription", defaultValue: "Le serveur ne transcrit pas les messages vocaux.", bundle: .main)
         case .noNotificationPreview:
@@ -95,8 +102,8 @@ extension ConversationEncryptionExplanation.Fact {
         switch self {
         case .noOfflineSending:
             String(localized: "conversation.encryption.fact.noOfflineSending", defaultValue: "Hors connexion, un message n’est pas mis en attente : renvoyez-le une fois connecté.", bundle: .main)
-        case .notYetAttachments:
-            String(localized: "conversation.encryption.fact.notYetAttachments", defaultValue: "Photos, vidéos, fichiers, vocaux, lieux et stickers ne peuvent pas encore être envoyés.", bundle: .main)
+        case .notYetPlacesAndStickers:
+            String(localized: "conversation.encryption.fact.notYetPlacesAndStickers", defaultValue: "Lieux, fiches de contact et stickers ne peuvent pas encore être envoyés.", bundle: .main)
         case .notYetDecryptedNotifications:
             String(localized: "conversation.encryption.fact.notYetDecryptedNotifications", defaultValue: "Le déchiffrement des notifications sur l’appareil, pour en afficher le texte, n’est pas encore disponible.", bundle: .main)
         case .notYetGroups:
@@ -132,6 +139,21 @@ extension ConversationEncryptionExplanation.Fact {
             String(localized: "conversation.encryption.fact.endToEndNeverTurnedOffDirect", defaultValue: "Le chiffrement de bout en bout ne se désactive pas : ce tête-à-tête reste chiffré. Pour échanger en clair avec cette personne, ouvrez une conversation non chiffrée à côté : les deux sont dans la liste, celle-ci marquée d’un cadenas.", bundle: .main)
         case .serverCannotTurnItOff:
             String(localized: "conversation.encryption.fact.serverCannotTurnItOff", defaultValue: "Sur cet appareil, une fois cette conversation vue chiffrée de bout en bout, votre compte n’y écrit plus jamais en clair, même si le serveur la présentait ensuite autrement.", bundle: .main)
+        default: attachmentTradeOffText
+        }
+    }
+
+    /// Ce que le bout en bout retire aux pièces jointes (#10789).
+    private var attachmentTradeOffText: String? {
+        switch self {
+        case .voiceTranslatedAsTextOnDevice:
+            String(localized: "conversation.encryption.fact.voiceTranslatedAsTextOnDevice", defaultValue: "Un message vocal se traduit en texte sur votre appareil : il n’a pas de version traduite avec la voix clonée.", bundle: .main)
+        case .noLockScreenMediaPreview:
+            String(localized: "conversation.encryption.fact.noLockScreenMediaPreview", defaultValue: "Sur l’écran verrouillé, une notification n’affiche ni photo, ni vidéo, ni extrait de vocal.", bundle: .main)
+        case .noWebPlayback:
+            String(localized: "conversation.encryption.fact.noWebPlayback", defaultValue: "Sur le web, une pièce jointe chiffrée ne s’ouvre pas : ouvrez-la dans l’application.", bundle: .main)
+        case .noServerModeration:
+            String(localized: "conversation.encryption.fact.noServerModeration", defaultValue: "Le serveur ne peut pas modérer ce qui s’échange ici : seul un participant peut signaler un message.", bundle: .main)
         default: nil
         }
     }

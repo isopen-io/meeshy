@@ -158,6 +158,8 @@ extension MeeshyApp {
             Task { await SessionManager.shared.clearSessions() }
         case .stopEndToEnd:
             EndToEndSessionBridge.shared.stop()
+            // #10789 — le clair des pièces chiffrées de bout en bout ne survit pas à la session.
+            Task { await EndToEndAttachmentVault.shared.wipe() }
         case .unbindCache:
             CacheAccountBinder.shared.bind(nil)
             Task { await CacheCoordinator.shared.stop() }

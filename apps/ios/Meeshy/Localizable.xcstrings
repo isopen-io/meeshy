@@ -102627,43 +102627,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "محادثة مشفرة: لا يمكن إرسال المرفقات والمواقع والملصقات بعد."
+            "value": "محادثة مشفرة: لا يمكن إرسال المواقع وبطاقات جهات الاتصال والملصقات بعد."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Verschlüsselte Unterhaltung: Anhänge, Orte und Sticker können noch nicht gesendet werden."
+            "value": "Verschlüsselte Unterhaltung: Orte, Kontaktkarten und Sticker können noch nicht gesendet werden."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Encrypted conversation: attachments, places and stickers can’t be sent yet."
+            "value": "Encrypted conversation: places, contact cards and stickers can’t be sent yet."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Conversación cifrada: aún no se pueden enviar adjuntos, ubicaciones ni stickers."
+            "value": "Conversación cifrada: aún no se pueden enviar ubicaciones, fichas de contacto ni stickers."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Conversation chiffrée : pièces jointes, lieux et stickers ne peuvent pas encore être envoyés."
+            "value": "Conversation chiffrée : lieux, fiches de contact et stickers ne peuvent pas encore être envoyés."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Conversazione crittografata: allegati, luoghi e sticker non possono ancora essere inviati."
+            "value": "Conversazione crittografata: luoghi, schede contatto e sticker non possono ancora essere inviati."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Conversa criptografada: anexos, locais e figurinhas ainda não podem ser enviados."
+            "value": "Conversa criptografada: locais, cartões de contato e figurinhas ainda não podem ser enviados."
           }
         }
       }
@@ -102711,6 +102711,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Mensagem criptografada não enviada: tente novamente quando estiver conectado."
+          }
+        }
+      }
+    },
+    "conversation.send.e2ee.pieceUploadFailed": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تعذّر إرسال المرفق المشفّر: لم يُرسَل أي شيء دون تشفير. أرفقه من جديد."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der verschlüsselte Anhang konnte nicht gesendet werden: Nichts ist unverschlüsselt hinausgegangen. Hänge ihn erneut an."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The encrypted attachment couldn’t be sent: nothing left in the clear. Attach it again."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo enviar el archivo adjunto cifrado: nada salió sin cifrar. Vuelve a adjuntarlo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La pièce jointe chiffrée n’a pas pu être envoyée : rien n’est parti en clair. Joignez-la de nouveau."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Non è stato possibile inviare l’allegato crittografato: nulla è partito in chiaro. Allegalo di nuovo."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não foi possível enviar o anexo criptografado: nada saiu sem criptografia. Anexe-o de novo."
           }
         }
       }
@@ -310420,6 +310467,335 @@
         }
       }
     },
+    "conversation.encryption.fact.attachmentsEncryptedOnDevice": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تُشفَّر الصور والفيديوهات والملفات والرسائل الصوتية على جهازك قبل الإرسال: لا يحتفظ الخادم إلا بنسخة غير قابلة للقراءة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fotos, Videos, Dateien und Sprachnachrichten werden vor dem Senden auf deinem Gerät verschlüsselt: Der Server bewahrt nur eine unlesbare Kopie auf."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Photos, videos, files and voice messages are encrypted on your device before sending: the server only keeps an unreadable copy."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Las fotos, los vídeos, los archivos y los audios se cifran en tu dispositivo antes de enviarse: el servidor solo guarda una copia ilegible."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Photos, vidéos, fichiers et vocaux sont chiffrés sur votre appareil avant l’envoi : le serveur n’en garde qu’une copie illisible."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Foto, video, file e vocali vengono crittografati sul tuo dispositivo prima dell’invio: il server ne conserva solo una copia illeggibile."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fotos, vídeos, arquivos e áudios são criptografados no seu aparelho antes do envio: o servidor só guarda uma cópia ilegível."
+          }
+        }
+      }
+    },
+    "conversation.encryption.fact.notYetPlacesAndStickers": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا يمكن بعد إرسال المواقع وبطاقات جهات الاتصال والملصقات."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Orte, Kontaktkarten und Sticker können noch nicht gesendet werden."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Places, contact cards and stickers can’t be sent yet."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aún no se pueden enviar ubicaciones, fichas de contacto ni stickers."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lieux, fiches de contact et stickers ne peuvent pas encore être envoyés."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Luoghi, schede contatto e sticker non possono ancora essere inviati."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Locais, cartões de contato e figurinhas ainda não podem ser enviados."
+          }
+        }
+      }
+    },
+    "conversation.encryption.fact.voiceTranslatedAsTextOnDevice": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تُترجَم الرسالة الصوتية إلى نص على جهازك: لا توجد لها نسخة مترجمة بصوت مستنسَخ."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eine Sprachnachricht wird auf deinem Gerät in Text übersetzt: Es gibt keine übersetzte Fassung mit geklonter Stimme."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A voice message is translated into text on your device: there’s no translated version in a cloned voice."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un mensaje de voz se traduce a texto en tu dispositivo: no tiene versión traducida con la voz clonada."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un message vocal se traduit en texte sur votre appareil : il n’a pas de version traduite avec la voix clonée."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un messaggio vocale viene tradotto in testo sul tuo dispositivo: non ha una versione tradotta con la voce clonata."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uma mensagem de voz é traduzida em texto no seu aparelho: ela não tem versão traduzida com a voz clonada."
+          }
+        }
+      }
+    },
+    "conversation.encryption.fact.noLockScreenMediaPreview": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "على شاشة القفل، لا يعرض الإشعار أي صورة أو فيديو أو مقتطف من رسالة صوتية."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auf dem Sperrbildschirm zeigt eine Benachrichtigung weder Fotos noch Videos noch Ausschnitte aus Sprachnachrichten."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "On the lock screen, a notification shows no photo, no video and no voice message excerpt."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "En la pantalla de bloqueo, una notificación no muestra fotos, vídeos ni fragmentos de audios."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sur l’écran verrouillé, une notification n’affiche ni photo, ni vidéo, ni extrait de vocal."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sulla schermata di blocco, una notifica non mostra foto, video né estratti dei vocali."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Na tela de bloqueio, uma notificação não mostra fotos, vídeos nem trechos de áudios."
+          }
+        }
+      }
+    },
+    "conversation.encryption.fact.noWebPlayback": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "على الويب، لا يُفتح المرفق المشفّر: افتحه في التطبيق."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Im Web lässt sich ein verschlüsselter Anhang nicht öffnen: Öffne ihn in der App."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "On the web, an encrypted attachment doesn’t open: open it in the app."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "En la web, un archivo adjunto cifrado no se abre: ábrelo en la aplicación."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sur le web, une pièce jointe chiffrée ne s’ouvre pas : ouvrez-la dans l’application."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sul web, un allegato crittografato non si apre: aprilo nell’app."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Na web, um anexo criptografado não abre: abra-o no app."
+          }
+        }
+      }
+    },
+    "conversation.encryption.fact.noServerModeration": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا يستطيع الخادم الإشراف على ما يُتبادل هنا: يمكن للمشارك فقط الإبلاغ عن رسالة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Server kann nicht moderieren, was hier geteilt wird: Nur ein Teilnehmer kann eine Nachricht melden."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The server can’t moderate what’s shared here: only a participant can report a message."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El servidor no puede moderar lo que se comparte aquí: solo un participante puede denunciar un mensaje."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le serveur ne peut pas modérer ce qui s’échange ici : seul un participant peut signaler un message."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Il server non può moderare ciò che si condivide qui: solo un partecipante può segnalare un messaggio."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O servidor não pode moderar o que é compartilhado aqui: só um participante pode denunciar uma mensagem."
+          }
+        }
+      }
+    },
+    "conversation.encryption.detail.activationTradeOffsHeader": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ما يُزيله التشفير التام بين الطرفين من المرفقات"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Was die Ende-zu-Ende-Verschlüsselung bei Anhängen wegnimmt"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "What end-to-end encryption removes from attachments"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lo que el cifrado de extremo a extremo quita a los archivos adjuntos"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ce que le bout en bout retire aux pièces jointes"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cosa toglie la crittografia end-to-end agli allegati"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O que a criptografia de ponta a ponta tira dos anexos"
+          }
+        }
+      }
+    },
     "conversation.encryption.fact.noOfflineSending": {
       "extractionState": "manual",
       "localizations": {
@@ -310463,53 +310839,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Sem conexão, a mensagem não fica na fila: reenvie quando estiver conectado."
-          }
-        }
-      }
-    },
-    "conversation.encryption.fact.notYetAttachments": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "لا يمكن بعد إرسال الصور والفيديوهات والملفات والرسائل الصوتية والمواقع والملصقات."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Fotos, Videos, Dateien, Sprachnachrichten, Standorte und Sticker können noch nicht gesendet werden."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Photos, videos, files, voice messages, locations and stickers can’t be sent yet."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Aún no se pueden enviar fotos, vídeos, archivos, audios, ubicaciones ni stickers."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Photos, vidéos, fichiers, vocaux, lieux et stickers ne peuvent pas encore être envoyés."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Foto, video, file, vocali, posizioni e sticker non possono ancora essere inviati."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Fotos, vídeos, arquivos, áudios, locais e figurinhas ainda não podem ser enviados."
           }
         }
       }

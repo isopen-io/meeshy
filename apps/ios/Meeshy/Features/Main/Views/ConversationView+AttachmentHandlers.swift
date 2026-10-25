@@ -164,7 +164,8 @@ extension ConversationView {
         let mediaGroupSends = OutgoingMediaGroup.sendable(
             plan: intent.plan, mediaFiles: intent.mediaFiles, thumbnails: thumbnails,
             currentUserId: currentUser?.id ?? "",
-            senderColor: DynamicColorGenerator.colorForName(currentUser?.displayName ?? "?")
+            senderColor: DynamicColorGenerator.colorForName(currentUser?.displayName ?? "?"),
+            seedsPreviewCache: !viewModel.endToEndSealsPieces
         )
         insertOptimisticMediaBubbles(mediaGroupSends, intent: intent)
         let textGroup = intent.plan.first(where: { $0.kind == .text })

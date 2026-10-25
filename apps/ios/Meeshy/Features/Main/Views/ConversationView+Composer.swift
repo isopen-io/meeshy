@@ -138,7 +138,7 @@ extension ConversationView {
             onContactPicker: guestDoor(guestAttachmentAllowance.offersContactsAndPlaces) { composerState.showContactPicker = true },
             onShowAttachments: { closeComposerEmojiPanel() },
             onRequestTextEmoji: { toggleComposerEmojiPanel() },
-            onRequestStickerPicker: guestDoor(guestAttachmentAllowance.offersVisualMedia) { composerState.showStickerPicker = true },
+            onRequestStickerPicker: guestDoor(guestAttachmentAllowance.offersStickers) { composerState.showStickerPicker = true },
             onSendTextSticker: textStickerDoor,
             onRecentMediaSelected: recentMediaPickDoor,
             onRecentMediaEdit: recentMediaEditDoor,

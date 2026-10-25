@@ -49,13 +49,14 @@ final class ConversationEncryptionExplanationTests: XCTestCase {
         let facts = facts("e2ee")
         XCTAssertTrue(facts.contains(.onlyParticipantsRead))
         XCTAssertTrue(facts.contains(.translatedOnDevice))
+        XCTAssertTrue(facts.contains(.attachmentsEncryptedOnDevice), "#10789 — les pièces partent chiffrées sur l'appareil")
         for absent: ConversationEncryptionExplanation.Fact in [
             .noServerTranscription, .noNotificationPreview, .noSearch, .noEdit, .noForward, .noOfflineSending
         ] {
             XCTAssertTrue(facts.contains(absent), "\(absent)")
         }
         for notYet: ConversationEncryptionExplanation.Fact in [
-            .notYetAttachments, .notYetDecryptedNotifications, .notYetGroups, .notYetSafetyNumbers
+            .notYetPlacesAndStickers, .notYetDecryptedNotifications, .notYetGroups, .notYetSafetyNumbers
         ] {
             XCTAssertTrue(facts.contains(notYet), "\(notYet)")
         }
@@ -119,11 +120,62 @@ final class ConversationEncryptionExplanationTests: XCTestCase {
         }
     }
 
-    /// #12918 — la fiche range les vocaux sous « Pas encore disponible » : le
-    /// composeur de la même conversation n'offre donc ni micro ni tuile
-    /// « Vocal », comme il retire déjà photos et fichiers.
-    func test_boutEnBout_leComposeurNOffreAucunGesteQueLaFicheDitIndisponible() {
-        let allowance = GuestAttachmentAllowance.unrestricted.sealing(.contentUnsealable)
+    /// #10789 (consigne du coordinateur, 2026-10-25) : ce que le bout en bout
+    /// retire aux pièces jointes se dit dans la fiche ET au moment d'activer.
+    func test_boutEnBout_laFicheDitCeQueLeModeRetireAuxPiecesJointes() {
+        let absent = ConversationEncryptionExplanation(mode: "e2ee", isDirect: true).sections
+            .first { $0.topic == .absent }?.facts ?? []
+        XCTAssertEqual(
+            ConversationEncryptionExplanation.attachmentTradeOffs,
+            [.voiceTranslatedAsTextOnDevice, .noLockScreenMediaPreview, .noWebPlayback, .noServerModeration]
+        )
+        for fact in ConversationEncryptionExplanation.attachmentTradeOffs {
+            XCTAssertTrue(absent.contains(fact), "\(fact)")
+            XCTAssertFalse(facts(nil).contains(fact), "un mode que le serveur lit ne perd rien de cela : \(fact)")
+        }
+    }
+
+    func test_activation_choisirLeBoutEnBout_annonceCeQuIlRetireAuxPiecesJointes() {
+        XCTAssertEqual(
+            ConversationEncryptionExplanation.activationTradeOffs(for: .e2ee),
+            ConversationEncryptionExplanation.attachmentTradeOffs
+        )
+        XCTAssertTrue(ConversationEncryptionExplanation.activationTradeOffs(for: .server).isEmpty)
+        XCTAssertTrue(ConversationEncryptionExplanation.activationTradeOffs(for: .hybrid).isEmpty)
+    }
+
+    /// Les sept langues du catalogue disent chacune ces retraits, et la phrase
+    /// de l'activation : aucune ne retombe sur la clé ni sur le français.
+    func test_lesRetraitsDuBoutEnBout_seDisentDansLesSeptLangues() throws {
+        let keys = [
+            "conversation.encryption.fact.voiceTranslatedAsTextOnDevice",
+            "conversation.encryption.fact.noLockScreenMediaPreview",
+            "conversation.encryption.fact.noWebPlayback",
+            "conversation.encryption.fact.noServerModeration",
+            "conversation.encryption.detail.activationTradeOffsHeader",
+            "conversation.encryption.fact.attachmentsEncryptedOnDevice",
+            "conversation.encryption.fact.notYetPlacesAndStickers",
+            "conversation.send.e2ee.pieceUploadFailed",
+        ]
+        let french = try XCTUnwrap(Bundle.main.path(forResource: "fr", ofType: "lproj").flatMap(Bundle.init(path:)))
+        for language in ["fr", "en", "es", "de", "it", "pt-BR", "ar"] {
+            let bundle = try XCTUnwrap(Bundle.main.path(forResource: language, ofType: "lproj").flatMap(Bundle.init(path:)), language)
+            for key in keys {
+                let text = bundle.localizedString(forKey: key, value: nil, table: "Localizable")
+                XCTAssertNotEqual(text, key, "\(language) \(key)")
+                if language != "fr" {
+                    XCTAssertNotEqual(text, french.localizedString(forKey: key, value: nil, table: "Localizable"), "\(language) \(key)")
+                }
+            }
+        }
+    }
+
+    /// #10789 (qui succède à #12918) — la fiche dit que photos, vidéos, fichiers
+    /// et vocaux partent chiffrés sur l'appareil, et que lieux, fiches et
+    /// stickers attendent : le composeur offre exactement les premiers, et
+    /// aucune porte vers les seconds.
+    func test_boutEnBout_leComposeurOffreCeQueLaFicheDitDisponible_etRienDAutre() {
+        let allowance = GuestAttachmentAllowance.unrestricted.sealedEndToEnd(true)
         let composer = UniversalComposerBar(
             mode: .message,
             voiceDoor: allowance.offersVoiceRecording ? .byMode : .closed,
@@ -131,14 +183,17 @@ final class ConversationEncryptionExplanationTests: XCTestCase {
             externalIsRecording: false, externalRecordingDuration: 0
         )
 
-        XCTAssertTrue(facts("e2ee").contains(.notYetAttachments), "la fiche dit que vocaux, photos et fichiers attendent")
-        XCTAssertFalse(composer.resolvedShowVoice, "aucune entrée vocale")
-        XCTAssertFalse(allowance.offersVisualMedia)
-        XCTAssertFalse(allowance.offersFiles)
+        XCTAssertTrue(facts("e2ee").contains(.attachmentsEncryptedOnDevice))
+        XCTAssertTrue(facts("e2ee").contains(.notYetPlacesAndStickers))
+        XCTAssertTrue(composer.resolvedShowVoice, "le vocal part chiffré sur l'appareil")
+        XCTAssertTrue(allowance.offersVisualMedia)
+        XCTAssertTrue(allowance.offersFiles)
+        XCTAssertFalse(allowance.offersStickers)
+        XCTAssertFalse(allowance.offersContactsAndPlaces)
     }
 
     func test_sansChiffrement_leComposeurGardeLeVocal() {
-        let allowance = GuestAttachmentAllowance.unrestricted.sealing(nil)
+        let allowance = GuestAttachmentAllowance.unrestricted.sealedEndToEnd(false)
         let composer = UniversalComposerBar(
             mode: .message,
             voiceDoor: allowance.offersVoiceRecording ? .byMode : .closed,

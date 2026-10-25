@@ -282,8 +282,9 @@ final class ConversationCommandHandler: ConversationCommandProviding {
     func removeAttachment(
         messageId: String, attachmentId: String, original: [MeeshyMessageAttachment]
     ) async -> ConversationCommandFailure? {
-        let remainingJson = try? JSONEncoder().encode(original.filter { $0.id != attachmentId })
-        let originalJson = try? JSONEncoder().encode(original)
+        let stored = EndToEndAttachmentOverlay.sealedForStorage(original)
+        let remainingJson = try? JSONEncoder().encode(stored.filter { $0.id != attachmentId })
+        let originalJson = try? JSONEncoder().encode(stored)
         try? await persistence.updateAttachmentsJson(localId: messageId, attachmentsJson: remainingJson)
         do {
             try await attachments.delete(attachmentId: attachmentId)

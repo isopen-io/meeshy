@@ -155,7 +155,7 @@ extension ConversationViewModel {
     /// (miroir du chemin `appendReaction`/`deleteAttachment`) : un échec d'écriture
     /// retombe sur la source de vérité serveur au prochain refetch.
     private func persistAttachmentReactions(messageId: String, attachments: [MeeshyMessageAttachment]) {
-        let json = try? JSONEncoder().encode(attachments)
+        let json = try? JSONEncoder().encode(EndToEndAttachmentOverlay.sealedForStorage(attachments))
         Task { [weak self] in
             try? await self?.messagePersistence.updateAttachmentsJson(localId: messageId, attachmentsJson: json)
         }

@@ -384,6 +384,8 @@ struct ConversationEncryptionDetailSheet: View {
                 .font(.caption)
         }
 
+        ConversationEncryptionActivationTradeOffs(mode: selectedMode)
+
         Section {
             Button {
                 Task { await activate() }

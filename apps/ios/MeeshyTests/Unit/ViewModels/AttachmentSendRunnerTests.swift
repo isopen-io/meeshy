@@ -22,6 +22,8 @@ private final class MockAttachmentSendHost: AttachmentSendHosting {
     var rekeyedWhenSending: [Bool] = []
     var acceptsSend: (OutgoingMessage) -> Bool = { _ in true }
     var endToEndPieceRefusal: EndToEndSendRefusal?
+    var endToEndSealsPieces = false
+    var endToEndRecipientRefusal: EndToEndSendRefusal?
     let journal: Journal
 
     init(journal: Journal) { self.journal = journal }
@@ -107,6 +109,27 @@ private final class SpyFeedback: AttachmentSendFeedbackGiving {
     func showError(_ message: String) { journal.add("toast:\(message)") }
 }
 
+/// Le chiffrement sur l'appareil, simulé : il rend un pointeur par source, ou échoue.
+private final class FakePieceSealer: EndToEndPieceSealing, @unchecked Sendable {
+    /// Un identifiant serveur (24 hexadécimaux) dérivé de l'identifiant local.
+    static func blobId(_ localId: String) -> String {
+        String(localId.utf8.map { String(format: "%02x", $0) }.joined().prefix(24)).padding(toLength: 24, withPad: "0", startingAt: 0)
+    }
+    var failure: (any Error)?
+    private(set) var sealed: [[EndToEndPieceSource]] = []
+
+    func seal(_ sources: [EndToEndPieceSource]) async throws -> [E2EEAttachmentPointer] {
+        sealed.append(sources)
+        if let failure { throw failure }
+        return sources.map { source in
+            E2EEAttachmentPointer(
+                id: Self.blobId(source.localId), key: Data(repeating: 1, count: 64), digest: Data(repeating: 2, count: 32),
+                size: 10, contentType: source.contentType, fileName: source.fileName, kind: source.kind
+            )
+        }
+    }
+}
+
 @MainActor
 final class AttachmentSendRunnerTests: XCTestCase {
 
@@ -120,13 +143,15 @@ final class AttachmentSendRunnerTests: XCTestCase {
         let network: FakeNetworkMonitor
         let transcriber: FakeVoiceTranscriber
         let journal: Journal
+        let pieces: FakePieceSealer
     }
 
     private let place = SharedPlace(latitude: 48.85, longitude: 2.35, name: "Paris")
     private let failureToast = "Échec de l'envoi de la pièce jointe"
 
-    private func makeSUT(online: Bool = true, hasSession: Bool = true) -> Fixture {
+    private func makeSUT(online: Bool = true, hasSession: Bool = true, sealsPieces: Bool = false) -> Fixture {
         let journal = Journal()
+        let pieces = FakePieceSealer()
         let host = MockAttachmentSendHost(journal: journal)
         let uploader = MockMediaGroupUploader(journal: journal)
         let queue = MockAttachmentGroupQueue(journal: journal)
@@ -147,9 +172,11 @@ final class AttachmentSendRunnerTests: XCTestCase {
             uploadSession: { _ in hasSession ? session : nil },
             outbox: { _, _ in queue },
             transcriber: transcriber,
-            feedback: SpyFeedback(journal: journal)
+            feedback: SpyFeedback(journal: journal),
+            endToEndPieces: { hasSession ? pieces : nil }
         )
-        return Fixture(runner: runner, host: host, uploader: uploader, queue: queue, network: network, transcriber: transcriber, journal: journal)
+        host.endToEndSealsPieces = sealsPieces
+        return Fixture(runner: runner, host: host, uploader: uploader, queue: queue, network: network, transcriber: transcriber, journal: journal, pieces: pieces)
     }
 
     private func attachment(_ id: String, mimeType: String = "image/jpeg") -> MeeshyMessageAttachment {
@@ -412,5 +439,95 @@ final class AttachmentSendRunnerTests: XCTestCase {
 
         XCTAssertEqual(fx.host.sent.map { $0.reusedClientMessageId?.rawValue }, ["t_text"])
         XCTAssertEqual(fx.host.sent.first?.attachments.ids, nil)
+    }
+
+    // MARK: - Pièces chiffrées sur l'appareil (#10789)
+
+    func test_run_e2ee_chiffreChaquePieceSurLAppareil_etNEnvoieQueSesBlobsEtSesPointeurs() async {
+        let fx = makeSUT(sealsPieces: true)
+        fx.host.endToEndPieceRefusal = .contentUnsealable
+        let batch = makeBatch(sends: [send("t1", attachmentIds: ["a1", "a2"]), send("t2", kind: .audio, attachmentIds: ["v1"])])
+
+        await fx.runner.run(batch)
+
+        XCTAssertFalse(fx.journal.entries.contains { $0.hasPrefix("upload:") }, "aucune pièce ne part par la porte en clair")
+        XCTAssertFalse(fx.journal.entries.contains { $0.hasPrefix("enqueueOffline:") || $0.hasPrefix("requeue:") })
+        XCTAssertEqual(fx.pieces.sealed.map { $0.map(\.localId) }, [["a1", "a2"], ["v1"]])
+        XCTAssertEqual(fx.pieces.sealed.last?.first?.contentType, "audio/mp4")
+        XCTAssertEqual(fx.host.sent.map { $0.reusedClientMessageId?.rawValue }, ["t1", "t2"])
+        let ids = [["a1", "a2"], ["v1"]].map { $0.map(FakePieceSealer.blobId) }
+        XCTAssertEqual(fx.host.sent.map { $0.attachments.ids }, ids)
+        XCTAssertEqual(fx.host.sent.map { $0.attachments.sealed?.map(\.id) }, ids)
+        XCTAssertTrue(fx.host.sent.allSatisfy { $0.attachments.previews == nil && $0.attachments.isFullySealed })
+        XCTAssertEqual(fx.journal.entries.last, "succeeded")
+    }
+
+    func test_run_e2eeHorsLigne_rienNeSeChiffreNiNEntreDansLOutbox_etLaBulleLeDit() async {
+        let fx = makeSUT(online: false, sealsPieces: true)
+        let batch = makeBatch(sends: [send("t1", attachmentIds: ["a"])])
+
+        await fx.runner.run(batch)
+
+        XCTAssertTrue(fx.pieces.sealed.isEmpty)
+        XCTAssertFalse(fx.journal.entries.contains { $0.hasPrefix("enqueueOffline:") || $0.hasPrefix("upload:") })
+        XCTAssertEqual(fx.journal.entries.filter { $0.hasPrefix("markFailed:") }, ["markFailed:t1:\(EndToEndSendRefusal.outboxUnsealable.userMessage)"])
+        XCTAssertTrue(fx.host.sent.isEmpty)
+    }
+
+    func test_run_e2ee_unChiffrementOuUnTeleversementEnEchec_neRepartJamaisEnClair() async {
+        let fx = makeSUT(sealsPieces: true)
+        fx.pieces.failure = UploadBoom()
+        let batch = makeBatch(sends: [send("t1", attachmentIds: ["a"])])
+
+        await fx.runner.run(batch)
+
+        XCTAssertTrue(fx.host.sent.isEmpty)
+        XCTAssertFalse(fx.journal.entries.contains { $0.hasPrefix("upload:") || $0.hasPrefix("requeue:") || $0.hasPrefix("enqueueOffline:") })
+        let reason = EndToEndSendRefusal.pieceUploadFailed.userMessage
+        XCTAssertEqual(fx.journal.entries.filter { $0.hasPrefix("markFailed:") }, ["markFailed:t1:\(reason)"])
+        XCTAssertEqual(fx.journal.entries.filter { $0.hasPrefix("toast:") }, ["toast:\(reason)"])
+    }
+
+    func test_run_e2eeSansSession_rienNePart() async {
+        let fx = makeSUT(hasSession: false, sealsPieces: true)
+        let batch = makeBatch(sends: [send("t1", attachmentIds: ["a"])])
+
+        await fx.runner.run(batch)
+
+        XCTAssertTrue(fx.host.sent.isEmpty)
+        XCTAssertFalse(fx.journal.entries.contains { $0.hasPrefix("upload:") })
+        XCTAssertEqual(fx.journal.entries.filter { $0.hasPrefix("markFailed:") }.count, 1)
+    }
+
+    func test_run_e2ee_leTexteDuLotPartAussi_scelle() async {
+        let fx = makeSUT(sealsPieces: true)
+        let textGroup = Planned(kind: .text, attachments: [], text: "Salut", carriesReply: false)
+        let batch = makeBatch(sends: [send("t1", attachmentIds: ["a"])], textGroup: textGroup, textTempId: "t_text")
+
+        await fx.runner.run(batch)
+
+        XCTAssertEqual(fx.host.sent.map { $0.reusedClientMessageId?.rawValue }, ["t1", "t_text"])
+    }
+
+    func test_run_e2eeDansUneConversationNonScellable_neChiffreNiNeTeleverseRien() async {
+        let fx = makeSUT(sealsPieces: true)
+        fx.host.endToEndRecipientRefusal = .recipientUnsealable
+        let batch = makeBatch(sends: [send("t1", attachmentIds: ["a"])])
+
+        await fx.runner.run(batch)
+
+        XCTAssertTrue(fx.pieces.sealed.isEmpty, "aucun blob orphelin")
+        XCTAssertEqual(fx.journal.entries.filter { $0.hasPrefix("markFailed:") }, ["markFailed:t1:\(EndToEndSendRefusal.recipientUnsealable.userMessage)"])
+    }
+
+    func test_run_e2ee_unRefusDeLEnvoiScelle_garde_sonMotif() async {
+        let fx = makeSUT(sealsPieces: true)
+        fx.host.acceptsSend = { _ in false }
+        let batch = makeBatch(sends: [send("t1", attachmentIds: ["a"])])
+
+        await fx.runner.run(batch)
+
+        XCTAssertFalse(fx.journal.entries.contains { $0.contains(EndToEndSendRefusal.pieceUploadFailed.userMessage) },
+                       "le motif de l'envoi refusé n'est pas remplacé par un échec de téléversement")
     }
 }

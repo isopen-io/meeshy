@@ -48,8 +48,9 @@ struct EndToEndSendSealer {
         return .sealedMessageUneditable
     }
 
-    /// Une pièce se téléverse EN CLAIR avant même que le message parte : en
-    /// E2EE, elle ne se téléverse pas.
+    /// Une pièce EN CLAIR se téléverse avant même que le message parte : en
+    /// E2EE, elle ne se téléverse pas — seule la voie chiffrée sur l'appareil
+    /// (`AttachmentSendRunner.runSealed`, #10789) y fait partir des pièces.
     var pieceRefusal: EndToEndSendRefusal? { requiresSeal ? .contentUnsealable : nil }
 
     /// Hors ligne, rien de chiffré ne peut attendre dans l'outbox.
@@ -74,12 +75,14 @@ struct EndToEndSendSealer {
         return SealedOutgoingPayload(request: request, content: content, isEncrypted: false)
     }
 
-    /// Ce que libsignal chiffre : le texte, sa langue, le message cité, et la
+    /// Ce que libsignal chiffre : le texte, sa langue, le message cité, les
+    /// pointeurs des pièces chiffrées sur l'appareil (#10789), et la
     /// conversation et l'identifiant client qui lient le chiffré à sa place.
     func content(of outgoing: OutgoingMessage, context: SendAttemptContext) -> E2EEContent {
         E2EEContent(
-            text: outgoing.text, language: context.language, replyTo: outgoing.relation.replyToId,
-            conversationId: conversationId, clientMessageId: context.clientMessageId.rawValue, sentAt: context.startedAt
+            text: outgoing.text.isEmpty ? nil : outgoing.text, language: context.language, replyTo: outgoing.relation.replyToId,
+            conversationId: conversationId, clientMessageId: context.clientMessageId.rawValue, sentAt: context.startedAt,
+            attachments: outgoing.attachments.sealed
         )
     }
 
@@ -282,7 +285,7 @@ extension EndToEndSendRefusal {
                    defaultValue: "Cette conversation chiffrée n’accepte pas encore d’envoi depuis cet appareil.", bundle: .main)
         case .contentUnsealable:
             String(localized: "conversation.send.e2ee.contentUnsealable",
-                   defaultValue: "Conversation chiffrée : pièces jointes, lieux et stickers ne peuvent pas encore être envoyés.", bundle: .main)
+                   defaultValue: "Conversation chiffrée : lieux, fiches de contact et stickers ne peuvent pas encore être envoyés.", bundle: .main)
         case .outboxUnsealable:
             String(localized: "conversation.send.e2ee.outboxUnsealable",
                    defaultValue: "Message chiffré non envoyé : réessayez une fois connecté.", bundle: .main)
@@ -304,6 +307,9 @@ extension EndToEndSendRefusal {
         case .regimeChanged:
             String(localized: "conversation.send.e2ee.regimeChanged",
                    defaultValue: "Le chiffrement de cette conversation vient de changer : le message n’est pas parti. Touchez pour le renvoyer selon le nouveau réglage.", bundle: .main)
+        case .pieceUploadFailed:
+            String(localized: "conversation.send.e2ee.pieceUploadFailed",
+                   defaultValue: "La pièce jointe chiffrée n’a pas pu être envoyée : rien n’est parti en clair. Joignez-la de nouveau.", bundle: .main)
         case .deviceLimitReached:
             String(localized: "conversation.send.e2ee.deviceLimitReached",
                    defaultValue: "Votre compte a atteint le nombre maximal d’appareils chiffrés : retirez-en un pour écrire depuis celui-ci.", bundle: .main)

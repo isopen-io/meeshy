@@ -33,10 +33,28 @@ nonisolated enum ConversationListEndToEndTexts {
             conversationId: writtenFor,
             author: senderUserId == viewerId ? .reader : .peer(userId: senderUserId),
             composedAt: Date(timeIntervalSince1970: TimeInterval(content.sentAt) / 1000),
-            text: content.text ?? "",
+            text: displayedText(of: content),
             language: content.language
         )
         return candidate.reading(conversation)
+    }
+
+    /// Le texte, ou, pour un message qui ne porte que des pièces chiffrées sur
+    /// l'appareil (#10789), la nature de la première — « 📷 Photo » —, dite comme
+    /// la liste la dit pour tout message média.
+    static func displayedText(of content: E2EEContent) -> String {
+        if let text = content.text, !text.isEmpty { return text }
+        guard let first = content.attachments?.first else { return "" }
+        return MediaKindLabel.summary(mediaKind(of: first.kind))
+    }
+
+    private static func mediaKind(of kind: E2EEAttachmentPointer.Kind) -> MediaKindLabel.Kind {
+        switch kind {
+        case .image: .photo
+        case .video: .video
+        case .audio: .audio
+        case .file: .file
+        }
     }
 
     /// Les clairs déjà tenus qui sont encore à leur place.

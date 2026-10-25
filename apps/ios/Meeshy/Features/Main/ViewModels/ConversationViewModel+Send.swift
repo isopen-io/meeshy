@@ -344,6 +344,12 @@ extension ConversationViewModel {
 
     var endToEndSealer: EndToEndSendSealer { EndToEndSendSealer(self) }
     var endToEndPieceRefusal: EndToEndSendRefusal? { endToEndSealer.pieceRefusal }
+    var endToEndSealsPieces: Bool { endToEndSealer.requiresSeal }
+    var endToEndRecipientRefusal: EndToEndSendRefusal? {
+        endToEndSealer.sealRefusal(for: OutgoingMessage(
+            conversationId: ConversationID(conversationId), content: "·", relation: .none, attachments: .none
+        ))
+    }
 
     // MARK: Transport
 

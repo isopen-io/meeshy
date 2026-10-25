@@ -13,9 +13,10 @@ import MeeshyUI
 // (`GuestAttachmentRefusal`, `ConversationView+AttachmentHandlers`).
 extension ConversationView {
 
-    /// Ce que CET écrivain peut joindre — sans restriction pour un compte, rien en E2EE (#11379).
+    /// Ce que CET écrivain peut joindre — sans restriction pour un compte ; en
+    /// E2EE, les pièces chiffrées sur l'appareil, sans lieu, fiche ni sticker (#10789).
     var guestAttachmentAllowance: GuestAttachmentAllowance {
-        (anonymousSession?.attachmentAllowance ?? .unrestricted).sealing(viewModel.endToEndPieceRefusal)
+        (anonymousSession?.attachmentAllowance ?? .unrestricted).sealedEndToEnd(viewModel.endToEndSealsPieces)
     }
 
     /// Une porte du composeur n'existe que si la famille qu'elle produit est
@@ -50,7 +51,7 @@ extension ConversationView {
 
     /// Cadre à mots (#5326) : il part comme une image de sticker.
     var textStickerDoor: ((StickerTemplate, String) -> Void)? {
-        guard guestAttachmentAllowance.offersVisualMedia else { return nil }
+        guard guestAttachmentAllowance.offersStickers else { return nil }
         return { gabarit, mots in
             sendTemplateSticker(gabarit, slots: [StickerSlotFiller.textSlot: mots])
         }

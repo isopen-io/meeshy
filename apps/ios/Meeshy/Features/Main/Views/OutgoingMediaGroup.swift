@@ -21,13 +21,16 @@ struct OutgoingMediaGroup {
         mediaFiles: [String: URL],
         thumbnails: [String: UIImage],
         currentUserId: String,
-        senderColor: String
+        senderColor: String,
+        seedsPreviewCache: Bool = true
     ) -> [OutgoingMediaGroup] {
         plan.filter { $0.kind != .text }.compactMap { group in
             let locals: [MeeshyMessageAttachment] = group.attachments.compactMap { att in
                 guard let fileURL = mediaFiles[att.id] else { return nil }
                 let isImage = att.mimeType.hasPrefix("image/")
-                if isImage {
+                // #10789 — en E2EE, aucun clair ne gagne le cache d'images : la bulle
+                // optimiste lit son fichier local (`file://`) directement.
+                if isImage, seedsPreviewCache {
                     // Seed in-memory NSCache + on-disk image cache so the
                     // optimistic bubble keeps the picture across navigation
                     // until the server `message:new` reconciliation lands.

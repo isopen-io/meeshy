@@ -58,13 +58,16 @@ final class AttachmentSendRunner: AttachmentSendRunning {
     private static let failureToast = "Échec de l'envoi de la pièce jointe"
     private static let audioRetention: Duration = .seconds(10)
 
-    private let host: any AttachmentSendHosting
+    let host: any AttachmentSendHosting
     private let callbacks: AttachmentSendCallbacks
-    private let network: any NetworkMonitorProviding
+    let network: any NetworkMonitorProviding
     private let uploadSession: @MainActor (AttachmentSendBatch) -> AttachmentUploadSession?
     private let outboxFor: @MainActor (AttachmentSendBatch, String) -> any AttachmentGroupQueueing
-    private let transcriber: any VoiceNoteLocalTranscribing
-    private let feedback: any AttachmentSendFeedbackGiving
+    let transcriber: any VoiceNoteLocalTranscribing
+    let feedback: any AttachmentSendFeedbackGiving
+    /// Le chiffrement sur l'appareil des pièces d'une conversation chiffrée de
+    /// bout en bout (#10789) ; `nil` sans session.
+    let endToEndPieces: @MainActor () -> (any EndToEndPieceSealing)?
 
     init(
         host: any AttachmentSendHosting,
@@ -80,7 +83,8 @@ final class AttachmentSendRunner: AttachmentSendRunning {
             )
         },
         transcriber: any VoiceNoteLocalTranscribing = VoiceNoteLocalTranscriber.shared,
-        feedback: any AttachmentSendFeedbackGiving = LiveAttachmentSendFeedback()
+        feedback: any AttachmentSendFeedbackGiving = LiveAttachmentSendFeedback(),
+        endToEndPieces: @escaping @MainActor () -> (any EndToEndPieceSealing)? = { EndToEndPieceSealer.live() }
     ) {
         self.host = host
         self.callbacks = callbacks
@@ -89,9 +93,15 @@ final class AttachmentSendRunner: AttachmentSendRunning {
         self.outboxFor = outbox
         self.transcriber = transcriber
         self.feedback = feedback
+        self.endToEndPieces = endToEndPieces
     }
 
     func run(_ batch: AttachmentSendBatch) async {
+        // #10789 — en E2EE, chaque pièce part chiffrée sur l'appareil, et seulement ainsi.
+        if host.endToEndSealsPieces {
+            await runSealed(batch)
+            return
+        }
         if await EndToEndPieceGuard.refuses(batch.mediaGroupSends.map(\.tempId), on: host, toast: { feedback.showError($0) }) {
             _ = await sendTrailing(batch)
             cleanUp(batch)
@@ -173,7 +183,7 @@ final class AttachmentSendRunner: AttachmentSendRunning {
 
     /// Attente bornée par le budget d'ENVOI, jamais par le plafond du moteur : au-delà, le
     /// fichier part sans texte et Whisper reprend côté serveur.
-    private func awaitedTranscriptions(for send: OutgoingMediaGroup) async -> [String: MessageTranscription] {
+    func awaitedTranscriptions(for send: OutgoingMediaGroup) async -> [String: MessageTranscription] {
         guard send.group.kind == .audio else { return [:] }
         let awaited = await transcriber.awaitTranscriptions(
             for: send.group.attachments.map(\.id),
@@ -212,7 +222,7 @@ final class AttachmentSendRunner: AttachmentSendRunning {
     }
 
     /// Le texte part EN DERNIER, sur la bulle posée au tap ; sans texte, un lieu part seul.
-    private func sendTrailing(_ batch: AttachmentSendBatch) async -> Bool {
+    func sendTrailing(_ batch: AttachmentSendBatch) async -> Bool {
         guard batch.textGroup != nil || batch.place != nil else { return false }
         let carriesReply = batch.textGroup?.carriesReply == true
         let ok = await host.send(OutgoingMessage(
@@ -241,13 +251,13 @@ final class AttachmentSendRunner: AttachmentSendRunning {
         feedback.showError(Self.failureToast)
     }
 
-    private func cleanUp(_ batch: AttachmentSendBatch) {
+    func cleanUp(_ batch: AttachmentSendBatch) {
         let urls = batch.cleanupURLs()
         for url in urls.visual { try? FileManager.default.removeItem(at: url) }
         if !urls.audio.isEmpty { removeAfterRetention(urls.audio) }
     }
 
-    private func removeAfterRetention(_ urls: [URL]) {
+    func removeAfterRetention(_ urls: [URL]) {
         Task {
             _ = await cancellableSleep(for: AttachmentSendRunner.audioRetention)
             for url in urls { try? FileManager.default.removeItem(at: url) }

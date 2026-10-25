@@ -15,8 +15,18 @@ import MeeshySDK
 /// Une instance par conversation ouverte (`ConversationDependencies`).
 final class EndToEndThreadClear {
     @Published private(set) var adopted: [String: E2EEPlaintextEntry] = [:]
+    /// Par message, le nombre de fichiers clairs de ses pièces chiffrées sur
+    /// l'appareil déjà là (#10789) : la cellule se redessine quand une pièce
+    /// arrive, et passe de son ThumbHash à l'image, au son, au document.
+    @Published private(set) var materialized: [String: Int] = [:]
+    private var requested: Set<String> = []
+    private let media: any EndToEndAttachmentMaterializing
 
-    init() {}
+    init(media: any EndToEndAttachmentMaterializing = EndToEndAttachmentVault.shared) {
+        self.media = media
+    }
+
+    var mediaPaths: EndToEndMediaPaths { media.paths }
 
     // Isolé au MainActor : une deinit isolée tue xctest au démontage hors
     // d'une tâche (iOS 18.4+/26, Swift #85663).
@@ -25,9 +35,23 @@ final class EndToEndThreadClear {
 
     /// Lit puis pose le clair de tout message scellé du lot, et le retient.
     func resolve(_ messages: inout [MeeshyMessage], from endToEnd: any EndToEndMessagingProviding, conversationId: String) async {
-        let found = await EndToEndThreadPlaintexts.resolve(&messages, from: endToEnd, conversationId: conversationId)
+        let found = await EndToEndThreadPlaintexts.resolve(&messages, from: endToEnd, conversationId: conversationId, media: media.paths)
+        materializePieces(of: found)
         guard found.contains(where: { adopted[$0.key] != $0.value }) else { return }
         adopted.merge(found) { _, fresh in fresh }
+    }
+
+    /// Les pièces d'un message adopté se téléchargent, se vérifient et se
+    /// déchiffrent une fois par visite ; un échec se retente à la suivante.
+    private func materializePieces(of found: [String: E2EEPlaintextEntry]) {
+        for (messageId, entry) in found where !requested.contains(messageId) {
+            guard case .readable(let content, _) = entry, let pointers = content.attachments, !pointers.isEmpty else { continue }
+            requested.insert(messageId)
+            Task { [weak self, media] in
+                let present = await media.materialize(pointers)
+                self?.materialized[messageId] = present
+            }
+        }
     }
 
     /// Repose sur une ligne du magasin le clair adopté pour elle, rejugé à SA
@@ -37,7 +61,7 @@ final class EndToEndThreadClear {
     func apply(to message: inout MeeshyMessage, conversationId: String) {
         guard EndToEndThreadPlaintexts.awaitsPlaintext(message) else { return }
         guard let entry = adopted[message.id],
-              let readable = EndToEndThreadPlaintexts.adoption(of: entry, by: message, conversationId: conversationId) else {
+              let readable = EndToEndThreadPlaintexts.adoption(of: entry, by: message, conversationId: conversationId, media: media.paths) else {
             message.content = E2EEWire.contentPlaceholder
             return
         }
