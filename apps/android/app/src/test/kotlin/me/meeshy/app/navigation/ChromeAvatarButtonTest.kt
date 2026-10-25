@@ -38,4 +38,30 @@ class ChromeAvatarButtonTest {
         assertThat(chromeAvatarModel("https://gate.meeshy.me/u/avatar.png", "https://gate.meeshy.me/api/v1/"))
             .isEqualTo("https://gate.meeshy.me/u/avatar.png")
     }
+
+    @Test
+    fun `the unread badge shows only while the ladder is closed and something is unread`() {
+        assertThat(chromeBadgeVisible(menuExpanded = false, unreadCount = 3)).isTrue()
+        assertThat(chromeBadgeVisible(menuExpanded = true, unreadCount = 3)).isFalse()
+        assertThat(chromeBadgeVisible(menuExpanded = false, unreadCount = 0)).isFalse()
+    }
+
+    @Test
+    fun `the avatar sits inside the gradient disc with a visible ring`() {
+        assertThat(CHROME_AVATAR_SIZE_DP).isAtLeast(38f)
+        assertThat(CHROME_AVATAR_SIZE_DP).isAtMost(44f)
+        assertThat(CHROME_AVATAR_SIZE_DP).isLessThan(me.meeshy.ui.component.chrome.FloatingButtonSize.value)
+    }
+
+    @Test
+    fun `the badge sits on the top trailing shoulder of the disc`() {
+        assertThat(CHROME_BADGE_OFFSET_DP).isEqualTo(16f)
+    }
+
+    @Test
+    fun `the feed disc is filled error to indigo300`() {
+        assertThat(feedButtonGradientColors())
+            .containsExactly(MeeshyPalette.Error, MeeshyPalette.Indigo300)
+            .inOrder()
+    }
 }

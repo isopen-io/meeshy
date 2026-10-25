@@ -111,7 +111,8 @@ public extension SendMessageRequest {
         storyReplyToId: String? = nil,
         senderDeviceId: UInt32,
         envelopes: [E2EEOutgoingEnvelope],
-        unapprovedOwnDevices: [UInt32]
+        unapprovedOwnDevices: [UInt32],
+        regimeEpoch: Int? = nil
     ) -> SendMessageRequest {
         var request = SendMessageRequest(
             content: nil, replyToId: replyToId, storyReplyToId: storyReplyToId,
@@ -119,7 +120,7 @@ public extension SendMessageRequest {
         )
         request.encryptionProtocol = E2EEWire.libsignalProtocol
         request.encryptedContent = E2EEWire.encryptedContentMarker
-        request.encryptionMetadata = E2EEWireMetadata(senderDeviceId: senderDeviceId)
+        request.encryptionMetadata = E2EEWireMetadata(senderDeviceId: senderDeviceId, regimeEpoch: regimeEpoch)
         request.envelopes = envelopes
         request.unapprovedOwnDevices = unapprovedOwnDevices.isEmpty ? nil : unapprovedOwnDevices
         return request

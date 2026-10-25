@@ -93,6 +93,7 @@ nonisolated enum ConversationPreviewCatalog {
         case .systemConversationImage: return String(localized: "system.conversation.image", bundle: .main)
         case .systemEncryptionE2EE: return String(localized: "system.encryption.e2ee", bundle: .main)
         case .systemEncryptionEnabled: return String(localized: "system.encryption.enabled", bundle: .main)
+        case .systemEncryptionDisabled: return String(localized: "system.encryption.disabled", bundle: .main)
         case .systemGeneric: return String(localized: "system.generic", bundle: .main)
         case .unitSecond: return String(localized: "unit.second", bundle: .main)
         case .unitMinute: return String(localized: "unit.minute", bundle: .main)

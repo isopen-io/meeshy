@@ -9,13 +9,13 @@ import me.meeshy.sdk.model.call.CallPermission
  * et de `ConversationActionPolicy.swift`, jumelle PURE de [MessageActionPolicy].
  * `ConversationActionPolicyVectorParityTest` rejoue la grille type × profil des vecteurs partagés.
  *
- * Rang EFFECTIF ([ConversationViewerAuthority.effectiveRank]) : ADMIN ou BIGBOSS de plateforme
- * MEMBRE ⇒ créateur, jamais au-dessus ; MODERATOR, AUDIT, ANALYST y sont des membres ; rang
- * illisible < membre. Fermé en plus : un `direct` n'a pas d'autorité (ses rangs sont un ordre
- * d'arrivée) ; Global ne se renomme, ne se quitte ni ne se supprime pour tous, et seuls
- * ADMIN/BIGBOSS y invitent ; une conversation terminée ne se modifie plus ; un type inconnu
- * n'ouvre rien qui en dépende. L'appel suit [CallPermission.canStartCall] ; le badge suit
- * [MessageActionPolicy.Conversation.isEndToEnd].
+ * Rang EFFECTIF ([ConversationViewerAuthority.effectiveRank]) : un rôle de plateforme PRIVILÉGIÉ
+ * (MODERATOR, ADMIN, BIGBOSS — #11217) MEMBRE ⇒ créateur, jamais au-dessus ; AUDIT, ANALYST y
+ * sont des membres ; rang illisible < membre. Fermé en plus : un `direct` n'a pas d'autorité (ses
+ * rangs sont un ordre d'arrivée) ; Global ne se renomme, ne se quitte ni ne se supprime pour tous,
+ * et seuls les rôles privilégiés y invitent ; une conversation terminée ne se modifie plus ; un
+ * type inconnu n'ouvre rien qui en dépende. L'appel suit [CallPermission.canStartCall] ; le badge
+ * suit [MessageActionPolicy.Conversation.isEndToEnd].
  *
  * Comme la passerelle (#11215) : le rang de la ligne se lit casse pliée ; Inviter suit
  * `mayMintShareLink`, où tout membre inscrit d'une conversation `public` fabrique un lien ;
@@ -63,7 +63,7 @@ object ConversationActionPolicy {
             ),
         )
         val invites = when {
-            conversation.isGlobal -> viewer.isActiveMember && viewer.administersPlatform
+            conversation.isGlobal -> viewer.isActiveMember && viewer.moderatesPlatform
             conversation.type == "public" -> viewer.isActiveMember && registered
             else -> authority && moderates
         }

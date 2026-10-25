@@ -82,6 +82,8 @@ public enum SocketEvent: String, CaseIterable, Sendable {
     case commentUnliked = "comment:unliked"
     case commentUpdated = "comment:updated"
     case conversationClosed = "conversation:closed"
+    /// Le régime de chiffrement a basculé (#12522) — vers la room personnelle de chaque membre.
+    case conversationEncryptionChanged = "conversation:encryption-changed"
     case conversationDeleted = "conversation:deleted"
     case conversationJoin = "conversation:join"
     case conversationJoinError = "conversation:join-error"
