@@ -4,6 +4,13 @@ import GRDB
 public struct MessageRecord: Codable, FetchableRecord, PersistableRecord, Sendable {
     public static let databaseTableName = "messages"
 
+    /// Les colonnes écrites sur le disque : celles de la ligne, sauf le texte
+    /// d'un message chiffré de bout en bout, qui s'écrit en littéral (#12999).
+    /// Aucun chemin d'écriture d'un `MessageRecord` ne peut y poser un clair.
+    public func encode(to container: inout PersistenceContainer) throws {
+        try MessageRecordDiskColumns(record: EndToEndDiskPlaintextLaw.sealed(self)).encode(to: &container)
+    }
+
     // Identity
     public var localId: String
     public var serverId: String?

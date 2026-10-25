@@ -569,7 +569,7 @@ struct ConversationListView: View {
                 showStatusComposer: $showStatusComposer,
                 showCreateAffiliate: $showCreateAffiliate,
                 showCreateTrackingLink: $showCreateTrackingLink
-            ))
+            )).background { DeviceTranslationEngineHost(engine: conversationViewModel.endToEndTexts.translations.engine) }
     }
 
     /// `AnyView` à la DÉCLARATION (2026-08-19). Chaîne `body → mainContent →

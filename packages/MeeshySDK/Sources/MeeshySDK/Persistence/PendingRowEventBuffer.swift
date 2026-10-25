@@ -4,6 +4,8 @@ struct PendingTombstone: Sendable {
     let deletedAt: Date
     let sparingOpenedViewOnce: Bool
     let expired: Bool
+    /// Lancée sur cet appareil, pas encore acceptée par le serveur (#13001).
+    var awaitingConfirmation = false
 }
 
 struct PendingEdit: Sendable {

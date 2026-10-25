@@ -66,7 +66,7 @@ nonisolated final class LibsignalDeviceProvisioning: EndToEndDeviceProvisioning,
             device: enrolled.device,
             sealer: E2EEMessageSealer(local: enrolled.device, cipher: cipher, directory: directory, approvals: approvals),
             opener: E2EEEnvelopeOpener(
-                local: enrolled.device, cipher: cipher, plaintexts: E2EEPlaintextVault(vault: vault),
+                local: enrolled.device, cipher: cipher, plaintexts: E2EEPlaintextVault(vault: vault, owner: enrolled.device.userId),
                 directory: directory, approvals: approvals
             )
         )

@@ -314,73 +314,87 @@ final class EndToEndDeviceLimitViewModelTests: XCTestCase {
             .mapValues { EndToEndMessagingRuntime(provisioning: $0) }
     }
 
+    private func enrolled(_ runtime: EndToEndMessagingRuntime, as userId: String) async throws {
+        await runtime.open(session: userId)
+        _ = try await runtime.ready(for: userId)
+    }
+
     func test_plaintexts_ofTheOpenSessionsAccount_areServed() async throws {
         let runtime = try XCTUnwrap(try device([alice])[alice])
-        await runtime.open(session: alice)
-        _ = try await runtime.ready(for: alice)
+        try await enrolled(runtime, as: alice)
 
-        await runtime.remember(written(by: alice), from: alice, as: ["m1"])
+        let kept = await runtime.remember(written(by: alice), from: alice, as: ["m1"])
 
-        let served = await runtime.plaintexts(for: ["m1"])
+        XCTAssertTrue(kept)
+        let served = await runtime.plaintexts(for: ["m1"], as: alice)
         XCTAssertEqual(served.keys.sorted(), ["m1"])
     }
 
     func test_plaintexts_ofAnotherAccountOnTheSameDevice_areNeverServed() async throws {
         let runtimes = try device([alice, bob])
         let asAlice = try XCTUnwrap(runtimes[alice]), asBob = try XCTUnwrap(runtimes[bob])
-        await asAlice.open(session: alice)
-        _ = try await asAlice.ready(for: alice)
+        try await enrolled(asAlice, as: alice)
         await asAlice.remember(written(by: alice), from: alice, as: ["m1"])
         await asAlice.close()
 
         await asBob.open(session: bob)
 
-        let servedToBob = await asBob.plaintexts(for: ["m1"])
+        let servedToBob = await asBob.plaintexts(for: ["m1"], as: bob)
         XCTAssertEqual(servedToBob, [:], "B, connecté sur l'appareil de A, ne lit pas le coffre de A")
-        let storedForBob = await asBob.storedMessageIds()
-        XCTAssertEqual(storedForBob, [])
+        let storedForBob = await asBob.storedMessageIds(as: bob)
+        XCTAssertNil(storedForBob, "le coffre n'est pas celui de B")
+    }
+
+    func test_plaintexts_askedForAnotherAccountThanTheSession_areNotServed() async throws {
+        let runtime = try XCTUnwrap(try device([alice])[alice])
+        try await enrolled(runtime, as: alice)
+        await runtime.remember(written(by: alice), from: alice, as: ["m1"])
+
+        let servedToBob = await runtime.plaintexts(for: ["m1"], as: bob)
+
+        XCTAssertEqual(servedToBob, [:], "une interface déjà basculée vers B ne lit pas le coffre de A, même session encore ouverte")
     }
 
     func test_plaintexts_afterTheSessionCloses_orBeforeItOpens_areNotServed() async throws {
         let runtime = try XCTUnwrap(try device([alice])[alice])
-        let beforeOpening = await runtime.plaintexts(for: ["m1"])
+        let beforeOpening = await runtime.plaintexts(for: ["m1"], as: alice)
         XCTAssertEqual(beforeOpening, [:])
-        await runtime.open(session: alice)
-        _ = try await runtime.ready(for: alice)
+        try await enrolled(runtime, as: alice)
         await runtime.remember(written(by: alice), from: alice, as: ["m1"])
 
         await runtime.close()
 
-        let afterClosing = await runtime.plaintexts(for: ["m1"])
+        let afterClosing = await runtime.plaintexts(for: ["m1"], as: alice)
         XCTAssertEqual(afterClosing, [:])
     }
 
-    func test_remember_forAnotherAccountThanTheSession_storesNothing() async throws {
+    func test_remember_forAnotherAccountThanTheSession_storesNothing_andSaysSo() async throws {
         let runtime = try XCTUnwrap(try device([alice])[alice])
-        await runtime.open(session: alice)
-        _ = try await runtime.ready(for: alice)
+        try await enrolled(runtime, as: alice)
 
-        await runtime.remember(written(by: bob), from: bob, as: ["m2"])
+        let kept = await runtime.remember(written(by: bob), from: bob, as: ["m2"])
 
-        let stored = await runtime.storedMessageIds()
+        XCTAssertFalse(kept)
+        let stored = await runtime.storedMessageIds(as: alice)
         XCTAssertEqual(stored, [])
     }
 
     // MARK: - Un clair effacé quitte le coffre (#13001)
 
-    func test_erase_removesTheClear_onlyWithinTheOpenSession() async throws {
+    func test_erase_removesTheClear_onlyForTheVaultsAccount_withinItsSession() async throws {
         let runtime = try XCTUnwrap(try device([alice])[alice])
-        await runtime.open(session: alice)
-        _ = try await runtime.ready(for: alice)
+        try await enrolled(runtime, as: alice)
         await runtime.remember(written(by: alice), from: alice, as: ["m1", "cid_1", "m2"])
 
-        let erased = await runtime.erase(["m1", "cid_1"])
+        let erasedForBob = await runtime.erase(["m2"], as: bob)
+        let erased = await runtime.erase(["m1", "cid_1"], as: alice)
 
+        XCTAssertFalse(erasedForBob)
         XCTAssertTrue(erased)
-        let stored = await runtime.storedMessageIds()
+        let stored = await runtime.storedMessageIds(as: alice)
         XCTAssertEqual(stored, ["m2"])
         await runtime.close()
-        let erasedClosed = await runtime.erase(["m2"])
+        let erasedClosed = await runtime.erase(["m2"], as: alice)
         XCTAssertFalse(erasedClosed, "hors session, l'effacement attend")
     }
 }

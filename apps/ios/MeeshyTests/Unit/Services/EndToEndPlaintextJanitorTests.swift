@@ -4,65 +4,78 @@ import MeeshyE2EE
 import MeeshySDK
 @testable import Meeshy
 
-/// Un message effacé dans la base des messages vide le coffre E2EE, après sa
-/// grâce, et seulement quand le coffre accepte (#13001).
+/// Un message effacé dans la base des messages vide le coffre E2EE (#13001) :
+/// une suppression lancée ici seulement une fois confirmée, et seulement pour
+/// le compte de cette base.
+@MainActor
 final class EndToEndPlaintextJanitorTests: XCTestCase {
     private let conversationId = "00000000000000000000ab01"
+    private let me = "00000000000000000000aa11"
 
     private func persistence(with rows: [(local: String, server: String)]) async throws -> MessagePersistenceActor {
         let queue = try DatabaseQueue()
         try MessageDatabaseMigrations.runAll(on: queue)
-        let conversationId = conversationId
-        try await queue.write { db in
-            for row in rows {
-                var record = OptimisticTextRecordBuilder.record(
-                    localId: row.local, conversationId: conversationId, senderId: "00000000000000000000bb22", sender: nil,
-                    text: "", originalLanguage: "fr", messageType: "text", replyToId: nil, storyReplyToId: nil,
-                    forwardedFromId: nil, forwardedFromConversationId: nil, replyToJson: nil, effectFlags: 0,
-                    maxViewOnceCount: nil, locationJson: nil, stickerJson: nil, now: Date(), ephemeralDuration: nil
-                )
-                record.serverId = row.server
-                record.isEncrypted = true
-                record.encryptionMode = E2EEWire.mode
-                try record.insert(db)
-            }
+        let records = rows.map { row -> MessageRecord in
+            var record = OptimisticTextRecordBuilder.record(
+                localId: row.local, conversationId: conversationId, senderId: "00000000000000000000bb22", sender: nil,
+                text: "", originalLanguage: "fr", messageType: "text", replyToId: nil, storyReplyToId: nil,
+                forwardedFromId: nil, forwardedFromConversationId: nil, replyToJson: nil, effectFlags: 0,
+                maxViewOnceCount: nil, locationJson: nil, stickerJson: nil, now: Date(), ephemeralDuration: nil,
+                sealedEndToEnd: true
+            )
+            record.serverId = row.server
+            return record
         }
-        return MessagePersistenceActor(dbWriter: queue)
+        try await queue.write { db in try records.forEach { try $0.insert(db) } }
+        return MessagePersistenceActor(dbWriter: queue, currentUserId: me)
     }
 
     private func content() -> E2EEContent {
         E2EEContent(text: "à effacer", language: "fr", replyTo: nil, conversationId: conversationId, clientMessageId: "cid_1", sentAt: Date())
     }
 
-    private func janitor(_ endToEnd: MockEndToEndMessaging, _ queue: MessagePersistenceActor, at now: Date) -> EndToEndPlaintextJanitor {
-        EndToEndPlaintextJanitor(endToEnd: endToEnd, queue: { queue }, now: { now })
+    private func janitor(_ endToEnd: MockEndToEndMessaging, _ queue: MessagePersistenceActor) -> EndToEndPlaintextJanitor {
+        EndToEndPlaintextJanitor(endToEnd: endToEnd, queue: { await queue.plaintextErasures })
     }
 
-    func test_aDeletedMessage_leavesTheVault_onceItsGraceHasPassed() async throws {
+    func test_aMessageDeletedByTheServer_leavesTheVault_andTheQueue() async throws {
         let queue = try await persistence(with: [("cid_1", "srv_1"), ("cid_2", "srv_2")])
         let endToEnd = MockEndToEndMessaging()
-        await endToEnd.remember(content(), from: "me", as: ["cid_1", "srv_1", "srv_2"])
+        await endToEnd.remember(content(), from: me, as: ["cid_1", "srv_1", "srv_2"])
         try await queue.markDeleted(localId: "srv_1", deletedAt: Date())
 
-        await janitor(endToEnd, queue, at: Date().addingTimeInterval(EndToEndPlaintextJanitor.grace + 1)).drain()
+        await janitor(endToEnd, queue).drain()
 
-        let stored = await endToEnd.storedMessageIds()
-        XCTAssertEqual(stored, ["srv_2"])
-        let left = try await queue.pendingPlaintextErasures(recordedBefore: .distantFuture, limit: 10)
+        XCTAssertEqual(endToEnd.storedIds, ["srv_2"])
+        let left = try await queue.plaintextErasures.pending(limit: 10)
         XCTAssertEqual(left, [])
     }
 
-    func test_aFreshDeletion_waitsItsGrace() async throws {
+    func test_aLocalDeletion_keepsItsClear_untilTheServerConfirmsIt() async throws {
         let queue = try await persistence(with: [("cid_1", "srv_1")])
         let endToEnd = MockEndToEndMessaging()
-        await endToEnd.remember(content(), from: "me", as: ["srv_1"])
-        try await queue.markDeleted(localId: "srv_1", deletedAt: Date())
+        await endToEnd.remember(content(), from: me, as: ["cid_1", "srv_1"])
+        try await queue.markDeletedAwaitingConfirmation(localId: "srv_1", deletedAt: Date())
 
-        await janitor(endToEnd, queue, at: Date()).drain()
+        await janitor(endToEnd, queue).drain()
+        XCTAssertEqual(endToEnd.storedIds, ["cid_1", "srv_1"], "une suppression pas encore acceptée peut se rétablir")
 
-        XCTAssertEqual(endToEnd.erasedIds, [])
-        let stored = await endToEnd.storedMessageIds()
-        XCTAssertEqual(stored, ["srv_1"], "une suppression qui échoue sur le réseau se rétablit avec son clair")
+        try await queue.confirmDeletion(localId: "srv_1")
+        await janitor(endToEnd, queue).drain()
+        XCTAssertEqual(endToEnd.storedIds, [])
+    }
+
+    func test_aLocalDeletionRefusedLater_keepsItsClear() async throws {
+        let queue = try await persistence(with: [("cid_1", "srv_1")])
+        let endToEnd = MockEndToEndMessaging()
+        await endToEnd.remember(content(), from: me, as: ["srv_1"])
+        try await queue.markDeletedAwaitingConfirmation(localId: "srv_1", deletedAt: Date())
+        await janitor(endToEnd, queue).drain()
+
+        try await queue.markUndeleted(localId: "srv_1")
+        await janitor(endToEnd, queue).drain()
+
+        XCTAssertEqual(endToEnd.storedIds, ["srv_1"])
     }
 
     func test_aRefusingVault_keepsTheErasuresForTheNextSession() async throws {
@@ -71,9 +84,22 @@ final class EndToEndPlaintextJanitorTests: XCTestCase {
         endToEnd.erasureAccepted = false
         try await queue.markDeleted(localId: "srv_1", deletedAt: Date())
 
-        await janitor(endToEnd, queue, at: Date().addingTimeInterval(EndToEndPlaintextJanitor.grace + 1)).drain()
+        await janitor(endToEnd, queue).drain()
 
-        let left = try await queue.pendingPlaintextErasures(recordedBefore: .distantFuture, limit: 10)
+        let left = try await queue.plaintextErasures.pending(limit: 10)
         XCTAssertEqual(Set(left), ["cid_1", "srv_1"])
+    }
+
+    func test_theVaultIsErasedOnlyForTheQueuesAccount() async throws {
+        let queue = try await persistence(with: [("cid_1", "srv_1")])
+        let endToEnd = MockEndToEndMessaging()
+        endToEnd.vaultAccount = "00000000000000000000cc33"
+        try await queue.markDeleted(localId: "srv_1", deletedAt: Date())
+
+        await janitor(endToEnd, queue).drain()
+
+        XCTAssertEqual(endToEnd.erasedIds.count, 1)
+        let left = try await queue.plaintextErasures.pending(limit: 10)
+        XCTAssertEqual(Set(left), ["cid_1", "srv_1"], "le coffre d'un autre compte ne se vide pas pour celui-ci")
     }
 }

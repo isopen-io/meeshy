@@ -64,8 +64,8 @@ nonisolated enum ConversationListEndToEndTexts {
             awaitsPlaintext($0) && kept[$0.id] == nil && !misses.contains($0.lastMessageId ?? "")
         }
         let ids = pending.compactMap(\.lastMessageId)
-        guard !ids.isEmpty else { return (kept, misses) }
-        let entries = await endToEnd.plaintexts(for: ids)
+        guard !ids.isEmpty, let viewerId, !viewerId.isEmpty else { return (kept, misses) }
+        let entries = await endToEnd.plaintexts(for: ids, as: viewerId)
         return pending.reduce(into: (texts: kept, misses: misses)) { found, conversation in
             let entry = conversation.lastMessageId.flatMap { entries[$0] }
             if let text = adoption(of: entry, for: conversation, viewerId: viewerId) {
@@ -103,6 +103,8 @@ final class ConversationListEndToEndTextStore {
     private let endToEnd: any EndToEndMessagingProviding
     private let viewerId: @MainActor () -> String?
     private let willChange: @MainActor () -> Void
+    /// Ce que l'appareil traduit de ces clairs (#13002), en mémoire.
+    let translations: ConversationListDeviceTranslations
     private var latestRows: [Conversation] = []
     private var reading: Task<Void, Never>?
     private var cancellables = Set<AnyCancellable>()
@@ -112,13 +114,22 @@ final class ConversationListEndToEndTextStore {
         endToEnd: any EndToEndMessagingProviding = EndToEndMessagingRuntime.shared,
         viewerId: @escaping @MainActor () -> String?,
         mineRetryDelay: Duration = .milliseconds(600),
+        translations: ConversationListDeviceTranslations? = nil,
         willChange: @escaping @MainActor () -> Void
     ) {
         self.mineRetryDelay = mineRetryDelay
         self.endToEnd = endToEnd
         self.viewerId = viewerId
         self.willChange = willChange
+        self.translations = translations ?? ConversationListDeviceTranslations(willChange: willChange)
+        // La première liste se lit sans attendre (#13002, clignotement au
+        // démarrage) ; les suivantes, regroupées.
         rows
+            .prefix(1)
+            .sink { [weak self] rows in self?.refresh(rows) }
+            .store(in: &cancellables)
+        rows
+            .dropFirst()
             .debounce(for: .milliseconds(16), scheduler: DispatchQueue.main)
             .sink { [weak self] rows in self?.refresh(rows) }
             .store(in: &cancellables)
@@ -133,7 +144,7 @@ final class ConversationListEndToEndTextStore {
     }
 
     func text(for conversationId: String) -> ConversationPreviewDeviceText? {
-        texts[conversationId]
+        texts[conversationId].map(translations.dressing)
     }
 
     private func refresh(_ rows: [Conversation]) {
@@ -150,6 +161,7 @@ final class ConversationListEndToEndTextStore {
             guard !Task.isCancelled, let self else { return }
             self.misses = resolved.misses
             self.retryMine(in: rows, unresolvedBy: resolved.texts)
+            self.translations.translate(Array(resolved.texts.values))
             guard self.texts != resolved.texts else { return }
             self.willChange()
             self.texts = resolved.texts

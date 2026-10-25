@@ -20,16 +20,22 @@ nonisolated protocol EndToEndMessagingProviding: Sendable {
     ) async throws -> T
     /// Range le clair d'un message que J'AI écrit : l'enveloppe ne revient pas
     /// à l'appareil émetteur, et l'écho du serveur ne porte que le littéral.
-    func remember(_ content: E2EEContent, from senderUserId: String, as messageIds: [String]) async
-    /// Ce que cet appareil sait de ces messages chiffrés, pour le compte de la
-    /// session ouverte seulement, et seulement si le coffre est le sien (#13000).
-    func plaintexts(for messageIds: [String]) async -> [String: E2EEPlaintextEntry]
-    /// Retire du coffre le clair de ces messages, effacés sur cet appareil
-    /// (#13001). `false` hors d'une session ouverte pour le compte du coffre :
-    /// rien n'est retiré, l'effacement attend la suivante.
-    func erase(_ messageIds: [String]) async -> Bool
-    /// Les messages dont le coffre du compte de la session tient le clair.
-    func storedMessageIds() async -> [String]
+    /// `false` quand il n'a pas pu être rangé : l'envoi chiffré ne part pas.
+    @discardableResult
+    func remember(_ content: E2EEContent, from senderUserId: String, as messageIds: [String]) async -> Bool
+    /// Ce que cet appareil sait de ces messages chiffrés, pour `account`, que
+    /// l'appelant affirme (#13000) : rien si ce n'est pas le compte de la
+    /// session ouverte, ou si le coffre n'est pas enrôlé pour lui. L'appelant
+    /// le dit parce que la session se ferme derrière une file : une interface
+    /// déjà basculée vers un autre compte ne lit jamais le coffre du précédent.
+    func plaintexts(for messageIds: [String], as account: String) async -> [String: E2EEPlaintextEntry]
+    /// Retire du coffre de `account` le clair de ces messages, effacés sur cet
+    /// appareil (#13001). `false` quand le coffre n'est pas le sien ou que sa
+    /// session n'est pas ouverte : rien n'est retiré, l'effacement attend.
+    func erase(_ messageIds: [String], as account: String) async -> Bool
+    /// Les messages dont le coffre de `account` tient le clair ; `nil` si ce
+    /// coffre n'est pas le sien.
+    func storedMessageIds(as account: String) async -> [String]?
     /// Chaque enveloppe ouverte, par la socket ou le rattrapage.
     var opened: AnyPublisher<E2EEOpenOutcome, Never> { get }
 }
@@ -197,21 +203,24 @@ actor EndToEndMessagingRuntime: EndToEndMessagingProviding, EndToEndDeviceManagi
         }
     }
 
-    func remember(_ content: E2EEContent, from senderUserId: String, as messageIds: [String]) async {
+    @discardableResult
+    func remember(_ content: E2EEContent, from senderUserId: String, as messageIds: [String]) async -> Bool {
         guard let owner = session.account, owner == senderUserId else {
             Logger.e2ee.warning("e2ee own plaintext not stored: no open session for its author")
-            return
+            return false
         }
         do {
             let store = try provisioning.plaintexts(owner: owner)
             try messageIds.forEach { id in try store.save(.readable(content, senderUserId: senderUserId), for: id) }
+            return true
         } catch {
             Logger.e2ee.error("e2ee own plaintext not stored count=\(messageIds.count, privacy: .public): \(String(describing: type(of: error)), privacy: .public)")
+            return false
         }
     }
 
-    func plaintexts(for messageIds: [String]) async -> [String: E2EEPlaintextEntry] {
-        guard !messageIds.isEmpty, let owner = session.account else { return [:] }
+    func plaintexts(for messageIds: [String], as account: String) async -> [String: E2EEPlaintextEntry] {
+        guard !messageIds.isEmpty, let owner = session.account, owner == account else { return [:] }
         do {
             return try provisioning.plaintexts(owner: owner).entries(for: messageIds)
         } catch {
@@ -220,8 +229,8 @@ actor EndToEndMessagingRuntime: EndToEndMessagingProviding, EndToEndDeviceManagi
         }
     }
 
-    func erase(_ messageIds: [String]) async -> Bool {
-        guard let owner = session.account else { return false }
+    func erase(_ messageIds: [String], as account: String) async -> Bool {
+        guard let owner = session.account, owner == account else { return false }
         guard !messageIds.isEmpty else { return true }
         do {
             try provisioning.plaintexts(owner: owner).remove(messageIds)
@@ -232,9 +241,11 @@ actor EndToEndMessagingRuntime: EndToEndMessagingProviding, EndToEndDeviceManagi
         }
     }
 
-    func storedMessageIds() async -> [String] {
-        guard let owner = session.account else { return [] }
-        return (try? provisioning.plaintexts(owner: owner).storedMessageIds()) ?? []
+    func storedMessageIds(as account: String) async -> [String]? {
+        guard let owner = session.account, owner == account,
+              let store = try? provisioning.plaintexts(owner: owner),
+              let ids = try? store.storedMessageIds(), (try? store.servesItsOwner()) == true else { return nil }
+        return ids
     }
 
     /// Une enveloppe poussée par la socket de cet appareil.

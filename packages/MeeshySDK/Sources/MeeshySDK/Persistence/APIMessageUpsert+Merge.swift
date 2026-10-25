@@ -19,6 +19,9 @@ extension APIMessageUpsert {
     ) -> MergeGuards {
         MergeGuards(
             keepLocalPlaintext: api.isEncrypted == true
+                // #12999 — un message chiffré de bout en bout ne garde jamais son
+                // clair dans cette base : il vit dans le coffre libsignal.
+                && api.encryptionMode != E2EEWire.mode
                 && !existing.isEncrypted
                 && !(existing.content ?? "").isEmpty
                 // Le littéral servi n'est pas un clair local : une ligne née
@@ -164,6 +167,9 @@ extension APIMessageUpsert {
         api: APIMessage,
         in db: Database
     ) throws -> Bool {
+        if api.deletedAt != nil {
+            try MessagePlaintextErasures.confirmDeletion(of: before.localId, in: db)
+        }
         let rowChanged = !upsertMutatedFieldsEqual(updated, before)
             || (api.updatedAt != nil && api.updatedAt != before.updatedAt)
         guard rowChanged else { return false }

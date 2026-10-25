@@ -79,13 +79,21 @@ final class E2EEPlaintextVaultTests: XCTestCase {
         XCTAssertEqual(try E2EEPlaintextVault(vault: records, owner: alice).storedMessageIds(), ["m1"])
     }
 
-    func test_aRemovedEntry_leavesNoSealedRowInTheFile() throws {
-        let records = try vault(enrolledFor: alice)
+    func test_aRemovedEntry_leavesNoSealedBytesInTheFile() throws {
+        let path = E2EETestDevice.temporaryPath("sqlite")
+        let pool = try DatabasePool(path: path)
+        let records = try E2EEGRDBRecordVault(writer: pool, sealingKey: SymmetricKey(size: .bits256))
+        try records.write { try E2EELocalEnrollmentRecord.save(E2EELocalDevice(userId: alice, deviceId: 1, registrationId: 7), in: $0) }
         let store = E2EEPlaintextVault(vault: records, owner: alice)
-        try store.save(entry("message supprimé", by: alice), for: "m1")
+        try store.save(entry(String(repeating: "message supprimé ", count: 40), by: alice), for: "m1")
+        let sealed = try XCTUnwrap(try pool.read { db in
+            try Data.fetchOne(db, sql: "SELECT sealed FROM record WHERE kind = 'plaintext' AND key = 'm1'")
+        })
 
         try store.remove(["m1"])
 
-        XCTAssertEqual(try records.read { try $0.keys(of: .plaintext) }, [])
+        let onDisk = [path, path + "-wal"].compactMap { FileManager.default.contents(atPath: $0) }
+        XCTAssertFalse(onDisk.isEmpty)
+        XCTAssertFalse(onDisk.contains { $0.range(of: sealed) != nil }, "ni la base ni le journal ne gardent la ligne retirée")
     }
 }

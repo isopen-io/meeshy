@@ -54,6 +54,8 @@ public protocol E2EEPlaintextStoring: Sendable {
     func remove(_ messageIds: [String]) throws
     /// Les messages dont le coffre tient un clair ou un échec.
     func storedMessageIds() throws -> [String]
+    /// Le coffre est-il enrôlé pour le compte qui le demande ?
+    func servesItsOwner() throws -> Bool
 }
 
 public enum E2EEPlaintextVaultError: Error, Equatable {
@@ -119,6 +121,11 @@ public final class E2EEPlaintextVault: E2EEPlaintextStoring {
             }
             try messageIds.forEach { try transaction.remove(.plaintext, $0) }
         }
+        try vault.compact()
+    }
+
+    public func servesItsOwner() throws -> Bool {
+        try vault.read { try serves(in: $0) }
     }
 
     public func storedMessageIds() throws -> [String] {

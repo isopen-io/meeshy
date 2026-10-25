@@ -29,7 +29,7 @@ final class MessagePlaintextErasuresTests: XCTestCase {
     }
 
     private func pending(_ actor: MessagePersistenceActor) async throws -> Set<String> {
-        Set(try await actor.pendingPlaintextErasures(recordedBefore: Date().addingTimeInterval(1)))
+        Set(try await actor.plaintextErasures.pending())
     }
 
     func test_aMessageDeletedForEveryone_recordsItsLocalAndServerIds() async throws {
@@ -114,19 +114,117 @@ final class MessagePlaintextErasuresTests: XCTestCase {
         XCTAssertEqual(recorded, [])
     }
 
-    func test_aRecentErasure_waitsItsGrace_andAnAcknowledgedOneLeavesTheQueue() async throws {
+    func test_aLocalDeletion_waitsForTheServer_thenAnAcknowledgedOneLeavesTheQueue() async throws {
         let (actor, queue) = try makeActor()
-        try insert(sealedRow(localId: "srv_10", serverId: "srv_10"), into: queue)
-        try await actor.markDeleted(localId: "srv_10", deletedAt: Date())
+        try insert(sealedRow(localId: "cid_10", serverId: "srv_10"), into: queue)
+        try await actor.markDeletedAwaitingConfirmation(localId: "cid_10", deletedAt: Date())
 
-        let tooEarly = try await actor.pendingPlaintextErasures(recordedBefore: Date().addingTimeInterval(-30))
-        XCTAssertEqual(tooEarly, [])
-        let oldest = try await actor.oldestPendingPlaintextErasure()
-        XCTAssertNotNil(oldest)
+        let unconfirmed = try await pending(actor)
+        XCTAssertEqual(unconfirmed, [], "refusée plus tard, elle se rétablirait sans son clair")
 
-        try await actor.acknowledgePlaintextErasures(["srv_10"])
+        try await actor.confirmDeletion(localId: "cid_10")
+        let confirmed = try await pending(actor)
+        XCTAssertEqual(confirmed, ["cid_10", "srv_10"])
+
+        try await actor.plaintextErasures.acknowledge(["cid_10", "srv_10"])
+        let left = try await pending(actor)
+        XCTAssertEqual(left, [])
+    }
+
+    func test_theServersEchoOfALocalDeletion_confirmsIt() async throws {
+        let (actor, queue) = try makeActor()
+        try insert(sealedRow(localId: "cid_17", serverId: "srv_17"), into: queue)
+        try await actor.markDeletedAwaitingConfirmation(localId: "cid_17", deletedAt: Date())
+
+        try await actor.markDeleted(localId: "srv_17", deletedAt: Date())
 
         let recorded = try await pending(actor)
-        XCTAssertEqual(recorded, [])
+        XCTAssertEqual(recorded, ["cid_17", "srv_17"])
+    }
+
+    func test_aServedPageCarryingTheDeletion_confirmsALocalOne() async throws {
+        let (actor, queue) = try makeActor()
+        try insert(sealedRow(localId: "srv_18", serverId: "srv_18"), into: queue)
+        try await actor.markDeletedAwaitingConfirmation(localId: "srv_18", deletedAt: Date())
+        let api = try APIClient.makeAPIPayloadDecoder().decode(APIMessage.self, from: Data("""
+        {"id":"srv_18","conversationId":"\(conversationId)","senderId":"u-peer","content":"","isEncrypted":true,
+         "encryptionMode":"e2ee","messageType":"text","messageSource":"user",
+         "createdAt":"2026-10-25T12:00:00.000Z","deletedAt":"2026-10-25T12:01:00.000Z"}
+        """.utf8))
+
+        try await actor.upsertFromAPIMessages([api])
+
+        let recorded = try await pending(actor)
+        XCTAssertEqual(recorded, ["srv_18"])
+    }
+
+    func test_theMigration_recordsTheTombstonesAlreadyStored() throws {
+        let queue = try DatabaseQueue()
+        var migrator = DatabaseMigrator()
+        migrator.register(Array(MessageDatabaseMigrations.all.dropLast()))
+        try migrator.migrate(queue)
+        var tombstone = sealedRow(localId: "srv_19", serverId: "srv_19")
+        tombstone.deletedAt = Date()
+        try insert(tombstone, into: queue)
+
+        try MessageDatabaseMigrations.runAll(on: queue)
+
+        let recorded = try queue.read { db in try String.fetchAll(db, sql: "SELECT messageKey FROM e2ee_plaintext_erasures") }
+        XCTAssertEqual(recorded, ["srv_19"])
+    }
+
+    func test_aRowInsertedAlreadyDeleted_isRecorded() async throws {
+        let (actor, queue) = try makeActor()
+        var tombstone = sealedRow(localId: "srv_11", serverId: "srv_11")
+        tombstone.deletedAt = Date()
+
+        try insert(tombstone, into: queue)
+
+        let recorded = try await pending(actor)
+        XCTAssertEqual(recorded, ["srv_11"], "une synchro tardive apporte un message déjà supprimé")
+    }
+
+    func test_aRowInsertedAlreadyOpened_isRecorded() async throws {
+        let (actor, queue) = try makeActor()
+        var opened = sealedRow(localId: "cid_12", serverId: "srv_12", maxViewOnce: 1)
+        opened.sealAsOpenedViewOnce(at: Date())
+
+        try insert(opened, into: queue)
+
+        let recorded = try await pending(actor)
+        XCTAssertEqual(recorded, ["cid_12", "srv_12"])
+    }
+
+    func test_aDeletionOrAnOpening_withoutLocalRow_isRecordedByItsId() async throws {
+        let (actor, _) = try makeActor()
+
+        try await actor.markDeleted(localId: "srv_13", deletedAt: Date())
+        try await actor.markViewOnceOpened(localId: "srv_14")
+
+        let recorded = try await pending(actor)
+        XCTAssertEqual(recorded, ["srv_13", "srv_14"], "le coffre peut tenir le clair d'un message que la base n'a pas")
+    }
+
+    func test_restoringAConsumedViewOnce_keepsItsErasure() async throws {
+        let (actor, queue) = try makeActor()
+        try insert(sealedRow(localId: "srv_15", serverId: "srv_15", maxViewOnce: 1), into: queue)
+        try await actor.markViewOnceOpened(localId: "srv_15")
+        try await actor.markDeleted(localId: "srv_15", deletedAt: Date())
+
+        try await actor.markUndeleted(localId: "srv_15")
+
+        let recorded = try await pending(actor)
+        XCTAssertEqual(recorded, ["srv_15"], "annuler la suppression ne rend pas le clair d'une vue unique consommée")
+    }
+
+    func test_restoringAnExpiredEphemeral_keepsItsErasure() async throws {
+        let (actor, queue) = try makeActor()
+        try insert(sealedRow(localId: "srv_16", serverId: "srv_16", expiresAt: Date().addingTimeInterval(-5)), into: queue)
+        try await actor.markDeleted(localId: "srv_16", deletedAt: Date())
+
+        try await actor.markUndeleted(localId: "srv_16")
+
+        let recorded = try await pending(actor)
+        XCTAssertEqual(recorded, ["srv_16"])
     }
 }

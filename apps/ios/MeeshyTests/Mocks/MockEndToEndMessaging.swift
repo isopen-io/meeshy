@@ -57,28 +57,50 @@ nonisolated final class MockEndToEndMessaging: EndToEndMessagingProviding, @unch
         throw E2EESealError.devicesMismatchUnresolved
     }
 
-    func remember(_ content: E2EEContent, from senderUserId: String, as messageIds: [String]) async {
-        lock.withLock { messageIds.forEach { stored[$0] = .readable(content, senderUserId: senderUserId) } }
+    /// Le compte dont le coffre est enrôlé ; `nil` : tout compte affirmé est servi.
+    var vaultAccount: String?
+    /// `false` : le rangement du clair échoue (session fermée, autre compte).
+    var rememberAccepted = true
+    private(set) var readAccounts: [String] = []
+
+    @discardableResult
+    func remember(_ content: E2EEContent, from senderUserId: String, as messageIds: [String]) async -> Bool {
+        lock.withLock {
+            guard rememberAccepted, serves(senderUserId) else { return false }
+            messageIds.forEach { stored[$0] = .readable(content, senderUserId: senderUserId) }
+            return true
+        }
     }
 
-    func plaintexts(for messageIds: [String]) async -> [String: E2EEPlaintextEntry] {
-        lock.withLock { stored.filter { messageIds.contains($0.key) } }
+    func plaintexts(for messageIds: [String], as account: String) async -> [String: E2EEPlaintextEntry] {
+        lock.withLock {
+            readAccounts.append(account)
+            guard serves(account) else { return [:] }
+            return stored.filter { messageIds.contains($0.key) }
+        }
     }
 
     /// `false` : le coffre refuse (session fermée, autre compte) et l'effacement attend.
     var erasureAccepted = true
     private(set) var erasedIds: [[String]] = []
 
-    func erase(_ messageIds: [String]) async -> Bool {
+    func erase(_ messageIds: [String], as account: String) async -> Bool {
         lock.withLock {
             erasedIds.append(messageIds)
-            guard erasureAccepted else { return false }
+            guard erasureAccepted, serves(account) else { return false }
             messageIds.forEach { stored[$0] = nil }
             return true
         }
     }
 
-    func storedMessageIds() async -> [String] {
-        lock.withLock { stored.keys.sorted() }
+    func storedMessageIds(as account: String) async -> [String]? {
+        lock.withLock { serves(account) ? stored.keys.sorted() : nil }
+    }
+
+    /// Les identifiants rangés, vus de l'extérieur du coffre (témoins).
+    var storedIds: [String] { lock.withLock { stored.keys.sorted() } }
+
+    private func serves(_ account: String) -> Bool {
+        vaultAccount.map { $0 == account } ?? true
     }
 }

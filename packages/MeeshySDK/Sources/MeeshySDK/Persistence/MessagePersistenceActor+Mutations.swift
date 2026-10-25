@@ -128,21 +128,8 @@ extension MessagePersistenceActor {
             // sur l'identifiant reçu — c'est pourquoi elles se purgent depuis
             // les lignes retrouvées, jamais depuis `ids`.
             let localIds = rows.map { $0.localId }
-            let placeholders = localIds.map { _ in "?" }.joined(separator: ",")
-            let childArgs = StatementArguments(localIds)
-            for table in ["message_translations", "message_transcriptions", "message_audio_translations"] {
-                try db.execute(
-                    sql: "DELETE FROM \(table) WHERE messageLocalId IN (\(placeholders))",
-                    arguments: childArgs
-                )
-            }
-            for table in ["pending_ids", "send_attempts"] {
-                try db.execute(
-                    sql: "DELETE FROM \(table) WHERE localId IN (\(placeholders))",
-                    arguments: childArgs
-                )
-            }
-            try MessagePlaintextErasures.record(rowsMatching: "localId IN (\(placeholders))", arguments: childArgs, in: db)
+            try MessageChildRows.delete(ofLocalIds: localIds, in: db)
+            try MessagePlaintextErasures.record(localIds, cause: .removedForMe, in: db)
             _ = try matching.deleteAll(db)
             return Set(rows.map { $0.conversationId })
         }
@@ -161,9 +148,7 @@ extension MessagePersistenceActor {
             affectedConversationId = try MessageRecord
                 .filter(Column("localId") == localId || Column("serverId") == localId)
                 .fetchOne(db)?.conversationId
-            try MessagePlaintextErasures.cancel(
-                rowsMatching: "localId = ? OR serverId = ?", arguments: [localId, localId], in: db
-            )
+            try MessagePlaintextErasures.cancelDeletion(of: localId, now: Date(), in: db)
             try db.execute(
                 sql: """
                     UPDATE messages SET deletedAt = NULL,

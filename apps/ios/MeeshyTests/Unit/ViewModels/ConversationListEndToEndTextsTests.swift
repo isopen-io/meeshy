@@ -161,12 +161,80 @@ final class ConversationListEndToEndTextsTests: XCTestCase {
     }
 
     private func makeStore(
-        rows: CurrentValueSubject<[Conversation], Never>, vault: MockEndToEndMessaging, changes: ChangeCounter = ChangeCounter()
+        rows: CurrentValueSubject<[Conversation], Never>, vault: MockEndToEndMessaging, changes: ChangeCounter = ChangeCounter(),
+        engine: ListTranslationEngine = ListTranslationEngine(), readers: [String] = ["fr"]
     ) -> ConversationListEndToEndTextStore {
         ConversationListEndToEndTextStore(
             rows: rows.eraseToAnyPublisher(), endToEnd: vault,
-            viewerId: { [me] in me }, mineRetryDelay: .milliseconds(150), willChange: { changes.count += 1 }
+            viewerId: { [me] in me }, mineRetryDelay: .milliseconds(150),
+            translations: ConversationListDeviceTranslations(engine: engine, readerLanguages: { readers }, willChange: { changes.count += 1 }),
+            willChange: { changes.count += 1 }
         )
+    }
+
+    // MARK: - Prisme sur l'appareil (#13002)
+
+    private func peerContent(_ text: String, language: String) -> E2EEContent {
+        E2EEContent(text: text, language: language, replyTo: nil, conversationId: conversationId, clientMessageId: "cmid-2", sentAt: sentAt)
+    }
+
+    func test_store_peerMessageInAnotherLanguage_isServedTranslatedOnTheDevice_asTheThreadWould() async {
+        let vault = MockEndToEndMessaging()
+        vault.store(.readable(peerContent("See you at 6", language: "en"), senderUserId: peer), for: messageId)
+        let engine = ListTranslationEngine()
+        let rows = CurrentValueSubject<[Conversation], Never>([sealedRow(from: peer)])
+        let store = makeStore(rows: rows, vault: vault, engine: engine, readers: ["fr", "en"])
+
+        await waitUntil { store.text(for: self.conversationId)?.translations["fr"] != nil }
+
+        XCTAssertEqual(engine.pairs, [DeviceTranslationPair(source: "en", target: "fr")])
+        XCTAssertEqual(store.text(for: conversationId)?.translations, ["fr": "[fr] See you at 6"])
+        let line = ConversationPreviewMessage(conversation: rows.value[0], readOnDevice: store.text(for: conversationId))
+        XCTAssertEqual(line?.translations, ["fr": "[fr] See you at 6"])
+        let persisted = String(decoding: (try? JSONEncoder().encode(rows.value)) ?? Data(), as: UTF8.self)
+        XCTAssertFalse(persisted.contains("[fr]"), "la traduction reste en mémoire")
+    }
+
+    func test_store_messageAlreadyInThePrimaryLanguage_isNotTranslated() async {
+        let vault = MockEndToEndMessaging()
+        vault.store(.readable(peerContent("Bien reçu", language: "fr"), senderUserId: peer), for: messageId)
+        let engine = ListTranslationEngine()
+        let rows = CurrentValueSubject<[Conversation], Never>([sealedRow(from: peer)])
+        let store = makeStore(rows: rows, vault: vault, engine: engine, readers: ["fr", "en"])
+
+        await waitUntil { store.text(for: self.conversationId) != nil }
+        try? await Task.sleep(for: .milliseconds(80))
+
+        XCTAssertEqual(engine.pairs, [])
+        XCTAssertEqual(store.text(for: conversationId)?.translations, [:])
+    }
+
+    func test_store_unsupportedPair_servesTheOriginal() async {
+        let vault = MockEndToEndMessaging()
+        vault.store(.readable(peerContent("See you at 6", language: "en"), senderUserId: peer), for: messageId)
+        let engine = ListTranslationEngine()
+        engine.availability = .unsupported
+        let rows = CurrentValueSubject<[Conversation], Never>([sealedRow(from: peer)])
+        let store = makeStore(rows: rows, vault: vault, engine: engine, readers: ["fr"])
+
+        await waitUntil { store.text(for: self.conversationId) != nil }
+        try? await Task.sleep(for: .milliseconds(80))
+
+        XCTAssertEqual(store.text(for: conversationId)?.text, "See you at 6")
+        XCTAssertEqual(store.text(for: conversationId)?.translations, [:])
+    }
+
+    /// #13002 — la liste lit le coffre dès sa première émission, sans le délai
+    /// de regroupement : la ligne ne passe pas par « Message chiffré ».
+    func test_store_firstList_isReadWithoutTheCoalescingDelay() async {
+        let vault = MockEndToEndMessaging()
+        vault.store(.readable(content("On se voit à 18 h"), senderUserId: me), for: messageId)
+        let rows = CurrentValueSubject<[Conversation], Never>([sealedRow()])
+        let store = makeStore(rows: rows, vault: vault)
+
+        for _ in 0..<20 { await Task.yield() }
+
+        XCTAssertEqual(store.text(for: conversationId)?.text, "On se voit à 18 h")
     }
 
     func test_store_readsMyOwnSentMessage_andNeverWritesItIntoTheConversation() async {
@@ -223,4 +291,22 @@ final class ConversationListEndToEndTextsTests: XCTestCase {
 
         XCTAssertNil(store.text(for: conversationId))
     }
+}
+
+@MainActor
+final class ListTranslationEngine: DeviceTranslationEngineProviding {
+    nonisolated deinit {}
+
+    let engineName = "list-tests-engine"
+    var availability: DeviceTranslationAvailability = .ready
+    private(set) var pairs: [DeviceTranslationPair] = []
+
+    func availability(of pair: DeviceTranslationPair) async -> DeviceTranslationAvailability { availability }
+
+    func translate(_ requests: [DeviceTranslationRequest], pair: DeviceTranslationPair) async -> [DeviceTranslationResult] {
+        pairs.append(pair)
+        return requests.map { DeviceTranslationResult(id: $0.id, text: "[\(pair.target)] \($0.text)") }
+    }
+
+    func cancelPending() {}
 }

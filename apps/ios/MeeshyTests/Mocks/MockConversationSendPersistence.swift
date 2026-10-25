@@ -96,7 +96,7 @@ enum SendingRowFixture {
             locationJson: nil,
             stickerJson: nil,
             now: Date(),
-            ephemeralDuration: nil
+            ephemeralDuration: nil, sealedEndToEnd: false
         )
     }
 }

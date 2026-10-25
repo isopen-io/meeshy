@@ -26,6 +26,7 @@ final class EndToEndSessionBridge: EndToEndSessionBridging {
     private let regimeChanges: AnyPublisher<ConversationEncryptionChangedEvent, Never>
     private let regimeLedger: EndToEndRegimeLedger
     private let janitor: EndToEndPlaintextJanitor
+    private let diskMigration: EndToEndDiskPlaintextMigration
     private let storeChanges: AnyPublisher<Void, Never>
     private var subscriptions: Set<AnyCancellable> = []
     /// Les ouvertures et fermetures de session, dans l'ordre où elles sont
@@ -40,6 +41,9 @@ final class EndToEndSessionBridge: EndToEndSessionBridging {
         regimeChanges: AnyPublisher<ConversationEncryptionChangedEvent, Never> = ConversationEncryptionChannel.shared.changed.eraseToAnyPublisher(),
         regimeLedger: EndToEndRegimeLedger = .shared,
         janitor: EndToEndPlaintextJanitor = .shared,
+        diskMigration: EndToEndDiskPlaintextMigration = EndToEndDiskPlaintextMigration(
+            endToEnd: EndToEndMessagingRuntime.shared, rows: { DependencyContainer.shared.messagePersistence.endToEndRowSealer }
+        ),
         storeChanges: AnyPublisher<Void, Never> = NotificationCenter.default
             .publisher(for: .messageStoreShouldRefresh).map { _ in () }.eraseToAnyPublisher()
     ) {
@@ -49,6 +53,7 @@ final class EndToEndSessionBridge: EndToEndSessionBridging {
         self.regimeChanges = regimeChanges
         self.regimeLedger = regimeLedger
         self.janitor = janitor
+        self.diskMigration = diskMigration
         self.storeChanges = storeChanges
     }
 
@@ -71,6 +76,9 @@ final class EndToEndSessionBridge: EndToEndSessionBridging {
         // #12522 — chaque bascule du régime est apprise, conversation ouverte ou non.
         regimeLedger.listen(to: regimeChanges).store(in: &subscriptions)
         enqueue { await runtime.catchUp(as: userId) }
+        // #12999 — le clair qu'une version antérieure a écrit hors du coffre s'en va.
+        let diskMigration = diskMigration
+        enqueue { await diskMigration.run(for: userId) }
         // #13001 — un effacement écrit dans la base des messages vide le coffre.
         let janitor = janitor
         enqueue { await janitor.drain() }

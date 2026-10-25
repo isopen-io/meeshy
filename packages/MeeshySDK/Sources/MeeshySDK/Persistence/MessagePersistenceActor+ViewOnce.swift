@@ -53,7 +53,10 @@ extension MessagePersistenceActor {
         try dbWriter.write { db in
             guard var record = try MessageRecord
                 .filter(Column("localId") == localId || Column("serverId") == localId)
-                .fetchOne(db) else { return }
+                .fetchOne(db) else {
+                try MessagePlaintextErasures.record(localId, cause: .viewOnceOpened, in: db)
+                return
+            }
             affectedConversationId = record.conversationId
             record.sealAsOpenedViewOnce(at: date)
             record.updatedAt = Date()

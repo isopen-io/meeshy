@@ -157,6 +157,22 @@ final class APIMessageUpsertTests: XCTestCase {
         XCTAssertFalse(result.isEncrypted)
     }
 
+    /// #12999 — l'écho d'un envoi chiffré de bout en bout ne garde jamais le
+    /// clair local : il vit dans le coffre libsignal, la ligne prend le littéral.
+    func test_merged_anEndToEndEcho_neverKeepsTheLocalPlaintext() throws {
+        let api = try makeAPI(["content": E2EEWire.contentPlaceholder, "isEncrypted": true, "encryptionMode": E2EEWire.mode])
+        var existing = makeRecord(api, localId: "cid_1", serverId: nil)
+        existing.content = "mon secret"
+        existing.isEncrypted = false
+        existing.encryptionMode = nil
+
+        let result = merge(existing, api)
+
+        XCTAssertEqual(result.content, E2EEWire.contentPlaceholder)
+        XCTAssertTrue(result.isEncrypted)
+        XCTAssertEqual(result.encryptionMode, E2EEWire.mode)
+    }
+
     /// #12916 — le littéral servi n'est pas un clair local : une ligne née en
     /// clair déclaré avec `[Encrypted]` redevient chiffrée, et le fil y cherche le clair.
     func test_merged_aRowBornWithTheServedLiteral_becomesEncryptedAgain() throws {

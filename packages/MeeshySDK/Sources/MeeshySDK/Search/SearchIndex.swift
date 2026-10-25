@@ -60,6 +60,21 @@ public actor SearchIndex {
         }
     }
 
+    /// Compacte l'index des conversations sous `secure_delete` : un terme
+    /// retiré (un aperçu en clair d'un message chiffré de bout en bout, #12999)
+    /// ne survit pas dans un segment FTS5 ni dans une page libérée.
+    public func compactConversations() async {
+        do {
+            try await pool.writeWithoutTransaction { db in
+                try db.execute(sql: "PRAGMA secure_delete = ON")
+                try db.execute(sql: "INSERT INTO conversations_fts(conversations_fts) VALUES('optimize')")
+                try db.execute(sql: "PRAGMA secure_delete = OFF")
+            }
+        } catch {
+            logger.error("compactConversations failed: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
     /// Upserts the supplied users into `users_fts`.
     public func indexUsers(_ users: [MeeshyUser]) async {
         guard !users.isEmpty else { return }

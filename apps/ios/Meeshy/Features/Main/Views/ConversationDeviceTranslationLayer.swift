@@ -81,7 +81,7 @@ struct ConversationDeviceTranslationLayer: View {
 /// Monte la vue qui sert le moteur de l'appareil, quand ce moteur en demande une.
 /// Sous iOS 16 et 17 il n'y a pas de moteur (`UnavailableDeviceTranslationEngine`) :
 /// rien n'est monté, et la conversation reçoit encore les traductions partagées.
-private struct DeviceTranslationEngineHost: View {
+struct DeviceTranslationEngineHost: View {
     let engine: any DeviceTranslationEngineProviding
 
     var body: some View {
