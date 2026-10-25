@@ -16,18 +16,27 @@ Architecture:
 - Cache-first strategy
 """
 
+from __future__ import annotations
+
 import os
 import logging
 import asyncio
-from typing import Optional, Dict, Any, List
+from typing import TYPE_CHECKING, Optional, Dict, Any, List
 from dataclasses import dataclass
 
-# Import services
-from ..transcription_service import (
-    TranscriptionService,
-    TranscriptionResult,
-    get_transcription_service
-)
+# `transcription_service` importe des modules de ce paquet (`speaker_probe`,
+# `transcription_guards`) : l'importer ici en tête referme une boucle au
+# chargement. Les types ne servent qu'aux annotations, le service se résout à
+# l'appel.
+if TYPE_CHECKING:
+    from ..transcription_service import TranscriptionService, TranscriptionResult
+
+
+def get_transcription_service():
+    from ..transcription_service import get_transcription_service as _get
+
+    return _get()
+
 from ..redis_service import (
     AudioCacheService,
     get_audio_cache_service

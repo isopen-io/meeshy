@@ -11,6 +11,8 @@ struct EncryptedDevicePresentation: Equatable {
     let title: String
     let systemImage: String
     let status: String
+    /// La date d'inscription et le NUMÉRO : deux « iPhone » se distinguent, et
+    /// le numéro est le seul repère que l'empreinte garantit.
     let detail: String?
     let trust: EndToEndOwnDevice.Trust
 
@@ -19,12 +21,16 @@ struct EncryptedDevicePresentation: Equatable {
         title = Self.title(of: device)
         systemImage = Self.systemImage(of: device)
         status = Self.status(of: device.trust)
-        detail = device.enrolledAt.map {
-            String(
-                format: String(localized: "e2ee.devices.enrolledOn", defaultValue: "Inscrit le %@", bundle: .main),
-                $0.formatted(date: .abbreviated, time: .omitted)
-            )
-        }
+        let number = String(format: String(localized: "e2ee.devices.number", defaultValue: "n° %d", bundle: .main), Int(device.deviceId))
+        detail = [
+            device.enrolledAt.map {
+                String(
+                    format: String(localized: "e2ee.devices.enrolledOn", defaultValue: "Inscrit le %@", bundle: .main),
+                    $0.formatted(date: .abbreviated, time: .omitted)
+                )
+            },
+            number,
+        ].compactMap { $0 }.joined(separator: " · ")
     }
 
     var accessibilityLabel: String {

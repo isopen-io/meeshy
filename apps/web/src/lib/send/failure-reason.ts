@@ -36,10 +36,12 @@ import { guestMaxSizeLabel } from './guest-attachment-policy';
 export function sendFailureReason(
   failure: ApiFailure | undefined,
   language: InterfaceLanguage,
+  { shell = __SHELL__ }: { readonly shell?: boolean } = {},
 ): string | undefined {
   if (failure === undefined) return undefined;
+  const endToEnd = (): string => translate(language, shell ? 'composer.writeRestriction.endToEnd.shell' : 'composer.writeRestriction.endToEnd');
   /* #12986 — le refus LOCAL d'un clair vers une conversation vue chiffrée porte le statut 0 : ce n'est pas une coupure. */
-  if (failure.code === E2EE_PLAINTEXT_WITHHELD) return translate(language, 'composer.writeRestriction.endToEnd');
+  if (failure.code === E2EE_PLAINTEXT_WITHHELD) return endToEnd();
   if (failure.status === 0)
     return translate(language, failure.code === 'TIMEOUT' ? 'send.failure.timeout' : 'send.failure.offline');
   /**
@@ -78,7 +80,7 @@ export function sendFailureReason(
      quand elle s'ouvrira (le composeur bascule dans le même état). */
   if (failure.code === GLOBAL_ADULTS_ONLY) return translate(language, 'composer.writeRestriction.minorGlobal');
   /* #11216 — un clair refusé dans une conversation chiffrée de bout en bout. */
-  if (failure.code === E2EE_PLAINTEXT_REFUSED) return translate(language, 'composer.writeRestriction.endToEnd');
+  if (failure.code === E2EE_PLAINTEXT_REFUSED) return endToEnd();
   /* #10001, #10003 — la passerelle a jugé le CONTENU réel d'une pièce jointe
      d'invité (REST 403/413, socket) : la cause se dit, jamais « envoi refusé ». */
   if (failure.code === GUEST_ATTACHMENT_REFUSAL_CODES.KIND_NOT_ALLOWED) return translate(language, 'send.failure.guestKind');
