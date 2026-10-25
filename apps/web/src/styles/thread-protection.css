@@ -120,7 +120,7 @@
   border: 0.5px solid color-mix(in srgb, white 8%, transparent);
 }
 :root.light .protected-notice--withheld,
-.protected-notice--endToEnd {
+:root.light .protected-notice--endToEnd {
   background-color: color-mix(in srgb, black 3%, transparent);
   border-color: color-mix(in srgb, black 5%, transparent);
 }

@@ -111,7 +111,9 @@ export function ProtectedContent({
    * CHIFFRÉ DE BOUT EN BOUT, ET CET APPAREIL N'A PAS LA CLÉ (#12983) — le
    * verdict d'`endToEndSealed` (`lib/view/end-to-end-sealed.ts`). Le texte servi
    * n'est que le littéral `[Encrypted]` : rien à révéler, et la mention dit où
-   * le message se lit. Il prime sur tout le reste, retenue comprise.
+   * le message se lit. La retenue du serveur passe AVANT : la lecture
+   * souveraine de l'administration dit « Contenu retenu », jamais « vos
+   * appareils », qui ne sont pas ceux du lecteur.
    */
   readonly endToEnd?: boolean;
   readonly onConsumeViewOnce?: ((messageId: string) => Promise<boolean>) | undefined;
@@ -321,7 +323,6 @@ export function ProtectedContent({
 
   if (kind === 'deleted') return <ProtectionNotice kind="deleted" surface={surface} isMine={isMine} />;
   if (kind === 'expired') return null;
-  if (endToEnd) return <ProtectionNotice kind="endToEnd" surface={surface} isMine={isMine} />;
 
   /**
    * LE CONTENU RETENU AU SERVEUR (#6862) — testé AVANT `standard`, et c'est
@@ -346,6 +347,8 @@ export function ProtectedContent({
       />
     );
   }
+
+  if (endToEnd) return <ProtectionNotice kind="endToEnd" surface={surface} isMine={isMine} />;
 
   if (kind === 'standard') return <>{children}</>;
 

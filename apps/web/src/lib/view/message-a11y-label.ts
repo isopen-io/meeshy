@@ -277,12 +277,12 @@ export function composeMessageLabel({
    * (`data-masked-media`) : « deux photos ont été retenues » et « un texte a
    * été retenu » s'annonçaient d'une seule phrase.
    */
-  if (endToEndSealed(message)) {
+  if (contentWithheld) {
+    segments.push(translate(language, PROTECTED_LABEL_KEY.withheld), ...attachmentSegments(message.attachments));
+  } else if (endToEndSealed(message)) {
     /* CHIFFRÉ DE BOUT EN BOUT (#12983) — l'oreille entend ce que l'œil lit,
        jamais le littéral `[Encrypted]` que la passerelle sert au web. */
     segments.push(translate(language, 'message.endToEnd.a11y'));
-  } else if (contentWithheld) {
-    segments.push(translate(language, PROTECTED_LABEL_KEY.withheld), ...attachmentSegments(message.attachments));
   } else if (!rendersContent(protection, phase)) {
     /* LA VUE UNIQUE SE NOMME PAR SA PUCE (#7580) — « Message à vue unique,
        touchez pour afficher » ou « … déjà ouvert » ; le flou reste « Contenu

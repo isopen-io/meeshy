@@ -3,8 +3,12 @@ import { renderToStaticMarkup } from 'react-dom/server';
 
 import { Bubble } from './bubble';
 import { FocalRow } from './focal-row';
+import type { SocketIOMessage } from '@meeshy/shared/types/socketio-events/message';
+
+import { rawMessageFromSocket } from '@/lib/api/realtime-apply';
 import { composeMessageLabel } from '@/lib/view/message-a11y-label';
 import { endToEndSealed } from '@/lib/view/end-to-end-sealed';
+import { unreadPreviewText } from '@/lib/view/unread-below';
 import type { Message } from '@/lib/api/types';
 import type { PlacedMessage } from '@/lib/grouping';
 
@@ -44,7 +48,7 @@ const variant = (patch: Partial<Message>): Message => ({ ...SEALED, ...patch });
 
 const placeOf = (message: Message): PlacedMessage => ({ message, head: true, tail: true, opensDay: null });
 
-const bubble = (message: Message) =>
+const bubble = (message: Message, revealable = true) =>
   renderToStaticMarkup(
     <Bubble
       place={placeOf(message)}
@@ -54,10 +58,11 @@ const bubble = (message: Message) =>
       ephemeralDeadline={{ state: 'none' }}
       onJumpToMessage={() => {}}
       onPickLanguage={() => {}}
+      revealable={revealable}
     />,
   );
 
-const row = (message: Message) =>
+const row = (message: Message, revealable = true) =>
   renderToStaticMarkup(
     <FocalRow
       mode="focal"
@@ -67,6 +72,7 @@ const row = (message: Message) =>
       ephemeralDeadline={{ state: 'none' }}
       onJumpToMessage={() => {}}
       onPickLanguage={() => {}}
+      revealable={revealable}
     />,
   );
 
@@ -80,8 +86,68 @@ describe('endToEndSealed — la loi', () => {
     expect(endToEndSealed(variant({ encryptionMode: 'hybrid', content: 'Bonjour' }))).toBe(false);
   });
 
-  test('un message en clair ne l’est pas, même dans une conversation chiffrée', () => {
+  test('un message non chiffré n’est pas scellé par ce verdict (le clair forgé dans une conversation chiffrée relève de #12992)', () => {
     expect(endToEndSealed(variant({ isEncrypted: false, content: 'Chiffrement activé' }))).toBe(false);
+  });
+
+  test('fermé par défaut : chiffré sans mode, mode inconnu ou en majuscules ⇒ scellé', () => {
+    const { encryptionMode: _omitted, ...withoutMode } = SEALED;
+    expect(endToEndSealed(withoutMode)).toBe(true);
+    const servedWith = (mode: string) => ({ isEncrypted: true, encryptionMode: mode }) as unknown as Message;
+    expect(endToEndSealed(servedWith('E2EE'))).toBe(true);
+    expect(endToEndSealed(servedWith('signal_v9'))).toBe(true);
+  });
+});
+
+describe('le message reçu EN DIRECT garde son mode (#12983, audit B1)', () => {
+  const socketMessage = (partial: Partial<SocketIOMessage>): SocketIOMessage => ({
+    id: 'm-live',
+    conversationId: 'c-e2ee',
+    senderId: 'p-bruno',
+    content: '[Encrypted]',
+    originalLanguage: 'fr',
+    messageType: 'text',
+    createdAt: new Date('2026-10-25T13:39:00.000Z'),
+    isEncrypted: true,
+    ...partial,
+  });
+
+  test('un message e2ee reçu par le socket se scelle dans la bulle, comme rechargé', () => {
+    const live = rawMessageFromSocket(socketMessage({ encryptionMode: 'e2ee' }));
+    expect(live.encryptionMode).toBe('e2ee');
+    expect(bubble(live)).toContain('Chiffré de bout en bout');
+    expect(bubble(live)).not.toContain('[Encrypted]');
+  });
+
+  test('un message chiffré au serveur reçu par le socket garde son texte', () => {
+    const live = rawMessageFromSocket(socketMessage({ encryptionMode: 'server', content: 'Bonjour Amina' }));
+    expect(live.encryptionMode).toBe('server');
+    expect(bubble(live)).toContain('Bonjour Amina');
+  });
+
+  test('un mode inconnu n’est pas recopié : le message reste scellé', () => {
+    const live = rawMessageFromSocket(socketMessage({ encryptionMode: 'signal_v9' }));
+    expect('encryptionMode' in live).toBe(false);
+    expect(endToEndSealed(live)).toBe(true);
+  });
+
+  test('une vue unique chiffrée reçue en direct n’offre aucun tap qui la consommerait', () => {
+    const live = rawMessageFromSocket(socketMessage({ encryptionMode: 'e2ee', isViewOnce: true }));
+    for (const html of [bubble(live), row(live)]) {
+      expect(html).not.toContain('data-protected="hidden"');
+      expect(html).not.toContain('Touchez pour afficher');
+      expect(html).toContain('Chiffré de bout en bout');
+    }
+  });
+});
+
+describe('le bouton « revenir en bas » (#12983, audit M2)', () => {
+  test('se tait sur un message scellé, jamais le littéral', () => {
+    expect(unreadPreviewText(SEALED, '[Encrypted]')).toBeNull();
+  });
+
+  test('montre le texte servi d’un message lisible', () => {
+    expect(unreadPreviewText(variant({ encryptionMode: 'server' }), 'Bonjour')).toBe('Bonjour');
   });
 });
 
@@ -99,6 +165,12 @@ describe.each([
   test('n’offre aucun voile à toucher : il n’y a rien à révéler sur cet appareil', () => {
     const html = render(SEALED);
     expect(html).not.toContain('data-protected="hidden"');
+  });
+
+  test('la retenue du serveur passe avant : la lecture souveraine dit « Contenu retenu », pas « vos appareils »', () => {
+    const html = render(SEALED, false);
+    expect(html).toContain('Contenu retenu');
+    expect(html).not.toContain('Chiffré de bout en bout');
   });
 
   test('CONTRASTE — un message chiffré au serveur montre son texte', () => {
@@ -120,5 +192,19 @@ describe('composeMessageLabel — message chiffré de bout en bout', () => {
     });
     expect(label).toContain('Chiffré de bout en bout');
     expect(label).not.toContain('[Encrypted]');
+  });
+
+  test('la retenue du serveur passe avant, comme à l’écran', () => {
+    const label = composeMessageLabel({
+      language: 'fr',
+      protection: 'standard',
+      message: SEALED,
+      isMine: false,
+      servedText: '[Encrypted]',
+      delivery: 'sent',
+      contentWithheld: true,
+    });
+    expect(label).toContain('Contenu retenu');
+    expect(label).not.toContain('Chiffré de bout en bout');
   });
 });
