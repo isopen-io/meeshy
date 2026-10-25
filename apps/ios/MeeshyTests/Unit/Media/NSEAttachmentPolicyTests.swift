@@ -257,12 +257,35 @@ final class NSEAttachmentPolicyTests: XCTestCase {
 
     // MARK: - Le scellé ne garde que ce qui ROUTE (#12655)
 
-    /// Ce qui survit au scellé : la constante de PRODUCTION, et la
-    /// déclaration de protection que le scellé pose. Une copie du test
-    /// divergerait d'elle sans que rien ne rougisse ; c'est l'oracle des clés
-    /// de CONTENU, ci-dessous, qui reste indépendant.
-    private static var routingKeys: Set<String> {
-        NSEAttachmentPolicy.sealedConversationKeys.union(["notificationLocKey"])
+    /// Ce qui ROUTE : le toucher de la bannière, l'appel à décrocher, et la
+    /// déclaration de protection que le scellé pose. Écrit ICI, sans lire la
+    /// constante de production : un oracle qui la lirait se validerait
+    /// lui-même. `test_theSealedKeys_areExactlyTheRoutingOracle` tient les deux
+    /// listes égales, et rougit d'un écart dans un sens comme dans l'autre.
+    private static let routingKeys: Set<String> = [
+        "type", "notificationId", "conversationId", "conversationTitle", "conversationType", "messageId",
+        "postId", "postType", "commentId", "parentCommentId", "friendRequestId", "route",
+        "contentId", "contentType",
+        "senderId", "senderUsername", "senderDisplayName", "senderAvatar", "imageURL",
+        "unreadCount", "badge", "createdAt", "ephemeralDuration", "effectFlags", "replacesActorSubject",
+        "callType", "isVideo", "callBackLabel", "callId", "callerUserId", "callerName", "callerAvatar",
+        "iceServers",
+        "isEncrypted", "apiBaseURL",
+        "notificationLocKey",
+    ]
+
+    /// Une clé admise par la production sans figurer à l'oracle laisse partir
+    /// ce que personne n'a classé ; une clé de l'oracle absente de la
+    /// production casse le toucher ou l'appel.
+    func test_theSealedKeys_areExactlyTheRoutingOracle() {
+        XCTAssertEqual(
+            NSEAttachmentPolicy.sealedConversationKeys.subtracting(Self.routingKeys), [],
+            "admises par le scellé sans être classées de routage"
+        )
+        XCTAssertEqual(
+            Self.routingKeys.subtracting(NSEAttachmentPolicy.sealedConversationKeys), ["notificationLocKey"],
+            "attendues par l'oracle et retirées par le scellé"
+        )
     }
 
     /// Ce qui DÉCRIT le contenu : le texte et ses traductions, le chiffré, la
@@ -358,6 +381,7 @@ final class NSEAttachmentPolicyTests: XCTestCase {
     func test_lockedConversation_sealing_keepsOnlyRoutingKeys() throws {
         let emitted = try gatewayPushDataKeys()
             .union(try incomingCallPushDataKeys())
+            .union(Self.routingKeys.subtracting(["notificationLocKey"]))
             .union(NSEAttachmentPolicy.sealedConversationKeys)
         var payload = Dictionary(uniqueKeysWithValues: emitted.map { (AnyHashable($0), "secret-\($0)" as Any) })
         payload["aps"] = ["alert": ["title": "Alice", "body": "le secret"], "mutable-content": 1] as [String: Any]
