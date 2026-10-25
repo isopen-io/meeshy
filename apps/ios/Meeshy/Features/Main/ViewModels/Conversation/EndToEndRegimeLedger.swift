@@ -108,6 +108,8 @@ final class EndToEndRegimeLedger {
     private var undatedPending: Set<String> = []
     /// Les confirmations non datées, effacées dès qu'un bout en bout est appris.
     private var undatedConfirmed: Set<String> = []
+    /// Les désactivations datées que la lecture n'a pas encore le droit d'apprendre.
+    private var heldReadingDowngrades: [String: ReadingSwitch] = [:]
 
     // Isolé au MainActor par défaut : une deinit isolée tue xctest au démontage
     // hors d'une tâche (iOS 18.4+/26, Swift #85663).
@@ -132,13 +134,53 @@ final class EndToEndRegimeLedger {
         let isEndToEnd = EndToEndSendGate.requiresSeal(conversationEncryptionModes: [status.mode])
         learn(Regime(isEndToEnd: isEndToEnd, epoch: status.epoch), for: conversationId)
         guard let epoch = status.epoch else { return }
-        memory?.learn(isEndToEnd: isEndToEnd, epoch: epoch, changedAt: nil, enabledAt: status.enabledAt, for: conversationId)
+        teachReading(ReadingSwitch(isEndToEnd: isEndToEnd, epoch: epoch, changedAt: nil, enabledAt: status.enabledAt), for: conversationId)
     }
 
     func learn(_ event: ConversationEncryptionChangedEvent) {
         let isEndToEnd = EndToEndSendGate.requiresSeal(conversationEncryptionModes: [event.mode])
         learn(Regime(isEndToEnd: isEndToEnd, epoch: event.epoch), for: event.conversationId)
-        memory?.learn(isEndToEnd: isEndToEnd, epoch: event.epoch, changedAt: event.changedAtDate, enabledAt: nil, for: event.conversationId)
+        teachReading(ReadingSwitch(isEndToEnd: isEndToEnd, epoch: event.epoch, changedAt: event.changedAtDate, enabledAt: nil), for: event.conversationId)
+    }
+
+    /// Une bascule datée, telle que la mémoire de LECTURE l'apprend.
+    private struct ReadingSwitch: Equatable {
+        let isEndToEnd: Bool
+        let epoch: Int
+        let changedAt: Date?
+        let enabledAt: Date?
+    }
+
+    /// La lecture suit la MÊME loi que l'envoi (revue #12846) : une activation
+    /// passe tout de suite ; une désactivation, là où cet appareil (ou sa
+    /// mémoire de lecture) a vu le bout en bout, attend que l'utilisateur ait vu
+    /// la bascule de cette époque. Jusque-là les messages se lisent chiffrés.
+    private func teachReading(_ change: ReadingSwitch, for conversationId: String) {
+        guard let memory else { return }
+        heldReadingDowngrades[conversationId] = nil
+        guard !change.isEndToEnd, readingAwaitsConfirmation(of: change.epoch, for: conversationId) else {
+            memory.learn(isEndToEnd: change.isEndToEnd, epoch: change.epoch, changedAt: change.changedAt, enabledAt: change.enabledAt, for: conversationId)
+            return
+        }
+        heldReadingDowngrades[conversationId] = change
+    }
+
+    private func readingAwaitsConfirmation(of epoch: Int, for conversationId: String) -> Bool {
+        guard confirmedDowngrades[conversationId] != epoch else { return false }
+        return witnessedEndToEnd.contains(conversationId) || readingRemembersEndToEnd(conversationId)
+    }
+
+    /// La mémoire de LECTURE tient cette conversation pour chiffrée : l'envoi
+    /// le compte aussi pour « bout en bout vu » (une seule loi, revue #12846).
+    private func readingRemembersEndToEnd(_ conversationId: String) -> Bool {
+        memory?.resolve(conversationId: conversationId, served: .serverReadable).isEndToEnd == true
+    }
+
+    /// La bascule de cette époque est vue : la lecture l'apprend à son tour.
+    private func releaseReadingDowngrade(of epoch: Int, for conversationId: String) {
+        guard let held = heldReadingDowngrades[conversationId], held.epoch == epoch else { return }
+        heldReadingDowngrades[conversationId] = nil
+        memory?.learn(isEndToEnd: false, epoch: epoch, changedAt: held.changedAt, enabledAt: nil, for: conversationId)
     }
 
     private func learn(_ observed: Regime, for conversationId: String) {
@@ -160,6 +202,7 @@ final class EndToEndRegimeLedger {
     /// ou sa confirmation dans la fiche du chiffrement.
     func confirmDowngrade(epoch: Int, for conversationId: String) {
         confirmedDowngrades[conversationId] = epoch
+        releaseReadingDowngrade(of: epoch, for: conversationId)
     }
 
     /// La confirmation donnée dans la fiche du chiffrement.
@@ -178,6 +221,7 @@ final class EndToEndRegimeLedger {
         confirmedDowngrades = [:]
         undatedPending = []
         undatedConfirmed = []
+        heldReadingDowngrades = [:]
     }
 
     /// Apprend chaque bascule annoncée par la passerelle (`conversation:encryption-changed`).
@@ -205,9 +249,11 @@ final class EndToEndRegimeLedger {
         }
         if learned.isEndToEnd { return .sealed }
         if case .enabled(let enabled)? = evidence.latest, enabled > epoch { return .sealed }
-        guard witnessedEndToEnd.contains(conversationId) else { return .plaintext }
+        guard witnessedEndToEnd.contains(conversationId) || readingRemembersEndToEnd(conversationId) else { return .plaintext }
         let seen = evidence.latest == .disabled(epoch: epoch) || confirmedDowngrades[conversationId] == epoch
-        return seen ? .plaintext : .downgradeUnconfirmed(epoch: epoch)
+        guard seen else { return .downgradeUnconfirmed(epoch: epoch) }
+        releaseReadingDowngrade(of: epoch, for: conversationId)
+        return .plaintext
     }
 
     /// Sans régime daté : une source locale ou le registre qui disent bout en
