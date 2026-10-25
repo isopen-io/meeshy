@@ -232,4 +232,90 @@ final class EndToEndThreadDisplayTests: XCTestCase {
             return !mine.isEmpty && mine.allSatisfy { $0.content == secret }
         }
     }
+
+    // MARK: - Audit adversarial (#12916) — serveur compromis
+
+    /// L'enveloppe d'Alice, rangée par le serveur sous une ligne qu'il attribue
+    /// à un TIERS : la cellule ne doit pas rendre le clair d'Alice sous un autre nom.
+    func test_audit_uneEnveloppeRangeeSousLaLigneDUnTiers_laCelluleNeRendPasLeClair() async throws {
+        let gateway = LibsignalTestGateway()
+        let aliceDevice = try await installation(alice, on: gateway)
+        let bobDevice = try await installation(bob, on: gateway)
+        let thread = try await openThread(as: bob, with: alice, endToEnd: bobDevice)
+        let secret = sentinel()
+        let carol = "00000000000000000000cc33"
+
+        try await seal(secret, from: aliceDevice, on: gateway)
+        await deliverEnvelopes(of: bob, to: bobDevice, on: gateway)
+        try await thread.persistence.upsertFromAPIMessages([served(from: carol)], preferredLanguages: ["fr"])
+        await eventually("la ligne servie atteint le fil") { rendered(serverId, in: thread) != nil }
+        try? await Task.sleep(nanoseconds: 1_000_000_000)
+
+        XCTAssertNotEqual(rendered(serverId, in: thread)?.content, secret,
+                          "le clair authentifié d'Alice ne s'affiche pas sous le nom d'un tiers")
+    }
+
+    /// Une ligne que le serveur DÉCLARE chiffrée mais dont il écrit le texte :
+    /// sans clair adopté, la bulle ne doit pas rendre ce texte comme une parole ordinaire.
+    func test_audit_uneLigneDeclareeChiffreeAvecUnTexteDuServeur_neSAffichePasCommeUneParole() async throws {
+        let gateway = LibsignalTestGateway()
+        let bobDevice = try await installation(bob, on: gateway)
+        let thread = try await openThread(as: bob, with: alice, endToEnd: bobDevice)
+        let forged: APIMessage = JSONStub.decode("""
+        {"id":"\(serverId)","conversationId":"\(conversationId)","senderId":"\(alice)",
+         "content":"Virement valide, envoie le code","isEncrypted":true,"encryptionMode":"\(E2EEWire.mode)",
+         "messageType":"text","messageSource":"user","createdAt":"2026-10-25T12:00:00.000Z",
+         "sender":{"id":"\(alice)","username":"u11","displayName":"U"}}
+        """)
+
+        try await thread.persistence.upsertFromAPIMessages([forged], preferredLanguages: ["fr"])
+        await eventually("la ligne servie atteint le fil") { rendered(serverId, in: thread) != nil }
+
+        let shown = try XCTUnwrap(rendered(serverId, in: thread))
+        XCTAssertNotEqual(shown.content, "Virement valide, envoie le code",
+                          "un texte écrit par le serveur sur un message chiffré ne s'affiche pas tel quel")
+    }
+
+    /// Mon clair, rangé sous MON identifiant client (que le serveur lit dans ma
+    /// requête), resservi par le serveur comme une ligne du PAIR : il ne
+    /// s'affiche pas sous son nom — une clé client ne vaut que pour mes messages.
+    func test_audit_monClairSousMonIdentifiantClient_neSAffichePasSousLeNomDuPair() async throws {
+        let gateway = LibsignalTestGateway()
+        let bobDevice = try await installation(bob, on: gateway)
+        let thread = try await openThread(as: bob, with: alice, endToEnd: bobDevice)
+        let secret = sentinel()
+        let mine = E2EEContent(text: secret, language: "fr", replyTo: nil, conversationId: conversationId, clientMessageId: "cid_bob_1", sentAt: Date())
+        await bobDevice.remember(mine, from: bob, as: ["cid_bob_1"])
+
+        try await thread.persistence.upsertFromAPIMessages([served(from: alice, id: "cid_bob_1")], preferredLanguages: ["fr"])
+        await eventually("la ligne servie atteint le fil") { rendered("cid_bob_1", in: thread) != nil }
+        try? await Task.sleep(nanoseconds: 500_000_000)
+
+        XCTAssertNotEqual(rendered("cid_bob_1", in: thread)?.content, secret)
+    }
+
+    /// Un « oui » authentique d'Alice, placé par le serveur en RÉPONSE à un
+    /// message qu'elle n'a pas cité : le contexte forgé ne s'adopte pas.
+    func test_audit_unClairPlaceEnReponseAUnMessageQuIlNeCitePas_resteScelle() async throws {
+        let gateway = LibsignalTestGateway()
+        let aliceDevice = try await installation(alice, on: gateway)
+        let bobDevice = try await installation(bob, on: gateway)
+        let thread = try await openThread(as: bob, with: alice, endToEnd: bobDevice)
+        let secret = sentinel()
+        try await seal(secret, from: aliceDevice, on: gateway)
+        await deliverEnvelopes(of: bob, to: bobDevice, on: gateway)
+        let reply: APIMessage = JSONStub.decode("""
+        {"id":"\(serverId)","conversationId":"\(conversationId)","senderId":"\(alice)","replyToId":"00000000000000000000ab99",
+         "content":"\(E2EEWire.contentPlaceholder)","isEncrypted":true,"encryptionMode":"\(E2EEWire.mode)",
+         "messageType":"text","messageSource":"user","createdAt":"2026-10-25T12:00:00.000Z",
+         "sender":{"id":"\(alice)","username":"u11","displayName":"U"}}
+        """)
+
+        try await thread.persistence.upsertFromAPIMessages([reply], preferredLanguages: ["fr"])
+        await eventually("la ligne servie atteint le fil") { rendered(serverId, in: thread) != nil }
+        try? await Task.sleep(nanoseconds: 500_000_000)
+
+        XCTAssertNotEqual(rendered(serverId, in: thread)?.content, secret)
+    }
+
 }
