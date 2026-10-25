@@ -89,7 +89,7 @@ class ConversationListViewModel @Inject constructor(
     /** Liste brute faisant autorite ; [ConversationListUiState.conversations] en est la vue filtree. */
     private var rawConversations: List<ApiConversation> = emptyList()
 
-    private val lock = ConversationListLockCoordinator(
+    private val lock: ConversationListLockCoordinator = ConversationListLockCoordinator(
         state = _state,
         lockStore = lockStore,
         openConversation = { dialogs.onConversationOpened(it); openConversationRequests.trySend(it) },
@@ -106,7 +106,7 @@ class ConversationListViewModel @Inject constructor(
         activeConversationId = { loadingDeps.activeConversation.conversationId.value },
     )
     /** Les dialogues confirmés de la liste (bloquer, masquer, quitter, renommer, signaler, verrou). */
-    internal val dialogs = ConversationListDialogController(
+    internal val dialogs: ConversationListDialogController = ConversationListDialogController(
         viewModelScope, _state, { id -> rawConversations.firstOrNull { it.id == id } }, actions, repository, dialogDeps, lock, lockStore,
     )
     private val realtime = ConversationListRealtimeBinder(
