@@ -104,7 +104,9 @@ public object FloatingMenuLadder {
         return ItemFrame(
             scale = HIDDEN_SCALE + (1f - HIDDEN_SCALE) * progress,
             alpha = alpha,
-            rotationDegrees = HIDDEN_ROTATION * (1f - progress),
+            // HIDDEN - HIDDEN x p, et non HIDDEN x (1 - p) : a p = 1 ce dernier rend -0.0, qu'une
+            // egalite de Float (data class) distingue de 0.0 — l'echelon pose doit valoir 0 tout court.
+            rotationDegrees = HIDDEN_ROTATION - HIDDEN_ROTATION * progress,
         )
     }
 }
