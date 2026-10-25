@@ -180,7 +180,12 @@ final class FakeE2EEServer: @unchecked Sendable {
         }
     }
 
-    fileprivate func retire(deviceId: UInt32, userId: String) -> E2EERetirement {
+    /// Comme `E2EEDirectory.retireDevice` (#13033) : une place reprise depuis la
+    /// lecture de l'appelant est refusée AVANT toute révocation.
+    fileprivate func retire(deviceId: UInt32, registrationId: UInt32, userId: String) throws -> E2EERetirement {
+        let occupant = lock.withLock { (devices[userId] ?? []).first { $0.deviceId == deviceId && !$0.retired } }
+        guard let occupant else { throw refusal(404, E2EEErrorCode.deviceNotBound) }
+        guard occupant.registrationId == registrationId else { throw refusal(409, E2EEErrorCode.deviceChanged) }
         revoke(userId: userId, deviceId: deviceId)
         return E2EERetirement(deviceId: deviceId, retired: true)
     }
@@ -223,9 +228,9 @@ final class FakeE2EEDirectoryClient: E2EEDirectoryClientProviding, @unchecked Se
         return E2EEPreKeyStock(deviceId: device.deviceId, oneTimePreKeys: device.oneTimePreKeys.count, kyberPreKeys: device.kyberPreKeys.count)
     }
 
-    func retireDevice(deviceId: UInt32) async throws -> E2EERetirement {
+    func retireDevice(deviceId: UInt32, registrationId: UInt32) async throws -> E2EERetirement {
         record("retire:\(deviceId)")
-        return server.retire(deviceId: deviceId, userId: userId)
+        return try server.retire(deviceId: deviceId, registrationId: registrationId, userId: userId)
     }
 
     func bundles(userId: String, deviceIds: [UInt32]?) async throws -> E2EEUserBundles {

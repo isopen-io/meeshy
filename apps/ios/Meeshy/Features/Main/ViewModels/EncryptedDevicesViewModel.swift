@@ -43,6 +43,9 @@ final class EncryptedDevicesViewModel: ObservableObject {
         /// Le code lu est celui d'un autre de mes appareils que celui qu'on approuve.
         case otherDevice
         case approved(deviceId: UInt32)
+        /// La place a changé d'occupant depuis la liste affichée : rien n'a été
+        /// retiré, la liste relue le montre (#13036).
+        case deviceChanged
         case actionFailed
 
         var id: String {
@@ -50,6 +53,7 @@ final class EncryptedDevicesViewModel: ObservableObject {
             case .noMatch: "noMatch"
             case .otherDevice: "otherDevice"
             case .approved(let deviceId): "approved-\(deviceId)"
+            case .deviceChanged: "deviceChanged"
             case .actionFailed: "actionFailed"
             }
         }
@@ -189,7 +193,8 @@ final class EncryptedDevicesViewModel: ObservableObject {
     }
 
     func retire(_ device: EndToEndOwnDevice) async {
-        await act(on: device) { linking, deviceId, _ in try await linking.retire(deviceId: deviceId) }
+        let registrationId = device.registrationId
+        await act(on: device) { linking, deviceId, _ in try await linking.retire(deviceId: deviceId, registrationId: registrationId) }
     }
 
     private func act(
@@ -201,6 +206,8 @@ final class EncryptedDevicesViewModel: ObservableObject {
         defer { busyDeviceId = nil }
         do {
             try await action(linking, device.deviceId, userId)
+        } catch E2EEDeviceRetirementError.deviceChanged {
+            notice = .deviceChanged
         } catch {
             notice = .actionFailed
         }

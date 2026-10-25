@@ -49,12 +49,12 @@ final class EndToEndDeviceLimitViewModel: ObservableObject {
         }
     }
 
-    func retire(_ deviceId: UInt32) async {
+    func retire(_ device: E2EEDeviceListing) async {
         guard let userId = userId() else { return }
-        retiringDeviceId = deviceId
+        retiringDeviceId = device.deviceId
         defer { retiringDeviceId = nil }
         do {
-            try await devices.retire(deviceId: deviceId)
+            try await devices.retire(deviceId: device.deviceId, registrationId: device.registrationId)
             try await devices.enroll(userId)
             state = .enrolled
         } catch {
@@ -66,7 +66,7 @@ final class EndToEndDeviceLimitViewModel: ObservableObject {
 struct EndToEndDeviceLimitSheet: View {
     @StateObject private var model: EndToEndDeviceLimitViewModel
     @Environment(\.dismiss) private var dismiss
-    @State private var pendingRetirement: UInt32?
+    @State private var pendingRetirement: E2EEDeviceListing?
     @State private var showsMyDevices = false
 
     init(model: @autoclosure @escaping () -> EndToEndDeviceLimitViewModel = EndToEndDeviceLimitViewModel()) {
@@ -103,8 +103,8 @@ struct EndToEndDeviceLimitSheet: View {
                 titleVisibility: .visible
             ) {
                 Button(String(localized: "e2ee.deviceLimit.retire", defaultValue: "Retirer", bundle: .main), role: .destructive) {
-                    guard let deviceId = pendingRetirement else { return }
-                    Task { await model.retire(deviceId) }
+                    guard let device = pendingRetirement else { return }
+                    Task { await model.retire(device) }
                 }
             }
             .task { await model.load() }
@@ -146,7 +146,7 @@ struct EndToEndDeviceLimitSheet: View {
                 ProgressView()
             } else {
                 Button(String(localized: "e2ee.deviceLimit.retire", defaultValue: "Retirer", bundle: .main), role: .destructive) {
-                    pendingRetirement = device.deviceId
+                    pendingRetirement = device
                 }
                 .disabled(model.retiringDeviceId != nil)
             }

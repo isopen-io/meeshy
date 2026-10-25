@@ -101,6 +101,42 @@ final class E2EEDeviceRegistrarTests: XCTestCase {
         }
     }
 
+    /// #13036 — la passerelle réattribue la plus petite place libre : retirer
+    /// depuis une liste lue AVANT qu'une autre installation reprenne la place
+    /// ne retire pas cette autre installation. Le refus se dit, et rien n'est
+    /// révoqué.
+    func test_retiringASlotTakenOverSinceTheListing_isRefused_andTheNewOccupantStays() async throws {
+        let server = FakeE2EEServer()
+        let laptop = try installation()
+        let phone = try installation()
+        let lost = try await laptop.registrar(server.client(userId: alice, sessionId: "lost")).ensureEnrolled(userId: alice)
+        let manager = phone.registrar(server.client(userId: alice, sessionId: "phone"))
+        _ = try await manager.ensureEnrolled(userId: alice)
+        let listed = try XCTUnwrap(try await manager.ownDevices(userId: alice).first { $0.deviceId == lost.device.deviceId })
+        server.revoke(userId: alice, deviceId: lost.device.deviceId)
+        let newcomer = try await installation().registrar(server.client(userId: alice, sessionId: "new")).ensureEnrolled(userId: alice)
+        XCTAssertEqual(newcomer.device.deviceId, listed.deviceId, "la place libérée est reprise")
+
+        do {
+            try await manager.retire(deviceId: listed.deviceId, registrationId: listed.registrationId)
+            XCTFail("une place reprise ne se retire pas depuis la liste d'avant")
+        } catch {
+            XCTAssertEqual(error as? E2EEDeviceRetirementError, .deviceChanged)
+        }
+        XCTAssertTrue(server.activeDevices(of: alice).contains { $0.registrationId == newcomer.device.registrationId })
+    }
+
+    func test_retiringTheListedGeneration_revokesIt() async throws {
+        let server = FakeE2EEServer()
+        let lost = try await installation().registrar(server.client(userId: alice, sessionId: "lost")).ensureEnrolled(userId: alice)
+        let manager = try installation().registrar(server.client(userId: alice, sessionId: "phone"))
+        _ = try await manager.ensureEnrolled(userId: alice)
+
+        try await manager.retire(deviceId: lost.device.deviceId, registrationId: lost.device.registrationId)
+
+        XCTAssertFalse(server.activeDevices(of: alice).contains { $0.registrationId == lost.device.registrationId })
+    }
+
     /// #12882 — le trousseau survit à la désinstallation d'iOS, pas `e2ee.sqlite`
     /// (groupe d'apps). Une installation qui a perdu ses sessions, ses pré-clés
     /// et son compteur d'identifiants ne reprend pas l'identité d'avant : ses

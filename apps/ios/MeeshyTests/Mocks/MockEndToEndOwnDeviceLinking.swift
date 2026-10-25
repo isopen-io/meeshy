@@ -27,6 +27,7 @@ nonisolated final class MockEndToEndOwnDeviceLinking: EndToEndOwnDeviceLinking, 
     private(set) var approved: [E2EEPairingCandidate] = []
     private(set) var revoked: [UInt32] = []
     private(set) var retired: [UInt32] = []
+    private(set) var retiredGenerations: [UInt32] = []
 
     func linkedDevices(of userId: String) async throws -> [EndToEndOwnDevice] {
         lock.withLock { listCallCount += 1 }
@@ -78,8 +79,11 @@ nonisolated final class MockEndToEndOwnDeviceLinking: EndToEndOwnDeviceLinking, 
         lock.withLock { revoked.append(deviceId) }
     }
 
-    func retire(deviceId: UInt32) async throws {
+    func retire(deviceId: UInt32, registrationId: UInt32) async throws {
         if let retireError { throw retireError }
-        lock.withLock { retired.append(deviceId) }
+        lock.withLock {
+            retired.append(deviceId)
+            retiredGenerations.append(registrationId)
+        }
     }
 }
