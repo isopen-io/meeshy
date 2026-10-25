@@ -704,7 +704,8 @@ final class ConversationLockManagerTests: XCTestCase {
         defer { vault.deleteAll() }
         let item = keychainItem(vault, "meeshy_lock_coffre")
         XCTAssertTrue(vault.write("ancien", for: "meeshy_lock_coffre"))
-        XCTAssertEqual(SecItemUpdate(item as CFDictionary, [kSecAttrLabel as String: "marque"] as CFDictionary), errSecSuccess)
+        let mark: [String: Any] = [kSecAttrLabel as String: "marque"]
+        XCTAssertEqual(SecItemUpdate(item as CFDictionary, mark as CFDictionary), errSecSuccess)
 
         XCTAssertTrue(vault.write("nouveau", for: "meeshy_lock_coffre"))
 

@@ -292,6 +292,9 @@ struct ConversationLockSheet: View {
     private var errCodeIncorrect: String {
         String(localized: "conversation.lock.error.codeIncorrect", defaultValue: "Code incorrect", bundle: .main)
     }
+    private var errCodeNotSaved: String {
+        String(localized: "conversation.lock.error.codeNotSaved", defaultValue: "Le code n'a pas pu être enregistré. Réessayez.", bundle: .main)
+    }
 
     /// Ce que dit un essai refusé (#11388) : « incorrect », ou, la temporisation
     /// engagée, combien de temps attendre — un refus muet pousserait à
@@ -380,7 +383,7 @@ struct ConversationLockSheet: View {
             } else {
                 guard pin == confirmPin else { return shakeAndReset(errCodeMismatch) }
                 guard let id = conversationId else { return }
-                lockManager.setLock(conversationId: id, pin: pin)
+                guard lockManager.setLock(conversationId: id, pin: pin) else { return shakeAndReset(errCodeNotSaved) }
                 HapticFeedback.success()
                 onSuccess()
                 dismiss()

@@ -64,6 +64,11 @@ protocol ConversationLockVault {
     /// énumérer (trousseau avant le premier déverrouillage) : « aucun compte »
     /// et « illisible » ne se confondent pas.
     func accounts() -> [String]?
+    /// Efface TOUT ce que le coffre tient : codes, compteurs, PIN maître,
+    /// biométrie. `false` quand il ne s'efface pas (trousseau avant le premier
+    /// déverrouillage) : la déconnexion rejoue alors l'effacement.
+    @discardableResult
+    func deleteAll() -> Bool
 }
 
 struct KeychainConversationLockVault: ConversationLockVault {
@@ -73,40 +78,51 @@ struct KeychainConversationLockVault: ConversationLockVault {
         self.service = service
     }
 
-    func read(_ key: String) -> String? {
-        let query: [String: Any] = [
+    private var serviceQuery: [String: Any] {
+        [
             kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: key,
+            kSecAttrService as String: service
+        ]
+    }
+
+    private func itemQuery(_ key: String) -> [String: Any] {
+        serviceQuery.merging([kSecAttrAccount as String: key]) { _, account in account }
+    }
+
+    func read(_ key: String) -> String? {
+        let query = itemQuery(key).merging([
             kSecReturnData as String: true,
             kSecMatchLimit as String: kSecMatchLimitOne
-        ]
+        ]) { _, option in option }
         var result: AnyObject?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
         guard status == errSecSuccess, let data = result as? Data else { return nil }
         return String(data: data, encoding: .utf8)
     }
 
+    /// Mis à jour EN PLACE, ajouté seulement s'il n'existe pas : effacé
+    /// d'abord, un ajout refusé laissait la conversation sans aucun code.
     @discardableResult
     func write(_ value: String, for key: String) -> Bool {
-        delete(key)
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: key,
-            kSecValueData as String: Data(value.utf8),
+        let data = Data(value.utf8)
+        let replacement: [String: Any] = [kSecValueData as String: data]
+        let updated = SecItemUpdate(itemQuery(key) as CFDictionary, replacement as CFDictionary)
+        guard updated == errSecItemNotFound else { return updated == errSecSuccess }
+        let item = itemQuery(key).merging([
+            kSecValueData as String: data,
             kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-        ]
-        return SecItemAdd(query as CFDictionary, nil) == errSecSuccess
+        ]) { _, attribute in attribute }
+        return SecItemAdd(item as CFDictionary, nil) == errSecSuccess
     }
 
     func delete(_ key: String) {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: key
-        ]
-        SecItemDelete(query as CFDictionary)
+        SecItemDelete(itemQuery(key) as CFDictionary)
+    }
+
+    @discardableResult
+    func deleteAll() -> Bool {
+        let status = SecItemDelete(serviceQuery as CFDictionary)
+        return status == errSecSuccess || status == errSecItemNotFound
     }
 
     func accounts() -> [String]? {
@@ -138,6 +154,10 @@ struct SecretsConversationLockVault: ConversationLockVault {
 
     /// Trois fonctions ne s'énumèrent pas : le coffre ne dit rien.
     func accounts() -> [String]? { nil }
+
+    /// Ni ne s'effacent en bloc.
+    @discardableResult
+    func deleteAll() -> Bool { false }
 }
 
 // MARK: - Le code dérivé (#11388)
@@ -437,6 +457,12 @@ final class ConversationLockManager: ObservableObject, ConversationLockGating, C
     /// La liste en mémoire vient-elle d'une LECTURE (liste persistée ou
     /// miroir) ? Tant que non, toute conversation peut être sous PIN.
     private var knowsLockedIds = false
+    /// La déconnexion n'a pas pu effacer le coffre (trousseau avant le premier
+    /// déverrouillage) : l'effacement se rejoue dès que les données protégées
+    /// le deviennent, et avant toute écriture.
+    private var pendingVaultWipe = false
+    /// Où s'annonce `.conversationContentLocksDidChange`.
+    private let notificationCenter: NotificationCenter
 
     private let masterPinKey = "meeshy_master_pin"
     private let lockKeyPrefix = "meeshy_lock_"
@@ -468,6 +494,7 @@ final class ConversationLockManager: ObservableObject, ConversationLockGating, C
         self.contentLockMirrorFile = contentLockMirrorFile
         self.purgeDeliveredBanners = purgeDeliveredBanners
         self.isProtectedDataAvailable = isProtectedDataAvailable
+        self.notificationCenter = notificationCenter
         loadLockedIds()
         wireProtectedDataReload(notificationCenter)
         wireAuthLogoutHook()
@@ -482,7 +509,7 @@ final class ConversationLockManager: ObservableObject, ConversationLockGating, C
     /// la liste, et la valeur ne sert qu'au geste de verrouillage et aux Réglages.
     var masterPinConfigured: Bool {
         if let knownMasterPin { return knownMasterPin }
-        let configured = vault.read(masterPinKey) != nil
+        let configured = read(masterPinKey) != nil
         knownMasterPin = configured
         return configured
     }
@@ -490,7 +517,7 @@ final class ConversationLockManager: ObservableObject, ConversationLockGating, C
     /// La biométrie est-elle activée ? Même lecture paresseuse que le PIN maître.
     var biometricUnlockEnabled: Bool {
         if let knownBiometricUnlock { return knownBiometricUnlock }
-        let enabled = vault.read(biometricStateKey) != nil
+        let enabled = read(biometricStateKey) != nil
         knownBiometricUnlock = enabled
         return enabled
     }
@@ -515,13 +542,19 @@ final class ConversationLockManager: ObservableObject, ConversationLockGating, C
             notificationCenter.publisher(for: UIApplication.didBecomeActiveNotification)
         )
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in self?.loadLockedIdsIfNeeded() }
+            .sink { [weak self] _ in self?.protectedDataMayBeAvailable() }
             .store(in: &cancellables)
     }
 
-    private func loadLockedIdsIfNeeded() {
+    private func protectedDataMayBeAvailable() {
+        settlePendingVaultWipe()
         guard !hasLoadedLockedIds else { return }
         loadLockedIds()
+    }
+
+    private func settlePendingVaultWipe() {
+        guard pendingVaultWipe else { return }
+        pendingVaultWipe = !vault.deleteAll()
     }
 
     /// P7-11 — pattern calqué sur `FeedbackToastManager.wireAuthLogoutHook` :
@@ -540,7 +573,7 @@ final class ConversationLockManager: ObservableObject, ConversationLockGating, C
     // MARK: - Master PIN (6 digits)
 
     func hasMasterPin() -> Bool {
-        vault.read(masterPinKey) != nil
+        read(masterPinKey) != nil
     }
 
     func setMasterPin(_ pin: String) {
@@ -556,9 +589,15 @@ final class ConversationLockManager: ObservableObject, ConversationLockGating, C
         attemptMasterPin(pin) == .granted
     }
 
-    /// Supprime le master PIN. Ne pas appeler si des conversations sont verrouillées.
+    /// Le PIN maître peut-il partir ? Seulement quand la liste LUE ne tient
+    /// aucun verrou : inconnue, elle ne dit pas qu'aucun code n'en dépend.
+    var offersMasterPinRemoval: Bool {
+        knowsLockedIds && lockedConversationIds.isEmpty
+    }
+
+    /// Supprime le master PIN, si `offersMasterPinRemoval`.
     func removeMasterPin() {
-        guard lockedConversationIds.isEmpty else { return }
+        guard offersMasterPinRemoval else { return }
         forceRemoveMasterPin()
     }
 
@@ -576,9 +615,14 @@ final class ConversationLockManager: ObservableObject, ConversationLockGating, C
     /// master PIN et les verrous du compte A s'appliquent au compte B.
     /// Après logout les conversations elles-mêmes sont purgées (7 tables +
     /// prefs + URLCache) — leurs PINs n'ont plus d'objet.
+    ///
+    /// Le coffre s'efface EN BLOC, pas seulement les codes que la liste
+    /// connaît : liste inconnue, un code laissé là, la reconstruction suivante
+    /// (`loadLockedIds`) en referait un verrou du compte suivant.
     func resetForLogout() {
         removeAllLocks()
         forceRemoveMasterPin()
+        pendingVaultWipe = !vault.deleteAll()
     }
 
     // MARK: - Per-conversation PIN (4 digits)
@@ -628,12 +672,18 @@ final class ConversationLockManager: ObservableObject, ConversationLockGating, C
         return lockedConversationIds.union(inVault)
     }
 
-    func setLock(conversationId: String, pin: String) {
-        store(pin, under: lockKey(conversationId))
+    /// La conversation n'entre dans la liste qu'une fois son code écrit : la
+    /// liste reste un sous-ensemble des codes du trousseau, ce que la
+    /// reconstruction suppose. `false` : rien n'est verrouillé, et un code
+    /// déjà posé reste le seul valable.
+    @discardableResult
+    func setLock(conversationId: String, pin: String) -> Bool {
+        guard store(pin, under: lockKey(conversationId)) else { return false }
         openingPasses[conversationId] = nil
         lockedConversationIds.insert(conversationId)
         saveLockedIds()
         purgeDeliveredBanners(conversationId)
+        return true
     }
 
     /// Un essai sur le code d'une conversation. Accordé, il vaut UNE ouverture
@@ -655,8 +705,10 @@ final class ConversationLockManager: ObservableObject, ConversationLockGating, C
         saveLockedIds()
     }
 
+    /// La liste, et les codes que le trousseau tient hors d'elle : liste
+    /// inconnue, elle seule ne dit pas tout.
     func removeAllLocks() {
-        lockedConversationIds.forEach { erase(lockKey($0)) }
+        lockedConversationIds.union(lockedIdsInVault() ?? []).forEach { erase(lockKey($0)) }
         openingPasses.removeAll()
         lockedConversationIds.removeAll()
         saveLockedIds(wipingAll: true)
@@ -689,7 +741,7 @@ final class ConversationLockManager: ObservableObject, ConversationLockGating, C
     func enableBiometricUnlock(authorizedBy masterPin: String) -> PinAttemptOutcome {
         let outcome = attemptMasterPin(masterPin)
         guard outcome == .granted, let enrollment = biometrics.enrollmentState() else { return outcome }
-        noteBiometricUnlock(vault.write(enrollment.base64EncodedString(), for: biometricStateKey))
+        noteBiometricUnlock(write(enrollment.base64EncodedString(), for: biometricStateKey))
         return outcome
     }
 
@@ -702,7 +754,7 @@ final class ConversationLockManager: ObservableObject, ConversationLockGating, C
     /// le code de l'appareil) désactive la biométrie au lieu d'ouvrir : le PIN
     /// redevient la seule porte jusqu'à une nouvelle activation.
     func unlockWithBiometrics(conversationId: String, reason: String) async -> Bool {
-        guard isLocked(conversationId), let enrolled = vault.read(biometricStateKey) else { return false }
+        guard isLocked(conversationId), let enrolled = read(biometricStateKey) else { return false }
         guard biometrics.enrollmentState()?.base64EncodedString() == enrolled else {
             disableBiometricUnlock()
             return false
@@ -736,7 +788,7 @@ final class ConversationLockManager: ObservableObject, ConversationLockGating, C
     }
 
     private func attempt(_ pin: String, against key: String) -> PinAttemptOutcome {
-        guard let stored = vault.read(key), let credential = ConversationPinCredential.decode(stored) else {
+        guard let stored = read(key), let credential = ConversationPinCredential.decode(stored) else {
             return .rejected(retryIn: 0)
         }
         let moment = now()
@@ -758,9 +810,24 @@ final class ConversationLockManager: ObservableObject, ConversationLockGating, C
     @discardableResult
     private func store(_ pin: String, under key: String) -> Bool {
         guard let credential = ConversationPinCredential.derive(pin: pin, iterations: iterations),
-              vault.write(credential.encoded, for: key) else { return false }
+              write(credential.encoded, for: key) else { return false }
         vault.delete(throttleKey(key))
         return true
+    }
+
+    /// Toute lecture, et toute écriture, passe après l'effacement que la
+    /// déconnexion a laissé en attente : un code du compte sortant ne
+    /// s'accepte plus, et rejoué après une écriture, l'effacement emporterait
+    /// le code qu'elle vient de poser.
+    private func read(_ key: String) -> String? {
+        settlePendingVaultWipe()
+        return vault.read(key)
+    }
+
+    @discardableResult
+    private func write(_ value: String, for key: String) -> Bool {
+        settlePendingVaultWipe()
+        return vault.write(value, for: key)
     }
 
     private func erase(_ key: String) {
@@ -769,7 +836,7 @@ final class ConversationLockManager: ObservableObject, ConversationLockGating, C
     }
 
     private func throttle(for key: String) -> ConversationPinThrottle {
-        guard let raw = vault.read(throttleKey(key)),
+        guard let raw = read(throttleKey(key)),
               let recorded = try? JSONDecoder().decode(ConversationPinThrottle.self, from: Data(raw.utf8)) else {
             return ConversationPinThrottle()
         }
@@ -778,7 +845,7 @@ final class ConversationLockManager: ObservableObject, ConversationLockGating, C
 
     private func saveThrottle(_ throttle: ConversationPinThrottle, for key: String) {
         guard let data = try? JSONEncoder().encode(throttle) else { return }
-        vault.write(String(decoding: data, as: UTF8.self), for: throttleKey(key))
+        write(String(decoding: data, as: UTF8.self), for: throttleKey(key))
     }
 
     // MARK: - Persistence
@@ -788,7 +855,7 @@ final class ConversationLockManager: ObservableObject, ConversationLockGating, C
     /// déconnexion, qui lève tous les verrous, est une intention, pas une
     /// lecture : elle s'écrit toujours.
     private func saveLockedIds(wipingAll: Bool = false) {
-        defer { NotificationCenter.default.post(name: .conversationContentLocksDidChange, object: nil) }
+        defer { announceContentLocks() }
         guard hasLoadedLockedIds || wipingAll else { return }
         hasLoadedLockedIds = true
         knowsLockedIds = true
@@ -835,11 +902,18 @@ final class ConversationLockManager: ObservableObject, ConversationLockGating, C
     }
 
     /// Une liste LUE : la mémoire la connaît ; `persisting` dit si elle a
-    /// aussi le droit d'être réécrite.
+    /// aussi le droit d'être réécrite. Devenue connue, ou changée, elle
+    /// s'annonce : le widget masquait jusque-là un autre jeu.
     private func adopt(_ ids: Set<String>, persisting: Bool) {
+        let changes = !knowsLockedIds || ids != lockedConversationIds
         lockedConversationIds = ids
         knowsLockedIds = true
         if persisting { hasLoadedLockedIds = true }
+        if changes { announceContentLocks() }
+    }
+
+    private func announceContentLocks() {
+        notificationCenter.post(name: .conversationContentLocksDidChange, object: nil)
     }
 
     /// Ce que le miroir DIT des verrous — le fichier, et la clé de renfort qui
