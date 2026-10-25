@@ -7,7 +7,7 @@ import os
 /// conversation (#11379, directives #9224 et #9229).
 ///
 /// Dans une conversation chiffrée de bout en bout, le texte part sous
-/// libsignal (#3707, spec 2026-10-23 § 4) : une enveloppe par appareil du
+/// libsignal (#3707, spec E2EE libsignal iOS/macOS § 4) : une enveloppe par appareil du
 /// correspondant et de mes autres appareils approuvés, un 409 Sesame qui
 /// rechiffre. Rien ne quitte l'appareil en clair : sans appareil chiffrant chez
 /// le correspondant, pour un contenu que l'appareil ne sait pas encore chiffrer,
