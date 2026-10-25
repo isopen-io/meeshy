@@ -62,7 +62,7 @@ nonisolated final class MockEndToEndMessaging: EndToEndMessagingProviding, @unch
     }
 
     func plaintexts(for messageIds: [String]) async -> [String: E2EEPlaintextEntry] {
-        let hook = lock.withLock { () -> (@MainActor @Sendable () -> Void)? in
+        let hook = lock.withLock { () -> (@MainActor @Sendable () async -> Void)? in
             plaintextsCallCount += 1
             requestedPlaintextKeys.append(contentsOf: messageIds)
             return onPlaintexts
@@ -74,6 +74,7 @@ nonisolated final class MockEndToEndMessaging: EndToEndMessagingProviding, @unch
     /// Combien de fois le clair a été LU, et sous quelles clés.
     private(set) var plaintextsCallCount = 0
     private(set) var requestedPlaintextKeys: [String] = []
-    /// Ce qui arrive PENDANT la lecture : un verrou, une déconnexion.
-    var onPlaintexts: (@MainActor @Sendable () -> Void)?
+    /// Ce qui arrive PENDANT la lecture : un verrou, une déconnexion — ou une
+    /// barrière qui tient la lecture en vol tant que le témoin ne la lève pas.
+    var onPlaintexts: (@MainActor @Sendable () async -> Void)?
 }

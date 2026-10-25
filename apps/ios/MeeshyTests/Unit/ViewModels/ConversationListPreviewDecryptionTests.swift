@@ -52,6 +52,24 @@ final class ConversationListPreviewDecryptionTests: XCTestCase {
         var contents: [String] = []
     }
 
+    /// Une barrière : `wait()` suspend jusqu'à `open()`. Elle rend un ordre
+    /// GARANTI là où un `Task.yield()` ne le rendait que probable (#12766).
+    private actor Gate {
+        private var isOpen = false
+        private var waiters: [CheckedContinuation<Void, Never>] = []
+
+        func wait() async {
+            guard !isOpen else { return }
+            await withCheckedContinuation { waiters.append($0) }
+        }
+
+        func open() {
+            isOpen = true
+            waiters.forEach { $0.resume() }
+            waiters = []
+        }
+    }
+
     // MARK: - Fabriques
 
     private func makeSUT(
@@ -59,7 +77,8 @@ final class ConversationListPreviewDecryptionTests: XCTestCase {
         cachedTranslations: [String: [MessageTranslation]] = [:],
         endToEnd: MockEndToEndMessaging = MockEndToEndMessaging(),
         isLocked: @escaping @MainActor (String) -> Bool = { _ in false },
-        locksDidChange: AnyPublisher<Void, Never> = Empty<Void, Never>().eraseToAnyPublisher()
+        locksDidChange: AnyPublisher<Void, Never> = Empty<Void, Never>().eraseToAnyPublisher(),
+        sessionsDidBegin: AnyPublisher<Void, Never> = Empty<Void, Never>().eraseToAnyPublisher()
     ) -> (sut: ConversationListPreviewLoader, service: MockMessageService) {
         let service = MockMessageService()
         let sut = ConversationListPreviewLoader(
@@ -69,7 +88,8 @@ final class ConversationListPreviewDecryptionTests: XCTestCase {
             isLocked: isLocked,
             endToEnd: endToEnd,
             locksDidChange: locksDidChange,
-            regimeMemory: EndToEndRegimeMemory(defaults: nil)
+            regimeMemory: EndToEndRegimeMemory(defaults: nil),
+            sessionsDidBegin: sessionsDidBegin
         )
         return (sut, service)
     }
@@ -341,18 +361,31 @@ final class ConversationListPreviewDecryptionTests: XCTestCase {
     }
 
     /// Un `.open` qui attendait un préchargement en vol reprend APRÈS la purge :
-    /// il ne republie rien, même sous une génération neuve.
+    /// il ne republie rien, même sous une génération neuve. L'ordre est tenu par
+    /// deux barrières : le préchargement est EN VOL (dans la lecture de la base
+    /// scellée) avant que l'ouverture ne parte, et il ne reprend — pour purger —
+    /// qu'une fois l'ouverture suspendue à l'attendre (#12766).
     func test_openWaitingOnAPrefetch_resumedAfterThePurge_publishesNothing() async {
         let e2ee = endToEnd([messageId: "Rendez-vous à midi"])
         let (sut, service) = makeSUT(cache: .fresh([makeSealedMessage()], age: 10), endToEnd: e2ee)
         service.listResult = .success(encryptedPage())
         let once = Once()
-        e2ee.onPlaintexts = { if once.fire() { sut.purge() } }
+        let prefetchReading = Gate()
+        let openWaiting = Gate()
+        e2ee.onPlaintexts = {
+            guard once.fire() else { return }
+            await prefetchReading.open()
+            await openWaiting.wait()
+            sut.purge()
+        }
         let reader = self.reader
         let id = conversationId
 
         let prefetch = Task { await sut.load(for: id, intent: .prefetch, currentUserId: reader) }
-        await Task.yield()
+        await prefetchReading.wait()
+        // Sur le fil principal, cette tâche ne part qu'une fois l'ouverture
+        // ci-dessous suspendue à attendre le préchargement.
+        Task { @MainActor in await openWaiting.open() }
         await sut.load(for: conversationId, intent: .open, currentUserId: reader)
         await prefetch.value
 
@@ -372,6 +405,50 @@ final class ConversationListPreviewDecryptionTests: XCTestCase {
 
         await sut.load(for: conversationId, intent: .prefetch, currentUserId: reader)
         XCTAssertEqual(served(sut)?.content, "Rendez-vous à midi", "un lecteur connecté rouvre le chargeur")
+    }
+
+    /// #12766 — un chargement qui lit encore l'identifiant du compte SORTI (le
+    /// lecteur n'est pas encore retombé à vide quand la déconnexion purge) ne
+    /// rouvre pas le chargeur ; un autre lecteur, si.
+    func test_afterThePurge_theSignedOutReader_publishesNothing_andANewReaderReopens() async {
+        let (sut, _) = makeSUT(cache: .fresh([makeSealedMessage()], age: 10), endToEnd: endToEnd([messageId: "Rendez-vous à midi"]))
+        await sut.load(for: conversationId, intent: .prefetch, currentUserId: reader)
+        XCTAssertEqual(served(sut)?.content, "Rendez-vous à midi", "précondition")
+
+        sut.purge()
+        await sut.load(for: conversationId, intent: .open, currentUserId: reader)
+        XCTAssertNil(sut.state(for: conversationId).snapshot, "le compte sorti ne rouvre pas le chargeur")
+
+        await sut.load(for: conversationId, intent: .prefetch, currentUserId: { "user-next" })
+        XCTAssertEqual(sut.state(for: conversationId).phase, .loaded, "un nouveau lecteur rouvre le chargeur")
+    }
+
+    /// Le compte sorti est refusé même s'il n'avait encore rien chargé : la
+    /// déconnexion le nomme.
+    func test_purgeNamingTheSignedOutAccount_refusesIt_beforeItEverLoaded() async {
+        let (sut, _) = makeSUT(cache: .fresh([makeSealedMessage()], age: 10), endToEnd: endToEnd([messageId: "Rendez-vous à midi"]))
+
+        sut.purge(signedOutUserId: "user-me")
+        await sut.load(for: conversationId, intent: .prefetch, currentUserId: reader)
+
+        XCTAssertNil(sut.state(for: conversationId).snapshot)
+    }
+
+    /// Le même compte qui se RECONNECTE retrouve son aperçu : c'est la
+    /// connexion neuve qui le réarme, jamais la seule lecture de son identifiant.
+    func test_theSignedOutAccount_signingBackIn_reopensTheLoader() async {
+        let sessions = PassthroughSubject<Void, Never>()
+        let (sut, _) = makeSUT(
+            cache: .fresh([makeSealedMessage()], age: 10), endToEnd: endToEnd([messageId: "Rendez-vous à midi"]),
+            sessionsDidBegin: sessions.eraseToAnyPublisher()
+        )
+        await sut.load(for: conversationId, intent: .prefetch, currentUserId: reader)
+        sut.purge()
+
+        sessions.send(())
+        await sut.load(for: conversationId, intent: .prefetch, currentUserId: reader)
+
+        XCTAssertEqual(served(sut)?.content, "Rendez-vous à midi")
     }
 
     func test_purgeAllLive_purgesEveryLiveLoader() async {
