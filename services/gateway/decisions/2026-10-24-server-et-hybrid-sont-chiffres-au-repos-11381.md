@@ -124,12 +124,43 @@ sur AUCUN autre disque. Trois l'y posaient encore ; ils sont fermés.
 - Lectures : l'aperçu de liste RECALCULÉ (suppression, vue unique, masquage,
   traduction) ouvre le repos ; l'épingle sert `isEncrypted`.
 
+### Après le troisième audit (2026-10-25, #12822)
+
+- **L'agent IA ne reçoit plus rien de ces conversations** (H1). Le clair servi
+  partait en `agent:new-message`, et `services/agent` en range une fenêtre de
+  250 messages dans Redis, l'envoie au fournisseur LLM et écrit des résumés
+  dans MongoDB. Site unique : `socketio/handlers/agentMessageNotification.ts`.
+  Ses réponses restent scellées par `saveMessage`. Sa présence dans ces
+  conversations est une décision du porteur (#12896, #12850).
+- **Chaque entrée de file qui porte du texte déclare le régime** (H2). Le lien
+  de partage rangeait son enveloppe en clair dans Redis : elle ne porte pas
+  `encryptionMode`. `atRest` est désormais REQUIS au type pour `new`,
+  `edited`, `translation`, `link-message` et `attachment-updated`
+  (`TextBearingQueuedEvent`) ; les huit producteurs le déclarent, et la
+  transcription d'un vocal (`attachment-updated`) part scellée elle aussi.
+- **Une clé d'activation d'avant le lot n'est jamais orpheline** (M1). Une
+  clé désignée sans propriétaire se rattache à sa conversation au premier
+  usage, l'activation reprend la clé désignée qui s'ouvre encore
+  (`activationKeyId`), et une bascule ne remet plus `serverEncryptionKeyId` à
+  `null`. Aucune migration de données.
+- **Les journaux de traduction ne citent aucune entité ni aucun extrait** (M2).
+- **Une entrée scellée qu'un drain ne peut pas rouvrir pour le moment est
+  remise en file** (M3), scellée, à son instant d'origine, dans sa limite de
+  48 h. Seules une entrée qui ne s'authentifie pas et une charge informe sont
+  jetées.
+- **Le sceau de file est `delivery-queue:v2`** (L1) : il authentifie aussi le
+  destinataire, l'`eventType` et la `dedupKey`. Les entrées v1 déjà en file au
+  déploiement se rouvrent pendant leurs 48 h.
+
 ### Ce que ça protège, et ce que ça ne protège pas
 
 Protège : une copie de MongoDB, de Redis (AOF compris) ou des journaux de la
 passerelle et du translator, SANS l'environnement de la passerelle
-(`ENCRYPTION_MASTER_KEY`), ne livre le texte d'aucun message `server`/`hybrid`
-écrit après ce lot, ni de sa traduction — sous réserve des points ci-dessous.
+(`ENCRYPTION_MASTER_KEY`), ne livre pas le TEXTE d'un message `server`/`hybrid`
+écrit après ce lot, ni celui de sa traduction. Cela vaut en base, dans le cache
+du translator et dans la file hors ligne, quel que soit le transport d'envoi
+(REST, socket, lien de partage), sous réserve des points ci-dessous. Dans la
+file, une entrée ne s'ouvre que pour son destinataire et sous son événement.
 
 Ne protège pas :
 
@@ -139,20 +170,34 @@ Ne protège pas :
 - **Les lignes déjà en base** : éditées avant le lot, avis système, ancien
   repli « Encryption failed → plaintext ». Mesure puis re-scellement : #12875
   (production après feu vert du porteur et sauvegarde vérifiée).
-- **L'audio** : transcriptions (Whisper), traductions de transcription, pistes
-  TTS et leurs journaux, et l'événement `message:attachment-updated` en file —
-  aucun n'est chiffré au repos.
-- **Les notifications** (ligne `Notification`, push) : elles gardent le
-  placeholder chiffré, mais les avis système et les métadonnées (expéditeur,
-  heure, conversation) restent en clair, comme `messageId`, `conversationId`
-  et `eventType` dans les entrées de file.
+- **Les avis système** : écrits en clair (`content`), ils partent aussi en clair
+  dans la file hors ligne, leur ligne ne déclarant aucun mode.
+- **L'audio** : transcriptions (Whisper), traductions de transcription et pistes
+  TTS sont en clair dans MongoDB (`MessageAttachment`), et les journaux de
+  transcription de la passerelle (`ZmqMessageHandler`,
+  `MessageTranslationService`) en citent les 50 premiers caractères. Seule leur
+  entrée de file (`message:attachment-updated`) est scellée.
+- **L'agent IA, de son côté** : il ne reçoit plus le clair de la passerelle,
+  mais son scanner relit MongoDB (il y lit en clair les lignes d'avant le lot),
+  et le texte de ses propres réponses reste en clair dans son Redis et chez le
+  fournisseur LLM avant d'être scellé par la passerelle (#12896).
+- **Les métadonnées** : la ligne `Notification` et le push gardent le
+  placeholder chiffré, mais expéditeur, heure et conversation restent en clair.
+  Dans la file, la clé (le destinataire), `messageId`, `conversationId`,
+  `eventType`, `enqueuedAt` et `dedupKey` restent en clair ; la `dedupKey`
+  d'une traduction nomme sa langue cible.
 - **Le cache mémoire de traduction de la passerelle** (non persistant) et la
   mémoire de tout processus.
+- **Des fonctions serveur qui lisent `content` en base** : la déduplication par
+  contenu (#6910) n'opère pas dans ces conversations (#12903) ; l'export de
+  compte, la boîte des mentions, les extraits de signalement et la recherche
+  servent un texte vide (#12904).
 - **La rotation de la clé maîtresse**, et le chemin des pièces jointes qui
   re-désigne une clé de conversation (constat E5, #12854).
-- **Un retour arrière** vers une passerelle d'avant ce lot pendant les 48 h de
-  la file : elle rejouerait les entrées scellées avec une charge vide, que les
-  clients ignorent (le message se relit à l'ouverture de la conversation).
+- **Un retour arrière pendant les 48 h de la file** : une passerelle d'avant ce
+  lot rejouerait les entrées scellées avec une charge vide, que les clients
+  ignorent ; une version de ce lot d'avant `delivery-queue:v2` les jetterait.
+  Dans les deux cas, le message se relit à l'ouverture de la conversation.
 - Aucune revue cryptographique tierce n'a eu lieu ; elle reste requise avant de
   présenter ce mode comme une garantie.
 
