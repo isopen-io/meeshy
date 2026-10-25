@@ -78,7 +78,8 @@ final class ConversationListPreviewDecryptionTests: XCTestCase {
         endToEnd: MockEndToEndMessaging = MockEndToEndMessaging(),
         isLocked: @escaping @MainActor (String) -> Bool = { _ in false },
         locksDidChange: AnyPublisher<Void, Never> = Empty<Void, Never>().eraseToAnyPublisher(),
-        sessionsDidBegin: AnyPublisher<Void, Never> = Empty<Void, Never>().eraseToAnyPublisher()
+        sessionsDidBegin: AnyPublisher<Void, Never> = Empty<Void, Never>().eraseToAnyPublisher(),
+        signedInUsers: AnyPublisher<MeeshyUser?, Never> = Empty<MeeshyUser?, Never>().eraseToAnyPublisher()
     ) -> (sut: ConversationListPreviewLoader, service: MockMessageService) {
         let service = MockMessageService()
         let sut = ConversationListPreviewLoader(
@@ -89,7 +90,8 @@ final class ConversationListPreviewDecryptionTests: XCTestCase {
             endToEnd: endToEnd,
             locksDidChange: locksDidChange,
             regimeMemory: EndToEndRegimeMemory(defaults: nil),
-            sessionsDidBegin: sessionsDidBegin
+            sessionsDidBegin: sessionsDidBegin,
+            signedInUsers: signedInUsers
         )
         return (sut, service)
     }
@@ -423,15 +425,40 @@ final class ConversationListPreviewDecryptionTests: XCTestCase {
         XCTAssertEqual(sut.state(for: conversationId).phase, .loaded, "un nouveau lecteur rouvre le chargeur")
     }
 
-    /// Le compte sorti est refusé même s'il n'avait encore rien chargé : la
-    /// déconnexion le nomme.
-    func test_purgeNamingTheSignedOutAccount_refusesIt_beforeItEverLoaded() async {
-        let (sut, _) = makeSUT(cache: .fresh([makeSealedMessage()], age: 10), endToEnd: endToEnd([messageId: "Rendez-vous à midi"]))
+    /// Câblage (#12766) : chaque chemin de sortie efface `currentUser` AVANT
+    /// de passer `isAuthenticated` à faux, et le puits de déconnexion purge
+    /// ensuite — l'identifiant lu à la purge est donc toujours `nil`. Le compte
+    /// sorti, même s'il n'avait jamais chargé, reste refusé : le chargeur
+    /// retient le dernier compte connecté au fil de la session.
+    func test_logoutClearsTheUserBeforeThePurge_theOutgoingAccountStillCannotReopen() async {
+        let auth = MockAuthManager()
+        auth.simulateLoggedIn(user: MeeshyUser(id: "user-me", username: "me", displayName: "Me"))
+        let (sut, _) = makeSUT(
+            cache: .fresh([makeSealedMessage()], age: 10), endToEnd: endToEnd([messageId: "Rendez-vous à midi"]),
+            signedInUsers: auth.currentUserPublisher
+        )
 
-        sut.purge(signedOutUserId: "user-me")
+        auth.logout()
+        XCTAssertNil(auth.currentUser, "précondition : le compte est effacé avant la purge")
+        ConversationListPreviewLoader.purgeAllLive()
         await sut.load(for: conversationId, intent: .prefetch, currentUserId: reader)
+        XCTAssertNil(sut.state(for: conversationId).snapshot, "le compte sorti ne rouvre pas le chargeur")
 
-        XCTAssertNil(sut.state(for: conversationId).snapshot)
+        await sut.load(for: conversationId, intent: .prefetch, currentUserId: { "user-next" })
+        XCTAssertEqual(sut.state(for: conversationId).phase, .loaded, "un autre lecteur le rouvre")
+    }
+
+    /// Le puits de déconnexion ne lit plus l'identifiant au moment de purger :
+    /// il serait déjà effacé. La source du compte connecté est celle d'AuthManager.
+    func test_logoutSink_purgesWithoutReadingTheClearedUser_andTheLoaderFollowsAuthManager() throws {
+        let root = Self.appRoot.appendingPathComponent("Meeshy")
+        let container = AppSourceGuard.stripComments(try String(contentsOf: root.appendingPathComponent("Core/DependencyContainer.swift"), encoding: .utf8))
+        let loader = AppSourceGuard.stripComments(try String(
+            contentsOf: root.appendingPathComponent("Features/Main/ViewModels/ConversationListPreviewLoader.swift"), encoding: .utf8))
+
+        XCTAssertTrue(container.contains("ConversationListPreviewLoader.purgeAllLive()"))
+        XCTAssertFalse(container.contains("purgeAllLive(signedOutUserId:"), "un identifiant lu à la purge est toujours nil")
+        XCTAssertTrue(loader.contains("signedInUsers ?? AuthManager.shared.currentUserPublisher"))
     }
 
     /// Le même compte qui se RECONNECTE retrouve son aperçu : c'est la
