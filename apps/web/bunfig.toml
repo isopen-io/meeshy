@@ -41,4 +41,4 @@
 # `act` sur l'objet de module de React, ce qui doit précéder tout import de
 # `react` par un autre préchargement ou un témoin.
 [test]
-preload = ["./src/test-support/act-leak-guard.ts", "./src/test-support/interface-catalog-preload.ts"]
+preload = ["./src/test-support/act-leak-guard.ts", "./src/test-support/interface-catalog-preload.ts", "./src/test-support/end-to-end-regime-isolation.ts"]

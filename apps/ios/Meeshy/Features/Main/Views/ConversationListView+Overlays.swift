@@ -284,10 +284,8 @@ extension ConversationListView {
                     // Le voile commun de l'appui long (#11222) : il s'EFFACE
                     // pendant le morph drag, la liste réapparaît sous la carte
                     // devenue chip draggable.
-                    LongPressVeil(
-                        visibility: contextMenuAppeared ? Double(1 - dragMorphProgress) : 0,
-                        onDismiss: { dismissContextMenu() }
-                    )
+                    LongPressVeil(visibility: contextMenuAppeared ? Double(1 - dragMorphProgress) : 0,
+                                  onDismiss: { dismissContextMenu() })
 
                     VStack(spacing: MeeshySpacing.lg) {
                         // Aperçu d'appui long = la carte des DERNIERS MESSAGES

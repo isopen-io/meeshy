@@ -75,7 +75,7 @@ describe('la section dit le mode de la conversation ouverte, en mots simples', (
     await mount({ id: 'c-seen-e2ee', type: 'direct', encryptionMode: null });
     expect(document.querySelector('[data-conversation-encryption]')?.getAttribute('data-conversation-encryption')).toBe('end-to-end');
     expect(facts()).toContain('endToEndNeverTurnedOffDirect');
-    endToEndRegimeLedger.getState().bind(null);
+    endToEndRegimeLedger.getState().reset();
   });
 
   test('bout en bout : « Meeshy ne peut pas les lire » porte sa réserve tant que les numéros de sécurité manquent (#12520)', async () => {

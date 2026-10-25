@@ -170,6 +170,7 @@ final class CallLiveFrameRenderer: NSObject, MTKViewDelegate {
         motionLayer = nil
         guard let motion, let view else { return }
         let layer = CallFrameMotionLayer(scene: motion)
+        layer.adoptTheMediaPolicy()
         layer.fit(into: view.bounds.size)
         view.layer.addSublayer(layer)
         motionLayer = layer

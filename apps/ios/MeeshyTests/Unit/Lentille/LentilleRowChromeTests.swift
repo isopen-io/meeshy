@@ -60,12 +60,15 @@ final class LentilleRowChromeTests: XCTestCase {
     /// « Auteur : message » en UN seul texte (#7548) : la ligne partagée
     /// concatène auteur, glyphe et corps composés par le SDK. Le séparateur
     /// vient du catalogue (`line.author` — « Alice : » en français, « Alice: »
-    /// ailleurs), jamais d'un littéral de la rangée.
+    /// ailleurs), jamais d'un littéral de la rangée. Le marqueur « non
+    /// chiffré » (#11404) se range dans ce même texte, entre l'auteur et le
+    /// glyphe : il qualifie le message, il n'ouvre pas un second texte.
     func test_flatRow_preview_isOneText_authorColonMessage_noOutline() throws {
         XCTAssertTrue(try rowSource().contains("ConversationPreviewLine("), "la rangée monte la ligne partagée")
         let line = try previewLineSource()
         let text = try block("private func styledText(_ preview: ConversationPreview, at now: Date) -> Text {", in: line)
-        XCTAssertTrue(text.contains("(author + glyph + direction + styledBody)"), "« Auteur : texte » en UN seul texte")
+        XCTAssertTrue(text.contains("(author + unencrypted + glyph + direction + styledBody)"),
+                      "« Auteur : texte » en UN seul texte, marqueur « non chiffré » compris")
         XCTAssertTrue(text.contains("strings(.lineAuthor"), "le séparateur d'auteur vient du catalogue")
         for outline in ["strokeBorder", ".border(", "RoundedRectangle", "background("] {
             XCTAssertFalse(text.contains(outline), "aucun contour ni fond sur le dernier message au repos (« \(outline) »)")
