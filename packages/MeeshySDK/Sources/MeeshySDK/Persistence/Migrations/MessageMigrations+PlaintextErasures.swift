@@ -63,26 +63,57 @@ struct MessagesPlaintextErasuresMigration: DatabaseMigration {
 }
 
 /// **La garde structurelle de #12999** : une ligne déclarée chiffrée de bout en
-/// bout ne garde jamais de texte, quel que soit l'écrivain — un `MessageRecord`
-/// (déjà scellé par son encodage), du SQL brut (`updateServerAckedFields`,
-/// `markEdited`, avis d'appel) ou un écrivain futur. Le déclencheur réécrit le
-/// littéral dans l'instruction même qui posait le texte.
+/// bout ne garde jamais de texte, quel que soit l'écrivain.
+/// - Un `MessageRecord` est scellé par son encodage (`EndToEndDiskPlaintextLaw`).
+/// - Le SQL brut qui écrit `content` passe par `sealedContentAssignment`, que
+///   que `EndToEndDiskPlaintextLawTests` exige de toute affectation paramétrée.
+/// - L'index plein texte n'indexe jamais le texte d'une telle ligne : ses
+///   déclencheurs indexent l'expression scellée, si bien qu'un écrivain futur
+///   qui oublierait la règle n'y laisserait aucun terme.
+///
+/// Les lignes déjà marquées sont rescellées AVANT que les déclencheurs ne
+/// changent : l'index et la table restent d'accord sur chaque ligne.
 enum EndToEndContentSeal {
     static let placeholder = E2EEWire.contentPlaceholder
 
+    /// L'affectation de `content` d'un `UPDATE` brut ; `?1` est le texte, premier
+    /// paramètre de l'instruction. La ligne lue est celle d'AVANT l'écriture.
+    static let sealedContentAssignment = """
+        content = CASE WHEN isEncrypted = 1 AND encryptionMode = '\(E2EEWire.mode)' AND length(COALESCE(?1, '')) > 0 \
+        THEN '\(placeholder)' ELSE ?1 END
+        """
+
+    private static func indexed(_ row: String) -> String {
+        """
+        CASE WHEN \(row).isEncrypted = 1 AND \(row).encryptionMode = '\(E2EEWire.mode)' \
+        AND length(COALESCE(\(row).content, '')) > 0 THEN '\(placeholder)' ELSE \(row).content END
+        """
+    }
+
     static func install(in db: Database) throws {
-        let sealed = """
-            new.isEncrypted = 1 AND new.encryptionMode = '\(E2EEWire.mode)'
-            AND new.content IS NOT NULL AND new.content NOT IN ('', '\(placeholder)')
-            """
         try db.execute(sql: """
-            CREATE TRIGGER e2ee_content_sealed_on_insert AFTER INSERT ON messages WHEN \(sealed)
-            BEGIN UPDATE messages SET content = '\(placeholder)' WHERE rowid = new.rowid; END
+            UPDATE messages SET content = '\(placeholder)'
+            WHERE isEncrypted = 1 AND encryptionMode = '\(E2EEWire.mode)'
+              AND length(COALESCE(content, '')) > 0 AND content != '\(placeholder)'
+            """)
+        for trigger in ["msg_fts_ai", "msg_fts_ad", "msg_fts_au"] {
+            try db.execute(sql: "DROP TRIGGER IF EXISTS \(trigger)")
+        }
+        try db.execute(sql: """
+            CREATE TRIGGER msg_fts_ai AFTER INSERT ON messages BEGIN
+                INSERT INTO messages_fts(rowid, content) VALUES (new.rowid, \(indexed("new")));
+            END
             """)
         try db.execute(sql: """
-            CREATE TRIGGER e2ee_content_sealed_on_update AFTER UPDATE OF content, isEncrypted, encryptionMode ON messages
-            WHEN \(sealed)
-            BEGIN UPDATE messages SET content = '\(placeholder)' WHERE rowid = new.rowid; END
+            CREATE TRIGGER msg_fts_ad AFTER DELETE ON messages BEGIN
+                INSERT INTO messages_fts(messages_fts, rowid, content) VALUES('delete', old.rowid, \(indexed("old")));
+            END
+            """)
+        try db.execute(sql: """
+            CREATE TRIGGER msg_fts_au AFTER UPDATE ON messages BEGIN
+                INSERT INTO messages_fts(messages_fts, rowid, content) VALUES('delete', old.rowid, \(indexed("old")));
+                INSERT INTO messages_fts(rowid, content) VALUES (new.rowid, \(indexed("new")));
+            END
             """)
     }
 }

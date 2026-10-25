@@ -67,7 +67,7 @@ extension MessagePersistenceActor {
             affectedConversationId = existing.conversationId
             try db.execute(
                 sql: """
-                    UPDATE messages SET content = ?, callSummaryJson = ?,
+                    UPDATE messages SET \(EndToEndContentSeal.sealedContentAssignment), callSummaryJson = ?,
                     updatedAt = ?, changeVersion = changeVersion + 1
                     WHERE localId = ? OR serverId = ?
                     """,
@@ -318,7 +318,7 @@ extension MessagePersistenceActor {
             try db.execute(
                 sql: """
                     UPDATE messages
-                    SET content = ?,
+                    SET \(EndToEndContentSeal.sealedContentAssignment),
                     attachmentsJson = COALESCE(?, attachmentsJson),
                     reactionsJson = COALESCE(?, reactionsJson),
                     pinnedAt = ?, pinnedBy = ?,

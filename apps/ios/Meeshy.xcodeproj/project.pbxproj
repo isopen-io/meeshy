@@ -8180,7 +8180,6 @@
 		00B61685604373ED5FF975B5 /* MeeshyWidgets */ = {
 			isa = PBXGroup;
 			children = (
-				8FCBDD688FC77593059FFEB5 /* EndToEndDiskPlaintextMigration.swift */,
 				BF479B93D688C488F5D4760C /* CallActivityAttributes.swift */,
 				9776950F1670772D58BAEB4D /* CallLiveActivity.swift */,
 				170DBAB52845E566028FB4C3 /* Info.plist */,
@@ -10099,8 +10098,8 @@
 				497B52A350BA573E18A172D9 /* EditHistoryStoreTests.swift */,
 				EB67A426B118ED876B1C5082 /* EndToEndDiskPlaintextMigrationTests.swift */,
 				3106025634D4B48B75780286 /* EndToEndMessagingRuntimeTests.swift */,
-				8AF1366BF7C109C9BCA822C6 /* EndToEndPlaintextJanitorTests.swift */,
 				449881FC857D6EA7A235B6A0 /* EndToEndOwnDeviceLinkingRuntimeTests.swift */,
+				8AF1366BF7C109C9BCA822C6 /* EndToEndPlaintextJanitorTests.swift */,
 				EE0D1818763763600F1D8101 /* EngagementDispatcherTests.swift */,
 				BEB6093F228F4C856265140E /* EngagementTrackerTests.swift */,
 				DFA854DEF6B57F5C4317E57E /* ExpiringClipboardTests.swift */,
@@ -12903,9 +12902,10 @@
 			isa = PBXGroup;
 			children = (
 				88471B62FEC033616C9DF128 /* EncryptedDevicesCache.swift */,
+				8FCBDD688FC77593059FFEB5 /* EndToEndDiskPlaintextMigration.swift */,
 				30D31DAE01F4C0227C3264C5 /* EndToEndMessagingRuntime.swift */,
-				4A2F7F2BD8D6286A089F87A0 /* EndToEndPlaintextJanitor.swift */,
 				E7852405FF3B1809E7C9A392 /* EndToEndOwnDevices.swift */,
+				4A2F7F2BD8D6286A089F87A0 /* EndToEndPlaintextJanitor.swift */,
 				6D4793733A4F7B7308491424 /* EndToEndSessionBridge.swift */,
 				D35E0BB26074CA420D97C0C6 /* LibsignalDeviceProvisioning.swift */,
 			);
@@ -14741,8 +14741,8 @@
 				059E2864440D184711C7F145 /* EndToEndDeviceLimitSheet.swift in Sources */,
 				313D00C8FD404674E50DC531 /* EndToEndDiskPlaintextMigration.swift in Sources */,
 				F97DFECE3A88789F75B2E5F3 /* EndToEndMessagingRuntime.swift in Sources */,
-				AFB7A739BD09A1AB62D00C6D /* EndToEndPlaintextJanitor.swift in Sources */,
 				913C9590D8443856FB138C78 /* EndToEndOwnDevices.swift in Sources */,
+				AFB7A739BD09A1AB62D00C6D /* EndToEndPlaintextJanitor.swift in Sources */,
 				65600F6BBF2F388AA269E13B /* EndToEndRegimeLedger.swift in Sources */,
 				7132B755ED51EFCD7DF31EDB /* EndToEndRegimeMemory.swift in Sources */,
 				BCD7BD78B678EFE03B5FBC19 /* EndToEndRegimeRefresher.swift in Sources */,
@@ -16629,12 +16629,12 @@
 				1C5EE638F1AFB1E8946A29F5 /* EmailVerificationLinkTests.swift in Sources */,
 				A034CBBEFB8C196B41DC27B4 /* EmailVerificationViewModelTests.swift in Sources */,
 				3A9A9FC37134C79FE4426734 /* EmojiGridCategoryTests.swift in Sources */,
-				F195F3D92C53C2914D42DC53 /* EndToEndDiskPlaintextMigrationTests.swift in Sources */,
 				7E943BB0302E3DF38328F0C8 /* EncryptedDevicesViewModelTests.swift in Sources */,
+				F195F3D92C53C2914D42DC53 /* EndToEndDiskPlaintextMigrationTests.swift in Sources */,
 				0748473321C25E2D6CD65F33 /* EndToEndMessagingRuntimeTests.swift in Sources */,
-				A4FD71563947641C49D32A62 /* EndToEndPlaintextJanitorTests.swift in Sources */,
 				C2FB57F90E26E5747B9197AD /* EndToEndOwnDeviceLinkingRuntimeTests.swift in Sources */,
 				615493E23B12E8D34D9E6014 /* EndToEndPeerMessageReadingTests.swift in Sources */,
+				A4FD71563947641C49D32A62 /* EndToEndPlaintextJanitorTests.swift in Sources */,
 				D69A62D8CE146A4B83899B3B /* EndToEndThreadDisplayTests.swift in Sources */,
 				13BA889CBD961604BA20B3D4 /* EndToEndThreadPlaintextsTests.swift in Sources */,
 				E4B6AD1406E0D16A07663504 /* EngagementCountConsolidationGuardTests.swift in Sources */,

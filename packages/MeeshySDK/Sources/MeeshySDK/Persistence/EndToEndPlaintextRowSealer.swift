@@ -65,10 +65,10 @@ public struct EndToEndPlaintextRowSealer: Sendable {
         let (filter, arguments) = target(keys)
         try db.execute(
             sql: """
-                UPDATE messages SET content = ?, isEncrypted = 1, encryptionMode = ?
+                UPDATE messages SET content = '\(E2EEWire.contentPlaceholder)', isEncrypted = 1, encryptionMode = ?
                 WHERE \(filter) AND content IS NOT NULL AND content != ?
                 """,
-            arguments: StatementArguments([E2EEWire.contentPlaceholder, E2EEWire.mode]) + arguments
+            arguments: StatementArguments([E2EEWire.mode]) + arguments
                 + StatementArguments([E2EEWire.contentPlaceholder])
         )
     }

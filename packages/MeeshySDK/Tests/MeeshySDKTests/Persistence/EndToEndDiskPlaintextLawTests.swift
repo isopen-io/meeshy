@@ -105,8 +105,10 @@ final class EndToEndDiskPlaintextLawTests: XCTestCase {
     }
 
     /// Audit #12999 (B-1) — l'écho de mon envoi réécrivait le clair par du SQL
-    /// brut, hors de l'encodage de `MessageRecord`. La base le rescelle.
-    func test_aRawSQLWriteOfAnEndToEndRow_isSealedByTheDatabase() async throws {
+    /// brut, hors de l'encodage de `MessageRecord`. L'affectation scellée l'en
+    /// empêche, et l'index plein texte n'indexe jamais le texte d'une telle
+    /// ligne, même écrit par un SQL qui oublierait la règle.
+    func test_aRawSQLWriteOfAnEndToEndRow_isSealed_andNeverIndexed() async throws {
         let (actor, queue) = try makeActor()
         var row = MessageRecordFactory.make(localId: "cid_9", content: E2EEWire.contentPlaceholder)
         row.isEncrypted = true
@@ -119,11 +121,30 @@ final class EndToEndDiskPlaintextLawTests: XCTestCase {
             isEdited: false, editedAt: nil, deletedAt: nil, deliveredCount: 0, readCount: 0,
             deliveredToAllAt: nil, readByAllAt: nil, updatedAt: Date()
         )
+        XCTAssertEqual(try storedContents(in: queue), [E2EEWire.contentPlaceholder])
+
         let secret = secret
         try await queue.write { db in
             try db.execute(sql: "UPDATE messages SET content = ? WHERE localId = 'cid_9'", arguments: [secret])
         }
+        let hits = try await queue.read { db in
+            try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM messages_fts WHERE messages_fts MATCH 'coffre'")
+        }
+        XCTAssertEqual(hits, 0)
+    }
 
-        XCTAssertEqual(try storedContents(in: queue), [E2EEWire.contentPlaceholder])
+    /// Tout `UPDATE` brut qui écrit `content` passe par l'affectation scellée.
+    func test_everyRawContentWrite_usesTheSealedAssignment() throws {
+        let persistence = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Sources/MeeshySDK/Persistence")
+        let files = try XCTUnwrap(FileManager.default.enumerator(at: persistence, includingPropertiesForKeys: nil))
+            .compactMap { $0 as? URL }.filter { $0.pathExtension == "swift" }
+        XCTAssertFalse(files.isEmpty)
+        let offenders = try files.filter { url in
+            let source = try String(contentsOf: url, encoding: .utf8)
+            return source.range(of: #"(SET|,)\s+content\s*=\s*\?"#, options: .regularExpression) != nil
+        }.map(\.lastPathComponent)
+        XCTAssertEqual(offenders, [], "écrire `\\(EndToEndContentSeal.sealedContentAssignment)`")
     }
 }

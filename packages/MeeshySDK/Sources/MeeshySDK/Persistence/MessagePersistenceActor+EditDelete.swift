@@ -97,7 +97,7 @@ extension MessagePersistenceActor {
             else { return nil }
             try db.execute(
                 sql: """
-                    UPDATE messages SET content = ?, isEdited = (isEdited OR ?), editedAt = ?,
+                    UPDATE messages SET \(EndToEndContentSeal.sealedContentAssignment), isEdited = (isEdited OR ?), editedAt = ?,
                     joinNoticeJson = COALESCE(?, joinNoticeJson),
                     editedById = CASE WHEN ? THEN ? ELSE editedById END,
                     updatedAt = ?, changeVersion = changeVersion + 1
