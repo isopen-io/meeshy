@@ -3,7 +3,7 @@ import type { QueryClient } from '@tanstack/react-query';
 import { Suspense, lazy, useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 
-import type { GloryAtmosphere } from '@meeshy/shared/types/glory-atmospheres';
+import { DEFAULT_GLORY_ATMOSPHERE, isGloryAtmosphere, type GloryAtmosphere } from '@meeshy/shared/types/glory-atmospheres';
 import { parseGloryFramePackContract, parsePackStrings, type GloryFramePackFrame, type PackStrings } from '@meeshy/shared/types/glory-frame-pack';
 import type { PackAssetRef } from '@meeshy/shared/types/content-pack';
 
@@ -116,6 +116,9 @@ const writeInstalled = (queryClient: QueryClient, pack: FramePackSummary, instal
 
 const isHeld = (pack: FramePackSummary, hold: FrameShopHold): boolean => hold.atmosphere !== null && pack.slug === hold.atmosphere;
 
+/** Seul le pack d'une atmosphère RETIRABLE peut être tenu par le choix du compte ; un autre 409 vient d'un pack inclus. */
+const mayHoldAtmosphere = (pack: FramePackSummary): boolean => isGloryAtmosphere(pack.slug) && pack.slug !== DEFAULT_GLORY_ATMOSPHERE;
+
 export const frameShopAdapter = (language: InterfaceLanguage, deps: ConversationsDeps, origin: string, hold: FrameShopHold = NO_HOLD): PackShopAdapter<FramePackSummary> => ({
   domain: 'glory-frame',
   catalogueKey: FRAME_KEYS.catalogue,
@@ -129,7 +132,7 @@ export const frameShopAdapter = (language: InterfaceLanguage, deps: Conversation
   applyInstalled: writeInstalled,
   removable: (pack) => pack.removable,
   swap: (pack) => (isHeld(pack, hold) ? { label: translateStickerPacks(language, 'packs.frames.changeAtmosphere'), run: hold.change } : null),
-  keptText: () => translateStickerPacks(language, 'packs.frames.atmosphereKept'),
+  keptText: (pack) => translateStickerPacks(language, mayHoldAtmosphere(pack) ? 'packs.frames.atmosphereKept' : 'packs.error.notRemovable'),
   price: (pack) => pack.price ?? null,
   owned: (pack) => pack.owned ?? true,
   title: (pack) => nameOf(pack, language).name,

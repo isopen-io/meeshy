@@ -1,16 +1,21 @@
-import { QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { act } from 'react';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
 import type { PackAssetRef } from '@meeshy/shared/types/content-pack';
 import { FRAME_MOMENT_FAMILIES, describeFrameUsage, type FrameUsage } from '@meeshy/shared/types/frame-usage';
 import { ACHIEVEMENT_RARITIES } from '@meeshy/shared/utils/game/glory';
+import { resolveEngagementProgress } from '@meeshy/shared/utils/engagement-progress';
+import type { GloryAtmosphere } from '@meeshy/shared/types/glory-atmospheres';
 
 import type { ConversationsDeps } from '@/lib/api/conversations';
 import type { ApiResult, HttpRequest, HttpTransport } from '@/lib/api/http';
-import { ENGAGEMENT_PROGRESS_QUERY_KEY } from '@/lib/api/engagement';
+import { ENGAGEMENT_PROGRESS_QUERY_KEY, type EngagementWithGame } from '@/lib/api/engagement';
+import { ENGAGEMENT_PROGRESS_FIXTURE } from '@/lib/api/engagement-fixture';
+import { gameBlockWithExtrasFixture } from '@/lib/api/game-fixture';
 import { appQueryClient } from '@/lib/api/query-client';
-import type { AtmosphereOutcome, AtmosphereTile } from '@/lib/game/atmosphere';
+import { chooseAtmosphere, withAtmosphere, type AtmosphereJob, type AtmosphereOutcome, type AtmosphereTile } from '@/lib/game/atmosphere';
+import { createOfflineQueue } from '@/lib/offline-queue';
 import { frameUsageText } from '@/lib/i18n-frame-usage-catalog';
 import { loadStickerPacksCatalog } from '@/lib/i18n-sticker-packs-catalog';
 import { SUPPORTED_INTERFACE_LANGUAGES } from '@/lib/inline-interface-language-bootstrap.js';
@@ -253,6 +258,51 @@ describe('FramePackShop', () => {
     expect(chosen).toEqual(['nord']);
   });
 
+  test('choisir depuis la boutique une atmosphère dont le pack n’est pas installé : la rangée du nouveau pack devient « Votre atmosphère » et l’ancien pack redevient retirable', async () => {
+    const server = { atmosphere: 'egypte' as GloryAtmosphere, installed: new Set<string>(['egypte']) };
+    const row = (slug: string) => summary(server.installed.has(slug), { slug });
+    const transport = {
+      request: async <T,>(request: HttpRequest): Promise<ApiResult<T>> => {
+        if (request.path === '/api/v1/packs/glory-frame') return { ok: true, data: ['egypte', 'nord'].map(row) as T };
+        if (request.path === '/api/v1/packs/glory-frame/installed') return { ok: true, data: [...server.installed].map(row) as T };
+        if (request.method === 'PUT' && request.path.endsWith('/frames/atmosphere')) {
+          const { atmosphere } = request.body as { readonly atmosphere: GloryAtmosphere };
+          server.atmosphere = atmosphere;
+          server.installed.add(atmosphere);
+          return { ok: true, data: { atmosphere, packInstalled: true } as T };
+        }
+        return { ok: false, status: 404, error: 'Not Found' };
+      },
+    } as unknown as HttpTransport;
+    const account = (): EngagementWithGame => withAtmosphere({ ...resolveEngagementProgress(ENGAGEMENT_PROGRESS_FIXTURE), game: gameBlockWithExtrasFixture() }, server.atmosphere);
+    appQueryClient.setQueryData(ENGAGEMENT_PROGRESS_QUERY_KEY, account());
+    const queue = createOfflineQueue<AtmosphereJob>();
+    const tiles = (['egypte', 'nord'] as const).map(tileOf);
+    const choose = (atmosphere: GloryAtmosphere) =>
+      chooseAtmosphere(atmosphere, { transport, client: appQueryClient, queue, isOnline: () => true, requestId: () => 'req-boutique', onInstalled: () => undefined });
+    function AccountShop() {
+      const progress = useQuery({ queryKey: ENGAGEMENT_PROGRESS_QUERY_KEY, queryFn: async () => account(), staleTime: 0 }, appQueryClient);
+      const current = progress.data?.game?.photo?.atmosphere ?? null;
+      return <FramePackShop language="fr" deps={{ source: 'gateway', transport }} assets={{ origin: ORIGIN, cacheStorage: null }} atmosphere={{ current, tiles, choose }} />;
+    }
+    const host = await mounter.mount(
+      <QueryClientProvider client={appQueryClient}>
+        <AccountShop />
+      </QueryClientProvider>,
+    );
+    await until(() => host.querySelector('[data-shop-swap="egypte"]') !== null);
+    await mounter.click(host.querySelector<HTMLElement>('[data-shop-swap="egypte"]'));
+    await until(() => host.ownerDocument.querySelector('[data-atmosphere-option="nord"]') !== null);
+    await mounter.click(host.ownerDocument.querySelector<HTMLElement>('[data-atmosphere-option="nord"]'));
+    await mounter.click(host.ownerDocument.querySelector<HTMLElement>('[data-atmosphere-continue]'));
+    await until(() => server.atmosphere === 'nord' && tab(host, 'nord') !== null);
+    await until(() => host.querySelector('[data-shop-swap="nord"]') !== null);
+    expect(host.querySelector('[data-shop-pack="nord"]')?.textContent).toContain('Votre atmosphère');
+    expect(host.querySelector('[data-shop-toggle="nord"]')).toBe(null);
+    expect(host.querySelector('[data-shop-toggle="egypte"]')?.getAttribute('aria-pressed')).toBe('true');
+    expect(host.querySelector('[data-shop-pack="egypte"]')?.textContent).not.toContain('Votre atmosphère');
+  });
+
   test('un choix parti hors ligne le dit dans la boutique', async () => {
     const { gate } = atmosphereGate('egypte', { status: 'queued' });
     const host = await mount(await gateway({ installed: true, pack: { slug: 'egypte' } }), gate);
@@ -274,6 +324,15 @@ describe('FramePackShop', () => {
     expect(host.querySelector('[data-shop-toggle="nord"]')?.getAttribute('aria-pressed')).toBe('true');
     expect(tab(host, 'nord')).not.toBe(null);
     expect(appQueryClient.getQueryState(ENGAGEMENT_PROGRESS_QUERY_KEY)?.isInvalidated).toBe(true);
+  });
+
+  test('un retrait refusé (409) d’un pack qui ne porte aucune atmosphère (inclus, cache périmé) dit qu’il reste installé, jamais qu’il porte l’atmosphère', async () => {
+    const host = await mount(await gateway({ installed: true, pack: { slug: 'moments' }, refuseRemoval: true }), atmosphereGate('egypte').gate);
+    await until(() => host.querySelector('[data-shop-toggle="moments"]') !== null);
+    await mounter.click(host.querySelector<HTMLElement>('[data-shop-toggle="moments"]'));
+    const status = () => host.querySelector('[data-pack-shop] [role="status"]')?.textContent ?? '';
+    await until(() => status() !== '');
+    expect(status()).toBe('Ce pack reste installé : il ne peut pas être retiré.');
   });
 
   test('un ANCIEN serveur (404 sur /packs/…) rend une boutique vide, sans erreur', async () => {

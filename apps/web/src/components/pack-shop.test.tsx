@@ -160,6 +160,7 @@ describe('PackShop × stickers', () => {
     await mounter.click(shop.querySelector<HTMLElement>('[data-shop-toggle="exemple-meeshy"]'));
     await until(() => shop.querySelector('[role="status"]')?.textContent !== '');
     expect(shop.querySelector('[role="status"]')?.textContent).toBe('Ce pack reste installé : il ne peut pas être retiré.');
+    expect(shop.querySelector<HTMLElement>('[role="status"]')?.style.color).not.toContain('--ios-error');
     expect(shop.querySelector('[data-shop-toggle="exemple-meeshy"]')?.getAttribute('aria-pressed')).toBe('true');
   });
 });

@@ -179,8 +179,9 @@ export function PackShop<P extends ShopPack>({
   useEffect(() => {
     if (focusPresent) focusedRow.current?.scrollIntoView?.({ block: 'center' });
   }, [focusPresent, focusSlug]);
+  const kept = typeof failure === 'object' && failure !== null;
   const notice =
-    typeof failure === 'object' && failure !== null
+    kept
       ? failure.kept
       : failure === 'insufficient'
       ? translateStickerPacks(language, 'packs.error.insufficient')
@@ -197,7 +198,7 @@ export function PackShop<P extends ShopPack>({
       <p className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
         {hint}
       </p>
-      <p className="text-caption empty:hidden" role="status" aria-live="polite" style={{ color: 'var(--ios-error)' }}>
+      <p className="text-caption empty:hidden" role="status" aria-live="polite" style={{ color: kept ? 'var(--color-ios-ink-2)' : 'var(--ios-error)' }}>
         {notice}
       </p>
 
