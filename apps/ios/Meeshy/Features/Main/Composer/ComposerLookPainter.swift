@@ -32,25 +32,48 @@ nonisolated struct ComposerLookSceneKey: Equatable, Sendable {
     }
 }
 
-/// **Ce que la retouche pose sur la prise** (#12591, #12602) : l'encre des textes (glyphes, fonds,
-/// liserés, teinte du verre) et leurs vitres, sous lesquelles le peintre floute la prise AVANT d'y
-/// poser l'encre. Les deux voyagent ensemble : une encre sans ses vitres poserait la teinte du
-/// verre sur une prise nette. L'aperçu ne remet que les vitres — le canvas de la retouche peint
-/// l'encre lui-même.
+/// **Ce que la retouche pose sur la prise** (#12591, #12602, #12753) : des couches, dans l'ordre
+/// des textes (z croissant). Une couche d'ENCRE pose des textes (glyphes, fonds, liserés, teinte du
+/// verre) ; une couche de VERRE floute tout ce qui est déjà peint sous sa vitre — la prise ET l'encre
+/// des textes inférieurs, comme le verre du composer. L'aperçu ne remet que les vitres : le canvas de
+/// la retouche peint l'encre lui-même.
 nonisolated struct ComposerTextOverlay: Equatable, Sendable {
-    let ink: CGImage?
-    let glass: [StoryGlassPane]
-
-    init(ink: CGImage?, glass: [StoryGlassPane] = []) {
-        self.ink = ink
-        self.glass = glass
+    enum Layer: Sendable {
+        case ink(CGImage)
+        case glass(StoryGlassPane)
     }
 
-    /// Deux calques sont les mêmes quand ils portent les MÊMES bitmaps : l'aperçu ne se repeint
-    /// qu'à une nouvelle cuisson.
+    let layers: [Layer]
+
+    init(layers: [Layer]) {
+        self.layers = layers
+    }
+
+    /// Les vitres d'abord, l'encre au-dessus : des textes qui ne se chevauchent pas.
+    init(ink: CGImage?, glass: [StoryGlassPane] = []) {
+        self.init(layers: glass.map(Layer.glass) + (ink.map { [Layer.ink($0)] } ?? []))
+    }
+
+    var ink: CGImage? {
+        layers.lazy.compactMap { if case .ink(let image) = $0 { return image } else { return nil } }.first
+    }
+
+    var glass: [StoryGlassPane] {
+        layers.compactMap { if case .glass(let pane) = $0 { return pane } else { return nil } }
+    }
+
+    /// Deux calques sont les mêmes quand ils portent les MÊMES bitmaps, dans le même ordre :
+    /// l'aperçu ne se repeint qu'à une nouvelle cuisson.
     static func == (lhs: Self, rhs: Self) -> Bool {
-        lhs.ink === rhs.ink && lhs.glass.count == rhs.glass.count
-            && zip(lhs.glass, rhs.glass).allSatisfy { $0.mask === $1.mask && $0.sigma == $1.sigma && $0.bounds == $1.bounds }
+        lhs.layers.count == rhs.layers.count && zip(lhs.layers, rhs.layers).allSatisfy(Self.same)
+    }
+
+    private static func same(_ a: Layer, _ b: Layer) -> Bool {
+        switch (a, b) {
+        case (.ink(let x), .ink(let y)): return x === y
+        case (.glass(let x), .glass(let y)): return x.mask === y.mask && x.sigma == y.sigma && x.bounds == y.bounds
+        default: return false
+        }
     }
 }
 

@@ -161,6 +161,36 @@ final class ComposerRetouchTextBoardTests: XCTestCase {
         XCTAssertEqual(calque.glass.first?.mask.width, 216)
     }
 
+    /// #12753 — l'ordre des couches suit l'ordre des textes : une vitre floute ce qui est dessous.
+    private func ordre(_ calque: ComposerTextOverlay) -> [String] {
+        calque.layers.map { if case .glass = $0 { return "verre" } else { return "encre" } }
+    }
+
+    private func deuxTextes(verreAuDessus: Bool) throws -> ComposerRetouchTextBoard {
+        let planche = ComposerRetouchTextBoard()
+        planche.begin()
+        try ecrire("Dessous", in: planche)
+        planche.addText()
+        try ecrire("Dessus", in: planche)
+        var slide = planche.scene.currentSlide
+        let rang = verreAuDessus ? 1 : 0
+        slide.effects.textObjects[0].zIndex = 0
+        slide.effects.textObjects[1].zIndex = 1
+        slide.effects.textObjects[rang].backgroundStyle = .glass(radius: 24)
+        planche.scene.currentSlide = slide
+        return planche
+    }
+
+    func test_overlay_aGlassAboveAText_bakesTheTextBelowBeforeTheGlass() throws {
+        let calque = try XCTUnwrap(try deuxTextes(verreAuDessus: true).overlay(canvas: CGSize(width: 216, height: 384)))
+        XCTAssertEqual(ordre(calque), ["encre", "verre", "encre"], "le texte du dessous, la vitre, puis le texte de verre")
+    }
+
+    func test_overlay_aGlassBelowAText_isBakedFirst() throws {
+        let calque = try XCTUnwrap(try deuxTextes(verreAuDessus: false).overlay(canvas: CGSize(width: 216, height: 384)))
+        XCTAssertEqual(ordre(calque), ["verre", "encre"], "rien sous la vitre que la prise ; les deux textes au-dessus")
+    }
+
     func test_previewGlass_isNilWithoutGlass_andHalfTheCanvasWithIt() throws {
         let planche = ComposerRetouchTextBoard()
         let toile = CGSize(width: 216, height: 384)
