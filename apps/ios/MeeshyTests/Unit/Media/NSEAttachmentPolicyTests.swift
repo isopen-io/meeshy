@@ -255,6 +255,26 @@ final class NSEAttachmentPolicyTests: XCTestCase {
         XCTAssertEqual(sealed["messageId"] as? String, "m1")
     }
 
+    /// La charge livrée reste dans le Centre de notifications : sous PIN, elle
+    /// n'y garde ni le texte, ni sa traduction, ni la transcription, ni le
+    /// chiffré — les clés de routage, elles, restent.
+    func test_lockedConversation_sealing_stripsEveryContentKey() {
+        let payload: [AnyHashable: Any] = [
+            "conversationId": "c1", "messageId": "m1", "senderId": "s1", "type": "new_message",
+            "content": "le secret", "translatedContent": "the secret",
+            "firstAttachmentTranscript": "le secret dit", "encryptedContent": "c2VjcmV0",
+        ]
+
+        let sealed = NSEAttachmentPolicy.sealingLockedConversation(payload, isLocked: true)
+
+        for key in ["content", "translatedContent", "firstAttachmentTranscript", "encryptedContent"] {
+            XCTAssertNil(sealed[key], "\(key) quitte la charge scellée")
+        }
+        XCTAssertEqual(Set(sealed.keys.compactMap { $0 as? String }), [
+            "conversationId", "messageId", "senderId", "type", "notificationLocKey",
+        ])
+    }
+
     func test_unlockedConversation_payloadIsUntouched() {
         let payload: [AnyHashable: Any] = ["conversationId": "c1", "attachmentMimeType": "image/jpeg"]
         let served = NSEAttachmentPolicy.sealingLockedConversation(payload, isLocked: false)

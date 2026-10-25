@@ -138,10 +138,22 @@ nonisolated enum NSEAttachmentPolicy {
     /// qu'aucun n'ait à connaître le verrou, et le corps se lit au catalogue.
     /// Les clés de routage restent : toucher la bannière ouvre la
     /// conversation, que la porte du routeur garde par le PIN (#11386).
+    ///
+    /// Les clés qui PORTENT le contenu quittent la charge (#12655) : le
+    /// `userInfo` livré reste dans le Centre de notifications et se relit par
+    /// quiconque l'énumère ; une conversation sous PIN n'y laisse ni le texte,
+    /// ni sa traduction, ni la transcription, ni le chiffré.
     static func sealingLockedConversation(_ userInfo: [AnyHashable: Any], isLocked: Bool) -> [AnyHashable: Any] {
         guard isLocked else { return userInfo }
-        return userInfo.merging([AnyHashable("notificationLocKey"): lockedConversationLocKey]) { _, sealed in sealed }
+        return userInfo
+            .filter { key, _ in !lockedConversationContentKeys.contains(key) }
+            .merging([AnyHashable("notificationLocKey"): lockedConversationLocKey]) { _, sealed in sealed }
     }
+
+    /// Les clés de la charge qui portent le CONTENU d'un message.
+    static let lockedConversationContentKeys: Set<AnyHashable> = [
+        "content", "translatedContent", "firstAttachmentTranscript", "encryptedContent",
+    ]
 
     /// La charge a-t-elle été scellée pour une conversation verrouillée ?
     static func isSealedForLockedConversation(_ userInfo: [AnyHashable: Any]) -> Bool {
