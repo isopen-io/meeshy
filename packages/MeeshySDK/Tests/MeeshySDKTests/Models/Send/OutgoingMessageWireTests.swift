@@ -60,9 +60,9 @@ struct OutgoingMessageWireTests {
     /// pointeur (clé, condensat, nom, type) ne part hors des enveloppes.
     @Test func libsignalWireRequest_withSealedPieces_carriesOnlyTheBlobIds() throws {
         let pointer = E2EEAttachmentPointer(
-            id: "b1", key: Data(repeating: 9, count: 64), digest: Data(repeating: 8, count: 32), size: 42,
+            id: "6add000000000000000000b1", key: Data(repeating: 9, count: 64), digest: Data(repeating: 8, count: 32), size: 42,
             contentType: "image/heic", fileName: "IMG_0042.HEIC", kind: .image, durationMs: 1200, thumbHash: "abc",
-            thumbnail: .init(id: "t1", key: Data(repeating: 7, count: 64), digest: Data(repeating: 6, count: 32), size: 5, contentType: "image/jpeg")
+            thumbnail: .init(id: "6add000000000000000000f1", key: Data(repeating: 7, count: 64), digest: Data(repeating: 6, count: 32), size: 5, contentType: "image/jpeg")
         )
         let message = OutgoingMessage(
             conversationId: ConversationID("c1"), content: "", relation: .none,
@@ -74,7 +74,7 @@ struct OutgoingMessageWireTests {
         )
 
         let wire = try json(request)
-        #expect(request.attachmentIds == ["b1", "t1"])
+        #expect(request.attachmentIds == ["6add000000000000000000b1", "6add000000000000000000f1"])
         for secret in ["IMG_0042", "image/heic", "abc", Data(repeating: 9, count: 64).base64EncodedString(), "1200"] {
             #expect(!wire.contains(secret), "\(secret)")
         }

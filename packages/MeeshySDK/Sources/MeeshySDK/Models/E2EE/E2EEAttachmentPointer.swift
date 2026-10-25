@@ -98,8 +98,17 @@ public struct E2EEAttachmentPointer: Codable, Equatable, Sendable {
         self.thumbnail = thumbnail
     }
 
-    /// Cet appareil sait-il rouvrir ce blob ?
-    public var isReadable: Bool { scheme == Self.clientV1 }
+    /// Cet appareil sait-il rouvrir ce blob ? Un `scheme` connu, et des
+    /// identifiants qui ont la forme d'un identifiant serveur (24 hexadécimaux) :
+    /// un `id` venu d'un pair ne compose jamais autre chose qu'un segment
+    /// d'adresse `GET /attachments/:id` (audit du 2026-10-25).
+    public var isReadable: Bool {
+        scheme == Self.clientV1 && Self.isServerId(id) && (thumbnail.map { Self.isServerId($0.id) } ?? true)
+    }
+
+    static func isServerId(_ id: String) -> Bool {
+        id.count == 24 && id.allSatisfy { $0.isHexDigit && ($0.isNumber || $0.isLowercase) }
+    }
 
     /// Les blobs que le message rattache sur le serveur : la pièce, puis son affiche.
     public var blobIds: [String] { [id] + (thumbnail.map { [$0.id] } ?? []) }

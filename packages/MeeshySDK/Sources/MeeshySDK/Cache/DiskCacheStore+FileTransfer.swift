@@ -120,14 +120,39 @@ extension DiskCacheStore {
         fileManager.removeItemLogging(at: fileURL, context: "media download staging cleanup", logger: logger)
     }
 
-    /// Un média LOCAL (`file://`) absent du cache se lit là où il est, et ne s'y
-    /// recopie jamais (#10789) : une pièce chiffrée de bout en bout, déchiffrée
-    /// dans le dossier protégé de l'app, ne gagne pas une copie dans un cache
-    /// qui n'a pas sa protection. Absent du disque : `nil`, et l'appel échoue comme avant.
+    /// Les SEULES racines sous lesquelles un média local (`file://`) absent du
+    /// cache se lit directement (#10789) : celles que l'app déclare — le dossier
+    /// protégé où elle déchiffre les pièces chiffrées de bout en bout. Aucune par
+    /// défaut.
+    nonisolated private static let localReadRoots = Locked<[URL]>([])
+
+    /// Déclare une racine de lecture locale. Appelé par l'app, jamais avec une
+    /// adresse venue du réseau.
+    public nonisolated static func allowLocalReads(under root: URL) {
+        let canonical = canonicalPath(of: root)
+        localReadRoots.mutate { roots in
+            if !roots.contains(where: { canonicalPath(of: $0) == canonical }) { roots.append(root) }
+        }
+    }
+
+    /// Un média LOCAL absent du cache se lit là où il est, et ne s'y recopie
+    /// jamais : le clair d'une pièce chiffrée de bout en bout ne gagne pas une
+    /// copie dans un cache qui n'a pas sa protection. Seulement sous une racine
+    /// déclarée, chemin standardisé et liens symboliques résolus : une URL
+    /// `file://` venue de la passerelle ou d'un pair ne fait lire aucun autre
+    /// fichier de l'app (revue de sécurité du 2026-10-25). Sinon `nil`, et
+    /// l'appel suit la règle http/https de `remoteURL`.
     nonisolated static func localFileBytes(_ urlString: String) -> Data? {
-        guard let url = URL(string: urlString), url.isFileURL,
-              FileManager.default.fileExists(atPath: url.path) else { return nil }
-        return try? Data(contentsOf: url, options: .mappedIfSafe)
+        guard let url = URL(string: urlString), url.isFileURL else { return nil }
+        let path = canonicalPath(of: url)
+        let roots = localReadRoots.read { $0 }
+        guard roots.contains(where: { path.hasPrefix(canonicalPath(of: $0) + "/") }),
+              FileManager.default.fileExists(atPath: path) else { return nil }
+        return try? Data(contentsOf: URL(fileURLWithPath: path))
+    }
+
+    private nonisolated static func canonicalPath(of url: URL) -> String {
+        url.standardizedFileURL.resolvingSymlinksInPath().path
     }
 
     static func remoteURL(_ urlString: String) throws -> URL {

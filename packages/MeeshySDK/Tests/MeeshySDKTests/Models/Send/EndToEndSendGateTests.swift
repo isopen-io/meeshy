@@ -89,29 +89,29 @@ struct EndToEndSendGateTests {
     }
 
     @Test func refusal_sealedPieces_evenWithoutText_isNil() {
-        let outgoing = sealedOutgoing(ids: ["b1", "t1"], pointers: [Self.pointer("b1", thumbnail: "t1")])
+        let outgoing = sealedOutgoing(ids: ["6add000000000000000000b1", "6add000000000000000000f1"], pointers: [Self.pointer("6add000000000000000000b1", thumbnail: "6add000000000000000000f1")])
         #expect(EndToEndSendGate.refusal(for: outgoing, isDirect: true, peerUserId: "peer") == nil)
     }
 
     @Test func refusal_aPieceNotCoveredByAPointer_isContentUnsealable() {
-        let outgoing = sealedOutgoing(ids: ["b1", "plain"], pointers: [Self.pointer("b1")])
+        let outgoing = sealedOutgoing(ids: ["6add000000000000000000b1", "plain"], pointers: [Self.pointer("6add000000000000000000b1")])
         #expect(EndToEndSendGate.refusal(for: outgoing, isDirect: true, peerUserId: "peer") == .contentUnsealable)
     }
 
     @Test func refusal_aPointerWhoseBlobIsNotSent_isContentUnsealable() {
-        let outgoing = sealedOutgoing(ids: ["b1"], pointers: [Self.pointer("b1", thumbnail: "t1")])
+        let outgoing = sealedOutgoing(ids: ["6add000000000000000000b1"], pointers: [Self.pointer("6add000000000000000000b1", thumbnail: "6add000000000000000000f1")])
         #expect(EndToEndSendGate.refusal(for: outgoing, isDirect: true, peerUserId: "peer") == .contentUnsealable)
     }
 
     @Test func refusal_aPointerOfAnUnknownScheme_isContentUnsealable() {
-        let outgoing = sealedOutgoing(ids: ["b1"], pointers: [Self.pointer("b1", scheme: "client-v9")])
+        let outgoing = sealedOutgoing(ids: ["6add000000000000000000b1"], pointers: [Self.pointer("6add000000000000000000b1", scheme: "client-v9")])
         #expect(EndToEndSendGate.refusal(for: outgoing, isDirect: true, peerUserId: "peer") == .contentUnsealable)
     }
 
     @Test func refusal_sealedPiecesNextToALocation_isStillContentUnsealable() {
         let outgoing = OutgoingMessage(
             conversationId: ConversationID("c1"), content: "", relation: .none,
-            attachments: OutgoingAttachments(ids: ["b1"], previews: nil, sealed: [Self.pointer("b1")]),
+            attachments: OutgoingAttachments(ids: ["6add000000000000000000b1"], previews: nil, sealed: [Self.pointer("6add000000000000000000b1")]),
             location: SharedPlace(latitude: 1, longitude: 2)
         )
         #expect(EndToEndSendGate.refusal(for: outgoing, isDirect: true, peerUserId: "peer") == .contentUnsealable)

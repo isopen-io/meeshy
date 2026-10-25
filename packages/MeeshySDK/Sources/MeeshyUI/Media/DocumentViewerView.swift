@@ -409,9 +409,10 @@ public struct DocumentWebView: UIViewRepresentable {
     }
 
     /// La vue web configurée pour ce portillon — sans rien charger encore.
-    public static func makeWebView(mayLeave: Bool) -> WKWebView {
+    public static func makeWebView(mayLeave: Bool, runsScripts: Bool = true) -> WKWebView {
         let interaction = Interaction(mayLeave: mayLeave)
         let config = WKWebViewConfiguration()
+        config.defaultWebpagePreferences.allowsContentJavaScript = runsScripts
         config.preferences.isTextInteractionEnabled = interaction.selectsText
         if let style = interaction.sealingStyle {
             let source = "var s=document.createElement('style');s.textContent=\"\(style)\";"
@@ -440,8 +441,16 @@ public struct DocumentWebView: UIViewRepresentable {
     }
 
     public func makeUIView(context: Context) -> WKWebView {
-        let webView = Self.makeWebView(mayLeave: mayLeave)
-        webView.load(URLRequest(url: url))
+        // Un document LOCAL (#10789 : le clair d'une pièce chiffrée de bout en
+        // bout, dans le dossier protégé de l'app) ne se lit que par `loadFileURL`,
+        // seulement son propre fichier, et sans script : un HTML ou un SVG d'un
+        // pair ne signale pas son ouverture.
+        let webView = Self.makeWebView(mayLeave: mayLeave, runsScripts: !url.isFileURL)
+        if url.isFileURL {
+            webView.loadFileURL(url, allowingReadAccessTo: url)
+        } else {
+            webView.load(URLRequest(url: url))
+        }
         return webView
     }
 
