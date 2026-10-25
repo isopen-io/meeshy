@@ -48,7 +48,8 @@ nonisolated enum ShareMediaStagingError: Error, Equatable, Sendable {
     case destinationOutsideShare
 }
 
-/// Le budget d'octets CUMULÉ des copies d'un partage (D10 : 500 Mo, #11429).
+/// Le budget d'octets CUMULÉ des copies d'un partage (D10 : `ShareLimits.maxTotalBytes`,
+/// 5 Go depuis le 2026-10-25, #12974 ; #11429).
 ///
 /// Les copies partent en parallèle, AVANT l'écran : un contrôle fichier par
 /// fichier laissait une app hôte remplir le disque jusqu'à la marge de

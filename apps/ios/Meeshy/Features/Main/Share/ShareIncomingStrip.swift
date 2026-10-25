@@ -27,7 +27,10 @@ struct ShareIncomingStrip: View {
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: MeeshySpacing.sm) {
+            // Paresseuse : un partage porte jusqu'à 100 pièces (#12974), et
+            // seules les vignettes visibles se décodent dans la mémoire bornée
+            // de l'extension.
+            LazyHStack(spacing: MeeshySpacing.sm) {
                 ForEach(Array(media.enumerated()), id: \.element.id) { index, piece in
                     tile(piece, index: index)
                 }
