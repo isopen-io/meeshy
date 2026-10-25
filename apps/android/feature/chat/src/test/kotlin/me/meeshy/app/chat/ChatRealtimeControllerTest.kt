@@ -11,7 +11,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.test.TestScope
-import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import me.meeshy.sdk.conversation.LocalMessage
@@ -68,10 +68,10 @@ class ChatRealtimeControllerTest {
         val rig = Rig(this)
         val pin = MessagePinChanged("m1", "c1", pinned = true)
         pin.isDelta(rig, handled = true)
-        advanceUntilIdle()
+        runCurrent()
 
         rig.events.emit(pin)
-        advanceUntilIdle()
+        runCurrent()
         rig.controller.awaitPendingEvents()
 
         coVerify(exactly = 1) { rig.deltas.apply(pin, "me") }
@@ -81,10 +81,10 @@ class ChatRealtimeControllerTest {
     @Test
     fun `an event of another conversation is ignored`() = runTest {
         val rig = Rig(this)
-        advanceUntilIdle()
+        runCurrent()
 
         rig.events.emit(MessagePinChanged("m1", "other", pinned = true))
-        advanceUntilIdle()
+        runCurrent()
 
         coVerify(exactly = 0) { rig.deltas.apply(any(), any()) }
     }
@@ -96,7 +96,7 @@ class ChatRealtimeControllerTest {
         val countdown = MessageCountdownStartedEvent("m9", "c1", "2026-10-24T10:00:30Z")
         arrived.isDelta(rig, handled = false)
         countdown.isDelta(rig, handled = true)
-        advanceUntilIdle()
+        runCurrent()
 
         rig.events.emit(arrived)
         rig.events.emit(countdown)
@@ -104,7 +104,7 @@ class ChatRealtimeControllerTest {
         coVerify(exactly = 0) { rig.deltas.apply(countdown, any()) }
 
         rig.host.messages.value = listOf(LocalMessage(ApiMessage(id = "m9", conversationId = "c1")))
-        advanceUntilIdle()
+        runCurrent()
         rig.controller.awaitPendingEvents()
 
         coVerifyOrder {
@@ -120,11 +120,15 @@ class ChatRealtimeControllerTest {
         val pin = MessagePinChanged("m1", "c1", pinned = true)
         arrived.isDelta(rig, handled = false)
         pin.isDelta(rig, handled = true)
-        advanceUntilIdle()
+        runCurrent()
 
         rig.events.emit(arrived)
         rig.events.emit(pin)
-        advanceUntilIdle()
+        runCurrent()
+        coVerify(exactly = 0) { rig.deltas.apply(pin, any()) }
+
+        advanceTimeBy(ChatRealtimeController.ARRIVAL_WAIT_MS + 1)
+        runCurrent()
 
         coVerify(exactly = 1) { rig.deltas.apply(pin, "me") }
     }
@@ -134,10 +138,10 @@ class ChatRealtimeControllerTest {
         val rig = Rig(this)
         val restored = MessageRestoredForMeEvent(messages = listOf(PersonalMessageVisibilityRef("m1", "c1")))
         restored.isDelta(rig, handled = false)
-        advanceUntilIdle()
+        runCurrent()
 
         rig.events.emit(restored)
-        advanceUntilIdle()
+        runCurrent()
 
         coVerify(exactly = 1) { rig.repo.refresh("c1") }
     }
@@ -153,10 +157,10 @@ class ChatRealtimeControllerTest {
             completed = false,
         )
         stage.isDelta(rig, handled = false)
-        advanceUntilIdle()
+        runCurrent()
 
         rig.events.emit(stage)
-        advanceUntilIdle()
+        runCurrent()
 
         coVerify(exactly = 1) {
             rig.repo.applyAudioTranslation("m1", "a1", "en", "https://cdn/a.mp3", "hi", null, null, false, null, null, null)
@@ -170,15 +174,15 @@ class ChatRealtimeControllerTest {
         val denied = ConversationJoinErrorEvent("c1", reason = "banned", message = "Vous avez été banni")
         val transient = ConversationJoinErrorEvent("c1", reason = "rate_limited", message = "Plus tard")
         listOf(failed, denied, transient).forEach { it.isDelta(rig, handled = false) }
-        advanceUntilIdle()
+        runCurrent()
 
         rig.events.emit(transient)
-        advanceUntilIdle()
+        runCurrent()
         assertThat(rig.controller.state.value.isAccessRevoked).isFalse()
 
         rig.events.emit(failed)
         rig.events.emit(denied)
-        advanceUntilIdle()
+        runCurrent()
 
         assertThat(rig.controller.state.value.failedTranslationMessageIds).containsExactly("m1")
         assertThat(rig.controller.state.value.accessRevokedReason).isEqualTo("Vous avez été banni")
