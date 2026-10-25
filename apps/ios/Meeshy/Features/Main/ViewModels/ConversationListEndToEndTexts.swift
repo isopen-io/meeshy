@@ -78,7 +78,7 @@ nonisolated enum ConversationListEndToEndTexts {
 
     /// Mon propre envoi n'entre jamais dans les manques : son clair se range
     /// sous l'identifiant serveur à l'acquittement, qui peut suivre la ligne.
-    private static func isMine(_ conversation: Conversation) -> Bool {
+    static func isMine(_ conversation: Conversation) -> Bool {
         conversation.lastMessageSenderUserId == nil
             && conversation.lastMessageSenderName == ConversationListAuthor.readerLabel
     }
@@ -88,14 +88,18 @@ nonisolated enum ConversationListEndToEndTexts {
 /// passe à ses rangées (#12968). Relue quand la liste change et quand
 /// libsignal ouvre des enveloppes (une rafale de rattrapage ne relit qu'une
 /// fois) ; une seule lecture en vol, la plus récente gagne. Un message cherché
-/// sans succès n'est relu qu'après une ouverture. `willChange` prévient le
-/// modèle de la liste, que la vue observe.
+/// sans succès n'est relu qu'après une ouverture ; mon propre envoi, dont le
+/// clair se range à l'acquittement et peut suivre la ligne, est relu UNE fois
+/// de plus peu après. `willChange` prévient le modèle de la liste, que la vue
+/// observe.
 @MainActor
 final class ConversationListEndToEndTextStore {
     nonisolated deinit {}
 
     private(set) var texts: [String: ConversationPreviewDeviceText] = [:]
     private var misses: Set<String> = []
+    private var retriedMine: Set<String> = []
+    private let mineRetryDelay: Duration
     private let endToEnd: any EndToEndMessagingProviding
     private let viewerId: @MainActor () -> String?
     private let willChange: @MainActor () -> Void
@@ -107,8 +111,10 @@ final class ConversationListEndToEndTextStore {
         rows: AnyPublisher<[Conversation], Never>,
         endToEnd: any EndToEndMessagingProviding = EndToEndMessagingRuntime.shared,
         viewerId: @escaping @MainActor () -> String?,
+        mineRetryDelay: Duration = .milliseconds(600),
         willChange: @escaping @MainActor () -> Void
     ) {
+        self.mineRetryDelay = mineRetryDelay
         self.endToEnd = endToEnd
         self.viewerId = viewerId
         self.willChange = willChange
@@ -143,9 +149,24 @@ final class ConversationListEndToEndTextStore {
             )
             guard !Task.isCancelled, let self else { return }
             self.misses = resolved.misses
+            self.retryMine(in: rows, unresolvedBy: resolved.texts)
             guard self.texts != resolved.texts else { return }
             self.willChange()
             self.texts = resolved.texts
+        }
+    }
+
+    private func retryMine(in rows: [Conversation], unresolvedBy texts: [String: ConversationPreviewDeviceText]) {
+        let waiting = rows.filter {
+            ConversationListEndToEndTexts.awaitsPlaintext($0) && ConversationListEndToEndTexts.isMine($0) && texts[$0.id] == nil
+        }.compactMap(\.lastMessageId).filter { !retriedMine.contains($0) }
+        guard !waiting.isEmpty else { return }
+        retriedMine.formUnion(waiting)
+        let delay = mineRetryDelay
+        Task { [weak self] in
+            try? await Task.sleep(for: delay)
+            guard let self else { return }
+            self.refresh(self.latestRows)
         }
     }
 }

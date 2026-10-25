@@ -113,6 +113,18 @@ struct ConversationPreviewDeviceTextTests {
         #expect(isLabelled(compose(sealedRow(), readOnDevice: replayed)))
     }
 
+    @Test func compositionWithinTheTolerance_isRead() {
+        let late = text("Bien reçu", composedAt: sentAt.addingTimeInterval(-14 * 60))
+
+        #expect(compose(sealedRow(), readOnDevice: late).segments == [.text("Bien reçu", language: nil)])
+    }
+
+    @Test func compositionJustBeyondTheTolerance_staysLabelled() {
+        let late = text("Bien reçu", composedAt: sentAt.addingTimeInterval(-16 * 60))
+
+        #expect(isLabelled(compose(sealedRow(), readOnDevice: late)))
+    }
+
     @Test func rowTheServerDoesNotSeal_keepsWhatItServes() {
         let row = sealedRow {
             $0.lastMessagePreview = "Servi"

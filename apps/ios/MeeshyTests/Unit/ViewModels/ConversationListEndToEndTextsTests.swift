@@ -165,7 +165,7 @@ final class ConversationListEndToEndTextsTests: XCTestCase {
     ) -> ConversationListEndToEndTextStore {
         ConversationListEndToEndTextStore(
             rows: rows.eraseToAnyPublisher(), endToEnd: vault,
-            viewerId: { [me] in me }, willChange: { changes.count += 1 }
+            viewerId: { [me] in me }, mineRetryDelay: .milliseconds(150), willChange: { changes.count += 1 }
         )
     }
 
@@ -199,14 +199,13 @@ final class ConversationListEndToEndTextsTests: XCTestCase {
         XCTAssertEqual(store.text(for: conversationId)?.text, "Bien reçu")
     }
 
-    func test_store_myAcknowledgedSend_rangedAfterTheRow_reachesItOnTheNextChange() async {
+    func test_store_myAcknowledgedSend_rangedAfterTheRow_reachesItWithoutAnotherChange() async {
         let vault = MockEndToEndMessaging()
         let rows = CurrentValueSubject<[Conversation], Never>([sealedRow()])
         let store = makeStore(rows: rows, vault: vault)
         try? await Task.sleep(for: .milliseconds(80))
 
         await vault.remember(content("Je pars"), from: me, as: [messageId])
-        rows.send([sealedRow()])
         await waitUntil { store.text(for: self.conversationId) != nil }
 
         XCTAssertEqual(store.text(for: conversationId)?.text, "Je pars")
