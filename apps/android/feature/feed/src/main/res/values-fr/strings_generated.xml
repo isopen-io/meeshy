@@ -80,7 +80,7 @@
     <string name="post_comments_copy_text">Copier le texte</string>
     <string name="post_comments_delete_error">Impossible de supprimer le commentaire</string>
     <string name="post_comments_deleted">Commentaire supprimé</string>
-    <string name="post_comments_edit_media">Éditer %s</string>
+    <string name="post_comments_edit_media">Éditer</string>
     <string name="post_comments_load_error">Impossible de charger les commentaires</string>
     <plurals name="post_comments_load_more_replies">
         <item quantity="one">Voir %d réponse de plus</item>

@@ -78,7 +78,7 @@
     <string name="post_comments_copy_text">Copy text</string>
     <string name="post_comments_delete_error">Couldn\'t delete the comment</string>
     <string name="post_comments_deleted">Comment deleted</string>
-    <string name="post_comments_edit_media">Edit %s</string>
+    <string name="post_comments_edit_media">Edit</string>
     <string name="post_comments_load_error">Error loading comments</string>
     <plurals name="post_comments_load_more_replies">
         <item quantity="one">View %d more reply</item>

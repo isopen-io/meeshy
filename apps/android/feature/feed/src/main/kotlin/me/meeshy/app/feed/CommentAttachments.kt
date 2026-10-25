@@ -87,7 +87,7 @@ internal fun CommentAttachmentBar(tray: CommentAttachmentTray, onEdit: (CommentP
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
     ) {
         tray.pieces.forEach { piece ->
-            val editLabel = stringResource(R.string.post_comments_edit_media, piece.item.fileName)
+            val editLabel = stringResource(R.string.post_comments_edit_media)
             Box(Modifier.size(PieceSize)) {
                 Box(
                     Modifier.size(PieceSize).clip(PieceShape).background(MeeshyTheme.tokens.inputBackground)
