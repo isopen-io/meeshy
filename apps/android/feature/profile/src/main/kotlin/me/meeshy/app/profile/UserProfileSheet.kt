@@ -4,15 +4,16 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
@@ -40,6 +41,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
 import me.meeshy.feature.profile.R
+import me.meeshy.sdk.model.appearance.AppearanceCatalog
 import me.meeshy.sdk.model.profile.ProfileSheetUser
 import me.meeshy.ui.accessibility.MeeshyMinTapTarget
 import me.meeshy.ui.component.ConnectionFeedbackHost
@@ -75,10 +77,12 @@ fun UserProfileSheet(
     environment: ProfileSheetEnvironment = ProfileSheetEnvironment(),
     viewModel: UserProfileSheetViewModel = hiltViewModel(),
     actionsViewModel: ProfileActionsViewModel = hiltViewModel(),
+    bannerViewModel: ProfileBannerViewModel = hiltViewModel(),
 ) {
     LaunchedEffect(user) { viewModel.onEvent(UserProfileSheetEvent.Open(user)) }
     val state by viewModel.state.collectAsStateWithLifecycle()
     val actionsState by actionsViewModel.state.collectAsStateWithLifecycle()
+    val catalog by bannerViewModel.catalog.collectAsStateWithLifecycle()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
     val scope = rememberCoroutineScope()
     val latestDismiss by rememberUpdatedState(onDismiss)
@@ -109,6 +113,7 @@ fun UserProfileSheet(
                 onClose = close,
                 onRetry = { viewModel.onEvent(UserProfileSheetEvent.Retry) },
                 actions = actionsViewModel.callbacks(state, environment),
+                catalog = catalog,
             )
             ConnectionFeedbackHost(feedback = actionsViewModel.connectionFeedback)
             FeedbackToastHost(toasts = toasts)
@@ -160,8 +165,9 @@ private fun ProfileActionsViewModel.callbacks(
 
 /**
  * Le corps de la feuille, projection mince de [UserProfileSheetUiState] : squelette sur cache vide,
- * échec + Réessayer, refus sans Réessayer, ou la fiche peinte. Le bouton Fermer reste au-dessus de
- * tout, en haut à gauche ; la feuille porte le nom de la personne comme titre de volet (TalkBack).
+ * échec + Réessayer, refus sans Réessayer, ou la fiche peinte — chacun en UN SEUL défilement. Le
+ * bouton Fermer reste au-dessus de tout (barre compacte comprise), en haut au début ; la feuille
+ * porte le nom de la personne comme titre de volet (TalkBack).
  */
 @Composable
 internal fun UserProfileSheetBody(
@@ -172,6 +178,7 @@ internal fun UserProfileSheetBody(
     onClose: () -> Unit,
     onRetry: () -> Unit,
     actions: ProfileActionCallbacks,
+    catalog: AppearanceCatalog? = null,
 ) {
     val accent = hexColor(state.accentHex, MeeshyPalette.Indigo500)
     val title = state.profile?.let { it.displayName ?: it.username } ?: state.user.resolvedDisplayName
@@ -180,21 +187,20 @@ internal fun UserProfileSheetBody(
             .fillMaxWidth()
             .semantics { paneTitle = title },
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
-                .padding(bottom = MeeshySpacing.xxxl),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(MeeshySpacing.lg),
-        ) {
-            when (state.content) {
-                ProfileSheetContent.Skeleton -> ProfileSheetSkeleton()
-                ProfileSheetContent.Failed -> ProfileSheetUnavailable(state.user, accent, onRetry)
-                ProfileSheetContent.Refused -> ProfileSheetUnavailable(state.user, accent, onRetry = null)
-                ProfileSheetContent.Close -> Unit
-                ProfileSheetContent.Loaded -> ProfileSheetLoadedContent(state, actionsState, environment, accent, actions)
-            }
+        when (state.content) {
+            ProfileSheetContent.Skeleton -> ProfileSheetPlaceholderList { ProfileSheetSkeleton() }
+            ProfileSheetContent.Failed -> ProfileSheetPlaceholderList { ProfileSheetUnavailable(state.user, accent, onRetry) }
+            ProfileSheetContent.Refused -> ProfileSheetPlaceholderList { ProfileSheetUnavailable(state.user, accent, onRetry = null) }
+            ProfileSheetContent.Close -> Unit
+            ProfileSheetContent.Loaded -> ProfileSheetLoadedContent(
+                state = state,
+                actionsState = actionsState,
+                environment = environment,
+                accent = accent,
+                catalog = catalog,
+                isExpanded = isExpanded,
+                actions = actions,
+            )
         }
         ProfileSheetCloseButton(
             onClose = onClose,
@@ -203,6 +209,21 @@ internal fun UserProfileSheetBody(
                 .then(if (isExpanded) Modifier.statusBarsPadding() else Modifier)
                 .padding(start = MeeshySpacing.xs, top = MeeshySpacing.xs),
         )
+    }
+}
+
+/** Un état sans profil peint (squelette, panne, refus), dans le même défilement unique. */
+@Composable
+private fun ProfileSheetPlaceholderList(content: @Composable ColumnScope.() -> Unit) {
+    LazyColumn(modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(bottom = MeeshySpacing.xxxl)) {
+        item(key = "placeholder", contentType = "placeholder") {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(MeeshySpacing.lg),
+                content = content,
+            )
+        }
     }
 }
 

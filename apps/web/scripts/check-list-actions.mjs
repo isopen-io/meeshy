@@ -393,6 +393,7 @@ check((await rowIds(page))[0] === SUBJECT, `après « Épingler », la rangée p
 await act(SUBJECT, 'Désépingler');
 check((await pinnedMark(SUBJECT)) === null, 'après « Désépingler », l’épingle disparaît');
 
+check(await revealRow(page, SUBJECT), `désépinglée, la rangée « ${SUBJECT} » revient à l'écran`);
 check((await avatarOpacity(SUBJECT)) === 1, 'avant action, le CHROME de la rangée sujet est à pleine opacité');
 check((await rowTitleOpacity(SUBJECT)) === 1, 'avant action, le titre est à pleine opacité');
 check((await rowPreviewOpacity(SUBJECT)) === 1, "avant action, l'aperçu est à pleine opacité");

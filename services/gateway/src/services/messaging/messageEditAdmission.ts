@@ -56,6 +56,7 @@ import {
   E2EE_PLAINTEXT_REFUSAL_MESSAGE,
   E2EE_PLAINTEXT_REFUSED,
   isEndToEndMode,
+  messageRowSealedFromServer,
 } from './e2eePlaintextAdmission.js';
 
 /**
@@ -179,6 +180,13 @@ export interface MessageEditAdmissionParams {
     /** Le type et la métadonnée — REQUIS : un avis de capture ne s'édite pas par celui qui a capturé (#9641). */
     messageType: string | null | undefined;
     metadata: unknown;
+    /**
+     * #12881 — ce que la LIGNE porte, EXIGÉ comme `conversation` : un message
+     * scellé sous e2ee reste chiffré après une désactivation, et le régime
+     * courant de sa conversation ne le dit plus.
+     */
+    isEncrypted: boolean | null | undefined;
+    encryptionMode: string | null | undefined;
   };
   /** Injectable pour les tests ; `Date.now()` en production. */
   now?: number;
@@ -264,6 +272,7 @@ export async function admitMessageEdit(
   if (!decision.admitted) return decision;
   if (isConversationClosed(params.message.conversation)) return REFUSE('conversation-closed');
   if (isEndToEndMode(params.message.conversation?.encryptionMode)) return REFUSE('end-to-end-encrypted');
+  if (messageRowSealedFromServer(params.message)) return REFUSE('end-to-end-encrypted');
   if (await editorIsMinorInGlobal(params)) return REFUSE('minor-global');
 
   return decision;

@@ -1,0 +1,218 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:conversations": {
+      "resDir": "feature/conversations/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "conversation.info.block.confirm",
+          "androidName": "dialogs_block_confirm",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "profile.block.error",
+          "androidName": "dialogs_block_error",
+          "status": "adopted"
+        },
+        {
+          "androidName": "dialogs_block_message",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.info.block.title",
+          "androidName": "dialogs_block_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "common.cancel",
+          "androidName": "dialogs_cancel",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.delete.confirm.title",
+          "androidName": "dialogs_delete_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.hide.confirm.title",
+          "androidName": "dialogs_hide_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.info.leave.confirm",
+          "androidName": "dialogs_leave_confirm",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.info.leave.error",
+          "androidName": "dialogs_leave_error",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.info.leave.message",
+          "androidName": "dialogs_leave_message",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.info.leave.title",
+          "androidName": "dialogs_leave_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.list.master_pin_required.configure",
+          "androidName": "dialogs_master_pin_configure",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.list.master_pin_required.message",
+          "androidName": "dialogs_master_pin_message",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.list.master_pin_required.title",
+          "androidName": "dialogs_master_pin_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "common.delete",
+          "androidName": "dialogs_removal_delete",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "context.hide_chat",
+          "androidName": "dialogs_removal_hide",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.delete.confirm.message",
+          "androidName": "dialogs_removal_message",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.rename.placeholder",
+          "androidName": "dialogs_rename_placeholder",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.rename.title",
+          "androidName": "dialogs_rename_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "report.message.details.label",
+          "androidName": "dialogs_report_details_label",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "report.message.details.placeholder",
+          "androidName": "dialogs_report_details_placeholder",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.report.error",
+          "androidName": "dialogs_report_error",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "report.message.nav.title",
+          "androidName": "dialogs_report_nav_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "report.user.reason.harassment",
+          "androidName": "dialogs_report_reason_harassment",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "report.reason.hate_speech",
+          "androidName": "dialogs_report_reason_hate_speech",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "report.user.reason.impersonation",
+          "androidName": "dialogs_report_reason_impersonation",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "report.user.reason.inappropriate",
+          "androidName": "dialogs_report_reason_inappropriate",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "report.user.reason.other",
+          "androidName": "dialogs_report_reason_other",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "report.user.reason.spam",
+          "androidName": "dialogs_report_reason_spam",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "report.reason.violence",
+          "androidName": "dialogs_report_reason_violence",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "report.message.send",
+          "androidName": "dialogs_report_send",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.report.success",
+          "androidName": "dialogs_report_success",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "report.conversation.title",
+          "androidName": "dialogs_report_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "common.save",
+          "androidName": "dialogs_save",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "profile.unblock.error",
+          "androidName": "dialogs_unblock_error",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

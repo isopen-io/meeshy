@@ -123,9 +123,14 @@ const AppUpdateBanner = lazy(chargerBanniereMaj);
  * (un badge accroché à la Lentille disparaîtrait dès qu'on ouvre un fil), et
  * À LA DEMANDE parce qu'il lit le cache des conversations — voir
  * `components/app-badge.tsx` pour la mesure qui l'a sorti du socle.
+ *
+ * Son chunk est devenu le CHROME DIFFÉRÉ (`deferred-chrome.tsx`, #10174) : il
+ * arme aussi, au repos, l'hôte des invitations à immortaliser, qui se pose
+ * dans la colonne de la bande du haut — la bande, dans l'entrée, n'en paie
+ * rien.
  */
-const chargerBadge = () => import('./app-badge').then((m) => ({ default: m.AppBadge }));
-const AppBadge = lazy(chargerBadge);
+const chargerChromeDiffere = () => import('./deferred-chrome').then((m) => ({ default: m.DeferredChrome }));
+const DeferredChrome = lazy(chargerChromeDiffere);
 
 /**
  * ...ET L'INVITATION À VALIDER SON COMPTE (#8239), cinquième exception : de J7
@@ -235,11 +240,12 @@ export default function Shell({ children }: { children: ReactNode }) {
           <SyncPill />
         </Suspense>
       ) : null}
-      {/* Aucun pixel, aucune garde de route : le badge vaut sur toutes les
-          routes, et il n'émet aucune requête (`useConversationsSnapshot`
-          observe le cache, `enabled: false`). */}
+      {/* Aucun pixel au premier rendu, aucune garde de route : le badge vaut
+          sur toutes les routes, et il n'émet aucune requête
+          (`useConversationsSnapshot` observe le cache, `enabled: false`) ;
+          l'hôte des invitations n'arrive qu'au repos, dans la bande du haut. */}
       <Suspense fallback={null}>
-        <AppBadge />
+        <DeferredChrome routeKey={routeKey} signedIn={connecte} />
       </Suspense>
       {majAnnoncee ? (
         <Suspense fallback={null}>

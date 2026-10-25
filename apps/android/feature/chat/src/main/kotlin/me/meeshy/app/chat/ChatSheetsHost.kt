@@ -129,6 +129,7 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
             onViews = { localRoute.open(MessageDetailRoute.Views(actionTarget.messageId)) },
             onHistory = { localRoute.open(MessageDetailRoute.History(actionTarget.messageId)) },
             onSentiment = { localRoute.open(MessageDetailRoute.Sentiment(actionTarget.messageId)) },
+            canWrite = state.viewerMayWrite,
         )
     }
 

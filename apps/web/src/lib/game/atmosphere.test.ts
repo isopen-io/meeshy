@@ -146,6 +146,24 @@ describe('chooseAtmosphere : choisir = installer, optimiste', () => {
     expect(b.bumps).toHaveLength(1);
   });
 
+  test('le catalogue de la boutique sait le pack installé AVANT la réponse, puis se relit auprès du serveur : sa rangée ne contredit pas l’onglet', async () => {
+    const seen: string[][] = [];
+    const installedInCatalogue = (client: QueryClient) => (client.getQueryData<readonly FramePackSummary[]>(FRAME_KEYS.catalogue) ?? []).filter((pack) => pack.installed).map((pack) => pack.slug);
+    const b = bench(() => {
+      seen.push(installedInCatalogue(b.client));
+      return { ok: true, data: { atmosphere: 'olympe', packInstalled: true } };
+    });
+    await chooseAtmosphere('olympe', b.deps);
+    expect(seen).toEqual([['afrique', 'olympe']]);
+    expect(b.client.getQueryState(FRAME_KEYS.catalogue)?.isInvalidated).toBe(true);
+  });
+
+  test('un refus (409) remet aussi le catalogue de la boutique dans son état d’avant', async () => {
+    const b = bench(() => ({ ok: false, status: 409, error: 'refus', code: 'GAME_WRITE_CONFLICT' }));
+    await chooseAtmosphere('olympe', b.deps);
+    expect((b.client.getQueryData<readonly FramePackSummary[]>(FRAME_KEYS.catalogue) ?? []).find((pack) => pack.slug === 'olympe')?.installed).toBe(false);
+  });
+
   test('un refus (409) remet l’état d’avant : ni atmosphère, ni pack', async () => {
     const b = bench(() => ({ ok: false, status: 409, error: 'refus', code: 'GAME_WRITE_CONFLICT' }));
     const outcome = await chooseAtmosphere('olympe', b.deps);

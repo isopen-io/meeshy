@@ -254,6 +254,7 @@ export class E2EEDirectory {
     if (existing) {
       await this.retireDevices({ userId, sessionId, id: { not: existing.id } });
       await this.prisma.e2EEDevice.update({ where: { id: existing.id }, data: { sessionId, ...keyFields, ...profile } });
+      await this.replaceOneTimeKeys(existing, request);
       await this.addOneTimeKeys(existing, request);
       return { deviceId: existing.deviceId, created: false };
     }
@@ -356,6 +357,21 @@ export class E2EEDirectory {
       where: { userId, ...ACTIVE, ...(deviceIds ? { deviceId: { in: [...deviceIds] } } : {}) },
       orderBy: { deviceId: 'asc' },
     });
+  }
+
+  /**
+   * Un enrôlement COMPLET d'une identité déjà active ouvre une nouvelle
+   * génération de pré-clés uniques (#12882) : une installation réinstallée
+   * garde son identité du trousseau mais a perdu ses clés privées, et son
+   * compteur repart de 1. Les clés de la nature qu'elle publie remplacent donc
+   * toutes celles d'avant, réservées comprises — aucune clé publique morte ne
+   * reste servie, aucun `keyId` neuf n'est écarté. Un réenrôlement sans lot
+   * (base intacte, session nouvelle) ne touche à rien.
+   */
+  private async replaceOneTimeKeys(generation: Generation, batches: OneTimeBatches): Promise<void> {
+    const kinds = [...new Set(oneTimeRowsOf(batches).map((key) => key.kind))];
+    if (kinds.length === 0) return;
+    await this.prisma.e2EEOneTimePreKey.deleteMany({ where: { ...generationOf(generation), kind: { in: kinds } } });
   }
 
   private async addOneTimeKeys(generation: Generation, batches: OneTimeBatches): Promise<void> {

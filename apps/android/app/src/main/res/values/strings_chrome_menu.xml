@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- lot: boutons-flottants-contre-les-bords — boutons flottants et echelle du menu (cles iOS en commentaire). -->
+<resources>
+    <!-- a11y.floating.feed.hint -->
+    <string name="a11y_floating_feed_hint">Opens the activity feed</string>
+    <!-- a11y.floating.menu.hint -->
+    <string name="a11y_floating_menu_hint">Opens the navigation menu</string>
+    <!-- a11y.floating.menu.notifications-value -->
+    <string name="a11y_floating_menu_notifications_value">%1$d pending notifications</string>
+    <!-- a11y.menu.item.hint -->
+    <string name="a11y_menu_item_hint">Open this section</string>
+    <!-- root.menu.communities -->
+    <string name="menu_communities">Communities</string>
+</resources>

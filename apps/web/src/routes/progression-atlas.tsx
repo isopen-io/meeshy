@@ -50,7 +50,7 @@ export default function ProgressionAtlasScreen() {
       titre={gameText('game.atlas.title')}
       teinte={GAME_BRAND}
       compte={(p) => {
-        const atlas = (p as EngagementWithGame).game?.atlas;
+        const atlas = p.game?.atlas;
         return atlas === undefined ? null : `${atlas.stamped} / ${atlas.total}`;
       }}
     >

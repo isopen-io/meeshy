@@ -8,6 +8,7 @@ import type { EngagementWithGame } from '@/lib/api/engagement';
 import type { HttpTransport } from '@/lib/api/http';
 import { guideActionTarget, type GuideRoute } from '@/lib/game-guide/action-target';
 import type { GuideCard } from '@/lib/game-guide/card';
+import { deferLater, type PhotoAlerts } from '@/lib/game-photo/alerts';
 import { appPhotoEnv } from '@/lib/game-photo/app-env';
 import type { PhotoEnv } from '@/lib/game-photo/env';
 import { photoMomentFromCard, photoMomentOfEmblemV2, startMoment, type PhotoMoment } from '@/lib/game-photo/moments';
@@ -53,9 +54,12 @@ export function GameLead({
   openConcept = defaultOpenConcept,
   onGuideLine,
   collapsed = false,
+  alerts,
 }: {
   readonly view: EngagementWithGame;
   readonly env?: () => PhotoEnv;
+  /** Le coordinateur des invitations (#10174) : celui de l'application, un double pour les témoins. */
+  readonly alerts?: PhotoAlerts;
   readonly transport?: HttpTransport;
   readonly navigateTo?: (to: GuideRoute) => void;
   readonly openConcept?: (concept: ProgressionConcept) => void;
@@ -71,7 +75,7 @@ export function GameLead({
   const prefs = useGamePrefs();
   const awake = prefs.celebrations && !prefs.hidden;
   const guide = useGameGuide({ view: awake ? view : undefined, settled, userId, ...(transport === undefined ? {} : { transport }) });
-  const photo = usePhotoMoments({ view: awake ? view : undefined, env, settled });
+  const photo = usePhotoMoments({ view: awake ? view : undefined, env, settled, userId, ...(alerts === undefined ? {} : { alerts }) });
   const atmosphere = useAtmosphereGate(view.game);
   const game = view.game;
 
@@ -113,10 +117,16 @@ export function GameLead({
   const later = useCallback(
     (moment: PhotoMoment) => {
       photo.dismiss(moment.id);
-      void env().notebook.defer(moment);
+      void deferLater(env().notebook, moment);
     },
     [photo, env],
   );
+  /* La carte d'offre est la surface de Progression (#10174) : PEINTE, elle accuse sa présentation — jamais repliée. */
+  const painted = !collapsed && offers.length > 0;
+  const shown = photo.shown;
+  useEffect(() => {
+    if (painted) shown();
+  }, [painted, shown]);
 
   const flow = photo.active === null ? null : <GamePhotoFlow moment={photo.active} env={env()} flameDays={game?.flame.days ?? null} atmosphere={atmosphere} onClose={photo.close} />;
   if (collapsed) return flow;
