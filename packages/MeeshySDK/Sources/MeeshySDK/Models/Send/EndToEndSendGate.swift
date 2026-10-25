@@ -16,6 +16,9 @@ public enum EndToEndSendRefusal: String, Error, Equatable, Sendable, CaseIterabl
     case outboxUnsealable
     /// L'édition d'un message chiffré n'a pas encore d'enveloppe (#12541).
     case editUnsealable
+    /// Le message a été envoyé chiffré : il le reste à jamais, même après la
+    /// désactivation du chiffrement de sa conversation (#12881, spec § 5.2).
+    case sealedMessageUneditable
     /// La passerelle a refusé un clair (`E2EE_PLAINTEXT_REFUSED`, #11216) : la
     /// conversation est chiffrée sans que l'appareil le sût. Rien ne repart.
     case plaintextRefusedByServer

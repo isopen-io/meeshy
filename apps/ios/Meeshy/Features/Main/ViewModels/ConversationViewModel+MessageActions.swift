@@ -271,8 +271,9 @@ extension ConversationViewModel {
     // MARK: - Edit Message
 
     func editMessage(messageId: String, newContent: String) async {
-        if let refusal = endToEndSealer.editRefusal { error = refusal.userMessage; return }
-        let originalContent = messageIndex(for: messageId).map { messages[$0].content }
+        let edited = messageIndex(for: messageId).map { messages[$0] }
+        if let refusal = endToEndSealer.editRefusal(for: edited) { error = refusal.userMessage; return }
+        let originalContent = edited?.content
         report(await commands.editMessage(
             messageId: messageId, serverId: serverId(for: messageId), content: newContent,
             originalContent: originalContent,

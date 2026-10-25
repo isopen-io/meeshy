@@ -48,6 +48,14 @@ struct EndToEndSendSealer {
     /// L'édition d'un message chiffré n'a pas encore d'enveloppe (#12541).
     var editRefusal: EndToEndSendRefusal? { downgradeRefusal ?? (requiresSeal ? .editUnsealable : nil) }
 
+    /// Un message envoyé chiffré reste chiffré à jamais (#12881, spec § 5.2) :
+    /// après une désactivation, son clair déchiffré sur l'appareil ne part pas.
+    func editRefusal(for message: Message?) -> EndToEndSendRefusal? {
+        if let refusal = editRefusal { return refusal }
+        guard let message, message.isEncrypted || message.isContentDecryptedOnDevice else { return nil }
+        return .sealedMessageUneditable
+    }
+
     /// Une pièce se téléverse EN CLAIR avant même que le message parte : en
     /// E2EE, elle ne se téléverse pas.
     var pieceRefusal: EndToEndSendRefusal? { downgradeRefusal ?? (requiresSeal ? .contentUnsealable : nil) }
@@ -311,6 +319,9 @@ extension EndToEndSendRefusal {
         case .editUnsealable:
             String(localized: "conversation.send.e2ee.editUnsealable",
                    defaultValue: "Conversation chiffrée : un message ne peut pas encore être modifié.", bundle: .main)
+        case .sealedMessageUneditable:
+            String(localized: "conversation.send.e2ee.sealedMessageUneditable",
+                   defaultValue: "Ce message a été envoyé chiffré : il ne peut pas être modifié.", bundle: .main)
         case .plaintextRefusedByServer:
             String(localized: "conversation.send.e2ee.plaintextRefusedByServer",
                    defaultValue: "Cette conversation est désormais chiffrée : le message n’est pas parti.", bundle: .main)

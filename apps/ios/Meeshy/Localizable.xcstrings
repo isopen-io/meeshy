@@ -21492,6 +21492,53 @@
         }
       }
     },
+    "conversation.send.e2ee.sealedMessageUneditable": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أُرسلت هذه الرسالة مشفرة: لا يمكن تعديلها."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diese Nachricht wurde verschlüsselt gesendet: Sie kann nicht bearbeitet werden."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This message was sent encrypted: it can’t be edited."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este mensaje se envió cifrado: no se puede editar."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ce message a été envoyé chiffré : il ne peut pas être modifié."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Questo messaggio è stato inviato crittografato: non può essere modificato."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esta mensagem foi enviada criptografada: ela não pode ser editada."
+          }
+        }
+      }
+    },
     "conversation.send.slow_mode": {
       "extractionState": "manual",
       "localizations": {
