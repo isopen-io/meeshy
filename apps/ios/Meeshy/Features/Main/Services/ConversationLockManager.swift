@@ -720,18 +720,44 @@ final class ConversationLockManager: ObservableObject, ConversationLockGating {
     /// miroir existe (mise à jour de l'app) rejoint l'extension sans attendre
     /// le prochain changement. Données protégées indisponibles : ni lecture
     /// de `.standard`, ni écriture du miroir — la liste en mémoire reprend le
-    /// miroir de fichier s'il se lit, sans rien persister.
+    /// miroir s'il se lit, sans rien persister.
+    ///
+    /// Une liste écrite l'est toujours, vide comprise : une clé ABSENTE de
+    /// `.standard` ne dit donc pas « aucun verrou » mais « jamais écrite » ou
+    /// « illisible » (`CFPreferences` sert encore le domaine vide d'avant le
+    /// premier déverrouillage). Le miroir fait alors foi et ne se réécrit pas ;
+    /// sans miroir lisible, seul un miroir ABSENT dit une première installation.
     private func loadLockedIds() {
+        let mirrored = mirroredLockedIds()
         guard isProtectedDataAvailable() else {
-            if case .ids(let mirrored) = NSELockedConversationMirror.readFile(at: contentLockMirrorFile) {
-                lockedConversationIds = Set(mirrored)
-            }
+            if let mirrored { lockedConversationIds = mirrored }
             return
         }
-        let ids = defaults.stringArray(forKey: lockedIdsDefaultsKey) ?? []
-        lockedConversationIds = Set(ids)
+        if let stored = defaults.stringArray(forKey: lockedIdsDefaultsKey) {
+            lockedConversationIds = Set(stored)
+            hasLoadedLockedIds = true
+            mirrorLockedIds()
+            return
+        }
+        if let mirrored {
+            lockedConversationIds = mirrored
+            hasLoadedLockedIds = true
+            return
+        }
+        guard NSELockedConversationMirror.readFile(at: contentLockMirrorFile) == .absent else { return }
+        lockedConversationIds = []
         hasLoadedLockedIds = true
         mirrorLockedIds()
+    }
+
+    /// Ce que le miroir DIT des verrous — le fichier, et la clé de renfort qui
+    /// ne peut qu'en ajouter ; `nil` quand ni l'un ni l'autre ne se lit.
+    private func mirroredLockedIds() -> Set<String>? {
+        let legacy = contentLockMirror?.stringArray(forKey: NSELockedConversationMirror.legacyDefaultsKey)
+        guard case .ids(let fromFile) = NSELockedConversationMirror.readFile(at: contentLockMirrorFile) else {
+            return legacy.map(Set.init)
+        }
+        return Set(fromFile).union(legacy ?? [])
     }
 
     private func mirrorLockedIds() {
