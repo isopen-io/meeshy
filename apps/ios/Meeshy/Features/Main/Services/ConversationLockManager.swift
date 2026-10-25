@@ -48,6 +48,10 @@ protocol ConversationLockVault {
     @discardableResult
     func write(_ value: String, for key: String) -> Bool
     func delete(_ key: String)
+    /// Les comptes que le coffre tient ; `nil` quand il ne se laisse pas
+    /// énumérer (trousseau avant le premier déverrouillage) : « aucun compte »
+    /// et « illisible » ne se confondent pas.
+    func accounts() -> [String]?
 }
 
 struct KeychainConversationLockVault: ConversationLockVault {
@@ -92,6 +96,20 @@ struct KeychainConversationLockVault: ConversationLockVault {
         ]
         SecItemDelete(query as CFDictionary)
     }
+
+    func accounts() -> [String]? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecReturnAttributes as String: true,
+            kSecMatchLimit as String: kSecMatchLimitAll
+        ]
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        guard status != errSecItemNotFound else { return [] }
+        guard status == errSecSuccess, let items = result as? [[String: Any]] else { return nil }
+        return items.compactMap { $0[kSecAttrAccount as String] as? String }
+    }
 }
 
 /// Un coffre bâti sur trois fonctions : les tests de lecture paresseuse
@@ -105,6 +123,9 @@ struct SecretsConversationLockVault: ConversationLockVault {
     func write(_ value: String, for key: String) -> Bool { secrets.save(key, value) }
 
     func delete(_ key: String) { secrets.delete(key) }
+
+    /// Trois fonctions ne s'énumèrent pas : le coffre ne dit rien.
+    func accounts() -> [String]? { nil }
 }
 
 // MARK: - Le code dérivé (#11388)
@@ -406,6 +427,8 @@ final class ConversationLockManager: ObservableObject, ConversationLockGating {
     private var knowsLockedIds = false
 
     private let masterPinKey = "meeshy_master_pin"
+    private let lockKeyPrefix = "meeshy_lock_"
+    private let throttleSuffix = ".attempts"
     private let biometricStateKey = "meeshy_lock_biometric_state"
     private let lockedIdsDefaultsKey = "meeshy.lockedConversationIds"
 
@@ -472,9 +495,13 @@ final class ConversationLockManager: ObservableObject, ConversationLockGating {
 
     /// La liste se relit dès que les données protégées le deviennent : un
     /// processus lancé en arrière-plan avant le premier déverrouillage (PushKit,
-    /// VoIP) n'avait lu qu'une liste vide.
+    /// VoIP) n'avait lu qu'une liste vide. Restée inconnue, elle se relit
+    /// aussi à chaque retour au premier plan.
     private func wireProtectedDataReload(_ notificationCenter: NotificationCenter) {
-        notificationCenter.publisher(for: UIApplication.protectedDataDidBecomeAvailableNotification)
+        Publishers.Merge(
+            notificationCenter.publisher(for: UIApplication.protectedDataDidBecomeAvailableNotification),
+            notificationCenter.publisher(for: UIApplication.didBecomeActiveNotification)
+        )
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.loadLockedIdsIfNeeded() }
             .store(in: &cancellables)
@@ -661,11 +688,24 @@ final class ConversationLockManager: ObservableObject, ConversationLockGating {
     // MARK: - Private helpers
 
     private func lockKey(_ conversationId: String) -> String {
-        "meeshy_lock_\(conversationId)"
+        lockKeyPrefix + conversationId
     }
 
     private func throttleKey(_ key: String) -> String {
-        "\(key).attempts"
+        key + throttleSuffix
+    }
+
+    /// Les conversations dont le coffre tient un code — ni le compte
+    /// biométrique, ni les compteurs d'échecs ; `nil` quand il ne s'énumère pas.
+    private func lockedIdsInVault() -> Set<String>? {
+        vault.accounts().map { accounts in
+            Set(accounts.compactMap { account in
+                guard account.hasPrefix(lockKeyPrefix), account != biometricStateKey,
+                      !account.hasSuffix(throttleSuffix) else { return nil }
+                let conversationId = String(account.dropFirst(lockKeyPrefix.count))
+                return conversationId.isEmpty ? nil : conversationId
+            })
+        }
     }
 
     private func attempt(_ pin: String, against key: String) -> PinAttemptOutcome {
@@ -738,8 +778,14 @@ final class ConversationLockManager: ObservableObject, ConversationLockGating {
     /// Une liste écrite l'est toujours, vide comprise : une clé ABSENTE de
     /// `.standard` ne dit donc pas « aucun verrou » mais « jamais écrite » ou
     /// « illisible » (`CFPreferences` sert encore le domaine vide d'avant le
-    /// premier déverrouillage). Le miroir fait alors foi et ne se réécrit pas ;
-    /// sans miroir lisible, seul un miroir ABSENT dit une première installation.
+    /// premier déverrouillage). Le miroir fait alors foi et ne se réécrit pas.
+    ///
+    /// Sans miroir non plus (mise à jour depuis une version qui ne l'écrivait
+    /// pas, ou première installation), le TROUSSEAU tranche : `setLock` y écrit
+    /// le code avant que la conversation entre dans la liste, donc ses comptes
+    /// `meeshy_lock_*` reconstruisent la liste — vide seulement s'il n'en tient
+    /// aucun. Un trousseau qui ne s'énumère pas laisse la liste inconnue, sans
+    /// rien écrire ; le retour au premier plan la relit.
     private func loadLockedIds() {
         let mirrored = mirroredLockedIds()
         guard isProtectedDataAvailable() else {
@@ -755,8 +801,9 @@ final class ConversationLockManager: ObservableObject, ConversationLockGating {
             adopt(mirrored, persisting: true)
             return
         }
-        guard NSELockedConversationMirror.readFile(at: contentLockMirrorFile) == .absent else { return }
-        adopt([], persisting: true)
+        guard NSELockedConversationMirror.readFile(at: contentLockMirrorFile) == .absent,
+              let inVault = lockedIdsInVault() else { return }
+        adopt(inVault, persisting: true)
         mirrorLockedIds()
     }
 
