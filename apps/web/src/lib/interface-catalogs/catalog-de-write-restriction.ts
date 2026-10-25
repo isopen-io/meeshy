@@ -4,6 +4,7 @@ import type { WriteRestrictionCatalogSlice } from './catalog-fr-write-restrictio
 const deWriteRestriction = {
   'composer.writeRestriction.minorGlobal': 'In Global kannst du ab 18 Jahren schreiben',
   'composer.writeRestriction.endToEnd': 'Ende-zu-Ende-verschlüsselte Unterhaltung: Schreibe in der Meeshy-App',
+  'composer.writeRestriction.endToEnd.shell': 'Ende-zu-Ende-verschlüsselte Unterhaltung: Schreibe auf einem deiner verschlüsselten Geräte',
   'age.blocked.title': 'Meeshy ist ab 13 Jahren',
   'age.blocked.body': 'Dieses Konto kann erst ab 13 Jahren genutzt werden.',
   'age.blocked.confirm': 'Verstanden',
