@@ -6,6 +6,7 @@ import { resolveEngagementProgress } from '@meeshy/shared/utils/engagement-progr
 import type { EngagementWithGame } from '@/lib/api/engagement';
 import { ENGAGEMENT_PROGRESS_FIXTURE } from '@/lib/api/engagement-fixture';
 import { gameBlockFixture } from '@/lib/api/game-fixture';
+import { createPhotoAlerts, type PhotoAlerts } from '@/lib/game-photo/alerts';
 import type { PhotoEnv } from '@/lib/game-photo/env';
 import { startMoment, type PhotoMoment } from '@/lib/game-photo/moments';
 import type { NotebookEntry } from '@/lib/game-photo/notebook';
@@ -34,7 +35,17 @@ const view = (patch: Parameters<typeof gameBlockFixture>[0] = {}): EngagementWit
 
 const settle = () => act(() => new Promise<void>((resolve) => setTimeout(resolve, 15)));
 
-async function bench(initial: EngagementWithGame | undefined, notebookEntries: readonly Partial<NotebookEntry>[] = []) {
+/* Le coordinateur par banc : mémoire appareil neuve (ligne de base, rythme), accusés comptés. */
+const freshAlerts = (acked: string[][] = []): PhotoAlerts => {
+  const map = new Map<string, string>();
+  return createPhotoAlerts({
+    storage: { getItem: (k) => map.get(k) ?? null, setItem: (k, v) => void map.set(k, v), removeItem: (k) => void map.delete(k) },
+    sessionStartedAt: null,
+    acknowledge: (ids) => void acked.push([...ids]),
+  });
+};
+
+async function bench(initial: EngagementWithGame | undefined, notebookEntries: readonly Partial<NotebookEntry>[] = [], alerts: PhotoAlerts = freshAlerts()) {
   const env = { notebook: { list: async () => notebookEntries as NotebookEntry[] } } as unknown as PhotoEnv;
   let current: PhotoMoments | null = null;
   let setView: (next: EngagementWithGame | undefined) => void = () => undefined;
@@ -44,11 +55,12 @@ async function bench(initial: EngagementWithGame | undefined, notebookEntries: r
     const [settled, mark] = useState(true);
     setView = set;
     setSettled = mark;
-    current = usePhotoMoments({ view: shown, env: () => env, settled });
+    current = usePhotoMoments({ view: shown, env: () => env, settled, alerts, userId: 'u1' });
     return null;
   }
   await mount(<Probe />);
   return {
+    alerts,
     photo: (): PhotoMoments => {
       if (current === null) throw new Error('le crochet n’est pas monté');
       return current;
@@ -204,5 +216,41 @@ describe('les gestes', () => {
     await act(async () => b.photo().start(startMoment()));
     await act(async () => b.photo().close());
     expect(b.photo().active).toBeNull();
+  });
+});
+
+/**
+ * LE COORDINATEUR UNIQUE (#10174, L18) — Progression lit la MÊME file que la bande du haut : une étape
+ * passive trouvée ailleurs s'y montre comme carte d'offre (jamais une seconde surface), et la carte PEINTE
+ * accuse sa présentation — toutes les étapes atteintes et l'étape proposée, une fois.
+ */
+describe('la file de un, partagée', () => {
+  test('une étape passive trouvée par l’hôte se montre ici comme carte d’offre', async () => {
+    const alerts = freshAlerts();
+    const b = await bench(view({ streak: 6 }), [], alerts);
+    await act(async () => {
+      await alerts.observe({ userId: 'u1', game: view({ streak: 7 }).game as NonNullable<EngagementWithGame['game']>, kept: async () => ({ kept: [], known: [] }) });
+    });
+    expect(ids(b.photo().offers)).toEqual(['flame:7']);
+  });
+
+  test('la carte peinte accuse les étapes atteintes et la proposée, une seule fois', async () => {
+    const acked: string[][] = [];
+    const b = await bench(view({ mintedLifetime: 9 }), [], freshAlerts(acked));
+    await b.show(view({ mintedLifetime: 10 }));
+    expect(ids(b.photo().offers)).toEqual(['meesh:1']);
+    await act(async () => b.photo().shown());
+    await act(async () => b.photo().shown());
+    expect(acked).toEqual([['meesh:10', 'meesh:1']]);
+  });
+
+  test('« Photographier » libère la file ; « Plus tard » aussi — et le même moment ne revient pas', async () => {
+    const b = await bench(view({ streak: 6 }));
+    await b.show(view({ streak: 7 }));
+    await act(async () => b.photo().dismiss('flame:7'));
+    expect(b.alerts.store.getState().pending).toBeNull();
+    await b.show(view({ streak: 6 }));
+    await b.show(view({ streak: 7 }));
+    expect(b.photo().offers).toEqual([]);
   });
 });

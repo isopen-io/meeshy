@@ -29,6 +29,7 @@
     <string name="profile_detail_system_language">اللغة الأساسية</string>
     <string name="profile_display_name_label">الاسم المعروض</string>
     <string name="profile_e2ee">مشفّرة من طرف إلى طرف</string>
+    <string name="profile_e2ee_enabled">التشفير من طرف إلى طرف مفعّل</string>
     <string name="profile_edit">تعديل</string>
     <string name="profile_email">البريد الإلكتروني</string>
     <string name="profile_first_name_label">الاسم الأول</string>
@@ -52,6 +53,8 @@
     <string name="profile_progression_subtitle">الشارات والمستوى والسلسلة</string>
     <string name="profile_progression_title">التقدّم</string>
     <string name="profile_save">حفظ</string>
+    <string name="profile_section_about">نبذة</string>
+    <string name="profile_section_actions">إجراءات</string>
     <string name="profile_section_contact">الاتصال</string>
     <string name="profile_section_identity">الهوية</string>
     <string name="profile_section_languages">اللغات</string>
@@ -67,8 +70,11 @@
     <string name="profile_stat_translations">الترجمات</string>
     <string name="profile_stats_a11y_hint">يفتح الإحصاءات التفصيلية</string>
     <string name="profile_stats_conversations">المحادثات</string>
+    <string name="profile_stats_daysShort">أيام</string>
     <string name="profile_stats_friends">الأصدقاء</string>
+    <string name="profile_stats_memberSince">عضو منذ</string>
     <string name="profile_stats_messages">الرسائل</string>
+    <string name="profile_stats_messagesShort">الرسائل</string>
     <string name="profile_stats_title">الإحصائيات</string>
     <string name="profile_status_connected">متصلون</string>
     <string name="profile_system_language_label">اللغة الأساسية</string>
@@ -84,6 +90,7 @@
     <string name="profile_username">اسم المستخدم</string>
     <string name="profile_verified">موثّق</string>
     <string name="profile_view_posts">المنشورات</string>
+    <string name="profile_voice_title">الصوت</string>
     <string name="report_close">إغلاق</string>
     <string name="report_details_header">تفاصيل (اختياري)</string>
     <string name="report_error">تعذّر إرسال البلاغ</string>

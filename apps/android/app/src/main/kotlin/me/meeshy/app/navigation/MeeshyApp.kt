@@ -13,7 +13,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -21,7 +20,6 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import me.meeshy.app.auth.AuthViewModel
 import me.meeshy.app.auth.LoggingOutVeil
 import me.meeshy.app.calls.CallPill
@@ -87,10 +85,7 @@ fun MeeshyApp(
 
     val navBackStack by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStack?.destination?.route
-    val showMenuFab = currentRoute in tabRoutes
-    val leftButtonPosition by floatingButtonPositions.leftPosition.collectAsStateWithLifecycle()
-    val rightButtonPosition by floatingButtonPositions.rightPosition.collectAsStateWithLifecycle()
-    val scope = rememberCoroutineScope()
+    val showMenuFab = floatingChromeVisible(currentRoute)
     val onCallScreen = currentRoute == CallRoute.PATTERN
 
     // Settle a call that ended while minimised: [CallScreen]'s own auto-dismiss only
@@ -205,10 +200,7 @@ fun MeeshyApp(
                     MeeshyFloatingChrome(
                         navController = navController,
                         currentRoute = currentRoute,
-                        leftButtonPosition = leftButtonPosition,
-                        rightButtonPosition = rightButtonPosition,
-                        onLeftPositionChange = { scope.launch { floatingButtonPositions.setLeftPosition(it) } },
-                        onRightPositionChange = { scope.launch { floatingButtonPositions.setRightPosition(it) } },
+                        floatingButtonPositions = floatingButtonPositions,
                     )
                 }
             }

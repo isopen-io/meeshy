@@ -59,9 +59,19 @@ export type PackShopAdapter<P extends ShopPack> = {
   unlock?(pack: P): string | null;
   /** `true` = le pack n'est pas encore débloqué : ni « Installer » ni « Acheter » ne s'offrent (le serveur refuserait). */
   locked?(pack: P): boolean;
+  /**
+   * Le geste qui REMPLACE « Retirer » sur un pack installé que le compte tient en place (l'atmosphère choisie, #10163 PP7) ;
+   * `null` ou absent : le geste ordinaire.
+   */
+  swap?(pack: P): { readonly label: string; readonly run: () => void } | null;
+  /** Ce que dit un retrait refusé (409) de ce pack ; absent : « ce pack reste installé ». */
+  keptText?(pack: P): string;
 };
 
-type Notice = 'install' | 'insufficient' | 'purchase' | null;
+type Notice = 'install' | 'insufficient' | 'purchase' | { readonly kept: string } | null;
+
+/** Un retrait que le serveur refuse (409) n'est pas une panne : le pack reste, et cela se dit. */
+const isKept = (failure: { readonly status: number }, installing: boolean): boolean => !installing && failure.status === 409;
 
 /** Les rangées fantômes du premier chargement (cache vide) — jamais au-dessus d'un cache. */
 const SKELETON_ROWS = [0, 1, 2] as const;
@@ -157,7 +167,7 @@ export function PackShop<P extends ShopPack>({
     if (!result.ok) {
       queryClient.setQueryData(adapter.catalogueKey, beforeCatalogue);
       queryClient.setQueryData(adapter.installedKey, beforeInstalled);
-      setFailure('install');
+      setFailure(isKept(result, next) ? { kept: adapter.keptText?.(pack) ?? translateStickerPacks(language, 'packs.error.notRemovable') } : 'install');
       return;
     }
     complete?.(queryClient);
@@ -169,8 +179,11 @@ export function PackShop<P extends ShopPack>({
   useEffect(() => {
     if (focusPresent) focusedRow.current?.scrollIntoView?.({ block: 'center' });
   }, [focusPresent, focusSlug]);
+  const kept = typeof failure === 'object' && failure !== null;
   const notice =
-    failure === 'insufficient'
+    kept
+      ? failure.kept
+      : failure === 'insufficient'
       ? translateStickerPacks(language, 'packs.error.insufficient')
       : failure === 'purchase'
         ? translateStickerPacks(language, 'packs.error.purchase')
@@ -185,7 +198,7 @@ export function PackShop<P extends ShopPack>({
       <p className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
         {hint}
       </p>
-      <p className="text-caption empty:hidden" role="status" aria-live="polite" style={{ color: 'var(--ios-error)' }}>
+      <p className="text-caption empty:hidden" role="status" aria-live="polite" style={{ color: kept ? 'var(--color-ios-ink-2)' : 'var(--ios-error)' }}>
         {notice}
       </p>
 
@@ -223,6 +236,7 @@ export function PackShop<P extends ShopPack>({
             const title = adapter.title(pack);
             const price = adapter.price?.(pack) ?? null;
             const toBuy = needsPurchase(pack);
+            const swap = pack.installed && !toBuy ? (adapter.swap?.(pack) ?? null) : null;
             const action = toBuy
               ? translateStickerPacks(language, 'packs.buy', { price: String(price) })
               : translateStickerPacks(language, pack.installed ? 'stickerPacks.uninstall' : 'stickerPacks.install');
@@ -255,6 +269,17 @@ export function PackShop<P extends ShopPack>({
                   <span data-shop-locked={pack.slug} className="shrink-0 px-4 text-body font-semibold" style={{ color: 'var(--color-ios-ink-2)' }}>
                     {unlockText(language, 'locked')}
                   </span>
+                ) : swap !== null ? (
+                  <button
+                    type="button"
+                    data-shop-swap={pack.slug}
+                    aria-label={`${swap.label} — ${title}`}
+                    onClick={swap.run}
+                    className="min-h-11 shrink-0 rounded-full px-4 text-body font-semibold"
+                    style={{ backgroundColor: 'var(--color-ios-fill)', color: 'var(--color-ios-ink)' }}
+                  >
+                    {swap.label}
+                  </button>
                 ) : pack.installed && !toBuy && adapter.removable?.(pack) === false ? (
                   <span data-shop-included={pack.slug} className="shrink-0 px-4 text-body font-semibold" style={{ color: 'var(--color-ios-ink-2)' }}>
                     {translateStickerPacks(language, 'packs.included')}

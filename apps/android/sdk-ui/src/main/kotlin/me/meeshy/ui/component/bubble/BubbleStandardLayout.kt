@@ -20,8 +20,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -119,6 +122,7 @@ private fun BubbleBody(
 ) {
     val accessibilityLabel = options.accessibilityLabel
     val onLongPress = callbacks.onLongPress
+    val namedActions = callbacks.accessibilityActions
     val widthClass = currentWindowWidthClass()
     val windowWidthDp = LocalMeeshyWindowInfo.current?.widthDp
         ?: LocalConfiguration.current.screenWidthDp.toFloat()
@@ -152,6 +156,14 @@ private fun BubbleBody(
             .let { base ->
                 if (onLongPress == null) base
                 else base.combinedClickable(onClick = {}, onLongClick = onLongPress)
+            }
+            .let { base ->
+                if (accessibilityLabel != null || namedActions.isEmpty()) base
+                else base.semantics {
+                    customActions = namedActions.map { named ->
+                        CustomAccessibilityAction(named.label) { named.onAction(); true }
+                    }
+                }
             }
             .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.sm),
     ) {

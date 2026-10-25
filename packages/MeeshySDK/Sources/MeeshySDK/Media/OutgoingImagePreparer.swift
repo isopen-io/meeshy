@@ -203,7 +203,8 @@ public struct OutgoingImagePreparer: OutgoingImagePreparing {
             return OutgoingImage(data: data, format: format, pixelSize: nil, encodedGenerations: 0)
         }
         let original = OriginalImage(data: data, source: source, properties: properties, format: format,
-                                     upright: OutgoingImageGeometry.upright(stored, properties: properties))
+                                     upright: OutgoingImageGeometry.upright(stored, properties: properties),
+                                     carriesLocation: OutgoingImageLocation.isCarried(by: source))
         switch OutgoingImagePlanner.plan(format: format, pixelSize: original.upright, byteCount: data.count,
                                          carriesLocation: original.carriesLocation, policy: policy) {
         case .passthrough:
@@ -235,7 +236,8 @@ struct OriginalImage {
     let format: OutgoingImageFormat
     let upright: CGSize
 
-    var carriesLocation: Bool { properties[kCGImagePropertyGPSDictionary] != nil }
+    /// Un lieu sur N'IMPORTE QUELLE image de la source, propriétés ou XMP.
+    let carriesLocation: Bool
 
     var asIs: OutgoingImage {
         OutgoingImage(data: data, format: format, pixelSize: upright, encodedGenerations: 0)
@@ -277,20 +279,17 @@ enum OutgoingImageGeometry {
 }
 
 enum OutgoingImageWriter {
-    /// Réécrit les métadonnées sans toucher aux données compressées des pixels.
-    /// `kCGImageMetadataShouldExcludeGPS` ne retire pas le lieu d'un HEIC : le
-    /// résultat est relu, et un lieu qui survit rend `nil` (fail-closed) — le
-    /// plan retombe alors sur un ré-encodage, qui ne recopie jamais le GPS.
+    /// Réécrit les métadonnées sans toucher aux données compressées des pixels ;
+    /// `nil` si un lieu survit dans les octets écrits (#12905).
     static func withoutLocation(_ source: CGImageSource) -> Data? {
         guard let type = CGImageSourceGetType(source) else { return nil }
         let buffer = NSMutableData()
-        guard let destination = CGImageDestinationCreateWithData(buffer as CFMutableData, type, 1, nil) else { return nil }
-        let options: [CFString: Any] = [kCGImageMetadataShouldExcludeGPS: true]
-        guard CGImageDestinationCopyImageSource(destination, source, options as CFDictionary, nil) else { return nil }
-        let data = buffer as Data
-        guard let written = CGImageSourceCreateWithData(data as CFData, nil),
-              OutgoingImageLocationProbe.isLocationFree(written) else { return nil }
-        return data
+        guard let destination = CGImageDestinationCreateWithData(buffer as CFMutableData, type,
+                                                                 CGImageSourceGetCount(source), nil),
+              OutgoingImageLocation.copyWithoutLocation(source, to: destination),
+              let written = CGImageSourceCreateWithData(buffer as CFData, nil),
+              !OutgoingImageLocation.isCarried(by: written) else { return nil }
+        return buffer as Data
     }
 
     /// LA génération d'encodage. Au-delà de `byteCeiling`, l'essai recommence
@@ -322,8 +321,8 @@ enum OutgoingImageWriter {
         }
         let written = CGSize(width: image.width, height: image.height)
         let orientation = redresses ? 1 : OutgoingImageGeometry.orientation(original.properties)
-        let carried = PhotoCaptureMetadata.carried(from: original.properties, orientation: orientation)
-            .filter { policy.keepsLocation || $0.key != kCGImagePropertyGPSDictionary }
+        let metadata = PhotoCaptureMetadata.carried(from: original.properties, orientation: orientation)
+        let carried = policy.keepsLocation ? metadata : OutgoingImageLocation.removed(from: metadata)
         let quality: [CFString: Any] = format.isLossy ? [kCGImageDestinationLossyCompressionQuality: policy.quality] : [:]
         let options = carried
             .merging(quality) { _, requested in requested }
@@ -408,13 +407,10 @@ public enum OutgoingImageLocationRemoval {
     public static func removeLocation(fromFileAt url: URL) -> Outcome {
         guard let source = CGImageSourceCreateWithURL(url as CFURL, [kCGImageSourceShouldCache: false] as CFDictionary),
               CGImageSourceGetCount(source) > 0,
-              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
-              properties[kCGImagePropertyGPSDictionary] != nil else { return .untouched }
+              OutgoingImageLocation.isCarried(by: source) else { return .untouched }
         guard let type = CGImageSourceGetType(source) else { return .failed }
         let copy = url.deletingLastPathComponent().appendingPathComponent(".\(UUID().uuidString).\(url.pathExtension)")
         guard writeWithoutLocation(source, type: type, to: copy),
-              let written = CGImageSourceCreateWithURL(copy as CFURL, [kCGImageSourceShouldCache: false] as CFDictionary),
-              OutgoingImageLocationProbe.isLocationFree(written),
               (try? FileManager.default.replaceItemAt(url, withItemAt: copy)) != nil else {
             try? FileManager.default.removeItem(at: copy)
             return .failed
@@ -422,26 +418,21 @@ public enum OutgoingImageLocationRemoval {
         return .removed
     }
 
-    /// La destination est relâchée au retour : le fichier est complet avant de remplacer l'original.
+    /// Un lieu qui survit dans la copie est un échec, jamais un retrait (#12905).
     private static func writeWithoutLocation(_ source: CGImageSource, type: CFString, to url: URL) -> Bool {
+        guard copyWithoutLocation(source, type: type, to: url),
+              let written = CGImageSourceCreateWithURL(url as CFURL, [kCGImageSourceShouldCache: false] as CFDictionary) else {
+            return false
+        }
+        return !OutgoingImageLocation.isCarried(by: written)
+    }
+
+    /// La destination est relâchée au retour : le fichier est complet avant d'être relu.
+    private static func copyWithoutLocation(_ source: CGImageSource, type: CFString, to url: URL) -> Bool {
         guard let destination = CGImageDestinationCreateWithURL(url as CFURL, type, CGImageSourceGetCount(source), nil) else {
             return false
         }
-        return CGImageDestinationCopyImageSource(destination, source, [kCGImageMetadataShouldExcludeGPS: true] as CFDictionary, nil)
-    }
-}
-
-/// Une image écrite est relue avant de partir : chacune de ses images est sans lieu.
-enum OutgoingImageLocationProbe {
-    static func isLocationFree(_ source: CGImageSource) -> Bool {
-        let count = CGImageSourceGetCount(source)
-        guard count > 0 else { return false }
-        return (0..<count).allSatisfy { index in
-            guard let properties = CGImageSourceCopyPropertiesAtIndex(source, index, nil) as? [CFString: Any] else {
-                return false
-            }
-            return properties[kCGImagePropertyGPSDictionary] == nil
-        }
+        return OutgoingImageLocation.copyWithoutLocation(source, to: destination)
     }
 }
 

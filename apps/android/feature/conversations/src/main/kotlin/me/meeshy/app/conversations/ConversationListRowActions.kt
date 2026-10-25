@@ -27,6 +27,8 @@ internal class ConversationListRowActions(
     private val categoryRepository: CategoryRepository,
     private val draftStore: ConversationDraftStore,
     private val workManager: WorkManager,
+    /** La conversation à l'écran ([me.meeshy.sdk.notification.ActiveConversationStore]), ou `null`. */
+    private val activeConversationId: () -> String? = { null },
 ) {
 
     /** Ids dont [loadPreviewMessages] est en vol : garde contre un double chargement. */
@@ -47,6 +49,11 @@ internal class ConversationListRowActions(
         runPrefMutation { repository.setArchivedOptimistic(id, !archived) }
     }
 
+    /** Archive [id] sans bascule (le blocage d'un pair archive sa conversation). */
+    fun archive(id: String) {
+        runPrefMutation { repository.setArchivedOptimistic(id, true) }
+    }
+
     fun toggleMentionsOnly(id: String) {
         val mentionsOnly = prefsOf(id)?.mentionsOnly ?: false
         runPrefMutation { repository.setMentionsOnlyOptimistic(id, !mentionsOnly) }
@@ -64,8 +71,40 @@ internal class ConversationListRowActions(
         runPrefMutation { repository.setTagsOptimistic(id, tags) }
     }
 
+    /**
+     * « Marquer comme lu » : la pastille tombe tout de suite à l'écran ([clearUnreadLocally]). La
+     * conversation déjà ouverte ne part pas au réseau (parité iOS `shouldDispatchListMarkAsRead`) :
+     * elle possède le marquage précis, seul le cache est mis à zéro.
+     */
     fun markRead(id: String) {
+        clearUnreadLocally(id)
+        if (activeConversationId() == id) {
+            scope.launch {
+                try {
+                    repository.markReadLocally(id)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    reportError(e.message)
+                }
+            }
+            return
+        }
         runPrefMutation { repository.markReadOptimistic(id) }
+    }
+
+    /**
+     * Efface la pastille de [id] dans l'état publié, sans attendre la réémission du cache. Les
+     * sections ([ConversationSections.of]) se dérivent de cette liste : elles suivent d'elles-mêmes.
+     */
+    fun clearUnreadLocally(id: String) {
+        state.update { current ->
+            if (current.conversations.none { it.id == id && it.unreadCount != 0 }) {
+                current
+            } else {
+                current.copy(conversations = current.conversations.map { if (it.id == id) it.copy(unreadCount = 0) else it })
+            }
+        }
     }
 
     fun markUnread(id: String) {
