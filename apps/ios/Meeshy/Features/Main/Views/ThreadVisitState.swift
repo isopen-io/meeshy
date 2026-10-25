@@ -11,5 +11,7 @@ enum ThreadVisitState {
     static func apply(to message: inout MeeshyMessage, from viewModel: ConversationViewModel?) {
         message.isViewOnceRevealed = viewModel?.revealedViewOnceIds[message.id] == true
         message.isBurning = viewModel?.burningEphemeralIds[message.id] == true
+        guard let viewModel else { return }
+        viewModel.startupDependencies.endToEndClear.apply(to: &message, conversationId: viewModel.conversationId)
     }
 }

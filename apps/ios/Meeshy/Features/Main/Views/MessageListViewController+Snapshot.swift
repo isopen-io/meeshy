@@ -284,5 +284,6 @@ extension MessageListViewController {
     func observeVisitState(_ vm: ConversationViewModel) {
         observePerMessageDictionary(vm.$revealedViewOnceIds, initial: vm.revealedViewOnceIds)
         observePerMessageDictionary(vm.$burningEphemeralIds, initial: vm.burningEphemeralIds)
+        observePerMessageDictionary(vm.startupDependencies.endToEndClear.$adopted, initial: vm.startupDependencies.endToEndClear.adopted)
     }
 }

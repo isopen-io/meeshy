@@ -533,7 +533,7 @@ struct CommentsSheetView: View {
             // Opt comments into the attachment carousel + voice (parity with
             // message-with-attachments). Pickers are wired below.
             forceShowAttachment: true,
-            forceShowVoice: true,
+            voiceDoor: .open,
             selectedLanguage: composerLanguage,
             onLanguageChange: { composerLanguage = $0 },
             onFocusChange: { composerIsFocused = $0 },

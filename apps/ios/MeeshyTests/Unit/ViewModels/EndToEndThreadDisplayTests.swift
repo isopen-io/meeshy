@@ -175,6 +175,7 @@ final class EndToEndThreadDisplayTests: XCTestCase {
         try assertNoPlaintextStored(secret, in: thread.pool)
 
         let reopened = try await openThread(as: bob, with: alice, endToEnd: bobDevice, pool: thread.pool)
+        await reopened.viewModel.loadMessages()
         await eventually("après un redémarrage à froid, le clair est relu de la base scellée") {
             rendered(serverId, in: reopened)?.content == secret
         }

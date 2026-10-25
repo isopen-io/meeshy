@@ -103,7 +103,7 @@ final class ConversationEncryptionExplanationTests: XCTestCase {
         let allowance = GuestAttachmentAllowance.unrestricted.sealing(.contentUnsealable)
         let composer = UniversalComposerBar(
             mode: .message,
-            forceHideVoice: !allowance.offersVoiceRecording,
+            voiceDoor: allowance.offersVoiceRecording ? .byMode : .closed,
             onStartRecording: {}, onStopRecordingToAttachment: {}, onSendRecording: {}, onCancelRecording: {},
             externalIsRecording: false, externalRecordingDuration: 0
         )
@@ -118,7 +118,7 @@ final class ConversationEncryptionExplanationTests: XCTestCase {
         let allowance = GuestAttachmentAllowance.unrestricted.sealing(nil)
         let composer = UniversalComposerBar(
             mode: .message,
-            forceHideVoice: !allowance.offersVoiceRecording,
+            voiceDoor: allowance.offersVoiceRecording ? .byMode : .closed,
             onStartRecording: {}, onStopRecordingToAttachment: {}, onSendRecording: {}, onCancelRecording: {},
             externalIsRecording: false, externalRecordingDuration: 0
         )

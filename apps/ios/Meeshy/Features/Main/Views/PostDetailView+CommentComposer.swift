@@ -30,7 +30,7 @@ extension PostDetailView {
             accentColor: accentColor,
             secondaryColor: composerSecondaryColor,
             forceShowAttachment: true,
-            forceShowVoice: true,
+            voiceDoor: .open,
             selectedLanguage: composerLanguage,
             onLanguageChange: { composerLanguage = $0 },
             onFocusChange: { composerIsFocused = $0 },
