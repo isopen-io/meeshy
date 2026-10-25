@@ -20,6 +20,7 @@
  * traductions NON VIDES : un double qui rendrait `[]` rendrait tout témoin de
  * contenu trivialement vert.
  */
+import { differsOrUnset } from '../../../../utils/prisma-unset';
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { attachmentServiceRowSelect } from '../../../../services/attachments/attachmentIncludes';
@@ -203,7 +204,7 @@ describe('AttachmentService.getConversationAttachments — ce que la REQUÊTE de
             conversationId: CONVERSATION_ID,
             ...carrierMessageStillServesWhere(now),
           },
-          NOT: [{ encryptionMode: 'e2ee' }],
+          ...differsOrUnset('encryptionMode', 'e2ee'),
         },
       })
     );

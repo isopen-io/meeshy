@@ -145,6 +145,7 @@ const flush = () => new Promise((resolve) => setImmediate(resolve));
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockAssociateAttachmentsToMessage.mockImplementation(async (ids: readonly string[]) => new Set(ids).size);
 });
 
 describe('conversation e2ee — le blob chiffré sur l’appareil est la seule pièce admise', () => {
@@ -158,6 +159,15 @@ describe('conversation e2ee — le blob chiffré sur l’appareil est la seule p
     expect(mockAssociateAttachmentsToMessage).toHaveBeenCalledWith(['photo', 'affiche'], MSG_ID, expect.anything());
     expect(processAudioAttachment).not.toHaveBeenCalled();
     expect(prisma.message.create.mock.calls[0][0].data.encryptionMode).toBe('e2ee');
+  });
+
+  it('deux envois du même blob : le second échoue AVANT toute enveloppe, son message retiré', async () => {
+    const { prisma, processor } = harness(E2EE, [blob('photo')]);
+    mockAssociateAttachmentsToMessage.mockResolvedValue(0);
+
+    await expect(processor.saveMessage({ ...send, ...sealed, attachmentIds: ['photo'] }))
+      .rejects.toMatchObject({ code: 'E2EE_ATTACHMENT_INVALID' });
+    expect(prisma.message.delete).toHaveBeenCalledWith({ where: { id: MSG_ID } });
   });
 
   it('refuse un blob sans enveloppe : personne n’aurait sa clé', async () => {
@@ -192,6 +202,22 @@ describe('conversation e2ee — le blob chiffré sur l’appareil est la seule p
     await flush();
     expect(prisma.message.create).not.toHaveBeenCalled();
     expect(processAudioAttachment).not.toHaveBeenCalled();
+  });
+
+  it('refuse un blob scellé ACCOMPAGNÉ d’une diffusion : la recopie en clair ne passe pas derrière lui (audit du 2026-10-25)', async () => {
+    const { prisma, processor } = harness(E2EE, [blob('photo')], [voiceNote('src-vocal')]);
+
+    await expect(processor.saveMessage({ ...send, ...sealed, attachmentIds: ['photo'], copyAttachmentsFromMessageId: SOURCE_ID }))
+      .rejects.toMatchObject({ code: E2EE_PLAINTEXT_REFUSED });
+    expect(prisma.message.create).not.toHaveBeenCalled();
+  });
+
+  it('refuse un blob scellé accompagné d’un transfert qui recopierait des pièces', async () => {
+    const { prisma, processor } = harness(E2EE, [blob('photo')], [voiceNote('src-vocal')]);
+
+    await expect(processor.saveMessage({ ...send, ...sealed, attachmentIds: ['photo'], forwardedFromId: SOURCE_ID, forwardImposes: null }))
+      .rejects.toMatchObject({ code: E2EE_PLAINTEXT_REFUSED });
+    expect(prisma.message.create).not.toHaveBeenCalled();
   });
 
   it('refuse un identifiant inconnu comme une pièce en clair (fail-closed)', async () => {

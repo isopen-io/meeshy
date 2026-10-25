@@ -26,6 +26,8 @@ out = {
   vector("nist-sp800-38a-f25", nist_key, mac1, nist_iv, nist_pt, "AES key and IV of NIST SP 800-38A F.2.5 (CBC-AES256.Encrypt): the first 64 ciphertext bytes are the published F.2.5 ciphertext"),
   vector("short-text", 'aa'*32, 'bb'*32, 'cc'*16, b'Meeshy', "6 bytes, padded to the 541-byte floor"),
   vector("bucket-1234", '11'*32, '22'*32, '33'*16, bytes(i % 251 for i in range(1234)), "1234 bytes, Signal-iOS spot check: padded to 1240"),
+  vector("full-pkcs7-block", '44'*32, '55'*32, '66'*16, bytes((i * 7) % 256 for i in range(3292)), "3292 bytes padded to 3456, a multiple of 16: PKCS7 appends a whole block"),
+  vector("beyond-64-kib", '77'*32, '88'*32, '99'*16, bytes((i * 13) % 256 for i in range(70000)), "70000 bytes padded to 71178: crosses the 64 KiB streaming chunk"),
  ]
 }
 json.dump(out, sys.stdout, indent=2)

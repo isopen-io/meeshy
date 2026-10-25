@@ -12,6 +12,8 @@ import { declaredReplyProtection } from './replyProtectionContagion';
 import { assertPlaintextAdmitted, E2EE_CONTENT_PLACEHOLDER, type EncryptionRegime } from './e2eePlaintextAdmission';
 import { admitSendUnderRegime } from './e2eeSendAdmission';
 import { persistAdmittedEnvelopes } from './e2eeEnvelopePersistence';
+import { E2eeRelayRefusedError } from '../e2ee/e2ee-relay-errors';
+import { E2EE_ATTACHMENT_ERROR_CODES } from '@meeshy/shared/types/e2ee-attachment';
 import { atRestModeOf, sealsAtRest, sealTextAtRest } from './atRestWrite';
 import { isSealedAtRest, isServerAtRestMode, revealAtRestWithQuote, servedClearAtRest, ServerAtRestUnavailableError } from './serverAtRest';
 import type { E2EERelayRequest } from '@meeshy/shared/types/e2ee-directory';
@@ -559,6 +561,11 @@ export class MessageProcessor {
 
     const corrWithMsg = { ...corr, messageId: message.id };
 
+    // #10789 — les blobs d'un envoi scellé se RÉSERVENT avant que la moindre
+    // enveloppe ne parte : deux envois du même blob, un seul l'obtient, l'autre
+    // échoue sans rien remettre aux appareils.
+    if (endToEnd && data.attachmentIds?.length) await this.reserveSealedPieces(data.attachmentIds, message);
+
     if (relay) await persistAdmittedEnvelopes(this.prisma, { message, relay });
 
     // ÉTAPE 4: Gérer les attachments (Lier ou Copier pour forward)
@@ -700,7 +707,8 @@ export class MessageProcessor {
     }
 
     try {
-      // 1. Lier les attachments pré-uploadés
+      // 1. Lier les attachments pré-uploadés — en e2ee, déjà réservés (`reserveSealedPieces`).
+      if (!options.serverReads && data.attachmentIds?.length) return;
       if (data.attachmentIds && data.attachmentIds.length > 0) {
         await this.attachmentService.associateAttachmentsToMessage(data.attachmentIds, message.id, message);
 
@@ -717,6 +725,23 @@ export class MessageProcessor {
     } catch (error) {
       logger.error('[MessageProcessor] Error handling attachments', error);
     }
+  }
+
+  /**
+   * Rattache les blobs chiffrés de bout en bout d'un envoi scellé (#10789). Le
+   * rattachement est conditionnel (`messageId` encore vide) : un blob déjà pris
+   * par un autre envoi ne l'est pas deux fois. Il en manque un : le message est
+   * retiré et l'envoi échoue, AVANT toute enveloppe — jamais une pièce perdue
+   * en silence.
+   */
+  private async reserveSealedPieces(attachmentIds: readonly string[], message: Message): Promise<void> {
+    const wanted = new Set(attachmentIds).size;
+    const reserved = await this.attachmentService.associateAttachmentsToMessage(attachmentIds, message.id, message);
+    if (reserved >= wanted) return;
+    await this.prisma.message.delete({ where: { id: message.id } }).catch((error: unknown) =>
+      logger.error('[MessageProcessor] Failed to delete a sealed message whose pieces were taken', error)
+    );
+    throw new E2eeRelayRefusedError(E2EE_ATTACHMENT_ERROR_CODES.INVALID, 400, 'Pièce jointe chiffrée refusée : elle part déjà avec un autre message');
   }
 
   /**

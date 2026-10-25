@@ -7,7 +7,10 @@
  * passe par le pointeur du message déchiffré sur l'appareil, jamais par ici.
  *
  * Même méthode que `conversation-attachments-carrier-lifecycle.test.ts` : on
- * mesure l'ARGUMENT passé à `findMany`, puisque c'est lui qui décide.
+ * mesure l'ARGUMENT passé à `findMany`, puisque c'est lui qui décide — et cet
+ * argument doit être la forme SSOT `differsOrUnset`, la seule qui garde les
+ * pièces SANS champ `encryptionMode` (toutes les pièces ordinaires) : un `NOT`
+ * nu les écartait toutes sur un vrai mongod (audit du 2026-10-25, #8309).
  */
 import { describe, it, expect, jest } from '@jest/globals';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
@@ -20,6 +23,7 @@ jest.mock('../../../../utils/logger-enhanced', () => ({
 }));
 
 import { AttachmentService } from '../../../../services/attachments';
+import { differsOrUnset } from '../../../../utils/prisma-unset';
 
 describe('AttachmentService.getConversationAttachments — aucun blob chiffré de bout en bout (#10789)', () => {
   it.each([undefined, 'image'] as const)('écarte les pièces e2ee de la requête (filtre de type : %s)', async (type) => {
@@ -29,6 +33,8 @@ describe('AttachmentService.getConversationAttachments — aucun blob chiffré d
     await service.getConversationAttachments('507f1f77bcf86cd799439022', { limit: 50, ...(type ? { type } : {}) });
 
     const where = (findMany.mock.calls[0]?.[0] as { where: Record<string, unknown> }).where;
-    expect(where.NOT).toEqual([{ encryptionMode: 'e2ee' }]);
+    expect(where.NOT).toBeUndefined();
+    expect(where.OR).toEqual(differsOrUnset('encryptionMode', 'e2ee').OR);
+    expect(JSON.stringify(where.OR)).toContain('"isSet":false');
   });
 });

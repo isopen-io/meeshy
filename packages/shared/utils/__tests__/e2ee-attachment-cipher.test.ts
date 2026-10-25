@@ -5,6 +5,7 @@ import {
   E2EEAttachmentCipherError,
   decryptAttachment,
   encryptAttachment,
+  encryptAttachmentForTestVector,
   paddedAttachmentSize,
 } from '../e2ee-attachment-cipher';
 
@@ -40,7 +41,7 @@ describe('format client-v1 des pièces jointes chiffrées de bout en bout (#1078
   it.each(vectors.vectors.map((vector) => [vector.name, vector] as const))(
     'reproduit le vecteur %s, écrit par OpenSSL',
     async (_name, vector) => {
-      const sealed = await encryptAttachment(hex(vector.plaintext), { key: hex(vector.key), iv: hex(vector.iv) });
+      const sealed = await encryptAttachmentForTestVector(hex(vector.plaintext), { key: hex(vector.key), iv: hex(vector.iv) });
       expect(toHex(sealed.blob)).toBe(vector.blob);
       expect(toHex(sealed.digest)).toBe(vector.digest);
       expect(sealed.size).toBe(vector.size);
@@ -48,9 +49,27 @@ describe('format client-v1 des pièces jointes chiffrées de bout en bout (#1078
     },
   );
 
+  // Chaque couche sur son vecteur OFFICIEL, telle que ce module s'en sert.
+  it('HMAC-SHA256 : RFC 4231, cas 2', async () => {
+    const key = await crypto.subtle.importKey('raw', new TextEncoder().encode('Jefe'), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+    const mac = new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode('what do ya want for nothing?')));
+    expect(toHex(mac)).toBe('5bdcc146bf60754e6a042426089575c75a003f089d2739839dec58b964ec3843');
+  });
+
+  it('SHA-256 : FIPS 180-2, « abc »', async () => {
+    const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode('abc')));
+    expect(toHex(digest)).toBe('ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad');
+  });
+
+  it('refuse une taille qui n’est pas un entier', async () => {
+    const vector = vectors.vectors[0];
+    expect(await failureOf(decryptAttachment(hex(vector.blob), { key: hex(vector.key), digest: hex(vector.digest), size: Number.NaN }))).toBe('malformed');
+    expect(await failureOf(decryptAttachment(hex(vector.blob), { key: hex(vector.key), digest: hex(vector.digest), size: 1.5 }))).toBe('malformed');
+  });
+
   it('chiffre les quatre premiers blocs comme NIST SP 800-38A F.2.5', async () => {
     const vector = vectors.vectors[0];
-    const sealed = await encryptAttachment(hex(vector.plaintext), { key: hex(vector.key), iv: hex(vector.iv) });
+    const sealed = await encryptAttachmentForTestVector(hex(vector.plaintext), { key: hex(vector.key), iv: hex(vector.iv) });
     expect(toHex(sealed.blob.slice(16, 80))).toBe(NIST_F25_CIPHERTEXT);
   });
 

@@ -84,12 +84,23 @@ const aesKey = (key: Bytes, usage: KeyUsage): Promise<CryptoKey> =>
 const macKey = (key: Bytes, usage: KeyUsage): Promise<CryptoKey> =>
   subtle().importKey('raw', key.slice(32, KEY_BYTES), { name: 'HMAC', hash: 'SHA-256' }, false, [usage]);
 
-export async function encryptAttachment(
+/** Une clé et un IV NEUFS à chaque fichier : la seule façon de chiffrer hors des vecteurs de test. */
+export function encryptAttachment(plaintext: Uint8Array): Promise<SealedAttachment> {
+  return seal(plaintext, randomBytes(KEY_BYTES), randomBytes(IV_BYTES));
+}
+
+/**
+ * VECTEURS DE TEST SEULEMENT : clé et IV imposés, pour rejouer un vecteur
+ * figé. Réutiliser une clé ou un IV hors de là romprait la confidentialité.
+ */
+export function encryptAttachmentForTestVector(
   plaintext: Uint8Array,
-  fixed: { readonly key?: Uint8Array; readonly iv?: Uint8Array } = {},
+  material: { readonly key: Uint8Array; readonly iv: Uint8Array },
 ): Promise<SealedAttachment> {
-  const key = fixed.key ? owned(fixed.key) : randomBytes(KEY_BYTES);
-  const iv = fixed.iv ? owned(fixed.iv) : randomBytes(IV_BYTES);
+  return seal(plaintext, owned(material.key), owned(material.iv));
+}
+
+async function seal(plaintext: Uint8Array, key: Bytes, iv: Bytes): Promise<SealedAttachment> {
   if (key.length !== KEY_BYTES || iv.length !== IV_BYTES) throw new E2EEAttachmentCipherError('malformed');
   const padded = concat(plaintext, new Uint8Array(paddedAttachmentSize(plaintext.length) - plaintext.length));
   const ciphertext = await bytes(subtle().encrypt({ name: 'AES-CBC', iv }, await aesKey(key, 'encrypt'), padded));
@@ -101,7 +112,7 @@ export async function encryptAttachment(
 }
 
 export async function decryptAttachment(blob: Uint8Array, opening: AttachmentOpening): Promise<Uint8Array> {
-  if (opening.key.length !== KEY_BYTES || opening.digest.length !== DIGEST_BYTES || opening.size < 0) {
+  if (opening.key.length !== KEY_BYTES || opening.digest.length !== DIGEST_BYTES || !Number.isSafeInteger(opening.size) || opening.size < 0) {
     throw new E2EEAttachmentCipherError('malformed');
   }
   const sealed = owned(blob);

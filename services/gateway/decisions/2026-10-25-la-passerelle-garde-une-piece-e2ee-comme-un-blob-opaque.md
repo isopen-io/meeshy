@@ -20,11 +20,16 @@ passerelle avait lu, vignetté, transcodé, transcrit. Directive #9224 / #9229 :
 - **Envoi** (`admitSendUnderRegime`) : dans une conversation `e2ee`, chaque pièce portée doit être un blob
   `e2ee`, pas encore rattaché, déposé par l'expéditeur ; une pièce en clair garde le refus
   `E2EE_PLAINTEXT_REFUSED` (lisible par les anciens clients, #9223), un blob d'autrui ou déjà rattaché est
-  refusé `E2EE_ATTACHMENT_INVALID`, une copie ou un transfert de pièces reste refusé. Hors `e2ee`, un blob
-  `e2ee` est refusé `409 E2EE_REGIME_CHANGED` : personne n'y aurait de quoi le lire.
+  refusé `E2EE_ATTACHMENT_INVALID`, une copie ou un transfert de pièces reste refusé — y compris à côté de
+  blobs : l'admission juge l'UNION de ce que l'envoi porterait. Les blobs se réservent (rattachement
+  conditionnel) AVANT que la moindre enveloppe parte ; un blob déjà pris fait échouer l'envoi. Hors `e2ee`,
+  un blob `e2ee` est refusé `409 E2EE_REGIME_CHANGED` : personne n'y aurait de quoi le lire.
+- **Droits par type** : le blob étant `application/octet-stream`, les droits de conversation par type de
+  pièce (`attachmentKindAdmission`) le lisent comme un fichier. Décision produit ouverte (issue du lot).
 - **Lecture** : `GET /attachments/:id` seulement (jeton, appartenance active, vie du porteur). La route par
   CHEMIN (`/attachments/file/*`), qui ne connaît pas son lecteur, refuse tout fichier porté par une ligne
-  `e2ee`. Transcription et traduction à la demande refusent la ligne `e2ee` elle-même, rattachée ou non.
+  `e2ee`. La galerie (`GET /conversations/:id/attachments`) l'écarte par `differsOrUnset` — jamais un `NOT`
+  nu, qui écarterait aussi toutes les pièces ordinaires, sans champ `encryptionMode` (#8309, mesuré). Transcription et traduction à la demande refusent la ligne `e2ee` elle-même, rattachée ou non.
 - **Push** : aucun média, nom, taille ni durée d'une pièce `e2ee` (garde `maskedAttachment`, en plus du
   message protégé).
 - **Purge** : la ligne est rattachée au message ; suppression, échéance et balayage des pièces non

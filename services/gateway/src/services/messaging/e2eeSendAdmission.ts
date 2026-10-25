@@ -188,25 +188,26 @@ async function attachedPieces(prisma: AdmissionPrisma, request: SendUnderRegime)
 }
 
 async function carriedPieces(prisma: AdmissionPrisma, request: SendUnderRegime): Promise<CarriedPieces> {
-  if (request.attachmentIds?.length) {
-    return { attached: await attachedPieces(prisma, request), copied: [], copiesFromBroadcast: false };
-  }
-  if (request.copyAttachmentsFromMessageId) {
-    const copied = await prisma.messageAttachment.findMany({
-      where: { messageId: request.copyAttachmentsFromMessageId },
-      orderBy: MESSAGE_ATTACHMENT_ORDER,
-      select: PIECE_SELECT,
-    });
-    return { attached: [], copied, copiesFromBroadcast: true };
-  }
-  if (!request.forwardedFromId || request.forwardCopySelection?.length === 0) return { attached: [], copied: [], copiesFromBroadcast: false };
-  const copied = await prisma.messageAttachment.findMany({
-    where: {
-      messageId: request.forwardedFromId,
-      ...(request.forwardCopySelection ? { id: { in: [...request.forwardCopySelection] } } : {}),
-    },
-    orderBy: MESSAGE_ATTACHMENT_ORDER,
-    select: PIECE_SELECT,
-  });
-  return { attached: [], copied, copiesFromBroadcast: false };
+  // L'UNION de ce que l'envoi ferait porter : `handleAttachments` traite la
+  // diffusion AVANT les pièces rattachées, si bien qu'un blob scellé ne doit
+  // jamais masquer une recopie en clair (audit du 2026-10-25).
+  const attached = await attachedPieces(prisma, request);
+  const broadcast = request.copyAttachmentsFromMessageId
+    ? await prisma.messageAttachment.findMany({
+        where: { messageId: request.copyAttachmentsFromMessageId },
+        orderBy: MESSAGE_ATTACHMENT_ORDER,
+        select: PIECE_SELECT,
+      })
+    : [];
+  const forwarded = !request.forwardedFromId || request.forwardCopySelection?.length === 0
+    ? []
+    : await prisma.messageAttachment.findMany({
+        where: {
+          messageId: request.forwardedFromId,
+          ...(request.forwardCopySelection ? { id: { in: [...request.forwardCopySelection] } } : {}),
+        },
+        orderBy: MESSAGE_ATTACHMENT_ORDER,
+        select: PIECE_SELECT,
+      });
+  return { attached, copied: [...broadcast, ...forwarded], copiesFromBroadcast: Boolean(request.copyAttachmentsFromMessageId) };
 }

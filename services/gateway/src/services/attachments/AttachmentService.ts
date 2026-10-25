@@ -3,6 +3,7 @@
  * Délègue à UploadProcessor et MetadataManager
  */
 
+import { differsOrUnset } from '../../utils/prisma-unset';
 import { PrismaClient, Prisma } from '@meeshy/shared/prisma/client';
 import { promises as fs } from 'fs';
 import path from 'path';
@@ -159,7 +160,7 @@ export class AttachmentService {
       readonly effectFlags?: number;
       readonly maxViewOnceCount?: number | null;
     }
-  ): Promise<void> {
+  ): Promise<number> {
     const orderedIds = [...new Set(attachmentIds)];
     const added = {
       messageId,
@@ -180,7 +181,7 @@ export class AttachmentService {
       const carried = carriedFlags.get(id);
       return carried === undefined ? [] : [{ id, data: { ...added, rank, effectFlags: carried | addedFlags } }];
     });
-    await Promise.all(
+    const results = await Promise.all(
       writes.map(({ id, data }) =>
         this.prisma.messageAttachment.updateMany({
           where: { id: { in: [id] }, ...unsetOrNull('messageId') },
@@ -188,6 +189,9 @@ export class AttachmentService {
         }),
       ),
     );
+    // Le nombre de pièces EFFECTIVEMENT rattachées : une pièce déjà prise par un
+    // autre message ne compte pas (#10789, réservation des blobs scellés).
+    return results.reduce((total, result) => total + (result?.count ?? 0), 0);
   }
 
   private toAttachment(attachment: {
@@ -584,7 +588,10 @@ export class AttachmentService {
       },
       // #10789 — un blob chiffré de bout en bout ne s'ouvre que par le pointeur
       // du message déchiffré sur l'appareil : la galerie du serveur l'ignore.
-      NOT: [{ encryptionMode: 'e2ee' }],
+      // `differsOrUnset`, jamais un `NOT` nu : une pièce ordinaire n'a PAS de
+      // champ `encryptionMode`, et un `NOT` Mongo l'écarterait aussi (#8309,
+      // mesuré sur mongod 8.0.4 par l'audit du 2026-10-25).
+      ...differsOrUnset('encryptionMode', 'e2ee'),
     };
 
     if (options.type) {

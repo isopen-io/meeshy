@@ -11,13 +11,12 @@
  * croit illisible pour le serveur gardait le message lisible en base. La règle
  * échoue désormais FERMÉE : le texte est refusé, avec un code stable.
  *
- Les PIÈCES JOINTES suivent la même règle (#12518). Aucun chemin de la
- * passerelle ne reçoit aujourd'hui un fichier chiffré par l'appareil (#10789) :
- * `uploadEncryptedFile` reçoit le CLAIR puis le chiffre lui-même. Une pièce
- * portée dans une conversation e2ee — rattachée, transférée ou recopiée par une
- * diffusion — est donc une pièce que le serveur a lue, puis qu'il aurait
- * transcrite, traduite et clonée : elle est refusée, sous le MÊME code, que les
- * clients savent déjà dire (« conversation chiffrée de bout en bout »).
+ Les PIÈCES JOINTES suivent la même règle (#12518) : une pièce portée en
+ * clair dans une conversation e2ee — rattachée, transférée ou recopiée par une
+ * diffusion — est une pièce que le serveur a lue, puis qu'il aurait transcrite,
+ * traduite et clonée : elle est refusée, sous le MÊME code, que les clients
+ * savent déjà dire (« conversation chiffrée de bout en bout »). Depuis #10789,
+ * la seule pièce admise est le blob chiffré sur l'appareil (`e2eeSendAdmission`).
  *
  * Ce qui reste admis, et pourquoi :
  * - à côté d'un chiffré, le seul littéral `[Encrypted]` que les clients posent
@@ -117,14 +116,4 @@ export const isE2eePlaintextRefusal = (error: unknown): error is E2eePlaintextRe
 /** Lève le refus quand le texte ne peut pas être écrit en clair. */
 export function assertPlaintextAdmitted(params: Parameters<typeof plaintextRefusedIn>[0]): void {
   if (plaintextRefusedIn(params)) throw new E2eePlaintextRefusedError();
-}
-
-/** Lève le refus quand une conversation e2ee recevrait des pièces que le serveur a lues (#12518). */
-export function assertNoPlaintextPieces(params: {
-  readonly encryptionMode: string | null | undefined;
-  readonly carriedPieceCount: number;
-}): void {
-  if (isEndToEndMode(params.encryptionMode) && params.carriedPieceCount > 0) {
-    throw new E2eePlaintextRefusedError(E2EE_PLAINTEXT_ATTACHMENT_REFUSAL_MESSAGE);
-  }
 }
