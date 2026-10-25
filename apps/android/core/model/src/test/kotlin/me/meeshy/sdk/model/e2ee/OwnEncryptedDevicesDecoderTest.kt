@@ -86,12 +86,12 @@ class OwnEncryptedDevicesDecoderTest {
     }
 
     @Test
-    fun `the current device comes first, then the most recently active`() {
+    fun `the current device comes first, then the most recently added, whatever its key publication date`() {
         val decoded = OwnEncryptedDevicesDecoder.decode(
             data(
-                device(deviceId = "1", lastSeenAt = "\"2026-10-01T00:00:00Z\"") + "," +
-                    device(deviceId = "2", lastSeenAt = "\"2026-10-24T00:00:00Z\"") + "," +
-                    device(deviceId = "3", lastSeenAt = "\"2026-09-01T00:00:00Z\"", current = "true"),
+                device(deviceId = "1", enrolledAt = "\"2026-10-01T00:00:00Z\"", lastSeenAt = "\"2026-10-25T00:00:00Z\"") + "," +
+                    device(deviceId = "2", enrolledAt = "\"2026-10-24T00:00:00Z\"", lastSeenAt = "\"2026-10-24T00:00:00Z\"") + "," +
+                    device(deviceId = "3", enrolledAt = "\"2026-09-01T00:00:00Z\"", current = "true"),
             ),
         )!!
 
