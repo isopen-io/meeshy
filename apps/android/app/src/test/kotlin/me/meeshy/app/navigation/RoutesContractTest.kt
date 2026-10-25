@@ -140,6 +140,11 @@ class RoutesContractTest {
     }
 
     @Test
+    fun `my encrypted devices live under settings`() {
+        assertThat(Routes.ENCRYPTED_DEVICES).isEqualTo("settings/encrypted-devices")
+    }
+
+    @Test
     fun `legal route resolves for every document kind`() {
         LegalDocumentKind.values().forEach { kind ->
             assertThat(Routes.legal(kind)).isEqualTo("settings/legal/${kind.arg}")

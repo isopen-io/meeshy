@@ -131,6 +131,10 @@ function registerDeviceRoutes(fastify: FastifyInstance, deps: E2EERouteDeps): vo
     return sendSuccess(reply, enrolled, { statusCode: enrolled.created ? 201 : 200 });
   }));
 
+  fastify.get('/e2ee/devices', { preValidation }, guarded(async (_request, reply, caller) =>
+    sendSuccess(reply, { devices: await deps.directory.ownDevices(caller) }),
+  ));
+
   fastify.put('/e2ee/devices/:deviceId/keys', writes, guarded(async (request, reply, caller) => {
     if (!withoutPrivateKeys(reply, request.body)) return;
     const deviceId = parsedOr400(reply, deviceIdParam.safeParse((request.params as { deviceId?: string }).deviceId));
