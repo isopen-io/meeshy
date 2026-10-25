@@ -1,6 +1,12 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 
+import { QueryClient } from '@tanstack/react-query';
+
+import { preferences as preferencesPath } from '@meeshy/shared/api/endpoints/me';
 import { resolveEngagementProgress } from '@meeshy/shared/utils/engagement-progress';
+
+import { APP_PREFERENCES_QUERY_KEY, type AppPreferences } from '@/lib/api/app-preferences';
+import type { PreferenceActionDeps } from '@/lib/api/app-preferences-actions';
 
 import type { EngagementWithGame } from '@/lib/api/engagement';
 import { ENGAGEMENT_PROGRESS_FIXTURE } from '@/lib/api/engagement-fixture';
@@ -9,10 +15,11 @@ import { atmosphereTilesOf, type AtmosphereGate, type AtmosphereOutcome } from '
 import type { GameHiddenOutcome } from '@/lib/game/game-hidden';
 import { gamePrefs } from '@/lib/game/preferences';
 import { createActMounter } from '@/test-support/act-mount';
+import { scriptedGateway } from '@/test-support/scripted-transport';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import type { GameV2Actions } from './game-v2-actions';
-import { ReglagesBody, hideGame } from './progression-reglages';
+import { ReglagesBody, hideGame, useGameNotifications } from './progression-reglages';
 
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 const { mount, unmountAll, click } = createActMounter();
@@ -227,5 +234,63 @@ describe('Mon atmosphère', () => {
     expect(chosen).toEqual(['neon']);
     expect(host.querySelector('[data-atmosphere-choice]')).toBeNull();
     expect(host.querySelector('#game-settings-atmosphere [role="status"]')?.textContent).toContain('Hors ligne');
+  });
+});
+
+/**
+ * CE QUI PART QUAND ON BASCULE UNE NOTIFICATION DU JEU (#9490, #10268) — le câblage de l'écran, pas un rappel
+ * tendu à la main : chaque interrupteur de la carte écrit SA clé, et seulement elle, dans `PATCH /me/preferences`.
+ * Un interrupteur « Moments à immortaliser » qui écrirait `gameEnabled` couperait tout le jeu en croyant ne couper
+ * que les photos.
+ */
+describe('les notifications du jeu : ce que la bascule envoie à la passerelle', () => {
+  const served: AppPreferences = {
+    theme: 'auto',
+    pushEnabled: true,
+    soundEnabled: true,
+    showOnlineStatus: true,
+    showLastSeen: true,
+    showReadReceipts: true,
+    showTypingIndicator: true,
+    hideProfileFromSearch: false,
+    acceptCallsFromNonContacts: true,
+    notifyContactsOnReturn: true,
+    contactActivityEnabled: true,
+    gameEnabled: true,
+    gamePhotoEnabled: true,
+  };
+
+  /** La passerelle sert la catégorie `notification` ENTIÈRE, telle qu'elle l'a retenue. */
+  const screen = (retained: Pick<AppPreferences, 'gameEnabled' | 'gamePhotoEnabled'>) => {
+    const { pushEnabled, soundEnabled, contactActivityEnabled, gameEnabled, gamePhotoEnabled } = { ...served, ...retained };
+    const notification = { pushEnabled, soundEnabled, contactActivityEnabled, gameEnabled, gamePhotoEnabled };
+    const gateway = scriptedGateway({ [`PATCH ${preferencesPath}`]: { ok: true, status: 200, data: { notification } } });
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    queryClient.setQueryData(APP_PREFERENCES_QUERY_KEY, served);
+    const deps: PreferenceActionDeps = { ...gateway.deps, queryClient, isOnline: () => true };
+    function Host() {
+      return <ReglagesBody progress={progress} actions={actions()} online hide={() => undefined} notifications={useGameNotifications(deps)} />;
+    }
+    return { gateway, queryClient, Host };
+  };
+
+  test('« Moments à immortaliser » éteint envoie notification.gamePhotoEnabled = false, et rien d’autre', async () => {
+    const { gateway, queryClient, Host } = screen({ gameEnabled: true, gamePhotoEnabled: false });
+    const host = await mount(<Host />);
+    await click(host.querySelector('[data-game-setting-photo]'));
+    expect(gateway.calls().map(({ method, path, body }) => ({ method, path, body }))).toEqual([
+      { method: 'PATCH', path: preferencesPath, body: { notification: { gamePhotoEnabled: false } } },
+    ]);
+    expect(queryClient.getQueryData<AppPreferences>(APP_PREFERENCES_QUERY_KEY)).toMatchObject({ gameEnabled: true, gamePhotoEnabled: false });
+    expect(host.querySelector<HTMLInputElement>('[data-game-setting-photo]')?.checked).toBe(false);
+  });
+
+  test('les notifications du jeu éteintes envoient notification.gameEnabled = false, et rien d’autre', async () => {
+    const { gateway, Host } = screen({ gameEnabled: false, gamePhotoEnabled: true });
+    const host = await mount(<Host />);
+    await click(host.querySelector('[data-game-setting-notifications]'));
+    expect(gateway.calls().map(({ method, path, body }) => ({ method, path, body }))).toEqual([
+      { method: 'PATCH', path: preferencesPath, body: { notification: { gameEnabled: false } } },
+    ]);
   });
 });

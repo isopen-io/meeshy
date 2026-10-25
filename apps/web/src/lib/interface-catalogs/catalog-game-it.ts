@@ -730,7 +730,7 @@ const it = {
   'game.settings.notifications.body': 'Una proposta di alleanza, un risultato del torneo, una sosta del viaggio: al massimo una notifica del gioco al giorno. Questa impostazione vale per il tuo account, su tutti i tuoi dispositivi.',
   'game.settings.notifications.switch': 'Ricevi le notifiche del gioco',
   'game.settings.notifications.photo_switch': 'Momenti da immortalare',
-  'game.settings.notifications.photo_body': 'Una tappa superata ad app chiusa: una notifica discreta ti propone di immortalarla nella tua Cronaca.',
+  'game.settings.notifications.photo_body': 'Un momento vissuto ad app chiusa: una notifica discreta ti propone di immortalarlo nella tua Cronaca.',
   'game.settings.notifications.photo_cut': 'Disattivati con le notifiche del gioco. La tua scelta resta salvata per quando le riattivi.',
   'game.archive.season.past_title': 'Viaggio {number} · concluso',
   'game.archive.season.current_title': 'Viaggio {number} · in corso',

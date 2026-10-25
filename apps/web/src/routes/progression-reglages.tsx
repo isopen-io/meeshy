@@ -14,7 +14,7 @@ import { GAME_BRAND } from '@/components/game-surface';
 import type { EngagementWithGame } from '@/lib/api/engagement';
 import type { GameHiddenOutcome } from '@/lib/game/game-hidden';
 import { appPreferencesQueryOptions, type PreferencesPatch } from '@/lib/api/app-preferences';
-import { performPreferenceEdit } from '@/lib/api/app-preferences-actions';
+import { performPreferenceEdit, type PreferenceActionDeps } from '@/lib/api/app-preferences-actions';
 import { apiDeps } from '@/lib/api/deps';
 import { appQueryClient } from '@/lib/api/query-client';
 import type { AtmosphereGate, AtmosphereOutcome } from '@/lib/game/atmosphere';
@@ -51,6 +51,13 @@ const CLOSED: { readonly showcase: 'me'; readonly rank: 'me'; readonly treasury:
   atlas: 'me',
 };
 
+export type GameNotificationsCard = {
+  readonly enabled: boolean | undefined;
+  readonly onToggle: (on: boolean) => void;
+  readonly error?: string | undefined;
+  readonly photo?: { readonly enabled: boolean | undefined; readonly onToggle: (on: boolean) => void } | undefined;
+};
+
 export function ReglagesBody({
   progress,
   actions,
@@ -68,14 +75,7 @@ export function ReglagesBody({
   /** Les visibilités lues par `GET /me/game/privacy` ; absentes, celles du bloc `game`. */
   readonly visibility?: GameVisibility | undefined;
   /** Les notifications du jeu (#9490) — absent : pas de carte ; `photo` : « Moments à immortaliser » (#10268), dans la même carte. */
-  readonly notifications?:
-    | {
-        readonly enabled: boolean | undefined;
-        readonly onToggle: (on: boolean) => void;
-        readonly error?: string | undefined;
-        readonly photo?: { readonly enabled: boolean | undefined; readonly onToggle: (on: boolean) => void } | undefined;
-      }
-    | undefined;
+  readonly notifications?: GameNotificationsCard | undefined;
   /** L'atmosphère des cadres (#10163) — absent : pas de carte. */
   readonly atmosphere?: AtmosphereGate | undefined;
   /** « Me proposer d'immortaliser » (#10174) : l'écriture de compte ; absent : pas de carte. */
@@ -150,23 +150,35 @@ export function hideGame({
   if (progress.game?.league?.access === 'open') actions.consent.run({ consent: false }, { onError: reopen });
 }
 
+/**
+ * LA CARTE « NOTIFICATIONS DU JEU » (#9490, #10268) — les deux interrupteurs de compte, lus dans les réglages de
+ * l'application (cache-first) et écrits en optimiste par `performPreferenceEdit` : chacun n'écrit QUE sa clé.
+ * Hors ligne, rien ne part et la carte le dit ; un refus se dit sous la carte.
+ */
+export function useGameNotifications(deps: PreferenceActionDeps): GameNotificationsCard {
+  const preferences = useQuery({ ...appPreferencesQueryOptions(deps), enabled: true }, deps.queryClient);
+  const [error, setError] = useState<string | undefined>(undefined);
+  const edit = (patch: Pick<PreferencesPatch, 'gameEnabled' | 'gamePhotoEnabled'>): void => {
+    setError(undefined);
+    void performPreferenceEdit({ patch, deps }).then((outcome) => {
+      if (outcome.status === 'offline') setError(gameText('game.offline.action'));
+      if (outcome.status === 'refused') setError(gameErrorMessage(undefined));
+    });
+  };
+  return {
+    enabled: preferences.data?.gameEnabled,
+    onToggle: (on) => edit({ gameEnabled: on }),
+    error,
+    photo: { enabled: preferences.data?.gamePhotoEnabled, onToggle: (on) => edit({ gamePhotoEnabled: on }) },
+  };
+}
+
 function ReglagesScreenBody({ progress }: { readonly progress: EngagementWithGame }) {
   const online = useOnline();
   const actions = useGameV2Actions();
   const settings = useGameSettings(true);
-  const preferences = useQuery({ ...appPreferencesQueryOptions(apiDeps), enabled: true }, appQueryClient);
   const atmosphere = useAtmosphereGate(progress.game, { tiles: true });
-  const [notificationsError, setNotificationsError] = useState<string | undefined>(undefined);
-  const editNotifications = (patch: Pick<PreferencesPatch, 'gameEnabled' | 'gamePhotoEnabled'>): void => {
-    setNotificationsError(undefined);
-    void performPreferenceEdit({
-      patch,
-      deps: { ...apiDeps, queryClient: appQueryClient, isOnline: () => navigator.onLine },
-    }).then((outcome) => {
-      if (outcome.status === 'offline') setNotificationsError(gameText('game.offline.action'));
-      if (outcome.status === 'refused') setNotificationsError(gameErrorMessage(undefined));
-    });
-  };
+  const notifications = useGameNotifications({ ...apiDeps, queryClient: appQueryClient, isOnline: () => navigator.onLine });
   return (
     <ReglagesBody
       progress={progress}
@@ -174,12 +186,7 @@ function ReglagesScreenBody({ progress }: { readonly progress: EngagementWithGam
       online={online}
       hide={(on) => hideGame({ on, progress, actions })}
       visibility={settings.data?.visibility}
-      notifications={{
-        enabled: preferences.data?.gameEnabled,
-        onToggle: (on) => editNotifications({ gameEnabled: on }),
-        error: notificationsError,
-        photo: { enabled: preferences.data?.gamePhotoEnabled, onToggle: (on) => editNotifications({ gamePhotoEnabled: on }) },
-      }}
+      notifications={notifications}
       atmosphere={atmosphere}
       invitations={setPhotoInvitations}
     />

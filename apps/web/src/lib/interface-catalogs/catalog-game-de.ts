@@ -730,7 +730,7 @@ const de = {
   'game.settings.notifications.body': 'Ein Bündnis-Angebot, ein Turnierergebnis, eine Rast auf der Reise: höchstens eine Spielbenachrichtigung pro Tag. Diese Einstellung gilt für dein Konto, auf allen deinen Geräten.',
   'game.settings.notifications.switch': 'Spielbenachrichtigungen erhalten',
   'game.settings.notifications.photo_switch': 'Momente zum Verewigen',
-  'game.settings.notifications.photo_body': 'Eine Etappe, erreicht bei geschlossener App: Eine dezente Benachrichtigung schlägt vor, sie in deiner Chronik zu verewigen.',
+  'game.settings.notifications.photo_body': 'Ein Moment, erlebt bei geschlossener App: Eine dezente Benachrichtigung schlägt vor, ihn in deiner Chronik zu verewigen.',
   'game.settings.notifications.photo_cut': 'Mit den Spielbenachrichtigungen ausgeschaltet. Deine Wahl bleibt erhalten, bis du sie wieder einschaltest.',
   'game.archive.season.past_title': 'Reise {number} · vollbracht',
   'game.archive.season.current_title': 'Reise {number} · unterwegs',
