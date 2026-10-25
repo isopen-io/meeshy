@@ -38,7 +38,7 @@ internal fun ChatBottomBarHost(host: ChatHostContext) {
     retouching?.let { (id, piece) ->
         ChatCaptureRetouchHost(
             pending = piece,
-            person = state.selfAuthor,
+            person = actions.selfAuthor(),
             onDeliver = { file ->
                 if (file.bytes !== piece.bytes) actions.replacePendingAttachment(id, file.bytes, file.fileName, file.mimeType)
                 retouching = null
@@ -76,7 +76,7 @@ internal fun ChatBottomBarHost(host: ChatHostContext) {
             editingOriginalText = editingOriginalText,
             onStageVoiceFile = { file -> actions.stageFile(file, "audio/mp4") },
             onStageCapturedUris = actions.stageCapturedUris,
-            selfAuthor = state.selfAuthor,
+            selfAuthor = actions.selfAuthor(),
             hasEffects = state.hasPendingEffects,
             clipboardContent = state.clipboardContent,
             sentiment = composerText.sentiment,
