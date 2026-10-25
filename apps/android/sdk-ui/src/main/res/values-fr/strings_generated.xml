@@ -67,6 +67,12 @@
     <string name="presence_online">En ligne</string>
     <string name="reactions_more">Plus de réactions</string>
     <string name="retouch_crop_original">Original</string>
+    <string name="retouch_effect_angel">Ange</string>
+    <string name="retouch_effect_demon">Démon</string>
+    <string name="retouch_effect_none">Aucun</string>
+    <string name="retouch_effect_smoothing">Lissage de peau</string>
+    <string name="retouch_effect_toad">Crapaud</string>
+    <string name="retouch_effect_volcano">Éruption</string>
     <string name="retouch_family_effects">Effets</string>
     <string name="retouch_family_filters">Filtres</string>
     <string name="retouch_family_frames">Cadres</string>
