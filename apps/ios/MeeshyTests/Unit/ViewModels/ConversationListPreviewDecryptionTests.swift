@@ -179,6 +179,7 @@ final class ConversationListPreviewDecryptionTests: XCTestCase {
 
         XCTAssertEqual(served(sut)?.content, "", "le scellé, jamais le littéral du serveur")
         XCTAssertEqual(served(sut)?.isContentDecryptedOnDevice, false)
+        XCTAssertEqual(e2ee.requestedPlaintextKeys, [messageId], "le clair est cherché, puis refusé hors de sa conversation")
     }
 
     /// Un serveur compromis présente MON message comme celui du pair : la ligne
@@ -192,6 +193,7 @@ final class ConversationListPreviewDecryptionTests: XCTestCase {
 
         XCTAssertEqual(served(sut)?.content, "")
         XCTAssertTrue(ConversationPreviewRenderer.isSealed(try XCTUnwrap(served(sut))))
+        XCTAssertEqual(e2ee.requestedPlaintextKeys, [messageId], "le clair est cherché, puis refusé sous un autre auteur")
     }
 
     func test_authorNeitherPeerNorReader_staysSealed() async {
@@ -202,16 +204,19 @@ final class ConversationListPreviewDecryptionTests: XCTestCase {
 
         XCTAssertEqual(served(sut)?.content, "")
         XCTAssertEqual(served(sut)?.isContentDecryptedOnDevice, false)
+        XCTAssertEqual(e2ee.requestedPlaintextKeys, [messageId], "le clair est cherché, puis refusé à l'auteur annoncé")
     }
 
     func test_nothingOpenedOnThisDevice_staysSealed() async {
-        let (sut, _) = makeSUT(cache: .fresh([makeSealedMessage()], age: 10))
+        let e2ee = MockEndToEndMessaging()
+        let (sut, _) = makeSUT(cache: .fresh([makeSealedMessage()], age: 10), endToEnd: e2ee)
 
         await sut.load(for: conversationId, intent: .prefetch, currentUserId: reader)
 
         XCTAssertEqual(served(sut)?.content, "", "sans clair, le placeholder scellé — jamais « [Encrypted] »")
         XCTAssertEqual(served(sut)?.isEncrypted, true)
         XCTAssertEqual(served(sut)?.isContentDecryptedOnDevice, false)
+        XCTAssertEqual(e2ee.requestedPlaintextKeys, [messageId], "la base scellée est interrogée, et ne rend rien")
     }
 
     func test_undecryptableOnThisDevice_staysSealed() async {
@@ -224,6 +229,7 @@ final class ConversationListPreviewDecryptionTests: XCTestCase {
 
         XCTAssertEqual(served(sut)?.content, "")
         XCTAssertEqual(served(sut)?.isContentDecryptedOnDevice, false)
+        XCTAssertEqual(e2ee.requestedPlaintextKeys, [messageId], "la base scellée est interrogée, et dit l'échec")
     }
 
     /// Cache-first : le cache se sert sans que l'aperçu dise « chargement ».
@@ -439,6 +445,8 @@ final class ConversationListPreviewDecryptionTests: XCTestCase {
 
         XCTAssertEqual(served(sut)?.content, "")
         XCTAssertEqual(served(sut)?.isContentDecryptedOnDevice, false)
+        XCTAssertEqual(e2ee.requestedPlaintextKeys, [messageId, messageId],
+                       "le message réattribué repasse par la base scellée, qui le refuse sous le nouvel auteur")
     }
 
     // MARK: - Ce qui part à côté
@@ -652,9 +660,11 @@ final class ConversationListPreviewDecryptionTests: XCTestCase {
     /// e2ee + rien d'ouvert ⇒ scellé : ni texte, ni marqueur « non chiffré »
     /// (un scellé n'a rien dit en clair), ni traduction du serveur.
     func test_endToEnd_nothingOpened_staysSealed_withoutMarkerNorTranslation() async throws {
+        let e2ee = MockEndToEndMessaging()
         let (sut, _) = makeSUT(
             cache: .fresh([makeSealedMessage()], age: 10),
-            cachedTranslations: [messageId: [wireTranslation(for: messageId, text: "Forgé par le serveur")]]
+            cachedTranslations: [messageId: [wireTranslation(for: messageId, text: "Forgé par le serveur")]],
+            endToEnd: e2ee
         )
 
         await sut.load(for: conversationId, intent: .prefetch, regime: endToEndRegime, currentUserId: reader)
@@ -667,6 +677,7 @@ final class ConversationListPreviewDecryptionTests: XCTestCase {
         XCTAssertEqual(ConversationPreviewRenderer.sealedReason(message), .encrypted)
         XCTAssertFalse(snapshot.isUnencrypted(messageId))
         XCTAssertNil(snapshot.servedTranslation(for: messageId))
+        XCTAssertEqual(e2ee.requestedPlaintextKeys, [messageId], "la base scellée est interrogée, et ne rend rien")
     }
 
     /// Hors e2ee, rien ne change : le clair se lit, traduit par le serveur,
