@@ -1014,6 +1014,8 @@ const es = {
   'message.mood.label': 'Estado de ánimo',
   'message.withheld': 'Contenido retenido',
   'message.withheld.a11y': 'Contenido retenido: este mensaje existe y no se muestra',
+  'message.endToEnd': 'Cifrado de extremo a extremo — se lee en tus dispositivos con el cifrado activado',
+  'message.endToEnd.a11y': 'Cifrado de extremo a extremo: este mensaje se lee en tus dispositivos Meeshy con el cifrado activado',
   'message.veiled': 'Contenido oculto',
   'message.veiled.hint': 'Toca para ver',
   'message.veiled.error': 'No se puede revelar por ahora',

@@ -1018,6 +1018,8 @@ const pt = {
   'message.mood.label': 'Humor',
   'message.withheld': 'Conteúdo retido',
   'message.withheld.a11y': 'Conteúdo retido: esta mensagem existe e não é exibida',
+  'message.endToEnd': 'Encriptada de ponta a ponta — legível nos seus dispositivos com a encriptação ativada',
+  'message.endToEnd.a11y': 'Encriptada de ponta a ponta: esta mensagem lê-se nos seus dispositivos Meeshy com a encriptação ativada',
   'message.veiled': 'Conteúdo oculto',
   'message.veiled.hint': 'Toque para ver',
   'message.veiled.error': 'Não é possível revelar por enquanto',

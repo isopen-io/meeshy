@@ -1011,6 +1011,8 @@ const ar = {
   'message.mood.label': 'المزاج',
   'message.withheld': 'محتوى محجوب',
   'message.withheld.a11y': 'محتوى محجوب: هذه الرسالة موجودة ولا تُعرض',
+  'message.endToEnd': 'مشفّرة من طرف إلى طرف — تُقرأ على أجهزتك التي فُعِّل عليها التشفير',
+  'message.endToEnd.a11y': 'مشفّرة من طرف إلى طرف: تُقرأ هذه الرسالة على أجهزة Meeshy التي فُعِّل عليها التشفير',
   'message.veiled': 'محتوى مخفي',
   'message.veiled.hint': 'المس للعرض',
   'message.veiled.error': 'يتعذّر الإظهار في الوقت الحالي',

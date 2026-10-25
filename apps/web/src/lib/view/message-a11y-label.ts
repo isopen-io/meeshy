@@ -3,6 +3,7 @@ import { kindOf } from './message';
 import type { Delivery } from './message';
 import { forwardAttributionOf, forwardLabelOf, systemRowLabel, systemRowOf } from './message-badges';
 import { bodyKindOf, moodCitationOf, placeOf, storyCitationOf } from './message-body';
+import { endToEndSealed } from './end-to-end-sealed';
 import { time } from '@/lib/grouping';
 import { rendersContent, type ProtectionKind, type RevealPhase } from '@/lib/reading-mode/protection';
 import type { Attachment, Message } from '@/lib/api/types';
@@ -276,7 +277,11 @@ export function composeMessageLabel({
    * (`data-masked-media`) : « deux photos ont été retenues » et « un texte a
    * été retenu » s'annonçaient d'une seule phrase.
    */
-  if (contentWithheld) {
+  if (endToEndSealed(message)) {
+    /* CHIFFRÉ DE BOUT EN BOUT (#12983) — l'oreille entend ce que l'œil lit,
+       jamais le littéral `[Encrypted]` que la passerelle sert au web. */
+    segments.push(translate(language, 'message.endToEnd.a11y'));
+  } else if (contentWithheld) {
     segments.push(translate(language, PROTECTED_LABEL_KEY.withheld), ...attachmentSegments(message.attachments));
   } else if (!rendersContent(protection, phase)) {
     /* LA VUE UNIQUE SE NOMME PAR SA PUCE (#7580) — « Message à vue unique,
