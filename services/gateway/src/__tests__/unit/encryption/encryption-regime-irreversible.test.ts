@@ -19,6 +19,7 @@ import {
   switchEncryptionRegime,
   type RegimeActivation,
 } from '../../../services/conversations/encryptionRegime';
+import { composeConversationUpdate } from '../../../services/conversations/conversation-metadata-update';
 
 const ID = '507f1f77bcf86cd799439013';
 
@@ -120,5 +121,22 @@ describe('les deux prédicats du régime', () => {
     [{ encryptionMode: null, encryptionEnabledAt: null }, false],
   ])('regimeMayBeLeft(%o) = %s', (regime, expected) => {
     expect(regimeMayBeLeft(regime)).toBe(expected);
+  });
+});
+
+describe('le PATCH de conversation, utilisateur ou admin, ne porte jamais le régime', () => {
+  it('un corps qui nomme les champs du régime n’en écrit aucun : la composition est une liste fermée', () => {
+    const body = {
+      title: 'Nouveau titre',
+      encryptionMode: null,
+      encryptionEnabledAt: null,
+      encryptionEnabledBy: null,
+      encryptionProtocol: null,
+      encryptionEpoch: 9,
+    } as unknown as Parameters<typeof composeConversationUpdate>[0];
+
+    const { updateData } = composeConversationUpdate(body);
+
+    expect(Object.keys(updateData)).toEqual(['title']);
   });
 });
