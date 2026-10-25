@@ -2,6 +2,7 @@ import Combine
 import Foundation
 import MeeshyE2EE
 import MeeshySDK
+import os
 
 /// Le fil d'une conversation chiffrée lit le clair que CET appareil a
 /// déchiffré ou écrit (#3707, spec § 4.4) : le serveur ne sert que le littéral
@@ -23,27 +24,41 @@ nonisolated enum EndToEndThreadPlaintexts {
         messages.filter(awaitsPlaintext).flatMap { [$0.id, $0.clientMessageId].compactMap { $0 } }
     }
 
-    /// Pose sur chaque message le clair rangé à SA place, et sa langue.
+    /// Pose sur chaque message le clair rangé à SA place, et sa langue. Rend
+    /// ce qui a été posé, par identifiant affiché : la cellule, qui rend la
+    /// ligne du magasin (le littéral servi), le repose (#12916).
+    @discardableResult
     static func apply(
         _ entries: [String: E2EEPlaintextEntry],
         to messages: inout [MeeshyMessage],
         conversationId: String
-    ) {
+    ) -> [String: E2EEPlaintextEntry] {
+        var adopted: [String: E2EEPlaintextEntry] = [:]
         for index in messages.indices where awaitsPlaintext(messages[index]) {
             let message = messages[index]
-            let entry = entries[message.id] ?? message.clientMessageId.flatMap { entries[$0] }
-            guard case .readable(let content, let senderUserId)? = entry,
-                  isInPlace(content, senderUserId: senderUserId, for: message, conversationId: conversationId) else { continue }
+            guard let entry = entries[message.id] ?? message.clientMessageId.flatMap({ entries[$0] }),
+                  case .readable(let content, let senderUserId) = entry else { continue }
+            guard isInPlace(content, senderUserId: senderUserId, for: message, conversationId: conversationId) else {
+                Logger.e2ee.warning("e2ee plaintext refused message=\(message.id, privacy: .public): not in place")
+                continue
+            }
             messages[index].adoptDecryptedContent(content.text ?? "")
             if let language = content.language, !language.isEmpty { messages[index].originalLanguage = language }
+            adopted[message.id] = entry
         }
+        return adopted
     }
 
     /// Lit puis pose le clair de tout message scellé du lot.
-    static func resolve(_ messages: inout [MeeshyMessage], from endToEnd: any EndToEndMessagingProviding, conversationId: String) async {
+    @discardableResult
+    static func resolve(
+        _ messages: inout [MeeshyMessage],
+        from endToEnd: any EndToEndMessagingProviding,
+        conversationId: String
+    ) async -> [String: E2EEPlaintextEntry] {
         let keys = lookupKeys(of: messages)
-        guard !keys.isEmpty else { return }
-        apply(await endToEnd.plaintexts(for: keys), to: &messages, conversationId: conversationId)
+        guard !keys.isEmpty else { return [:] }
+        return apply(await endToEnd.plaintexts(for: keys), to: &messages, conversationId: conversationId)
     }
 
     /// Chaque enveloppe ouverte de CETTE conversation, sur le fil principal.

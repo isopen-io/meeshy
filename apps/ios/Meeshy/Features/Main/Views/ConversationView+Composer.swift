@@ -112,6 +112,7 @@ extension ConversationView {
             accentColor: composerAccent,
             secondaryColor: composerSecondaryColor,
             forceHideAttachment: previewMode,
+            voiceDoor: guestAttachmentAllowance.offersVoiceRecording ? .byMode : .closed,
             selectedLanguage: composerState.selectedLanguage,
             onLanguageChange: { composerState.selectedLanguage = $0 },
             onFocusChange: { composerFocusChanged($0) },
