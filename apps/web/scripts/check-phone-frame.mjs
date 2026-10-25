@@ -267,11 +267,15 @@ const ouvre = async (viewport) => {
 /** Ce que la page montrait quand l'attente a buté — la cause d'un « rien de peint », jamais le seul symptôme. */
 const etatDe = async (page, network) => {
   const vu = await page
-    .evaluate(() => ({ adresse: location.pathname, contenu: document.getElementById('contenu') !== null, texte: (document.body?.innerText ?? '').trim().replace(/\s+/g, ' ').slice(0, 80) }))
-    .catch((cause) => ({ adresse: '?', contenu: false, texte: `page illisible : ${cause?.message ?? cause}` }));
+    .evaluate(() => {
+      const main = document.getElementById('contenu');
+      const contenu = main === null ? 'absent' : main.querySelector('[aria-busy="true"]') === null ? 'présent' : 'encore en chargement (aria-busy)';
+      return { adresse: location.pathname, contenu, texte: (document.body?.innerText ?? '').trim().replace(/\s+/g, ' ').slice(0, 80) };
+    })
+    .catch((cause) => ({ adresse: '?', contenu: 'illisible', texte: `page illisible : ${cause?.message ?? cause}` }));
   const vol = network.enVol();
   const reseau = vol.length === 0 ? 'réseau au repos' : `${vol.length} requête(s) en vol : ${vol.slice(0, 3).join(', ')}`;
-  return `${vu.adresse}, #contenu ${vu.contenu ? 'présent' : 'absent'}, ${reseau}, texte « ${vu.texte} »`;
+  return `${vu.adresse}, #contenu ${vu.contenu}, ${reseau}, texte « ${vu.texte} »`;
 };
 
 const mesure = async (context, adresse) => {
@@ -331,8 +335,8 @@ const progression = (viewport, langue) => async (constate) => {
   for (const adresse of PROGRESSION_PAGES) {
     const tag = `${adresse} @ ${viewport.width} px, ${langue}, valeurs longues`;
     await page.goto(`${BASE}${adresse}`, { waitUntil: 'load' });
-    const m = await waitForValueSettled(page, sidewaysReleve, undefined, { network, pret: (r) => !r.sansContenu });
-    if (m === undefined || m.sansContenu) {
+    const m = await waitForValueSettled(page, sidewaysReleve, undefined, { network, pret: (r) => !r.sansContenu && !r.enChargement });
+    if (m === undefined) {
       constate(false, `${tag} : la page n'a rien peint de mesurable — le témoin ne mesure rien (${await etatDe(page, network)})`);
       continue;
     }
