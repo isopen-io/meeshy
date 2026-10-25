@@ -490,6 +490,7 @@ struct ConversationListView: View {
             )
         )
         row.onDragBegan = { token in beginConversationDrag(conversation.id, token: token) }
+        row.deviceText = conversationViewModel.endToEndTexts[conversation.id]
         return row
         .equatable()
         .meeshyPointerInteractive(shape: .roundedRect(cornerRadius: MeeshyRadius.lg))

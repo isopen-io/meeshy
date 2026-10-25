@@ -115,6 +115,9 @@ struct ConversationRowItem: View {
     let focusElection: LentilleFocusElection
     let sceneActivity: LentilleSceneActivity
     let magnification: LentilleMagnification
+    /// Le clair local du dernier message scellé (#12968) — une VALEUR, lue
+    /// par la liste dans `ConversationListViewModel.endToEndTexts`.
+    var deviceText: ConversationPreviewDeviceText? = nil
 
     var body: some View {
         SwipeableRow(
@@ -318,6 +321,7 @@ struct ConversationRowItem: View {
                     draftSummary: draftSummary,
                     isContentLocked: isContentLocked,
                     preferredContentLanguages: preferredContentLanguages,
+                    deviceText: deviceText,
                     onJoinLiveCall: { joinLiveCall() },
                     magnification: context
                 )
@@ -343,6 +347,7 @@ struct ConversationRowItem: View {
                 draftSummary: draftSummary,
                 isContentLocked: isContentLocked,
                 preferredContentLanguages: preferredContentLanguages,
+                deviceText: deviceText,
                 onJoinLiveCall: { joinLiveCall() }
             )
             .equatable()
@@ -571,6 +576,7 @@ extension ConversationRowItem: @MainActor Equatable {
         lhs.isSelected == rhs.isSelected &&
         lhs.draftSummary == rhs.draftSummary &&
         lhs.preferredContentLanguages == rhs.preferredContentLanguages &&
+        lhs.deviceText == rhs.deviceText &&
         // Compare swipe action ICONS, not just `.count`: the lock/block toggles
         // (`leadingSwipeActions`/`trailingSwipeActions`) read live state from
         // `ConversationLockManager` / `BlockService` — singletons NOT folded into

@@ -108,6 +108,13 @@ class ConversationListViewModel: ObservableObject {
     /// synchronisation son `@pseudo`. Une divergence entre les deux se lirait
     /// comme deux personnes en train d'écrire.
     @Published var typingUsers: [String: String] = [:]
+    /// conversationId → clair que CET appareil tient du dernier message scellé
+    /// (#12968, `ConversationListEndToEndTexts`). En mémoire seulement : jamais
+    /// dans `Conversation`, que le cache disque persiste.
+    @Published var endToEndTexts: [String: ConversationPreviewDeviceText] = [:]
+    /// Le coffre local des clairs E2EE, le même que lit le fil.
+    let endToEnd: any EndToEndMessagingProviding
+    var endToEndTextsTask: Task<Void, Never>?
     /// Qui écrit où (état par membre, échéances 15 s, abonnements) : voir
     /// `ConversationListTypingTracker`, qui réaligne `typingUsernames` et
     /// `typingUsers` par `applyTypingSelection`.
@@ -484,7 +491,8 @@ class ConversationListViewModel: ObservableObject {
         messageNotificationPublisher: AnyPublisher<MessageActivitySignal, Never> = PushNotificationManager.shared.messageNotificationReceived.eraseToAnyPublisher(),
         draftStore: DraftStore = DraftStore.shared,
         store: ConversationStore = .shared,
-        categoryStore: UserCategoryStore = .shared
+        categoryStore: UserCategoryStore = .shared,
+        endToEnd: any EndToEndMessagingProviding = EndToEndMessagingRuntime.shared
     ) {
         self.conversationService = conversationService
         self.preferenceService = preferenceService
@@ -497,6 +505,7 @@ class ConversationListViewModel: ObservableObject {
         self.draftStore = draftStore
         self.store = store
         self.categoryStore = categoryStore
+        self.endToEnd = endToEnd
         self.previewLoader = ConversationListPreviewLoader(messageService: messageService)
         reloadDraftSummaries()
         observeTyping()
@@ -509,6 +518,7 @@ class ConversationListViewModel: ObservableObject {
         observeSync()
         observeStore()
         observeCategoryStore()
+        observeEndToEndTexts()
     }
 
     /// Latest store-hydration task spawned by `setConversations`
