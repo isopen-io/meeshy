@@ -51,6 +51,10 @@ export const createConversationRequestSchema = {
     communityId: {
       type: 'string',
       description: 'Parent community ID'
+    },
+    plaintext: {
+      type: 'boolean',
+      description: 'Direct only (#12966): get or create the direct conversation the server can read, even when an end-to-end encrypted one exists with the same person. Absent: the existing end-to-end encrypted direct conversation if any, otherwise the most recently active one, as before.'
     }
   }
 } as const;

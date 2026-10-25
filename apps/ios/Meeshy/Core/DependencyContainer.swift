@@ -171,6 +171,7 @@ final class DependencyContainer {
             activeKey: Self.activeAccountStoreKey()
         )
         guard case let .account(key) = target else { return }
+        EndToEndRegimeMemory.shared.bind(account: key.map(EndToEndRegimeMemory.account(of:)))
         // Un compte quitté SANS être déconnecté (changement de compte,
         // ajout d'un compte) garde sa base ouverte pour son retour ; seul un
         // compte dont les jetons sont partis (déconnexion, session révoquée,

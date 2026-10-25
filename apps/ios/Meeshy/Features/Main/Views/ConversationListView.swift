@@ -392,11 +392,7 @@ struct ConversationListView: View {
     }
 
     private func conversationRow(for conversation: Conversation, rowWidth: CGFloat, passContext: ConversationRowPassContext) -> some View {
-        let community: MeeshyCommunity? = {
-            guard conversation.type == .community || conversation.communityId != nil,
-                  let communityId = conversation.communityId else { return nil }
-            return userCommunityLookup[communityId] ?? userCommunities.first(where: { $0.id == communityId })
-        }()
+        let community = ConversationRowItem.community(of: conversation, lookup: userCommunityLookup, all: userCommunities)
 
         var row = ConversationRowItem(
             conversation: conversation,
@@ -490,6 +486,7 @@ struct ConversationListView: View {
             )
         )
         row.onDragBegan = { token in beginConversationDrag(conversation.id, token: token) }
+        row.deviceText = conversationViewModel.endToEndTexts.text(for: conversation.id)
         return row
         .equatable()
         .meeshyPointerInteractive(shape: .roundedRect(cornerRadius: MeeshyRadius.lg))

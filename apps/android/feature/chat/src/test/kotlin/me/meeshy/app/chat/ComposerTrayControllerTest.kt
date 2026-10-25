@@ -271,6 +271,35 @@ class ComposerTrayControllerTest {
     }
 
     @Test
+    fun `replacing a video by its rendered file keeps its position, copies it and deletes the rendered source`() = runTest {
+        val r = rig()
+        r.tray.stageUris(listOf(r.source("content://v", "v.mp4", "video/mp4"), r.source("content://b", "b.jpg", "image/jpeg")))
+        advanceUntilIdle()
+        val rendered = java.io.File.createTempFile("video_retouche", ".mp4").apply { writeBytes(byteArrayOf(4, 5, 6)) }
+
+        r.tray.replaceFile("id0", rendered, "video/mp4")
+        advanceUntilIdle()
+
+        val items = r.tray.state.value.items
+        assertThat(items.map { it.id }).containsExactly("id0", "id1").inOrder()
+        assertThat(items.first().type).isEqualTo(PendingAttachmentType.VIDEO)
+        assertThat(items.first().localPath).contains(rendered.name)
+        assertThat(r.ingestor.deleted).containsAtLeast("/work/id0_v.mp4", rendered.path)
+    }
+
+    @Test
+    fun `a rendered video for a piece that already left is deleted, never orphaned`() = runTest {
+        val r = rig()
+        val rendered = java.io.File.createTempFile("video_retouche", ".mp4").apply { writeBytes(byteArrayOf(4)) }
+
+        r.tray.replaceFile("gone", rendered, "video/mp4")
+        advanceUntilIdle()
+
+        assertThat(rendered.exists()).isFalse()
+        assertThat(r.tray.state.value.items).isEmpty()
+    }
+
+    @Test
     fun `replacing a piece that already left is ignored and its new file is discarded`() = runTest {
         val r = rig()
         r.tray.stageBytes(byteArrayOf(1), "a.jpg", "image/jpeg")

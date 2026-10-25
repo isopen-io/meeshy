@@ -23,7 +23,7 @@ struct ShareSendBar: View {
             if !network.isOnline { banner(ShareSheetCopy.offline, symbol: "wifi.slash", color: MeeshyColors.warning) }
             if let warning = encryptionWarning { banner(warning, symbol: "lock.open", color: MeeshyColors.warning) }
             if plan.limits.trimCount > 0 {
-                banner(ShareSheetCopy.tooHeavy(files: plan.limits.files, megabytes: plan.limits.bytes / (1024 * 1024)), symbol: "exclamationmark.triangle", color: MeeshyColors.error)
+                banner(ShareSheetCopy.tooHeavy(files: plan.limits.files, bytes: plan.limits.bytes), symbol: "exclamationmark.triangle", color: MeeshyColors.error)
             }
             if plan.limits.overRecipients > 0 { banner(ShareSheetCopy.tooManyRecipients, symbol: "person.3", color: MeeshyColors.error) }
             if plan.caption != nil, !model.hasSent {

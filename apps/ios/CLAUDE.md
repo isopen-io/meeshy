@@ -968,9 +968,13 @@ Les composants suivants gerent l'**entite** Notification (CRUD, listing, prefere
     (`ShareRelayHandoff`, `meeshy://share-relay`) : sans session (« Connectez-vous pour
     envoyer · Ouvrir Meeshy ») et vers une conversation chiffrée (D7 — elle n'a pas les
     clés, jamais de clair d'ici), et pour le studio (`ShareComposeHandoff`).
-  - **Portée : texte, URL, images, vidéos, fichiers** (`Info.plist`, 20 par type). Les
-    plafonds communs (D10 : 20 fichiers, 500 Mo, 10 destinataires) ne refusent plus la
-    copie : l'écran les dit et « Retirer les N derniers » les applique (V9).
+  - **Portée : texte, URL, images, vidéos, fichiers** (`Info.plist`, `ShareLimits.maxFiles`
+    par type). Les plafonds communs (D10 : 20 fichiers, 500 Mo, 10 destinataires ; révisés
+    par le porteur le 2026-10-25 à **100 fichiers et 5 Go**, destinataires inchangés, #12974 —
+    `packages/shared/decisions/2026-10-25-un-partage-emporte-100-fichiers-et-5-go-12974.md`)
+    ne refusent plus la copie : l'écran les dit et « Retirer les N derniers » les applique
+    (V9). Les phrases de plafond prennent les chiffres en arguments formatés depuis
+    `ShareLimits` (`ShareSheetCopy.limitSize`) : aucun plafond n'est écrit dans le catalogue.
   - **Échec d'envoi = relais durable, jamais une perte** : `ShareSender` dépose
     `share_pending_sends/<clientMessageId>.json` dans le conteneur App Group ;
     `SharePendingSendConsumer` (app) le verse dans l'`OfflineQueue` au boot et au retour en

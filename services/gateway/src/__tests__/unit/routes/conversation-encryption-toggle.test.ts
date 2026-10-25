@@ -95,6 +95,8 @@ function makeWorld(conversation: MongoDocument, members: Member[] = [ANALYST_ALI
         return { count: 1 };
       }),
       update: jest.fn(async () => ({ id: CONV_ID })),
+      // #12966 — la paire n'a pas d'autre tête-à-tête.
+      findMany: jest.fn(async () => []),
     },
     participant: {
       findFirst: jest.fn(async ({ where }: { where: { userId: string } }) =>

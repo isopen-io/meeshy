@@ -70,14 +70,37 @@ final class ConversationEncryptionExplanationTests: XCTestCase {
         XCTAssertFalse(facts("e2ee", isDirect: true).contains(.groupSendingUnavailable))
     }
 
-    func test_chaqueMode_ditQuiPeutBasculer_etCeQueFaitLaBascule() {
-        for mode in [nil, "server", "hybrid", "e2ee"] {
+    /// Une conversation que le serveur lit dit qui peut activer, ce que fait la
+    /// bascule, et que le bout en bout est définitif ; une conversation chiffrée
+    /// de bout en bout dit qu'elle le reste (#12949).
+    func test_chaqueMode_ditQuiPeutActiver_etCeQuiEstDefinitif() {
+        for mode in [nil, "server", "hybrid"] {
             let facts = facts(mode)
             XCTAssertTrue(facts.contains(.whoMayToggle), "\(String(describing: mode))")
             XCTAssertTrue(facts.contains(.switchKeepsHistory), "\(String(describing: mode))")
             XCTAssertTrue(facts.contains(.switchIsShownInThread), "\(String(describing: mode))")
+            XCTAssertTrue(facts.contains(.endToEndIsFinal), "\(String(describing: mode))")
         }
-        XCTAssertTrue(facts("e2ee").contains(.switchNeverResendsInClear))
+        XCTAssertEqual(facts("e2ee", isDirect: true).suffix(2), [.endToEndNeverTurnedOffDirect, .serverCannotTurnItOff])
+        XCTAssertEqual(facts("e2ee", isDirect: false).suffix(2), [.endToEndNeverTurnedOff, .serverCannotTurnItOff])
+        XCTAssertFalse(facts("e2ee").contains(.whoMayToggle), "rien ne se bascule dans une conversation chiffrée de bout en bout")
+    }
+
+    /// #12949 — le bout en bout ne se désactive pas, et la fiche le dit.
+    func test_irreversible_unTeteATeteChiffre_resteChiffre_etNePromeutAucuneDesactivation() {
+        let facts = facts("e2ee", isDirect: true)
+        XCTAssertTrue(facts.contains(.endToEndNeverTurnedOffDirect))
+        XCTAssertFalse(facts.contains(.endToEndNeverTurnedOff), "un tête-à-tête ne promet pas de nouvelle conversation (#12966)")
+    }
+
+    func test_irreversible_unGroupeChiffre_ditDeCreerUneNouvelleConversation() {
+        XCTAssertTrue(facts("e2ee", isDirect: false).contains(.endToEndNeverTurnedOff))
+    }
+
+    func test_irreversible_avantDActiver_laFicheDitQueLeBoutEnBoutEstDefinitif() {
+        for mode in [nil, "server", "hybrid"] {
+            XCTAssertTrue(facts(mode).contains(.endToEndIsFinal), "\(String(describing: mode))")
+        }
     }
 
     /// Aucun texte en dur : chaque fait et chaque titre se lit dans le catalogue,

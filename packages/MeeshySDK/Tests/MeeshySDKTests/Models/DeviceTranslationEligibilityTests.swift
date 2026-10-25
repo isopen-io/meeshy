@@ -153,10 +153,12 @@ final class DeviceTranslationEligibilityTests: XCTestCase {
         XCTAssertEqual(disposition(of: message), .skip)
     }
 
-    /// Hors bout en bout, la provenance ne compte pas : le serveur lit déjà le message.
-    func test_disposition_whereTheServerReadsTheMessage_ignoresTheProvenance() {
+    /// Là où le serveur lit le message, il se partage ; mais un clair que CET
+    /// appareil a déchiffré ne se partage jamais, quelles que soient les
+    /// étiquettes servies : la provenance prime (audit #12950, B1).
+    func test_disposition_whereTheServerReadsTheMessage_sharesIt_unlessDecryptedOnDevice() {
         XCTAssertEqual(disposition(of: makeMessage()), .shareable)
-        XCTAssertEqual(disposition(of: decrypted()), .shareable)
+        XCTAssertEqual(disposition(of: decrypted()), .ephemeral)
     }
 
     func test_isEndToEnd_readsTheConversationAndTheMessage() {

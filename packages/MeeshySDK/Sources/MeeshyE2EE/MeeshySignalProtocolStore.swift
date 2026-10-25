@@ -14,9 +14,14 @@ public final class MeeshySignalProtocolStore: IdentityKeyStore, PreKeyStore, Sig
     SessionStore, SenderKeyStore, Sendable
 {
     private let identity: E2EELocalIdentity
+    private let ownUserId: String?
 
-    public init(identity: E2EELocalIdentity) {
+    /// `ownUserId` : le compte de CET appareil. Avec lui, un envoi vers un de mes
+    /// autres appareils n'est permis que sous la clé que j'ai épinglée (spec
+    /// § 3.5, #12976).
+    public init(identity: E2EELocalIdentity, ownUserId: String? = nil) {
         self.identity = identity
+        self.ownUserId = ownUserId
     }
 
     private func transaction(_ context: StoreContext) throws -> any E2EERecordTransaction {
@@ -39,13 +44,19 @@ public final class MeeshySignalProtocolStore: IdentityKeyStore, PreKeyStore, Sig
         return previous == nil || previous == identity.serialize() ? .newOrUnchanged : .replacedExisting
     }
 
-    /// TOFU avec alerte, dans les deux sens : un changement d'identité ne bloque
-    /// ni l'envoi ni la réception, il est signalé par `saveIdentity`. Le mode
-    /// strict (bloquer jusqu'à vérification du numéro de sécurité) est hors de
-    /// ce lot (spec § 4.1) ; c'est ici qu'il se branchera.
+    /// TOFU avec alerte pour un contact, dans les deux sens : un changement
+    /// d'identité ne bloque ni l'envoi ni la réception, il est signalé par
+    /// `saveIdentity`. Le mode strict (numéro de sécurité vérifié) se branchera
+    /// ici (spec § 4.1).
+    ///
+    /// Un ENVOI vers un de MES appareils n'est permis que sous la clé épinglée à
+    /// son approbation, vérifiée dans la transaction même de libsignal
+    /// (`processPreKeyBundle`, `signalEncrypt`) : un serveur qui remplace la
+    /// session entre le tri du scelleur et le chiffrement ne reçoit rien.
     public func isTrustedIdentity(_ identity: IdentityKey, for address: ProtocolAddress, direction: Direction, context: StoreContext) throws -> Bool {
-        _ = try transaction(context)
-        return true
+        let records = try transaction(context)
+        guard direction == .sending, let ownUserId, address.name == ownUserId else { return true }
+        return try E2EEOwnDeviceApprovals.pinned(address.deviceId, in: records) == identity.serialize()
     }
 
     public func identity(for address: ProtocolAddress, context: StoreContext) throws -> IdentityKey? {

@@ -164,7 +164,7 @@ extension ConversationViewModel {
     func requestTextTranslation(
         messageId: String, content: String, sourceLanguage: String, targetLanguage: String, conversationEncryptionMode: String?
     ) async {
-        guard ServerTranslationAdmission.admits(messageIndex(for: messageId).map { messages[$0] }, conversationEncryptionMode: conversationEncryptionMode) else { return translationRequestFailed.send(.serverRefused(messageId: messageId, language: targetLanguage, kind: .text)) }
+        guard ServerTranslationAdmission.admits(messageIndex(for: messageId).map { messages[$0] }, conversationEncryptionMode: startupDependencies.encryptedEra.encryptionMode(conversationEncryptionMode, in: self)) else { return translationRequestFailed.send(.serverRefused(messageId: messageId, language: targetLanguage, kind: .text)) }
         guard !(translatingTextLanguages[messageId]?.contains(targetLanguage) ?? false) else { return }
         translatingTextLanguages[messageId, default: []].insert(targetLanguage)
         defer { translatingTextLanguages[messageId]?.remove(targetLanguage) }
@@ -202,7 +202,7 @@ extension ConversationViewModel {
     func requestAudioTranslation(
         messageId: String, attachmentId: String, sourceLanguage: String, targetLanguage: String, conversationEncryptionMode: String?
     ) async {
-        guard ServerTranslationAdmission.admits(messageIndex(for: messageId).map { messages[$0] }, conversationEncryptionMode: conversationEncryptionMode) else { return translationRequestFailed.send(.serverRefused(messageId: messageId, language: targetLanguage, kind: .audio)) }
+        guard ServerTranslationAdmission.admits(messageIndex(for: messageId).map { messages[$0] }, conversationEncryptionMode: startupDependencies.encryptedEra.encryptionMode(conversationEncryptionMode, in: self)) else { return translationRequestFailed.send(.serverRefused(messageId: messageId, language: targetLanguage, kind: .audio)) }
         guard !(translatingAudioLanguages[messageId]?.contains(targetLanguage) ?? false) else { return }
         translatingAudioLanguages[messageId, default: []].insert(targetLanguage)
         defer { translatingAudioLanguages[messageId]?.remove(targetLanguage) }

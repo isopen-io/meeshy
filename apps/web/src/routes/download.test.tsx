@@ -8,6 +8,11 @@ import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { SUPPORTED_INTERFACE_LANGUAGES } from '@/lib/inline-interface-language-bootstrap.js';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
+import { SiteHeader } from '@/landing/site-chrome';
+import { LANDING_COPY } from '@/landing/landing-copy';
+import { siteHref } from '@/lib/institutional-href';
+import { isAppPath } from '@/routes/app-paths';
+
 import { APP_STORE_URL, DownloadPage, downloadShots } from './download';
 
 /**
@@ -115,6 +120,20 @@ describe('/download — ce que voit quelqu’un qui ne connaît pas Meeshy (#729
     expect(en).not.toContain('Sign in');
     expect(en).not.toContain('Join without an account');
     expect(en).toContain('href="/en#world"');
+  });
+
+  test('dans la coque, chaque lien de l’en-tête est une route de l’application ou l’adresse publique — jamais « page introuvable » (#12930)', () => {
+    const html = renderToStaticMarkup(
+      <SiteHeader language="en" copy={LANDING_COPY.en} onLanding={false} languageControl={null} siteHref={(path) => siteHref(path, { shell: true })} />,
+    );
+    const hrefs = [...html.matchAll(/<a [^>]*href="([^"]+)"/g)].map((match) => match[1] ?? '');
+    expect(hrefs).toContain('https://meeshy.me/faq');
+    expect(hrefs).toContain('https://meeshy.me/en#world');
+    expect(hrefs).toContain('https://meeshy.me/en');
+    expect(hrefs).toContain('/chats');
+    for (const href of hrefs) {
+      expect(href.startsWith('https://meeshy.me/') || isAppPath(new URL(href, 'https://localhost').pathname)).toBe(true);
+    }
   });
 
   test('le sélecteur de langue de l’en-tête change la langue de LA PAGE — elle est traduite, elle ne renvoie pas ailleurs', () => {

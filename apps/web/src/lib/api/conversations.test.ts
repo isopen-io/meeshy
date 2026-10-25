@@ -522,6 +522,16 @@ describe('createDirectConversation', () => {
     expect(JSON.parse(String(calls[0]?.init.body))).toEqual({ type: 'direct', participantIds: ['u-amina'] });
   });
 
+  test('le tête-à-tête lisible à côté du chiffré se demande par `plaintext: true` (#12966)', async () => {
+    const { impl, calls } = fakeFetch({ status: 201, body: { success: true, data: { id: 'c-readable', title: null } } });
+    const transport = createHttpTransport({ base: '', fetchImpl: impl, credential: () => ({ kind: 'registered', token: 'jwt-1' }) });
+
+    const result = await createDirectConversation({ source: 'gateway', transport }, 'u-amina', { plaintext: true });
+
+    expect(result.ok).toBe(true);
+    expect(JSON.parse(String(calls[0]?.init.body))).toEqual({ type: 'direct', participantIds: ['u-amina'], plaintext: true });
+  });
+
   test('en fixtures, rend le direct existant avec ce participant', async () => {
     const target = CONVERSATIONS.find((c) => c.type === 'direct' && !PAGINATION_CONVERSATIONS.includes(c));
     if (target === undefined) return; // pas de fixture directe dans ce corpus — rien à prouver ici
