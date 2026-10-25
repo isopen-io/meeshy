@@ -94,9 +94,10 @@ struct RiverStreamHost: View {
     var onOpenProfile: ((ProfileSheetUser) -> Void)? = nil
     var onViewStory: ((String) -> Void)? = nil
     /// « Ouvrir dans le fil » (action d'accessibilité) et l'appui long, qui
-    /// ouvre le menu unifié du message chez l'hôte (#11224).
+    /// ouvre le menu unifié du message chez l'hôte (#11224) — avec la bulle
+    /// pressée, son cadre déjà dans la fenêtre (#12630).
     var onOpenInThread: ((String) -> Void)? = nil
-    var onLongPress: ((String) -> Void)? = nil
+    var onLongPress: ((RiverPressedCell) -> Void)? = nil
     /// #7452 — la consommation d'une vue unique, reçue de `ConversationView`.
     var onConsumeViewOnce: ((String, @escaping (Bool) -> Void) -> Void)? = nil
     /// #8283 — la zone média d'une citation : joue un vocal sur place (#8320)
@@ -115,6 +116,8 @@ struct RiverStreamHost: View {
     @Environment(\.layoutDirection) private var layoutDirection
 
     @State private var frames: [String: CGRect] = [:]
+    /// #12630 — où le pane se tient dans la fenêtre, lu au geste seulement.
+    @State private var paneAnchor = RiverPaneWindowAnchor()
     @State private var horizontalOffset: CGFloat = 0
     /// Le fil s'ouvre au PRÉSENT — une seule fois. Un lecteur qui est remonté
     /// dans l'histoire ne doit jamais être ramené en bas par l'arrivée d'un
@@ -246,6 +249,10 @@ struct RiverStreamHost: View {
                     hasLandedOnCursor = false
                     landOnCursor()
                 }
+                // #12630 — le repère des cadres publiés (`RiverCoordinateSpace`)
+                // est celui de ce pane : son origine dans la fenêtre les y
+                // convertit. Sur iPad en vue partagée, elle n'est pas (0, 0).
+                .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { paneAnchor.frame = $0 }
         }
     }
 
@@ -585,7 +592,7 @@ struct RiverStreamHost: View {
                 onOpenProfile: onOpenProfile,
                 onViewStory: onViewStory,
                 onOpenInThread: onOpenInThread,
-                onLongPress: onLongPress,
+                onLongPress: onLongPress == nil ? nil : { press($0, content: content) },
                 onConsumeViewOnce: onConsumeViewOnce,
                 onMediaTap: onMediaTap
             )
@@ -617,6 +624,15 @@ struct RiverStreamHost: View {
                 .frame(width: laneWidth, height: 1)
                 .accessibilityHidden(true)
         }
+    }
+
+    /// #12630 — l'appui long remet à l'hôte la bulle pressée, telle que son
+    /// couloir la peint, et son cadre déjà converti dans la fenêtre. Lu au
+    /// geste : le cadre est celui de l'instant, jamais celui du dernier rendu.
+    private func press(_ messageId: String, content: RiverBubbleContent) {
+        onLongPress?(RiverPressedCell.make(
+            messageId: messageId, content: content, paneFrame: frames[messageId],
+            paneInWindow: paneAnchor.frame, bubbleWidth: columns.bubbleContentWidth))
     }
 
     /// #8147 — « Lire la suite » / « Réduire » : la même loi que le fil
@@ -657,6 +673,75 @@ struct RiverStreamHost: View {
                 navigation.step(direction)
             }
     }
+}
+
+// MARK: - La bulle pressée, remise à l'hôte (#12630)
+
+/// **Ce que l'appui long d'une bulle de la Rivière remet à l'hôte** : le
+/// message, le cadre de la bulle dans la FENÊTRE et la face que l'aperçu rend.
+///
+/// Les bulles publient leur cadre dans le repère du pane
+/// (`RiverCoordinateSpace`), pas dans celui de la fenêtre : l'overlay, qui
+/// attend un cadre de fenêtre (`MessageOverlayMenu.messageBubbleFrame`), ouvrait
+/// l'aperçu décalé de l'origine du pane — sur iPad en vue partagée, de toute la
+/// colonne de gauche. L'HÔTE convertit, une fois, au geste.
+///
+/// L'aperçu se tient à 16 pt des bords du pane (`MessageOverlayCellPreview
+/// .bubbleMargin`, la marge de toute bulle d'aperçu) : un couloir à moitié
+/// défilé hors de l'écran, ou plus large que lui après un pince, ne pose pas
+/// une bulle coupée. La face prend la largeur de ce cadre.
+struct RiverPressedCell: Equatable {
+    let messageId: String
+    /// `nil` quand la bulle n'a pas encore publié son cadre : l'overlay retombe
+    /// alors sur son placement par défaut.
+    let windowFrame: CGRect?
+    let face: RiverOverlayFace
+
+    static var edgeMargin: CGFloat { MessageOverlayCellPreview.bubbleMargin }
+
+    static func make(
+        messageId: String,
+        content: RiverBubbleContent,
+        paneFrame: CGRect?,
+        paneInWindow: CGRect,
+        bubbleWidth: CGFloat
+    ) -> RiverPressedCell {
+        let width = fittedWidth(bubbleWidth, paneWidth: paneInWindow.width)
+        let frame = paneFrame.map { windowFrame(paneFrame: $0, paneInWindow: paneInWindow, width: width) }
+        return RiverPressedCell(
+            messageId: messageId,
+            windowFrame: frame,
+            face: RiverOverlayFace(content: content, contentWidth: width))
+    }
+
+    /// La largeur de la bulle, bornée à ce qui tient entre les deux marges du pane.
+    static func fittedWidth(_ bubbleWidth: CGFloat, paneWidth: CGFloat) -> CGFloat {
+        let room = paneWidth - 2 * edgeMargin
+        return room > 0 ? min(bubbleWidth, room) : bubbleWidth
+    }
+
+    /// Le cadre de la bulle, du repère du pane à celui de la fenêtre, ramené
+    /// horizontalement entre les marges du pane. La hauteur et le haut restent
+    /// ceux de la bulle : l'aperçu s'ouvre à sa place.
+    static func windowFrame(paneFrame: CGRect, paneInWindow: CGRect, width: CGFloat) -> CGRect {
+        let x = paneFrame.minX + paneInWindow.minX
+        let lowest = paneInWindow.minX + edgeMargin
+        let highest = max(lowest, paneInWindow.maxX - edgeMargin - width)
+        return CGRect(
+            x: min(max(x, lowest), highest),
+            y: paneFrame.minY + paneInWindow.minY,
+            width: width,
+            height: paneFrame.height)
+    }
+}
+
+/// Le cadre du pane dans la fenêtre, ÉCRIT à chaque déplacement du pane et LU
+/// une fois par geste : une référence tenue en `@State` garde son identité, donc
+/// l'écrire ne réévalue aucun corps (patron de `MessageFrameBox`).
+@MainActor
+final class RiverPaneWindowAnchor {
+    nonisolated deinit {}
+    var frame: CGRect = .zero
 }
 
 // MARK: - Offset horizontal — le seul geste que `scrollTo` ne sait pas faire ici

@@ -24,7 +24,7 @@ import type { ApiResult, HttpTransport } from './http';
  *   applique le MÊME prédicat de visibilité que la liste, et sert la MÊME forme
  *   que l'événement `notification:counts` — une seule loi de décodage pour les
  *   deux voies.
- * - `POST /notifications/:id/read`, `POST /notifications/read-all`,
+ * - `POST /notifications/:id/read`, `POST /notifications/read-all`, `POST /notifications/read-by-types`,
  *   `DELETE /notifications/:id`.
  */
 
@@ -146,6 +146,15 @@ export async function postAllNotificationsRead(deps: NotificationsDeps): Promise
     return fixtureMarkAllNotificationsRead();
   }
   return deps.transport.request({ method: 'POST', path: notificationsEndpoints.readAll });
+}
+
+/** `POST /notifications/read-by-types` — toutes les non-lues de ces types, en cache ou non (#10175). */
+export async function postNotificationsReadByTypes(deps: NotificationsDeps, types: readonly string[]): Promise<ApiResult<unknown>> {
+  if (__FIXTURES__ && deps.source === 'fixtures') {
+    const { fixtureMarkNotificationsReadByTypes } = await import('./fixtures-notifications');
+    return fixtureMarkNotificationsReadByTypes(types);
+  }
+  return deps.transport.request({ method: 'POST', path: notificationsEndpoints.readByTypes, body: { types } });
 }
 
 export async function removeNotification(deps: NotificationsDeps, id: string): Promise<ApiResult<unknown>> {

@@ -2927,6 +2927,98 @@
           "hidden": false
         }
       ]
+    },
+    {
+      "slug": "succes-retrait",
+      "atmosphere": null,
+      "collections": [
+        "succes"
+      ],
+      "frames": [
+        {
+          "id": "succes.common",
+          "usage": {
+            "kind": "achievement",
+            "rarity": "common"
+          },
+          "collection": "succes",
+          "appliesTo": {
+            "family": "achievement",
+            "rarity": "common"
+          },
+          "option": null,
+          "hidden": false
+        },
+        {
+          "id": "succes.rare",
+          "usage": {
+            "kind": "achievement",
+            "rarity": "rare"
+          },
+          "collection": "succes",
+          "appliesTo": {
+            "family": "achievement",
+            "rarity": "rare"
+          },
+          "option": null,
+          "hidden": false
+        },
+        {
+          "id": "succes.epic",
+          "usage": {
+            "kind": "achievement",
+            "rarity": "epic"
+          },
+          "collection": "succes",
+          "appliesTo": {
+            "family": "achievement",
+            "rarity": "epic"
+          },
+          "option": null,
+          "hidden": false
+        },
+        {
+          "id": "succes.legendary",
+          "usage": {
+            "kind": "achievement",
+            "rarity": "legendary"
+          },
+          "collection": "succes",
+          "appliesTo": {
+            "family": "achievement",
+            "rarity": "legendary"
+          },
+          "option": null,
+          "hidden": false
+        },
+        {
+          "id": "succes.mythic",
+          "usage": {
+            "kind": "achievement",
+            "rarity": "mythic"
+          },
+          "collection": "succes",
+          "appliesTo": {
+            "family": "achievement",
+            "rarity": "mythic"
+          },
+          "option": null,
+          "hidden": true
+        },
+        {
+          "id": "succes.neutre",
+          "usage": {
+            "kind": "achievement"
+          },
+          "collection": "succes",
+          "appliesTo": {
+            "family": "achievement",
+            "rarity": null
+          },
+          "option": null,
+          "hidden": false
+        }
+      ]
     }
   ],
   "cases": [
@@ -5676,7 +5768,6 @@
           "moments",
           "tresor",
           "succes",
-          "succes",
           "mythologies"
         ],
         "rarity": "rare"
@@ -5707,7 +5798,6 @@
           "afrique",
           "moments",
           "tresor",
-          "succes",
           "succes",
           "mythologies"
         ],
@@ -5740,7 +5830,6 @@
           "moments",
           "tresor",
           "succes",
-          "succes",
           "mythologies"
         ],
         "rarity": null
@@ -5771,7 +5860,6 @@
           "afrique",
           "moments",
           "tresor",
-          "succes",
           "succes",
           "mythologies"
         ],
@@ -5804,7 +5892,6 @@
           "moments",
           "tresor",
           "succes",
-          "succes",
           "mythologies"
         ],
         "rarity": null
@@ -5822,6 +5909,66 @@
         "preselected": {
           "pack": "succes",
           "frameId": "succes.neutre"
+        }
+      }
+    },
+    {
+      "name": "rareté dont le cadre est masqué ⇒ le neutre du même pack, jamais une autre rareté",
+      "input": {
+        "stepId": "achievement:messages.3",
+        "atmosphere": null,
+        "lastChosen": null,
+        "installed": [
+          "afrique",
+          "moments",
+          "tresor",
+          "succes-retrait"
+        ],
+        "rarity": "mythic"
+      },
+      "expected": {
+        "needsAtmosphere": false,
+        "suggested": [
+          {
+            "pack": "succes-retrait",
+            "frameId": "succes.neutre"
+          }
+        ],
+        "others": [],
+        "reinstall": null,
+        "preselected": {
+          "pack": "succes-retrait",
+          "frameId": "succes.neutre"
+        }
+      }
+    },
+    {
+      "name": "un cadre masqué ne retire que sa rareté : les autres restent servies",
+      "input": {
+        "stepId": "achievement:messages.3",
+        "atmosphere": null,
+        "lastChosen": null,
+        "installed": [
+          "afrique",
+          "moments",
+          "tresor",
+          "succes-retrait"
+        ],
+        "rarity": "legendary"
+      },
+      "expected": {
+        "needsAtmosphere": false,
+        "suggested": [
+          {
+            "pack": "succes-retrait",
+            "frameId": "succes.legendary"
+          }
+        ],
+        "others": [],
+        "reinstall": null,
+        "preselected": {
+          "pack": "succes-retrait",
+          "frameId": "succes.legendary"
         }
       }
     },
@@ -5856,7 +6003,6 @@
           "afrique",
           "moments",
           "tresor",
-          "succes",
           "succes",
           "mythologies"
         ],
@@ -5893,7 +6039,6 @@
           "moments",
           "tresor",
           "succes",
-          "succes",
           "mythologies"
         ],
         "rarity": null
@@ -5925,7 +6070,6 @@
           "moments",
           "tresor",
           "succes",
-          "succes",
           "mythologies"
         ],
         "rarity": null
@@ -5948,7 +6092,6 @@
           "afrique",
           "moments",
           "tresor",
-          "succes",
           "succes",
           "mythologies"
         ],
