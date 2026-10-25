@@ -403,11 +403,15 @@ struct RiverBubbleView: View, Equatable {
     var onConsumeViewOnce: ((String, @escaping (Bool) -> Void) -> Void)? = nil
     /// #8310 — le plein écran de l'hôte, le MÊME que celui du Fil.
     var onMediaTap: ((MessageAttachment) -> Void)? = nil
+    /// #12630 — la respiration de tête appartient au RANG, pas à la bulle : le
+    /// cadre publié ne la compte pas, et l'aperçu d'appui long la retire pour
+    /// que la bulle tombe au haut de ce cadre.
+    var drawsTopSeam = true
 
     @Environment(\.colorScheme) private var colorScheme
 
     static func == (lhs: RiverBubbleView, rhs: RiverBubbleView) -> Bool {
-        lhs.content == rhs.content && lhs.contentWidth == rhs.contentWidth
+        lhs.content == rhs.content && lhs.contentWidth == rhs.contentWidth && lhs.drawsTopSeam == rhs.drawsTopSeam
     }
 
     private var colorHex: String { DynamicColorGenerator.colorForName(content.colorSeed) }
@@ -444,7 +448,7 @@ struct RiverBubbleView: View, Equatable {
     /// LOI (`isFirstInGroup`) — cette vue ne fait que le dessiner.
     @ViewBuilder
     private var topSeam: some View {
-        if !content.groupPosition.joinsAbove {
+        if drawsTopSeam, !content.groupPosition.joinsAbove {
             Color.clear
                 .frame(width: contentWidth, height: RiverMetrics.Row.gap)
                 .accessibilityHidden(true)

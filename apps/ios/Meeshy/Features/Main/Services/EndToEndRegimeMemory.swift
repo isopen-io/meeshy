@@ -17,8 +17,9 @@ import os
 /// datée a établi : elle resserre la lecture le temps qu'elle est servie.
 nonisolated protocol EndToEndRegimeMemoryProviding: Sendable {
     func resolve(conversationId: String, served: EndToEndRegime) -> EndToEndRegime
-    /// Une bascule datée par son `epoch`. `changedAt` absent (statut servi) :
-    /// l'instant où l'appareil l'apprend, plus tardif — fail-closed.
+    /// Une bascule datée par son `epoch`, bornée du côté fermé (revue #12846) :
+    /// une désactivation ne prend effet qu'à l'instant où l'appareil l'apprend,
+    /// une activation au plus tard à cet instant.
     func learn(isEndToEnd: Bool, epoch: Int, changedAt: Date?, enabledAt: Date?, for conversationId: String)
 }
 
@@ -52,7 +53,12 @@ nonisolated final class EndToEndRegimeMemory: EndToEndRegimeMemoryProviding, @un
     }
 
     func learn(isEndToEnd: Bool, epoch: Int, changedAt: Date?, enabledAt: Date?, for conversationId: String) {
-        let observed = EndToEndRegime.dated(isEndToEnd: isEndToEnd, epoch: epoch, at: changedAt ?? now(), enabledAt: enabledAt)
+        let learnedAt = now()
+        let served = changedAt ?? learnedAt
+        let boundary = isEndToEnd ? min(served, learnedAt) : max(served, learnedAt)
+        let observed = EndToEndRegime.dated(
+            isEndToEnd: isEndToEnd, epoch: epoch, at: boundary, enabledAt: enabledAt.map { min($0, learnedAt) }
+        )
         let changed = remembered.withLock { known -> [String: EndToEndRegime]? in
             let previous = known[conversationId]
             let learned = observed.superseding(previous)

@@ -69,6 +69,40 @@ final class EndToEndRegimeEpochTests: XCTestCase {
         XCTAssertTrue(conflicting.merging(datedDeactivation).isEndToEnd)
     }
 
+    // MARK: - Une désactivation datée AVANT l'activation (revue #12846)
+
+    /// Un serveur qui date la désactivation avant l'activation ne fait jamais
+    /// disparaître l'ère chiffrée : ses messages restent jugés chiffrés.
+    func test_aDeactivationDatedBeforeTheActivation_neverErasesTheEncryptedEra() {
+        let backdated = EndToEndRegime.dated(isEndToEnd: false, epoch: 2, at: Date(timeIntervalSince1970: 100))
+        let during = peerMessage(at: Date(timeIntervalSince1970: 2_000))
+
+        for regime in [backdated.merging(rememberedEncrypted), rememberedEncrypted.merging(backdated)] {
+            XCTAssertTrue(regime.hasEncryptedEra)
+            XCTAssertEqual(EndToEndPlaintextLaw.standing(of: during, in: regime), .unencrypted)
+            XCTAssertFalse(regime.admitsWireTranslations(forMessageCreatedAt: during.createdAt))
+        }
+    }
+
+    func test_aBackdatedDeactivationSupersedingUndatedMemory_keepsTheEraEncrypted() {
+        let legacy = EndToEndRegime(encryptionMode: "e2ee", enabledAt: activation)
+        let backdated = EndToEndRegime.dated(isEndToEnd: false, epoch: 2, at: Date(timeIntervalSince1970: 100))
+
+        let learned = backdated.superseding(legacy)
+
+        XCTAssertTrue(learned.governs(createdAt: Date(timeIntervalSince1970: 2_000)))
+    }
+
+    /// Une ère aux bornes inversées relue du disque n'est pas jetée : elle ne se clôt plus.
+    func test_aStoredEraWithInvertedBounds_isKeptOpen() throws {
+        let stored = Data(#"{"isEndToEnd":false,"epoch":2,"disabledAt":100,"closedEras":[{"start":500,"end":100}]}"#.utf8)
+
+        let decoded = try JSONDecoder().decode(EndToEndRegime.self, from: stored)
+
+        XCTAssertTrue(decoded.hasEncryptedEra)
+        XCTAssertTrue(decoded.governs(createdAt: Date(timeIntervalSinceReferenceDate: 9_000)))
+    }
+
     // MARK: - Ce qui n'est pas daté ne rétrograde rien
 
     func test_anUndatedClearAnnouncement_neverDowngrades() {

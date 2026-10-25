@@ -193,5 +193,8 @@ struct ConversationOverlayMenuLayer<Piece: View>: View {
             mediaSaveCoordinator: mediaSaveCoordinator,
             actions: actions
         )
+        // #12630 — en Rivière, l'aperçu rend la bulle du couloir pressée, pas
+        // celle du fil (`MessageOverlayCellPreview.displayedFace`).
+        .environment(\.riverOverlayFace, overlayState.overlayRiverFace)
     }
 }
