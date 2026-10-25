@@ -1,4 +1,5 @@
 import XCTest
+import UIKit
 @testable import Meeshy
 
 @MainActor
@@ -179,6 +180,140 @@ final class ConversationLockManagerTests: XCTestCase {
         sut.forceRemoveMasterPin()
 
         XCTAssertFalse(sut.masterPinConfigured)
+    }
+
+    // MARK: - #12655 : un processus lancé avant le premier déverrouillage
+
+    private let lockedIdsKey = "meeshy.lockedConversationIds"
+
+    @MainActor
+    private final class ProtectedData {
+        nonisolated deinit {}
+        var available: Bool
+        init(available: Bool) { self.available = available }
+    }
+
+    private struct LaunchFixture {
+        let standard: UserDefaults
+        let mirror: UserDefaults
+        let mirrorFile: URL
+        let center: NotificationCenter
+    }
+
+    private func makeLaunchFixture() throws -> LaunchFixture {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let standardSuite = "pin-standard-\(UUID().uuidString)"
+        let mirrorSuite = "pin-mirror-\(UUID().uuidString)"
+        let fixture = LaunchFixture(
+            standard: try XCTUnwrap(UserDefaults(suiteName: standardSuite)),
+            mirror: try XCTUnwrap(UserDefaults(suiteName: mirrorSuite)),
+            mirrorFile: try XCTUnwrap(NSELockedConversationMirror.fileURL(inContainer: directory)),
+            center: NotificationCenter()
+        )
+        addTeardownBlock {
+            try? FileManager.default.removeItem(at: directory)
+            UserDefaults().removePersistentDomain(forName: standardSuite)
+            UserDefaults().removePersistentDomain(forName: mirrorSuite)
+        }
+        return fixture
+    }
+
+    private func makeLaunchedManager(_ fixture: LaunchFixture, protectedData: ProtectedData) -> ConversationLockManager {
+        ConversationLockManager(
+            vault: InMemoryConversationLockVault(),
+            defaults: fixture.standard,
+            biometrics: StubBiometricUnlocker(),
+            iterations: 1_000,
+            contentLockMirror: fixture.mirror,
+            contentLockMirrorFile: fixture.mirrorFile,
+            isProtectedDataAvailable: { protectedData.available },
+            notificationCenter: fixture.center
+        )
+    }
+
+    /// Avant le premier déverrouillage, `.standard` se lit VIDE (PushKit, VoIP
+    /// réveillent l'app en arrière-plan). Le gestionnaire ne réécrit alors ni
+    /// la liste ni le miroir : écrire `[]` aurait effacé les verrous pour
+    /// l'extension, désormais autoritaire sur une liste vide.
+    func test_aLaunchWithoutProtectedData_writesNeitherTheListNorTheMirror() throws {
+        let fixture = try makeLaunchFixture()
+        NSELockedConversationMirror.mirror(["coffre"], toFile: fixture.mirrorFile, defaults: fixture.mirror)
+
+        _ = makeLaunchedManager(fixture, protectedData: ProtectedData(available: false))
+
+        XCTAssertNil(fixture.standard.stringArray(forKey: lockedIdsKey), "aucune liste lue, aucune liste écrite")
+        XCTAssertEqual(fixture.mirror.stringArray(forKey: NSELockedConversationMirror.legacyDefaultsKey), ["coffre"])
+        XCTAssertEqual(NSELockedConversationMirror.readFile(at: fixture.mirrorFile), .ids(["coffre"]))
+    }
+
+    /// La porte PIN ne s'ouvre pas sur une liste vide lue par erreur : en
+    /// mémoire, le gestionnaire reprend le miroir de fichier quand il se lit.
+    func test_aLaunchWithoutProtectedData_keepsTheMirroredLocksInMemory() throws {
+        let fixture = try makeLaunchFixture()
+        NSELockedConversationMirror.mirror(["coffre"], toFile: fixture.mirrorFile, defaults: nil)
+
+        let sut = makeLaunchedManager(fixture, protectedData: ProtectedData(available: false))
+
+        XCTAssertTrue(sut.isLocked("coffre"))
+        XCTAssertFalse(sut.admitsOpening("coffre"))
+    }
+
+    /// Un geste fait avant que la liste soit lue ne persiste pas une liste
+    /// partielle : les verrous qu'elle ignore survivraient sinon effacés.
+    func test_aChangeBeforeTheListIsRead_doesNotOverwriteThePersistedLocks() throws {
+        let fixture = try makeLaunchFixture()
+        fixture.standard.set(["coffre", "autre"], forKey: lockedIdsKey)
+        let sut = makeLaunchedManager(fixture, protectedData: ProtectedData(available: false))
+
+        sut.removeLock(conversationId: "autre")
+
+        XCTAssertEqual(Set(fixture.standard.stringArray(forKey: lockedIdsKey) ?? []), ["coffre", "autre"])
+        XCTAssertNil(fixture.mirror.stringArray(forKey: NSELockedConversationMirror.legacyDefaultsKey))
+    }
+
+    /// Les données protégées deviennent disponibles : la liste se relit et le
+    /// miroir se réécrit.
+    func test_theListIsRead_whenProtectedDataBecomesAvailable() throws {
+        let fixture = try makeLaunchFixture()
+        fixture.standard.set(["coffre"], forKey: lockedIdsKey)
+        let protectedData = ProtectedData(available: false)
+        let sut = makeLaunchedManager(fixture, protectedData: protectedData)
+        XCTAssertFalse(sut.isLocked("coffre"))
+
+        let reloaded = expectation(description: "la liste se relit")
+        let subscription = sut.$lockedConversationIds.first { $0.contains("coffre") }.sink { _ in reloaded.fulfill() }
+        protectedData.available = true
+        fixture.center.post(name: UIApplication.protectedDataDidBecomeAvailableNotification, object: nil)
+        wait(for: [reloaded], timeout: 2)
+        subscription.cancel()
+
+        XCTAssertTrue(sut.isLocked("coffre"))
+        XCTAssertEqual(NSELockedConversationMirror.readFile(at: fixture.mirrorFile), .ids(["coffre"]))
+        XCTAssertEqual(fixture.mirror.stringArray(forKey: NSELockedConversationMirror.legacyDefaultsKey), ["coffre"])
+    }
+
+    /// La déconnexion lève tous les verrous : c'est une intention, pas une
+    /// lecture, et elle s'écrit même avant que la liste ait été lue.
+    func test_logout_beforeTheListIsRead_stillWipesTheLocks() throws {
+        let fixture = try makeLaunchFixture()
+        fixture.standard.set(["coffre"], forKey: lockedIdsKey)
+        let sut = makeLaunchedManager(fixture, protectedData: ProtectedData(available: false))
+
+        sut.resetForLogout()
+
+        XCTAssertEqual(fixture.standard.stringArray(forKey: lockedIdsKey), [])
+        XCTAssertEqual(NSELockedConversationMirror.readFile(at: fixture.mirrorFile), .ids([]))
+    }
+
+    func test_aLaunchWithProtectedData_readsTheListAndMirrorsIt() throws {
+        let fixture = try makeLaunchFixture()
+        fixture.standard.set(["coffre"], forKey: lockedIdsKey)
+
+        let sut = makeLaunchedManager(fixture, protectedData: ProtectedData(available: true))
+
+        XCTAssertTrue(sut.isLocked("coffre"))
+        XCTAssertEqual(NSELockedConversationMirror.readFile(at: fixture.mirrorFile), .ids(["coffre"]))
     }
 }
 
