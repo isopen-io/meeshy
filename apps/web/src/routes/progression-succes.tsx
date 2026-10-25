@@ -59,7 +59,7 @@ export default function ProgressionSuccesScreen() {
       teinte={UNLOCKED_TINT}
       compte={(p) => `${p.achievements.filter((a) => a.unlocked).length} / ${p.achievements.length}`}
     >
-      {(progress) => <SuccesBody progress={progress} env={appPhotoEnv()} flameDays={flameDays} rarities={(progress as EngagementWithGame).game?.achievementRarities} />}
+      {(progress) => <SuccesBody progress={progress} env={appPhotoEnv()} flameDays={flameDays} rarities={progress.game?.achievementRarities} />}
     </ProgressionPage>
   );
 }

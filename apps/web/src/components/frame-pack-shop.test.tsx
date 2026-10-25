@@ -246,6 +246,23 @@ describe('FramePackShop', () => {
     expect(host.querySelector('[data-shop-pack="egypte"]')?.textContent).toContain('Votre atmosphère');
   });
 
+  test('montée SANS porte (le chemin des réglages), la boutique lit l’atmosphère du COMPTE dans le cache de Progression et tient son pack en place', async () => {
+    appQueryClient.setQueryData<EngagementWithGame>(
+      ENGAGEMENT_PROGRESS_QUERY_KEY,
+      withAtmosphere({ ...resolveEngagementProgress(ENGAGEMENT_PROGRESS_FIXTURE), game: gameBlockWithExtrasFixture() }, 'egypte'),
+    );
+    const fixture = await gateway({ installed: true, pack: { slug: 'egypte' } });
+    const host = await mounter.mount(
+      <QueryClientProvider client={appQueryClient}>
+        <FramePackShop language="fr" deps={fixture.deps} assets={{ origin: ORIGIN, fetcher: fixture.fetcher, cacheStorage: null }} />
+      </QueryClientProvider>,
+    );
+    await until(() => host.querySelector('[data-shop-swap="egypte"]') !== null);
+    expect(host.querySelector('[data-shop-toggle="egypte"]')).toBe(null);
+    expect(host.querySelector('[data-shop-pack="egypte"]')?.textContent).toContain('Votre atmosphère');
+    expect(host.querySelector('[data-shop-pack="egypte"]')?.textContent).not.toContain('Retirer');
+  });
+
   test('« Changer d’atmosphère » ouvre le choix des atmosphères, et choisir passe par la porte du compte', async () => {
     const { gate, chosen } = atmosphereGate('egypte');
     const host = await mount(await gateway({ installed: true, pack: { slug: 'egypte' } }), gate);
