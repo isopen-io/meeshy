@@ -146,12 +146,12 @@ nonisolated enum NSEAttachmentPolicy {
     static func sealingLockedConversation(_ userInfo: [AnyHashable: Any], isLocked: Bool) -> [AnyHashable: Any] {
         guard isLocked else { return userInfo }
         return userInfo
-            .filter { key, _ in !lockedConversationContentKeys.contains(key) }
+            .filter { key, _ in (key as? String).map { !lockedConversationContentKeys.contains($0) } ?? true }
             .merging([AnyHashable("notificationLocKey"): lockedConversationLocKey]) { _, sealed in sealed }
     }
 
     /// Les clés de la charge qui portent le CONTENU d'un message.
-    static let lockedConversationContentKeys: Set<AnyHashable> = [
+    static let lockedConversationContentKeys: Set<String> = [
         "content", "translatedContent", "firstAttachmentTranscript", "encryptedContent",
     ]
 
