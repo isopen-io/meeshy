@@ -230,6 +230,21 @@ final class NotificationActionLockedConversationTests: XCTestCase {
         XCTAssertEqual(sut.ledger.opened, 0)
     }
 
+    /// Avant que le gestionnaire ait lu sa liste (données protégées
+    /// indisponibles, miroir illisible ou absent), une conversation PEUT être
+    /// sous PIN : le geste par défaut se refuse (fail-closed), il ne lit pas
+    /// une liste vide comme « aucun verrou ». Garde de SOURCE : le défaut de
+    /// production est le singleton, qu'un test ne reconstruit pas.
+    func test_theDefaultLockGate_isFailClosedBeforeTheListIsRead() throws {
+        let code = AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Main/Services/NotificationActionHandler.swift")
+        )
+
+        XCTAssertTrue(code.contains("ConversationLockManager.shared.mayBeLocked("),
+                      "le geste par défaut doit refuser tant que la liste des verrous n'est pas lue")
+        XCTAssertFalse(code.contains("ConversationLockManager.shared.isLocked($0)"))
+    }
+
     // MARK: - Les gestes du détail (#8858) sous PIN
 
     /// Une bannière NON scellée (extension tuée avant sa catégorie, bannière
