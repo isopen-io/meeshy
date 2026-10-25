@@ -91,7 +91,7 @@ final class ExtensionShareDispatcher: ShareDispatching {
             return .failed(reason: Self.unreachableReason)
         }
         let conversationId = destination.id
-        if destination.isEncrypted { // RED-STUB : la mémoire n'est pas encore lue
+        if destination.isEncrypted || remembersEndToEnd(conversationId) {
             if !relayedConversationIds.contains(conversationId) { relayedConversationIds.append(conversationId) }
             relayedText = request.subject.composedText(caption: request.caption)
             relayedMedia = keptMedia(of: request.subject)

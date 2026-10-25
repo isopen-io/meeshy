@@ -475,29 +475,8 @@ final class NotificationActionHandler: NotificationActionHandling {
             replyToId: payload.messageId
         )
 
-        do {
-            try await messagePersistence.insertOptimistic(
-                MessageRecord.optimisticText(
-                    item: item,
-                    senderId: userId,
-                    replyToId: payload.messageId
-                )
-            )
-        } catch {
-            logger.error("reply optimistic insert failed: \(error.localizedDescription, privacy: .public)")
-        }
-
-        // #12641 — la réponse ne sait pas sceller : vers une conversation
-        // chiffrée de bout en bout, rien ne part ni n'entre dans la file. La
-        // bulle reste en échec dans le fil, d'où le renvoi se scelle.
-        if await destinationGuard.seals(conversationId) {
-            logger.warning("notification reply refused before transport: end-to-end conversation")
-            try? await messagePersistence.markOptimisticFailed(
-                localId: item.clientMessageId, reason: EndToEndSendRefusal.sealedOnlyInConversation.userMessage
-            )
-            removeDeliveredForConversation(conversationId)
-            return
-        }
+        await insertReplyBubble(item, senderId: userId, replyToId: payload.messageId)
+        if await refusesEndToEndReply(item, in: conversationId) { return }
 
         await prepareReplyQueue()
         var outboxRowLanded = false
@@ -538,6 +517,29 @@ final class NotificationActionHandler: NotificationActionHandling {
             logger.error("post-reply markRead failed: \(error.localizedDescription, privacy: .public)")
         }
         removeDeliveredForConversation(conversationId)
+    }
+
+    private func insertReplyBubble(_ item: OfflineQueueItem, senderId: String, replyToId: String?) async {
+        do {
+            try await messagePersistence.insertOptimistic(
+                MessageRecord.optimisticText(item: item, senderId: senderId, replyToId: replyToId)
+            )
+        } catch {
+            logger.error("reply optimistic insert failed: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    /// #12641 — la réponse ne sait pas sceller : vers une conversation chiffrée
+    /// de bout en bout (loi du fil, #12985), rien ne part ni n'entre dans la
+    /// file. La bulle reste en échec dans le fil, d'où le renvoi se scelle.
+    private func refusesEndToEndReply(_ item: OfflineQueueItem, in conversationId: String) async -> Bool {
+        guard await destinationGuard.seals(conversationId) else { return false }
+        logger.warning("notification reply refused before transport: end-to-end conversation")
+        try? await messagePersistence.markOptimisticFailed(
+            localId: item.clientMessageId, reason: EndToEndSendRefusal.sealedOnlyInConversation.userMessage
+        )
+        removeDeliveredForConversation(conversationId)
+        return true
     }
 
     // MARK: - Inline comment on social pushes (R3/R4)

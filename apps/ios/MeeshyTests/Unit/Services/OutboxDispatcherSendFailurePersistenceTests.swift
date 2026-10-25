@@ -31,7 +31,7 @@ final class OutboxDispatcherSendFailurePersistenceTests: XCTestCase {
 
     private func makeDispatcher(store: Store, service: MockMessageService) -> OutboxDispatcher {
         let persistence = store.persistence
-        return OutboxDispatcher(messageService: service, persistence: { persistence }, sealsDestination: { _ in false })
+        return OutboxDispatcher(messageService: service, persistence: { persistence })
     }
 
     private func failingService() -> MockMessageService {

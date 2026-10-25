@@ -142,7 +142,7 @@ extension MeeshyApp {
             }
             let flusher = OutboxFlusher(
                 pool: bootPool,
-                dispatcher: OutboxDispatcher(),
+                dispatcher: EndToEndOutboxGate(),
                 onOutcome: { @Sendable outcome in
                     Task { await OfflineQueue.shared.publishOutcome(outcome) }
                 },

@@ -34,6 +34,14 @@ struct EndToEndDestinationGuard {
     }
 
     func seals(_ conversationId: String, served modes: [String?] = []) async -> Bool {
-        EndToEndSendGate.requiresSeal(conversationEncryptionModes: modes) // RED-STUB
+        modes.forEach { ledger.learn(mode: $0, for: conversationId) }
+        let row = await cache.currentConversation(id: conversationId)
+        let thread = await cache.cachedThread(id: conversationId) ?? []
+        return ledger.seals(
+            for: conversationId,
+            opening: nil,
+            cached: row?.encryptionMode,
+            activationShownAt: EncryptionSwitchNoticeTrail.endToEndShownAt(in: thread)
+        )
     }
 }

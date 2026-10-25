@@ -43,6 +43,9 @@ public enum DirectPairChoice {
         mode: KeyPath<C, String?>,
         remembersEndToEnd: (String) -> Bool
     ) -> C? {
-        ordered.first // RED-STUB
+        ordered.first { candidate in
+            EndToEndSendGate.requiresSeal(conversationEncryptionModes: [candidate[keyPath: mode]])
+                || remembersEndToEnd(candidate[keyPath: id])
+        } ?? ordered.first
     }
 }

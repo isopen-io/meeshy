@@ -145,7 +145,6 @@ extension OutboxDispatcher {
                 logger.error("Corrupt OfflineQueueItem payload for record \(record.id, privacy: .public), dropping: \(error.localizedDescription, privacy: .public)")
                 return
             }
-            try await refuseEndToEndReplay(to: item.conversationId, record: record)
 
             // Rejeu audio multi-pistes : `localAudioPaths` est le champ
             // canonique, les anciennes lignes ne portent que `localAudioPath`.
@@ -335,7 +334,6 @@ extension OutboxDispatcher {
                 logger.error("Legacy mrq_* payload without clientMessageId for record \(record.id, privacy: .public), dropping")
                 return
             }
-            try await refuseEndToEndReplay(to: item.conversationId, record: record)
             let request = SendMessageRequest(
                 content: item.content,
                 originalLanguage: item.originalLanguage ?? "fr",
@@ -353,18 +351,6 @@ extension OutboxDispatcher {
             )
         }
         // Unknown namespace prefix — stale row, accept so the flusher removes it.
-    }
-
-    /// **La file ne rejoue rien en clair vers une conversation chiffrée de bout
-    /// en bout** (#12985). Une ligne enfilée avant l'activation, par une version
-    /// antérieure ou par un chemin qui ne gardait pas, s'arrête AVANT tout
-    /// téléversement ou transport : le refus est définitif
-    /// (`OutboxFlusher.isPermanentServerRejection`), la bulle reste en échec
-    /// dans le fil, d'où le renvoi se scelle.
-    func refuseEndToEndReplay(to conversationId: String, record: OutboxRecord) async throws {
-        guard await sealsDestination(conversationId) else { return }
-        logger.warning("E2EE outbox replay refused before transport record=\(record.id, privacy: .public)")
-        throw EndToEndSendRefusal.outboxUnsealable
     }
 
     // MARK: - Rejeu des pièces téléversées (#8350)

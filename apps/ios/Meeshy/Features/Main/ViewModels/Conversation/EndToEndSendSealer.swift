@@ -47,9 +47,8 @@ struct EndToEndSendSealer {
     /// Un message envoyé chiffré reste chiffré à jamais (#12881, spec § 5.2) :
     /// son clair déchiffré sur l'appareil ne part pas en clair.
     func editRefusal(for message: Message?) -> EndToEndSendRefusal? {
-        if let refusal = editRefusal { return refusal }
-        guard let message, message.isEncrypted || message.isContentDecryptedOnDevice else { return nil }
-        return .sealedMessageUneditable
+        if let message, message.isEncrypted || message.isContentDecryptedOnDevice { return .sealedMessageUneditable }
+        return editRefusal
     }
 
     /// Une pièce se téléverse EN CLAIR avant même que le message parte : en
@@ -271,7 +270,10 @@ enum EncryptionSwitchNoticeTrail {
     /// un message chiffré de bout en bout (`DeviceTranslationEligibility.isEndToEnd`,
     /// provenance comprise).
     static func endToEndShownAt(in messages: [Message]) -> Date? {
-        activationShownAt(in: messages) // RED-STUB
+        let sealedMessages = messages
+            .filter { $0.messageSource != .system && DeviceTranslationEligibility.isEndToEnd($0, conversationEncryptionMode: nil) }
+            .map(\.createdAt)
+        return (sealedMessages + [activationShownAt(in: messages)].compactMap { $0 }).min()
     }
 
     static func activationShownAt(in messages: [Message]) -> Date? {

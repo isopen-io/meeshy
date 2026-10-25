@@ -105,7 +105,9 @@ nonisolated final class EndToEndRegimeMemory: EndToEndRegimeMemoryProviding, @un
     /// Le compte lié dépose, pour l'extension de partage, les conversations
     /// qu'il a vues chiffrées de bout en bout — des identifiants, rien d'autre.
     private func reflect(_ known: [String: EndToEndRegime], for account: String) {
-        // RED-STUB
+        guard let mirror, let owner = EndToEndShareMemory.ownerUserId(ofAccount: account) else { return }
+        EndToEndShareMemory(ownerUserId: owner, conversationIds: known.filter { $0.value.isEndToEnd }.map(\.key))
+            .write(to: mirror)
     }
 }
 

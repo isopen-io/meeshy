@@ -1,4 +1,5 @@
 import XCTest
+import GRDB
 import MeeshySDK
 @testable import Meeshy
 
@@ -201,13 +202,23 @@ final class EndToEndOffThreadSendTests: XCTestCase {
                             clientMessageId: item.clientMessageId, payload: (try? encoder.encode(item)) ?? Data())
     }
 
-    func test_outbox_aQueuedPlaintext_toARememberedEndToEndConversation_neverLeaves_andIsRefusedForGood() async {
+    private func gate(_ service: MockMessageService) throws -> (EndToEndOutboxGate, DatabaseQueue) {
+        let pool = try DatabaseQueue()
+        try MessageDatabaseMigrations.runAll(on: pool)
+        let persistence = MessagePersistenceActor(dbWriter: pool)
+        let sealedId = sealed
+        let gate = EndToEndOutboxGate(OutboxDispatcher(messageService: service, persistence: { persistence }),
+                                      sealsDestination: { $0 == sealedId })
+        return (gate, pool)
+    }
+
+    func test_outbox_aQueuedPlaintext_toARememberedEndToEndConversation_neverLeaves_andIsRefusedForGood() async throws {
         let service = MockMessageService()
-        let sut = OutboxDispatcher(messageService: service, sealsDestination: { [sealed] in $0 == sealed })
+        let (sut, _) = try gate(service)
         let item = OfflineQueueItem(conversationId: sealed, content: secret, clientMessageId: ClientMessageId.generate())
 
         do {
-            try await sut.dispatchSendMessage(outboxRecord(item))
+            try await sut.dispatch(outboxRecord(item))
             XCTFail("la ligne doit être refusée")
         } catch {
             XCTAssertEqual(error as? EndToEndSendRefusal, .outboxUnsealable, "un refus que la file classe définitif")
@@ -218,13 +229,26 @@ final class EndToEndOffThreadSendTests: XCTestCase {
 
     func test_outbox_aQueuedPlaintext_toAReadableConversation_stillLeaves() async throws {
         let service = MockMessageService()
-        let sut = OutboxDispatcher(messageService: service, sealsDestination: { [sealed] in $0 == sealed })
+        let (sut, _) = try gate(service)
         let item = OfflineQueueItem(conversationId: readable, content: "Bonjour", clientMessageId: ClientMessageId.generate())
 
-        try? await sut.dispatchSendMessage(outboxRecord(item))
+        try? await sut.dispatch(outboxRecord(item))
 
         XCTAssertEqual(service.sendCallCount, 1)
         XCTAssertEqual(service.lastSendRequest?.content, "Bonjour")
+    }
+
+    /// La garde de production est montée devant le dispatcher, aux trois sites
+    /// qui vident la file.
+    func test_outbox_everyFlusherSite_mountsTheEndToEndGate() throws {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        for path in ["Meeshy/MeeshyApp+LaunchSequence.swift", "Meeshy/Features/Main/Services/BackgroundTransitionCoordinator.swift",
+                     "Meeshy/Features/Main/Services/OutboxFlushScheduling.swift"] {
+            let code = try String(contentsOf: root.appendingPathComponent(path), encoding: .utf8)
+            XCTAssertTrue(code.contains("dispatcher: EndToEndOutboxGate()"), path)
+            XCTAssertFalse(code.contains("dispatcher: OutboxDispatcher()"), path)
+        }
     }
 
     // MARK: - Réponse depuis une notification, refus d'appel, humeur (#12641)

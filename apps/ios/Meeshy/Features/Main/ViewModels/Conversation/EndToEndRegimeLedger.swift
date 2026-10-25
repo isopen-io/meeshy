@@ -27,6 +27,10 @@ final class EndToEndRegimeLedger {
     private let memory: any EndToEndRegimeMemoryProviding
     /// L'époque du régime chiffré connue, que l'envoi scellé déclare (#12522).
     private var epochs: [String: Int] = [:]
+    /// Les conversations vues chiffrées que la passerelle a, en dernier, servies
+    /// sans bout en bout (statut ou bascule annoncée) pendant cette session
+    /// (#12987). Un régime chiffré servi de nouveau les en retire.
+    private var servedWithoutEndToEnd: Set<String> = []
 
     init(memory: any EndToEndRegimeMemoryProviding = EndToEndRegimeMemory(defaults: nil)) {
         self.memory = memory
@@ -39,6 +43,7 @@ final class EndToEndRegimeLedger {
 
     func learn(mode: String?, for conversationId: String) {
         guard EndToEndSendGate.requiresSeal(conversationEncryptionModes: [mode]) else { return }
+        servedWithoutEndToEnd.remove(conversationId)
         learnEndToEnd(for: conversationId)
     }
 
@@ -54,20 +59,31 @@ final class EndToEndRegimeLedger {
     func learn(_ status: ConversationEncryptionStatus, for conversationId: String) {
         guard EndToEndSendGate.requiresSeal(conversationEncryptionModes: [status.mode])
                 || (status.isEncrypted && status.mode == nil)
-        else { return }
+        else { return noteServedWithoutEndToEnd(conversationId) }
+        servedWithoutEndToEnd.remove(conversationId)
         learnEndToEnd(for: conversationId, enabledAt: status.enabledAt, epoch: status.epoch)
     }
 
     /// Une bascule annoncée par la passerelle : seule une activation s'apprend.
     func learn(_ event: ConversationEncryptionChangedEvent) {
-        guard EndToEndSendGate.requiresSeal(conversationEncryptionModes: [event.mode]) else { return }
+        guard EndToEndSendGate.requiresSeal(conversationEncryptionModes: [event.mode]) else {
+            return noteServedWithoutEndToEnd(event.conversationId)
+        }
+        servedWithoutEndToEnd.remove(event.conversationId)
         learnEndToEnd(for: event.conversationId, enabledAt: event.changedAtDate, epoch: event.epoch)
+    }
+
+    /// Une conversation jamais vue chiffrée, servie en clair, n'est pas un écart.
+    private func noteServedWithoutEndToEnd(_ conversationId: String) {
+        guard remembersEndToEnd(conversationId) else { return }
+        servedWithoutEndToEnd.insert(conversationId)
     }
 
     /// La session se ferme : l'époque apprise ne vaut pas pour le compte
     /// suivant. La mémoire, elle, est rangée par compte.
     func reset() {
         epochs = [:]
+        servedWithoutEndToEnd = []
     }
 
     /// Apprend chaque bascule annoncée par la passerelle (`conversation:encryption-changed`).
@@ -86,7 +102,7 @@ final class EndToEndRegimeLedger {
     /// Le dernier statut que la passerelle a servi ne dit pas le bout en bout
     /// d'une conversation que cet appareil a vue chiffrée (#12987).
     func servesWithoutEndToEnd(_ conversationId: String) -> Bool {
-        false // RED-STUB
+        servedWithoutEndToEnd.contains(conversationId) && remembersEndToEnd(conversationId)
     }
 
     /// L'envoi suivant doit-il être scellé ? Oui dès qu'UNE source dit le bout
@@ -95,7 +111,10 @@ final class EndToEndRegimeLedger {
     /// (`activationShownAt`, daté par le serveur). Ce qui est vu ici est retenu.
     func seals(for conversationId: String, opening: String?, cached: String?, activationShownAt: Date? = nil) -> Bool {
         if let activationShownAt { learnEndToEnd(for: conversationId, enabledAt: activationShownAt) }
-        if EndToEndSendGate.requiresSeal(conversationEncryptionModes: [opening, cached]) { return true }
+        if EndToEndSendGate.requiresSeal(conversationEncryptionModes: [opening, cached]) {
+            learnEndToEnd(for: conversationId)
+            return true
+        }
         return remembersEndToEnd(conversationId)
     }
 }

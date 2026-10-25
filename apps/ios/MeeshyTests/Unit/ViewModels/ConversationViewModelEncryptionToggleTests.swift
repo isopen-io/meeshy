@@ -259,7 +259,9 @@ final class ConversationViewModelEncryptionToggleTests: XCTestCase {
     }
 
     /// Un avis de désactivation déjà en base (staging) s'affiche comme un
-    /// historique : il ne rouvre ni l'envoi en clair, ni la lecture.
+    /// historique : il ne rouvre ni l'envoi en clair, ni la lecture. Le statut
+    /// servi en clair d'une conversation vue chiffrée arrête l'envoi AVANT le
+    /// réseau, avec l'écart dit (#12987).
     func test_irreversible_aDisabledNoticeShownInTheThread_neverReopensPlaintext() async throws {
         let memory = rememberedEndToEnd()
         let ledger = EndToEndRegimeLedger(memory: memory)
@@ -267,11 +269,12 @@ final class ConversationViewModelEncryptionToggleTests: XCTestCase {
         ledger.learn(status(nil, epoch: 2), for: conversationId)
         sut.viewModel.messages = [downgradeNotice(epoch: 2, at: 200)]
 
-        _ = await sut.viewModel.send(outgoingMessage(content: secret, conversationId: conversationId))
+        let result = await sut.viewModel.send(outgoingMessage(content: secret, conversationId: conversationId))
 
-        let request = try XCTUnwrap(sut.messageService.lastSendRequest)
-        XCTAssertEqual(request.isEncrypted, true)
-        XCTAssertNotEqual(request.content, secret)
+        guard case .failure(.endToEndUnsealed(.servedWithoutEndToEnd)) = result else {
+            return XCTFail("écart lisible attendu, reçu \(result)")
+        }
+        XCTAssertEqual(sut.messageService.sendCallCount, 0)
         XCTAssertTrue(memory.resolve(conversationId: conversationId, served: .serverReadable).isEndToEnd)
     }
 
