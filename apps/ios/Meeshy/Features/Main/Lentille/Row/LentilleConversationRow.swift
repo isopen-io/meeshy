@@ -48,6 +48,8 @@ struct LentilleConversationRow: View {
     /// que la conversation contient (même entrée que `ThemedConversationRow`).
     var isContentLocked: Bool = false
     var preferredContentLanguages: [String] = []
+    /// Le clair local du dernier message scellé (#12968), lu par la liste.
+    var deviceText: ConversationPreviewDeviceText? = nil
     /// Appel en cours (Scène) — contrat LWS-2bis/§3.3, behaviour-matrix:L13.
     /// `nil` (défaut) ⇒ AUCUN rendu : zéro donnée fabriquée, exactement le
     /// même contrat que `moodStatus`/`draftSummary`. Le rang ne nomme
@@ -207,7 +209,8 @@ struct LentilleConversationRow: View {
         let base = ThemedConversationRow(
             conversation: conversation,
             isContentLocked: isContentLocked,
-            preferredContentLanguages: preferredContentLanguages
+            preferredContentLanguages: preferredContentLanguages,
+            deviceText: deviceText
         ).conversationAccessibilityLabel
         // L'heure y est déjà ; les points aussi, toujours (#9571) — ce qui
         // s'efface au repos est VISUEL, jamais ce que VoiceOver lit.
@@ -573,7 +576,8 @@ struct LentilleConversationRow: View {
             font: LentilleMetrics.Line2.font,
             authorFont: MeeshyFont.relative(LentilleMetrics.Line2.size, weight: .semibold),
             lineLimit: isMagnified ? 2 : 1,
-            onJoin: liveCall == nil ? onJoinLiveCall : nil
+            onJoin: liveCall == nil ? onJoinLiveCall : nil,
+            readOnDevice: deviceText
         )
     }
 }
@@ -609,6 +613,7 @@ extension LentilleConversationRow: @MainActor Equatable {
         lhs.draftSummary == rhs.draftSummary &&
         lhs.isContentLocked == rhs.isContentLocked &&
         lhs.preferredContentLanguages == rhs.preferredContentLanguages &&
+        lhs.deviceText == rhs.deviceText &&
         lhs.liveCall == rhs.liveCall &&
         // La magnification décide de TROIS lignes de rendu : elle doit passer
         // le portillon. Ses fermetures en sont exclues — comparées, elles le
