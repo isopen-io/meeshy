@@ -28,7 +28,7 @@ struct EncryptedDeviceSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: MeeshySpacing.xl) {
-                    EncryptedDeviceRow(device: current, isBusy: model.busyDeviceId == device.deviceId)
+                    EncryptedDeviceRow(device: current, isBusy: model.busyDeviceId == device.deviceId, opens: false)
                     readTheirCode
                     showMyCode
                     removal

@@ -7,6 +7,8 @@ import MeeshyUI
 struct EncryptedDeviceRow: View, Equatable {
     let device: EndToEndOwnDevice
     let isBusy: Bool
+    /// La ligne ouvre l'appareil (liste) ; dans sa propre feuille, elle ne mène nulle part.
+    var opens = true
 
     private var theme: ThemeManager { ThemeManager.shared }
 
@@ -39,7 +41,7 @@ struct EncryptedDeviceRow: View, Equatable {
 
             if isBusy {
                 ProgressView()
-            } else if !device.isCurrent {
+            } else if opens && !device.isCurrent {
                 Image(systemName: "chevron.forward")
                     .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
                     .foregroundStyle(theme.textMuted)
@@ -57,7 +59,7 @@ struct EncryptedDeviceRow: View, Equatable {
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(row.accessibilityLabel)
-        .accessibilityAddTraits(device.isCurrent ? [] : .isButton)
+        .accessibilityAddTraits(opens && !device.isCurrent ? .isButton : [])
     }
 
     private var statusSymbol: String {
