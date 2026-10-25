@@ -25,12 +25,15 @@ const ORDER = 'MESSAGE_ATTACHMENT_ORDER';
  * La protection d'une pièce comprend son CHIFFREMENT (`isEncrypted`,
  * `encryptionMode`) : l'admission d'un transfert (#10987) lit ces colonnes avec
  * l'id pour retrouver la pièce choisie PAR SON ID et refuser une source
- * chiffrée — elle ne sert aucune liste ordonnée.
+ * chiffrée — elle ne sert aucune liste ordonnée. L'admission d'une ÉDITION
+ * (#12792) lit l'id, le type et la protection de chaque pièce pour juger si le
+ * message garde un contenu : elle ne sert rien d'ordonné non plus.
  */
 const NON_SERVING_SELECTS: readonly RegExp[] = [
   /^select:\{(id:true,?|mimeType:true,?)+\}$/,
   /^select:\{(id:true,?|isViewOnce:true,?|isBlurred:true,?|effectFlags:true,?|isEncrypted:true,?|encryptionMode:true,?)+\}$/,
   /^select:(attachmentProtectionSelect|PROTECTION_SELECT|PIECE_PROTECTION_SELECT)$/,
+  /^select:\{(id:true,?|mimeType:true,?|\.\.\.attachmentProtectionSelect,?)+\}$/,
 ];
 
 export type OrderSweepFinding = { readonly file: string; readonly line: number; readonly snippet: string };

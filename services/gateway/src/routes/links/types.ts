@@ -84,6 +84,7 @@ export const updateLinkSchema = z.object({
 });
 
 import { CLIENT_MESSAGE_ID_REGEX } from '@meeshy/shared/utils/client-message-id';
+import { clientMessageTypeSchema } from '../../validation/client-message-type';
 
 
 
@@ -109,7 +110,7 @@ export const sendMessageSchema = z.object({
     .string()
     .default('fr')
     .transform((v) => normalizeLanguageCode(v) ?? v),
-  messageType: z.string().default('text'),
+  messageType: clientMessageTypeSchema.default('text'),
   // Accepté puis IGNORÉ, et c'est délibéré : aucune des deux routes d'envoi par
   // lien ne lit ce champ — ni `message.create`, ni la diffusion, ni la
   // notification. Il reste déclaré pour qu'un client qui l'envoie à côté d'un

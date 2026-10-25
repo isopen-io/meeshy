@@ -221,22 +221,22 @@ describe('planShare — ensemble / séparément, légende (D3, D4)', () => {
 });
 
 describe('planShare — plafonds (D10, V9)', () => {
-  it('22 fichiers et 612 Mo : retirer les 2 derniers, bouton désactivé', () => {
+  it('102 fichiers : retirer les 2 derniers, bouton désactivé (100 fichiers depuis le 2026-10-25, #12974)', () => {
     const media = [
-      ...Array.from({ length: 20 }, (_, index) => ({ id: `f${index}`, mimeType: 'image/jpeg', bytes: 23 * MB })),
-      { id: 'f20', mimeType: 'video/mp4', bytes: 12 * MB, durationMs: 10_000 },
-      { id: 'f21', mimeType: 'video/mp4', bytes: 140 * MB, durationMs: 60_000 },
+      ...Array.from({ length: 100 }, (_, index) => ({ id: `f${index}`, mimeType: 'image/jpeg', bytes: 23 * MB })),
+      { id: 'f100', mimeType: 'video/mp4', bytes: 12 * MB, durationMs: 10_000 },
+      { id: 'f101', mimeType: 'video/mp4', bytes: 140 * MB, durationMs: 60_000 },
     ];
     const plan = planShare({ entry: { kind: 'media', media }, destinations: [{ id: 'd' }] });
-    expect(plan.limits.files).toBe(22);
+    expect(plan.limits.files).toBe(102);
     expect(plan.limits.trimCount).toBe(2);
     expect(plan.canSend).toBe(false);
   });
 
   it('les octets seuls peuvent imposer de retirer', () => {
     const media = [
-      { id: 'a', mimeType: 'video/mp4', bytes: 300 * MB, durationMs: 10_000 },
-      { id: 'b', mimeType: 'video/mp4', bytes: 300 * MB, durationMs: 10_000 },
+      { id: 'a', mimeType: 'video/mp4', bytes: 3 * 1024 * MB, durationMs: 10_000 },
+      { id: 'b', mimeType: 'video/mp4', bytes: 3 * 1024 * MB, durationMs: 10_000 },
     ];
     expect(planShare({ entry: { kind: 'media', media } }).limits.trimCount).toBe(1);
   });

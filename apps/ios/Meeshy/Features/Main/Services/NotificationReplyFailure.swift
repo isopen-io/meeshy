@@ -46,4 +46,36 @@ enum NotificationReplyFailure {
                                             content: content, trigger: nil)
         UNUserNotificationCenter.current().add(request)
     }
+
+    /// **Une réponse refusée sous PIN ne disparaît pas en silence** (#12655).
+    /// « Répondre » s'exécute en arrière-plan : sans ce message, l'utilisateur
+    /// croyait sa réponse partie. Le corps est un libellé du catalogue, jamais
+    /// le texte saisi ; la charge ne porte que la route vers la conversation,
+    /// que la porte du routeur garde par le PIN, et la catégorie sans action.
+    static func refusedUnderConversationPinContent(
+        conversationId: String?,
+        bundle: Bundle = InterfaceLanguageResolver.bundle()
+    ) -> UNMutableNotificationContent {
+        let content = UNMutableNotificationContent()
+        content.body = String(
+            localized: "notifications.reply_refused.locked_conversation",
+            defaultValue: "Réponse non envoyée : ouvrez la conversation",
+            bundle: bundle
+        )
+        content.sound = .default
+        content.categoryIdentifier = NSEAttachmentPolicy.lockedConversationCategory
+        guard let conversationId, !conversationId.isEmpty else { return content }
+        content.userInfo = ["type": "new_message", "conversationId": conversationId]
+        content.threadIdentifier = "conversation:\(conversationId)"
+        return content
+    }
+
+    static func postRefusedUnderConversationPin(conversationId: String?) {
+        let request = UNNotificationRequest(
+            identifier: "reply-refused-locked-\(UUID().uuidString)",
+            content: refusedUnderConversationPinContent(conversationId: conversationId),
+            trigger: nil
+        )
+        UNUserNotificationCenter.current().add(request)
+    }
 }

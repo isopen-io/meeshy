@@ -16,6 +16,8 @@ public enum EndToEndSendRefusal: String, Error, Equatable, Sendable, CaseIterabl
     case outboxUnsealable
     /// L'édition d'un message chiffré n'a pas encore d'enveloppe (#12541).
     case editUnsealable
+    /// Le message a été envoyé chiffré : il le reste à jamais (#12881, spec § 5.2).
+    case sealedMessageUneditable
     /// La passerelle a refusé un clair (`E2EE_PLAINTEXT_REFUSED`, #11216) : la
     /// conversation est chiffrée sans que l'appareil le sût. Rien ne repart.
     case plaintextRefusedByServer
@@ -25,6 +27,11 @@ public enum EndToEndSendRefusal: String, Error, Equatable, Sendable, CaseIterabl
     /// Le correspondant n'a aucun appareil qui chiffre (#3707) : sa version de
     /// Meeshy ne parle pas libsignal. Rien ne part, rien ne part en clair.
     case recipientWithoutEncryptedDevice
+    /// Le régime de la conversation a changé depuis la rédaction
+    /// (`E2EE_REGIME_CHANGED`, #12522) : le fil relit le régime, et le geste
+    /// de l'utilisateur renvoie scellé sous l'époque relue — jamais en clair,
+    /// le bout en bout ne se désactivant pas (#12949).
+    case regimeChanged
     /// Mon compte a déjà le nombre maximal d'appareils chiffrés (#3707) : cet
     /// appareil ne peut pas s'enrôler tant qu'un autre n'est pas retiré.
     case deviceLimitReached

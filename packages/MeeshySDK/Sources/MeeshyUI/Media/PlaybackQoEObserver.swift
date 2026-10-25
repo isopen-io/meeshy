@@ -38,18 +38,21 @@ public final class PlaybackQoEObserver {
     private weak var player: AVPlayer?
     private var lastIndicatedBitrate: Double?
     private var finished = false
+    private var firstFrameFromComposition = false
 
     public init(
         subject: PlaybackQoESubject,
         player: AVPlayer,
         mutedAtStart: Bool,
+        deviceTier: PlaybackDeviceTier? = DeviceMediaTier.current.playbackTier,
+        startedAtMs: Int? = nil,
         clockMs: @escaping @MainActor () -> Int = { Int(CACurrentMediaTime() * 1_000) }
     ) {
         self.subject = subject
         self.clockMs = clockMs
-        self.startedAtMs = clockMs()
+        self.startedAtMs = startedAtMs ?? clockMs()
         self.player = player
-        self.accumulator = PlaybackQoEAccumulator(mediaId: subject.mediaId, mediaDurationMs: subject.mediaDurationMs, mutedAtStart: mutedAtStart)
+        self.accumulator = PlaybackQoEAccumulator(mediaId: subject.mediaId, mediaDurationMs: subject.mediaDurationMs, mutedAtStart: mutedAtStart, deviceTier: deviceTier)
         attach(to: player)
     }
 
@@ -63,7 +66,22 @@ public final class PlaybackQoEObserver {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] status in self?.noteTimeControl(status) }
             .store(in: &cancellables)
-        guard let item = player.currentItem else { return }
+        // Un `AVQueuePlayer` bouclé (fond de story) expose `currentItem == nil`
+        // quelques tours de boucle après l'attache : les observateurs d'item
+        // se posent alors à l'arrivée du premier élément, jamais perdus.
+        if let item = player.currentItem {
+            attachItemObservers(item)
+            return
+        }
+        player.publisher(for: \.currentItem, options: [.new])
+            .compactMap { $0 }
+            .first()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] item in self?.attachItemObservers(item) }
+            .store(in: &cancellables)
+    }
+
+    private func attachItemObservers(_ item: AVPlayerItem) {
         let asset = item.asset
         item.publisher(for: \.isPlaybackBufferEmpty)
             .receive(on: DispatchQueue.main)
@@ -101,13 +119,36 @@ public final class PlaybackQoEObserver {
             .store(in: &cancellables)
     }
 
+    /// **La première image COMPOSÉE** (#11287) — `AVPlayerLayer.isReadyForDisplay`,
+    /// le seul signal qui dit « l'utilisateur voit une image », là où
+    /// `timeControlStatus == .playing` n'arrive qu'au GO de la lecture. La
+    /// première image gagne. Une fois armée, elle est la SEULE source de la
+    /// première image : un `.playing` arrivé avant la composition ne la
+    /// devance pas. `readiness` est livrée sur le fil principal.
+    public func observeFirstFrame(readiness: AnyPublisher<Bool, Never>) {
+        firstFrameFromComposition = true
+        readiness
+            .filter { $0 }
+            .first()
+            .sink { [weak self] _ in self?.noteFirstFrameComposed() }
+            .store(in: &cancellables)
+    }
+
+    public func observeFirstFrame(of layer: AVPlayerLayer) {
+        observeFirstFrame(readiness: layer.publisher(for: \.isReadyForDisplay)
+            .receive(on: DispatchQueue.main)
+            .eraseToAnyPublisher())
+    }
+
+    public func noteFirstFrameComposed() { accumulator.noteFirstFrame(atMs: nowMs) }
+
     private func noteBufferEmpty() { accumulator.noteBufferEmpty(atMs: nowMs) }
     private func noteLikelyToKeepUp() { accumulator.noteLikelyToKeepUp(atMs: nowMs) }
 
-    private func noteTimeControl(_ status: AVPlayer.TimeControlStatus) {
+    func noteTimeControl(_ status: AVPlayer.TimeControlStatus) {
         switch status {
         case .playing:
-            accumulator.noteFirstFrame(atMs: nowMs)
+            if !firstFrameFromComposition { accumulator.noteFirstFrame(atMs: nowMs) }
             accumulator.notePlaying(atMs: nowMs)
         case .paused:
             accumulator.notePaused(atMs: nowMs)

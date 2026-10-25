@@ -64,7 +64,10 @@ public final class E2EEDeviceRegistrar: E2EEDeviceRegistering {
 
     public func ensureEnrolled(userId: String) async throws -> E2EEEnrolledDevice {
         let recorded = try vault.read { try E2EELocalEnrollmentRecord.load(in: $0) }
-        if let recorded, recorded.userId != userId { try reset() }
+        // Sans enrôlement local, l'identité du trousseau (qui survit à la
+        // désinstallation) n'a plus ses sessions ni ses pré-clés : elle est
+        // tirée de nouveau, et ses pairs reçoivent un 409 `stale` (#12882, § 4.5).
+        if recorded?.userId != userId { try reset() }
         let identity = try currentOrCreateIdentity()
         if let recorded, recorded.userId == userId, recorded.registrationId == identity.registrationId,
            let kept = try await stillBound(recorded, identity: identity) {

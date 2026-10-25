@@ -31,6 +31,7 @@ const wire = (overrides: Record<string, Record<string, unknown>> = {}) => ({
     soundEnabled: true,
     contactActivityEnabled: false,
     gameEnabled: false,
+    gamePhotoEnabled: false,
     emailEnabled: true,
     dndEnabled: false,
     ...overrides.notification,
@@ -54,6 +55,7 @@ const expected: AppPreferences = {
   soundEnabled: true,
   contactActivityEnabled: false,
   gameEnabled: false,
+  gamePhotoEnabled: false,
   showOnlineStatus: false,
   showLastSeen: true,
   showReadReceipts: true,
@@ -84,6 +86,16 @@ describe('decodeAppPreferences — une PROJECTION, jamais la charge reçue', () 
     expect(decodeAppPreferences(wire({ notification: { gameEnabled: true } }))?.gameEnabled).toBe(true);
     const { gameEnabled: _served, ...withoutGame } = wire().notification;
     expect(decodeAppPreferences({ ...wire(), notification: withoutGame })?.gameEnabled).toBe(true);
+  });
+
+  test('« Moments à immortaliser » : lu sous `notification`, ABSENT = reçu (un ancien serveur ne le sert pas, #10268)', () => {
+    expect(decodeAppPreferences(wire({ notification: { gamePhotoEnabled: true } }))?.gamePhotoEnabled).toBe(true);
+    const { gamePhotoEnabled: _served, ...withoutPhoto } = wire().notification;
+    expect(decodeAppPreferences({ ...wire(), notification: withoutPhoto })?.gamePhotoEnabled).toBe(true);
+  });
+
+  test('« Moments à immortaliser » de mauvais type rend la lecture illisible, jamais une valeur devinée', () => {
+    expect(decodeAppPreferences(wire({ notification: { gamePhotoEnabled: 'oui' } }))).toBeNull();
   });
 
   test('la bascule « Analytique » est lue sous `privacy` ; ABSENTE (ancien serveur), la charge se décode toujours et la bascule reste inconnue (#10502)', () => {
@@ -144,6 +156,15 @@ describe('decodeServedPreferences — ce qu’une écriture rend, catégorie par
     });
   });
 
+  test('« Moments à immortaliser », servi, est rendu ; non servi, il n’est pas inventé (#10268)', () => {
+    expect(decodeServedPreferences({ notification: { pushEnabled: true, soundEnabled: false, contactActivityEnabled: true, gamePhotoEnabled: false } })).toEqual({
+      pushEnabled: true,
+      soundEnabled: false,
+      contactActivityEnabled: true,
+      gamePhotoEnabled: false,
+    });
+  });
+
   test('une catégorie servie mal formée est illisible', () => {
     expect(decodeServedPreferences({ notification: { pushEnabled: 1, soundEnabled: false } })).toBeNull();
   });
@@ -176,6 +197,16 @@ describe('preferencesPatchBody — un réglage retrouve SA catégorie', () => {
 
   test('« notifications du jeu » part sous `notification`, là où `GameNotifier` la lit (#9490)', () => {
     expect(preferencesPatchBody({ gameEnabled: false })).toEqual({ notification: { gameEnabled: false } });
+  });
+
+  test('« Moments à immortaliser » part sous `notification`, là où la porte du push photo la lit (#10268)', () => {
+    expect(preferencesPatchBody({ gamePhotoEnabled: false })).toEqual({ notification: { gamePhotoEnabled: false } });
+  });
+
+  test('la lecture demande « Moments à immortaliser » avec les autres', async () => {
+    const { calls, transport } = transportAnswering({ ok: true, data: wire() });
+    await loadAppPreferences({ source: 'gateway', transport });
+    expect(calls[0]?.path).toContain('notification.gamePhotoEnabled');
   });
 
   test('la lecture demande le champ du jeu avec les autres', async () => {

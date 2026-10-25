@@ -72,13 +72,25 @@ export const E2EE_ERROR_CODES = {
   SIGNATURE_INVALID: 'E2EE_SIGNATURE_INVALID',
   SIGNATURE_UNVERIFIABLE: 'E2EE_SIGNATURE_UNVERIFIABLE',
   DEVICE_NOT_BOUND: 'E2EE_DEVICE_NOT_BOUND',
+  /** Le retrait nommait une génération (`registrationId`) que la place ne porte plus : un autre appareil l'a reprise (#13014). */
+  DEVICE_CHANGED: 'E2EE_DEVICE_CHANGED',
   DEVICE_LIMIT_REACHED: 'E2EE_DEVICE_LIMIT_REACHED',
   ENVELOPES_INVALID: 'E2EE_ENVELOPES_INVALID',
   KEYS_FORBIDDEN: 'E2EE_KEYS_FORBIDDEN',
   REGIME_CHANGED: 'E2EE_REGIME_CHANGED',
+  /** Une conversation chiffrée de bout en bout ne repasse jamais en clair (#12949). */
+  IRREVERSIBLE: 'E2EE_IRREVERSIBLE',
+  /** Une paire de personnes a au plus UN tête-à-tête chiffré de bout en bout (#12966). */
+  DIRECT_ALREADY_END_TO_END: 'E2EE_DIRECT_ALREADY_END_TO_END',
+  /** Un tête-à-tête ne se chiffre de bout en bout qu'entre exactement deux membres actifs (#12966). */
+  DIRECT_NOT_A_PAIR: 'E2EE_DIRECT_NOT_A_PAIR',
   BINDING_INVALID: 'E2EE_DEVICE_BINDING_INVALID',
   PREKEY_STOCK_FULL: 'E2EE_PREKEY_STOCK_FULL',
   IDENTITY_REVOKED: 'E2EE_IDENTITY_REVOKED',
+  /** Retirer un appareil depuis une autre session ferme la sienne ; si elle ne se ferme pas, rien n'est retiré (#13013). */
+  DEVICE_SESSION_NOT_CLOSED: 'E2EE_DEVICE_SESSION_NOT_CLOSED',
+  /** Une session dont l'appareil a été retiré n'enrôle plus rien : il faut une nouvelle connexion (#13013). */
+  SESSION_RETIRED: 'E2EE_SESSION_RETIRED',
   IDENTITY_KEY_INVALID: 'E2EE_IDENTITY_KEY_INVALID',
 } as const;
 
@@ -87,6 +99,26 @@ export type E2EEErrorCode = (typeof E2EE_ERROR_CODES)[keyof typeof E2EE_ERROR_CO
 /** Le texte lisible servi à un client qui ne parle pas libsignal (#9223 : rien ne se perd en silence). */
 export const E2EE_CLIENT_OUTDATED_MESSAGE =
   'Cette conversation est chiffrée de bout en bout : mettez à jour Meeshy pour y écrire';
+
+/**
+ * Le texte servi avec `E2EE_IRREVERSIBLE` (#12949) : un ancien client qui
+ * appelle la désactivation l'affiche tel quel.
+ */
+export const E2EE_IRREVERSIBLE_MESSAGE =
+  'End-to-end encryption cannot be turned off for this conversation. To chat without it, start a new conversation.';
+
+/**
+ * Le texte servi avec `E2EE_DIRECT_ALREADY_END_TO_END` (#12966) : chiffrer un
+ * tête-à-tête alors que la paire en a déjà un chiffré de bout en bout. La
+ * réponse nomme ce tête-à-tête (`existingConversationId`), dont l'appelant est
+ * membre.
+ */
+export const E2EE_DIRECT_ALREADY_END_TO_END_MESSAGE =
+  'You already have an end-to-end encrypted conversation with this person. Open it to chat encrypted; this one stays readable by the server.';
+
+/** Le texte servi avec `E2EE_DIRECT_NOT_A_PAIR` (#12966). */
+export const E2EE_DIRECT_NOT_A_PAIR_MESSAGE =
+  'A direct conversation can only be end-to-end encrypted between exactly two active members.';
 
 const PRIVATE_KEY_FIELD = /private|secret|privkey|seed/i;
 
@@ -204,6 +236,24 @@ export type E2EEDeviceBundle = {
   readonly signedPreKey: z.infer<typeof e2eeSignedPreKeySchema>;
   readonly kyberPreKey: z.infer<typeof e2eeSignedPreKeySchema> & { readonly lastResort: boolean };
   readonly preKey: z.infer<typeof e2eeOneTimePreKeySchema> | null;
+};
+
+/**
+ * Un de MES appareils chiffrés, tel que `GET /e2ee/devices` le sert à son seul
+ * propriétaire (#13014). Aucune clé, aucune session : de quoi le reconnaître
+ * (plateforme, libellé, dates) et savoir lequel est celui de la session appelante.
+ * Un contact ne lit jamais ces champs (`/e2ee/keys/:userId/devices` n'en sert aucun).
+ */
+export type E2EEOwnDevice = {
+  readonly deviceId: number;
+  readonly registrationId: number;
+  /** `unknown` pour une ligne écrite hors du schéma d'enrôlement : jamais une plateforme devinée. */
+  readonly platform: z.infer<typeof e2eePlatformSchema> | 'unknown';
+  readonly label: string | null;
+  readonly enrolledAt: string;
+  /** Dernier enrôlement ou dernière publication de pré-clés : PAS une activité (la lecture d'enveloppes ne l'avance pas). */
+  readonly lastSeenAt: string;
+  readonly current: boolean;
 };
 
 /** Une enveloppe servie à SON appareil destinataire. */

@@ -17,6 +17,7 @@ import helmet from '@fastify/helmet';
 import jwt from '@fastify/jwt';
 import sensible from '@fastify/sensible'; // Ajout pour httpErrors
 import multipart from '@fastify/multipart';
+import { MAX_DIRECT_UPLOAD_FILES } from '@meeshy/shared/types/attachment';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
@@ -68,6 +69,7 @@ import { backfillSearchTokens } from './jobs/backfill-search-tokens';
 import { demarrerSondeDeTypage, type SondeDeTypage } from './services/schema-drift.service';
 import { EmailService } from './services/EmailService';
 import { RedisDeliveryQueue } from './services/RedisDeliveryQueue';
+import { gatewayDeliveryQueueSealer } from './services/deliveryQueueSealing';
 import { TusCleanupService } from './services/TusCleanupService';
 import { ExpiredMessagesCleanupService } from './services/ExpiredMessagesCleanupService';
 import { EphemeralRecipientExpiryService } from './services/EphemeralRecipientExpiryService';
@@ -257,7 +259,7 @@ class MeeshyServer {
     this.callCleanupService = new CallCleanupService(this.prisma);
 
     // Initialiser la delivery queue Redis
-    this.deliveryQueue = new RedisDeliveryQueue(getCacheStore());
+    this.deliveryQueue = new RedisDeliveryQueue(getCacheStore(), gatewayDeliveryQueueSealer(this.prisma));
 
     // Initialiser les background jobs (cleanup, digest, etc.)
     const emailService = new EmailService();
@@ -367,7 +369,7 @@ class MeeshyServer {
     await this.server.register(multipart, {
       limits: {
         fileSize: 4294967296, // 4GB max file size
-        files: 30, // Max 30 files per request
+        files: MAX_DIRECT_UPLOAD_FILES,
       },
     });
 
@@ -537,7 +539,7 @@ class MeeshyServer {
       if (err && err.code === 'FST_FILES_LIMIT') {
         return reply.code(413).send({
           error: 'Too Many Files',
-          message: `You can only upload a maximum of 30 files at once. Please reduce the number of files.`
+          message: `You can only upload a maximum of ${MAX_DIRECT_UPLOAD_FILES} files at once. Please reduce the number of files.`
         });
       }
 

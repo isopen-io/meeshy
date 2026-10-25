@@ -171,6 +171,7 @@ final class DependencyContainer {
             activeKey: Self.activeAccountStoreKey()
         )
         guard case let .account(key) = target else { return }
+        EndToEndRegimeMemory.shared.bind(account: key.map(EndToEndRegimeMemory.account(of:)))
         // Un compte quitté SANS être déconnecté (changement de compte,
         // ajout d'un compte) garde sa base ouverte pour son retour ; seul un
         // compte dont les jetons sont partis (déconnexion, session révoquée,
@@ -321,9 +322,10 @@ final class DependencyContainer {
         await StarredMessagesStore.follow(mutation, persistence: persistence)
         do {
             switch mutation {
-            case let .edited(messageId, content, editedAt, marksEdited):
+            case let .edited(messageId, content, editedAt, marksEdited, authorship):
                 try await persistence.markEdited(
-                    localId: messageId, newContent: content, editedAt: editedAt, marksEdited: marksEdited)
+                    localId: messageId, newContent: content, editedAt: editedAt, marksEdited: marksEdited,
+                    authorship: authorship)
             case let .callNoticeUpdated(messageId, content, callSummaryJson, serverUpdatedAt):
                 try await persistence.applyCallNoticeUpdate(
                     localId: messageId, content: content,
@@ -423,6 +425,7 @@ final class DependencyContainer {
         .filter { $0 }
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
+                ConversationListPreviewLoader.purgeAllLive() // EN TÊTE, avant toute purge attendue (#11232)
                 let invalidated = self?.sessionWasInvalidated ?? false
                 self?.sessionWasInvalidated = false
                 // La purge vise les bases QUITTÉES, que la bascule
@@ -441,8 +444,7 @@ final class DependencyContainer {
                         } catch {
                             containerLogger.error("Q3 logout message purge failed: \(error.localizedDescription, privacy: .public)")
                         }
-                        // Purge feed indépendante : un échec d'un côté
-                        // ne doit pas empêcher l'autre purge.
+                        // Purge feed indépendante : un échec d'un côté n'empêche pas l'autre.
                         // Les pièces de commentaire en attente du compte
                         // quitté partent avec sa file : rien ne reste sur le
                         // disque pour le compte suivant.

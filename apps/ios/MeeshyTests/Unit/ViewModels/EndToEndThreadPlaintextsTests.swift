@@ -14,7 +14,8 @@ final class EndToEndThreadPlaintextsTests: XCTestCase {
     private func sealed(id: String = "m1", clientMessageId: String? = "cid_1", senderUserId: String? = nil) -> MeeshyMessage {
         MeeshyMessage(
             id: id, clientMessageId: clientMessageId, conversationId: conversationId, senderId: "p1",
-            content: E2EEWire.contentPlaceholder, isEncrypted: true, encryptionMode: "e2ee", senderUserId: senderUserId ?? peer
+            content: E2EEWire.contentPlaceholder, isEncrypted: true, encryptionMode: "e2ee", senderUserId: senderUserId ?? peer,
+            isMe: senderUserId == "me"
         )
     }
 
@@ -57,6 +58,42 @@ final class EndToEndThreadPlaintextsTests: XCTestCase {
         XCTAssertFalse(messages[0].isContentDecryptedOnDevice, "le serveur ne m'attribue pas le message de mon correspondant")
     }
 
+    /// Une ligne GRDB d'un pair ne porte pas `senderUserId` (`MessageRecord.toMessage`
+    /// ne le pose que pour le lecteur) : son auteur annoncé est son `senderId`,
+    /// l'utilisateur résolu à l'ingestion. Un serveur qui présente MON message
+    /// comme celui du pair n'obtient qu'une bulle scellée (#11232, #12757).
+    func test_aStoreRowWithoutSenderUserId_isJudgedByItsSenderId() {
+        var messages = [storeRow(senderId: peer)]
+
+        EndToEndThreadPlaintexts.apply(["m1": .readable(content("Moi"), senderUserId: "me")], to: &messages, conversationId: conversationId)
+
+        XCTAssertFalse(messages[0].isContentDecryptedOnDevice, "mon clair n'est jamais attribué à mon correspondant")
+        XCTAssertEqual(messages[0].content, E2EEWire.contentPlaceholder)
+    }
+
+    func test_aStoreRowOfThePeer_opensUnderItsSenderId() {
+        var messages = [storeRow(senderId: peer)]
+
+        EndToEndThreadPlaintexts.apply(["m1": .readable(content("Hola"), senderUserId: peer)], to: &messages, conversationId: conversationId)
+
+        XCTAssertEqual(messages[0].content, "Hola")
+    }
+
+    func test_aMessageWithoutAnyAnnouncedAuthor_staysSealed() {
+        var messages = [storeRow(senderId: "")]
+
+        EndToEndThreadPlaintexts.apply(["m1": .readable(content("Hola"), senderUserId: peer)], to: &messages, conversationId: conversationId)
+
+        XCTAssertFalse(messages[0].isContentDecryptedOnDevice)
+    }
+
+    private func storeRow(senderId: String) -> MeeshyMessage {
+        MeeshyMessage(
+            id: "m1", clientMessageId: "cid_1", conversationId: conversationId, senderId: senderId,
+            content: E2EEWire.contentPlaceholder, isEncrypted: true, encryptionMode: "e2ee"
+        )
+    }
+
     func test_aPlaintextWrittenForAnotherMessage_staysSealed() {
         var messages = [sealed(clientMessageId: "cid_2")]
 
@@ -78,4 +115,30 @@ final class EndToEndThreadPlaintextsTests: XCTestCase {
 
         XCTAssertEqual(EndToEndThreadPlaintexts.lookupKeys(of: [sealed(), clear]), ["m1", "cid_1"])
     }
+
+    /// Audit #12916 — un avis système n'est la parole de personne : aucun clair ne s'y pose.
+    func test_aPlaintextServedUnderASystemLine_staysSealed() {
+        var system = sealed()
+        system.messageSource = .system
+        var messages = [system]
+
+        EndToEndThreadPlaintexts.apply(["m1": .readable(content("Oui"), senderUserId: peer)], to: &messages, conversationId: conversationId)
+
+        XCTAssertFalse(messages[0].isContentDecryptedOnDevice)
+    }
+
+    /// Audit #12916 — une ligne dont l'auteur n'est que l'identifiant brut du
+    /// magasin (`senderId`) se juge sur lui : un autre auteur reste scellé.
+    func test_aStoreRowOfAnotherAuthor_staysSealed() {
+        let row = MeeshyMessage(
+            id: "m1", conversationId: conversationId, senderId: "00000000000000000000cc33",
+            content: E2EEWire.contentPlaceholder, isEncrypted: true, encryptionMode: "e2ee"
+        )
+        var messages = [row]
+
+        EndToEndThreadPlaintexts.apply(["m1": .readable(content("Oui"), senderUserId: peer)], to: &messages, conversationId: conversationId)
+
+        XCTAssertFalse(messages[0].isContentDecryptedOnDevice)
+    }
+
 }

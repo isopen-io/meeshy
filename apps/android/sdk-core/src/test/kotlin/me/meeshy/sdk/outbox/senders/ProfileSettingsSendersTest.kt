@@ -34,14 +34,47 @@ class ProfileSettingsSendersTest {
         outboxRow(OutboxKind.UPDATE_PROFILE, targetId = "u1", payload = payload)
 
     @Test
-    fun `update profile adopts the server authoritative user once delivered`() = runTest {
+    fun `update profile merges the server authoritative user once delivered`() = runTest {
         coEvery { userRepository.updateProfile(edit) } returns NetworkResult.Success(serverUser)
         val handler = UpdateProfileHandler(userRepository, sessionRepository, senderJson)
 
         val result = handler.send(profileRow())
 
         assertThat(result).isEqualTo(SendResult.Success)
-        verify(exactly = 1) { sessionRepository.adopt(serverUser) }
+        coVerify(exactly = 1) { sessionRepository.adoptMerging(serverUser, "cmid-1") }
+        verify(exactly = 0) { sessionRepository.adopt(any(), any()) }
+    }
+
+    @Test
+    fun `update profile refused by validation fails permanently so the edit rolls back at once`() = runTest {
+        coEvery { userRepository.updateProfile(edit) } returns
+            NetworkResult.Failure(ApiError("bio too long", httpStatus = 400))
+        val handler = UpdateProfileHandler(userRepository, sessionRepository, senderJson)
+
+        val result = handler.send(profileRow())
+
+        assertThat(result).isInstanceOf(SendResult.PermanentFailure::class.java)
+        coVerify(exactly = 0) { sessionRepository.adoptMerging(any(), any()) }
+    }
+
+    @Test
+    fun `update profile stays retryable on a rate limit or an expired token`() = runTest {
+        val handler = UpdateProfileHandler(userRepository, sessionRepository, senderJson)
+
+        listOf(401, 408, 429, 503).forEach { status ->
+            coEvery { userRepository.updateProfile(edit) } returns
+                NetworkResult.Failure(ApiError("retry", httpStatus = status))
+            assertThat(handler.send(profileRow())).isEqualTo(SendResult.TransientFailure)
+        }
+    }
+
+    @Test
+    fun `update profile already applied (410) counts as delivered`() = runTest {
+        coEvery { userRepository.updateProfile(edit) } returns
+            NetworkResult.Failure(ApiError("gone", httpStatus = 410))
+        val handler = UpdateProfileHandler(userRepository, sessionRepository, senderJson)
+
+        assertThat(handler.send(profileRow())).isEqualTo(SendResult.Success)
     }
 
     @Test
@@ -52,7 +85,7 @@ class ProfileSettingsSendersTest {
         val result = handler.send(profileRow())
 
         assertThat(result).isEqualTo(SendResult.TransientFailure)
-        verify(exactly = 0) { sessionRepository.adopt(any()) }
+        coVerify(exactly = 0) { sessionRepository.adoptMerging(any(), any()) }
     }
 
     @Test

@@ -18,9 +18,12 @@ import MeeshySDK
 /// une traduction du fil qui l'écrase ne prend pas sa provenance.
 ///
 /// Le régime lu est celui que la conversation sert, fusionné avec celui que
-/// l'appareil retient (`EndToEndRegimeMemoryProviding`) : une conversation vue
-/// chiffrée le reste, même avant l'hydratation de sa ligne ou quand le serveur
-/// la sert sans régime.
+/// l'appareil retient pour le compte (`EndToEndRegimeMemoryProviding`) : une
+/// conversation vue chiffrée le reste, même avant l'hydratation de sa ligne ou
+/// quand le serveur la sert ensuite sans régime — le bout en bout ne se
+/// désactive pas (#12949). Un message chiffré de bout en bout ou déchiffré sur
+/// l'appareil n'admet aucune traduction du serveur, quelle que soit sa date
+/// (#12935).
 @MainActor
 final class ConversationEncryptedEra {
     private let memory: any EndToEndRegimeMemoryProviding
@@ -42,13 +45,18 @@ final class ConversationEncryptedEra {
         )
     }
 
-    /// Le serveur peut-il traduire ce message ? Un message hors de la fenêtre
-    /// se range dans l'ère chiffrée (fail-closed).
+    /// Le mode qu'une décision de traduction lit : le bout en bout que
+    /// l'appareil a vu l'emporte sur un mode servi qui ne le dit plus (#12949).
+    func encryptionMode(_ served: String?, in viewModel: ConversationViewModel) -> String? {
+        regime(of: viewModel).isEndToEnd ? E2EEWire.mode : served
+    }
+
+    /// Le serveur peut-il traduire ce message (`EndToEndRegime.admitsWireTranslations`) ?
+    /// Un message hors de la fenêtre se range dans l'ère chiffrée (fail-closed).
     func admitsWireTranslations(forMessage messageId: String, in viewModel: ConversationViewModel) -> Bool {
         let regime = regime(of: viewModel)
-        guard regime.isEndToEnd else { return true }
-        let createdAt = viewModel.messageIndex(for: messageId).map { viewModel.messages[$0].createdAt }
-        return regime.admitsWireTranslations(forMessageCreatedAt: createdAt)
+        guard let index = viewModel.messageIndex(for: messageId) else { return !regime.governs(createdAt: nil) }
+        return regime.admitsWireTranslations(of: viewModel.messages[index])
     }
 
     /// Les traductions de texte SERVIES pour ce message.
@@ -83,17 +91,27 @@ final class ConversationEncryptedEra {
             ?? (viewModel.messageTranslatedAudios[messageId] ?? []).filter { $0.attachmentId == attachment.id }
     }
 
-    /// Les deux cartes de pistes traduites, telles qu'elles peuvent être servies.
+    /// Les deux cartes de pistes traduites, telles qu'elles peuvent être servies :
+    /// dans l'ère chiffrée, celles des seuls messages admis du fil ; ailleurs,
+    /// toutes sauf celles des messages chiffrés de bout en bout.
     func servedAudioMaps(
         in viewModel: ConversationViewModel
     ) -> (byAttachment: [String: [MessageTranslatedAudio]], byMessage: [String: [MessageTranslatedAudio]]) {
         let regime = regime(of: viewModel)
-        guard regime.isEndToEnd else {
-            return (viewModel.messageTranslatedAudiosByAttachment, viewModel.messageTranslatedAudios)
+        let (admitted, withheld) = viewModel.messages.reduce(into: ([Message](), [Message]())) { split, message in
+            if regime.admitsWireTranslations(of: message) { split.0.append(message) } else { split.1.append(message) }
         }
-        let admitted = viewModel.messages.filter { regime.admitsWireTranslations(forMessageCreatedAt: $0.createdAt) }
-        let messageIds = Set(admitted.map(\.id))
-        let attachmentIds = Set(admitted.flatMap { $0.attachments.map(\.id) })
+        let serves: ([Message]) -> (Set<String>, Set<String>) = { messages in
+            (Set(messages.map(\.id)), Set(messages.flatMap { $0.attachments.map(\.id) }))
+        }
+        guard regime.isEndToEnd else {
+            let (messageIds, attachmentIds) = serves(withheld)
+            return (
+                viewModel.messageTranslatedAudiosByAttachment.filter { !attachmentIds.contains($0.key) },
+                viewModel.messageTranslatedAudios.filter { !messageIds.contains($0.key) }
+            )
+        }
+        let (messageIds, attachmentIds) = serves(admitted)
         return (
             viewModel.messageTranslatedAudiosByAttachment.filter { attachmentIds.contains($0.key) },
             viewModel.messageTranslatedAudios.filter { messageIds.contains($0.key) }
@@ -112,7 +130,9 @@ final class ConversationEncryptedEra {
     /// changé, les résolutions et projections calculées sous l'ancien tombent.
     func conversationChanged(from previous: MeeshyConversation?, in viewModel: ConversationViewModel) {
         _ = regime(of: viewModel)
-        guard EndToEndRegime(conversation: previous) != EndToEndRegime(conversation: viewModel.currentConversation) else { return }
+        guard previous?.encryptionMode != viewModel.currentConversation?.encryptionMode
+                || previous?.encryptionEnabledAt != viewModel.currentConversation?.encryptionEnabledAt
+        else { return }
         viewModel.translationResolutionCache.removeAll()
         viewModel.derived.invalidateTranslationDerived()
         viewModel.derived.invalidateAudioDerived()

@@ -1,0 +1,134 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:settings": {
+      "resDir": "feature/settings/src/main/res",
+      "entries": [
+        {
+          "androidName": "security_section_encrypted_devices",
+          "status": "android-only"
+        },
+        {
+          "androidName": "encrypted_devices_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "encrypted_devices_notice_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "encrypted_devices_notice_body",
+          "status": "android-only"
+        },
+        {
+          "androidName": "encrypted_devices_loading",
+          "status": "android-only"
+        },
+        {
+          "androidName": "encrypted_devices_offline_empty",
+          "status": "android-only"
+        },
+        {
+          "androidName": "encrypted_devices_error",
+          "status": "android-only"
+        },
+        {
+          "androidName": "encrypted_devices_retry",
+          "status": "android-only"
+        },
+        {
+          "androidName": "encrypted_devices_offline",
+          "status": "android-only"
+        },
+        {
+          "androidName": "encrypted_devices_stale",
+          "status": "android-only"
+        },
+        {
+          "androidName": "encrypted_devices_empty_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "encrypted_devices_empty_body",
+          "status": "android-only"
+        },
+        {
+          "androidName": "encrypted_devices_current",
+          "status": "android-only"
+        },
+        {
+          "androidName": "encrypted_devices_retiring",
+          "status": "android-only"
+        },
+        {
+          "androidName": "encrypted_devices_retire_a11y",
+          "status": "android-only"
+        },
+        {
+          "androidName": "encrypted_devices_retire",
+          "status": "android-only"
+        },
+        {
+          "androidName": "encrypted_devices_retire_confirm_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "encrypted_devices_retire_confirm_message",
+          "status": "android-only"
+        },
+        {
+          "androidName": "encrypted_devices_retire_confirm_action",
+          "status": "android-only"
+        },
+        {
+          "androidName": "encrypted_devices_cancel",
+          "status": "android-only"
+        },
+        {
+          "androidName": "encrypted_devices_retire_offline",
+          "status": "android-only"
+        },
+        {
+          "androidName": "encrypted_devices_retire_failed",
+          "status": "android-only"
+        },
+        {
+          "androidName": "encrypted_devices_ok",
+          "status": "android-only"
+        },
+        {
+          "androidName": "encrypted_devices_unnamed",
+          "status": "android-only"
+        },
+        {
+          "androidName": "encrypted_devices_platform_ios",
+          "status": "android-only"
+        },
+        {
+          "androidName": "encrypted_devices_platform_macos",
+          "status": "android-only"
+        },
+        {
+          "androidName": "encrypted_devices_platform_android",
+          "status": "android-only"
+        },
+        {
+          "androidName": "encrypted_devices_platform_web",
+          "status": "android-only"
+        },
+        {
+          "androidName": "encrypted_devices_platform_unknown",
+          "status": "android-only"
+        },
+        {
+          "androidName": "encrypted_devices_enrolled",
+          "status": "android-only"
+        },
+        {
+          "androidName": "encrypted_devices_retire_changed",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

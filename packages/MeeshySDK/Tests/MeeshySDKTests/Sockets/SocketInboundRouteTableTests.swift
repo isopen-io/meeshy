@@ -33,7 +33,7 @@ final class SocketInboundRouteTableTests: XCTestCase {
         "call:recording-requested", "call:recording-started", "call:recording-stopped", "call:screen-capture-alert",
         "call:signal", "call:transcription-active", "call:translated-segment", "categories:reordered",
         "category:created", "category:deleted", "category:updated", "conversation:closed", "conversation:deleted",
-        "conversation:join-error", "conversation:joined", "conversation:left", "conversation:new",
+        "conversation:encryption-changed", "conversation:join-error", "conversation:joined", "conversation:left", "conversation:new",
         "conversation:participant-banned", "conversation:participant-joined", "conversation:participant-left",
         "conversation:participant-unbanned", "conversation:restored", "conversation:stats",
         "conversation:unread-updated", "conversation:updated", "e2ee:envelope", "engagement:conversation-updated",
@@ -137,6 +137,19 @@ final class SocketInboundRouteTableTests: XCTestCase {
 
         await expectOneValue(from: E2EEEnvelopeChannel.shared.received, where: { $0.id == id && $0.senderDeviceId == 2 }) {
             registrar.deliver("e2ee:envelope", payload)
+        }
+    }
+
+    func test_conversationEncryptionChangedRoute_deliversTheRegimeToItsChannel() async {
+        let registrar = installed(MessageSocketRoutes.all(for: .shared))
+        let id = "regime-\(UUID().uuidString)"
+        let payload: [String: Any] = [
+            "conversationId": id, "isEncrypted": true, "mode": "e2ee", "epoch": 3,
+            "changedByUserId": "u1", "changedAt": "2026-10-25T10:00:00.000Z",
+        ]
+
+        await expectOneValue(from: ConversationEncryptionChannel.shared.changed, where: { $0.conversationId == id && $0.epoch == 3 }) {
+            registrar.deliver("conversation:encryption-changed", payload)
         }
     }
 

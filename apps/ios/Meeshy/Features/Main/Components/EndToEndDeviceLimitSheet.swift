@@ -67,6 +67,7 @@ struct EndToEndDeviceLimitSheet: View {
     @StateObject private var model: EndToEndDeviceLimitViewModel
     @Environment(\.dismiss) private var dismiss
     @State private var pendingRetirement: UInt32?
+    @State private var showsMyDevices = false
 
     init(model: @autoclosure @escaping () -> EndToEndDeviceLimitViewModel = EndToEndDeviceLimitViewModel()) {
         _model = StateObject(wrappedValue: model())
@@ -80,10 +81,15 @@ struct EndToEndDeviceLimitSheet: View {
                                 defaultValue: "Votre compte utilise déjà le nombre maximal d’appareils pour le chiffrement de bout en bout. Retirez-en un pour écrire depuis celui-ci. Un appareil retiré ne lit plus les nouveaux messages chiffrés.",
                                 bundle: .main))
                         .font(.subheadline)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                 }
                 content
+                Section {
+                    Button(String(localized: "e2ee.deviceLimit.manage", defaultValue: "Voir mes appareils chiffrés", bundle: .main)) { showsMyDevices = true }
+                        .frame(minHeight: MeeshyControlSize.tapTarget)
+                }
             }
+            .sheet(isPresented: $showsMyDevices) { EncryptedDevicesView() }
             .navigationTitle(String(localized: "e2ee.deviceLimit.title", defaultValue: "Trop d’appareils chiffrés", bundle: .main))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -126,7 +132,7 @@ struct EndToEndDeviceLimitSheet: View {
             Section {
                 Label(String(localized: "e2ee.deviceLimit.enrolled", defaultValue: "Cet appareil chiffre de nouveau. Vous pouvez renvoyer votre message.", bundle: .main),
                       systemImage: "lock.shield.fill")
-                    .foregroundColor(MeeshyColors.success)
+                    .foregroundStyle(MeeshyColors.success)
             }
         }
     }

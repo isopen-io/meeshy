@@ -355,10 +355,10 @@ final class ConversationViewModelDirectEncryptionSendTests: XCTestCase {
 
         ledger.learn(mode: "server", for: conversationId)
 
-        XCTAssertNil(ledger.mode(for: conversationId))
+        XCTAssertFalse(ledger.seals(for: conversationId, opening: nil, cached: nil))
         ledger.learn(mode: "e2ee", for: conversationId)
         ledger.learn(mode: "server", for: conversationId)
-        XCTAssertEqual(ledger.mode(for: conversationId), "e2ee", "l'activation ne se défait pas")
+        XCTAssertTrue(ledger.seals(for: conversationId, opening: nil, cached: nil), "l'activation ne se défait pas")
     }
 
     /// Le geste du jour et la flamme ne se posent que pour un message qui PART.
@@ -505,6 +505,38 @@ final class ConversationViewModelDirectEncryptionSendTests: XCTestCase {
         let edits = await sut.queue.enqueuedEdits
         XCTAssertTrue(edits.isEmpty)
         XCTAssertEqual(sut.viewModel.error, EndToEndSendRefusal.editUnsealable.userMessage)
+    }
+
+    /// #12881 — un message scellé sous e2ee reste chiffré à jamais (spec § 5.2) :
+    /// même dans une conversation que rien ne dit plus chiffrée, son clair
+    /// déchiffré sur l'appareil ne part pas.
+    func test_editMessage_messageScelleDansUneConversationEnClair_refuseSansAppelReseau() async throws {
+        let ledger = EndToEndRegimeLedger()
+        let sut = try await makeSUT(endToEnd: failingEndToEnd(), encryptionMode: nil, ledger: ledger)
+        var sealed = Message(
+            id: "00000000000000000000cd44", conversationId: conversationId, senderId: userId,
+            content: "", isEncrypted: true, encryptionMode: "e2ee"
+        )
+        sealed.adoptDecryptedContent(secret)
+        sut.viewModel.messages = [sealed]
+
+        await sut.viewModel.editMessage(messageId: sealed.id, newContent: secret + " (corrigé)")
+
+        XCTAssertEqual(sut.messageService.editCallCount, 0, "le clair d'un message scellé partirait au serveur")
+        let edits = await sut.queue.enqueuedEdits
+        XCTAssertTrue(edits.isEmpty)
+        XCTAssertEqual(sut.viewModel.error, EndToEndSendRefusal.sealedMessageUneditable.userMessage)
+    }
+
+    func test_editMessage_messageEnClairApresDesactivation_partAuServeur() async throws {
+        let sut = try await makeSUT(endToEnd: failingEndToEnd(), encryptionMode: nil)
+        sut.viewModel.messages = [Message(
+            id: "00000000000000000000cd44", conversationId: conversationId, senderId: userId, content: "Salut"
+        )]
+
+        await sut.viewModel.editMessage(messageId: "00000000000000000000cd44", newContent: "Salut !")
+
+        XCTAssertEqual(sut.messageService.editCallCount, 1)
     }
 
     func test_editMessage_sansE2EE_partAuServeur() async throws {

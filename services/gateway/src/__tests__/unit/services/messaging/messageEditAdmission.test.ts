@@ -68,6 +68,10 @@ const admit = (params: {
       createdAt: params.createdAt === undefined ? freshCreatedAt : params.createdAt,
       messageType: 'text',
       metadata: null,
+      // #12881 — même permissif explicite que `conversation` ci-dessus : ces
+      // témoins ne portent pas sur le régime de chiffrement.
+      isEncrypted: null,
+      encryptionMode: null,
     },
     now: NOW,
     onError: params.onError,
@@ -158,7 +162,7 @@ describe('admitMessageEdit — quelqu\'un d\'autre que l\'auteur', () => {
 
     const decision = await admit({ prisma, editorUserId: OTHER });
 
-    expect(decision).toEqual({ admitted: true, asModerator: true, windowBypassed: false });
+    expect(decision).toEqual({ admitted: true, asModerator: true, windowBypassed: false, editorRole: 'MODERATOR' });
     expect(prisma.participant.findFirst).toHaveBeenCalledWith({
       where: { conversationId: CONV, userId: OTHER, isActive: true },
       select: { id: true, user: { select: { role: true } } },

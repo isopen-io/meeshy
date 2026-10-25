@@ -292,6 +292,7 @@ Format : **Règle** · *Raison* · Source · État. **[B]** = bloque l'ouverture
 - **I-3 Registre des traitements : quatre fiches.**
   - Ligue publique (consentement) ; ligue Amis et duo (intérêt légitime) ; vitrine et Atlas ; visites de liens de parrainage (intérêt légitime, durée courte).
   - Source : RGPD art. 30.
+  - **Cinquième fiche (ajout du 2026-10-25, #10185 / #10176) — statistiques d'usage du carnet de photos** : intérêt légitime (art. 6.1.f) ; agrégats ANONYMES calculés côté serveur depuis le registre `GamePhotoMoment` et les notifications `game_photo_moment` (aucun événement client, aucune collection neuve) ; sortie sans identifiant, cellules de moins de 10 comptes distincts supprimées, comptes ayant refusé l'analyse (`analyticsConsentWithdrawnAt`) exclus ; lecture limitée à 25 mois. Fiche complète : `services/gateway/decisions/2026-10-21-l-immortalisation-se-mesure-en-agregats-anonymes-lus-dans-le-registre-10185.md`. La qualification « anonyme » des agrégats reste à confirmer par un juriste humain (§ 6).
 - **I-4 Étiquettes App Store et formulaire Sécurité des données de Google Play** : contenu de jeu, interactions avec le produit, données liées à l'identité, sans suivi ; « Photos » seulement si le carnet se synchronise.
 - **I-5 Politique de confidentialité et CGU** : une section jeu, **un âge minimum**, l'interdiction de vendre comptes, Meeshes et objets.
   - Source : RGPD art. 13 ; DSA art. 14.

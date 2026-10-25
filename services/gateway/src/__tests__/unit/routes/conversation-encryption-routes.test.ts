@@ -16,8 +16,8 @@
  *     - anonymous user → 403
  *     - invalid mode → 400
  *     - conversation not found → 404
- *     - already encrypted → 400
- *     - not a member → 403
+ *     - not a member → the 404 of an unknown conversation (#12563)
+ *     - already encrypted → 400 ENCRYPTION_ALREADY_ENABLED (#12522)
  *     - group + no moderator role → 403
  *     - only a platform ADMIN|BIGBOSS member may activate, every mode (#12517)
  *     - mode=e2ee → no server key
@@ -36,11 +36,12 @@ import Fastify, { FastifyInstance } from 'fastify';
 
 // ─── Module-level mock controls ───────────────────────────────────────────────
 
+// #12822 (M1) — l'activation passe par `activationKeyId`, qui reprend la clé déjà désignée.
 const mockGetOrCreateConversationKey = jest.fn<any>().mockResolvedValue('server-key-id');
 
 jest.mock('../../../services/EncryptionService', () => ({
   getEncryptionService: jest.fn().mockResolvedValue({
-    getOrCreateConversationKey: (...a: unknown[]) => mockGetOrCreateConversationKey(...a),
+    activationKeyId: (...a: unknown[]) => mockGetOrCreateConversationKey(...a),
   }),
 }));
 
@@ -101,17 +102,28 @@ type ConvShape = {
   encryptionEnabledBy?: string | null;
   participants?: Array<{ userId: string; role?: string; user?: { role: string } | null }>;
   type?: string;
+  serverEncryptionKeyId?: string | null;
 } | null;
+
+/**
+ * #12966 — un tête-à-tête a DEUX membres : l'autre membre, inscrit et sans
+ * rôle, s'ajoute aux participants que le cas déclare (un tête-à-tête ne se
+ * chiffre de bout en bout qu'entre deux personnes).
+ */
+const DIRECT_PEER = { userId: '507f1f77bcf86cd7994390d0', role: 'member', user: { role: 'USER' } };
 
 function makeConversation(conv: ConvShape) {
   if (!conv) return null;
+  const type = conv.type ?? 'group';
+  const declared = conv.participants ?? [{ userId: USER_ID, role: 'MEMBER' }];
   return {
     id: CONV_ID,
     encryptionEnabledAt: conv.encryptionEnabledAt ?? null,
     encryptionMode: conv.encryptionMode ?? null,
     encryptionEnabledBy: conv.encryptionEnabledBy ?? null,
-    participants: conv.participants ?? [{ userId: USER_ID, role: 'MEMBER' }],
-    type: conv.type ?? 'group',
+    participants: type === 'direct' && declared.length === 1 ? [...declared, DIRECT_PEER] : declared,
+    type,
+    serverEncryptionKeyId: conv.serverEncryptionKeyId ?? null,
   };
 }
 
@@ -126,6 +138,9 @@ function makePrisma(opts: {
       findUnique: conversationFindError
         ? jest.fn().mockRejectedValue(conversationFindError)
         : jest.fn().mockResolvedValue(makeConversation(conversation)),
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      // #12966 — la paire n'a pas d'autre tête-à-tête.
+      findMany: jest.fn().mockResolvedValue([]),
       update: jest.fn().mockResolvedValue({
         id: CONV_ID,
         encryptionEnabledAt: new Date(),
@@ -270,23 +285,38 @@ describe('POST /conversations/:conversationId/encryption', () => {
     await app.close();
   });
 
-  it('returns 400 when encryption is already enabled', async () => {
+  it('returns 400 ENCRYPTION_ALREADY_ENABLED when the same mode is already enabled', async () => {
     const app = await buildApp({
       conversation: {
-        participants: [{ userId: USER_ID, role: 'admin' }],
+        participants: [{ userId: USER_ID, role: 'admin', user: { role: 'ADMIN' } }],
+        encryptionEnabledAt: new Date(),
+        encryptionMode: 'e2ee',
+      },
+    });
+    const res = await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/encryption`, headers: AUTH, payload: { mode: 'e2ee' } });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({ code: 'ENCRYPTION_ALREADY_ENABLED' });
+    await app.close();
+  });
+
+  it('returns 409 E2EE_IRREVERSIBLE when another mode is asked for an e2ee conversation (#12949)', async () => {
+    const app = await buildApp({
+      conversation: {
+        participants: [{ userId: USER_ID, role: 'admin', user: { role: 'ADMIN' } }],
         encryptionEnabledAt: new Date(),
         encryptionMode: 'e2ee',
       },
     });
     const res = await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/encryption`, headers: AUTH, payload: { mode: 'server' } });
-    expect(res.statusCode).toBe(400);
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toMatchObject({ success: false, code: 'E2EE_IRREVERSIBLE' });
     await app.close();
   });
 
-  it('returns 403 when user is not a member', async () => {
+  it('returns the 404 of an unknown conversation when user is not a member (#12563)', async () => {
     const app = await buildApp({ conversation: { participants: [{ userId: OTHER_ID, role: 'admin' }] } });
     const res = await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/encryption`, headers: AUTH, payload: { mode: 'e2ee' } });
-    expect(res.statusCode).toBe(403);
+    expect(res.statusCode).toBe(404);
     await app.close();
   });
 
@@ -358,7 +388,7 @@ describe('POST /conversations/:conversationId/encryption', () => {
     await app.close();
   });
 
-  it.each(['MODERATOR', 'AUDIT', 'ANALYST', 'ADMIN'])('un %s de plateforme étranger à la conversation reste refusé (#12588)', async (role) => {
+  it.each(['MODERATOR', 'AUDIT', 'ANALYST', 'ADMIN'])('un %s de plateforme étranger à la conversation reste refusé, du 404 d’un identifiant inconnu (#12588, #12563)', async (role) => {
     testAuthContext = { isAuthenticated: true, isAnonymous: false, userId: USER_ID, registeredUser: { id: USER_ID, role } };
     const prisma = makePrisma({ conversation: { participants: [{ userId: OTHER_ID, role: 'creator', user: { role: 'USER' } }], type: 'direct' } });
     const app = Fastify({ logger: false });
@@ -366,7 +396,7 @@ describe('POST /conversations/:conversationId/encryption', () => {
     await app.register(encryptionRoutes);
     await app.ready();
     const res = await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/encryption`, headers: AUTH, payload: { mode: 'e2ee' } });
-    expect(res.statusCode).toBe(403);
+    expect(res.statusCode).toBe(404);
     expect(prisma.conversation.update).not.toHaveBeenCalled();
     await app.close();
   });
@@ -422,6 +452,18 @@ describe('POST /conversations/:conversationId/encryption', () => {
     const res = await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/encryption`, headers: AUTH, payload: { mode: 'server' } });
     expect(res.statusCode).toBe(200);
     expect(mockGetOrCreateConversationKey).toHaveBeenCalledTimes(1);
+    expect(mockGetOrCreateConversationKey).toHaveBeenCalledWith(CONV_ID, null);
+    await app.close();
+  });
+
+  it('reprend la clé que la conversation désigne déjà (désactivée puis réactivée, #12822)', async () => {
+    const app = await buildApp({
+      conversation: { participants: [{ userId: USER_ID, role: 'admin', user: { role: 'ADMIN' } }], type: 'group', serverEncryptionKeyId: 'legacy-key-id' },
+      senderParticipant: { id: PARTICIPANT_ID },
+    });
+    const res = await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/encryption`, headers: AUTH, payload: { mode: 'server' } });
+    expect(res.statusCode).toBe(200);
+    expect(mockGetOrCreateConversationKey).toHaveBeenCalledWith(CONV_ID, 'legacy-key-id');
     await app.close();
   });
 
@@ -444,7 +486,7 @@ describe('POST /conversations/:conversationId/encryption', () => {
     const create = (app as unknown as { prisma: { message: { create: jest.Mock } } }).prisma.message.create;
     await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/encryption`, headers: AUTH, payload: { mode: 'e2ee' } });
     expect(create).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({ messageType: 'system', metadata: { kind: 'encryption-enabled', mode: 'e2ee' } }),
+      data: expect.objectContaining({ messageType: 'system', metadata: expect.objectContaining({ kind: 'encryption-enabled', mode: 'e2ee' }) }),
     }));
     await app.close();
   });
@@ -508,7 +550,7 @@ describe('POST /conversations/:conversationId/encryption', () => {
           messageSource: 'system',
           originalLanguage: 'en',
           content: expect.stringContaining('End-to-end encryption enabled'),
-          metadata: { kind: 'encryption-enabled', mode: 'e2ee' },
+          metadata: expect.objectContaining({ kind: 'encryption-enabled', mode: 'e2ee' }),
         }),
       }));
       await app.close();

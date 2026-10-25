@@ -24,16 +24,23 @@ class ConversationViewerAuthorityTest {
     )
 
     @Test
-    fun `an ADMIN or BIGBOSS member takes the creator rank, never above`() {
-        assertThat(viewer(platformRole = "ADMIN").effectiveRole).isEqualTo(MemberRole.CREATOR)
+    fun `a privileged platform role member takes the creator rank, never above`() {
+        listOf("MODERATOR", "ADMIN", "BIGBOSS").forEach { role ->
+            assertThat(viewer(platformRole = role).effectiveRole).isEqualTo(MemberRole.CREATOR)
+        }
         assertThat(viewer(platformRole = "BIGBOSS", conversationRole = "creator").effectiveRank)
             .isEqualTo(MemberRole.CREATOR.level)
-        assertThat(viewer(platformRole = "admin").effectiveRole).isEqualTo(MemberRole.CREATOR)
     }
 
     @Test
-    fun `MODERATOR, AUDIT and ANALYST take the rank of their row`() {
-        listOf("MODERATOR", "AUDIT", "ANALYST").forEach { role ->
+    fun `a lowercase platform role does not take the creator rank, unlike the admin console`() {
+        assertThat(viewer(platformRole = "admin").effectiveRole).isEqualTo(MemberRole.MEMBER)
+        assertThat(viewer(platformRole = "admin").administersPlatform).isTrue()
+    }
+
+    @Test
+    fun `AUDIT and ANALYST take the rank of their row`() {
+        listOf("AUDIT", "ANALYST").forEach { role ->
             assertThat(viewer(platformRole = role, conversationRole = "member").effectiveRole).isEqualTo(MemberRole.MEMBER)
             assertThat(viewer(platformRole = role, conversationRole = "admin").effectiveRank).isEqualTo(MemberRole.ADMIN.level)
         }

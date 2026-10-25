@@ -12,6 +12,7 @@ import { callActions } from '@/lib/calls/call-actions';
 import { callsAvailable } from '@/lib/calls/calls-availability';
 import { translate } from '@/lib/i18n-catalog';
 import { categoryIdOf, reactionOf, type ConversationFlags } from '@/lib/api/preferences';
+import { endToEndRegimeLedger, endToEndSealed } from '@/lib/end-to-end-regime-ledger';
 import { rowMenuText } from '@/lib/i18n-row-menu-catalog';
 import { accentOf, withAccent } from '@/lib/accent';
 import { useColorScheme } from '@/lib/use-color-scheme';
@@ -311,6 +312,7 @@ function LensRowImpl({
    */
   const chromeFade = flags.isMuted ? MUTED_OPACITY : 1;
   const group = isGroup(conversation);
+  const endToEnd = useStore(endToEndRegimeLedger, (state) => endToEndSealed(state, { conversationId: conversation.id, servedMode: conversation.encryptionMode }));
   const title = titleOf(conversation, viewerId);
   const photo = avatarOf(conversation, viewerId);
   /**
@@ -706,6 +708,14 @@ function LensRowImpl({
             {flags.isMuted ? (
               <span data-muted className="flex shrink-0" style={{ opacity: chromeFade }}>
                 <Glyph name="bellSlash" size={12} title={rowMenuText(currentInterfaceLanguage(), 'listRow.muted')} style={{ color: 'var(--color-ios-ink-3)' }} />
+              </span>
+            ) : null}
+            {/* LE CADENAS DU BOUT EN BOUT (#12966) — deux tête-à-tête avec la
+                même personne, le chiffré et celui que le serveur lit, se
+                distinguent ici, quel que soit leur dernier message. */}
+            {endToEnd ? (
+              <span data-end-to-end className="flex shrink-0" style={{ opacity: chromeFade }}>
+                <Glyph name="lock" size={12} title={rowMenuText(currentInterfaceLanguage(), 'listRow.endToEnd')} style={{ color: 'var(--color-ios-ink-3)' }} />
               </span>
             ) : null}
             {/*

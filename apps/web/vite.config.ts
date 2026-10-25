@@ -734,6 +734,10 @@ export default defineConfig({
            * `boosts`, `personal-mission` et `photo-moments` (#9961) la rejoignent
            * pour la même raison : dev était à 90,00 Ko pile, et la seule entropie
            * des empreintes faisait basculer le gate (mesuré : 90,01 → 89,9 Ko).
+           * `photo-catch-up` (#10174) aussi : l'hôte des invitations à
+           * immortaliser le lit, comme les écrans du jeu, et Rolldown en faisait
+           * un morceau de plus (mesuré : 92,97 → 92,96 Ko, `treasury` qu'il lit
+           * rejoignant la famille avec lui).
            */
           /**
            * LES LOIS PURES DU TRANSPORT MÉDIA (`lib/view/media-transport.ts`) —
@@ -770,7 +774,7 @@ export default defineConfig({
           if (/\/utils\/platform-privilege\.[jt]s$/.test(id)) return 'role-law';
           if (/\/types\/(world-identity|guest-attachment-kind-rules)\.[jt]s$/.test(id)) return 'guest-world-law';
           if (id.endsWith('/src/lib/view/media-transport.ts')) return 'media-time';
-          if (/\/utils\/game\/(levels|level-steps|level-wire|mint|rarity|boosts|personal-mission|photo-moments)\.[jt]s$/.test(id)) return 'game-law';
+          if (/\/utils\/game\/(levels|level-steps|level-wire|mint|rarity|boosts|personal-mission|photo-moments|photo-catch-up)\.[jt]s$/.test(id)) return 'game-law';
           return undefined;
         },
       },

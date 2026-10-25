@@ -9,9 +9,11 @@ import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.unit.dp
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.call.montage.CallMontageCaption
@@ -47,20 +49,26 @@ class ComposerRetouchScreenTest {
         compose.waitForIdle()
     }
 
+    /** « Terminé » revient quand l'outil ou la bande se referme : on l'attend avant de le toucher. */
+    private fun tapDone() {
+        compose.waitUntil(5_000) { compose.onAllNodesWithText("Done").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("Done").performClick()
+    }
+
     @Test
-    fun `a l entree, Annuler et Termine sont la, et le rail offre Filtres et Cadres`() {
+    fun `a l entree, Annuler et Termine sont la, et le rail offre Filtres, Effets et Cadres`() {
         show()
         compose.onNodeWithContentDescription("Cancel").assertWidthIsAtLeast(48.dp).assertHeightIsAtLeast(48.dp)
         compose.onNodeWithText("Done").assertHeightIsAtLeast(48.dp)
         compose.onNodeWithText("Filters").assertHeightIsAtLeast(48.dp)
         compose.onNodeWithText("Frames").assertHeightIsAtLeast(48.dp)
-        compose.onNodeWithText("Effects").assertDoesNotExist()
+        compose.onNodeWithText("Effects").assertHeightIsAtLeast(48.dp)
     }
 
     @Test
     fun `une prise intouchee part telle quelle`() {
         show()
-        compose.onNodeWithText("Done").performClick()
+        tapDone()
         compose.waitUntil(5_000) { delivered.isNotEmpty() }
         assertThat(delivered).containsExactly(ComposerRetouchResult.Original)
     }
@@ -77,12 +85,29 @@ class ComposerRetouchScreenTest {
         compose.onNodeWithContentDescription("Screen").assertIsSelected()
         compose.onNodeWithText("Frames").performClick()
         compose.waitForIdle()
-        compose.onNodeWithText("Done").performClick()
+        tapDone()
         compose.waitUntil(10_000) { delivered.isNotEmpty() }
         val rendered = delivered.single() as ComposerRetouchResult.Rendered
         assertThat(rendered.bitmap.width % 2).isEqualTo(0)
         assertThat(rendered.bitmap.getPixel(rendered.bitmap.width / 2, 1)).isNotEqualTo(Color.RED)
         assertThat(cancelled).isEqualTo(0)
+    }
+
+    @Test
+    fun `le Crapaud choisi dans les Effets part peint, la prise teintee de vert`() {
+        show()
+        compose.onNodeWithText("Effects").performClick()
+        compose.waitForIdle()
+        compose.onAllNodesWithContentDescription("None")[0].assertIsSelected()
+        compose.onNodeWithContentDescription("Toad").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithContentDescription("Toad").assertIsSelected()
+        compose.onNodeWithText("Effects").performClick()
+        compose.waitForIdle()
+        tapDone()
+        compose.waitUntil(10_000) { delivered.isNotEmpty() }
+        val rendered = delivered.single() as ComposerRetouchResult.Rendered
+        assertThat(Color.green(rendered.bitmap.getPixel(rendered.bitmap.width / 2, rendered.bitmap.height / 2))).isGreaterThan(4)
     }
 
     @Test
@@ -106,7 +131,7 @@ class ComposerRetouchScreenTest {
         compose.onNodeWithText("1:1").assertIsSelected()
         compose.onNodeWithText("Crop").performClick()
         compose.waitForIdle()
-        compose.onNodeWithText("Done").performClick()
+        tapDone()
         compose.waitUntil(10_000) { delivered.isNotEmpty() }
         val rendered = delivered.single() as ComposerRetouchResult.Rendered
         assertThat(rendered.bitmap.width).isEqualTo(rendered.bitmap.height)
@@ -121,14 +146,14 @@ class ComposerRetouchScreenTest {
     @Test
     fun `Texte ouvre un texte en saisie, et le texte ecrit part dans les pixels de la photo`() {
         show()
-        compose.onNodeWithText("Text").performClick()
+        compose.onNodeWithText("Text").performScrollTo().performClick()
         compose.waitForIdle()
         compose.onNodeWithText("Done").assertDoesNotExist()
         compose.onNode(hasSetTextAction()).performTextInput("MEESHY")
         compose.waitForIdle()
-        compose.onNodeWithText("Text").performClick()
+        compose.onNodeWithText("Text").performScrollTo().performClick()
         compose.waitForIdle()
-        compose.onNodeWithText("Done").performClick()
+        tapDone()
         compose.waitUntil(10_000) { delivered.isNotEmpty() }
         val rendered = delivered.single() as ComposerRetouchResult.Rendered
         val pixels = IntArray(rendered.bitmap.width * rendered.bitmap.height)

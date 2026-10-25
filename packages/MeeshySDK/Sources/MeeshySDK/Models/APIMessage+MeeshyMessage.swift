@@ -239,7 +239,7 @@ extension APIMessage {
             conversationId: conversationId, senderId: senderId,
             content: content ?? "",
             originalLanguage: originalLanguage ?? "fr", messageType: msgType, messageSource: msgSource,
-            isEdited: isEdited ?? false, deletedAt: deletedAt, replyToId: replyToId,
+            isEdited: isEdited ?? false, editedById: editedById, deletedAt: deletedAt, replyToId: replyToId,
             storyReplyToId: storyReplyToId,
             forwardedFromId: forwardedFromId, forwardedFromConversationId: forwardedFromConversationId,
             expiresAt: expiresAt, effects: effects,
@@ -262,7 +262,7 @@ extension APIMessage {
             callSummary: callSummary,
             joinNotice: joinNotice,
             captureNotice: captureNotice,
-            arrivalsNotice: arrivalsNotice,
+            arrivalsNotice: arrivalsNotice, encryptionSwitchNotice: encryptionSwitchNotice,
             sticker: sticker,
             trackedLinkMap: trackedLinkMap
         )

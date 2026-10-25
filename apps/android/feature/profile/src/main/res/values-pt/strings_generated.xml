@@ -21,12 +21,15 @@
     <string name="profile_close_hint">Fecha o perfil</string>
     <string name="profile_connection_context_received">%s quer se conectar com você. Aceite para trocar mensagens.</string>
     <string name="profile_connection_context_sent">Você enviou um pedido de conexão para %s. Aguardando a resposta.</string>
+    <string name="profile_conversations_interactionsDisabled">Interações desativadas</string>
+    <string name="profile_conversations_noShared">Sem conversas em comum</string>
     <string name="profile_decor_subtitle">Visíveis para todos no seu perfil</string>
     <string name="profile_decor_title">Contorno e banner</string>
     <string name="profile_detail_country">País</string>
     <string name="profile_detail_system_language">Idioma principal</string>
     <string name="profile_display_name_label">Nome de exibição</string>
     <string name="profile_e2ee">Criptografada de ponta a ponta</string>
+    <string name="profile_e2ee_enabled">Criptografia de ponta a ponta ativada</string>
     <string name="profile_edit">Editar</string>
     <string name="profile_email">E-mail</string>
     <string name="profile_first_name_label">Nome</string>
@@ -50,6 +53,9 @@
     <string name="profile_progression_subtitle">Emblemas, nível e sequência</string>
     <string name="profile_progression_title">Progresso</string>
     <string name="profile_save">Salvar</string>
+    <string name="profile_save_error">Erro ao salvar</string>
+    <string name="profile_section_about">Sobre</string>
+    <string name="profile_section_actions">Ações</string>
     <string name="profile_section_contact">CONTATO</string>
     <string name="profile_section_identity">IDENTIDADE</string>
     <string name="profile_section_languages">IDIOMAS</string>
@@ -65,8 +71,11 @@
     <string name="profile_stat_translations">Traduções</string>
     <string name="profile_stats_a11y_hint">Abre as estatísticas detalhadas</string>
     <string name="profile_stats_conversations">Conversas</string>
+    <string name="profile_stats_daysShort">Dias</string>
     <string name="profile_stats_friends">Amigos</string>
+    <string name="profile_stats_memberSince">Membro desde</string>
     <string name="profile_stats_messages">Mensagens</string>
+    <string name="profile_stats_messagesShort">Mensagens</string>
     <string name="profile_stats_title">Estatísticas</string>
     <string name="profile_status_connected">Conectados</string>
     <string name="profile_system_language_label">Idioma principal</string>
@@ -82,6 +91,7 @@
     <string name="profile_username">Nome de usuário</string>
     <string name="profile_verified">Verificado</string>
     <string name="profile_view_posts">Publicações</string>
+    <string name="profile_voice_title">Voz</string>
     <string name="report_close">Fechar</string>
     <string name="report_details_header">Detalhes (opcional)</string>
     <string name="report_error">Erro ao enviar a denúncia</string>

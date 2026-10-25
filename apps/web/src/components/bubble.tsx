@@ -2,7 +2,7 @@ import { quotedPieceIdOf } from '@/lib/view/quoted-preview';
 import type { EphemeralDeadline } from '@meeshy/shared/utils/ephemeral-deadline';
 
 import { checkStatusOf, isMineOf, servedRowLanguage, translatedLanguagesOf } from '@/lib/view/message';
-import { badgesOf, editedOf, systemRowOf } from '@/lib/view/message-badges';
+import { badgesOf, editedByModeratorOf, editedOf, systemRowOf } from '@/lib/view/message-badges';
 import { bodyKindOf, moodCitationOf, placeOf, storyCitationOf } from '@/lib/view/message-body';
 import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
 import { usePresence } from '@/lib/view/use-presence';
@@ -11,6 +11,7 @@ import type { AuthorStoryRing } from '@/lib/view/author-story-ring';
 import { prismFor, served } from '@/lib/api/prism';
 import { mediaCarrierOf } from '@/lib/view/media';
 import type { PlacedMessage } from '@/lib/grouping';
+import { endToEndSealed } from '@/lib/view/end-to-end-sealed';
 import { time } from '@/lib/grouping';
 import { languageBand, mountsBottomLine } from '@/lib/reading-mode/meta';
 import { protectionOf } from '@/lib/reading-mode/protection';
@@ -273,7 +274,8 @@ export function Bubble({
   const senderPhoto = participantAvatarOf(message.sender);
 
   // `kind === 'veiled' | 'burned'` toutes deux passent par `ProtectedContent`.
-  const isProtected = kind !== 'standard' || !revealable;
+  const sealedEndToEnd = endToEndSealed(message);
+  const isProtected = kind !== 'standard' || !revealable || sealedEndToEnd;
   /** LA LANGUE ACTIVE DU PIED (revue #5814, défaut majeur 12) — la langue
    * RÉELLEMENT servie par la rangée, jamais un état local. `servedRowLanguage`
    * (revue #5805) et non `rendered.language` : sur un message MÉDIA-SEUL le
@@ -372,7 +374,7 @@ export function Bubble({
           (#5936, `BubbleStandardLayout.swift:1064-1066`). `EditedMark` porte
           déjà `aria-hidden` (revue-correction #5936, défaut majeur 8) : le
           mot est dans `rowLabel`, il ne se prononce pas une seconde fois. */}
-      {isEdited ? <EditedMark onBrandBubble={isMine && !bareBody} /> : null}
+      {isEdited ? <EditedMark onBrandBubble={isMine && !bareBody} byModerator={editedByModeratorOf(badges)} /> : null}
       {message.attachments && body.kind !== 'sticker' ? (
         <Attachments
           attachments={message.attachments}
@@ -465,6 +467,7 @@ export function Bubble({
       surface="bubble"
       isMine={isMine}
       revealable={revealable}
+      endToEnd={sealedEndToEnd}
       onConsumeViewOnce={onConsumeViewOnce}
       media={{
         frame: 'box',

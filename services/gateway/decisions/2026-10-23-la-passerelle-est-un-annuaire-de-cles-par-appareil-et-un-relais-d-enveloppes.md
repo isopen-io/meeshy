@@ -48,8 +48,10 @@ s'il envoie dans une conversation chiffrée : rien n'est perdu en silence.
   reprend, et la socket restée d'un appareil retiré ne reçoit rien de celle qui lui succède ; le retrait la fait
   sortir de sa salle (#12592).
 - *Compteur* : le champ s'appelle `lastDeviceId` (dernier numéro attribué, 0 = aucun), pas `nextDeviceId`.
-- *Garde du régime* : `regimeEpoch` n'est pas encore comparé (le champ `encryptionEpoch` arrive avec #12522) ;
-  des enveloppes vers une conversation qui n'est plus `e2ee` rendent déjà 409 `E2EE_REGIME_CHANGED`.
+- *Garde du régime* (#12522, #12562) : `encryptionMetadata.regimeEpoch`, quand l'envoi le déclare, est comparé à
+  `Conversation.encryptionEpoch` (absent = 0) ; une époque périmée, des enveloppes ou tout autre chiffré vers une
+  conversation qui n'est pas `e2ee` rendent 409 `E2EE_REGIME_CHANGED`, sans rien ranger. Un envoi sans époque déclarée
+  (client antérieur) n'est pas jugé sur elle.
 - *Ancien format* : un chiffré sans enveloppes dans une conversation `e2ee` rend 400 `E2EE_CLIENT_OUTDATED` ; un
   texte clair garde `E2EE_PLAINTEXT_REFUSED`, que le web publié sait dire (`apps/web/src/lib/send/failure-reason.ts`).
 - *Bornes* : 200 pré-clés uniques non consommées par appareil et par nature ; 10 écritures d'annuaire et 30

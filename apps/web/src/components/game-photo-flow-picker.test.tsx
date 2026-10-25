@@ -50,19 +50,28 @@ const fakeScene = (frameId: string): GloryScene => ({
   close: () => undefined,
 });
 
-/** `warm: 'later'` : le chargement d'une tuile absente attend `releaseWarm()` — le cadre arrive APRÈS la prise. */
-function offered(offer: GloryOffer, options: { readonly ready?: ReadonlySet<string>; readonly warmOk?: boolean; readonly warm?: 'later' } = {}) {
+/**
+ * `warm: 'later'` : le chargement d'une tuile absente attend `releaseWarm()` — le cadre arrive APRÈS la prise.
+ * `previewLagMs` : la scène d'APERÇU (demi-résolution) met ce temps à s'ouvrir, comme les couches décodées en production.
+ */
+function offered(offer: GloryOffer, options: { readonly ready?: ReadonlySet<string>; readonly warmOk?: boolean; readonly warm?: 'later'; readonly previewLagMs?: number } = {}) {
   const calls: Call[] = [];
   const warmed: string[] = [];
   const ready = new Set(options.ready ?? offer.tiles.filter((t) => t.ready).map((t) => t.ref.frameId));
   const pending: (() => void)[] = [];
   const releaseWarm = () => pending.splice(0).forEach((release) => release());
+  const composed: { readonly frameId: string | null; readonly pose: GloryFrameBirdLayout | null }[] = [];
   const { env: base, log } = env();
   const value: PhotoEnv = {
     ...base,
+    render: async (input) => {
+      composed.push({ frameId: input.glory?.scene.frame.id ?? null, pose: input.glory?.recipe.pose ?? null });
+      return base.render(input);
+    },
     gloryOffer: async () => offer,
     glory: async ({ frame, pose, scale }) => {
       calls.push({ frame, pose, scale });
+      if (scale < 1 && options.previewLagMs !== undefined) await new Promise<void>((resolve) => setTimeout(resolve, options.previewLagMs));
       const id = frame === undefined ? offer.preselected?.frameId : frame?.frameId;
       return id !== undefined && ready.has(id) ? fakeScene(id) : null;
     },
@@ -75,7 +84,7 @@ function offered(offer: GloryOffer, options: { readonly ready?: ReadonlySet<stri
     },
     gloryThumb: async () => null,
   };
-  return { env: value, log, calls, warmed, releaseWarm };
+  return { env: value, log, calls, warmed, releaseWarm, composed };
 }
 
 const twoTiles: GloryOffer = { tiles: [tile('savane.ambassadeur-2'), tile('royaumes.ambassadeur-2', { poses: ['duo'], defaultPose: 'duo' })], preselected: ref('savane.ambassadeur-2') };
@@ -264,5 +273,63 @@ describe('tout se change après', () => {
     expect(calls.filter((call) => call.scale === 1).at(-1)?.frame).toEqual(ref('royaumes.ambassadeur-2'));
     expect(by(host, 'data-photo-save')).not.toBeNull();
     expect(log.saved).toHaveLength(1);
+  });
+
+  /* La scène d'aperçu se rouvre à chaque choix et met du temps à s'ouvrir (couches décodées) : ce transit n'est
+     pas un choix. Une seule recomposition par geste, décorée, et jamais une carte simple offerte à « Enregistrer ». */
+  test('changer de pose sur le résultat, la scène d’aperçu lente à s’ouvrir : UNE recomposition, celle de la pose choisie, jamais la carte simple', async () => {
+    const { env: e, log, calls, composed } = offered(twoTiles, { previewLagMs: 20 });
+    const host = await open(ambassador, e, log);
+    await click(choose(host, 'selfie'));
+    await settle();
+    await settle();
+    await click(takeFrame(host));
+    await settle();
+    await settle();
+    const composedBefore = composed.length;
+    const finalsBefore = calls.filter((call) => call.scale === 1).length;
+    await click(poseOption(host, 'pied'));
+    expect(by(host, 'data-photo-save')).toBeNull();
+    await settle();
+    await settle();
+    await settle();
+    expect(composed.slice(composedBefore)).toEqual([{ frameId: 'savane.ambassadeur-2', pose: 'pied' }]);
+    expect(calls.filter((call) => call.scale === 1)).toHaveLength(finalsBefore + 1);
+    expect(by(host, 'data-photo-save')).not.toBeNull();
+  });
+
+  test('changer de cadre sur le résultat, la scène d’aperçu lente à s’ouvrir : UNE recomposition, sur le cadre choisi', async () => {
+    const { env: e, log, calls, composed } = offered(twoTiles, { previewLagMs: 20 });
+    const host = await open(ambassador, e, log);
+    await click(choose(host, 'selfie'));
+    await settle();
+    await settle();
+    await click(takeFrame(host));
+    await settle();
+    await settle();
+    const composedBefore = composed.length;
+    const finalsBefore = calls.filter((call) => call.scale === 1).length;
+    await click(option(host, 'royaumes.ambassadeur-2'));
+    await settle();
+    await settle();
+    await settle();
+    expect(composed.slice(composedBefore).map((entry) => entry.frameId)).toEqual(['royaumes.ambassadeur-2']);
+    expect(calls.filter((call) => call.scale === 1)).toHaveLength(finalsBefore + 1);
+    expect(by(host, 'data-photo-save')).not.toBeNull();
+  });
+
+  test('changer de pose puis déclencher avant que la scène d’aperçu n’arrive : la prise compose la pose choisie, et l’arrivée de la scène ne recompose rien', async () => {
+    const { env: e, log, composed } = offered(twoTiles, { previewLagMs: 20 });
+    const host = await open(ambassador, e, log);
+    await click(choose(host, 'selfie'));
+    await settle();
+    await settle();
+    await click(poseOption(host, 'pied'));
+    await click(takeFrame(host));
+    await settle();
+    await settle();
+    await settle();
+    expect(composed).toEqual([{ frameId: 'savane.ambassadeur-2', pose: 'pied' }]);
+    expect(by(host, 'data-photo-save')).toBeNull();
   });
 });

@@ -97,6 +97,9 @@ public struct APIMessage: Sendable {
     /// Ligne d'arrivées regroupées de Meeshy Global (`metadata.kind ==
     /// "members-arrived"`, #7759).
     public var arrivalsNotice: ArrivalsNoticeMetadata? = nil
+    /// Avis de bascule du chiffrement (`metadata.kind` `encryption-enabled` /
+    /// `encryption-disabled`, #12846).
+    public var encryptionSwitchNotice: EncryptionSwitchNoticeMetadata? = nil
     /// L'événement système d'un avis que le SERVEUR complète sur place (#8565
     /// — la ligne d'arrivées de Meeshy Global, qui ne part qu'en
     /// `message:edited`). Même forme que `lastMessageSystemEvent` de
@@ -108,6 +111,16 @@ public struct APIMessage: Sendable {
     /// feature — the renderer then falls back to the raw URLs. Defaulted so the
     /// memberwise initializer stays source-compatible with existing call sites.
     public var trackingLinks: [TrackedLink]? = nil
+    /// #11375 — l'auteur de la dernière modification tel que la passerelle l'a
+    /// SERVI, ou `.untouched` quand la charge ne porte pas la clé `editedById`.
+    /// Même patron `var`/défaut que `trackingLinks` : l'init memberwise reste
+    /// source-compatible.
+    public var editAuthorship: EditAuthorship = .untouched
+
+    /// #11375 — l'éditeur tiers servi (`User.id`, ou la marque sans identité) ;
+    /// `nil` quand c'est l'auteur ou que la charge ne le dit pas. Sa présence
+    /// dit « modifié par un modérateur ».
+    public var editedById: String? { editAuthorship.servedEditorId }
 
     /// `[rawURL: token]` lookup derived from `trackingLinks`. Empty when no
     /// tracking data is present. Consumed by `MessageTextRenderer` (tappable
@@ -118,7 +131,7 @@ public struct APIMessage: Sendable {
 extension APIMessage: Decodable {
     private enum CodingKeys: String, CodingKey {
         case id, clientMessageId, conversationId, senderId, content, originalLanguage
-        case messageType, messageSource, isEdited, editedAt, deletedAt
+        case messageType, messageSource, isEdited, editedAt, editedById, deletedAt
         case replyToId, storyReplyToId, postReplyTo, storyReplyTo, forwardedFromId, forwardedFromConversationId
         case pinnedAt, pinnedBy, isViewOnce, isBlurred, expiresAt, ephemeralDuration, location, sticker, consumedByMe
         case isEncrypted, encryptionMode, createdAt, updatedAt
@@ -148,6 +161,23 @@ extension APIMessage: Decodable {
         let sticker: MessageSticker?
     }
 
+    /// #11375 — « absent » (la charge ne dit rien de l'auteur) et « null »
+    /// (l'auteur a réécrit, la mention s'efface) ne se confondent pas.
+    private static func servedEditAuthorship(in c: KeyedDecodingContainer<CodingKeys>) -> EditAuthorship {
+        guard c.contains(.editedById) else { return .untouched }
+        return .served(editedById: (try? c.decodeIfPresent(String.self, forKey: .editedById)) ?? nil)
+    }
+
+    /// Sticker : la racine d'abord (les deux producteurs le hissent), sinon
+    /// l'enveloppe `metadata`. Les deux lectures sont tolérantes — une forme
+    /// inattendue laisse le champ nil sans faire tomber le message — et un
+    /// sticker non rendable vaut absence (règle de `MessageSticker`).
+    private static func servedSticker(in c: KeyedDecodingContainer<CodingKeys>) -> MessageSticker? {
+        let rootSticker: MessageSticker? = try? c.decodeIfPresent(MessageSticker.self, forKey: .sticker)
+        let metadataSticker: MessageSticker? = (try? c.decodeIfPresent(MessageStickerEnvelope.self, forKey: .metadata))?.sticker
+        return rootSticker?.ifWireWorthy ?? metadataSticker?.ifWireWorthy
+    }
+
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         // Resilient id: try "id" first, fall back to "_id" (raw MongoDB)
@@ -165,6 +195,7 @@ extension APIMessage: Decodable {
         messageSource = try c.decodeIfPresent(String.self, forKey: .messageSource)
         isEdited = try c.decodeIfPresent(Bool.self, forKey: .isEdited)
         editedAt = try c.decodeIfPresent(Date.self, forKey: .editedAt)
+        editAuthorship = Self.servedEditAuthorship(in: c)
         deletedAt = try c.decodeIfPresent(Date.self, forKey: .deletedAt)
         replyToId = try c.decodeIfPresent(String.self, forKey: .replyToId)
         storyReplyToId = try c.decodeIfPresent(String.self, forKey: .storyReplyToId)
@@ -182,13 +213,7 @@ extension APIMessage: Decodable {
         ephemeralDuration = try c.decodeIfPresent(Int.self, forKey: .ephemeralDuration)
         consumedByMe = try c.decodeIfPresent(Bool.self, forKey: .consumedByMe)
         location = try c.decodeIfPresent(SharedPlace.self, forKey: .location)
-        // Sticker : la racine d'abord (les deux producteurs le hissent), sinon
-        // l'enveloppe `metadata`. Les deux lectures sont tolérantes — une forme
-        // inattendue laisse le champ nil sans faire tomber le message — et un
-        // sticker non rendable vaut absence (règle de `MessageSticker`).
-        let rootSticker: MessageSticker? = try? c.decodeIfPresent(MessageSticker.self, forKey: .sticker)
-        let metadataSticker: MessageSticker? = (try? c.decodeIfPresent(MessageStickerEnvelope.self, forKey: .metadata))?.sticker
-        sticker = rootSticker?.ifWireWorthy ?? metadataSticker?.ifWireWorthy
+        sticker = Self.servedSticker(in: c)
         isEncrypted = try c.decodeIfPresent(Bool.self, forKey: .isEncrypted)
         encryptionMode = try c.decodeIfPresent(String.self, forKey: .encryptionMode)
         createdAt = try c.decode(Date.self, forKey: .createdAt)
@@ -217,7 +242,7 @@ extension APIMessage: Decodable {
         callSummary = try? c.decodeIfPresent(CallSummaryMetadata.self, forKey: .metadata)
         joinNotice = try? c.decodeIfPresent(JoinNoticeMetadata.self, forKey: .metadata)
         captureNotice = try? c.decodeIfPresent(CaptureNoticeMetadata.self, forKey: .metadata)
-        arrivalsNotice = try? c.decodeIfPresent(ArrivalsNoticeMetadata.self, forKey: .metadata)
+        arrivalsNotice = try? c.decodeIfPresent(ArrivalsNoticeMetadata.self, forKey: .metadata); encryptionSwitchNotice = try? c.decodeIfPresent(EncryptionSwitchNoticeMetadata.self, forKey: .metadata)
         systemEvent = try? c.decodeIfPresent(LastMessageSystemEvent.self, forKey: .systemEvent)
         // Outbound-link tracking: prefer the top-level `trackingLinks` (socket
         // `message:new`); otherwise read it from the `metadata` envelope (REST).

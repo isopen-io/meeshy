@@ -11,8 +11,12 @@ import io.mockk.slot
 import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -21,6 +25,8 @@ import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.UpdateProfileRequest
 import me.meeshy.sdk.cache.SystemCacheClock
 import me.meeshy.sdk.friend.FriendshipCache
+import me.meeshy.sdk.network.InMemoryNetworkMonitor
+import me.meeshy.sdk.network.NetworkMonitor
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.status.StatusBarCache
 import me.meeshy.sdk.user.ProfileStatsCacheRepository
@@ -72,8 +78,9 @@ class OwnProfileViewModelEditTest {
         flow: MutableStateFlow<MeeshyUser?>,
         userRepo: UserRepository,
         workManager: WorkManager = mockk(relaxed = true),
+        session: SessionRepository = mockk(relaxed = true),
+        networkMonitor: NetworkMonitor = InMemoryNetworkMonitor(),
     ): OwnProfileViewModel {
-        val session = mockk<SessionRepository>()
         every { session.currentUser } returns flow
         return OwnProfileViewModel(
             sessionRepository = session,
@@ -82,6 +89,7 @@ class OwnProfileViewModelEditTest {
             workManager = workManager,
             friendshipCache = FriendshipCache(),
             statusBarCache = StatusBarCache(SystemCacheClock),
+            networkMonitor = networkMonitor,
         )
     }
 
@@ -211,10 +219,12 @@ class OwnProfileViewModelEditTest {
         val vm = ownProfileVm(MutableStateFlow(user()), userRepo, workManager)
         advanceUntilIdle()
         vm.onEvent(OwnProfileUiEvent.StartEditing)
+        vm.onEvent(OwnProfileUiEvent.BioChanged("new bio"))
 
         vm.onEvent(OwnProfileUiEvent.Save)
         advanceUntilIdle()
 
+        coVerify(exactly = 1) { userRepo.enqueueProfileEdit(any()) }
         verify(exactly = 0) { workManager.enqueue(any<WorkRequest>()) }
     }
 
@@ -222,15 +232,19 @@ class OwnProfileViewModelEditTest {
     fun saveProfile_reopensTheEditorAndSurfacesTheError_whenTheEnqueueThrows() = runTest(dispatcher) {
         val userRepo = mockk<UserRepository>()
         coEvery { userRepo.enqueueProfileEdit(any()) } throws RuntimeException("db write failed")
-        val vm = ownProfileVm(MutableStateFlow(user()), userRepo)
+        val session = mockk<SessionRepository>(relaxed = true)
+        val vm = ownProfileVm(MutableStateFlow(user()), userRepo, session = session)
         advanceUntilIdle()
         vm.onEvent(OwnProfileUiEvent.StartEditing)
+        vm.onEvent(OwnProfileUiEvent.DisplayNameChanged("Alicia"))
 
         vm.onEvent(OwnProfileUiEvent.Save)
         advanceUntilIdle()
 
         assertThat(vm.state.value.isEditing).isTrue()
         assertThat(vm.state.value.errorMessage).isEqualTo("db write failed")
+        assertThat(vm.state.value.displayName).isEqualTo("Alicia")
+        verify(exactly = 1) { session.restoreProfileSnapshot(user()) }
     }
 
     @Test
@@ -282,5 +296,136 @@ class OwnProfileViewModelEditTest {
 
         assertThat(vm.state.value.displayName).isEqualTo("Renamed")
         assertThat(vm.state.value.systemLanguage).isEqualTo("de")
+    }
+
+    @Test
+    fun saveProfile_sendsOnlyTheChangedFields_andAnEmptyStringToClearTheBio() = runTest(dispatcher) {
+        val userRepo = mockk<UserRepository>(relaxed = true)
+        val captured = slot<UpdateProfileRequest>()
+        coEvery { userRepo.enqueueProfileEdit(capture(captured)) } returns "cmid_1"
+        val vm = ownProfileVm(MutableStateFlow(user()), userRepo)
+        advanceUntilIdle()
+        vm.onEvent(OwnProfileUiEvent.StartEditing)
+        vm.onEvent(OwnProfileUiEvent.BioChanged(""))
+        vm.onEvent(OwnProfileUiEvent.CustomDestinationLanguageChanged(""))
+
+        vm.onEvent(OwnProfileUiEvent.Save)
+        advanceUntilIdle()
+
+        assertThat(captured.captured).isEqualTo(UpdateProfileRequest(bio = "", customDestinationLanguage = ""))
+    }
+
+    @Test
+    fun saveProfile_withNothingChanged_closesTheEditorWithoutQueueingAnything() = runTest(dispatcher) {
+        val userRepo = mockk<UserRepository>(relaxed = true)
+        val vm = ownProfileVm(MutableStateFlow(user()), userRepo)
+        val effects = mutableListOf<OwnProfileUiEffect>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.effects.toList(effects) }
+        advanceUntilIdle()
+        vm.onEvent(OwnProfileUiEvent.StartEditing)
+
+        vm.onEvent(OwnProfileUiEvent.Save)
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.isEditing).isFalse()
+        coVerify(exactly = 0) { userRepo.enqueueProfileEdit(any()) }
+        assertThat(effects).containsExactly(OwnProfileUiEffect.SaveSucceeded)
+    }
+
+    @Test
+    fun saveProfile_offline_playsTheSuccessHapticAndSaysItWillSyncLater() = runTest(dispatcher) {
+        val userRepo = mockk<UserRepository>(relaxed = true)
+        coEvery { userRepo.enqueueProfileEdit(any()) } returns "cmid_1"
+        coEvery { userRepo.awaitProfileEditAbandoned("cmid_1") } coAnswers { CompletableDeferred<Boolean>().await() }
+        val vm = ownProfileVm(
+            MutableStateFlow(user()),
+            userRepo,
+            networkMonitor = InMemoryNetworkMonitor(initialOnline = false),
+        )
+        val effects = mutableListOf<OwnProfileUiEffect>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.effects.toList(effects) }
+        advanceUntilIdle()
+        vm.onEvent(OwnProfileUiEvent.StartEditing)
+        vm.onEvent(OwnProfileUiEvent.BioChanged("offline bio"))
+
+        vm.onEvent(OwnProfileUiEvent.Save)
+        advanceUntilIdle()
+
+        assertThat(effects)
+            .containsExactly(OwnProfileUiEffect.SaveSucceeded, OwnProfileUiEffect.SavedOffline)
+            .inOrder()
+    }
+
+    @Test
+    fun saveProfile_online_neverShowsTheOfflineToast() = runTest(dispatcher) {
+        val userRepo = mockk<UserRepository>(relaxed = true)
+        coEvery { userRepo.enqueueProfileEdit(any()) } returns "cmid_1"
+        coEvery { userRepo.awaitProfileEditAbandoned("cmid_1") } returns false
+        val vm = ownProfileVm(MutableStateFlow(user()), userRepo)
+        val effects = mutableListOf<OwnProfileUiEffect>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.effects.toList(effects) }
+        advanceUntilIdle()
+        vm.onEvent(OwnProfileUiEvent.StartEditing)
+        vm.onEvent(OwnProfileUiEvent.BioChanged("online bio"))
+
+        vm.onEvent(OwnProfileUiEvent.Save)
+        advanceUntilIdle()
+
+        assertThat(effects).containsExactly(OwnProfileUiEffect.SaveSucceeded)
+    }
+
+    @Test
+    fun anAbandonedEdit_restoresTheSnapshot_reopensTheEditor_andSaysTheError() = runTest(dispatcher) {
+        val userRepo = mockk<UserRepository>(relaxed = true)
+        coEvery { userRepo.enqueueProfileEdit(any()) } returns "cmid_1"
+        coEvery { userRepo.awaitProfileEditAbandoned("cmid_1") } returns true
+        val session = mockk<SessionRepository>(relaxed = true)
+        val before = user()
+        val vm = ownProfileVm(MutableStateFlow(before), userRepo, session = session)
+        val effects = mutableListOf<OwnProfileUiEffect>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.effects.toList(effects) }
+        advanceUntilIdle()
+        vm.onEvent(OwnProfileUiEvent.StartEditing)
+        vm.onEvent(OwnProfileUiEvent.BioChanged(""))
+
+        vm.onEvent(OwnProfileUiEvent.Save)
+        advanceUntilIdle()
+
+        verify(exactly = 1) { session.restoreProfileSnapshot(before) }
+        assertThat(vm.state.value.isEditing).isTrue()
+        assertThat(vm.state.value.bio).isEmpty()
+        assertThat(effects).containsExactly(
+            OwnProfileUiEffect.SaveSucceeded,
+            OwnProfileUiEffect.SaveFailed(showDefaultMessage = true),
+        ).inOrder()
+    }
+
+    @Test
+    fun aDeliveredEdit_neverRollsBack() = runTest(dispatcher) {
+        val userRepo = mockk<UserRepository>(relaxed = true)
+        coEvery { userRepo.enqueueProfileEdit(any()) } returns "cmid_1"
+        coEvery { userRepo.awaitProfileEditAbandoned("cmid_1") } returns false
+        val session = mockk<SessionRepository>(relaxed = true)
+        val vm = ownProfileVm(MutableStateFlow(user()), userRepo, session = session)
+        advanceUntilIdle()
+        vm.onEvent(OwnProfileUiEvent.StartEditing)
+        vm.onEvent(OwnProfileUiEvent.DisplayNameChanged("Alicia"))
+
+        vm.onEvent(OwnProfileUiEvent.Save)
+        advanceUntilIdle()
+
+        verify(exactly = 0) { session.restoreProfileSnapshot(any()) }
+        assertThat(vm.state.value.isEditing).isFalse()
+    }
+
+    @Test
+    fun theBioIsCappedAtFiveHundredCharacters() = runTest(dispatcher) {
+        val vm = ownProfileVm(MutableStateFlow(user()), mockk(relaxed = true))
+        advanceUntilIdle()
+        vm.onEvent(OwnProfileUiEvent.StartEditing)
+
+        vm.onEvent(OwnProfileUiEvent.BioChanged("b".repeat(700)))
+
+        assertThat(vm.state.value.bio).hasLength(500)
     }
 }

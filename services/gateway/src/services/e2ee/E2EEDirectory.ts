@@ -19,6 +19,7 @@
  * La `registrationId` désigne la GÉNÉRATION d'une place : pré-clés et
  * enveloppes lui appartiennent, jamais à la place (#12592).
  */
+import { createHash } from 'crypto';
 import type { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
 import {
   deviceBindingMessage,
@@ -27,17 +28,20 @@ import {
   E2EE_ERROR_CODES,
   E2EE_MAX_ACTIVE_DEVICES,
   E2EE_ONE_TIME_PREKEY_STOCK_MAX,
+  e2eePlatformSchema,
   type E2EEDeviceBundle,
   type E2EEEnrollDeviceRequest,
   type E2EEErrorCode,
+  type E2EEOwnDevice,
   type E2EEPublishKeysRequest,
 } from '@meeshy/shared/types/e2ee-directory';
+import { unsetOrNull } from '../../utils/prisma-unset';
 import { RETIRABLE_DEVICE, retireDeviceRows, retireDevicesOfEndedSessions } from './device-retirement';
 import type { SignatureVerifier } from './signature-verifier';
 
 export type DirectoryPrisma = Pick<
   PrismaClient,
-  'e2EEDevice' | 'e2EEOneTimePreKey' | 'messageEnvelope' | 'userSession' | 'e2EERevokedIdentity' | '$runCommandRaw'
+  'e2EEDevice' | 'e2EEOneTimePreKey' | 'messageEnvelope' | 'userSession' | 'e2EERevokedIdentity' | 'e2EEBindingProof' | '$runCommandRaw'
 >;
 
 export type E2EEDirectoryDeps = {
@@ -60,6 +64,12 @@ export class E2EEDirectoryError extends Error {
 type SignedKey = { readonly keyId: number; readonly publicKey: string; readonly signature: string };
 type OneTimeKey = { readonly keyId: number; readonly publicKey: string };
 type OneTimeBatches = { readonly oneTimePreKeys?: readonly OneTimeKey[]; readonly kyberPreKeys?: readonly SignedKey[] };
+
+export type DeviceSignOut = {
+  readonly callerSessionId: string;
+  /** `true` seulement si la session n'est plus valide après l'appel. */
+  readonly close: (sessionId: string) => Promise<boolean>;
+};
 
 export type PreKeyStock = { readonly deviceId: number; readonly oneTimePreKeys: number; readonly kyberPreKeys: number };
 
@@ -93,6 +103,20 @@ async function assertSigned(verifier: SignatureVerifier, identityKey: string, ke
     throw new E2EEDirectoryError(E2EE_ERROR_CODES.SIGNATURE_INVALID, 400, 'Une pré-clé ne porte pas la signature de son identité');
   }
 }
+
+/**
+ * L'`_id` de la trace d'une installation : 12 octets d'un condensat de
+ * (compte, identité, registrationId). Deux enrôlements de la même installation
+ * visent le MÊME document, quel que soit l'état des index de la base.
+ */
+const bindingProofId = (installation: { userId: string; identityKey: string; registrationId: number }): string =>
+  createHash('sha256').update(`${installation.userId}|${installation.identityKey}|${installation.registrationId}`).digest('hex').slice(0, 24);
+
+/** Au-delà de deux fenêtres, la fenêtre de la preuve la refuse d'elle-même : la trace ne sert plus. */
+const BINDING_PROOF_RETENTION_MS = 2 * E2EE_DEVICE_BINDING_MAX_SKEW_MS + 60_000;
+
+const bindingReplayed = () =>
+  new E2EEDirectoryError(E2EE_ERROR_CODES.BINDING_INVALID, 400, 'Cette preuve de possession de la clé d’identité a déjà servi');
 
 const unverifiable = () =>
   new E2EEDirectoryError(E2EE_ERROR_CODES.SIGNATURE_UNVERIFIABLE, 503, 'Vérification des signatures indisponible');
@@ -153,6 +177,11 @@ const kyberLastResortFields = (key: SignedKey) => ({
   kyberLastResort: key.publicKey,
   kyberLastResortSignature: key.signature,
 });
+
+const ownPlatform = (raw: string): E2EEOwnDevice['platform'] => {
+  const parsed = e2eePlatformSchema.safeParse(raw);
+  return parsed.success ? parsed.data : 'unknown';
+};
 
 type ActiveDevice = Awaited<ReturnType<DirectoryPrisma['e2EEDevice']['findMany']>>[number];
 
@@ -238,9 +267,51 @@ export class E2EEDirectory {
     await assertBinding(this.verifier, { userId: params.userId, request: params.request, now: at });
     await assertSigned(this.verifier, params.request.identityKey, signedKeysOf(params.request));
     await this.assertNotRevoked(params.userId, params.request.identityKey);
+    await this.assertSessionNotRetired(params);
+    const retried = await this.consumeBinding({ ...params, at });
+    if (retried) return retried;
     const placed = await this.placeDevice({ ...params, at });
     await this.undoIfRevoked(params.userId, params.request.identityKey);
+    await this.undoIfSessionRetired(params);
     return placed;
+  }
+
+  /**
+   * Une preuve de liaison ne sert qu'une fois par installation (#12933). Elle
+   * vaut dix minutes de part et d'autre : rejouée, elle rebranchait l'appareil
+   * sur la session du rejoueur et republiait le lot capturé — dont des
+   * pré-clés uniques déjà remises à des pairs. Elle n'est donc acceptée que si
+   * son horodatage signé est STRICTEMENT plus récent que la dernière preuve
+   * acceptée pour cette identité et cette `registrationId` : une écriture
+   * conditionnelle sur un document dont l'`_id` est dérivé de l'installation,
+   * ou sa création, que l'index de `_id` départage sans aucun index à déployer.
+   *
+   * La même preuve présentée de nouveau par la même session (réponse perdue,
+   * réessai réseau) n'écrit RIEN : elle rend l'appareil actif de cette
+   * installation lié à cette session, ou elle est refusée. Rejouer un
+   * placement republierait le lot capturé.
+   */
+  private async consumeBinding(params: { userId: string; sessionId: string; request: E2EEEnrollDeviceRequest; at: Date }): Promise<{ deviceId: number; created: false } | null> {
+    const { userId, sessionId, request, at } = params;
+    const installation = { userId, identityKey: request.identityKey, registrationId: request.registrationId };
+    const id = bindingProofId(installation);
+    const signedAt = new Date(request.binding.timestamp);
+    await this.prisma.e2EEBindingProof.deleteMany({ where: { userId, signedAt: { lt: new Date(at.getTime() - BINDING_PROOF_RETENTION_MS) } } });
+    const { count } = await this.prisma.e2EEBindingProof.updateMany({ where: { id, signedAt: { lt: signedAt } }, data: { signedAt, sessionId } });
+    if (count > 0) return null;
+    const created = await this.prisma.e2EEBindingProof.create({ data: { id, ...installation, signedAt, sessionId } }).then(
+      () => true,
+      (error: unknown) => {
+        if (isUniqueViolation(error)) return false;
+        throw error;
+      },
+    );
+    if (created) return null;
+    const last = await this.prisma.e2EEBindingProof.findUnique({ where: { id }, select: { signedAt: true, sessionId: true } });
+    if (last === null || last.sessionId !== sessionId || last.signedAt.getTime() !== signedAt.getTime()) throw bindingReplayed();
+    const bound = await this.prisma.e2EEDevice.findFirst({ where: { ...installation, sessionId, ...ACTIVE }, select: { deviceId: true } });
+    if (!bound) throw bindingReplayed();
+    return { deviceId: bound.deviceId, created: false };
   }
 
   private async placeDevice(params: { userId: string; sessionId: string; request: E2EEEnrollDeviceRequest; at: Date }): Promise<{ deviceId: number; created: boolean }> {
@@ -254,6 +325,7 @@ export class E2EEDirectory {
     if (existing) {
       await this.retireDevices({ userId, sessionId, id: { not: existing.id } });
       await this.prisma.e2EEDevice.update({ where: { id: existing.id }, data: { sessionId, ...keyFields, ...profile } });
+      await this.replaceOneTimeKeys(existing, request);
       await this.addOneTimeKeys(existing, request);
       return { deviceId: existing.deviceId, created: false };
     }
@@ -308,27 +380,92 @@ export class E2EEDirectory {
     return devices.map((device) => ({ deviceId: device.deviceId, registrationId: device.registrationId }));
   }
 
+  /** Mes appareils actifs, pour moi seul (#13014) : jamais une clé, jamais la session d'un autre appareil. */
+  async ownDevices(caller: { userId: string; sessionId: string }): Promise<E2EEOwnDevice[]> {
+    const devices = await this.activeDevices(caller.userId);
+    return devices.map((device) => ({
+      deviceId: device.deviceId,
+      registrationId: device.registrationId,
+      platform: ownPlatform(device.platform),
+      label: device.label ?? null,
+      enrolledAt: device.createdAt.toISOString(),
+      lastSeenAt: device.lastSeenAt.toISOString(),
+      current: device.sessionId === caller.sessionId,
+    }));
+  }
+
   /**
    * Le retrait par le propriétaire du compte RÉVOQUE l'identité : elle ne
    * reprend jamais sa place et ne se réenrôle plus sur ce compte, même avec une
    * preuve de liaison fraîche — un appareil révoqué, ou un jeton volé qui l'a
    * révoqué, ne la ramène pas. L'installation doit tirer une nouvelle identité.
+   *
+   * Demandé depuis une AUTRE session (`signOut`), il ferme d'abord celle de
+   * l'appareil (#13013) — sans quoi un appareil volé, toujours connecté, se
+   * réenrôle sous une identité neuve. Une session qui ne se ferme pas fait
+   * échouer le retrait AVANT toute révocation : on ne dit jamais « déconnecté »
+   * d'une session vivante, et un nouvel essai repart du même état.
    */
-  async retireDevice(params: { userId: string; deviceId: number }): Promise<void> {
+  async retireDevice(params: {
+    userId: string;
+    deviceId: number;
+    signOut?: DeviceSignOut;
+    /** La génération lue par l'appelant (#13014) : une place reprise depuis est refusée AVANT toute fermeture ni révocation. */
+    expectedRegistrationId?: number;
+  }): Promise<{ signedOut: boolean }> {
     const device = await this.prisma.e2EEDevice.findFirst({
       where: { userId: params.userId, deviceId: params.deviceId, ...ACTIVE },
-      select: { identityKey: true },
+      select: { identityKey: true, sessionId: true, registrationId: true },
     });
     if (!device) {
       throw new E2EEDirectoryError(E2EE_ERROR_CODES.DEVICE_NOT_BOUND, 404, 'Appareil chiffré introuvable sur ce compte');
     }
+    if (params.expectedRegistrationId !== undefined && params.expectedRegistrationId !== device.registrationId) {
+      throw new E2EEDirectoryError(E2EE_ERROR_CODES.DEVICE_CHANGED, 409, 'Cet appareil a changé depuis la liste affichée : relisez-la avant de retirer');
+    }
+    const signsOut = params.signOut !== undefined && device.sessionId !== params.signOut.callerSessionId;
+    if (signsOut && !(await params.signOut!.close(device.sessionId))) {
+      throw new E2EEDirectoryError(
+        E2EE_ERROR_CODES.DEVICE_SESSION_NOT_CLOSED,
+        503,
+        'La session de cet appareil n’a pas pu être fermée : rien n’a été retiré. Réessayez.',
+      );
+    }
     await this.prisma.e2EERevokedIdentity.upsert({
       where: { userId_identityKey: { userId: params.userId, identityKey: device.identityKey } },
-      create: { userId: params.userId, identityKey: device.identityKey, revokedAt: this.now() },
-      update: {},
+      create: { userId: params.userId, identityKey: device.identityKey, revokedAt: this.now(), sessionId: device.sessionId },
+      update: { sessionId: device.sessionId },
     });
-    await this.retireDevices({ userId: params.userId, deviceId: params.deviceId });
+    await this.retireDevices({ userId: params.userId, deviceId: params.deviceId, identityKey: device.identityKey });
     await this.retireDevices({ userId: params.userId, identityKey: device.identityKey });
+    await this.retireDevices({ userId: params.userId, sessionId: device.sessionId });
+    return { signedOut: signsOut };
+  }
+
+  /**
+   * Une session dont le propriétaire a retiré l'appareil n'en enrôle plus
+   * aucun (#13013) : sans quoi un appareil volé dont la session survit — retrait
+   * depuis sa propre session, fermeture ratée — revenait sous une identité
+   * neuve. Une nouvelle connexion, elle, enrôle librement.
+   */
+  private async assertSessionNotRetired(params: { userId: string; sessionId: string }): Promise<void> {
+    const barred = await this.prisma.e2EERevokedIdentity.findFirst({ where: { userId: params.userId, sessionId: params.sessionId }, select: { id: true } });
+    if (barred) {
+      throw new E2EEDirectoryError(
+        E2EE_ERROR_CODES.SESSION_RETIRED,
+        403,
+        'Cet appareil a été retiré du compte : reconnectez-vous pour réactiver le chiffrement',
+      );
+    }
+  }
+
+  private async undoIfSessionRetired(params: { userId: string; sessionId: string }): Promise<void> {
+    try {
+      await this.assertSessionNotRetired(params);
+    } catch (error) {
+      await this.retireDevices({ userId: params.userId, sessionId: params.sessionId });
+      throw error;
+    }
   }
 
   private async undoIfRevoked(userId: string, identityKey: string): Promise<void> {
@@ -356,6 +493,26 @@ export class E2EEDirectory {
       where: { userId, ...ACTIVE, ...(deviceIds ? { deviceId: { in: [...deviceIds] } } : {}) },
       orderBy: { deviceId: 'asc' },
     });
+  }
+
+  /**
+   * Un enrôlement COMPLET d'une identité déjà active ouvre une nouvelle
+   * génération de pré-clés uniques (#12882) : une installation réinstallée
+   * garde son identité du trousseau mais a perdu ses clés privées, et son
+   * compteur repart de 1. Les clés NON RÉSERVÉES de la nature qu'elle publie
+   * sont donc remplacées — aucune clé publique morte ne reste servie.
+   *
+   * Une clé déjà remise à un pair, elle, n'est jamais effacée (#12933) : sa
+   * ligne garde la réservation, et `addOneTimeKeys` écarte ce `keyId` pour
+   * toute la génération. Effacer la ligne puis réinsérer le lot la remettait
+   * en service : deux pairs ouvraient leur session sur la même pré-clé
+   * « unique ». Un réenrôlement sans lot (base intacte, session nouvelle) ne
+   * touche à rien.
+   */
+  private async replaceOneTimeKeys(generation: Generation, batches: OneTimeBatches): Promise<void> {
+    const kinds = [...new Set(oneTimeRowsOf(batches).map((key) => key.kind))];
+    if (kinds.length === 0) return;
+    await this.prisma.e2EEOneTimePreKey.deleteMany({ where: { ...generationOf(generation), kind: { in: kinds }, ...unsetOrNull('usedAt') } });
   }
 
   private async addOneTimeKeys(generation: Generation, batches: OneTimeBatches): Promise<void> {

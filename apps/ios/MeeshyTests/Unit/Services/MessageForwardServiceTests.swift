@@ -265,6 +265,37 @@ final class MessageForwardServiceTests: XCTestCase {
                        "le refus du serveur s'affiche par la phrase du catalogue, dans la langue du lecteur")
     }
 
+    /// #12978 — le vrai `APIClient` lève `MeeshyError`, jamais `APIError` : un
+    /// refus reconnu sur le seul `APIError` ne se traduisait pour personne.
+    func test_forward_serverRefusal_raisedByTheRealClient_isSaidByTheCatalog() async {
+        let (sut, api, _, _) = makeSUT()
+        api.errorToThrow = MeeshyError.server(statusCode: 400, message: "Un message qui disparaît après lecture ne peut pas être transféré")
+
+        let outcome = await sut.forward(message: makeMessage(content: "x"), sourceConversationId: nil, to: target)
+
+        XCTAssertEqual(outcome, .failed(reason: ForwardRefusalReason.afterRead.explanation))
+    }
+
+    /// Un transfert VERS une conversation chiffrée de bout en bout : la phrase dit
+    /// que c'est la DESTINATION, jamais « ce contenu chiffré se copie depuis cet appareil ».
+    func test_forward_intoAnEndToEndConversation_saysTheDestinationIsEncrypted() async throws {
+        let (sut, api, _, _) = makeSUT()
+        api.errorToThrow = MeeshyError.rejected(APIRejection(
+            statusCode: 400, code: "E2EE_PLAINTEXT_REFUSED",
+            message: "Cette conversation est chiffrée de bout en bout : le serveur n’accepte aucune pièce jointe en clair"
+        ))
+
+        let outcome = await sut.forward(message: makeMessage(content: "x"), sourceConversationId: nil, to: target)
+        let refusedCid = try postedBody(api, at: 0)["clientMessageId"] as? String
+
+        XCTAssertEqual(outcome, .failed(reason: ForwardRefusalReason.encryptedDestination.explanation))
+        XCTAssertNotEqual(ForwardRefusalReason.encryptedDestination.explanation, ForwardRefusalReason.encryptedSource.explanation)
+        api.errorToThrow = nil
+        stubSendSuccess(api, target: target)
+        _ = await sut.forward(message: makeMessage(content: "x"), sourceConversationId: nil, to: target)
+        XCTAssertNotEqual(try postedBody(api, at: 1)["clientMessageId"] as? String, refusedCid, "un refus libère sa clé")
+    }
+
     func test_forward_serverFailure_thatIsNotARefusal_keepsTheServerMessage() async {
         let (sut, api, _, _) = makeSUT()
         api.errorToThrow = APIError.serverError(500, "boom")

@@ -12,6 +12,9 @@
  * à cette loi.
  */
 
+import type { Message } from '@/lib/api/types';
+import { endToEndSealed } from '@/lib/view/end-to-end-sealed';
+
 export type UnreadBelowMessage = {
   readonly id: string;
   readonly senderId: string;
@@ -65,4 +68,18 @@ export function reduceUnreadBelow(state: UnreadBelowState, event: UnreadBelowEve
       };
     }
   }
+}
+
+/**
+ * LE TEXTE DU BOUTON « REVENIR EN BAS » (#12983) — le texte servi par le
+ * Prisme, sauf pour un message que le serveur ne lit pas : le web n'en tient
+ * que le littéral `[Encrypted]`, et le bouton se tait plutôt que de le montrer
+ * (même loi que le fil, `endToEndSealed`).
+ */
+export function unreadPreviewText(
+  message: Pick<Message, 'isEncrypted' | 'encryptionMode'> | undefined,
+  servedText: string | undefined,
+): string | null {
+  if (message === undefined || endToEndSealed(message)) return null;
+  return servedText ?? null;
 }

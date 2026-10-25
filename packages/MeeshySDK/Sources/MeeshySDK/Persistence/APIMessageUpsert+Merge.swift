@@ -20,7 +20,10 @@ extension APIMessageUpsert {
         MergeGuards(
             keepLocalPlaintext: api.isEncrypted == true
                 && !existing.isEncrypted
-                && !(existing.content ?? "").isEmpty,
+                && !(existing.content ?? "").isEmpty
+                // Le littéral servi n'est pas un clair local : une ligne née
+                // ainsi (rattrapage sans drapeau, #12916) redevient chiffrée.
+                && existing.content != E2EEWire.contentPlaceholder,
             pendingEdit: pending.edits.contains(api.id),
             pendingDelete: pending.deletes.contains(api.id),
             staleLiveCall: MessagePersistenceActor.isStaleLiveCallSnapshot(
@@ -67,6 +70,9 @@ extension APIMessageUpsert {
         if !guards.pendingEdit {
             next.isEdited = api.isEdited ?? false
             next.editedAt = api.editedAt
+            // #11375 — l'auteur ne s'écrit que si la charge le DIT : une projection
+            // qui ne le sélectionne pas n'efface pas ce qu'un `message:edited` a écrit.
+            if api.editAuthorship.servesEditor { next.editedById = api.editAuthorship.servedEditorId }
         }
         if !guards.pendingDelete {
             next.deletedAt = api.deletedAt
@@ -245,6 +251,7 @@ extension APIMessageUpsert {
             senderIsAnonymous: api.sender.map(\.isAnonymous), senderHasAccount: api.sender.map(\.hasAccount),
             senderRingJson: MessageRecord.servedSenderRingJson(api.sender, id: api.id) ?? nil
         )
+        record.editedById = api.editedById
         if api.consumedByMe == true {
             record.sealAsOpenedViewOnce(at: Date())
         }

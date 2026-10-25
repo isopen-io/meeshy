@@ -177,8 +177,7 @@ extension BubbleContent {
         // #9617 — l'avis de capture se compose CHEZ LE LECTEUR (langue
         // d'interface, fuseau) ; son `content` n'est que le repli français.
         // #7759 — la ligne d'arrivées de Meeshy Global, de même.
-        let effective = Self.captureNoticeText(for: message)
-            ?? Self.arrivalsNoticeText(for: message)
+        let effective = Self.systemNoticeText(for: message)
             ?? Self.resolveEffectiveContent(
             message: message,
             translations: translations,
@@ -319,17 +318,9 @@ extension BubbleContent {
         self.isBlurred = message.isBlurred
         self.isViewOnce = message.isViewOnce
         self.isPinned = message.pinnedAt != nil
-        // **Le site UNIQUE où l'attribution d'un transfert se tranche** (#5058).
-        //
-        // `forwardedFromId` dit QUE le message est un transfert ;
-        // `ForwardBadgePolicy` dit QUI a le droit d'être nommé — un groupe au
-        // moins public, l'auteur en tête-à-tête, personne sinon. Les deux
-        // doivent être lus ENSEMBLE : une référence absente sur un transfert
-        // avéré rend `.anonymous`, qui est un badge, pas une absence de badge.
-        self.forwardAttribution = message.forwardedFromId == nil
-            ? nil
-            : ForwardBadgePolicy.attribution(for: message.forwardedFrom)
+        self.forwardAttribution = Self.resolvedForwardAttribution(of: message)
         self.editedAt = message.isEdited ? message.updatedAt : nil
+        self.editedByModerator = message.editedByModerator
         self.isEditSaving = isEditSaving
         self.hasEditHistory = hasEditHistory
 
@@ -422,6 +413,22 @@ extension BubbleContent {
     /// ligne dont la métadonnée ne se lit pas, qui retombe sur son `content`.
     static func arrivalsNoticeText(for message: Message, strings: ConversationPreviewStrings? = nil) -> String? {
         guard message.messageSource == .system, let notice = message.arrivalsNotice else { return nil }
+        return notice.text(strings ?? ConversationPreviewCatalog.strings())
+    }
+
+    /// La phrase d'un avis système composée CHEZ LE LECTEUR depuis sa
+    /// métadonnée — capture, arrivées, bascule du chiffrement —, ou `nil` pour
+    /// retomber sur le `content`. Partagée par les quatre modes.
+    static func systemNoticeText(for message: Message) -> String? {
+        captureNoticeText(for: message) ?? arrivalsNoticeText(for: message) ?? encryptionSwitchNoticeText(for: message)
+    }
+
+    /// **L'avis d'une bascule du chiffrement** (#12846, #12840) dans la langue
+    /// du lecteur, composé depuis sa métadonnée : ce que le fil AFFICHE est ce
+    /// que l'envoi compte pour « bascule vue », jamais le texte écrit par le
+    /// serveur. `nil` pour tout autre message.
+    static func encryptionSwitchNoticeText(for message: Message, strings: ConversationPreviewStrings? = nil) -> String? {
+        guard message.messageSource == .system, let notice = message.encryptionSwitchNotice else { return nil }
         return notice.text(strings ?? ConversationPreviewCatalog.strings())
     }
 
@@ -561,6 +568,17 @@ extension BubbleContent {
                     includesMe: entry.data.includesMe
                 )
             }
+    }
+
+    /// **Le site UNIQUE où l'attribution d'un transfert se tranche** (#5058).
+    ///
+    /// `forwardedFromId` dit QUE le message est un transfert ;
+    /// `ForwardBadgePolicy` dit QUI a le droit d'être nommé — un groupe au
+    /// moins public, l'auteur en tête-à-tête, personne sinon. Les deux
+    /// doivent être lus ENSEMBLE : une référence absente sur un transfert
+    /// avéré rend `.anonymous`, qui est un badge, pas une absence de badge.
+    static func resolvedForwardAttribution(of message: MeeshyMessage) -> ForwardAttribution? {
+        message.forwardedFromId == nil ? nil : ForwardBadgePolicy.attribution(for: message.forwardedFrom)
     }
 
     /// Le verdict « emoji seul » d'un message, site UNIQUE : la bulle, Focal,

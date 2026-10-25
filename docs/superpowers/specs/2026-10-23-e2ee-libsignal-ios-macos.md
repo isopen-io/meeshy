@@ -2,6 +2,8 @@
 
 **Date** : 2026-10-23 · **Statut** : PROPOSÉE (conception, aucune ligne de production écrite)
 **Directive porteur 2026-10-23** : « un E2EE efficace, commutable et opérationnel sur iOS et macOS ; masquer le bouton sauf pour les admins de la plateforme ».
+
+**Décision porteur 2026-10-25 (#12949)** : « commutable » ne vaut plus que dans un sens. Une conversation chiffrée de bout en bout ne repasse jamais en clair ; pour revenir au clair, on crée une autre conversation (§ 5).
 **Milestone** : « Chiffrement de bout en bout vérifiable (libsignal) » (#28).
 **Cadre** : #9224 (E2EE optionnel par conversation), #9229 (fail-closed), #9223 (rétrocompatibilité, staging d'abord), #12517 (activation réservée à un rôle de plateforme tant que la recette n'est pas verte), #12588 (rôle minimal ANALYST depuis le 2026-10-24).
 **Décisions liées** : `packages/MeeshySDK/decisions/2026-10-23-l-e2ee-ios-et-macos-repose-sur-libsignal-par-appareil.md`, `services/gateway/decisions/2026-10-23-la-passerelle-est-un-annuaire-de-cles-par-appareil-et-un-relais-d-enveloppes.md`.
@@ -145,6 +147,12 @@ Conforme à Sesame § 3 et au comportement public de Signal-Server :
 Le serveur pourrait ajouter un « appareil » à mon compte pour recevoir une copie de mes messages. Parade, sans construction cryptographique nouvelle :
 - Mes appareils n'envoient d'enveloppe à un autre de **mes** appareils que s'il figure dans leur **liste locale d'appareils approuvés** (clé d'identité épinglée).
 - Approbation : le nouvel appareil (le Mac) affiche le QR de son `ScannableFingerprint` libsignal (calculé entre sa clé d'identité et celle de l'appareil qui approuve) ; l'iPhone le scanne et compare (`ScannableFingerprint.compareWith`). Réussite : l'iPhone épingle la clé du Mac, et inversement par le QR réciproque.
+- Paramètres, identiques sur toutes les plateformes (#12976, `E2EEFingerprint` et `E2EEPairingPayload` du SDK) : `NumericFingerprintGenerator`, version 2, 5 200 itérations (les valeurs de Signal, vérifiées sur les vecteurs officiels de libsignal) ; identifiant stable d'un appareil de compte `meeshy-own-device:v1:<userId en minuscules>.<deviceId décimal>` en UTF-8, préfixé pour ne jamais valoir comme numéro de sécurité d'un contact (#12520) ; le QR porte du **texte**, `meeshy-device-link:v1:<base64url sans remplissage de l'encodage scannable>`.
+- Le scan désigne de lui-même l'appareil (le code lu est comparé à l'empreinte de chacun de mes appareils ; un appareil dont le bundle manque ne bloque pas les autres) mais **n'épingle rien** : l'utilisateur voit l'appareil trouvé et confirme. L'empreinte se calcule sur la clé publique de la session courante si elle vise la génération annoncée, sinon sur celle du bundle ; l'appairage n'ouvre ni n'efface aucune session.
+- Les 60 chiffres s'affichent mais **n'approuvent pas** dans ce lot : l'affichage libsignal trie les deux moitiés, et la moitié de l'appareil qui approuve est la même sur les deux écrans quoi qu'il arrive. Une comparaison à l'œil sûre (tous les groupes, ou un groupe tiré au hasard à saisir) est un suivi.
+- L'épinglage est **appliqué par libsignal** : `isTrustedIdentity` refuse, dans la transaction même de `processPreKeyBundle` et `signalEncrypt`, un envoi vers un de mes appareils sous une autre clé que la clé épinglée. Un appareil refusé ne reçoit rien, l'envoi aux autres continue.
+- Une enveloppe d'un de mes appareils pas encore approuvé n'est ni déchiffrée ni acquittée : elle attend au serveur (30 jours au plus) et s'ouvre au rattrapage qui suit l'approbation. C'est ce qui rend l'appairage en deux temps sans perte.
+- Une approbation épingle le couple (clé d'identité, `registrationId`) : une place reprise par une autre installation n'en hérite pas, ni à l'affichage ni à l'envoi, et une copie qu'elle m'envoie sous une autre clé attend la réapprobation au lieu de se juger illisible. Une approbation d'un appareil que l'annuaire n'annonce plus s'efface. L'épingle se relit dans la transaction de déchiffrement. Seul un refus de confiance de libsignal écarte un de mes appareils d'un envoi ; toute autre erreur fait échouer l'envoi, jamais une copie perdue en silence.
 - Un appareil que le serveur annonce sans approbation locale apparaît dans les réglages comme « appareil non approuvé » et ne reçoit rien. Le 409 de la passerelle ne peut donc pas forcer l'envoi vers lui : le client répond par une enveloppe absente pour cet appareil et un drapeau `unapprovedOwnDevices`, que la passerelle accepte (seuls MES appareils peuvent être ainsi exclus, jamais ceux d'un contact).
 - Les appareils d'un **contact** suivent le TOFU avec alerte (§ 7.3).
 
@@ -167,6 +175,8 @@ Le clair chiffré par libsignal n'est pas le texte nu mais une structure **`E2EE
 ```
 
 Tout ce qui part à côté du corps (aperçu de citation, mentions, lieu, sticker, pointeur de pièce, langue détectée) voyage **dans** l'enveloppe, jamais en champ libre du message (#12526).
+
+L'**auteur** voyage aussi dans le chiffré : `authorUserId` et `authorDeviceId`, posés par le scelleur (#12976), facultatifs pour qu'un client plus ancien reste lisible. libsignal authentifie la clé de l'expéditeur, pas le nom que le serveur donne à l'enveloppe. L'ouvreur refuse un contenu dont l'auteur n'est pas l'expéditeur annoncé : sans cela, un serveur pouvait réétiqueter, comme venant de mon contact, la copie qu'un de mes appareils m'envoie.
 
 ### 4.3 Format sur le fil
 
@@ -215,24 +225,28 @@ model MessageEnvelope {
 
 ---
 
-## 5. Commutable (#12522)
+## 5. Activable, jamais désactivable (#12522, puis #12949)
+
+**Décision porteur du 2026-10-25 (#12949), qui remplace le « commutable » de la directive du 2026-10-23** : une conversation chiffrée de bout en bout ne repasse **jamais** en clair. Pour revenir au clair, on crée une autre conversation. Une conversation en clair peut devenir chiffrée. Modes : `server` = chiffré au repos, le serveur lit, traduction serveur ; `hybrid` = chiffré en transit, lisible par le serveur, chiffré au repos, traduction serveur ; `e2ee` = serveur aveugle, aucune traduction serveur. Décision : `services/gateway/decisions/2026-10-25-une-conversation-e2ee-ne-repasse-jamais-en-clair-12949.md`.
 
 ### 5.1 Régime de conversation
 
-- `Conversation.encryptionMode` redevient modifiable : `"e2ee"` ou `null`. Champ additif `encryptionEpoch Int @default(0)`, incrémenté à chaque bascule. `encryptionEnabledAt` garde sa sémantique pour les anciens clients (non nul ⇔ `e2ee` actif) ; un champ additif `encryptionDisabledAt` n'est pas nécessaire : l'historique des bascules est dans les lignes système.
-- **Bascule atomique (#12521)** : `updateMany({ id, encryptionEpoch: n }, { encryptionMode, encryptionEnabledAt, encryptionEpoch: n + 1 })` ; `count === 0` ⇒ 409 `E2EE_REGIME_CHANGED`. Test de concurrence à deux requêtes.
-- Chaque bascule écrit, **dans la même transaction**, une ligne système (`messageSource: "system"`, nature `encryption_enabled` / `encryption_disabled`, auteur, époque) visible des deux côtés et des anciens clients (texte de repli servi).
+- `Conversation.encryptionMode` passe du clair (`null`) à `"e2ee"` et n'en revient pas. Champ additif `encryptionEpoch Int?` (absent = 0 : aucune conversation existante n'est réécrite), incrémenté à chaque bascule. `encryptionEnabledAt` garde sa sémantique pour les anciens clients (non nul ⇔ régime actif).
+- **Une seule écriture, qui ne quitte jamais `e2ee`** : `switchEncryptionRegime` fait `updateMany({ id, époque lue, mode ∈ {absent, null, server, hybrid} }, { … , encryptionEpoch: n + 1 })` (l'époque 0 se lit « absent, nul ou 0 ») ; `count === 0` ⇒ 409 `E2EE_REGIME_CHANGED`. La liste de ce qui se quitte est positive : `e2ee` en toute casse et tout mode inconnu en sont exclus. Une garde de source interdit tout autre écrivain du régime, routes, admin, outils et scripts de base compris. Test de concurrence à deux requêtes.
+- **`DELETE /conversations/:id/encryption`** ne quitte que le chiffrement au repos (`server`, `hybrid`, que le serveur lit déjà) ; `serverEncryptionKeyId` n'est pas touché. Sur une conversation `e2ee`, il rend `409 E2EE_IRREVERSIBLE` (« To chat without it, start a new conversation »), sans rien écrire ni annoncer : un ancien client reçoit ce refus lisible (#9223). Un `POST` qui demanderait un autre mode sur une conversation `e2ee` aussi.
+- Chaque bascule écrit ensuite une ligne système (`messageSource: "system"`, `metadata.kind` `encryption-enabled` / `encryption-disabled` pour le seul chiffrement au repos, auteur, époque) visible des deux côtés et des anciens clients (texte de repli servi), et émet `conversation:encryption-changed` vers la room personnelle de chaque membre actif. **Écart assumé** : la ligne n'est pas dans la même transaction que la bascule. Elle suit la doctrine des avis système (#11416 : l'avis est un accessoire du geste, jamais sa condition) ; seule l'écriture conditionnelle porte la garantie d'atomicité.
 
 ### 5.2 Ce que la bascule change
 
 - **Activer** : les messages suivants partent en `libsignal-v1` ; la passerelle coupe traduction, transcription, aperçus et indexation pour eux (gardes existantes sur `isEncrypted`).
-- **Désactiver** : les messages suivants partent en clair et retrouvent les features serveur. **Les messages `e2ee` déjà envoyés restent chiffrés** côté serveur, à jamais : la désactivation ne déclenche aucun envoi du clair au serveur. Ils restent lisibles sur chaque appareil qui les a déchiffrés (cache local). Le Prisme les traduit sur l'appareil (#9272), jamais le serveur.
-- **Message composé avant une bascule** : le client envoie son `regimeEpoch`. Différent du courant ⇒ 409 `E2EE_REGIME_CHANGED`. Dans le sens **chiffré → clair**, le client ne renvoie **jamais** automatiquement en clair un texte composé sous `e2ee` : il demande à l'utilisateur. Dans le sens clair → chiffré, il rechiffre et renvoie.
+- **Désactiver le bout en bout n'existe pas.** Un client qui a vu une conversation `e2ee` (mode servi, `conversation:encryption-changed`, fil qui montre l'avis système d'activation — un message isolé marqué `e2ee` n'en est pas un : trois tête-à-tête sans régime en portent un sur staging) la garde fermée au clair pour toujours et **ignore toute rétrogradation servie** : mode absent ou nul, bascule à `null`, avis `encryption-disabled`. Il n'y a ni confirmation de l'utilisateur, ni époque à départager, ni ère de fin à la lecture. Web : `apps/web/src/lib/end-to-end-regime-ledger.ts` (registre par compte, persistant ; garde `canSendPlaintext` lue avant tout téléversement et tout envoi). iOS : #12950. Android natif : #12956.
+- **Message composé avant une activation** : le client envoie son `regimeEpoch`. Différent du courant ⇒ 409 `E2EE_REGIME_CHANGED` ; le client rechiffre et renvoie.
+- **Ce que #12522 a laissé** (mesuré en lecture seule le 2026-10-25) : staging, aucune conversation désactivée (une seule a basculé, quatre fois, et elle est `e2ee`) ; production (`9ca0dded61`, qui portait la route de désactivation), aucune conversation basculée ni chiffrée de bout en bout.
 
 ### 5.3 Qui peut basculer
 
-- La politique « rôle de plateforme ANALYST au minimum » (#12517 pour ADMIN et BIGBOSS, élargie à MODERATOR, AUDIT et ANALYST par directives porteur du 2026-10-24, #12588 ; USER refusé, appartenance à la conversation toujours exigée) **reste** tant que la recette à deux appareils (§ 8) n'est pas verte.
-- Elle se relâche en **un point** : la passerelle sert `canToggleEncryption` dans `GET /conversations/:id/encryption`, calculé par une seule fonction de politique (variable `E2EE_TOGGLE_POLICY = admins | members`, défaut `admins`). iOS rend le bouton si et seulement si `canToggleEncryption` ; `ConversationEncryptionActivationPolicy` devient la lecture de ce champ (repli : rôle ANALYST ou supérieur si le champ manque, pour les réponses d'une passerelle plus ancienne). La garde 403 de la passerelle fait foi.
+- La politique « rôle de plateforme ANALYST au minimum » (pour ACTIVER, et pour quitter le chiffrement au repos) (#12517 pour ADMIN et BIGBOSS, élargie à MODERATOR, AUDIT et ANALYST par directives porteur du 2026-10-24, #12588 ; USER refusé, appartenance à la conversation toujours exigée) **reste** tant que la recette à deux appareils (§ 8) n'est pas verte.
+- Elle se relâche en **un point** : la passerelle sert `canToggleEncryption` et `canDisableEncryption` dans `GET /conversations/:id/encryption-status` (tous deux faux pour une conversation `e2ee`, pour tout le monde, #12949), calculé par une seule fonction de politique (variable `E2EE_TOGGLE_POLICY = admins | members`, défaut `admins`). iOS rend le bouton si et seulement si `canToggleEncryption` ; `ConversationEncryptionActivationPolicy` devient la lecture de ce champ (repli : rôle ANALYST ou supérieur si le champ manque, pour les réponses d'une passerelle plus ancienne). La garde 403 de la passerelle fait foi.
 
 ---
 
@@ -256,9 +270,13 @@ model MessageEnvelope {
 
 ### 7.1 Pièces jointes (#10789, #10727)
 
-- Format de pièce **à la manière de Signal** : clé aléatoire de 64 octets (32 AES-256 + 32 HMAC-SHA256), IV aléatoire de 16 octets, `IV ‖ AES-256-CBC-PKCS7(clair) ‖ HMAC-SHA256(IV ‖ chiffré)`, condensat SHA-256 du blob entier. Chiffrement en flux (gros fichiers sans tout charger). CommonCrypto pour AES-CBC, CryptoKit pour HMAC et SHA-256. Vérification du HMAC en temps constant **avant** tout déchiffrement, du condensat avant tout HMAC.
-- Le blob part par le téléversement existant, avec un drapeau `e2ee` qui interdit tout traitement serveur (vignette, transcodage, transcription, empreinte perceptuelle). Le `AttachmentPointer` (identifiant, clé, condensat, taille, type MIME, nom de fichier, durée, dimensions, vignette chiffrée en pièce séparée) voyage **dans** `E2EEContent`. Le serveur ne voit ni le nom, ni la durée, ni le type exact (le type serveur est `application/octet-stream`).
-- Cette composition est écrite par Meeshy à partir de primitives standard : elle est listée comme surface de revue externe (§ 9), et ses vecteurs sont recoupés avec l'implémentation publiée de Signal (Signal-Android `AttachmentCipherOutputStream`, Signal-Desktop) faute de vecteurs officiels.
+Décisions : `packages/MeeshySDK/decisions/2026-10-25-une-piece-jointe-e2ee-est-chiffree-sur-l-appareil-a-la-maniere-de-signal.md` (format) et `services/gateway/decisions/2026-10-25-la-passerelle-garde-une-piece-e2ee-comme-un-blob-opaque.md` (stockage, admission).
+
+- Format `client-v1`, **celui de Signal** (Signal-Android `AttachmentCipherOutputStream`, `PaddingInputStream`) : clé aléatoire de 64 octets par fichier (32 AES-256 + 32 HMAC-SHA256), clair complété de zéros jusqu'à `max(541, ⌊1,05^⌈log(n)/log(1,05)⌉⌋)`, IV aléatoire de 16 octets, `IV ‖ AES-256-CBC-PKCS7(clair complété) ‖ HMAC-SHA256(IV ‖ chiffré)`, condensat SHA-256 du blob entier. CommonCrypto pour AES-CBC, CryptoKit pour HMAC et SHA-256, WebCrypto en TypeScript. Ouverture : condensat en temps constant, puis HMAC en temps constant, puis seulement déchiffrement et troncature à la taille exacte ; un échec ne rend rien.
+- Le blob part par TUS sous le contexte `e2ee-attachment`, métadonnées en liste blanche (`digest` et rien qui dise le contenu) ; la passerelle vérifie le condensat et range le blob sans aucun traitement (vignette, transcodage, EXIF, transcription, TTS, empreinte). Elle ne le sert que par identifiant, aux membres ; jamais par chemin, jamais dans un push.
+- Le `E2EEAttachmentPointer` (identifiant, `scheme`, clé, condensat, taille exacte, type MIME, nom de fichier, genre, dimensions, durée, ThumbHash, forme d'onde, transcription faite sur l'appareil, affiche chiffrée d'une vidéo en blob séparé) voyage **dans** `E2EEContent`, qui passe en `v: 2` quand il porte des pièces : un lecteur `v: 1` la refuse au lieu de la perdre en silence. Le serveur ne voit ni le nom, ni la durée, ni le type exact (`application/octet-stream`), ni la taille exacte.
+- Le destinataire télécharge, vérifie, déchiffre ; le blob reste chiffré au repos sous sa clé, qui ne vit que dans `e2ee.sqlite`. Image et vocal se déchiffrent en mémoire ; vidéo et document dans un dossier `NSFileProtectionComplete`, vidé après usage.
+- Cette composition est écrite par Meeshy à partir de primitives standard : elle reste une surface de revue externe (§ 9). Chaque couche est rejouée sur des vecteurs officiels (NIST SP 800-38A, RFC 4231, FIPS 180-2, points de contrôle du remplissage de Signal-iOS), et la composition sur un vecteur commun que Swift et TypeScript reproduisent.
 
 ### 7.2 Notifications (NSE)
 
@@ -288,7 +306,7 @@ Un vocal `e2ee` est une pièce chiffrée (§ 7.1). Le pipeline audio serveur ref
 3. **Passerelle, aucun octet clair** : test d'intégration à deux appareils (clients de test `@signalapp/libsignal-client` côté Node) qui envoie un texte sentinelle aléatoire et vérifie son absence dans MongoDB (toutes collections), Redis (toutes clés), les journaux capturés et les charges push émises.
 4. **Réservation** : 50 requêtes concurrentes de bundle sur 10 pré-clés uniques ⇒ 10 bundles avec clé unique distincte, 40 sans.
 5. **Croisé** : un message chiffré par le client Node (`@signalapp/libsignal-client`) se déchiffre dans le SDK Swift, et l'inverse — c'est la base du croisé iOS ↔ web de #10788.
-6. **Recette à deux appareils sur staging** (`gate.staging.meeshy.me`, comptes Demo et « Recette … ») : iPhone simulateur `Meeshy-iOS27` et Mac (« Designed for iPad »). Activer (admin), échanger texte et pièce, vérifier les numéros, approuver le Mac depuis l'iPhone, recevoir sur les deux appareils un message envoyé du troisième, désactiver, constater l'historique lisible et le retour de la traduction serveur sur les nouveaux messages. Un ancien build (production) dans la même conversation reçoit le message illisible annoncé, jamais un silence.
+6. **Recette à deux appareils sur staging** (`gate.staging.meeshy.me`, comptes Demo et « Recette … ») : iPhone simulateur `Meeshy-iOS27` et Mac (« Designed for iPad »). Activer (admin), échanger texte et pièce, vérifier les numéros, approuver le Mac depuis l'iPhone, recevoir sur les deux appareils un message envoyé du troisième, tenter de désactiver (refus `E2EE_IRREVERSIBLE`, aucun geste dans l'interface), constater que rien ne part en clair. Un ancien build (production) dans la même conversation reçoit le message illisible annoncé, jamais un silence.
 7. **Avant fusion** : agent `auditeur-adversarial` sur chaque lot.
 
 ---

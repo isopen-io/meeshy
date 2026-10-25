@@ -158,6 +158,13 @@ public final class StoryBackgroundLayer: CALayer {
     /// gelée sur son thumbnail, progression sans frames ni audio.
     @MainActor public var onPlayerAttached: (() -> Void)?
 
+    /// La session de qualité de lecture du fond vidéo (#11287) : la couche
+    /// possède le player, elle en ouvre et en ferme la session. Pas de valeur
+    /// par défaut : son évaluation est MainActor, et les deux initialiseurs de
+    /// cette classe sont `nonisolated` pour interopérer avec `CALayer` — elle
+    /// est donc posée après `super.init()`, jamais avant (voir les deux inits).
+    @MainActor public let playbackQoE: StoryBackgroundPlaybackQoE
+
     /// Marks the final bitmap as stamped and notifies `onFinalImageStamped`.
     @MainActor
     private func markFinalContentStamped() {
@@ -269,6 +276,7 @@ public final class StoryBackgroundLayer: CALayer {
     }
 
     public override nonisolated init() {
+        self.playbackQoE = StoryBackgroundPlaybackQoE()
         super.init()
         // Clip le contenu interne aux bounds du backgroundLayer pour le
         // pinch/pan "INSIDE the bg" (style Instagram) — sinon scaler le
@@ -277,6 +285,7 @@ public final class StoryBackgroundLayer: CALayer {
         self.masksToBounds = true
     }
     public override nonisolated init(layer: Any) {
+        self.playbackQoE = StoryBackgroundPlaybackQoE()
         super.init(layer: layer)
         self.masksToBounds = true
     }
@@ -578,11 +587,7 @@ extension StoryBackgroundLayer {
         letterboxFillLayer?.removeFromSuperlayer()
         letterboxFillLayer = nil
         letterboxSourceImage = nil
-        avPlayerLayer?.removeFromSuperlayer()
-        avPlayer?.pause()
-        avPlayer = nil
-        avPlayerLayer = nil
-        avPlayerLooper = nil
+        releaseBackgroundPlayer()
         contentLayer = nil
         stampedSource = nil
         backgroundVideoLookTask?.cancel()

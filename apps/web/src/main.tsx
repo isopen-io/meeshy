@@ -179,7 +179,7 @@ createRoot(root).render(
   const precharger = (): void => {
     const lancer = (): void =>
       void import('@/lib/view/screen-preload').then(({ preloadScreensWhenIdle, browserIdle, browserNetworkHints }) =>
-        preloadScreensWhenIdle({ preload, idle: browserIdle, network: browserNetworkHints() }),
+        preloadScreensWhenIdle({ preload, idle: browserIdle, network: browserNetworkHints(), bundled: __SHELL__ }),
       );
     if (sessionStore.getState().session.status === 'authenticated') return lancer();
     const stop = sessionStore.subscribe((state) => {

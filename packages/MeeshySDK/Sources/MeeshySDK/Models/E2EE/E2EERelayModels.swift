@@ -30,6 +30,12 @@ public enum E2EEErrorCode {
     public static let deviceLimitReached = "E2EE_DEVICE_LIMIT_REACHED"
     public static let envelopesInvalid = "E2EE_ENVELOPES_INVALID"
     public static let regimeChanged = "E2EE_REGIME_CHANGED"
+    /// Le bout en bout ne se désactive pas (#12949).
+    public static let irreversible = "E2EE_IRREVERSIBLE"
+    /// La paire a déjà un tête-à-tête chiffré de bout en bout (#12966).
+    public static let directAlreadyEndToEnd = "E2EE_DIRECT_ALREADY_END_TO_END"
+    /// Le tête-à-tête n'a pas exactement deux membres inscrits (#12966).
+    public static let directNotAPair = "E2EE_DIRECT_NOT_A_PAIR"
     public static let identityRevoked = "E2EE_IDENTITY_REVOKED"
     public static let prekeyStockFull = "E2EE_PREKEY_STOCK_FULL"
 
@@ -82,14 +88,19 @@ public struct E2EEOutgoingEnvelope: Codable, Equatable, Sendable {
     }
 }
 
-/// `encryptionMetadata` d'un envoi libsignal : le protocole et l'appareil émetteur.
+/// `encryptionMetadata` d'un envoi libsignal : le protocole, l'appareil émetteur
+/// et l'époque du régime sous laquelle le message a été scellé (#12522) — une
+/// époque périmée fait refuser l'envoi `E2EE_REGIME_CHANGED`. Absente, la
+/// passerelle ne juge pas l'envoi sur elle.
 public struct E2EEWireMetadata: Codable, Equatable, Sendable {
     public let `protocol`: String
     public let senderDeviceId: UInt32
+    public let regimeEpoch: Int?
 
-    public init(senderDeviceId: UInt32) {
+    public init(senderDeviceId: UInt32, regimeEpoch: Int? = nil) {
         self.protocol = E2EEWire.libsignalProtocol
         self.senderDeviceId = senderDeviceId
+        self.regimeEpoch = regimeEpoch
     }
 }
 
@@ -131,6 +142,7 @@ public struct E2EEServedEnvelope: Codable, Equatable, Sendable {
 /// reçoit pour CET appareil — la room de sa génération. Un canal à part plutôt
 /// qu'un éditeur de plus sur le gestionnaire de socket : seul `MeeshyE2EE`, côté
 /// app, l'écoute.
+/// unchecked: `received` est un `PassthroughSubject` (sérialise ses propres envois) ; aucune autre propriété mutable.
 public final class E2EEEnvelopeChannel: @unchecked Sendable {
     public static let shared = E2EEEnvelopeChannel()
     public let received = PassthroughSubject<E2EEServedEnvelope, Never>()

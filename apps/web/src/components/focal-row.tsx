@@ -6,13 +6,14 @@ import type { EphemeralDeadline } from '@meeshy/shared/utils/ephemeral-deadline'
 import { checkStatusOf, isMineOf, servedRowLanguage, translatedLanguagesOf } from '@/lib/view/message';
 import type { LocalDelivery } from '@/lib/view/message';
 import type { AuthorStoryRing } from '@/lib/view/author-story-ring';
-import { badgesOf, editedOf, systemRowOf } from '@/lib/view/message-badges';
+import { badgesOf, editedByModeratorOf, editedOf, systemRowOf } from '@/lib/view/message-badges';
 import { bodyKindOf, moodCitationOf, placeOf, storyCitationOf } from '@/lib/view/message-body';
 import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
 import { usePresence } from '@/lib/view/use-presence';
 import { prismFor, served } from '@/lib/api/prism';
 import { mediaCarrierOf } from '@/lib/view/media';
 import type { PlacedMessage } from '@/lib/grouping';
+import { endToEndSealed } from '@/lib/view/end-to-end-sealed';
 import { time } from '@/lib/grouping';
 import type { FlatRowMode } from '@/lib/reading-mode/decision';
 import { languageBand, mountsBottomLine } from '@/lib/reading-mode/meta';
@@ -465,7 +466,8 @@ export const FocalRow = memo(function FocalRow({
 
   // `kind === 'veiled' | 'burned'` toutes deux passent par `ProtectedContent`
   // (voir le commentaire ci-dessus sur le tombstone plat).
-  const isProtected = kind !== 'standard' || !revealable;
+  const sealedEndToEnd = endToEndSealed(message);
+  const isProtected = kind !== 'standard' || !revealable || sealedEndToEnd;
 
   /**
    * LA LIGNE BASSE — miroir de `FocalMetaColumn.mountsBottomLine` (défaut 7) :
@@ -855,6 +857,7 @@ export const FocalRow = memo(function FocalRow({
                   attachments={message.attachments}
                   surface="row"
                   revealable={revealable}
+                  endToEnd={sealedEndToEnd}
                   onConsumeViewOnce={onConsumeViewOnce}
                   media={{
                     frame: 'tiles',
@@ -905,7 +908,7 @@ export const FocalRow = memo(function FocalRow({
               `aria-hidden` : `composeMessageLabel` porte déjà « modifié ». */}
           {isEdited ? (
             <div data-loupe-follow className="flex shrink-0 items-center pb-0.5" aria-hidden>
-              <EditedMark onBrandBubble={false} />
+              <EditedMark onBrandBubble={false} byModerator={editedByModeratorOf(badges)} />
             </div>
           ) : null}
 

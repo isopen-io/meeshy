@@ -716,8 +716,13 @@ model Conversation {
   /// Encryption protocol: "aes-256-gcm" (server), "signal_v3" (e2ee)
   encryptionProtocol String?
 
-  /// When encryption was enabled (immutable once set)
+  /// When encryption was enabled; null again once it is disabled (#12522)
   encryptionEnabledAt DateTime?
+
+  /// Le régime de chiffrement change à chaque bascule (#12522) : activer et
+  /// désactiver l'incrémentent atomiquement, un envoi qui déclare une époque
+  /// périmée est refusé (E2EE_REGIME_CHANGED). Absent = 0 (conversation jamais basculée).
+  encryptionEpoch Int?
 
   /// User who enabled encryption
   encryptionEnabledBy String? @db.ObjectId
@@ -1019,6 +1024,16 @@ model Message {
   metadata                    Json?
   isEdited                    Boolean   @default(false)
   editedAt                    DateTime?
+  /// #11375 — `User.id` du TIERS (modérateur de plateforme) qui a fait la
+  /// dernière modification ; `null` (ou absent, lignes antérieures) quand c'est
+  /// l'auteur. Nommé à part du fil (`editedById`) À DESSEIN : aucun schéma de
+  /// réponse ne déclare cette colonne, une ligne brute ne la sert donc jamais ;
+  /// seule `servedEditAttribution` la projette, et l'identité ne part qu'à
+  /// ADMIN / BIGBOSS et au modérateur lui-même.
+  /// @see packages/shared/utils/message-edit-attribution.ts
+  thirdPartyEditorId          String?   @db.ObjectId
+  /// #11375 — rôle GLOBAL (`User.role`) de ce tiers au moment de la modification.
+  thirdPartyEditorRole        String?
   deletedAt                   DateTime?
   replyToId                   String?   @db.ObjectId
   /// ID du post cité quand le message répond à un post (status/story/reel/post).
@@ -3318,8 +3333,36 @@ model E2EERevokedIdentity {
   /// Clé d'identité publique révoquée, base64.
   identityKey String
   revokedAt   DateTime @default(now())
+  /// La session qui portait l'identité révoquée (#13013) : elle n'enrôle plus
+  /// aucun appareil, il faut une nouvelle connexion. Absent sur les lignes
+  /// antérieures, qui ne barrent aucune session.
+  sessionId   String?  @db.ObjectId
 
   @@unique([userId, identityKey])
+}
+
+/// La dernière preuve de liaison ACCEPTÉE pour une installation (identité +
+/// registrationId) d'un compte (#12933). Une preuve ne sert qu'une fois : un
+/// enrôlement dont l'horodatage signé n'est pas strictement plus récent est
+/// refusé ; la reprise de la même requête par la même session n'écrit rien.
+/// Distincte de E2EEDevice, dont la ligne se reprend par une autre
+/// installation : la trace survit à la reprise de la place. Effacée avec le
+/// compte, et élaguée au-delà de la fenêtre de la preuve.
+///
+/// `id` est DÉRIVÉ de (userId, identityKey, registrationId)
+/// (`bindingProofId`, `E2EEDirectory.ts`) : l'unicité tient à l'index de `_id`,
+/// que MongoDB pose toujours, et ne dépend d'aucun index à déployer.
+model E2EEBindingProof {
+  id             String   @id @map("_id") @db.ObjectId
+  userId         String   @db.ObjectId
+  identityKey    String
+  registrationId Int
+  /// L'horodatage signé par l'appareil dans la preuve (`binding.timestamp`).
+  signedAt       DateTime
+  /// La session qui l'a présentée.
+  sessionId      String   @db.ObjectId
+
+  @@index([userId, signedAt])
 }
 
 /// Une pré-clé à usage unique (EC ou Kyber), un document par clé. Réservée UNE

@@ -42,21 +42,23 @@ export type SiteHeaderProps = {
   readonly copy: LandingCopy;
   readonly onLanding: boolean;
   readonly languageControl: ReactNode;
+  /** L'adresse d'une page du site : le chemin sur le web, l'origine publique dans la coque (#12930), comme `SiteFooter.pageHref`. */
+  readonly siteHref?: (path: string) => string;
 };
 
-export function SiteHeader({ language, copy, onLanding, languageControl }: SiteHeaderProps) {
-  const anchor = (id: string): string => (onLanding ? `#${id}` : `${landingPath(language)}#${id}`);
+export function SiteHeader({ language, copy, onLanding, languageControl, siteHref = (path) => path }: SiteHeaderProps) {
+  const anchor = (id: string): string => (onLanding ? `#${id}` : siteHref(`${landingPath(language)}#${id}`));
   return (
     <header className="ld-header">
       <div className="ld-wrap ld-bar">
-        <a href={landingPath(language)} className="ld-brand">
+        <a href={siteHref(landingPath(language))} className="ld-brand">
           <img src={BRAND_LOGO_PATH} alt="" width={36} height={36} />
           <span className="ld-wordmark">Meeshy</span>
         </a>
         <nav className="ld-nav" aria-label={copy.navLabel}>
           <a href={anchor('comment')}>{copy.navHow}</a>
           <a href={anchor('world')}>{copy.navWorld}</a>
-          <a href="/faq">{copy.navFaq}</a>
+          <a href={siteHref('/faq')}>{copy.navFaq}</a>
         </nav>
         <span className="ld-spacer" />
         {languageControl}

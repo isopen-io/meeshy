@@ -26,8 +26,13 @@ internal fun ChatBottomBarHost(host: ChatHostContext) {
     LaunchedEffect(actions.trayNotices) {
         actions.trayNotices.collect { notice -> Toast.makeText(context, notice, Toast.LENGTH_LONG).show() }
     }
+    val editPending = rememberPendingRetouch(actions)
     Column {
-        ComposerPendingStrip(pending.items, onRemove = actions.removePendingAttachment)
+        ComposerPendingStrip(
+            pending.items,
+            onRemove = actions.removePendingAttachment,
+            onEdit = editPending,
+        )
         MentionSuggestionStrip(
             mention = state.mention,
             accentColor = accentColor,
@@ -46,6 +51,7 @@ internal fun ChatBottomBarHost(host: ChatHostContext) {
             editingOriginalText = editingOriginalText,
             onStageVoiceFile = { file -> actions.stageFile(file, "audio/mp4") },
             onStageCapturedUris = actions.stageCapturedUris,
+            selfAuthor = actions.selfAuthor(),
             hasEffects = state.hasPendingEffects,
             clipboardContent = state.clipboardContent,
             sentiment = composerText.sentiment,
