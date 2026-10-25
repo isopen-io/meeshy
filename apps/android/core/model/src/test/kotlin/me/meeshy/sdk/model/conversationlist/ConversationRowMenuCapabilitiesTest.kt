@@ -172,6 +172,65 @@ class ConversationRowMenuCapabilitiesTest {
         assertThat(caps(conversation(), user()).canToggleArchive).isTrue()
     }
 
+    // ── Gérer les membres (#12865) ──
+
+    /** La grille type × rôle d'iOS (`ConversationRowMenuCapabilitiesTests`, #12631). */
+    @Test
+    fun `managing members follows the type by role grid of iOS`() {
+        val grid = listOf(
+            Triple("group", "member", "USER") to false,
+            Triple("group", "moderator", "USER") to true,
+            Triple("group", "admin", "USER") to true,
+            Triple("group", "creator", "USER") to true,
+            Triple("group", "MODERATOR", "USER") to true,
+            Triple("public", "member", "USER") to false,
+            Triple("public", "moderator", "USER") to true,
+            Triple("broadcast", "member", "USER") to false,
+            Triple("broadcast", "admin", "USER") to true,
+            Triple("global", "member", "USER") to false,
+            Triple("global", "member", "MODERATOR") to true,
+            Triple("group", "member", "MODERATOR") to true,
+            Triple("group", "member", "ADMIN") to true,
+            Triple("group", "member", "AUDIT") to false,
+            Triple("group", "member", "ANALYST") to false,
+        )
+        grid.forEach { (row, expected) ->
+            val (type, member, platform) = row
+            assertWithMessage("$type · $member · $platform")
+                .that(caps(conversation(type = type, currentUserRole = member), user(role = platform)).manageMembers)
+                .isEqualTo(expected)
+        }
+    }
+
+    @Test
+    fun `a direct never manages members whatever the role`() {
+        listOf("USER", "MODERATOR", "ADMIN", "BIGBOSS").forEach { platform ->
+            listOf("member", "moderator", "admin", "creator").forEach { member ->
+                assertWithMessage("$member · $platform")
+                    .that(caps(conversation(type = "direct", currentUserRole = member, peerUserId = "peer"), user(role = platform)).manageMembers)
+                    .isFalse()
+            }
+        }
+    }
+
+    @Test
+    fun `a closed group manages no member`() {
+        assertThat(caps(conversation(currentUserRole = "creator", isActive = false), user()).manageMembers).isFalse()
+    }
+
+    @Test
+    fun `a reader not yet loaded manages no member`() {
+        assertThat(caps(conversation(currentUserRole = "creator"), null).manageMembers).isFalse()
+    }
+
+    @Test
+    fun `the row of a locked conversation offers no member management, its content is sealed`() {
+        val moderator = caps(conversation(currentUserRole = "moderator"), user())
+        assertThat(moderator.offersManageMembers(isLocked = false)).isTrue()
+        assertThat(moderator.offersManageMembers(isLocked = true)).isFalse()
+        assertThat(caps(conversation(currentUserRole = "member"), user()).offersManageMembers(isLocked = false)).isFalse()
+    }
+
     // ── Administration ──
 
     @Test

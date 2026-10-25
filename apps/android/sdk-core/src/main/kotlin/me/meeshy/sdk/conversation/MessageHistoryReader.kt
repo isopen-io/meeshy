@@ -1,13 +1,11 @@
 package me.meeshy.sdk.conversation
 
-import androidx.room.withTransaction
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.core.database.dao.MessageDao
 import me.meeshy.core.database.dao.SyncMetaDao
-import me.meeshy.core.database.dao.upsertKeepingLocal
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.cache.CachePolicy
 import me.meeshy.sdk.cache.CacheResult
@@ -97,9 +95,7 @@ internal class MessageHistoryReader(
             throw MessageSyncException(response.error ?: response.message ?: "Unknown error")
         }
         val now = clock.nowMillis()
-        database.withTransaction {
-            messageDao.upsertKeepingLocal(page.map { MessageEntityFactory.cached(it, now) })
-        }
+        MessageIngestPipeline(database).ingest(page, now)
         // #5189 — grow the observe window by exactly what was just paged in,
         // so these older rows (now cached) are not immediately hidden again
         // by messagesStream's bound.
