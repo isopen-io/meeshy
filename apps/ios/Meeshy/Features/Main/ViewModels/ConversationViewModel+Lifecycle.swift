@@ -38,6 +38,8 @@ struct ConversationDependencies {
     /// Ce que l'ère chiffrée de la conversation laisse servir (#11380) — une
     /// instance par conversation ouverte, comme ce conteneur.
     var encryptedEra = ConversationEncryptedEra()
+    /// Le clair que cet appareil a posé sur le fil, que la cellule repose (#12916).
+    var endToEndClear = EndToEndThreadClear()
 
     @MainActor
     static var live: ConversationDependencies {

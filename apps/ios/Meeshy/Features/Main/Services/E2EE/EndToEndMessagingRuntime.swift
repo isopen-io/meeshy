@@ -183,13 +183,22 @@ actor EndToEndMessagingRuntime: EndToEndMessagingProviding, EndToEndDeviceManagi
     }
 
     func remember(_ content: E2EEContent, from senderUserId: String, as messageIds: [String]) async {
-        guard let store = try? provisioning.plaintexts() else { return }
-        messageIds.forEach { id in try? store.save(.readable(content, senderUserId: senderUserId), for: id) }
+        do {
+            let store = try provisioning.plaintexts()
+            try messageIds.forEach { id in try store.save(.readable(content, senderUserId: senderUserId), for: id) }
+        } catch {
+            Logger.e2ee.error("e2ee own plaintext not stored count=\(messageIds.count, privacy: .public): \(String(describing: type(of: error)), privacy: .public)")
+        }
     }
 
     func plaintexts(for messageIds: [String]) async -> [String: E2EEPlaintextEntry] {
-        guard !messageIds.isEmpty, let store = try? provisioning.plaintexts() else { return [:] }
-        return (try? store.entries(for: messageIds)) ?? [:]
+        guard !messageIds.isEmpty else { return [:] }
+        do {
+            return try provisioning.plaintexts().entries(for: messageIds)
+        } catch {
+            Logger.e2ee.error("e2ee plaintexts unreadable count=\(messageIds.count, privacy: .public): \(String(describing: type(of: error)), privacy: .public)")
+            return [:]
+        }
     }
 
     /// Une enveloppe poussée par la socket de cet appareil.
@@ -221,7 +230,18 @@ actor EndToEndMessagingRuntime: EndToEndMessagingProviding, EndToEndDeviceManagi
         _ = try await ready(for: userId)
     }
 
+    /// Chaque issue d'une enveloppe laisse UNE ligne de journal, sans contenu (#12916).
     private func publish(_ outcome: E2EEOpenOutcome) {
+        switch outcome {
+        case .opened(let message):
+            Logger.e2ee.info("e2ee envelope opened message=\(message.messageId, privacy: .public)")
+        case .undecryptable(let messageId, _):
+            Logger.e2ee.warning("e2ee envelope undecryptable message=\(messageId, privacy: .public)")
+        case .notForThisDevice(let envelopeId):
+            Logger.e2ee.info("e2ee envelope for another device id=\(envelopeId, privacy: .public)")
+        case .deferred(let envelopeId):
+            Logger.e2ee.warning("e2ee envelope deferred id=\(envelopeId, privacy: .public)")
+        }
         relay.send(outcome)
     }
 }

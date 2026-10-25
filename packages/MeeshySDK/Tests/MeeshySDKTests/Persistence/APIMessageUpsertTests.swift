@@ -157,6 +157,21 @@ final class APIMessageUpsertTests: XCTestCase {
         XCTAssertFalse(result.isEncrypted)
     }
 
+    /// #12916 — le littéral servi n'est pas un clair local : une ligne née en
+    /// clair déclaré avec `[Encrypted]` redevient chiffrée, et le fil y cherche le clair.
+    func test_merged_aRowBornWithTheServedLiteral_becomesEncryptedAgain() throws {
+        let api = try makeAPI(["content": E2EEWire.contentPlaceholder, "isEncrypted": true, "encryptionMode": E2EEWire.mode])
+        var existing = makeRecord(api, localId: "srv1", serverId: "srv1")
+        existing.content = E2EEWire.contentPlaceholder
+        existing.isEncrypted = false
+        existing.encryptionMode = nil
+
+        let result = merge(existing, api)
+
+        XCTAssertTrue(result.isEncrypted)
+        XCTAssertEqual(result.encryptionMode, E2EEWire.mode)
+    }
+
     func test_merged_payloadWithoutAttachments_keepsExistingAttachments() throws {
         let api = try makeAPI()
         var existing = makeRecord(api, localId: "srv1", serverId: "srv1")
