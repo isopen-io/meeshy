@@ -27,19 +27,46 @@ export function gloryFrameLayoutVerdict(layout: GloryFrameBirdLayout, { overlap,
 }
 
 type VerticalSide = { readonly x: number; readonly y0: number; readonly y1: number; readonly sign: 1 | -1 };
+type Run = readonly [number, number];
+
+function verticalSide(x: number, from: number, to: number): VerticalSide {
+  return { x, y0: Math.min(from, to), y1: Math.max(from, to), sign: to > from ? 1 : -1 };
+}
+
+function subpathSides([sx, sy]: readonly [number, number], moves: string): readonly VerticalSide[] {
+  const sides: VerticalSide[] = [];
+  let [x, y] = [sx, sy];
+  for (const [, axis, n] of moves.matchAll(/([hv])(-?\d+)/g)) {
+    const step = Number(n);
+    if (axis === 'v' && step !== 0) sides.push(verticalSide(x, y, y + step));
+    if (axis === 'h') x += step;
+    else y += step;
+  }
+  return x === sx && y !== sy ? [...sides, verticalSide(x, y, sy)] : sides;
+}
 
 function verticalSides(d: string): readonly VerticalSide[] {
-  return [...d.matchAll(/M(\d+) (\d+)((?:[hv]-?\d+)+)Z/g)].flatMap(([, sx, sy, moves]) => {
-    const start: readonly [number, number] = [Number(sx), Number(sy)];
-    const points = [...(moves ?? '').matchAll(/([hv])(-?\d+)/g)].reduce<readonly (readonly [number, number])[]>((acc, [, axis, n]) => {
-      const [x, y] = acc[acc.length - 1] ?? start;
-      return [...acc, axis === 'h' ? [x + Number(n), y] : [x, y + Number(n)]];
-    }, [start]);
-    const closed = [...points, start];
-    return closed.slice(1).flatMap((to, at): readonly VerticalSide[] => {
-      const from = closed[at] ?? to;
-      return from[0] === to[0] && from[1] !== to[1] ? [{ x: from[0], y0: Math.min(from[1], to[1]), y1: Math.max(from[1], to[1]), sign: to[1] > from[1] ? 1 : -1 }] : [];
-    });
+  return [...d.matchAll(/M(\d+) (\d+)((?:[hv]-?\d+)+)Z/g)].flatMap(([, sx, sy, moves]) => subpathSides([Number(sx), Number(sy)], moves ?? ''));
+}
+
+/**
+ * Les plages `[a, b)` d'abscisses de winding non nul, pour chaque ligne de pixels `oy + i` (`0 ≤ i < rows`), lue en
+ * son centre : un pixel d'abscisse `X` est dans le chemin ssi `a ≤ X < b` pour une plage de sa ligne. Le chemin n'est
+ * lu qu'UNE fois, et chaque côté ne visite que les lignes qu'il traverse.
+ */
+function windowRuns(d: string, oy: number, rows: number): readonly (readonly Run[])[] {
+  const crossings: VerticalSide[][] = Array.from({ length: Math.max(0, rows) }, () => []);
+  verticalSides(d).forEach((side) => {
+    const last = Math.min(crossings.length - 1, Math.ceil(side.y1 - oy - 0.5) - 1);
+    for (let row = Math.max(0, Math.floor(side.y0 - oy - 0.5) + 1); row <= last; row++) crossings[row]?.push(side);
+  });
+  return crossings.map((row) => {
+    const sorted = row.sort((a, b) => a.x - b.x);
+    return sorted.reduce<{ readonly winding: number; readonly runs: readonly Run[] }>(({ winding, runs }, side, at) => {
+      const turned = winding + side.sign;
+      const end = sorted[at + 1]?.x ?? Infinity;
+      return { winding: turned, runs: turned !== 0 && end > side.x ? [...runs, [side.x, end]] : runs };
+    }, { winding: 0, runs: [] }).runs;
   });
 }
 
@@ -49,18 +76,10 @@ function verticalSides(d: string): readonly VerticalSide[] {
  */
 export function rasterizeGloryWindowPath(d: string, { origin, width, height }: { readonly origin: readonly [number, number]; readonly width: number; readonly height: number }): Uint8Array {
   const [ox, oy] = origin;
-  const sides = verticalSides(d);
   const data = new Uint8Array(Math.max(0, width * height));
-  for (let y = 0; y < height; y++) {
-    const center = oy + y + 0.5;
-    const crossings = sides.filter((side) => side.y0 < center && center < side.y1).sort((a, b) => a.x - b.x);
-    let winding = 0;
-    let next = 0;
-    for (let x = 0; x < width; x++) {
-      while (next < crossings.length && (crossings[next]?.x ?? Infinity) <= ox + x) winding += crossings[next++]?.sign ?? 0;
-      data[y * width + x] = winding === 0 ? 0 : 1;
-    }
-  }
+  windowRuns(d, oy, height).forEach((runs, y) =>
+    runs.forEach(([a, b]) => data.fill(1, y * width + Math.max(0, Math.ceil(a - ox)), y * width + Math.min(width, Math.ceil(b - ox)))),
+  );
   return data;
 }
 
@@ -84,16 +103,28 @@ export function gloryBirdArtRect({ box: [x, y, w, h], art = [0, 0, 1, 1], rotate
   return [Math.min(...xs), Math.min(...ys), Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)];
 }
 
+/** Le nombre de pixels `x0 ≤ X < x1` d'une ligne dans ses plages : bornes entières, la grammaire du chemin l'est. */
+function insideCount(runs: readonly Run[], x0: number, x1: number): number {
+  return runs.reduce((sum, [a, b]) => sum + Math.max(0, Math.min(b, x1) - Math.max(a, x0)), 0);
+}
+
+/** La mesure de `gloryBirdArtInWindow` pour toutes les ancres d'un format : la fenêtre n'est découpée qu'une fois. */
+function gloryBirdArtInWindowOf(format: GloryFrameFormat): (anchor: GloryFrameBirdAnchor) => number {
+  const path = format.window.path;
+  if (path === undefined) return () => 0;
+  const runs = windowRuns(path, 0, format.size[1]);
+  return (anchor) => {
+    const [rx, ry, rw, rh] = gloryBirdArtRect(anchor);
+    const [x0, y0] = [Math.max(0, Math.floor(rx)), Math.max(0, Math.floor(ry))];
+    const [x1, y1] = [Math.min(format.size[0], Math.ceil(rx + rw)), Math.min(format.size[1], Math.ceil(ry + rh))];
+    if (x1 <= x0 || y1 <= y0 || rw * rh === 0) return 0;
+    return runs.slice(y0, y1).reduce((sum, row) => sum + insideCount(row, x0, x1), 0) / (rw * rh);
+  };
+}
+
 /** La part du dessin d'une ancre qui tombe dans le chemin de la fenêtre photo (0 à 1). */
 export function gloryBirdArtInWindow(format: GloryFrameFormat, anchor: GloryFrameBirdAnchor): number {
-  const path = format.window.path;
-  if (path === undefined) return 0;
-  const [rx, ry, rw, rh] = gloryBirdArtRect(anchor);
-  const [x0, y0] = [Math.max(0, Math.floor(rx)), Math.max(0, Math.floor(ry))];
-  const [x1, y1] = [Math.min(format.size[0], Math.ceil(rx + rw)), Math.min(format.size[1], Math.ceil(ry + rh))];
-  if (x1 <= x0 || y1 <= y0 || rw * rh === 0) return 0;
-  const mask = rasterizeGloryWindowPath(path, { origin: [x0, y0], width: x1 - x0, height: y1 - y0 });
-  return mask.reduce((sum, v) => sum + v, 0) / (rw * rh);
+  return gloryBirdArtInWindowOf(format)(anchor);
 }
 
 /**
@@ -103,6 +134,7 @@ export function gloryBirdArtInWindow(format: GloryFrameFormat, anchor: GloryFram
 export function gloryFrameBirdFailures(format: GloryFrameFormat): readonly string[] {
   const { default: fallback, layouts, validated } = format.birds;
   const declared = GLORY_FRAME_BIRD_LAYOUTS.filter((layout) => layouts[layout] !== undefined);
+  const artInWindow = gloryBirdArtInWindowOf(format);
   const defaultFailure = fallback === 'selfie' || layouts[fallback] === undefined ? [`mise en page par défaut invalide : ${fallback}`] : [];
   const layoutFailures = declared.flatMap((layout) => {
     const verdict = validated?.[layout];
@@ -112,7 +144,7 @@ export function gloryFrameBirdFailures(format: GloryFrameFormat): readonly strin
     const inside = layout === 'selfie'
       ? []
       : Object.entries(layouts[layout] ?? {}).flatMap(([key, anchor]) => {
-          const share = gloryBirdArtInWindow(format, anchor);
+          const share = artInWindow(anchor);
           return share > GLORY_FRAME_ART_IN_WINDOW_MAX ? [`${layout} : ${key} dans la photo (${Math.round(share * 100)} % de son dessin)`] : [];
         });
     return [...ruled, ...inside];
