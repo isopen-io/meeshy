@@ -380,3 +380,21 @@ describe('à rattraper', () => {
     expect(host.textContent).not.toContain('À rattraper');
   });
 });
+
+/**
+ * IMMORTALISÉE SUR UN AUTRE APPAREIL (D22 b, #10182 ; #10174) : l'identifiant servi (`keptAt`) sort l'étape de
+ * « À rattraper » même sans photo ici ; la piste reprend à l'étape suivante.
+ */
+describe('le registre partagé', () => {
+  test('une étape `keptAt` servie par le serveur n’est plus à rattraper', async () => {
+    const env = { notebook: { list: async () => [] as NotebookEntry[] }, now: () => new Date('2026-10-05T10:00:00.000Z') } as unknown as PhotoEnv;
+    const base = gameBlockFixture({ mintedLifetime: 10 });
+    const game = { ...base, photo: { atmosphere: null, invitations: 'every' as const, baselineAt: null, baseline: null, treasuryPeakTier: null, moments: [{ stepId: 'meesh:1', detectedAt: null, presentedAt: null, notifiedAt: null, keptAt: '2026-10-04T10:00:00.000Z' }] } };
+    const host = await mount(<CarnetBody env={env} game={game} />);
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    expect(host.querySelector('[data-carnet-catch-up="meesh:1"]')).toBeNull();
+    expect(host.querySelector('[data-carnet-catch-up="meesh:10"]')).not.toBeNull();
+  });
+});

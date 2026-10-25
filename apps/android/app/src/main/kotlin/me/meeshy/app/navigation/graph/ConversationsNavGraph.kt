@@ -1,5 +1,10 @@
 package me.meeshy.app.navigation.graph
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.Color
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
@@ -12,6 +17,7 @@ import me.meeshy.app.calls.CallPillPresenter
 import me.meeshy.app.calls.CallUiState
 import me.meeshy.app.chat.ChatScreen
 import me.meeshy.app.chat.ChatViewModel
+import me.meeshy.app.chat.ConversationMembersPresenter
 import me.meeshy.app.chat.StarredMessagesScreen
 import me.meeshy.app.conversations.ConversationListScreen
 import me.meeshy.app.conversations.ConversationRowNavigation
@@ -45,6 +51,16 @@ internal fun NavGraphBuilder.conversationsNavGraph(
         // Une seule instance pour la barre et le geste « tirer » : tirer la liste recharge
         // aussi les stories (iOS `ConversationListView` : pullToRefresh + loadStories).
         val storiesViewModel: StoriesViewModel = hiltViewModel()
+        // « Gérer les membres » d'une rangée (#12865) : la fiche des membres s'ouvre sur la liste,
+        // sans entrer dans la conversation, comme iOS.
+        var membersTarget by remember { mutableStateOf<Pair<String, Color>?>(null) }
+        membersTarget?.let { (conversationId, accent) ->
+            ConversationMembersPresenter(
+                conversationId = conversationId,
+                accentColor = accent,
+                onDismiss = { membersTarget = null },
+            )
+        }
         ConversationListScreen(
             onConversationClick = { conversationId ->
                 navController.navigate(Routes.chat(conversationId))
@@ -64,9 +80,11 @@ internal fun NavGraphBuilder.conversationsNavGraph(
             },
             onRefresh = storiesViewModel::refresh,
             rowNavigation = ConversationRowNavigation(
+                onManageMembers = { conversationId, accent -> membersTarget = conversationId to accent },
                 onViewProfile = { userId -> navController.navigate(Routes.profile(userId)) },
                 onCreateShareLink = { id -> navController.navigate(Routes.createShareLink(id)) },
             ),
+            onOpenSettings = { navController.navigate(Routes.SETTINGS) },
         )
     }
     composable(Routes.SHARE_LINK_PICKER) {
