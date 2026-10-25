@@ -73,6 +73,7 @@
  * avoir mesuré au moins un champ de saisie et au moins une bande.
  */
 import { launchChromium } from './lib/browser.mjs';
+import { documentNetwork } from './lib/document-network.mjs';
 import { startDistServer } from './lib/gate-server.mjs';
 import { runBounded } from './lib/run-bounded.mjs';
 import { waitForValueSettled } from './lib/settle-value.mjs';
@@ -263,23 +264,6 @@ const ouvre = async (viewport) => {
   return context;
 };
 
-/* #12600 — le réseau de la page entre dans la stabilité (`settle-value.mjs`) : sans
- * la fenêtre fixe de 500 ms de `networkidle`, payée à chacun des ~740 relevés. */
-const reseauDe = (page) => {
-  let partis = 0;
-  const enVol = new Set();
-  page.on('request', (request) => {
-    partis += 1;
-    enVol.add(request);
-  });
-  page.on('requestfinished', (request) => enVol.delete(request));
-  page.on('requestfailed', (request) => enVol.delete(request));
-  const network = () => (enVol.size === 0 ? String(partis) : undefined);
-  /* Ce que le réseau retenait quand l'attente a buté : sans lui, « rien de peint » ne dit pas si la page attendait un chunk. */
-  network.enVol = () => [...enVol].map((request) => new URL(request.url()).pathname);
-  return network;
-};
-
 /** Ce que la page montrait quand l'attente a buté — la cause d'un « rien de peint », jamais le seul symptôme. */
 const etatDe = async (page, network) => {
   const vu = await page
@@ -292,7 +276,7 @@ const etatDe = async (page, network) => {
 
 const mesure = async (context, adresse) => {
   const page = await context.newPage();
-  const network = reseauDe(page);
+  const network = documentNetwork(page);
   await page.goto(`${BASE}${adresse}`, { waitUntil: 'load' });
   const m = await waitForValueSettled(page, releve, undefined, { network, pret: (r) => r.perceptible });
   await page.close();
@@ -343,7 +327,7 @@ const progression = (viewport, langue) => async (constate) => {
   );
   /* UN onglet par langue, rechargé d'adresse en adresse : 280 relevés ne paient pas 280 ouvertures. */
   const page = await context.newPage();
-  const network = reseauDe(page);
+  const network = documentNetwork(page);
   for (const adresse of PROGRESSION_PAGES) {
     const tag = `${adresse} @ ${viewport.width} px, ${langue}, valeurs longues`;
     await page.goto(`${BASE}${adresse}`, { waitUntil: 'load' });
@@ -371,7 +355,7 @@ const texteEntier = (viewport, langue) => async (constate) => {
   const context = await ouvre(viewport);
   await context.addInitScript(([clef, valeur]) => localStorage.setItem(clef, valeur), [LANGUAGE_KEY, langue]);
   const page = await context.newPage();
-  const network = reseauDe(page);
+  const network = documentNetwork(page);
   for (const [adresse, selecteurs, uneLigne] of [
     [LANDING_DE(langue), PORTES_LANDING, true],
   ]) {
