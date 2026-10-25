@@ -429,6 +429,7 @@ export class E2EEDirectory {
     });
     await this.retireDevices({ userId: params.userId, deviceId: params.deviceId });
     await this.retireDevices({ userId: params.userId, identityKey: device.identityKey });
+    await this.retireDevices({ userId: params.userId, sessionId: device.sessionId });
     return { signedOut: signsOut };
   }
 
