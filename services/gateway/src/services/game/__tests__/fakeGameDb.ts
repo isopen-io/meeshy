@@ -133,20 +133,23 @@ class Model {
     return this.read(this.rows.find((row) => matches(row, args.where ?? {})), args.select);
   }
 
-  async findMany(args: { where?: Where; select?: Record<string, boolean>; orderBy?: Record<string, 'asc' | 'desc'>; take?: number } = {}) {
-    let found = this.rows.filter((row) => matches(row, args.where ?? {}));
-    const order = args.orderBy && Object.entries(args.orderBy)[0];
-    if (order) {
-      const [field, dir] = order;
-      const rank = (value: unknown): number | string => (value instanceof Date ? value.getTime() : (value as number | string));
-      const compare = (a: Row, b: Row): number => {
+  async findMany(
+    args: { where?: Where; select?: Record<string, boolean>; orderBy?: Record<string, 'asc' | 'desc'> | readonly Record<string, 'asc' | 'desc'>[]; take?: number } = {},
+  ) {
+    const found = this.rows.filter((row) => matches(row, args.where ?? {}));
+    // Prisma lit un tableau de clés de tri dans l'ordre : la suivante ne départage que les égalités de la précédente.
+    const keys = (args.orderBy === undefined ? [] : Array.isArray(args.orderBy) ? args.orderBy : [args.orderBy]).flatMap((clause) => Object.entries(clause));
+    const rank = (value: unknown): number | string => (value instanceof Date ? value.getTime() : (value as number | string));
+    const compare = (a: Row, b: Row): number => {
+      for (const [field, dir] of keys) {
         const left = rank(a[field]);
         const right = rank(b[field]);
-        return left < right ? -1 : left > right ? 1 : 0;
-      };
-      found = [...found].sort((a, b) => compare(a, b) * (dir === 'asc' ? 1 : -1));
-    }
-    return found.slice(0, args.take ?? found.length).map((row) => this.read(row, args.select));
+        if (left !== right) return (left < right ? -1 : 1) * (dir === 'asc' ? 1 : -1);
+      }
+      return 0;
+    };
+    const sorted = keys.length === 0 ? found : [...found].sort(compare);
+    return sorted.slice(0, args.take ?? sorted.length).map((row) => this.read(row, args.select));
   }
 
   async count(args: { where?: Where; take?: number } = {}) {
@@ -281,6 +284,8 @@ export type FakeGameDb = {
   readonly gamePhotoMoment: Model;
   readonly userStickerPack: Model;
   readonly engagementActStreak: Model;
+  /** Les jetons push du compte : qui peut recevoir un type neuf (#10267, `push-type-routing.ts`). */
+  readonly pushToken: Model;
 };
 
 export function fakeGameDb(): FakeGameDb {
@@ -332,6 +337,7 @@ export function fakeGameDb(): FakeGameDb {
   const engagementActStreak = flattenCompound(new Model({ uniques: [['userId', 'act']] }));
   // Le calendrier des saisons servi (#10016) : vide, la loi rend la constante.
   const gameSeasonDefinition = flattenCompound(new Model({ uniques: [['number'], ['revision']] }));
+  const pushToken = new Model();
   const models = {
     user,
     gloryLedger,
@@ -368,6 +374,7 @@ export function fakeGameDb(): FakeGameDb {
     userStickerPack,
     gameSeasonDefinition,
     engagementActStreak,
+    pushToken,
   };
 
   /**

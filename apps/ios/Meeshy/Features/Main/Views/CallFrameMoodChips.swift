@@ -157,7 +157,7 @@ private struct CallFrameScopeChip: View {
             toggle.toggle()
         } label: {
             CallFrameMoodChipLabel(title: CallFrameCopy.scopeToggle(showsAll: toggle.showsAll), isSelected: false,
-                                   symbol: toggle.showsAll ? "chevron.left" : "ellipsis")
+                                   symbol: toggle.showsAll ? "chevron.backward" : "ellipsis")
         }
         .buttonStyle(CallPressButtonStyle())
         .accessibilityLabel(CallFrameCopy.scopeToggle(showsAll: toggle.showsAll))

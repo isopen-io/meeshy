@@ -274,7 +274,21 @@ describe('POST /conversations/:conversationId/encryption', () => {
     await app.close();
   });
 
-  it('returns 400 ENCRYPTION_ALREADY_ENABLED when encryption is already enabled (disable it first, #12522)', async () => {
+  it('returns 400 ENCRYPTION_ALREADY_ENABLED when the same mode is already enabled', async () => {
+    const app = await buildApp({
+      conversation: {
+        participants: [{ userId: USER_ID, role: 'admin', user: { role: 'ADMIN' } }],
+        encryptionEnabledAt: new Date(),
+        encryptionMode: 'e2ee',
+      },
+    });
+    const res = await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/encryption`, headers: AUTH, payload: { mode: 'e2ee' } });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({ code: 'ENCRYPTION_ALREADY_ENABLED' });
+    await app.close();
+  });
+
+  it('returns 409 E2EE_IRREVERSIBLE when another mode is asked for an e2ee conversation (#12949)', async () => {
     const app = await buildApp({
       conversation: {
         participants: [{ userId: USER_ID, role: 'admin', user: { role: 'ADMIN' } }],
@@ -283,8 +297,8 @@ describe('POST /conversations/:conversationId/encryption', () => {
       },
     });
     const res = await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/encryption`, headers: AUTH, payload: { mode: 'server' } });
-    expect(res.statusCode).toBe(400);
-    expect(res.json()).toMatchObject({ code: 'ENCRYPTION_ALREADY_ENABLED' });
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toMatchObject({ success: false, code: 'E2EE_IRREVERSIBLE' });
     await app.close();
   });
 
