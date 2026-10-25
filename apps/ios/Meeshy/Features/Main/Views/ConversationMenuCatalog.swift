@@ -17,7 +17,7 @@ import MeeshyUI
 nonisolated enum ConversationMenuEntry: String, CaseIterable, Sendable {
     case pin, unpin, mute, unmute, markRead, markUnread
     case detach, search, call, videoCall
-    case readingMode, details, groupSettings, rename, favorite, move
+    case readingMode, details, groupSettings, rename, manageMembers, favorite, move
     case invite, lock, unlock, archive, unarchive, block, unblock, report, adminOpen
     case leave, delete, hide
 
@@ -37,6 +37,8 @@ nonisolated enum ConversationMenuEntry: String, CaseIterable, Sendable {
         case .details: return String(localized: "context.details", defaultValue: "Détails", bundle: .main)
         case .groupSettings: return String(localized: "context.group_settings", defaultValue: "Paramètres du groupe", bundle: .main)
         case .rename: return String(localized: "context.rename", defaultValue: "Renommer", bundle: .main)
+        // Le mot que la fiche de la conversation porte déjà sur la même porte.
+        case .manageMembers: return String(localized: "conversation.info.manage_members", defaultValue: "Gérer les membres", bundle: .main)
         case .favorite: return String(localized: "context.favorite", defaultValue: "Favori", bundle: .main)
         case .move: return String(localized: "context.move_to", defaultValue: "Déplacer vers...", bundle: .main)
         case .invite: return String(localized: "context.invite_friends", defaultValue: "Inviter mes amis", bundle: .main)
@@ -74,6 +76,7 @@ nonisolated enum ConversationMenuEntry: String, CaseIterable, Sendable {
         case .details: return "info.circle.fill"
         case .groupSettings: return "gearshape.fill"
         case .rename: return "pencil"
+        case .manageMembers: return "person.2.badge.gearshape"
         case .favorite: return "star"
         case .move: return "folder.fill"
         case .invite: return "person.badge.plus"
@@ -227,6 +230,8 @@ nonisolated struct ConversationMenuCatalog: Equatable, Sendable {
                 (.details, true),
                 (.groupSettings, law.groupSettings),
                 (.rename, law.rename),
+                // L'ordre du web : Détails, Renommer, Gérer les membres, Favori (#12631).
+                (.manageMembers, law.manageMembers),
                 (.favorite, true),
                 (.move, true)
             ]),
@@ -268,6 +273,7 @@ extension ConversationRowMenuActions {
         case .details: onDetails()
         case .groupSettings: onGroupSettings()
         case .rename: onRename()
+        case .manageMembers: onManageMembers()
         case .invite: onInvite()
         case .lock, .unlock: onLock()
         case .archive, .unarchive: onArchive()

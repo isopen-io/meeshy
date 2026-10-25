@@ -101,15 +101,18 @@ export type AtmosphereOutcome =
 const FRAME_KEYS = packQueryKeys('glory-frame');
 const QUEUE_KEY = 'atmosphere';
 
+/** Le pack de l'atmosphère posé installé sur l'étagère ET sur sa rangée du catalogue : la boutique ne se contredit pas (onglet présent, « Installer » offert). */
 const installedLocally = (client: QueryClient, atmosphere: GloryAtmosphere): void => {
   const known = (client.getQueryData<readonly FramePackSummary[]>(FRAME_KEYS.catalogue) ?? []).find((pack) => pack.slug === atmosphere);
   if (known === undefined) return;
+  client.setQueryData<readonly FramePackSummary[]>(FRAME_KEYS.catalogue, (list) => (list ?? []).map((pack) => (pack.slug === atmosphere ? { ...pack, installed: true } : pack)));
   client.setQueryData<readonly FramePackSummary[]>(FRAME_KEYS.installed, (list) => [...(list ?? []).filter((pack) => pack.slug !== atmosphere), { ...known, installed: true }]);
 };
 
 const afterServer = (deps: AtmosphereDeps): void => {
   void deps.client.invalidateQueries({ queryKey: ENGAGEMENT_PROGRESS_QUERY_KEY });
   void deps.client.invalidateQueries({ queryKey: FRAME_KEYS.installed });
+  void deps.client.invalidateQueries({ queryKey: FRAME_KEYS.catalogue });
   deps.onInstalled();
 };
 
@@ -131,6 +134,7 @@ export async function chooseAtmosphere(atmosphere: GloryAtmosphere, deps: Atmosp
   await client.cancelQueries({ queryKey: ENGAGEMENT_PROGRESS_QUERY_KEY });
   const snapshot = client.getQueryData<EngagementWithGame>(ENGAGEMENT_PROGRESS_QUERY_KEY);
   const shelf = client.getQueryData<readonly FramePackSummary[]>(FRAME_KEYS.installed);
+  const catalogue = client.getQueryData<readonly FramePackSummary[]>(FRAME_KEYS.catalogue);
   if (snapshot !== undefined) client.setQueryData(ENGAGEMENT_PROGRESS_QUERY_KEY, withAtmosphere(snapshot, atmosphere));
   installedLocally(client, atmosphere);
 
@@ -147,6 +151,7 @@ export async function chooseAtmosphere(atmosphere: GloryAtmosphere, deps: Atmosp
   if (sent.kind === 'refused') {
     if (snapshot !== undefined) client.setQueryData(ENGAGEMENT_PROGRESS_QUERY_KEY, snapshot);
     if (shelf !== undefined) client.setQueryData(FRAME_KEYS.installed, shelf);
+    if (catalogue !== undefined) client.setQueryData(FRAME_KEYS.catalogue, catalogue);
     deps.queue.remove(QUEUE_KEY);
     return { status: 'refused', code: sent.code };
   }

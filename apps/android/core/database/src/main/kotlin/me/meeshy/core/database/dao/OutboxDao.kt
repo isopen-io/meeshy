@@ -52,6 +52,13 @@ public interface OutboxDao {
     @Query("SELECT DISTINCT targetId FROM outbox WHERE kind IN (:kinds) AND state != 'EXHAUSTED'")
     public fun observePendingTargets(kinds: List<String>): Flow<List<String>>
 
+    /**
+     * One-shot twin of [observePendingTargets]: the anchors of the rows of [kinds] still on their
+     * way, read inside the caller's transaction (a message snapshot must not undo them).
+     */
+    @Query("SELECT DISTINCT targetId FROM outbox WHERE kind IN (:kinds) AND state != 'EXHAUSTED'")
+    public suspend fun pendingTargets(kinds: List<String>): List<String>
+
     @Query("SELECT * FROM outbox WHERE state = :state ORDER BY createdAt ASC")
     public suspend fun byState(state: String): List<OutboxEntity>
 

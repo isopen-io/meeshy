@@ -1,238 +1,304 @@
 package me.meeshy.ui.component.chrome
 
-import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.wrapContentSize
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import me.meeshy.sdk.model.chrome.FloatingButtonPosition
-import me.meeshy.sdk.model.chrome.applyDragDelta
-import me.meeshy.sdk.model.chrome.snapToNearestEdge
-import me.meeshy.ui.compatibility.systemBarsInsetsCompat
+import kotlinx.coroutines.launch
+import me.meeshy.sdk.model.chrome.FloatingButtonGeometry
+import me.meeshy.sdk.model.chrome.FloatingButtonsLayout
+import me.meeshy.sdk.model.layout.PointDp
+import me.meeshy.ui.haptics.rememberMeeshyHaptics
+import me.meeshy.ui.layout.currentMeeshyWindowInfo
+import me.meeshy.ui.theme.MeeshyMotion
 import kotlin.math.roundToInt
 
-/** Diametre d'un bouton flottant, aligne sur la cible tactile minimale d'Android. */
-public val FloatingButtonSize: androidx.compose.ui.unit.Dp = 56.dp
+/** Diametre d'un bouton flottant — `FloatingButtonGeometry.buttonSize` iOS (52). */
+public val FloatingButtonSize: Dp = FloatingButtonGeometry.BUTTON_SIZE.dp
+
+/** Etiquettes de test des deux disques. */
+public const val FLOATING_BUTTON_LEFT_TAG: String = "floating-button-left"
+public const val FLOATING_BUTTON_RIGHT_TAG: String = "floating-button-right"
 
 /**
- * Les deux boutons flottants qui pilotent le routage — portage du
- * `FreeFloatingButtonsContainer` iOS (MeeshyUI/Primitives/FloatingButtons.swift).
+ * Ce que TalkBack annonce d'un bouton flottant — miroir de `floatingButtonAccessibility` iOS :
+ * un libelle, un indice (lu comme l'action du double-tap), une valeur (etat), et une action
+ * nommee qui declenche l'appui long quand [actionName] est fourni.
+ */
+@Immutable
+public data class FloatingButtonSemantics(
+    val label: String,
+    val hint: String? = null,
+    val value: String? = null,
+    val actionName: String? = null,
+)
+
+/**
+ * Les deux boutons flottants, posables a n'importe quelle hauteur contre le bord gauche ou
+ * droit — portage de `FreeFloatingButtonsContainer` (FloatingButtons.swift, #9679).
  *
- * NE PAS remettre dans le slot `Scaffold(floatingActionButton = )` : ce slot
- * positionne LUI-MEME son contenu, ce qui est structurellement incompatible avec un
- * bouton deplacable. Les boutons se posent dans un Box par-dessus le NavHost.
+ * Toute la geometrie vient de [FloatingButtonGeometry] (core:model) : la zone sure REELLE de
+ * la fenetre ([currentMeeshyWindowInfo] — ce chrome est dessine hors du fournisseur de la
+ * navigation), l'ecart minimal du meme cote, et la SEULE ecriture d'une position, a la fin d'un
+ * vrai glisser ([FloatingButtonGeometry.storageAfterDrag]).
  *
- * Purete SDK : aucune route, aucun singleton produit ici. Positions et actions
- * arrivent par parametre, l'appelant decide de ce que chaque geste declenche. Toute
- * la geometrie vit dans `core:model` (unites pures testees) ; ce composable dessine
- * et delegue, rien de plus.
+ * Les valeurs sont BRUTES (`v3,L,0.5` ou l'ancien `x,y`) : le conteneur les lit, ne les
+ * reecrit jamais par lui-meme. [behindButtons] est dessine sous les disques (le voile de
+ * l'echelle), [aboveButtons] au-dessus (l'echelle elle-meme), tous deux dans le repere de
+ * l'ecran. Tant que [LocalScrollMotionActive] est vrai, les disques s'effacent et ne repondent
+ * plus.
  */
 @Composable
 public fun MeeshyFloatingButtons(
-    leftPosition: FloatingButtonPosition,
-    rightPosition: FloatingButtonPosition,
-    onLeftPositionChange: (FloatingButtonPosition) -> Unit,
-    onRightPositionChange: (FloatingButtonPosition) -> Unit,
+    leftStorage: String,
+    rightStorage: String,
+    onLeftStorageChange: (String) -> Unit,
+    onRightStorageChange: (String) -> Unit,
     onLeftTap: () -> Unit,
     onLeftLongPress: () -> Unit,
     onRightTap: () -> Unit,
     onRightLongPress: () -> Unit,
-    leftContentDescription: String,
-    rightContentDescription: String,
-    leftStateDescription: String? = null,
-    rightStateDescription: String? = null,
-    leftAccessibilityActions: List<Pair<String, () -> Unit>> = emptyList(),
-    rightAccessibilityActions: List<Pair<String, () -> Unit>> = emptyList(),
+    leftSemantics: FloatingButtonSemantics,
+    rightSemantics: FloatingButtonSemantics,
     modifier: Modifier = Modifier,
+    behindButtons: @Composable () -> Unit = {},
+    aboveButtons: @Composable (geometry: FloatingButtonGeometry, layout: FloatingButtonsLayout) -> Unit = { _, _ -> },
     leftContent: @Composable () -> Unit,
     rightContent: @Composable () -> Unit,
 ) {
-    BoxWithConstraints(
-        modifier = modifier
-            .fillMaxSize()
-            // targetSdk 36 impose l'edge-to-edge : sans ces marges, un bouton colle
-            // en bas tomberait SOUS la barre de gestes, ou il est materiellement
-            // inatteignable.
-            .padding(systemBarsInsetsCompat()),
-    ) {
-        val density = LocalDensity.current
-        val buttonPx = with(density) { FloatingButtonSize.toPx() }
-        // La course utile, pas la largeur d'ecran : sinon le bouton deborderait
-        // d'une demi-largeur a chaque extremite.
-        val travelXPx = with(density) { maxWidth.toPx() } - buttonPx
-        val travelYPx = with(density) { maxHeight.toPx() } - buttonPx
+    val safeInsets = currentMeeshyWindowInfo().safeInsets
+    val scrolling = LocalScrollMotionActive.current
+    BoxWithConstraints(modifier = modifier.fillMaxSize()) {
+        val geometry = remember(maxWidth, maxHeight, safeInsets) {
+            FloatingButtonGeometry(screenWidth = maxWidth.value, screenHeight = maxHeight.value, safeInsets = safeInsets)
+        }
+        // La valeur ecrite a la levee du doigt, tenue le temps que le magasin la renvoie : sans
+        // elle, le disque reviendrait a son ancienne place l'espace d'une image avant d'y aller.
+        var leftPending by remember { mutableStateOf<String?>(null) }
+        var rightPending by remember { mutableStateOf<String?>(null) }
+        LaunchedEffect(leftStorage) { leftPending = null }
+        LaunchedEffect(rightStorage) { rightPending = null }
 
-        DraggableFloatingButton(
-            position = leftPosition,
-            onPositionChange = onLeftPositionChange,
-            onTap = onLeftTap,
-            onLongPress = onLeftLongPress,
-            contentDescription = leftContentDescription,
-            stateDescription = leftStateDescription,
-            accessibilityActions = leftAccessibilityActions,
-            travelXPx = travelXPx,
-            travelYPx = travelYPx,
-            content = leftContent,
-        )
-
-        DraggableFloatingButton(
-            position = rightPosition,
-            onPositionChange = onRightPositionChange,
-            onTap = onRightTap,
-            onLongPress = onRightLongPress,
-            contentDescription = rightContentDescription,
-            stateDescription = rightStateDescription,
-            accessibilityActions = rightAccessibilityActions,
-            travelXPx = travelXPx,
-            travelYPx = travelYPx,
-            content = rightContent,
-        )
+        if (geometry.isMeasured) {
+            val layout = geometry.layout(leftPending ?: leftStorage, rightPending ?: rightStorage)
+            behindButtons()
+            FloatingDisc(
+                center = layout.feed,
+                onDragEnded = { start, dx, dy ->
+                    val written = geometry.storageAfterDrag(start, dx, dy, avoiding = layout.menu)
+                    if (written == null) {
+                        layout.feed
+                    } else {
+                        leftPending = written
+                        onLeftStorageChange(written)
+                        geometry.layout(written, rightPending ?: rightStorage).feed
+                    }
+                },
+                onTap = onLeftTap,
+                onLongPress = onLeftLongPress,
+                a11y = leftSemantics,
+                hidden = scrolling,
+                testTag = FLOATING_BUTTON_LEFT_TAG,
+                content = leftContent,
+            )
+            FloatingDisc(
+                center = layout.menu,
+                onDragEnded = { start, dx, dy ->
+                    val written = geometry.storageAfterDrag(start, dx, dy, avoiding = layout.feed)
+                    if (written == null) {
+                        layout.menu
+                    } else {
+                        rightPending = written
+                        onRightStorageChange(written)
+                        geometry.layout(leftPending ?: leftStorage, written).menu
+                    }
+                },
+                onTap = onRightTap,
+                onLongPress = onRightLongPress,
+                a11y = rightSemantics,
+                hidden = scrolling,
+                testTag = FLOATING_BUTTON_RIGHT_TAG,
+                content = rightContent,
+            )
+            aboveButtons(geometry, layout)
+        }
     }
 }
 
-@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+/**
+ * Un disque pose en [center] (dp, repere de l'ecran). Il suit le doigt image par image ; a la
+ * levee, [onDragEnded] recoit le depart et la course et rend le centre ou se poser — le meme
+ * si rien n'est ecrit (un toucher), le nouveau sinon — rejoint sur un ressort 0,4 / 0,75.
+ */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun DraggableFloatingButton(
-    position: FloatingButtonPosition,
-    onPositionChange: (FloatingButtonPosition) -> Unit,
+private fun FloatingDisc(
+    center: PointDp,
+    onDragEnded: (start: PointDp, dx: Float, dy: Float) -> PointDp,
     onTap: () -> Unit,
     onLongPress: () -> Unit,
-    contentDescription: String,
-    travelXPx: Float,
-    travelYPx: Float,
+    a11y: FloatingButtonSemantics,
+    hidden: Boolean,
+    testTag: String,
     content: @Composable () -> Unit,
-    stateDescription: String? = null,
-    accessibilityActions: List<Pair<String, () -> Unit>> = emptyList(),
 ) {
-    val haptic = LocalHapticFeedback.current
-    // Position vivante pendant le glissement. La source de verite n'est notifiee
-    // qu'au relachement : notifier a chaque pixel parcouru declencherait une
-    // ecriture DataStore par image.
-    var dragged by remember { mutableStateOf<FloatingButtonPosition?>(null) }
-    val shown = dragged ?: position
+    val haptics = rememberMeeshyHaptics()
+    val scope = rememberCoroutineScope()
+    val x = remember { Animatable(center.x) }
+    val y = remember { Animatable(center.y) }
+    var drag by remember { mutableStateOf(Offset.Zero) }
+    var dragging by remember { mutableStateOf(false) }
+    var dragStart by remember { mutableStateOf(center) }
+    val currentOnDragEnded by rememberUpdatedState(onDragEnded)
 
-    // Sous le doigt la position est INSTANTANEE (snap) ; au relachement elle
-    // rejoint le bord aimante par un ressort — le saut sec du bouton vers le bord
-    // etait le principal marqueur "non fini" du composant.
-    val followSpec = if (dragged != null) {
-        snap<Float>()
-    } else {
-        spring(dampingRatio = 0.72f, stiffness = Spring.StiffnessMediumLow)
+    // Un centre qui change hors glisser (rotation, zone sure, repoussement) : ressort 0,35 / 0,8.
+    LaunchedEffect(center) {
+        launch { x.animateTo(center.x, spring(dampingRatio = 0.8f, stiffness = MeeshyMotion.stiffnessForResponse(0.35f))) }
+        launch { y.animateTo(center.y, spring(dampingRatio = 0.8f, stiffness = MeeshyMotion.stiffnessForResponse(0.35f))) }
     }
-    val animatedX by animateFloatAsState(shown.x, followSpec, label = "fab-x")
-    val animatedY by animateFloatAsState(shown.y, followSpec, label = "fab-y")
-
-    // Retour d'appui : la pastille s'ecrase legerement sous le doigt. Remplace le
-    // ripple (une onde rectangulaire sous un cercle deborde) par un geste plus
-    // proche des bulles de chat systeme.
-    val interactionSource = remember { MutableInteractionSource() }
-    val pressed by interactionSource.collectIsPressedAsState()
-    val pressScale by animateFloatAsState(
-        targetValue = if (pressed) 0.88f else 1f,
-        animationSpec = spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessMedium),
-        label = "fab-press-scale",
+    val scale by animateFloatAsState(
+        targetValue = if (dragging) DRAG_SCALE else 1f,
+        animationSpec = spring(dampingRatio = 0.7f, stiffness = MeeshyMotion.stiffnessForResponse(0.3f)),
+        label = "floating-disc-drag-scale",
     )
+    val alpha by animateFloatAsState(
+        targetValue = ScrollMotionVisibility.opacity(hidden),
+        animationSpec = tween(ScrollMotionVisibility.FADE_DURATION_MS),
+        label = "floating-disc-scroll-fade",
+    )
+    val half = FloatingButtonGeometry.BUTTON_SIZE / 2f
+    val interactionSource = remember { MutableInteractionSource() }
+    // Efface en plein glisser (la liste repart) : le geste est detache, le disque revient.
+    LaunchedEffect(hidden) {
+        if (hidden) {
+            drag = Offset.Zero
+            dragging = false
+        }
+    }
 
-    Box(
-        modifier = Modifier
-            // Pas de .align ici : TopStart est deja le defaut du Box, et align
-            // n'existe que dans son scope.
-            .offset {
-                IntOffset(
-                    x = (animatedX * travelXPx).roundToInt(),
-                    y = (animatedY * travelYPx).roundToInt(),
-                )
-            }
-            // Taille MINIMALE, pas fixe : le contenu garde sa cible tactile de
-            // 56dp mais un avatar legerement plus grand ne se fait pas clipper.
-            // Le menu deploye ne vit plus ici : il est ancre dans un Popup
-            // (MeeshyMenuFab), qui le positionne et le CLAMPE dans la fenetre.
-            .defaultMinSize(minWidth = FloatingButtonSize, minHeight = FloatingButtonSize)
-            .graphicsLayer {
-                scaleX = pressScale
-                scaleY = pressScale
-            }
-            .semantics {
-                this.contentDescription = contentDescription
-                stateDescription?.let { this.stateDescription = it }
-                if (accessibilityActions.isNotEmpty()) {
-                    customActions = accessibilityActions.map { (label, action) ->
-                        CustomAccessibilityAction(label) { action(); true }
-                    }
-                }
-            }
-            // combinedClickable et NON un second detectTapGestures : deux
-            // pointerInput concurrents se disputent le meme evenement, et un simple
-            // tap finissait par etre traite comme un glissement — observe sur
-            // emulateur, les deux boutons derivaient de leur place a chaque appui.
-            // combinedClickable applique le touch slop standard, et apporte en prime
-            // l'activation au clavier. indication = null : le retour visuel est
-            // porte par l'echelle d'appui, pas par un ripple.
+    val gestures = if (!ScrollMotionVisibility.allowsHitTesting(hidden)) {
+        Modifier
+    } else {
+        Modifier
             .combinedClickable(
                 interactionSource = interactionSource,
                 indication = null,
+                role = Role.Button,
+                onClickLabel = a11y.hint,
+                onLongClickLabel = a11y.actionName,
                 onClick = {
-                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    haptics.light()
                     onTap()
                 },
                 onLongClick = {
-                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    haptics.medium()
                     onLongPress()
                 },
             )
-            .pointerInput(travelXPx, travelYPx) {
+            .pointerInput(Unit) {
                 detectDragGestures(
-                    onDragEnd = {
-                        // Aimantation au bord, uniquement au relachement, et
-                        // uniquement si le doigt a REELLEMENT parcouru quelque
-                        // chose : sans cette garde, un effleurement reecrit la
-                        // position stockee.
-                        dragged?.let { onPositionChange(snapToNearestEdge(it)) }
-                        dragged = null
+                    onDragStart = {
+                        dragStart = PointDp(x.value, y.value)
+                        dragging = true
                     },
-                    onDragCancel = { dragged = null },
-                ) { change, delta ->
+                    onDragEnd = {
+                        val travelled = drag
+                        scope.launch {
+                            x.snapTo(x.value + travelled.x)
+                            y.snapTo(y.value + travelled.y)
+                            drag = Offset.Zero
+                            dragging = false
+                            val target = currentOnDragEnded(dragStart, travelled.x, travelled.y)
+                            haptics.light()
+                            val release = spring<Float>(dampingRatio = 0.75f, stiffness = MeeshyMotion.stiffnessForResponse(0.4f))
+                            launch { x.animateTo(target.x, release) }
+                            launch { y.animateTo(target.y, release) }
+                        }
+                    },
+                    onDragCancel = {
+                        drag = Offset.Zero
+                        dragging = false
+                    },
+                ) { change, amount ->
                     change.consume()
-                    dragged = applyDragDelta(
-                        current = dragged ?: position,
-                        deltaXPx = delta.x,
-                        deltaYPx = delta.y,
-                        travelXPx = travelXPx,
-                        travelYPx = travelYPx,
-                    )
+                    drag += Offset(amount.x / density, amount.y / density)
                 }
-            },
+            }
+    }
+
+    Box(
+        modifier = Modifier
+            .offset {
+                IntOffset(
+                    x = (x.value + drag.x - half).dp.roundToPx(),
+                    y = (y.value + drag.y - half).dp.roundToPx(),
+                )
+            }
+            .size(FloatingButtonSize)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+                this.alpha = alpha
+            }
+            .shadow(elevation = 10.dp, shape = CircleShape, clip = false)
+            .border(1.5.dp, DISC_RIM, CircleShape)
+            .testTag(testTag)
+            .semantics {
+                contentDescription = a11y.label
+                a11y.value?.let { stateDescription = it }
+                a11y.actionName?.let { name ->
+                    customActions = listOf(CustomAccessibilityAction(name) { onLongPress(); true })
+                }
+            }
+            .then(gestures),
         contentAlignment = Alignment.Center,
-        content = { content() },
-    )
+    ) {
+        // Le contenu (icone, avatar, pastille) est DESSINE, pas annonce : le disque porte seul
+        // son libelle, sa valeur et ses actions (`accessibilityElement(children: .ignore)`).
+        Box(Modifier.clearAndSetSemantics { }, contentAlignment = Alignment.Center) { content() }
+    }
 }
+
+private const val DRAG_SCALE = 1.15f
+
+/** Le liseré du disque : blanc dégradé du haut-gauche au bas-droite (`MeeshyOpacity.medium` -> `subtle`). */
+private val DISC_RIM = Brush.linearGradient(listOf(Color.White.copy(alpha = 0.3f), Color.White.copy(alpha = 0.1f)))

@@ -58,7 +58,7 @@ export default function ProgressionVitrineScreen() {
       titre={gameText('game.showcase.title')}
       teinte={GAME_BRAND}
       compte={(p) => {
-        const trophies = (p as EngagementWithGame).game?.trophies;
+        const trophies = p.game?.trophies;
         return trophies === undefined ? null : String(trophies.items.length);
       }}
     >

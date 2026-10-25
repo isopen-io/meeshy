@@ -8,6 +8,8 @@
  */
 import { describe, it, expect } from '@jest/globals';
 
+import { GAME_NOTIFICATION_TYPES } from '@meeshy/shared/utils/game/notifications';
+
 import { androidNotificationConfig } from '../../../services/android-push-config';
 
 const banner = { title: 'Alice', body: 'Salut' };
@@ -85,5 +87,61 @@ describe('androidNotificationConfig — la vignette d’une vidéo s’affiche d
     expect(
       androidNotificationConfig(video('https://gate.meeshy.me/t.jpg', { notificationLocKey: 'notification.viewOnce' })),
     ).not.toHaveProperty('imageUrl');
+  });
+});
+
+describe('androidNotificationConfig — le jeu a son canal, qui se coupe dans les réglages du système (#10266)', () => {
+  const game = (type: string, extra: Partial<Parameters<typeof androidNotificationConfig>[0]> = {}) =>
+    androidNotificationConfig({ ...banner, ...extra, data: { notificationId: 'n-1', type } }, { client: 'android-shell' });
+
+  it('« moments à immortaliser » arrive sur le canal Jeu de la coque', () => {
+    expect(game('game_photo_moment').channelId).toBe('meeshy_game');
+  });
+
+  it('every game notification shares the Game channel, so cutting it silences the whole game', () => {
+    expect(GAME_NOTIFICATION_TYPES.map((type) => game(type).channelId)).toEqual(GAME_NOTIFICATION_TYPES.map(() => 'meeshy_game'));
+  });
+
+  it('a game banner still rings like any other banner', () => {
+    expect(game('game_photo_moment').sound).toBe('default');
+  });
+
+  it('a muted reader stays silent: the silent channel wins over the Game channel', () => {
+    expect(game('game_photo_moment', { muted: true }).channelId).toBe('meeshy_notifications_silent');
+  });
+
+  it('a non-game notification stays on the default shell channel', () => {
+    expect(game('new_message').channelId).toBe('meeshy_notifications');
+    expect(androidNotificationConfig(banner).channelId).toBe('meeshy_notifications');
+  });
+});
+
+describe('androidNotificationConfig — seul le client qui crée le canal Jeu le reçoit (#10266, #9223)', () => {
+  const gameBanner = (client: Parameters<typeof androidNotificationConfig>[1]['client']) =>
+    androidNotificationConfig({ ...banner, data: { notificationId: 'n-1', type: 'game_duo_invited' } }, { client });
+
+  it('a native Android token stays on the default channel the native app creates, never on an unknown channel', () => {
+    expect(gameBanner('android-native').channelId).toBe('meeshy_notifications');
+  });
+
+  it('an Android token without a recognised bundleId stays on the default channel', () => {
+    expect(gameBanner(null).channelId).toBe('meeshy_notifications');
+  });
+
+  it('every game type stays on the default channel for the native app', () => {
+    const native = GAME_NOTIFICATION_TYPES.map(
+      (type) => androidNotificationConfig({ ...banner, data: { notificationId: 'n-1', type } }, { client: 'android-native' }).channelId,
+    );
+    expect(native).toEqual(GAME_NOTIFICATION_TYPES.map(() => 'meeshy_notifications'));
+  });
+
+  it('the shell token receives the Game channel it creates', () => {
+    expect(gameBanner('android-shell').channelId).toBe('meeshy_game');
+  });
+
+  it('a muted native reader still goes to the silent channel the native app creates', () => {
+    expect(
+      androidNotificationConfig({ ...banner, muted: true, data: { notificationId: 'n-1', type: 'game_duo_invited' } }, { client: 'android-native' }).channelId,
+    ).toBe('meeshy_notifications_silent');
   });
 });

@@ -12,7 +12,8 @@ import MeeshyUI
 /// pixels, bornés au cadre de la cellule, tranchaient l'identité et la méta
 /// posées à cheval sur lui. L'aperçu ne capture plus rien — il rend la rangée
 /// du fil elle-même, entière. En Script et en Focal, c'est la rangée plate ; en
-/// Bulles, en Rivière et dans le Résumé, la bulle.
+/// Bulles, en Rivière et dans le Résumé, la bulle — en Rivière, celle du
+/// couloir, que l'hôte remet (`RiverOverlayFace`, #12630).
 enum MessageOverlayPreviewKind: Equatable {
     case flatRow
     case bubble
@@ -24,6 +25,31 @@ enum MessageOverlayPreviewKind: Equatable {
     /// La densité de la rangée, celle que la cellule reçoit (`focalRowInput`).
     static func density(for readingMode: ConversationReadingMode) -> FocalRowInput.Density {
         readingMode == .script ? .script : .focal
+    }
+}
+
+// MARK: - La bulle de la Rivière, remise à l'aperçu (#12630)
+
+/// **Ce que la Rivière remet à l'aperçu de l'appui long** : la bulle pressée
+/// telle que son couloir la peint (le contenu résolu par la projection, Prisme
+/// compris) et la largeur à laquelle l'aperçu la pose. L'hôte la tient le temps
+/// du menu (`ConversationOverlayState.overlayRiverFace`) et la pose dans
+/// l'environnement de l'overlay ; hors Rivière, `nil`.
+struct RiverOverlayFace: Equatable {
+    let content: RiverBubbleContent
+    let contentWidth: CGFloat
+
+    var messageId: String { content.bubble.messageId }
+}
+
+private struct RiverOverlayFaceKey: EnvironmentKey {
+    static let defaultValue: RiverOverlayFace? = nil
+}
+
+extension EnvironmentValues {
+    var riverOverlayFace: RiverOverlayFace? {
+        get { self[RiverOverlayFaceKey.self] }
+        set { self[RiverOverlayFaceKey.self] = newValue }
     }
 }
 
@@ -46,6 +72,8 @@ struct MessageOverlayCellPreview: View {
     enum Face: Equatable {
         case flatRow(FocalRowInput)
         case bubble(ThemedMessageBubble)
+        /// La bulle de la Rivière, telle que son couloir la peint (#12630).
+        case river(RiverOverlayFace)
 
         static func == (lhs: Face, rhs: Face) -> Bool {
             switch (lhs, rhs) {
@@ -53,10 +81,24 @@ struct MessageOverlayCellPreview: View {
                 return left == right
             case let (.bubble(left), .bubble(right)):
                 return left == right
+            case let (.river(left), .river(right)):
+                return left == right
             default:
                 return false
             }
         }
+    }
+
+    /// **La face MONTRÉE** (#12630) : en Rivière, la cellule pressée n'est pas
+    /// une `ThemedMessageBubble` mais une `RiverBubbleView` — couleur de
+    /// couloir, en-tête d'identité, largeur de couloir. L'hôte de la Rivière la
+    /// remet (`riverOverlayFace`) ; elle remplace la bulle du fil pour CE
+    /// message, sous ses deux identités (`cid_…` accusé compris). Une rangée
+    /// plate reste une rangée plate : la Rivière n'en a pas.
+    static func displayedFace(_ face: Face, river: RiverOverlayFace?, message: Message) -> Face {
+        guard case .bubble = face, let river,
+              river.messageId == message.id || river.messageId == message.clientMessageId else { return face }
+        return .river(river)
     }
 
     /// La rangée plate se pose à 16 pt des bords de l'écran.
@@ -78,6 +120,7 @@ struct MessageOverlayCellPreview: View {
     /// (`FocalRevealedTime`) : l'aperçu porte son propre révélé, fermé, comme
     /// la rangée immobile qu'on vient de presser.
     @StateObject private var timestampReveal = FocalTimestampRevealState()
+    @Environment(\.riverOverlayFace) private var riverFace
 
     var body: some View {
         let protection = OverlayPreviewProtection.form(for: message)
@@ -92,7 +135,7 @@ struct MessageOverlayCellPreview: View {
 
     @ViewBuilder
     private var faceView: some View {
-        switch face {
+        switch Self.displayedFace(face, river: riverFace, message: message) {
         case .flatRow(let input):
             FocalRow(input: input, actions: rowActions)
                 .environmentObject(timestampReveal)
@@ -107,6 +150,15 @@ struct MessageOverlayCellPreview: View {
                 .equatable()
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal, Self.bubbleMargin)
+        case .river(let river):
+            // Les 16 pt des bords sont déjà dans le cadre que l'hôte a posé
+            // (`RiverPressedCell.windowFrame`) : la bulle a la largeur de ce
+            // cadre, et son cadre publié ne remonte pas jusqu'au suivi du fil.
+            RiverBubbleView(content: river.content, contentWidth: river.contentWidth, drawsTopSeam: false)
+                .equatable()
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity)
+                .transformPreference(MessageFramePreferenceKey.self) { $0 = [:] }
         }
     }
 

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from 'react';
+import { lazy, useEffect, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from 'react';
 import { useStore } from 'zustand/react';
 
 import { useEmailGatePresenter } from '@/lib/activation/email-gate-presenter';
@@ -22,6 +22,7 @@ import { CallLayer } from './call-layer';
 import { LazyFloatingMenus as FloatingMenus, loadFloatingMenus } from './floating-menus-lazy';
 import { loadConversationPreviewHost } from './conversation-preview-chunks';
 import { MoodPeekHost } from './mood-peek-host';
+import { OptionalChunk } from './optional-chunk';
 import { ProfilePeekHost } from './profile-peek-host';
 import { SendSheetHost } from './send-sheet-host';
 import { TopBand } from './top-band';
@@ -123,9 +124,14 @@ const AppUpdateBanner = lazy(chargerBanniereMaj);
  * (un badge accroché à la Lentille disparaîtrait dès qu'on ouvre un fil), et
  * À LA DEMANDE parce qu'il lit le cache des conversations — voir
  * `components/app-badge.tsx` pour la mesure qui l'a sorti du socle.
+ *
+ * Son chunk est devenu le CHROME DIFFÉRÉ (`deferred-chrome.tsx`, #10174) : il
+ * arme aussi, au repos, l'hôte des invitations à immortaliser, qui se pose
+ * dans la colonne de la bande du haut — la bande, dans l'entrée, n'en paie
+ * rien.
  */
-const chargerBadge = () => import('./app-badge').then((m) => ({ default: m.AppBadge }));
-const AppBadge = lazy(chargerBadge);
+const chargerChromeDiffere = () => import('./deferred-chrome').then((m) => ({ default: m.DeferredChrome }));
+const DeferredChrome = lazy(chargerChromeDiffere);
 
 /**
  * ...ET L'INVITATION À VALIDER SON COMPTE (#8239), cinquième exception : de J7
@@ -231,20 +237,21 @@ export default function Shell({ children }: { children: ReactNode }) {
           peindre — surtout pas un squelette, qui annoncerait un état qu'on ne
           connaît pas encore. */}
       {pastilleArmee ? (
-        <Suspense fallback={null}>
+        <OptionalChunk>
           <SyncPill />
-        </Suspense>
+        </OptionalChunk>
       ) : null}
-      {/* Aucun pixel, aucune garde de route : le badge vaut sur toutes les
-          routes, et il n'émet aucune requête (`useConversationsSnapshot`
-          observe le cache, `enabled: false`). */}
-      <Suspense fallback={null}>
-        <AppBadge />
-      </Suspense>
+      {/* Aucun pixel au premier rendu, aucune garde de route : le badge vaut
+          sur toutes les routes, et il n'émet aucune requête
+          (`useConversationsSnapshot` observe le cache, `enabled: false`) ;
+          l'hôte des invitations n'arrive qu'au repos, dans la bande du haut. */}
+      <OptionalChunk>
+        <DeferredChrome routeKey={routeKey} signedIn={connecte} />
+      </OptionalChunk>
       {majAnnoncee ? (
-        <Suspense fallback={null}>
+        <OptionalChunk>
           <AppUpdateBanner />
-        </Suspense>
+        </OptionalChunk>
       ) : null}
       {children}
       {/* LE PROFIL D'UN AUTEUR S'OUVRE PAR-DESSUS L'ÉCRAN, sur toutes les
@@ -258,9 +265,9 @@ export default function Shell({ children }: { children: ReactNode }) {
           et un appel entrant s'affiche sur toutes les routes, comme
           `CallPresentationLayer.swift`. Sans appel, rien n'est chargé. */}
       {banniereNotification ? (
-        <Suspense fallback={null}>
+        <OptionalChunk>
           <NotificationToastHost />
-        </Suspense>
+        </OptionalChunk>
       ) : null}
       <CallLayer />
       {/* LA PILE DU HAUT (#9279, #9494) — « Reprendre l'appel », le
@@ -270,32 +277,32 @@ export default function Shell({ children }: { children: ReactNode }) {
           `--safe-top`. */}
       <TopBand routeKey={routeKey} signedIn={connecte} onInset={setBandeau} />
       {invitationArmee ? (
-        <Suspense fallback={null}>
+        <OptionalChunk>
           <ActivationInviteHost />
-        </Suspense>
+        </OptionalChunk>
       ) : null}
       {gardeEmail !== null ? (
-        <Suspense fallback={null}>
+        <OptionalChunk>
           <EmailGateHost reason={gardeEmail} />
-        </Suspense>
+        </OptionalChunk>
       ) : null}
       {/* APRÈS `children` : à z-index égal, c'est l'ordre du document qui
           tranche, et un menu recouvert par l'écran qu'il commande serait le
           défaut le plus bête du lot. */}
       {menusArmes ? (
-        <Suspense fallback={null}>
+        <OptionalChunk>
           <FloatingMenus routeKey={routeKey} />
-        </Suspense>
+        </OptionalChunk>
       ) : null}
       {apercuOuvert ? (
-        <Suspense fallback={null}>
+        <OptionalChunk>
           <ConversationPreviewHost />
-        </Suspense>
+        </OptionalChunk>
       ) : null}
       {departEnCours ? (
-        <Suspense fallback={null}>
+        <OptionalChunk>
           <ConversationDepartureHost />
-        </Suspense>
+        </OptionalChunk>
       ) : null}
       {/* LA FEUILLE D'ENVOI (#8884) : transfert, partage, publication — toute
           entrée l'ouvre par `openSendSheet`. L'hôte ne porte que l'abonnement ;

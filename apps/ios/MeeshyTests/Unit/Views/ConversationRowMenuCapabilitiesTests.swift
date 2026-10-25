@@ -197,6 +197,57 @@ final class ConversationRowMenuCapabilitiesTests: XCTestCase {
         XCTAssertEqual(caps.removal, .delete)
     }
 
+    // MARK: - Gérer les membres (#12631)
+
+    /// La grille type × rôle de `ConversationActionPolicy.manageMembers` : un
+    /// membre ne gère rien, un modérateur de groupe gère, un direct jamais, et
+    /// un rôle de plateforme PRIVILÉGIÉ vaut créateur une fois DANS (#11217).
+    func test_make_manageMembers_followsTheTypeByRoleGrid() {
+        let grid: [(type: MeeshyConversation.ConversationType, member: String, platform: String, expected: Bool)] = [
+            (.group, "member", "USER", false),
+            (.group, "moderator", "USER", true),
+            (.group, "admin", "USER", true),
+            (.group, "creator", "USER", true),
+            (.group, "MODERATOR", "USER", true),
+            (.public, "member", "USER", false),
+            (.public, "moderator", "USER", true),
+            (.broadcast, "member", "USER", false),
+            (.broadcast, "admin", "USER", true),
+            (.global, "member", "USER", false),
+            (.global, "member", "MODERATOR", true),
+            (.group, "member", "MODERATOR", true),
+            (.group, "member", "ADMIN", true),
+            (.group, "member", "AUDIT", false),
+            (.group, "member", "ANALYST", false)
+        ]
+        for row in grid {
+            let caps = capabilities(makeConversation(type: row.type, currentUserRole: row.member), user: makeUser(role: row.platform))
+            XCTAssertEqual(caps.manageMembers, row.expected, "\(row.type.rawValue) · \(row.member) · \(row.platform)")
+        }
+    }
+
+    func test_make_direct_neverManagesMembers_whateverTheRole() {
+        for platform in ["USER", "MODERATOR", "ADMIN", "BIGBOSS"] {
+            for member in ["member", "moderator", "admin", "creator"] {
+                let caps = capabilities(
+                    makeConversation(type: .direct, currentUserRole: member, participantUserId: "peer"),
+                    user: makeUser(role: platform)
+                )
+                XCTAssertFalse(caps.manageMembers, "Un direct n'a pas de membres à gérer (\(member), \(platform)).")
+            }
+        }
+    }
+
+    func test_make_closedGroup_managesNoMember() {
+        let caps = capabilities(makeConversation(currentUserRole: "creator", isActive: false), user: makeUser())
+        XCTAssertFalse(caps.manageMembers, "Une conversation terminée ne se modifie plus.")
+    }
+
+    func test_make_unloadedUser_managesNoMember() {
+        let caps = capabilities(makeConversation(currentUserRole: "creator"), user: nil)
+        XCTAssertFalse(caps.manageMembers)
+    }
+
     // MARK: - Le rang des réglages (#11230)
 
     /// L'entrée « Paramètres du groupe » s'ouvre sur le rang EFFECTIF de la
@@ -265,7 +316,8 @@ final class ConversationContextMenuAccessibilityTests: XCTestCase {
             onSearch: { recorder.calls.append("search") },
             onCall: { recorder.calls.append("call") },
             onVideoCall: { recorder.calls.append("videoCall") },
-            onGroupSettings: { recorder.calls.append("groupSettings") }
+            onGroupSettings: { recorder.calls.append("groupSettings") },
+            onManageMembers: { recorder.calls.append("manageMembers") }
         )
     }
 

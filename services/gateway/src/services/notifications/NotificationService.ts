@@ -60,7 +60,7 @@ import type { ServerEmitIOWithRooms } from '../../socketio/serverEmit';
 import { PushNotificationService } from '../PushNotificationService';
 import { EmailService } from '../EmailService';
 import { loadPostAcl, canUserConsumePost } from '../posts/postVisibility';
-import { pushCategoryForNotificationType, buildPushHeader, dedupePushSubtitle } from './push-header';
+import { pushCategoryForNotificationType, buildPushHeader, dedupePushSubtitle, pushThreadFields } from './push-header';
 import { contentDetailCategory, contentDetailPushFields } from './content-detail';
 import { servedBannerBody } from './served-banner-body';
 import type { NotificationContentDetail } from '@meeshy/shared/types/notification-content-detail';
@@ -1001,7 +1001,7 @@ export class NotificationService {
               body: pushBody,
               link,
               collapseId: params.collapseId,
-              ...(params.context.conversationId ? { threadId: params.context.conversationId } : {}),
+              ...pushThreadFields({ type: params.type, conversationId: params.context.conversationId }),
               ...(pushCategory ? { category: pushCategory } : {}),
               ...(unreadBadge !== undefined ? { badge: unreadBadge } : {}),
               data: {
@@ -3359,7 +3359,7 @@ export class NotificationService {
         // `data.replacesNotificationId` annule la bannière d'AVANT ; la
         // coalescence native sur la même identité en est le second filet.
         collapseId: row.id as string,
-        ...(conversationId ? { threadId: conversationId } : {}),
+        ...pushThreadFields({ type: row.type as NotificationType, conversationId }),
         ...(category ? { category } : {}),
         ...(unreadBadge !== undefined ? { badge: unreadBadge } : {}),
         data,

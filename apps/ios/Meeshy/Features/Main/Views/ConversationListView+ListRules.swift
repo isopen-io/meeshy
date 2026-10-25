@@ -106,6 +106,11 @@ nonisolated struct ConversationRowMenuCapabilities: Equatable, Sendable {
     /// autorité, ouvert), jamais sur `manageMembers`, qui couvre aussi Global,
     /// où la passerelle refuse toute modification (403).
     let groupSettings: Bool
+    /// « Gérer les membres » (#12631) — modérateur ou plus d'un groupe, d'une
+    /// conversation publique, d'une chaîne ou de Global encore ouverts ; jamais
+    /// un direct. Le rôle de plateforme privilégié vaut créateur une fois DANS
+    /// (#11217). Le web l'offre au même rôle (`row-actions.ts`).
+    let manageMembers: Bool
 
     static func make(conversation: MeeshyConversation, currentUser: MeeshyUser?) -> ConversationRowMenuCapabilities {
         let actions = ConversationActionPolicy.actions(for: ConversationActionPolicy.Input(
@@ -132,7 +137,8 @@ nonisolated struct ConversationRowMenuCapabilities: Equatable, Sendable {
             removal: actions.hide ? (conversation.type == .direct ? .delete : .hide) : nil,
             call: actions.call && talksToPeer,
             videoCall: actions.videoCall && talksToPeer,
-            groupSettings: actions.rename
+            groupSettings: actions.rename,
+            manageMembers: actions.manageMembers
         )
     }
 

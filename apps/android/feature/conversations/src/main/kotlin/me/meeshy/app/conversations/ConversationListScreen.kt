@@ -51,6 +51,8 @@ fun ConversationListScreen(
     searchCommunityCount: Int = 0,
     onRefresh: () -> Unit = {},
     rowNavigation: ConversationRowNavigation = ConversationRowNavigation.None,
+    onOpenSettings: () -> Unit = {},
+    onOpenConversationSearch: (String) -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
@@ -183,5 +185,6 @@ fun ConversationListScreen(
             onDismiss = viewModel::dismissLockPrompt,
         )
     }
+    ConversationListDialogHost(viewModel.dialogs, rowNavigation, onOpenSettings, onOpenConversationSearch)
     }
 }

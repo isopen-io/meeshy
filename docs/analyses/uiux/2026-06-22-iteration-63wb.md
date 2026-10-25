@@ -122,3 +122,14 @@ fichiers.
 ✅ **Complète et corrigée.** NE PLUS re-flagger le gap « Framer Motion ignore
 `prefers-reduced-motion` » : réglé globalement via `MotionProvider`
 (OS-level). NE PLUS re-flagger `MotionProvider.tsx`/`globals.css` reduced-motion.
+
+---
+
+## ✅ Statut : CLOS — LEGACY (annoté iter-76w, 2026-10-25)
+
+Cette analyse visait le **legacy Next.js** (`apps/web` d'avant #7668, routes
+`app/`, surfaces admin/ranking/tracking-links) retiré du dépôt le 2026-09-24.
+Son périmètre pointe du code **supprimé** : elle **ne se rejoue pas** et ses
+pistes différées sont caduques. Conservée pour l'histoire. La routine UI/UX web
+repart d'une revue fraîche de l'`apps/web` actuel (Vite + Preact) — voir le
+pointeur `docs/plans/uiux/web-iteration-pointer.md`.
