@@ -173,6 +173,7 @@
     <string name="row_join_call">Reingressar</string>
     <string name="row_join_call_a11y">Chamada em andamento, toque para reingressar</string>
     <string name="row_menu_info">Informações da conversa</string>
+    <string name="row_menu_manage_members">Gerenciar os membros</string>
     <string name="row_menu_view_profile">Ver perfil</string>
     <string name="shareLink_a11y_copied">Link copiado</string>
     <string name="shareLink_detail_allLanguages">Todos os idiomas</string>

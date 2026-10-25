@@ -1,6 +1,7 @@
 package me.meeshy.app.conversations
 
 import androidx.compose.runtime.Immutable
+import androidx.compose.ui.graphics.Color
 import me.meeshy.sdk.conversation.LocalMessage
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.CategoryOption
@@ -42,6 +43,8 @@ internal data class ConversationRowActions(
     val onViewInfo: (() -> Unit)? = null,
     val onViewProfile: (() -> Unit)? = null,
     val onCreateShareLink: (() -> Unit)? = null,
+    /** « Gérer les membres » ; la rangée ne l'offre que si la loi l'accorde (#12865). */
+    val onManageMembers: ((accent: Color) -> Unit)? = null,
 ) {
     /** Ajoute les destinations de navigation de [conversation] (profil du pair pour une directe). */
     fun withNavigation(
@@ -54,6 +57,7 @@ internal data class ConversationRowActions(
             onViewInfo = navigation.onViewInfo?.let { open -> { open(conversation.id) } },
             onViewProfile = peerId?.let { id -> navigation.onViewProfile?.let { open -> { open(id) } } },
             onCreateShareLink = navigation.onCreateShareLink?.let { open -> { open(conversation.id) } },
+            onManageMembers = navigation.onManageMembers?.let { open -> { accent -> open(conversation.id, accent) } },
         )
     }
 

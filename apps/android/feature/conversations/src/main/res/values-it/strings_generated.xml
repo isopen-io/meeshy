@@ -173,6 +173,7 @@
     <string name="row_join_call">Rientra</string>
     <string name="row_join_call_a11y">Chiamata in corso, tocca per rientrare</string>
     <string name="row_menu_info">Info conversazione</string>
+    <string name="row_menu_manage_members">Gestisci i membri</string>
     <string name="row_menu_view_profile">Vedi profilo</string>
     <string name="shareLink_a11y_copied">Link copiato</string>
     <string name="shareLink_detail_allLanguages">Tutte le lingue</string>

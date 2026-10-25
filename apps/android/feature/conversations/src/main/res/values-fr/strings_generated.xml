@@ -173,6 +173,7 @@
     <string name="row_join_call">Rejoindre</string>
     <string name="row_join_call_a11y">Appel en cours, toucher pour rejoindre</string>
     <string name="row_menu_info">Infos conversation</string>
+    <string name="row_menu_manage_members">Gérer les membres</string>
     <string name="row_menu_view_profile">Voir le profil</string>
     <string name="shareLink_a11y_copied">Lien copié</string>
     <string name="shareLink_detail_allLanguages">Toutes les langues</string>
