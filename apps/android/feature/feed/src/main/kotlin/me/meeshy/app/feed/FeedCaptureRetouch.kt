@@ -47,15 +47,19 @@ internal object FeedRetouchDelivery {
     }
 }
 
+/** L'auteur et la séance que les cadres écrivent : la marque, la date et l'heure de la prise. */
+@Composable
+private fun rememberFeedRetouchAuthor(): ComposerLookAuthor = remember {
+    val now = Date()
+    val date = DateFormat.getDateInstance(DateFormat.MEDIUM).format(now)
+    val person = ComposerLookPerson.author(null, null, null)
+    ComposerLookAuthor(person.id, person.name, person.handle, CallMontageCaption(CallMontageCaption.BRAND_TITLE, date, DateFormat.getTimeInstance(DateFormat.SHORT).format(now)), date)
+}
+
 /** La retouche unique de la photo prise pour un post (#12735) : [onDeliver] reçoit ce qui se téléverse. */
 @Composable
 internal fun FeedCaptureRetouchHost(pending: FeedRetouchPending, onDeliver: (MediaUploadItem) -> Unit, onDismiss: () -> Unit) {
-    val author = remember {
-        val now = Date()
-        val date = DateFormat.getDateInstance(DateFormat.MEDIUM).format(now)
-        val person = ComposerLookPerson.author(null, null, null)
-        ComposerLookAuthor(person.id, person.name, person.handle, CallMontageCaption(CallMontageCaption.BRAND_TITLE, date, DateFormat.getTimeInstance(DateFormat.SHORT).format(now)), date)
-    }
+    val author = rememberFeedRetouchAuthor()
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnBackPress = false, dismissOnClickOutside = false, decorFitsSystemWindows = false),
@@ -109,6 +113,7 @@ internal object FeedVideoRetouchDelivery {
 /** La retouche unique de la vidéo prise pour un post (#12735) : [onDeliver] reçoit ce qui se téléverse. */
 @Composable
 internal fun FeedVideoRetouchHost(pending: FeedVideoRetouchPending, onDeliver: (MediaUploadItem?) -> Unit, onDismiss: () -> Unit) {
+    val author = rememberFeedRetouchAuthor()
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnBackPress = false, dismissOnClickOutside = false, decorFitsSystemWindows = false),
@@ -117,6 +122,7 @@ internal fun FeedVideoRetouchHost(pending: FeedVideoRetouchPending, onDeliver: (
             source = pending.source,
             probe = pending.probe,
             output = pending.output,
+            author = author,
             onDone = { result ->
                 val file = when (result) {
                     ComposerVideoRetouchResult.Original -> pending.source

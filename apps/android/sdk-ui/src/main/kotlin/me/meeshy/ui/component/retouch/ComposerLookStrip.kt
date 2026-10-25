@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import me.meeshy.sdk.model.composer.look.CallFaceEffect
 import me.meeshy.sdk.model.composer.look.ComposerLookCanvas
 import me.meeshy.sdk.model.composer.look.ComposerLookFamily
 import me.meeshy.sdk.model.composer.look.ComposerLookStripFollow
@@ -73,8 +74,9 @@ internal fun ComposerLookStrip(
     author: ComposerLookAuthor,
     selects: Boolean,
     onChoose: (ComposerLookStripItem) -> Unit,
+    effects: List<CallFaceEffect> = RetouchRenderableEffects,
 ) {
-    val items = remember(family) { ComposerLookStripRule.items(family, effects = RetouchRenderableEffects) }
+    val items = remember(family, effects) { ComposerLookStripRule.items(family, effects = effects) }
     val chosen = ComposerLookStripRule.chosenIndex(items, look)
     val list = rememberLazyListState()
     val scope = rememberCoroutineScope()
