@@ -11,13 +11,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
-import androidx.compose.material.icons.filled.AttachFile
-import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.PhotoCamera
-import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
@@ -50,6 +43,7 @@ import me.meeshy.sdk.model.waveform.VoiceRecordingOutcome
 import me.meeshy.sdk.model.waveform.VoiceRecordingSession
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.ui.component.recording.VoiceRecordingPill
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -70,12 +64,12 @@ import java.io.File
  * in-flight spinner tile while uploading, then the real thumbnail, so the
  * publish gate only unlocks once media is genuinely attachable server-side.
  *
- * Camera-photo capture (`onCamera`, [Icons.Filled.PhotoCamera] tile) mirrors iOS's
+ * Camera-photo capture (`onCamera`, [MeeshyIcons.Camera] tile) mirrors iOS's
  * `camera.fill` button — one system `ACTION_IMAGE_CAPTURE` activity
  * ([ActivityResultContracts.TakePicture]) writing into a fresh [CameraCaptureFile]-named
  * destination the composer creates via the app's [FileProvider] authority, then dispatched
  * through the exact same [dispatchPicked] pipeline as a gallery pick — zero new upload/error
- * logic. Camera-video capture (`onVideoCapture`, [Icons.Filled.Videocam] tile) is the same
+ * logic. Camera-video capture (`onVideoCapture`, [MeeshyIcons.Video] tile) is the same
  * pattern one level over: `ACTION_VIDEO_CAPTURE` ([ActivityResultContracts.CaptureVideo]) writing
  * into a [CameraCaptureFile.nextVideo]-named destination, dispatched through the identical
  * [dispatchPicked] pipeline. **Deliberate, documented scope cut vs. iOS**: two system-delegated
@@ -84,7 +78,7 @@ import java.io.File
  * to the system camera app's own `ACTION_IMAGE_CAPTURE`/`ACTION_VIDEO_CAPTURE` intents, so no
  * camera runtime permission is needed here (the system camera app owns that).
  *
- * Generic file attachment (`onAttachFile`, [Icons.Filled.AttachFile] tile) mirrors iOS's
+ * Generic file attachment (`onAttachFile`, [MeeshyIcons.AttachFile] tile) mirrors iOS's
  * `doc.fill` button: [ActivityResultContracts.OpenMultipleDocuments] (any MIME type) lets the
  * author pick ANY document from the system picker, dispatched through the **exact same** [dispatchPicked]
  * pipeline every other tile already uses — the TUS upload/error-handling logic is fully
@@ -93,7 +87,7 @@ import java.io.File
  * was needed. The one genuinely new rendering decision — a picked document has no
  * image/video thumbnail to show — lives in the pure [UploadedMedia.hasThumbnailPreview] extension
  * (next to [FeedComposerDraft]), not inlined here: [MediaAttachmentsRow] renders a generic
- * [Icons.AutoMirrored.Filled.InsertDriveFile] tile instead of [AsyncImage] whenever an attached
+ * [MeeshyIcons.Document] tile instead of [AsyncImage] whenever an attached
  * item answers `false`. **Deliberate, documented scope cut**: no filename/size label on the file tile yet —
  * [UploadedMedia] (`:core:model`) doesn't carry the original filename the gateway's TUS response
  * discards on this path, unlike iOS's `MessageAttachment.fileName`; adding it is a separately-scoped
@@ -111,7 +105,7 @@ import java.io.File
  * on publish ([FeedComposerDraft.language]), matching iOS always sending
  * `originalLanguage: composerLanguage`, never omitting it once a draft exists.
  *
- * **Audio attachment** ([FeedVoiceRecorder], [Icons.Filled.Mic] tile) mirrors iOS's
+ * **Audio attachment** ([FeedVoiceRecorder], [MeeshyIcons.Mic] tile) mirrors iOS's
  * `mic.fill` button, but scoped to the smallest genuinely-unblocked slice rather than porting
  * iOS's dedicated full-screen `AudioPostComposerView` (its own record → on-device-transcribe →
  * pick-language → preview flow): a take recorded here dispatches through [dispatchItems] as one
@@ -134,7 +128,7 @@ import java.io.File
  * language override tied to the clip, no dedicated full-screen composer — each a
  * separately-scoped, heavier follow-up.
  *
- * **Location attachment** ([FeedLocationCapture], [Icons.Filled.LocationOn] tile) mirrors iOS's
+ * **Location attachment** ([FeedLocationCapture], [MeeshyIcons.LocationFilled] tile) mirrors iOS's
  * `location.fill` button, scoped to the smallest genuinely-valuable first sub-slice rather than
  * porting iOS's dedicated `LocationPickerView` (its own full-screen MapKit map, search, "my
  * position" recentring and `CLGeocoder` reverse-geocoding into a name/address): tapping the tile

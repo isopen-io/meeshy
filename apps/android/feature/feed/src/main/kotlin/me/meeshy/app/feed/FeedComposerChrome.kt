@@ -13,11 +13,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Description
-import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -43,6 +38,7 @@ import me.meeshy.sdk.model.auth.LanguageStepSelection
 import me.meeshy.sdk.model.formattedCoordinates
 import me.meeshy.ui.component.LanguagePickerDialog
 import me.meeshy.ui.component.LanguagePickerOption
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
@@ -134,7 +130,7 @@ internal fun LocationAttachmentChip(
             .padding(horizontal = MeeshySpacing.sm, vertical = MeeshySpacing.xs),
     ) {
         Icon(
-            imageVector = Icons.Filled.LocationOn,
+            imageVector = MeeshyIcons.LocationFilled,
             contentDescription = null,
             tint = MeeshyPalette.Indigo500,
             modifier = Modifier.size(16.dp),
@@ -149,7 +145,7 @@ internal fun LocationAttachmentChip(
             modifier = Modifier.size(20.dp),
         ) {
             Icon(
-                imageVector = Icons.Filled.Close,
+                imageVector = MeeshyIcons.Close,
                 contentDescription = stringResource(R.string.feed_composer_remove_location),
                 tint = MeeshyTheme.tokens.textMuted,
                 modifier = Modifier.size(12.dp),
@@ -260,7 +256,7 @@ internal fun ReelTypeToggle(
             .padding(vertical = MeeshySpacing.xs),
     ) {
         Icon(
-            imageVector = if (forcePlainPost) Icons.Filled.Description else Icons.Filled.PlayCircle,
+            imageVector = if (forcePlainPost) MeeshyIcons.Document else MeeshyIcons.PlayCircleFilled,
             contentDescription = null,
             tint = tint,
             modifier = Modifier.size(16.dp),
