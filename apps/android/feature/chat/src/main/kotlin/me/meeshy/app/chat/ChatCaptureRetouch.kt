@@ -15,6 +15,7 @@ import java.util.Date
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import me.meeshy.sdk.model.call.montage.CallMontageCaption
+import me.meeshy.sdk.model.composer.look.ComposerLookPerson
 import me.meeshy.ui.component.retouch.ComposerLookAuthor
 import me.meeshy.ui.component.retouch.ComposerRetouchResult
 import me.meeshy.ui.component.retouch.ComposerRetouchScreen
@@ -60,8 +61,13 @@ internal object ChatRetouchDelivery {
  * répond qu'une fois — [onDeliver] avec le fichier qui part, ou [onDismiss] quand elle est abandonnée.
  */
 @Composable
-internal fun ChatCaptureRetouchHost(pending: ChatRetouchPending, onDeliver: suspend (ChatRetouchedFile) -> Unit, onDismiss: () -> Unit) {
-    val author = rememberRetouchAuthor()
+internal fun ChatCaptureRetouchHost(
+    pending: ChatRetouchPending,
+    person: ComposerLookPerson?,
+    onDeliver: suspend (ChatRetouchedFile) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val author = rememberRetouchAuthor(person ?: ComposerLookPerson.author(null, null, null))
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnBackPress = false, dismissOnClickOutside = false, decorFitsSystemWindows = false),
@@ -80,14 +86,14 @@ internal fun ChatCaptureRetouchHost(pending: ChatRetouchPending, onDeliver: susp
 
 /** L'auteur et la séance que les cadres écrivent : la marque, la date et l'heure de la prise. */
 @Composable
-private fun rememberRetouchAuthor(): ComposerLookAuthor = remember {
+private fun rememberRetouchAuthor(person: ComposerLookPerson): ComposerLookAuthor = remember(person) {
     val now = Date()
     val date = DateFormat.getDateInstance(DateFormat.MEDIUM).format(now)
     val clock = DateFormat.getTimeInstance(DateFormat.SHORT).format(now)
     ComposerLookAuthor(
-        id = "self",
-        name = "",
-        handle = null,
+        id = person.id,
+        name = person.name,
+        handle = person.handle,
         caption = CallMontageCaption(CallMontageCaption.BRAND_TITLE, date, clock),
         date = date,
     )
@@ -109,6 +115,18 @@ internal class ChatVideoRetouchPending(val source: File, val output: File, val p
     }
 
     companion object {
+        /** Une vidéo des récents (#12735), écrite dans le dossier de prises ; `null` si elle ne se lit pas. */
+        suspend fun of(context: Context, bytes: ByteArray, nowMillis: Long): ChatVideoRetouchPending? = withContext(Dispatchers.IO) {
+            val dir = File(context.cacheDir, "captures").apply { mkdirs() }
+            val source = File(dir, ChatCameraCaptureFile.nextVideoSource(nowMillis))
+            val probe = runCatching { source.writeBytes(bytes) }.getOrNull()?.let { RetouchVideoProbe.of(source) }
+            if (probe == null) {
+                source.delete()
+                return@withContext null
+            }
+            ChatVideoRetouchPending(source, File(dir, ChatCameraCaptureFile.nextRetouchedVideo(nowMillis)), probe)
+        }
+
         /** La vidéo copiée dans le dossier de prises ; `null` si elle ne se lit pas (elle part alors telle quelle). */
         suspend fun of(context: Context, uri: Uri, nowMillis: Long): ChatVideoRetouchPending? = withContext(Dispatchers.IO) {
             val dir = File(context.cacheDir, "captures").apply { mkdirs() }

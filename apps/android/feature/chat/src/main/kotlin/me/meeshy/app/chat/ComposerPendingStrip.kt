@@ -1,5 +1,6 @@
 package me.meeshy.app.chat
 
+import me.meeshy.sdk.model.composer.PendingRetouchRule
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -49,6 +50,7 @@ internal fun ComposerPendingStrip(
     items: List<PendingAttachment>,
     onRemove: (String) -> Unit,
     modifier: Modifier = Modifier,
+    onEdit: ((PendingAttachment) -> Unit)? = null,
 ) {
     if (items.isEmpty()) return
     Row(
@@ -58,20 +60,25 @@ internal fun ComposerPendingStrip(
             .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.xs),
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
     ) {
-        items.forEach { item -> PendingChip(item = item, onRemove = { onRemove(item.id) }) }
+        items.forEach { item ->
+            val edit: (() -> Unit)? = if (onEdit != null && PendingRetouchRule.opens(item)) ({ onEdit(item) }) else null
+            PendingChip(item = item, onRemove = { onRemove(item.id) }, onEdit = edit)
+        }
     }
 }
 
 @Composable
-private fun PendingChip(item: PendingAttachment, onRemove: () -> Unit) {
+private fun PendingChip(item: PendingAttachment, onRemove: () -> Unit, onEdit: (() -> Unit)? = null) {
     val name = item.fileName.orEmpty()
     val removeLabel = stringResource(R.string.chat_tray_remove, name)
     val preparingLabel = stringResource(R.string.chat_tray_preparing, name)
+    val editLabel = stringResource(R.string.composer_recent_edit)
     Box(modifier = Modifier.size(CHIP_SIZE)) {
         Box(
             modifier = Modifier
                 .size(CHIP_SIZE)
                 .clip(RoundedCornerShape(MeeshyRadius.md))
+                .then(if (onEdit != null) Modifier.clickable(onClickLabel = editLabel, role = Role.Button, onClick = onEdit) else Modifier)
                 .background(MeeshyTheme.tokens.backgroundTertiary),
             contentAlignment = Alignment.Center,
         ) {

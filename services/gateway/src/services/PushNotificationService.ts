@@ -19,7 +19,8 @@ import {
   NOTIFICATION_REVOCATION_TTL_MS,
 } from './notifications/notificationRevocationPush';
 import { applyUserPreferences, isCallPushDataType } from './push-delivery-preferences';
-import { tokenRoutesPushType } from './push-type-routing';
+import { pushRoutingClientOf, tokenRoutesPushType } from './push-type-routing';
+import { apnsThreadIdOf } from './notifications/push-thread';
 
 const pushLogger = enhancedLogger.child({ module: 'PushNotificationService' });
 
@@ -66,7 +67,10 @@ export interface PushNotificationPayload {
   sound?: string;
   // For iOS
   category?: string;
+  /** Le fil d'une conversation : iOS empile, Android et le web en font le `tag` qui remplace (`push-thread.ts`). */
   threadId?: string;
+  /** Le fil lu par iOS SEUL (`aps.thread-id`), qui regroupe sans remplacer : le jeu (`push-thread.ts`). */
+  apnsThreadId?: string;
   // For VoIP calls
   callId?: string;
   callerName?: string;
@@ -434,7 +438,7 @@ export class PushNotificationService {
    * Send notification via Firebase Cloud Messaging
    */
   private async sendViaFCM(
-    tokenRecord: { id: string; token: string; platform: string },
+    tokenRecord: { id: string; token: string; platform: string; bundleId?: string | null },
     payload: PushNotificationPayload
   ): Promise<PushResult> {
     if (!this.firebaseMessaging) {
@@ -502,7 +506,7 @@ export class PushNotificationService {
           badge: payload.badge,
           ...(payload.muted ? {} : { sound: payload.sound || 'default' }),
           category: payload.category,
-          'thread-id': payload.threadId,
+          'thread-id': apnsThreadIdOf(payload),
           'mutable-content': 1,
           'content-available': 1,
         };
@@ -545,7 +549,9 @@ export class PushNotificationService {
             }
           : {
               priority: 'high',
-              notification: androidNotificationConfig(payload),
+              notification: androidNotificationConfig(payload, {
+                client: pushRoutingClientOf({ platform: tokenRecord.platform, bundleId: tokenRecord.bundleId ?? null }),
+              }),
             };
       } else if (tokenRecord.platform === 'web') {
         Object.assign(message, webPushFor(payload, { isCallPush, dataOnly, callTtlMs: CALL_PUSH_TTL_MS }));
@@ -709,8 +715,9 @@ export class PushNotificationService {
         (notification as any).category = payload.category;
       }
 
-      if (payload.threadId) {
-        notification.threadId = payload.threadId;
+      const threadId = apnsThreadIdOf(payload);
+      if (threadId) {
+        notification.threadId = threadId;
       }
 
       // mutable-content routes ALERT pushes through the Notification Service

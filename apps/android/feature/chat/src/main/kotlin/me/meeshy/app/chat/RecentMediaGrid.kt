@@ -89,12 +89,14 @@ internal fun ComposerRecentMedia(
     onPickFile: (bytes: ByteArray, fileName: String, mimeType: String?) -> Unit,
     modifier: Modifier = Modifier,
     onPickUri: ((Uri) -> Unit)? = null,
+    onEdit: ((PickedAttachment) -> Unit)? = null,
 ) {
     if (!canCapture) return
     RecentMediaGrid(
         accentColor = accentColor,
         onPick = { _, picked -> onPickFile(picked.bytes, picked.fileName, picked.mimeType) },
         modifier = modifier,
+        onEdit = onEdit,
         onPickUri = onPickUri?.let { stage -> { _: RecentMediaItem?, uri: Uri -> stage(uri) } },
     )
 }
