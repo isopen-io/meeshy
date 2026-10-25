@@ -923,6 +923,14 @@ describe('PushNotificationService', () => {
         expect(sent.threadId).toBe('conv-42');
       });
 
+      it('#10267 — le fil iOS seul (apnsThreadId) devient le thread-id APNs, sans fil de conversation', async () => {
+        const service = await setupService({ pushEnabled: true });
+
+        await service.sendToUser({ userId: 'user-123', payload: { title: 'T', body: 'B', apnsThreadId: 'game', data: { type: 'game_duo_invited' } } });
+
+        expect(mockApnsProviderSend.mock.calls[0][0].threadId).toBe('game');
+      });
+
       it('call pushes are exempt from delivery preferences (ring must stay audible)', async () => {
         mockApnsProviderSend.mockResolvedValue({ sent: [{ device: 'voip-token-123' }], failed: [] });
         const { PushNotificationService } = await getServiceWithEnv({

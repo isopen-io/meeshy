@@ -31,7 +31,7 @@ jest.mock('../../../utils/logger-enhanced', () => {
 
 const PHOTO = 'game_photo_moment';
 
-const shell = (appVersion: string | null): RoutableToken => ({ platform: 'android', appVersion, bundleId: null });
+const shell = (appVersion: string | null): RoutableToken => ({ platform: 'android', appVersion, bundleId: 'me.meeshy.app' });
 const iphone = (appVersion: string | null): RoutableToken => ({ platform: 'ios', appVersion, bundleId: 'me.meeshy.app' });
 const browser = (appVersion: string | null): RoutableToken => ({ platform: 'web', appVersion, bundleId: null });
 const nativeAndroid = (appVersion: string | null): RoutableToken => ({ platform: 'android', appVersion, bundleId: 'me.meeshy.android' });
@@ -67,6 +67,14 @@ describe('tokenRoutesPushType — la loi', () => {
     expect(tokenRoutesPushType({ platform: 'android', appVersion: '99.0.0', bundleId: 'me.meeshy.android.debug' }, PHOTO)).toBe(false);
   });
 
+  it('exclut un jeton Android qui ne dit pas quelle application l’a enregistré (fail-closed)', () => {
+    for (const bundleId of [null, '', 'com.example.app', 'me.meeshy.application']) {
+      const token = { platform: 'android', appVersion: '99.0.0', bundleId };
+      expect(pushRoutingClientOf(token)).toBeNull();
+      expect(tokenRoutesPushType(token, PHOTO)).toBe(false);
+    }
+  });
+
   it('exclut une plateforme inconnue', () => {
     expect(tokenRoutesPushType({ platform: 'windows', appVersion: '99.0.0', bundleId: null }, PHOTO)).toBe(false);
   });
@@ -98,7 +106,7 @@ describe('tokenRoutesPushType — la loi', () => {
 
   it('distingue la coque et l’application native Android par l’identifiant de publication', () => {
     expect(pushRoutingClientOf(shell('2.23.0'))).toBe('android-shell');
-    expect(pushRoutingClientOf({ platform: 'android', appVersion: '2.23.0', bundleId: 'me.meeshy.app' })).toBe('android-shell');
+    expect(pushRoutingClientOf({ platform: 'android', appVersion: '2.23.0', bundleId: 'me.meeshy.app.debug' })).toBe('android-shell');
     expect(pushRoutingClientOf(nativeAndroid('0.1.0'))).toBe('android-native');
     expect(pushRoutingClientOf(iphone('1.0'))).toBe('ios');
     expect(pushRoutingClientOf(browser('2.23.0'))).toBe('web');

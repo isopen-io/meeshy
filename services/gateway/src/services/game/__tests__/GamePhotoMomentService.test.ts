@@ -53,9 +53,13 @@ const facts = (over: Partial<GameBlockFacts> = {}): GameBlockFacts => ({
 
 const stepsOf = (block: GameBlock): string[] => photoStepsReached(catchUpStandingOf(block)).map((step) => step.id);
 
-const world = (options: { user?: Record<string, unknown>; notify?: GameNotifyResult } = {}) => {
+/** Une coque Android qui route le push photo (`PUSH_TYPE_ROUTING_FLOORS`). */
+const CAPABLE_SHELL = { platform: 'android', type: 'fcm', isActive: true, appVersion: '2.23.0', bundleId: 'me.meeshy.app' };
+
+const world = (options: { user?: Record<string, unknown>; notify?: GameNotifyResult; tokens?: readonly Record<string, unknown>[] } = {}) => {
   const db: FakeGameDb = fakeGameDb();
   seedUser(db, { isActive: true, deletedAt: null, isOnline: false, timezone: 'UTC', systemLanguage: 'fr', ...options.user }, USER);
+  for (const [index, token] of (options.tokens ?? [CAPABLE_SHELL]).entries()) db.pushToken.rows.push({ id: `token-${index}`, userId: USER, token: `t-${index}`, ...token });
   let block: GameBlock = buildGameBlock(facts());
   const events: GameNotificationEvent[] = [];
   const notifier = { notify: jest.fn(async (event: GameNotificationEvent) => (events.push(event), options.notify ?? 'sent')) };
@@ -247,5 +251,30 @@ describe('l’envoi', () => {
 
     expect(await w.service.deliver(LATER)).toEqual({ sent: 0, deferred: 0 });
     expect(w.events).toHaveLength(0);
+  });
+
+  it('aucun appareil qui sache ouvrir le push photo : rien ne part, le créneau reste libre, et l’étape reste à présenter (#10267)', async () => {
+    const iphoneOnly = [{ platform: 'ios', type: 'apns', isActive: true, appVersion: '1.9.0 (900)', bundleId: 'me.meeshy.app' }];
+    const oldShell = [{ ...CAPABLE_SHELL, appVersion: '2.22.0' }];
+    const inactive = [{ ...CAPABLE_SHELL, isActive: false }];
+    const voipOnly = [{ ...CAPABLE_SHELL, platform: 'ios', type: 'voip' }];
+    for (const tokens of [[], iphoneOnly, oldShell, inactive, voipOnly]) {
+      const w = world({ tokens });
+      await crossFlameSeven(w);
+
+      expect(await w.service.deliver(LATER)).toEqual({ sent: 0, deferred: 0 });
+      expect(w.notifier.notify).not.toHaveBeenCalled();
+      for (const row of w.rows()) expect(row.notifiedAt).toBeUndefined();
+    }
+  });
+
+  it('l’appareil capable arrive : l’étape restée en attente part au passage suivant', async () => {
+    const w = world({ tokens: [{ ...CAPABLE_SHELL, appVersion: '2.22.0' }] });
+    await crossFlameSeven(w);
+    await w.service.deliver(LATER);
+    w.db.pushToken.rows.push({ id: 'token-new', userId: USER, token: 't-new', ...CAPABLE_SHELL });
+
+    expect(await w.service.deliver(new Date(LATER.getTime() + 10 * MINUTE))).toEqual({ sent: 1, deferred: 0 });
+    expect(w.events).toHaveLength(1);
   });
 });
