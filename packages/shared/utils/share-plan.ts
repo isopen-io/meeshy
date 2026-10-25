@@ -116,7 +116,7 @@ export type SharePlan = {
   readonly limits: {
     readonly files: number;
     readonly bytes: number;
-    /** Combien de pièces retirer, depuis la fin, pour tenir 20 fichiers et 500 Mo. */
+    /** Combien de pièces retirer, depuis la fin, pour tenir `SHARE_LIMITS` (fichiers et octets). */
     readonly trimCount: number;
     readonly recipients: number;
     readonly overRecipients: number;

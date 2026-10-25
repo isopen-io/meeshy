@@ -147626,43 +147626,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "ملفات لم تُنسخ: %d. تحمل المشاركة 20 ملفًا و500 ميغابايت على الأكثر."
+            "value": "ملفات لم تُنسخ: %1$d. تحمل المشاركة %2$d ملفًا و%3$@ على الأكثر."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nicht kopierte Dateien: %d. Ein Teilen umfasst höchstens 20 Dateien und 500 MB."
+            "value": "Nicht kopierte Dateien: %1$d. Ein Teilen umfasst höchstens %2$d Dateien und %3$@."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Files not copied: %d. A share carries at most 20 files and 500 MB."
+            "value": "Files not copied: %1$d. A share carries at most %2$d files and %3$@."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Archivos no copiados: %d. Un envío lleva como máximo 20 archivos y 500 MB."
+            "value": "Archivos no copiados: %1$d. Un envío lleva como máximo %2$d archivos y %3$@."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Fichiers non copiés : %d. Un partage emporte au plus 20 fichiers et 500 Mo."
+            "value": "Fichiers non copiés : %1$d. Un partage emporte au plus %2$d fichiers et %3$@."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "File non copiati: %d. Una condivisione porta al massimo 20 file e 500 MB."
+            "value": "File non copiati: %1$d. Una condivisione porta al massimo %2$d file e %3$@."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Arquivos não copiados: %d. Um compartilhamento leva no máximo 20 arquivos e 500 MB."
+            "value": "Arquivos não copiados: %1$d. Um compartilhamento leva no máximo %2$d arquivos e %3$@."
           }
         }
       }
@@ -305335,43 +305335,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "%1$d ملفات، %2$d ميغابايت. تحمل المشاركة 20 ملفًا و500 ميغابايت على الأكثر."
+            "value": "%1$d ملفات، %2$@. تحمل المشاركة %3$d ملفًا و%4$@ على الأكثر."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "%1$d Dateien, %2$d MB. Ein Teilen umfasst höchstens 20 Dateien und 500 MB."
+            "value": "%1$d Dateien, %2$@. Ein Teilen umfasst höchstens %3$d Dateien und %4$@."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "%1$d files, %2$d MB. A share carries at most 20 files and 500 MB."
+            "value": "%1$d files, %2$@. A share carries at most %3$d files and %4$@."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "%1$d archivos, %2$d MB. Un envío lleva como máximo 20 archivos y 500 MB."
+            "value": "%1$d archivos, %2$@. Un envío lleva como máximo %3$d archivos y %4$@."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "%1$d fichiers, %2$d Mo. Un partage emporte au plus 20 fichiers et 500 Mo."
+            "value": "%1$d fichiers, %2$@. Un partage emporte au plus %3$d fichiers et %4$@."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "%1$d file, %2$d MB. Una condivisione porta al massimo 20 file e 500 MB."
+            "value": "%1$d file, %2$@. Una condivisione porta al massimo %3$d file e %4$@."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "%1$d arquivos, %2$d MB. Um compartilhamento leva no máximo 20 arquivos e 500 MB."
+            "value": "%1$d arquivos, %2$@. Um compartilhamento leva no máximo %3$d arquivos e %4$@."
           }
         }
       }

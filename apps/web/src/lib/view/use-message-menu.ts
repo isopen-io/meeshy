@@ -29,6 +29,9 @@ import { useStickerLibrary } from '@/lib/stickers/use-sticker-library';
 import { safeLocalStorage } from '@/lib/storage';
 import { saveContactFile } from '@/lib/contact-card/save-contact-file';
 import { coqueCourante } from '@/lib/native-shell';
+import { openLink } from '@/lib/links/open-link';
+import { publicWebOrigin } from '@/lib/links/public-origin';
+import { navigate } from '@/routes/route-table';
 
 import {
   forwardMenuItems,
@@ -588,7 +591,7 @@ export function useMessageMenu(params: {
           if (outcome === 'failed') announce(translate(lang, 'contactCard.downloadFailed'));
         });
       const gestures: Readonly<Record<TypeActionId, (() => void) | null>> = {
-        openLink: link === null ? null : () => open(link),
+        openLink: link === null ? null : () => openLink(link, { origins: [publicWebOrigin(window.location.origin), window.location.origin], navigate, openOutside: open }),
         copyLink: link === null || !leaves ? null : () => copy(link, 'message.link.copied'),
         openInMaps: place === null ? null : () => open(mapsUrlOf(place, { platform: coqueCourante()?.getPlatform?.() })),
         copyAddress: place === null || !leaves ? null : () => copy(place.address ?? place.name ?? `${place.latitude}, ${place.longitude}`, 'message.location.copied'),
