@@ -16,6 +16,7 @@
 //     (fixture/photo.jpg, lib/fixture.mjs) prend la place des silhouettes, recadrée en cover sur sa boîte ;
 //   - le cadre complet est rendu DEUX fois, depuis deux chargements de page : des octets différents (un titre en
 //     dégradé sur chemin courbe) rendent la cible instable et la commande rouge — une cible se prouve ;
+//   - aucune capture ne part avant que la photo, posée après le chargement, soit chargée et décodée (settle, #12801) ;
 //   - le rendu descend à l'échelle de design par la moyenne exacte 2×2 (halve), WebP sans perte.
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -26,7 +27,7 @@ import { destinationOf, halve, indexOf, planTargets, RENDERED, selectCollections
 import { FIXTURE } from './fixture.mjs';
 import { launch } from './launch.mjs';
 import { classify, show } from './layers.mjs';
-import { openPage, pool, shoot, showSvg } from './page.mjs';
+import { openPage, pool, shoot, showPhoto, showSvg } from './page.mjs';
 import sharp, { sharpVersion } from './sharp.mjs';
 
 const HERE = path.dirname(new URL(import.meta.url).pathname);
@@ -79,7 +80,7 @@ async function renderOnce(handle, svg) {
   const green = await decode(await shoot(handle));
   const window = windowBox(magenta, green);
   const kinds = Object.keys(order).filter((k) => k !== 'photo');
-  await handle.page.evaluate(show, { kinds, photo: { href: photoHref, box: window.map((v) => v / 2) } });
+  await showPhoto(handle, { kinds, photo: { href: photoHref, box: window.map((v) => v / 2) } });
   return { png: await shoot(handle), window };
 }
 

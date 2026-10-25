@@ -21,8 +21,7 @@ nonisolated struct CallFrameBundleImages: CallFrameSceneImageProviding {
 
     func image(for src: String, maxPixelSize: CGFloat) -> CGImage? {
         guard let url = Self.url(for: src) else { return nil }
-        return ImageDownsampler.thumbnail(fileURL: url, maxPixelSize: max(1, maxPixelSize.rounded(.up)),
-                                          decodeImmediately: true)
+        return ImageDownsampler.thumbnail(fileURL: url, maxPixelSize: max(1, maxPixelSize.rounded(.up)), decodeImmediately: true)
     }
 }
 

@@ -157,19 +157,77 @@ final class OutgoingImageHEICDeliveryTests: XCTestCase {
         XCTAssertLessThanOrEqual(out.encodedGenerations, 1, "au plus UNE génération, jamais une conversion en JPEG")
     }
 
-    func test_removeLocation_heicFileWithGPS_neverLeavesWithItsLocation() throws {
+    func test_prepare_nativeHeicWithAPlaceName_dropsThePlace_keepsThePixels_andStaysHeic() throws {
+        let data = try Self.heic(place: true)
+        let out = try XCTUnwrap(OutgoingImagePreparer().prepare(data, policy: Self.native()))
+        XCTAssertEqual(OutgoingImageFormat(sniffing: out.data), .heic)
+        XCTAssertEqual(Self.placeNames(in: try Self.properties(of: out.data)), [])
+        XCTAssertEqual(try Self.pixels(of: out.data), try Self.pixels(of: data), "retirer le lieu ne ré-encode pas les pixels")
+        XCTAssertEqual(out.encodedGenerations, 0)
+    }
+
+    func test_prepare_nativeHeicWithAPlaceKeptByTheUser_travelsByteForByte() throws {
+        let data = try Self.heic(gps: true, place: true)
+        let out = try XCTUnwrap(OutgoingImagePreparer().prepare(data, policy: Self.native(keepsLocation: true)))
+        XCTAssertEqual(out.data, data)
+    }
+
+    func test_prepare_heicConvertedToJpeg_dropsTheCoordinatesAndThePlaceName() throws {
+        let out = try XCTUnwrap(OutgoingImagePreparer().prepare(try Self.heic(gps: true, place: true),
+                                                                policy: .jpegCompatibility(keepsLocation: false)))
+        XCTAssertEqual(out.format, .jpeg)
+        let properties = try Self.properties(of: out.data)
+        XCTAssertNil(properties[kCGImagePropertyGPSDictionary])
+        XCTAssertEqual(Self.placeNames(in: properties), [])
+    }
+
+    func test_removeLocation_heicFileWithGPS_dropsIt_andStaysHeic() throws {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("outgoing-\(UUID().uuidString).heic")
-        try Self.heic(gps: true).write(to: url)
+        try Self.heic(gps: true, place: true).write(to: url)
         defer { try? FileManager.default.removeItem(at: url) }
-        switch OutgoingImageLocationRemoval.removeLocation(fromFileAt: url) {
-        case .removed:
-            XCTAssertNil(try Self.properties(of: Data(contentsOf: url))[kCGImagePropertyGPSDictionary])
-        case .failed:
-            XCTAssertNotNil(try Self.properties(of: Data(contentsOf: url))[kCGImagePropertyGPSDictionary],
-                            "un échec laisse l'original en place, et l'hôte ne le fait pas partir")
-        case .untouched:
-            XCTFail("un HEIC qui porte un lieu n'est jamais rendu intact")
-        }
+        XCTAssertEqual(OutgoingImageLocationRemoval.removeLocation(fromFileAt: url), .removed)
+        let stripped = try Data(contentsOf: url)
+        XCTAssertEqual(OutgoingImageFormat(sniffing: stripped), .heic)
+        XCTAssertNil(try Self.properties(of: stripped)[kCGImagePropertyGPSDictionary])
+        XCTAssertEqual(Self.placeNames(in: try Self.properties(of: stripped)), [])
+    }
+
+    func test_prepare_nativeHeicWithAPlaceInXmpOnly_dropsIt_andStaysHeic() throws {
+        let data = try Self.heicWithXmpPlace()
+        XCTAssertFalse(Self.places(in: data).isEmpty, "le témoin doit porter un lieu XMP")
+        let out = try XCTUnwrap(OutgoingImagePreparer().prepare(data, policy: Self.native()))
+        XCTAssertEqual(OutgoingImageFormat(sniffing: out.data), .heic)
+        XCTAssertEqual(Self.places(in: out.data), [])
+        XCTAssertEqual(out.encodedGenerations, 0)
+    }
+
+    func test_prepare_nativeHeicWhoseSecondImageCarriesGPS_dropsItEverywhere() throws {
+        let data = try Self.heicSequence(gpsOnImage: 1)
+        let witness = Self.places(in: data)
+        XCTAssertFalse(witness.isEmpty)
+        XCTAssertTrue(witness.allSatisfy { $0.hasPrefix("1:") }, "le témoin ne porte le lieu que sur la 2e image : \(witness)")
+        let out = try XCTUnwrap(OutgoingImagePreparer().prepare(data, policy: Self.native()))
+        XCTAssertEqual(OutgoingImageFormat(sniffing: out.data), .heic)
+        XCTAssertEqual(Self.places(in: out.data), [])
+    }
+
+    func test_removeLocation_heicFileWhoseSecondImageCarriesGPS_dropsItEverywhere() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("outgoing-\(UUID().uuidString).heic")
+        try Self.heicSequence(gpsOnImage: 1).write(to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+        XCTAssertEqual(OutgoingImageLocationRemoval.removeLocation(fromFileAt: url), .removed)
+        XCTAssertEqual(Self.places(in: try Data(contentsOf: url)), [])
+    }
+
+    /// Un HEIC n'a pas de bloc IIM et le lieu du contenu IPTC n'a pas d'équivalent
+    /// XMP : seul un JPEG le transporte.
+    func test_removeLocation_jpegFileWithAContentLocation_dropsIt() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("outgoing-\(UUID().uuidString).jpg")
+        try Self.jpegWithContentLocation().write(to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+        XCTAssertFalse(Self.places(in: try Data(contentsOf: url)).isEmpty, "le témoin doit porter un lieu du contenu")
+        XCTAssertEqual(OutgoingImageLocationRemoval.removeLocation(fromFileAt: url), .removed)
+        XCTAssertEqual(Self.places(in: try Data(contentsOf: url)), [])
     }
 
     func test_prepare_heicOnACompatibilityPolicy_isARealJpeg() throws {
@@ -203,7 +261,8 @@ final class OutgoingImageHEICDeliveryTests: XCTestCase {
         return defaults
     }
 
-    private static func heic(width: Int = 200, height: Int = 150, gps: Bool = false, noisy: Bool = false) throws -> Data {
+    private static func heic(width: Int = 200, height: Int = 150, gps: Bool = false, place: Bool = false,
+                             noisy: Bool = false) throws -> Data {
         let types = CGImageDestinationCopyTypeIdentifiers() as? [String] ?? []
         try XCTSkipUnless(types.contains(UTType.heic.identifier), "l'hôte ne sait pas encoder du HEIC")
         let colorSpace = try XCTUnwrap(CGColorSpace(name: CGColorSpace.sRGB))
@@ -224,13 +283,97 @@ final class OutgoingImageHEICDeliveryTests: XCTestCase {
         let image = try XCTUnwrap(context.makeImage())
         let data = NSMutableData()
         let destination = try XCTUnwrap(CGImageDestinationCreateWithData(data, UTType.heic.identifier as CFString, 1, nil))
-        let properties: [CFString: Any] = gps ? [kCGImagePropertyGPSDictionary: [
+        let coordinates: [CFString: Any] = gps ? [kCGImagePropertyGPSDictionary: [
             kCGImagePropertyGPSLatitude: 48.8566, kCGImagePropertyGPSLatitudeRef: "N",
             kCGImagePropertyGPSLongitude: 2.3522, kCGImagePropertyGPSLongitudeRef: "E",
         ] as [CFString: Any]] : [:]
+        let placeName: [CFString: Any] = place ? [kCGImagePropertyIPTCDictionary: [
+            kCGImagePropertyIPTCCity: "Paris", kCGImagePropertyIPTCSubLocation: "Rue de Rivoli",
+            kCGImagePropertyIPTCProvinceState: "Île-de-France", kCGImagePropertyIPTCCountryPrimaryLocationName: "France",
+        ] as [CFString: Any]] : [:]
+        let properties = coordinates.merging(placeName) { first, _ in first }
         CGImageDestinationAddImage(destination, image, properties as CFDictionary)
         XCTAssertTrue(CGImageDestinationFinalize(destination))
         return data as Data
+    }
+
+    /// Chaque lieu trouvé, image par image : propriétés GPS et IPTC, balises XMP.
+    private static func places(in data: Data) -> [String] {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return ["illisible"] }
+        let iptcKeys: [CFString] = [kCGImagePropertyIPTCCity, kCGImagePropertyIPTCSubLocation, kCGImagePropertyIPTCProvinceState,
+                                    kCGImagePropertyIPTCCountryPrimaryLocationName, kCGImagePropertyIPTCContentLocationName,
+                                    kCGImagePropertyIPTCContentLocationCode, kCGImagePropertyIPTCExtLocationShown,
+                                    kCGImagePropertyIPTCExtLocationCreated]
+        let xmpNames: Set<String> = ["City", "State", "Country", "Location", "LocationShown", "LocationCreated",
+                                     "IIM2-026", "IIM2-027"]
+        return (0..<CGImageSourceGetCount(source)).flatMap { index -> [String] in
+            let properties = CGImageSourceCopyPropertiesAtIndex(source, index, nil) as? [CFString: Any] ?? [:]
+            let iptc = properties[kCGImagePropertyIPTCDictionary] as? [CFString: Any] ?? [:]
+            let tags = CGImageSourceCopyMetadataAtIndex(source, index, nil)
+                .flatMap { CGImageMetadataCopyTags($0) as? [CGImageMetadataTag] } ?? []
+            let xmp = tags.compactMap { CGImageMetadataTagCopyName($0) as String? }
+                .filter { $0.hasPrefix("GPS") || xmpNames.contains($0) }
+            return (properties[kCGImagePropertyGPSDictionary] != nil ? ["\(index):GPS"] : [])
+                + iptcKeys.filter { iptc[$0] != nil }.map { "\(index):IPTC \($0)" }
+                + xmp.map { "\(index):XMP \($0)" }
+        }
+    }
+
+    private static func image(width: Int = 200, height: Int = 150, green: CGFloat = 0.5) throws -> CGImage {
+        let colorSpace = try XCTUnwrap(CGColorSpace(name: CGColorSpace.sRGB))
+        let context = try XCTUnwrap(CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+                                              space: colorSpace, bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue))
+        context.setFillColor(red: 0.3, green: green, blue: 0.2, alpha: 1)
+        context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        return try XCTUnwrap(context.makeImage())
+    }
+
+    private static func encoded(_ type: UTType, images: [(CGImage, CGImageMetadata?, [CFString: Any])]) throws -> Data {
+        let types = CGImageDestinationCopyTypeIdentifiers() as? [String] ?? []
+        try XCTSkipUnless(types.contains(type.identifier), "l'hôte ne sait pas encoder \(type.identifier)")
+        let data = NSMutableData()
+        let destination = try XCTUnwrap(CGImageDestinationCreateWithData(data, type.identifier as CFString, images.count, nil))
+        images.forEach { image, metadata, properties in
+            CGImageDestinationAddImageAndMetadata(destination, image, metadata, properties as CFDictionary)
+        }
+        XCTAssertTrue(CGImageDestinationFinalize(destination))
+        return data as Data
+    }
+
+    private static func heicWithXmpPlace() throws -> Data {
+        let metadata = try XCTUnwrap(CGImageMetadataCreateMutable())
+        XCTAssertTrue(CGImageMetadataSetValueWithPath(metadata, nil, "photoshop:City" as CFString, "Paris" as CFString))
+        XCTAssertTrue(CGImageMetadataSetValueWithPath(metadata, nil, "Iptc4xmpCore:Location" as CFString, "Louvre" as CFString))
+        return try encoded(.heic, images: [(try image(), metadata, [:])])
+    }
+
+    private static func heicSequence(gpsOnImage gpsIndex: Int) throws -> Data {
+        let gps: [CFString: Any] = [kCGImagePropertyGPSDictionary: [
+            kCGImagePropertyGPSLatitude: 48.8566, kCGImagePropertyGPSLatitudeRef: "N",
+        ] as [CFString: Any]]
+        return try encoded(.heic, images: try [0.2, 0.8].enumerated().map { index, green in
+            (try image(green: green), nil, index == gpsIndex ? gps : [:])
+        })
+    }
+
+    private static func jpegWithContentLocation() throws -> Data {
+        let iptc: [CFString: Any] = [kCGImagePropertyIPTCDictionary: [
+            kCGImagePropertyIPTCContentLocationName: "Tour Eiffel", kCGImagePropertyIPTCContentLocationCode: "FRA",
+        ] as [CFString: Any]]
+        return try encoded(.jpeg, images: [(try image(), nil, iptc)])
+    }
+
+    private static func placeNames(in properties: [CFString: Any]) -> [String] {
+        let iptc = properties[kCGImagePropertyIPTCDictionary] as? [CFString: Any] ?? [:]
+        return [kCGImagePropertyIPTCCity, kCGImagePropertyIPTCSubLocation, kCGImagePropertyIPTCProvinceState,
+                kCGImagePropertyIPTCCountryPrimaryLocationName].compactMap { iptc[$0] as? String }
+    }
+
+    /// Les pixels DÉCODÉS : deux fichiers aux mêmes pixels n'ont pas été ré-encodés entre eux.
+    private static func pixels(of data: Data) throws -> Data {
+        let source = try XCTUnwrap(CGImageSourceCreateWithData(data as CFData, nil))
+        let image = try XCTUnwrap(CGImageSourceCreateImageAtIndex(source, 0, nil))
+        return try XCTUnwrap(image.dataProvider?.data) as Data
     }
 
     private static func properties(of data: Data) throws -> [CFString: Any] {
