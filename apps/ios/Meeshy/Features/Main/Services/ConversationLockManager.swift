@@ -571,8 +571,14 @@ final class ConversationLockManager: ObservableObject, ConversationLockGating {
 
     // MARK: - Per-conversation PIN (4 digits)
 
+    /// La conversation est-elle sous PIN ? La liste LUE fait foi. Tant
+    /// qu'elle est inconnue (#12655), le code que le trousseau tient pour la
+    /// conversation la verrouille aussi : la rangée, l'aperçu, le balayage,
+    /// l'ouverture et la porte du routeur ne traitent jamais en ouverte une
+    /// conversation dont le PIN existe.
     func isLocked(_ conversationId: String) -> Bool {
         lockedConversationIds.contains(conversationId)
+            || (!knowsLockedIds && vault.read(lockKey(conversationId)) != nil)
     }
 
     /// **La conversation PEUT-elle être sous PIN ?** (#12655) Avant que la
@@ -598,7 +604,7 @@ final class ConversationLockManager: ObservableObject, ConversationLockGating {
     }
 
     func hidesContent(of conversationId: String) -> Bool {
-        Self.hidesContent(of: conversationId, lockedConversationIds: lockedConversationIds)
+        isLocked(conversationId)
     }
 
     func setLock(conversationId: String, pin: String) {
