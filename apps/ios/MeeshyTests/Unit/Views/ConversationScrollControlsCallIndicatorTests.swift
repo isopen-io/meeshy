@@ -112,3 +112,65 @@ final class ConversationScrollControlsCallIndicatorTests: XCTestCase {
         )
     }
 }
+
+/// #13109 — la pastille « revenir en bas » ne montre jamais ce que la bulle
+/// scelle ou voile : ni texte, ni vignette, ni image, ni audio.
+final class ConversationScrollPillProtectionTests: XCTestCase {
+    private let now = Date(timeIntervalSince1970: 1_792_970_000)
+    private let secret = "Le code du coffre est 4417"
+
+    private func photo(isViewOnce: Bool = false, isBlurred: Bool = false) -> MeeshyMessageAttachment {
+        MeeshyMessageAttachment(id: "a1", mimeType: "image/jpeg", fileUrl: "https://cdn.example/secret.jpg",
+                                isViewOnce: isViewOnce, isBlurred: isBlurred, thumbnailUrl: "https://cdn.example/secret-thumb.jpg")
+    }
+
+    private func message(
+        content: String? = nil,
+        effects: MessageEffects = .none,
+        expiresAt: Date? = nil,
+        deletedAt: Date? = nil,
+        isEncrypted: Bool = false,
+        encryptionMode: String? = nil,
+        attachments: [MeeshyMessageAttachment]? = nil
+    ) -> Message {
+        Message(conversationId: "c1", senderId: "peer", content: content ?? secret, deletedAt: deletedAt,
+                expiresAt: expiresAt, effects: effects, isEncrypted: isEncrypted, encryptionMode: encryptionMode,
+                attachments: attachments ?? [photo()])
+    }
+
+    func test_anOrdinaryMessage_showsItsTextAndItsPiece() {
+        let preview = ConversationView.unreadPreview(of: message(), now: now)
+
+        XCTAssertEqual(preview.text, secret)
+        XCTAssertEqual(preview.attachment?.id, "a1")
+    }
+
+    func test_aProtectedMessage_showsNothingOfItsContent() {
+        let cases: [(String, Message)] = [
+            ("vue unique", message(effects: MessageEffects(flags: [.viewOnce]))),
+            ("flou", message(effects: MessageEffects(flags: [.blurred]))),
+            ("pièce à vue unique", message(attachments: [photo(isViewOnce: true)])),
+            ("pièce floutée", message(attachments: [photo(isBlurred: true)])),
+            ("éphémère échu", message(expiresAt: now.addingTimeInterval(-1))),
+            ("supprimé", message(deletedAt: now.addingTimeInterval(-60))),
+            ("chiffré non ouvert", message(content: E2EEWire.contentPlaceholder, isEncrypted: true, encryptionMode: "e2ee")),
+        ]
+        for (label, protected) in cases {
+            let preview = ConversationView.unreadPreview(of: protected, now: now)
+            XCTAssertNil(preview.text, "\(label) : le texte ne part pas dans la pastille")
+            XCTAssertNil(preview.attachment, "\(label) : ni vignette, ni image, ni audio")
+        }
+    }
+
+    func test_anEphemeralStillAlive_staysReadableLikeItsBubble() {
+        let preview = ConversationView.unreadPreview(of: message(expiresAt: now.addingTimeInterval(60)), now: now)
+
+        XCTAssertEqual(preview.text, secret)
+    }
+
+    func test_anEndToEndMessageThisDeviceOpened_showsItsPlaintext() {
+        let preview = ConversationView.unreadPreview(of: message(content: "Bonjour", isEncrypted: true, encryptionMode: "e2ee", attachments: []), now: now)
+
+        XCTAssertEqual(preview.text, "Bonjour")
+    }
+}

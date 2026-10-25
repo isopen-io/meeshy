@@ -27,9 +27,36 @@ extension ConversationView {
         !typing.isEmpty
     }
 
+    /// Ce que la pastille montre du dernier message non lu : la loi
+    /// `unreadPreview(of:now:)`, jamais le message brut.
+    var unreadPreview: (text: String?, attachment: MessageAttachment?) {
+        Self.unreadPreview(of: viewModel.lastUnreadMessage, now: Date())
+    }
+
     /// Unread message attachment (for rich preview in button)
-    var unreadAttachment: MessageAttachment? {
-        viewModel.lastUnreadMessage?.attachments.first
+    var unreadAttachment: MessageAttachment? { unreadPreview.attachment }
+
+    /// CE QUE LA PASTILLE « REVENIR EN BAS » A LE DROIT DE MONTRER (#13109,
+    /// jumelle de #12993 sur le web). La pastille peint le texte, la vignette,
+    /// l'image et l'audio du dernier message non lu à côté de sa bulle : elle
+    /// ne montre donc rien de ce que la bulle scelle ou voile. Vue unique ou
+    /// flou (sur le message ou sur une pièce), éphémère échu, message
+    /// supprimé, chiffré de bout en bout que cet appareil n'a pas ouvert (le
+    /// littéral `[Encrypted]`) : ni texte, ni pièce.
+    nonisolated static func unreadPreview(of message: Message?, now: Date) -> (text: String?, attachment: MessageAttachment?) {
+        guard let message, !unreadPreviewIsWithheld(message, now: now) else { return (nil, nil) }
+        return (message.content, message.attachments.first)
+    }
+
+    private nonisolated static func unreadPreviewIsWithheld(_ message: Message, now: Date) -> Bool {
+        let protectedPiece = message.attachments.contains { piece in
+            piece.isViewOnce || piece.isBlurred
+                || MessageEffectFlags(rawValue: piece.effectFlags ?? 0).contains(.viewOnce)
+                || MessageEffectFlags(rawValue: piece.effectFlags ?? 0).contains(.blurred)
+        }
+        let expired = message.expiresAt.map { $0 <= now } ?? false
+        let unopenedEndToEnd = message.content == E2EEWire.contentPlaceholder
+        return message.isDeleted || message.holdsViewOnce || message.isBlurred || protectedPiece || expired || unopenedEndToEnd
     }
 
     /// True when there are unread messages to show in the button
@@ -46,7 +73,7 @@ extension ConversationView {
         ConversationScrollControlsView(
             unreadCount: scrollState.unreadBadgeCount,
             typingParticipants: typing,
-            lastUnreadMessageContent: viewModel.lastUnreadMessage?.content,
+            lastUnreadMessageContent: unreadPreview.text,
             // Nom devant l'aperçu — utile en groupe (qui a écrit ?), muet en
             // DM (l'unique interlocuteur n'a pas besoin d'être nommé) (#3921).
             lastUnreadMessageSenderName: isDirect ? nil : viewModel.lastUnreadMessage?.senderName,
