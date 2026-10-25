@@ -26,7 +26,7 @@ class OwnEncryptedDevicesDecoderTest {
 
     @Test
     fun `decodes the served device, ignoring a key it does not know`() {
-        val decoded = OwnEncryptedDevicesDecoder.decode(data(device(extra = ""","identityKey":"BQ==""")))
+        val decoded = OwnEncryptedDevicesDecoder.decode(data(device(extra = ",\"identityKey\":\"BQ==\"")))
 
         assertThat(decoded).containsExactly(
             OwnEncryptedDevice(
