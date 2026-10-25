@@ -21,8 +21,15 @@ nonisolated protocol EndToEndMessagingProviding: Sendable {
     /// Range le clair d'un message que J'AI écrit : l'enveloppe ne revient pas
     /// à l'appareil émetteur, et l'écho du serveur ne porte que le littéral.
     func remember(_ content: E2EEContent, from senderUserId: String, as messageIds: [String]) async
-    /// Ce que cet appareil sait de ces messages chiffrés.
+    /// Ce que cet appareil sait de ces messages chiffrés, pour le compte de la
+    /// session ouverte seulement, et seulement si le coffre est le sien (#13000).
     func plaintexts(for messageIds: [String]) async -> [String: E2EEPlaintextEntry]
+    /// Retire du coffre le clair de ces messages, effacés sur cet appareil
+    /// (#13001). `false` hors d'une session ouverte pour le compte du coffre :
+    /// rien n'est retiré, l'effacement attend la suivante.
+    func erase(_ messageIds: [String]) async -> Bool
+    /// Les messages dont le coffre du compte de la session tient le clair.
+    func storedMessageIds() async -> [String]
     /// Chaque enveloppe ouverte, par la socket ou le rattrapage.
     var opened: AnyPublisher<E2EEOpenOutcome, Never> { get }
 }
@@ -39,7 +46,8 @@ nonisolated struct EndToEndReadyDevice: Sendable {
 /// trousseau, au groupe d'apps et à l'annuaire.
 nonisolated protocol EndToEndDeviceProvisioning: Sendable {
     func ready(for userId: String) async throws -> EndToEndReadyDevice
-    func plaintexts() throws -> any E2EEPlaintextStoring
+    /// Le coffre des clairs, servi au seul compte dont l'installation est enrôlée.
+    func plaintexts(owner: String) throws -> any E2EEPlaintextStoring
     func registrar() throws -> any E2EEDeviceRegistering
 }
 
@@ -74,6 +82,13 @@ actor EndToEndMessagingRuntime: EndToEndMessagingProviding, EndToEndDeviceManagi
         case unbound
         case open(String)
         case closed
+
+        /// Le compte que la session sert ; aucun avant la première ouverture
+        /// ni après la fermeture : le coffre ne se lit pour personne.
+        var account: String? {
+            guard case .open(let current) = self else { return nil }
+            return current
+        }
 
         func admits(_ userId: String) -> Bool {
             switch self {
@@ -183,8 +198,12 @@ actor EndToEndMessagingRuntime: EndToEndMessagingProviding, EndToEndDeviceManagi
     }
 
     func remember(_ content: E2EEContent, from senderUserId: String, as messageIds: [String]) async {
+        guard let owner = session.account, owner == senderUserId else {
+            Logger.e2ee.warning("e2ee own plaintext not stored: no open session for its author")
+            return
+        }
         do {
-            let store = try provisioning.plaintexts()
+            let store = try provisioning.plaintexts(owner: owner)
             try messageIds.forEach { id in try store.save(.readable(content, senderUserId: senderUserId), for: id) }
         } catch {
             Logger.e2ee.error("e2ee own plaintext not stored count=\(messageIds.count, privacy: .public): \(String(describing: type(of: error)), privacy: .public)")
@@ -192,13 +211,30 @@ actor EndToEndMessagingRuntime: EndToEndMessagingProviding, EndToEndDeviceManagi
     }
 
     func plaintexts(for messageIds: [String]) async -> [String: E2EEPlaintextEntry] {
-        guard !messageIds.isEmpty else { return [:] }
+        guard !messageIds.isEmpty, let owner = session.account else { return [:] }
         do {
-            return try provisioning.plaintexts().entries(for: messageIds)
+            return try provisioning.plaintexts(owner: owner).entries(for: messageIds)
         } catch {
             Logger.e2ee.error("e2ee plaintexts unreadable count=\(messageIds.count, privacy: .public): \(String(describing: type(of: error)), privacy: .public)")
             return [:]
         }
+    }
+
+    func erase(_ messageIds: [String]) async -> Bool {
+        guard let owner = session.account else { return false }
+        guard !messageIds.isEmpty else { return true }
+        do {
+            try provisioning.plaintexts(owner: owner).remove(messageIds)
+            return true
+        } catch {
+            Logger.e2ee.warning("e2ee plaintexts not erased count=\(messageIds.count, privacy: .public): \(String(describing: type(of: error)), privacy: .public)")
+            return false
+        }
+    }
+
+    func storedMessageIds() async -> [String] {
+        guard let owner = session.account else { return [] }
+        return (try? provisioning.plaintexts(owner: owner).storedMessageIds()) ?? []
     }
 
     /// Une enveloppe poussée par la socket de cet appareil.

@@ -64,4 +64,21 @@ nonisolated final class MockEndToEndMessaging: EndToEndMessagingProviding, @unch
     func plaintexts(for messageIds: [String]) async -> [String: E2EEPlaintextEntry] {
         lock.withLock { stored.filter { messageIds.contains($0.key) } }
     }
+
+    /// `false` : le coffre refuse (session fermée, autre compte) et l'effacement attend.
+    var erasureAccepted = true
+    private(set) var erasedIds: [[String]] = []
+
+    func erase(_ messageIds: [String]) async -> Bool {
+        lock.withLock {
+            erasedIds.append(messageIds)
+            guard erasureAccepted else { return false }
+            messageIds.forEach { stored[$0] = nil }
+            return true
+        }
+    }
+
+    func storedMessageIds() async -> [String] {
+        lock.withLock { stored.keys.sorted() }
+    }
 }

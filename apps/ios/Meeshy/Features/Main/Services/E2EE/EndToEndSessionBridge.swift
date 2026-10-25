@@ -25,6 +25,8 @@ final class EndToEndSessionBridge: EndToEndSessionBridging {
     private let connections: AnyPublisher<Bool, Never>
     private let regimeChanges: AnyPublisher<ConversationEncryptionChangedEvent, Never>
     private let regimeLedger: EndToEndRegimeLedger
+    private let janitor: EndToEndPlaintextJanitor
+    private let storeChanges: AnyPublisher<Void, Never>
     private var subscriptions: Set<AnyCancellable> = []
     /// Les ouvertures et fermetures de session, dans l'ordre où elles sont
     /// demandées : deux tâches libres pouvaient rattraper le nouveau compte
@@ -36,13 +38,18 @@ final class EndToEndSessionBridge: EndToEndSessionBridging {
         envelopes: AnyPublisher<E2EEServedEnvelope, Never> = E2EEEnvelopeChannel.shared.received.eraseToAnyPublisher(),
         connections: AnyPublisher<Bool, Never> = MessageSocketManager.shared.$isConnected.eraseToAnyPublisher(),
         regimeChanges: AnyPublisher<ConversationEncryptionChangedEvent, Never> = ConversationEncryptionChannel.shared.changed.eraseToAnyPublisher(),
-        regimeLedger: EndToEndRegimeLedger = .shared
+        regimeLedger: EndToEndRegimeLedger = .shared,
+        janitor: EndToEndPlaintextJanitor = .shared,
+        storeChanges: AnyPublisher<Void, Never> = NotificationCenter.default
+            .publisher(for: .messageStoreShouldRefresh).map { _ in () }.eraseToAnyPublisher()
     ) {
         self.runtime = runtime
         self.envelopes = envelopes
         self.connections = connections
         self.regimeChanges = regimeChanges
         self.regimeLedger = regimeLedger
+        self.janitor = janitor
+        self.storeChanges = storeChanges
     }
 
     func start(userId: String) {
@@ -64,6 +71,13 @@ final class EndToEndSessionBridge: EndToEndSessionBridging {
         // #12522 — chaque bascule du régime est apprise, conversation ouverte ou non.
         regimeLedger.listen(to: regimeChanges).store(in: &subscriptions)
         enqueue { await runtime.catchUp(as: userId) }
+        // #13001 — un effacement écrit dans la base des messages vide le coffre.
+        let janitor = janitor
+        enqueue { await janitor.drain() }
+        storeChanges
+            .debounce(for: .seconds(1), scheduler: DispatchQueue.main)
+            .sink { [weak self] in Task { @MainActor in self?.enqueue { await janitor.drain() } } }
+            .store(in: &subscriptions)
     }
 
     func stop() {

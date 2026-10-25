@@ -63,6 +63,9 @@ extension MessagePersistenceActor {
                 .filter(Column("expiresAt") <= before)
                 .fetchAll(db)
             let ids = Set(expired.map { $0.conversationId })
+            try MessagePlaintextErasures.record(
+                rowsMatching: "expiresAt IS NOT NULL AND expiresAt <= ?", arguments: [before], in: db
+            )
             try MessageRecord
                 .filter(Column("expiresAt") != nil)
                 .filter(Column("expiresAt") <= before)

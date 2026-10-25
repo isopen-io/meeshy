@@ -142,6 +142,7 @@ extension MessagePersistenceActor {
                     arguments: childArgs
                 )
             }
+            try MessagePlaintextErasures.record(rowsMatching: "localId IN (\(placeholders))", arguments: childArgs, in: db)
             _ = try matching.deleteAll(db)
             return Set(rows.map { $0.conversationId })
         }
@@ -160,6 +161,9 @@ extension MessagePersistenceActor {
             affectedConversationId = try MessageRecord
                 .filter(Column("localId") == localId || Column("serverId") == localId)
                 .fetchOne(db)?.conversationId
+            try MessagePlaintextErasures.cancel(
+                rowsMatching: "localId = ? OR serverId = ?", arguments: [localId, localId], in: db
+            )
             try db.execute(
                 sql: """
                     UPDATE messages SET deletedAt = NULL,

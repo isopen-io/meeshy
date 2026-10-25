@@ -49,6 +49,16 @@ public protocol E2EEPlaintextStoring: Sendable {
     func entry(for messageId: String) throws -> E2EEPlaintextEntry?
     func entries(for messageIds: [String]) throws -> [String: E2EEPlaintextEntry]
     func save(_ entry: E2EEPlaintextEntry, for messageId: String) throws
+    /// Retire le clair de ces messages : effacé, échu ou consommé, il ne reste
+    /// pas sur l'appareil (#13001).
+    func remove(_ messageIds: [String]) throws
+    /// Les messages dont le coffre tient un clair ou un échec.
+    func storedMessageIds() throws -> [String]
+}
+
+public enum E2EEPlaintextVaultError: Error, Equatable {
+    /// Le coffre est celui d'un autre compte que celui qui le demande (#13000).
+    case foreignAccount
 }
 
 enum E2EEPlaintextRecords {
@@ -61,27 +71,66 @@ enum E2EEPlaintextRecords {
     }
 }
 
+/// `owner` : le compte de la session ouverte (#13000). Le coffre ne sert alors
+/// que si l'enrôlement de CETTE installation est le sien, vérifié dans la
+/// transaction qui lit ou écrit : un compte B connecté sur l'appareil de A, tant
+/// qu'il ne s'est pas réenrôlé (ce qui efface tout), ne lit ni n'écrit rien du
+/// coffre de A. Sans `owner`, l'appelant est l'ouvreur d'enveloppes, déjà
+/// construit sur l'enrôlement courant.
 public final class E2EEPlaintextVault: E2EEPlaintextStoring {
     private let vault: any E2EERecordVaultProviding
+    private let owner: String?
 
-    public init(vault: any E2EERecordVaultProviding) {
+    public init(vault: any E2EERecordVaultProviding, owner: String? = nil) {
         self.vault = vault
+        self.owner = owner
     }
 
     public func entry(for messageId: String) throws -> E2EEPlaintextEntry? {
-        try vault.read { try E2EEPlaintextRecords.load(messageId, in: $0) }
+        try vault.read { transaction in
+            guard try serves(in: transaction) else { return nil }
+            return try E2EEPlaintextRecords.load(messageId, in: transaction)
+        }
     }
 
     public func entries(for messageIds: [String]) throws -> [String: E2EEPlaintextEntry] {
         try vault.read { transaction in
-            try messageIds.reduce(into: [String: E2EEPlaintextEntry]()) { found, id in
+            guard try serves(in: transaction) else { return [:] }
+            return try messageIds.reduce(into: [String: E2EEPlaintextEntry]()) { found, id in
                 if let entry = try E2EEPlaintextRecords.load(id, in: transaction) { found[id] = entry }
             }
         }
     }
 
     public func save(_ entry: E2EEPlaintextEntry, for messageId: String) throws {
-        try vault.write { try E2EEPlaintextRecords.save(entry, for: messageId, in: $0) }
+        try vault.write { transaction in
+            guard try serves(in: transaction) else { throw E2EEPlaintextVaultError.foreignAccount }
+            try E2EEPlaintextRecords.save(entry, for: messageId, in: transaction)
+        }
+    }
+
+    /// Un coffre sans enrôlement ne tient aucun clair (l'enrôlement l'efface) :
+    /// il se vide sans refus. Celui d'un autre compte refuse, car un message
+    /// d'une conversation partagée porte le même identifiant chez les deux.
+    public func remove(_ messageIds: [String]) throws {
+        try vault.write { transaction in
+            guard try serves(in: transaction) || E2EELocalEnrollmentRecord.load(in: transaction) == nil else {
+                throw E2EEPlaintextVaultError.foreignAccount
+            }
+            try messageIds.forEach { try transaction.remove(.plaintext, $0) }
+        }
+    }
+
+    public func storedMessageIds() throws -> [String] {
+        try vault.read { transaction in
+            guard try serves(in: transaction) else { return [] }
+            return try transaction.keys(of: .plaintext)
+        }
+    }
+
+    private func serves(in transaction: any E2EERecordTransaction) throws -> Bool {
+        guard let owner else { return true }
+        return try E2EELocalEnrollmentRecord.load(in: transaction)?.userId == owner
     }
 }
 

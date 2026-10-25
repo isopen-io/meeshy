@@ -42,7 +42,7 @@ final class EndToEndMessagingRuntimeTests: XCTestCase {
             try await Task.sleep(nanoseconds: 20_000_000)
             return EndToEndReadyDevice(device: E2EELocalDevice(userId: userId, deviceId: 1, registrationId: 7), sealer: sealer, opener: StubOpener())
         }
-        func plaintexts() throws -> any E2EEPlaintextStoring { throw CocoaError(.featureUnsupported) }
+        func plaintexts(owner: String) throws -> any E2EEPlaintextStoring { throw CocoaError(.featureUnsupported) }
         func registrar() throws -> any E2EEDeviceRegistering { throw CocoaError(.featureUnsupported) }
     }
 
@@ -106,7 +106,7 @@ final class EndToEndMessagingRuntimeTests: XCTestCase {
             try? await Task.sleep(nanoseconds: userId == slowUserId ? 300_000_000 : 5_000_000)
             return EndToEndReadyDevice(device: E2EELocalDevice(userId: userId, deviceId: 1, registrationId: 7), sealer: sealer, opener: StubOpener())
         }
-        func plaintexts() throws -> any E2EEPlaintextStoring { throw CocoaError(.featureUnsupported) }
+        func plaintexts(owner: String) throws -> any E2EEPlaintextStoring { throw CocoaError(.featureUnsupported) }
         func registrar() throws -> any E2EEDeviceRegistering { throw CocoaError(.featureUnsupported) }
     }
 
@@ -298,5 +298,89 @@ final class EndToEndDeviceLimitViewModelTests: XCTestCase {
         XCTAssertEqual(stub.enrolled, 1)
         XCTAssertEqual(model.state, .enrolled)
         XCTAssertNil(model.retiringDeviceId)
+    }
+
+    // MARK: - Le coffre ne se lit que pour le compte de la session (#13000)
+
+    private let alice = "00000000000000000000aa11"
+    private let bob = "00000000000000000000bb22"
+
+    private func written(by userId: String) -> E2EEContent {
+        E2EEContent(text: "le secret de \(userId.suffix(2))", language: "fr", replyTo: nil, conversationId: "c1", clientMessageId: "cid_1", sentAt: Date())
+    }
+
+    private func device(_ userIds: [String]) throws -> [String: EndToEndMessagingRuntime] {
+        try LibsignalDeviceProvisioning.sharedDevice(on: LibsignalTestGateway(), userIds: userIds)
+            .mapValues { EndToEndMessagingRuntime(provisioning: $0) }
+    }
+
+    func test_plaintexts_ofTheOpenSessionsAccount_areServed() async throws {
+        let runtime = try XCTUnwrap(try device([alice])[alice])
+        await runtime.open(session: alice)
+        _ = try await runtime.ready(for: alice)
+
+        await runtime.remember(written(by: alice), from: alice, as: ["m1"])
+
+        let served = await runtime.plaintexts(for: ["m1"])
+        XCTAssertEqual(served.keys.sorted(), ["m1"])
+    }
+
+    func test_plaintexts_ofAnotherAccountOnTheSameDevice_areNeverServed() async throws {
+        let runtimes = try device([alice, bob])
+        let asAlice = try XCTUnwrap(runtimes[alice]), asBob = try XCTUnwrap(runtimes[bob])
+        await asAlice.open(session: alice)
+        _ = try await asAlice.ready(for: alice)
+        await asAlice.remember(written(by: alice), from: alice, as: ["m1"])
+        await asAlice.close()
+
+        await asBob.open(session: bob)
+
+        let servedToBob = await asBob.plaintexts(for: ["m1"])
+        XCTAssertEqual(servedToBob, [:], "B, connecté sur l'appareil de A, ne lit pas le coffre de A")
+        let storedForBob = await asBob.storedMessageIds()
+        XCTAssertEqual(storedForBob, [])
+    }
+
+    func test_plaintexts_afterTheSessionCloses_orBeforeItOpens_areNotServed() async throws {
+        let runtime = try XCTUnwrap(try device([alice])[alice])
+        let beforeOpening = await runtime.plaintexts(for: ["m1"])
+        XCTAssertEqual(beforeOpening, [:])
+        await runtime.open(session: alice)
+        _ = try await runtime.ready(for: alice)
+        await runtime.remember(written(by: alice), from: alice, as: ["m1"])
+
+        await runtime.close()
+
+        let afterClosing = await runtime.plaintexts(for: ["m1"])
+        XCTAssertEqual(afterClosing, [:])
+    }
+
+    func test_remember_forAnotherAccountThanTheSession_storesNothing() async throws {
+        let runtime = try XCTUnwrap(try device([alice])[alice])
+        await runtime.open(session: alice)
+        _ = try await runtime.ready(for: alice)
+
+        await runtime.remember(written(by: bob), from: bob, as: ["m2"])
+
+        let stored = await runtime.storedMessageIds()
+        XCTAssertEqual(stored, [])
+    }
+
+    // MARK: - Un clair effacé quitte le coffre (#13001)
+
+    func test_erase_removesTheClear_onlyWithinTheOpenSession() async throws {
+        let runtime = try XCTUnwrap(try device([alice])[alice])
+        await runtime.open(session: alice)
+        _ = try await runtime.ready(for: alice)
+        await runtime.remember(written(by: alice), from: alice, as: ["m1", "cid_1", "m2"])
+
+        let erased = await runtime.erase(["m1", "cid_1"])
+
+        XCTAssertTrue(erased)
+        let stored = await runtime.storedMessageIds()
+        XCTAssertEqual(stored, ["m2"])
+        await runtime.close()
+        let erasedClosed = await runtime.erase(["m2"])
+        XCTAssertFalse(erasedClosed, "hors session, l'effacement attend")
     }
 }

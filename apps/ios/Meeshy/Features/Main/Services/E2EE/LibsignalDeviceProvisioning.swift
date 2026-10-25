@@ -44,8 +44,8 @@ nonisolated final class LibsignalDeviceProvisioning: EndToEndDeviceProvisioning,
         }
     }
 
-    func plaintexts() throws -> any E2EEPlaintextStoring {
-        E2EEPlaintextVault(vault: try storage().vault)
+    func plaintexts(owner: String) throws -> any E2EEPlaintextStoring {
+        E2EEPlaintextVault(vault: try storage().vault, owner: owner)
     }
 
     func registrar() throws -> any E2EEDeviceRegistering {
