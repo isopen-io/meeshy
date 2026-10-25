@@ -161,4 +161,16 @@ describe('sendFailureReason — le format refusé (W9)', () => {
       expect(reason).not.toBe(french);
     }
   });
+
+  test('dans la coque Android, un clair refusé renvoie vers un appareil chiffré, jamais vers l’app où l’on se trouve (#13066)', () => {
+    for (const code of ['E2EE_PLAINTEXT_WITHHELD', 'E2EE_PLAINTEXT_REFUSED']) {
+      const refused = failure(code === 'E2EE_PLAINTEXT_WITHHELD' ? 0 : 400, { code });
+      expect(sendFailureReasonIn(refused, 'fr', { shell: true })).toBe(
+        'Conversation chiffrée de bout en bout : écrivez depuis un de vos appareils chiffrés',
+      );
+      for (const language of SUPPORTED_INTERFACE_LANGUAGES) {
+        expect(sendFailureReasonIn(refused, language, { shell: true })).not.toBe(sendFailureReasonIn(refused, language));
+      }
+    }
+  });
 });
