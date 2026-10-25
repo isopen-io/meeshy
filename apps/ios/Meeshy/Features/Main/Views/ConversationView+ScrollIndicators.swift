@@ -28,35 +28,45 @@ extension ConversationView {
     }
 
     /// Ce que la pastille montre du dernier message non lu : la loi
-    /// `unreadPreview(of:now:)`, jamais le message brut.
-    var unreadPreview: (text: String?, attachment: MessageAttachment?) {
+    /// `unreadPreview(of:ledger:now:)`, jamais le message brut.
+    var unreadPreview: UnreadPillPreview {
         Self.unreadPreview(of: viewModel.lastUnreadMessage, now: Date())
     }
 
     /// Unread message attachment (for rich preview in button)
     var unreadAttachment: MessageAttachment? { unreadPreview.attachment }
 
+    /// Ce que la pastille a le droit de peindre, et l'instant où elle doit se
+    /// réévaluer (l'échéance d'un éphémère encore vivant).
+    struct UnreadPillPreview {
+        static let withheld = UnreadPillPreview(text: nil, attachment: nil, expiresAt: nil)
+        let text: String?
+        let attachment: MessageAttachment?
+        let expiresAt: Date?
+    }
+
     /// CE QUE LA PASTILLE « REVENIR EN BAS » A LE DROIT DE MONTRER (#13109,
     /// jumelle de #12993 sur le web). La pastille peint le texte, la vignette,
     /// l'image et l'audio du dernier message non lu à côté de sa bulle : elle
-    /// ne montre donc rien de ce que la bulle scelle ou voile. Vue unique ou
-    /// flou (sur le message ou sur une pièce), éphémère échu, message
-    /// supprimé, chiffré de bout en bout que cet appareil n'a pas ouvert (le
-    /// littéral `[Encrypted]`) : ni texte, ni pièce.
-    nonisolated static func unreadPreview(of message: Message?, now: Date) -> (text: String?, attachment: MessageAttachment?) {
-        guard let message, !unreadPreviewIsWithheld(message, now: now) else { return (nil, nil) }
-        return (message.content, message.attachments.first)
-    }
-
-    private nonisolated static func unreadPreviewIsWithheld(_ message: Message, now: Date) -> Bool {
-        let protectedPiece = message.attachments.contains { piece in
-            piece.isViewOnce || piece.isBlurred
-                || MessageEffectFlags(rawValue: piece.effectFlags ?? 0).contains(.viewOnce)
-                || MessageEffectFlags(rawValue: piece.effectFlags ?? 0).contains(.blurred)
-        }
-        let expired = message.expiresAt.map { $0 <= now } ?? false
-        let unopenedEndToEnd = message.content == E2EEWire.contentPlaceholder
-        return message.isDeleted || message.holdsViewOnce || message.isBlurred || protectedPiece || expired || unopenedEndToEnd
+    /// ne montre donc rien de ce que la bulle scelle ou voile.
+    ///
+    /// La protection se lit par la loi UNIQUE `MeeshyMessage.protection` —
+    /// donc `MessageProtectionDescriptor.resolve`, avec l'échéance servie, la
+    /// durée comptée depuis la réception locale et la mort gravée au registre —,
+    /// jamais par une vérification partielle à côté. S'y ajoutent ce que la loi
+    /// ne dit pas : la suppression, le flou d'une pièce, et le littéral
+    /// `[Encrypted]` d'un message e2ee que cet appareil n'a pas ouvert.
+    nonisolated static func unreadPreview(
+        of message: Message?,
+        ledger: EphemeralReceiptRecording = EphemeralReceiptLedger.shared,
+        now: Date
+    ) -> UnreadPillPreview {
+        guard let message, !message.isDeleted, message.content != E2EEWire.contentPlaceholder else { return .withheld }
+        let protection = message.protection(ledger: ledger, now: now)
+        let veiledPiece = message.attachments.contains { $0.isBlurred || $0.isViewOnce }
+        guard !protection.isExpired, !protection.requiresVeil, !message.holdsViewOnce, !veiledPiece else { return .withheld }
+        return UnreadPillPreview(text: message.content, attachment: message.attachments.first,
+                                 expiresAt: protection.ephemeralState.deadline)
     }
 
     /// True when there are unread messages to show in the button
@@ -120,6 +130,11 @@ extension ConversationView {
             }
         )
         .accessibilityLabel(scrollToBottomAccessibilityLabel(typing))
+        // #13109 — un éphémère qui échoit pendant que la pastille l'affiche n'y
+        // laisse rien : à son échéance, le message non lu quitte la pastille.
+        .task(id: UnreadPillExpiry(messageId: viewModel.lastUnreadMessage?.id, deadline: unreadPreview.expiresAt)) {
+            await clearUnreadPreviewAtItsDeadline()
+        }
         .onReceive(scrollButtonAudioStatePublisher) { context, playing in
             updateScrollButtonAudioIsPlaying(context: context, playing: playing)
         }
@@ -250,4 +265,22 @@ extension ConversationView {
     // L'indicateur de frappe en fin de conversation n'est plus un overlay :
     // c'est une vraie cellule du flux, gérée par `MessageListViewController`
     // (`MessageListItem.typingIndicator` + `TypingIndicatorBubble`).
+}
+
+/// La clé qui relance l'attente de l'échéance quand le message ou son échéance change.
+struct UnreadPillExpiry: Equatable {
+    let messageId: String?
+    let deadline: Date?
+}
+
+extension ConversationView {
+    func clearUnreadPreviewAtItsDeadline() async {
+        guard let messageId = viewModel.lastUnreadMessage?.id, let deadline = unreadPreview.expiresAt else { return }
+        let delay = deadline.timeIntervalSinceNow + 0.05
+        if delay > 0 {
+            do { try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000)) } catch { return }
+        }
+        guard viewModel.lastUnreadMessage?.id == messageId, unreadPreview.text == nil else { return }
+        viewModel.lastUnreadMessage = nil
+    }
 }

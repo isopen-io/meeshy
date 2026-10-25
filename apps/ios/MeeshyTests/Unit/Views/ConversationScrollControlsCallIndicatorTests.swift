@@ -114,7 +114,8 @@ final class ConversationScrollControlsCallIndicatorTests: XCTestCase {
 }
 
 /// #13109 — la pastille « revenir en bas » ne montre jamais ce que la bulle
-/// scelle ou voile : ni texte, ni vignette, ni image, ni audio.
+/// scelle ou voile : ni texte, ni vignette, ni image, ni audio. La protection
+/// se lit par la loi unique `MeeshyMessage.protection(ledger:now:)`.
 final class ConversationScrollPillProtectionTests: XCTestCase {
     private let now = Date(timeIntervalSince1970: 1_792_970_000)
     private let secret = "Le code du coffre est 4417"
@@ -125,6 +126,7 @@ final class ConversationScrollPillProtectionTests: XCTestCase {
     }
 
     private func message(
+        id: String = "m1",
         content: String? = nil,
         effects: MessageEffects = .none,
         expiresAt: Date? = nil,
@@ -133,16 +135,21 @@ final class ConversationScrollPillProtectionTests: XCTestCase {
         encryptionMode: String? = nil,
         attachments: [MeeshyMessageAttachment]? = nil
     ) -> Message {
-        Message(conversationId: "c1", senderId: "peer", content: content ?? secret, deletedAt: deletedAt,
+        Message(id: id, conversationId: "c1", senderId: "peer", content: content ?? secret, deletedAt: deletedAt,
                 expiresAt: expiresAt, effects: effects, isEncrypted: isEncrypted, encryptionMode: encryptionMode,
                 attachments: attachments ?? [photo()])
     }
 
-    func test_anOrdinaryMessage_showsItsTextAndItsPiece() {
-        let preview = ConversationView.unreadPreview(of: message(), now: now)
+    private func preview(_ message: Message?, ledger: FakeEphemeralLedger = FakeEphemeralLedger(), at date: Date? = nil) -> ConversationView.UnreadPillPreview {
+        ConversationView.unreadPreview(of: message, ledger: ledger, now: date ?? now)
+    }
 
-        XCTAssertEqual(preview.text, secret)
-        XCTAssertEqual(preview.attachment?.id, "a1")
+    func test_anOrdinaryMessage_showsItsTextAndItsPiece() {
+        let shown = preview(message())
+
+        XCTAssertEqual(shown.text, secret)
+        XCTAssertEqual(shown.attachment?.id, "a1")
+        XCTAssertNil(shown.expiresAt)
     }
 
     func test_aProtectedMessage_showsNothingOfItsContent() {
@@ -151,26 +158,52 @@ final class ConversationScrollPillProtectionTests: XCTestCase {
             ("flou", message(effects: MessageEffects(flags: [.blurred]))),
             ("pièce à vue unique", message(attachments: [photo(isViewOnce: true)])),
             ("pièce floutée", message(attachments: [photo(isBlurred: true)])),
-            ("éphémère échu", message(expiresAt: now.addingTimeInterval(-1))),
+            ("échéance servie passée", message(expiresAt: now.addingTimeInterval(-1))),
             ("supprimé", message(deletedAt: now.addingTimeInterval(-60))),
             ("chiffré non ouvert", message(content: E2EEWire.contentPlaceholder, isEncrypted: true, encryptionMode: "e2ee")),
         ]
         for (label, protected) in cases {
-            let preview = ConversationView.unreadPreview(of: protected, now: now)
-            XCTAssertNil(preview.text, "\(label) : le texte ne part pas dans la pastille")
-            XCTAssertNil(preview.attachment, "\(label) : ni vignette, ni image, ni audio")
+            let shown = preview(protected)
+            XCTAssertNil(shown.text, "\(label) : le texte ne part pas dans la pastille")
+            XCTAssertNil(shown.attachment, "\(label) : ni vignette, ni image, ni audio")
         }
     }
 
-    func test_anEphemeralStillAlive_staysReadableLikeItsBubble() {
-        let preview = ConversationView.unreadPreview(of: message(expiresAt: now.addingTimeInterval(60)), now: now)
+    func test_anEphemeralWithoutServedDeadline_expiresFromItsLocalReception() {
+        let ledger = FakeEphemeralLedger(receptions: ["m1": now.addingTimeInterval(-120)])
+        let ephemeral = message(effects: MessageEffects(flags: [.ephemeral], ephemeralDuration: 60))
 
-        XCTAssertEqual(preview.text, secret)
+        let shown = preview(ephemeral, ledger: ledger)
+
+        XCTAssertNil(shown.text, "la durée se compte depuis la réception locale, sans échéance servie")
+        XCTAssertNil(shown.attachment)
+    }
+
+    func test_aDestroyedEphemeral_staysWithheldEvenBeforeItsServedDeadline() {
+        let ledger = FakeEphemeralLedger(deaths: ["m1": now.addingTimeInterval(-5)])
+        let ephemeral = message(effects: MessageEffects(flags: [.ephemeral], ephemeralDuration: 3600),
+                                expiresAt: now.addingTimeInterval(3600))
+
+        XCTAssertNil(preview(ephemeral, ledger: ledger).text)
+    }
+
+    func test_anEphemeralStillAlive_showsItsText_andNamesItsDeadline_thenNothingOnceItPasses() {
+        let ledger = FakeEphemeralLedger()
+        let ephemeral = message(effects: MessageEffects(flags: [.ephemeral], ephemeralDuration: 60))
+
+        let alive = preview(ephemeral, ledger: ledger)
+        XCTAssertEqual(alive.text, secret)
+        let deadline = try? XCTUnwrap(alive.expiresAt)
+        XCTAssertEqual(deadline, now.addingTimeInterval(60), "l'échéance est remise à la pastille pour qu'elle se réévalue")
+
+        let afterwards = preview(ephemeral, ledger: ledger, at: now.addingTimeInterval(61))
+        XCTAssertNil(afterwards.text, "affichée avant l'échéance, la pastille ne garde rien après")
+        XCTAssertNil(afterwards.attachment)
     }
 
     func test_anEndToEndMessageThisDeviceOpened_showsItsPlaintext() {
-        let preview = ConversationView.unreadPreview(of: message(content: "Bonjour", isEncrypted: true, encryptionMode: "e2ee", attachments: []), now: now)
+        let shown = preview(message(content: "Bonjour", isEncrypted: true, encryptionMode: "e2ee", attachments: []))
 
-        XCTAssertEqual(preview.text, "Bonjour")
+        XCTAssertEqual(shown.text, "Bonjour")
     }
 }
