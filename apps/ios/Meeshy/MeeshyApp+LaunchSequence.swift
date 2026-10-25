@@ -77,6 +77,9 @@ extension MeeshyApp {
             }
         }
         await OfflineQueue.shared.setRetrySend { @Sendable item in
+            // #12985 — même loi que l'outbox : rien ne se rejoue en clair vers
+            // une conversation chiffrée de bout en bout.
+            if await EndToEndDestinationGuard.live(item.conversationId) { return nil }
             do {
                 let request = SendMessageRequest(
                     content: item.content,

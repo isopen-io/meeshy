@@ -41,6 +41,10 @@ final class ExtensionShareDispatcher: ShareDispatching {
     private let now: () -> Date
     private let sendShare: Send
     private let createDirect: CreateDirect
+    /// Les conversations que ce compte a vues chiffrées de bout en bout, d'après
+    /// le reflet que l'app dépose (`EndToEndShareMemory`, #12985) : elles se
+    /// relaient, même servies sans mode. Sans reflet, toutes se relaient.
+    private let remembersEndToEnd: @Sendable (String) -> Bool
 
     /// La fiche du partage, dès le premier envoi tenté.
     private(set) var share: SharePendingShare?
@@ -56,8 +60,12 @@ final class ExtensionShareDispatcher: ShareDispatching {
         staged: [ShareStagedMedia],
         now: @escaping () -> Date = Date.init,
         sendShare: @escaping Send = { share, session in await ShareSender.send(share: share, session: session) },
-        createDirect: @escaping CreateDirect = { userId, session in await ExtensionShareDispatcher.createDirectConversation(with: userId, session: session) }
+        createDirect: @escaping CreateDirect = { userId, session in await ExtensionShareDispatcher.createDirectConversation(with: userId, session: session) },
+        remembersEndToEnd: (@Sendable (String) -> Bool)? = nil
     ) {
+        self.remembersEndToEnd = remembersEndToEnd ?? EndToEndShareMemory.remembers(
+            in: UserDefaults(suiteName: EndToEndShareMemory.appGroupIdentifier), userId: session?.userId
+        )
         self.shareId = shareId
         self.session = session
         self.staged = staged
@@ -83,7 +91,7 @@ final class ExtensionShareDispatcher: ShareDispatching {
             return .failed(reason: Self.unreachableReason)
         }
         let conversationId = destination.id
-        if destination.isEncrypted {
+        if destination.isEncrypted { // RED-STUB : la mémoire n'est pas encore lue
             if !relayedConversationIds.contains(conversationId) { relayedConversationIds.append(conversationId) }
             relayedText = request.subject.composedText(caption: request.caption)
             relayedMedia = keptMedia(of: request.subject)

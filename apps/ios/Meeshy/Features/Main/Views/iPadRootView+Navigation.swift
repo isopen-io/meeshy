@@ -247,9 +247,7 @@ extension iPadRootView {
 
     func handleSendMessageToUser(_ notification: Notification) {
         guard let targetUserId = notification.object as? String else { return }
-        if let existingConv = conversationViewModel.conversations.first(where: {
-            $0.type == .direct && $0.participantUserId == targetUserId
-        }) {
+        if let existingConv = DirectConversationResolver.loaded(with: targetUserId, in: conversationViewModel.conversations) {
             openConversation(existingConv)
             return
         }

@@ -17,7 +17,7 @@ final class OutboxDispatcherTests: XCTestCase {
 
     // MARK: - Factories
 
-    private func makeSUT() -> OutboxDispatcher { OutboxDispatcher() }
+    private func makeSUT() -> OutboxDispatcher { OutboxDispatcher(sealsDestination: { _ in false }) }
 
     private func makeRecord(
         kind: OutboxKind,

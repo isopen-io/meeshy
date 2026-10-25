@@ -266,9 +266,7 @@ extension ConversationView {
 
     func navigateToDM(with userId: String, name: String) async {
         // Check if a DM already exists in the loaded conversation list
-        if let existing = conversationListViewModel?.conversations.first(where: {
-            $0.type == .direct && $0.participantUserId == userId
-        }) {
+        if let existing = conversationListViewModel.flatMap({ DirectConversationResolver.loaded(with: userId, in: $0.conversations) }) {
             router.navigateToConversation(existing)
             return
         }

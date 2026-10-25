@@ -23,6 +23,7 @@ final class LiveShareDispatcher: ShareDispatching {
     private let conversationCreator: ConversationCreating
     private let postService: PostServiceProviding
     private let currentUserId: () -> String
+    private let destinationGuard: EndToEndDestinationGuard
 
     init(
         forwardService: MessageForwardServiceProviding = MessageForwardService.shared,
@@ -31,7 +32,8 @@ final class LiveShareDispatcher: ShareDispatching {
         isOnline: @escaping () -> Bool = { NetworkMonitor.shared.isOnline },
         conversationCreator: ConversationCreating = ConversationCreator(),
         postService: PostServiceProviding = PostService.shared,
-        currentUserId: @escaping () -> String = { AuthManager.shared.currentUser?.id ?? "" }
+        currentUserId: @escaping () -> String = { AuthManager.shared.currentUser?.id ?? "" },
+        destinationGuard: EndToEndDestinationGuard = EndToEndDestinationGuard()
     ) {
         self.forwardService = forwardService
         self.api = api
@@ -40,6 +42,7 @@ final class LiveShareDispatcher: ShareDispatching {
         self.conversationCreator = conversationCreator
         self.postService = postService
         self.currentUserId = currentUserId
+        self.destinationGuard = destinationGuard
     }
 
     func deliver(_ request: ShareSendRequest, to recipient: ShareRecipient) async -> ShareDeliveryOutcome {
@@ -278,14 +281,17 @@ final class LiveShareDispatcher: ShareDispatching {
     /// Une personne sans conversation en reçoit une, À L'ENVOI et jamais à la
     /// sélection ; hors ligne, la création n'est pas tentée. La création étant
     /// idempotente, elle peut rendre une directe existante CHIFFRÉE : son mode
-    /// fait foi, pas celui de la ligne choisie.
+    /// fait foi, pas celui de la ligne choisie. Le chiffrement se lit par la
+    /// loi du fil (#12985) : une conversation vue chiffrée de bout en bout par
+    /// ce compte l'est, quel que soit le mode servi.
     private func resolveConversation(_ recipient: ShareRecipient) async -> ResolvedConversation? {
         if let conversationId = recipient.conversationId {
-            return ResolvedConversation(id: conversationId, isEncrypted: recipient.isEncrypted)
+            let sealed = await destinationGuard.seals(conversationId, served: [recipient.isEncrypted ? E2EEWire.mode : nil])
+            return ResolvedConversation(id: conversationId, isEncrypted: sealed)
         }
         guard let userId = recipient.userId, isOnline(),
               let created = try? await conversationCreator.createDirectConversation(with: userId, currentUserId: currentUserId()) else { return nil }
-        return ResolvedConversation(id: created.id, isEncrypted: EndToEndSendGate.requiresSeal(conversationEncryptionModes: [created.encryptionMode]))
+        return ResolvedConversation(id: created.id, isEncrypted: await destinationGuard.seals(created.id, served: [created.encryptionMode]))
     }
 
     private static func outcome(_ outcome: ForwardOutcome) -> ShareDeliveryOutcome {

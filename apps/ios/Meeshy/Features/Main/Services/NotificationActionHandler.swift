@@ -106,6 +106,8 @@ final class NotificationActionHandler: NotificationActionHandling {
     private let openExternalURL: @MainActor (URL) -> Void
     private let openDeepLink: @MainActor (URL) -> Void
     private let presentNewContact: @MainActor (NotificationContactCard) -> Void
+    /// La loi du fil appliquée à la conversation de la réponse (#12641, #12985).
+    private let destinationGuard: EndToEndDestinationGuard
     private var revocationSubscription: AnyCancellable?
     /// #7453 — l'abonnement au retour au premier plan, qui rejoue le balayage
     /// des bannières éphémères échues. Un nouvel appel REMPLACE l'abonnement :
@@ -197,8 +199,10 @@ final class NotificationActionHandler: NotificationActionHandling {
         openDeepLink: @escaping @MainActor (URL) -> Void = { _ = DeepLinkRouter.shared.handle(url: $0) },
         presentNewContact: @escaping @MainActor (NotificationContactCard) -> Void = {
             NotificationContactPresenter.present($0)
-        }
+        },
+        destinationGuard: EndToEndDestinationGuard = EndToEndDestinationGuard()
     ) {
+        self.destinationGuard = destinationGuard
         self.messageService = messageService
         self.conversationService = conversationService
         self.postService = postService
@@ -481,6 +485,18 @@ final class NotificationActionHandler: NotificationActionHandling {
             )
         } catch {
             logger.error("reply optimistic insert failed: \(error.localizedDescription, privacy: .public)")
+        }
+
+        // #12641 — la réponse ne sait pas sceller : vers une conversation
+        // chiffrée de bout en bout, rien ne part ni n'entre dans la file. La
+        // bulle reste en échec dans le fil, d'où le renvoi se scelle.
+        if await destinationGuard.seals(conversationId) {
+            logger.warning("notification reply refused before transport: end-to-end conversation")
+            try? await messagePersistence.markOptimisticFailed(
+                localId: item.clientMessageId, reason: EndToEndSendRefusal.sealedOnlyInConversation.userMessage
+            )
+            removeDeliveredForConversation(conversationId)
+            return
         }
 
         await prepareReplyQueue()

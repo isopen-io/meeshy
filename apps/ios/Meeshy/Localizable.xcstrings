@@ -308540,6 +308540,53 @@
         }
       }
     },
+    "conversation.encryption.detail.plaintextDirectServedGap": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يعرض الخادم هذه المحادثة الثنائية بلا تشفير بالفعل: أعد أولًا التشفير من طرف إلى طرف هنا، ثم افتح المحادثة غير المشفّرة بجانبها."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Server zeigt diesen Einzelchat bereits ohne Verschlüsselung an: Stelle hier zuerst die Ende-zu-Ende-Verschlüsselung wieder her und öffne dann daneben die unverschlüsselte Unterhaltung."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The server already presents this one-to-one chat without encryption: first restore end-to-end encryption here, then open the unencrypted conversation alongside it."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El servidor ya presenta este chat individual sin cifrado: primero restablece aquí el cifrado de extremo a extremo y luego abre la conversación sin cifrar al lado."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le serveur présente déjà ce tête-à-tête sans chiffrement : rétablissez d’abord le chiffrement de bout en bout ici, puis ouvrez la conversation non chiffrée à côté."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Il server presenta già questa chat individuale senza crittografia: ripristina prima qui la crittografia end-to-end, poi apri accanto la conversazione non crittografata."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O servidor já apresenta esta conversa individual sem criptografia: primeiro restaure aqui a criptografia de ponta a ponta e depois abra ao lado a conversa sem criptografia."
+          }
+        }
+      }
+    },
     "conversation.encryption.detail.plaintextDirectOffline": {
       "extractionState": "manual",
       "localizations": {
@@ -309053,6 +309100,100 @@
           "stringUnit": {
             "state": "translated",
             "value": "A criptografia desta conversa acabou de mudar: a mensagem não foi enviada. Toque para reenviá-la com a nova configuração."
+          }
+        }
+      }
+    },
+    "conversation.send.e2ee.servedWithoutEndToEnd": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هذه المحادثة مشفّرة من طرف إلى طرف، لكن الخادم يعرضها بلا تشفير: لم تُرسل الرسالة. راجع بطاقة التشفير."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diese Unterhaltung ist Ende-zu-Ende-verschlüsselt, aber der Server zeigt sie ohne Verschlüsselung an: Die Nachricht wurde nicht gesendet. Siehe die Seite „Verschlüsselung“."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This conversation is end-to-end encrypted, but the server presents it without encryption: the message wasn’t sent. See the Encryption sheet."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esta conversación está cifrada de extremo a extremo, pero el servidor la presenta sin cifrado: el mensaje no se envió. Consulta la ficha Cifrado."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cette conversation est chiffrée de bout en bout, mais le serveur la présente sans chiffrement : le message n’est pas parti. Voir la fiche Chiffrement."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Questa conversazione è crittografata end-to-end, ma il server la presenta senza crittografia: il messaggio non è stato inviato. Vedi la scheda Crittografia."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esta conversa tem criptografia de ponta a ponta, mas o servidor a apresenta sem criptografia: a mensagem não foi enviada. Veja a ficha Criptografia."
+          }
+        }
+      }
+    },
+    "conversation.send.e2ee.sealedOnlyInConversation": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "محادثة مشفّرة: لم تُرسل الرسالة. افتح المحادثة وانقر عليها لإرسالها مشفّرة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verschlüsselte Unterhaltung: Die Nachricht wurde nicht gesendet. Öffne die Unterhaltung und tippe sie an, um sie verschlüsselt zu senden."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Encrypted conversation: the message wasn’t sent. Open the conversation and tap it to send it encrypted."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conversación cifrada: el mensaje no se envió. Abre la conversación y tócalo para enviarlo cifrado."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conversation chiffrée : le message n’est pas parti. Ouvrez la conversation et touchez-le pour l’envoyer chiffré."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conversazione crittografata: il messaggio non è stato inviato. Apri la conversazione e toccalo per inviarlo crittografato."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conversa criptografada: a mensagem não foi enviada. Abra a conversa e toque nela para enviá-la criptografada."
           }
         }
       }

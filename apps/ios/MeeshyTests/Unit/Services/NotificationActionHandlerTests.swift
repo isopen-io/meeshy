@@ -170,7 +170,8 @@ final class NotificationActionHandlerTests: XCTestCase {
         authToken: String? = nil,
         currentUserId: String? = "user1",
         preferredLanguage: String? = "fr",
-        isRegisteredUser: Bool = true
+        isRegisteredUser: Bool = true,
+        rememberedEndToEnd: [String] = []
     ) -> SUTContext {
         let messageService = MockMessageService()
         let conversationService = MockConversationService()
@@ -215,7 +216,8 @@ final class NotificationActionHandlerTests: XCTestCase {
             removeDeliveredForConversation: { removedBanners.append($0) },
             removeDeliveredForPost: { removedPostBanners.append($0) },
             removeDeliveredForNotificationIds: { revokedIds.append($0) },
-            prepareReplyQueue: { preparedReplyQueueCount += 1 }
+            prepareReplyQueue: { preparedReplyQueueCount += 1 },
+            destinationGuard: Self.destinationGuard(remembering: rememberedEndToEnd)
         )
 
         return SUTContext(
@@ -250,6 +252,31 @@ final class NotificationActionHandlerTests: XCTestCase {
             "messageId": messageId,
             "senderId": "sender1"
         ]
+    }
+
+    private static func destinationGuard(remembering ids: [String]) -> EndToEndDestinationGuard {
+        let ledger = EndToEndRegimeLedger(memory: EndToEndRegimeMemory(defaults: nil))
+        ids.forEach { ledger.learnEndToEnd(for: $0) }
+        return EndToEndDestinationGuard(
+            ledger: ledger, cache: ConversationCacheReader(loadConversations: { .empty }, loadThread: { _ in .empty })
+        )
+    }
+
+    /// #12641 — une réponse depuis la bannière d'une conversation vue chiffrée
+    /// de bout en bout ne part pas en clair et n'entre pas dans la file : la
+    /// bulle reste en échec dans le fil, avec sa raison.
+    func test_handle_reply_inARememberedEndToEndConversation_sendsNothing_queuesNothing() async {
+        let ctx = makeSUT(rememberedEndToEnd: ["conv1"])
+
+        await ctx.sut.handle(
+            actionIdentifier: MeeshyNotificationAction.reply.rawValue,
+            userInfo: replyUserInfo(),
+            replyText: "Le code du coffre est 4512"
+        )
+
+        XCTAssertEqual(ctx.messageService.sendCallCount, 0)
+        XCTAssertTrue(ctx.queue.enqueuedItems.isEmpty)
+        XCTAssertEqual(ctx.persistence.markFailedCalls.map { $0.reason }, [EndToEndSendRefusal.sealedOnlyInConversation.userMessage])
     }
 
     // MARK: - (a) Work completes inside handle(), wrapped in a background task

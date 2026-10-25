@@ -24,6 +24,8 @@ final class MoodReplySender: MoodReplySending {
     // `@concurrent` écrit : sans isolement, sous NonisolatedNonsendingByDefault ce type devient
     // `nonisolated(nonsending)`, dont les métadonnées manquent au runtime d'iOS 16 et 17 (#8182).
     private let composingLanguages: @concurrent @Sendable () async -> [String]
+    /// La loi du fil : mémoire du compte, mode servi, cache (#12641, #12985).
+    private let destinationGuard: EndToEndDestinationGuard
 
     private var messagePersistence: OptimisticMessagePersisting {
         injectedPersistence ?? DependencyContainer.shared.messagePersistence
@@ -46,8 +48,10 @@ final class MoodReplySender: MoodReplySending {
         composingLanguages: @escaping @concurrent @Sendable () async -> [String] = {
             // Défaut de COMPOSITION (langue proposée, repli « fr ») — pas une lecture (#11875).
             await MainActor.run { AuthManager.shared.currentUser?.preferredContentLanguages ?? [] }
-        }
+        },
+        destinationGuard: EndToEndDestinationGuard = EndToEndDestinationGuard()
     ) {
+        self.destinationGuard = destinationGuard
         self.conversations = conversations
         self.messages = messages
         self.endToEnd = endToEnd
@@ -61,7 +65,7 @@ final class MoodReplySender: MoodReplySending {
     func sendReply(_ text: String, to entry: StatusEntry) async throws -> String {
         let conversation = try await DirectConversationResolver.resolve(with: entry.userId, conversations: conversations)
         let language = ConversationViewModel.composeLanguage(for: text, preferred: await composingLanguages())
-        guard EndToEndPlaintextLaw.isEndToEndConversation(conversation.encryptionMode) else {
+        guard await destinationGuard.seals(conversation.id, served: [conversation.encryptionMode]) else {
             try await sendThroughOutbox(text, language: language, storyId: entry.id, conversationId: conversation.id)
             return conversation.id
         }

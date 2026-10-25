@@ -83,6 +83,12 @@ final class EndToEndRegimeLedger {
         memory.resolve(conversationId: conversationId, served: .serverReadable).isEndToEnd
     }
 
+    /// Le dernier statut que la passerelle a servi ne dit pas le bout en bout
+    /// d'une conversation que cet appareil a vue chiffrée (#12987).
+    func servesWithoutEndToEnd(_ conversationId: String) -> Bool {
+        false // RED-STUB
+    }
+
     /// L'envoi suivant doit-il être scellé ? Oui dès qu'UNE source dit le bout
     /// en bout : la ligne qui a ouvert le fil, la conversation relue du cache,
     /// la mémoire du compte, ou l'avis d'activation affiché dans le fil

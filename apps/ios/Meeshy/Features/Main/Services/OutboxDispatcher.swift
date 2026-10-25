@@ -29,13 +29,18 @@ struct OutboxDispatcher: OutboxDispatching {
 
     let messageService: any MessageServiceProviding
     let persistence: @Sendable @concurrent () async -> MessagePersistenceActor
+    /// La file ne garde que du clair : vers une conversation que la loi du fil
+    /// dit chiffrée de bout en bout, rien ne se rejoue (#12985).
+    let sealsDestination: @Sendable @concurrent (String) async -> Bool
 
     init(
         messageService: any MessageServiceProviding = MessageService.shared,
-        persistence: @escaping @Sendable @concurrent () async -> MessagePersistenceActor = { DependencyContainer.shared.messagePersistence }
+        persistence: @escaping @Sendable @concurrent () async -> MessagePersistenceActor = { DependencyContainer.shared.messagePersistence },
+        sealsDestination: @escaping @Sendable @concurrent (String) async -> Bool = { await EndToEndDestinationGuard.live($0) }
     ) {
         self.messageService = messageService
         self.persistence = persistence
+        self.sealsDestination = sealsDestination
     }
 
     /// #10502 — une mutation ENVOYÉE qui est une interaction avec un contenu

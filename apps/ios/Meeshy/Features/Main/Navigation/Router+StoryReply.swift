@@ -22,9 +22,7 @@ extension Router {
         case .status(_, let authorId, _, _, _, _): authId = authorId
         }
 
-        if let existingConv = conversationList?.conversations.first(where: {
-            $0.type == .direct && $0.participantUserId == authId
-        }) {
+        if let existingConv = conversationList.flatMap({ DirectConversationResolver.loaded(with: authId, in: $0.conversations) }) {
             pendingReplyContext = context
             navigateToConversation(existingConv)
             return

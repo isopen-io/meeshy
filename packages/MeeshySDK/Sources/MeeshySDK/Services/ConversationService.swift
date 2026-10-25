@@ -476,17 +476,21 @@ public final class ConversationService: ConversationServiceProviding, Sendable {
         return response.data
     }
 
-    /// Finds the most recent existing direct conversation with a given user, or nil if none exists.
+    /// Le tête-à-tête existant avec `userId`, ou `nil` : le chiffré de bout en
+    /// bout d'abord, sinon le plus récent (#13006, même règle que
+    /// `POST /conversations`, #12966). La liste ne trie que par activité : une
+    /// page d'un seul rendait le tête-à-tête lisible dès qu'il était le plus
+    /// récent.
     public func findDirectWith(userId: String) async throws -> APIConversation? {
         let response: APIResponse<[APIConversation]> = try await api.request(
             ConversationsEndpoint.root,
             queryItems: [
                 URLQueryItem(name: "type", value: "direct"),
                 URLQueryItem(name: "withUserId", value: userId),
-                URLQueryItem(name: "limit", value: "1")
+                URLQueryItem(name: "limit", value: "\(DirectPairChoice.candidateLimit)")
             ]
         )
-        return response.data.first
+        return DirectPairChoice.preferred(among: response.data)
     }
 }
 

@@ -252,8 +252,13 @@ final class SharePendingSendConsumer {
     private let queue: OfflineMessageQueueing
     private let logger = MeeshyLog.logger(.shareConsumer)
 
-    init(queue: OfflineMessageQueueing = OfflineQueue.shared) {
+    /// L'extension n'a pas la mémoire du compte : la cible qu'elle a jugée en
+    /// clair se relit ici par la loi du fil avant d'entrer dans la file (#12985).
+    private let destinationGuard: EndToEndDestinationGuard
+
+    init(queue: OfflineMessageQueueing = OfflineQueue.shared, destinationGuard: EndToEndDestinationGuard = EndToEndDestinationGuard()) {
         self.queue = queue
+        self.destinationGuard = destinationGuard
     }
 
     func consumeAll(
@@ -379,6 +384,12 @@ final class SharePendingSendConsumer {
             // toujours le même écart d'un appel à l'autre.
             let rowCreatedAt = share.createdAt.addingTimeInterval(
                 Self.fanoutOrderEpsilon * TimeInterval(position))
+            if await destinationGuard.seals(current.targets[index].conversationId) {
+                logger.warning("Cible chiffrée de bout en bout : partage différé refusé avant la file")
+                current.targets[index].state = .failed
+                try? Self.commit(current, to: url)
+                continue
+            }
             do {
                 try await enqueue(
                     current, targetIndex: index, origin: origin, mediaRoot: mediaRoot,
