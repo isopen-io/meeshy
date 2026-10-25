@@ -126,7 +126,7 @@ describe('/download — ce que voit quelqu’un qui ne connaît pas Meeshy (#729
     const html = renderToStaticMarkup(
       <SiteHeader language="en" copy={LANDING_COPY.en} onLanding={false} languageControl={null} siteHref={(path) => siteHref(path, { shell: true })} />,
     );
-    const hrefs = [...html.matchAll(/href="([^"]+)"/g)].map((match) => match[1] ?? '');
+    const hrefs = [...html.matchAll(/<a [^>]*href="([^"]+)"/g)].map((match) => match[1] ?? '');
     expect(hrefs).toContain('https://meeshy.me/faq');
     expect(hrefs).toContain('https://meeshy.me/en#world');
     expect(hrefs).toContain('https://meeshy.me/en');
