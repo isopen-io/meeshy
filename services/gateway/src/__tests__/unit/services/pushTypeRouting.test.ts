@@ -106,11 +106,11 @@ describe('tokenRoutesPushType — la loi', () => {
 
   it('distingue la coque et l’application native Android par l’identifiant de publication', () => {
     expect(pushRoutingClientOf(shell('2.23.0'))).toBe('android-shell');
-    expect(pushRoutingClientOf({ platform: 'android', appVersion: '2.23.0', bundleId: 'me.meeshy.app.debug' })).toBe('android-shell');
+    expect(pushRoutingClientOf({ platform: 'android', bundleId: 'me.meeshy.app.debug' })).toBe('android-shell');
     expect(pushRoutingClientOf(nativeAndroid('0.1.0'))).toBe('android-native');
     expect(pushRoutingClientOf(iphone('1.0'))).toBe('ios');
     expect(pushRoutingClientOf(browser('2.23.0'))).toBe('web');
-    expect(pushRoutingClientOf({ platform: 'tv', appVersion: '1', bundleId: null })).toBeNull();
+    expect(pushRoutingClientOf({ platform: 'tv', bundleId: null })).toBeNull();
   });
 });
 
