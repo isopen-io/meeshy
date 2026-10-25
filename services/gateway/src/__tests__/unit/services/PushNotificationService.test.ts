@@ -2526,6 +2526,39 @@ describe('PushNotificationService', () => {
       expect(sentMsg?.android?.notification?.sound).toBe('default');
     });
 
+    it('a game banner reaches the Game channel only on the shell token, which creates it (#10266)', async () => {
+      const service = await getFCMService();
+
+      mockPrisma.pushToken.findMany.mockResolvedValue([
+        { id: 'tok', token: 'fcm-shell', type: 'fcm', platform: 'android', bundleId: 'me.meeshy.app', apnsEnvironment: null },
+      ]);
+
+      await service.sendToUser({
+        userId: 'user-android-shell',
+        payload: { title: 'Jeu', body: 'Duo', data: { type: 'game_duo_invited' } },
+      });
+
+      const sentMsg = mockFirebaseMessagingSend.mock.calls.at(-1)?.[0];
+      expect(sentMsg?.android?.notification?.channelId).toBe('meeshy_game');
+    });
+
+    it('a game banner stays on the default channel for the native app, which never creates the Game channel (#9223)', async () => {
+      const service = await getFCMService();
+
+      mockPrisma.pushToken.findMany.mockResolvedValue([
+        { id: 'tok', token: 'fcm-native', type: 'fcm', platform: 'android', bundleId: 'me.meeshy.android', apnsEnvironment: null },
+        { id: 'tok-2', token: 'fcm-unknown', type: 'fcm', platform: 'android', bundleId: null, apnsEnvironment: null },
+      ]);
+
+      await service.sendToUser({
+        userId: 'user-android-native',
+        payload: { title: 'Jeu', body: 'Duo', data: { type: 'game_duo_invited' } },
+      });
+
+      const channels = mockFirebaseMessagingSend.mock.calls.slice(-2).map((call) => call[0]?.android?.notification?.channelId);
+      expect(channels).toEqual(['meeshy_notifications', 'meeshy_notifications']);
+    });
+
     // --- Pushes d'appel Android : DATA-ONLY obligatoire ---------------------
     // Un message FCM portant un bloc `notification` est rendu par le SYSTÈME
     // quand l'app est backgroundée/tuée : onMessageReceived ne s'exécute

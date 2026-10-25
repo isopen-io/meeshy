@@ -1,6 +1,7 @@
 import type { AndroidNotification } from 'firebase-admin/messaging';
 import { isGameNotificationType } from '@meeshy/shared/utils/game/notifications';
 import type { PushNotificationPayload } from './PushNotificationService';
+import type { PushRoutingClient } from './push-type-routing';
 
 /**
  * CE QUE PORTE UNE BANNIÈRE ANDROID — le bloc `android.notification` d'un
@@ -32,9 +33,13 @@ import type { PushNotificationPayload } from './PushNotificationService';
  * - le JEU (#10266, § 5.16.4) a son canal, `meeshy_game`
  *   (`GameNotificationChannel.java`), pour que « moments à immortaliser » et
  *   les autres notifications du jeu se coupent aussi dans les réglages du
- *   système sans toucher aux messages. Une coque qui ne l'a pas encore retombe
- *   sur le canal par défaut du manifeste : rien ne se perd pendant la
- *   transition ;
+ *   système sans toucher aux messages. Il n'est adressé qu'au jeton de la
+ *   COQUE (`android-shell`, `pushRoutingClientOf`) : une coque qui ne l'a pas
+ *   encore retombe sur le canal par défaut de son manifeste. L'application
+ *   native (`me.meeshy.android`) ne crée pas ce canal et son manifeste ne
+ *   déclare aucun canal par défaut : FCM y rangerait la bannière sous son canal
+ *   générique, sans bannière. Elle reste donc sur `meeshy_notifications`, comme
+ *   tout jeton Android dont le client n'est pas reconnu (#9223) ;
  * - `muted` l'emporte sur le jeu : un lecteur qui a coupé le son ne sonne
  *   jamais, quelle que soit la famille de la notification.
  */
@@ -42,6 +47,9 @@ export const ANDROID_DEFAULT_CHANNEL_ID = 'meeshy_notifications';
 export const ANDROID_SILENT_CHANNEL_ID = 'meeshy_notifications_silent';
 export const ANDROID_GAME_CHANNEL_ID = 'meeshy_game';
 export type AndroidPushSource = Pick<PushNotificationPayload, 'title' | 'body' | 'muted' | 'sound' | 'badge' | 'threadId' | 'data'>;
+export type AndroidPushTarget = { readonly client: PushRoutingClient | null };
+
+const CLIENTS_WITH_GAME_CHANNEL: ReadonlySet<PushRoutingClient> = new Set(['android-shell']);
 
 function bannerTag(payload: AndroidPushSource): string {
   return payload.threadId || payload.data?.notificationId || '';
@@ -60,17 +68,21 @@ function bannerImage(payload: AndroidPushSource): string | undefined {
   return url.startsWith('https://') ? url : undefined;
 }
 
-function bannerChannel(payload: AndroidPushSource): string {
+function bannerChannel(payload: AndroidPushSource, target: AndroidPushTarget): string {
   if (payload.muted) return ANDROID_SILENT_CHANNEL_ID;
-  return isGameNotificationType(payload.data?.type) ? ANDROID_GAME_CHANNEL_ID : ANDROID_DEFAULT_CHANNEL_ID;
+  const createsGameChannel = target.client !== null && CLIENTS_WITH_GAME_CHANNEL.has(target.client);
+  return createsGameChannel && isGameNotificationType(payload.data?.type) ? ANDROID_GAME_CHANNEL_ID : ANDROID_DEFAULT_CHANNEL_ID;
 }
 
-export function androidNotificationConfig(payload: AndroidPushSource): AndroidNotification {
+export function androidNotificationConfig(
+  payload: AndroidPushSource,
+  target: AndroidPushTarget = { client: null },
+): AndroidNotification {
   const tag = bannerTag(payload);
   const imageUrl = bannerImage(payload);
   return {
     ...(payload.muted ? {} : { sound: payload.sound || 'default' }),
-    channelId: bannerChannel(payload),
+    channelId: bannerChannel(payload, target),
     ...(payload.badge !== undefined ? { notificationCount: payload.badge } : {}),
     ...(tag ? { tag } : {}),
     ...(imageUrl ? { imageUrl } : {}),
