@@ -22,7 +22,10 @@ passerelle avait lu, vignetté, transcodé, transcrit. Directive #9224 / #9229 :
   `E2EE_PLAINTEXT_REFUSED` (lisible par les anciens clients, #9223), un blob d'autrui ou déjà rattaché est
   refusé `E2EE_ATTACHMENT_INVALID`, une copie ou un transfert de pièces reste refusé — y compris à côté de
   blobs : l'admission juge l'UNION de ce que l'envoi porterait. Les blobs se réservent (rattachement
-  conditionnel) AVANT que la moindre enveloppe parte ; un blob déjà pris fait échouer l'envoi. Hors `e2ee`,
+  conditionnel) AVANT que la moindre enveloppe parte ; un blob déjà pris fait échouer l'envoi, et ceux
+  que l'envoi avait déjà réservés sont rendus à leur déposant avant le retrait du message (la suppression
+  cascade sur les pièces : mesuré sur mongod 8.0.4, un blob non rendu est supprimé). Un envoi e2ee qui joint
+  des blobs ET nomme une source de transfert est refusé, même si rien n'aurait été recopié : fail-closed. Hors `e2ee`,
   un blob `e2ee` est refusé `409 E2EE_REGIME_CHANGED` : personne n'y aurait de quoi le lire.
 - **Droits par type** : le blob étant `application/octet-stream`, les droits de conversation par type de
   pièce (`attachmentKindAdmission`) le lisent comme un fichier. Décision produit ouverte (issue du lot).

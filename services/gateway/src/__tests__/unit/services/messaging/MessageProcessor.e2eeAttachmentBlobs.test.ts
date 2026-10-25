@@ -170,6 +170,23 @@ describe('conversation e2ee — le blob chiffré sur l’appareil est la seule p
     expect(prisma.message.delete).toHaveBeenCalledWith({ where: { id: MSG_ID } });
   });
 
+  it('une réservation PARTIELLE rend ses blobs intacts AVANT de retirer le message (la suppression cascade)', async () => {
+    const { prisma, processor } = harness(E2EE, [blob('photo'), blob('affiche')]);
+    mockAssociateAttachmentsToMessage.mockResolvedValue(1);
+    const order: string[] = [];
+    prisma.messageAttachment.updateMany.mockImplementation(async () => { order.push('release'); return { count: 1 }; });
+    prisma.message.delete.mockImplementation(async () => { order.push('delete'); return {}; });
+
+    await expect(processor.saveMessage({ ...send, ...sealed, attachmentIds: ['photo', 'affiche'] }))
+      .rejects.toMatchObject({ code: 'E2EE_ATTACHMENT_INVALID' });
+
+    expect(prisma.messageAttachment.updateMany).toHaveBeenCalledWith({
+      where: { messageId: MSG_ID },
+      data: { messageId: null, rank: null, isViewOnce: false, isBlurred: false, effectFlags: 0 },
+    });
+    expect(order).toEqual(['release', 'delete']);
+  });
+
   it('refuse un blob sans enveloppe : personne n’aurait sa clé', async () => {
     const { prisma, processor } = harness(E2EE, [blob('photo')]);
 

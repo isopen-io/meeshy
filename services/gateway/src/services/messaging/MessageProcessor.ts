@@ -738,6 +738,14 @@ export class MessageProcessor {
     const wanted = new Set(attachmentIds).size;
     const reserved = await this.attachmentService.associateAttachmentsToMessage(attachmentIds, message.id, message);
     if (reserved >= wanted) return;
+    // Les blobs déjà réservés par CET envoi sont rendus à leur déposant, intacts,
+    // AVANT de retirer le message : la suppression cascade sur les pièces
+    // (`onDelete: Cascade`), et un blob perdu laisserait son fichier orphelin
+    // (audit du 2026-10-25). Un blob frais n'a ni rang ni drapeau.
+    await this.prisma.messageAttachment.updateMany({
+      where: { messageId: message.id },
+      data: { messageId: null, rank: null, isViewOnce: false, isBlurred: false, effectFlags: 0 },
+    });
     await this.prisma.message.delete({ where: { id: message.id } }).catch((error: unknown) =>
       logger.error('[MessageProcessor] Failed to delete a sealed message whose pieces were taken', error)
     );
