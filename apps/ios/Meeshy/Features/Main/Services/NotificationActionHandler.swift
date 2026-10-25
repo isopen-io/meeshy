@@ -396,7 +396,7 @@ final class NotificationActionHandler: NotificationActionHandling {
     /// verrouillé : ceux qui ÉCRIVENT dans la conversation (répondre, marquer
     /// lu) et ceux qui AGISSENT sur son contenu (suivre l'invitation, ajouter
     /// le contact, ouvrir la position dans Plans).
-    nonisolated static let pinGuardedActions: Set<String> = [
+    static let pinGuardedActions: Set<String> = [
         MeeshyNotificationAction.reply.rawValue,
         MeeshyNotificationAction.markRead.rawValue,
         MeeshyNotificationAction.joinInvite.rawValue,
