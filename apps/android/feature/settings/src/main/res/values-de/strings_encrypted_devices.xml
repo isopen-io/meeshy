@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="security_section_encrypted_devices">Ende-zu-Ende-Verschlüsselung</string>
+    <string name="encrypted_devices_title">Meine verschlüsselten Geräte</string>
+    <string name="encrypted_devices_notice_title">Dieses Android-Telefon liest Ende-zu-Ende-verschlüsselte Chats noch nicht</string>
+    <string name="encrypted_devices_notice_body">Es steht noch nicht in dieser Liste und kann vorerst weder seinen Code zeigen noch den eines anderen Geräts scannen. Ein verlorenes Gerät kannst du schon jetzt entfernen: Es erhält dann keine verschlüsselten Nachrichten mehr.</string>
+    <string name="encrypted_devices_loading">Deine verschlüsselten Geräte werden geladen</string>
+    <string name="encrypted_devices_offline_empty">Du bist offline. Stelle eine Verbindung her, um deine verschlüsselten Geräte zu sehen.</string>
+    <string name="encrypted_devices_error">Deine verschlüsselten Geräte konnten nicht geladen werden.</string>
+    <string name="encrypted_devices_retry">Erneut versuchen</string>
+    <string name="encrypted_devices_offline">Du bist offline. Diese Liste ist möglicherweise nicht aktuell.</string>
+    <string name="encrypted_devices_stale">Diese Liste konnte nicht aktualisiert werden und ist möglicherweise nicht aktuell.</string>
+    <string name="encrypted_devices_empty_title">Noch kein verschlüsseltes Gerät</string>
+    <string name="encrypted_devices_empty_body">Ein Gerät erscheint hier, sobald Meeshy darauf die Ende-zu-Ende-Verschlüsselung eingerichtet hat.</string>
+    <string name="encrypted_devices_dates">Hinzugefügt am %1$s · zuletzt aktiv am %2$s</string>
+    <string name="encrypted_devices_current">Dieses Gerät</string>
+    <string name="encrypted_devices_retiring">%1$s wird entfernt</string>
+    <string name="encrypted_devices_retire_a11y">%1$s entfernen</string>
+    <string name="encrypted_devices_retire">Entfernen</string>
+    <string name="encrypted_devices_retire_confirm_title">Dieses Gerät entfernen?</string>
+    <string name="encrypted_devices_retire_confirm_message">%1$s erhält keine verschlüsselten Nachrichten mehr und kann nicht mit denselben Schlüsseln zurückkehren. Was es bereits entschlüsselt hat, bleibt darauf: Wurde es verloren oder gestohlen, melde es auch unter Sitzungen ab und ändere dein Passwort.</string>
+    <string name="encrypted_devices_retire_confirm_action">Entfernen</string>
+    <string name="encrypted_devices_cancel">Abbrechen</string>
+    <string name="encrypted_devices_retire_offline">Du bist offline: Ein Gerät kann erst entfernt werden, wenn du verbunden bist.</string>
+    <string name="encrypted_devices_retire_failed">Das Gerät konnte nicht entfernt werden. Versuche es erneut.</string>
+    <string name="encrypted_devices_ok">OK</string>
+    <string name="encrypted_devices_unnamed">%1$s-Gerät Nr. %2$d</string>
+    <string name="encrypted_devices_platform_ios">iOS</string>
+    <string name="encrypted_devices_platform_macos">macOS</string>
+    <string name="encrypted_devices_platform_android">Android</string>
+    <string name="encrypted_devices_platform_web">Webbrowser</string>
+    <string name="encrypted_devices_platform_unknown">Unbekanntes Gerät</string>
+</resources>

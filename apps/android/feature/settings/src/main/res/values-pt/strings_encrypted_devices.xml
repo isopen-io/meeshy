@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="security_section_encrypted_devices">Encriptação ponto a ponto</string>
+    <string name="encrypted_devices_title">Os meus dispositivos encriptados</string>
+    <string name="encrypted_devices_notice_title">Este telemóvel Android ainda não lê conversas encriptadas ponto a ponto</string>
+    <string name="encrypted_devices_notice_body">Ainda não aparece nesta lista e, por agora, não pode mostrar o seu código nem ler o de outro dispositivo. Já pode remover um dispositivo perdido: deixará de receber as suas mensagens encriptadas.</string>
+    <string name="encrypted_devices_loading">A carregar os seus dispositivos encriptados</string>
+    <string name="encrypted_devices_offline_empty">Está offline. Ligue-se para ver os seus dispositivos encriptados.</string>
+    <string name="encrypted_devices_error">Não foi possível carregar os seus dispositivos encriptados.</string>
+    <string name="encrypted_devices_retry">Tentar novamente</string>
+    <string name="encrypted_devices_offline">Está offline. Esta lista pode não estar atualizada.</string>
+    <string name="encrypted_devices_stale">Não foi possível atualizar esta lista e pode não estar atualizada.</string>
+    <string name="encrypted_devices_empty_title">Ainda nenhum dispositivo encriptado</string>
+    <string name="encrypted_devices_empty_body">Um dispositivo aparece aqui assim que o Meeshy configurar nele a encriptação ponto a ponto.</string>
+    <string name="encrypted_devices_dates">Adicionado a %1$s · ativo a %2$s</string>
+    <string name="encrypted_devices_current">Este dispositivo</string>
+    <string name="encrypted_devices_retiring">A remover %1$s</string>
+    <string name="encrypted_devices_retire_a11y">Remover %1$s</string>
+    <string name="encrypted_devices_retire">Remover</string>
+    <string name="encrypted_devices_retire_confirm_title">Remover este dispositivo?</string>
+    <string name="encrypted_devices_retire_confirm_message">%1$s deixará de receber as suas mensagens encriptadas e não poderá voltar com as mesmas chaves. O que já desencriptou fica nele: se foi perdido ou roubado, termine também a sessão dele em Sessões e altere a sua palavra-passe.</string>
+    <string name="encrypted_devices_retire_confirm_action">Remover</string>
+    <string name="encrypted_devices_cancel">Cancelar</string>
+    <string name="encrypted_devices_retire_offline">Está offline: um dispositivo só pode ser removido quando estiver ligado.</string>
+    <string name="encrypted_devices_retire_failed">Não foi possível remover o dispositivo. Tente novamente.</string>
+    <string name="encrypted_devices_ok">OK</string>
+    <string name="encrypted_devices_unnamed">Dispositivo %1$s n.º %2$d</string>
+    <string name="encrypted_devices_platform_ios">iOS</string>
+    <string name="encrypted_devices_platform_macos">macOS</string>
+    <string name="encrypted_devices_platform_android">Android</string>
+    <string name="encrypted_devices_platform_web">Navegador web</string>
+    <string name="encrypted_devices_platform_unknown">Dispositivo desconhecido</string>
+</resources>
