@@ -94,11 +94,18 @@ function useRunState(run: SendRun | null): SendRunState | null {
   return useSyncExternalStore(run?.subscribe ?? subscribeNothing, run?.getState ?? nothing, run?.getState ?? nothing);
 }
 
-/** Un poids dans la langue du lecteur (« 500 Mo », « 500 MB ») — jamais une unité écrite en dur. */
+const SIZE_UNITS = [
+  { unit: 'gigabyte', bytes: 1024 * 1024 * 1024, fractionDigits: 1 },
+  { unit: 'megabyte', bytes: 1024 * 1024, fractionDigits: 0 },
+  { unit: 'kilobyte', bytes: 1024, fractionDigits: 0 },
+] as const;
+
+/** Un poids dans la langue du lecteur (« 500 Mo », « 5 Go », « 5 GB ») — jamais une unité écrite en dur. */
 export const sizeIn = (language: InterfaceLanguage, bytes: number): string => {
-  const mega = bytes >= 1024 * 1024;
-  return new Intl.NumberFormat(language, { style: 'unit', unit: mega ? 'megabyte' : 'kilobyte', unitDisplay: 'short', maximumFractionDigits: 0 }).format(
-    Math.max(1, Math.round(bytes / (mega ? 1024 * 1024 : 1024))),
+  const scale = SIZE_UNITS.find((candidate) => bytes >= candidate.bytes) ?? SIZE_UNITS[SIZE_UNITS.length - 1];
+  const value = Math.max(1, bytes / scale.bytes);
+  return new Intl.NumberFormat(language, { style: 'unit', unit: scale.unit, unitDisplay: 'short', maximumFractionDigits: scale.fractionDigits }).format(
+    scale.fractionDigits === 0 ? Math.round(value) : value,
   );
 };
 

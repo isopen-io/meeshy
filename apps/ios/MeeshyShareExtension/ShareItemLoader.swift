@@ -24,10 +24,11 @@ nonisolated struct ShareItemLoads: Sendable {
 /// Chaque fichier est copié DANS la complétion de `loadFileRepresentation` :
 /// l'URL fournie est supprimée à son retour. Le dossier du partage n'est créé
 /// qu'au premier fichier à copier, sinon un partage de texte laisserait un
-/// dossier que rien n'efface. Le plafond d'octets commun (D10 : 500 Mo) se
-/// réserve ICI, pour toutes les copies ensemble (`ShareByteBudget`, #11429) :
-/// ce qui le dépasse n'est pas copié, et l'écran unique le DIT (V9), comme il
-/// dit le plafond de 20 fichiers. La copie reste gardée par l'espace libre.
+/// dossier que rien n'efface. Le plafond d'octets commun (D10 :
+/// `ShareLimits.maxTotalBytes`, 5 Go) se réserve ICI, pour toutes les copies
+/// ensemble (`ShareByteBudget`, #11429) : ce qui le dépasse n'est pas copié, et
+/// l'écran unique le DIT (V9), comme il dit le plafond de fichiers
+/// (`ShareLimits.maxFiles`, 100). La copie reste gardée par l'espace libre.
 nonisolated enum ShareItemLoader {
     typealias PrepareMediaRoot = @Sendable (String) -> URL?
     typealias Deliver = @Sendable (ShareLoadOutcome) -> Void

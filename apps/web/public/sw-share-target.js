@@ -39,8 +39,8 @@ const SHARE_DB_NAME = 'meeshy-share';
 const SHARE_DB_VERSION = 1;
 const SHARE_STORE_NAME = 'incoming';
 const SHARE_KEY = 'current';
-const SHARE_MAX_FILES = 20;
-const SHARE_MAX_TOTAL_BYTES = 500 * 1024 * 1024;
+const SHARE_MAX_FILES = 100;
+const SHARE_MAX_TOTAL_BYTES = 5 * 1024 * 1024 * 1024;
 const SHARE_MAX_TEXT_CHARS = 20000;
 
 const textOf = (form, name) => {
