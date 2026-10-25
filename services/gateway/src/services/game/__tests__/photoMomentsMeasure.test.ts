@@ -1,8 +1,10 @@
 /**
  * LA MESURE DE L'IMMORTALISATION (D15, #10185 — lot L20 #10176) : des agrégats ANONYMES lus dans le registre que la
- * fonctionnalité tient déjà. Les témoins portent sur ce que le rapport SORT : aucun identifiant, aucune cellule sous
- * dix comptes distincts, aucun compte qui a refusé l'analyse, une lecture qui n'écrit rien — et AUCUNE soustraction
- * entre deux lignes publiées (famille − clés, clé − cellules, fenêtre − fenêtre) qui isolerait moins de dix comptes.
+ * fonctionnalité tient déjà. Les témoins portent sur ce que le rapport SORT : aucun identifiant, aucun autre nombre que
+ * des comptes distincts, aucune cellule sous dix comptes, aucun compte qui a refusé l'analyse, une lecture qui
+ * n'écrit rien — et aucun RESTE d'une soustraction entre lignes publiées (famille − clés, clé − cellules, cellule
+ * `kept` − taux, fenêtre − fenêtre) qui isolerait moins de dix comptes. Le RECOUVREMENT de deux lignes publiées dont
+ * l'union est publiée n'est pas fermé : c'est une limite connue de la fiche de décision, pas un témoin.
  */
 
 import {
@@ -31,7 +33,7 @@ type MomentRow = {
   readonly notifiedAt: Date | null;
   readonly keptAt: Date | null;
 };
-type NotificationRow = { readonly id: string; readonly userId: string; readonly createdAt: Date; readonly readAt: Date | null };
+type NotificationRow = { readonly id: string; readonly userId: string; readonly createdAt: Date; readonly readAt: Date | null; readonly type?: string };
 
 const moment = (overrides: Partial<MomentRow> & { readonly userId: string }): MomentRow => ({
   id: `m-${overrides.userId}-${overrides.stepId ?? 'rank:echo:5'}`,
@@ -44,43 +46,77 @@ const moment = (overrides: Partial<MomentRow> & { readonly userId: string }): Mo
 
 const accounts = (count: number, offset = 0): readonly string[] => Array.from({ length: count }, (_, i) => accountId(offset + i + 1));
 
-type Calls = { readonly reads: string[]; readonly writes: string[] };
+type Calls = { readonly reads: string[]; readonly writes: string[]; readonly served: string[] };
+type FindArgs<M extends keyof PhotoMeasureReader> = Parameters<PhotoMeasureReader[M]['findMany']>[0];
+type UserRow = { readonly id: string; readonly analyticsConsentWithdrawnAt: Date | null };
+
+const within = (date: Date | null, range: { readonly gte: Date; readonly lt: Date }): boolean =>
+  date !== null && date.getTime() >= range.gte.getTime() && date.getTime() < range.lt.getTime();
 
 /**
- * Un registre en mémoire qui sert les `findMany` d'après leur `where` et leur curseur, et CONSIGNE tout autre appel :
- * une écriture tentée (create, update, upsert, delete, $runCommandRaw…) se voit dans `calls.writes`.
+ * Un registre en mémoire qui APPLIQUE le `where` de chaque `findMany` (plages de dates, type de notification, refus
+ * posé) et son curseur, CONSIGNE les lignes servies, et consigne tout autre appel : une écriture tentée (create,
+ * update, upsert, delete, $runCommandRaw…) se voit dans `calls.writes`. Chaque compte des moments et des notifications
+ * existe en `User`, sans refus : une mesure qui oublierait son `where` sur les refus les compterait tous comme refusés.
  */
 function registry(params: {
   readonly moments: readonly MomentRow[];
   readonly notifications?: readonly NotificationRow[];
   readonly withdrawn?: readonly string[];
 }): { readonly reader: PhotoMeasureReader; readonly calls: Calls } {
-  const calls: Calls = { reads: [], writes: [] };
-  const page = <T extends { readonly id: string }>(rows: readonly T[], args: { take: number; cursor?: { id: string } }): T[] => {
+  const calls: Calls = { reads: [], writes: [], served: [] };
+  const withdrawn = new Set(params.withdrawn ?? []);
+  const notifications = params.notifications ?? [];
+  const users: readonly UserRow[] = [...new Set([...params.moments, ...notifications].map((row) => row.userId).concat([...withdrawn]))].map((id) => ({
+    id,
+    analyticsConsentWithdrawnAt: withdrawn.has(id) ? at('2026-10-01') : null,
+  }));
+  const serve = <T extends { readonly id: string }>(name: string, rows: readonly T[], args: { readonly take: number; readonly cursor?: { readonly id: string } }): readonly T[] => {
     const sorted = [...rows].sort((a, b) => a.id.localeCompare(b.id));
     const start = args.cursor === undefined ? 0 : sorted.findIndex((row) => row.id === args.cursor?.id) + 1;
-    return sorted.slice(start, start + args.take);
+    const served = sorted.slice(start, start + args.take);
+    calls.served.push(...served.map((row) => `${name}:${row.id}`));
+    return served;
   };
-  const model = <T extends { readonly id: string }>(name: string, rows: readonly T[]) =>
-    new Proxy(
-      {},
-      {
-        get: (_target, method: string) => (args: { take: number; cursor?: { id: string } }) => {
-          if (method !== 'findMany') {
-            calls.writes.push(`${name}.${method}`);
-            return Promise.resolve(null);
-          }
+  const tracked = <T extends object>(name: string, model: T): T =>
+    new Proxy(model, {
+      get: (target, method, receiver) => {
+        if (method === 'findMany') {
           calls.reads.push(name);
-          return Promise.resolve(page(rows, args));
-        },
+          return Reflect.get(target, method, receiver);
+        }
+        return () => {
+          calls.writes.push(`${name}.${String(method)}`);
+          return Promise.resolve(null);
+        };
       },
-    );
-  const withdrawnRows = (params.withdrawn ?? []).map((id) => ({ id }));
-  const reader = {
-    gamePhotoMoment: model('gamePhotoMoment', params.moments),
-    notification: model('notification', params.notifications ?? []),
-    user: model('user', withdrawnRows),
-  } as unknown as PhotoMeasureReader;
+    });
+  const reader: PhotoMeasureReader = {
+    gamePhotoMoment: tracked('gamePhotoMoment', {
+      findMany: (args: FindArgs<'gamePhotoMoment'>) => {
+        const [presented, notified, kept] = args.where.OR;
+        const matching = params.moments.filter(
+          (row) => within(row.presentedAt, presented.presentedAt) || within(row.notifiedAt, notified.notifiedAt) || within(row.keptAt, kept.keptAt),
+        );
+        return Promise.resolve(serve('gamePhotoMoment', matching, args));
+      },
+    }),
+    notification: tracked('notification', {
+      findMany: (args: FindArgs<'notification'>) => {
+        const [created, read] = args.where.OR;
+        const matching = notifications.filter(
+          (row) => (row.type ?? 'game_photo_moment') === args.where.type && (within(row.createdAt, created.createdAt) || within(row.readAt, read.readAt)),
+        );
+        return Promise.resolve(serve('notification', matching, args));
+      },
+    }),
+    user: tracked('user', {
+      findMany: (args: FindArgs<'user'>) => {
+        const matching = users.filter((row) => row.analyticsConsentWithdrawnAt !== args.where.analyticsConsentWithdrawnAt.not);
+        return Promise.resolve(serve('user', matching, args).map(({ id }) => ({ id })));
+      },
+    }),
+  };
   return { reader, calls };
 }
 
@@ -100,15 +136,15 @@ describe('aucun identifiant ne sort', () => {
     expect(wire).not.toMatch(IDENTIFIER);
     expect(wire).not.toContain('userId');
     expect(wire).not.toMatch(/meesh:\d/);
-    expect(report.cells).toContainEqual({ day: DAY, family: 'meesh', key: 'meesh', event: 'presented', surface: 'in-app', accounts: 12, moments: 12 });
-    expect(report.cells).toContainEqual({ day: DAY, family: 'meesh', key: 'meesh', event: 'kept', surface: 'in-app', accounts: 12, moments: 12 });
+    expect(report.cells).toContainEqual({ day: DAY, family: 'meesh', key: 'meesh', event: 'presented', surface: 'in-app', accounts: 12 });
+    expect(report.cells).toContainEqual({ day: DAY, family: 'meesh', key: 'meesh', event: 'kept', surface: 'in-app', accounts: 12 });
   });
 
   it('les clés de chaque cellule sont celles du contrat, et seulement elles', async () => {
     const { reader } = registry({ moments: accounts(10).map((userId) => moment({ userId })) });
     const report = await measurePhotoMoments(reader, { ...WINDOW, now: NOW });
-    report.cells.forEach((cell) => expect(Object.keys(cell).sort()).toEqual(['accounts', 'day', 'event', 'family', 'key', 'moments', 'surface']));
-    report.rates.forEach((rate) => expect(Object.keys(rate).sort()).toEqual(['accounts', 'announced', 'family', 'kept', 'key', 'rate']));
+    report.cells.forEach((cell) => expect(Object.keys(cell).sort()).toEqual(['accounts', 'day', 'event', 'family', 'key', 'surface']));
+    report.rates.forEach((rate) => expect(Object.keys(rate).sort()).toEqual(['announced', 'family', 'kept', 'key', 'rate']));
   });
 });
 
@@ -124,7 +160,7 @@ describe('une cellule sous dix comptes distincts n’apparaît pas', () => {
     expect(below.cells).toEqual([]);
     expect(below.rates).toEqual([]);
     expect(below.suppressed.cells).toBeGreaterThan(0);
-    expect(at10.cells).toEqual([{ day: DAY, family: 'rank', key: 'rank:echo', event: 'presented', surface: 'in-app', accounts: 10, moments: 10 }]);
+    expect(at10.cells).toEqual([{ day: DAY, family: 'rank', key: 'rank:echo', event: 'presented', surface: 'in-app', accounts: 10 }]);
   });
 
   it('les seuils comptent des COMPTES, pas des lignes : un compte aux cinq divisions reste un compte', async () => {
@@ -164,7 +200,7 @@ describe('un compte qui a refusé l’analyse ne compte pas', () => {
 
     const report = await measurePhotoMoments(reader, { ...WINDOW, now: NOW });
 
-    expect(report.push).toEqual([{ day: DAY, event: 'sent', accounts: 10, notifications: 10 }]);
+    expect(report.push).toEqual([{ day: DAY, event: 'sent', accounts: 10 }]);
   });
 });
 
@@ -191,7 +227,7 @@ describe('rejouer le script ne modifie rien en base', () => {
 
     const report = await measurePhotoMoments(reader, { ...WINDOW, now: NOW });
 
-    expect(report.cells).toEqual([{ day: DAY, family: 'rank', key: 'rank:echo', event: 'presented', surface: 'in-app', accounts: 2_100, moments: 2_100 }]);
+    expect(report.cells).toEqual([{ day: DAY, family: 'rank', key: 'rank:echo', event: 'presented', surface: 'in-app', accounts: 2_100 }]);
   });
 });
 
@@ -204,10 +240,10 @@ describe('ce que le rapport mesure', () => {
     const report = await measurePhotoMoments(reader, { ...WINDOW, now: NOW });
 
     expect(report.rates).toEqual([
-      { family: 'flame', key: null, announced: 20, kept: 10, accounts: 20, rate: 0.5 },
-      { family: 'flame', key: 'flame:30', announced: 20, kept: 10, accounts: 20, rate: 0.5 },
+      { family: 'flame', key: null, announced: 20, kept: 10, rate: 0.5 },
+      { family: 'flame', key: 'flame:30', announced: 20, kept: 10, rate: 0.5 },
     ]);
-    expect(report.cells).toContainEqual({ day: DAY, family: 'flame', key: 'flame:30', event: 'notified', surface: 'push', accounts: 10, moments: 10 });
+    expect(report.cells).toContainEqual({ day: DAY, family: 'flame', key: 'flame:30', event: 'notified', surface: 'push', accounts: 10 });
   });
 
   it('la surface est grossière : in-app si présentée, push si seulement notifiée, none sinon', async () => {
@@ -217,8 +253,8 @@ describe('ce que le rapport mesure', () => {
 
     const report = await measurePhotoMoments(reader, { ...WINDOW, now: NOW });
 
-    expect(report.cells).toContainEqual({ day: DAY, family: 'rank', key: 'rank:echo', event: 'kept', surface: 'push', accounts: 10, moments: 10 });
-    expect(report.cells).toContainEqual({ day: DAY, family: 'start', key: 'start', event: 'kept', surface: 'none', accounts: 10, moments: 10 });
+    expect(report.cells).toContainEqual({ day: DAY, family: 'rank', key: 'rank:echo', event: 'kept', surface: 'push', accounts: 10 });
+    expect(report.cells).toContainEqual({ day: DAY, family: 'start', key: 'start', event: 'kept-backlog', surface: 'none', accounts: 10 });
   });
 
   it('un événement hors de la fenêtre et une identité hors grammaire ne comptent pas', async () => {
@@ -238,8 +274,8 @@ describe('ce que le rapport mesure', () => {
     const report = await measurePhotoMoments(reader, { ...WINDOW, now: NOW });
 
     expect(report.push).toEqual([
-      { day: '2026-10-19', event: 'sent', accounts: 10, notifications: 10 },
-      { day: DAY, event: 'read', accounts: 10, notifications: 10 },
+      { day: '2026-10-19', event: 'sent', accounts: 10 },
+      { day: DAY, event: 'read', accounts: 10 },
     ]);
     expect(report.pushReadMeaning).toBe('ceiling-includes-carnet-visits');
   });
@@ -316,8 +352,8 @@ describe('aucune soustraction entre lignes publiées n’isole moins de dix comp
 
     const report = await measurePhotoMoments(reader, { ...WINDOW, now: NOW });
 
-    expect(report.rates).toEqual([{ family: 'rank', key: 'rank:echo', announced: 10, kept: 0, accounts: 10, rate: 0 }]);
-    expect(report.cells).toEqual([{ day: DAY, family: 'rank', key: 'rank:echo', event: 'presented', surface: 'in-app', accounts: 10, moments: 10 }]);
+    expect(report.rates).toEqual([{ family: 'rank', key: 'rank:echo', announced: 10, kept: 0, rate: 0 }]);
+    expect(report.cells).toEqual([{ day: DAY, family: 'rank', key: 'rank:echo', event: 'presented', surface: 'in-app', accounts: 10 }]);
   });
 
   it('clé − cellules : le compte qui seul a vu et gardé son rang un autre jour ne se déduit pas de la ligne de clé', async () => {
@@ -328,7 +364,7 @@ describe('aucune soustraction entre lignes publiées n’isole moins de dix comp
     const report = await measurePhotoMoments(reader, { ...WINDOW, now: NOW });
 
     expect(report.rates).toEqual([]);
-    expect(report.cells).toEqual([{ day: DAY, family: 'rank', key: 'rank:echo', event: 'presented', surface: 'in-app', accounts: 10, moments: 10 }]);
+    expect(report.cells).toEqual([{ day: DAY, family: 'rank', key: 'rank:echo', event: 'presented', surface: 'in-app', accounts: 10 }]);
   });
 
   it('clé − cellules, sur le seul taux de garde : un compte qui garde seul un autre jour ne se déduit pas', async () => {
@@ -350,8 +386,130 @@ describe('aucune soustraction entre lignes publiées n’isole moins de dix comp
     const report = await measurePhotoMoments(reader, { ...WINDOW, now: NOW });
 
     expect(report.rates).toEqual([
-      { family: 'rank', key: null, announced: 20, kept: 0, accounts: 20, rate: 0 },
-      { family: 'rank', key: 'rank:echo', announced: 10, kept: 0, accounts: 10, rate: 0 },
+      { family: 'rank', key: null, announced: 20, kept: 0, rate: 0 },
+      { family: 'rank', key: 'rank:echo', announced: 10, kept: 0, rate: 0 },
     ]);
+  });
+});
+
+describe('les cellules de garde et le taux comptent la MÊME population', () => {
+  it('cellule kept − taux : le compte annoncé une semaine antérieure qui garde dans celle-ci ne se déduit pas', async () => {
+    const thisWeek = accounts(10).map((userId) => moment({ userId, stepId: 'rank:echo:5', keptAt: at(DAY, 11) }));
+    const earlier = moment({ userId: accountId(11), stepId: 'rank:echo:4', presentedAt: at('2026-10-12'), keptAt: at(DAY, 12) });
+    const { reader } = registry({ moments: [...thisWeek, earlier] });
+
+    const report = await measurePhotoMoments(reader, { ...WINDOW, now: NOW });
+
+    expect(report.cells).toEqual([
+      { day: DAY, family: 'rank', key: 'rank:echo', event: 'kept', surface: 'in-app', accounts: 10 },
+      { day: DAY, family: 'rank', key: 'rank:echo', event: 'presented', surface: 'in-app', accounts: 10 },
+    ]);
+    expect(report.rates).toEqual([
+      { family: 'rank', key: null, announced: 10, kept: 10, rate: 1 },
+      { family: 'rank', key: 'rank:echo', announced: 10, kept: 10, rate: 1 },
+    ]);
+    expect(report.push).toEqual([]);
+    expect(report.suppressed.cells).toBe(1);
+  });
+});
+
+describe('un compte à plusieurs moments d’une même clé ne se distingue pas', () => {
+  it('cellules et taux comptent des COMPTES : un second moment du même compte, le même jour, ne laisse aucune trace', async () => {
+    const single = accounts(10).map((userId) => moment({ userId, stepId: 'rank:echo:5', keptAt: at(DAY, 11) }));
+    const second = moment({ userId: accountId(1), stepId: 'rank:echo:4', presentedAt: at(DAY, 14), keptAt: at(DAY, 15) });
+
+    const once = await measurePhotoMoments(registry({ moments: single }).reader, { ...WINDOW, now: NOW });
+    const twice = await measurePhotoMoments(registry({ moments: [...single, second] }).reader, { ...WINDOW, now: NOW });
+
+    expect(twice).toEqual(once);
+    expect(twice.cells).toEqual([
+      { day: DAY, family: 'rank', key: 'rank:echo', event: 'kept', surface: 'in-app', accounts: 10 },
+      { day: DAY, family: 'rank', key: 'rank:echo', event: 'presented', surface: 'in-app', accounts: 10 },
+    ]);
+    expect(twice.rates).toEqual([
+      { family: 'rank', key: null, announced: 10, kept: 10, rate: 1 },
+      { family: 'rank', key: 'rank:echo', announced: 10, kept: 10, rate: 1 },
+    ]);
+  });
+
+  it('les push comptent des comptes : une seconde notification du même compte, le même jour, ne laisse aucune trace', async () => {
+    const sent = accounts(10).map((userId, i) => ({ id: notificationId(i), userId, createdAt: at(DAY, 8), readAt: null }));
+    const again = { id: notificationId(50), userId: accountId(1), createdAt: at(DAY, 18), readAt: null };
+
+    const once = await measurePhotoMoments(registry({ moments: [], notifications: sent }).reader, { ...WINDOW, now: NOW });
+    const twice = await measurePhotoMoments(registry({ moments: [], notifications: [...sent, again] }).reader, { ...WINDOW, now: NOW });
+
+    expect(twice).toEqual(once);
+    expect(twice.push).toEqual([{ day: DAY, event: 'sent', accounts: 10 }]);
+  });
+});
+
+describe('la conservation de 25 mois borne la mesure elle-même, pas seulement sa ligne de commande', () => {
+  it('une semaine au-delà de la conservation est refusée par measurePhotoMoments, sans aucune lecture', async () => {
+    const { reader, calls } = registry({ moments: accounts(10).map((userId) => moment({ userId })) });
+
+    await expect(measurePhotoMoments(reader, { week: '2024-W01', now: NOW })).rejects.toThrow('beyond-retention');
+    expect(calls.reads).toEqual([]);
+  });
+
+  it('la dernière semaine dans la conservation se mesure encore', async () => {
+    const { reader } = registry({ moments: [] });
+
+    await expect(measurePhotoMoments(reader, { week: '2024-W40', now: NOW })).resolves.toMatchObject({ window: { week: '2024-W40' } });
+    await expect(measurePhotoMoments(reader, { week: '2024-W39', now: NOW })).rejects.toThrow('beyond-retention');
+  });
+});
+
+describe('la base ne sert que ce que la semaine demande', () => {
+  it('les moments sans aucun événement dans la semaine ne sont même pas servis', async () => {
+    const inside = accounts(10).map((userId) => moment({ userId }));
+    const outside = accounts(10, 10).map((userId) => moment({ userId, presentedAt: at('2026-10-10'), keptAt: at('2026-10-27') }));
+    const { reader, calls } = registry({ moments: [...inside, ...outside] });
+
+    await measurePhotoMoments(reader, { ...WINDOW, now: NOW });
+
+    expect(calls.served.filter((row) => row.startsWith('gamePhotoMoment:')).sort()).toEqual(inside.map((row) => `gamePhotoMoment:${row.id}`).sort());
+  });
+
+  it('seules les notifications du jeu se comptent : un autre type, même dans la semaine, ne sort pas', async () => {
+    const other = accounts(10).map((userId, i) => ({ id: notificationId(i), userId, createdAt: at(DAY, 8), readAt: at(DAY, 9), type: 'message' }));
+    const { reader, calls } = registry({ moments: [], notifications: other });
+
+    const report = await measurePhotoMoments(reader, { ...WINDOW, now: NOW });
+
+    expect(report.push).toEqual([]);
+    expect(calls.served.filter((row) => row.startsWith('notification:'))).toEqual([]);
+  });
+
+  it('seuls les refus sont lus : un compte sans refus compte, un compte qui a refusé ne compte pas', async () => {
+    const users = accounts(11);
+    const { reader, calls } = registry({ moments: users.map((userId) => moment({ userId })), withdrawn: [accountId(11)] });
+
+    const report = await measurePhotoMoments(reader, { ...WINDOW, now: NOW });
+
+    expect(calls.served.filter((row) => row.startsWith('user:'))).toEqual([`user:${accountId(11)}`]);
+    expect(report.cells).toEqual([{ day: DAY, family: 'rank', key: 'rank:echo', event: 'presented', surface: 'in-app', accounts: 10 }]);
+  });
+});
+
+describe('une garde posée dans la semaine d’une étape annoncée AVANT elle sort à part, sous le même seuil', () => {
+  it('dix comptes annoncés en W42 qui gardent en W43 ⇒ une cellule kept-backlog, et aucun taux', async () => {
+    const late = accounts(10).map((userId) => moment({ userId, presentedAt: at('2026-10-12'), keptAt: at(DAY, 12) }));
+    const { reader } = registry({ moments: late });
+
+    const report = await measurePhotoMoments(reader, { ...WINDOW, now: NOW });
+
+    expect(report.cells).toEqual([{ day: DAY, family: 'rank', key: 'rank:echo', event: 'kept-backlog', surface: 'in-app', accounts: 10 }]);
+    expect(report.rates).toEqual([]);
+  });
+
+  it('neuf comptes ⇒ la cellule kept-backlog ne sort pas', async () => {
+    const late = accounts(9).map((userId) => moment({ userId, presentedAt: at('2026-10-12'), keptAt: at(DAY, 12) }));
+    const { reader } = registry({ moments: late });
+
+    const report = await measurePhotoMoments(reader, { ...WINDOW, now: NOW });
+
+    expect(report.cells).toEqual([]);
+    expect(report.suppressed.cells).toBe(1);
   });
 });

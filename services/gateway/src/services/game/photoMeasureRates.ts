@@ -26,13 +26,17 @@ export type RateMoment = {
   readonly keepingShown: boolean;
 };
 
-/** Le taux d'immortalisation sur la semaine : `kept / announced` des étapes annoncées dedans ; `key: null` = la famille. */
+/**
+ * Le taux d'immortalisation sur la semaine, en COMPTES : `announced` = comptes à qui une étape de la ligne a été
+ * annoncée dans la semaine, `kept` = ceux d'entre eux qui en ont gardé au moins une avant sa fin ; `key: null` = la
+ * famille. Compter des moments à côté des comptes dirait combien de comptes en ont eu deux (11 annoncés pour 10
+ * comptes : un seul compte a franchi deux divisions) — la ligne ne porte donc que des comptes.
+ */
 export type PhotoMeasureRate = {
   readonly family: PhotoMeasureFamily;
   readonly key: string | null;
   readonly announced: number;
   readonly kept: number;
-  readonly accounts: number;
   readonly rate: number;
 };
 
@@ -54,9 +58,9 @@ const groupBy = (moments: readonly RateMoment[], level: 'family' | 'key'): reado
 ];
 
 const line = (group: Group): PhotoMeasureRate => {
-  const kept = group.moments.filter((moment) => moment.kept).length;
-  const announced = group.moments.length;
-  return { family: group.family, key: group.key, announced, kept, accounts: accountsOf(group.moments), rate: Math.round((kept / announced) * 1000) / 1000 };
+  const kept = accountsOf(group.moments.filter((moment) => moment.kept));
+  const announced = accountsOf(group.moments);
+  return { family: group.family, key: group.key, announced, kept, rate: Math.round((kept / announced) * 1000) / 1000 };
 };
 
 /** Les lignes de taux publiables, triées comme le rapport (famille, puis ses clés), et le nombre de lignes retenues. */
