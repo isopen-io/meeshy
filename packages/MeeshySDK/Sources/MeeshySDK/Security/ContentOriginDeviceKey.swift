@@ -89,10 +89,17 @@ enum ContentOriginKeyResolution: Equatable, Sendable {
 
 /// La clé d'un processus. Une clé gardée ne se relit plus. Une éphémère reste
 /// la MÊME tant que le trousseau est fermé (ce qu'elle a scellé se vérifie
-/// encore), et le trousseau se retente au plus une fois par `retryInterval`,
-/// pour qu'une liste rendue avant le déverrouillage ne le sollicite pas à
-/// chaque bulle. S'il se rouvre VIDE, c'est l'éphémère qui s'y garde : ce
-/// qu'elle a scellé pendant le verrouillage reste vérifiable.
+/// encore), et le trousseau se retente à intervalle CROISSANT — `retryInterval`,
+/// puis son double à chaque échec, jusqu'à `maxRetryInterval` — pour qu'une
+/// liste rendue avant le déverrouillage, ou une valeur abîmée qui ne se lira
+/// jamais, ne le sollicite pas chaque seconde. S'il se rouvre VIDE, c'est
+/// l'éphémère qui s'y garde : ce qu'elle a scellé pendant le verrouillage
+/// reste vérifiable.
+///
+/// Seule la PREMIÈRE lecture se fait sous le verrou : elle fixe la clé que
+/// tous les appels concurrents partagent. Une relecture se fait HORS du
+/// verrou — un aller-retour au trousseau ne bloque aucun autre appel, qui
+/// reçoit l'éphémère en attendant — et une seule à la fois.
 ///
 /// L'intervalle se mesure sur une horloge MONOTONE (`systemUptime`) : l'heure
 /// murale recule (réglage manuel, NTP, fuseau) et, mesurée sur elle, une clé
@@ -102,41 +109,88 @@ final class ContentOriginKeyHolder: Sendable {
     private struct Held: Sendable {
         let resolution: ContentOriginKeyResolution
         let readAt: TimeInterval
+        let failedRetries: Int
+        let retrying: Bool
 
-        func isSettled(at instant: TimeInterval, retryInterval: TimeInterval) -> Bool {
+        func isSettled(at instant: TimeInterval, after delay: TimeInterval) -> Bool {
             guard case .ephemeral = resolution else { return true }
             let elapsed = instant - readAt
-            return elapsed >= 0 && elapsed < retryInterval
+            return retrying || (elapsed >= 0 && elapsed < delay)
         }
+
+        func startingRetry() -> Held {
+            Held(resolution: resolution, readAt: readAt, failedRetries: failedRetries, retrying: true)
+        }
+    }
+
+    private enum Access {
+        case settled(Data)
+        case retry(candidate: Data)
     }
 
     private let vault: any ContentOriginKeyVault
     private let generate: @Sendable () -> Data
     private let uptime: @Sendable () -> TimeInterval
     private let retryInterval: TimeInterval
+    private let maxRetryInterval: TimeInterval
     private let held = OSAllocatedUnfairLock<Held?>(initialState: nil)
 
     init(
         vault: any ContentOriginKeyVault,
         generate: @escaping @Sendable () -> Data,
         uptime: @escaping @Sendable () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },
-        retryInterval: TimeInterval = 1
+        retryInterval: TimeInterval = 1,
+        maxRetryInterval: TimeInterval = 300
     ) {
         self.vault = vault
         self.generate = generate
         self.uptime = uptime
         self.retryInterval = retryInterval
+        self.maxRetryInterval = max(retryInterval, maxRetryInterval)
     }
 
     func current() -> Data {
+        switch access() {
+        case .settled(let key):
+            return key
+        case .retry(let candidate):
+            let resolution = ContentOriginDeviceKey.resolve(using: vault) { candidate }
+            return settle(resolution)
+        }
+    }
+
+    /// Le délai avant la prochaine relecture, après `failedRetries` relectures
+    /// restées fermées.
+    func retryDelay(afterFailedRetries failedRetries: Int) -> TimeInterval {
+        let doublings = Double(min(failedRetries, 32))
+        return min(retryInterval * pow(2, doublings), maxRetryInterval)
+    }
+
+    private func access() -> Access {
         held.withLock { slot in
             let instant = uptime()
-            if let settled = slot, settled.isSettled(at: instant, retryInterval: retryInterval) {
-                return settled.resolution.key
+            guard let current = slot else {
+                let resolution = ContentOriginDeviceKey.resolve(using: vault, generate: generate)
+                slot = Held(resolution: resolution, readAt: instant, failedRetries: 0, retrying: false)
+                return .settled(resolution.key)
             }
-            let candidate = slot?.resolution.key ?? generate()
-            let resolution = ContentOriginDeviceKey.resolve(using: vault) { candidate }
-            slot = Held(resolution: resolution, readAt: instant)
+            if current.isSettled(at: instant, after: retryDelay(afterFailedRetries: current.failedRetries)) {
+                return .settled(current.resolution.key)
+            }
+            slot = current.startingRetry()
+            return .retry(candidate: current.resolution.key)
+        }
+    }
+
+    private func settle(_ resolution: ContentOriginKeyResolution) -> Data {
+        held.withLock { slot in
+            let failedRetries: Int
+            if case .ephemeral = resolution {
+                failedRetries = (slot?.failedRetries ?? 0) + 1
+            } else {
+                failedRetries = 0
+            }
+            slot = Held(resolution: resolution, readAt: uptime(), failedRetries: failedRetries, retrying: false)
             return resolution.key
         }
     }
