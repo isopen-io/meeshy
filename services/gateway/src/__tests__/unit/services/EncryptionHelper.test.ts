@@ -510,13 +510,23 @@ describe('EncryptionHelper', () => {
       expect(result.conversationId).toBeNull();
     });
 
-    it('should handle database errors gracefully', async () => {
+    it('#12822 — fails CLOSED on a database error: the caller writes nothing rather than plaintext', async () => {
       mockPrisma.message.findUnique.mockRejectedValue(new Error('Database error'));
+
+      await expect(encryptionHelper.shouldEncryptTranslation(messageId)).rejects.toThrow('Database error');
+    });
+
+    it('#12822 — reads the mode case-insensitively, like the write path', async () => {
+      mockPrisma.message.findUnique.mockResolvedValue({
+        id: messageId,
+        conversationId,
+        encryptionMode: 'SERVER',
+        isEncrypted: true
+      } as any);
 
       const result = await encryptionHelper.shouldEncryptTranslation(messageId);
 
-      expect(result.shouldEncrypt).toBe(false);
-      expect(result.conversationId).toBeNull();
+      expect(result.shouldEncrypt).toBe(true);
     });
 
     it('should return false for unencrypted messages', async () => {

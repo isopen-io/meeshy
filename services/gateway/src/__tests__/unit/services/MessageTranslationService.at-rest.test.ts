@@ -169,3 +169,30 @@ describe('E1 — le translator apprend qu’un texte est chiffré au repos (ni c
     expect(requests()[0]).not.toHaveProperty('atRest');
   });
 });
+
+describe('E2 — une traduction dont le régime ne se relit pas ne se range JAMAIS en clair', () => {
+  const TRANSLATED = 'the meeting moves to Thursday, room 4471';
+
+  it('la relecture du message échoue : message.update ne reçoit aucun texte', async () => {
+    state.row = await sealedRow('server');
+    const service = new MessageTranslationService(prisma);
+    await service.initialize();
+    const update = prisma.message.update as unknown as jest.Mock;
+    const findUnique = prisma.message.findUnique as unknown as jest.Mock;
+    update.mockClear();
+    findUnique.mockImplementation(async (args: unknown) => {
+      const select = (args as { select?: Record<string, unknown> }).select ?? {};
+      if ('encryptionMode' in select && !('encryptedContent' in select)) throw new Error('mongo down');
+      return { ...state.row };
+    });
+
+    zmq.emit('translationCompleted', {
+      taskId: 'task-e2', targetLanguage: 'en',
+      result: { messageId: MSG_ID, sourceLanguage: 'fr', targetLanguage: 'en', translatedText: TRANSLATED, confidenceScore: 0.9, processingTime: 1, modelType: 'basic' },
+    });
+    await settle();
+    findUnique.mockImplementation(async () => ({ ...state.row }));
+
+    expect(JSON.stringify(update.mock.calls)).not.toContain(TRANSLATED);
+  });
+});

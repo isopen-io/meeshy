@@ -6,7 +6,7 @@
 import * as crypto from 'crypto';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { enhancedLogger } from '../../utils/logger-enhanced';
-import { ServerAtRestUnavailableError } from '../messaging/serverAtRest';
+import { isServerAtRestMode, ServerAtRestUnavailableError } from '../messaging/serverAtRest';
 
 const logger = enhancedLogger.child({ module: 'EncryptionHelper' });
 
@@ -149,31 +149,30 @@ export class EncryptionHelper {
   }
 
   /**
-   * Check if a message requires encrypted translation storage
+   * Une traduction de ce message se range-t-elle chiffrée ?
+   *
+   * #12822 — FAIL-CLOSED. Une relecture qui échoue LÈVE : l'appelant
+   * (`_saveTranslationToDatabase`) n'écrit alors rien, au lieu de ranger en
+   * clair la traduction d'un message peut-être chiffré au repos. Le mode se lit
+   * par `isServerAtRestMode`, sans égard à la casse, comme à l'écriture.
    */
   async shouldEncryptTranslation(messageId: string): Promise<{ shouldEncrypt: boolean; conversationId: string | null }> {
-    try {
-      const message = await this.prisma.message.findUnique({
-        where: { id: messageId },
-        select: {
-          conversationId: true,
-          encryptionMode: true,
-          isEncrypted: true
-        }
-      });
-
-      if (!message) {
-        return { shouldEncrypt: false, conversationId: null };
+    const message = await this.prisma.message.findUnique({
+      where: { id: messageId },
+      select: {
+        conversationId: true,
+        encryptionMode: true,
+        isEncrypted: true
       }
+    }).catch((error: unknown) => {
+      logger.error('Failed to check encryption requirement: translation not stored', { messageId, error });
+      throw error;
+    });
 
-      // E2EE messages should NOT have translations (they should be skipped entirely)
-      // Server and Hybrid mode messages should have encrypted translations
-      const shouldEncrypt = message.encryptionMode === 'server' || message.encryptionMode === 'hybrid';
-
-      return { shouldEncrypt, conversationId: message.conversationId };
-    } catch (error) {
-      logger.error('Failed to check encryption requirement', { messageId, error });
+    if (!message) {
       return { shouldEncrypt: false, conversationId: null };
     }
+
+    return { shouldEncrypt: isServerAtRestMode(message.encryptionMode), conversationId: message.conversationId };
   }
 }
