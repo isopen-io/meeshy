@@ -6,9 +6,11 @@ import os
 
 /// Le fil d'une conversation chiffrée lit le clair que CET appareil a
 /// déchiffré ou écrit (#3707, spec § 4.4) : le serveur ne sert que le littéral
-/// `[Encrypted]`. Le clair n'est adopté que s'il est à SA place — même
-/// conversation, même auteur authentifié par libsignal, même identifiant client
-/// — sans quoi un serveur compromis pourrait ranger un message sous un autre.
+/// `[Encrypted]`. Le clair n'est adopté que s'il est à SA place — parole d'un
+/// membre, même conversation, même auteur authentifié par libsignal, même
+/// identifiant client, même message cité (#12916, audit) — sans quoi un serveur
+/// compromis pourrait ranger un message sous un autre, un autre nom ou un autre
+/// contexte.
 /// Tout ce qui ne s'adopte pas reste scellé (fail-closed), jamais affiché comme
 /// chiffré brut.
 nonisolated enum EndToEndThreadPlaintexts {
@@ -36,17 +38,32 @@ nonisolated enum EndToEndThreadPlaintexts {
         var adopted: [String: E2EEPlaintextEntry] = [:]
         for index in messages.indices where awaitsPlaintext(messages[index]) {
             let message = messages[index]
-            guard let entry = entries[message.id] ?? message.clientMessageId.flatMap({ entries[$0] }),
-                  case .readable(let content, let senderUserId) = entry else { continue }
-            guard isInPlace(content, senderUserId: senderUserId, for: message, conversationId: conversationId) else {
+            guard let entry = entry(for: message, in: entries), case .readable = entry else { continue }
+            guard let readable = adoption(of: entry, by: message, conversationId: conversationId) else {
                 Logger.e2ee.warning("e2ee plaintext refused message=\(message.id, privacy: .public): not in place")
                 continue
             }
-            messages[index].adoptDecryptedContent(content.text ?? "")
-            if let language = content.language, !language.isEmpty { messages[index].originalLanguage = language }
-            adopted[message.id] = entry
+            messages[index] = readable
+            adopted[readable.id] = entry
         }
         return adopted
+    }
+
+    /// Le clair rangé pour ce message : sous son identifiant serveur, ou sous
+    /// son identifiant client seulement si le message est le MIEN — une clé
+    /// client se lit dans ma requête, le serveur pourrait la reprendre.
+    static func entry(for message: MeeshyMessage, in entries: [String: E2EEPlaintextEntry]) -> E2EEPlaintextEntry? {
+        entries[message.id] ?? (message.isMe ? message.clientMessageId.flatMap { entries[$0] } : nil)
+    }
+
+    /// Le message portant son clair, s'il est à SA place ; `nil` sinon.
+    static func adoption(of entry: E2EEPlaintextEntry, by message: MeeshyMessage, conversationId: String) -> MeeshyMessage? {
+        guard case .readable(let content, let senderUserId) = entry,
+              isInPlace(content, senderUserId: senderUserId, for: message, conversationId: conversationId) else { return nil }
+        var readable = message
+        readable.adoptDecryptedContent(content.text ?? "")
+        if let language = content.language, !language.isEmpty { readable.originalLanguage = language }
+        return readable
     }
 
     /// Lit puis pose le clair de tout message scellé du lot.
@@ -70,10 +87,17 @@ nonisolated enum EndToEndThreadPlaintexts {
             .eraseToAnyPublisher()
     }
 
+    /// L'auteur se lit sur la ligne (`senderUserId`, sinon `senderId`, que le
+    /// magasin résout en identifiant utilisateur) : une ligne sans auteur
+    /// reconnaissable reste scellée.
     static func isInPlace(_ content: E2EEContent, senderUserId: String, for message: MeeshyMessage, conversationId: String) -> Bool {
-        guard content.belongs(to: conversationId) else { return false }
-        if let author = message.senderUserId, !author.isEmpty, author != senderUserId { return false }
+        guard content.belongs(to: conversationId), message.messageSource == .user,
+              (message.senderUserId ?? message.senderId) == senderUserId else { return false }
         if let written = content.clientMessageId, let served = message.clientMessageId, written != served { return false }
-        return true
+        return cited(content.replyTo) == cited(message.replyToId)
+    }
+
+    private static func cited(_ id: String?) -> String? {
+        id.flatMap { $0.isEmpty ? nil : $0 }
     }
 }

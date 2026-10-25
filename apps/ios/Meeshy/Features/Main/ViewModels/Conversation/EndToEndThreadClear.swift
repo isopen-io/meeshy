@@ -30,12 +30,17 @@ final class EndToEndThreadClear {
         adopted.merge(found) { _, fresh in fresh }
     }
 
-    /// Repose sur une ligne du magasin le clair adopté pour elle — rien sur un
-    /// message qui n'attend pas de clair (déjà lisible, supprimé, en clair).
+    /// Repose sur une ligne du magasin le clair adopté pour elle, rejugé à SA
+    /// place sur la ligne telle qu'elle est maintenant. Une ligne chiffrée sans
+    /// clair recevable rend le littéral, jamais le texte que le serveur y a
+    /// écrit (audit #12916) ; rien ne change pour un message en clair.
     func apply(to message: inout MeeshyMessage, conversationId: String) {
-        guard let entry = adopted[message.id] else { return }
-        var single = [message]
-        EndToEndThreadPlaintexts.apply([message.id: entry], to: &single, conversationId: conversationId)
-        message = single[0]
+        guard EndToEndThreadPlaintexts.awaitsPlaintext(message) else { return }
+        guard let entry = adopted[message.id],
+              let readable = EndToEndThreadPlaintexts.adoption(of: entry, by: message, conversationId: conversationId) else {
+            message.content = E2EEWire.contentPlaceholder
+            return
+        }
+        message = readable
     }
 }

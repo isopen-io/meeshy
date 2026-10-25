@@ -96,7 +96,6 @@ feature/conversations/src/main/kotlin/me/meeshy/app/conversations/ShareLinkDetai
 feature/conversations/src/main/kotlin/me/meeshy/app/conversations/ShareLinkPickerScreen.kt
 feature/feed/src/main/kotlin/me/meeshy/app/feed/BookmarksScreen.kt
 feature/feed/src/main/kotlin/me/meeshy/app/feed/CommentMoreMenu.kt
-feature/feed/src/main/kotlin/me/meeshy/app/feed/FeedComposerSheet.kt
 feature/feed/src/main/kotlin/me/meeshy/app/feed/FeedHeader.kt
 feature/feed/src/main/kotlin/me/meeshy/app/feed/FeedMediaCarousel.kt
 feature/feed/src/main/kotlin/me/meeshy/app/feed/FeedPostCardActions.kt

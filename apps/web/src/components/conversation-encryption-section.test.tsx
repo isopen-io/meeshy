@@ -2,6 +2,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
+import { endToEndRegimeLedger } from '@/lib/end-to-end-regime-ledger';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
@@ -37,7 +38,7 @@ const settle = () =>
     await new Promise((resolve) => setTimeout(resolve, 20));
   });
 
-const mount = async (conversation: { readonly type: 'direct' | 'group'; readonly encryptionMode: string | null }) => {
+const mount = async (conversation: { readonly id?: string; readonly type: 'direct' | 'group'; readonly encryptionMode: string | null }) => {
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -58,6 +59,28 @@ describe('la section dit le mode de la conversation ouverte, en mots simples', (
     expect(facts()).toContain('onlyParticipantsRead');
     expect(facts()).toContain('webCannotReadYet');
     expect(text('[data-conversation-encryption-fact="noEdit"]')).toBe('Un message envoyé ne peut pas être modifié.');
+  });
+
+  test('bout en bout : la fiche dit qu’il ne se désactive pas et qu’il faut une nouvelle conversation pour le clair (#12949)', async () => {
+    await mount({ type: 'group', encryptionMode: 'e2ee' });
+    expect(text('[data-conversation-encryption-fact="endToEndNeverTurnedOff"]')).toBe(
+      'Le chiffrement de bout en bout ne se désactive pas. Pour échanger en clair, créez une nouvelle conversation.',
+    );
+    expect(facts()).not.toContain('switchNeverResendsInClear');
+    expect(document.querySelector('[data-conversation-encryption] button')).toBeNull();
+  });
+
+  test('vue e2ee par ce compte puis servie sans mode : la fiche dit toujours le bout en bout (#12949)', async () => {
+    endToEndRegimeLedger.getState().learnEndToEnd('c-seen-e2ee');
+    await mount({ id: 'c-seen-e2ee', type: 'direct', encryptionMode: null });
+    expect(document.querySelector('[data-conversation-encryption]')?.getAttribute('data-conversation-encryption')).toBe('end-to-end');
+    expect(facts()).toContain('endToEndNeverTurnedOffDirect');
+    endToEndRegimeLedger.getState().reset();
+  });
+
+  test('bout en bout : « Meeshy ne peut pas les lire » porte sa réserve tant que les numéros de sécurité manquent (#12520)', async () => {
+    await mount({ type: 'direct', encryptionMode: 'e2ee' });
+    expect(text('[data-conversation-encryption-fact="onlyParticipantsRead"]')).toContain('tant que la vérification des numéros de sécurité n’est pas disponible');
   });
 
   test('hybride : identique au mode Serveur, jamais « de bout en bout »', async () => {
