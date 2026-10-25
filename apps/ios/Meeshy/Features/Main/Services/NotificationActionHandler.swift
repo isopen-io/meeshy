@@ -96,6 +96,8 @@ final class NotificationActionHandler: NotificationActionHandling {
     private let localMarkRead: @MainActor (String) -> Void
     /// #12655 — la conversation est-elle verrouillée par PIN sur cet appareil ?
     private let isConversationLocked: @MainActor (String) -> Bool
+    /// #12655 — une réponse refusée sous PIN le dit, hors de l'app.
+    private let notifyRefusedReply: @MainActor (String?) -> Void
     /// L'unique consommation du SDK, injectée pour que les tests l'observent :
     /// `NotificationToastManager` est un singleton `@MainActor` sans couture de
     /// service, et un témoin ne peut pas mesurer un aller-retour REST réel.
@@ -200,7 +202,10 @@ final class NotificationActionHandler: NotificationActionHandling {
         presentNewContact: @escaping @MainActor (NotificationContactCard) -> Void = {
             NotificationContactPresenter.present($0)
         },
-        isConversationLocked: @escaping @MainActor (String) -> Bool = { ConversationLockManager.shared.isLocked($0) }
+        isConversationLocked: @escaping @MainActor (String) -> Bool = { ConversationLockManager.shared.isLocked($0) },
+        notifyRefusedReply: @escaping @MainActor (String?) -> Void = {
+            NotificationReplyFailure.postRefusedUnderConversationPin(conversationId: $0)
+        }
     ) {
         self.messageService = messageService
         self.conversationService = conversationService
@@ -228,6 +233,7 @@ final class NotificationActionHandler: NotificationActionHandling {
         self.openDeepLink = openDeepLink
         self.presentNewContact = presentNewContact
         self.isConversationLocked = isConversationLocked
+        self.notifyRefusedReply = notifyRefusedReply
     }
 
     // MARK: - Révocation (features 4/5)
@@ -403,7 +409,8 @@ final class NotificationActionHandler: NotificationActionHandling {
     /// quand l'extension n'a pas tourné (tuée, hors budget), porte encore ses
     /// gestes. Sur une conversation verrouillée (ou une charge scellée), rien
     /// ne part, rien n'est marqué lu, aucun lien n'est suivi : l'app s'ouvre
-    /// sur la conversation, que la porte du routeur garde par le PIN.
+    /// sur la conversation, que la porte du routeur garde par le PIN. Une
+    /// réponse, exécutée en arrière-plan, le dit par une notification locale.
     private func refusesUnderConversationPin(
         _ actionIdentifier: String,
         payload: NotificationPayload,
@@ -413,6 +420,9 @@ final class NotificationActionHandler: NotificationActionHandling {
         let locked = payload.conversationId.map { isConversationLocked($0) } ?? false
         guard locked || NSEAttachmentPolicy.isSealedForLockedConversation(userInfo) else { return false }
         logger.info("notification action refused: conversation locked by PIN")
+        if actionIdentifier == MeeshyNotificationAction.reply.rawValue {
+            notifyRefusedReply(payload.conversationId)
+        }
         openNotification(userInfo)
         return true
     }

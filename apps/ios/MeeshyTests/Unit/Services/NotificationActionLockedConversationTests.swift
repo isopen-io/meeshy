@@ -54,6 +54,7 @@ final class NotificationActionLockedConversationTests: XCTestCase {
         var externalURLs: [URL] = []
         var deepLinks: [URL] = []
         var contacts: [NotificationContactCard] = []
+        var refusedReplies: [String?] = []
     }
 
     private struct SUT {
@@ -97,7 +98,8 @@ final class NotificationActionLockedConversationTests: XCTestCase {
             openExternalURL: { ledger.externalURLs.append($0) },
             openDeepLink: { ledger.deepLinks.append($0) },
             presentNewContact: { ledger.contacts.append($0) },
-            isConversationLocked: { lockedConversationIds.contains($0) }
+            isConversationLocked: { lockedConversationIds.contains($0) },
+            notifyRefusedReply: { ledger.refusedReplies.append($0) }
         )
         return SUT(
             handler: handler, messages: messages, conversations: conversations,
@@ -124,6 +126,64 @@ final class NotificationActionLockedConversationTests: XCTestCase {
         XCTAssertEqual(sut.conversations.markReadCallCount, 0)
         XCTAssertTrue(sut.ledger.markedRead.isEmpty)
         XCTAssertEqual(sut.ledger.opened, 1, "l'app s'ouvre sur la conversation, que le PIN garde")
+    }
+
+    /// « Répondre » s'exécute en arrière-plan : une réponse refusée le DIT,
+    /// par une notification locale, au lieu de disparaître en silence.
+    func test_reply_onALockedConversation_tellsTheUserItWasNotSent() async {
+        let sut = makeSUT(lockedConversationIds: ["coffre"])
+
+        await sut.handler.handle(
+            actionIdentifier: MeeshyNotificationAction.reply.rawValue,
+            userInfo: payload(),
+            replyText: "écrit sans PIN"
+        )
+
+        XCTAssertEqual(sut.ledger.refusedReplies, ["coffre"])
+    }
+
+    func test_reply_onASealedPayload_tellsTheUserItWasNotSent() async {
+        let sut = makeSUT(lockedConversationIds: [])
+        let sealed = NSEAttachmentPolicy.sealingLockedConversation(payload(), isLocked: true)
+
+        await sut.handler.handle(
+            actionIdentifier: MeeshyNotificationAction.reply.rawValue, userInfo: sealed, replyText: "écrit sans PIN"
+        )
+
+        XCTAssertEqual(sut.ledger.refusedReplies, ["coffre"])
+    }
+
+    /// Seule une réponse, saisie puis perdue, appelle le message : les autres
+    /// gestes refusés ouvrent l'app sans rien annoncer, et une réponse
+    /// acceptée n'annonce aucun refus.
+    func test_onlyARefusedReply_isAnnounced() async {
+        let sut = makeSUT(lockedConversationIds: ["coffre"])
+
+        await sut.handler.handle(
+            actionIdentifier: MeeshyNotificationAction.markRead.rawValue, userInfo: payload(), replyText: nil
+        )
+        await sut.handler.handle(
+            actionIdentifier: MeeshyNotificationAction.reply.rawValue,
+            userInfo: payload(conversationId: "ouverte"),
+            replyText: "Salut"
+        )
+
+        XCTAssertTrue(sut.ledger.refusedReplies.isEmpty)
+    }
+
+    /// Le message ne recopie jamais le texte saisi : un libellé du catalogue,
+    /// la route vers la conversation (gardée par le PIN), et aucune action.
+    func test_theRefusedReplyNotification_carriesNoTypedText_andNoAction() throws {
+        let english = try XCTUnwrap(Bundle.main.path(forResource: "en", ofType: "lproj").flatMap(Bundle.init(path:)))
+
+        let content = NotificationReplyFailure.refusedUnderConversationPinContent(conversationId: "coffre", bundle: english)
+
+        XCTAssertEqual(content.body, "Reply not sent: open the conversation")
+        XCTAssertEqual(content.categoryIdentifier, NSEAttachmentPolicy.lockedConversationCategory)
+        XCTAssertEqual(content.threadIdentifier, "conversation:coffre")
+        XCTAssertEqual(Set(content.userInfo.keys.compactMap { $0 as? String }), ["type", "conversationId"])
+        XCTAssertEqual(content.userInfo["conversationId"] as? String, "coffre")
+        XCTAssertTrue(content.title.isEmpty && content.subtitle.isEmpty)
     }
 
     func test_markRead_onALockedConversation_marksNothing_andOpensTheApp() async {
