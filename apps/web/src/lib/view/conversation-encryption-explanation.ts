@@ -12,11 +12,18 @@ import type { ConversationEncryptionCatalogKey } from '@/lib/i18n-conversation-e
  * protégé. Le web ajoute ce qu'il ne sait pas encore faire : lire et écrire en
  * `e2ee` (#10788) — son composeur s'y efface (`write-restriction.ts`).
  *
+ * Le bout en bout ne se désactive pas (#12949, décision porteur du
+ * 2026-10-25) : la fiche d'une conversation e2ee le dit — avec, pour un
+ * groupe, la seule façon de revenir au clair (une nouvelle conversation) ; un
+ * tête-à-tête ne la promet pas, la passerelle rendant le tête-à-tête existant
+ * (#12966) — et celle d'une conversation que le serveur lit prévient avant
+ * d'activer.
+ *
  * Toute évolution touche les deux.
  */
 export type EncryptionRegime = 'none' | 'server' | 'hybrid' | 'end-to-end';
 
-export type ExplanationTopic = 'whoReads' | 'available' | 'absent' | 'notYet' | 'devices' | 'switching';
+export type ExplanationTopic = 'whoReads' | 'available' | 'absent' | 'notYet' | 'devices' | 'switching' | 'permanence';
 
 export type ExplanationFact =
   | 'transitProtected' | 'storedWithoutEncryption' | 'encryptedOnServerServerReads' | 'hybridIsServerToday'
@@ -24,7 +31,8 @@ export type ExplanationFact =
   | 'noServerTranscription' | 'noNotificationPreview' | 'noSearch' | 'noEdit' | 'noForward' | 'noOfflineSending'
   | 'webCannotReadYet' | 'notYetAttachments' | 'notYetDecryptedNotifications' | 'notYetGroups' | 'groupSendingUnavailable' | 'notYetSafetyNumbers'
   | 'oneKeyPerDevice' | 'deviceLimit' | 'restoredDeviceIsNew'
-  | 'whoMayToggle' | 'switchKeepsHistory' | 'switchIsShownInThread' | 'switchNeverResendsInClear';
+  | 'whoMayToggle' | 'switchKeepsHistory' | 'switchIsShownInThread' | 'endToEndIsFinal'
+  | 'endToEndNeverTurnedOff' | 'endToEndNeverTurnedOffDirect' | 'serverCannotTurnItOff';
 
 export type ExplanationSection = { readonly topic: ExplanationTopic; readonly facts: readonly ExplanationFact[] };
 
@@ -38,7 +46,7 @@ export function encryptionRegime(mode: string | null | undefined): EncryptionReg
   return 'end-to-end';
 }
 
-const SWITCHING: readonly ExplanationFact[] = ['whoMayToggle', 'switchKeepsHistory', 'switchIsShownInThread'];
+const SWITCHING: readonly ExplanationFact[] = ['whoMayToggle', 'switchKeepsHistory', 'switchIsShownInThread', 'endToEndIsFinal'];
 
 const readable = (whoReads: readonly ExplanationFact[]): readonly ExplanationSection[] => [
   { topic: 'whoReads', facts: whoReads },
@@ -55,7 +63,7 @@ const endToEnd = (isDirect: boolean): readonly ExplanationSection[] => [
     facts: ['webCannotReadYet', 'notYetAttachments', 'notYetDecryptedNotifications', 'notYetGroups', ...(isDirect ? [] : ['groupSendingUnavailable' as const]), 'notYetSafetyNumbers'],
   },
   { topic: 'devices', facts: ['oneKeyPerDevice', 'deviceLimit', 'restoredDeviceIsNew'] },
-  { topic: 'switching', facts: [...SWITCHING, 'switchNeverResendsInClear'] },
+  { topic: 'permanence', facts: [isDirect ? 'endToEndNeverTurnedOffDirect' : 'endToEndNeverTurnedOff', 'serverCannotTurnItOff'] },
 ];
 
 const SECTIONS: Readonly<Record<EncryptionRegime, (isDirect: boolean) => readonly ExplanationSection[]>> = {
@@ -84,6 +92,7 @@ export const TOPIC_KEY = {
   notYet: 'conversationEncryption.topic.notYet',
   devices: 'conversationEncryption.topic.devices',
   switching: 'conversationEncryption.topic.switching',
+  permanence: 'conversationEncryption.topic.permanence',
 } as const satisfies Record<ExplanationTopic, ConversationEncryptionCatalogKey>;
 
 export const FACT_KEY = {
@@ -112,5 +121,8 @@ export const FACT_KEY = {
   whoMayToggle: 'conversationEncryption.fact.whoMayToggle',
   switchKeepsHistory: 'conversationEncryption.fact.switchKeepsHistory',
   switchIsShownInThread: 'conversationEncryption.fact.switchIsShownInThread',
-  switchNeverResendsInClear: 'conversationEncryption.fact.switchNeverResendsInClear',
+  endToEndIsFinal: 'conversationEncryption.fact.endToEndIsFinal',
+  endToEndNeverTurnedOff: 'conversationEncryption.fact.endToEndNeverTurnedOff',
+  endToEndNeverTurnedOffDirect: 'conversationEncryption.fact.endToEndNeverTurnedOffDirect',
+  serverCannotTurnItOff: 'conversationEncryption.fact.serverCannotTurnItOff',
 } as const satisfies Record<ExplanationFact, ConversationEncryptionCatalogKey>;
