@@ -21,9 +21,9 @@ class OwnEncryptedDevicesRepositoryTest {
 
     private fun obj(text: String) = Json.parseToJsonElement(text) as JsonObject
 
-    private fun device(deviceId: Int, current: Boolean = false, lastSeenAt: String = "2026-10-25T09:30:00Z") =
+    private fun device(deviceId: Int, current: Boolean = false, enrolledAt: String = "2026-10-20T08:00:00Z") =
         """{"deviceId":$deviceId,"registrationId":${100 + deviceId},"platform":"ios","label":null,""" +
-            """"enrolledAt":"2026-10-20T08:00:00Z","lastSeenAt":"$lastSeenAt","current":$current}"""
+            """"enrolledAt":"$enrolledAt","lastSeenAt":"2026-10-25T09:30:00Z","current":$current}"""
 
     private fun listed(vararg devices: String) = ApiResponse(true, obj("""{"devices":[${devices.joinToString(",")}]}"""))
 
@@ -52,7 +52,7 @@ class OwnEncryptedDevicesRepositoryTest {
     @Test
     fun `a refresh serves the devices in display order and remembers them`() = runTest {
         val repo = OwnEncryptedDevicesRepository(
-            FakeApi(list = { listed(device(1, lastSeenAt = "2026-10-01T00:00:00Z"), device(2), device(3, current = true)) }),
+            FakeApi(list = { listed(device(1, enrolledAt = "2026-10-01T00:00:00Z"), device(2), device(3, current = true)) }),
         )
 
         val result = repo.refresh() as NetworkResult.Success
