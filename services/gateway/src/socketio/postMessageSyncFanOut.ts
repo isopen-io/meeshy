@@ -134,7 +134,7 @@ export async function syncConversationListOnNewMessage(
       payload: broadcastPayload,
       ...(params.payloadForReader ? { resolvePayloadForReader: params.payloadForReader } : {}),
       // #12822 — le clair d'une conversation chiffrée au repos part scellé dans Redis.
-      ...(isServerAtRestMode(message.encryptionMode) ? { atRest: true } : {}),
+      atRest: isServerAtRestMode(message.encryptionMode),
       participants: allParticipants,
     }
   );

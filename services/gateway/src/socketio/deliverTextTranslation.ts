@@ -145,7 +145,7 @@ export async function deliverTextTranslation(
         payload: translationData,
         dedupKey: `${result.messageId}:${targetLanguage}`,
         restrictToReadersOfLanguage: targetLanguage,
-        ...(atRest ? { atRest: true } : {}),
+        atRest,
         ...(readers.kind === 'readers' ? { excludedQueueKeys: readers.excludedQueueKeys } : {}),
       });
 

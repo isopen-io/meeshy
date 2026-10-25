@@ -522,6 +522,7 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
         senderParticipantId: anonymousParticipant.id,
         messageId: message.id,
         payload: { message: stripClientMessageId(payload) },
+        atRest: sealsAtRest(regime),
         onError: (err) => logError(fastify.log, 'Link message broadcast error:', err)
       });
 

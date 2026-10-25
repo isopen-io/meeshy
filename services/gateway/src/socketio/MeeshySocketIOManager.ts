@@ -111,6 +111,7 @@ import { broadcastReactionMutation } from './broadcastReactionMutation';
 import { announcesMessageArrival } from './queuedMessageArrival';
 import type { QueuedMessagePayload } from '@meeshy/shared/types/delivery-queue';
 import type { QueuedPayloadFor, QueuedVariantFor } from './queuedEventContract';
+import { isServerAtRestMode } from '../services/messaging/serverAtRest';
 import { drainedEventName, isAddressableConversationId, isDeliverableQueuedPayload } from './queuedEventContract';
 import { isValidObjectId } from '@meeshy/shared/utils/object-id';
 import { syncConversationListOnNewMessage } from './postMessageSyncFanOut';
@@ -1144,6 +1145,8 @@ export class MeeshySocketIOManager {
     actorParticipantId: string | null | undefined;
     messageId: string;
     payload: QueuedPayloadFor<'link-message'>;
+    /** #12822 — la conversation est chiffrée au repos : l'entrée part scellée. */
+    atRest: boolean;
   }): Promise<void> {
     await this._enqueueForOfflineParticipants({ ...params, eventType: 'link-message' });
   }
@@ -3267,6 +3270,7 @@ export class MeeshySocketIOManager {
         eventType: 'edited',
         messageId: message.id,
         payload: editedPayload,
+        atRest: isServerAtRestMode(message.encryptionMode),
       });
     } catch (error) {
       logger.error('broadcast message:edited (call) failed', error);

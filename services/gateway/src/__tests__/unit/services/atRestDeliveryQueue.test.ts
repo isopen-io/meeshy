@@ -210,17 +210,39 @@ describe('l’unité de file hors ligne décide du sceau', () => {
     expect(calls[0]?.[2]).toEqual({ sealAtRest: true });
   });
 
-  it.each([
-    ['message:new d’une conversation hybrid', { id: MSG, encryptionMode: 'hybrid' }],
-    ['message de lien d’une conversation server', { message: { id: MSG, encryptionMode: 'SERVER' } }],
-  ])('%s se scelle sans que l’appelant le dise', async (_label, payload) => {
+  it('message:new d’une conversation hybrid se scelle sans que l’appelant le dise', async () => {
     const { calls, deps } = offline();
 
     await enqueueForOfflineParticipants(deps, {
-      conversationId: CONV, messageId: MSG, eventType: 'new', payload,
+      conversationId: CONV, messageId: MSG, eventType: 'new', payload: { id: MSG, encryptionMode: 'hybrid' },
     } as OfflineParticipantQueueParams);
 
     expect(calls[0]?.[2]).toEqual({ sealAtRest: true });
+  });
+
+  // L'enveloppe que `routes/links/messages.ts` (`buildLinkMessagePayload`) émet
+  // vraiment : elle ne porte AUCUN `encryptionMode`. Le témoin précédent lui en
+  // prêtait un, et restait vert pendant que la route rangeait le clair (#12822, H2).
+  const linkEnvelope = () => ({
+    message: {
+      id: MSG, conversationId: CONV, senderId: 'p-anon', content: SECRET, originalLanguage: 'fr',
+      messageType: 'text', isEdited: false, editedAt: null, deletedAt: null, replyToId: null,
+      createdAt: new Date('2026-10-24T10:00:00Z'), updatedAt: new Date('2026-10-24T10:00:00Z'),
+      sender: { id: 'p-anon', userId: null, displayName: 'anon', type: 'anonymous' }, validatedMentions: [],
+    },
+  });
+
+  it.each([
+    [true, [{ sealAtRest: true }]],
+    [false, []],
+  ])('message de lien (enveloppe réelle, sans mode), atRest %s : seule la déclaration de l’appelant décide', async (atRest, sealOption) => {
+    const { calls, deps } = offline();
+
+    await enqueueForOfflineParticipants(deps, {
+      conversationId: CONV, messageId: MSG, eventType: 'link-message', payload: linkEnvelope(), atRest,
+    } as OfflineParticipantQueueParams);
+
+    expect(calls[0]?.slice(2)).toEqual(sealOption);
   });
 
   it.each([

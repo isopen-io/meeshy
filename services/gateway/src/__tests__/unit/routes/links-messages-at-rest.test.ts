@@ -41,6 +41,7 @@ jest.mock('../../../services/EncryptionService', () => {
 // ─── Import après les mocks ──────────────────────────────────────────────────
 
 import {
+  makeSocketIOHandler,
   MSHY_ID,
   mockShareLink,
   mockParticipantShareLink,
@@ -51,6 +52,10 @@ import {
 } from './links-messages.harness';
 import { EncryptionService } from '../../../services/EncryptionService';
 import { revealAtRest, SERVER_AT_REST_UNAVAILABLE } from '../../../services/messaging/serverAtRest';
+import { RedisDeliveryQueue } from '../../../services/RedisDeliveryQueue';
+import { deliveryQueueSealer } from '../../../services/deliveryQueueSealing';
+import type { CacheStore } from '../../../services/CacheStore';
+import { enqueueForOfflineParticipants, type OfflineParticipantQueueParams } from '../../../socketio/offlineParticipantQueue';
 
 const SECRET = 'Rendez-vous porte B, code 4471';
 const savedKey = process.env.ENCRYPTION_MASTER_KEY;
@@ -72,7 +77,7 @@ const projectConversation = (args: any, conversation: Record<string, unknown>) =
 
 const ALIVE = { type: 'group', isActive: true, closedAt: null, isAnnouncementChannel: false, defaultWriteRole: null };
 
-const appIn = async (regime: Record<string, unknown>) => {
+const appIn = async (regime: Record<string, unknown>, socketIOHandler?: ReturnType<typeof makeSocketIOHandler>) => {
   const prisma = makePrisma();
   const keys = new Map<string, Record<string, unknown>>();
   Object.assign(prisma, {
@@ -89,7 +94,7 @@ const appIn = async (regime: Record<string, unknown>) => {
       ...mockParticipantShareLink,
       conversation: projectConversation(args, { ...ALIVE, ...regime }),
     }));
-  return { prisma, app: await buildApp({ prisma }) };
+  return { prisma, app: await buildApp({ prisma, ...(socketIOHandler ? { socketIOHandler } : {}) }) };
 };
 
 const send = (app: FastifyInstance) => app.inject({
@@ -141,5 +146,75 @@ describe('POST /links/:id/messages — conversation non chiffrée', () => {
     await built.app.close();
     expect(res.statusCode).toBe(201);
     expect((built.prisma.message.create as jest.Mock<any>).mock.calls[0][0].data.content).toBe(SECRET);
+  });
+});
+
+const recordingRedis = () => {
+  const lists = new Map<string, string[]>();
+  const client = {
+    eval: async (_script: string, _keys: number, key: string, ...args: string[]) => {
+      if (args.length === 0) {
+        const entries = lists.get(key) ?? [];
+        lists.delete(key);
+        return entries;
+      }
+      lists.set(key, [...(lists.get(key) ?? []), args[0]]);
+      return 1;
+    },
+    lrange: async (key: string) => lists.get(key) ?? [],
+    llen: async (key: string) => (lists.get(key) ?? []).length,
+  };
+  return { stored: () => [...lists.values()].flat().join('\n'), cacheStore: { getNativeClient: () => client } as unknown as CacheStore };
+};
+
+const sendThroughManager = async (regime: Record<string, unknown>) => {
+  const handler = makeSocketIOHandler(true);
+  const built = await appIn(regime, handler);
+  const res = await send(built.app);
+  await built.app.close();
+  const queued = (handler.enqueueOfflineLinkMessage as jest.Mock<any>).mock.calls[0]?.[0] as Record<string, unknown> | undefined;
+  return { res, queued, prisma: built.prisma };
+};
+
+const settled = async (done: () => boolean, attempts = 50): Promise<void> => {
+  if (done() || attempts === 0) return;
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  return settled(done, attempts - 1);
+};
+
+const offlineParticipant = { participant: { findMany: async () => [{ id: 'p-off', userId: 'u-off' }] } };
+
+describe.each(['server', 'hybrid'])('#12822 (H2) — la file hors ligne d’un message de lien, conversation %s', (mode) => {
+  const regime = { encryptionMode: mode, encryptionEnabledAt: new Date(), serverEncryptionKeyId: null };
+
+  it('la route déclare le régime au rejeu hors ligne', async () => {
+    const { res, queued } = await sendThroughManager(regime);
+    expect(res.statusCode).toBe(201);
+    expect(queued).toMatchObject({ atRest: true });
+  });
+
+  it('Redis ne reçoit aucun octet du texte, et le rejeu rend l’enveloppe d’avant', async () => {
+    const { queued, prisma } = await sendThroughManager(regime);
+    const redis = recordingRedis();
+    const service = new EncryptionService(prisma as unknown as PrismaClient);
+    const queue = new RedisDeliveryQueue(redis.cacheStore, deliveryQueueSealer(async () => service));
+
+    await enqueueForOfflineParticipants(
+      { deliveryQueue: queue, prisma: offlineParticipant as never, connectedUsers: new Set<string>() },
+      { ...queued, eventType: 'link-message' } as OfflineParticipantQueueParams,
+    );
+
+    await settled(() => redis.stored() !== '');
+    expect(redis.stored()).not.toBe('');
+    expect(redis.stored()).not.toContain('4471');
+    const [replayed] = await queue.drain('u-off');
+    expect(JSON.stringify(replayed?.payload)).toContain('4471');
+  });
+});
+
+describe('#12822 (H2) — la file d’un message de lien en clair reste en clair', () => {
+  it('une conversation non chiffrée déclare atRest: false', async () => {
+    const { queued } = await sendThroughManager({ encryptionMode: null, encryptionEnabledAt: null });
+    expect(queued).toMatchObject({ atRest: false });
   });
 });

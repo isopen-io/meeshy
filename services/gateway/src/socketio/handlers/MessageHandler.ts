@@ -67,6 +67,7 @@ import {
 import { resolveParticipant } from '../utils/participant-resolver.js';
 import { agentSenderIdentity } from './agentSenderIdentity.js';
 import { agentMayReadMessage, notifyAgentOfMessage } from './agentMessageNotification.js';
+import { isServerAtRestMode, queuedEventSealsAtRest } from '../../services/messaging/serverAtRest';
 import { resolvePeerBroadcastSplit } from '../peerBroadcastSplit.js';
 import { emitMessageNew } from '../messageNewEmission';
 import { readerSignedPlan, readerSignedPlanForMessageId } from '../readerSignedDelivery';
@@ -993,6 +994,7 @@ export class MessageHandler {
         eventType: 'edited',
         messageId: validated.messageId,
         payload: editedPayload,
+        atRest: queuedEventSealsAtRest(message),
       }).catch((err) => handlerLogger.warn('offline enqueue (edit) failed', { error: err }));
 
       callback?.({ success: true, data: { messageId: validated.messageId } });
@@ -1418,6 +1420,7 @@ export class MessageHandler {
           actorUserId: message.senderId,
           eventType: 'new',
           messageId: message.id,
+          atRest: isServerAtRestMode(message.encryptionMode),
           payload: peerPayload,
           // La file est la TROISIÈME porte de sortie de ce message. Sans cette
           // ligne, un destinataire hors ligne qui a refusé les sources de

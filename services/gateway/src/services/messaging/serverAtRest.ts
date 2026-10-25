@@ -110,6 +110,16 @@ const SERVER_AT_REST_MODES: ReadonlySet<string> = new Set(['server', 'hybrid']);
 export const isServerAtRestMode = (mode: string | null | undefined): boolean =>
   typeof mode === 'string' && SERVER_AT_REST_MODES.has(mode.toLowerCase());
 
+/**
+ * #12822 — la file hors ligne scelle-t-elle l'événement de CE message ? Oui si
+ * la ligne est au repos, ou si sa conversation l'est aujourd'hui : un message
+ * d'avant l'activation reste un texte de cette conversation.
+ */
+export const queuedEventSealsAtRest = (row: {
+  readonly encryptionMode?: string | null;
+  readonly conversation?: { readonly encryptionMode?: string | null } | null;
+}): boolean => isServerAtRestMode(row.encryptionMode) || isServerAtRestMode(row.conversation?.encryptionMode);
+
 export const AT_REST_AAD_V1 = 'conversation:v1';
 
 export const atRestAad = (conversationId: string): Buffer =>

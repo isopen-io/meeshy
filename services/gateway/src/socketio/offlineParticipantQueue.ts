@@ -114,13 +114,6 @@ export type OfflineParticipantQueueParams = QueuedEventVariant & {
    */
   resolvePayloadForReader?: (queueKey: string) => Record<string, unknown>;
   /**
-   * #12822 — la conversation est chiffrée au repos (`server`/`hybrid`) : la
-   * charge se scelle avant Redis. Une charge qui DÉCLARE elle-même ce mode
-   * (`encryptionMode` du message, ou de l'enveloppe de lien) se scelle aussi,
-   * sans que l'appelant ait à le dire.
-   */
-  atRest?: boolean;
-  /**
    * Les clés de file qui ne reçoivent RIEN — un lecteur dont le plancher
    * d'historique est postérieur au message (`translationReaders`, #9709).
    */
@@ -167,6 +160,12 @@ const asRecord = (value: unknown): Record<string, unknown> | null =>
 const modeOf = (record: Record<string, unknown> | null): string | null =>
   typeof record?.['encryptionMode'] === 'string' ? record['encryptionMode'] : null;
 
+/**
+ * #12822 — la déclaration `atRest` du producteur décide (requise au type pour
+ * les familles qui portent du texte, `TextBearingQueuedEvent`). Une charge qui
+ * déclare elle-même un mode au repos se scelle EN PLUS : défense en profondeur,
+ * jamais un substitut — l'enveloppe d'un lien, par exemple, n'en porte aucun.
+ */
 const declaresAtRest = (payload: Record<string, unknown>): boolean =>
   isServerAtRestMode(modeOf(payload)) || isServerAtRestMode(modeOf(asRecord(payload['message'])));
 
