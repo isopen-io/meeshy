@@ -160,6 +160,7 @@ final class EncryptedDevicesViewModelTests: XCTestCase {
         await model.confirmApproval(presented)
 
         XCTAssertTrue(linking.approved.isEmpty)
+        XCTAssertNil(model.pendingApproval, "la confirmation refusée se referme, elle ne se représente pas")
     }
 
     func test_aScanWhileAConfirmationIsOpen_doesNotReplaceIt() async {

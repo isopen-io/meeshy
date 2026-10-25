@@ -158,8 +158,9 @@ final class EncryptedDevicesViewModel: ObservableObject {
     /// représente pas. Annulée, remplacée ou lue sous un autre compte, elle
     /// n'est pas acceptée.
     func acceptApproval(_ presented: PendingApproval) -> AcceptedApproval? {
-        guard let pending = pendingApproval, pending == presented, userId() == pending.userId else { return nil }
+        guard let pending = pendingApproval, pending == presented else { return nil }
         pendingApproval = nil
+        guard userId() == pending.userId else { return nil }
         busyDeviceId = pending.candidate.deviceId
         return AcceptedApproval(pending: pending)
     }

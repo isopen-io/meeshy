@@ -81,8 +81,9 @@ struct EncryptedDeviceScannerSheet: View {
         return String(format: String(localized: "e2ee.devices.approve.title", defaultValue: "Approuver « %@ » (n° %d) ?", bundle: .main), name, number)
     }
 
-    /// Le numéro et l'heure d'inscription disent QUEL appareil on approuve : le
-    /// nom, lui, est annoncé par l'appareil et peut mentir.
+    /// Seul le NUMÉRO est garanti : il entre dans l'empreinte que le code lu a
+    /// vérifiée. Le nom et l'heure d'inscription sont servis par la passerelle,
+    /// donnés pour aider l'utilisateur à reconnaître l'appareil, jamais pour le prouver.
     private func approvalMessage(_ pending: EncryptedDevicesViewModel.PendingApproval) -> String {
         let warning = String(localized: "e2ee.devices.approve.message", defaultValue: "N’approuvez qu’un appareil qui est à vous et devant vous, jamais un code reçu par message ou montré par quelqu’un d’autre. Il pourra lire les messages chiffrés que vous écrivez depuis celui-ci.", bundle: .main)
         guard let enrolled = pending.device?.enrolledAt else { return warning }
