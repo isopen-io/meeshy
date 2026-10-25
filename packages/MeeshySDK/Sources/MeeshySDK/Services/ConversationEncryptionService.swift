@@ -10,6 +10,7 @@ public protocol ConversationEncryptionServiceProviding: Sendable {
     func disable(conversationId: String) async throws -> ConversationEncryptionStatus
 }
 
+// unchecked: un seul état, `api`, immuable après l'init (même contrat que les autres services du SDK).
 public final class ConversationEncryptionService: ConversationEncryptionServiceProviding, @unchecked Sendable {
     public static let shared = ConversationEncryptionService()
     private let api: APIClientProviding

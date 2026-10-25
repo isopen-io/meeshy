@@ -197,7 +197,7 @@ struct ConversationEncryptionDetailSheet: View {
                                     defaultValue: "Chiffrement désactivé : la traduction et la transcription par le serveur sont de nouveau disponibles pour les nouveaux messages.",
                                     bundle: .main))
                             .font(.caption.weight(.semibold))
-                            .foregroundColor(MeeshyColors.success)
+                            .foregroundStyle(MeeshyColors.success)
                     }
                     Text(String(localized: "conversation.encryption.detail.inactiveLabel",
                                 defaultValue: "Conversation non chiffrée",

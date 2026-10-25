@@ -7,6 +7,7 @@ import Foundation
 ///
 /// Un canal à part de `MessageSocketManager` (déjà au-delà de son budget de
 /// cohésion) : la route socket y publie, les abonnés n'en lisent que ceci.
+// unchecked: `changed` est immuable ; le sujet n'est publié que par la route socket, sur le fil principal.
 public final class ConversationEncryptionChannel: @unchecked Sendable {
     public static let shared = ConversationEncryptionChannel()
 
