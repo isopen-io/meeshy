@@ -10,8 +10,9 @@ import type { ApiFailure, ApiResult, HttpTransport } from './http';
  *  - `GET /e2ee/devices` (#13014, `E2EEOwnDevice`) — MES appareils où le
  *    chiffrement de bout en bout est activé : numéro, plateforme, nom déclaré,
  *    enrôlé le, vu le, et s'il est celui de la session qui lit (`current`) ;
- *  - `DELETE /e2ee/devices/:deviceId` — le retirer. La passerelle révoque son
- *    identité ET ferme sa session (un appareil volé ne se réenrôle pas).
+ *  - `DELETE /e2ee/devices/:deviceId` — le retirer. La passerelle
+ *    ferme sa session PUIS révoque son identité (un appareil volé ne se
+ *    réenrôle pas) ; une session qui ne se ferme pas rend 503, rien retiré.
  *
  * Le navigateur n'a aucune pile libsignal (#12975) : il ne s'enrôle pas, il
  * n'approuve rien. L'APPROBATION d'un appareil par un autre vit sur chaque

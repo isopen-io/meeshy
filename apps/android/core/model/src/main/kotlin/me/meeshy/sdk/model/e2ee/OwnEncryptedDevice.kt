@@ -34,6 +34,7 @@ data class OwnEncryptedDevice(
     val platform: EncryptedDevicePlatform,
     val label: String?,
     val enrolledAt: Instant,
+    /** Dernier enrôlement ou dernière publication de pré-clés — jamais une activité de lecture. */
     val lastSeenAt: Instant,
     val isCurrent: Boolean,
 ) {
@@ -58,11 +59,14 @@ object OwnEncryptedDevicesDecoder {
         return devices.takeIf { list -> list.distinctBy { it.deviceId }.size == list.size }
     }
 
-    /** Ce que l'écran montre d'abord : l'appareil courant, puis le plus récemment actif. */
+    /**
+     * Ce que l'écran montre d'abord : l'appareil courant, puis le plus récemment AJOUTÉ (horloge du
+     * serveur). `lastSeenAt` n'ordonne rien : il ne date que la dernière publication de clés.
+     */
     fun ordered(devices: List<OwnEncryptedDevice>): List<OwnEncryptedDevice> =
         devices.sortedWith(
             compareByDescending<OwnEncryptedDevice> { it.isCurrent }
-                .thenByDescending { it.lastSeenAt }
+                .thenByDescending { it.enrolledAt }
                 .thenBy { it.deviceId },
         )
 

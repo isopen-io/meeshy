@@ -97,6 +97,7 @@ fun EncryptedDevicesScreen(
                         EncryptedDeviceRow(
                             device = device,
                             isRetiring = device.deviceId in state.retiringIds,
+                            canRetire = state.canRetire,
                             onRetire = { viewModel.requestRetire(device) },
                         )
                     }
@@ -202,15 +203,11 @@ private fun EmptyState() {
 }
 
 @Composable
-private fun EncryptedDeviceRow(device: OwnEncryptedDevice, isRetiring: Boolean, onRetire: () -> Unit) {
+private fun EncryptedDeviceRow(device: OwnEncryptedDevice, isRetiring: Boolean, canRetire: Boolean, onRetire: () -> Unit) {
     val title = deviceTitle(device)
     val platform = stringResource(platformName(device.platform))
     val locale = LocalConfiguration.current.locales[0]
-    val dates = stringResource(
-        R.string.encrypted_devices_dates,
-        deviceDate(device.enrolledAt, locale),
-        deviceDate(device.lastSeenAt, locale),
-    )
+    val dates = stringResource(R.string.encrypted_devices_enrolled, deviceDate(device.enrolledAt, locale))
     MeeshyGlassSurface(shape = RoundedCornerShape(MeeshyRadius.lg), modifier = Modifier.fillMaxWidth()) {
         Row(modifier = Modifier.padding(MeeshySpacing.md), verticalAlignment = Alignment.CenterVertically) {
             Box(
@@ -240,13 +237,13 @@ private fun EncryptedDeviceRow(device: OwnEncryptedDevice, isRetiring: Boolean, 
                     )
                 }
             }
-            RetireControl(device = device, title = title, isRetiring = isRetiring, onRetire = onRetire)
+            RetireControl(device = device, title = title, isRetiring = isRetiring, enabled = canRetire, onRetire = onRetire)
         }
     }
 }
 
 @Composable
-private fun RetireControl(device: OwnEncryptedDevice, title: String, isRetiring: Boolean, onRetire: () -> Unit) {
+private fun RetireControl(device: OwnEncryptedDevice, title: String, isRetiring: Boolean, enabled: Boolean, onRetire: () -> Unit) {
     if (!device.isRetirable) return
     if (isRetiring) {
         val label = stringResource(R.string.encrypted_devices_retiring, title)
@@ -259,9 +256,13 @@ private fun RetireControl(device: OwnEncryptedDevice, title: String, isRetiring:
     val label = stringResource(R.string.encrypted_devices_retire_a11y, title)
     TextButton(
         onClick = onRetire,
+        enabled = enabled,
         modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = label },
     ) {
-        Text(text = stringResource(R.string.encrypted_devices_retire), color = MeeshyPalette.Error)
+        Text(
+            text = stringResource(R.string.encrypted_devices_retire),
+            color = if (enabled) MeeshyPalette.Error else MeeshyTheme.tokens.textMuted,
+        )
     }
 }
 
@@ -291,10 +292,10 @@ private fun EncryptedDeviceDialogs(
             text = {
                 Text(
                     stringResource(
-                        if (failure == EncryptedDevicesFailure.OFFLINE) {
-                            R.string.encrypted_devices_retire_offline
-                        } else {
-                            R.string.encrypted_devices_retire_failed
+                        when (failure) {
+                            EncryptedDevicesFailure.OFFLINE -> R.string.encrypted_devices_retire_offline
+                            EncryptedDevicesFailure.CHANGED -> R.string.encrypted_devices_retire_changed
+                            EncryptedDevicesFailure.UNAVAILABLE -> R.string.encrypted_devices_retire_failed
                         },
                     ),
                 )
