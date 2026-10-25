@@ -25,7 +25,7 @@
    456,
    719
   ],
-  "windowPx": 165387,
+  "windowPx": 165539,
   "layout": "ruban",
   "verdict": "ok"
  },
@@ -40,7 +40,7 @@
    101,
    713
   ],
-  "windowPx": 157641,
+  "windowPx": 157654,
   "layout": "ruban",
   "verdict": "ok"
  },
@@ -100,7 +100,7 @@
    404,
    686
   ],
-  "windowPx": 142865,
+  "windowPx": 142866,
   "layout": "pied",
   "verdict": "ok"
  },
@@ -155,7 +155,7 @@
    405,
    713
   ],
-  "windowPx": 157591,
+  "windowPx": 157602,
   "layout": "pied",
   "verdict": "ok"
  },
@@ -180,7 +180,7 @@
   "face": 0,
   "depth": 0,
   "bbox": null,
-  "windowPx": 158250,
+  "windowPx": 158258,
   "layout": "perches",
   "verdict": "ok"
  },
@@ -225,7 +225,7 @@
    448,
    448
   ],
-  "windowPx": 153984,
+  "windowPx": 153995,
   "layout": "cotes",
   "verdict": "ok"
  },
@@ -235,7 +235,7 @@
   "face": 0,
   "depth": 0,
   "bbox": null,
-  "windowPx": 160046,
+  "windowPx": 160112,
   "layout": "libre",
   "verdict": "ok"
  },
@@ -250,7 +250,7 @@
    401,
    720
   ],
-  "windowPx": 137663,
+  "windowPx": 137661,
   "layout": "pied",
   "verdict": "ok"
  },

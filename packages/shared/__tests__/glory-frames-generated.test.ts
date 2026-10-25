@@ -47,7 +47,6 @@ const { entries, rejected } = parsePackIndex(versioned);
 const collections = [...sources.collections.values()];
 const frames: readonly GloryFrame[] = collections.flatMap((collection) => collection.frames);
 const gaps = readJson(join(REPO_ROOT, 'packages/shared/design/glory-frames/known-gaps.json')) as {
-  readonly selfieDefault: { readonly frames: readonly string[] };
   readonly missingAfriqueMotif: { readonly collections: readonly string[] };
   readonly lowContrast: { readonly slots: readonly string[] };
   readonly missingLanguages: { readonly languages: readonly string[] };
@@ -197,8 +196,8 @@ describe('les gardes de données des cadres (§ 7, L3) — cliquets de known-gap
     expect(poses.filter((pose) => !embedded.has(pose))).toEqual([]);
   });
 
-  it('la pose par défaut n’est jamais selfie (cliquet #10153)', () => {
-    expect(frames.filter((frame) => frame.formats.story.birds.default === 'selfie').map((frame) => frame.id)).toEqual(gaps.selfieDefault.frames);
+  it('la pose par défaut n’est jamais selfie (cliquet #10153, vidé par #10277)', () => {
+    expect(frames.filter((frame) => frame.formats.story.birds.default === 'selfie').map((frame) => frame.id)).toEqual([]);
   });
 
   it('un peu d’Afrique dans chaque atmosphère (cliquet #10253)', () => {

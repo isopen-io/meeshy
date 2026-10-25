@@ -16,7 +16,10 @@
  *    pack), son remplissage, ses effets et le pire contraste mesuré à l'export
  *    contre les pixels réellement dessous ;
  *  - une mise en page de Mee et Meo porte DEUX ancres (`mee`, `meo`) ou UNE
- *    seule (`pair`, un sticker à deux oiseaux), jamais les deux.
+ *    seule (`pair`, un sticker à deux oiseaux), jamais les deux ; un cadre en
+ *    déclare plusieurs (#10277), chacune avec le verdict du détecteur
+ *    (`birds.validated`, à côté de `layouts` pour qu'un client d'avant, qui lit
+ *    chaque mise en page en objet strict, la lise encore).
  *
  * Séparé de `glory-frame-pack.ts` pour que la boutique (qui ne lit que les
  * vignettes et les noms) n'embarque pas ce schéma.
@@ -140,6 +143,12 @@ const anchor = z.object({
   rotate: finite,
   flip: z.boolean(),
   opacity: unit,
+  /**
+   * Où le DESSIN de la pose tient dans la boîte carrée `box` (unités de la boîte, 0 à 1 : x, y, largeur, hauteur) :
+   * l'image du générateur y est ajustée sans déformation (#10277). Un peintre y cale le contenu de son propre sticker ;
+   * absent d'un contrat d'avant #10277, le dessin occupe toute la boîte.
+   */
+  art: z.optional(z.tuple([unit, unit, unit, unit])),
 });
 
 const isPrefixed = (anchorOf: z.infer<typeof anchor>, prefix: 'mee-' | 'meo-'): boolean => anchorOf.sticker.startsWith(prefix);
@@ -156,6 +165,16 @@ const birds = z.union([
 
 const layoutKeys = Object.fromEntries(GLORY_FRAME_BIRD_LAYOUTS.map((name) => [name, z.optional(birds)])) as {
   [L in GloryFrameBirdLayout]: z.ZodMiniOptional<typeof birds>;
+};
+
+/**
+ * Le verdict du détecteur d'empiètement du générateur (`lib/overlap.mjs`, prompt § 5.7) sur UNE mise en page, à
+ * l'échelle de design (540×960) : pixels de photo recouverts, profondeur maximale dans la fenêtre, pixels de visage.
+ */
+const layoutVerdict = z.object({ overlap: nonNegative, depth: nonNegative, face: nonNegative });
+
+const validatedKeys = Object.fromEntries(GLORY_FRAME_BIRD_LAYOUTS.map((name) => [name, z.optional(layoutVerdict)])) as {
+  [L in GloryFrameBirdLayout]: z.ZodMiniOptional<typeof layoutVerdict>;
 };
 
 const formatObject = z.object({
@@ -182,7 +201,12 @@ const formatObject = z.object({
   crest: z.nullable(z.object({ box })),
   text: z.record(z.string().check(z.regex(SLOT_KEY)), textSlot),
   birds: z
-    .object({ default: z.enum(GLORY_FRAME_BIRD_LAYOUTS), layouts: z.object(layoutKeys) })
+    .object({
+      default: z.enum(GLORY_FRAME_BIRD_LAYOUTS),
+      layouts: z.object(layoutKeys),
+      /** Le verdict de chaque mise en page déclarée (#10277) ; absent d'un contrat d'avant, que le client lit encore. */
+      validated: z.optional(z.object(validatedKeys)),
+    })
     .check(z.refine((value) => value.layouts[value.default] !== undefined)),
   banner: z.nullable(z.object({ box })),
 });
@@ -212,6 +236,7 @@ export type GloryFrameLayer = z.infer<typeof layer>;
 export type GloryFrameGradeLayer = z.infer<typeof gradeLayer>;
 export type GloryFrameBirdAnchor = z.infer<typeof anchor>;
 export type GloryFrameBirds = z.infer<typeof birds>;
+export type GloryFrameLayoutVerdict = z.infer<typeof layoutVerdict>;
 export type GloryFrameFormat = z.infer<typeof GloryFrameFormatSchema>;
 
 const refOf = ({ src, bytes, sha256 }: GloryFrameLayer): PackAssetRef => ({ src, bytes, sha256 });

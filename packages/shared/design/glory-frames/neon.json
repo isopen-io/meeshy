@@ -357,27 +357,46 @@
                 "mee": {
                   "sticker": "mee-sourire",
                   "box": [
-                    52,
-                    1276,
+                    6.4,
+                    1350.2,
                     264,
                     264
                   ],
                   "rotate": -6,
                   "flip": false,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.025,
+                    1,
+                    0.95
+                  ]
                 },
                 "meo": {
                   "sticker": "meo-cool",
                   "box": [
-                    764,
-                    1276,
+                    790.8,
+                    1345.6,
                     264,
                     264
                   ],
                   "rotate": 6,
                   "flip": true,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0104,
+                    1,
+                    0.9792
+                  ]
                 }
+              }
+            },
+            "validated": {
+              "pied": {
+                "overlap": 117,
+                "depth": 5,
+                "face": 0
               }
             }
           },
@@ -947,14 +966,20 @@
                 "mee": {
                   "sticker": "mee-coucou",
                   "box": [
-                    28,
+                    16,
                     1384,
                     224,
                     224
                   ],
                   "rotate": -6,
                   "flip": false,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0865,
+                    1,
+                    0.827
+                  ]
                 },
                 "meo": {
                   "sticker": "meo-salut",
@@ -966,8 +991,21 @@
                   ],
                   "rotate": 6,
                   "flip": true,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0104,
+                    1,
+                    0.9792
+                  ]
                 }
+              }
+            },
+            "validated": {
+              "ruban": {
+                "overlap": 23,
+                "depth": 4,
+                "face": 0
               }
             }
           },
@@ -1312,27 +1350,46 @@
                 "mee": {
                   "sticker": "mee-bravo",
                   "box": [
-                    52,
-                    1268,
+                    -1.6,
+                    1391.4,
                     272,
                     272
                   ],
                   "rotate": -4,
                   "flip": false,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0.0411,
+                    0,
+                    0.9179,
+                    1
+                  ]
                 },
                 "meo": {
                   "sticker": "meo-bravo",
                   "box": [
-                    756,
-                    1268,
+                    799,
+                    1365.8,
                     272,
                     272
                   ],
                   "rotate": 4,
                   "flip": true,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0.0325,
+                    0,
+                    0.9349,
+                    1
+                  ]
                 }
+              }
+            },
+            "validated": {
+              "pied": {
+                "overlap": 107,
+                "depth": 5,
+                "face": 0
               }
             }
           },
@@ -1734,27 +1791,46 @@
                 "mee": {
                   "sticker": "mee-wow",
                   "box": [
-                    62,
-                    1278,
+                    4.8,
+                    1404.4,
                     252,
                     252
                   ],
                   "rotate": -6,
                   "flip": false,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0564,
+                    1,
+                    0.8872
+                  ]
                 },
                 "meo": {
                   "sticker": "meo-roi",
                   "box": [
-                    766,
-                    1278,
+                    809.6,
+                    1353.8,
                     252,
                     252
                   ],
                   "rotate": 6,
                   "flip": true,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0125,
+                    1,
+                    0.975
+                  ]
                 }
+              }
+            },
+            "validated": {
+              "pied": {
+                "overlap": 157,
+                "depth": 5,
+                "face": 0
               }
             }
           },
@@ -2156,27 +2232,46 @@
                 "mee": {
                   "sticker": "mee-fete",
                   "box": [
-                    50,
-                    1266,
+                    19.6,
+                    1334.8,
                     268,
                     268
                   ],
                   "rotate": -6,
                   "flip": false,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0.0219,
+                    0,
+                    0.9562,
+                    1
+                  ]
                 },
                 "meo": {
                   "sticker": "meo-champagne",
                   "box": [
-                    762,
-                    1266,
+                    801.4,
+                    1360.8,
                     268,
                     268
                   ],
                   "rotate": 6,
                   "flip": true,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0758,
+                    1,
+                    0.8484
+                  ]
                 }
+              }
+            },
+            "validated": {
+              "pied": {
+                "overlap": 126,
+                "depth": 5,
+                "face": 0
               }
             }
           },
@@ -2578,27 +2673,46 @@
                 "mee": {
                   "sticker": "mee-bisou-vole",
                   "box": [
-                    24,
-                    1084,
-                    232,
-                    232
+                    7.87,
+                    1132.27,
+                    191.86,
+                    191.86
                   ],
                   "rotate": -8,
                   "flip": false,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0824,
+                    1,
+                    0.8352
+                  ]
                 },
                 "meo": {
                   "sticker": "meo-feu-artifice",
                   "box": [
-                    824,
-                    1084,
-                    232,
-                    232
+                    867.56,
+                    1148.16,
+                    218.08,
+                    218.08
                   ],
                   "rotate": 6,
                   "flip": true,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0.0567,
+                    0,
+                    0.8867,
+                    1
+                  ]
                 }
+              }
+            },
+            "validated": {
+              "libre": {
+                "overlap": 46,
+                "depth": 3,
+                "face": 0
               }
             }
           },
@@ -3000,27 +3114,46 @@
                 "mee": {
                   "sticker": "mee-courage",
                   "box": [
-                    56,
-                    1276,
+                    -14.8,
+                    1402.8,
                     256,
                     256
                   ],
                   "rotate": -4,
                   "flip": false,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0.0932,
+                    0,
+                    0.8136,
+                    1
+                  ]
                 },
                 "meo": {
                   "sticker": "meo-serenade",
                   "box": [
-                    772,
-                    1284,
+                    807.8,
+                    1371.6,
                     248,
                     248
                   ],
                   "rotate": 4,
                   "flip": true,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0.075,
+                    0,
+                    0.85,
+                    1
+                  ]
                 }
+              }
+            },
+            "validated": {
+              "pied": {
+                "overlap": 67,
+                "depth": 5,
+                "face": 0
               }
             }
           },
@@ -3674,27 +3807,46 @@
                 "mee": {
                   "sticker": "mee-danse",
                   "box": [
-                    58,
-                    1278,
+                    6.2,
+                    1401.8,
                     260,
                     260
                   ],
                   "rotate": -6,
                   "flip": false,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0583,
+                    1,
+                    0.8833
+                  ]
                 },
                 "meo": {
                   "sticker": "meo-yo",
                   "box": [
                     762,
-                    1278,
+                    1370,
                     260,
                     260
                   ],
                   "rotate": 6,
                   "flip": true,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0789,
+                    1,
+                    0.8423
+                  ]
                 }
+              }
+            },
+            "validated": {
+              "pied": {
+                "overlap": 42,
+                "depth": 4,
+                "face": 0
               }
             }
           },
@@ -4268,26 +4420,45 @@
                   "sticker": "mee-montee-au-ciel",
                   "box": [
                     58,
-                    1278,
+                    1410,
                     260,
                     260
                   ],
                   "rotate": -4,
                   "flip": false,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0.0105,
+                    0,
+                    0.9789,
+                    1
+                  ]
                 },
                 "meo": {
                   "sticker": "meo-love",
                   "box": [
                     762,
-                    1278,
+                    1406,
                     260,
                     260
                   ],
                   "rotate": 4,
                   "flip": true,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0192,
+                    1,
+                    0.9617
+                  ]
                 }
+              }
+            },
+            "validated": {
+              "pied": {
+                "overlap": 139,
+                "depth": 5,
+                "face": 0
               }
             }
           },
@@ -4797,8 +4968,122 @@
             }
           },
           "birds": {
-            "default": "selfie",
+            "default": "pied",
             "layouts": {
+              "pied": {
+                "mee": {
+                  "sticker": "mee-coucou",
+                  "box": [
+                    46,
+                    1390,
+                    300,
+                    300
+                  ],
+                  "rotate": -6,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0865,
+                    1,
+                    0.827
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-salut",
+                  "box": [
+                    734,
+                    1350,
+                    300,
+                    300
+                  ],
+                  "rotate": 6,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0104,
+                    1,
+                    0.9792
+                  ]
+                }
+              },
+              "perches": {
+                "mee": {
+                  "sticker": "mee-coucou",
+                  "box": [
+                    116,
+                    64,
+                    240,
+                    240
+                  ],
+                  "rotate": -10,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0865,
+                    1,
+                    0.827
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-salut",
+                  "box": [
+                    724,
+                    64,
+                    240,
+                    240
+                  ],
+                  "rotate": 10,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0104,
+                    1,
+                    0.9792
+                  ]
+                }
+              },
+              "cotes": {
+                "mee": {
+                  "sticker": "mee-coucou",
+                  "box": [
+                    -34.8,
+                    745.2,
+                    229.6,
+                    229.6
+                  ],
+                  "rotate": 18,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0865,
+                    1,
+                    0.827
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-salut",
+                  "box": [
+                    888.2,
+                    822.2,
+                    229.6,
+                    229.6
+                  ],
+                  "rotate": 342,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0104,
+                    1,
+                    0.9792
+                  ]
+                }
+              },
               "selfie": {
                 "pair": {
                   "sticker": "duo-meo-selfie",
@@ -4810,8 +5095,36 @@
                   ],
                   "rotate": 0,
                   "flip": true,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.165,
+                    1,
+                    0.67
+                  ]
                 }
+              }
+            },
+            "validated": {
+              "pied": {
+                "overlap": 60,
+                "depth": 4,
+                "face": 0
+              },
+              "perches": {
+                "overlap": 0,
+                "depth": 0,
+                "face": 0
+              },
+              "cotes": {
+                "overlap": 77,
+                "depth": 4,
+                "face": 0
+              },
+              "selfie": {
+                "overlap": 2103,
+                "depth": 46,
+                "face": 0
               }
             }
           },
@@ -5328,26 +5641,45 @@
                   "sticker": "mee-amoureuse",
                   "box": [
                     56,
-                    1280,
+                    1396,
                     256,
                     256
                   ],
                   "rotate": -6,
                   "flip": false,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0789,
+                    1,
+                    0.8421
+                  ]
                 },
                 "meo": {
                   "sticker": "meo-salut",
                   "box": [
-                    768,
-                    1280,
+                    773.6,
+                    1353.6,
                     256,
                     256
                   ],
                   "rotate": 6,
                   "flip": true,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0104,
+                    1,
+                    0.9792
+                  ]
                 }
+              }
+            },
+            "validated": {
+              "pied": {
+                "overlap": 152,
+                "depth": 4,
+                "face": 0
               }
             }
           },
@@ -5919,27 +6251,46 @@
                 "mee": {
                   "sticker": "mee-jackpot",
                   "box": [
-                    58,
-                    1278,
+                    22.2,
+                    1365.6,
                     260,
                     260
                   ],
                   "rotate": -6,
                   "flip": false,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0746,
+                    1,
+                    0.8507
+                  ]
                 },
                 "meo": {
                   "sticker": "meo-muscles",
                   "box": [
-                    762,
-                    1278,
+                    823.4,
+                    1318.4,
                     260,
                     260
                   ],
                   "rotate": 6,
                   "flip": true,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0.073,
+                    0,
+                    0.8541,
+                    1
+                  ]
                 }
+              }
+            },
+            "validated": {
+              "pied": {
+                "overlap": 82,
+                "depth": 5,
+                "face": 0
               }
             }
           },
@@ -6411,19 +6762,186 @@
           "birds": {
             "default": "duo",
             "layouts": {
+              "pied": {
+                "mee": {
+                  "sticker": "mee-coucou",
+                  "box": [
+                    46,
+                    1394,
+                    300,
+                    300
+                  ],
+                  "rotate": -6,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0865,
+                    1,
+                    0.827
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-salut",
+                  "box": [
+                    734,
+                    1378,
+                    300,
+                    300
+                  ],
+                  "rotate": 6,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0104,
+                    1,
+                    0.9792
+                  ]
+                }
+              },
+              "perches": {
+                "mee": {
+                  "sticker": "mee-coucou",
+                  "box": [
+                    116,
+                    64,
+                    240,
+                    240
+                  ],
+                  "rotate": -10,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0865,
+                    1,
+                    0.827
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-salut",
+                  "box": [
+                    724,
+                    64,
+                    240,
+                    240
+                  ],
+                  "rotate": 10,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0104,
+                    1,
+                    0.9792
+                  ]
+                }
+              },
+              "cotes": {
+                "mee": {
+                  "sticker": "mee-coucou",
+                  "box": [
+                    -34.8,
+                    745.2,
+                    229.6,
+                    229.6
+                  ],
+                  "rotate": 18,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0865,
+                    1,
+                    0.827
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-salut",
+                  "box": [
+                    885.2,
+                    825.2,
+                    229.6,
+                    229.6
+                  ],
+                  "rotate": 342,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0104,
+                    1,
+                    0.9792
+                  ]
+                }
+              },
               "duo": {
                 "pair": {
                   "sticker": "duo-main-dans-la-main",
                   "box": [
-                    730,
-                    1230,
+                    764,
+                    1298,
                     300,
                     300
                   ],
                   "rotate": 0,
                   "flip": true,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.125,
+                    1,
+                    0.75
+                  ]
                 }
+              },
+              "selfie": {
+                "meo": {
+                  "sticker": "meo-selfie",
+                  "box": [
+                    650,
+                    1090,
+                    380,
+                    380
+                  ],
+                  "rotate": 0,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0375,
+                    1,
+                    0.9251
+                  ]
+                }
+              }
+            },
+            "validated": {
+              "pied": {
+                "overlap": 60,
+                "depth": 5,
+                "face": 0
+              },
+              "perches": {
+                "overlap": 0,
+                "depth": 0,
+                "face": 0
+              },
+              "cotes": {
+                "overlap": 45,
+                "depth": 3,
+                "face": 0
+              },
+              "duo": {
+                "overlap": 38,
+                "depth": 4,
+                "face": 0
+              },
+              "selfie": {
+                "overlap": 10578,
+                "depth": 116,
+                "face": 0
               }
             }
           },
@@ -6883,27 +7401,46 @@
                 "mee": {
                   "sticker": "mee-wow",
                   "box": [
-                    62,
-                    1286,
+                    10.2,
+                    1405.8,
                     252,
                     252
                   ],
                   "rotate": -6,
                   "flip": false,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0564,
+                    1,
+                    0.8872
+                  ]
                 },
                 "meo": {
                   "sticker": "meo-bravo",
                   "box": [
-                    766,
-                    1286,
+                    801.8,
+                    1369.6,
                     252,
                     252
                   ],
                   "rotate": 6,
                   "flip": true,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0.0325,
+                    0,
+                    0.9349,
+                    1
+                  ]
                 }
+              }
+            },
+            "validated": {
+              "pied": {
+                "overlap": 89,
+                "depth": 5,
+                "face": 0
               }
             }
           },
@@ -7389,27 +7926,46 @@
                 "mee": {
                   "sticker": "mee-lettre",
                   "box": [
-                    62,
-                    1286,
+                    31.6,
+                    1358.8,
                     252,
                     252
                   ],
                   "rotate": -6,
                   "flip": false,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.025,
+                    1,
+                    0.95
+                  ]
                 },
                 "meo": {
                   "sticker": "meo-trophee",
                   "box": [
-                    766,
-                    1286,
+                    817.8,
+                    1409.8,
                     252,
                     252
                   ],
                   "rotate": 6,
                   "flip": true,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.033,
+                    1,
+                    0.934
+                  ]
                 }
+              }
+            },
+            "validated": {
+              "pied": {
+                "overlap": 171,
+                "depth": 5,
+                "face": 0
               }
             }
           },
@@ -7925,27 +8481,46 @@
                 "mee": {
                   "sticker": "mee-fete",
                   "box": [
-                    54,
-                    1278,
+                    30.8,
+                    1336.6,
                     260,
                     260
                   ],
                   "rotate": -6,
                   "flip": false,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0.0219,
+                    0,
+                    0.9562,
+                    1
+                  ]
                 },
                 "meo": {
                   "sticker": "meo-roi",
                   "box": [
-                    766,
-                    1278,
+                    806,
+                    1346.6,
                     260,
                     260
                   ],
                   "rotate": 6,
                   "flip": true,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0125,
+                    1,
+                    0.975
+                  ]
                 }
+              }
+            },
+            "validated": {
+              "pied": {
+                "overlap": 151,
+                "depth": 5,
+                "face": 0
               }
             }
           },
@@ -8460,15 +9035,28 @@
                 "pair": {
                   "sticker": "duo-mee-trinquer",
                   "box": [
-                    28,
-                    1164,
-                    392,
-                    392
+                    7.76,
+                    1319.76,
+                    368.48,
+                    368.48
                   ],
                   "rotate": -3,
                   "flip": false,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.25,
+                    1,
+                    0.5
+                  ]
                 }
+              }
+            },
+            "validated": {
+              "duo": {
+                "overlap": 13,
+                "depth": 2,
+                "face": 0
               }
             }
           },
@@ -9012,27 +9600,46 @@
                 "mee": {
                   "sticker": "mee-lettre",
                   "box": [
-                    66,
-                    1278,
+                    35.6,
+                    1350.8,
                     252,
                     252
                   ],
                   "rotate": -6,
                   "flip": false,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.025,
+                    1,
+                    0.95
+                  ]
                 },
                 "meo": {
                   "sticker": "meo-champagne",
                   "box": [
-                    762,
-                    1278,
+                    794.2,
+                    1362.4,
                     252,
                     252
                   ],
                   "rotate": 6,
                   "flip": true,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0758,
+                    1,
+                    0.8484
+                  ]
                 }
+              }
+            },
+            "validated": {
+              "pied": {
+                "overlap": 145,
+                "depth": 5,
+                "face": 0
               }
             }
           },
@@ -10068,8 +10675,21 @@
                   ],
                   "rotate": -6,
                   "flip": false,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0883,
+                    1,
+                    0.8233
+                  ]
                 }
+              }
+            },
+            "validated": {
+              "duo": {
+                "overlap": 0,
+                "depth": 0,
+                "face": 0
               }
             }
           },

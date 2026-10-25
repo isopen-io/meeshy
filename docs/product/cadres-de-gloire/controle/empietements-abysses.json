@@ -1,7 +1,7 @@
 [
  {
   "file": "abysses-ambassadeur-1",
-  "overlap": 73,
+  "overlap": 82,
   "face": 0,
   "depth": 3,
   "bbox": [
@@ -10,13 +10,13 @@
    449,
    722
   ],
-  "windowPx": 158623,
+  "windowPx": 158668,
   "layout": "pied",
   "verdict": "ok"
  },
  {
   "file": "abysses-ambassadeur-2",
-  "overlap": 4846,
+  "overlap": 4849,
   "face": 0,
   "depth": 76,
   "bbox": [
@@ -25,7 +25,7 @@
    447,
    713
   ],
-  "windowPx": 149247,
+  "windowPx": 149284,
   "layout": "selfie",
   "verdict": "ok"
  },
@@ -35,7 +35,7 @@
   "face": 0,
   "depth": 0,
   "bbox": null,
-  "windowPx": 159916,
+  "windowPx": 159973,
   "layout": "libre",
   "verdict": "ok"
  },
@@ -45,13 +45,13 @@
   "face": 0,
   "depth": 0,
   "bbox": null,
-  "windowPx": 150940,
+  "windowPx": 150938,
   "layout": "ruban",
   "verdict": "ok"
  },
  {
   "file": "abysses-ambassadeur-5",
-  "overlap": 70,
+  "overlap": 72,
   "face": 0,
   "depth": 4,
   "bbox": [
@@ -60,13 +60,13 @@
    431,
    719
   ],
-  "windowPx": 162039,
+  "windowPx": 162019,
   "layout": "pied",
   "verdict": "ok"
  },
  {
   "file": "abysses-legende-1",
-  "overlap": 53,
+  "overlap": 58,
   "face": 0,
   "depth": 4,
   "bbox": [
@@ -75,7 +75,7 @@
    441,
    715
   ],
-  "windowPx": 146986,
+  "windowPx": 147136,
   "layout": "pied",
   "verdict": "ok"
  },
@@ -85,7 +85,7 @@
   "face": 0,
   "depth": 0,
   "bbox": null,
-  "windowPx": 156572,
+  "windowPx": 156614,
   "layout": "ruban",
   "verdict": "ok"
  },
@@ -95,22 +95,22 @@
   "face": 0,
   "depth": 0,
   "bbox": null,
-  "windowPx": 157453,
+  "windowPx": 157601,
   "layout": "perches",
   "verdict": "ok"
  },
  {
   "file": "abysses-legende-4",
-  "overlap": 56,
+  "overlap": 59,
   "face": 0,
   "depth": 4,
   "bbox": [
-   111,
-   333,
+   110,
+   332,
    446,
    447
   ],
-  "windowPx": 147616,
+  "windowPx": 147770,
   "layout": "cotes",
   "verdict": "ok"
  },
@@ -125,7 +125,7 @@
    401,
    715
   ],
-  "windowPx": 157439,
+  "windowPx": 157588,
   "layout": "pied",
   "verdict": "ok"
  },
@@ -140,22 +140,22 @@
    446,
    709
   ],
-  "windowPx": 155177,
+  "windowPx": 155217,
   "layout": "selfie",
   "verdict": "ok"
  },
  {
   "file": "abysses-mythe-b",
-  "overlap": 29,
+  "overlap": 36,
   "face": 0,
   "depth": 3,
   "bbox": [
-   95,
+   94,
    424,
-   445,
-   450
+   446,
+   451
   ],
-  "windowPx": 146330,
+  "windowPx": 146368,
   "layout": "cotes",
   "verdict": "ok"
  },
@@ -165,7 +165,7 @@
   "face": 0,
   "depth": 0,
   "bbox": null,
-  "windowPx": 148059,
+  "windowPx": 148095,
   "layout": "perches",
   "verdict": "ok"
  },
@@ -180,37 +180,37 @@
    436,
    714
   ],
-  "windowPx": 144970,
+  "windowPx": 145032,
   "layout": "ruban",
   "verdict": "ok"
  },
  {
   "file": "abysses-oracle-b",
-  "overlap": 85,
+  "overlap": 90,
   "face": 0,
   "depth": 4,
   "bbox": [
    97,
    379,
-   427,
+   428,
    453
   ],
-  "windowPx": 122704,
+  "windowPx": 122770,
   "layout": "cotes",
   "verdict": "ok"
  },
  {
   "file": "abysses-oracle-c",
-  "overlap": 55,
+  "overlap": 63,
   "face": 0,
   "depth": 4,
   "bbox": [
    96,
    706,
-   447,
-   718
+   448,
+   719
   ],
-  "windowPx": 163027,
+  "windowPx": 163099,
   "layout": "pied",
   "verdict": "ok"
  },
@@ -225,7 +225,7 @@
    399,
    715
   ],
-  "windowPx": 148987,
+  "windowPx": 149155,
   "layout": "libre",
   "verdict": "ok"
  },
@@ -240,7 +240,7 @@
    417,
    714
   ],
-  "windowPx": 154715,
+  "windowPx": 154761,
   "layout": "pied",
   "verdict": "ok"
  },
@@ -250,7 +250,7 @@
   "face": 0,
   "depth": 0,
   "bbox": null,
-  "windowPx": 156723,
+  "windowPx": 156739,
   "layout": "perches",
   "verdict": "ok"
  }

@@ -1057,9 +1057,10 @@ jobs:
       # (`scripts/lib/glory-gate-verdict.ts`). Les mesures de tolérance sont
       # IMPRIMÉES (`--report`) : les cibles ne sont PAS composées avec les
       # mêmes entrées que le peintre — le générateur applique
-      # `generateur/lib/anchors.json` (L2, #10153 : Mee et Meo déplacés) que le
-      # contrat versionné ne porte pas ; le gate exclut les oiseaux aux deux
-      # places et nomme l'écart par cadre. Ce qui reste : la plaque sans
+      # `generateur/lib/anchors.json` (L2, #10153 : Mee et Meo déplacés), que le
+      # contrat versionné porte depuis #10277 (mises en page relevées par
+      # `lib/overlap.mjs`) ; le gate exclut encore les oiseaux aux deux places
+      # et nomme l'écart d'ancres par cadre. Ce qui reste : la plaque sans
       # message absente des contrats (variantes `plain`) et des couches
       # servies en q82 (mesuré le 2026-10-22 : 82 à 98 % des pixels à |Δ| ≤ 6 ;
       # voir #10159, #10153/#10177). Le gate bâtit et sert le peintre par
@@ -1469,9 +1470,15 @@ jobs:
   # La garde d'empiètement du prompt § 5.7 : les SVG des onze ateliers sont
   # régénérés, puis `lib/overlap.mjs --check` mesure chaque cadre dans Chromium
   # (fenêtre par différence magenta/vert, oiseaux par `data-layer`) et rougit
-  # dès qu'un cadre dépasse overlap 250 px, depth 6 px ou touche un visage.
-  # Le témoin qui précède prouve qu'elle rougit : un oiseau posé au centre de
-  # la fenêtre (`--mutate bird-in-window`). Playwright est ÉPINGLÉ, donc
+  # dès qu'un cadre dépasse overlap 250 px, depth 6 px ou touche un visage —
+  # dans CHAQUE mise en page qu'il déclare (#10277,
+  # `controle/mises-en-page-<collection>.json`), re-mesurée à ses ancres.
+  # Sur une PR, seules les collections que le diff touche se re-mesurent
+  # (`lib/touched.mjs`) ; un fichier commun (lib/, mee/, fonts/) ou
+  # workflow_dispatch re-mesure tout. Les témoins qui précèdent prouvent
+  # qu'elle rougit : un oiseau dessiné posé au centre de la fenêtre
+  # (`--mutate bird-in-window`), une ancre d'une mise en page générée posée
+  # dans la photo (`--mutate layout-in-window`). Playwright est ÉPINGLÉ, donc
   # Chromium ; seul ce job lit `docs/product/cadres-de-gloire/` (domaine
   # `glory_frames`, `scripts/ci-affected.mjs`), il n'installe rien du monorepo.
   # Le domaine porte aussi les contrats (`packages/shared/design/glory-frames/`)
@@ -1494,6 +1501,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          # L'historique sert au choix des collections touchées (lib/touched.mjs).
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -1556,8 +1566,33 @@ jobs:
             exit 1
           fi
 
-      - name: Garde d'empiètement (197 cadres)
-        run: node lib/overlap.mjs --check --jobs 2
+      - name: Témoin — la garde rougit sur une mise en page déclarée posée dans la photo
+        run: |
+          if node lib/overlap.mjs --check --only savane-orateur-a --mutate layout-in-window; then
+            echo "::error::la garde d'empiètement n'a pas rougi sur une ancre de mise en page posée dans la photo"
+            exit 1
+          fi
+
+      - name: Collections touchées
+        id: touched
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || github.event.before }}
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "only=all" >> "$GITHUB_OUTPUT"
+          else
+            echo "only=$(node lib/touched.mjs "$BASE")" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Garde d'empiètement, chaque mise en page déclarée
+        env:
+          ONLY: ${{ steps.touched.outputs.only }}
+        run: |
+          case "$ONLY" in
+            all) node lib/overlap.mjs --check --jobs 2 ;;
+            "") echo "aucune collection touchée : la garde ne re-mesure rien" ;;
+            *) node lib/overlap.mjs --check --jobs 2 --only "$ONLY" ;;
+          esac
 
       # La garde de lisibilité (#10265, prompt § 5.2) : chaque texte d'un
       # cadre tient 4,5:1 (3:1 au-dessus de 24 px) contre ce qui est dessous,

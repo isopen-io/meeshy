@@ -1,6 +1,6 @@
 // L'exportateur unique (lot L1, § 5.1 et § 5.3 du prompt) : chaque cadre généré devient un jeu de couches raster
 // WebP rognées à leur boîte, et un export.json BRUT qui décrit ce que l'app peindra elle-même (texte, oiseaux, blason).
-// Usage : node lib/export.mjs [--generate] [--out out] [--plates out-plate] [--export export] [--only savane,neon] [--jobs 3] [--mutate <défaut>]
+// Usage : node lib/export.mjs [--generate] [--out out] [--plates out-plate] [--export export] [--controle ../controle] [--only savane,neon] [--jobs 3] [--mutate <défaut>]
 //   --generate régénère d'abord les SVG de chaque atelier (python3, ou $PYTHON ; poses demande numpy et Pillow), et
 //              les rejoue dans les deux variantes de plaque (CADRES_PLATE=plain|message) sous out-plate/<variante>/
 //   --mutate rejoue un défaut connu pour montrer export-check.mjs ROUGE :
@@ -14,16 +14,20 @@
 //   - les textes de décor NEUTRES (table du tri, lib/decor-sorts.mjs, #10256) sont rendus AVEC le décor : cuits dans
 //     sa couche, ils quittent les emplacements de texte ; les autres restent des emplacements, traduits ou vivants ;
 //   - chaque couche est rognée à sa boîte, encodée par sharp, adressée par son empreinte dans export.json ;
+//   - Mee et Meo partent en MISES EN PAGE déclarées (#10277) : celles que lib/overlap.mjs a validées et écrites dans
+//     controle/mises-en-page-<collection>.json, chacune avec ses ancres et son verdict `validated` ;
 //   - la fenêtre part aussi en CHEMIN (`window.path`, #10254, lib/window-path.mjs) : le contour rectiligne de ce même
 //     masque, que le peintre découpe sans décoder d'image et qui le rend au pixel près.
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { generateAteliers, PLATE_VARIANTS as VARIANTS } from './ateliers.mjs';
+import { exportedBirds } from './bird-layouts.mjs';
 import { launch } from './launch.mjs';
 import { bakedSlotsOf, DECOR_TEXTS_FILE, frameIdOf, readDecorTexts } from './decor-sorts.mjs';
 import { flatColor, slotsOf, underGlyphContrastOf } from './contrast-rule.mjs';
 import { classify, isFront, markBaked, read, show } from './layers.mjs';
+import { declaredAnchor, loadPoses } from './overlap-measure.mjs';
 import { H, openPage, pool, SCALE, shoot, showSvg, W } from './page.mjs';
 import sharp, { sharpVersion } from './sharp.mjs';
 import { windowPath } from './window-path.mjs';
@@ -40,6 +44,14 @@ const ONLY = arg('--only') ? new Set(arg('--only').split(',')) : null;
 const JOBS = Number(arg('--jobs', '3'));
 const MUTATE = arg('--mutate', null);
 const DECOR_TEXTS = readDecorTexts(path.resolve(arg('--decor-texts', DECOR_TEXTS_FILE)));
+const CONTROLE = path.resolve(arg('--controle', path.join(HERE, '../../controle')));
+const POSES = loadPoses();
+// Les mises en page de Mee et Meo que la garde a validées (lib/overlap.mjs → controle/mises-en-page-<collection>.json,
+// #10277) : l'export les porte telles quelles, avec leur verdict.
+const declaredOf = (collection) => {
+  const file = path.join(CONTROLE, `mises-en-page-${collection}.json`);
+  return new Map((fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : []).map((record) => [record.frame, record]));
+};
 
 const FW = W * SCALE;
 const FH = H * SCALE;
@@ -196,7 +208,7 @@ async function otherPlate(handle, render, { collection, name, variant, decor, ba
   return { variant, plate, decorDelta, text };
 }
 
-async function exportFrame(handle, { collection, name, message }) {
+async function exportFrame(handle, { collection, name, message, declared }) {
   const dir = path.join(EXPORT, collection, name);
   fs.mkdirSync(dir, { recursive: true });
   const svg = fs.readFileSync(path.join(OUT, collection, name + '.svg'), 'utf8');
@@ -287,7 +299,7 @@ async function exportFrame(handle, { collection, name, message }) {
     mask: windowFile,
     veilMaxAlpha: 0,
   };
-  const birds = dom.birds.map(({ href, ...b }) => b);
+  const birds = exportedBirds(declared, dom.birds.map(declaredAnchor(POSES)));
   return {
     frame: name,
     size: [FW, FH],
@@ -326,7 +338,8 @@ const collections = fs.readdirSync(OUT).filter((d) => fs.statSync(path.join(OUT,
 const jobs = collections.flatMap((collection) => {
   const manifest = JSON.parse(fs.readFileSync(path.join(OUT, collection, 'manifest.json'), 'utf8'));
   const messages = new Map(manifest.map((m) => [m.file.replace(/\.jpg$/, ''), m.message]));
-  return fs.readdirSync(path.join(OUT, collection)).filter((f) => f.endsWith('.svg') && (!ONLY || ONLY.has(collection) || ONLY.has(f.slice(0, -4)))).sort().map((f) => ({ collection, name: f.slice(0, -4), message: messages.get(f.slice(0, -4)) ?? null }));
+  const declared = declaredOf(collection);
+  return fs.readdirSync(path.join(OUT, collection)).filter((f) => f.endsWith('.svg') && (!ONLY || ONLY.has(collection) || ONLY.has(f.slice(0, -4)))).sort().map((f) => ({ collection, name: f.slice(0, -4), message: messages.get(f.slice(0, -4)) ?? null, declared: declared.get(f.slice(0, -4)) }));
 });
 fs.rmSync(EXPORT, { recursive: true, force: true });
 const browser = await launch();

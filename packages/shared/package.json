@@ -107,6 +107,7 @@
     "import:glory-frames": "bun scripts/import-glory-frames.ts",
     "generate:glory-frames": "bun scripts/generate-glory-frames.ts",
     "glory-frames:decor-texts": "bun scripts/apply-glory-decor-texts.ts",
+    "glory-frames:bird-layouts": "bun scripts/apply-glory-bird-layouts.ts",
     "glory-frames:check-versions": "tsx scripts/glory-frame-version-ratchet.ts",
     "translator-languages:generate": "tsx scripts/generate-translator-languages.ts",
     "translator-languages:check": "tsx scripts/generate-translator-languages.ts --check",

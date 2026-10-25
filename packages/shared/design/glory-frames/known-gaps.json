@@ -1,21 +1,5 @@
 {
   "note": "CLIQUETS des gardes de données des cadres de gloire (#10154, L3). Chaque liste nomme l'écart CONNU, avec l'issue qui le solde ; le témoin `__tests__/glory-frames-generated.test.ts` exige l'égalité EXACTE : un écart neuf rougit, un écart corrigé aussi tant qu'il reste listé. Ces listes ne font que se vider.",
-  "selfieDefault": {
-    "issue": "#10153",
-    "rule": "la pose par défaut n’est jamais selfie (choisie exprès, H-3)",
-    "frames": [
-      "savane.legende-1",
-      "olympe.legende-3",
-      "nord.oracle-a",
-      "nord.mythe-b",
-      "abysses.ambassadeur-2",
-      "abysses.mythe-a",
-      "neon.oracle-b",
-      "moments.palier-supernova",
-      "moments.meesh-1000",
-      "tresor.reserve-c"
-    ]
-  },
   "missingAfriqueMotif": {
     "issue": "#10253",
     "rule": "chaque atmosphère autre qu’Afrique éternelle porte au moins un cadre `afrique`",
