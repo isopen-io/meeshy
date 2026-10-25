@@ -19,7 +19,7 @@ import {
   NOTIFICATION_REVOCATION_TTL_MS,
 } from './notifications/notificationRevocationPush';
 import { applyUserPreferences, isCallPushDataType } from './push-delivery-preferences';
-import { tokenRoutesPushType } from './push-type-routing';
+import { pushRoutingClientOf, tokenRoutesPushType } from './push-type-routing';
 import { apnsThreadIdOf } from './notifications/push-thread';
 
 const pushLogger = enhancedLogger.child({ module: 'PushNotificationService' });
@@ -438,7 +438,7 @@ export class PushNotificationService {
    * Send notification via Firebase Cloud Messaging
    */
   private async sendViaFCM(
-    tokenRecord: { id: string; token: string; platform: string },
+    tokenRecord: { id: string; token: string; platform: string; bundleId?: string | null },
     payload: PushNotificationPayload
   ): Promise<PushResult> {
     if (!this.firebaseMessaging) {
@@ -549,7 +549,9 @@ export class PushNotificationService {
             }
           : {
               priority: 'high',
-              notification: androidNotificationConfig(payload),
+              notification: androidNotificationConfig(payload, {
+                client: pushRoutingClientOf({ platform: tokenRecord.platform, bundleId: tokenRecord.bundleId ?? null }),
+              }),
             };
       } else if (tokenRecord.platform === 'web') {
         Object.assign(message, webPushFor(payload, { isCallPush, dataOnly, callTtlMs: CALL_PUSH_TTL_MS }));
