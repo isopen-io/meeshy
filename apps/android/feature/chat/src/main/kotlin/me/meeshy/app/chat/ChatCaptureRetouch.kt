@@ -115,6 +115,18 @@ internal class ChatVideoRetouchPending(val source: File, val output: File, val p
     }
 
     companion object {
+        /** Une vidéo des récents (#12735), écrite dans le dossier de prises ; `null` si elle ne se lit pas. */
+        suspend fun of(context: Context, bytes: ByteArray, nowMillis: Long): ChatVideoRetouchPending? = withContext(Dispatchers.IO) {
+            val dir = File(context.cacheDir, "captures").apply { mkdirs() }
+            val source = File(dir, ChatCameraCaptureFile.nextVideoSource(nowMillis))
+            val probe = runCatching { source.writeBytes(bytes) }.getOrNull()?.let { RetouchVideoProbe.of(source) }
+            if (probe == null) {
+                source.delete()
+                return@withContext null
+            }
+            ChatVideoRetouchPending(source, File(dir, ChatCameraCaptureFile.nextRetouchedVideo(nowMillis)), probe)
+        }
+
         /** La vidéo copiée dans le dossier de prises ; `null` si elle ne se lit pas (elle part alors telle quelle). */
         suspend fun of(context: Context, uri: Uri, nowMillis: Long): ChatVideoRetouchPending? = withContext(Dispatchers.IO) {
             val dir = File(context.cacheDir, "captures").apply { mkdirs() }

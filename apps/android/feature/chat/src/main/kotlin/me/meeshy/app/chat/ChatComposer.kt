@@ -222,6 +222,19 @@ internal fun ChatComposer(
                                 accentColor = accentColor,
                                 onPickFile = onPickFile,
                                 onPickUri = onPickUris?.let { stage -> { uri: Uri -> stage(listOf(uri)) } },
+                                onEdit = { picked ->
+                                    attachmentTrayOpen = false
+                                    ioScope.launch {
+                                        val now = System.currentTimeMillis()
+                                        val opened = when {
+                                            picked.mimeType?.startsWith("video") == true ->
+                                                ChatVideoRetouchPending.of(context, picked.bytes, now)?.also { videoRetouch = it }
+                                            else -> withContext(Dispatchers.Default) { ChatRetouchPending.of(picked.bytes, picked.fileName, picked.mimeType) }
+                                                ?.also { retouch = it }
+                                        }
+                                        if (opened == null) onPickFile(picked.bytes, picked.fileName, picked.mimeType)
+                                    }
+                                },
                             )
                         },
                         onTileClick = { kind ->
