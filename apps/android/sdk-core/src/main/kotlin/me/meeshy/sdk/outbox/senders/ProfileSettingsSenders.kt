@@ -24,9 +24,12 @@ import me.meeshy.sdk.user.UserRepository
 import javax.inject.Inject
 
 /**
- * `UPDATE_PROFILE`: patches the profile, then adopts the server-authoritative user (the
- * gateway may normalise names or derive fields the local merge cannot). An exhausted edit
- * reverts the optimistic paint to the gateway's truth so the identity never drifts.
+ * `UPDATE_PROFILE`: patches the profile, then MERGES the server-authoritative user onto the session
+ * ([SessionRepository.adoptMerging]: the route does not serve voicePublic, the decor nor the
+ * activation, and an edit queued after this one must survive the confirmation). A 4xx refusal
+ * (validation) can never succeed on retry: it is permanent, so the edit rolls back at once instead
+ * of spinning the lane. An exhausted edit reverts the optimistic paint to the gateway's truth; the
+ * screen that queued it also restores its snapshot and reopens the editor.
  */
 public class UpdateProfileHandler @Inject constructor(
     private val userRepository: UserRepository,
@@ -38,15 +41,28 @@ public class UpdateProfileHandler @Inject constructor(
         json.withPayload<UpdateProfileRequest>(row) { request ->
             when (val result = userRepository.updateProfile(request)) {
                 is NetworkResult.Success -> {
-                    sessionRepository.adopt(result.data)
+                    sessionRepository.adoptMerging(result.data, deliveredCmid = row.cmid)
                     SendResult.Success
                 }
-                is NetworkResult.Failure -> SendResult.TransientFailure
+                is NetworkResult.Failure -> result.error.httpStatus.toProfileFailure()
             }
         }
 
     override suspend fun onExhausted(row: OutboxEntity) {
         sessionRepository.refresh()
+    }
+
+    private fun Int?.toProfileFailure(): SendResult = when {
+        this == HTTP_GONE -> SendResult.Success
+        this == null || this in HTTP_RETRYABLE -> SendResult.TransientFailure
+        this in HTTP_CLIENT_ERRORS -> SendResult.PermanentFailure("Profile edit refused: HTTP $this")
+        else -> SendResult.TransientFailure
+    }
+
+    private companion object {
+        const val HTTP_GONE = 410
+        val HTTP_RETRYABLE = setOf(401, 408, 429)
+        val HTTP_CLIENT_ERRORS = 400..499
     }
 }
 

@@ -180,6 +180,30 @@ final class MessageStateSaidOnceTests: XCTestCase {
         XCTAssertEqual(BubbleEditMark.resolve(editedAt: nil, isSaving: true), .saving)
     }
 
+    /// #11375 — un modérateur de plateforme modifie le message d'un autre à
+    /// visage découvert : la marque le dit, et l'enregistrement en cours garde
+    /// la priorité (c'est l'éditeur qui regarde sa propre édition partir).
+    func test_editMarkResolve_byModerator_returnsTheModeratorMark() {
+        XCTAssertEqual(BubbleEditMark.resolve(editedAt: Date(), isSaving: false, byModerator: true), .editedByModerator)
+        XCTAssertEqual(BubbleEditMark.resolve(editedAt: Date(), isSaving: true, byModerator: true), .saving)
+        XCTAssertNil(BubbleEditMark.resolve(editedAt: nil, isSaving: false, byModerator: true))
+    }
+
+    /// Le libellé du modérateur n'est pas celui de l'auteur — à l'œil comme à l'oreille.
+    func test_editMarkSpokenLabel_byModerator_differsFromTheAuthorsLabel() {
+        let byModerator = BubbleEditMark.spokenLabel(byModerator: true)
+        let byAuthor = BubbleEditMark.spokenLabel(byModerator: false)
+        XCTAssertFalse(byModerator.isEmpty)
+        XCTAssertNotEqual(byModerator, byAuthor)
+    }
+
+    /// Le pied d'un message modifié par un modérateur porte les MOTS : plus large que le crayon seul.
+    func test_rowFooter_editedByModerator_isWiderThanThePencilAlone() {
+        let byModerator = footerWidth(receivedFooter(showsTranslate: false, edit: .editedByModerator), actions: .none)
+        let pencil = footerWidth(receivedFooter(showsTranslate: false, edit: .edited), actions: .none)
+        XCTAssertGreaterThan(byModerator, pencil)
+    }
+
     /// Le crayon vit DANS le pied : un pied « modifié » est plus large que le
     /// même pied sans l'état, en rangée comme en compact (émoji seul).
     func test_rowFooter_editedMessage_rendersPencilInFooter() {

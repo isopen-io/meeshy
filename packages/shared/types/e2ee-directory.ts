@@ -222,25 +222,6 @@ export type E2EEDevicesMismatch = {
   readonly stale: readonly E2EEDeviceRef[];
 };
 
-/**
- * Un appareil chiffré de MON compte, tel que l'écran « Mes appareils chiffrés »
- * le montre (#13009). Servi au seul propriétaire du compte : la plateforme, le
- * modèle (« iPhone », jamais « iPhone de Jean ») et les dates sont des
- * métadonnées, aucune clé n'y voyage. L'approbation, elle, ne se lit jamais
- * ici : elle vit sur chaque appareil (spec § 3.5).
- */
-export type E2EEOwnDevice = {
-  readonly deviceId: number;
-  readonly registrationId: number;
-  /** Une valeur de `e2eePlatformSchema` à l'enrôlement ; un client tolère une valeur qu'il ne connaît pas. */
-  readonly platform: string;
-  readonly label: string | null;
-  readonly createdAt: string;
-  readonly lastSeenAt: string;
-  /** L'appareil de la session qui demande. */
-  readonly current: boolean;
-};
-
 /** Un bundle servi pour UN appareil : PQXDH § 2.4, une pré-clé unique EC au plus, une Kyber toujours. */
 export type E2EEDeviceBundle = {
   readonly deviceId: number;
@@ -249,6 +230,23 @@ export type E2EEDeviceBundle = {
   readonly signedPreKey: z.infer<typeof e2eeSignedPreKeySchema>;
   readonly kyberPreKey: z.infer<typeof e2eeSignedPreKeySchema> & { readonly lastResort: boolean };
   readonly preKey: z.infer<typeof e2eeOneTimePreKeySchema> | null;
+};
+
+/**
+ * Un de MES appareils chiffrés, tel que `GET /e2ee/devices` le sert à son seul
+ * propriétaire (#13014). Aucune clé, aucune session : de quoi le reconnaître
+ * (plateforme, libellé, dates) et savoir lequel est celui de la session appelante.
+ * Un contact ne lit jamais ces champs (`/e2ee/keys/:userId/devices` n'en sert aucun).
+ */
+export type E2EEOwnDevice = {
+  readonly deviceId: number;
+  readonly registrationId: number;
+  /** `unknown` pour une ligne écrite hors du schéma d'enrôlement : jamais une plateforme devinée. */
+  readonly platform: z.infer<typeof e2eePlatformSchema> | 'unknown';
+  readonly label: string | null;
+  readonly enrolledAt: string;
+  readonly lastSeenAt: string;
+  readonly current: boolean;
 };
 
 /** Une enveloppe servie à SON appareil destinataire. */

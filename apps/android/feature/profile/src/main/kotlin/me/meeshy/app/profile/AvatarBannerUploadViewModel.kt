@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.media.MediaRepository
 import me.meeshy.sdk.media.MediaUploadItem
+import me.meeshy.sdk.model.ProfileSnapshot
 import me.meeshy.sdk.model.AvatarBannerApply
 import me.meeshy.sdk.model.AvatarBannerUpload
 import me.meeshy.sdk.model.ImageUploadTarget
@@ -91,7 +92,9 @@ class AvatarBannerUploadViewModel @Inject constructor(
                 }
                 when (val confirm = confirm(target, url)) {
                     is NetworkResult.Success -> {
-                        sessionRepository.adopt(confirm.data)
+                        sessionRepository.adopt(
+                            ProfileSnapshot.mergingServerUser(confirm.data, sessionRepository.currentUser.value),
+                        )
                         _state.update { it.copy(uploading = null) }
                     }
                     is NetworkResult.Failure -> {

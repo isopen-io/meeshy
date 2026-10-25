@@ -147,6 +147,33 @@ describe('message:edited — le fil suit le texte modifié', () => {
     expect(row?.translations).toEqual([]);
   });
 
+  /* #11375 — la modification d'un modérateur se dit à tous, et l'auteur qui réécrit l'efface. */
+  test('l’auteur d’une modification faite par un modérateur rejoint la rangée', () => {
+    const client = seeded([original()]);
+
+    editWith(client, edited({ editedById: 'u-mod', editedByRole: 'MODERATOR' }));
+
+    expect(rowOf(client)?.editedById).toBe('u-mod');
+    expect(rowOf(client)?.editedByRole).toBe('MODERATOR');
+  });
+
+  test('l’auteur qui réécrit après le modérateur efface la mention (null servi)', () => {
+    const client = seeded([original({ isEdited: true, editedById: 'u-mod', editedByRole: 'MODERATOR' })]);
+
+    editWith(client, edited({ editedById: null, editedByRole: null }));
+
+    expect(rowOf(client)?.editedById).toBeUndefined();
+    expect(rowOf(client)?.editedByRole).toBeUndefined();
+  });
+
+  test('une charge d’une passerelle antérieure (clé absente) garde la mention en place', () => {
+    const client = seeded([original({ isEdited: true, editedById: 'u-mod', editedByRole: 'MODERATOR' })]);
+
+    editWith(client, edited());
+
+    expect(rowOf(client)?.editedById).toBe('u-mod');
+  });
+
   test('ce que l’édition ne touche pas reste : réactions, expéditeur, horloge de création', () => {
     const client = seeded([original()]);
 

@@ -33,7 +33,7 @@ import { verifierCible } from '../../../../routes/reports/target';
 import { admitMessageDelete, type DeleteAdmissionReader } from '../../../../services/messaging/messageDeleteAdmission';
 import { admitMessageEdit, type EditAdmissionReader } from '../../../../services/messaging/messageEditAdmission';
 import { mayMintShareLink } from '../../../../routes/links/utils/share-link-mint';
-import { actorHasMinimumRole } from '../../../../utils/conversation-authority';
+import { actorHasMinimumRole } from '@meeshy/shared/utils/conversation-authority';
 import type { ConversationActionInput, ConversationActions } from '@meeshy/shared/utils/conversation-action-policy';
 import type { ActionViewer, MessageActionInput, MessageActions } from '@meeshy/shared/utils/message-action-policy';
 
@@ -116,10 +116,22 @@ describe('parité des actions sur un message — admitMessageEdit / admitMessage
       message: {
         authorUserId: message.authorUserId,
         conversationId: CONVERSATION_ID,
-        conversation: { isActive: conversation.isActive, closedAt: conversation.closedAt == null ? null : new Date(conversation.closedAt), type: conversation.type },
+        // Le régime de la conversation voyage aussi : sans lui, la passerelle ne refusait jamais
+        // l'édition d'un message server/hybrid ici, et la divergence de la loi restait verte (#11381).
+        conversation: {
+          isActive: conversation.isActive,
+          closedAt: conversation.closedAt == null ? null : new Date(conversation.closedAt),
+          type: conversation.type,
+          encryptionMode: conversation.encryptionMode ?? null,
+        },
         createdAt: message.createdAt == null ? null : new Date(message.createdAt),
         messageType: message.messageType,
         metadata: message.metadata,
+        isViewOnce: message.isViewOnce ?? false,
+        effectFlags: message.effectFlags ?? 0,
+        isEncrypted: message.isEncrypted ?? false,
+        encryptionMode: message.encryptionMode ?? null,
+        attachments: (message.attachments ?? []).filter((piece) => piece != null),
       },
       now,
     });

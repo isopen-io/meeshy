@@ -132,7 +132,7 @@ function registerDeviceRoutes(fastify: FastifyInstance, deps: E2EERouteDeps): vo
   }));
 
   fastify.get('/e2ee/devices', { preValidation }, guarded(async (_request, reply, caller) =>
-    sendSuccess(reply, { devices: await deps.directory.listOwnDevices(caller) }),
+    sendSuccess(reply, { devices: await deps.directory.ownDevices(caller) }),
   ));
 
   fastify.put('/e2ee/devices/:deviceId/keys', writes, guarded(async (request, reply, caller) => {

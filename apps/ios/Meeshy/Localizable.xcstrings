@@ -56118,6 +56118,53 @@
         }
       }
     },
+    "bubble.meta.editedByModerator": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "عدّله مشرف"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "von einem Moderator bearbeitet"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "edited by a moderator"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "editado por un moderador"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "modifié par un modérateur"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "modificato da un moderatore"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "editado por um moderador"
+          }
+        }
+      }
+    },
     "bubble.meta.forwarded": {
       "extractionState": "manual",
       "localizations": {
@@ -94039,49 +94086,96 @@
         }
       }
     },
-    "conversation.encrypted": {
+    "conversation.encryption.endToEnd": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "محادثة مشفّرة"
+            "value": "مشفّرة من طرف إلى طرف"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Verschlüsselte Unterhaltung"
+            "value": "Ende-zu-Ende-verschlüsselt"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Encrypted conversation"
+            "value": "End-to-end encrypted"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Conversación cifrada"
+            "value": "Cifrado de extremo a extremo"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Conversation chiffrée"
+            "value": "Chiffré de bout en bout"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Conversazione crittografata"
+            "value": "Crittografato end-to-end"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Conversa criptografada"
+            "value": "Criptografado de ponta a ponta"
+          }
+        }
+      }
+    },
+    "conversation.encryption.server": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مشفّرة على الخادم"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auf dem Server verschlüsselt"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Encrypted on the server"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cifrado en el servidor"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chiffré sur le serveur"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crittografato sul server"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Criptografado no servidor"
           }
         }
       }
@@ -98326,6 +98420,100 @@
           "stringUnit": {
             "state": "translated",
             "value": "Código incorreto"
+          }
+        }
+      }
+    },
+    "conversation.lock.error.codeNotSaved": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تعذّر حفظ الرمز. حاول مرة أخرى."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Code konnte nicht gespeichert werden. Versuche es erneut."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The code couldn't be saved. Try again."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo guardar el código. Inténtalo de nuevo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le code n'a pas pu être enregistré. Réessayez."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossibile salvare il codice. Riprova."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não foi possível salvar o código. Tente novamente."
+          }
+        }
+      }
+    },
+    "conversation.lock.error.masterPinStillNeeded": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا تزال بعض المحادثات مقفلة. افتح قفلها أولاً."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Einige Unterhaltungen sind noch gesperrt. Entsperre sie zuerst."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Some conversations are still locked. Unlock them first."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Algunas conversaciones siguen bloqueadas. Desbloquéalas primero."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Des conversations sont encore verrouillées. Déverrouillez-les d'abord."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alcune conversazioni sono ancora bloccate. Sbloccale prima."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Algumas conversas ainda estão bloqueadas. Desbloqueie-as primeiro."
           }
         }
       }
@@ -139807,6 +139995,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Responder"
+          }
+        }
+      }
+    },
+    "notifications.reply_refused.locked_conversation": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لم يتم إرسال الرد: افتح المحادثة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Antwort nicht gesendet: Öffne die Unterhaltung"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reply not sent: open the conversation"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Respuesta no enviada: abre la conversación"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Réponse non envoyée : ouvrez la conversation"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Risposta non inviata: apri la conversazione"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Resposta não enviada: abra a conversa"
           }
         }
       }

@@ -111,6 +111,7 @@ describe('la garde : aucune autre liste de rôles privilégiés', () => {
 const ADMINISTRATION_RANK_SITES: Readonly<Record<string, string>> = {
   'packages/shared/types/role-types.ts': '`isGlobalAdmin` — console et visibilité de la présence (directive 2026-08-25)',
   'packages/shared/utils/participant-helpers.ts': 'champs de console du contrat participant (`canAccessAdmin`, `canViewAuditLogs`…)',
+  'packages/shared/utils/message-edit-attribution.ts': 'qui rend compte d’une modération lit l’identité du modérateur — ADMIN et BIGBOSS, jamais un pair MODERATOR (#11375)',
   'services/gateway/src/jobs/backup-status-check.ts': 'alertes de sauvegarde, exploitation',
   'services/gateway/src/middleware/auth.ts': '`requireAdmin` — console d’administration',
   'services/gateway/src/middleware/authorize.ts': '`requireAdminRank` — rang d’administration (directive 2026-09-16)',

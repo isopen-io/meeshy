@@ -104,6 +104,7 @@ export class ZmqRequestSender {
       targetLanguages: uniqueTargetLanguages,
       conversationId: request.conversationId,
       modelType: request.modelType || 'basic',
+      ...(request.atRest === true ? { atRest: true } : {}),
       timestamp: Date.now()
     };
 

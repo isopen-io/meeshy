@@ -213,6 +213,12 @@ public enum MessageActionPolicy {
     // MARK: - Tables
 
     private static let moderatedTypes: Set<String> = ["group", "public", "global", "broadcast"]
+    /// `server`/`hybrid` (#11374, #11381) : la passerelle refuse toute édition (`server-encrypted-at-rest`).
+    private static let atRestRegimes: Set<String> = ["server", "hybrid"]
+
+    private static func sealedAtRest(_ mode: String?) -> Bool {
+        atRestRegimes.contains((mode ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased())
+    }
     private static let writeHierarchyFreeTypes: Set<String> = ["global", "direct"]
     private static let everyoneWriteRole = "everyone"
     private static let saveableKinds: Set<MessageContentKind> = [.image, .video, .audio, .file, .multi]
@@ -224,8 +230,10 @@ public enum MessageActionPolicy {
     /// `admitMessageEdit` — auteur 24 h, rôle global au-delà ou sur autrui — plus les refus propres au client.
     private static func editVerdict(_ context: MessageActionContext) -> EditVerdict? {
         let flags = context.content.flags
+        let atRest = sealedAtRest(context.conversation.encryptionMode)
+            || sealedAtRest(context.message.subject.encryptionMode)
         let offered = context.live && context.registered && context.hasText
-            && editableKinds.contains(context.content.kind) && !context.e2ee && !flags.viewOnce
+            && editableKinds.contains(context.content.kind) && !context.e2ee && !atRest && !flags.viewOnce
         guard offered, !context.conversation.isClosed else { return nil }
         if context.conversation.isGlobal && context.viewer.isDeclaredMinor { return nil }
         guard context.isAuthor else {

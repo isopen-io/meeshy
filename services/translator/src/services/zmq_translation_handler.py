@@ -255,7 +255,7 @@ class TranslationHandler:
                     pass
                 else:
                     # Log détaillé pour debug
-                    text_preview = str(request_data.get('text', ''))[:100] if request_data.get('text') else '<empty>'
+                    text_length = len(str(request_data.get('text') or ''))
                     targets = request_data.get('targetLanguages', [])
                     msg_id = request_data.get('messageId', '<no-id>')
                     conv_id = request_data.get('conversationId', '<no-conv>')
@@ -263,7 +263,7 @@ class TranslationHandler:
                     logger.warning(
                         f"⚠️ [TRANSLATOR] Requête de traduction invalide: "
                         f"type={message_type}, messageId={msg_id}, conversationId={conv_id}, "
-                        f"has_text={bool(request_data.get('text'))}, text_preview='{text_preview}', "
+                        f"has_text={bool(request_data.get('text'))}, text_length={text_length}, "
                         f"has_targets={bool(targets)}, targets={targets}, "
                         f"all_keys={all_keys}"
                     )
@@ -349,11 +349,12 @@ class TranslationHandler:
                 source_language=request_data.get('sourceLanguage', 'fr'),
                 target_languages=request_data.get('targetLanguages', []),
                 conversation_id=request_data.get('conversationId', 'unknown'),
-                model_type=request_data.get('modelType', 'basic')
+                model_type=request_data.get('modelType', 'basic'),
+                at_rest=request_data.get('atRest') is True
             )
             
             logger.info(f"🔧 [TRANSLATOR] Tâche créée: {task.task_id} pour {task.conversation_id} ({len(task.target_languages)} langues)")
-            logger.info(f"📝 [TRANSLATOR] Détails: texte='{task.text[:50]}...', source={task.source_language}, target={task.target_languages}, modèle={task.model_type}")
+            logger.info(f"📝 [TRANSLATOR] Détails: {len(task.text)} caractères, source={task.source_language}, target={task.target_languages}, modèle={task.model_type}, auRepos={task.at_rest}")
             
             # Enfiler la tâche dans la pool appropriée
             success = await self.pool_manager.enqueue_task(task)
@@ -448,8 +449,7 @@ class TranslationHandler:
                 logger.error(f"   📋 Task ID: {task_id}")
                 logger.error(f"   📋 Message ID: {result.get('messageId')}")
                 logger.error(f"   📋 Source: {result.get('sourceLanguage')} -> Target: {target_language}")
-                logger.error(f"   📋 Texte original: {result.get('originalText', 'N/A')}")
-                logger.error(f"   📋 Texte traduit: '{translated_text}'")
+                logger.error(f"   📋 Texte traduit: {len(translated_text or '')} caractères")
                 logger.error(f"   📋 Modèle utilisé: {result.get('modelType', 'unknown')}")
                 logger.error(f"   📋 Worker: {result.get('workerName', 'unknown')}")
                 logger.error(f"   📋 Raison: {self._get_translation_error_reason(translated_text)}")
