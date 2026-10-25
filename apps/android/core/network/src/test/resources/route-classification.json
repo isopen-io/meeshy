@@ -304,6 +304,7 @@
     "GET /api/v1/conversations/check-identifier/:identifier",
     "GET /api/v1/directory/availability",
     "GET /api/v1/directory/people",
+    "GET /api/v1/e2ee/devices",
     "GET /api/v1/e2ee/devices/self/prekey-count",
     "GET /api/v1/e2ee/envelopes",
     "GET /api/v1/e2ee/keys/:userId",

@@ -31,6 +31,7 @@ import {
   type E2EEDeviceBundle,
   type E2EEEnrollDeviceRequest,
   type E2EEErrorCode,
+  type E2EEOwnDevice,
   type E2EEPublishKeysRequest,
 } from '@meeshy/shared/types/e2ee-directory';
 import { unsetOrNull } from '../../utils/prisma-unset';
@@ -363,6 +364,20 @@ export class E2EEDirectory {
   async listDevices(userId: string): Promise<{ deviceId: number; registrationId: number }[]> {
     const devices = await this.activeDevices(userId);
     return devices.map((device) => ({ deviceId: device.deviceId, registrationId: device.registrationId }));
+  }
+
+  /** Mes appareils actifs, pour moi seul : métadonnées, jamais de clé (#13009). */
+  async listOwnDevices(caller: { userId: string; sessionId: string }): Promise<E2EEOwnDevice[]> {
+    const devices = await this.activeDevices(caller.userId);
+    return devices.map((device) => ({
+      deviceId: device.deviceId,
+      registrationId: device.registrationId,
+      platform: device.platform,
+      label: device.label ?? null,
+      createdAt: device.createdAt.toISOString(),
+      lastSeenAt: device.lastSeenAt.toISOString(),
+      current: device.sessionId === caller.sessionId,
+    }));
   }
 
   /**
