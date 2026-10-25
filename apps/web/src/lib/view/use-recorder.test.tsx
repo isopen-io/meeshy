@@ -479,3 +479,35 @@ describe('useRecorder — demande de micro abandonnée pendant `requesting` (#12
     expect(late.calls).toEqual({ start: 0, release: 1, hold: 0 });
   });
 });
+
+/**
+ * #12908 — `engine.stop()` est le seul à fermer l'`AudioContext` et la boucle
+ * du vumètre. Quitter le fil pendant un enregistrement doit l'appeler, comme
+ * l'annulation : sinon les deux survivent jusqu'au rechargement, ce qui dans
+ * la coque Android peut prendre des jours.
+ */
+describe('useRecorder — quitter le fil pendant un enregistrement (#12908)', () => {
+  test('démonter pendant `recording` arrête le moteur (contexte audio et vumètre compris)', async () => {
+    let recorder!: Recorder;
+    const engine = fakeEngine({ ok: true, stream: fakeStream() });
+    mount({ onReady: (r) => (recorder = r), engine });
+
+    await act(async () => {
+      recorder.start();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    act(() => root.render(<div />));
+
+    expect(engine.stopCalls).toBe(1);
+  });
+
+  test('démonter au repos ne touche pas au moteur', () => {
+    const engine = fakeEngine({ ok: true, stream: fakeStream() });
+    mount({ onReady: () => {}, engine });
+
+    act(() => root.render(<div />));
+
+    expect(engine.stopCalls).toBe(0);
+  });
+});
