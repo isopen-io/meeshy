@@ -415,6 +415,44 @@ final class ConversationLockManagerTests: XCTestCase {
         XCTAssertTrue(sut.admitsOpening("orpheline"))
     }
 
+    /// Ce qui publie HORS de l'app (widget) ou met en cache (préchargement)
+    /// lit un JEU de verrous : tant que la liste est inconnue, il porte aussi
+    /// les conversations dont le trousseau tient le code.
+    func test_beforeTheListIsRead_theContentLockSet_includesTheConversationsWithAPin() throws {
+        let fixture = try makeLaunchFixture()
+        let vault = InMemoryConversationLockVault()
+        vault.write("code", for: "meeshy_lock_coffre")
+        vault.write("{}", for: "meeshy_lock_coffre.attempts")
+
+        let sut = makeLaunchedManager(fixture, protectedData: ProtectedData(available: false), vault: vault)
+
+        XCTAssertEqual(sut.contentLockedConversationIds, ["coffre"])
+    }
+
+    func test_onceTheListIsRead_theContentLockSet_isTheList() throws {
+        let fixture = try makeLaunchFixture()
+        fixture.standard.set(["coffre"], forKey: lockedIdsKey)
+        let vault = InMemoryConversationLockVault()
+        vault.write("code", for: "meeshy_lock_orpheline")
+
+        let sut = makeLaunchedManager(fixture, protectedData: ProtectedData(available: true), vault: vault)
+
+        XCTAssertEqual(sut.contentLockedConversationIds, ["coffre"])
+    }
+
+    /// Le widget et le préchargement lisent ce jeu-là par défaut, pas la
+    /// liste nue : garde de SOURCE, leur défaut de production est le singleton.
+    func test_theWidgetAndThePrefetcher_readTheContentLockSet() throws {
+        for path in [
+            "Meeshy/Features/Main/Services/WidgetDataManager.swift",
+            "Meeshy/Features/Main/ViewModels/ConversationListMessagePrefetcher.swift",
+        ] {
+            let code = AppSourceGuard.stripComments(try AppSourceGuard.unit(path))
+            XCTAssertTrue(code.contains("ConversationLockManager.shared.contentLockedConversationIds"), path)
+            XCTAssertFalse(code.contains("ConversationLockManager.shared.lockedConversationIds"), path)
+        }
+    }
+
     /// Première installation : ni liste, ni miroir, ni code au trousseau.
     /// « Aucun verrou » est alors un savoir, et l'extension l'apprend.
     func test_aFirstInstall_knowsThereIsNoLock_andTellsTheExtension() throws {
