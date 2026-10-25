@@ -58,10 +58,31 @@ actor EndToEndMessagingRuntime: EndToEndMessagingProviding, EndToEndDeviceManagi
     private let provisioning: any EndToEndDeviceProvisioning
     private var readyDevice: EndToEndReadyDevice?
     private var preparing: Preparation?
+    /// La dernière préparation annulée, qui peut encore écrire le coffre : la
+    /// suivante l'attend, quelle que soit la voie de l'annulation (audit #12769).
+    private var draining: Task<EndToEndReadyDevice, any Error>?
     /// Change à chaque oubli et à chaque préparation remplacée : une
     /// préparation reprise sous une autre génération ne rend rien (#12769).
     private var generation = 0
+    private var session: Session = .unbound
     private let relay = OutcomeRelay()
+
+    /// La session que le pont a ouverte : un appel pour un autre compte, resté
+    /// en file d'une session précédente, ne prépare ni ne rend rien (#12769).
+    private enum Session: Equatable {
+        /// Jamais liée (témoins, avant la première ouverture) : tout compte demandé.
+        case unbound
+        case open(String)
+        case closed
+
+        func admits(_ userId: String) -> Bool {
+            switch self {
+            case .unbound: true
+            case .open(let current): current == userId
+            case .closed: false
+            }
+        }
+    }
 
     /// La préparation en vol, liée au compte qui l'a demandée.
     private struct Preparation {
@@ -81,6 +102,7 @@ actor EndToEndMessagingRuntime: EndToEndMessagingProviding, EndToEndDeviceManagi
     /// remplacée, et un appareil n'est rendu, ni gardé, que s'il est celui du
     /// compte demandé sous la génération où il a été demandé (#12769).
     func ready(for userId: String) async throws -> EndToEndReadyDevice {
+        guard session.admits(userId) else { throw CancellationError() }
         if let readyDevice, readyDevice.device.userId == userId { return readyDevice }
         let demandedUnder = preparation(for: userId)
         let outcome = await demandedUnder.task.result
@@ -92,12 +114,19 @@ actor EndToEndMessagingRuntime: EndToEndMessagingProviding, EndToEndDeviceManagi
         return device
     }
 
+    /// Une préparation remplacée écrit encore le coffre et le trousseau
+    /// partagés : la suivante attend sa fin avant de commencer (audit #12769).
     private func preparation(for userId: String) -> Preparation {
         if let preparing, preparing.userId == userId { return preparing }
         cancelPreparation()
+        let previous = draining
         let preparation = Preparation(
             userId: userId, generation: generation,
-            task: Task { [provisioning] in try await provisioning.ready(for: userId) }
+            task: Task { [provisioning] in
+                _ = await previous?.result
+                try Task.checkCancellation()
+                return try await provisioning.ready(for: userId)
+            }
         )
         preparing = preparation
         return preparation
@@ -106,6 +135,7 @@ actor EndToEndMessagingRuntime: EndToEndMessagingProviding, EndToEndDeviceManagi
     private func cancelPreparation() {
         guard let preparing else { return }
         preparing.task.cancel()
+        draining = preparing.task
         self.preparing = nil
         generation += 1
     }
@@ -118,6 +148,25 @@ actor EndToEndMessagingRuntime: EndToEndMessagingProviding, EndToEndDeviceManagi
         generation += 1
     }
 
+    /// L'ouverture d'une session : un autre compte que celui-ci n'est plus servi.
+    func open(session userId: String) {
+        if session != .open(userId) { forget() }
+        session = .open(userId)
+    }
+
+    /// La fermeture de la session : plus aucun compte n'est servi jusqu'à la suivante.
+    func close() {
+        session = .closed
+        forget()
+    }
+
+    /// La passerelle dit cet appareil délié pour CE compte : seul son appareil
+    /// prêt est oublié, la préparation d'un autre compte continue.
+    func forgetDevice(of userId: String) {
+        guard readyDevice?.device.userId == userId else { return }
+        readyDevice = nil
+    }
+
     func deliver<T: Sendable>(
         _ content: E2EEContent,
         from userId: String,
@@ -128,7 +177,7 @@ actor EndToEndMessagingRuntime: EndToEndMessagingProviding, EndToEndDeviceManagi
         do {
             return try await device.sealer.sealAndDeliver(content, to: peerUserId, deliver: deliver)
         } catch let error as MeeshyError where error.e2eeCode == E2EEErrorCode.deviceNotBound {
-            forget()
+            forgetDevice(of: userId)
             throw error
         }
     }
