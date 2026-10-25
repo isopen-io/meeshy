@@ -126,6 +126,8 @@ data class ChatUiState(
      * viewer's resolved content language, seeded once the session loads. Only the
      * DISPLAY fallback; [ChatViewModel.send] resolves it authoritatively per user. */
     val composerLanguageSeed: String = ComposerLanguage.DEFAULT,
+    /** L'auteur que les cadres de la retouche écrivent (#12734) ; `null` tant que la session n'est pas lue. */
+    val selfAuthor: me.meeshy.sdk.model.composer.look.ComposerLookPerson? = null,
     /** The in-flight/last "open"/"share" of a FILE attachment (tap → download → open),
      * driven by [ChatViewModel.onFileAttachmentOpen] / [ChatViewModel.onFileAttachmentShare].
      * `null` when nothing is downloading and nothing needs surfacing. */

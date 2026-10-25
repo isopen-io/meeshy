@@ -1,5 +1,6 @@
 package me.meeshy.app.chat
 
+import me.meeshy.sdk.model.composer.look.ComposerLookPerson
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -300,6 +301,9 @@ class ChatViewModel @Inject constructor(
                         composerLanguageSeed = sessionRepository.currentUser.value
                             ?.let { user -> LanguageResolver.resolveUserLanguage(user) }
                             ?: it.composerLanguageSeed,
+                        selfAuthor = sessionRepository.currentUser.value
+                            ?.let { user -> ComposerLookPerson.author(user.id, user.displayName, user.username) }
+                            ?: it.selfAuthor,
                     )
                 }
             }
