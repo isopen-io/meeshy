@@ -91,6 +91,20 @@ describe('POST /conversations/:id/messages — envoi libsignal (#3706)', () => {
     expect(res.json()).toMatchObject({ code: E2EE_ERROR_CODES.CLIENT_OUTDATED, error: E2EE_CLIENT_OUTDATED_MESSAGE });
   });
 
+  it("rend 409 E2EE_REGIME_CHANGED quand le régime a basculé depuis la rédaction (#12522, #12562)", async () => {
+    const handleMessage = jest.fn<() => Promise<unknown>>().mockResolvedValue({
+      success: false, error: 'Le chiffrement de cette conversation a changé', code: E2EE_ERROR_CODES.REGIME_CHANGED, data: null,
+    });
+    app = await buildApp(handleMessage);
+
+    const res = await send({ ...libsignalBody, encryptionMetadata: { protocol: 'libsignal-v1', senderDeviceId: 1, regimeEpoch: 4 } });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toMatchObject({ success: false, code: E2EE_ERROR_CODES.REGIME_CHANGED });
+    const request = handleMessage.mock.calls[0] as unknown as [{ encryptedPayload: Record<string, unknown> }];
+    expect(request[0].encryptedPayload).toMatchObject({ regimeEpoch: 4 });
+  });
+
   it("rend 403 E2EE_DEVICE_NOT_BOUND quand l'appareil émetteur n'est pas celui de la session", async () => {
     const handleMessage = jest.fn<() => Promise<unknown>>().mockResolvedValue({
       success: false, error: 'non lié', code: E2EE_ERROR_CODES.DEVICE_NOT_BOUND, data: null,

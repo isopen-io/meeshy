@@ -1,4 +1,5 @@
 import Foundation
+import MeeshySDK
 
 // Le contrat des routes `/api/v1/e2ee/*` (#3706), miroir Swift de
 // `packages/shared/types/e2ee-directory.ts`. Tout ce qui voyage ici est PUBLIC
@@ -130,25 +131,6 @@ public struct E2EEDeviceListing: Decodable, Equatable, Sendable {
 public struct E2EEUserDevices: Decodable, Equatable, Sendable {
     public let userId: String
     public let devices: [E2EEDeviceListing]
-}
-
-/// Une enveloppe servie à SON appareil. `recipientRegistrationId` dit pour quelle
-/// génération de la place elle a été chiffrée (#12592) : une enveloppe qui n'est
-/// pas pour la mienne ne s'ouvre pas, elle s'écarte.
-public struct E2EEServedEnvelope: Decodable, Equatable, Sendable {
-    public let id: String
-    public let messageId: String
-    public let conversationId: String
-    public let recipientRegistrationId: UInt32?
-    public let senderUserId: String
-    public let senderDeviceId: UInt32
-    public let type: Int
-    public let body: String
-    public let createdAt: String
-
-    public func isAddressed(to registrationId: UInt32) -> Bool {
-        recipientRegistrationId.map { $0 == registrationId } ?? true
-    }
 }
 
 public struct E2EEEnvelopePage: Decodable, Equatable, Sendable {

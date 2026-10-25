@@ -231,6 +231,30 @@ describe('resolveLastMessagePreviewGroup — la nature du dernier message', () =
     expect(group.lastMessageSystemEvent).toEqual({ key: 'system.encryption-enabled', params: { mode: 'e2ee' } });
   });
 
+  it("la désactivation du chiffrement de bout en bout devient une clé localisable qui nomme son auteur (#12522)", () => {
+    const group = resolveLastMessagePreviewGroup(
+      reader,
+      makeMessage({
+        messageType: 'system',
+        metadata: { kind: 'encryption-disabled', previousMode: 'e2ee', epoch: 2, actor: { participantId: 'p-alice', displayName: 'Alice' } },
+      }),
+      NOW,
+    );
+    expect(group.lastMessageSystemEvent).toEqual({ key: 'system.encryption-disabled', params: { actor: 'Alice' } });
+  });
+
+  it("la désactivation d'un chiffrement serveur reste un avis non typé, son texte faisant foi (#12522)", () => {
+    const group = resolveLastMessagePreviewGroup(
+      reader,
+      makeMessage({
+        messageType: 'system',
+        metadata: { kind: 'encryption-disabled', previousMode: 'server', epoch: 2, actor: { participantId: 'p-alice', displayName: 'Alice' } },
+      }),
+      NOW,
+    );
+    expect(group.lastMessageSystemEvent).toEqual({ key: 'system.generic', params: {} });
+  });
+
   it('un message système que le serveur ne sait pas typer rend system.generic', () => {
     const group = resolveLastMessagePreviewGroup(reader, makeMessage({ messageType: 'system', metadata: null }), NOW);
     expect(group.lastMessageSystemEvent).toEqual({ key: 'system.generic', params: {} });

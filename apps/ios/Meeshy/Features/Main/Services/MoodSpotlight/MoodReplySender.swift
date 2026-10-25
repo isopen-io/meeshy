@@ -1,4 +1,5 @@
 import Foundation
+import MeeshyE2EE
 import MeeshySDK
 
 /// Envoie une réponse à une humeur en `storyReplyToId` dans la conversation
@@ -15,7 +16,7 @@ final class MoodReplySender: MoodReplySending {
 
     private let conversations: ConversationServiceProviding
     private let messages: MessageServiceProviding
-    private let encryptor: DirectMessageEncrypting
+    private let endToEnd: any EndToEndMessagingProviding
     private let replyQueue: NotificationReplyQueueing
     private let injectedPersistence: OptimisticMessagePersisting?
     private let currentUserId: @MainActor () -> String?
@@ -37,7 +38,7 @@ final class MoodReplySender: MoodReplySending {
     init(
         conversations: ConversationServiceProviding = ConversationService.shared,
         messages: MessageServiceProviding = MessageService.shared,
-        encryptor: DirectMessageEncrypting = SessionManager.shared,
+        endToEnd: any EndToEndMessagingProviding = EndToEndMessagingRuntime.shared,
         replyQueue: NotificationReplyQueueing = OfflineQueue.shared,
         messagePersistence: OptimisticMessagePersisting? = nil,
         currentUserId: @escaping @MainActor () -> String? = { AuthManager.shared.currentUser?.id },
@@ -49,7 +50,7 @@ final class MoodReplySender: MoodReplySending {
     ) {
         self.conversations = conversations
         self.messages = messages
-        self.encryptor = encryptor
+        self.endToEnd = endToEnd
         self.replyQueue = replyQueue
         self.injectedPersistence = messagePersistence
         self.currentUserId = currentUserId
@@ -58,21 +59,42 @@ final class MoodReplySender: MoodReplySending {
     }
 
     func sendReply(_ text: String, to entry: StatusEntry) async throws -> String {
-        let conversationId = try await DirectConversationResolver.resolve(with: entry.userId, conversations: conversations).id
+        let conversation = try await DirectConversationResolver.resolve(with: entry.userId, conversations: conversations)
         let language = ConversationViewModel.composeLanguage(for: text, preferred: await composingLanguages())
-        let sealed = await seal(text, for: entry.userId, conversationId: conversationId)
-        guard !sealed.isEncrypted else {
-            _ = try await messages.send(conversationId: conversationId, request: SendMessageRequest(
-                content: sealed.content,
-                originalLanguage: language,
-                storyReplyToId: entry.id,
-                isEncrypted: true,
-                encryptionMode: "E2EE"
-            ))
-            return conversationId
+        guard EndToEndPlaintextLaw.isEndToEndConversation(conversation.encryptionMode) else {
+            try await sendThroughOutbox(text, language: language, storyId: entry.id, conversationId: conversation.id)
+            return conversation.id
         }
-        try await sendThroughOutbox(text, language: language, storyId: entry.id, conversationId: conversationId)
-        return conversationId
+        try await sendSealed(text, language: language, storyId: entry.id, to: entry.userId, conversationId: conversation.id)
+        return conversation.id
+    }
+
+    /// **Le chiffrement suit le RÉGIME de la conversation, jamais
+    /// l'opportunité** (#3707) — la MÊME règle que le composer. Dans une directe
+    /// chiffrée, la réponse part sous libsignal, pour chaque appareil, et
+    /// n'entre jamais dans la file (qui rejoue en clair). Ailleurs elle part en
+    /// clair, même vers un pair qui a des clés : la passerelle y refuse un chiffré.
+    private func sendSealed(_ text: String, language: String, storyId: String, to peerUserId: String, conversationId: String) async throws {
+        guard let senderUserId = currentUserId(), !senderUserId.isEmpty else { throw EndToEndSendRefusal.recipientUnsealable }
+        let clientMessageId = ClientMessageId.generate()
+        let content = E2EEContent(
+            text: text, language: language, replyTo: nil,
+            conversationId: conversationId, clientMessageId: clientMessageId, sentAt: Date()
+        )
+        await endToEnd.remember(content, from: senderUserId, as: [clientMessageId])
+        let messages = messages
+        let sent = try await endToEnd.deliver(content, from: senderUserId, to: peerUserId) { sealed in
+            do {
+                return try await messages.send(conversationId: conversationId, request: .libsignal(
+                    clientMessageId: clientMessageId, storyReplyToId: storyId, senderDeviceId: sealed.senderDeviceId,
+                    envelopes: sealed.envelopes, unapprovedOwnDevices: sealed.unapprovedOwnDevices
+                ))
+            } catch let error as MeeshyError {
+                if case .rejected(let rejection) = error, let mismatch = rejection.e2eeMismatch { throw mismatch }
+                throw error
+            }
+        }
+        await endToEnd.remember(content, from: senderUserId, as: [sent.id])
     }
 
     /// **La réponse en clair suit le chemin de toute réponse hors de la
@@ -106,19 +128,6 @@ final class MoodReplySender: MoodReplySending {
             guard !queued else { return }
             try? await messagePersistence.markOptimisticFailed(localId: item.clientMessageId, reason: error.localizedDescription)
             throw error
-        }
-    }
-
-    /// La MÊME règle que le composer d'une conversation directe : chiffré quand
-    /// une session E2EE existe avec le pair, en clair sinon (#8221) — une
-    /// réponse partie d'ici ne doit pas être moins protégée que la même
-    /// réponse tapée dans la conversation.
-    private func seal(_ text: String, for userId: String, conversationId: String) async -> (content: String, isEncrypted: Bool) {
-        do {
-            let sealed = try await encryptor.encryptMessage(Data(text.utf8), for: userId, conversationId: conversationId)
-            return (sealed.base64EncodedString(), true)
-        } catch {
-            return (text, false)
         }
     }
 }

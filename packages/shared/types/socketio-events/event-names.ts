@@ -329,6 +329,15 @@ export const SERVER_EVENTS = {
   PARTICIPANT_RIGHTS_UPDATED: 'participant:rights-updated',
   CONVERSATION_UPDATED: 'conversation:updated',
   /**
+   * Le régime de chiffrement d'une conversation a basculé (#12522) : activé ou
+   * désactivé, avec sa nouvelle époque. Part vers la room PERSONNELLE de chaque
+   * membre actif, pour que ses appareils changent de régime sans recharger
+   * (composeur, scellement, features serveur). Charge :
+   * `ConversationEncryptionChangedEventData`. Un ancien client l'ignore et lit
+   * toujours l'avis système et `conversation:updated`.
+   */
+  CONVERSATION_ENCRYPTION_CHANGED: 'conversation:encryption-changed',
+  /**
    * Emitted to the user-rooms of EVERY participant of a freshly-created
    * conversation — INCLUDING the creator. Replaces the previous overload
    * of `NOTIFICATION_NEW` (which was only sent to invitees, leaving the

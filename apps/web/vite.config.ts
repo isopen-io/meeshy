@@ -756,6 +756,18 @@ export default defineConfig({
            * un nom de plus dans la table de préchargement de l'entrée. Un nom
            * pour les deux : lues par les mêmes écrans (liste, fil, jonction).
            */
+          /**
+           * LA TABLE DES RÔLES PRIVILÉGIÉS (#11217) — `platform-privilege`
+           * (`@meeshy/shared`), lue par la loi d'actions (`message-action-policy`,
+           * chargée au geste) et par `participant-helpers`, que l'entrée lit pour
+           * `resolveParticipantAvatar`. Laissée à Rolldown, ce module partagé
+           * réorganisait les morceaux communs : `message-effect-flags`, jusque-là
+           * dans l'entrée, en sortait en morceau à part, et la première peinture
+           * passait le plafond (mesuré sur dev + le lot : 92,99 Ko, 93,01 en CI,
+           * contre 92,87 sur dev). Un nom à elle la laisse aux écrans qui la
+           * lisent : 92,91 Ko, la table des drapeaux revient dans l'entrée.
+           */
+          if (/\/utils\/platform-privilege\.[jt]s$/.test(id)) return 'role-law';
           if (/\/types\/(world-identity|guest-attachment-kind-rules)\.[jt]s$/.test(id)) return 'guest-world-law';
           if (id.endsWith('/src/lib/view/media-transport.ts')) return 'media-time';
           if (/\/utils\/game\/(levels|level-steps|level-wire|mint|rarity|boosts|personal-mission|photo-moments)\.[jt]s$/.test(id)) return 'game-law';

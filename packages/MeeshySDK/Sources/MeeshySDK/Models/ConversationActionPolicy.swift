@@ -7,11 +7,12 @@ import Foundation
 /// grille type × profil que la loi TypeScript a produite.
 ///
 /// Rang EFFECTIF de `conversation-authority` (`ConversationViewerAuthority`) :
-/// ADMIN ou BIGBOSS de plateforme MEMBRE ⇒ créateur, jamais au-dessus ;
-/// MODERATOR, AUDIT, ANALYST y sont des membres ; rang illisible < membre.
-/// Fermé en plus : un `direct` n'a pas d'autorité (ses rangs sont un ordre
-/// d'arrivée) ; Global ne se renomme, ne se quitte ni ne se supprime pour tous,
-/// et seuls ADMIN/BIGBOSS y invitent ; une conversation terminée ne se modifie
+/// rôle de plateforme PRIVILÉGIÉ (MODERATOR, ADMIN, BIGBOSS — `PlatformRole.privileged`,
+/// #11217) MEMBRE ⇒ créateur, jamais au-dessus ; AUDIT, ANALYST y sont des
+/// membres ; rang illisible < membre. Fermé en plus : un `direct` n'a pas
+/// d'autorité (ses rangs sont un ordre d'arrivée) ; Global ne se renomme, ne se
+/// quitte ni ne se supprime pour tous, et seuls les rôles privilégiés y
+/// invitent ; la console (`adminOpen`) reste à ADMIN/BIGBOSS ; une conversation terminée ne se modifie
 /// plus ; un type inconnu n'ouvre rien qui en dépende. L'appel suit
 /// `CallPermission.canStartCall` ; le badge suit
 /// `MessageActionPolicy.Conversation.isEndToEnd`, la loi qui retire les
@@ -70,7 +71,7 @@ public enum ConversationActionPolicy {
             )
         )
         let invites: Bool = {
-            if global { return viewer.isActiveMember && viewer.administersPlatform }
+            if global { return viewer.isActiveMember && viewer.moderatesPlatform }
             if conversation.type == "public" { return viewer.isActiveMember && registered }
             return authority && moderates
         }()

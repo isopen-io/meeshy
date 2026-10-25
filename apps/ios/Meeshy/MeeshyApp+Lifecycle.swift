@@ -136,19 +136,12 @@ extension MeeshyApp {
         case .reRegisterPushTokens:
             PushNotificationManager.shared.reRegisterTokenIfNeeded()
             VoIPPushManager.shared.forceReregister()
-        case .uploadE2EEBundle:
-            Task { await uploadE2EEBundle() }
+        case .startEndToEnd(let userId):
+            // #3707 — plus aucun bundle hérité (`/signal/keys`) n'est publié : l'annuaire
+            // libsignal par appareil le remplace, et les anciens clients le lisent encore.
+            EndToEndSessionBridge.shared.start(userId: userId ?? "")
         case .migrateKeychain:
             Task { await SessionManager.shared.migrateKeychainIfNeeded() }
-        }
-    }
-
-    private static func uploadE2EEBundle() async {
-        do {
-            let bundle = try E2EEService.shared.generatePublicBundle()
-            try await E2EAPI.shared.uploadBundle(bundle: bundle)
-        } catch {
-            Logger.e2ee.error("E2EE bundle upload failed: \(error)")
         }
     }
 
@@ -163,6 +156,8 @@ extension MeeshyApp {
             FriendshipCache.shared.clear()
         case .clearE2EESessions:
             Task { await SessionManager.shared.clearSessions() }
+        case .stopEndToEnd:
+            EndToEndSessionBridge.shared.stop()
         case .unbindCache:
             CacheAccountBinder.shared.bind(nil)
             Task { await CacheCoordinator.shared.stop() }

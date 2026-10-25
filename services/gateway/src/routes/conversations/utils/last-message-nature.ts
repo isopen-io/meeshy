@@ -207,6 +207,17 @@ function conversationNoticeEvent(notice: ConversationNotice): LastMessageSystemE
 }
 
 /**
+ * L'auteur d'une désactivation du chiffrement de BOUT EN BOUT (#12522). Une
+ * désactivation d'un mode serveur n'a pas de clé à elle : son texte de repli
+ * fait foi (`system.generic`).
+ */
+function encryptionDisabledActor(raw: Record<string, unknown> | null): string | null {
+  if (raw?.kind !== 'encryption-disabled' || raw.previousMode !== 'e2ee') return null;
+  const actor = asRecord(raw.actor);
+  return typeof actor?.displayName === 'string' && actor.displayName.length > 0 ? actor.displayName : null;
+}
+
+/**
  * L'événement système localisable d'un message système, ou `null` pour un
  * message ordinaire ou une synthèse d'appel (portée par `callSummary`). Jamais
  * le texte français stocké dans `content`.
@@ -224,6 +235,8 @@ export function systemEventFromMessage(message: SystemEventSource): LastMessageS
   if (raw?.kind === 'encryption-enabled' && typeof raw.mode === 'string' && ENCRYPTION_MODES.has(raw.mode)) {
     return { key: 'system.encryption-enabled', params: { mode: raw.mode } };
   }
+  const disabledBy = encryptionDisabledActor(raw);
+  if (disabledBy) return { key: 'system.encryption-disabled', params: { actor: disabledBy } };
   return { key: 'system.generic', params: {} };
 }
 

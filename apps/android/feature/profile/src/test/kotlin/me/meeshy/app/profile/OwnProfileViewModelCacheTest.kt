@@ -18,7 +18,10 @@ import me.meeshy.sdk.model.TimelinePoint
 import me.meeshy.sdk.model.UserStats
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.cache.SystemCacheClock
+import me.meeshy.sdk.friend.FriendshipCache
 import me.meeshy.sdk.session.SessionRepository
+import me.meeshy.sdk.status.StatusBarCache
 import me.meeshy.sdk.user.ProfileStatsCacheRepository
 import me.meeshy.sdk.user.UserRepository
 import org.junit.After
@@ -71,6 +74,8 @@ class OwnProfileViewModelCacheTest {
             userRepository = userRepo,
             statsCache = statsCache,
             workManager = mockk(relaxed = true),
+            friendshipCache = FriendshipCache(),
+            statusBarCache = StatusBarCache(SystemCacheClock),
         )
     }
 

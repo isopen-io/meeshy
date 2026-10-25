@@ -109,11 +109,12 @@ describe('MessagingService.handleMessage — envoi libsignal par appareil (#3706
   const conversationIn = (regime: { encryptionMode: string | null; encryptionEnabledAt: Date | null }) =>
     mockPrisma.conversation.findUnique.mockResolvedValue({ id: conversationId, type: 'direct', ...regime });
 
-  const relaySend = (envelopes = [{ userId: bobUserId, deviceId: 1, registrationId: 201, type: 3 as const, body: SENTINEL }], content = '') =>
+  const relaySend = (envelopes = [{ userId: bobUserId, deviceId: 1, registrationId: 201, type: 3 as const, body: SENTINEL }], content = '', regimeEpoch: number | null = 0) =>
     ({
       conversationId, content, originalLanguage: 'fr',
       encryptedPayload: {
-        ciphertext: LIBSIGNAL_PROTOCOL, mode: 'e2ee', protocol: LIBSIGNAL_PROTOCOL, senderDeviceId: 1, regimeEpoch: 0,
+        ciphertext: LIBSIGNAL_PROTOCOL, mode: 'e2ee', protocol: LIBSIGNAL_PROTOCOL, senderDeviceId: 1,
+        ...(regimeEpoch === null ? {} : { regimeEpoch }),
         relay: { protocol: LIBSIGNAL_PROTOCOL, senderDeviceId: 1, sessionId: senderSession, unapprovedOwnDevices: [], envelopes },
       },
     }) as unknown as MessageRequest;
@@ -226,6 +227,72 @@ describe('MessagingService.handleMessage — envoi libsignal par appareil (#3706
 
     expect(response.code).toBe(E2EE_ERROR_CODES.REGIME_CHANGED);
     expect(mockPrisma.message.create).not.toHaveBeenCalled();
+  });
+
+  describe("l'époque du régime (#12522)", () => {
+    const ENVELOPE = [{ userId: bobUserId, deviceId: 1, registrationId: 201, type: 3 as const, body: SENTINEL }];
+
+    it("refuse 409 E2EE_REGIME_CHANGED un chiffré scellé sous une époque périmée, sans rien écrire", async () => {
+      conversationIn({ ...E2EE, encryptionEpoch: 3 } as never);
+
+      const response = await service.handleMessage(relaySend(ENVELOPE, '', 1), senderParticipantId);
+
+      expect(response.success).toBe(false);
+      expect(response.code).toBe(E2EE_ERROR_CODES.REGIME_CHANGED);
+      expect(mockPrisma.message.create).not.toHaveBeenCalled();
+      expect(store.collections.MessageEnvelope.rows).toHaveLength(0);
+    });
+
+    it("admet un chiffré scellé sous l'époque courante", async () => {
+      conversationIn({ ...E2EE, encryptionEpoch: 3 } as never);
+
+      const response = await service.handleMessage(relaySend(ENVELOPE, '', 3), senderParticipantId);
+
+      expect(response.success).toBe(true);
+    });
+
+    it("lit l'époque d'une conversation jamais basculée comme 0", async () => {
+      conversationIn(E2EE);
+
+      const response = await service.handleMessage(relaySend(ENVELOPE, '', 0), senderParticipantId);
+
+      expect(response.success).toBe(true);
+    });
+
+    it("admet un envoi qui ne déclare aucune époque (client antérieur à #12522)", async () => {
+      conversationIn({ ...E2EE, encryptionEpoch: 3 } as never);
+
+      const response = await service.handleMessage(relaySend(ENVELOPE, '', null), senderParticipantId);
+
+      expect(response.success).toBe(true);
+    });
+  });
+
+  describe('un chiffré dans une conversation en clair est refusé, jamais rangé en bulle vide (#12562)', () => {
+    const legacyCiphertext = () =>
+      ({
+        conversationId, content: '[Encrypted]', originalLanguage: 'fr',
+        encryptedPayload: { ciphertext: 'Y2hpZmZyZS1oZXJpdGU=', mode: 'e2ee', v: 1 },
+      }) as unknown as MessageRequest;
+
+    it('refuse 409 E2EE_REGIME_CHANGED un chiffré sans enveloppes, et rien n’est rangé', async () => {
+      conversationIn(CLEAR);
+
+      const response = await service.handleMessage(legacyCiphertext(), senderParticipantId);
+
+      expect(response.success).toBe(false);
+      expect(response.code).toBe(E2EE_ERROR_CODES.REGIME_CHANGED);
+      expect(mockPrisma.message.create).not.toHaveBeenCalled();
+    });
+
+    it('un texte en clair dans une conversation en clair garde son chemin', async () => {
+      conversationIn(CLEAR);
+
+      const response = await service.handleMessage({ conversationId, content: 'Bonjour', originalLanguage: 'fr' } as unknown as MessageRequest, senderParticipantId);
+
+      expect(response.success).toBe(true);
+      expect(mockPrisma.message.create.mock.calls[0][0].data).toMatchObject({ content: 'Bonjour', isEncrypted: false });
+    });
   });
 
   it('défait le message si ses enveloppes ne peuvent pas être rangées', async () => {
