@@ -46,6 +46,8 @@ struct ThemedConversationRow: View {
     /// Falls back to the raw preview if the conversation has no
     /// translations attached (e.g., gateway not yet providing them).
     var preferredContentLanguages: [String] = []
+    /// Le clair local du dernier message scellé (#12968), lu par la liste.
+    var deviceText: ConversationPreviewDeviceText? = nil
     /// « Rejoindre » l'appel en cours, offert par la ligne d'aperçu (#7548).
     var onJoinLiveCall: (() -> Void)? = nil
 
@@ -274,7 +276,7 @@ struct ThemedConversationRow: View {
         if isContentLocked {
             parts.append(ConversationLockedPreviewLine.label)
         } else if let spoken = ConversationPreviewLine.spokenPreview(
-            for: conversation, preferredLanguages: preferredContentLanguages, now: Date()
+            for: conversation, preferredLanguages: preferredContentLanguages, now: Date(), readOnDevice: deviceText
         ) {
             parts.append(String(format: String(localized: "accessibility.last_message_preview", bundle: .main), spoken))
         }
@@ -490,7 +492,8 @@ struct ThemedConversationRow: View {
                 accent: accent,
                 isDark: isDark,
                 font: MeeshyFont.relative(MeeshyFont.subheadSize),
-                onJoin: onJoinLiveCall
+                onJoin: onJoinLiveCall,
+                readOnDevice: deviceText
             )
         }
     }
@@ -554,7 +557,8 @@ extension ThemedConversationRow: @MainActor Equatable {
         lhs.isSelected == rhs.isSelected &&
         lhs.draftSummary == rhs.draftSummary &&
         lhs.isContentLocked == rhs.isContentLocked &&
-        lhs.preferredContentLanguages == rhs.preferredContentLanguages
+        lhs.preferredContentLanguages == rhs.preferredContentLanguages &&
+        lhs.deviceText == rhs.deviceText
     }
 }
 

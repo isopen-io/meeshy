@@ -158,14 +158,15 @@ final class ExtensionShareDispatcher: ShareDispatching {
     /// `{ data: { id, encryptionMode } }` — la création est idempotente et rend
     /// la directe EXISTANTE, éventuellement chiffrée. Une réponse qui ne dit pas
     /// le mode explicitement (`null` ou chaîne) compte comme chiffrée : on relaie
-    /// plutôt que d'envoyer en clair.
+    /// plutôt que d'envoyer en clair. `server` et `hybrid` reçoivent le clair,
+    /// que le serveur chiffre lui-même ; un mode inconnu se lit bout en bout (#12978).
     nonisolated static func createdDirect(fromResponse data: Data) -> CreatedDirect? {
         guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let payload = root["data"] as? [String: Any],
               let id = payload["id"] as? String, !id.isEmpty else { return nil }
         let mode = payload["encryptionMode"]
         let knownClear = payload.keys.contains("encryptionMode") && (mode is NSNull)
-        let encrypted = (mode as? String).map { !$0.isEmpty } ?? !knownClear
+        let encrypted = (mode as? String).map { EndToEndSendGate.requiresSeal(conversationEncryptionModes: [$0]) } ?? !knownClear
         return CreatedDirect(id: id, isEncrypted: encrypted)
     }
 

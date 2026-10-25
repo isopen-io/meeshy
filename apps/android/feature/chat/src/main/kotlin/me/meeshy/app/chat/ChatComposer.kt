@@ -168,6 +168,7 @@ internal fun ChatComposer(
     videoRetouch?.let { pending ->
         ChatVideoRetouchHost(
             pending = pending,
+            person = selfAuthor,
             onDeliver = { file ->
                 ioScope.launch { deliverVideo(pending, file) }
                 videoRetouch = null

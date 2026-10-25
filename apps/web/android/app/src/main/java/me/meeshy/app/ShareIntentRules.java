@@ -9,13 +9,14 @@ import java.util.Locale;
  *
  * Les plafonds bornent ce qui traverse le pont : un partage vient d'un tiers,
  * et ce sont les plafonds COMMUNS du partage (D10, #10949 :
- * {@code packages/shared/utils/share-limits.ts}, vingt fichiers, 500 Mio), les
- * memes que le service worker de la PWA ({@code public/sw-share-target.js}).
+ * {@code packages/shared/utils/share-limits.ts}, cent fichiers, 5 Gio depuis
+ * la revision du porteur du 2026-10-25, #12974), les memes que le service
+ * worker de la PWA ({@code public/sw-share-target.js}).
  */
 final class ShareIntentRules {
 
-    static final int MAX_FILES = 20;
-    static final long MAX_TOTAL_BYTES = 500L * 1024 * 1024;
+    static final int MAX_FILES = 100;
+    static final long MAX_TOTAL_BYTES = 5L * 1024 * 1024 * 1024;
     static final int MAX_TEXT_CHARS = 20_000;
     static final int MAX_NAME_CHARS = 100;
 

@@ -5,13 +5,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
@@ -33,30 +26,12 @@ internal fun ChatBottomBarHost(host: ChatHostContext) {
     LaunchedEffect(actions.trayNotices) {
         actions.trayNotices.collect { notice -> Toast.makeText(context, notice, Toast.LENGTH_LONG).show() }
     }
-    val scope = rememberCoroutineScope()
-    var retouching by remember { mutableStateOf<Pair<String, ChatRetouchPending>?>(null) }
-    retouching?.let { (id, piece) ->
-        ChatCaptureRetouchHost(
-            pending = piece,
-            person = actions.selfAuthor(),
-            onDeliver = { file ->
-                if (file.bytes !== piece.bytes) actions.replacePendingAttachment(id, file.bytes, file.fileName, file.mimeType)
-                retouching = null
-            },
-            onDismiss = { retouching = null },
-        )
-    }
+    val editPending = rememberPendingRetouch(actions)
     Column {
         ComposerPendingStrip(
             pending.items,
             onRemove = actions.removePendingAttachment,
-            onEdit = { item ->
-                scope.launch {
-                    val bytes = actions.readPendingBytes(item) ?: return@launch
-                    val piece = withContext(Dispatchers.Default) { ChatRetouchPending.of(bytes, item.fileName ?: "photo.jpg", item.mimeType) }
-                    if (piece != null) retouching = item.id to piece
-                }
-            },
+            onEdit = editPending,
         )
         MentionSuggestionStrip(
             mention = state.mention,

@@ -127,6 +127,104 @@ final class LiveShareDispatcherTests: XCTestCase {
         XCTAssertEqual(calls.first?.originalNames, ["IMG_0111.jpg", nil])
     }
 
+    // MARK: - Chiffrée sur le serveur ≠ chiffrée de bout en bout (#12978)
+
+    private func incomingPhoto() -> ShareSendRequest {
+        let incoming = ShareIncoming(media: [
+            ShareIncomingMedia(id: "s/0.jpg", mimeType: "image/jpeg", bytes: 4,
+                               fileURL: URL(fileURLWithPath: "/tmp/s/0.jpg"), originalName: "IMG_0112.jpg"),
+        ])
+        return ShareSendRequest(subject: .incoming(incoming), keptMessageIds: [], caption: "", captionPlacement: nil,
+                                grouping: .together, chosenDurationSeconds: nil, copyOnDevice: false)
+    }
+
+    private func served(_ id: String, mode: String?) -> ShareRecipient {
+        ShareRecipient(conversation: MeeshyConversation(id: id, identifier: id, type: .group, encryptionMode: mode))
+    }
+
+    /// Le serveur reçoit le clair en `server` et en `hybrid`, et le chiffre lui-même :
+    /// une photo venue d'une autre app y part.
+    func test_incomingMedia_toAConversationEncryptedOnTheServer_leaves() async {
+        for mode in ["server", "hybrid", "SERVER"] {
+            let sut = makeSUT()
+
+            let outcome = await sut.dispatcher.deliver(incomingPhoto(), to: served("c-\(mode)", mode: mode))
+
+            XCTAssertEqual(outcome, .queued(conversationId: "c-\(mode)"), "mode \(mode)")
+            let calls = await sut.queue.enqueuedMediaCalls
+            XCTAssertEqual(calls.count, 1, "mode \(mode) : la photo entre dans la file d'envoi")
+        }
+    }
+
+    func test_text_toAConversationEncryptedOnTheServer_leavesInClear() async throws {
+        let sut = makeSUT()
+        stubSend(sut.api, to: "c-srv")
+
+        let outcome = await sut.dispatcher.deliver(text("Salut"), to: served("c-srv", mode: "server"))
+
+        XCTAssertEqual(outcome, .sent(conversationId: "c-srv"))
+        XCTAssertEqual(try body(sut.api)["content"] as? String, "Salut")
+    }
+
+    /// Le bout en bout, et un mode que l'appareil ne connaît pas, restent fermés.
+    func test_incomingMedia_toAnEndToEndConversation_isRefusedAndSaysWhy() async {
+        for mode in ["e2ee", "inconnu"] {
+            let sut = makeSUT()
+
+            let outcome = await sut.dispatcher.deliver(incomingPhoto(), to: served("c-\(mode)", mode: mode))
+
+            guard case .failed(let reason) = outcome else { return XCTFail("mode \(mode) : reçu \(outcome)") }
+            XCTAssertFalse(reason.isEmpty, "le refus se dit à la ligne")
+            let calls = await sut.queue.enqueuedMediaCalls
+            XCTAssertTrue(calls.isEmpty, "mode \(mode) : rien n'entre dans la file, qui enverrait le clair")
+        }
+    }
+
+    func test_aPersonWhoseDirectIsEncryptedOnTheServer_receivesThePlainText() async throws {
+        let sut = makeSUT()
+        sut.creator.result = .success(MeeshyConversation(id: "dm-7", identifier: "dm-7", type: .direct, encryptionMode: "hybrid"))
+        stubSend(sut.api, to: "dm-7")
+
+        let outcome = await sut.dispatcher.deliver(text("Salut"), to: person("eve"))
+
+        XCTAssertEqual(outcome, .sent(conversationId: "dm-7"))
+    }
+
+    func test_theRecipientLine_isMarkedEncryptedOnlyForEndToEnd() {
+        XCTAssertFalse(served("a", mode: nil).isEncrypted)
+        XCTAssertFalse(served("b", mode: "server").isEncrypted)
+        XCTAssertFalse(served("c", mode: "hybrid").isEncrypted)
+        XCTAssertTrue(served("d", mode: "e2ee").isEncrypted)
+        XCTAssertTrue(served("e", mode: "E2EE").isEncrypted)
+        XCTAssertTrue(served("f", mode: "inconnu").isEncrypted)
+    }
+
+    // MARK: - Un refus de transfert se dit dans la langue du lecteur (#12978)
+
+    private final class RefusingForward: MessageForwardServiceProviding {
+        let outcome: ForwardOutcome
+        init(_ outcome: ForwardOutcome) { self.outcome = outcome }
+        func forward(message: Message, sourceConversationId: String?, to targetConversationId: String, chosenDurationSeconds: Int?, forwardedAttachmentIds: [String]?) async -> ForwardOutcome { outcome }
+        func forward(message: Message, sourceConversationId: String?, to target: ShareRecipient, chosenDurationSeconds: Int?, forwardedAttachmentIds: [String]?) async -> ForwardOutcome { outcome }
+    }
+
+    func test_aServerRefusalOfAText_isSaidByTheCatalog_whateverTheErrorType() async {
+        let refusals: [any Error] = [
+            MeeshyError.server(statusCode: 400, message: "Un message à vue unique ne peut pas être transféré"),
+            MeeshyError.rejected(APIRejection(statusCode: 400, code: "E2EE_PLAINTEXT_REFUSED",
+                                              message: "Cette conversation est chiffrée de bout en bout : le serveur n’accepte aucun message en clair")),
+        ]
+        let expected = [ForwardRefusalReason.viewOnce.explanation, ForwardRefusalReason.encryptedDestination.explanation]
+        for (error, explanation) in zip(refusals, expected) {
+            let sut = makeSUT()
+            sut.api.errorToThrow = error
+
+            let outcome = await sut.dispatcher.deliver(text("Salut"), to: conversation("c-9"))
+
+            XCTAssertEqual(outcome, .failed(reason: explanation))
+        }
+    }
+
     // MARK: - La conversation RENDUE décide du chiffrement
 
     func test_aPersonWhoseDirectComesBackEncrypted_receivesNoPlaintext() async {

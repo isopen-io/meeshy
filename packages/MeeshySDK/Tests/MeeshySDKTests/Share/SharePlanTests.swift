@@ -266,8 +266,8 @@ struct SharePlanTests {
     }
 
     @Test func limitsMirrorTheSharedPackage() {
-        #expect(ShareLimits.maxFiles == 20)
-        #expect(ShareLimits.maxTotalBytes == 500 * 1024 * 1024)
+        #expect(ShareLimits.maxFiles == 100)
+        #expect(ShareLimits.maxTotalBytes == 5 * 1024 * 1024 * 1024)
         #expect(ShareLimits.maxRecipients == 10)
         #expect(ShareLimits.maxPublicationMedia == 10)
     }
