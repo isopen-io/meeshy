@@ -252,12 +252,16 @@ export function useRecorder(params?: {
   }, []);
 
   // Nettoyage au DÉMONTAGE — un composeur fermé pendant un enregistrement ne
-  // laisse ni minuteur ni piste micro ouverte derrière lui.
+  // laisse ni minuteur ni piste micro ouverte derrière lui, ni le contexte
+  // audio et la boucle du vumètre que seul `engine.stop()` ferme (#12908).
   useEffect(() => {
     return () => {
       attemptRef.current += 1;
       stopMetering();
-      if (streamRef.current !== null) engine.release(streamRef.current);
+      if (streamRef.current !== null) {
+        void engine.stop();
+        engine.release(streamRef.current);
+      }
       releaseMicrophone();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- nettoyage de démontage seul, volontairement sans dépendance.
