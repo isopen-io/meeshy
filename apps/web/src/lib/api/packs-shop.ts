@@ -149,6 +149,12 @@ const CATALOGUED_ROUTES: Partial<Record<PackDomain, DomainRoutes>> = {
     bySlug: packsEndpoints.gloryFrameBySlug,
     install: packsEndpoints.gloryFrameBySlugInstall,
   },
+  'capture-frame': {
+    catalogue: packsEndpoints.captureFrame,
+    installed: packsEndpoints.captureFrameInstalled,
+    bySlug: packsEndpoints.captureFrameBySlug,
+    install: packsEndpoints.captureFrameBySlugInstall,
+  },
   wallpaper: {
     catalogue: packsEndpoints.wallpaper,
     installed: packsEndpoints.wallpaperInstalled,
@@ -186,9 +192,9 @@ const CATALOGUED_ROUTES: Partial<Record<PackDomain, DomainRoutes>> = {
 };
 
 /**
- * Un domaine que la passerelle ne monte pas encore (`capture-frame`) garde la
- * forme `/packs/<domaine>` : il répond 404, que `absentMeansEmpty` lit comme
- * une vitrine vide. La racine se déduit du catalogue, jamais d'un littéral.
+ * Un domaine que le catalogue généré ne porte pas encore garde la forme
+ * `/packs/<domaine>` : un ancien serveur répond 404, que `absentMeansEmpty` lit
+ * comme une vitrine vide. La racine se déduit du catalogue, jamais d'un littéral.
  */
 const PACKS_ROOT = packsEndpoints.shop.slice(0, -'/shop'.length);
 

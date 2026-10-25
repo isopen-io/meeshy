@@ -12,7 +12,8 @@
  * vaut un registre VIDE (celui des cadres de capture jusqu'au LC) : le moteur
  * se monte et répond une boutique vide, jamais des données inventées. Le
  * registre des cadres de gloire est publié depuis le L3 (#10154), produit par
- * `generate:glory-frames`.
+ * `generate:glory-frames` ; celui des cadres de capture depuis le LC (#10169),
+ * produit par `scripts/generate-capture-frame-packs.ts`.
  *
  * Le registre d'EXEMPLES (`packages/shared/design/packs/samples/glory-frame.json`,
  * demande porteur du 2026-10-11) n'est lu que sous `PACK_SAMPLES=1`, valeur
@@ -44,6 +45,7 @@ import { parseAvatarRingPackContract } from '@meeshy/shared/types/avatar-ring-de
 import { parseBannerFramePackContract } from '@meeshy/shared/types/banner-frame-design';
 import { parseGloryFramePackContract } from '@meeshy/shared/types/glory-frame-pack';
 import { gloryFrameAssets, parseGloryFrameContract } from '@meeshy/shared/types/glory-frames';
+import { FrameMoodFileSchema, captureFrameCount } from '@meeshy/shared/types/capture-frames';
 import { servablePackPreview } from '@meeshy/shared/types/glory-frame-atlas';
 import { PackRegistryOverrides, overlayPackIndex, type PackRegistryOverridesPrisma } from './PackRegistryOverrides';
 import { attachPackRegistryMetrics } from '../metrics/packRegistryMetrics';
@@ -220,15 +222,29 @@ function appearanceContractFiles(domain: PackDomain, input: unknown): ContractFi
 const APPEARANCE_DOMAINS: readonly PackDomain[] = ['wallpaper', 'banner', 'avatar-ring', 'banner-frame'];
 
 /**
+ * Le contrat d'un pack de CAPTURE (#10169, LC) est son fichier d'ambiance, lu par
+ * le schéma même des clients (`FrameMoodFileSchema`) : il compte ses cadres et
+ * n'ouvre AUCUN fichier au magasin — les couches `assets/` de scène restent
+ * embarquées (#10187). Un contrat d'une autre ambiance que le slug n'ouvre rien.
+ */
+function captureContractFiles(entry: PackIndexEntry, input: unknown): ContractFiles {
+  const parsed = FrameMoodFileSchema.safeParse(input);
+  if (!parsed.success || parsed.data.mood !== entry.slug) return NO_CONTRACT;
+  return { refs: [], frames: captureFrameCount(parsed.data), keys: [] };
+}
+
+/**
  * Les fichiers du contrat d'un pack, lu dans le magasin et vérifié contre son
  * empreinte. Cadres de gloire : la vignette de chaque cadre et, pour un cadre
  * complet (L3), son masque, ses couches et ses passes. Fonds, bannières et
- * contours : le nombre de modèles et leurs couches Lottie. Contrat illisible ou
+ * contours : le nombre de modèles et leurs couches Lottie. Cadres de capture :
+ * le nombre de cadres de l'ambiance, aucun fichier. Contrat illisible ou
  * altéré ⇒ rien.
  */
 function contractFiles(assetsDir: string, entry: PackIndexEntry): ContractFiles {
   const appearance = APPEARANCE_DOMAINS.includes(entry.domain);
-  if ((entry.domain !== 'glory-frame' && !appearance) || !ASSET_SRC.test(entry.contract.src)) return NO_CONTRACT;
+  const capture = entry.domain === 'capture-frame';
+  if ((entry.domain !== 'glory-frame' && !appearance && !capture) || !ASSET_SRC.test(entry.contract.src)) return NO_CONTRACT;
   const path = join(assetsDir, entry.contract.src);
   if (!existsSync(path)) return NO_CONTRACT;
   try {
@@ -236,6 +252,7 @@ function contractFiles(assetsDir: string, entry: PackIndexEntry): ContractFiles 
     if (createHash('sha256').update(bytes).digest('hex') !== entry.contract.sha256) return NO_CONTRACT;
     const input = JSON.parse(bytes.toString('utf8')) as unknown;
     if (appearance) return appearanceContractFiles(entry.domain, input);
+    if (capture) return captureContractFiles(entry, input);
     const thumbs = parseGloryFramePackContract(input)?.contract.frames.map((frame) => frame.thumb) ?? [];
     const layers = parseGloryFrameContract(input)?.contract.frames.flatMap(gloryFrameAssets) ?? [];
     return { refs: [...thumbs, ...layers], frames: thumbs.length, keys: [] };

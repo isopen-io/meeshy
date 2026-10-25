@@ -33,6 +33,8 @@ const APPEARANCE_REGISTRY_FILES = [
   'packages/shared/design/appearance/avatar-rings/packs.json',
   'packages/shared/design/appearance/banner-frames/packs.json',
   'packages/shared/design/packs/samples/wallpaper.json',
+  // Les douze ambiances de capture (#10169, LC) : couverture et contrat (le fichier d'ambiance).
+  'packages/shared/design/call-capture-frames/packs.json',
 ].map((file) => join(REPO_ROOT, file));
 
 /** Chaque `src` d'une référence de fichier du magasin, à n'importe quelle profondeur. */

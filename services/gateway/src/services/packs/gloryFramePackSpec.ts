@@ -79,8 +79,9 @@ export function framePackDetail(entry: PackIndexEntry, installed: boolean, itemC
 export const framePackSummary = ({ contractSchema: _schema, contract: _contract, strings: _strings, collections: _collections, ...summary }: FramePackDetail): FramePackSummary =>
   summary;
 
-const registryOf = (index: PackIndex): readonly RegistryPack<FramePackDetail>[] =>
-  index.entries('glory-frame').map((entry) => ({
+/** Le registre d'un domaine de CADRES (gloire, capture) projeté pour le moteur : un pack, son usage, son détail. */
+export const framePackRegistry = (index: PackIndex, domain: 'glory-frame' | 'capture-frame'): readonly RegistryPack<FramePackDetail>[] =>
+  index.entries(domain).map((entry) => ({
     slug: entry.slug,
     installedByDefault: entry.installedByDefault,
     removable: entry.removable,
@@ -100,7 +101,7 @@ export function gloryFramePackSpec(options: GloryFramePackSpecOptions): PackDoma
     domain: 'glory-frame',
     // Relu à chaque accès : une surcharge d'administration (#11275) s'applique sans redémarrer.
     get registry() {
-      return registryOf(options.index);
+      return framePackRegistry(options.index, 'glory-frame');
     },
     community: null,
     removalGuard: options.removalGuard ?? null,
