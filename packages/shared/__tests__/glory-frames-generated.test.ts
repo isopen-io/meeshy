@@ -125,7 +125,7 @@ describe('les packs (§ 5.10.5, PP1, PP2)', () => {
   it('chaque collection appartient à EXACTEMENT un pack, et chaque collection versionnée à un pack', () => {
     const owners = entries.flatMap((entry) => (entry.collections ?? []).map((collection) => collection.slug));
     expect(new Set(owners).size).toBe(owners.length);
-    const files = readdirSync(join(REPO_ROOT, 'packages/shared/design/glory-frames')).filter((file) => file.endsWith('.json') && !['packs.json', 'known-gaps.json'].includes(file));
+    const files = readdirSync(join(REPO_ROOT, 'packages/shared/design/glory-frames')).filter((file) => file.endsWith('.json') && !['packs.json', 'known-gaps.json', 'decor-texts.json'].includes(file));
     expect(files.map((file) => file.slice(0, -5)).sort()).toEqual([...owners].sort());
   });
 

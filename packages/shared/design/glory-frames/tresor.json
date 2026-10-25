@@ -204,7 +204,8 @@
                 32
               ],
               "contrast": 2.22,
-              "sample": "BOURSE"
+              "sample": "BOURSE",
+              "i18n": "game.frame.decor.purse"
             },
             "kicker": {
               "x": 540,
@@ -644,7 +645,8 @@
                 32
               ],
               "contrast": 2.22,
-              "sample": "BOURSE"
+              "sample": "BOURSE",
+              "i18n": "game.frame.decor.purse"
             },
             "kicker": {
               "x": 540,
@@ -1046,7 +1048,8 @@
                 52
               ],
               "contrast": 2.18,
-              "sample": "ESCARCELLE"
+              "sample": "ESCARCELLE",
+              "i18n": "game.frame.decor.pouch"
             },
             "kicker": {
               "x": 540,
@@ -1435,7 +1438,8 @@
                 46
               ],
               "contrast": 2.18,
-              "sample": "ESCARCELLE"
+              "sample": "ESCARCELLE",
+              "i18n": "game.frame.decor.pouch"
             },
             "kicker": {
               "x": 540,
@@ -1914,7 +1918,8 @@
                 32
               ],
               "contrast": 2.22,
-              "sample": "COFFRET"
+              "sample": "COFFRET",
+              "i18n": "game.frame.decor.casket"
             },
             "kicker": {
               "x": 540,
@@ -2368,7 +2373,8 @@
                 33
               ],
               "contrast": 2.18,
-              "sample": "COFFRET"
+              "sample": "COFFRET",
+              "i18n": "game.frame.decor.casket"
             },
             "kicker": {
               "x": 540,
@@ -2795,7 +2801,8 @@
                 29
               ],
               "contrast": 2.22,
-              "sample": "COFFRE"
+              "sample": "COFFRE",
+              "i18n": "game.frame.decor.chest"
             },
             "kicker": {
               "x": 540,
@@ -3592,7 +3599,8 @@
                 28
               ],
               "contrast": 2.2,
-              "sample": "COFFRE"
+              "sample": "COFFRE",
+              "i18n": "game.frame.decor.chest"
             },
             "kicker": {
               "x": 540,
@@ -3997,7 +4005,8 @@
                 31
               ],
               "contrast": 2.2,
-              "sample": "COFFRE"
+              "sample": "COFFRE",
+              "i18n": "game.frame.decor.chest"
             },
             "kicker": {
               "x": 540,
@@ -4385,7 +4394,8 @@
                 34
               ],
               "contrast": 2.22,
-              "sample": "TRÉSOR"
+              "sample": "TRÉSOR",
+              "i18n": "game.frame.decor.treasure"
             },
             "title": {
               "x": 540,
@@ -4848,7 +4858,8 @@
                 28
               ],
               "contrast": 2.2,
-              "sample": "TRÉSOR"
+              "sample": "TRÉSOR",
+              "i18n": "game.frame.decor.treasure"
             },
             "title": {
               "x": 540,
@@ -5251,7 +5262,8 @@
                 57
               ],
               "contrast": 4.89,
-              "sample": "RÉSERVE MEESHY"
+              "sample": "RÉSERVE MEESHY",
+              "i18n": "game.frame.decor.meeshy-reserve"
             },
             "decor.2": {
               "x": 540,
@@ -5306,7 +5318,8 @@
                 57
               ],
               "contrast": 1.02,
-              "sample": "RÉSERVE MEESHY"
+              "sample": "RÉSERVE MEESHY",
+              "i18n": "game.frame.decor.meeshy-reserve"
             },
             "decor.3": {
               "x": 0,
@@ -5368,7 +5381,8 @@
                 27
               ],
               "contrast": 2.2,
-              "sample": "RÉSERVE"
+              "sample": "RÉSERVE",
+              "i18n": "game.frame.decor.reserve"
             },
             "kicker": {
               "x": 540,
@@ -6045,7 +6059,8 @@
                 31
               ],
               "contrast": 2.22,
-              "sample": "RÉSERVE"
+              "sample": "RÉSERVE",
+              "i18n": "game.frame.decor.reserve"
             },
             "decor.12": {
               "x": 540,
@@ -6073,7 +6088,8 @@
                 37
               ],
               "contrast": 5.47,
-              "sample": "RÉSERVE MEESHY"
+              "sample": "RÉSERVE MEESHY",
+              "i18n": "game.frame.decor.meeshy-reserve"
             },
             "decor.13": {
               "x": 540,
@@ -6128,7 +6144,8 @@
                 37
               ],
               "contrast": 1.01,
-              "sample": "RÉSERVE MEESHY"
+              "sample": "RÉSERVE MEESHY",
+              "i18n": "game.frame.decor.meeshy-reserve"
             },
             "kicker": {
               "x": 540,
@@ -6521,7 +6538,8 @@
                 37
               ],
               "contrast": 2.22,
-              "sample": "RÉSERVE"
+              "sample": "RÉSERVE",
+              "i18n": "game.frame.decor.reserve"
             },
             "kicker": {
               "x": 540,

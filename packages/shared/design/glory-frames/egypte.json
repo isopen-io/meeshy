@@ -5664,7 +5664,8 @@
                 26
               ],
               "contrast": 11.97,
-              "sample": "10²⁶ m · quasar"
+              "sample": "10²⁶ m · quasar",
+              "i18n": "game.frame.decor.quasar-scale"
             },
             "decor.2": {
               "x": 1000,
@@ -5692,7 +5693,8 @@
                 26
               ],
               "contrast": 11.97,
-              "sample": "quark · 10⁻³⁵ m"
+              "sample": "quark · 10⁻³⁵ m",
+              "i18n": "game.frame.decor.quark-scale"
             },
             "plate.1": {
               "x": 540,

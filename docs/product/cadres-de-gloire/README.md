@@ -92,9 +92,12 @@ node lib/export.mjs --generate      # régénère les 12 ateliers (et leurs plaq
 node lib/export-check.mjs           # ROUGE tant qu'une couche porte un texte ou un oiseau, qu'une fenêtre est voilée,
                                     # que la bande du bandeau est trouée, qu'un emplacement n'a pas de contraste mesuré ou
                                     # qu'une plaque dessinée n'a pas ses deux variantes, ou que le chemin d'une fenêtre
-                                    # s'écarte de son masque d'un seul pixel
+                                    # s'écarte de son masque d'un seul pixel, ou qu'un texte de décor n'est ni traduit, ni
+                                    # neutre (cuit dans le décor, hors de la fenêtre), ni vivant dans la table du tri (#10256)
 node lib/recompose.mjs              # recompose chaque cadre et le compare à la référence (§ 8.3) → export/fidelity.json
 node lib/window-paths.mjs           # pose `window.path` (#10254) sur les contrats versionnés depuis LEUR masque, sans réexport
+# depuis packages/shared :
+bun run glory-frames:decor-texts    # rejoue le tri des textes de décor (#10256) sur les contrats versionnés, sans réexport
 ```
 
 Options : `--only savane,neon-oracle-a` (collections ou cadres), `--jobs 3`, `--quality 82`, `--lossless`, `PYTHON=…` pour l'interpréteur des ateliers. `export.mjs --mutate text-in-decor|birds-in-decor|veil|no-contrast|one-plate` rejoue un défaut connu : `export-check.mjs --partial` doit alors être ROUGE.
@@ -113,6 +116,7 @@ Options : `--only savane,neon-oracle-a` (collections ou cadres), `--jobs 3`, `--
 | `thumb` | la vignette 270×480 du cadre, photo factice, oiseaux, blason et plaque compris, SANS texte : le texte est vivant et localisé, une vignette ne le cuit pas en français (et le rendu Chromium d’un titre en dégradé sur chemin courbe n’est pas déterministe) |
 | `stack` | l'ordre des couches de CE cadre, lu dans le SVG — le peintre ne le devine jamais |
 | `text` | chaque emplacement (`kicker`, `title`, `message`, `date`, `plate.<n>`, `decor.<n>`) : texte, ligne de base, ancre, matrice, police (famille, graisse exacte, taille, interlettrage), remplissage résolu (dégradé et arrêts), contour, opacité, filtres, chemin courbe, boîte, effets (les copies décalées, floues ou dédoublées), et `contrast` : le contraste WCAG mesuré contre les pixels réellement dessous (5ᵉ centile, et `contrastMin`) |
+| `baked`, `bakedInWindow` | les textes de décor NEUTRES (#10256) : rangés `baked` par la table du tri `packages/shared/design/glory-frames/decor-texts.json` (nombre, unité, symbole chimique, nom propre — 10⁻³⁵ m, Au, HUGINN, MEESHY), ils sont rendus AVEC le décor et cuits dans `layers.decor` (et la vignette) : ils quittent `text`, `baked` les nomme. Les autres `decor.<n>` restent des emplacements, `translated` (leur clé dans `decor-strings/<langue>.json`, sept langues) ou `live` (une donnée du moment, L14). `bakedInWindow` compte les pixels cuits dans la fenêtre photo : 0, sinon export-check est rouge |
 | `birds` | chaque oiseau posé (`bird()`) : pose, boîte carrée du sticker, rotation, miroir, opacité |
 | `art` | les boîtes des images de Mee qui restent dans le décor parce qu'elles en sont une ILLUSTRATION (frappées sur une pièce, en hologramme au Néon) et non un oiseau posé |
 | `crest`, `motifs`, `banner`, `veil`, `inventory` | la boîte du blason ; les motifs (`afrique`, `cosmos`) ; la bande du bandeau et sa part opaque ; le voile de la fenêtre ; ce que chaque couche contient de texte et d'oiseaux, compté dans le DOM au moment du rendu |

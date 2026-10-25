@@ -2626,7 +2626,8 @@
                 22
               ],
               "contrast": 3.13,
-              "sample": "LES TROIS ÉTOILES"
+              "sample": "LES TROIS ÉTOILES",
+              "i18n": "game.frame.decor.three-stars"
             },
             "kicker": {
               "x": 540,
@@ -4146,7 +4147,8 @@
                 24
               ],
               "contrast": 10.17,
-              "sample": "VÉGA"
+              "sample": "VÉGA",
+              "i18n": "game.frame.decor.vega"
             },
             "decor.2": {
               "x": 848,
@@ -4174,7 +4176,8 @@
                 24
               ],
               "contrast": 2.05,
-              "sample": "ALTAÏR"
+              "sample": "ALTAÏR",
+              "i18n": "game.frame.decor.altair"
             },
             "kicker": {
               "x": 540,
@@ -5175,7 +5178,8 @@
                 22
               ],
               "contrast": 19.06,
-              "sample": "NOYAU"
+              "sample": "NOYAU",
+              "i18n": "game.frame.decor.nucleus"
             },
             "decor.2": {
               "x": 88,
@@ -5231,7 +5235,8 @@
                 22
               ],
               "contrast": 15.37,
-              "sample": "PARTICULES"
+              "sample": "PARTICULES",
+              "i18n": "game.frame.decor.particles"
             },
             "decor.4": {
               "x": 88,
@@ -5287,7 +5292,8 @@
                 22
               ],
               "contrast": 17.45,
-              "sample": "CORDES"
+              "sample": "CORDES",
+              "i18n": "game.frame.decor.strings"
             },
             "decor.6": {
               "x": 88,
@@ -5343,7 +5349,8 @@
                 22
               ],
               "contrast": 8.92,
-              "sample": "TROU NOIR"
+              "sample": "TROU NOIR",
+              "i18n": "game.frame.decor.black-hole"
             },
             "decor.8": {
               "x": 992,
@@ -5399,7 +5406,8 @@
                 22
               ],
               "contrast": 1.3,
-              "sample": "AMAS"
+              "sample": "AMAS",
+              "i18n": "game.frame.decor.cluster"
             },
             "decor.10": {
               "x": 992,
@@ -5455,7 +5463,8 @@
                 22
               ],
               "contrast": 12.66,
-              "sample": "TOILE"
+              "sample": "TOILE",
+              "i18n": "game.frame.decor.web"
             },
             "decor.12": {
               "x": 992,
@@ -5890,7 +5899,8 @@
                 34
               ],
               "contrast": 3.35,
-              "sample": "DU QUARK AU QUASAR"
+              "sample": "DU QUARK AU QUASAR",
+              "i18n": "game.frame.decor.quark-to-quasar"
             },
             "decor.2": {
               "x": 96,
@@ -5929,7 +5939,8 @@
                 20
               ],
               "contrast": 3.55,
-              "sample": "CELLULE"
+              "sample": "CELLULE",
+              "i18n": "game.frame.decor.cell"
             },
             "decor.3": {
               "x": 96,
@@ -6007,7 +6018,8 @@
                 20
               ],
               "contrast": 3.33,
-              "sample": "ADN"
+              "sample": "ADN",
+              "i18n": "game.frame.decor.dna"
             },
             "decor.5": {
               "x": 96,
@@ -6085,7 +6097,8 @@
                 20
               ],
               "contrast": 3.2,
-              "sample": "ATOME"
+              "sample": "ATOME",
+              "i18n": "game.frame.decor.atom"
             },
             "decor.7": {
               "x": 96,
@@ -6163,7 +6176,8 @@
                 20
               ],
               "contrast": 3.09,
-              "sample": "NOYAU"
+              "sample": "NOYAU",
+              "i18n": "game.frame.decor.nucleus"
             },
             "decor.9": {
               "x": 96,
@@ -6241,7 +6255,8 @@
                 20
               ],
               "contrast": 3.06,
-              "sample": "QUARKS"
+              "sample": "QUARKS",
+              "i18n": "game.frame.decor.quarks"
             },
             "decor.11": {
               "x": 96,
@@ -6319,7 +6334,8 @@
                 20
               ],
               "contrast": 3.1,
-              "sample": "CORDES"
+              "sample": "CORDES",
+              "i18n": "game.frame.decor.strings"
             },
             "decor.13": {
               "x": 96,
@@ -6397,7 +6413,8 @@
                 20
               ],
               "contrast": 3.55,
-              "sample": "TERRE"
+              "sample": "TERRE",
+              "i18n": "game.frame.decor.earth"
             },
             "decor.15": {
               "x": 984,
@@ -6475,7 +6492,8 @@
                 20
               ],
               "contrast": 3.39,
-              "sample": "SOLEIL"
+              "sample": "SOLEIL",
+              "i18n": "game.frame.decor.sun"
             },
             "decor.17": {
               "x": 984,
@@ -6553,7 +6571,8 @@
                 20
               ],
               "contrast": 3.37,
-              "sample": "TROU NOIR"
+              "sample": "TROU NOIR",
+              "i18n": "game.frame.decor.black-hole"
             },
             "decor.19": {
               "x": 984,
@@ -6631,7 +6650,8 @@
                 20
               ],
               "contrast": 3.06,
-              "sample": "GALAXIE"
+              "sample": "GALAXIE",
+              "i18n": "game.frame.decor.galaxy"
             },
             "decor.21": {
               "x": 984,
@@ -6709,7 +6729,8 @@
                 20
               ],
               "contrast": 3.02,
-              "sample": "AMAS"
+              "sample": "AMAS",
+              "i18n": "game.frame.decor.cluster"
             },
             "decor.23": {
               "x": 984,
@@ -6787,7 +6808,8 @@
                 20
               ],
               "contrast": 3.08,
-              "sample": "TOILE COSMIQUE"
+              "sample": "TOILE COSMIQUE",
+              "i18n": "game.frame.decor.cosmic-web"
             },
             "decor.25": {
               "x": 984,

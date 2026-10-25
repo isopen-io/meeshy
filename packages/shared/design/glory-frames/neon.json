@@ -3422,7 +3422,8 @@
                 46
               ],
               "contrast": 12.13,
-              "sample": "ON AIR"
+              "sample": "ON AIR",
+              "i18n": "game.frame.decor.on-air"
             },
             "decor.9": {
               "x": 950,
@@ -3928,7 +3929,8 @@
                 18
               ],
               "contrast": 10.16,
-              "sample": "PLÉIADES"
+              "sample": "PLÉIADES",
+              "i18n": "game.frame.decor.pleiades"
             },
             "decor.4": {
               "x": 540,
@@ -3956,7 +3958,8 @@
                 18
               ],
               "contrast": 8.64,
-              "sample": "AR 04h 47m · DÉC +22°"
+              "sample": "AR 04h 47m · DÉC +22°",
+              "i18n": "game.frame.decor.pleiades-coordinates"
             },
             "decor.5": {
               "x": 92,
@@ -3984,7 +3987,8 @@
                 18
               ],
               "contrast": 15.84,
-              "sample": "FLOCON"
+              "sample": "FLOCON",
+              "i18n": "game.frame.decor.snowflake"
             },
             "decor.6": {
               "x": 92,
@@ -4040,7 +4044,8 @@
                 18
               ],
               "contrast": 9.5,
-              "sample": "QUARTZ"
+              "sample": "QUARTZ",
+              "i18n": "game.frame.decor.quartz"
             },
             "decor.8": {
               "x": 988,
@@ -4461,7 +4466,8 @@
                 18
               ],
               "contrast": 17.11,
-              "sample": "POLLEN"
+              "sample": "POLLEN",
+              "i18n": "game.frame.decor.pollen"
             },
             "decor.2": {
               "x": 92,
@@ -4517,7 +4523,8 @@
                 18
               ],
               "contrast": 17.31,
-              "sample": "CELLULE"
+              "sample": "CELLULE",
+              "i18n": "game.frame.decor.cell"
             },
             "decor.4": {
               "x": 988,
@@ -4983,7 +4990,8 @@
                 18
               ],
               "contrast": 13.14,
-              "sample": "SILICIUM"
+              "sample": "SILICIUM",
+              "i18n": "game.frame.decor.silicon"
             },
             "decor.2": {
               "x": 92,
@@ -5039,7 +5047,8 @@
                 18
               ],
               "contrast": 12.38,
-              "sample": "TRANSISTOR"
+              "sample": "TRANSISTOR",
+              "i18n": "game.frame.decor.transistor"
             },
             "decor.4": {
               "x": 988,
@@ -5629,7 +5638,8 @@
                 18
               ],
               "contrast": 10.89,
-              "sample": "GALAXIE"
+              "sample": "GALAXIE",
+              "i18n": "game.frame.decor.galaxy"
             },
             "decor.6": {
               "x": 992,
@@ -5657,7 +5667,8 @@
                 18
               ],
               "contrast": 11.03,
-              "sample": "NÉBULEUSE"
+              "sample": "NÉBULEUSE",
+              "i18n": "game.frame.decor.nebula"
             },
             "decor.7": {
               "x": 992,
@@ -5685,7 +5696,8 @@
                 18
               ],
               "contrast": 11.04,
-              "sample": "AMAS"
+              "sample": "AMAS",
+              "i18n": "game.frame.decor.cluster"
             },
             "decor.8": {
               "x": 300,
@@ -6093,7 +6105,8 @@
                 18
               ],
               "contrast": 6.54,
-              "sample": "ADN · 2 nm"
+              "sample": "ADN · 2 nm",
+              "i18n": "game.frame.decor.dna-scale"
             },
             "decor.2": {
               "x": 992,
@@ -6121,7 +6134,8 @@
                 18
               ],
               "contrast": 10.6,
-              "sample": "ADN · 2 nm"
+              "sample": "ADN · 2 nm",
+              "i18n": "game.frame.decor.dna-scale"
             },
             "decor.3": {
               "x": 540,
@@ -6149,7 +6163,8 @@
                 18
               ],
               "contrast": 8.55,
-              "sample": "GALAXIE · 100 000 ANNÉES-LUMIÈRE"
+              "sample": "GALAXIE · 100 000 ANNÉES-LUMIÈRE",
+              "i18n": "game.frame.decor.galaxy-scale"
             },
             "kicker": {
               "x": 540,
@@ -6587,7 +6602,8 @@
                 18
               ],
               "contrast": 1.07,
-              "sample": "NEURONE · 0,1 mm"
+              "sample": "NEURONE · 0,1 mm",
+              "i18n": "game.frame.decor.neuron-scale"
             },
             "decor.2": {
               "x": 540,
@@ -6615,7 +6631,8 @@
                 18
               ],
               "contrast": 2.68,
-              "sample": "SUPERNOVA · 10 ANNÉES-LUMIÈRE"
+              "sample": "SUPERNOVA · 10 ANNÉES-LUMIÈRE",
+              "i18n": "game.frame.decor.supernova-scale"
             },
             "kicker": {
               "x": 540,
@@ -7121,7 +7138,8 @@
                 23
               ],
               "contrast": 11.53,
-              "sample": "1024 m · amas"
+              "sample": "1024 m · amas",
+              "i18n": "game.frame.decor.cluster-scale"
             },
             "decor.4": {
               "x": 88,
@@ -7570,7 +7588,8 @@
                 18
               ],
               "contrast": 9.79,
-              "sample": "ATOME"
+              "sample": "ATOME",
+              "i18n": "game.frame.decor.atom"
             },
             "decor.2": {
               "x": 100,
@@ -7626,7 +7645,8 @@
                 18
               ],
               "contrast": 17.59,
-              "sample": "NEURONE"
+              "sample": "NEURONE",
+              "i18n": "game.frame.decor.neuron"
             },
             "decor.4": {
               "x": 980,
@@ -8160,7 +8180,8 @@
                 18
               ],
               "contrast": 1.67,
-              "sample": "SINGULARITÉ · HORIZON DES ÉVÉNEMENTS"
+              "sample": "SINGULARITÉ · HORIZON DES ÉVÉNEMENTS",
+              "i18n": "game.frame.decor.singularity-horizon"
             },
             "plate.1": {
               "x": 540,
@@ -8626,7 +8647,8 @@
                 20
               ],
               "contrast": 8.75,
-              "sample": "QUASAR"
+              "sample": "QUASAR",
+              "i18n": "game.frame.decor.quasar"
             },
             "decor.2": {
               "x": 128,
@@ -8682,7 +8704,8 @@
                 20
               ],
               "contrast": 14.29,
-              "sample": "QUARKS"
+              "sample": "QUARKS",
+              "i18n": "game.frame.decor.quarks"
             },
             "decor.4": {
               "x": 952,
@@ -9188,7 +9211,8 @@
                 18
               ],
               "contrast": 11.68,
-              "sample": "TOILE"
+              "sample": "TOILE",
+              "i18n": "game.frame.decor.web"
             },
             "decor.2": {
               "x": 88,
@@ -9244,7 +9268,8 @@
                 18
               ],
               "contrast": 13.43,
-              "sample": "AMAS"
+              "sample": "AMAS",
+              "i18n": "game.frame.decor.cluster"
             },
             "decor.4": {
               "x": 88,
@@ -9300,7 +9325,8 @@
                 18
               ],
               "contrast": 11.68,
-              "sample": "GALAXIE"
+              "sample": "GALAXIE",
+              "i18n": "game.frame.decor.galaxy"
             },
             "decor.6": {
               "x": 88,
@@ -9356,7 +9382,8 @@
                 18
               ],
               "contrast": 13.07,
-              "sample": "ÉTOILE"
+              "sample": "ÉTOILE",
+              "i18n": "game.frame.decor.star"
             },
             "decor.8": {
               "x": 88,
@@ -9412,7 +9439,8 @@
                 18
               ],
               "contrast": 14.25,
-              "sample": "TERRE"
+              "sample": "TERRE",
+              "i18n": "game.frame.decor.earth"
             },
             "decor.10": {
               "x": 88,
@@ -9468,7 +9496,8 @@
                 18
               ],
               "contrast": 8.61,
-              "sample": "CELLULE"
+              "sample": "CELLULE",
+              "i18n": "game.frame.decor.cell"
             },
             "decor.12": {
               "x": 992,
@@ -9524,7 +9553,8 @@
                 18
               ],
               "contrast": 8.7,
-              "sample": "MOLÉCULE"
+              "sample": "MOLÉCULE",
+              "i18n": "game.frame.decor.molecule"
             },
             "decor.14": {
               "x": 992,
@@ -9580,7 +9610,8 @@
                 18
               ],
               "contrast": 7.73,
-              "sample": "ATOME"
+              "sample": "ATOME",
+              "i18n": "game.frame.decor.atom"
             },
             "decor.16": {
               "x": 992,
@@ -9636,7 +9667,8 @@
                 18
               ],
               "contrast": 7.73,
-              "sample": "NOYAU"
+              "sample": "NOYAU",
+              "i18n": "game.frame.decor.nucleus"
             },
             "decor.18": {
               "x": 992,
@@ -9692,7 +9724,8 @@
                 18
               ],
               "contrast": 8.9,
-              "sample": "CORDE"
+              "sample": "CORDE",
+              "i18n": "game.frame.decor.string"
             },
             "decor.20": {
               "x": 992,
@@ -9748,7 +9781,8 @@
                 18
               ],
               "contrast": 10.97,
-              "sample": "DU QUARK AU QUASAR · 61 PUISSANCES DE DIX"
+              "sample": "DU QUARK AU QUASAR · 61 PUISSANCES DE DIX",
+              "i18n": "game.frame.decor.quark-to-quasar-powers"
             },
             "plate.1": {
               "x": 540,

@@ -11,6 +11,8 @@
 //     se voit — c'est la FENÊTRE, sans aucune heuristique de couleur ;
 //   - le décor est rendu sans photo, sans texte, sans oiseaux, sans blason, sans plaque, puis COUPÉ à la fenêtre :
 //     dans la fenêtre son alpha est nul, et ce qu'il y peignait part dans `grade` (normal, ou `screen` séparément) ;
+//   - les textes de décor NEUTRES (table du tri, lib/decor-sorts.mjs, #10256) sont rendus AVEC le décor : cuits dans
+//     sa couche, ils quittent les emplacements de texte ; les autres restent des emplacements, traduits ou vivants ;
 //   - chaque couche est rognée à sa boîte, encodée par sharp, adressée par son empreinte dans export.json ;
 //   - la fenêtre part aussi en CHEMIN (`window.path`, #10254, lib/window-path.mjs) : le contour rectiligne de ce même
 //     masque, que le peintre découpe sans décoder d'image et qui le rend au pixel près.
@@ -19,7 +21,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { generateAteliers, PLATE_VARIANTS as VARIANTS } from './ateliers.mjs';
 import { launch } from './launch.mjs';
-import { classify, isFront, read, show } from './layers.mjs';
+import { bakedSlotsOf, DECOR_TEXTS_FILE, frameIdOf, readDecorTexts } from './decor-sorts.mjs';
+import { classify, isFront, markBaked, read, show } from './layers.mjs';
 import { H, openPage, pool, SCALE, shoot, showSvg, W } from './page.mjs';
 import sharp, { sharpVersion } from './sharp.mjs';
 import { windowPath } from './window-path.mjs';
@@ -35,6 +38,7 @@ const EXPORT = path.resolve(arg('--export', path.join(HERE, '../export')));
 const ONLY = arg('--only') ? new Set(arg('--only').split(',')) : null;
 const JOBS = Number(arg('--jobs', '3'));
 const MUTATE = arg('--mutate', null);
+const DECOR_TEXTS = readDecorTexts(path.resolve(arg('--decor-texts', DECOR_TEXTS_FILE)));
 
 const FW = W * SCALE;
 const FH = H * SCALE;
@@ -209,7 +213,7 @@ function bandOf(decor, front) {
 }
 
 const frontKinds = (order) => Object.keys(order).filter(isFront).sort((a, b) => order[a] - order[b]);
-const sceneOf = (order, runs) => ['photo', 'photo-bg', 'backdrop', ...runs.map((r) => r.kind), ...frontKinds(order), 'crest', 'plate', 'birds', 'text'];
+const sceneOf = (order, runs, baked = []) => ['photo', 'photo-bg', 'backdrop', ...runs.map((r) => r.kind), ...baked, ...frontKinds(order), 'crest', 'plate', 'birds', 'text'];
 
 async function plateInScene(render, order, scene) {
   const full = await render(scene);
@@ -224,18 +228,20 @@ const PLATE_SLOTS = (slot) => ['kicker', 'title', 'message', 'date'].includes(sl
 // L'AUTRE variante de la plaque (§ 5.1, #10252) : l'atelier rejoué avec CADRES_PLATE (lib/base.py) l'a dessinée
 // dans out-plate/<variante>/ ; on la lit dans SA scène, on vérifie que son décor est celui du cadre au pixel près
 // (`decorDelta`), et on garde la géométrie de ses emplacements (le message déplace la date).
-async function otherPlate(handle, render, { collection, name, variant, decor }) {
+async function otherPlate(handle, render, { collection, name, variant, decor, baked }) {
   const file = path.join(PLATES, variant, collection, name + '.svg');
   if (!fs.existsSync(file)) return { variant, missing: true };
   await showSvg(handle, fs.readFileSync(file, 'utf8'), { fonts: 'exact' });
   const { order, runs } = await handle.page.evaluate(classify);
   if (order.plate === undefined) return { variant, missing: true };
-  const own = await render(['backdrop', ...runs.map((r) => r.kind)]);
+  if (baked.length) await handle.page.evaluate(markBaked, baked);
+  const BAKED = baked.length ? ['baked'] : [];
+  const own = await render(['backdrop', ...runs.map((r) => r.kind), ...BAKED]);
   let decorDelta = 0;
   for (let i = 0; i < own.raw.length; i += 4) if (own.raw.readUInt32LE(i) !== decor.readUInt32LE(i)) decorDelta++;
-  const plate = await plateInScene(render, order, sceneOf(order, runs));
+  const plate = await plateInScene(render, order, sceneOf(order, runs, BAKED));
   const dom = await handle.page.evaluate(read);
-  const text = Object.fromEntries(slotsOf(dom.texts).filter((s) => PLATE_SLOTS(s.slot)).map((s) => {
+  const text = Object.fromEntries(slotsOf(dom.texts.filter((t) => !baked.includes(t.slot))).filter((s) => PLATE_SLOTS(s.slot)).map((s) => {
     const { index, slot, ...main } = s.main;
     return [slot, { ...main, effects: s.effects }];
   }));
@@ -256,7 +262,12 @@ async function exportFrame(handle, { collection, name, message }) {
     return { inventory, raw: await decode(await shoot(handle)) };
   };
   const has = (k) => order[k] !== undefined;
-  const decorKinds = [...DECOR_KINDS, ...(MUTATE === 'text-in-decor' ? ['text'] : []), ...(MUTATE === 'birds-in-decor' ? ['birds'] : [])];
+  const samples = new Map(slotsOf(dom.texts).map((s) => [s.slot, s.main.text]));
+  const baked = bakedSlotsOf(DECOR_TEXTS, frameIdOf(collection, name), samples);
+  if (baked.length) await page.evaluate(markBaked, baked);
+  const BAKED = baked.length ? ['baked'] : [];
+  const cleanKinds = [...DECOR_KINDS, ...BAKED];
+  const decorKinds = [...cleanKinds, ...(MUTATE === 'text-in-decor' ? ['text'] : []), ...(MUTATE === 'birds-in-decor' ? ['birds'] : [])];
 
   const probeM = await render(DECOR_KINDS, { probe: '#FF00FF' });
   const probeG = await render(DECOR_KINDS, { probe: '#00FF00' });
@@ -271,11 +282,12 @@ async function exportFrame(handle, { collection, name, message }) {
   const FRONT_KINDS = frontKinds(order);
   const fronts = [];
   for (const kind of FRONT_KINDS) fronts.push({ rank: kind.slice('front:'.length), shot: await render([kind]) });
-  const notext = await render(['photo', 'photo-bg', 'backdrop', ...DECOR_KINDS, ...FRONT_KINDS, 'crest', 'plate', 'birds']);
-  const plate = has('plate') ? await plateInScene(render, order, sceneOf(order, runs)) : null;
-  const decorClean = decorKinds.length === DECOR_KINDS.length ? decorRaw.raw : (await render(['backdrop', ...DECOR_KINDS])).raw;
+  const notext = await render(['photo', 'photo-bg', 'backdrop', ...cleanKinds, ...FRONT_KINDS, 'crest', 'plate', 'birds']);
+  const plate = has('plate') ? await plateInScene(render, order, sceneOf(order, runs, BAKED)) : null;
+  const decorClean = decorKinds.length === cleanKinds.length ? decorRaw.raw : (await render(['backdrop', ...cleanKinds])).raw;
+  const bakedShot = baked.length ? (await render(['baked'])).raw : null;
 
-  const slots = slotsOf(dom.texts);
+  const slots = slotsOf(dom.texts.filter((t) => !baked.includes(t.slot)));
   const flat = slots.map((s, i) => ({ index: s.main.index, color: `rgb(${flatColor(i).join(',')})` }));
   const masks = await render([], { flatSlots: flat });
 
@@ -299,7 +311,7 @@ async function exportFrame(handle, { collection, name, message }) {
   const native = message ? 'message' : 'plain';
   const nativeFile = plate ? await encode(dir, `plate-${native}`, plate.raw) : null;
   const other = nativeFile && MUTATE !== 'one-plate'
-    ? await otherPlate(handle, render, { collection, name, variant: VARIANTS.find((v) => v !== native), decor: decorClean })
+    ? await otherPlate(handle, render, { collection, name, variant: VARIANTS.find((v) => v !== native), decor: decorClean, baked })
     : null;
   const plates = nativeFile ? { [native]: nativeFile } : null;
   if (other?.plate) plates[other.variant] = await encode(dir, `plate-${other.variant}`, other.plate.raw);
@@ -343,6 +355,8 @@ async function exportFrame(handle, { collection, name, message }) {
     birds,
     art: dom.art,
     text,
+    baked: baked.map((slot) => ({ slot, sample: samples.get(slot) })),
+    bakedInWindow: bakedShot ? winMask.reduce((n, inside, i) => n + (inside && bakedShot[i * 4 + 3] > 0 ? 1 : 0), 0) : 0,
     plateVariant: other ? { variant: other.variant, missing: Boolean(other.missing), decorDelta: other.decorDelta ?? null, text: other.text ?? null } : null,
     inventory: {
       decor: decorRaw.inventory,

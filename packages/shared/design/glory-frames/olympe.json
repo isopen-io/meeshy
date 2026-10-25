@@ -5119,7 +5119,8 @@
                 36
               ],
               "contrast": 16.95,
-              "sample": "Nº 42"
+              "sample": "Nº 42",
+              "live": "mythe-number"
             },
             "decor.2": {
               "x": 876,
@@ -5158,7 +5159,8 @@
                 26
               ],
               "contrast": 13.17,
-              "sample": "/ 100"
+              "sample": "/ 100",
+              "live": "mythe-total"
             }
           },
           "birds": {
@@ -5522,7 +5524,8 @@
                 36
               ],
               "contrast": 16.95,
-              "sample": "Nº 42"
+              "sample": "Nº 42",
+              "live": "mythe-number"
             },
             "decor.2": {
               "x": 876,
@@ -5561,7 +5564,8 @@
                 26
               ],
               "contrast": 13.17,
-              "sample": "/ 100"
+              "sample": "/ 100",
+              "live": "mythe-total"
             }
           },
           "birds": {
@@ -6317,7 +6321,8 @@
                 36
               ],
               "contrast": 16.95,
-              "sample": "Nº 42"
+              "sample": "Nº 42",
+              "live": "mythe-number"
             },
             "decor.16": {
               "x": 876,
@@ -6356,7 +6361,8 @@
                 26
               ],
               "contrast": 13.17,
-              "sample": "/ 100"
+              "sample": "/ 100",
+              "live": "mythe-total"
             }
           },
           "birds": {

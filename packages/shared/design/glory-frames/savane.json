@@ -5967,7 +5967,8 @@
                 25
               ],
               "contrast": 1.42,
-              "sample": "TOILE COSMIQUE"
+              "sample": "TOILE COSMIQUE",
+              "i18n": "game.frame.decor.cosmic-web"
             },
             "decor.2": {
               "x": 817.4,
@@ -6023,7 +6024,8 @@
                 24
               ],
               "contrast": 9.26,
-              "sample": "GALAXIE"
+              "sample": "GALAXIE",
+              "i18n": "game.frame.decor.galaxy"
             },
             "decor.4": {
               "x": 964.2,
@@ -6079,7 +6081,8 @@
                 25
               ],
               "contrast": 6.57,
-              "sample": "ÉTOILE"
+              "sample": "ÉTOILE",
+              "i18n": "game.frame.decor.star"
             },
             "decor.6": {
               "x": 996,
@@ -6135,7 +6138,8 @@
                 24
               ],
               "contrast": 7.4,
-              "sample": "TERRE"
+              "sample": "TERRE",
+              "i18n": "game.frame.decor.earth"
             },
             "decor.8": {
               "x": 948.8,
@@ -6191,7 +6195,8 @@
                 24
               ],
               "contrast": 8.66,
-              "sample": "CELLULE"
+              "sample": "CELLULE",
+              "i18n": "game.frame.decor.cell"
             },
             "decor.10": {
               "x": 131.2,
@@ -6247,7 +6252,8 @@
                 25
               ],
               "contrast": 6.2,
-              "sample": "ADN"
+              "sample": "ADN",
+              "i18n": "game.frame.decor.dna"
             },
             "decor.12": {
               "x": 84,
@@ -6303,7 +6309,8 @@
                 24
               ],
               "contrast": 8.24,
-              "sample": "ATOME"
+              "sample": "ATOME",
+              "i18n": "game.frame.decor.atom"
             },
             "decor.14": {
               "x": 115.8,
@@ -6359,7 +6366,8 @@
                 25
               ],
               "contrast": 9.96,
-              "sample": "QUARKS"
+              "sample": "QUARKS",
+              "i18n": "game.frame.decor.quarks"
             },
             "decor.16": {
               "x": 262.6,

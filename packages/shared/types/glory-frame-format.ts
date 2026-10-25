@@ -24,6 +24,7 @@
 import * as z from 'zod/mini';
 import { PackAssetRefSchema } from './content-pack-index.js';
 import type { PackAssetRef } from './content-pack.js';
+import { GLORY_DECOR_KEY_PATTERN, GLORY_DECOR_LIVE_DATA } from './glory-frame-decor-vocabulary.js';
 
 /** Les polices des cadres, embarquées par les clients : un pack les RÉFÉRENCE, jamais il ne les transporte (§ 5.6). */
 export const GLORY_FRAME_FONTS = ['Manrope', 'Cinzel', 'Cinzel Decorative', 'Cormorant Garamond', 'Fraunces', 'Caveat'] as const;
@@ -123,6 +124,10 @@ const textSlot = z.object({
   contrast: nonNegative,
   /** Le texte d'exemple de l'export (le français des planches) ; les emplacements vivants le remplacent. */
   sample: z.string().check(z.maxLength(MAX_TEXT_LENGTH)),
+  /** Un texte de décor TRADUIT (#10256) : sa clé dans les chaînes du pack, que le peintre peint à la place de `sample`. */
+  i18n: z.optional(z.string().check(z.regex(GLORY_DECOR_KEY_PATTERN))),
+  /** Un texte de décor VIVANT (#10256) : la donnée du moment que le peintre remplit (L14, #10167). */
+  live: z.optional(z.enum(GLORY_DECOR_LIVE_DATA)),
 });
 
 const layer = z.intersection(PackAssetRefSchema, z.object({ box }));

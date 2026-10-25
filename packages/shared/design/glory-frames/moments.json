@@ -186,7 +186,8 @@
                 232
               ],
               "contrast": 2,
-              "sample": "NIVEAU 10 · LUEUR · NIVEAU 10 · LUEUR · "
+              "sample": "NIVEAU 10 · LUEUR · NIVEAU 10 · LUEUR · ",
+              "live": "level-ring"
             },
             "decor.2": {
               "x": 540,
@@ -214,7 +215,8 @@
                 20
               ],
               "contrast": 10.11,
-              "sample": "NIVEAU"
+              "sample": "NIVEAU",
+              "i18n": "game.frame.decor.level"
             },
             "decor.3": {
               "x": 540,
@@ -307,7 +309,8 @@
                 147
               ],
               "contrast": 1.13,
-              "sample": "10"
+              "sample": "10",
+              "live": "level"
             },
             "kicker": {
               "x": 540,
@@ -677,7 +680,8 @@
                 246
               ],
               "contrast": 2.16,
-              "sample": "NIVEAU 50 · AURORE · NIVEAU 50 · AURORE · "
+              "sample": "NIVEAU 50 · AURORE · NIVEAU 50 · AURORE · ",
+              "live": "level-ring"
             },
             "decor.2": {
               "x": 540,
@@ -705,7 +709,8 @@
                 21
               ],
               "contrast": 9.21,
-              "sample": "NIVEAU"
+              "sample": "NIVEAU",
+              "i18n": "game.frame.decor.level"
             },
             "decor.3": {
               "x": 540,
@@ -798,7 +803,8 @@
                 147
               ],
               "contrast": 1.05,
-              "sample": "50"
+              "sample": "50",
+              "live": "level"
             },
             "kicker": {
               "x": 540,
@@ -1140,7 +1146,8 @@
                 254
               ],
               "contrast": 2.02,
-              "sample": "NIVEAU 90 · GALAXIE · NIVEAU 90 · GALAXIE · "
+              "sample": "NIVEAU 90 · GALAXIE · NIVEAU 90 · GALAXIE · ",
+              "live": "level-ring"
             },
             "decor.2": {
               "x": 540,
@@ -1168,7 +1175,8 @@
                 21
               ],
               "contrast": 7.94,
-              "sample": "NIVEAU"
+              "sample": "NIVEAU",
+              "i18n": "game.frame.decor.level"
             },
             "decor.3": {
               "x": 540,
@@ -1261,7 +1269,8 @@
                 147
               ],
               "contrast": 1.02,
-              "sample": "90"
+              "sample": "90",
+              "live": "level"
             },
             "kicker": {
               "x": 540,
@@ -1631,7 +1640,8 @@
                 254
               ],
               "contrast": 2.08,
-              "sample": "NIVEAU 101 · NÉBULEUSE · NIVEAU 101 · NÉBULEUSE · "
+              "sample": "NIVEAU 101 · NÉBULEUSE · NIVEAU 101 · NÉBULEUSE · ",
+              "live": "level-ring"
             },
             "decor.2": {
               "x": 540,
@@ -1659,7 +1669,8 @@
                 21
               ],
               "contrast": 4.49,
-              "sample": "NIVEAU"
+              "sample": "NIVEAU",
+              "i18n": "game.frame.decor.level"
             },
             "decor.3": {
               "x": 540,
@@ -1752,7 +1763,8 @@
                 119
               ],
               "contrast": 1.09,
-              "sample": "101"
+              "sample": "101",
+              "live": "level"
             },
             "kicker": {
               "x": 540,
@@ -2626,7 +2638,8 @@
                 254
               ],
               "contrast": 4.63,
-              "sample": "NIVEAU 400 · SUPERNOVA · NIVEAU 400 · SUPERNOVA · "
+              "sample": "NIVEAU 400 · SUPERNOVA · NIVEAU 400 · SUPERNOVA · ",
+              "live": "level-ring"
             },
             "decor.16": {
               "x": 540,
@@ -2654,7 +2667,8 @@
                 21
               ],
               "contrast": 4.46,
-              "sample": "NIVEAU"
+              "sample": "NIVEAU",
+              "i18n": "game.frame.decor.level"
             },
             "decor.17": {
               "x": 540,
@@ -2743,7 +2757,8 @@
                 119
               ],
               "contrast": 1.8,
-              "sample": "400"
+              "sample": "400",
+              "live": "level"
             },
             "kicker": {
               "x": 540,
@@ -3086,7 +3101,8 @@
                 234
               ],
               "contrast": 1.24,
-              "sample": "NIVEAU 1000 · SINGULARITÉ · NIVEAU 1000 · SINGULARITÉ · "
+              "sample": "NIVEAU 1000 · SINGULARITÉ · NIVEAU 1000 · SINGULARITÉ · ",
+              "live": "level-ring"
             },
             "decor.2": {
               "x": 540,
@@ -3114,7 +3130,8 @@
                 21
               ],
               "contrast": 9.46,
-              "sample": "NIVEAU"
+              "sample": "NIVEAU",
+              "i18n": "game.frame.decor.level"
             },
             "decor.3": {
               "x": 540,
@@ -3215,7 +3232,8 @@
                 93
               ],
               "contrast": 6.43,
-              "sample": "1000"
+              "sample": "1000",
+              "live": "level"
             },
             "decor.4": {
               "x": 92,
@@ -3551,7 +3569,8 @@
                 26
               ],
               "contrast": 16.02,
-              "sample": "NOUS"
+              "sample": "NOUS",
+              "i18n": "game.frame.decor.us"
             },
             "kicker": {
               "x": 540,
@@ -3777,7 +3796,8 @@
                 20
               ],
               "contrast": 15.36,
-              "sample": "NOUS"
+              "sample": "NOUS",
+              "i18n": "game.frame.decor.us"
             },
             "decor.19": {
               "x": 140,
@@ -3805,7 +3825,8 @@
                 18
               ],
               "contrast": 7.7,
-              "sample": "L'INFINIMENT GRAND"
+              "sample": "L'INFINIMENT GRAND",
+              "i18n": "game.frame.decor.infinitely-large"
             },
             "decor.20": {
               "x": 940,
@@ -3833,7 +3854,8 @@
                 18
               ],
               "contrast": 7.59,
-              "sample": "L'INFINIMENT PETIT"
+              "sample": "L'INFINIMENT PETIT",
+              "i18n": "game.frame.decor.infinitely-small"
             }
           },
           "birds": {
@@ -4110,7 +4132,8 @@
                 24
               ],
               "contrast": 10.72,
-              "sample": "L"
+              "sample": "L",
+              "i18n": "game.frame.decor.weekday-mon"
             },
             "decor.4": {
               "x": 404,
@@ -4138,7 +4161,8 @@
                 24
               ],
               "contrast": 9.84,
-              "sample": "M"
+              "sample": "M",
+              "i18n": "game.frame.decor.weekday-tue"
             },
             "decor.5": {
               "x": 472,
@@ -4166,7 +4190,8 @@
                 24
               ],
               "contrast": 9.23,
-              "sample": "M"
+              "sample": "M",
+              "i18n": "game.frame.decor.weekday-wed"
             },
             "decor.6": {
               "x": 540,
@@ -4194,7 +4219,8 @@
                 24
               ],
               "contrast": 8.33,
-              "sample": "J"
+              "sample": "J",
+              "i18n": "game.frame.decor.weekday-thu"
             },
             "decor.7": {
               "x": 608,
@@ -4222,7 +4248,8 @@
                 24
               ],
               "contrast": 9.23,
-              "sample": "V"
+              "sample": "V",
+              "i18n": "game.frame.decor.weekday-fri"
             },
             "decor.8": {
               "x": 676,
@@ -4250,7 +4277,8 @@
                 24
               ],
               "contrast": 9.88,
-              "sample": "S"
+              "sample": "S",
+              "i18n": "game.frame.decor.weekday-sat"
             },
             "decor.9": {
               "x": 744,
@@ -4278,7 +4306,8 @@
                 24
               ],
               "contrast": 10.75,
-              "sample": "D"
+              "sample": "D",
+              "i18n": "game.frame.decor.weekday-sun"
             },
             "kicker": {
               "x": 540,
@@ -4692,7 +4721,8 @@
                 25
               ],
               "contrast": 3.33,
-              "sample": "JOURS"
+              "sample": "JOURS",
+              "i18n": "game.frame.decor.days"
             },
             "kicker": {
               "x": 540,
@@ -5073,7 +5103,8 @@
                 248
               ],
               "contrast": 3.11,
-              "sample": "CENT JOURS DE FEU · LE GRAND BRASIER · "
+              "sample": "CENT JOURS DE FEU · LE GRAND BRASIER · ",
+              "i18n": "game.frame.decor.hundred-days-ring"
             },
             "decor.2": {
               "x": 540,
@@ -5101,7 +5132,8 @@
                 21
               ],
               "contrast": 10.04,
-              "sample": "JOURS"
+              "sample": "JOURS",
+              "i18n": "game.frame.decor.days"
             },
             "decor.3": {
               "x": 540,
@@ -5534,7 +5566,8 @@
                 219
               ],
               "contrast": 3.67,
-              "sample": "UN AN DE FLAMME · RENAÎTRE CHAQUE JOUR · "
+              "sample": "UN AN DE FLAMME · RENAÎTRE CHAQUE JOUR · ",
+              "i18n": "game.frame.decor.year-of-flame-ring"
             },
             "decor.2": {
               "x": 540,
@@ -5562,7 +5595,8 @@
                 21
               ],
               "contrast": 9.57,
-              "sample": "JOURS"
+              "sample": "JOURS",
+              "i18n": "game.frame.decor.days"
             },
             "decor.3": {
               "x": 540,
@@ -6019,7 +6053,8 @@
                 320
               ],
               "contrast": 1.17,
-              "sample": "MEESH Nº 1 · LA PREMIÈRE · OCTOBRE 2026 · "
+              "sample": "MEESH Nº 1 · LA PREMIÈRE · OCTOBRE 2026 · ",
+              "live": "meesh-ring"
             },
             "decor.2": {
               "x": 540,
@@ -6067,7 +6102,8 @@
                 48
               ],
               "contrast": 2.13,
-              "sample": "Nº 1"
+              "sample": "Nº 1",
+              "live": "meesh-number"
             },
             "kicker": {
               "x": 540,
@@ -6435,7 +6471,8 @@
                 340
               ],
               "contrast": 1.13,
-              "sample": "MEESH Nº 10 · ARGENT · OCTOBRE 2026 · "
+              "sample": "MEESH Nº 10 · ARGENT · OCTOBRE 2026 · ",
+              "live": "meesh-ring"
             },
             "decor.2": {
               "x": 540,
@@ -6483,7 +6520,8 @@
                 50
               ],
               "contrast": 2.14,
-              "sample": "Nº 10"
+              "sample": "Nº 10",
+              "live": "meesh-number"
             },
             "kicker": {
               "x": 540,
@@ -6823,7 +6861,8 @@
                 326
               ],
               "contrast": 1.19,
-              "sample": "MEESH Nº 100 · ÉDITION OR · OCTOBRE 2026 · "
+              "sample": "MEESH Nº 100 · ÉDITION OR · OCTOBRE 2026 · ",
+              "live": "meesh-ring"
             },
             "decor.2": {
               "x": 540,
@@ -6871,7 +6910,8 @@
                 50
               ],
               "contrast": 2.04,
-              "sample": "Nº 100"
+              "sample": "Nº 100",
+              "live": "meesh-number"
             },
             "kicker": {
               "x": 540,
@@ -7241,7 +7281,8 @@
                 340
               ],
               "contrast": 1.01,
-              "sample": "MEESH Nº 1000 · ÉDITION PRISME · OCTOBRE 2026 · "
+              "sample": "MEESH Nº 1000 · ÉDITION PRISME · OCTOBRE 2026 · ",
+              "live": "meesh-ring"
             },
             "decor.2": {
               "x": 540,
@@ -7289,7 +7330,8 @@
                 50
               ],
               "contrast": 2.41,
-              "sample": "Nº 1000"
+              "sample": "Nº 1000",
+              "live": "meesh-number"
             },
             "kicker": {
               "x": 540,
@@ -7651,7 +7693,8 @@
                 162
               ],
               "contrast": 3.78,
-              "sample": "CARNET DE BORD"
+              "sample": "CARNET DE BORD",
+              "i18n": "game.frame.decor.logbook"
             },
             "decor.2": {
               "x": 0,
@@ -7727,7 +7770,8 @@
                 122
               ],
               "contrast": 3.77,
-              "sample": "10 OCTOBRE 2026"
+              "sample": "10 OCTOBRE 2026",
+              "live": "date"
             },
             "decor.3": {
               "x": 284,
@@ -7800,7 +7844,8 @@
                 43
               ],
               "contrast": 3.45,
-              "sample": "JOUR"
+              "sample": "JOUR",
+              "i18n": "game.frame.decor.day"
             },
             "decor.4": {
               "x": 284,
@@ -7873,7 +7918,8 @@
                 114
               ],
               "contrast": 3.88,
-              "sample": "283"
+              "sample": "283",
+              "live": "day"
             },
             "decor.5": {
               "x": 524,
@@ -7918,7 +7964,8 @@
                 68
               ],
               "contrast": 7.7,
-              "sample": "Missions du jour"
+              "sample": "Missions du jour",
+              "i18n": "game.frame.decor.daily-missions"
             },
             "decor.6": {
               "x": 576,
@@ -7963,7 +8010,8 @@
                 56
               ],
               "contrast": 8.96,
-              "sample": "Écrire à trois amis"
+              "sample": "Écrire à trois amis",
+              "live": "mission-1"
             },
             "decor.7": {
               "x": 576,
@@ -8008,7 +8056,8 @@
                 56
               ],
               "contrast": 7.79,
-              "sample": "Traduire un message"
+              "sample": "Traduire un message",
+              "live": "mission-2"
             },
             "decor.8": {
               "x": 576,
@@ -8053,7 +8102,8 @@
                 56
               ],
               "contrast": 9.4,
-              "sample": "Publier une story"
+              "sample": "Publier une story",
+              "live": "mission-3"
             },
             "decor.9": {
               "x": 876,
@@ -8106,7 +8156,8 @@
                 79
               ],
               "contrast": 3.91,
-              "sample": "3 / 3 !"
+              "sample": "3 / 3 !",
+              "live": "missions-done"
             },
             "decor.10": {
               "x": 520,
@@ -8159,7 +8210,8 @@
                 69
               ],
               "contrast": 7.94,
-              "sample": "nous, ce jour-là"
+              "sample": "nous, ce jour-là",
+              "i18n": "game.frame.decor.us-that-day"
             },
             "plate.1": {
               "x": 540,
@@ -8513,7 +8565,8 @@
                 32
               ],
               "contrast": 4.2,
-              "sample": "N"
+              "sample": "N",
+              "i18n": "game.frame.decor.compass-north"
             },
             "decor.2": {
               "x": 639,
@@ -8541,7 +8594,8 @@
                 32
               ],
               "contrast": 9.64,
-              "sample": "E"
+              "sample": "E",
+              "i18n": "game.frame.decor.compass-east"
             },
             "decor.3": {
               "x": 540,
@@ -8569,7 +8623,8 @@
                 32
               ],
               "contrast": 9.37,
-              "sample": "S"
+              "sample": "S",
+              "i18n": "game.frame.decor.compass-south"
             },
             "decor.4": {
               "x": 441,
@@ -8597,7 +8652,8 @@
                 32
               ],
               "contrast": 10.1,
-              "sample": "O"
+              "sample": "O",
+              "i18n": "game.frame.decor.compass-west"
             },
             "decor.5": {
               "x": 540,
@@ -8625,7 +8681,8 @@
                 22
               ],
               "contrast": 12.53,
-              "sample": "JOUR"
+              "sample": "JOUR",
+              "i18n": "game.frame.decor.day"
             },
             "decor.6": {
               "x": 540,
@@ -8672,7 +8729,8 @@
                 66
               ],
               "contrast": 5.75,
-              "sample": "283"
+              "sample": "283",
+              "live": "day"
             },
             "kicker": {
               "x": 540,

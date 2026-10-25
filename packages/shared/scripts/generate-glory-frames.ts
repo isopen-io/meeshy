@@ -42,11 +42,14 @@ import { PACK_LANGUAGES, type PackAssetRef, type PackLanguage } from '../types/c
 import { parsePackIndex } from '../types/content-pack-index.js';
 import { gloryFrameAssets, parseGloryFrameCollection, parseGloryFrameContract, type GloryFrame, type GloryFrameCollection } from '../types/glory-frames.js';
 import { parsePackStrings, type PackStrings } from '../types/glory-frame-pack.js';
+import { gloryDecorStringsOf, parseGloryDecorTextTable, type GloryDecorCatalogue, type GloryDecorTextTable } from '../types/glory-frame-decor.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const REPO_ROOT = resolve(HERE, '../../..');
 export const GLORY_FRAMES_DIR = join(REPO_ROOT, 'packages/shared/design/glory-frames');
 export const REGISTRY_FILE = join(GLORY_FRAMES_DIR, 'packs.json');
+export const DECOR_TEXTS_FILE = join(GLORY_FRAMES_DIR, 'decor-texts.json');
+export const DECOR_STRINGS_DIR = join(GLORY_FRAMES_DIR, 'decor-strings');
 export const RETAINED_FILE = join(REPO_ROOT, 'packages/shared/design/packs/retained.json');
 export const SAMPLE_REGISTRY_FILE = join(REPO_ROOT, 'packages/shared/design/packs/samples/glory-frame.json');
 export const PACK_ASSETS_DIR = join(REPO_ROOT, 'services/gateway/assets/packs');
@@ -68,6 +71,10 @@ export type GloryFrameSources = {
   readonly registry: readonly RegistryEntry[];
   readonly collections: ReadonlyMap<string, GloryFrameCollection>;
   readonly strings: ReadonlyMap<string, Partial<Record<PackLanguage, PackStrings>>>;
+  /** Le tri des textes de décor (#10256) : ce que l'import et `glory-frames:decor-texts` posent dans les contrats. */
+  readonly decorTexts: GloryDecorTextTable;
+  /** Les textes de décor traduits, une table par langue : chaque pack sert ceux que ses cadres emploient. */
+  readonly decorStrings: GloryDecorCatalogue;
   readonly retained: Readonly<Record<string, readonly string[]>>;
   /** Le contrat d'une version QUITTÉE, relu dans le magasin pour en retenir les fichiers ; `null` s'il est introuvable. */
   readonly readStoredJson: (src: string) => unknown;
@@ -102,12 +109,12 @@ const framesOf = (entry: RegistryEntry, collections: GloryFrameSources['collecti
     return collection.frames;
   });
 
-const stringsOf = (entry: RegistryEntry, strings: GloryFrameSources['strings']): Partial<Record<PackLanguage, PackStrings>> =>
+const stringsOf = (entry: RegistryEntry, frames: readonly GloryFrame[], sources: GloryFrameSources): Partial<Record<PackLanguage, PackStrings>> =>
   Object.fromEntries(
     PACK_LANGUAGES.flatMap((language) => {
-      const tables = entry.collections.map(({ slug }) => strings.get(slug)?.[language]);
+      const tables = entry.collections.map(({ slug }) => sources.strings.get(slug)?.[language]);
       if (tables.some((table) => table === undefined)) return [];
-      return [[language, Object.assign({}, ...tables) as PackStrings]];
+      return [[language, Object.assign({}, ...tables, gloryDecorStringsOf(frames, sources.decorStrings[language] ?? {})) as PackStrings]];
     }),
   );
 
@@ -141,7 +148,7 @@ export function buildGloryFramePacks(sources: GloryFrameSources): GeneratedPacks
     const coverFrame = frames.find((frame) => frame.id === entry.coverFrame) ?? frames[0];
     if (coverFrame === undefined) throw new Error(`le pack ${entry.slug} n'a aucun cadre`);
     const contract = addressedJson({ schema: 1, frames });
-    const strings = Object.entries(stringsOf(entry, sources.strings)).map(([language, table]) => [language, addressedJson(table)] as const);
+    const strings = Object.entries(stringsOf(entry, frames, sources)).map(([language, table]) => [language, addressedJson(table)] as const);
     const cover = coverFrame.thumb;
     files.set(contract.ref.src, contract.text);
     strings.forEach(([, file]) => files.set(file.ref.src, file.text));
@@ -195,11 +202,16 @@ export function readGloryFrameSources(): GloryFrameSources {
     }),
   );
   const retained = existsSync(RETAINED_FILE) ? (readJson(RETAINED_FILE) as Record<string, readonly string[]>) : {};
+  const decorTexts = parseGloryDecorTextTable(readJson(DECOR_TEXTS_FILE));
+  if (decorTexts === null) throw new Error(`${DECOR_TEXTS_FILE} illisible`);
+  const decorStrings = Object.fromEntries(
+    PACK_LANGUAGES.filter((language) => existsSync(join(DECOR_STRINGS_DIR, `${language}.json`))).map((language) => [language, parsePackStrings(readJson(join(DECOR_STRINGS_DIR, `${language}.json`)))]),
+  ) as GloryDecorCatalogue;
   const readStoredJson = (src: string): unknown => {
     const path = join(PACK_ASSETS_DIR, src);
     return existsSync(path) ? readJson(path) : null;
   };
-  return { registry, collections, strings, retained, readStoredJson };
+  return { registry, collections, strings, decorTexts, decorStrings, retained, readStoredJson };
 }
 
 /** Lit le registre d'une référence git ; une base illisible est une erreur, jamais un registre vide. */
