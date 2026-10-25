@@ -6,7 +6,6 @@ import { prefersReducedMotion } from '@/lib/game/haptics';
 import { useGamePrefs } from '@/lib/game/preferences';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
-import { browserIdle } from '@/lib/view/browser-idle';
 import { audioCarryStore } from '@/lib/view/audio-carry';
 import {
   PLAYER_BANNER_EXIT_MS,
@@ -47,23 +46,6 @@ const MiniAudioPlayerHost = lazy(() =>
  * quand elle a sa place — jamais avec la première peinture.
  */
 const PlayerBannerHost = lazy(() => import('./player-banner').then(async (m) => (await m.loadPlayerBannerCatalog(), m)));
-
-/**
- * L'HÔTE DES INVITATIONS À IMMORTALISER (#10174) : monté au REPOS, après la
- * première peinture, pour un compte connecté ; son chunk ne pèse rien tant
- * qu'on n'est pas connecté, et rien du jeu n'entre dans l'entrée — la PORTE
- * (`game-photo-alert-gate.tsx`) est le seul nom que l'entrée apprend.
- */
-const PhotoAlertHost = lazy(() => import('./game-photo-alert-gate').then((m) => ({ default: m.GamePhotoAlertGate })));
-
-function useArmedAtIdle(signedIn: boolean): boolean {
-  const [armed, setArmed] = useState(false);
-  useEffect(() => {
-    if (!signedIn || armed) return;
-    browserIdle(() => setArmed(true));
-  }, [signedIn, armed]);
-  return armed && signedIn;
-}
 
 const occupants = (slots: TopBandSlots): string =>
   (['call', 'audio', 'player'] as const).filter((slot) => slots[slot]).join(' ');
@@ -118,7 +100,6 @@ export function TopBand({
     occupied: eligible && (slots.call || slots.audio),
     occupantReady: slots.call || !slots.audio || miniPlayerReady,
   });
-  const alertsArmed = useArmedAtIdle(signedIn);
 
   return (
     <div
@@ -129,13 +110,6 @@ export function TopBand({
       style={{ top: 'calc(env(safe-area-inset-top, 0px) + 8px)' }}
     >
       <CallResumeSlot />
-      {alertsArmed ? (
-        <div data-photo-alert-host="" className="contents">
-          <Suspense fallback={null}>
-            <PhotoAlertHost routeKey={routeKey} />
-          </Suspense>
-        </div>
-      ) : null}
       {slots.audio ? (
         <Suspense fallback={null}>
           <MiniAudioPlayerHost />

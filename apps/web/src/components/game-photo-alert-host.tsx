@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useStore } from 'zustand/react';
 
@@ -26,21 +26,23 @@ import { gameText } from '@/lib/view/game-copy';
 import { showsPlayerBanner } from '@/lib/view/top-band';
 import { href, navigate } from '@/routes/route-table';
 
+import { GamePhotoFlow } from './game-photo-flow';
 import { GamePhotoFrame } from './game-photo-frame';
 import { GAME_BRAND, GAME_CARD, GAME_INK, GAME_INK_2 } from './game-surface';
 
 /**
- * L'HÔTE DES INVITATIONS À IMMORTALISER (#10174, L18 ; § 5.16.3 ; D19 de #10183) — monté avec la bande du haut,
- * APRÈS la première peinture, sur toutes les routes d'un compte connecté. Il nourrit le coordinateur unique
- * (`lib/game-photo/alerts.ts`) de chaque lecture fraîche du jeu (`['me','engagement']`), et montre ce qui
+ * L'HÔTE DES INVITATIONS À IMMORTALISER (#10174, L18 ; § 5.16.3 ; D19 de #10183) — armé par le chrome différé
+ * (`game-photo-alert-mount.tsx`) dans la colonne de la bande du haut, APRÈS la première peinture, sur toutes les
+ * routes d'un compte connecté. Il nourrit le coordinateur unique (`lib/game-photo/alerts.ts`) de chaque lecture fraîche du jeu (`['me','engagement']`), et montre ce qui
  * attend dans la file :
  *
  *  - une BANNIÈRE non modale, dans la pile du haut : elle ne prend pas le focus, s'annonce poliment aux
  *    lecteurs d'écran (`role="status"`, `aria-live="polite"`) et s'efface seule ; la toucher ouvre la feuille ;
  *  - la FEUILLE : Mee, le sur-titre et le titre de l'étape ANNONCÉE, la phrase de reprise quand l'étape
  *    PROPOSÉE diffère, l'aperçu de la carte (la carte actuelle, dessinée ici — aucune requête réseau), puis
- *    « Immortaliser » (le déroulé, chargé à ce geste), « Plus tard » (l'attente sans expiration) et un lien
- *    discret « Ne plus me proposer » qui OUVRE le réglage et n'agit jamais en silence. Échap vaut « Plus tard ».
+ *    « Immortaliser » (le déroulé, importé avec l'hôte : il partage le morceau des écrans du jeu), « Plus tard »
+ *    (l'attente sans expiration) et un lien discret « Ne plus me proposer » qui OUVRE le réglage et n'agit jamais
+ *    en silence. Échap vaut « Plus tard ».
  *
  * AU BON MOMENT : seulement sur un hub (`showsPlayerBanner` — l'onboarding, l'appel, le composer, une story,
  * une visionneuse sont ailleurs), jamais pendant un appel ni une saisie ; l'étape attend, elle reste dans la
@@ -50,8 +52,6 @@ import { GAME_BRAND, GAME_CARD, GAME_INK, GAME_INK_2 } from './game-surface';
  * À la première lecture d'un compte sur cet appareil, les photos déjà gardées sont SIGNALÉES au registre
  * (D22 b), par lots de 64, pour que les autres appareils les sortent de « À rattraper ».
  */
-const GamePhotoFlowLazy = lazy(() => import('./game-photo-flow').then((m) => ({ default: m.GamePhotoFlow })));
-
 /** La bannière s'efface seule : l'étape reste dans la file et au carnet. */
 export const PHOTO_ALERT_BANNER_MS = 8_000;
 
@@ -291,9 +291,7 @@ function Flow({
 }) {
   return (
     <div data-photo-alert-flow={moment.id} className="pointer-events-auto">
-      <Suspense fallback={null}>
-        <GamePhotoFlowLazy moment={moment} env={env()} flameDays={game?.flame.days ?? null} atmosphere={atmosphere} onClose={onClose} />
-      </Suspense>
+      <GamePhotoFlow moment={moment} env={env()} flameDays={game?.flame.days ?? null} atmosphere={atmosphere} onClose={onClose} />
     </div>
   );
 }
