@@ -5,9 +5,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.HourglassEmpty
-import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.LocalFireDepartment
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -67,6 +68,12 @@ internal fun ConversationRowPreviewLine(
             icon = Icons.Filled.LocalFireDepartment,
             contentDescriptionRes = R.string.conversations_preview_view_once_content_description,
             tint = primaryAccent,
+            italic = true,
+        )
+        MessageSummaryKind.ENCRYPTED -> RowPreviewKindStyle(
+            icon = Icons.Filled.Lock,
+            contentDescriptionRes = R.string.conversations_preview_end_to_end,
+            tint = textSecondary,
             italic = true,
         )
         MessageSummaryKind.EPHEMERAL_ACTIVE -> RowPreviewKindStyle(
@@ -137,4 +144,5 @@ internal fun lastMessagePreviewLabels(): LastMessagePreviewLabels =
         expired = stringResource(R.string.conversations_preview_expired),
         hidden = stringResource(R.string.conversations_preview_hidden),
         viewOnce = stringResource(R.string.conversations_preview_view_once),
+        encrypted = stringResource(R.string.conversations_preview_end_to_end),
     ).withMediaKinds(rememberMediaKindStrings())

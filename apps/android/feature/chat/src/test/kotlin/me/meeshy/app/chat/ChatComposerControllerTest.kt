@@ -16,6 +16,7 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.chat.InMemoryConversationDraftStore
+import me.meeshy.sdk.composer.ComposerAffordances
 import me.meeshy.sdk.conversation.LocalMessage
 import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.lang.LanguageIdentification
@@ -471,6 +472,49 @@ class ChatComposerControllerTest {
         r.controller.release()
 
         verify(exactly = 1) { r.socket.emitTypingStop("c1") }
+    }
+
+    // --- end-to-end encryption (#13110) --------------------------------------------------------
+
+    @Test
+    fun `an end-to-end conversation sends no text — nothing leaves the device`() = runTest {
+        val r = rig(initial = ChatUiState(conversationId = "c1", encryptionMode = "e2ee"))
+        r.controller.onDraftChange("le code est 4417")
+
+        r.controller.send()
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { r.repo.sendOptimistic(any(), any(), any(), any(), any()) }
+        verify(exactly = 0) { r.workManager.enqueue(any<androidx.work.OneTimeWorkRequest>()) }
+    }
+
+    @Test
+    fun `an end-to-end conversation uploads no piece — not even before the message`() = runTest {
+        val r = rig(initial = ChatUiState(conversationId = "c1", encryptionMode = " E2EE "))
+
+        r.controller.sendFileAttachment(byteArrayOf(1, 2, 3), "photo.png", "image/png")
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { r.uploads.enqueue(any()) }
+        coVerify(exactly = 0) { r.repo.sendOptimistic(any(), any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `an end-to-end conversation offers no writing affordance and no reply`() {
+        val state = ChatUiState(conversationId = "c1", encryptionMode = "e2ee")
+
+        assertThat(state.isEndToEnd).isTrue()
+        assertThat(state.composerAffordances).isEqualTo(ComposerAffordances.CLOSED)
+        assertThat(state.viewerMayWrite).isFalse()
+    }
+
+    @Test
+    fun `a server-encrypted conversation still writes`() {
+        val state = ChatUiState(conversationId = "c1", encryptionMode = "server")
+
+        assertThat(state.isEndToEnd).isFalse()
+        assertThat(state.composerAffordances.canSendText).isTrue()
+        assertThat(state.viewerMayWrite).isTrue()
     }
 
     private companion object {
