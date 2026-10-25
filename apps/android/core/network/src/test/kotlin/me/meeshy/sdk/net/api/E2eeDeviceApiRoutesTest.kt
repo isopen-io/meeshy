@@ -30,13 +30,14 @@ class E2eeDeviceApiRoutesTest {
     }
 
     @Test
-    fun `retiring a device deletes it by its device id`() = runTest {
-        val http = RecordingHttp(responseBody = """{"success":true,"data":{"deviceId":3,"retired":true}}""")
+    fun `retiring a device deletes it by its device id and names the generation it was read with`() = runTest {
+        val http = RecordingHttp(responseBody = """{"success":true,"data":{"deviceId":3,"retired":true,"sessionEnded":true}}""")
 
-        val response = devices(http).retireDevice(3)
+        val response = devices(http).retireDevice(3, registrationId = 4711)
 
         assertThat(http.only.method).isEqualTo("DELETE")
         assertThat(http.only.path).isEqualTo("/api/v1/e2ee/devices/3")
+        assertThat(http.only.queryParameter("registrationId")).isEqualTo("4711")
         assertThat(response.success).isTrue()
     }
 }
