@@ -334,27 +334,42 @@ final class InMemoryConversationLockVault: ConversationLockVault {
     /// `false` : le coffre ne se laisse pas énumérer (trousseau avant le
     /// premier déverrouillage), comme `accounts()` le rend en production.
     var enumerable = true
+    /// `true` : le trousseau avant le premier déverrouillage — rien ne s'y
+    /// lit, rien ne s'y écrit, rien ne s'en efface.
+    var sealed = false
+    /// `true` : les écritures échouent (trousseau plein, erreur du système) ;
+    /// ce qui est déjà écrit reste.
+    var refusesWrites = false
 
     init(items: [String: String] = [:]) {
         self.items = items
     }
 
     func accounts() -> [String]? {
-        enumerable ? Array(items.keys) : nil
+        enumerable && !sealed ? Array(items.keys) : nil
     }
 
     func read(_ key: String) -> String? {
-        items[key]
+        sealed ? nil : items[key]
     }
 
     @discardableResult
     func write(_ value: String, for key: String) -> Bool {
+        guard !sealed, !refusesWrites else { return false }
         items[key] = value
         return true
     }
 
     func delete(_ key: String) {
+        guard !sealed else { return }
         items[key] = nil
+    }
+
+    @discardableResult
+    func deleteAll() -> Bool {
+        guard !sealed else { return false }
+        items.removeAll()
+        return true
     }
 }
 

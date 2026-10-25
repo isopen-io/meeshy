@@ -1,4 +1,5 @@
 import XCTest
+import Security
 import UIKit
 @testable import Meeshy
 
@@ -555,6 +556,247 @@ final class ConversationLockManagerTests: XCTestCase {
 
         XCTAssertTrue(sut.isLocked("coffre"))
         XCTAssertEqual(NSELockedConversationMirror.readFile(at: fixture.mirrorFile), .ids(["coffre"]))
+    }
+
+    // MARK: - #12655 : la déconnexion ne laisse aucun code qu'une reconstruction ranimerait
+
+    /// Les blocs que la file principale tient déjà — dont la relecture
+    /// abonnée à `fixture.center` — passent avant celui-ci.
+    private func drainMainQueue() {
+        let drained = expectation(description: "file principale vidée")
+        DispatchQueue.main.async { drained.fulfill() }
+        wait(for: [drained], timeout: 2)
+    }
+
+    /// La liste est inconnue (données protégées indisponibles, aucun miroir) :
+    /// la déconnexion ne peut pas se borner à la liste en mémoire. Un code
+    /// laissé au trousseau, la réinstallation suivante reconstruirait le
+    /// verrou du compte A pour le compte B.
+    func test_aLogoutWhileTheListIsUnknown_leavesNoPinThatARebuildCouldRevive() throws {
+        let fixture = try makeLaunchFixture()
+        let vault = InMemoryConversationLockVault()
+        vault.write("code", for: "meeshy_lock_coffre")
+        vault.write("{}", for: "meeshy_lock_coffre.attempts")
+        let sut = makeLaunchedManager(fixture, protectedData: ProtectedData(available: false), vault: vault)
+
+        sut.resetForLogout()
+
+        XCTAssertNil(vault.read("meeshy_lock_coffre"))
+        XCTAssertTrue(vault.items.isEmpty, "restes : \(vault.items.keys.sorted())")
+        let reinstall = try makeLaunchFixture()
+        let next = makeLaunchedManager(reinstall, protectedData: ProtectedData(available: true), vault: vault)
+        XCTAssertFalse(next.isLocked("coffre"))
+        XCTAssertFalse(next.mayBeLocked("coffre"))
+    }
+
+    /// Le trousseau ne s'efface pas avant le premier déverrouillage : la
+    /// déconnexion rejoue l'effacement dès que les données protégées le
+    /// deviennent.
+    func test_aLogoutBeforeTheFirstUnlock_wipesTheVault_onceProtectedDataBecomesAvailable() throws {
+        let fixture = try makeLaunchFixture()
+        let vault = InMemoryConversationLockVault(items: [
+            "meeshy_master_pin": "pin-maître", "meeshy_lock_coffre": "code", "meeshy_lock_biometric_state": "enrôlement",
+        ])
+        vault.sealed = true
+        let protectedData = ProtectedData(available: false)
+        let sut = makeLaunchedManager(fixture, protectedData: protectedData, vault: vault)
+
+        sut.resetForLogout()
+        XCTAssertEqual(vault.items.count, 3, "un trousseau scellé ne s'efface pas")
+
+        vault.sealed = false
+        protectedData.available = true
+        fixture.center.post(name: UIApplication.protectedDataDidBecomeAvailableNotification, object: nil)
+        drainMainQueue()
+
+        XCTAssertTrue(vault.items.isEmpty, "restes : \(vault.items.keys.sorted())")
+        let reinstall = try makeLaunchFixture()
+        let next = makeLaunchedManager(reinstall, protectedData: ProtectedData(available: true), vault: vault)
+        XCTAssertFalse(next.isLocked("coffre"))
+    }
+
+    /// L'effacement en attente passe AVANT toute nouvelle écriture : rejoué
+    /// après, il emporterait le code que le compte suivant vient de poser, et
+    /// sa conversation resterait sous un PIN que plus rien ne vérifie.
+    func test_aPendingLogoutWipe_neverErasesACodeWrittenAfterIt() throws {
+        let fixture = try makeLaunchFixture()
+        let vault = InMemoryConversationLockVault(items: ["meeshy_lock_coffre": "code"])
+        vault.sealed = true
+        let protectedData = ProtectedData(available: false)
+        let sut = makeLaunchedManager(fixture, protectedData: protectedData, vault: vault)
+        sut.resetForLogout()
+
+        vault.sealed = false
+        protectedData.available = true
+        sut.setMasterPin("123456")
+        XCTAssertTrue(sut.setLock(conversationId: "neuve", pin: "1234"))
+        fixture.center.post(name: UIApplication.protectedDataDidBecomeAvailableNotification, object: nil)
+        drainMainQueue()
+
+        XCTAssertNil(vault.read("meeshy_lock_coffre"), "le code du compte sortant part")
+        XCTAssertTrue(sut.isLocked("neuve"))
+        XCTAssertEqual(sut.attemptLock(conversationId: "neuve", pin: "1234"), .granted)
+        XCTAssertTrue(sut.verifyMasterPin("123456"))
+    }
+
+    // MARK: - #12655 : un verrou n'entre dans la liste qu'une fois son code écrit
+
+    /// La liste est un sous-ensemble des codes du trousseau — c'est ce que la
+    /// reconstruction suppose. Un code qui ne s'écrit pas ne verrouille rien,
+    /// et ne promet rien à l'extension.
+    func test_setLock_whenTheCodeCannotBeWritten_locksNothing_andSaysSo() throws {
+        let fixture = try makeLaunchFixture()
+        let vault = InMemoryConversationLockVault()
+        let sut = makeLaunchedManager(fixture, protectedData: ProtectedData(available: true), vault: vault)
+        vault.refusesWrites = true
+
+        XCTAssertFalse(sut.setLock(conversationId: "coffre", pin: "1234"))
+
+        XCTAssertFalse(sut.isLocked("coffre"))
+        XCTAssertFalse(sut.lockedConversationIds.contains("coffre"))
+        XCTAssertEqual(NSELockedConversationMirror.readFile(at: fixture.mirrorFile), .ids([]))
+        XCTAssertFalse((fixture.standard.stringArray(forKey: lockedIdsKey) ?? []).contains("coffre"))
+    }
+
+    func test_setLock_whenTheCodeIsWritten_saysSo() throws {
+        let fixture = try makeLaunchFixture()
+        let sut = makeLaunchedManager(fixture, protectedData: ProtectedData(available: true))
+
+        XCTAssertTrue(sut.setLock(conversationId: "coffre", pin: "1234"))
+
+        XCTAssertEqual(NSELockedConversationMirror.readFile(at: fixture.mirrorFile), .ids(["coffre"]))
+    }
+
+    /// Changer le code d'une conversation sans pouvoir l'écrire garde l'ancien.
+    func test_aCodeChangeThatCannotBeWritten_keepsTheOldCode() throws {
+        let fixture = try makeLaunchFixture()
+        let vault = InMemoryConversationLockVault()
+        let sut = makeLaunchedManager(fixture, protectedData: ProtectedData(available: true), vault: vault)
+        XCTAssertTrue(sut.setLock(conversationId: "coffre", pin: "1111"))
+        vault.refusesWrites = true
+
+        XCTAssertFalse(sut.setLock(conversationId: "coffre", pin: "2222"))
+
+        XCTAssertTrue(sut.isLocked("coffre"))
+        XCTAssertEqual(sut.attemptLock(conversationId: "coffre", pin: "1111"), .granted)
+    }
+
+    // MARK: - #12655 : le trousseau réel
+
+    private func makeKeychainVault() -> KeychainConversationLockVault {
+        KeychainConversationLockVault(service: "me.meeshy.tests.conversation-locks.\(UUID().uuidString)")
+    }
+
+    private func keychainItem(_ vault: KeychainConversationLockVault, _ account: String) -> [String: Any] {
+        [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: vault.service,
+            kSecAttrAccount as String: account,
+        ]
+    }
+
+    /// Réécrire un code le met à jour EN PLACE : effacé d'abord, un ajout
+    /// refusé ensuite laissait la conversation sans aucun code. Une marque
+    /// posée sur l'élément survit à la réécriture, ce qu'un élément recréé ne
+    /// ferait pas.
+    func test_theKeychainVault_rewritesACodeInPlace_neverDeletingItFirst() throws {
+        let vault = makeKeychainVault()
+        defer { vault.deleteAll() }
+        let item = keychainItem(vault, "meeshy_lock_coffre")
+        XCTAssertTrue(vault.write("ancien", for: "meeshy_lock_coffre"))
+        XCTAssertEqual(SecItemUpdate(item as CFDictionary, [kSecAttrLabel as String: "marque"] as CFDictionary), errSecSuccess)
+
+        XCTAssertTrue(vault.write("nouveau", for: "meeshy_lock_coffre"))
+
+        var found: AnyObject?
+        let query = item.merging([
+            kSecReturnAttributes as String: true, kSecMatchLimit as String: kSecMatchLimitOne,
+        ]) { _, new in new }
+        XCTAssertEqual(SecItemCopyMatching(query as CFDictionary, &found), errSecSuccess)
+        XCTAssertEqual((found as? [String: Any])?[kSecAttrLabel as String] as? String, "marque", "l'élément a été recréé")
+        XCTAssertEqual(vault.read("meeshy_lock_coffre"), "nouveau")
+    }
+
+    func test_theKeychainVault_deleteAll_leavesNoAccount() {
+        let vault = makeKeychainVault()
+        defer { vault.deleteAll() }
+        vault.write("pin-maître", for: "meeshy_master_pin")
+        vault.write("code", for: "meeshy_lock_coffre")
+
+        XCTAssertTrue(vault.deleteAll())
+
+        XCTAssertEqual(vault.accounts(), [])
+        XCTAssertTrue(vault.deleteAll(), "un coffre déjà vide s'efface sans échec")
+    }
+
+    // MARK: - #12655 : les Réglages ne lisent pas une liste inconnue comme « aucun verrou »
+
+    func test_beforeTheListIsRead_theMasterPinCannotBeRemoved() throws {
+        let fixture = try makeLaunchFixture()
+        let vault = InMemoryConversationLockVault()
+        vault.write("code", for: "meeshy_lock_coffre")
+        let sut = makeLaunchedManager(fixture, protectedData: ProtectedData(available: false), vault: vault)
+        sut.setMasterPin("123456")
+
+        XCTAssertFalse(sut.offersMasterPinRemoval)
+        sut.removeMasterPin()
+        XCTAssertTrue(sut.hasMasterPin(), "le code de la conversation dépend encore du PIN maître")
+    }
+
+    func test_onceTheListIsReadEmpty_theMasterPinCanBeRemoved() throws {
+        let fixture = try makeLaunchFixture()
+        let sut = makeLaunchedManager(fixture, protectedData: ProtectedData(available: true))
+        sut.setMasterPin("123456")
+
+        XCTAssertTrue(sut.offersMasterPinRemoval)
+        sut.removeMasterPin()
+        XCTAssertFalse(sut.hasMasterPin())
+    }
+
+    /// Garde de SOURCE : les Réglages comptent le jeu de verrous (liste, et
+    /// codes du trousseau tant qu'elle est inconnue) et ne proposent de
+    /// supprimer le PIN maître que sur la décision du gestionnaire.
+    func test_theSecuritySettings_countTheContentLockSet_andAskBeforeOfferingRemoval() throws {
+        let code = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Views/SecurityView.swift"))
+
+        XCTAssertTrue(code.contains("lockManager.contentLockedConversationIds.count"))
+        XCTAssertTrue(code.contains("lockManager.offersMasterPinRemoval"))
+        XCTAssertFalse(code.contains("lockManager.lockedConversationIds"))
+        XCTAssertFalse(code.contains("lockedCount == 0"))
+    }
+
+    // MARK: - #12655 : une liste qui devient connue s'annonce
+
+    /// Le widget republie sur `.conversationContentLocksDidChange` : la liste
+    /// qui se lit enfin change le jeu qu'il masque.
+    func test_aListThatBecomesKnown_announcesTheContentLockChange() throws {
+        let fixture = try makeLaunchFixture()
+        fixture.standard.set(["coffre"], forKey: lockedIdsKey)
+        let protectedData = ProtectedData(available: false)
+        let sut = makeLaunchedManager(fixture, protectedData: protectedData)
+
+        let announced = expectation(
+            forNotification: .conversationContentLocksDidChange, object: nil, notificationCenter: fixture.center
+        )
+        protectedData.available = true
+        fixture.center.post(name: UIApplication.protectedDataDidBecomeAvailableNotification, object: nil)
+        wait(for: [announced], timeout: 2)
+
+        XCTAssertTrue(sut.isLocked("coffre"))
+    }
+
+    func test_aListRebuiltFromTheVault_announcesTheContentLockChange() throws {
+        let fixture = try makeLaunchFixture()
+        let vault = InMemoryConversationLockVault()
+        vault.write("code", for: "meeshy_lock_coffre")
+        let announced = expectation(
+            forNotification: .conversationContentLocksDidChange, object: nil, notificationCenter: fixture.center
+        )
+
+        let sut = makeLaunchedManager(fixture, protectedData: ProtectedData(available: true), vault: vault)
+
+        wait(for: [announced], timeout: 2)
+        XCTAssertEqual(sut.lockedConversationIds, ["coffre"])
     }
 }
 
