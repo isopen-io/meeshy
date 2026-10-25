@@ -108,13 +108,11 @@ class ConversationListViewModel: ObservableObject {
     /// synchronisation son `@pseudo`. Une divergence entre les deux se lirait
     /// comme deux personnes en train d'écrire.
     @Published var typingUsers: [String: String] = [:]
-    /// conversationId → clair que CET appareil tient du dernier message scellé
-    /// (#12968, `ConversationListEndToEndTexts`). En mémoire seulement : jamais
-    /// dans `Conversation`, que le cache disque persiste.
-    @Published var endToEndTexts: [String: ConversationPreviewDeviceText] = [:]
-    /// Le coffre local des clairs E2EE, le même que lit le fil.
-    let endToEnd: any EndToEndMessagingProviding
-    var endToEndTextsTask: Task<Void, Never>?
+    /// #12968 — le clair local du dernier message scellé, en mémoire seulement.
+    lazy var endToEndTexts = ConversationListEndToEndTextStore(
+        rows: $conversations.eraseToAnyPublisher(), viewerId: { [weak self] in self?.authManager.currentUser?.id },
+        willChange: { [weak self] in self?.objectWillChange.send() }
+    )
     /// Qui écrit où (état par membre, échéances 15 s, abonnements) : voir
     /// `ConversationListTypingTracker`, qui réaligne `typingUsernames` et
     /// `typingUsers` par `applyTypingSelection`.
@@ -491,8 +489,7 @@ class ConversationListViewModel: ObservableObject {
         messageNotificationPublisher: AnyPublisher<MessageActivitySignal, Never> = PushNotificationManager.shared.messageNotificationReceived.eraseToAnyPublisher(),
         draftStore: DraftStore = DraftStore.shared,
         store: ConversationStore = .shared,
-        categoryStore: UserCategoryStore = .shared,
-        endToEnd: any EndToEndMessagingProviding = EndToEndMessagingRuntime.shared
+        categoryStore: UserCategoryStore = .shared
     ) {
         self.conversationService = conversationService
         self.preferenceService = preferenceService
@@ -505,7 +502,6 @@ class ConversationListViewModel: ObservableObject {
         self.draftStore = draftStore
         self.store = store
         self.categoryStore = categoryStore
-        self.endToEnd = endToEnd
         self.previewLoader = ConversationListPreviewLoader(messageService: messageService)
         reloadDraftSummaries()
         observeTyping()
@@ -518,7 +514,6 @@ class ConversationListViewModel: ObservableObject {
         observeSync()
         observeStore()
         observeCategoryStore()
-        observeEndToEndTexts()
     }
 
     /// Latest store-hydration task spawned by `setConversations`
@@ -575,53 +570,7 @@ class ConversationListViewModel: ObservableObject {
         filters: Set<ConversationFilter>,
         tag: String? = nil
     ) -> [Conversation] {
-        return conversations.filter { c in
-            // Étiquette active (carte de focus) : seules celles qui la portent.
-            if let tag, !c.tags.contains(where: { $0.name == tag }) { return false }
-            // Soft delete (`.deleteForUser` / `.leave` set `deletedForUserAt`):
-            // the store keeps the row in RAM until a refresh drops it, so the
-            // list must hide it from EVERY filter (incl. .archived). Matches
-            // `ConversationUserState.isVisible`.
-            guard c.userState.deletedForUserAt == nil else { return false }
-            // Les ARCHIVES changent de corpus, elles ne restreignent pas : sans
-            // ce gate, une archivée reparaîtrait dans « Non lus » parce qu'elle
-            // porte encore des messages non lus.
-            let wantsArchived = ConversationFilterComposition.includesArchived(filters)
-            guard wantsArchived == c.userState.isArchived else { return false }
-            // Une archivée n'a pas à être encore ACTIVE pour se montrer : c'est
-            // le seul corpus où l'inactivité est attendue.
-            guard wantsArchived || c.isActive else { return false }
-
-            // TYPES : un OU. Vide ⇒ aucun type n'est exigé.
-            let types = ConversationFilterComposition.selectedTypes(filters)
-            let typeMatch = types.isEmpty || types.contains { type in
-                switch type {
-                case .personnel: return c.type == .direct
-                case .privee: return c.type == .group
-                case .ouvertes: return c.type == .public || c.type == .community
-                case .globales: return c.type == .global
-                case .channels: return c.isAnnouncementChannel
-                default: return false
-                }
-            }
-
-            // ÉTATS : un ET. Vide ⇒ aucune restriction.
-            let states = ConversationFilterComposition.selectedStates(filters)
-            let stateMatch = states.allSatisfy { state in
-                switch state {
-                case .unread: return c.userState.unreadCount > 0
-                case .favoris: return c.userState.reaction != nil
-                default: return true
-                }
-            }
-
-            let filterMatch = typeMatch && stateMatch
-            // `displayName` (not `name`): a conversation renamed locally via
-            // `userState.customName` must remain findable by the name the
-            // row actually shows, not just the server-side title/identifier.
-            let searchMatch = searchText.isEmpty || c.displayName.localizedCaseInsensitiveContains(searchText)
-            return filterMatch && searchMatch
-        }
+        conversations.filter { ConversationFilterComposition.admits($0, filters: filters, tag: tag, searchText: searchText) }
     }
 
     // MARK: - Sync Engine Observation

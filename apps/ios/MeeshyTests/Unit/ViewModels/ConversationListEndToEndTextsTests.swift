@@ -8,9 +8,12 @@ import MeeshySDK
 /// l'appareil sait lire** (#12968).
 ///
 /// Le serveur ne sert que le scellé (« 🔒 Message chiffré ») ; le clair vit
-/// dans le coffre local, que le fil lisait seul. La ligne le lit désormais par
-/// le même coffre et le même socle de place, le tient en mémoire, et garde le
-/// libellé pour ce que cet appareil n'a pas pu déchiffrer.
+/// dans le coffre local, que le fil lisait seul. La ligne le lit désormais dans
+/// le même coffre, le confronte à ce qu'elle montre (conversation, auteur,
+/// composition), le tient en mémoire, et garde le libellé pour ce que cet
+/// appareil n'a pas pu déchiffrer. Les lignes sont fabriquées comme la
+/// production les écrit : mon propre envoi porte « Vous » et AUCUN
+/// identifiant d'auteur (`ConversationListAuthor.peerUserId`).
 @MainActor
 final class ConversationListEndToEndTextsTests: XCTestCase {
 
@@ -18,110 +21,129 @@ final class ConversationListEndToEndTextsTests: XCTestCase {
     private let me = "00000000000000000000aa11"
     private let peer = "00000000000000000000bb22"
     private let messageId = "00000000000000000000ab51"
+    private let sentAt = Date(timeIntervalSince1970: 1_790_000_000)
 
-    private func sealedRow(
-        id: String? = nil, lastMessageId: String? = nil, senderUserId: String? = nil
-    ) -> Conversation {
+    private func sealedRow(lastMessageId: String? = nil, from author: String? = nil) -> Conversation {
+        let senderUserId = author ?? me
         var row = Conversation(
-            id: id ?? conversationId, identifier: id ?? conversationId, type: .direct,
-            lastMessageAt: Date(timeIntervalSince1970: 1_790_000_000),
+            id: conversationId, identifier: conversationId, type: .direct,
+            lastMessageAt: sentAt.addingTimeInterval(2),
             encryptionMode: E2EEWire.mode, lastMessagePreview: "",
             lastMessageId: lastMessageId ?? messageId
         )
-        row.lastMessageSenderName = "Vous"
-        row.lastMessageSenderUserId = senderUserId ?? me
+        row.lastMessageSenderName = senderUserId == me ? ConversationListAuthor.readerLabel : "Bob"
+        row.lastMessageSenderUserId = ConversationListAuthor.peerUserId(
+            senderUserId: senderUserId, senderName: row.lastMessageSenderName, readerId: me
+        )
         row.lastMessageNature = LastMessageNature(messageType: "text", isEncrypted: true)
         return row
     }
 
-    private func content(_ text: String, in conversation: String? = nil, language: String? = "fr") -> E2EEContent {
+    private func content(_ text: String, in conversation: String? = nil, composedAt: Date? = nil) -> E2EEContent {
         E2EEContent(
-            text: text, language: language, replyTo: nil,
-            conversationId: conversation ?? conversationId, clientMessageId: "cmid-1", sentAt: Date()
+            text: text, language: "fr", replyTo: nil,
+            conversationId: conversation ?? conversationId, clientMessageId: "cmid-1", sentAt: composedAt ?? sentAt
         )
     }
 
     // MARK: - Lois pures
 
-    func test_adoption_myOwnSentMessage_isReadOnTheRow() {
+    func test_adoption_myOwnSentMessage_asProductionStoresIt_isRead() {
         let entry = E2EEPlaintextEntry.readable(content("On se voit à 18 h"), senderUserId: me)
 
-        let text = ConversationListEndToEndTexts.adoption(of: entry, for: sealedRow())
+        let text = ConversationListEndToEndTexts.adoption(of: entry, for: sealedRow(), viewerId: me)
 
-        XCTAssertEqual(text, ConversationPreviewDeviceText(messageId: messageId, text: "On se voit à 18 h", language: "fr"))
+        XCTAssertEqual(text?.text, "On se voit à 18 h")
+        XCTAssertEqual(text?.author, .reader)
     }
 
-    func test_adoption_peerMessageOpenedByLibsignal_isReadOnTheRow() {
+    func test_adoption_peerMessageOpenedByLibsignal_isRead() {
         let entry = E2EEPlaintextEntry.readable(content("Bien reçu"), senderUserId: peer)
 
-        let text = ConversationListEndToEndTexts.adoption(of: entry, for: sealedRow(senderUserId: peer))
+        let text = ConversationListEndToEndTexts.adoption(of: entry, for: sealedRow(from: peer), viewerId: me)
 
         XCTAssertEqual(text?.text, "Bien reçu")
+        XCTAssertEqual(text?.author, .peer(userId: peer))
     }
 
-    func test_adoption_undecryptable_keepsTheLabel() {
-        XCTAssertNil(ConversationListEndToEndTexts.adoption(of: .undecryptable, for: sealedRow()))
-        XCTAssertNil(ConversationListEndToEndTexts.adoption(of: nil, for: sealedRow()))
+    func test_adoption_undecryptableOrAbsent_keepsTheLabel() {
+        XCTAssertNil(ConversationListEndToEndTexts.adoption(of: .undecryptable, for: sealedRow(), viewerId: me))
+        XCTAssertNil(ConversationListEndToEndTexts.adoption(of: nil, for: sealedRow(), viewerId: me))
     }
 
     func test_adoption_plaintextWrittenForAnotherConversation_isRefused() {
         let entry = E2EEPlaintextEntry.readable(content("Ailleurs", in: "00000000000000000000ab99"), senderUserId: me)
 
-        XCTAssertNil(ConversationListEndToEndTexts.adoption(of: entry, for: sealedRow()))
+        XCTAssertNil(ConversationListEndToEndTexts.adoption(of: entry, for: sealedRow(), viewerId: me))
     }
 
-    func test_adoption_authorTheServerReassigned_isRefused() {
-        let entry = E2EEPlaintextEntry.readable(content("Envoie-moi le code"), senderUserId: me)
+    func test_adoption_peerTextServedUnderMyName_isRefused() {
+        let entry = E2EEPlaintextEntry.readable(content("Envoie-moi le code"), senderUserId: peer)
 
-        XCTAssertNil(ConversationListEndToEndTexts.adoption(of: entry, for: sealedRow(senderUserId: peer)))
+        XCTAssertNil(ConversationListEndToEndTexts.adoption(of: entry, for: sealedRow(), viewerId: me))
     }
 
-    func test_adoption_rowWithoutAuthor_isRefused() {
-        var row = sealedRow()
-        row.lastMessageSenderUserId = nil
+    func test_adoption_myTextServedUnderAPeerName_isRefused() {
+        let entry = E2EEPlaintextEntry.readable(content("Je pars"), senderUserId: me)
+
+        XCTAssertNil(ConversationListEndToEndTexts.adoption(of: entry, for: sealedRow(from: peer), viewerId: me))
+    }
+
+    func test_adoption_withoutViewer_isRefused() {
+        let entry = E2EEPlaintextEntry.readable(content("On se voit à 18 h"), senderUserId: me)
+
+        XCTAssertNil(ConversationListEndToEndTexts.adoption(of: entry, for: sealedRow(), viewerId: nil))
+    }
+
+    func test_adoption_oldMessageReplayedAsTheLastOne_isRefused() {
+        let replayed = content("Oui, je confirme le virement", composedAt: sentAt.addingTimeInterval(-3 * 86_400))
 
         XCTAssertNil(ConversationListEndToEndTexts.adoption(
-            of: .readable(content("Sans auteur"), senderUserId: me), for: row
+            of: .readable(replayed, senderUserId: peer), for: sealedRow(from: peer), viewerId: me
         ))
     }
 
-    func test_adoption_rowNotSealed_isNotTouched() {
-        var row = sealedRow()
-        row.lastMessageNature = LastMessageNature(messageType: "text", isEncrypted: false)
+    func test_kept_dropsATextWhoseRowNoLongerDescribesIt() {
+        let entry = E2EEPlaintextEntry.readable(content("Bien reçu"), senderUserId: peer)
+        let read = ConversationListEndToEndTexts.adoption(of: entry, for: sealedRow(from: peer), viewerId: me)
+        var reassigned = sealedRow(from: peer)
+        reassigned.lastMessageSenderUserId = "00000000000000000000cc33"
 
-        XCTAssertNil(ConversationListEndToEndTexts.adoption(
-            of: .readable(content("Clair servi"), senderUserId: me), for: row
-        ))
+        let changedMessage = ConversationListEndToEndTexts.kept(
+            [conversationId: read!], in: [sealedRow(lastMessageId: "00000000000000000000ab52", from: peer)]
+        )
+        let changedAuthor = ConversationListEndToEndTexts.kept([conversationId: read!], in: [reassigned])
+
+        XCTAssertTrue(changedMessage.isEmpty)
+        XCTAssertTrue(changedAuthor.isEmpty)
     }
 
-    func test_kept_dropsTheTextOfALastMessageThatChanged() {
-        let known = [conversationId: ConversationPreviewDeviceText(messageId: messageId, text: "Ancien", language: nil)]
-
-        let kept = ConversationListEndToEndTexts.kept(known, in: [sealedRow(lastMessageId: "00000000000000000000ab52")])
-
-        XCTAssertTrue(kept.isEmpty)
-    }
-
-    func test_resolve_readsTheVaultOnlyForRowsStillWaiting() async {
+    func test_resolve_peerMiss_isNotReReadUntilAnOpening_butMineAlwaysIs() async {
         let vault = MockEndToEndMessaging()
-        vault.store(.readable(content("Nouveau"), senderUserId: me), for: messageId)
 
-        let texts = await ConversationListEndToEndTexts.resolve([sealedRow()], known: [:], from: vault)
+        let first = await ConversationListEndToEndTexts.resolve(
+            [sealedRow(from: peer)], known: [:], misses: [], viewerId: me, from: vault
+        )
+        let mine = await ConversationListEndToEndTexts.resolve(
+            [sealedRow()], known: [:], misses: [], viewerId: me, from: vault
+        )
 
-        XCTAssertEqual(texts[conversationId]?.text, "Nouveau")
+        XCTAssertEqual(first.misses, [messageId])
+        XCTAssertTrue(mine.misses.isEmpty)
     }
 
     // MARK: - Rendu de la ligne
 
     func test_previewLine_readOnDevice_showsTheTextInsteadOfTheLabel() {
-        let device = ConversationPreviewDeviceText(messageId: messageId, text: "On se voit à 18 h", language: "fr")
+        let entry = E2EEPlaintextEntry.readable(content("On se voit à 18 h"), senderUserId: me)
+        let device = ConversationListEndToEndTexts.adoption(of: entry, for: sealedRow(), viewerId: me)
         let strings = ConversationPreviewStrings(language: "fr") { $0.rawValue }
 
         let sealed = ConversationPreviewLine.preview(
-            for: sealedRow(), viewerId: me, preferredLanguages: ["fr"], now: Date(), strings: strings
+            for: sealedRow(), viewerId: me, preferredLanguages: ["fr"], now: sentAt, strings: strings
         )
         let read = ConversationPreviewLine.preview(
-            for: sealedRow(), viewerId: me, preferredLanguages: ["fr"], now: Date(), readOnDevice: device, strings: strings
+            for: sealedRow(), viewerId: me, preferredLanguages: ["fr"], now: sentAt, readOnDevice: device, strings: strings
         )
 
         XCTAssertEqual(sealed.icon, .encrypted)
@@ -129,59 +151,77 @@ final class ConversationListEndToEndTextsTests: XCTestCase {
         XCTAssertEqual(read.segments, [.text("On se voit à 18 h", language: nil)])
     }
 
-    // MARK: - Le modèle de la liste
+    // MARK: - La carte tenue par la liste
 
-    private func makeViewModel(endToEnd: MockEndToEndMessaging) -> ConversationListViewModel {
-        ConversationListViewModel(
-            conversationService: MockConversationService(),
-            preferenceService: MockPreferenceService(),
-            messageSocket: MockMessageSocket(),
-            messageService: MockMessageService(),
-            authManager: MockAuthManager(),
-            storyService: MockStoryService(),
-            syncEngine: MockConversationSyncEngine(),
-            messageNotificationPublisher: PassthroughSubject<MessageActivitySignal, Never>().eraseToAnyPublisher(),
-            draftStore: DraftStore(userDefaults: UserDefaults(suiteName: "E2EListTexts-\(UUID().uuidString)")!),
-            store: ConversationListViewModelTests.makeTestStore(),
-            categoryStore: UserCategoryStore(service: ConvListTestCategoryWriter()),
-            endToEnd: endToEnd
+    @MainActor private final class ChangeCounter { var count = 0 }
+
+    private func waitUntil(_ condition: @escaping @MainActor () -> Bool) async {
+        let deadline = Date().addingTimeInterval(2)
+        while !condition(), Date() < deadline { try? await Task.sleep(for: .milliseconds(10)) }
+    }
+
+    private func makeStore(
+        rows: CurrentValueSubject<[Conversation], Never>, vault: MockEndToEndMessaging, changes: ChangeCounter = ChangeCounter()
+    ) -> ConversationListEndToEndTextStore {
+        ConversationListEndToEndTextStore(
+            rows: rows.eraseToAnyPublisher(), endToEnd: vault,
+            viewerId: { [me] in me }, willChange: { changes.count += 1 }
         )
     }
 
-    private func waitForTexts(
-        of viewModel: ConversationListViewModel, where predicate: @escaping ([String: ConversationPreviewDeviceText]) -> Bool
-    ) async {
-        let reached = expectation(description: "endToEndTexts")
-        let observation = viewModel.$endToEndTexts.first(where: predicate).sink { _ in reached.fulfill() }
-        await fulfillment(of: [reached], timeout: 2)
-        observation.cancel()
-    }
-
-    func test_viewModel_readsMyOwnSentMessage_andNeverWritesItIntoTheConversation() async {
+    func test_store_readsMyOwnSentMessage_andNeverWritesItIntoTheConversation() async {
         let vault = MockEndToEndMessaging()
         vault.store(.readable(content("On se voit à 18 h"), senderUserId: me), for: messageId)
-        let viewModel = makeViewModel(endToEnd: vault)
+        let rows = CurrentValueSubject<[Conversation], Never>([sealedRow()])
+        let changes = ChangeCounter()
+        let store = makeStore(rows: rows, vault: vault, changes: changes)
 
-        viewModel.conversations = [sealedRow()]
-        await waitForTexts(of: viewModel) { !$0.isEmpty }
+        await waitUntil { store.text(for: self.conversationId) != nil }
 
-        XCTAssertEqual(viewModel.endToEndTexts[conversationId]?.text, "On se voit à 18 h")
-        XCTAssertEqual(viewModel.conversations.first?.lastMessagePreview, "")
-        let persisted = String(decoding: (try? JSONEncoder().encode(viewModel.conversations)) ?? Data(), as: UTF8.self)
+        XCTAssertEqual(store.text(for: conversationId)?.text, "On se voit à 18 h")
+        XCTAssertEqual(changes.count, 1)
+        XCTAssertEqual(rows.value.first?.lastMessagePreview, "")
+        let persisted = String(decoding: (try? JSONEncoder().encode(rows.value)) ?? Data(), as: UTF8.self)
         XCTAssertFalse(persisted.contains("On se voit"))
     }
 
-    func test_viewModel_envelopeOpenedLater_reachesTheRow() async {
+    func test_store_envelopeOpenedLater_reachesTheRow() async {
         let vault = MockEndToEndMessaging()
-        let viewModel = makeViewModel(endToEnd: vault)
-        viewModel.conversations = [sealedRow(senderUserId: peer)]
+        let rows = CurrentValueSubject<[Conversation], Never>([sealedRow(from: peer)])
+        let store = makeStore(rows: rows, vault: vault)
         try? await Task.sleep(for: .milliseconds(80))
-        XCTAssertTrue(viewModel.endToEndTexts.isEmpty)
+        XCTAssertNil(store.text(for: conversationId))
 
         vault.store(.readable(content("Bien reçu"), senderUserId: peer), for: messageId)
         vault.publish(.undecryptable(messageId: "autre", conversationId: conversationId))
-        await waitForTexts(of: viewModel) { !$0.isEmpty }
+        await waitUntil { store.text(for: self.conversationId) != nil }
 
-        XCTAssertEqual(viewModel.endToEndTexts[conversationId]?.text, "Bien reçu")
+        XCTAssertEqual(store.text(for: conversationId)?.text, "Bien reçu")
+    }
+
+    func test_store_myAcknowledgedSend_rangedAfterTheRow_reachesItOnTheNextChange() async {
+        let vault = MockEndToEndMessaging()
+        let rows = CurrentValueSubject<[Conversation], Never>([sealedRow()])
+        let store = makeStore(rows: rows, vault: vault)
+        try? await Task.sleep(for: .milliseconds(80))
+
+        await vault.remember(content("Je pars"), from: me, as: [messageId])
+        rows.send([sealedRow()])
+        await waitUntil { store.text(for: self.conversationId) != nil }
+
+        XCTAssertEqual(store.text(for: conversationId)?.text, "Je pars")
+    }
+
+    func test_store_listEmptiedOnSignOut_dropsEveryText() async {
+        let vault = MockEndToEndMessaging()
+        vault.store(.readable(content("On se voit à 18 h"), senderUserId: me), for: messageId)
+        let rows = CurrentValueSubject<[Conversation], Never>([sealedRow()])
+        let store = makeStore(rows: rows, vault: vault)
+        await waitUntil { store.text(for: self.conversationId) != nil }
+
+        rows.send([])
+        await waitUntil { store.text(for: self.conversationId) == nil }
+
+        XCTAssertNil(store.text(for: conversationId))
     }
 }

@@ -247,6 +247,14 @@ struct ConversationRowItem: View {
         Task { await LiveCallJoiner.live.join(request) }
     }
 
+    /// La communauté d'une rangée : l'index de la liste d'abord, la liste
+    /// entière ensuite.
+    static func community(of conversation: Conversation, lookup: [String: MeeshyCommunity], all: [MeeshyCommunity]) -> MeeshyCommunity? {
+        guard conversation.type == .community || conversation.communityId != nil,
+              let communityId = conversation.communityId else { return nil }
+        return lookup[communityId] ?? all.first(where: { $0.id == communityId })
+    }
+
     /// #11387 — verrouillée par PIN : la rangée ne montre rien de ce que la
     /// conversation contient. LA décision (`ConversationLockManager
     /// .hidesContent`) est celle que le chargeur d'aperçu lit : un verrou qui

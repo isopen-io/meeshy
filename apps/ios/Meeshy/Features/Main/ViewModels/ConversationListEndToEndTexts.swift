@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 import MeeshyE2EE
 import MeeshySDK
@@ -5,11 +6,13 @@ import MeeshySDK
 /// La ligne de liste d'une conversation chiffrée de bout en bout lit le clair
 /// que CET appareil tient de son dernier message (#12968) : ce qu'il a écrit
 /// (`EndToEndSendSealer` le range sous l'identifiant serveur à l'acquittement)
-/// ou ce que libsignal a ouvert. Même coffre et même socle de place que le fil
-/// (`EndToEndThreadPlaintexts.isWritten`) : même conversation, même auteur
-/// authentifié. Le clair n'est tenu qu'en mémoire par la liste, jamais écrit
-/// dans le cache des conversations ni renvoyé au serveur. Absent ou
-/// indéchiffrable, la ligne garde « Message chiffré ».
+/// ou ce que libsignal a ouvert — le même coffre que le fil. Ce que libsignal
+/// en a authentifié (conversation, auteur, composition) voyage avec lui, et la
+/// ligne le confronte à ce qu'elle montre à CHAQUE rendu
+/// (`ConversationPreviewDeviceText.reading`). Le clair n'est tenu qu'en
+/// mémoire par la liste, jamais écrit dans le cache des conversations ni
+/// renvoyé au serveur. Absent, indéchiffrable ou hors de sa place, la ligne
+/// garde « Message chiffré ».
 nonisolated enum ConversationListEndToEndTexts {
 
     /// Un dernier message scellé par le serveur, que la ligne nomme.
@@ -17,44 +20,132 @@ nonisolated enum ConversationListEndToEndTexts {
         conversation.lastMessageNature?.isEncrypted == true && !(conversation.lastMessageId ?? "").isEmpty
     }
 
-    /// Le clair de la ligne, s'il est à SA place ; `nil` sinon.
-    static func adoption(of entry: E2EEPlaintextEntry?, for conversation: Conversation) -> ConversationPreviewDeviceText? {
-        guard awaitsPlaintext(conversation), let messageId = conversation.lastMessageId,
+    /// Le clair de la ligne, s'il est à SA place ; `nil` sinon. L'auteur se dit
+    /// comme la ligne le dit : moi, ou un pair nommé.
+    static func adoption(
+        of entry: E2EEPlaintextEntry?, for conversation: Conversation, viewerId: String?
+    ) -> ConversationPreviewDeviceText? {
+        guard let viewerId, !viewerId.isEmpty, let messageId = conversation.lastMessageId,
               case .readable(let content, let senderUserId)? = entry,
-              EndToEndThreadPlaintexts.isWritten(
-                content, by: senderUserId, in: conversation.id, servedAuthor: conversation.lastMessageSenderUserId
-              )
-        else { return nil }
-        return ConversationPreviewDeviceText(messageId: messageId, text: content.text ?? "", language: content.language)
+              let writtenFor = content.conversationId else { return nil }
+        let candidate = ConversationPreviewDeviceText(
+            messageId: messageId,
+            conversationId: writtenFor,
+            author: senderUserId == viewerId ? .reader : .peer(userId: senderUserId),
+            composedAt: Date(timeIntervalSince1970: TimeInterval(content.sentAt) / 1000),
+            text: content.text ?? "",
+            language: content.language
+        )
+        return candidate.reading(conversation)
     }
 
-    /// Les clairs déjà tenus qui valent encore : même conversation, même
-    /// dernier message. Un dernier message qui change fait tomber le sien.
+    /// Les clairs déjà tenus qui sont encore à leur place.
     static func kept(
         _ known: [String: ConversationPreviewDeviceText], in conversations: [Conversation]
     ) -> [String: ConversationPreviewDeviceText] {
         conversations.reduce(into: [String: ConversationPreviewDeviceText]()) { kept, conversation in
-            guard awaitsPlaintext(conversation), let text = known[conversation.id],
-                  text.messageId == conversation.lastMessageId else { return }
+            guard let text = known[conversation.id]?.reading(conversation) else { return }
             kept[conversation.id] = text
         }
     }
 
     /// Lit le coffre pour les lignes scellées qui n'ont pas encore leur clair,
-    /// et rend la carte complète, par conversation.
+    /// hors des messages d'un pair déjà cherchés sans succès (`misses`, vidés à
+    /// chaque ouverture), et rend la carte complète avec les nouveaux manques.
     static func resolve(
         _ conversations: [Conversation],
         known: [String: ConversationPreviewDeviceText],
+        misses: Set<String>,
+        viewerId: String?,
         from endToEnd: any EndToEndMessagingProviding
-    ) async -> [String: ConversationPreviewDeviceText] {
+    ) async -> (texts: [String: ConversationPreviewDeviceText], misses: Set<String>) {
         let kept = kept(known, in: conversations)
-        let pending = conversations.filter { awaitsPlaintext($0) && kept[$0.id] == nil }
+        let pending = conversations.filter {
+            awaitsPlaintext($0) && kept[$0.id] == nil && !misses.contains($0.lastMessageId ?? "")
+        }
         let ids = pending.compactMap(\.lastMessageId)
-        guard !ids.isEmpty else { return kept }
+        guard !ids.isEmpty else { return (kept, misses) }
         let entries = await endToEnd.plaintexts(for: ids)
-        return pending.reduce(into: kept) { texts, conversation in
-            guard let text = adoption(of: conversation.lastMessageId.flatMap { entries[$0] }, for: conversation) else { return }
-            texts[conversation.id] = text
+        return pending.reduce(into: (texts: kept, misses: misses)) { found, conversation in
+            let entry = conversation.lastMessageId.flatMap { entries[$0] }
+            if let text = adoption(of: entry, for: conversation, viewerId: viewerId) {
+                found.texts[conversation.id] = text
+            } else if let id = conversation.lastMessageId, !isMine(conversation) {
+                found.misses.insert(id)
+            }
+        }
+    }
+
+    /// Mon propre envoi n'entre jamais dans les manques : son clair se range
+    /// sous l'identifiant serveur à l'acquittement, qui peut suivre la ligne.
+    private static func isMine(_ conversation: Conversation) -> Bool {
+        conversation.lastMessageSenderUserId == nil
+            && conversation.lastMessageSenderName == ConversationListAuthor.readerLabel
+    }
+}
+
+/// La carte « conversation → clair local du dernier message » que la liste
+/// passe à ses rangées (#12968). Relue quand la liste change et quand
+/// libsignal ouvre des enveloppes (une rafale de rattrapage ne relit qu'une
+/// fois) ; une seule lecture en vol, la plus récente gagne. Un message cherché
+/// sans succès n'est relu qu'après une ouverture. `willChange` prévient le
+/// modèle de la liste, que la vue observe.
+@MainActor
+final class ConversationListEndToEndTextStore {
+    nonisolated deinit {}
+
+    private(set) var texts: [String: ConversationPreviewDeviceText] = [:]
+    private var misses: Set<String> = []
+    private let endToEnd: any EndToEndMessagingProviding
+    private let viewerId: @MainActor () -> String?
+    private let willChange: @MainActor () -> Void
+    private var latestRows: [Conversation] = []
+    private var reading: Task<Void, Never>?
+    private var cancellables = Set<AnyCancellable>()
+
+    init(
+        rows: AnyPublisher<[Conversation], Never>,
+        endToEnd: any EndToEndMessagingProviding = EndToEndMessagingRuntime.shared,
+        viewerId: @escaping @MainActor () -> String?,
+        willChange: @escaping @MainActor () -> Void
+    ) {
+        self.endToEnd = endToEnd
+        self.viewerId = viewerId
+        self.willChange = willChange
+        rows
+            .debounce(for: .milliseconds(16), scheduler: DispatchQueue.main)
+            .sink { [weak self] rows in self?.refresh(rows) }
+            .store(in: &cancellables)
+        endToEnd.opened
+            .debounce(for: .milliseconds(50), scheduler: DispatchQueue.main)
+            .sink { [weak self] _ in
+                guard let self else { return }
+                self.misses = []
+                self.refresh(self.latestRows)
+            }
+            .store(in: &cancellables)
+    }
+
+    func text(for conversationId: String) -> ConversationPreviewDeviceText? {
+        texts[conversationId]
+    }
+
+    private func refresh(_ rows: [Conversation]) {
+        latestRows = rows
+        let known = texts
+        let misses = misses
+        let viewer = viewerId()
+        let endToEnd = endToEnd
+        reading?.cancel()
+        reading = Task { [weak self] in
+            let resolved = await ConversationListEndToEndTexts.resolve(
+                rows, known: known, misses: misses, viewerId: viewer, from: endToEnd
+            )
+            guard !Task.isCancelled, let self else { return }
+            self.misses = resolved.misses
+            guard self.texts != resolved.texts else { return }
+            self.willChange()
+            self.texts = resolved.texts
         }
     }
 }

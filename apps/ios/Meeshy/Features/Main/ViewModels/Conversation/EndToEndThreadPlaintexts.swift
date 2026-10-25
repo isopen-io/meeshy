@@ -91,18 +91,10 @@ nonisolated enum EndToEndThreadPlaintexts {
     /// magasin résout en identifiant utilisateur) : une ligne sans auteur
     /// reconnaissable reste scellée.
     static func isInPlace(_ content: E2EEContent, senderUserId: String, for message: MeeshyMessage, conversationId: String) -> Bool {
-        guard message.messageSource == .user,
-              isWritten(content, by: senderUserId, in: conversationId, servedAuthor: message.senderUserId ?? message.senderId)
-        else { return false }
+        guard content.belongs(to: conversationId), message.messageSource == .user,
+              (message.senderUserId ?? message.senderId) == senderUserId else { return false }
         if let written = content.clientMessageId, let served = message.clientMessageId, written != served { return false }
         return cited(content.replyTo) == cited(message.replyToId)
-    }
-
-    /// Le socle de la place, partagé par le fil et la ligne de liste (#12968) :
-    /// le clair a été écrit POUR cette conversation, et l'auteur que le serveur
-    /// annonce est celui que libsignal a authentifié.
-    static func isWritten(_ content: E2EEContent, by senderUserId: String, in conversationId: String, servedAuthor: String?) -> Bool {
-        content.belongs(to: conversationId) && servedAuthor == senderUserId
     }
 
     private static func cited(_ id: String?) -> String? {
