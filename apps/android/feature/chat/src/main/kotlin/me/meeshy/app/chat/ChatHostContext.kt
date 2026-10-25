@@ -155,6 +155,8 @@ internal class ChatHostActions(
     val forwardTo: (String) -> Unit,
     val stageFile: (File, String?) -> Unit = { _, _ -> },
     val stageCapturedUris: suspend (List<Uri>) -> Unit = {},
+    /** L'auteur que les cadres de la retouche écrivent (#12734). */
+    val selfAuthor: () -> me.meeshy.sdk.model.composer.look.ComposerLookPerson? = { null },
     val trayNotices: Flow<String> = emptyFlow(),
 )
 
@@ -195,6 +197,7 @@ internal fun ChatViewModel.hostActions(): ChatHostActions = ChatHostActions(
     stagePendingUris = { uris -> controllers.find<ComposerTrayController>()?.stageUris(uris) },
     stageFile = { file, mime -> controllers.find<ComposerTrayController>()?.stageFile(file, mime) },
     stageCapturedUris = { uris -> controllers.find<ComposerTrayController>()?.stageUrisAndWait(uris) },
+    selfAuthor = this::selfAuthor,
     trayNotices = controllers.find<ComposerTrayController>()?.notices ?: emptyFlow(),
     dismissImageViewer = this::dismissImageViewer,
     openEmojiPicker = this::openEmojiPicker,

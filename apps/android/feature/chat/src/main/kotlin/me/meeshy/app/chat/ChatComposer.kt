@@ -67,6 +67,7 @@ internal fun ChatComposer(
     editingOriginalText: String? = null,
     onStageVoiceFile: ((File) -> Unit)? = null,
     onStageCapturedUris: (suspend (List<Uri>) -> Unit)? = null,
+    selfAuthor: me.meeshy.sdk.model.composer.look.ComposerLookPerson? = null,
     secondaryColor: Color = MeeshyPalette.Indigo600,
     hostCallbacks: ComposerHostCallbacks = ComposerHostCallbacks(),
     focusTrigger: Int = 0,
@@ -156,6 +157,7 @@ internal fun ChatComposer(
     retouch?.let { pending ->
         ChatCaptureRetouchHost(
             pending = pending,
+            person = selfAuthor,
             onDeliver = { file ->
                 ioScope.launch { deliverCapture(file) }
                 retouch = null
