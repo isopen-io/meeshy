@@ -286,80 +286,210 @@ final class ConversationTranslationE2EEGuardTests: XCTestCase {
         XCTAssertNil(sut.preferredTranslation(for: messageId))
     }
 
-    // MARK: - Après une désactivation datée (#12883)
+    // MARK: - Un message déchiffré sur l'appareil (#12935)
 
-    private let deactivation = Date(timeIntervalSince1970: 5_000)
-
-    /// L'appareil a vu le chiffrement, puis le registre du régime — celui que
-    /// l'envoi lit — apprend une désactivation DATÉE par son époque.
-    private func memoryAfterADatedDeactivation() -> EndToEndRegimeMemory {
-        let memory = EndToEndRegimeMemory(defaults: nil, now: { [deactivation] in deactivation })
-        _ = memory.resolve(conversationId: conversationId, served: EndToEndRegime(encryptionMode: "e2ee", enabledAt: activation))
-        let ledger = EndToEndRegimeLedger(memory: memory)
-        ledger.learn(ConversationEncryptionStatus(isEncrypted: false, mode: nil, epoch: 2), for: conversationId)
-        ledger.confirmDowngrade(epoch: 2, for: conversationId)
-        return memory
+    private func decryptedOnDevice(createdAt: Date) -> Message {
+        var message = Message(id: messageId, conversationId: conversationId, senderId: "p-1",
+                              content: "Q2lwaGVydGV4dGU=", originalLanguage: "en", isEncrypted: true, encryptionMode: "e2ee",
+                              createdAt: createdAt, updatedAt: createdAt)
+        message.adoptDecryptedContent("Salut")
+        return message
     }
 
-    func test_thread_afterADatedDeactivation_thePeersNextPlaintextIsOrdinaryAndTranslatedByTheServer() {
-        let message = forgedPlaintext(createdAt: Date(timeIntervalSince1970: 9_000))
-        let sut = thread(mode: nil, message: message, enabledAt: nil, regimeMemory: memoryAfterADatedDeactivation())
+    /// Le serveur n'a pas lu un message que CET appareil a déchiffré : toute
+    /// traduction qu'il en sert est forgée, même s'il le date avant l'activation.
+    func test_thread_aMessageDecryptedOnDevice_datedBeforeTheActivation_servesNoServerTranslation() {
+        let message = decryptedOnDevice(createdAt: Date(timeIntervalSince1970: 500))
+        let sut = thread(mode: "e2ee", message: message)
 
-        XCTAssertFalse(UnencryptedMessageGate.isUnencrypted(message, in: sut))
-        XCTAssertEqual(UnencryptedMessageGate.translations(of: message, in: sut), [clearTranslation()])
+        XCTAssertEqual(UnencryptedMessageGate.translations(of: message, in: sut), [])
+        XCTAssertNil(sut.preferredTranslation(for: messageId))
     }
 
-    func test_thread_afterADatedDeactivation_aPlaintextOfTheEncryptedEraKeepsItsVerdict() {
-        let message = forgedPlaintext(createdAt: afterActivation)
-        let sut = thread(mode: nil, message: message, enabledAt: nil, regimeMemory: memoryAfterADatedDeactivation())
+    /// Même loi dans une conversation que l'appareil n'a jamais vue chiffrée.
+    func test_thread_aMessageDecryptedOnDevice_inAConversationNeverSeenEncrypted_servesNoServerTranslation() {
+        let message = decryptedOnDevice(createdAt: afterActivation)
+        let sut = thread(mode: nil, message: message, enabledAt: nil)
+
+        XCTAssertEqual(UnencryptedMessageGate.translations(of: message, in: sut), [])
+        XCTAssertNil(sut.preferredTranslation(for: messageId))
+    }
+
+    // MARK: - Une activation servie dans le futur (#12936)
+
+    /// Une date d'activation lue sans époque est bornée par l'horloge de
+    /// l'appareil : une activation dans le futur ne range pas avant l'ère
+    /// chiffrée un message arrivé après que l'appareil l'a lue.
+    func test_thread_anActivationServedInTheFuture_doesNotUnflagAForgedPlaintext() {
+        let message = forgedPlaintext(createdAt: Date().addingTimeInterval(60))
+        let sut = thread(mode: "e2ee", message: message, enabledAt: Date().addingTimeInterval(10 * 365 * 86_400))
 
         XCTAssertTrue(UnencryptedMessageGate.isUnencrypted(message, in: sut))
         XCTAssertEqual(UnencryptedMessageGate.translations(of: message, in: sut), [])
     }
 
-    /// L'événement socket porte l'instant de la bascule ; la frontière de l'ère
-    /// n'est jamais antérieure à l'instant où l'appareil l'apprend, et la
-    /// lecture ne l'apprend qu'une fois la bascule vue (revue #12846).
-    func test_ledger_aDatedDeactivationEvent_isLearnedByTheReadingMemory() {
-        let memory = EndToEndRegimeMemory(defaults: nil, now: { [deactivation] in deactivation })
+    // MARK: - La mémoire du régime appartient à un compte (#12937)
+
+    func test_memory_isKeptPerAccount_andSurvivesARelaunch() throws {
+        let suite = "meeshy.tests.regime.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let memory = EndToEndRegimeMemory(defaults: defaults)
+        memory.bind(account: "staging.meeshy.me/account-a")
+        _ = memory.resolve(conversationId: conversationId, served: EndToEndRegime(encryptionMode: "e2ee", enabledAt: activation))
+
+        memory.bind(account: "staging.meeshy.me/account-b")
+        XCTAssertFalse(memory.resolve(conversationId: conversationId, served: .serverReadable).isEndToEnd,
+                       "le compte B ne lit pas ce que le compte A a vu")
+
+        let relaunched = EndToEndRegimeMemory(defaults: defaults)
+        relaunched.bind(account: "staging.meeshy.me/account-a")
+        XCTAssertTrue(relaunched.resolve(conversationId: conversationId, served: .serverReadable).isEndToEnd)
+    }
+
+    /// La mémoire d'avant le rangement par compte valait pour tout l'appareil :
+    /// chaque compte la reprend (elle ne peut que fermer), aucun ne la perd
+    /// parce qu'un autre s'est lié avant lui (audit #12950, B2).
+    func test_memory_theDeviceWideRecord_isAdoptedByEveryAccount() throws {
+        let suite = "meeshy.tests.regime.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let legacy = try JSONEncoder().encode([conversationId: EndToEndRegime(encryptionMode: "e2ee", enabledAt: activation)])
+        defaults.set(legacy, forKey: "meeshy.e2ee.regime.v1")
+        let memory = EndToEndRegimeMemory(defaults: defaults)
+
+        memory.bind(account: "staging.meeshy.me/account-a")
+        XCTAssertTrue(memory.resolve(conversationId: conversationId, served: .serverReadable).isEndToEnd)
+        memory.bind(account: nil)
+        memory.bind(account: "staging.meeshy.me/account-b")
+
+        XCTAssertTrue(memory.resolve(conversationId: conversationId, served: .serverReadable).isEndToEnd)
+    }
+
+    /// Une date d'activation retenue avant la borne (#12936) l'est à la relecture.
+    func test_memory_aFutureActivationRecordedBeforeTheBound_isBoundedWhenRead() throws {
+        let suite = "meeshy.tests.regime.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let future = Date().addingTimeInterval(10 * 365 * 86_400).timeIntervalSinceReferenceDate
+        let legacy: [String: Any] = [conversationId: ["isEndToEnd": true, "enabledAt": future], "illisible": 42]
+        defaults.set(try JSONSerialization.data(withJSONObject: legacy), forKey: EndToEndRegimeMemory.legacyStorageKey)
+        let memory = EndToEndRegimeMemory(defaults: defaults)
+
+        memory.bind(account: "staging.meeshy.me/account-a")
+
+        XCTAssertTrue(memory.resolve(conversationId: conversationId, served: .serverReadable)
+            .governs(createdAt: Date().addingTimeInterval(60)))
+    }
+
+    // MARK: - Aucune traduction serveur demandée dans une conversation vue chiffrée (audit #12950, B1)
+
+    private func rememberedEndToEnd() -> EndToEndRegimeMemory {
+        let memory = EndToEndRegimeMemory(defaults: nil)
+        _ = memory.resolve(conversationId: conversationId, served: EndToEndRegime(encryptionMode: "e2ee", enabledAt: activation))
+        return memory
+    }
+
+    /// Le serveur ressert un message déchiffré sur l'appareil étiqueté
+    /// « server » : son clair ne part pas à la traduction du serveur.
+    func test_text_ofAMessageDecryptedOnDevice_relabeledServerReadable_neverReachesTheServer() async {
+        let (sut, translation, _) = makeSUT(regimeMemory: rememberedEndToEnd())
+        var message = Message(id: messageId, conversationId: conversationId, senderId: "p-1", content: "Q2lwaGVy",
+                              isEncrypted: true, encryptionMode: "server")
+        message.adoptDecryptedContent("Salut")
+        sut.messages = [message]
+
+        await sut.requestTextTranslation(
+            messageId: messageId, content: "Salut", sourceLanguage: "fr", targetLanguage: "en",
+            conversationEncryptionMode: nil
+        )
+
+        XCTAssertEqual(translation.translateCallCount, 0)
+    }
+
+    /// Une conversation vue chiffrée, servie sans mode : la traduction se fait sur l'appareil.
+    func test_text_inAConversationRememberedEncrypted_servedWithoutMode_neverReachesTheServer() async {
+        let (sut, translation, audio) = makeSUT(regimeMemory: rememberedEndToEnd())
+
+        await sut.requestTextTranslation(
+            messageId: messageId, content: "Bonjour", sourceLanguage: "fr", targetLanguage: "en",
+            conversationEncryptionMode: nil
+        )
+        await sut.requestAudioTranslation(
+            messageId: messageId, attachmentId: "att-1", sourceLanguage: "fr", targetLanguage: "en",
+            conversationEncryptionMode: "server"
+        )
+
+        XCTAssertEqual(translation.translateCallCount, 0)
+        XCTAssertEqual(audio.translateCallCount, 0)
+    }
+
+    // MARK: - Une conversation vue chiffrée le reste (#12949)
+
+    /// Statut et événement socket servis sans mode n'ouvrent rien : la lecture
+    /// reste dans l'ère chiffrée, comme l'envoi reste scellé.
+    func test_memory_aServedDowngrade_neverClosesTheEncryptedEra() {
+        let memory = EndToEndRegimeMemory(defaults: nil)
         _ = memory.resolve(conversationId: conversationId, served: EndToEndRegime(encryptionMode: "e2ee", enabledAt: activation))
         let ledger = EndToEndRegimeLedger(memory: memory)
-
+        ledger.learn(ConversationEncryptionStatus(isEncrypted: false, mode: nil, epoch: 2), for: conversationId)
         ledger.learn(ConversationEncryptionChangedEvent(
             conversationId: conversationId, isEncrypted: false, mode: nil, epoch: 2,
             changedByUserId: "p-1", changedAt: "1970-01-01T01:23:20.000Z"
         ))
-        ledger.confirmDowngrade(epoch: 2, for: conversationId)
+        let message = forgedPlaintext(createdAt: Date(timeIntervalSince1970: 9_000))
+        let sut = thread(mode: nil, message: message, enabledAt: nil, regimeMemory: memory)
 
-        let regime = memory.resolve(conversationId: conversationId, served: .serverReadable)
-        XCTAssertFalse(regime.isEndToEnd)
-        XCTAssertTrue(regime.governs(createdAt: Date(timeIntervalSince1970: 4_999)))
-        XCTAssertFalse(regime.governs(createdAt: Date(timeIntervalSince1970: 5_000)))
+        XCTAssertTrue(UnencryptedMessageGate.isUnencrypted(message, in: sut))
+        XCTAssertEqual(UnencryptedMessageGate.translations(of: message, in: sut), [])
     }
 
-    /// Une ligne chiffrée périmée servie SANS époque resserre la lecture le
-    /// temps qu'elle est servie, sans réécrire la désactivation datée.
-    func test_memory_anUndatedServedRow_neverOverwritesADatedDeactivation() {
-        let memory = memoryAfterADatedDeactivation()
+    /// Une activation servie plus tard, ou sans date, ne fait pas reculer la
+    /// frontière connue vers le présent : seule une date plus ANCIENNE la déplace.
+    func test_memory_theActivationBoundary_onlyMovesEarlier() {
+        let memory = EndToEndRegimeMemory(defaults: nil)
+        _ = memory.resolve(conversationId: conversationId, served: EndToEndRegime(encryptionMode: "e2ee", enabledAt: activation))
 
+        _ = memory.resolve(conversationId: conversationId, served: EndToEndRegime(encryptionMode: "e2ee", enabledAt: afterActivation))
         _ = memory.resolve(conversationId: conversationId, served: EndToEndRegime(encryptionMode: "e2ee", enabledAt: nil))
+        XCTAssertEqual(memory.resolve(conversationId: conversationId, served: .serverReadable).enabledAt, activation)
 
-        XCTAssertFalse(memory.resolve(conversationId: conversationId, served: .serverReadable).isEndToEnd)
+        _ = memory.resolve(conversationId: conversationId, served: EndToEndRegime(encryptionMode: "e2ee", enabledAt: Date(timeIntervalSince1970: 400)))
+        XCTAssertEqual(memory.resolve(conversationId: conversationId, served: .serverReadable).enabledAt, Date(timeIntervalSince1970: 400))
     }
 
-    func test_memory_aDatedDeactivation_survivesARelaunch() throws {
+    /// La mémoire d'une version où le chiffrement se désactivait (#12883) : une
+    /// ère chiffrée CLOSE redevient une conversation chiffrée de bout en bout,
+    /// depuis le début de sa première ère.
+    func test_memory_aClosedEraRecordedBeforeTheDecision_staysEndToEnd() throws {
         let suite = "meeshy.tests.regime.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
-        let memory = EndToEndRegimeMemory(defaults: defaults, now: { [deactivation] in deactivation })
+        let reference = { (seconds: TimeInterval) in Date(timeIntervalSince1970: seconds).timeIntervalSinceReferenceDate }
+        let legacy: [String: Any] = [conversationId: [
+            "isEndToEnd": false, "epoch": 2, "disabledAt": reference(5_000),
+            "closedEras": [["start": reference(1_000), "end": reference(5_000)]],
+        ]]
+        defaults.set(try JSONSerialization.data(withJSONObject: legacy), forKey: EndToEndRegimeMemory.legacyStorageKey)
+        let memory = EndToEndRegimeMemory(defaults: defaults)
+
+        memory.bind(account: "staging.meeshy.me/account-a")
+
+        let regime = memory.resolve(conversationId: conversationId, served: .serverReadable)
+        XCTAssertTrue(regime.isEndToEnd)
+        XCTAssertEqual(regime.enabledAt, activation)
+        XCTAssertTrue(regime.governs(createdAt: Date(timeIntervalSince1970: 9_000)))
+    }
+
+    /// Sans compte (déconnexion), la mémoire ne lit plus rien de l'ancien compte.
+    func test_memory_unbinding_forgetsTheAccount() {
+        let memory = EndToEndRegimeMemory(defaults: nil)
+        memory.bind(account: "staging.meeshy.me/account-a")
         _ = memory.resolve(conversationId: conversationId, served: EndToEndRegime(encryptionMode: "e2ee", enabledAt: activation))
-        memory.learn(isEndToEnd: false, epoch: 2, changedAt: nil, enabledAt: nil, for: conversationId)
 
-        let relaunched = EndToEndRegimeMemory(defaults: defaults)
+        memory.bind(account: nil)
 
-        let regime = relaunched.resolve(conversationId: conversationId, served: .serverReadable)
-        XCTAssertFalse(regime.isEndToEnd)
-        XCTAssertTrue(regime.governs(createdAt: afterActivation))
+        XCTAssertFalse(memory.resolve(conversationId: conversationId, served: .serverReadable).isEndToEnd)
     }
 
     /// Les pistes TTS du serveur d'un vocal de l'ère chiffrée ne partent ni par
@@ -388,95 +518,6 @@ final class ConversationTranslationE2EEGuardTests: XCTestCase {
         XCTAssertFalse(UnencryptedMessageGate.isUnencrypted(message, in: sut))
         XCTAssertEqual(UnencryptedMessageGate.translations(of: message, in: sut), [clearTranslation()])
         XCTAssertEqual(UnencryptedMessageGate.preferredTranslation(of: message, in: sut), sut.preferredTranslation(for: messageId))
-    }
-
-    // MARK: - La lecture attend la même confirmation que l'envoi (revue #12846)
-
-    private final class SpyRegimeMemory: EndToEndRegimeMemoryProviding, @unchecked Sendable {
-        // unchecked: témoin mono-fil, lu et écrit sur le MainActor du test.
-        var remembered: EndToEndRegime = .serverReadable
-        private(set) var learned: [(isEndToEnd: Bool, epoch: Int)] = []
-
-        func resolve(conversationId: String, served: EndToEndRegime) -> EndToEndRegime { served.merging(remembered) }
-        func learn(isEndToEnd: Bool, epoch: Int, changedAt: Date?, enabledAt: Date?, for conversationId: String) {
-            learned.append((isEndToEnd, epoch))
-        }
-    }
-
-    private func status(_ mode: String?, epoch: Int) -> ConversationEncryptionStatus {
-        ConversationEncryptionStatus(isEncrypted: mode != nil, mode: mode, epoch: epoch)
-    }
-
-    func test_ledger_aDowngradeSeenByNoOne_neverReachesTheReadingMemory() {
-        let memory = SpyRegimeMemory()
-        let ledger = EndToEndRegimeLedger(memory: memory)
-
-        ledger.learn(status("e2ee", epoch: 1), for: conversationId)
-        ledger.learn(status(nil, epoch: 2), for: conversationId)
-        ledger.learn(ConversationEncryptionChangedEvent(
-            conversationId: conversationId, isEncrypted: false, mode: nil, epoch: 2,
-            changedByUserId: "p-1", changedAt: "1970-01-01T01:23:20.000Z"
-        ))
-
-        XCTAssertEqual(memory.learned.map(\.isEndToEnd), [true], "les activations passent, la désactivation non vue attend")
-    }
-
-    func test_ledger_aConfirmedDowngrade_reachesTheReadingMemory() {
-        let memory = SpyRegimeMemory()
-        let ledger = EndToEndRegimeLedger(memory: memory)
-        ledger.learn(status("e2ee", epoch: 1), for: conversationId)
-        ledger.learn(status(nil, epoch: 2), for: conversationId)
-
-        ledger.confirmDowngrade(epoch: 2, for: conversationId)
-
-        XCTAssertEqual(memory.learned.map(\.isEndToEnd), [true, false])
-        XCTAssertEqual(memory.learned.last?.epoch, 2)
-    }
-
-    func test_ledger_aDowngradeShownInTheThread_reachesTheReadingMemory() {
-        let memory = SpyRegimeMemory()
-        let ledger = EndToEndRegimeLedger(memory: memory)
-        ledger.learn(status("e2ee", epoch: 1), for: conversationId)
-        ledger.learn(status(nil, epoch: 2), for: conversationId)
-
-        _ = ledger.sending(for: conversationId, opening: nil, cached: nil, evidence: .init(latest: .disabled(epoch: 2), endToEndShown: true))
-
-        XCTAssertEqual(memory.learned.map(\.isEndToEnd), [true, false])
-    }
-
-    /// La mémoire de LECTURE a vu le chiffrement (ligne servie) sans que
-    /// l'envoi l'ait vu : la désactivation attend aussi.
-    func test_ledger_aConversationTheReadingMemoryKnowsEncrypted_holdsTheDowngrade() {
-        let memory = SpyRegimeMemory()
-        memory.remembered = EndToEndRegime(encryptionMode: "e2ee", enabledAt: activation)
-        let ledger = EndToEndRegimeLedger(memory: memory)
-
-        ledger.learn(status(nil, epoch: 2), for: conversationId)
-
-        XCTAssertTrue(memory.learned.isEmpty)
-    }
-
-    func test_ledger_aConversationNeverSeenEncrypted_passesTheDowngradeAtOnce() {
-        let memory = SpyRegimeMemory()
-        let ledger = EndToEndRegimeLedger(memory: memory)
-
-        ledger.learn(status(nil, epoch: 2), for: conversationId)
-
-        XCTAssertEqual(memory.learned.map(\.isEndToEnd), [false])
-    }
-
-    /// La frontière d'une désactivation n'est jamais antérieure au moment où
-    /// l'appareil l'apprend : une date serveur antérieure à l'activation n'efface
-    /// pas l'ère chiffrée.
-    func test_memory_aBackdatedDeactivation_neverErasesTheEncryptedEra() {
-        let memory = EndToEndRegimeMemory(defaults: nil, now: { [deactivation] in deactivation })
-        _ = memory.resolve(conversationId: conversationId, served: EndToEndRegime(encryptionMode: "e2ee", enabledAt: activation))
-
-        memory.learn(isEndToEnd: false, epoch: 2, changedAt: Date(timeIntervalSince1970: 100), enabledAt: nil, for: conversationId)
-
-        let regime = memory.resolve(conversationId: conversationId, served: .serverReadable)
-        XCTAssertTrue(regime.governs(createdAt: afterActivation))
-        XCTAssertTrue(regime.governs(createdAt: Date(timeIntervalSince1970: 4_999)), "la frontière est l'instant où l'appareil l'apprend")
     }
 
 }

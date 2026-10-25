@@ -92,8 +92,10 @@ public enum DeviceTranslationEligibility {
     /// lui-même, mais aussi mode inconnu et message chiffré sans mode annoncé — en
     /// cas de doute, le serveur n'y lit rien. Seuls `server` et `hybrid` annoncés,
     /// où il lit déjà le message, le sortent de la règle.
+    /// Un message que CET appareil a déchiffré l'est, quelles que soient les
+    /// étiquettes servies : la provenance prime (audit #12950).
     public static func isEndToEnd(_ message: MeeshyMessage, conversationEncryptionMode: String?) -> Bool {
-        !serverReadsMessage(
+        message.isContentDecryptedOnDevice || !serverReadsMessage(
             conversationEncryptionMode: conversationEncryptionMode,
             isEncrypted: message.isEncrypted,
             encryptionMode: message.encryptionMode

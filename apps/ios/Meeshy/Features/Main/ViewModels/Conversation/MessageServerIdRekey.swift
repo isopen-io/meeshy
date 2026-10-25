@@ -20,6 +20,7 @@ nonisolated enum MessageServerIdRekey {
                 messageSource: message.messageSource,
                 isEdited: message.isEdited,
                 editedAt: message.editedAt,
+                editedById: message.editedById,
                 deletedAt: message.deletedAt,
                 replyToId: message.replyToId,
                 storyReplyToId: message.storyReplyToId,

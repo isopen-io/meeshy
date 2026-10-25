@@ -6,11 +6,13 @@ import Foundation
 /// l'ÉPOQUE du régime qu'elle ouvre.
 ///
 /// Même contrat que `JoinNoticeMetadata` : le sens voyage dans
-/// `Message.metadata`, jamais dans le texte. Son rôle de sécurité : une
-/// conversation chiffrée de bout en bout ne repasse en clair, à l'envoi, que
-/// lorsque l'utilisateur a VU la bascule — cet avis affiché dans le fil, ou
-/// son propre geste. Il est écrit par le serveur : il rend la bascule visible,
-/// il ne l'authentifie pas (la bascule scellée par son auteur est un suivi).
+/// `Message.metadata`, jamais dans le texte. Une activation du bout en bout
+/// affichée dans le fil SCELLE l'envoi suivant. Le bout en bout ne se
+/// désactivant plus (#12949), un avis `encryption-disabled` d'une conversation
+/// chiffrée de bout en bout n'existe que dans les fils d'avant la décision
+/// (staging) : il s'affiche comme un historique et ne rouvre RIEN, ni l'envoi
+/// en clair, ni la lecture. Il est écrit par le serveur : il rend la bascule
+/// visible, il ne l'authentifie pas.
 ///
 /// Producteur : `services/gateway/src/routes/conversation-encryption.ts`
 /// (`announceSwitch`) ; lecteur TypeScript de la clé :
@@ -38,10 +40,9 @@ public struct EncryptionSwitchNoticeMetadata: Codable, Sendable, Equatable {
         self.actorName = actorName
     }
 
-    /// La bascule rend-elle au serveur le clair d'une conversation chiffrée de
-    /// bout en bout ? Un mode quitté absent ne CONFIRME rien (cet avis sert à
-    /// rendre le clair : dans le doute, il ne le rend pas) ; quitter `server` ou
-    /// `hybrid` ne retire rien au serveur.
+    /// L'avis dit-il la désactivation d'un bout en bout (historique d'avant
+    /// #12949) ? Un mode quitté absent ne le dit pas ; quitter `server` ou
+    /// `hybrid` ne retire rien au serveur. Sert au seul TEXTE de l'avis.
     public var disablesEndToEnd: Bool {
         guard kind == Self.disabledKind, let previousMode else { return false }
         return !DeviceTranslationEligibility.serverReadsMessage(

@@ -6,7 +6,7 @@ import type { EphemeralDeadline } from '@meeshy/shared/utils/ephemeral-deadline'
 import { checkStatusOf, isMineOf, servedRowLanguage, translatedLanguagesOf } from '@/lib/view/message';
 import type { LocalDelivery } from '@/lib/view/message';
 import type { AuthorStoryRing } from '@/lib/view/author-story-ring';
-import { badgesOf, editedOf, systemRowOf } from '@/lib/view/message-badges';
+import { badgesOf, editedByModeratorOf, editedOf, systemRowOf } from '@/lib/view/message-badges';
 import { bodyKindOf, moodCitationOf, placeOf, storyCitationOf } from '@/lib/view/message-body';
 import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
 import { usePresence } from '@/lib/view/use-presence';
@@ -908,7 +908,7 @@ export const FocalRow = memo(function FocalRow({
               `aria-hidden` : `composeMessageLabel` porte déjà « modifié ». */}
           {isEdited ? (
             <div data-loupe-follow className="flex shrink-0 items-center pb-0.5" aria-hidden>
-              <EditedMark onBrandBubble={false} />
+              <EditedMark onBrandBubble={false} byModerator={editedByModeratorOf(badges)} />
             </div>
           ) : null}
 

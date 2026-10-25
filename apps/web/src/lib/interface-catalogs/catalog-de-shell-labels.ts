@@ -10,6 +10,8 @@ const deShellLabels = {
   'thread.header.back.unread.one': 'Zurück — {count} ungelesene Nachricht anderswo',
   'thread.header.back.unread.other': 'Zurück — {count} ungelesene Nachrichten anderswo',
   'thread.header.details': 'Details der Unterhaltung',
+  'thread.header.encryption.endToEnd': 'Ende-zu-Ende-verschlüsselt',
+  'thread.header.encryption.server': 'Auf dem Server verschlüsselt',
   'thread.scrollToBottom': 'Nach unten scrollen',
   'thread.scrollToBottom.unread.one': '{count} ungelesene Nachricht, Nach unten scrollen',
   'thread.scrollToBottom.unread.other': '{count} ungelesene Nachrichten, Nach unten scrollen',

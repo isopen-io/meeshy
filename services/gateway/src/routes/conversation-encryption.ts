@@ -11,7 +11,7 @@
  * Encryption Modes:
  * - e2ee: Full end-to-end encryption (Signal Protocol) - NO translation
  * - server: Server-side encryption (AES-256-GCM) - translation supported
- * - hybrid: Double encryption (E2EE + server layer) - translation supported
+ * - hybrid: chiffré AU REPOS comme server (#11374) — jamais de bout en bout - translation supported
  */
 
 import { FastifyInstance, FastifyReply } from 'fastify';
@@ -21,6 +21,7 @@ import { validateParams, validateBody } from '../validation/helpers.js';
 import { ConversationIdParamSchema, SetEncryptionModeBodySchema } from '../validation/conversation-encryption-schemas.js';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 import { sendSuccess, sendBadRequest, sendError, sendForbidden, sendInternalError } from '../utils/response.js';
+import { isServerAtRestUnavailable } from '../services/messaging/serverAtRest';
 import {
   noticeBroadcast,
   postSystemNotice,
@@ -29,13 +30,19 @@ import {
   type SystemNoticeInput,
 } from '../services/conversations/conversationNotice';
 import { refuserCommeIntrouvable } from './conversations/utils/access-control';
-import { actorHasMinimumRole } from '../utils/conversation-authority';
+import { actorHasMinimumRole } from '@meeshy/shared/utils/conversation-authority';
 import { MemberRole } from '@meeshy/shared/types/role-types';
 import {
   ENCRYPTION_ACTIVATION_RESTRICTED_CODE,
   mayActivateConversationEncryption,
 } from '../utils/encryption-activation-policy';
-import { E2EE_ERROR_CODES, E2EE_IRREVERSIBLE_MESSAGE } from '@meeshy/shared/types/e2ee-directory';
+import {
+  E2EE_DIRECT_ALREADY_END_TO_END_MESSAGE,
+  E2EE_DIRECT_NOT_A_PAIR_MESSAGE,
+  E2EE_ERROR_CODES,
+  E2EE_IRREVERSIBLE_MESSAGE,
+} from '@meeshy/shared/types/e2ee-directory';
+import { otherEndToEndDirectOf, pairOfMembers } from '../services/conversations/directPair';
 import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import type { ConversationEncryptionChangedEventData } from '@meeshy/shared/types/socketio-events';
 import {
@@ -93,6 +100,8 @@ type RegimeConversation = {
   readonly encryptionMode: string | null;
   readonly encryptionEnabledBy: string | null;
   readonly encryptionEpoch?: number | null;
+  /** #12822 — la clé que la conversation désigne déjà ; l'activation la reprend si elle s'ouvre. */
+  readonly serverEncryptionKeyId?: string | null;
   readonly participants: readonly RegimeMember[];
 };
 
@@ -104,6 +113,7 @@ const REGIME_SELECT = {
   encryptionMode: true,
   encryptionEnabledBy: true,
   encryptionEpoch: true,
+  serverEncryptionKeyId: true,
   participants: {
     where: { isActive: true },
     select: {
@@ -171,6 +181,28 @@ export default async function encryptionRoutes(fastify: FastifyInstance) {
   /** #12949 — le bout en bout ne se quitte pas : lisible et stable pour un ancien client (#9223). */
   const irreversible = (reply: FastifyReply) =>
     sendError(reply, 409, E2EE_IRREVERSIBLE_MESSAGE, { code: E2EE_ERROR_CODES.IRREVERSIBLE });
+
+  /**
+   * #12966 — une paire a au plus UN tête-à-tête chiffré de bout en bout. Le
+   * refus nomme celui qui existe : l'appelant, membre actif des deux, peut y
+   * être mené.
+   */
+  const pairAlreadyEndToEnd = (reply: FastifyReply, existingConversationId: string) =>
+    sendError(reply, 409, E2EE_DIRECT_ALREADY_END_TO_END_MESSAGE, {
+      code: E2EE_ERROR_CODES.DIRECT_ALREADY_END_TO_END,
+      details: { existingConversationId },
+    });
+
+  /** #12966 — un tête-à-tête ne se chiffre de bout en bout qu'entre deux membres inscrits actifs : un tiers ne contourne pas la règle de la paire. */
+  const notAPair = (reply: FastifyReply) =>
+    sendError(reply, 409, E2EE_DIRECT_NOT_A_PAIR_MESSAGE, { code: E2EE_ERROR_CODES.DIRECT_NOT_A_PAIR });
+
+  /** Le tête-à-tête chiffré que la paire a déjà, à côté de ce tête-à-tête lisible, ou `null`. */
+  const pairEndToEndOf = async (conversation: RegimeConversation): Promise<string | null> => {
+    if (conversation.type !== 'direct' || regimeIsActive(conversation)) return null;
+    const pair = pairOfMembers(conversation.participants.map((participant) => participant.userId));
+    return pair ? otherEndToEndDirectOf(fastify.prisma, { conversationId: conversation.id, pair }) : null;
+  };
 
   const regimeChanged = (reply: FastifyReply) =>
     sendError(reply, 409, 'The encryption of this conversation has just changed: reload it and try again', {
@@ -247,6 +279,7 @@ export default async function encryptionRoutes(fastify: FastifyInstance) {
 
         const status = encryptionStatusView(conversation, {
           mayToggle: member !== undefined && toggleRefusal(conversation, member) === null,
+          pairEndToEndConversationId: member === undefined ? null : await pairEndToEndOf(conversation),
         });
 
         return sendSuccess(reply, status);
@@ -318,6 +351,16 @@ export default async function encryptionRoutes(fastify: FastifyInstance) {
           });
         }
 
+        if (mode === 'e2ee' && conversation.type === 'direct') {
+          if (!pairOfMembers(conversation.participants.map((participant) => participant.userId))) {
+            return notAPair(reply);
+          }
+          const existingEndToEnd = await pairEndToEndOf(conversation);
+          if (existingEndToEnd) {
+            return pairAlreadyEndToEnd(reply, existingEndToEnd);
+          }
+        }
+
         // Determine encryption protocol based on mode
         // - e2ee: Signal Protocol only
         // - server: AES-256-GCM only
@@ -327,7 +370,9 @@ export default async function encryptionRoutes(fastify: FastifyInstance) {
         // Get or create server encryption key (for server and hybrid modes)
         let serverEncryptionKeyId: string | null = null;
         if (mode === 'server' || mode === 'hybrid') {
-          serverEncryptionKeyId = await encryptionService.getOrCreateConversationKey();
+          // #11381 — la clé est RATTACHÉE à sa conversation : elle n'ouvre rien ailleurs.
+          // #12822 — la clé déjà désignée, qui s'ouvre encore, est reprise.
+          serverEncryptionKeyId = await encryptionService.activationKeyId(conversationId, conversation.serverEncryptionKeyId ?? null);
         }
 
         // #12521 — UNE écriture conditionnelle sur l'époque lue.
@@ -345,7 +390,8 @@ export default async function encryptionRoutes(fastify: FastifyInstance) {
         const encryptionMessages: Record<EncryptionMode, string> = {
           e2ee: '🔒 End-to-end encryption enabled. Messages are now fully encrypted.',
           server: '🔐 Server-side encryption enabled. Messages are encrypted with translation support.',
-          hybrid: '🔐🔒 Hybrid encryption enabled. Messages are double-encrypted with E2EE + server layer. Translation is supported.',
+          // #11374 — `hybrid` est chiffré AU REPOS, comme `server` : jamais « de bout en bout ».
+          hybrid: '🔐 Server-side encryption enabled. Messages are encrypted at rest with translation support.',
         };
 
         const encryptionLabels: Record<EncryptionMode, string> = {
@@ -374,6 +420,11 @@ export default async function encryptionRoutes(fastify: FastifyInstance) {
         ), { message: `${encryptionLabels[mode]} encryption enabled successfully` });
 
       } catch (error) {
+        // #11381 — sans clé maîtresse, aucun mode `server`/`hybrid` ne s'active.
+        if (isServerAtRestUnavailable(error)) {
+          logger.error('Server encryption unavailable: ENCRYPTION_MASTER_KEY missing or invalid', { reason: error.reason });
+          return sendError(reply, 503, error.message, { code: error.code });
+        }
         logger.error('Error enabling encryption', error as Error);
         return sendInternalError(reply, 'Internal server error');
       }

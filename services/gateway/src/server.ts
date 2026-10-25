@@ -69,6 +69,7 @@ import { backfillSearchTokens } from './jobs/backfill-search-tokens';
 import { demarrerSondeDeTypage, type SondeDeTypage } from './services/schema-drift.service';
 import { EmailService } from './services/EmailService';
 import { RedisDeliveryQueue } from './services/RedisDeliveryQueue';
+import { gatewayDeliveryQueueSealer } from './services/deliveryQueueSealing';
 import { TusCleanupService } from './services/TusCleanupService';
 import { ExpiredMessagesCleanupService } from './services/ExpiredMessagesCleanupService';
 import { EphemeralRecipientExpiryService } from './services/EphemeralRecipientExpiryService';
@@ -258,7 +259,7 @@ class MeeshyServer {
     this.callCleanupService = new CallCleanupService(this.prisma);
 
     // Initialiser la delivery queue Redis
-    this.deliveryQueue = new RedisDeliveryQueue(getCacheStore());
+    this.deliveryQueue = new RedisDeliveryQueue(getCacheStore(), gatewayDeliveryQueueSealer(this.prisma));
 
     // Initialiser les background jobs (cleanup, digest, etc.)
     const emailService = new EmailService();

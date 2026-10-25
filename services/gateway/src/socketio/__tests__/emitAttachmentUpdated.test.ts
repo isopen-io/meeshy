@@ -42,7 +42,8 @@ function makeDeps(
     enqueue,
     deps: {
       io: { to: (room: string) => makeOperator([room]) } as any,
-      prisma: { participant: { findMany } } as any,
+      // #12822 — le régime du message décide du sceau de la file : une conversation en clair ici.
+      prisma: { participant: { findMany }, message: { findUnique: async () => ({ encryptionMode: null, conversation: { encryptionMode: null } }) } } as any,
       deliveryQueue: { enqueue } as any,
       connectedUsers: new Map(online.map((u) => [u, {}])) as any,
     },

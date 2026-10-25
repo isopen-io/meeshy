@@ -25,7 +25,7 @@ extension ConversationTranslationRequestFailure {
 /// par l'appareil (`DeviceTranslationCoordinator`).
 enum ServerTranslationAdmission {
     static func admits(_ message: Message?, conversationEncryptionMode: String?) -> Bool {
-        DeviceTranslationEligibility.serverReadsMessage(
+        !(message?.isContentDecryptedOnDevice ?? false) && DeviceTranslationEligibility.serverReadsMessage(
             conversationEncryptionMode: conversationEncryptionMode,
             isEncrypted: message?.isEncrypted ?? false,
             encryptionMode: message?.encryptionMode

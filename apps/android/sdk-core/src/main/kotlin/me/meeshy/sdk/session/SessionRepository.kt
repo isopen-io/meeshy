@@ -1,10 +1,12 @@
 package me.meeshy.sdk.session
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.ProfileEditApply
+import me.meeshy.sdk.model.ProfileSnapshot
 import me.meeshy.sdk.model.ServedProfileDecor
 import me.meeshy.sdk.model.UpdateProfileRequest
 import me.meeshy.sdk.model.auth.SessionOrigin
@@ -29,6 +31,7 @@ class SessionRepository @Inject constructor(
     private val authApi: AuthApi,
     private val tokenStore: TokenStore,
     private val transition: SessionTransitionFlags,
+    private val pendingProfileEdits: PendingProfileEdits = PendingProfileEdits.NONE,
 ) {
     constructor(authApi: AuthApi, tokenStore: TokenStore) : this(authApi, tokenStore, SessionTransitionFlags())
 
@@ -85,6 +88,44 @@ class SessionRepository @Inject constructor(
     }
 
     /**
+     * Rétablit le cliché d'avant une édition abandonnée (retour arrière de l'optimisme). Sans effet
+     * hors session ou si [snapshot] est celui d'un autre compte.
+     */
+    fun restoreProfileSnapshot(snapshot: MeeshyUser) {
+        val current = _currentUser.value ?: return
+        if (current.id != snapshot.id) return
+        _currentUser.value = snapshot
+    }
+
+    /**
+     * Adopte la réponse du serveur à une mutation de MON profil en la FUSIONNANT sur l'identité
+     * locale ([ProfileSnapshot.mergingServerUser] : voicePublic, décor et activation survivent), puis
+     * réapplique les éditions encore en attente — sauf [deliveredCmid], celle qui vient de partir —
+     * pour qu'une confirmation ne remplace jamais un état optimiste plus récent. Sans effet hors
+     * session, pour un autre compte, ou si la session a changé pendant la lecture de la file.
+     */
+    suspend fun adoptMerging(server: MeeshyUser, deliveredCmid: String? = null) {
+        val generation = transition.generation
+        if (_currentUser.value?.id != server.id) return
+        val pending = pendingEditsFor(server.id, deliveredCmid)
+        if (generation != transition.generation) return
+        val current = _currentUser.value ?: return
+        if (current.id != server.id) return
+        _currentUser.value = ProfileSnapshot.resolveServerUserWithOptimistic(
+            ProfileSnapshot.mergingServerUser(server, current),
+            pending,
+        )
+    }
+
+    private suspend fun pendingEditsFor(userId: String, excludingCmid: String? = null): List<UpdateProfileRequest> = try {
+        pendingProfileEdits.pendingFor(userId, excludingCmid)
+    } catch (e: CancellationException) {
+        throw e
+    } catch (_: Exception) {
+        emptyList()
+    }
+
+    /**
      * Publie le décor de profil de SOI (fusion : aucun autre champ de [MeeshyUser] ne bouge) pour
      * que chaque surface qui observe [currentUser] se repeigne au toucher. Sans effet hors session.
      */
@@ -96,7 +137,9 @@ class SessionRepository @Inject constructor(
     /**
      * Re-hydrates the identity from the gateway on app start. Clears the
      * identity when no token is held; a network failure leaves the current
-     * value untouched (offline-tolerant).
+     * value untouched (offline-tolerant). The server answer is merged onto the
+     * local identity and every profile edit still pending in the outbox is
+     * re-applied on top — a restart before confirmation never loses an edit.
      */
     suspend fun refresh() {
         val generation = transition.generation
@@ -109,8 +152,14 @@ class SessionRepository @Inject constructor(
             val result = apiCall { authApi.me() }
             if (generation != transition.generation) return
             if (result is NetworkResult.Success) {
-                _currentUser.value = result.data.user
-                tokenStore.userId = result.data.user.id
+                val server = result.data.user
+                val pending = pendingEditsFor(server.id)
+                if (generation != transition.generation) return
+                _currentUser.value = ProfileSnapshot.resolveServerUserWithOptimistic(
+                    ProfileSnapshot.mergingServerUser(server, _currentUser.value),
+                    pending,
+                )
+                tokenStore.userId = server.id
                 if (_sessionOrigin.value == null) _sessionOrigin.value = SessionOrigin.RESTORED
             }
         } finally {

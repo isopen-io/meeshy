@@ -4,9 +4,9 @@ import Foundation
 
 /// #12846 — l'avis système d'une bascule du chiffrement (`metadata.kind`
 /// `encryption-enabled` / `encryption-disabled`, posé par la passerelle à chaque
-/// bascule, #12522) se lit dans le fil avec son ÉPOQUE : c'est lui qui montre à
-/// l'utilisateur qu'une conversation chiffrée de bout en bout repasse en clair,
-/// et l'envoi en clair attend qu'il soit affiché.
+/// bascule, #12522) se lit dans le fil avec son ÉPOQUE. Le bout en bout ne se
+/// désactivant plus (#12949), un avis de désactivation déjà en base (staging)
+/// se lit et s'affiche comme un historique, sans rien rouvrir.
 @Suite("EncryptionSwitchNoticeMetadata — l'avis de bascule du chiffrement porte son époque (#12846)")
 struct EncryptionSwitchNoticeMetadataTests {
 
@@ -35,7 +35,7 @@ struct EncryptionSwitchNoticeMetadataTests {
         #expect(!notice.disablesEndToEnd)
     }
 
-    @Test("une désactivation sans mode quitté ne confirme rien : dans le doute, le clair n'est pas rendu")
+    @Test("une désactivation sans mode quitté ne se dit pas comme celle d'un bout en bout")
     func disablingWithoutPreviousModeConfirmsNothing() throws {
         #expect(!(try Self.notice(#"{"kind":"encryption-disabled","epoch":2}"#).disablesEndToEnd))
     }

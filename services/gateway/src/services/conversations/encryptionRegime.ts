@@ -22,7 +22,8 @@
  * faisait l'activation, laissait deux activations poser deux modes.
  *
  * Désactiver ne touche ni `serverEncryptionKeyId` (les messages `server` ou
- * `hybrid` déjà écrits restent lisibles par leur clé), ni les messages `e2ee`
+ * `hybrid` déjà écrits restent lisibles par leur clé — et une activation e2ee
+ * ne l'efface pas davantage, #12822), ni les messages `e2ee`
  * déjà envoyés : ils restent chiffrés à jamais, et la désactivation n'envoie
  * aucun clair au serveur (§ 5.2).
  */
@@ -112,7 +113,10 @@ function switchData(change: RegimeSwitch): Record<string, unknown> {
     encryptionProtocol: change.target.protocol,
     encryptionEnabledAt: change.at,
     encryptionEnabledBy: change.target.enabledBy,
-    serverEncryptionKeyId: change.target.serverEncryptionKeyId,
+    // #12822 (M1) — une activation sans clé (e2ee) ne remet jamais la
+    // désignation à null : les messages `server`/`hybrid` déjà scellés sous
+    // elle doivent rester lisibles, et une réactivation la reprendra.
+    ...(change.target.serverEncryptionKeyId ? { serverEncryptionKeyId: change.target.serverEncryptionKeyId } : {}),
     encryptionEpoch: epoch,
   };
 }
@@ -125,6 +129,23 @@ function switchData(change: RegimeSwitch): Record<string, unknown> {
  */
 const LEAVABLE_FILTER: Record<string, unknown> = {
   OR: [{ encryptionMode: { isSet: false } }, { encryptionMode: null }, { encryptionMode: { in: [...LEAVABLE_ACTIVE_MODES] } }],
+};
+
+/**
+ * Ce que le serveur LIT (#12966) : exactement ce qu'une bascule peut réécrire
+ * — le clair, ou le chiffrement au repos. Le tête-à-tête « en clair » d'une
+ * paire est celui-là ; un `e2ee`, quelle que soit sa casse, ou un mode inconnu
+ * n'en est jamais un.
+ */
+export const SERVER_READABLE_REGIME_FILTER: Readonly<Record<string, unknown>> = LEAVABLE_FILTER;
+
+/**
+ * L'inverse POSITIF (#12966) : un mode posé, non nul, hors du chiffrement au
+ * repos — `e2ee` quelle que soit sa casse, ou un mode inconnu. Écrit sans
+ * négation de document : un champ absent n'y entre jamais.
+ */
+export const SERVER_BLIND_REGIME_FILTER: Readonly<Record<string, unknown>> = {
+  AND: [{ encryptionMode: { isSet: true } }, { encryptionMode: { not: null } }, { encryptionMode: { notIn: [...LEAVABLE_ACTIVE_MODES] } }],
 };
 
 /**
@@ -158,6 +179,11 @@ export type EncryptionStatusView = {
   readonly epoch: number;
   readonly canToggleEncryption: boolean;
   readonly canDisableEncryption: boolean;
+  /**
+   * #12966 — le tête-à-tête chiffré de bout en bout que la paire a déjà, à
+   * côté de celui-ci ; `null` sinon. Le lecteur en est membre actif.
+   */
+  readonly pairEndToEndConversationId: string | null;
 };
 
 /**
@@ -169,11 +195,13 @@ export type EncryptionStatusView = {
  */
 export function encryptionStatusView(
   regime: RegimeFields,
-  options: { readonly mayToggle: boolean },
+  options: { readonly mayToggle: boolean; readonly pairEndToEndConversationId?: string | null },
 ): EncryptionStatusView {
   const mode = regime.encryptionMode;
   const active = regimeIsActive(regime);
   const mayDisable = options.mayToggle && regimeMayBeLeft(regime);
+  const pairEndToEndConversationId = options.pairEndToEndConversationId ?? null;
+  const mayEnable = options.mayToggle && pairEndToEndConversationId === null;
   return {
     isEncrypted: Boolean(regime.encryptionEnabledAt),
     mode,
@@ -181,7 +209,8 @@ export function encryptionStatusView(
     enabledBy: regime.encryptionEnabledBy ?? null,
     canTranslate: mode === 'server' || mode === 'hybrid',
     epoch: regimeEpochOf(regime),
-    canToggleEncryption: active ? mayDisable : options.mayToggle,
+    canToggleEncryption: active ? mayDisable : mayEnable,
     canDisableEncryption: mayDisable,
+    pairEndToEndConversationId,
   };
 }

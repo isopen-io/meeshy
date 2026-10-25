@@ -28,9 +28,11 @@ import {
   E2EE_ERROR_CODES,
   E2EE_MAX_ACTIVE_DEVICES,
   E2EE_ONE_TIME_PREKEY_STOCK_MAX,
+  e2eePlatformSchema,
   type E2EEDeviceBundle,
   type E2EEEnrollDeviceRequest,
   type E2EEErrorCode,
+  type E2EEOwnDevice,
   type E2EEPublishKeysRequest,
 } from '@meeshy/shared/types/e2ee-directory';
 import { unsetOrNull } from '../../utils/prisma-unset';
@@ -169,6 +171,11 @@ const kyberLastResortFields = (key: SignedKey) => ({
   kyberLastResort: key.publicKey,
   kyberLastResortSignature: key.signature,
 });
+
+const ownPlatform = (raw: string): E2EEOwnDevice['platform'] => {
+  const parsed = e2eePlatformSchema.safeParse(raw);
+  return parsed.success ? parsed.data : 'unknown';
+};
 
 type ActiveDevice = Awaited<ReturnType<DirectoryPrisma['e2EEDevice']['findMany']>>[number];
 
@@ -363,6 +370,20 @@ export class E2EEDirectory {
   async listDevices(userId: string): Promise<{ deviceId: number; registrationId: number }[]> {
     const devices = await this.activeDevices(userId);
     return devices.map((device) => ({ deviceId: device.deviceId, registrationId: device.registrationId }));
+  }
+
+  /** Mes appareils actifs, pour moi seul (#13014) : jamais une clé, jamais la session d'un autre appareil. */
+  async ownDevices(caller: { userId: string; sessionId: string }): Promise<E2EEOwnDevice[]> {
+    const devices = await this.activeDevices(caller.userId);
+    return devices.map((device) => ({
+      deviceId: device.deviceId,
+      registrationId: device.registrationId,
+      platform: ownPlatform(device.platform),
+      label: device.label ?? null,
+      enrolledAt: device.createdAt.toISOString(),
+      lastSeenAt: device.lastSeenAt.toISOString(),
+      current: device.sessionId === caller.sessionId,
+    }));
   }
 
   /**

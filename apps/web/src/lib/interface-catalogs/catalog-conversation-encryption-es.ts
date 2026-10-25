@@ -40,9 +40,13 @@ const es = {
   'conversationEncryption.fact.switchIsShownInThread': 'Cada activación o desactivación aparece en el chat para todos los miembros.',
   'conversationEncryption.fact.endToEndIsFinal': 'Una vez activado, el cifrado de extremo a extremo ya no se puede desactivar.',
   'conversationEncryption.fact.endToEndNeverTurnedOff': 'El cifrado de extremo a extremo no se puede desactivar. Para chatear sin él, crea una conversación nueva.',
-  'conversationEncryption.fact.endToEndNeverTurnedOffDirect': 'El cifrado de extremo a extremo no se puede desactivar: este chat individual sigue cifrado.',
+  'conversationEncryption.fact.endToEndNeverTurnedOffDirect': 'El cifrado de extremo a extremo no se puede desactivar: este chat individual sigue cifrado. Para chatear sin él con esta persona, abre al lado una conversación sin cifrar: las dos están en la lista, esta marcada con un candado.',
   'conversationEncryption.fact.serverCannotTurnItOff': 'En este navegador, una vez vista esta conversación cifrada de extremo a extremo, tu cuenta ya no escribe nunca en ella sin cifrado, aunque el servidor la presentara después de otra forma.',
   'conversationEncryption.fact.webCannotReadYet': 'En la web, los mensajes cifrados de extremo a extremo aún no se pueden leer ni escribir: abre esta conversación en la app de iOS.',
+  'conversationEncryption.plaintextDirect.open': 'Abrir una conversación sin cifrar con {name}',
+  'conversationEncryption.plaintextDirect.busy': 'Abriendo…',
+  'conversationEncryption.plaintextDirect.failed': 'No se pudo abrir la conversación sin cifrar. Inténtalo de nuevo.',
+  'conversationEncryption.plaintextDirect.offline': 'Sin conexión: vuelve a conectarte para abrir la conversación sin cifrar.',
 } satisfies ConversationEncryptionCatalog;
 
 export default es;

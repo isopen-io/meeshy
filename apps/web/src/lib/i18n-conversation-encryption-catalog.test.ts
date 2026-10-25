@@ -8,7 +8,7 @@ import {
 } from './i18n-conversation-encryption-catalog';
 import { SUPPORTED_INTERFACE_LANGUAGES } from './inline-interface-language-bootstrap.js';
 import type { InterfaceLanguage } from './interface-language';
-import { FACT_KEY, REGIME_SUMMARY_KEY, TOPIC_KEY } from './view/conversation-encryption-explanation';
+import { FACT_KEY, PLAINTEXT_DIRECT_KEY, REGIME_SUMMARY_KEY, TOPIC_KEY } from './view/conversation-encryption-explanation';
 
 /**
  * LE CATALOGUE DU CHIFFREMENT D'UNE CONVERSATION (#12880) — même discipline
@@ -38,7 +38,7 @@ describe('chaque langue porte toutes les clés conversationEncryption.* du fran�
 
   test('chaque clé lue par la section existe, et aucune clé du catalogue n’est orpheline', async () => {
     const french = await loadConversationEncryptionCatalog('fr');
-    const read = new Set<string>(['conversationEncryption.section', ...Object.values(REGIME_SUMMARY_KEY), ...Object.values(TOPIC_KEY), ...Object.values(FACT_KEY)]);
+    const read = new Set<string>(['conversationEncryption.section', ...Object.values(REGIME_SUMMARY_KEY), ...Object.values(TOPIC_KEY), ...Object.values(FACT_KEY), ...Object.values(PLAINTEXT_DIRECT_KEY)]);
     expect(sorted(read)).toEqual(sorted(Object.keys(french)));
   });
 

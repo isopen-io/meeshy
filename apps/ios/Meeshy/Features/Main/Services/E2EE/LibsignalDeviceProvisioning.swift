@@ -59,7 +59,7 @@ nonisolated final class LibsignalDeviceProvisioning: EndToEndDeviceProvisioning,
     func ready(for userId: String) async throws -> EndToEndReadyDevice {
         let (vault, processLock) = try storage()
         let enrolled = try await registrar().ensureEnrolled(userId: userId)
-        let store = MeeshySignalProtocolStore(identity: enrolled.identity)
+        let store = MeeshySignalProtocolStore(identity: enrolled.identity, ownUserId: enrolled.device.userId)
         let cipher = E2EESessionCipher(local: enrolled.device.address, store: store, vault: vault, lock: processLock)
         let approvals = E2EEOwnDeviceApprovals(vault: vault)
         return EndToEndReadyDevice(

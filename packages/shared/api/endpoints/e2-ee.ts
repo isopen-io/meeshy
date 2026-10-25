@@ -12,7 +12,7 @@
  * Les paramètres sont encodés ICI (encodeURIComponent) : passer la valeur brute.
  */
 
-/** POST /api/v1/e2ee/devices */
+/** GET · POST /api/v1/e2ee/devices */
 export const devices = '/api/v1/e2ee/devices';
 
 /** DELETE /api/v1/e2ee/devices/:deviceId */

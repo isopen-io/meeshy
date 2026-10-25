@@ -59,7 +59,7 @@ final class ConversationSyncEngineSocketOrderTests: XCTestCase {
             await journal.record("api:\(messages.first?.id ?? "?")")
         }
         engine.realtimeMessagePersistor = { mutation in
-            guard case let .edited(messageId, _, _, _) = mutation else { return }
+            guard case let .edited(messageId, _, _, _, _) = mutation else { return }
             await journal.record("edited:\(messageId)")
         }
     }

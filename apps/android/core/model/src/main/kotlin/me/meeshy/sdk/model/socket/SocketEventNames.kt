@@ -190,6 +190,31 @@ object SocketEventNames {
     const val VIEWING_START = "viewing:start"
     const val VIEWING_STOP = "viewing:stop"
 
+    // lot: chat-realtime-events-and-local-deltas (famille du fil)
+    const val ATTACHMENT_REACTION_ADD = "attachment:reaction-add"
+    const val ATTACHMENT_REACTION_ADDED = "attachment:reaction-added"
+    const val ATTACHMENT_REACTION_REMOVE = "attachment:reaction-remove"
+    const val ATTACHMENT_REACTION_REMOVED = "attachment:reaction-removed"
+    const val ATTACHMENT_READY = "attachment:ready"
+    const val ATTACHMENT_STATUS_UPDATED = "attachment-status:updated"
+    const val AUDIO_TRANSCRIPTION_FAILED = "audio:transcription-failed"
+    const val AUDIO_TRANSLATION_FAILED = "audio:translation-failed"
+    const val AUDIO_TRANSLATIONS_COMPLETED = "audio:translations-completed"
+    const val AUDIO_TRANSLATIONS_PROGRESSIVE = "audio:translations-progressive"
+    const val CONVERSATION_JOIN_ERROR = "conversation:join-error"
+    const val CONVERSATION_JOINED = "conversation:joined"
+    const val CONVERSATION_LEFT = "conversation:left"
+    const val CONVERSATION_STATS = "conversation:stats"
+    const val MESSAGE_CITED_POST_WITHDRAWN = "message:cited-post-withdrawn"
+    const val MESSAGE_CONSUMED = "message:consumed"
+    const val MESSAGE_COUNTDOWN_STARTED = "message:countdown-started"
+    const val MESSAGE_HIDDEN_FOR_ME = "message:hidden-for-me"
+    const val MESSAGE_PENDING_DELIVERED = "message:pending-delivered"
+    const val MESSAGE_RESTORED_FOR_ME = "message:restored-for-me"
+    const val MESSAGE_VIEW_ONCE_PURGED = "message:view-once-purged"
+    const val PARTICIPANT_RIGHTS_UPDATED = "participant:rights-updated"
+    const val TRANSLATION_FAILED = "translation:failed"
+
     /** Tous les noms du catalogue, dans l'ordre de déclaration. */
     val all: List<String> = listOf(
         AUDIO_TRANSCRIPTION_READY,
@@ -330,5 +355,28 @@ object SocketEventNames {
         VIEWING_SNAPSHOT,
         VIEWING_START,
         VIEWING_STOP,
+        ATTACHMENT_REACTION_ADD,
+        ATTACHMENT_REACTION_ADDED,
+        ATTACHMENT_REACTION_REMOVE,
+        ATTACHMENT_REACTION_REMOVED,
+        ATTACHMENT_READY,
+        ATTACHMENT_STATUS_UPDATED,
+        AUDIO_TRANSCRIPTION_FAILED,
+        AUDIO_TRANSLATION_FAILED,
+        AUDIO_TRANSLATIONS_COMPLETED,
+        AUDIO_TRANSLATIONS_PROGRESSIVE,
+        CONVERSATION_JOIN_ERROR,
+        CONVERSATION_JOINED,
+        CONVERSATION_LEFT,
+        CONVERSATION_STATS,
+        MESSAGE_CITED_POST_WITHDRAWN,
+        MESSAGE_CONSUMED,
+        MESSAGE_COUNTDOWN_STARTED,
+        MESSAGE_HIDDEN_FOR_ME,
+        MESSAGE_PENDING_DELIVERED,
+        MESSAGE_RESTORED_FOR_ME,
+        MESSAGE_VIEW_ONCE_PURGED,
+        PARTICIPANT_RIGHTS_UPDATED,
+        TRANSLATION_FAILED,
     )
 }

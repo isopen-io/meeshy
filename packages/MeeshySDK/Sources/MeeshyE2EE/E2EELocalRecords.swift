@@ -89,9 +89,27 @@ public final class E2EEPlaintextVault: E2EEPlaintextStoring {
 /// d'identité épinglée à l'approbation. Un appareil que le serveur annonce sur
 /// mon compte sans approbation locale ne reçoit RIEN : sans cela, un serveur
 /// compromis ajouterait un « appareil » pour recevoir une copie de mes messages.
-/// L'approbation elle-même (QR du `ScannableFingerprint`) est le lot #12520.
+/// L'approbation elle-même (QR du `ScannableFingerprint`) : `E2EEOwnDeviceLinking` (#12976).
 public protocol E2EEOwnDeviceApprovalProviding: Sendable {
     func approvedIdentity(of deviceId: UInt32) throws -> Data?
+    func approval(of deviceId: UInt32) throws -> E2EEOwnDeviceApproval?
+}
+
+/// Une approbation : la clé d'identité épinglée et, quand l'appairage l'a vue,
+/// la génération de la place (`registrationId`). Une place reprise par une
+/// autre installation n'hérite jamais de l'approbation (#12543).
+public struct E2EEOwnDeviceApproval: Codable, Equatable, Sendable {
+    public let identityKey: Data
+    public let registrationId: UInt32?
+
+    public init(identityKey: Data, registrationId: UInt32?) {
+        self.identityKey = identityKey
+        self.registrationId = registrationId
+    }
+
+    public func covers(registrationId announced: UInt32) -> Bool {
+        registrationId.map { $0 == announced } ?? true
+    }
 }
 
 public final class E2EEOwnDeviceApprovals: E2EEOwnDeviceApprovalProviding {
@@ -102,15 +120,36 @@ public final class E2EEOwnDeviceApprovals: E2EEOwnDeviceApprovalProviding {
     }
 
     public func approvedIdentity(of deviceId: UInt32) throws -> Data? {
-        try vault.read { try $0.load(.approvedOwnDevice, String(deviceId)) }
+        try approval(of: deviceId)?.identityKey
     }
 
-    public func approve(deviceId: UInt32, identityKey: Data) throws {
-        try vault.write { try $0.save(identityKey, as: .approvedOwnDevice, String(deviceId)) }
+    public func approval(of deviceId: UInt32) throws -> E2EEOwnDeviceApproval? {
+        try vault.read { try Self.approval(deviceId, in: $0) }
+    }
+
+    public func approve(deviceId: UInt32, identityKey: Data, registrationId: UInt32? = nil) throws {
+        let record = try JSONEncoder().encode(E2EEOwnDeviceApproval(identityKey: identityKey, registrationId: registrationId))
+        try vault.write { try $0.save(record, as: .approvedOwnDevice, String(deviceId)) }
     }
 
     public func revoke(deviceId: UInt32) throws {
         try vault.write { try $0.remove(.approvedOwnDevice, String(deviceId)) }
+    }
+
+    public func approvedDeviceIds() throws -> [UInt32] {
+        try vault.read { try $0.keys(of: .approvedOwnDevice) }.compactMap(UInt32.init)
+    }
+
+    /// La clé épinglée, lue dans la transaction libsignal en cours : c'est là
+    /// que `MeeshySignalProtocolStore.isTrustedIdentity` fait respecter
+    /// l'approbation, pas dans une lecture séparée qu'un écrivain concurrent
+    /// pourrait devancer.
+    static func pinned(_ deviceId: UInt32, in transaction: any E2EERecordTransaction) throws -> Data? {
+        try approval(deviceId, in: transaction)?.identityKey
+    }
+
+    static func approval(_ deviceId: UInt32, in transaction: any E2EERecordTransaction) throws -> E2EEOwnDeviceApproval? {
+        try transaction.load(.approvedOwnDevice, String(deviceId)).map { try JSONDecoder().decode(E2EEOwnDeviceApproval.self, from: $0) }
     }
 }
 

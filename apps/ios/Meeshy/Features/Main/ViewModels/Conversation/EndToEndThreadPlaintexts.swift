@@ -91,13 +91,25 @@ nonisolated enum EndToEndThreadPlaintexts {
     /// magasin résout en identifiant utilisateur) : une ligne sans auteur
     /// reconnaissable reste scellée.
     static func isInPlace(_ content: E2EEContent, senderUserId: String, for message: MeeshyMessage, conversationId: String) -> Bool {
+        let author = announcedAuthor(of: message)
         guard content.belongs(to: conversationId), message.messageSource == .user,
-              (message.senderUserId ?? message.senderId) == senderUserId else { return false }
+              !author.isEmpty, author == senderUserId else { return false }
         if let written = content.clientMessageId, let served = message.clientMessageId, written != served { return false }
         return cited(content.replyTo) == cited(message.replyToId)
     }
 
     private static func cited(_ id: String?) -> String? {
         id.flatMap { $0.isEmpty ? nil : $0 }
+    }
+
+    /// L'auteur que le message ANNONCE, quel que soit son chemin d'arrivée
+    /// (#11232, #12757). REST et socket portent `senderUserId`, leur `senderId`
+    /// désignant le Participant. Une ligne GRDB d'un pair n'a pas
+    /// `senderUserId` (`MessageRecord.toMessage` ne le pose que pour le
+    /// lecteur) : son `senderId` est l'utilisateur résolu à l'ingestion. Sans
+    /// auteur annoncé, aucun clair ne s'adopte.
+    static func announcedAuthor(of message: MeeshyMessage) -> String {
+        guard let author = message.senderUserId, !author.isEmpty else { return message.senderId }
+        return author
     }
 }

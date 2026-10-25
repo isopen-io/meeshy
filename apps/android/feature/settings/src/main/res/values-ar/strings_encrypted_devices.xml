@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="security_section_encrypted_devices">التشفير التام بين الطرفين</string>
+    <string name="encrypted_devices_title">أجهزتي المشفّرة</string>
+    <string name="encrypted_devices_notice_title">هاتف Android هذا لا يقرأ بعد المحادثات المشفّرة تشفيرًا تامًا بين الطرفين</string>
+    <string name="encrypted_devices_notice_body">لا يظهر بعد في هذه القائمة، ولا يمكنه حاليًا عرض رمزه أو قراءة رمز جهاز آخر. يمكنك من الآن إزالة جهاز مفقود: لن يتلقى رسائلك المشفّرة بعد ذلك.</string>
+    <string name="encrypted_devices_loading">جارٍ تحميل أجهزتك المشفّرة</string>
+    <string name="encrypted_devices_offline_empty">أنت غير متصل. اتصل لعرض أجهزتك المشفّرة.</string>
+    <string name="encrypted_devices_error">تعذّر تحميل أجهزتك المشفّرة.</string>
+    <string name="encrypted_devices_retry">إعادة المحاولة</string>
+    <string name="encrypted_devices_offline">أنت غير متصل. قد لا تكون هذه القائمة محدّثة.</string>
+    <string name="encrypted_devices_stale">تعذّر تحديث هذه القائمة وقد لا تكون محدّثة.</string>
+    <string name="encrypted_devices_empty_title">لا يوجد جهاز مشفّر بعد</string>
+    <string name="encrypted_devices_empty_body">يظهر الجهاز هنا بمجرد أن يُعدّ Meeshy عليه التشفير التام بين الطرفين.</string>
+    <string name="encrypted_devices_dates">أُضيف في %1$s · آخر نشاط في %2$s</string>
+    <string name="encrypted_devices_current">هذا الجهاز</string>
+    <string name="encrypted_devices_retiring">جارٍ إزالة %1$s</string>
+    <string name="encrypted_devices_retire_a11y">إزالة %1$s</string>
+    <string name="encrypted_devices_retire">إزالة</string>
+    <string name="encrypted_devices_retire_confirm_title">إزالة هذا الجهاز؟</string>
+    <string name="encrypted_devices_retire_confirm_message">لن يتلقى %1$s رسائلك المشفّرة بعد الآن ولن يتمكن من العودة بالمفاتيح نفسها. ما فكّ تشفيره سابقًا يبقى عليه: إن فُقد أو سُرق، فسجّل خروجه أيضًا من الجلسات وغيّر كلمة المرور.</string>
+    <string name="encrypted_devices_retire_confirm_action">إزالة</string>
+    <string name="encrypted_devices_cancel">إلغاء</string>
+    <string name="encrypted_devices_retire_offline">أنت غير متصل: لا يمكن إزالة جهاز إلا بعد الاتصال.</string>
+    <string name="encrypted_devices_retire_failed">تعذّرت إزالة الجهاز. حاول مرة أخرى.</string>
+    <string name="encrypted_devices_ok">حسنًا</string>
+    <string name="encrypted_devices_unnamed">جهاز %1$s رقم %2$d</string>
+    <string name="encrypted_devices_platform_ios">iOS</string>
+    <string name="encrypted_devices_platform_macos">macOS</string>
+    <string name="encrypted_devices_platform_android">Android</string>
+    <string name="encrypted_devices_platform_web">متصفح الويب</string>
+    <string name="encrypted_devices_platform_unknown">جهاز غير معروف</string>
+</resources>

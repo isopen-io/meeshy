@@ -23,6 +23,7 @@
 
 import { MEMBER_ROLE_HIERARCHY } from '../types/role-types.js';
 import { canStartCall } from './call-permission.js';
+import { actorRoleLevel } from './conversation-authority.js';
 import { GLOBAL_CONVERSATION_TYPE } from './global-minor-restriction.js';
 import {
   conversationIsClosed,
@@ -56,13 +57,9 @@ export type ConversationActions = {
 const AUTHORITY_TYPES: ReadonlySet<string> = new Set(['group', 'public', 'broadcast']);
 const MANAGED_TYPES: ReadonlySet<string> = new Set([...AUTHORITY_TYPES, GLOBAL_CONVERSATION_TYPE]);
 
-const MEMBER_RANKS: ReadonlyMap<string, number> = new Map(Object.entries(MEMBER_ROLE_HIERARCHY));
-
-/** `effectiveConversationRole` rendu en niveau : rôle de plateforme privilégié membre ⇒ créateur, sinon le rang de la ligne casse pliée ; illisible ⇒ 0. */
+/** `actorRoleLevel` de la loi d'autorité (rôle de plateforme privilégié membre ⇒ créateur, rang de la ligne casse pliée, illisible ⇒ 0), restreint aux membres actifs : hors participation, aucun rang. */
 function effectiveRank(viewer: ActionViewer): number {
-  if (!viewer.isActiveMember) return 0;
-  if (platformModerates(viewer)) return MEMBER_ROLE_HIERARCHY.creator;
-  return MEMBER_RANKS.get((viewer.conversationRole ?? '').toLowerCase()) ?? 0;
+  return viewer.isActiveMember ? actorRoleLevel(viewer) : 0;
 }
 
 /** `mayMintShareLink` : public ⇒ tout membre inscrit ; Global ⇒ rôle de plateforme privilégié ; le reste ⇒ MODERATOR+. */

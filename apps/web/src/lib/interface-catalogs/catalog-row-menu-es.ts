@@ -40,6 +40,7 @@ const es = {
   'listFilter.pinned': 'Fijados',
   'listFilter.archived': 'Archivadas',
   'listRow.muted': 'Silenciada',
+  'listRow.endToEnd': 'Cifrada de extremo a extremo',
   'listRow.announce.pin.on': 'Conversación fijada',
   'listRow.announce.pin.off': 'Conversación desfijada',
   'listRow.announce.mute.on': 'Conversación silenciada',

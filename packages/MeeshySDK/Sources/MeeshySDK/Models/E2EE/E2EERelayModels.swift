@@ -30,6 +30,12 @@ public enum E2EEErrorCode {
     public static let deviceLimitReached = "E2EE_DEVICE_LIMIT_REACHED"
     public static let envelopesInvalid = "E2EE_ENVELOPES_INVALID"
     public static let regimeChanged = "E2EE_REGIME_CHANGED"
+    /// Le bout en bout ne se désactive pas (#12949).
+    public static let irreversible = "E2EE_IRREVERSIBLE"
+    /// La paire a déjà un tête-à-tête chiffré de bout en bout (#12966).
+    public static let directAlreadyEndToEnd = "E2EE_DIRECT_ALREADY_END_TO_END"
+    /// Le tête-à-tête n'a pas exactement deux membres inscrits (#12966).
+    public static let directNotAPair = "E2EE_DIRECT_NOT_A_PAIR"
     public static let identityRevoked = "E2EE_IDENTITY_REVOKED"
     public static let prekeyStockFull = "E2EE_PREKEY_STOCK_FULL"
 

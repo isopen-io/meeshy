@@ -1,9 +1,10 @@
 import XCTest
 @testable import MeeshySDK
 
-/// Le chiffrement d'une conversation est COMMUTABLE (#12522) : le service lit
-/// et bascule le régime, l'époque voyage avec un envoi libsignal, et un
-/// événement socket repeint la conversation sans relecture.
+/// Le chiffrement d'une conversation s'ACTIVE (#12522) et le bout en bout ne se
+/// désactive pas (#12949) : le service lit et active le régime, l'époque voyage
+/// avec un envoi libsignal, et un événement socket repeint la conversation sans
+/// relecture — jamais vers le clair depuis le bout en bout.
 final class ConversationEncryptionRegimeTests: XCTestCase {
 
     private func makeSUT() -> (sut: ConversationEncryptionService, api: MockAPIClient) {
@@ -62,18 +63,51 @@ final class ConversationEncryptionRegimeTests: XCTestCase {
         XCTAssertEqual(result.epoch, 1)
     }
 
-    func test_disable_deletesTheRegimeAndReturnsItInClear() async throws {
+    /// Le chiffrement AU REPOS se désactive encore (#12522) ; la passerelle
+    /// refuse la désactivation d'un bout en bout (#12949).
+    func test_disable_deletesTheAtRestRegimeAndReturnsItInClear() async throws {
         let (sut, api) = makeSUT()
         api.stub("/conversations/c1/encryption", result: try status("""
-        {"success":true,"data":{"isEncrypted":false,"mode":null,"enabledAt":null,"enabledBy":null,"canTranslate":false,"epoch":2,"canToggleEncryption":true}}
+        {"success":true,"data":{"isEncrypted":false,"mode":null,"enabledAt":null,"enabledBy":null,"canTranslate":true,"epoch":2,"canToggleEncryption":true}}
         """))
 
         let result = try await sut.disable(conversationId: "c1")
 
         XCTAssertEqual(api.lastRequest?.method, "DELETE")
         XCTAssertFalse(result.isEncrypted)
-        XCTAssertNil(result.mode)
         XCTAssertEqual(result.epoch, 2)
+    }
+
+    // MARK: - L'autre tête-à-tête de la paire (#12966)
+
+    func test_openReadableDirect_asksTheReadableOneOfThePair() async throws {
+        let (sut, api) = makeSUT()
+        api.stub("/conversations", result: try decode(APIResponse<CreateConversationResponse>.self, """
+        {"success":true,"data":{"id":"c-readable","type":"direct","title":null,"createdAt":"2026-10-25T10:00:00.000Z"}}
+        """))
+
+        let opened = try await sut.openReadableDirect(with: "u-peer")
+
+        XCTAssertEqual(opened, "c-readable")
+        XCTAssertEqual(api.lastRequest?.method, "POST")
+        XCTAssertEqual(api.lastRequest?.bodyJSON?["type"] as? String, "direct")
+        XCTAssertEqual(api.lastRequest?.bodyJSON?["participantIds"] as? [String], ["u-peer"])
+        XCTAssertEqual(api.lastRequest?.bodyJSON?["plaintext"] as? Bool, true)
+    }
+
+    func test_createConversationRequest_withoutPlaintext_staysTheBodyOfBefore() throws {
+        let body = try JSONSerialization.jsonObject(with: JSONEncoder().encode(CreateConversationRequest(type: "direct", participantIds: ["u"]))) as? [String: Any]
+
+        XCTAssertNil(body?["plaintext"], "un ancien appel ne change pas de forme (#9223)")
+    }
+
+    func test_status_readsThePairEndToEndConversation() throws {
+        let served = try status("""
+        {"success":true,"data":{"isEncrypted":false,"mode":null,"canTranslate":true,"epoch":0,"canToggleEncryption":false,"pairEndToEndConversationId":"c-e2ee"}}
+        """).data
+
+        XCTAssertEqual(served.pairEndToEndConversationId, "c-e2ee")
+        XCTAssertEqual(served.canToggleEncryption, false)
     }
 
     // MARK: - Fil
@@ -101,16 +135,39 @@ final class ConversationEncryptionRegimeTests: XCTestCase {
         XCTAssertFalse(event.isEncrypted)
     }
 
-    func test_adoptingEncryption_repaintsTheConversationInClear() throws {
+    /// #12949 — le bout en bout ne se désactive pas : une bascule servie vers
+    /// le clair ne repeint jamais une conversation chiffrée de bout en bout.
+    func test_adoptingEncryption_neverRepaintsAnEndToEndConversationInClear() throws {
         let event = try decode(ConversationEncryptionChangedEvent.self, changedJSON)
         var conversation = MeeshyConversation(id: "c1", identifier: "c1")
         conversation.encryptionMode = "e2ee"
         conversation.encryptionEnabledAt = Date(timeIntervalSince1970: 1_000)
 
+        XCTAssertNil(conversation.adoptingEncryption(event))
+    }
+
+    /// Le chiffrement AU REPOS se quitte encore : la passerelle le lit déjà.
+    func test_adoptingEncryption_repaintsAServerEncryptedConversationInClear() throws {
+        let event = try decode(ConversationEncryptionChangedEvent.self, changedJSON)
+        var conversation = MeeshyConversation(id: "c1", identifier: "c1")
+        conversation.encryptionMode = "server"
+
         let adopted = conversation.adoptingEncryption(event)
 
+        XCTAssertNotNil(adopted)
         XCTAssertNil(adopted?.encryptionMode)
-        XCTAssertNil(adopted?.encryptionEnabledAt)
+    }
+
+    /// #12936 — une activation servie dans le futur est bornée par l'horloge de l'appareil.
+    func test_regime_anActivationServedInTheFuture_isBoundedByTheDeviceClock() throws {
+        var conversation = MeeshyConversation(id: "c1", identifier: "c1")
+        conversation.encryptionMode = "e2ee"
+        conversation.encryptionEnabledAt = Date().addingTimeInterval(365 * 86_400)
+
+        let regime = EndToEndRegime(conversation: conversation)
+
+        XCTAssertLessThanOrEqual(try XCTUnwrap(regime.enabledAt), Date())
+        XCTAssertTrue(regime.governs(createdAt: Date()))
     }
 
     func test_adoptingEncryption_ignoresAnotherConversationAndAnUnchangedRegime() throws {

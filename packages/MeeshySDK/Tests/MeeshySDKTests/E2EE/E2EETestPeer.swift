@@ -36,7 +36,7 @@ struct E2EETestPeer {
             directory: directory, platform: .ios, label: "iPhone"
         )
         let enrolled = try await registrar.ensureEnrolled(userId: userId)
-        let store = MeeshySignalProtocolStore(identity: enrolled.identity)
+        let store = MeeshySignalProtocolStore(identity: enrolled.identity, ownUserId: enrolled.device.userId)
         let cipher = E2EESessionCipher(local: enrolled.device.address, store: store, vault: vault, lock: lock)
         let approvals = E2EEOwnDeviceApprovals(vault: vault)
         let plaintexts = E2EEPlaintextVault(vault: vault)

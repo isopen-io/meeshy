@@ -28,9 +28,11 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -43,17 +45,23 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import me.meeshy.feature.profile.R
 import me.meeshy.sdk.model.ImageUploadTarget
 import me.meeshy.sdk.model.LanguageData
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.util.resolveServedImageUrl
+import me.meeshy.ui.component.FeedbackKind
+import me.meeshy.ui.component.FeedbackToastHost
+import me.meeshy.ui.component.FeedbackToastRequest
 import me.meeshy.ui.component.LanguagePickerDialog
 import me.meeshy.ui.component.LanguagePickerOption
 import me.meeshy.ui.component.LocalMediaBaseUrl
 import me.meeshy.ui.component.chrome.CollapsibleHeaderActionButton
 import me.meeshy.ui.component.chrome.CollapsibleHeaderPage
 import me.meeshy.ui.component.chrome.MeeshyBackground
+import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.profile.ProfileFullscreenImage
 import me.meeshy.ui.profile.ProfileFullscreenImageViewer
@@ -100,6 +108,12 @@ fun OwnProfileScreen(
         uploadErrorMessage = uploadState.error?.let { stringResource(it.messageRes()) },
         onUploadErrorShown = uploadViewModel::dismissError,
     )
+    val toasts = remember { MutableSharedFlow<FeedbackToastRequest>(extraBufferCapacity = 1) }
+    OwnProfileSaveEffects(
+        effects = viewModel.effects,
+        onSaveFailedMessage = { capsule.value = it },
+        toasts = toasts,
+    )
 
     BackHandler(enabled = state.isEditing) { onEvent(OwnProfileUiEvent.CancelEditing) }
 
@@ -140,7 +154,8 @@ fun OwnProfileScreen(
                 banner = { ProfileBanner(user = it, modifier = Modifier.fillMaxSize()) },
             )
         }
-        OwnProfileErrorCapsule(capsule)
+        OwnProfileErrorCapsule(capsule.value)
+        FeedbackToastHost(toasts = toasts)
     }
 
     pickingSlot?.let { slot -> OwnProfileLanguagePicker(slot, state, onEvent, onDone = { pickingSlot = null }) }
@@ -164,14 +179,44 @@ private fun rememberOwnProfileImagePicker(uploadViewModel: AvatarBannerUploadVie
     }
 }
 
+/**
+ * Les effets de l'enregistrement (iOS `HapticFeedback` + `FeedbackToastManager`) : haptique succès au
+ * toucher d'Enregistrer, toast « synchronisé au retour en ligne » hors ligne, haptique d'erreur et
+ * message générique quand la file abandonne l'édition.
+ */
+@Composable
+private fun OwnProfileSaveEffects(
+    effects: Flow<OwnProfileUiEffect>,
+    onSaveFailedMessage: (String) -> Unit,
+    toasts: MutableSharedFlow<FeedbackToastRequest>,
+) {
+    val haptics = rememberMeeshyHaptics()
+    val saveError by rememberUpdatedState(stringResource(R.string.profile_save_error))
+    val onFailed by rememberUpdatedState(onSaveFailedMessage)
+    LaunchedEffect(effects) {
+        effects.collect { effect ->
+            when (effect) {
+                OwnProfileUiEffect.SaveSucceeded -> haptics.success()
+                OwnProfileUiEffect.SavedOffline ->
+                    toasts.tryEmit(FeedbackToastRequest(R.string.profile_own_saved_offline, FeedbackKind.Success))
+                is OwnProfileUiEffect.SaveFailed -> {
+                    haptics.error()
+                    if (effect.showDefaultMessage) onFailed(saveError)
+                }
+            }
+        }
+    }
+}
+
 /** La capsule d'erreur : le dernier message (enregistrement ou téléversement), effacé après 3 s. */
 @Composable
 private fun rememberOwnProfileErrorCapsule(
     errorMessage: String?,
     uploadErrorMessage: String?,
     onUploadErrorShown: () -> Unit,
-): String? {
-    var capsule by remember { mutableStateOf<String?>(null) }
+): MutableState<String?> {
+    val capsuleState = remember { mutableStateOf<String?>(null) }
+    var capsule by capsuleState
     LaunchedEffect(errorMessage) { errorMessage?.let { capsule = it } }
     LaunchedEffect(uploadErrorMessage) {
         uploadErrorMessage?.let {
@@ -185,7 +230,7 @@ private fun rememberOwnProfileErrorCapsule(
             capsule = null
         }
     }
-    return capsule
+    return capsuleState
 }
 
 /**

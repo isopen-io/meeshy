@@ -43,6 +43,7 @@ final class DatabaseMigrationTableTests: XCTestCase {
         "messages_sender_has_account",
         "outbox_v4_cancel_requested_at",
         "messages_sender_ring",
+        "messages_edited_by_id",
     ]
 
     static let feedIdentifiers = [

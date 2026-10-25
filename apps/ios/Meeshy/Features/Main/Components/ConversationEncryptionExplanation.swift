@@ -53,11 +53,14 @@ enum ConversationEncryptionRegime: Equatable {
 ///   l'appareil seulement (`EndToEndSendRefusal`, `DeviceTranslationEligibility`) ;
 /// - appareils : 16 au plus (`E2EE_MAX_ACTIVE_DEVICES`), clés du trousseau
 ///   `ThisDeviceOnly` ;
-/// - bascule : `mayActivateConversationEncryption`, avis système, #12846.
+/// - bascule : `mayActivateConversationEncryption`, avis système ; le bout en
+///   bout ne se désactive pas (#12949) : un tête-à-tête renvoie à une
+///   conversation non chiffrée avec le même contact (#12966), un groupe à une
+///   nouvelle conversation. Le chiffrement au repos se désactive encore.
 struct ConversationEncryptionExplanation: Equatable {
 
     enum Topic: CaseIterable, Equatable {
-        case whoReads, available, absent, notYet, devices, switching
+        case whoReads, available, absent, notYet, devices, switching, permanence
     }
 
     enum Fact: CaseIterable, Equatable {
@@ -66,7 +69,8 @@ struct ConversationEncryptionExplanation: Equatable {
         case noServerTranscription, noNotificationPreview, noSearch, noEdit, noForward, noOfflineSending
         case notYetAttachments, notYetDecryptedNotifications, notYetGroups, groupSendingUnavailable, notYetSafetyNumbers
         case oneKeyPerDevice, deviceLimit, restoredDeviceIsNew
-        case whoMayToggle, switchKeepsHistory, switchIsShownInThread, switchNeverResendsInClear
+        case whoMayToggle, switchKeepsHistory, switchIsShownInThread, endToEndIsFinal
+        case endToEndNeverTurnedOff, endToEndNeverTurnedOffDirect, serverCannotTurnItOff
     }
 
     struct Section: Equatable {
@@ -96,7 +100,7 @@ struct ConversationEncryptionExplanation: Equatable {
         }
     }
 
-    private static let switchingFacts: [Fact] = [.whoMayToggle, .switchKeepsHistory, .switchIsShownInThread]
+    private static let switchingFacts: [Fact] = [.whoMayToggle, .switchKeepsHistory, .switchIsShownInThread, .endToEndIsFinal]
 
     private static func readable(whoReads: [Fact]) -> [Section] {
         [
@@ -115,7 +119,7 @@ struct ConversationEncryptionExplanation: Equatable {
                 + (isDirect ? [.notYetGroups] : [.notYetGroups, .groupSendingUnavailable])
                 + [.notYetSafetyNumbers]),
             Section(topic: .devices, facts: [.oneKeyPerDevice, .deviceLimit, .restoredDeviceIsNew]),
-            Section(topic: .switching, facts: switchingFacts + [.switchNeverResendsInClear]),
+            Section(topic: .permanence, facts: [isDirect ? .endToEndNeverTurnedOffDirect : .endToEndNeverTurnedOff, .serverCannotTurnItOff]),
         ]
     }
 }
