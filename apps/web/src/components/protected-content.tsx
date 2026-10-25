@@ -62,6 +62,7 @@ export function ProtectedContent({
   surface,
   isMine = false,
   revealable = true,
+  endToEnd = false,
   onConsumeViewOnce,
   media,
   now = defaultNow,
@@ -106,6 +107,15 @@ export function ProtectedContent({
    * simplement masqué à l'affichage, et le tap le révèle pour de bon.
    */
   readonly revealable?: boolean;
+  /**
+   * CHIFFRÉ DE BOUT EN BOUT, ET CET APPAREIL N'A PAS LA CLÉ (#12983) — le
+   * verdict d'`endToEndSealed` (`lib/view/end-to-end-sealed.ts`). Le texte servi
+   * n'est que le littéral `[Encrypted]` : rien à révéler, et la mention dit où
+   * le message se lit. La retenue du serveur passe AVANT : la lecture
+   * souveraine de l'administration dit « Contenu retenu », jamais « vos
+   * appareils », qui ne sont pas ceux du lecteur.
+   */
+  readonly endToEnd?: boolean;
   readonly onConsumeViewOnce?: ((messageId: string) => Promise<boolean>) | undefined;
   /**
    * LE MÉDIA D'UN MESSAGE PROTÉGÉ — ce que la grille et la visionneuse ont
@@ -337,6 +347,8 @@ export function ProtectedContent({
       />
     );
   }
+
+  if (endToEnd) return <ProtectionNotice kind="endToEnd" surface={surface} isMine={isMine} />;
 
   if (kind === 'standard') return <>{children}</>;
 
@@ -673,7 +685,7 @@ export function ProtectionNotice({
    * Une vue unique ouverte n'est PLUS un tombstone (#7580) : elle a sa puce,
    * `ViewOnceChip`, et ne dit jamais « supprimé ».
    */
-  readonly kind: 'deleted' | 'withheld';
+  readonly kind: 'deleted' | 'withheld' | 'endToEnd';
   readonly surface: 'row' | 'bubble';
   readonly isMine?: boolean;
   /**
@@ -713,7 +725,8 @@ export function ProtectionNotice({
   const LABELS = {
     deleted: { label: 'message.deleted', aria: 'message.deleted' },
     withheld: { label: 'message.withheld', aria: 'message.withheld.a11y' },
-  } as const satisfies Readonly<Record<'deleted' | 'withheld', { label: InterfaceCatalogKey; aria: InterfaceCatalogKey }>>;
+    endToEnd: { label: 'message.endToEnd', aria: 'message.endToEnd.a11y' },
+  } as const satisfies Readonly<Record<'deleted' | 'withheld' | 'endToEnd', { label: InterfaceCatalogKey; aria: InterfaceCatalogKey }>>;
   const label = translate(language, LABELS[kind].label);
   const ariaLabel = translate(language, LABELS[kind].aria);
   /* Le MÊME vocabulaire que l'oreille — `attachmentSegments` est le site
@@ -756,7 +769,7 @@ export function ProtectionNotice({
         className={`protected-notice protected-notice--${kind} inline-flex items-center gap-1.5 rounded-chip`}
         aria-label={constat === '' ? ariaLabel : `${ariaLabel}, ${constat}`}
       >
-        <Glyph name="prohibit" size={12} style={{ color: 'var(--color-ios-ink-2)' }} />
+        <Glyph name={kind === 'endToEnd' ? 'lock' : 'prohibit'} size={12} style={{ color: 'var(--color-ios-ink-2)' }} />
         <span className="text-title italic" style={{ color: 'var(--color-ios-ink-2)' }}>
           {label}
           {media}

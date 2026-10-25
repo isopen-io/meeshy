@@ -9,7 +9,7 @@ import type { PlacedMessage } from '@/lib/grouping';
 import { createDayPillRevealSubscriber, useDayPillReveal } from '@/lib/view/day-pill-reveal';
 import { composerKeyboard, createScrollerGestureSubscriber, useThreadChrome } from '@/lib/view/use-thread-chrome';
 import { isNearBottom, stickyDayOf, type VirtualRowSpan } from '@/lib/view/thread-chrome';
-import { initialUnreadBelowState, reduceUnreadBelow } from '@/lib/view/unread-below';
+import { initialUnreadBelowState, reduceUnreadBelow, unreadPreviewText } from '@/lib/view/unread-below';
 import { SCROLL_TO_BOTTOM_FRAMES, pinToBottom, type PinToBottomHandle } from '@/lib/view/pin-to-bottom';
 
 /**
@@ -218,7 +218,7 @@ export function useThreadChromeSignals(input: {
     scrollButtonVisible: mode !== 'summary' && (!nearBottom || detached),
     scrollButtonUnreadCount: unreadBelow.count,
     scrollButtonSenderName: group ? (lastUnreadMessage?.sender?.displayName ?? null) : null,
-    scrollButtonPreviewText: lastUnreadServed?.text ?? null,
+    scrollButtonPreviewText: unreadPreviewText(lastUnreadMessage, lastUnreadServed?.text),
     onScrollToBottom,
   };
 }

@@ -115,6 +115,9 @@ struct ConversationRowItem: View {
     let focusElection: LentilleFocusElection
     let sceneActivity: LentilleSceneActivity
     let magnification: LentilleMagnification
+    /// Le clair local du dernier message scellé (#12968) — une VALEUR, lue
+    /// par la liste dans `ConversationListViewModel.endToEndTexts`.
+    var deviceText: ConversationPreviewDeviceText? = nil
 
     var body: some View {
         SwipeableRow(
@@ -244,6 +247,14 @@ struct ConversationRowItem: View {
         Task { await LiveCallJoiner.live.join(request) }
     }
 
+    /// La communauté d'une rangée : l'index de la liste d'abord, la liste
+    /// entière ensuite.
+    static func community(of conversation: Conversation, lookup: [String: MeeshyCommunity], all: [MeeshyCommunity]) -> MeeshyCommunity? {
+        guard conversation.type == .community || conversation.communityId != nil,
+              let communityId = conversation.communityId else { return nil }
+        return lookup[communityId] ?? all.first(where: { $0.id == communityId })
+    }
+
     /// #11387 — verrouillée par PIN : la rangée ne montre rien de ce que la
     /// conversation contient. LA décision (`ConversationLockManager
     /// .hidesContent`) est celle que le chargeur d'aperçu lit : un verrou qui
@@ -318,6 +329,7 @@ struct ConversationRowItem: View {
                     draftSummary: draftSummary,
                     isContentLocked: isContentLocked,
                     preferredContentLanguages: preferredContentLanguages,
+                    deviceText: deviceText,
                     onJoinLiveCall: { joinLiveCall() },
                     magnification: context
                 )
@@ -343,6 +355,7 @@ struct ConversationRowItem: View {
                 draftSummary: draftSummary,
                 isContentLocked: isContentLocked,
                 preferredContentLanguages: preferredContentLanguages,
+                deviceText: deviceText,
                 onJoinLiveCall: { joinLiveCall() }
             )
             .equatable()
@@ -571,6 +584,7 @@ extension ConversationRowItem: @MainActor Equatable {
         lhs.isSelected == rhs.isSelected &&
         lhs.draftSummary == rhs.draftSummary &&
         lhs.preferredContentLanguages == rhs.preferredContentLanguages &&
+        lhs.deviceText == rhs.deviceText &&
         // Compare swipe action ICONS, not just `.count`: the lock/block toggles
         // (`leadingSwipeActions`/`trailingSwipeActions`) read live state from
         // `ConversationLockManager` / `BlockService` — singletons NOT folded into

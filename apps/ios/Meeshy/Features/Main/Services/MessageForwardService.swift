@@ -45,12 +45,35 @@ nonisolated enum ForwardRefusalReason: Equatable, CaseIterable, Sendable {
     case encryptedSource
     /// La pièce choisie n'est pas du message (`forwarded-attachment-not-in-source`).
     case attachmentNotInSource
+    /// La DESTINATION est chiffrée de bout en bout (`E2EE_PLAINTEXT_REFUSED`) :
+    /// le serveur n'y reçoit aucun clair, et l'appareil ne sait pas encore y
+    /// sceller une pièce ni une copie (#10789, #12978).
+    case encryptedDestination
 
     /// Ce que la loi de sortie refuse pour ce message, ou `nil` s'il se
     /// transfère. Un flouté se transfère (D8).
     static func local(for message: Message) -> ForwardRefusalReason? {
         guard case .refused(let refusal) = message.exitOffer.law.forward else { return nil }
         return refusal == .viewOnce ? .viewOnce : .afterRead
+    }
+
+    /// La raison d'un refus du serveur, quel que soit le type que le client lève :
+    /// le vrai `APIClient` lève `MeeshyError` (`.server`, `.rejected`), jamais
+    /// `APIError` (#12978). Le code du refus E2EE se lit AVANT la phrase, qui dit
+    /// « chiffrée » et se lirait sinon comme une source chiffrée.
+    static func server(error: any Error) -> ForwardRefusalReason? {
+        if EndToEndSendGate.isServerPlaintextRefusal(error) { return .encryptedDestination }
+        return server(message: serverMessage(of: error))
+    }
+
+    /// La phrase que le serveur a jointe à son refus, ou `nil`.
+    static func serverMessage(of error: any Error) -> String? {
+        switch error {
+        case APIError.serverError(_, let message): return message
+        case MeeshyError.server(_, let message): return message
+        case MeeshyError.rejected(let rejection): return rejection.message
+        default: return nil
+        }
     }
 
     /// La raison que porte la phrase de refus du serveur, ou `nil` si ce n'en est pas une.
@@ -81,6 +104,9 @@ nonisolated enum ForwardRefusalReason: Equatable, CaseIterable, Sendable {
         case .attachmentNotInSource:
             return String(localized: "forward.refused.attachment-not-in-source",
                           defaultValue: "Cette pièce n’appartient plus au message.", bundle: .main)
+        case .encryptedDestination:
+            return String(localized: "share.refused.encrypted-destination",
+                          defaultValue: "Cette conversation est chiffrée : le partage n’y envoie rien pour l’instant.", bundle: .main)
         }
     }
 }
@@ -269,8 +295,7 @@ final class MessageForwardService: MessageForwardServiceProviding {
     }
 
     private static func refusal(in error: Error) -> ForwardRefusalReason? {
-        guard case let APIError.serverError(_, serverMessage) = error else { return nil }
-        return ForwardRefusalReason.server(message: serverMessage)
+        ForwardRefusalReason.server(error: error)
     }
 
     private static func failureReason(for error: Error) -> String {
