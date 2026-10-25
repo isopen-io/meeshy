@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { FIXTURES_LOADED_AT, parisCalendarDay, resolveThreadAnchor, resolveThreadMoment } from './fixtures-base';
+import { FIXTURES_LOADED_AT, nextParisDayInstant, parisCalendarDay, resolveThreadAnchor, resolveThreadMoment } from './fixtures-base';
 
 /**
  * `resolveThreadAnchor` (#5797) — extraite de l'IIFE qui calculait
@@ -94,5 +94,22 @@ describe('resolveThreadMoment — jamais dans le futur, jamais hors du jour pari
     const at = new Date('2026-09-21T12:00:00.000Z');
     const offsets = [240, 120, ...WRITTEN].map((minutesAgo) => (at.getTime() - momentAt(at, minutesAgo).getTime()) / 60_000);
     expect(offsets).toEqual([240, 120, ...WRITTEN]);
+  });
+});
+
+describe('nextParisDayInstant — le jour calendaire parisien suivant, même les jours de changement d’heure (#12826)', () => {
+  test('jour ordinaire ⇒ exactement 24 heures plus tard', () => {
+    const at = new Date('2026-09-08T12:00:00.000Z');
+    expect(nextParisDayInstant(at).getTime()).toBe(at.getTime() + 24 * 60 * 60_000);
+  });
+
+  test('passage à l’heure d’hiver, 00:30 CEST le 25 octobre ⇒ le 26 octobre', () => {
+    const at = new Date('2026-10-24T22:30:00.000Z');
+    expect(parisCalendarDay(nextParisDayInstant(at))).toBe('2026-10-26');
+  });
+
+  test('veille du passage à l’heure d’été, 23:30 CET le 27 mars ⇒ le 28 mars, jamais le 29', () => {
+    const at = new Date('2027-03-27T22:30:00.000Z');
+    expect(parisCalendarDay(nextParisDayInstant(at))).toBe('2027-03-28');
   });
 });

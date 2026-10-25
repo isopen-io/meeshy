@@ -4,7 +4,7 @@ import MeeshyE2EE
 import MeeshySDK
 import os
 
-/// L'E2EE libsignal de l'app (#3707, spec 2026-10-23 § 4) vu par ses deux
+/// L'E2EE libsignal de l'app (#3707, spec E2EE libsignal iOS/macOS § 4) vu par ses deux
 /// consommateurs : l'envoi d'une conversation chiffrée, qui scelle pour chaque
 /// appareil de la directe, et le fil, qui lit le clair que CET appareil a
 /// déchiffré ou envoyé. Le serveur ne voit jamais ce clair : il ne vit que dans
@@ -57,8 +57,18 @@ actor EndToEndMessagingRuntime: EndToEndMessagingProviding, EndToEndDeviceManagi
 
     private let provisioning: any EndToEndDeviceProvisioning
     private var readyDevice: EndToEndReadyDevice?
-    private var preparing: Task<EndToEndReadyDevice, any Error>?
+    private var preparing: Preparation?
+    /// Change à chaque oubli et à chaque préparation remplacée : une
+    /// préparation reprise sous une autre génération ne rend rien (#12769).
+    private var generation = 0
     private let relay = OutcomeRelay()
+
+    /// La préparation en vol, liée au compte qui l'a demandée.
+    private struct Preparation {
+        let userId: String
+        let generation: Int
+        let task: Task<EndToEndReadyDevice, any Error>
+    }
 
     init(provisioning: any EndToEndDeviceProvisioning) {
         self.provisioning = provisioning
@@ -66,21 +76,46 @@ actor EndToEndMessagingRuntime: EndToEndMessagingProviding, EndToEndDeviceManagi
 
     nonisolated var opened: AnyPublisher<E2EEOpenOutcome, Never> { relay.publisher }
 
-    /// L'installation de ce compte, enrôlée une fois ; une préparation en cours est partagée.
+    /// L'installation de ce compte, enrôlée une fois ; une préparation en cours
+    /// pour CE compte est partagée. Celle d'un autre compte est annulée et
+    /// remplacée, et un appareil n'est rendu, ni gardé, que s'il est celui du
+    /// compte demandé sous la génération où il a été demandé (#12769).
     func ready(for userId: String) async throws -> EndToEndReadyDevice {
         if let readyDevice, readyDevice.device.userId == userId { return readyDevice }
-        if let preparing { return try await preparing.value }
-        let task = Task { [provisioning] in try await provisioning.ready(for: userId) }
-        preparing = task
-        defer { preparing = nil }
-        let device = try await task.value
+        let demandedUnder = preparation(for: userId)
+        let outcome = await demandedUnder.task.result
+        guard demandedUnder.generation == generation else { throw CancellationError() }
+        if preparing?.task == demandedUnder.task { preparing = nil }
+        let device = try outcome.get()
+        guard device.device.userId == userId else { throw CancellationError() }
         readyDevice = device
         return device
     }
 
-    /// À la fermeture de session : l'installation se relira, et se reliera, à la prochaine.
+    private func preparation(for userId: String) -> Preparation {
+        if let preparing, preparing.userId == userId { return preparing }
+        cancelPreparation()
+        let preparation = Preparation(
+            userId: userId, generation: generation,
+            task: Task { [provisioning] in try await provisioning.ready(for: userId) }
+        )
+        preparing = preparation
+        return preparation
+    }
+
+    private func cancelPreparation() {
+        guard let preparing else { return }
+        preparing.task.cancel()
+        self.preparing = nil
+        generation += 1
+    }
+
+    /// À la fermeture de session : l'installation se relira, et se reliera, à
+    /// la prochaine ; une préparation en vol est annulée et ne rendra rien.
     func forget() {
         readyDevice = nil
+        cancelPreparation()
+        generation += 1
     }
 
     func deliver<T: Sendable>(
@@ -144,6 +179,7 @@ actor EndToEndMessagingRuntime: EndToEndMessagingProviding, EndToEndDeviceManagi
 
 /// Le relais des enveloppes ouvertes, lisible hors de l'acteur. Il n'est
 /// alimenté QUE par l'acteur, donc jamais par deux fils à la fois.
+/// unchecked: `PassthroughSubject` sérialise déjà ses envois, et `subject` n'est jamais réassigné après l'init.
 nonisolated final class OutcomeRelay: @unchecked Sendable {
     private let subject = PassthroughSubject<E2EEOpenOutcome, Never>()
     var publisher: AnyPublisher<E2EEOpenOutcome, Never> { subject.eraseToAnyPublisher() }
