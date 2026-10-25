@@ -1,3 +1,4 @@
+import CommonCrypto
 import CryptoKit
 import Foundation
 import Testing
@@ -70,7 +71,7 @@ struct E2EEAttachmentCipherTests {
         #expect(E2EEAttachmentCipher.paddedSize(size) == padded)
     }
 
-    @Test(arguments: ["nist-sp800-38a-f25", "short-text", "bucket-1234"])
+    @Test(arguments: ["nist-sp800-38a-f25", "short-text", "bucket-1234", "full-pkcs7-block", "beyond-64-kib"])
     func itReproducesTheOpenSSLVector(name: String) throws {
         let vector = try Self.vector(name)
         let sealed = try E2EEAttachmentCipher.seal(Data(hex: vector.plaintext), key: Data(hex: vector.key), iv: Data(hex: vector.iv))
@@ -86,11 +87,42 @@ struct E2EEAttachmentCipherTests {
         #expect(sealed.blob.subdata(in: 16..<80).hex == Self.nistF25Ciphertext)
     }
 
-    @Test(arguments: ["nist-sp800-38a-f25", "short-text", "bucket-1234"])
+    @Test(arguments: ["nist-sp800-38a-f25", "short-text", "bucket-1234", "full-pkcs7-block", "beyond-64-kib"])
     func itOpensTheVectorToItsExactSize(name: String) throws {
         let vector = try Self.vector(name)
         let secret = E2EEAttachmentSecret(key: Data(hex: vector.key), digest: Data(hex: vector.digest), size: vector.size)
         #expect(try E2EEAttachmentCipher.open(Data(hex: vector.blob), with: secret).hex == vector.plaintext)
+    }
+
+    // MARK: - Chaque couche sur son vecteur OFFICIEL, telle que ce module s'en sert
+
+    @Test func aesLayer_reproducesNISTSP80038AF25() throws {
+        let cryptor = try AESCBC(
+            operation: CCOperation(kCCEncrypt),
+            key: Data(hex: "603deb1015ca71be2b73aef0857d77811f352c073b6108d72d9810a30914dff4"),
+            iv: Data(hex: "000102030405060708090a0b0c0d0e0f")
+        )
+        var out = try cryptor.update(Data(hex: "6bc1bee22e409f96e93d7e117393172aae2d8a571e03ac9c9eb76fac45af8e5130c81c46a35ce411e5fbc1191a0a52eff69f2445df4f9b17ad2b417be66c3710"))
+        out.append(try cryptor.finish())
+        #expect(out.prefix(64).hex == Self.nistF25Ciphertext)
+    }
+
+    @Test func hmacLayer_reproducesRFC4231Case2() {
+        let mac = HMAC<SHA256>.authenticationCode(for: Data("what do ya want for nothing?".utf8), using: SymmetricKey(data: Data("Jefe".utf8)))
+        #expect(Data(mac).hex == "5bdcc146bf60754e6a042426089575c75a003f089d2739839dec58b964ec3843")
+    }
+
+    @Test func digestLayer_reproducesFIPS1802Abc() {
+        #expect(Data(SHA256.hash(data: Data("abc".utf8))).hex == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
+    }
+
+    /// Une tranche de `Data` garde ses indices d'origine : l'ouverture ne s'y trompe pas.
+    @Test func itOpensABlobHandedAsASlice() throws {
+        let vector = try Self.vector("short-text")
+        let padded = Data([0xAA, 0xBB]) + Data(hex: vector.blob)
+        let slice = padded.dropFirst(2)
+        let secret = E2EEAttachmentSecret(key: Data(hex: vector.key), digest: Data(hex: vector.digest), size: vector.size)
+        #expect(try E2EEAttachmentCipher.open(slice, with: secret).hex == vector.plaintext)
     }
 
     @Test func eachFileDrawsAFreshKeyAndIV() throws {

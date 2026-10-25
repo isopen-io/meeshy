@@ -79,7 +79,13 @@ public enum E2EEAttachmentCipher {
 
     // MARK: - Scellement
 
-    public static func seal(_ plaintext: Data, key: Data? = nil, iv: Data? = nil) throws -> E2EEAttachmentSealed {
+    /// Une clé et un IV NEUFS à chaque fichier : la seule façon de chiffrer hors des vecteurs de test.
+    public static func seal(_ plaintext: Data) throws -> E2EEAttachmentSealed {
+        try seal(plaintext, key: nil, iv: nil)
+    }
+
+    /// Clé et IV imposés : VECTEURS DE TEST seulement (`@testable`), jamais l'app.
+    static func seal(_ plaintext: Data, key: Data?, iv: Data?) throws -> E2EEAttachmentSealed {
         var blob = Data(capacity: blobSize(forPlaintextSize: plaintext.count))
         var offset = 0
         let secret = try seal(
@@ -94,8 +100,13 @@ public enum E2EEAttachmentCipher {
         return E2EEAttachmentSealed(blob: blob, secret: secret)
     }
 
-    /// Chiffre un fichier en flux vers `destination`, sans jamais le charger entier.
-    public static func seal(fileAt source: URL, to destination: URL, key: Data? = nil, iv: Data? = nil) throws -> E2EEAttachmentSecret {
+    /// Chiffre un fichier en flux vers `destination`, sans jamais le charger entier, sous une clé neuve.
+    public static func seal(fileAt source: URL, to destination: URL) throws -> E2EEAttachmentSecret {
+        try seal(fileAt: source, to: destination, key: nil, iv: nil)
+    }
+
+    /// Clé et IV imposés : VECTEURS DE TEST seulement (`@testable`), jamais l'app.
+    static func seal(fileAt source: URL, to destination: URL, key: Data?, iv: Data?) throws -> E2EEAttachmentSecret {
         let size = try fileSize(of: source)
         let input = try FileHandle(forReadingFrom: source)
         defer { try? input.close() }
@@ -115,7 +126,7 @@ public enum E2EEAttachmentCipher {
 
     private static func seal(
         size: Int, key fixedKey: Data?, iv fixedIV: Data?,
-        read: () throws -> Data, write: (Data) throws -> Void
+        read: () throws -> Data, write: @escaping (Data) throws -> Void
     ) throws -> E2EEAttachmentSecret {
         let key = try fixedKey ?? randomBytes(keyBytes)
         let iv = try fixedIV ?? randomBytes(ivBytes)
@@ -156,7 +167,9 @@ public enum E2EEAttachmentCipher {
 
     // MARK: - Ouverture
 
-    public static func open(_ blob: Data, with secret: E2EEAttachmentSecret) throws -> Data {
+    public static func open(_ sealed: Data, with secret: E2EEAttachmentSecret) throws -> Data {
+        // Une copie indexée depuis zéro : une tranche de `Data` garde ses indices d'origine.
+        let blob = Data(sealed)
         try verify(digestOf: { body in try body(blob) }, blobSize: blob.count, secret: secret)
         let authenticated = blob.subdata(in: 0..<(blob.count - macBytes))
         try verifyMAC(Data(HMAC<SHA256>.authenticationCode(for: authenticated, using: SymmetricKey(data: secret.key.suffix(32)))),
@@ -289,7 +302,7 @@ public enum E2EEAttachmentCipher {
 }
 
 /// AES-256-CBC-PKCS7 de CommonCrypto, en flux.
-private final class AESCBC {
+final class AESCBC {
     private var ref: CCCryptorRef?
 
     init(operation: CCOperation, key: Data, iv: Data) throws {

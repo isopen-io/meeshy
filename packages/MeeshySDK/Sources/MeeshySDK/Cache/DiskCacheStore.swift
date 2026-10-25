@@ -398,6 +398,7 @@ public actor DiskCacheStore: ReadableCacheStore {
         // 1. Check cache (memory + disk)
         let result = await load(for: urlString)
         if let data = result.snapshot()?.first { return data }
+        if let local = Self.localFileBytes(urlString) { return local }
 
         // 2. Download from network (coalesced with any in-flight fetch) and cache
         return try await networkData(for: urlString, url: Self.remoteURL(urlString))

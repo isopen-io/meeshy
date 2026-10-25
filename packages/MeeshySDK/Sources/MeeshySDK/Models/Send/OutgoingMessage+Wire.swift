@@ -37,7 +37,9 @@ extension OutgoingMessage {
 
     /// Le corps REST d'un envoi libsignal (#3707, spec § 4.3). Le texte, la
     /// langue détectée et le lieu ne voyagent QUE dans les enveloppes : ni
-    /// `content`, ni `originalLanguage`, ni pièce, ni sticker n'y figurent. Les
+    /// `content`, ni `originalLanguage`, ni pièce en clair, ni sticker n'y
+    /// figurent ; une pièce chiffrée sur l'appareil n'y rattache que son blob
+    /// opaque, son pointeur voyageant dans les enveloppes (#10789). Les
     /// métadonnées que le serveur applique sans lire le contenu (réponse à,
     /// éphémère, vue unique, flou, effets) restent sur le fil.
     public func libsignalWireRequest(
@@ -52,6 +54,7 @@ extension OutgoingMessage {
             clientMessageId: context.clientMessageId.rawValue,
             replyToId: relation.replyToId,
             storyReplyToId: relation.storyReplyToId,
+            attachmentIds: attachments.isFullySealed ? attachments.ids : nil,
             senderDeviceId: senderDeviceId,
             envelopes: envelopes,
             unapprovedOwnDevices: unapprovedOwnDevices,

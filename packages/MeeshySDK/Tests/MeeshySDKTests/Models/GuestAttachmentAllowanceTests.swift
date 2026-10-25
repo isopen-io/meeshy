@@ -46,6 +46,32 @@ struct GuestAttachmentAllowanceTests {
         #expect(free.offersContactsAndPlaces)
     }
 
+    // MARK: - Une conversation chiffrée de bout en bout (#10789)
+
+    /// Photos, vidéos, fichiers et vocaux se chiffrent sur l'appareil : leurs
+    /// portes restent. Lieux, fiches de contact et stickers ne se chiffrent pas
+    /// encore (#12526) : leurs portes se ferment AVANT le geste.
+    @Test func boutEnBout_ouvreMediasFichiersVocaux_fermeLieuxContactsStickers() {
+        let sealed = GuestAttachmentAllowance.unrestricted.sealedEndToEnd(true)
+        #expect(sealed.offersVisualMedia)
+        #expect(sealed.offersFiles)
+        #expect(sealed.offersVoiceRecording)
+        #expect(sealed.offersContactsAndPlaces == false)
+        #expect(sealed.offersStickers == false)
+    }
+
+    @Test func horsBoutEnBout_lesStickersSuiventLesMedias() {
+        #expect(GuestAttachmentAllowance.unrestricted.sealedEndToEnd(false).offersStickers)
+        #expect(Self.world.sealedEndToEnd(false).offersStickers == false)
+    }
+
+    @Test func boutEnBout_nOuvreJamaisCeQueLeLienFerme() {
+        let sealed = Self.world.sealedEndToEnd(true)
+        #expect(sealed.offersVisualMedia == false)
+        #expect(sealed.offersVoiceRecording)
+        #expect(sealed.kinds == Self.world.kinds)
+    }
+
     // MARK: - Le plafond de World Wide (miroir de WORLD_GUEST_ATTACHMENT_KINDS)
 
     @Test func lePlafondDeWorldWide_estTexteEtAudio() {

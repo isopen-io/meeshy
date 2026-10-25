@@ -8,14 +8,26 @@ import Foundation
 public struct OutgoingAttachments: Equatable, Sendable {
     public let ids: [String]?
     public let previews: [MeeshyMessageAttachment]?
+    /// Les pièces chiffrées SUR L'APPAREIL (#10789) : leur pointeur (clé,
+    /// condensat, nom, type) part dans les enveloppes libsignal, `ids` ne
+    /// rattache que leurs blobs opaques. `nil` hors chiffrement de bout en bout.
+    public let sealed: [E2EEAttachmentPointer]?
 
-    public init(ids: [String]?, previews: [MeeshyMessageAttachment]?) {
+    public init(ids: [String]?, previews: [MeeshyMessageAttachment]?, sealed: [E2EEAttachmentPointer]? = nil) {
         self.ids = ids
         self.previews = previews
+        self.sealed = sealed
     }
 
     public static func == (lhs: OutgoingAttachments, rhs: OutgoingAttachments) -> Bool {
-        lhs.ids == rhs.ids && lhs.signature == rhs.signature
+        lhs.ids == rhs.ids && lhs.signature == rhs.signature && lhs.sealed == rhs.sealed
+    }
+
+    /// Chaque pièce rattachée est un blob d'un pointeur lisible, et chaque blob
+    /// d'un pointeur est rattaché : rien d'autre ne part à côté du chiffré.
+    public var isFullySealed: Bool {
+        guard let sealed, !sealed.isEmpty, sealed.allSatisfy(\.isReadable) else { return false }
+        return Set(ids ?? []) == Set(sealed.flatMap(\.blobIds)) && (ids ?? []).count == sealed.flatMap(\.blobIds).count
     }
 
     private var signature: [String]? {

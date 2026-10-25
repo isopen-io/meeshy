@@ -41,8 +41,11 @@ CommonCrypto (`SignalServiceKit/Cryptography/Cryptography.swift`).
 données aléatoires), chaque couche est rejouée sur des vecteurs officiels — NIST SP 800-38A F.2.5
 (CBC-AES256), RFC 4231 cas 2 (HMAC-SHA256), FIPS 180-2 « abc » (SHA-256), les points de contrôle de
 `Cryptography.paddedSize` de Signal-iOS (`CryptographyTests.test_spotCheckBucketBoundaries`) — et la
-composition sur un vecteur commun (`packages/shared/fixtures/e2ee-attachment/client-v1.vectors.json`) que
-Swift et TypeScript, deux implémentations indépendantes, reproduisent octet pour octet.
+composition sur des vecteurs écrits par OpenSSL (`packages/shared/fixtures/e2ee-attachment/client-v1.vectors.json` :
+NIST, texte court, palier de Signal, bloc PKCS7 plein, plus de 64 Kio) que Swift (CommonCrypto + CryptoKit,
+implémentation indépendante d'OpenSSL) et TypeScript (WebCrypto, qui repose sur OpenSSL sous Node : il
+vérifie l'usage de l'API, pas l'indépendance) reproduisent octet pour octet. Clé et IV ne s'imposent que
+dans les vecteurs (`encryptAttachmentForTestVector`, `seal(_:key:iv:)` interne).
 
 **Stockage local** : le blob téléchargé se garde tel quel, chiffré sous sa clé ; la clé ne vit que dans la
 base scellée `e2ee.sqlite` (pointeur du contenu). Le clair d'une image ou d'un vocal se déchiffre en
@@ -63,4 +66,8 @@ mémoire ; celui d'une vidéo ou d'un document, que les lecteurs système lisent
 
 **Conséquences** : composition écrite par Meeshy à partir de primitives standard : surface de revue
 cryptographique externe (#3710), comme le reste du § 9 de la spec. Ce que le serveur voit encore : qu'un
-message porte N blobs, leur taille arrondie, l'heure. La passerelle : `services/gateway/decisions/2026-10-25-la-passerelle-garde-une-piece-e2ee-comme-un-blob-opaque.md`.
+message porte N blobs, l'existence d'une affiche (un second blob) et sa taille, la taille arrondie de chaque
+blob, l'heure du dépôt et celle de l'envoi. Un appareil d'une version qui ne lit que `v: 1` juge un contenu
+`v: 2` illisible et l'acquitte : il le perd, en le disant (« message illisible »), sans pouvoir le relire
+après mise à jour — seules les versions à partir de celle-ci gardent le brut d'une version future
+(`E2EEPlaintextEntry.newerFormat`). Une capacité de version par appareil dans l'annuaire fermerait ce cas. La passerelle : `services/gateway/decisions/2026-10-25-la-passerelle-garde-une-piece-e2ee-comme-un-blob-opaque.md`.

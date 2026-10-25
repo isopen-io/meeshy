@@ -33,6 +33,7 @@ extension DiskCacheStore {
     ) async throws -> Data {
         let result = await load(for: urlString)
         if let data = result.snapshot()?.first { return data }
+        if let local = Self.localFileBytes(urlString) { return local }
         let url = try Self.remoteURL(urlString)
         return try await networkData(
             for: urlString,
@@ -117,6 +118,16 @@ extension DiskCacheStore {
     private func discardStagedFile(_ fileURL: URL) {
         guard fileManager.fileExists(atPath: fileURL.path) else { return }
         fileManager.removeItemLogging(at: fileURL, context: "media download staging cleanup", logger: logger)
+    }
+
+    /// Un média LOCAL (`file://`) absent du cache se lit là où il est, et ne s'y
+    /// recopie jamais (#10789) : une pièce chiffrée de bout en bout, déchiffrée
+    /// dans le dossier protégé de l'app, ne gagne pas une copie dans un cache
+    /// qui n'a pas sa protection. Absent du disque : `nil`, et l'appel échoue comme avant.
+    nonisolated static func localFileBytes(_ urlString: String) -> Data? {
+        guard let url = URL(string: urlString), url.isFileURL,
+              FileManager.default.fileExists(atPath: url.path) else { return nil }
+        return try? Data(contentsOf: url, options: .mappedIfSafe)
     }
 
     static func remoteURL(_ urlString: String) throws -> URL {

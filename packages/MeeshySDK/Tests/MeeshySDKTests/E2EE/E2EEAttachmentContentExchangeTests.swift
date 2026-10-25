@@ -64,6 +64,23 @@ final class E2EEAttachmentContentExchangeTests: XCTestCase {
         XCTAssertEqual(try bobIPhone.plaintexts.entry(for: "m2"), .newerFormat(raw, senderUserId: alice))
     }
 
+    /// Une version future qui change la FORME d'un champ connu (ici `sentAt`)
+    /// n'est pas jugée illisible pour autant : seule sa version compte (audit du 2026-10-25).
+    func test_aNewerContentVersionWithAReshapedField_isStillKeptRaw() async throws {
+        let server = FakeE2EEServer()
+        let aliceIPhone = try await E2EETestPeer.enroll(alice, on: server)
+        let bobIPhone = try await E2EETestPeer.enroll(bob, on: server)
+        try relay(try await aliceIPhone.sealer.seal(aliceIPhone.content("bonjour"), to: bob), from: aliceIPhone, on: server, messageId: "m1")
+        _ = bobIPhone.opener.open(try XCTUnwrap(server.pending(userId: bob, deviceId: bobIPhone.device.deviceId).first))
+        let raw = Data(#"{"authorDeviceId":\#(aliceIPhone.device.deviceId),"authorUserId":"\#(alice)","conversationId":"conv1","sentAt":"later","v":3}"#.utf8)
+
+        try relay(sealedRaw(raw, from: aliceIPhone, to: bobIPhone), from: aliceIPhone, on: server, messageId: "m2")
+        let envelope = try XCTUnwrap(server.pending(userId: bob, deviceId: bobIPhone.device.deviceId).first { $0.messageId == "m2" })
+
+        _ = bobIPhone.opener.open(envelope)
+        XCTAssertEqual(try bobIPhone.plaintexts.entry(for: "m2"), .newerFormat(raw, senderUserId: alice))
+    }
+
     /// Le serveur range un contenu futur dans une AUTRE conversation : il n'est
     /// pas gardé comme lisible plus tard, il est jugé illisible.
     func test_aNewerContentForAnotherConversation_isNotKept() async throws {

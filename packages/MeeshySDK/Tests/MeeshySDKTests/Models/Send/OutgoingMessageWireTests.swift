@@ -56,6 +56,30 @@ struct OutgoingMessageWireTests {
         #expect(try json(request) == #"{"clientMessageId":"cid_1","encryptedContent":"libsignal-v1","encryptionMetadata":{"protocol":"libsignal-v1","senderDeviceId":1},"encryptionMode":"e2ee","encryptionProtocol":"libsignal-v1","envelopes":[{"body":"Y2lwaGVy","deviceId":2,"registrationId":77,"type":3,"userId":"b"}],"isEncrypted":true,"replyToId":"m1","unapprovedOwnDevices":[3]}"#)
     }
 
+    /// #10789 — un envoi scellé rattache ses BLOBS par identifiant ; rien du
+    /// pointeur (clé, condensat, nom, type) ne part hors des enveloppes.
+    @Test func libsignalWireRequest_withSealedPieces_carriesOnlyTheBlobIds() throws {
+        let pointer = E2EEAttachmentPointer(
+            id: "b1", key: Data(repeating: 9, count: 64), digest: Data(repeating: 8, count: 32), size: 42,
+            contentType: "image/heic", fileName: "IMG_0042.HEIC", kind: .image, durationMs: 1200, thumbHash: "abc",
+            thumbnail: .init(id: "t1", key: Data(repeating: 7, count: 64), digest: Data(repeating: 6, count: 32), size: 5, contentType: "image/jpeg")
+        )
+        let message = OutgoingMessage(
+            conversationId: ConversationID("c1"), content: "", relation: .none,
+            attachments: OutgoingAttachments(ids: pointer.blobIds, previews: nil, sealed: [pointer])
+        )
+        let request = message.libsignalWireRequest(
+            context: makeContext(), wireEffectFlags: nil, senderDeviceId: 1,
+            envelopes: [E2EEOutgoingEnvelope(userId: "b", deviceId: 1, registrationId: 5, type: 2, body: "eA==")], unapprovedOwnDevices: []
+        )
+
+        let wire = try json(request)
+        #expect(request.attachmentIds == ["b1", "t1"])
+        for secret in ["IMG_0042", "image/heic", "abc", Data(repeating: 9, count: 64).base64EncodedString(), "1200"] {
+            #expect(!wire.contains(secret), "\(secret)")
+        }
+    }
+
     @Test func libsignalWireRequest_withoutUnapprovedDevices_omitsTheKey() throws {
         let request = makeMessage().libsignalWireRequest(
             context: makeContext(), wireEffectFlags: nil, senderDeviceId: 1,

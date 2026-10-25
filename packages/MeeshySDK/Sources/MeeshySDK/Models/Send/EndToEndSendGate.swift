@@ -9,8 +9,9 @@ public enum EndToEndSendRefusal: String, Error, Equatable, Sendable, CaseIterabl
     /// Pas une directe avec un pair connu : l'appareil ne sait pas encore
     /// chiffrer pour un groupe (Sender Keys, MLS).
     case recipientUnsealable
-    /// Pièce jointe, lieu, sticker, citation de pièce ou transfert : le serveur
-    /// les lirait en clair, l'appareil ne sait pas encore les chiffrer (#10789, #12526).
+    /// Pièce jointe en clair, lieu, sticker, citation de pièce ou transfert : le
+    /// serveur les lirait en clair (#12526). Une pièce chiffrée sur l'appareil
+    /// (#10789) n'en est pas une.
     case contentUnsealable
     /// La file hors ligne ne garde que du clair : rien de chiffré ne s'y dépose.
     case outboxUnsealable
@@ -35,6 +36,9 @@ public enum EndToEndSendRefusal: String, Error, Equatable, Sendable, CaseIterabl
     /// Mon compte a déjà le nombre maximal d'appareils chiffrés (#3707) : cet
     /// appareil ne peut pas s'enrôler tant qu'un autre n'est pas retiré.
     case deviceLimitReached
+    /// Une pièce chiffrée sur l'appareil n'a pas pu partir (#10789) : chiffrement
+    /// ou téléversement du blob en échec. Rien n'est parti en clair.
+    case pieceUploadFailed
 }
 
 /// La loi PURE de l'envoi sous chiffrement de bout en bout (#11379, directives
@@ -103,13 +107,19 @@ public enum EndToEndSendGate {
     /// Tout ce qui partirait À CÔTÉ du texte chiffré et que le serveur lirait :
     /// les pièces, le lieu, le sticker, l'ancre d'une pièce citée, la source
     /// d'un transfert — et un texte vide, qui ne laisserait rien à sceller.
+    ///
+    /// Une pièce chiffrée sur l'appareil (#10789) se scelle : son pointeur part
+    /// dans les enveloppes, et seul son blob opaque est rattaché. Un message qui
+    /// ne porte qu'elle n'a pas besoin de texte.
     public static func carriesUnsealableContent(_ outgoing: OutgoingMessage) -> Bool {
-        !(outgoing.attachments.ids ?? []).isEmpty
-            || !(outgoing.attachments.previews ?? []).isEmpty
+        let sealedPieces = outgoing.attachments.isFullySealed
+        let carriesPieces = !(outgoing.attachments.ids ?? []).isEmpty || !(outgoing.attachments.previews ?? []).isEmpty
+            || !(outgoing.attachments.sealed ?? []).isEmpty
+        return (carriesPieces && !sealedPieces)
             || outgoing.location != nil
             || outgoing.sticker != nil
             || outgoing.relation.attachmentReplyTo != nil
             || outgoing.relation.forwardedFromId != nil
-            || outgoing.text.isEmpty
+            || (outgoing.text.isEmpty && !sealedPieces)
     }
 }

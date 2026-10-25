@@ -299,4 +299,30 @@ final class TusUploadManagerTests: XCTestCase {
         XCTAssertEqual(metadata["uploadcontext"], "post")
         XCTAssertEqual(metadata["thumbhash"], "abc")
     }
+
+    /// #10789 — un blob chiffré de bout en bout ne déclare RIEN de ce que son
+    /// chiffré cache : ni nom, ni type, ni ThumbHash, ni transcription, ni
+    /// provenance. Seuls le contexte et le condensat du blob partent.
+    func test_creationMetadata_endToEndBlob_declaresOnlyItsContextAndDigest() {
+        let header = TusUploadManager.creationMetadata(
+            fileName: "IMG_0042.HEIC", mimeType: "image/heic", uploadContext: TusUploadManager.endToEndBlobContext,
+            thumbHash: "abc", transcription: TusUploadTranscriptionMetadata(text: "secret", language: "fr", confidence: nil, durationMs: nil, segments: nil), capturedInApp: true,
+            blobDigest: "q83vEjRWeJA="
+        )
+
+        XCTAssertEqual(decodedMetadata(header), [
+            "uploadcontext": "e2ee-attachment",
+            "digest": "q83vEjRWeJA=",
+            "filetype": "application/octet-stream",
+            "filename": "blob",
+        ])
+    }
+
+    func test_blobDigest_isTheBase64OfTheFileSHA256() throws {
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("blob-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: file) }
+        try Data("abc".utf8).write(to: file)
+
+        XCTAssertEqual(try TusUploadManager.blobDigest(of: file), "ungWv48Bz+pBQUDeXa4iI7ADYaOWF3qctBD/YfIAFa0=")
+    }
 }

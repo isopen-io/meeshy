@@ -102,9 +102,12 @@ public struct E2EEContent: Codable, Equatable, Sendable {
     /// Refuse une version que cet appareil ne sait pas lire : un message d'une
     /// version future ne s'affiche jamais à moitié.
     public static func decoded(from data: Data) throws -> E2EEContent {
-        let content = try JSONDecoder().decode(E2EEContent.self, from: data)
-        guard (textVersion...currentVersion).contains(content.v) else { throw E2EEContentError.unsupportedVersion(content.v) }
-        return content
+        // La version d'abord, sur l'en-tête que toute version garde : une version
+        // future peut changer n'importe quel autre champ sans que ce lecteur la
+        // juge illisible pour une raison de forme (audit du 2026-10-25).
+        let header = try JSONDecoder().decode(E2EEContentHeader.self, from: data)
+        guard (textVersion...currentVersion).contains(header.v) else { throw E2EEContentError.unsupportedVersion(header.v) }
+        return try JSONDecoder().decode(E2EEContent.self, from: data)
     }
 }
 

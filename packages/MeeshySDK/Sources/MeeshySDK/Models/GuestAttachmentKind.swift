@@ -65,9 +65,13 @@ public enum GuestAttachmentKind: String, Sendable, CaseIterable, Codable, Equata
 /// comme avant), un tableau quand il fait foi.
 public struct GuestAttachmentAllowance: Sendable, Equatable {
     public let kinds: [GuestAttachmentKind]?
+    /// La conversation est chiffrée de bout en bout (#10789) : ce qui ne se
+    /// chiffre pas encore sur l'appareil (lieux, fiches, stickers) n'est pas offert.
+    public let sealsEndToEnd: Bool
 
-    public init(kinds: [GuestAttachmentKind]?) {
+    public init(kinds: [GuestAttachmentKind]?, sealsEndToEnd: Bool = false) {
         self.kinds = kinds
+        self.sealsEndToEnd = sealsEndToEnd
     }
 
     public static let unrestricted = GuestAttachmentAllowance(kinds: nil)
@@ -75,11 +79,12 @@ public struct GuestAttachmentAllowance: Sendable, Equatable {
     /// Aucune famille ouverte : aucune porte de pièce, de lieu ni de sticker.
     public static let closed = GuestAttachmentAllowance(kinds: [])
 
-    /// Dans une conversation chiffrée de bout en bout (#11379), aucune pièce,
-    /// aucun lieu, aucun sticker ne se chiffre encore : les portes du composeur
-    /// se ferment AVANT le geste, au lieu d'un refus après la sélection.
-    public func sealing(_ refusal: EndToEndSendRefusal?) -> GuestAttachmentAllowance {
-        refusal == nil ? self : .closed
+    /// Dans une conversation chiffrée de bout en bout, photos, vidéos, fichiers
+    /// et vocaux se chiffrent sur l'appareil (#10789) ; lieux, fiches de contact
+    /// et stickers pas encore (#12526) : leurs portes se ferment AVANT le geste,
+    /// au lieu d'un refus après la sélection. Les familles d'un lien ne s'élargissent jamais.
+    public func sealedEndToEnd(_ seals: Bool) -> GuestAttachmentAllowance {
+        GuestAttachmentAllowance(kinds: kinds, sealsEndToEnd: seals)
     }
 
     /// `GUEST_ATTACHMENT_MAX_BYTES` — le serveur lit le fichier ENTIER pour le
@@ -103,13 +108,16 @@ public struct GuestAttachmentAllowance: Sendable, Equatable {
 
     /// Une fiche de contact ou un lieu ne sont dans aucune famille : un lien
     /// restreint ne les offre pas.
-    public var offersContactsAndPlaces: Bool { !isRestricted }
+    public var offersContactsAndPlaces: Bool { !isRestricted && !sealsEndToEnd }
+
+    /// Un sticker part comme une image, mais ne se chiffre pas encore (#12526).
+    public var offersStickers: Bool { offersVisualMedia && !sealsEndToEnd }
 
     /// Le plafond d'une conversation appliqué aux termes servis : des termes
     /// ABSENTS prennent le plafond — jamais « tout » —, des termes plus larges
     /// y sont resserrés, des termes plus étroits le restent.
     public func capped(by ceiling: [GuestAttachmentKind]) -> GuestAttachmentAllowance {
-        GuestAttachmentAllowance(kinds: (kinds ?? ceiling).filter(ceiling.contains))
+        GuestAttachmentAllowance(kinds: (kinds ?? ceiling).filter(ceiling.contains), sealsEndToEnd: sealsEndToEnd)
     }
 
     public enum Verdict: Sendable, Equatable {

@@ -168,6 +168,12 @@ public actor TusUploadManager {
     /// (`packages/shared/types/attachment.ts`). Le contexte précis ne s'y conserve pas.
     static let postMediaUploadContexts: Set<String> = ["post", "story", "status", "comment"]
 
+    /// Le contexte d'un blob chiffré de bout en bout (#10789), miroir de
+    /// `E2EE_ATTACHMENT_UPLOAD_CONTEXT` (`packages/shared/types/e2ee-attachment.ts`).
+    public static let endToEndBlobContext = "e2ee-attachment"
+    static let endToEndBlobMimeType = "application/octet-stream"
+    static let endToEndBlobFileName = "blob"
+
     /// Une session TUS naît avec ce que son POST déclare : l'OBJET serveur qu'elle créera (`PostMedia` pour
     /// story/post/statut/commentaire, `MessageAttachment` sans contexte) et ses métadonnées (aperçu flou,
     /// transcription, capture dans l'app). Elle ne se reprend que par un envoi qui la créerait identique : une
@@ -318,6 +324,17 @@ public actor TusUploadManager {
         activeTasks[fileId]?.cancel()
     }
 
+    /// Téléverse un blob chiffré SUR L'APPAREIL (#10789) : le serveur le range
+    /// opaque. Rien de ce que son chiffré cache ne part à côté — ni nom, ni type,
+    /// ni ThumbHash, ni transcription —, seul son condensat SHA-256, que la
+    /// passerelle vérifie. Aucun cache média n'est amorcé avec ses octets.
+    public func uploadEndToEndBlob(fileURL: URL, credential: MeeshyRequestCredential) async throws -> TusUploadResult {
+        try await uploadFile(
+            fileURL: fileURL, mimeType: Self.endToEndBlobMimeType, credential: credential,
+            uploadContext: Self.endToEndBlobContext, fileName: Self.endToEndBlobFileName
+        )
+    }
+
     public func uploadFiles(fileURLs: [(url: URL, mimeType: String)], credential: MeeshyRequestCredential) async throws -> [TusUploadResult] {
         try await withThrowingTaskGroup(of: TusUploadResult.self) { group in
             for item in fileURLs {
@@ -350,7 +367,9 @@ public actor TusUploadManager {
                     // relit ses propres médias (story, pièce jointe) depuis le disque
                     // — offline, jamais re-téléchargés. Idempotent (no-op si déjà
                     // caché, ex. via MessagePersistenceActor.adoptSDKLevel).
-                    await Self.seedMediaCache(localFile: fileURL, result: result)
+                    if uploadContext != Self.endToEndBlobContext {
+                        await Self.seedMediaCache(localFile: fileURL, result: result)
+                    }
                     activeCount -= 1
                     activeTasks[fileId] = nil
                     continuation.resume(returning: result)
@@ -509,7 +528,8 @@ public actor TusUploadManager {
                 uploadContext: uploadContext,
                 thumbHash: thumbHash,
                 transcription: transcription,
-                capturedInApp: capturedInApp
+                capturedInApp: capturedInApp,
+                blobDigest: uploadContext == Self.endToEndBlobContext ? try Self.blobDigest(of: fileURL) : nil
             )
             guard let url = URL(string: location, relativeTo: baseURL) else {
                 throw URLError(.badURL)
@@ -701,7 +721,8 @@ public actor TusUploadManager {
         uploadContext: String?,
         thumbHash: String?,
         transcription: TusUploadTranscriptionMetadata?,
-        capturedInApp: Bool
+        capturedInApp: Bool,
+        blobDigest: String? = nil
     ) async throws -> String {
         let uploadURL = baseURL.appendingPathComponent("api/v1/uploads")
         var createReq = URLRequest(url: uploadURL)
@@ -713,7 +734,8 @@ public actor TusUploadManager {
 
         let metadataValue = Self.creationMetadata(
             fileName: fileName, mimeType: mimeType, uploadContext: uploadContext,
-            thumbHash: thumbHash, transcription: transcription, capturedInApp: capturedInApp
+            thumbHash: thumbHash, transcription: transcription, capturedInApp: capturedInApp,
+            blobDigest: blobDigest
         )
         createReq.setValue(metadataValue, forHTTPHeaderField: "Upload-Metadata")
 
@@ -743,9 +765,19 @@ public actor TusUploadManager {
         uploadContext: String?,
         thumbHash: String?,
         transcription: TusUploadTranscriptionMetadata?,
-        capturedInApp: Bool
+        capturedInApp: Bool,
+        blobDigest: String? = nil
     ) -> String {
         let encode = { (value: String) in Data(value.utf8).base64EncodedString() }
+        // #10789 — un blob chiffré de bout en bout : sa liste blanche, et rien d'autre.
+        if uploadContext == endToEndBlobContext {
+            return [
+                "filename \(encode(endToEndBlobFileName))",
+                "filetype \(encode(endToEndBlobMimeType))",
+                "uploadcontext \(encode(endToEndBlobContext))",
+                blobDigest.map { "digest \(encode($0))" },
+            ].compactMap { $0 }.joined(separator: ",")
+        }
         let pairs: [String?] = [
             "filename \(encode(fileName))",
             "filetype \(encode(mimeType))",
@@ -814,6 +846,16 @@ public actor TusUploadManager {
     ///
     /// `static` so the implementation is purely a pure I/O helper and can
     /// be exercised from tests without needing an actor hop.
+    /// Le condensat d'un blob, tel que la passerelle le compare : SHA-256 en base64.
+    static func blobDigest(of fileURL: URL) throws -> String {
+        let hex = try sha256Hex(of: fileURL)
+        let bytes = stride(from: 0, to: hex.count, by: 2).compactMap { offset -> UInt8? in
+            let start = hex.index(hex.startIndex, offsetBy: offset)
+            return UInt8(hex[start..<hex.index(start, offsetBy: 2)], radix: 16)
+        }
+        return Data(bytes).base64EncodedString()
+    }
+
     static func sha256Hex(of fileURL: URL) throws -> String {
         let handle = try FileHandle(forReadingFrom: fileURL)
         defer {

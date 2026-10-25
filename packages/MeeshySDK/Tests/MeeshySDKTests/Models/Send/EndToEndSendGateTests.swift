@@ -71,6 +71,52 @@ struct EndToEndSendGateTests {
         #expect(EndToEndSendGate.refusal(for: outgoing, isDirect: true, peerUserId: "peer") == .contentUnsealable)
     }
 
+    // MARK: - Pièces chiffrées sur l'appareil (#10789)
+
+    private static func pointer(_ id: String, scheme: String = E2EEAttachmentPointer.clientV1, thumbnail: String? = nil) -> E2EEAttachmentPointer {
+        E2EEAttachmentPointer(
+            id: id, scheme: scheme, key: Data(repeating: 1, count: 64), digest: Data(repeating: 2, count: 32),
+            size: 10, contentType: "image/jpeg", fileName: "a.jpg", kind: .image,
+            thumbnail: thumbnail.map { .init(id: $0, key: Data(repeating: 3, count: 64), digest: Data(repeating: 4, count: 32), size: 5, contentType: "image/jpeg") }
+        )
+    }
+
+    private func sealedOutgoing(content: String = "", ids: [String], pointers: [E2EEAttachmentPointer]) -> OutgoingMessage {
+        OutgoingMessage(
+            conversationId: ConversationID("c1"), content: content, relation: .none,
+            attachments: OutgoingAttachments(ids: ids, previews: nil, sealed: pointers)
+        )
+    }
+
+    @Test func refusal_sealedPieces_evenWithoutText_isNil() {
+        let outgoing = sealedOutgoing(ids: ["b1", "t1"], pointers: [Self.pointer("b1", thumbnail: "t1")])
+        #expect(EndToEndSendGate.refusal(for: outgoing, isDirect: true, peerUserId: "peer") == nil)
+    }
+
+    @Test func refusal_aPieceNotCoveredByAPointer_isContentUnsealable() {
+        let outgoing = sealedOutgoing(ids: ["b1", "plain"], pointers: [Self.pointer("b1")])
+        #expect(EndToEndSendGate.refusal(for: outgoing, isDirect: true, peerUserId: "peer") == .contentUnsealable)
+    }
+
+    @Test func refusal_aPointerWhoseBlobIsNotSent_isContentUnsealable() {
+        let outgoing = sealedOutgoing(ids: ["b1"], pointers: [Self.pointer("b1", thumbnail: "t1")])
+        #expect(EndToEndSendGate.refusal(for: outgoing, isDirect: true, peerUserId: "peer") == .contentUnsealable)
+    }
+
+    @Test func refusal_aPointerOfAnUnknownScheme_isContentUnsealable() {
+        let outgoing = sealedOutgoing(ids: ["b1"], pointers: [Self.pointer("b1", scheme: "client-v9")])
+        #expect(EndToEndSendGate.refusal(for: outgoing, isDirect: true, peerUserId: "peer") == .contentUnsealable)
+    }
+
+    @Test func refusal_sealedPiecesNextToALocation_isStillContentUnsealable() {
+        let outgoing = OutgoingMessage(
+            conversationId: ConversationID("c1"), content: "", relation: .none,
+            attachments: OutgoingAttachments(ids: ["b1"], previews: nil, sealed: [Self.pointer("b1")]),
+            location: SharedPlace(latitude: 1, longitude: 2)
+        )
+        #expect(EndToEndSendGate.refusal(for: outgoing, isDirect: true, peerUserId: "peer") == .contentUnsealable)
+    }
+
     @Test func refusal_location_isContentUnsealable() {
         let outgoing = makeOutgoing(location: SharedPlace(latitude: 48.85, longitude: 2.35))
         #expect(EndToEndSendGate.refusal(for: outgoing, isDirect: true, peerUserId: "peer") == .contentUnsealable)

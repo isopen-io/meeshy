@@ -109,13 +109,14 @@ public extension SendMessageRequest {
         clientMessageId: String,
         replyToId: String? = nil,
         storyReplyToId: String? = nil,
+        attachmentIds: [String]? = nil,
         senderDeviceId: UInt32,
         envelopes: [E2EEOutgoingEnvelope],
         unapprovedOwnDevices: [UInt32],
         regimeEpoch: Int? = nil
     ) -> SendMessageRequest {
         var request = SendMessageRequest(
-            content: nil, replyToId: replyToId, storyReplyToId: storyReplyToId,
+            content: nil, replyToId: replyToId, storyReplyToId: storyReplyToId, attachmentIds: attachmentIds,
             isEncrypted: true, encryptionMode: E2EEWire.mode, clientMessageId: clientMessageId
         )
         request.encryptionProtocol = E2EEWire.libsignalProtocol
