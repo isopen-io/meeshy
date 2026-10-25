@@ -215,6 +215,7 @@ describe('E2EE de bout en bout à deux appareils, libsignal réel (#3706)', () =
       directory: createE2EEDirectory({ prisma: store.prisma as never, verifier: libsignalSignatureVerifier(() => realLibsignal) }),
       relay: createE2EEEnvelopeRelay({ prisma: store.prisma as never }),
       mayReadKeysOf: async () => true,
+      closeSession: async () => undefined,
     });
     await app.ready();
 

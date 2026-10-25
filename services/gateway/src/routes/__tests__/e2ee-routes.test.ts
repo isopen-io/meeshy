@@ -21,6 +21,7 @@ const USERS: Record<string, string> = { alice: ALICE, aliceWeb: ALICE, bob: BOB,
 
 async function buildApp() {
   const store = createFakeE2EEStore();
+  const closedSessions: { userId: string; sessionId: string }[] = [];
   const app: FastifyInstance = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
   const auth = async (request: FastifyRequest) => {
     const who = String(request.headers['x-test-user'] ?? '');
@@ -33,9 +34,12 @@ async function buildApp() {
     directory: createE2EEDirectory({ prisma: store.prisma as never, verifier: fakeVerifier }),
     relay: createE2EEEnvelopeRelay({ prisma: store.prisma as never }),
     mayReadKeysOf: async (requester, target) => requester === target || target !== STRANGER,
+    closeSession: async (closed) => {
+      closedSessions.push(closed);
+    },
   });
   await app.ready();
-  return { app, store };
+  return { app, store, closedSessions };
 }
 
 const enrollment = (userId: string, keys = fakeDeviceKeys({ oneTime: 2, kyber: 2 })) => ({
@@ -179,5 +183,25 @@ describe('routes /e2ee', () => {
     expect(stillListed.json().data.devices).toHaveLength(1);
     expect(own.statusCode).toBe(200);
     expect(after.json().data.devices).toEqual([]);
+  });
+
+  it("retirer un appareil depuis une autre session ferme AUSSI la session de l'appareil : un appareil volé ne se réenrôle pas", async () => {
+    const { app, closedSessions } = await buildApp();
+    await app.inject({ method: 'POST', url: '/e2ee/devices', headers: { 'x-test-user': 'alice' }, payload: enrollment(ALICE) });
+
+    const res = await app.inject({ method: 'DELETE', url: '/e2ee/devices/1', headers: { 'x-test-user': 'aliceWeb' } });
+
+    expect(res.json().data).toEqual({ deviceId: 1, retired: true, signedOut: true });
+    expect(closedSessions).toEqual([{ userId: ALICE, sessionId: SESSIONS.alice }]);
+  });
+
+  it("retirer l'appareil de sa PROPRE session ne déconnecte pas celui qui retire", async () => {
+    const { app, closedSessions } = await buildApp();
+    await app.inject({ method: 'POST', url: '/e2ee/devices', headers: { 'x-test-user': 'alice' }, payload: enrollment(ALICE) });
+
+    const res = await app.inject({ method: 'DELETE', url: '/e2ee/devices/1', headers: { 'x-test-user': 'alice' } });
+
+    expect(res.json().data).toEqual({ deviceId: 1, retired: true, signedOut: false });
+    expect(closedSessions).toEqual([]);
   });
 });

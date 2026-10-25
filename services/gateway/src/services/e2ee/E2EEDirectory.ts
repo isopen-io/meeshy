@@ -396,11 +396,12 @@ export class E2EEDirectory {
    * reprend jamais sa place et ne se réenrôle plus sur ce compte, même avec une
    * preuve de liaison fraîche — un appareil révoqué, ou un jeton volé qui l'a
    * révoqué, ne la ramène pas. L'installation doit tirer une nouvelle identité.
+   * Rend la session qui portait l'appareil : la route la ferme (#13013).
    */
-  async retireDevice(params: { userId: string; deviceId: number }): Promise<void> {
+  async retireDevice(params: { userId: string; deviceId: number }): Promise<{ sessionId: string }> {
     const device = await this.prisma.e2EEDevice.findFirst({
       where: { userId: params.userId, deviceId: params.deviceId, ...ACTIVE },
-      select: { identityKey: true },
+      select: { identityKey: true, sessionId: true },
     });
     if (!device) {
       throw new E2EEDirectoryError(E2EE_ERROR_CODES.DEVICE_NOT_BOUND, 404, 'Appareil chiffré introuvable sur ce compte');
@@ -412,6 +413,7 @@ export class E2EEDirectory {
     });
     await this.retireDevices({ userId: params.userId, deviceId: params.deviceId });
     await this.retireDevices({ userId: params.userId, identityKey: device.identityKey });
+    return { sessionId: device.sessionId };
   }
 
   private async undoIfRevoked(userId: string, identityKey: string): Promise<void> {
