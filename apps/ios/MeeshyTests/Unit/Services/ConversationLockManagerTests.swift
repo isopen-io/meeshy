@@ -893,10 +893,10 @@ final class ConversationLockManagerTests: XCTestCase {
     /// PIN maître n'a pas d'étape 1 : elle repart de l'étape 0, sans quoi la
     /// saisie suivante se comparait à une confirmation vide, sans fin.
     func test_aRefusalAtConfirmation_resumesAtTheCodeChoice() {
-        XCTAssertEqual(ConversationLockSheet.step(afterRefusalAt: 2, in: .setupMasterPin), 0)
-        XCTAssertEqual(ConversationLockSheet.step(afterRefusalAt: 2, in: .changeMasterPin), 1)
-        XCTAssertEqual(ConversationLockSheet.step(afterRefusalAt: 2, in: .lockConversation), 1)
-        XCTAssertEqual(ConversationLockSheet.step(afterRefusalAt: 0, in: .removeMasterPin), 0)
+        XCTAssertEqual(ConversationLockSheet.resumedStep(afterRefusalAt: 2, in: .setupMasterPin), 0)
+        XCTAssertEqual(ConversationLockSheet.resumedStep(afterRefusalAt: 2, in: .changeMasterPin), 1)
+        XCTAssertEqual(ConversationLockSheet.resumedStep(afterRefusalAt: 2, in: .lockConversation), 1)
+        XCTAssertEqual(ConversationLockSheet.resumedStep(afterRefusalAt: 0, in: .removeMasterPin), 0)
     }
 
     /// Garde de SOURCE : les Réglages comptent le jeu de verrous (liste, et
