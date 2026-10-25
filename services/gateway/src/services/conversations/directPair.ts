@@ -20,7 +20,7 @@
  * quitté n'est plus celui de la paire.
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import { isEndToEndMode, SERVER_BLIND_REGIME_FILTER, SERVER_READABLE_REGIME_FILTER } from './encryptionRegime';
+import { LEAVABLE_ACTIVE_MODES, SERVER_BLIND_REGIME_FILTER, SERVER_READABLE_REGIME_FILTER } from './encryptionRegime';
 
 export type DirectPair = { readonly userId: string; readonly peerId: string };
 
@@ -29,12 +29,27 @@ const bothActive = (pair: DirectPair): readonly Record<string, unknown>[] => [
   { participants: { some: { userId: pair.peerId, isActive: true } } },
 ];
 
+/**
+ * Le serveur lit-il ce mode ? La MÊME liste positive que
+ * `SERVER_READABLE_REGIME_FILTER` (et son inverse `SERVER_BLIND_REGIME_FILTER`) :
+ * absent, nul, `server` ou `hybrid` exacts.
+ * Tout le reste — `e2ee` quelle que soit sa casse, ou un mode inconnu — est
+ * traité comme chiffré de bout en bout, partout dans ce fichier.
+ */
+export const serverReadsMode = (mode: string | null | undefined): boolean =>
+  mode === null || mode === undefined || (LEAVABLE_ACTIVE_MODES as readonly string[]).includes(mode);
+
 const lookup = (pair: DirectPair, regime: Readonly<Record<string, unknown>> | null): Record<string, unknown> => ({
   type: 'direct',
   AND: regime === null ? [...bothActive(pair)] : [...bothActive(pair), regime],
 });
 
-/** Les `where` à essayer DANS L'ORDRE pour trouver le tête-à-tête à rouvrir ; le premier trouvé gagne. */
+/**
+ * Les `where` à essayer DANS L'ORDRE pour trouver le tête-à-tête à rouvrir ;
+ * le premier trouvé gagne. Sans précision, deux recherches au plus : le
+ * chiffré, puis n'importe lequel — le prix d'un tri que MongoDB ne sait pas
+ * faire sur le régime, jusqu'à une clé de paire en base (#13010).
+ */
 export function directLookupWheres(pair: DirectPair, request: { readonly plaintext: boolean }): readonly Record<string, unknown>[] {
   return request.plaintext
     ? [lookup(pair, SERVER_READABLE_REGIME_FILTER)]
@@ -51,15 +66,19 @@ export async function firstFound<T>(
   return (await find(where)) ?? firstFound(rest, find);
 }
 
-/** Les deux personnes d'un tête-à-tête, ou `null` s'il n'en reste pas deux actives. */
+/**
+ * Les deux personnes d'un tête-à-tête, ou `null` s'il n'a pas exactement deux
+ * membres actifs inscrits — un invité sans compte en est un troisième.
+ */
 export function pairOfMembers(userIds: readonly (string | null | undefined)[]): DirectPair | null {
-  const distinct = [...new Set(userIds.filter((id): id is string => typeof id === 'string' && id !== ''))];
-  return distinct.length === 2 ? { userId: distinct[0]!, peerId: distinct[1]! } : null;
+  if (userIds.length !== 2 || userIds.some((id) => typeof id !== 'string' || id === '')) return null;
+  const [userId, peerId] = userIds as readonly string[];
+  return userId !== peerId ? { userId: userId!, peerId: peerId! } : null;
 }
 
 /**
  * L'AUTRE tête-à-tête de la paire déjà chiffré de bout en bout, ou `null`.
- * Le mode se juge comme partout (`isEndToEndMode`, casse comprise).
+ * « Chiffré » se juge comme partout ici (`serverReadsMode`).
  */
 export async function otherEndToEndDirectOf(
   prisma: Pick<PrismaClient, 'conversation'>,
@@ -69,5 +88,5 @@ export async function otherEndToEndDirectOf(
     where: { type: 'direct', id: { not: params.conversationId }, AND: [...bothActive(params.pair)] },
     select: { id: true, encryptionMode: true },
   } as never) as ReadonlyArray<{ readonly id: string; readonly encryptionMode: string | null }>;
-  return others.find((other) => isEndToEndMode(other.encryptionMode))?.id ?? null;
+  return others.find((other) => !serverReadsMode(other.encryptionMode))?.id ?? null;
 }

@@ -154,6 +154,13 @@ describe('un second tête-à-tête chiffré de bout en bout pour la même paire 
     expect(world.conversation.encryptionMode).toBeUndefined();
   });
 
+  it('un autre tête-à-tête de la paire d’un mode que le serveur ne lit pas (inconnu) compte comme le chiffré : même refus', async () => {
+    const world = makeWorld({ others: [sealedDirectOf(ALICE_AND_BOB, { encryptionMode: 'quantum' })] });
+    const res = await enable(world);
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe('E2EE_DIRECT_ALREADY_END_TO_END');
+  });
+
   it('l’autre tête-à-tête de la paire est lisible : le chiffrement s’active', async () => {
     const world = makeWorld({ others: [sealedDirectOf(ALICE_AND_BOB, {})] });
     const res = await enable(world);
@@ -210,6 +217,13 @@ describe('un tête-à-tête ne se chiffre de bout en bout qu’entre deux person
     expect(res.statusCode).toBe(409);
     expect(res.json()).toMatchObject({ success: false, code: 'E2EE_DIRECT_NOT_A_PAIR' });
     expect(world.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('un invité sans compte actif à côté des deux : pas une paire, même refus', async () => {
+    const world = makeWorld({ members: [analyst(ALICE), user(BOB), { userId: null as unknown as string, role: 'member', isActive: true, user: null }] });
+    const res = await enable(world);
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe('E2EE_DIRECT_NOT_A_PAIR');
   });
 
   it('seul membre actif restant : même refus', async () => {
