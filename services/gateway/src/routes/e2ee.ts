@@ -18,6 +18,7 @@ import {
   e2eeDeviceIdSchema,
   e2eeEnrollDeviceRequestSchema,
   e2eePublishKeysRequestSchema,
+  e2eeRegistrationIdSchema,
 } from '@meeshy/shared/types/e2ee-directory';
 import { createUnifiedAuthMiddleware, type UnifiedAuthRequest } from '../middleware/auth';
 import { sendBadRequest, sendError, sendForbidden, sendInternalError, sendSuccess, sendUnauthorized } from '../utils/response.js';
@@ -32,6 +33,7 @@ import { joinSessionSocketsToDeviceRoom } from '../services/e2ee/device-room';
 import { currentE2EEIO } from '../services/e2ee/envelope-delivery';
 import { invalidateSession } from '../services/SessionService';
 import { disconnectSession } from '../socketio/disconnectSession';
+import { createRetiredDeviceSessionCloser } from '../services/e2ee/retired-device-session';
 
 const logger = enhancedLogger.child({ module: 'E2EERoutes' });
 
@@ -43,6 +45,7 @@ const deviceIdsQuery = z
   .transform((raw) => raw.split(',').map((part) => Number(part.trim())))
   .pipe(z.array(e2eeDeviceIdSchema).max(127));
 const envelopeListQuery = z.object({ after: objectIdParam.optional(), limit: z.coerce.number().int().min(1).max(200).optional() });
+const retireQuery = z.object({ registrationId: z.coerce.number().pipe(e2eeRegistrationIdSchema).optional() });
 const ackBody = z.object({ ids: z.array(objectIdParam).min(1).max(200) });
 
 /** Lecture de bundles : 30 par minute et par couple (demandeur, cible). */
@@ -76,7 +79,7 @@ export type E2EERouteDeps = {
   readonly relay: E2EEEnvelopeRelay;
   readonly mayReadKeysOf: (requesterUserId: string, targetUserId: string) => Promise<boolean>;
   /**
-   * Retirer un appareil depuis une AUTRE session ferme aussi la sienne (#13013) :
+   * Retirer un appareil depuis une AUTRE session ferme aussi la sienne, par défaut (#13013) :
    * sans quoi un appareil volé, toujours connecté, se réenrôle aussitôt sous une
    * identité neuve et reçoit de nouveau les messages chiffrés. Rend `true`
    * seulement si la session n'est plus valide après l'appel.
@@ -154,10 +157,12 @@ function registerDeviceRoutes(fastify: FastifyInstance, deps: E2EERouteDeps): vo
 
   fastify.delete('/e2ee/devices/:deviceId', writes, guarded(async (request, reply, caller) => {
     const deviceId = parsedOr400(reply, deviceIdParam.safeParse((request.params as { deviceId?: string }).deviceId));
-    if (deviceId === null) return;
+    const query = deviceId === null ? null : parsedOr400(reply, retireQuery.safeParse(request.query ?? {}));
+    if (deviceId === null || !query) return;
     const { signedOut } = await deps.directory.retireDevice({
       userId: caller.userId,
       deviceId,
+      expectedRegistrationId: query.registrationId,
       signOut: { callerSessionId: caller.sessionId, close: (sessionId) => deps.closeSession({ userId: caller.userId, sessionId }) },
     });
     return sendSuccess(reply, { deviceId, retired: true, signedOut });
@@ -228,20 +233,19 @@ export default async function e2eeRoutes(fastify: FastifyInstance): Promise<void
     relay: createE2EEEnvelopeRelay({ prisma }),
     mayReadKeysOf: (requester, target) => mayReadKeysOf(prisma, requester, target),
     onEnrolled: (enrolled) => joinSessionSocketsToDeviceRoom(currentE2EEIO(), enrolled),
-    closeSession: async ({ userId, sessionId }) => {
-      const invalidated = await invalidateSession(sessionId, 'user_revoked');
-      const stillLive = invalidated
-        ? null
-        : await prisma.userSession.findFirst({ where: { id: sessionId, userId, isValid: true, expiresAt: { gt: new Date() } }, select: { id: true } });
-      if (stillLive !== null) return false;
-      await disconnectSession({
-        io: fastify.socketIOHandler?.getManager?.()?.getIO(),
-        userId,
-        sessionId,
-        reason: 'user_revoke',
-        onError: (error) => logger.warn('e2ee retired device socket not cut', { error }),
-      });
-      return true;
-    },
+    closeSession: createRetiredDeviceSessionCloser({
+      invalidate: (sessionId) => invalidateSession(sessionId, 'user_revoked'),
+      isLive: async ({ userId, sessionId }) =>
+        (await prisma.userSession.findFirst({ where: { id: sessionId, userId, isValid: true, expiresAt: { gt: new Date() } }, select: { id: true } })) !== null,
+      disconnect: async ({ userId, sessionId }) => {
+        await disconnectSession({
+          io: fastify.socketIOHandler?.getManager?.()?.getIO(),
+          userId,
+          sessionId,
+          reason: 'user_revoke',
+          onError: (error) => logger.warn('e2ee retired device socket not cut', { error }),
+        });
+      },
+    }),
   });
 }

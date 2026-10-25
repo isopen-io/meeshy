@@ -937,7 +937,7 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
             dégradé de masquage — le porteur a fait retirer ces voiles
             (#6537, « supprimer ces voiles, non pas simplement les rendre
             invisible, mais permettre qu'on manipule les éléments entre »). */
-        <ThreadWriteLock conversationId={conversationId} conversation={conversation} messages={threadData.messages}>
+        <ThreadWriteLock conversationId={conversationId} conversation={conversation} messages={threadData.messages} viewerId={viewer.id ?? ''} title={title}>
         <ThreadComposerChrome onFocus={chrome.onComposerFocus} onBlur={chrome.onComposerBlur}>
           <MessageEditDock edit={compose.edit}>
           <Composer

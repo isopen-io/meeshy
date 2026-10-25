@@ -67,6 +67,7 @@ struct EndToEndDeviceLimitSheet: View {
     @StateObject private var model: EndToEndDeviceLimitViewModel
     @Environment(\.dismiss) private var dismiss
     @State private var pendingRetirement: UInt32?
+    @State private var showsMyDevices = false
 
     init(model: @autoclosure @escaping () -> EndToEndDeviceLimitViewModel = EndToEndDeviceLimitViewModel()) {
         _model = StateObject(wrappedValue: model())
@@ -83,7 +84,12 @@ struct EndToEndDeviceLimitSheet: View {
                         .foregroundStyle(.secondary)
                 }
                 content
+                Section {
+                    Button(String(localized: "e2ee.deviceLimit.manage", defaultValue: "Voir mes appareils chiffrés", bundle: .main)) { showsMyDevices = true }
+                        .frame(minHeight: MeeshyControlSize.tapTarget)
+                }
             }
+            .sheet(isPresented: $showsMyDevices) { EncryptedDevicesView() }
             .navigationTitle(String(localized: "e2ee.deviceLimit.title", defaultValue: "Trop d’appareils chiffrés", bundle: .main))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

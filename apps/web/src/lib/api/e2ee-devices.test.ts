@@ -40,6 +40,7 @@ describe('le décodage', () => {
       enrolledAt: '2026-10-20T09:00:00.000Z',
       lastSeenAt: '2026-10-25T08:00:00.000Z',
       current: false,
+      registrationId: 4242,
     });
   });
 
@@ -50,6 +51,11 @@ describe('le décodage', () => {
 
   test('un nom déclaré perd ses caractères de contrôle et de renversement d’orientation', () => {
     expect(decodeE2eeDevice(wire({ label: 'iPhone\u202E de Awa\u0007' }))?.label).toBe('iPhone de Awa');
+  });
+
+  test('une génération hors bornes ne se garde pas : l’appareil reste listé, sans génération', () => {
+    expect(decodeE2eeDevice(wire({ registrationId: 0 }))?.registrationId).toBeNull();
+    expect(decodeE2eeDevice(wire({ registrationId: undefined }))?.registrationId).toBeNull();
   });
 
   test('une ligne sans numéro d’appareil valide est écartée', () => {
@@ -66,9 +72,9 @@ describe('les appels', () => {
     expect(result.ok && result.data.map((device) => device.deviceId)).toEqual([2]);
   });
 
-  test('le retrait vise DELETE /api/v1/e2ee/devices/:deviceId', async () => {
+  test('le retrait nomme la génération LUE : une place reprise depuis ne se retire pas', async () => {
     const { transport, requests } = recordingTransport({ ok: true, status: 200, data: { deviceId: 2, retired: true } });
-    await retireE2eeDevice({ source: 'gateway', transport }, 2);
-    expect(requests.map((request) => `${request.method} ${request.path}`)).toEqual(['DELETE /api/v1/e2ee/devices/2']);
+    await retireE2eeDevice({ source: 'gateway', transport }, { deviceId: 2, registrationId: 4242 });
+    expect(requests.map((request) => `${request.method} ${request.path}`)).toEqual(['DELETE /api/v1/e2ee/devices/2?registrationId=4242']);
   });
 });

@@ -3,7 +3,7 @@
     <string name="security_section_encrypted_devices">Cifrado de extremo a extremo</string>
     <string name="encrypted_devices_title">Mis dispositivos cifrados</string>
     <string name="encrypted_devices_notice_title">Este teléfono Android aún no lee los chats cifrados de extremo a extremo</string>
-    <string name="encrypted_devices_notice_body">Todavía no aparece en esta lista y, por ahora, no puede mostrar su código ni leer el de otro dispositivo. Ya puedes quitar un dispositivo perdido: dejará de recibir tus mensajes cifrados.</string>
+    <string name="encrypted_devices_notice_body">Todavía no aparece en esta lista y, por ahora, no puede mostrar su código ni leer el de otro dispositivo. Ya puedes quitar un dispositivo perdido: se cierra su sesión y deja de recibir tus mensajes cifrados.</string>
     <string name="encrypted_devices_loading">Cargando tus dispositivos cifrados</string>
     <string name="encrypted_devices_offline_empty">No tienes conexión. Conéctate para ver tus dispositivos cifrados.</string>
     <string name="encrypted_devices_error">No se pudieron cargar tus dispositivos cifrados.</string>
@@ -12,13 +12,12 @@
     <string name="encrypted_devices_stale">No se pudo actualizar esta lista y puede que no esté al día.</string>
     <string name="encrypted_devices_empty_title">Aún no hay dispositivos cifrados</string>
     <string name="encrypted_devices_empty_body">Un dispositivo aparece aquí en cuanto Meeshy configura en él el cifrado de extremo a extremo.</string>
-    <string name="encrypted_devices_dates">Añadido el %1$s · activo el %2$s</string>
     <string name="encrypted_devices_current">Este dispositivo</string>
     <string name="encrypted_devices_retiring">Quitando %1$s</string>
     <string name="encrypted_devices_retire_a11y">Quitar %1$s</string>
     <string name="encrypted_devices_retire">Quitar</string>
     <string name="encrypted_devices_retire_confirm_title">¿Quitar este dispositivo?</string>
-    <string name="encrypted_devices_retire_confirm_message">%1$s dejará de recibir tus mensajes cifrados y no podrá volver con las mismas claves. Lo que ya ha descifrado se queda en él: si se perdió o te lo robaron, cierra también su sesión en Sesiones y cambia tu contraseña.</string>
+    <string name="encrypted_devices_retire_confirm_message">Se cerrará la sesión de %1$s y dejará de recibir tus mensajes cifrados; sus claves no podrán volver. Lo que ya ha descifrado se queda en él. Si se perdió o te lo robaron, cambia también tu contraseña: si no, quien lo tenga podría volver a iniciar sesión como un dispositivo nuevo.</string>
     <string name="encrypted_devices_retire_confirm_action">Quitar</string>
     <string name="encrypted_devices_cancel">Cancelar</string>
     <string name="encrypted_devices_retire_offline">No tienes conexión: un dispositivo solo se puede quitar cuando estés conectado.</string>
@@ -30,4 +29,6 @@
     <string name="encrypted_devices_platform_android">Android</string>
     <string name="encrypted_devices_platform_web">Navegador web</string>
     <string name="encrypted_devices_platform_unknown">Dispositivo desconocido</string>
+    <string name="encrypted_devices_enrolled">Añadido el %1$s</string>
+    <string name="encrypted_devices_retire_changed">Este dispositivo cambió desde que se mostró la lista. Se ha vuelto a cargar: revísala antes de quitarlo.</string>
 </resources>
