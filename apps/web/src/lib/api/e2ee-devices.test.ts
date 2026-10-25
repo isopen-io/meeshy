@@ -66,9 +66,9 @@ describe('les appels', () => {
     expect(result.ok && result.data.map((device) => device.deviceId)).toEqual([2]);
   });
 
-  test('le retrait vise DELETE /api/v1/e2ee/devices/:deviceId', async () => {
+  test('le retrait vise DELETE /api/v1/e2ee/devices/:deviceId et demande de fermer la session de l’appareil', async () => {
     const { transport, requests } = recordingTransport({ ok: true, status: 200, data: { deviceId: 2, retired: true } });
     await retireE2eeDevice({ source: 'gateway', transport }, 2);
-    expect(requests.map((request) => `${request.method} ${request.path}`)).toEqual(['DELETE /api/v1/e2ee/devices/2']);
+    expect(requests.map((request) => `${request.method} ${request.path}`)).toEqual(['DELETE /api/v1/e2ee/devices/2?signOut=true']);
   });
 });
