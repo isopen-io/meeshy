@@ -13,6 +13,7 @@ import { usePresence } from '@/lib/view/use-presence';
 import { prismFor, served } from '@/lib/api/prism';
 import { mediaCarrierOf } from '@/lib/view/media';
 import type { PlacedMessage } from '@/lib/grouping';
+import { endToEndSealed } from '@/lib/view/end-to-end-sealed';
 import { time } from '@/lib/grouping';
 import type { FlatRowMode } from '@/lib/reading-mode/decision';
 import { languageBand, mountsBottomLine } from '@/lib/reading-mode/meta';
@@ -465,7 +466,8 @@ export const FocalRow = memo(function FocalRow({
 
   // `kind === 'veiled' | 'burned'` toutes deux passent par `ProtectedContent`
   // (voir le commentaire ci-dessus sur le tombstone plat).
-  const isProtected = kind !== 'standard' || !revealable;
+  const sealedEndToEnd = endToEndSealed(message);
+  const isProtected = kind !== 'standard' || !revealable || sealedEndToEnd;
 
   /**
    * LA LIGNE BASSE — miroir de `FocalMetaColumn.mountsBottomLine` (défaut 7) :
@@ -855,6 +857,7 @@ export const FocalRow = memo(function FocalRow({
                   attachments={message.attachments}
                   surface="row"
                   revealable={revealable}
+                  endToEnd={sealedEndToEnd}
                   onConsumeViewOnce={onConsumeViewOnce}
                   media={{
                     frame: 'tiles',

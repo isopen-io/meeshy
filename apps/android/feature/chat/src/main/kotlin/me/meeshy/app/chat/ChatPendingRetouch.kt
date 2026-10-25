@@ -40,6 +40,7 @@ internal fun rememberPendingRetouch(actions: ChatHostActions): (PendingAttachmen
     video?.let { (id, piece) ->
         ChatVideoRetouchHost(
             pending = piece,
+            person = actions.selfAuthor(),
             onDeliver = { file ->
                 video = null
                 val rendered = file != piece.source
