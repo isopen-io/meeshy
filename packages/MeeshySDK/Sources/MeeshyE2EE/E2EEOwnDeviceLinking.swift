@@ -155,7 +155,7 @@ public final class E2EEOwnDeviceLinking: E2EEOwnDeviceLinkingProviding {
     }
 
     public func approve(_ candidate: E2EEPairingCandidate) throws {
-        try approvals.approve(deviceId: candidate.deviceId, identityKey: candidate.identityKey)
+        try approvals.approve(deviceId: candidate.deviceId, identityKey: candidate.identityKey, registrationId: candidate.registrationId)
     }
 
     public func revoke(deviceId: UInt32) throws {
@@ -175,16 +175,16 @@ public final class E2EEOwnDeviceLinking: E2EEOwnDeviceLinkingProviding {
         try approvals.approvedDeviceIds().filter { !active.contains($0) }.forEach { try approvals.revoke(deviceId: $0) }
     }
 
-    /// Approuvé : une clé épinglée, et aucune session qui dise une AUTRE clé
-    /// pour la génération que l'annuaire annonce. Une session d'une autre
-    /// génération (place reprise par une réinstallation, #12543) ne prouve rien :
-    /// l'appareil n'est plus celui qu'on a approuvé.
+    /// Approuvé : une approbation de la génération que l'annuaire annonce
+    /// (une place reprise par une réinstallation n'en hérite pas, #12543), et
+    /// aucune session de cette génération qui dise une AUTRE clé.
     private func isApproved(_ listing: E2EEDeviceListing) throws -> Bool {
-        guard let pinned = try approvals.approvedIdentity(of: listing.deviceId) else { return false }
+        guard let approval = try approvals.approval(of: listing.deviceId),
+              approval.covers(registrationId: listing.registrationId)
+        else { return false }
         let address = address(of: listing.deviceId)
-        guard let generation = try cipher.remoteRegistrationId(of: address) else { return true }
-        guard generation == listing.registrationId else { return false }
-        return try cipher.remoteIdentity(of: address) == pinned
+        guard try cipher.remoteRegistrationId(of: address) == listing.registrationId else { return true }
+        return try cipher.remoteIdentity(of: address) == approval.identityKey
     }
 
     /// La clé publique de la génération annoncée : celle de la session courante

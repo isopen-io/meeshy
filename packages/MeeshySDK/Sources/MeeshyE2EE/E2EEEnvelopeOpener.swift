@@ -21,7 +21,8 @@ public struct E2EEOpenedMessage: Equatable, Sendable {
 }
 
 public enum E2EEOpenError: Error, Equatable {
-    /// L'enveloppe se dit envoyée par un de mes appareils que je n'ai pas approuvé.
+    /// L'enveloppe se dit envoyée par un de mes appareils que je n'ai pas (ou
+    /// plus, ou pas sous cette clé) approuvé : elle attend, elle ne se juge pas.
     case unapprovedOwnDevice
 }
 
@@ -108,13 +109,23 @@ public final class E2EEEnvelopeOpener: E2EEEnvelopeOpening {
         }
         do {
             guard let body = Data(base64Encoded: envelope.body) else { throw E2EESessionCipherError.unknownMessageType(envelope.type) }
-            let pinned = try ownDevicePin(of: sender)
             let content = try cipher.decrypt(E2EECiphertext(type: envelope.type, body: body), from: sender) { plaintext, transaction in
-                if let pinned, try transaction.load(.remoteIdentity, "\(sender.userId).\(sender.deviceId)") != pinned {
-                    throw E2EEOpenError.unapprovedOwnDevice
+                // L'épingle se relit DANS la transaction : une révocation ou une
+                // réapprobation concurrente ne s'intercale pas. Une clé qui n'est
+                // pas l'épinglée annule la transaction (le ratchet n'avance pas) et
+                // l'enveloppe attend : c'est le cas d'une place reprise par une
+                // réinstallation que je n'ai pas encore réapprouvée.
+                if sender.userId == local.userId {
+                    let pinned = try E2EEOwnDeviceApprovals.pinned(sender.deviceId, in: transaction)
+                    guard let pinned, try transaction.load(.remoteIdentity, "\(sender.userId).\(sender.deviceId)") == pinned else {
+                        throw E2EEOpenError.unapprovedOwnDevice
+                    }
                 }
                 let content = try E2EEContent.decoded(from: plaintext)
                 guard content.belongs(to: envelope.conversationId) else { throw E2EEContentError.misattributed }
+                guard content.isAuthored(by: envelope.senderUserId, deviceId: envelope.senderDeviceId) else {
+                    throw E2EEContentError.misattributedAuthor
+                }
                 try E2EEPlaintextRecords.save(.readable(content, senderUserId: envelope.senderUserId), for: envelope.messageId, in: transaction)
                 return content
             }
@@ -124,6 +135,7 @@ public final class E2EEEnvelopeOpener: E2EEEnvelopeOpening {
             // temps : le verrou les sérialise, et le second échoue (clé de message
             // consommée) APRÈS que le premier a rangé le clair. Il le relit.
             if let known = try? plaintexts.entry(for: envelope.messageId) { return outcome(of: known, envelope) }
+            if error as? E2EEOpenError == .unapprovedOwnDevice { return .deferred(envelopeId: envelope.id) }
             guard Self.isVerdict(error) else {
                 logger.warning("e2ee envelope deferred id=\(envelope.id, privacy: .public): storage refused")
                 return .deferred(envelopeId: envelope.id)
@@ -143,17 +155,6 @@ public final class E2EEEnvelopeOpener: E2EEEnvelopeOpening {
         case is SignalError, is E2EEContentError, is E2EEOpenError, is E2EESessionCipherError, is DecodingError: true
         default: false
         }
-    }
-
-    /// Un message qui se dit envoyé par un de MES autres appareils ne s'ouvre
-    /// que si je l'ai approuvé (spec § 3.5), et sous la clé épinglée : sans
-    /// cela, un serveur compromis ajouterait un « appareil » à mon compte pour
-    /// me faire dire ce que je n'ai pas écrit. Rend la clé épinglée, `nil` pour
-    /// l'appareil d'un contact (TOFU jusqu'au numéro de sécurité, #12520).
-    private func ownDevicePin(of sender: E2EEDeviceAddress) throws -> Data? {
-        guard sender.userId == local.userId else { return nil }
-        guard let pinned = try approvals.approvedIdentity(of: sender.deviceId) else { throw E2EEOpenError.unapprovedOwnDevice }
-        return pinned
     }
 
     public func receive(_ envelope: E2EEServedEnvelope) async -> E2EEOpenOutcome {

@@ -259,6 +259,112 @@ final class E2EEOwnDeviceLinkingTests: XCTestCase {
         XCTAssertEqual(after, before, "afficher mon code ne touche ni la session ni son ratchet")
     }
 
+    func test_myOwnCopy_relabelledAsMyContact_neverOpensAsHisWords() async throws {
+        let server = FakeE2EEServer()
+        let iPhone = try await E2EETestPeer.enroll(alice, on: server)
+        let mac = try await E2EETestPeer.enroll(alice, on: server)
+        let bobPhone = try await E2EETestPeer.enroll(bob, on: server)
+        try await approve(mac, by: iPhone)
+        try await approve(iPhone, by: mac)
+        _ = try await send("c'est moi qui l'ai écrit", from: iPhone, to: bob, on: server)
+        let copy = try XCTUnwrap(server.pending(userId: alice, deviceId: mac.device.deviceId).first)
+        let relabelled = E2EEServedEnvelope(
+            id: copy.id, messageId: copy.messageId, conversationId: copy.conversationId,
+            recipientRegistrationId: copy.recipientRegistrationId, senderUserId: bob, senderDeviceId: bobPhone.device.deviceId,
+            type: copy.type, body: copy.body, createdAt: copy.createdAt
+        )
+
+        let outcome = mac.opener.open(relabelled)
+
+        if case .opened = outcome { XCTFail("le serveur fait dire à Bob ce que j'ai écrit") }
+        XCTAssertFalse(try mac.cipher.hasSession(with: E2EEDeviceAddress(userId: bob, deviceId: bobPhone.device.deviceId)),
+                       "la transaction est annulée : aucune session de Bob liée à ma clé")
+    }
+
+    func test_aCopyUnderAnotherKeyThanMyPin_neverOpens_andWaits() async throws {
+        let server = FakeE2EEServer()
+        let iPhone = try await E2EETestPeer.enroll(alice, on: server)
+        let mac = try await E2EETestPeer.enroll(alice, on: server)
+        _ = try await E2EETestPeer.enroll(bob, on: server)
+        try await approve(mac, by: iPhone)
+        _ = try await send("x", from: iPhone, to: bob, on: server)
+        let copy = try XCTUnwrap(server.pending(userId: alice, deviceId: mac.device.deviceId).first)
+        try mac.approvals.approve(deviceId: iPhone.device.deviceId, identityKey: Data(repeating: 7, count: 33))
+
+        XCTAssertEqual(mac.opener.open(copy), .deferred(envelopeId: copy.id))
+        XCTAssertNil(try mac.plaintexts.entry(for: copy.messageId))
+    }
+
+    func test_aReinstalledSlotWithoutPriorSession_isNotShownApproved() async throws {
+        let server = FakeE2EEServer()
+        let iPhone = try await E2EETestPeer.enroll(alice, on: server)
+        let mac = try await E2EETestPeer.enroll(alice, on: server)
+        try await approve(mac, by: iPhone)
+        server.revoke(userId: alice, deviceId: mac.device.deviceId)
+        _ = try await E2EETestPeer.enroll(alice, on: server)
+
+        let status = try await linking(of: iPhone).ownDevices()
+
+        XCTAssertEqual(status.map(\.approved), [false])
+    }
+
+    func test_aCopyFromMyReinstalledDevice_beforeIReapproveIt_waits() async throws {
+        let server = FakeE2EEServer()
+        let iPhone = try await E2EETestPeer.enroll(alice, on: server)
+        let mac = try await E2EETestPeer.enroll(alice, on: server)
+        _ = try await E2EETestPeer.enroll(bob, on: server)
+        try await approve(mac, by: iPhone)
+        try await approve(iPhone, by: mac)
+        server.revoke(userId: alice, deviceId: mac.device.deviceId)
+        let reinstalled = try await E2EETestPeer.enroll(alice, on: server)
+        try await approve(iPhone, by: reinstalled)
+        _ = try await send("depuis le Mac réinstallé", from: reinstalled, to: bob, on: server)
+        let copy = try XCTUnwrap(server.pending(userId: alice, deviceId: iPhone.device.deviceId).first)
+
+        XCTAssertEqual(iPhone.opener.open(copy), .deferred(envelopeId: copy.id))
+    }
+
+    func test_encryptingToMyDeviceUnderARepinnedKey_isRefusedByLibsignal() async throws {
+        let server = FakeE2EEServer()
+        let iPhone = try await E2EETestPeer.enroll(alice, on: server)
+        let mac = try await E2EETestPeer.enroll(alice, on: server)
+        _ = try await E2EETestPeer.enroll(bob, on: server)
+        try await approve(mac, by: iPhone)
+        _ = try await send("ouvre la session", from: iPhone, to: bob, on: server)
+        try iPhone.approvals.approve(deviceId: mac.device.deviceId, identityKey: Data(repeating: 7, count: 33))
+
+        XCTAssertThrowsError(try iPhone.cipher.encrypt(Data("non".utf8), for: mac.device.address))
+    }
+
+    func test_aNetworkErrorOnMyOwnBundles_failsTheSend_insteadOfDroppingMyCopy() async throws {
+        let server = FakeE2EEServer()
+        let iPhone = try await E2EETestPeer.enroll(alice, on: server)
+        let mac = try await E2EETestPeer.enroll(alice, on: server)
+        _ = try await E2EETestPeer.enroll(bob, on: server)
+        try await approve(mac, by: iPhone)
+        let offline = ScriptedDirectory(honest: iPhone.directory, failsFor: alice) { $0 }
+        let sealer = E2EEMessageSealer(local: iPhone.device, cipher: iPhone.cipher, directory: offline, approvals: iPhone.approvals)
+
+        do {
+            _ = try await sealer.seal(iPhone.content("hors ligne"), to: bob)
+            XCTFail("la copie de mon Mac se perdrait en silence")
+        } catch {
+            XCTAssertTrue(error is URLError)
+        }
+    }
+
+    func test_theSealer_signsTheAuthorInsideTheCiphertext() async throws {
+        let server = FakeE2EEServer()
+        let iPhone = try await E2EETestPeer.enroll(alice, on: server)
+        let bobPhone = try await E2EETestPeer.enroll(bob, on: server)
+        _ = try await send("signé", from: iPhone, to: bob, on: server)
+        let envelope = try XCTUnwrap(server.pending(userId: bob, deviceId: bobPhone.device.deviceId).first)
+
+        guard case .opened(let message) = bobPhone.opener.open(envelope) else { return XCTFail("illisible") }
+        XCTAssertEqual(message.content.authorUserId, alice)
+        XCTAssertEqual(message.content.authorDeviceId, iPhone.device.deviceId)
+    }
+
     func test_aCodeTowardsADeviceThatIsNotMine_isRefused() async throws {
         let server = FakeE2EEServer()
         let iPhone = try await E2EETestPeer.enroll(alice, on: server)
@@ -291,15 +397,21 @@ final class E2EEOwnDeviceLinkingTests: XCTestCase {
 private final class ScriptedDirectory: E2EEDirectoryClientProviding, @unchecked Sendable {
     private let honest: any E2EEDirectoryClientProviding
     private let drops: UInt32?
+    private let failsFor: String?
     private let rewrite: @Sendable (E2EEDeviceBundle) -> E2EEDeviceBundle
 
-    init(honest: any E2EEDirectoryClientProviding, drops: UInt32? = nil, rewrite: @escaping @Sendable (E2EEDeviceBundle) -> E2EEDeviceBundle) {
+    init(
+        honest: any E2EEDirectoryClientProviding, drops: UInt32? = nil, failsFor: String? = nil,
+        rewrite: @escaping @Sendable (E2EEDeviceBundle) -> E2EEDeviceBundle
+    ) {
         self.honest = honest
         self.drops = drops
+        self.failsFor = failsFor
         self.rewrite = rewrite
     }
 
     func bundles(userId: String, deviceIds: [UInt32]?) async throws -> E2EEUserBundles {
+        if userId == failsFor { throw URLError(.notConnectedToInternet) }
         let served = try await honest.bundles(userId: userId, deviceIds: deviceIds)
         return E2EEUserBundles(userId: served.userId, devices: served.devices.filter { $0.deviceId != drops }.map(rewrite))
     }
