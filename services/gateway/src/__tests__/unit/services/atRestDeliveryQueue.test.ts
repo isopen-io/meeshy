@@ -65,11 +65,15 @@ const serviceUnder = (masterKey: string | undefined, prisma: PrismaClient): Encr
 const fakeRedis = () => {
   const lists = new Map<string, string[]>();
   const client = {
-    eval: async (_script: string, _keys: number, key: string, ...args: string[]) => {
+    eval: async (script: string, _keys: number, key: string, ...args: string[]) => {
       if (args.length === 0) {
         const entries = lists.get(key) ?? [];
         lists.delete(key);
         return entries;
+      }
+      if (script.includes('LPUSH')) {
+        lists.set(key, [...args.slice(2), ...(lists.get(key) ?? [])]);
+        return args.length - 2;
       }
       lists.set(key, [...(lists.get(key) ?? []), args[0]]);
       return 1;
@@ -157,6 +161,11 @@ describe('la file hors ligne scelle la charge d’une conversation chiffrée au 
     const reader = new RedisDeliveryQueue(redis.cacheStore, deliveryQueueSealer(async () => serviceUnder(MASTER_B, store.prisma)));
 
     expect(await reader.drain('u-1')).toEqual([]);
+    // #12822 (M3) — une clé maîtresse erronée peut n'être qu'un déploiement raté :
+    // l'entrée reste en file, toujours scellée, pour la bonne clé.
+    expect(redis.stored()).not.toBe('');
+    expect(redis.stored()).not.toContain('4471');
+    expect(await writer.drain('u-1')).toEqual([entry()]);
   });
 
   it('une entrée ordinaire reste telle quelle (rétrocompatibilité)', async () => {
