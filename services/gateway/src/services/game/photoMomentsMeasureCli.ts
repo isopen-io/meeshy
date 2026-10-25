@@ -2,7 +2,10 @@
  * LA MESURE DE L'IMMORTALISATION EN LIGNE DE COMMANDE (D15, #10185 — lot L20 #10176) — REQUÊTE D'ADMINISTRATION EN
  * LECTURE SEULE.
  *
- * Rend, en JSON sur la sortie standard, les agrégats ANONYMES d'une semaine ISO close (`photoMomentsMeasure.ts`).
+ * Rend, en JSON sur la sortie standard, les agrégats ANONYMES d'une semaine ISO close (`photoMomentsMeasure.ts`) — un
+ * seul niveau : par famille d'étape, les comptes annoncés et ceux qui ont gardé (`families`), les rattrapages
+ * (`keptBacklog`) ; le push de la semaine (`push`) ; et le nombre de lignes retenues (`suppressed`). Aucun jour, aucune
+ * clé, aucune surface : le grain par clé attend la décision du porteur (#13094).
  * Sous `src/` pour être COMPILÉ dans l'image : le conteneur de la passerelle ne porte que `dist/` et les dépendances
  * de production. Rien n'est écrit : rejouer la requête ne change rien en base.
  *
@@ -27,9 +30,9 @@ export type PhotoMeasureCliDeps = {
 
 function verifyImage(deps: PhotoMeasureCliDeps): number {
   const measure = photoMeasureKeyOf('rank:echo:5');
-  if (measure?.family !== 'rank' || measure.key !== 'rank:echo') throw new Error('loi partagée photoMeasureKeyOf illisible');
+  if (measure?.family !== 'rank') throw new Error('loi partagée photoMeasureKeyOf illisible');
   const prismaClient = require.resolve('@meeshy/shared/prisma/client');
-  deps.out(`mesure photo embarquée : clé ${measure.key}, client Prisma ${prismaClient}`);
+  deps.out(`mesure photo embarquée : famille ${measure.family}, client Prisma ${prismaClient}`);
   return 0;
 }
 

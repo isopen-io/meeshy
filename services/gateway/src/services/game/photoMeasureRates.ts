@@ -1,90 +1,68 @@
 /**
- * LES LIGNES DE TAUX DE LA MESURE DE L'IMMORTALISATION (D15, #10185 — lot L20 #10176), et la règle qui les publie.
+ * LA RÈGLE QUI PUBLIE UNE LIGNE DE LA MESURE DE L'IMMORTALISATION (D15, #10185 — lot L20 #10176).
  *
- * Le seuil de dix comptes ne suffit pas cellule par cellule : une ligne publiée MOINS les lignes publiées qui la
- * composent rend le reste, et ce reste peut être un seul compte. La famille `rank` (11 comptes, 1 gardé) moins la clé
- * `rank:echo` (10 comptes, 0 gardé) disait qu'exactement un compte avait atteint Légende et immortalisé sa photo.
+ * Deux audits adversariaux ont montré qu'un rapport à plusieurs niveaux (cellules jour × clé, taux par clé et par
+ * famille, push par jour) laisse toujours une soustraction qui isole un compte : chaque ligne publiée passait le seuil,
+ * et la DIFFÉRENCE de deux lignes emboîtées n'en passait aucun. Le rapport ne publie donc plus qu'un niveau (la famille
+ * à la semaine), et chaque ligne candidate n'y entre qu'à trois conditions, sur des ensembles de COMPTES, jamais des
+ * moments :
  *
- * D'où la règle, appliquée du plus fin au plus large — cellules (jour × surface), puis clés, puis familles : une ligne
- * de taux ne sort que si elle compte au moins dix comptes ET si, pour chacune de ses deux mesures (annoncées, gardées),
- * les moments qu'aucune ligne PUBLIÉE plus fine ne couvre sont zéro compte ou au moins dix. Un reste d'au moins dix
- * comptes ne se protège pas : la soustraction rend un groupe, jamais une personne.
+ *  1. son ensemble porteur compte au moins `minAccounts` comptes ;
+ *  2. chaque ensemble qu'on y LIT — porteur, sous-ensemble publié, et son COMPLÉMENT (annoncés − gardés, envoyés −
+ *     lus), que la soustraction rend aussi sûrement qu'un nombre imprimé — vaut zéro ou au moins `minAccounts` ;
+ *  3. aucun de ses ensembles n'est CONTENU dans un ensemble déjà publié (ou ne le contient) à moins de `minAccounts`
+ *     comptes près : la différence de deux ensembles emboîtés est exactement le nombre de comptes qui les séparent.
+ *
+ * La condition 3 se mesure sur les ensembles RÉELS, pas sur les seuls emboîtements de construction : une inclusion
+ * fortuite qu'un lecteur peut déduire (une seule famille annoncée dans la semaine contient tous les comptes poussés)
+ * isole aussi bien qu'une inclusion par définition. Deux ensembles qui se recouvrent sans s'emboîter ne se soustraient
+ * pas : leur différence n'est le cardinal d'aucun ensemble.
+ *
+ * Les lignes sont examinées dans un ordre FIXE, indépendant des données (familles, puis rattrapages, puis push) : une
+ * ligne retenue n'est comptée que dans `withheld`, sans étiquette.
  */
 
-import type { PhotoMeasureFamily } from '@meeshy/shared/utils/game/photo-measure';
+export type Accounts = ReadonlySet<string>;
 
-/** Un moment annoncé dans la semaine, et ce que les cellules publiées en montrent déjà. */
-export type RateMoment = {
-  readonly userId: string;
-  readonly family: PhotoMeasureFamily;
-  readonly key: string;
-  /** Gardé avant la fin de la semaine. */
-  readonly kept: boolean;
-  /** Son annonce (présentée ou notifiée) est comptée dans une cellule publiée. */
-  readonly announcementShown: boolean;
-  /** Sa garde est comptée dans une cellule publiée. */
-  readonly keepingShown: boolean;
+/** Une ligne candidate : ce qu'elle publierait, et les ensembles de comptes qu'un lecteur y lirait. */
+export type CandidateLine<L> = {
+  readonly line: L;
+  /** L'ensemble qui porte la ligne : sous `minAccounts` comptes, elle ne sort pas. */
+  readonly base: Accounts;
+  /** Tout ce qu'on lit dans la ligne : le porteur, ses sous-ensembles publiés, et leurs compléments. */
+  readonly sets: readonly Accounts[];
+  /**
+   * Des ensembles publiés AILLEURS — un autre rapport — dont aucun ensemble de la ligne ne doit s'emboîter à moins de
+   * `minAccounts` près ; `null` quand ils ne peuvent pas être relus : la ligne est alors retenue (fail-closed).
+   */
+  readonly guards: readonly Accounts[] | null;
 };
 
-/**
- * Le taux d'immortalisation sur la semaine, en COMPTES : `announced` = comptes à qui une étape de la ligne a été
- * annoncée dans la semaine, `kept` = ceux d'entre eux qui en ont gardé au moins une avant sa fin ; `key: null` = la
- * famille. Compter des moments à côté des comptes dirait combien de comptes en ont eu deux (11 annoncés pour 10
- * comptes : un seul compte a franchi deux divisions) — la ligne ne porte donc que des comptes.
- */
-export type PhotoMeasureRate = {
-  readonly family: PhotoMeasureFamily;
-  readonly key: string | null;
-  readonly announced: number;
-  readonly kept: number;
-  readonly rate: number;
-};
+const isSubset = (inner: Accounts, outer: Accounts): boolean => inner.size <= outer.size && [...inner].every((id) => outer.has(id));
 
-type Coverage = (moment: RateMoment) => { readonly announcement: boolean; readonly keeping: boolean };
-type Group = { readonly sortKey: string; readonly family: PhotoMeasureFamily; readonly key: string | null; readonly moments: readonly RateMoment[] };
+/** Zéro ou au moins `minAccounts` : un groupe, ou rien — jamais une poignée de comptes qu'on pourrait nommer. */
+const safeCount = (count: number, minAccounts: number): boolean => count === 0 || count >= minAccounts;
 
-const SEP = '\u0000';
-const keyOf = (moment: RateMoment): string => `${moment.family}${SEP}${moment.key}`;
-const accountsOf = (moments: readonly RateMoment[]): number => new Set(moments.map((moment) => moment.userId)).size;
+/** Deux ensembles emboîtés ne se lisent ensemble que si ce qui les sépare est un groupe. */
+const separable = (a: Accounts, b: Accounts, minAccounts: number): boolean =>
+  !(isSubset(a, b) || isSubset(b, a)) || safeCount(Math.abs(a.size - b.size), minAccounts);
 
-const groupBy = (moments: readonly RateMoment[], level: 'family' | 'key'): readonly Group[] => [
-  ...moments
-    .reduce((groups, moment) => {
-      const sortKey = level === 'family' ? moment.family : keyOf(moment);
-      const group = groups.get(sortKey) ?? { sortKey, family: moment.family, key: level === 'family' ? null : moment.key, moments: [] };
-      return groups.set(sortKey, { ...group, moments: [...group.moments, moment] });
-    }, new Map<string, Group>())
-    .values(),
-];
-
-const line = (group: Group): PhotoMeasureRate => {
-  const kept = accountsOf(group.moments.filter((moment) => moment.kept));
-  const announced = accountsOf(group.moments);
-  return { family: group.family, key: group.key, announced, kept, rate: Math.round((kept / announced) * 1000) / 1000 };
-};
-
-/** Les lignes de taux publiables, triées comme le rapport (famille, puis ses clés), et le nombre de lignes retenues. */
-export function publishedRates(moments: readonly RateMoment[], minAccounts: number): { readonly rates: readonly PhotoMeasureRate[]; readonly withheld: number } {
-  const isolates = (rest: readonly RateMoment[]): boolean => {
-    const accounts = accountsOf(rest);
-    return accounts > 0 && accounts < minAccounts;
-  };
-  const publishable = (group: Group, covered: Coverage): boolean =>
-    accountsOf(group.moments) >= minAccounts &&
-    !isolates(group.moments.filter((moment) => !covered(moment).announcement)) &&
-    !isolates(group.moments.filter((moment) => moment.kept && !covered(moment).keeping));
-
-  const keys = groupBy(moments, 'key');
-  const families = groupBy(moments, 'family');
-  const shownKeys = keys.filter((group) => publishable(group, (moment) => ({ announcement: moment.announcementShown, keeping: moment.keepingShown })));
-  const shownKeyIds = new Set(shownKeys.map((group) => group.sortKey));
-  const shownFamilies = families.filter((group) =>
-    publishable(group, (moment) => ({
-      announcement: shownKeyIds.has(keyOf(moment)) || moment.announcementShown,
-      keeping: shownKeyIds.has(keyOf(moment)) || moment.keepingShown,
-    })),
-  );
-
-  const rates = [...shownFamilies, ...shownKeys].sort((a, b) => (a.sortKey < b.sortKey ? -1 : a.sortKey > b.sortKey ? 1 : 0)).map(line);
-  return { rates, withheld: keys.length + families.length - rates.length };
+function publishable<L>(candidate: CandidateLine<L>, published: readonly Accounts[], minAccounts: number): boolean {
+  if (candidate.guards === null || candidate.base.size < minAccounts) return false;
+  if (!candidate.sets.every((set) => safeCount(set.size, minAccounts))) return false;
+  const others = [...published, ...candidate.guards];
+  return candidate.sets.every((set) => others.every((other) => separable(set, other, minAccounts)));
 }
+
+/** Les lignes publiables, dans l'ordre des candidates, et le nombre de lignes retenues. */
+export function publishLines<L>(candidates: readonly CandidateLine<L>[], minAccounts: number): { readonly published: readonly L[]; readonly withheld: number } {
+  const accepted = candidates.reduce<{ readonly sets: readonly Accounts[]; readonly lines: readonly L[] }>(
+    (state, candidate) =>
+      publishable(candidate, state.sets, minAccounts) ? { sets: [...state.sets, ...candidate.sets], lines: [...state.lines, candidate.line] } : state,
+    { sets: [], lines: [] },
+  );
+  return { published: accepted.lines, withheld: candidates.length - accepted.lines.length };
+}
+
+/** Les comptes de `whole` qui ne sont pas dans `part` : le complément qu'une soustraction rend. */
+export const complement = (whole: Accounts, part: Accounts): Accounts => new Set([...whole].filter((id) => !part.has(id)));

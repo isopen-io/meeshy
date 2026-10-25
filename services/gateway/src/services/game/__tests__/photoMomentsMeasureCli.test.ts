@@ -44,13 +44,13 @@ const harness = (): { readonly deps: PhotoMeasureCliDeps; readonly out: string[]
 };
 
 describe('le point d’entrée de la mesure photo', () => {
-  it('verify-image : la loi partagée de la clé et le client Prisma se chargent depuis l’image, sans base', async () => {
+  it('verify-image : la loi partagée de la famille et le client Prisma se chargent depuis l’image, sans base', async () => {
     const { deps, out, opened } = harness();
 
     await expect(runPhotoMeasureCli(['verify-image'], deps)).resolves.toBe(0);
 
     expect(opened).toEqual([]);
-    expect(out.join('\n')).toContain('mesure photo embarquée');
+    expect(out.join('\n')).toContain('mesure photo embarquée : famille rank');
   });
 
   it('sans argument : mesure la dernière semaine ISO close, rend du JSON, et referme la connexion', async () => {
@@ -59,7 +59,15 @@ describe('le point d’entrée de la mesure photo', () => {
     await expect(runPhotoMeasureCli([], deps)).resolves.toBe(0);
 
     expect(opened).toEqual(['open', 'close']);
-    expect(JSON.parse(out.join('\n'))).toMatchObject({ window: { week: '2026-W43' }, cells: [], rates: [], push: [] });
+    expect(JSON.parse(out.join('\n'))).toEqual({
+      window: { week: '2026-W43', from: '2026-10-19T00:00:00.000Z', to: '2026-10-26T00:00:00.000Z' },
+      minAccounts: 10,
+      families: [],
+      keptBacklog: [],
+      push: null,
+      pushReadMeaning: 'ceiling-includes-carnet-visits',
+      suppressed: 0,
+    });
   });
 
   it('une fenêtre libre est refusée avant toute connexion', async () => {
