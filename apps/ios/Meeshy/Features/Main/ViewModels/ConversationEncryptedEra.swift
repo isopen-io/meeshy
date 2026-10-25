@@ -20,7 +20,9 @@ import MeeshySDK
 /// Le régime lu est celui que la conversation sert, fusionné avec celui que
 /// l'appareil retient (`EndToEndRegimeMemoryProviding`) : une conversation vue
 /// chiffrée le reste, même avant l'hydratation de sa ligne ou quand le serveur
-/// la sert sans régime.
+/// la sert sans régime — jusqu'à une désactivation DATÉE (#12883), après
+/// laquelle les messages suivants retrouvent les traductions du serveur et
+/// ceux de l'ère chiffrée gardent leur filtre.
 @MainActor
 final class ConversationEncryptedEra {
     private let memory: any EndToEndRegimeMemoryProviding
@@ -46,7 +48,7 @@ final class ConversationEncryptedEra {
     /// se range dans l'ère chiffrée (fail-closed).
     func admitsWireTranslations(forMessage messageId: String, in viewModel: ConversationViewModel) -> Bool {
         let regime = regime(of: viewModel)
-        guard regime.isEndToEnd else { return true }
+        guard regime.hasEncryptedEra else { return true }
         let createdAt = viewModel.messageIndex(for: messageId).map { viewModel.messages[$0].createdAt }
         return regime.admitsWireTranslations(forMessageCreatedAt: createdAt)
     }
@@ -88,7 +90,7 @@ final class ConversationEncryptedEra {
         in viewModel: ConversationViewModel
     ) -> (byAttachment: [String: [MessageTranslatedAudio]], byMessage: [String: [MessageTranslatedAudio]]) {
         let regime = regime(of: viewModel)
-        guard regime.isEndToEnd else {
+        guard regime.hasEncryptedEra else {
             return (viewModel.messageTranslatedAudiosByAttachment, viewModel.messageTranslatedAudios)
         }
         let admitted = viewModel.messages.filter { regime.admitsWireTranslations(forMessageCreatedAt: $0.createdAt) }

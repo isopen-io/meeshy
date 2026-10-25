@@ -32,7 +32,16 @@ import MeeshySDK
 /// que la désactivation connue scelle (sources divergentes ⇒ chiffré).
 /// Ces signaux rendent la bascule VISIBLE ; aucun ne l'authentifie (#12866).
 final class EndToEndRegimeLedger {
-    static let shared = EndToEndRegimeLedger()
+    static let shared = EndToEndRegimeLedger(memory: EndToEndRegimeMemory.shared)
+
+    /// La lecture apprend les MÊMES bascules datées que l'envoi (#12883) :
+    /// après une désactivation, les messages suivants retrouvent la traduction
+    /// du serveur et perdent le marqueur « non chiffré ».
+    private let memory: (any EndToEndRegimeMemoryProviding)?
+
+    init(memory: (any EndToEndRegimeMemoryProviding)? = nil) {
+        self.memory = memory
+    }
 
     struct Regime: Equatable {
         let isEndToEnd: Bool
@@ -120,11 +129,16 @@ final class EndToEndRegimeLedger {
 
     /// Un statut servi par la passerelle ; sans époque (passerelle antérieure), il ne fait qu'ajouter.
     func learn(_ status: ConversationEncryptionStatus, for conversationId: String) {
-        learn(Regime(isEndToEnd: EndToEndSendGate.requiresSeal(conversationEncryptionModes: [status.mode]), epoch: status.epoch), for: conversationId)
+        let isEndToEnd = EndToEndSendGate.requiresSeal(conversationEncryptionModes: [status.mode])
+        learn(Regime(isEndToEnd: isEndToEnd, epoch: status.epoch), for: conversationId)
+        guard let epoch = status.epoch else { return }
+        memory?.learn(isEndToEnd: isEndToEnd, epoch: epoch, changedAt: nil, enabledAt: status.enabledAt, for: conversationId)
     }
 
     func learn(_ event: ConversationEncryptionChangedEvent) {
-        learn(Regime(isEndToEnd: EndToEndSendGate.requiresSeal(conversationEncryptionModes: [event.mode]), epoch: event.epoch), for: event.conversationId)
+        let isEndToEnd = EndToEndSendGate.requiresSeal(conversationEncryptionModes: [event.mode])
+        learn(Regime(isEndToEnd: isEndToEnd, epoch: event.epoch), for: event.conversationId)
+        memory?.learn(isEndToEnd: isEndToEnd, epoch: event.epoch, changedAt: event.changedAtDate, enabledAt: nil, for: event.conversationId)
     }
 
     private func learn(_ observed: Regime, for conversationId: String) {
