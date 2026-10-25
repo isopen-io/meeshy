@@ -182,27 +182,6 @@ export function getDeletedMessageIds(
 }
 
 /**
- * Vérifie si un utilisateur peut supprimer un message pour tout le monde
- * (typiquement dans les X minutes après l'envoi)
- */
-export function canDeleteForEveryone(
-  message: { createdAt: Date; userId?: string },
-  userId: string,
-  windowMinutes: number = 60
-): boolean {
-  // Seul l'auteur peut supprimer pour tout le monde
-  if (message.userId !== userId) {
-    return false;
-  }
-
-  const now = new Date();
-  const messageAge = now.getTime() - message.createdAt.getTime();
-  const windowMs = windowMinutes * 60 * 1000;
-
-  return messageAge <= windowMs;
-}
-
-/**
  * Crée un DTO de suppression à partir d'une requête
  */
 export function createDeletionDTO(

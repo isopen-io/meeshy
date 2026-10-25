@@ -85,6 +85,8 @@ export const E2EE_ERROR_CODES = {
   BINDING_INVALID: 'E2EE_DEVICE_BINDING_INVALID',
   PREKEY_STOCK_FULL: 'E2EE_PREKEY_STOCK_FULL',
   IDENTITY_REVOKED: 'E2EE_IDENTITY_REVOKED',
+  /** Retirer un appareil depuis une autre session ferme la sienne ; si elle ne se ferme pas, rien n'est retiré (#13013). */
+  DEVICE_SESSION_NOT_CLOSED: 'E2EE_DEVICE_SESSION_NOT_CLOSED',
   IDENTITY_KEY_INVALID: 'E2EE_IDENTITY_KEY_INVALID',
 } as const;
 
@@ -230,6 +232,23 @@ export type E2EEDeviceBundle = {
   readonly signedPreKey: z.infer<typeof e2eeSignedPreKeySchema>;
   readonly kyberPreKey: z.infer<typeof e2eeSignedPreKeySchema> & { readonly lastResort: boolean };
   readonly preKey: z.infer<typeof e2eeOneTimePreKeySchema> | null;
+};
+
+/**
+ * Un de MES appareils chiffrés, tel que `GET /e2ee/devices` le sert à son seul
+ * propriétaire (#13014). Aucune clé, aucune session : de quoi le reconnaître
+ * (plateforme, libellé, dates) et savoir lequel est celui de la session appelante.
+ * Un contact ne lit jamais ces champs (`/e2ee/keys/:userId/devices` n'en sert aucun).
+ */
+export type E2EEOwnDevice = {
+  readonly deviceId: number;
+  readonly registrationId: number;
+  /** `unknown` pour une ligne écrite hors du schéma d'enrôlement : jamais une plateforme devinée. */
+  readonly platform: z.infer<typeof e2eePlatformSchema> | 'unknown';
+  readonly label: string | null;
+  readonly enrolledAt: string;
+  readonly lastSeenAt: string;
+  readonly current: boolean;
 };
 
 /** Une enveloppe servie à SON appareil destinataire. */

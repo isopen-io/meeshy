@@ -182,6 +182,9 @@ export type RawMessageRow = MessageProtectionRow & {
   metadata?: unknown;
   isEdited?: boolean | null;
   editedAt?: Date | null;
+  /** #11375 — les colonnes de l'éditeur tiers ; jamais servies telles quelles. */
+  thirdPartyEditorId?: string | null;
+  thirdPartyEditorRole?: string | null;
   deletedAt?: Date | null;
   replyToId?: string | null;
   storyReplyToId?: string | null;
@@ -223,6 +226,9 @@ export type MappedMessageRow = MessageProtectionRow & {
   metadata?: unknown;
   isEdited?: boolean | null;
   editedAt?: Date | null;
+  /** #11375 — l'auteur de la modification SERVI à ce lecteur (`servedEditAttribution`). */
+  editedById: string | null;
+  editedByRole: string | null;
   deletedAt?: Date | null;
   replyToId?: string | null;
   storyReplyToId?: string | null;

@@ -2016,7 +2016,7 @@ describe('registerMessagesAdvancedRoutes', () => {
 
         expect(prisma.message.findFirst).toHaveBeenCalledWith(
           expect.objectContaining({
-            include: expect.objectContaining({ attachments: { select: { id: true } } }),
+            include: expect.objectContaining({ attachments: { select: expect.objectContaining({ id: true }) } }),
           })
         );
       });

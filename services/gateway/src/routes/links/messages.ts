@@ -31,6 +31,9 @@ import {
 } from './types';
 import type { SharedPlace } from '../../services/location/sharedPlace';
 import { LIVE_MESSAGE_MARK } from '../../services/messaging/liveMessage';
+import { getEncryptionService } from '../../services/EncryptionService';
+import { sealsAtRest, sealTextAtRest } from '../../services/messaging/atRestWrite';
+import { isServerAtRestUnavailable, servedClearAtRest } from '../../services/messaging/serverAtRest';
 import {
   E2EE_PLAINTEXT_REFUSAL_MESSAGE,
   E2EE_PLAINTEXT_REFUSED,
@@ -276,8 +279,11 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
                   isAnnouncementChannel: true,
                   defaultWriteRole: true,
                   // #11216 — ce transport contourne `saveMessage` : il lit
-                  // lui-même le régime pour ne jamais écrire de clair en e2ee.
-                  encryptionMode: true
+                  // lui-même le régime pour ne jamais écrire de clair en e2ee,
+                  // et (#11381) pour sceller au repos en server/hybrid.
+                  encryptionMode: true,
+                  encryptionEnabledAt: true,
+                  serverEncryptionKeyId: true
                 }
               }
             }
@@ -376,11 +382,25 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
       // Pas de catch-P2002 ici (chemin anonyme simple) — un retry serveur
       // produit le même cid donc Prisma renvoie une 409 que la couche
       // Fastify mappe en réponse 409 Conflict côté client.
-      const message = await fastify.prisma.message.create({
+      // #11381 — dans une conversation `server`/`hybrid`, la base ne reçoit que le chiffré.
+      const regime = participantShareLink.conversation;
+      const sealedText = sealsAtRest(regime)
+        ? await sealTextAtRest({
+          sealer: await getEncryptionService(fastify.prisma),
+          mode: regime?.encryptionMode ?? '',
+          conversationId: participantShareLink.conversationId,
+          plaintext: body.content,
+          preferredKeyId: regime?.serverEncryptionKeyId ?? null,
+        })
+        : null;
+
+      const stored = await fastify.prisma.message.create({
         data: {
           conversationId: participantShareLink.conversationId,
           senderId: anonymousParticipant.id,
-          content: body.content,
+          ...(sealedText
+            ? { content: '', isEncrypted: true, encryptionMode: sealedText.mode, encryptedContent: sealedText.encryptedContent, encryptionMetadata: sealedText.encryptionMetadata }
+            : { content: body.content }),
           originalLanguage,
           messageType: body.messageType,
           clientMessageId: body.clientMessageId,
@@ -410,6 +430,8 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
           }
         }
       });
+      // L'invité, `message:new` et la traduction reçoivent le CLAIR ; la notification, la ligne scellée.
+      const message = sealedText ? servedClearAtRest(stored, body.content) : stored;
 
       // Lieu partagé : hisser `metadata.location` en top-level `location`,
       // même contrat que le chemin nominal (messages.ts / MessageHandler).
@@ -483,7 +505,7 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
       void notifyMessageRecipients({
         prisma: fastify.prisma,
         notificationService: fastify.notificationService,
-        message,
+        message: stored,
         senderParticipantId: anonymousParticipant.id,
         conversationId: participantShareLink.conversationId,
         processedContent: message.content,
@@ -500,6 +522,7 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
         senderParticipantId: anonymousParticipant.id,
         messageId: message.id,
         payload: { message: stripClientMessageId(payload) },
+        atRest: sealsAtRest(regime),
         onError: (err) => logError(fastify.log, 'Link message broadcast error:', err)
       });
 
@@ -511,6 +534,10 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
     } catch (error) {
       if (error instanceof z.ZodError) {
         return sendBadRequest(reply, 'Données invalides');
+      }
+      // #11381 — sans clé maîtresse, un message server/hybrid est refusé, jamais écrit en clair.
+      if (isServerAtRestUnavailable(error)) {
+        return sendError(reply, 503, error.message, { code: error.code });
       }
       logError(fastify.log, 'Send link message error:', error);
       return sendInternalError(reply, 'Erreur interne du serveur');

@@ -53,6 +53,7 @@
     <string name="profile_progression_subtitle">Badges, level and streak</string>
     <string name="profile_progression_title">Progress</string>
     <string name="profile_save">Save</string>
+    <string name="profile_save_error">Error while saving</string>
     <string name="profile_section_about">About</string>
     <string name="profile_section_actions">Actions</string>
     <string name="profile_section_contact">CONTACT</string>

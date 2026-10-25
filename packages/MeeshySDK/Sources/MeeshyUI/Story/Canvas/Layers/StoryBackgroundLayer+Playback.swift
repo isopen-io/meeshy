@@ -105,7 +105,40 @@ extension StoryBackgroundLayer {
         // Les réglages du fond (#9496) : posés sur l'item dès l'attache, comme
         // à chaque changement de curseur.
         applyBackgroundVideoLook()
+        notifyPlayerAttached()
+    }
+
+    /// La story lue, déclarée par l'hôte (#11287) : l'attente de la première
+    /// image part ici, la session s'ouvre dès qu'un player existe.
+    @MainActor
+    public func declarePlaybackQoETarget(_ target: SocialTarget?) {
+        playbackQoE.target = target
+        playbackQoE.markWaiting()
+        beginPlaybackQoEIfAttached()
+    }
+
+    @MainActor
+    func notifyPlayerAttached() {
+        beginPlaybackQoEIfAttached()
         onPlayerAttached?()
+    }
+
+    @MainActor
+    private func beginPlaybackQoEIfAttached() {
+        guard case .video = kind, let player = avPlayer, let playerLayer = avPlayerLayer else { return }
+        playbackQoE.begin(player: player, layer: playerLayer,
+                          mediaId: Self.mediaIdentity(for: kind) ?? "", mutedAtStart: player.isMuted)
+    }
+
+    /// Le player quitte la couche : sa session se ferme AVANT qu'il parte.
+    @MainActor
+    func releaseBackgroundPlayer() {
+        playbackQoE.finish(reason: .swiped)
+        avPlayerLayer?.removeFromSuperlayer()
+        avPlayer?.pause()
+        avPlayer = nil
+        avPlayerLayer = nil
+        avPlayerLooper = nil
     }
 
     /// Le player que le chemin de LECTURE porte déjà pour ce média de fond, ou
@@ -186,6 +219,7 @@ extension StoryBackgroundLayer {
     @MainActor
     public func handleAppLifecycle(active: Bool) {
         guard let player = avPlayer else { return }
+        if !active { playbackQoE.finish(reason: .backgrounded) }
         if active {
             // Reprise gated sur l'autorisation canonique : un retour
             // foreground ne doit JAMAIS relancer un player dont la lecture

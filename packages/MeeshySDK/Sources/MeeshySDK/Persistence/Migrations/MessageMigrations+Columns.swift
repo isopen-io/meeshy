@@ -129,3 +129,16 @@ struct MessagesSenderRingMigration: DatabaseMigration {
         }
     }
 }
+
+/// #11375 — l'auteur d'une modification faite par un modérateur de plateforme.
+/// Le fil ne lit que GRDB : sans cette colonne, « modifié par un modérateur »
+/// redevenait « modifié » au premier rechargement.
+struct MessagesEditedByIdMigration: DatabaseMigration {
+    let identifier = "messages_edited_by_id"
+
+    func migrate(_ db: Database) throws {
+        try db.alter(table: "messages") { t in
+            t.add(column: "editedById", .text)
+        }
+    }
+}

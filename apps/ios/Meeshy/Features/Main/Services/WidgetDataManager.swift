@@ -205,7 +205,7 @@ final class WidgetDataManager: NotificationWidgetSink {
             await LiveShareRecipientDirectory().cachedPeople(currentUserId: $0)
         },
         contentLocks: @escaping @MainActor () -> Set<String> = {
-            ConversationLockManager.shared.lockedConversationIds
+            ConversationLockManager.shared.contentLockedConversationIds
         },
         contentLockChanges: NotificationCenter = .default
     ) {

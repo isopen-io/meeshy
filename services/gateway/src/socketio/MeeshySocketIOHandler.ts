@@ -24,6 +24,7 @@ import { mediaReadyPorts } from '../services/attachments/media-processing/ready-
 import { MessageAttachmentAltTranslationService } from '../services/attachments/MessageAttachmentAltTranslationService';
 import { startMediaReadyListener } from '../services/attachments/media-processing/ready-listener';
 import { RedisDeliveryQueue } from '../services/RedisDeliveryQueue';
+import { gatewayDeliveryQueueSealer } from '../services/deliveryQueueSealing';
 import { getCacheStore } from '../services/CacheStore';
 
 /** Le bloc `game` tel que `GET /me/engagement` le compose : la lecture ne crédite rien (`READ_ONLY_CREDIT`). */
@@ -110,7 +111,7 @@ export class MeeshySocketIOHandler {
     const mediaDeps = {
       prisma: this.prisma,
       io: manager.getIO() as never,
-      deliveryQueue: new RedisDeliveryQueue(getCacheStore()),
+      deliveryQueue: new RedisDeliveryQueue(getCacheStore(), gatewayDeliveryQueueSealer(this.prisma)),
       connectedUsers: () => new Set(manager.getConnectedUsers()),
       socialEvents: () => manager.getSocialEventsHandler(),
       leaseStore: getCacheStore(),

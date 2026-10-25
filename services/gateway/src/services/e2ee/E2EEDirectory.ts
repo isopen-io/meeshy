@@ -28,9 +28,11 @@ import {
   E2EE_ERROR_CODES,
   E2EE_MAX_ACTIVE_DEVICES,
   E2EE_ONE_TIME_PREKEY_STOCK_MAX,
+  e2eePlatformSchema,
   type E2EEDeviceBundle,
   type E2EEEnrollDeviceRequest,
   type E2EEErrorCode,
+  type E2EEOwnDevice,
   type E2EEPublishKeysRequest,
 } from '@meeshy/shared/types/e2ee-directory';
 import { unsetOrNull } from '../../utils/prisma-unset';
@@ -62,6 +64,12 @@ export class E2EEDirectoryError extends Error {
 type SignedKey = { readonly keyId: number; readonly publicKey: string; readonly signature: string };
 type OneTimeKey = { readonly keyId: number; readonly publicKey: string };
 type OneTimeBatches = { readonly oneTimePreKeys?: readonly OneTimeKey[]; readonly kyberPreKeys?: readonly SignedKey[] };
+
+export type DeviceSignOut = {
+  readonly callerSessionId: string;
+  /** `true` seulement si la session n'est plus valide après l'appel. */
+  readonly close: (sessionId: string) => Promise<boolean>;
+};
 
 export type PreKeyStock = { readonly deviceId: number; readonly oneTimePreKeys: number; readonly kyberPreKeys: number };
 
@@ -169,6 +177,11 @@ const kyberLastResortFields = (key: SignedKey) => ({
   kyberLastResort: key.publicKey,
   kyberLastResortSignature: key.signature,
 });
+
+const ownPlatform = (raw: string): E2EEOwnDevice['platform'] => {
+  const parsed = e2eePlatformSchema.safeParse(raw);
+  return parsed.success ? parsed.data : 'unknown';
+};
 
 type ActiveDevice = Awaited<ReturnType<DirectoryPrisma['e2EEDevice']['findMany']>>[number];
 
@@ -365,19 +378,47 @@ export class E2EEDirectory {
     return devices.map((device) => ({ deviceId: device.deviceId, registrationId: device.registrationId }));
   }
 
+  /** Mes appareils actifs, pour moi seul (#13014) : jamais une clé, jamais la session d'un autre appareil. */
+  async ownDevices(caller: { userId: string; sessionId: string }): Promise<E2EEOwnDevice[]> {
+    const devices = await this.activeDevices(caller.userId);
+    return devices.map((device) => ({
+      deviceId: device.deviceId,
+      registrationId: device.registrationId,
+      platform: ownPlatform(device.platform),
+      label: device.label ?? null,
+      enrolledAt: device.createdAt.toISOString(),
+      lastSeenAt: device.lastSeenAt.toISOString(),
+      current: device.sessionId === caller.sessionId,
+    }));
+  }
+
   /**
    * Le retrait par le propriétaire du compte RÉVOQUE l'identité : elle ne
    * reprend jamais sa place et ne se réenrôle plus sur ce compte, même avec une
    * preuve de liaison fraîche — un appareil révoqué, ou un jeton volé qui l'a
    * révoqué, ne la ramène pas. L'installation doit tirer une nouvelle identité.
+   *
+   * Demandé depuis une AUTRE session (`signOut`), il ferme d'abord celle de
+   * l'appareil (#13013) — sans quoi un appareil volé, toujours connecté, se
+   * réenrôle sous une identité neuve. Une session qui ne se ferme pas fait
+   * échouer le retrait AVANT toute révocation : on ne dit jamais « déconnecté »
+   * d'une session vivante, et un nouvel essai repart du même état.
    */
-  async retireDevice(params: { userId: string; deviceId: number }): Promise<void> {
+  async retireDevice(params: { userId: string; deviceId: number; signOut?: DeviceSignOut }): Promise<{ signedOut: boolean }> {
     const device = await this.prisma.e2EEDevice.findFirst({
       where: { userId: params.userId, deviceId: params.deviceId, ...ACTIVE },
-      select: { identityKey: true },
+      select: { identityKey: true, sessionId: true },
     });
     if (!device) {
       throw new E2EEDirectoryError(E2EE_ERROR_CODES.DEVICE_NOT_BOUND, 404, 'Appareil chiffré introuvable sur ce compte');
+    }
+    const signsOut = params.signOut !== undefined && device.sessionId !== params.signOut.callerSessionId;
+    if (signsOut && !(await params.signOut!.close(device.sessionId))) {
+      throw new E2EEDirectoryError(
+        E2EE_ERROR_CODES.DEVICE_SESSION_NOT_CLOSED,
+        503,
+        'La session de cet appareil n’a pas pu être fermée : rien n’a été retiré. Réessayez.',
+      );
     }
     await this.prisma.e2EERevokedIdentity.upsert({
       where: { userId_identityKey: { userId: params.userId, identityKey: device.identityKey } },
@@ -386,6 +427,7 @@ export class E2EEDirectory {
     });
     await this.retireDevices({ userId: params.userId, deviceId: params.deviceId });
     await this.retireDevices({ userId: params.userId, identityKey: device.identityKey });
+    return { signedOut: signsOut };
   }
 
   private async undoIfRevoked(userId: string, identityKey: string): Promise<void> {

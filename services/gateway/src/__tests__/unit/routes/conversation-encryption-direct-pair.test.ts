@@ -19,7 +19,7 @@ import { findConversationsIn, type DirectDoc } from '../../helpers/direct-pair-w
 
 jest.mock('../../../services/EncryptionService', () => ({
   getEncryptionService: jest.fn().mockResolvedValue({
-    getOrCreateConversationKey: jest.fn().mockResolvedValue('server-key-id'),
+    activationKeyId: jest.fn().mockResolvedValue('server-key-id'),
   }),
 }));
 

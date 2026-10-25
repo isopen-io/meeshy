@@ -208,6 +208,19 @@ final class ConversationRecentMessagesPreviewTests: XCTestCase {
         XCTAssertFalse(ConversationPreviewRenderer.isSealed(message("m1", content: "")))
     }
 
+    func test_sealedReason_encryptedMessage_saysEncrypted() {
+        XCTAssertEqual(ConversationPreviewRenderer.sealedReason(message("m1", isEncrypted: true, content: "")), .encrypted)
+    }
+
+    /// Une flamme « après lecture » reçue ET chiffrée est retenue parce
+    /// qu'elle brûle, pas parce qu'elle est illisible : elle se dit flamme.
+    func test_sealedReason_receivedEncryptedAfterReadFlame_saysAfterRead() {
+        var burning = message("m1", isEncrypted: true, content: "")
+        burning.effects = MessageEffects(flags: [.ephemeral, .ephemeralAfterRead])
+
+        XCTAssertEqual(ConversationPreviewRenderer.sealedReason(burning), .afterRead)
+    }
+
     // MARK: - Les marges
 
     func test_contentWidth_keepsSixteenPointsOnEachSide() {

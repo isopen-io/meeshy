@@ -59,8 +59,12 @@ describe('les deux tuyaux nomment l\'auteur par le site UNIQUE', () => {
     'utf-8'
   );
 
-  it('appelle `agentSenderIdentity` à chacun des deux sites `_notifyAgent`', () => {
-    const appels = source.match(/\.\.\.agentSenderIdentity\(message\.sender\)/g) ?? [];
+  // #12822 — les deux tuyaux remettent le message à `_notifyAgent`, qui compose
+  // l'identité UNE fois (et tait un message chiffré au repos avant de la composer).
+  it('compose l’identité à un seul site, que les deux tuyaux appellent', () => {
+    const compositions = source.match(/\.\.\.agentSenderIdentity\(message\.sender\)/g) ?? [];
+    const appels = source.match(/await this\._notifyAgent\(message\)/g) ?? [];
+    expect(compositions).toHaveLength(1);
     expect(appels).toHaveLength(2);
   });
 

@@ -991,6 +991,7 @@ const de = {
   'message.forwarded': 'Weitergeleitet',
   'message.forwarded.fromGroup': 'Weitergeleitet aus {name}',
   'message.forwarded.fromPerson': 'Weitergeleitet von {name}',
+  'message.editedByModerator': 'von einem Moderator bearbeitet',
   'message.send.failed': 'Nicht gesendet',
   'message.send.failed.reason': 'Nicht gesendet — {reason}',
   'message.send.retry': 'Erneut versuchen',

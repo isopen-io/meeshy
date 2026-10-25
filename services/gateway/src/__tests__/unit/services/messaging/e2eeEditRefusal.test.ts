@@ -76,9 +76,16 @@ describe('admitMessageEdit — aucune édition en clair dans une conversation e2
     expect(isEditRefused(admission) && admission.reason).toBe('not-a-member');
   });
 
-  it.each([null, 'server', 'hybrid'])('mode %s : l’édition reste admise (le serveur lit déjà le clair)', async (mode) => {
-    const admission = await edit({ encryptionMode: mode });
+  it('sans chiffrement, l’édition reste admise', async () => {
+    const admission = await edit({ encryptionMode: null });
     expect(admission.admitted).toBe(true);
+  });
+
+  it.each(['server', 'hybrid', 'Hybrid'])('#11381 — mode %s : refusée tant qu’aucun transport ne rechiffre, jamais écrite en clair', async (mode) => {
+    const admission = await edit({ encryptionMode: mode });
+    expect(isEditRefused(admission) && admission.reason).toBe('server-encrypted-at-rest');
+    expect(editRefusalCode('server-encrypted-at-rest')).toBe('SERVER_AT_REST_EDIT_REFUSED');
+    expect(describeEditRefusalForSocket('server-encrypted-at-rest')).toContain('chiffré sur le serveur');
   });
 
   it('le socket dit la phrase claire et porte le code stable', () => {
