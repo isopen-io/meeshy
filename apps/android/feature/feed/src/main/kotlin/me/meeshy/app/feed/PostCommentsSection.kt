@@ -59,6 +59,7 @@ import kotlinx.coroutines.flow.map
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.wrapContentHeight
 import me.meeshy.feature.feed.R
+import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.mention.MentionAutocompleteState
 import me.meeshy.sdk.model.MentionCandidate
 import me.meeshy.ui.component.MeeshyAvatar
@@ -156,13 +157,18 @@ internal fun PostCommentsSection(
         }
 
         Spacer(Modifier.height(MeeshySpacing.md))
+        val editPiece = rememberCommentPieceRetouch(onReplace = viewModel::replaceMedia)
+        CommentAttachmentBar(tray = state.attachments, onEdit = editPiece, onRemove = viewModel::removeMedia)
         CommentComposer(
             draft = state.draft,
             mention = state.mention,
             isSubmitting = state.isSubmitting,
+            canSubmit = state.canSubmit,
+            canAttach = !state.attachments.isFull,
             replyTarget = state.replyTarget,
             onDraftChange = viewModel::onDraftChange,
             onMentionSelected = viewModel::onMentionSelected,
+            onAttach = viewModel::attachMedia,
             onSubmit = viewModel::submit,
             onCancelReply = viewModel::cancelReply,
         )
@@ -235,6 +241,7 @@ private fun CommentRow(
                 )
             }
             }
+            CommentMediaStrip(comment.media)
             if (comment.languageStrip.isNotEmpty()) {
                 Spacer(Modifier.height(2.dp))
                 CommentLanguageStrip(
@@ -473,9 +480,12 @@ private fun CommentComposer(
     draft: String,
     mention: MentionAutocompleteState,
     isSubmitting: Boolean,
+    canSubmit: Boolean,
+    canAttach: Boolean,
     replyTarget: ReplyTarget?,
     onDraftChange: (String) -> Unit,
     onMentionSelected: (MentionCandidate) -> Unit,
+    onAttach: (MediaUploadItem) -> Unit,
     onSubmit: () -> Unit,
     onCancelReply: () -> Unit,
 ) {
@@ -487,6 +497,7 @@ private fun CommentComposer(
             Spacer(Modifier.height(MeeshySpacing.xs))
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
+            CommentAttachButton(enabled = canAttach && !isSubmitting, onPicked = onAttach)
             OutlinedTextField(
                 value = draft,
                 onValueChange = onDraftChange,
@@ -509,12 +520,12 @@ private fun CommentComposer(
             } else {
                 IconButton(
                     onClick = onSubmit,
-                    enabled = draft.isNotBlank(),
+                    enabled = canSubmit,
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.Send,
                         contentDescription = stringResource(R.string.post_comments_send),
-                        tint = if (draft.isNotBlank()) MeeshyPalette.Indigo500 else MeeshyTheme.tokens.textSecondary,
+                        tint = if (canSubmit) MeeshyPalette.Indigo500 else MeeshyTheme.tokens.textSecondary,
                     )
                 }
             }
