@@ -87,6 +87,8 @@ const MESSAGE_CASES: readonly MessageCase[] = [
   ['groupe-rang-conversation-inconnu-ferme', {}, {}, { conversationRole: 'owner' }],
   ['groupe-rang-en-majuscules-ferme', {}, {}, { conversationRole: 'MODERATOR' }],
   ['chiffrement-serveur-garde-les-services', { ...mine, isEncrypted: true, encryptionMode: 'server' }, { encryptionMode: 'server' }, {}],
+  ['serveur-auteur-texte-ne-se-modifie-pas', mine, { encryptionMode: 'server' }, {}],
+  ['hybride-moderator-plateforme-ne-modifie-pas', {}, { encryptionMode: 'hybrid' }, { platformRole: 'MODERATOR' }],
   ['groupe-moderator-de-conversation-retire', {}, {}, { conversationRole: 'moderator' }],
   ['groupe-admin-de-conversation-retire', {}, {}, { conversationRole: 'admin' }],
   ['groupe-creator-retire', {}, {}, { conversationRole: 'creator' }],

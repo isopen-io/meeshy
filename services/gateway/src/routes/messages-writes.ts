@@ -37,6 +37,7 @@ import {
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { loadPrivacyPreferencesCached } from '../services/preferences/privacy-cache';
 import { broadcastMessageMutation } from '../socketio/broadcastMessageMutation';
+import { queuedEventSealsAtRest } from '../services/messaging/serverAtRest';
 import { buildMessageEditedCore } from '../socketio/messageEditedPayload';
 import type { Message } from '@meeshy/shared/types/index';
 import { transformTranslationsToArray, type MessageTranslationJSON } from '../utils/translation-transformer';
@@ -214,7 +215,7 @@ export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: Mess
         if (admission.reason === 'conversation-closed') {
           return sendError(reply, 410, CONVERSATION_CLOSED_EDIT_MESSAGE);
         }
-        if (editRefusalCode(admission.reason)) {
+        if (editRefusalCode(admission.reason) !== undefined) {
           return sendBadRequest(reply, describeEditRefusalForSocket(admission.reason), { code: editRefusalCode(admission.reason) });
         }
         if (isContentEditRefusal(admission.reason)) {
@@ -433,6 +434,7 @@ export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: Mess
         actorUserId: userId,
         eventType: 'edited',
         messageId,
+        atRest: queuedEventSealsAtRest(message),
         // Le NOYAU du contrat vient de `buildMessageEditedCore`, source unique
         // partagée avec les deux producteurs socket. Étalé APRÈS la ligne
         // relue, il n'ajoute rien qui ne soit déjà servi — il corrige la seule

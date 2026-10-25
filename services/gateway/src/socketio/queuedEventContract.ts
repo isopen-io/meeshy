@@ -188,8 +188,26 @@ export type QueuedPayloadFor<T extends QueuedEventType> = Anonymized<
  * ne doivent pas être forcés de l'écrire pour rester typés.
  */
 export type QueuedEventVariant =
-  | { eventType?: undefined; payload: QueuedPayloadFor<'new'> }
-  | { [T in QueuedEventType]: { eventType: T; payload: QueuedPayloadFor<T> } }[QueuedEventType];
+  | { eventType?: undefined; payload: QueuedPayloadFor<'new'>; readonly atRest: boolean }
+  | QueuedVariantFor<QueuedEventType>;
+
+/**
+ * #12822 — les familles dont la charge porte le TEXTE d'un message, ou ce qui
+ * voyage avec lui (traductions, transcription, noms de fichiers).
+ *
+ * Leur producteur DÉCLARE le régime de la conversation (`atRest`) : `true`
+ * scelle l'entrée avant Redis (`RedisDeliveryQueue`, 48 h, AOF), `false` la
+ * laisse telle quelle. Le champ est REQUIS au type, pour que le compilateur
+ * prouve qu'aucun producteur n'a oublié la question — l'oubli rangeait le clair
+ * d'une conversation chiffrée au repos (le lien de partage, troisième audit).
+ * Les autres familles (suppression, expiration, épingle, réactions) ne portent
+ * que des identifiants et un emoji : elles ne déclarent rien.
+ */
+export type TextBearingQueuedEvent = 'new' | 'edited' | 'translation' | 'link-message' | 'attachment-updated';
+
+type AtRestDeclarationFor<K extends QueuedEventType> = K extends TextBearingQueuedEvent
+  ? { readonly atRest: boolean }
+  : { readonly atRest?: never };
 
 /**
  * Le sous-ensemble corrélé des variantes, pour les relais qui n'en portent que
@@ -202,7 +220,7 @@ export type QueuedEventVariant =
  * bien même la file l'aurait exigé.
  */
 export type QueuedVariantFor<T extends QueuedEventType> = {
-  [K in T]: { eventType: K; payload: QueuedPayloadFor<K> };
+  [K in T]: { eventType: K; payload: QueuedPayloadFor<K> } & AtRestDeclarationFor<K>;
 }[T];
 
 /**
@@ -216,10 +234,11 @@ export type QueuedVariantFor<T extends QueuedEventType> = {
  * d'appel ; c'est seulement leur RÉUNION que le compilateur ne sait pas nommer.
  *
  * À n'employer que là où le couple arrive déjà séparé (une signature héritée à
- * plusieurs paramètres). Quand l'appelant tient une union DISCRIMINÉE, le
+ * plusieurs paramètres). Fermée aux familles qui portent du texte (#12822) :
+ * l'effacement y forgerait une variante sans sa déclaration `atRest`. Quand l'appelant tient une union DISCRIMINÉE, le
  * `switch` reste préférable : il corrèle sans rien effacer.
  */
-export function queuedVariantOf<T extends QueuedEventType>(
+export function queuedVariantOf<T extends Exclude<QueuedEventType, TextBearingQueuedEvent>>(
   eventType: T,
   payload: QueuedPayloadFor<T>,
 ): QueuedVariantFor<T> {

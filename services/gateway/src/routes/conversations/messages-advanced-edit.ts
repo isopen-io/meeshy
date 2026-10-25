@@ -47,6 +47,7 @@ import {
 import { emitMentionCreated } from '../../socketio/emitMentionCreated';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
 import { broadcastMessageMutation } from '../../socketio/broadcastMessageMutation';
+import { queuedEventSealsAtRest } from '../../services/messaging/serverAtRest';
 import { buildMessageEditedCore } from '../../socketio/messageEditedPayload';
 import type {
   ConversationParams,
@@ -239,7 +240,7 @@ export function registerEditMessagePutRoute(
         if (admission.reason === 'conversation-closed') {
           return sendError(reply, 410, CONVERSATION_CLOSED_EDIT_MESSAGE);
         }
-        if (editRefusalCode(admission.reason)) {
+        if (editRefusalCode(admission.reason) !== undefined) {
           return sendBadRequest(reply, describeEditRefusalForSocket(admission.reason), { code: editRefusalCode(admission.reason) });
         }
         if (isContentEditRefusal(admission.reason)) {
@@ -525,6 +526,7 @@ export function registerEditMessagePutRoute(
         actorUserId: userId,
         eventType: 'edited',
         messageId,
+        atRest: queuedEventSealsAtRest(existingMessage),
         sealedQuoteAudience,
         // Le NOYAU du contrat vient de `buildMessageEditedCore` (voir le
         // sibling `PUT /messages/:messageId`) : le `as unknown as
@@ -699,7 +701,7 @@ export function registerEditMessagePatchRoute(
         if (admission.reason === 'conversation-closed') {
           return sendError(reply, 410, CONVERSATION_CLOSED_EDIT_MESSAGE);
         }
-        if (editRefusalCode(admission.reason)) {
+        if (editRefusalCode(admission.reason) !== undefined) {
           return sendBadRequest(reply, describeEditRefusalForSocket(admission.reason), { code: editRefusalCode(admission.reason) });
         }
         if (isContentEditRefusal(admission.reason)) {
@@ -872,6 +874,7 @@ export function registerEditMessagePatchRoute(
         actorUserId: userId,
         eventType: 'edited',
         messageId,
+        atRest: queuedEventSealsAtRest(message),
         // Même noyau, même raison que sur les deux siblings d'édition : ce
         // transport est celui du client ANDROID, et il servait lui aussi le
         // `Participant.id` en guise de `senderId`.

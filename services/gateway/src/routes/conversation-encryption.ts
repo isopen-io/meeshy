@@ -11,7 +11,7 @@
  * Encryption Modes:
  * - e2ee: Full end-to-end encryption (Signal Protocol) - NO translation
  * - server: Server-side encryption (AES-256-GCM) - translation supported
- * - hybrid: Double encryption (E2EE + server layer) - translation supported
+ * - hybrid: chiffré AU REPOS comme server (#11374) — jamais de bout en bout - translation supported
  */
 
 import { FastifyInstance, FastifyReply } from 'fastify';
@@ -21,6 +21,7 @@ import { validateParams, validateBody } from '../validation/helpers.js';
 import { ConversationIdParamSchema, SetEncryptionModeBodySchema } from '../validation/conversation-encryption-schemas.js';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 import { sendSuccess, sendBadRequest, sendError, sendForbidden, sendInternalError } from '../utils/response.js';
+import { isServerAtRestUnavailable } from '../services/messaging/serverAtRest';
 import {
   noticeBroadcast,
   postSystemNotice,
@@ -99,6 +100,8 @@ type RegimeConversation = {
   readonly encryptionMode: string | null;
   readonly encryptionEnabledBy: string | null;
   readonly encryptionEpoch?: number | null;
+  /** #12822 — la clé que la conversation désigne déjà ; l'activation la reprend si elle s'ouvre. */
+  readonly serverEncryptionKeyId?: string | null;
   readonly participants: readonly RegimeMember[];
 };
 
@@ -110,6 +113,7 @@ const REGIME_SELECT = {
   encryptionMode: true,
   encryptionEnabledBy: true,
   encryptionEpoch: true,
+  serverEncryptionKeyId: true,
   participants: {
     where: { isActive: true },
     select: {
@@ -366,7 +370,9 @@ export default async function encryptionRoutes(fastify: FastifyInstance) {
         // Get or create server encryption key (for server and hybrid modes)
         let serverEncryptionKeyId: string | null = null;
         if (mode === 'server' || mode === 'hybrid') {
-          serverEncryptionKeyId = await encryptionService.getOrCreateConversationKey();
+          // #11381 — la clé est RATTACHÉE à sa conversation : elle n'ouvre rien ailleurs.
+          // #12822 — la clé déjà désignée, qui s'ouvre encore, est reprise.
+          serverEncryptionKeyId = await encryptionService.activationKeyId(conversationId, conversation.serverEncryptionKeyId ?? null);
         }
 
         // #12521 — UNE écriture conditionnelle sur l'époque lue.
@@ -384,7 +390,8 @@ export default async function encryptionRoutes(fastify: FastifyInstance) {
         const encryptionMessages: Record<EncryptionMode, string> = {
           e2ee: '🔒 End-to-end encryption enabled. Messages are now fully encrypted.',
           server: '🔐 Server-side encryption enabled. Messages are encrypted with translation support.',
-          hybrid: '🔐🔒 Hybrid encryption enabled. Messages are double-encrypted with E2EE + server layer. Translation is supported.',
+          // #11374 — `hybrid` est chiffré AU REPOS, comme `server` : jamais « de bout en bout ».
+          hybrid: '🔐 Server-side encryption enabled. Messages are encrypted at rest with translation support.',
         };
 
         const encryptionLabels: Record<EncryptionMode, string> = {
@@ -413,6 +420,11 @@ export default async function encryptionRoutes(fastify: FastifyInstance) {
         ), { message: `${encryptionLabels[mode]} encryption enabled successfully` });
 
       } catch (error) {
+        // #11381 — sans clé maîtresse, aucun mode `server`/`hybrid` ne s'active.
+        if (isServerAtRestUnavailable(error)) {
+          logger.error('Server encryption unavailable: ENCRYPTION_MASTER_KEY missing or invalid', { reason: error.reason });
+          return sendError(reply, 503, error.message, { code: error.code });
+        }
         logger.error('Error enabling encryption', error as Error);
         return sendInternalError(reply, 'Internal server error');
       }

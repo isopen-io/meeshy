@@ -111,12 +111,14 @@ import { broadcastReactionMutation } from './broadcastReactionMutation';
 import { announcesMessageArrival } from './queuedMessageArrival';
 import type { QueuedMessagePayload } from '@meeshy/shared/types/delivery-queue';
 import type { QueuedPayloadFor, QueuedVariantFor } from './queuedEventContract';
+import { isServerAtRestMode } from '../services/messaging/serverAtRest';
 import { drainedEventName, isAddressableConversationId, isDeliverableQueuedPayload } from './queuedEventContract';
 import { isValidObjectId } from '@meeshy/shared/utils/object-id';
 import { syncConversationListOnNewMessage } from './postMessageSyncFanOut';
 import { wireCallMessageBroadcasters } from './callMessageBroadcasters';
 import { attachSocketIORedisAdapter, type SocketIORedisAdapterHandle } from './redis-adapter';
 import { creditTranslationRequest, lazyTranslationRequestEngagement } from '../services/messaging/translationRequestCredit';
+import { loadTranslatableMessage } from '../services/messaging/atRestTranslationSource';
 
 // Logger dédié pour SocketIOManager
 const logger = enhancedLogger.child({ module: 'SocketIOManager' });
@@ -1143,6 +1145,8 @@ export class MeeshySocketIOManager {
     actorParticipantId: string | null | undefined;
     messageId: string;
     payload: QueuedPayloadFor<'link-message'>;
+    /** #12822 — la conversation est chiffrée au repos : l'entrée part scellée. */
+    atRest: boolean;
   }): Promise<void> {
     await this._enqueueForOfflineParticipants({ ...params, eventType: 'link-message' });
   }
@@ -2109,10 +2113,8 @@ export class MeeshySocketIOManager {
       // traduit à un non-participant : le contrôle n'existait que côté on-demand,
       // donc un message déjà mis en cache fuitait vers n'importe quel socket
       // connaissant son id (IDOR / message-content disclosure).
-      const message = await this.prisma.message.findUnique({
-        where: { id: messageId },
-        select: { id: true, conversationId: true, content: true, originalLanguage: true, senderId: true, encryptionMode: true }
-      });
+      // #11381 — le texte d'un message `server`/`hybrid` est ouvert par la passerelle ; scellé, il reste vide.
+      const message = await loadTranslatableMessage(this.prisma, messageId);
 
       if (!message || !message.content) {
         socket.emit(SERVER_EVENTS.ERROR, {
@@ -3268,6 +3270,7 @@ export class MeeshySocketIOManager {
         eventType: 'edited',
         messageId: message.id,
         payload: editedPayload,
+        atRest: isServerAtRestMode(message.encryptionMode),
       });
     } catch (error) {
       logger.error('broadcast message:edited (call) failed', error);

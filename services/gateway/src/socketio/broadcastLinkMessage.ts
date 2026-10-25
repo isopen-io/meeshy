@@ -15,6 +15,7 @@ export interface LinkMessageManager {
     actorParticipantId: string | null | undefined;
     messageId: string;
     payload: QueuedPayloadFor<'link-message'>;
+    atRest: boolean;
   }): Promise<void>;
   emitUnreadCountsToRecipients(params: {
     conversationId: string;
@@ -95,9 +96,15 @@ export async function broadcastLinkMessage(params: {
    * `linkMessageEmissions` déplie en DEUX événements au rejeu (cycle 106).
    */
   payload: QueuedPayloadFor<'link-message'>;
+  /**
+   * #12822 — la conversation est chiffrée au repos (`server`/`hybrid`) : la
+   * file hors ligne scelle l'enveloppe avant Redis. L'enveloppe d'un lien ne
+   * porte pas `encryptionMode` ; seul l'appelant, qui a lu le régime, le sait.
+   */
+  atRest: boolean;
   onError?: (error: unknown) => void;
 }): Promise<void> {
-  const { manager, conversationId, senderParticipantId, messageId, payload, onError } = params;
+  const { manager, conversationId, senderParticipantId, messageId, payload, atRest, onError } = params;
   if (!manager) return;
 
   try {
@@ -126,6 +133,7 @@ export async function broadcastLinkMessage(params: {
       actorParticipantId: senderParticipantId,
       messageId,
       payload,
+      atRest,
     })?.catch((error: unknown) => onError?.(error));
   } catch (error) {
     onError?.(error);

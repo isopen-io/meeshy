@@ -66,6 +66,8 @@ import {
 } from '../utils/message-payload-filter.js';
 import { resolveParticipant } from '../utils/participant-resolver.js';
 import { agentSenderIdentity } from './agentSenderIdentity.js';
+import { agentMayReadMessage, notifyAgentOfMessage } from './agentMessageNotification.js';
+import { isServerAtRestMode, queuedEventSealsAtRest } from '../../services/messaging/serverAtRest';
 import { resolvePeerBroadcastSplit } from '../peerBroadcastSplit.js';
 import { emitMessageNew } from '../messageNewEmission';
 import { readerSignedPlan, readerSignedPlanForMessageId } from '../readerSignedDelivery';
@@ -427,19 +429,7 @@ export class MessageHandler {
           { ...corr, messageId: message.id }
         );
 
-        this._notifyAgent({
-          id: message.id,
-          conversationId: message.conversationId,
-          senderId: message.senderId,
-          ...agentSenderIdentity(message.sender),
-          content: message.content,
-          originalLanguage: message.originalLanguage,
-          replyToId: message.replyToId,
-          mentionedUserIds: await this._resolveMentionUserIds(
-            (message.validatedMentions as string[] | undefined) ?? []
-          ),
-          createdAt: message.createdAt,
-        });
+        await this._notifyAgent(message);
 
         // Le comptage du message n'est plus fait ici : il vit avec les trois
         // autres obligations post-commit, dans `runMessagePostSaveEffects`, que
@@ -653,19 +643,7 @@ export class MessageHandler {
           { ...corr, messageId: message.id }
         );
 
-        this._notifyAgent({
-          id: message.id,
-          conversationId: message.conversationId,
-          senderId: message.senderId,
-          ...agentSenderIdentity(message.sender),
-          content: message.content,
-          originalLanguage: message.originalLanguage,
-          replyToId: message.replyToId,
-          mentionedUserIds: await this._resolveMentionUserIds(
-            (message.validatedMentions as string[] | undefined) ?? []
-          ),
-          createdAt: message.createdAt,
-        });
+        await this._notifyAgent(message);
 
         // Idem : le comptage — pièces jointes comprises — vit dans
         // `runMessagePostSaveEffects`, qui lit les MIME du message committé au
@@ -999,6 +977,7 @@ export class MessageHandler {
         eventType: 'edited',
         messageId: validated.messageId,
         payload: editedPayload,
+        atRest: queuedEventSealsAtRest(message),
       }).catch((err) => handlerLogger.warn('offline enqueue (edit) failed', { error: err }));
 
       callback?.({ success: true, data: { messageId: validated.messageId } });
@@ -1424,6 +1403,7 @@ export class MessageHandler {
           actorUserId: message.senderId,
           eventType: 'new',
           messageId: message.id,
+          atRest: isServerAtRestMode(message.encryptionMode),
           payload: peerPayload,
           // La file est la TROISIÈME porte de sortie de ce message. Sans cette
           // ligne, un destinataire hors ligne qui a refusé les sources de
@@ -2062,32 +2042,25 @@ export class MessageHandler {
     }
   }
 
-  private _notifyAgent(message: {
-    id: string;
-    conversationId: string;
-    senderId: string | null;
-    senderDisplayName?: string;
-    senderUsername?: string;
-    content: string | null;
-    originalLanguage: string | null;
-    replyToId?: string | null;
-    mentionedUserIds?: string[];
-    createdAt: Date;
-  }): void {
-    if (!this.agentClient || !message.senderId || !message.content) return;
-    this.agentClient.sendEvent({
-      type: 'agent:new-message',
-      conversationId: message.conversationId,
-      messageId: message.id,
-      senderId: message.senderId,
-      senderDisplayName: message.senderDisplayName,
-      senderUsername: message.senderUsername,
-      content: message.content,
-      originalLanguage: message.originalLanguage ?? 'fr',
-      replyToId: message.replyToId ?? undefined,
-      mentionedUserIds: message.mentionedUserIds ?? [],
-      timestamp: message.createdAt.getTime(),
-    }).catch(err => handlerLogger.warn('agent event delivery failed (non-blocking)', { messageId: message.id, error: err }));
+  /** #12822 — `notifyAgentOfMessage` tait tout message chiffré au repos, avant même la résolution des mentions. */
+  private async _notifyAgent(message: Message): Promise<void> {
+    if (!this.agentClient || !agentMayReadMessage(message)) return;
+    notifyAgentOfMessage({
+      agent: this.agentClient,
+      message: {
+        id: message.id,
+        conversationId: message.conversationId,
+        senderId: message.senderId,
+        ...agentSenderIdentity(message.sender),
+        content: message.content,
+        originalLanguage: message.originalLanguage,
+        encryptionMode: message.encryptionMode,
+        replyToId: message.replyToId,
+        mentionedUserIds: await this._resolveMentionUserIds((message.validatedMentions as string[] | undefined) ?? []),
+        createdAt: message.createdAt,
+      },
+      onError: (err) => handlerLogger.warn('agent event delivery failed (non-blocking)', { messageId: message.id, error: err }),
+    });
   }
 
   private _sendError(
