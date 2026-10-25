@@ -90,7 +90,9 @@ export const lowerVersions = (registry: readonly RegistryEntry[]): readonly Regi
 
 /**
  * La preuve de ROUGE tient si CHAQUE pack du registre (non muté) QUI A UNE BASE
- * tombe, nommé, sous `below-baseline` à sa version abaissée de 1 — quelles que
+ * tombe, nommé, à sa version abaissée de 1 — sous `below-baseline` quand il est
+ * au numéro de la base, sous `reuses-baseline` quand la branche l'a monté d'un
+ * cran au-dessus d'elle (#10254 : le premier lot qui monte un pack) — quelles que
  * soient les autres violations que la mutation produit (un pack monté a sa
  * version quittée dans `retained.json`, et l'abaisser la réutilise aussi).
  * Un pack NÉ sur la branche n'a pas de base sous laquelle redescendre : la
@@ -107,13 +109,22 @@ export const lowerVersionProofHolds = ({
   readonly baseline: readonly RegistryEntry[] | null;
 }): boolean => {
   if (baseline === null) return false;
-  const based = registry.filter((entry) => baseline.some((candidate) => candidate.slug === entry.slug));
-  return (
-    based.length > 0 &&
-    based.every((entry) =>
-      violations.some((violation) => violation.kind === 'below-baseline' && violation.slug === entry.slug && violation.version === versionOf(entry) - 1 && violation.baseline === versionOf(entry)),
-    )
-  );
+  const based = registry.flatMap((entry) => {
+    const base = baseline.find((candidate) => candidate.slug === entry.slug);
+    return base === undefined ? [] : [{ entry, baseVersion: versionOf(base) }];
+  });
+  return based.length > 0 && based.every(({ entry, baseVersion }) => violations.some((violation) => fallsAtLoweredVersion(violation, entry, baseVersion)));
+};
+
+/**
+ * Un pack au numéro de la base doit redescendre SOUS elle ; un pack que la branche a MONTÉ d'un cran retombe, abaissé,
+ * sur le numéro de la base avec une autre empreinte (`reuses-baseline`) : c'est le rouge que la mutation doit voir.
+ */
+const fallsAtLoweredVersion = (violation: VersionViolation, entry: RegistryEntry, baseVersion: number): boolean => {
+  const lowered = versionOf(entry) - 1;
+  if (violation.slug !== entry.slug || violation.version !== lowered) return false;
+  if (violation.kind === 'below-baseline') return violation.baseline === baseVersion && baseVersion === versionOf(entry);
+  return violation.kind === 'reuses-baseline' && lowered === baseVersion;
 };
 
 export const describeViolation = (violation: VersionViolation): string => {

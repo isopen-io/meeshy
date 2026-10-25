@@ -205,12 +205,15 @@ export function birdsOf(raw: readonly RawBird[]): GloryFrameBirds {
 
 export type RawRef = { readonly src: string; readonly bytes: number; readonly sha256: string; readonly box?: [number, number, number, number]; readonly blend?: string };
 
+/** La fenêtre de l'export : `path` manque à un export d'avant #10254, et vaut `null` pour un masque vide. */
+export type RawWindow = { readonly box: [number, number, number, number]; readonly path?: string | null; readonly mask: RawRef; readonly veilMaxAlpha: number };
+
 export type RawExportFrame = {
   readonly frame: string;
   readonly size: [number, number];
   readonly motifs: readonly string[];
   readonly stack: readonly string[];
-  readonly window: { readonly box: [number, number, number, number]; readonly mask: RawRef; readonly veilMaxAlpha: number };
+  readonly window: RawWindow;
   readonly banner: { readonly box: [number, number, number, number] } | null;
   readonly layers: {
     readonly decor: RawRef;
@@ -249,11 +252,17 @@ export function normalizeStack(raw: RawExportFrame): string[] {
   return raw.banner === null || stack.includes('banner') ? stack : [...stack, 'banner'];
 }
 
+/** La fenêtre du contrat : sa boîte, son chemin quand l'export le porte (#10254), son masque adressé par contenu. */
+export function normalizeWindow(raw: RawWindow): GloryFrameFormat['window'] {
+  const path = typeof raw.path === 'string' ? { path: raw.path } : {};
+  return { box: raw.box, ...path, mask: layerOf(raw.mask), veilMaxAlpha: raw.veilMaxAlpha };
+}
+
 export function normalizeFormat(raw: RawExportFrame, layout: GloryFrameBirdLayout): GloryFrameFormat {
   const grades = raw.layers.grade.filter((ref): ref is RawRef => ref !== null).map((ref) => ({ ...layerOf(ref), blend: (ref.blend ?? 'normal') as 'normal' | 'screen' | 'multiply' }));
   return {
     size: raw.size,
-    window: { box: raw.window.box, mask: layerOf(raw.window.mask), veilMaxAlpha: raw.window.veilMaxAlpha },
+    window: normalizeWindow(raw.window),
     stack: normalizeStack(raw),
     layers: {
       decor: layerOf(raw.layers.decor),

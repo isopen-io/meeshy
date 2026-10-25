@@ -91,8 +91,10 @@ node lib/export.mjs --generate      # régénère les 12 ateliers (et leurs plaq
                                     # puis exporte les 197 cadres → generateur/export/ (ignorés par git)
 node lib/export-check.mjs           # ROUGE tant qu'une couche porte un texte ou un oiseau, qu'une fenêtre est voilée,
                                     # que la bande du bandeau est trouée, qu'un emplacement n'a pas de contraste mesuré ou
-                                    # qu'une plaque dessinée n'a pas ses deux variantes
+                                    # qu'une plaque dessinée n'a pas ses deux variantes, ou que le chemin d'une fenêtre
+                                    # s'écarte de son masque d'un seul pixel
 node lib/recompose.mjs              # recompose chaque cadre et le compare à la référence (§ 8.3) → export/fidelity.json
+node lib/window-paths.mjs           # pose `window.path` (#10254) sur les contrats versionnés depuis LEUR masque, sans réexport
 ```
 
 Options : `--only savane,neon-oracle-a` (collections ou cadres), `--jobs 3`, `--quality 82`, `--lossless`, `PYTHON=…` pour l'interpréteur des ateliers. `export.mjs --mutate text-in-decor|birds-in-decor|veil|no-contrast|one-plate` rejoue un défaut connu : `export-check.mjs --partial` doit alors être ROUGE.
@@ -101,7 +103,7 @@ Options : `--only savane,neon-oracle-a` (collections ou cadres), `--jobs 3`, `--
 
 | Clé | Contenu |
 |---|---|
-| `window` | la fenêtre photo, TROUVÉE et non devinée : la photo factice rendue magenta puis verte, la fenêtre est là où les deux rendus diffèrent. `mask` (WebP sans perte), `box`, `area`, `veilMaxAlpha` (0) |
+| `window` | la fenêtre photo, TROUVÉE et non devinée : la photo factice rendue magenta puis verte, la fenêtre est là où les deux rendus diffèrent. `mask` (WebP sans perte), `path` (#10254, `lib/window-path.mjs` : le contour rectiligne de ce masque sur la grille des pixels, grammaire fermée `M x y` + `h`/`v` entiers + `Z`, chaque contour tournant la fenêtre à sa droite ; un `clip` le rend au pixel près, et le peintre découpe la photo sans décoder d'image), `box`, `area`, `veilMaxAlpha` (0) |
 | `layers.decor` | le décor sans texte, sans oiseaux, sans blason, sans plaque, d'alpha nul dans la fenêtre ; la bande du bandeau (`banner.box`) y reste pleine |
 | `layers.windowFill` | le fond d'atmosphère (le fond de la photo factice), découpé à la fenêtre : ce que montre une carte sans photo |
 | `layers.grade` | ce que le décor peignait DANS la fenêtre, en PASSES ordonnées : le décor est découpé en suites consécutives de même mode de fusion (`normal`, `screen`, `multiply`…), chaque passe est une couche posée sur la photo dans l'ordre du SVG avec son `blend` (`null` quand la passe ne touche pas la fenêtre) |

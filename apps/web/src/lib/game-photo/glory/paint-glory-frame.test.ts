@@ -243,6 +243,46 @@ describe('la photo dans sa fenêtre', () => {
   });
 });
 
+describe('la fenêtre découpée par son CHEMIN (#10254)', () => {
+  const PATH = 'M128 528h824v948h-824Z';
+  const withPath = formatOf({ window: { box: WINDOW, path: PATH, mask: ref('mask', WINDOW), veilMaxAlpha: 0 } });
+  const built: string[] = [];
+  const path2d = (d: string): Path2D => {
+    built.push(d);
+    return { d } as unknown as Path2D;
+  };
+
+  test('le contrat porte un chemin : la photo couvre la boîte, découpée par CE chemin, sans masque ni surface de travail', () => {
+    const { calls, surfaces } = paint({ format: withPath, layers: { ...layers, mask: null }, path2d });
+    expect(built.at(-1)).toBe(PATH);
+    const main = calls.map((c) => (c.op === 'drawImage' ? `img:${idOf(c.args[0])}` : c.op));
+    const clip = calls.find((c) => c.op === 'clip');
+    expect((clip?.args[0] as { readonly d: string } | undefined)?.d).toBe(PATH);
+    expect(main.lastIndexOf('save', main.indexOf('clip'))).toBeGreaterThanOrEqual(0);
+    expect(main.indexOf('clip')).toBeLessThan(main.indexOf('img:photo'));
+    expect(main.indexOf('restore', main.indexOf('img:photo'))).toBeGreaterThan(main.indexOf('img:photo'));
+    expect(nums(calls.find((c) => c.op === 'drawImage' && idOf(c.args[0]) === 'photo')).slice(5)).toEqual([128, 528, 824, 948]);
+    expect(surfaces).toHaveLength(0);
+    expect(main).not.toContain('img:mask');
+    expect(main).not.toContain('rect');
+    expect(calls.filter((c) => c.op === 'save').length).toBe(calls.filter((c) => c.op === 'restore').length);
+  });
+
+  test('un moteur sans Path2D garde le rectangle puis le masque : le chemin ne retire jamais une découpe', () => {
+    const { calls, surfaces } = paint({ format: withPath, path2d: () => null });
+    expect(surfaces).toHaveLength(1);
+    expect(calls.find((c) => c.op === 'rect')?.args).toEqual([128, 528, 824, 948]);
+    expect(calls.find((c) => c.op === 'clip')?.args).toEqual([]);
+  });
+
+  test('un contrat SANS chemin ne construit aucun Path2D : rectangle et masque, comme avant', () => {
+    const before = built.length;
+    const { surfaces } = paint({ path2d });
+    expect(built.length).toBe(before);
+    expect(surfaces).toHaveLength(1);
+  });
+});
+
 describe('les passes de grade', () => {
   test('screen est posé pour sa passe et rendu à source-over avant la couche suivante', () => {
     const { calls } = paint();

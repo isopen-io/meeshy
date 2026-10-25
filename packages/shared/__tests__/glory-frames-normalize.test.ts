@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { birdLayoutOf, normalizeColor, targetOfSlug, usageOfTarget } from '../scripts/glory-frames-normalize';
+import { birdLayoutOf, normalizeColor, normalizeWindow, targetOfSlug, usageOfTarget } from '../scripts/glory-frames-normalize';
 
 describe('le normaliseur lit la cible d’un cadre dans son identifiant, avec les clés de la loi', () => {
   it('rangs à division, rangs à décorations, Mythe', () => {
@@ -54,5 +54,23 @@ describe('la mise en page des oiseaux, ramenée à la liste fermée', () => {
     expect(birdLayoutOf('pied : Mee et Meo', 1)).toBe('duo');
     expect(birdLayoutOf('selfie : Meo prend la photo', 1)).toBe('selfie');
     expect(birdLayoutOf('balustrade', 2)).toBe('libre');
+  });
+});
+
+describe('la fenêtre photo (#10254) : le chemin de l’export passe au contrat, son absence aussi', () => {
+  const mask = { src: 'export/window.webp', bytes: 12, sha256: 'f3a02fd90d1e7461'.padEnd(64, '0'), box: [128, 528, 824, 948] as [number, number, number, number] };
+
+  it('un export qui porte `window.path` le transmet tel quel, le masque restant adressé par contenu', () => {
+    expect(normalizeWindow({ box: [128, 528, 824, 948], path: 'M128 528h824v948h-824Z', mask, veilMaxAlpha: 0 })).toEqual({
+      box: [128, 528, 824, 948],
+      path: 'M128 528h824v948h-824Z',
+      mask: { src: 'f3a02fd90d1e7461.webp', bytes: 12, sha256: mask.sha256, box: [128, 528, 824, 948] },
+      veilMaxAlpha: 0,
+    });
+  });
+
+  it('un export d’avant #10254 (sans chemin, ou `null` pour un masque vide) ne pose aucune clé `path`', () => {
+    expect(normalizeWindow({ box: [128, 528, 824, 948], mask, veilMaxAlpha: 0 })).not.toHaveProperty('path');
+    expect(normalizeWindow({ box: [128, 528, 824, 948], path: null, mask, veilMaxAlpha: 0 })).not.toHaveProperty('path');
   });
 });

@@ -51,6 +51,16 @@ const STICKER_ID = /^(?:mee|meo|duo)-[a-z0-9-]+$/;
 const SLOT_KEY = /^[a-z][a-z0-9]*(?:\.[0-9]{1,3})?$/;
 const MAX_TEXT_LENGTH = 400;
 
+/**
+ * Le CHEMIN de la fenêtre photo (#10254) : sa grammaire est FERMÉE — sous-chemins `M x y`, pas relatifs `h`/`v`
+ * entiers, `Z`. Le générateur (`docs/product/cadres-de-gloire/generateur/lib/window-path.mjs`) l'écrit sur la grille
+ * des pixels, chaque contour tournant la fenêtre à sa droite : un `clip` le rend au pixel près du masque, et aucun
+ * tracé SVG arbitraire (courbe, arc, commande inconnue) n'atteint jamais un `Path2D`.
+ */
+export const GLORY_FRAME_WINDOW_PATH_PATTERN = /^(?:M\d+ \d+(?:[hv]-?\d+)+Z)+$/;
+/** Le plus long chemin mesuré (`egypte.ambassadeur-5`, 23 833 caractères au 2026-10-25), avec sa marge. */
+export const GLORY_FRAME_WINDOW_PATH_MAX_LENGTH = 64_000;
+
 const finite = z.number().check(z.refine(Number.isFinite));
 const nonNegative = finite.check(z.minimum(0));
 const unit = finite.check(z.minimum(0), z.maximum(1));
@@ -145,8 +155,17 @@ const layoutKeys = Object.fromEntries(GLORY_FRAME_BIRD_LAYOUTS.map((name) => [na
 
 const formatObject = z.object({
   size: z.tuple([z.int().check(z.minimum(1)), z.int().check(z.minimum(1))]),
-  /** La fenêtre photo, masque sans perte adressé par contenu ; `path` vectoriel au suivi #10254. */
-  window: z.object({ box, mask: layer, veilMaxAlpha: unit }),
+  /**
+   * La fenêtre photo : sa boîte, son CHEMIN (#10254) que le peintre découpe sans décoder d'image, et son masque sans
+   * perte adressé par contenu, que garde le client d'avant le chemin. Un contrat sans `path` reste lisible : le
+   * peintre découpe alors au rectangle, puis au masque.
+   */
+  window: z.object({
+    box,
+    path: z.optional(z.string().check(z.maxLength(GLORY_FRAME_WINDOW_PATH_MAX_LENGTH), z.regex(GLORY_FRAME_WINDOW_PATH_PATTERN))),
+    mask: layer,
+    veilMaxAlpha: unit,
+  }),
   stack: z.array(z.string().check(z.regex(STACK_TOKEN))).check(z.minLength(2), z.maxLength(24)),
   layers: z.object({
     decor: layer,
@@ -190,9 +209,25 @@ export type GloryFrameBirdAnchor = z.infer<typeof anchor>;
 export type GloryFrameBirds = z.infer<typeof birds>;
 export type GloryFrameFormat = z.infer<typeof GloryFrameFormatSchema>;
 
-/** Tous les fichiers qu'un format référence : masque, couches, passes — ce que le magasin doit pouvoir servir. */
-export function gloryFrameFormatAssets(format: GloryFrameFormat): readonly PackAssetRef[] {
+const refOf = ({ src, bytes, sha256 }: GloryFrameLayer): PackAssetRef => ({ src, bytes, sha256 });
+
+/** Les couches peintes d'un format, sans le masque de la fenêtre. */
+function paintedLayers(format: GloryFrameFormat): readonly PackAssetRef[] {
   const { decor, windowFill, grade, front, plate } = format.layers;
   const optional = [front['under-birds'], front['over-birds'], plate.plain, plate.message].filter((ref): ref is GloryFrameLayer => ref !== undefined);
-  return [format.window.mask, decor, windowFill, ...grade, ...optional].map(({ src, bytes, sha256 }) => ({ src, bytes, sha256 }));
+  return [decor, windowFill, ...grade, ...optional].map(refOf);
+}
+
+/** Tous les fichiers qu'un format référence : masque, couches, passes — ce que le magasin doit pouvoir servir. */
+export function gloryFrameFormatAssets(format: GloryFrameFormat): readonly PackAssetRef[] {
+  return [refOf(format.window.mask), ...paintedLayers(format)];
+}
+
+/**
+ * Ce qu'un PEINTRE qui découpe au chemin de la fenêtre (#10254) doit lire du magasin : tout le format, sauf le
+ * masque quand le chemin est là. Le pack, lui, sert toujours le masque (`gloryFrameFormatAssets`) : un client
+ * d'avant le chemin le lit encore.
+ */
+export function gloryFramePainterAssets(format: GloryFrameFormat): readonly PackAssetRef[] {
+  return format.window.path === undefined ? gloryFrameFormatAssets(format) : paintedLayers(format);
 }

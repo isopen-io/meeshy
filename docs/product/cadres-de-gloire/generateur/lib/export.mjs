@@ -11,7 +11,9 @@
 //     se voit — c'est la FENÊTRE, sans aucune heuristique de couleur ;
 //   - le décor est rendu sans photo, sans texte, sans oiseaux, sans blason, sans plaque, puis COUPÉ à la fenêtre :
 //     dans la fenêtre son alpha est nul, et ce qu'il y peignait part dans `grade` (normal, ou `screen` séparément) ;
-//   - chaque couche est rognée à sa boîte, encodée par sharp, adressée par son empreinte dans export.json.
+//   - chaque couche est rognée à sa boîte, encodée par sharp, adressée par son empreinte dans export.json ;
+//   - la fenêtre part aussi en CHEMIN (`window.path`, #10254, lib/window-path.mjs) : le contour rectiligne de ce même
+//     masque, que le peintre découpe sans décoder d'image et qui le rend au pixel près.
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -20,6 +22,7 @@ import { launch } from './launch.mjs';
 import { classify, isFront, read, show } from './layers.mjs';
 import { H, openPage, pool, SCALE, shoot, showSvg, W } from './page.mjs';
 import sharp, { sharpVersion } from './sharp.mjs';
+import { windowPath } from './window-path.mjs';
 
 const HERE = path.dirname(new URL(import.meta.url).pathname);
 const arg = (name, fallback) => {
@@ -317,7 +320,13 @@ async function exportFrame(handle, { collection, name, message }) {
     return [s.slot, { ...main, effects: s.effects, contrast: measured?.contrast ?? null, contrastMin: measured?.contrastMin ?? null, glyphPixels: measured?.glyphPixels ?? 0 }];
   }));
   const veilLayers = [...gradeBufs.filter((g) => g.blend === 'normal').map((g) => g.buf), ...fronts.map((f) => f.shot.raw)];
-  const window = { box: windowFile?.box ?? [0, 0, 0, 0], area: winMask.reduce((a, v) => a + v, 0), mask: windowFile, veilMaxAlpha: 0 };
+  const window = {
+    box: windowFile?.box ?? [0, 0, 0, 0],
+    path: windowPath({ data: winMask, width: FW, height: FH, origin: [0, 0] }),
+    area: winMask.reduce((a, v) => a + v, 0),
+    mask: windowFile,
+    veilMaxAlpha: 0,
+  };
   const birds = dom.birds.map(({ href, ...b }) => b);
   return {
     frame: name,

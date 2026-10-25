@@ -1,12 +1,14 @@
 // Juge un export (lot L1) : rouge tant qu'une couche peinte par le générateur porte du texte ou un oiseau, qu'une
 // fenêtre photo est voilée par le décor ou trop voilée par le grade, que la bande du bandeau n'est pas pleine, qu'un
 // emplacement de texte n'a pas de contraste mesuré, qu'une plaque dessinée n'a pas ses deux variantes (plain et message,
-// la seconde sans changer le décor), ou qu'un fichier déclaré ne correspond pas à ses octets.
+// la seconde sans changer le décor), qu'un fichier déclaré ne correspond pas à ses octets, ou que le chemin de la
+// fenêtre (`window.path`, #10254) ne rend pas son masque au pixel près.
 // Usage : node lib/export-check.mjs [export] [--reference ../reference/sha256.json] [--partial : n'exige pas les 191 cadres]
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import sharp from './sharp.mjs';
+import { WINDOW_PATH_PATTERN, rasterizeWindowPath } from './window-path.mjs';
 
 const HERE = path.dirname(new URL(import.meta.url).pathname);
 const arg = (name, fallback) => {
@@ -39,6 +41,18 @@ async function alphaPlane(dir, layer) {
   return { data, info, box: layer.box };
 }
 
+// Les pixels où le chemin de la fenêtre et son masque (alpha ≥ 128) diffèrent ; `null` pour un chemin absent ou hors
+// de la grammaire fermée.
+function pathStrayPixels(d, win) {
+  if (typeof d !== 'string' || !WINDOW_PATH_PATTERN.test(d)) return null;
+  const [bx, by] = win.box;
+  const { width, height } = win.info;
+  const raster = rasterizeWindowPath(d, { origin: [bx, by], width, height });
+  let strayed = 0;
+  for (let i = 0; i < width * height; i++) if (raster[i] !== (win.data[i * 4 + 3] >= 128 ? 1 : 0)) strayed++;
+  return strayed;
+}
+
 async function checkFrame(dir, frame) {
   const id = frame.frame;
   for (const kind of PAINTED) {
@@ -69,6 +83,9 @@ async function checkFrame(dir, frame) {
   };
   const [wx, wy, ww, wh] = frame.window.box;
   if (!(ww > 0 && wh > 0)) { fail(id, 'aucune fenêtre photo'); return; }
+  const strayed = pathStrayPixels(frame.window.path, win);
+  if (strayed === null) fail(id, 'fenêtre sans chemin vectoriel lisible (window.path)');
+  else if (strayed > 0) fail(id, `le chemin de la fenêtre s'écarte de son masque : ${strayed} px`);
   let inside = 0, veiled = 0;
   for (let y = wy; y < wy + wh; y++) {
     for (let x = wx; x < wx + ww; x++) {
@@ -115,4 +132,4 @@ if (failures.length) {
   if (failures.length > 60) console.error(`  … et ${failures.length - 60} autres`);
   process.exit(1);
 }
-console.log(`VERT — ${seen.size}/${expected.length} cadres : décor sans texte ni oiseau, fenêtres nettes, bande pleine, contrastes mesurés, plaques en deux variantes, octets conformes.`);
+console.log(`VERT — ${seen.size}/${expected.length} cadres : décor sans texte ni oiseau, fenêtres nettes, bande pleine, contrastes mesurés, plaques en deux variantes, chemins de fenêtre au pixel, octets conformes.`);

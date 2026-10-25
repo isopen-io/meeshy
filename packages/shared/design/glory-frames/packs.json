@@ -47,7 +47,7 @@
       }
     ],
     "atmosphere": "afrique",
-    "version": 1,
+    "version": 2,
     "cover": {
       "src": "016694c090dcae9f.webp",
       "bytes": 16410,
@@ -55,9 +55,9 @@
     },
     "preview": null,
     "contract": {
-      "src": "d08c6dbc691dbb07.json",
-      "bytes": 139227,
-      "sha256": "d08c6dbc691dbb0736b644ad8a42c2e85dfaedf9e3734dd60754b305c5b0572e"
+      "src": "443cce762c663349.json",
+      "bytes": 245648,
+      "sha256": "443cce762c663349e742be3fc276be02afc8231f6bc1cee4de2872fc230fba6a"
     },
     "strings": {
       "fr": {
@@ -67,10 +67,10 @@
       }
     },
     "downloadBytes": {
-      "story": 7921975,
+      "story": 8028396,
       "square": null
     },
-    "fingerprint": "3d197f6b853d885d1ce08a7d8f02b4f380e44d09ae4183bc8502ede7149f6572"
+    "fingerprint": "a8fb34b035798e238325b1ea5d1099b4655fb3c81735da72a4a959d374260f09"
   },
   {
     "slug": "egypte",
@@ -117,7 +117,7 @@
       }
     ],
     "atmosphere": "egypte",
-    "version": 1,
+    "version": 2,
     "cover": {
       "src": "aa665278a4cd57bb.webp",
       "bytes": 17254,
@@ -125,9 +125,9 @@
     },
     "preview": null,
     "contract": {
-      "src": "da88519415e5ff0b.json",
-      "bytes": 68694,
-      "sha256": "da88519415e5ff0be8d9358f8db908da1f59f1ecbb6cd5ec48b986e6760790e4"
+      "src": "a6f475b2e332f49d.json",
+      "bytes": 115859,
+      "sha256": "a6f475b2e332f49d6625c735b554eca6cfe4b8c169dfb45a4cc70ddb1f3d84a9"
     },
     "strings": {
       "fr": {
@@ -137,10 +137,10 @@
       }
     },
     "downloadBytes": {
-      "story": 4896049,
+      "story": 4943214,
       "square": null
     },
-    "fingerprint": "da85aba4150b95de44d79e61eff67cc818cb72af10ad30664dbb7534d8554ffe"
+    "fingerprint": "337fb953ac94a6e4ba549ae2231c6c9da1ec79967086d0ed47d68d8689efc728"
   },
   {
     "slug": "olympe",
@@ -187,7 +187,7 @@
       }
     ],
     "atmosphere": "olympe",
-    "version": 1,
+    "version": 2,
     "cover": {
       "src": "2e187f928a1da8ce.webp",
       "bytes": 15602,
@@ -195,9 +195,9 @@
     },
     "preview": null,
     "contract": {
-      "src": "70daa3873cbe232e.json",
-      "bytes": 66618,
-      "sha256": "70daa3873cbe232ef0722e527c1a454780b1d7bdefe9e54e710ae9abca13d378"
+      "src": "cb349da7ba3c27f1.json",
+      "bytes": 130291,
+      "sha256": "cb349da7ba3c27f1a227c59629ce65b63068aae9cf76f235171d8f3a3a4535c2"
     },
     "strings": {
       "fr": {
@@ -207,10 +207,10 @@
       }
     },
     "downloadBytes": {
-      "story": 3697286,
+      "story": 3760959,
       "square": null
     },
-    "fingerprint": "2b7e6e616b707a7aba9a42ec280060869ea5791da4abd15101ebac43817f57b2"
+    "fingerprint": "fc9a57c6187498b25462490ff844a5e59986dd4b46492798eb381a6f0332fdb3"
   },
   {
     "slug": "celeste",
@@ -257,7 +257,7 @@
       }
     ],
     "atmosphere": "celeste",
-    "version": 1,
+    "version": 2,
     "cover": {
       "src": "ddf815deaa09774f.webp",
       "bytes": 17238,
@@ -265,9 +265,9 @@
     },
     "preview": null,
     "contract": {
-      "src": "6e1a5e07314405a4.json",
-      "bytes": 76710,
-      "sha256": "6e1a5e07314405a4b71b5145b32adba7c8bc315ffb8f76496180ec9817a0b1e8"
+      "src": "829e6cc9c6cffdbd.json",
+      "bytes": 146823,
+      "sha256": "829e6cc9c6cffdbd57829ea1d708ee1dee0aac1b46ca950383215246699125d8"
     },
     "strings": {
       "fr": {
@@ -277,10 +277,10 @@
       }
     },
     "downloadBytes": {
-      "story": 3441498,
+      "story": 3511611,
       "square": null
     },
-    "fingerprint": "553c86f9cf072e9ec0d98c372bb6885bd1a13d9553cb2ae32152ed25fb3041d7"
+    "fingerprint": "9f1207a14415e2662655867c421ac6643c703e1562c840fac2312ef14cc32f47"
   },
   {
     "slug": "nord",
@@ -327,7 +327,7 @@
       }
     ],
     "atmosphere": "nord",
-    "version": 1,
+    "version": 2,
     "cover": {
       "src": "def2a7c4003689d2.webp",
       "bytes": 20838,
@@ -335,9 +335,9 @@
     },
     "preview": null,
     "contract": {
-      "src": "729b17a4d9bb047f.json",
-      "bytes": 68972,
-      "sha256": "729b17a4d9bb047f76bce03b1b30353403c93bd50017294641268879bf20e074"
+      "src": "a4ce6ecd1a950a71.json",
+      "bytes": 122839,
+      "sha256": "a4ce6ecd1a950a7110d64c30a1606a56d35661a77a6b7b0be97904d058172c6a"
     },
     "strings": {
       "fr": {
@@ -347,10 +347,10 @@
       }
     },
     "downloadBytes": {
-      "story": 5107697,
+      "story": 5161564,
       "square": null
     },
-    "fingerprint": "d8e4387f74f210186b70c7200572f4ed5b8e215a71d30de3b1eedce97338e23f"
+    "fingerprint": "672de09b370720014f0defb34e4944866b1c079bb5ffdb7b7d4698db09a2fe49"
   },
   {
     "slug": "abysses",
@@ -397,7 +397,7 @@
       }
     ],
     "atmosphere": "abysses",
-    "version": 1,
+    "version": 2,
     "cover": {
       "src": "c142164470cf9a81.webp",
       "bytes": 17014,
@@ -405,9 +405,9 @@
     },
     "preview": null,
     "contract": {
-      "src": "11917e8eec3c4529.json",
-      "bytes": 72446,
-      "sha256": "11917e8eec3c45290a8015f067aaad5a1ac57a3d75717a05a83022318088392b"
+      "src": "5254ab5ee9bee8ea.json",
+      "bytes": 104770,
+      "sha256": "5254ab5ee9bee8ea65accbe4bd7c488bdcd27166ef135f5a30b95971b4f63455"
     },
     "strings": {
       "fr": {
@@ -417,10 +417,10 @@
       }
     },
     "downloadBytes": {
-      "story": 5465081,
+      "story": 5497405,
       "square": null
     },
-    "fingerprint": "ba479f41675bdfc923368b5f7ac6e5f4c7806632c4737e1de0320a65e1a6ace8"
+    "fingerprint": "8cc23df8ade1701efe0b6df9900bfa8c27ed7175a25a9344477288036f39eeac"
   },
   {
     "slug": "neon",
@@ -467,7 +467,7 @@
       }
     ],
     "atmosphere": "neon",
-    "version": 1,
+    "version": 2,
     "cover": {
       "src": "7a11ab49f74f8d9e.webp",
       "bytes": 12348,
@@ -475,9 +475,9 @@
     },
     "preview": null,
     "contract": {
-      "src": "f4cdaca00aa2e5ee.json",
-      "bytes": 100100,
-      "sha256": "f4cdaca00aa2e5eec058efb5f934e9d67a77e3bf6c27fd984b890ef4cf00b1ba"
+      "src": "e78d41f937e5f3e1.json",
+      "bytes": 147545,
+      "sha256": "e78d41f937e5f3e14e591f190157c910fddaf52c06e03d653c1e07a94da2aad2"
     },
     "strings": {
       "fr": {
@@ -487,10 +487,10 @@
       }
     },
     "downloadBytes": {
-      "story": 3905681,
+      "story": 3953126,
       "square": null
     },
-    "fingerprint": "9a0863e82cad430b5088b881b1e520efcb81a10081e5a1f465926e9e48aa00a3"
+    "fingerprint": "3519d63cbcd9734226c14dd05f415df3a78c37f04360f26f7800ff6d21658a65"
   },
   {
     "slug": "moments",
@@ -536,7 +536,7 @@
         "slug": "moments"
       }
     ],
-    "version": 1,
+    "version": 2,
     "cover": {
       "src": "ac9e19b1eb404909.webp",
       "bytes": 13250,
@@ -544,9 +544,9 @@
     },
     "preview": null,
     "contract": {
-      "src": "12a81cccb7852635.json",
-      "bytes": 92670,
-      "sha256": "12a81cccb7852635bb6489bb9c6e9ecc449f5d3fdee728efccc24f98f928c472"
+      "src": "e6663a7dfbdaeefe.json",
+      "bytes": 120467,
+      "sha256": "e6663a7dfbdaeefed6abc5e286c5e3d635d432f1bea7643ceea32153bb06e5cd"
     },
     "strings": {
       "fr": {
@@ -556,10 +556,10 @@
       }
     },
     "downloadBytes": {
-      "story": 4431677,
+      "story": 4459474,
       "square": null
     },
-    "fingerprint": "20e9418e82db009a83e67afc5d806364ae9f0a25d0e421ab81e9599c26c47985"
+    "fingerprint": "9a2473d465145ef0940b9ff3dffe649c3232ef6229240e963f65371a7c00902a"
   },
   {
     "slug": "tresor",
@@ -609,7 +609,7 @@
       "kind": "moment",
       "family": "treasury"
     },
-    "version": 1,
+    "version": 2,
     "cover": {
       "src": "0e558ffde0751e0c.webp",
       "bytes": 17176,
@@ -617,9 +617,9 @@
     },
     "preview": null,
     "contract": {
-      "src": "a6c8696dc2d067c3.json",
-      "bytes": 72666,
-      "sha256": "a6c8696dc2d067c385eb1e84c85638acfef57edda4006840212a98e9bc57f6f0"
+      "src": "62e7b66ec194aaeb.json",
+      "bytes": 141524,
+      "sha256": "62e7b66ec194aaeb2104733220adca736cfe0f9824bf0953c126450a08449cbd"
     },
     "strings": {
       "fr": {
@@ -629,10 +629,10 @@
       }
     },
     "downloadBytes": {
-      "story": 3850801,
+      "story": 3919659,
       "square": null
     },
-    "fingerprint": "92d0c297ca7185131de775fda17766234a4aee8ff4ec439363afb34fa14e5a3d"
+    "fingerprint": "ca9eee12ac7a5110e624c6471f10b0c4089b81c832b7cfbbf2b9dfa0f36639ce"
   },
   {
     "slug": "succes",
@@ -678,7 +678,7 @@
         "slug": "succes"
       }
     ],
-    "version": 1,
+    "version": 2,
     "cover": {
       "src": "8d804ea74f058bf8.webp",
       "bytes": 9892,
@@ -686,9 +686,9 @@
     },
     "preview": null,
     "contract": {
-      "src": "f48b623dcdbf431a.json",
-      "bytes": 21298,
-      "sha256": "f48b623dcdbf431a1da6f05552ab0e24c56cf8c86b7d808dbad6d8f0d64c54c2"
+      "src": "b67c4ad1a904603d.json",
+      "bytes": 32558,
+      "sha256": "b67c4ad1a904603d490594d7d16d90287c4eea09a143bca586e3b9bb66f97682"
     },
     "strings": {
       "fr": {
@@ -698,9 +698,9 @@
       }
     },
     "downloadBytes": {
-      "story": 1331259,
+      "story": 1342519,
       "square": null
     },
-    "fingerprint": "8215e1d6b83b97ebbbc3fa6a708e8e4da1261ca29fdd9939c15514215a301c8b"
+    "fingerprint": "0bea4a88ed6dea33918c5708d159c19e6566595532cc1e6ed3ba2db5e5823722"
   }
 ]

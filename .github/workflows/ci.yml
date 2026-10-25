@@ -1502,9 +1502,13 @@ jobs:
           ./node_modules/.bin/playwright install --with-deps chromium
 
       # Les témoins du générateur : le plan des cibles sans navigateur
-      # (lib/cible-plan.test.mjs) et la cohérence de ce que ce job épingle —
-      # Playwright donc Chromium, sharp — avec cible/index.json.
+      # (lib/cible-plan.test.mjs), la cohérence de ce que ce job épingle —
+      # Playwright donc Chromium, sharp — avec cible/index.json, et le chemin
+      # de chaque fenêtre versionnée rendu à son masque au pixel près
+      # (lib/window-path-contracts.test.mjs, #10254 : sharp y décode les masques).
       - name: Témoins du générateur
+        env:
+          SHARP_MODULE: sharp
         run: node --test lib/*.test.mjs
 
       - name: Générer les SVG des ateliers

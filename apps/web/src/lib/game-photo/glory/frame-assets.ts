@@ -1,5 +1,5 @@
 import type { PackAssetRef } from '@meeshy/shared/types/content-pack';
-import { gloryFrameFormatAssets, type GloryFrameLayer } from '@meeshy/shared/types/glory-frame-format';
+import { gloryFramePainterAssets, type GloryFrameLayer } from '@meeshy/shared/types/glory-frame-format';
 
 import { loadGloryFonts, type GloryFontRequest } from '../glory-fonts';
 import { anchorsOf, birdLayoutOf, type GloryFrameBirdLayout, type GloryFrameBirdTable, type GloryFrameFormat } from './frame-spec';
@@ -52,7 +52,8 @@ export type GloryFrameImages = {
 /** Le rendu d'un sticker : le double de la plus grande ancre des contrats (180 px), comme les dessins du cadre simple. */
 const STICKER_SIZE = 512;
 
-const layerRefs = (format: GloryFrameFormat): readonly PackAssetRef[] => gloryFrameFormatAssets(format);
+/** Ce que le peintre lit : le masque de la fenêtre seulement quand le contrat n'en porte pas le chemin (#10254). */
+const layerRefs = (format: GloryFrameFormat): readonly PackAssetRef[] => gloryFramePainterAssets(format);
 
 /** Les polices que ce format demande, une requête par face. */
 export const fontRequestsOf = (format: GloryFrameFormat): readonly GloryFontRequest[] =>
@@ -124,7 +125,7 @@ export async function loadGloryFrameImages(
   const { decor, windowFill, grade, front, plate } = format.layers;
   const optional = (layer: GloryFrameLayer | undefined): Promise<Decoded | null> => (layer === undefined ? Promise.resolve(null) : decodeLayer(layer, deps, scale));
   const [maskD, decorD, fillD, grades, under, over, plain, message, birds] = await Promise.all([
-    decodeLayer(format.window.mask, deps, scale),
+    format.window.path === undefined ? decodeLayer(format.window.mask, deps, scale) : Promise.resolve(null),
     decodeLayer(decor, deps, scale),
     decodeLayer(windowFill, deps, scale),
     Promise.all(grade.map((layer) => decodeLayer(layer, deps, scale))),
@@ -142,10 +143,10 @@ export async function loadGloryFrameImages(
     deps.request(missing.length > 0 ? missing : layerRefs(format));
     return null;
   }
-  const images = [maskD.image, decorD.image, fillD.image, ...grades.map((entry) => entry.image), under?.image, over?.image, plain?.image, message?.image];
+  const images = [maskD?.image, decorD.image, fillD.image, ...grades.map((entry) => entry.image), under?.image, over?.image, plain?.image, message?.image];
   return {
     layers: {
-      mask: maskD.image,
+      mask: maskD?.image ?? null,
       decor: decorD.image,
       windowFill: fillD.image,
       grade: grades.map((entry) => entry.image).filter((image): image is ClosableImage => image !== null),

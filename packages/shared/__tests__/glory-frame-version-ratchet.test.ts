@@ -118,6 +118,15 @@ describe('la preuve de ROUGE : chaque version abaissée de 1 tombe, nommée, con
     expect(lowerVersionProofHolds({ registry, violations: [...violations, { kind: 'reuses-baseline', slug: 'neon', version: 1 }], baseline })).toBe(false);
   });
 
+  it('un pack que la branche MONTE au-dessus de la base (#10254) tombe, nommé, sous le numéro de la base à sa version abaissée', () => {
+    const registry = [entry('afrique', 2, 'a2'), entry('neon', 1, 'n')];
+    const baseline = [entry('afrique', 1, 'a1'), entry('neon', 1, 'n')];
+    const violations = gloryFrameVersionViolations({ registry: lowerVersions(registry), retained: {}, baseline, servedFilesOf: filesOf });
+    expect(violations).toContainEqual({ kind: 'reuses-baseline', slug: 'afrique', version: 1 });
+    expect(lowerVersionProofHolds({ registry, violations, baseline })).toBe(true);
+    expect(lowerVersionProofHolds({ registry, violations: violations.filter((violation) => violation.slug !== 'afrique'), baseline })).toBe(false);
+  });
+
   it('un pack NÉ sur la branche, absent de la base, ne défait pas la preuve : il n’a rien sous quoi redescendre', () => {
     const registry = [entry('afrique', 2, 'a'), entry('succes', 1, 's')];
     const baseline = [entry('afrique', 2, 'a')];
