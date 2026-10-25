@@ -86,6 +86,7 @@
     <string name="post_comments_copy_text">نسخ النص</string>
     <string name="post_comments_delete_error">تعذّر حذف التعليق</string>
     <string name="post_comments_deleted">تم حذف التعليق</string>
+    <string name="post_comments_edit_media">تحرير</string>
     <string name="post_comments_load_error">تعذّر تحميل التعليقات</string>
     <plurals name="post_comments_load_more_replies">
         <item quantity="zero">عرض %d ردّ إضافي</item>
