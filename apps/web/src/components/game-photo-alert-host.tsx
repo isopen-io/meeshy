@@ -235,7 +235,8 @@ export function GamePhotoAlertHost({
           aria-label={gameText('game.photo.alert.a11y', { kicker: announce.kicker, title: announce.title })}
           tabIndex={-1}
           onKeyDown={onKey}
-          className="pointer-events-auto fixed inset-x-0 bottom-0 z-50 px-4 pb-[calc(env(safe-area-inset-bottom,0px)+12px)] outline-none"
+          className="pointer-events-auto fixed inset-x-0 bottom-0 z-50 px-4 outline-none"
+          style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 12px)' }}
         >
           <div className="mx-auto flex max-w-md flex-col gap-3 rounded-card p-4" style={{ backgroundColor: GAME_CARD, boxShadow: '0 -8px 32px color-mix(in srgb, var(--color-ios-ink) 18%, transparent)' }}>
             <div className="flex items-end gap-3">
