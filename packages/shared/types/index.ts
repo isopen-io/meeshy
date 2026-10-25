@@ -65,6 +65,7 @@ export * from './playback-qoe.js';
 export * from './message-sticker.js';
 export * from './sticker-definition.js';
 export * from './sticker-pack.js';
+export * from './sticker-pack-asset.js';
 
 // Favori de message (#7377) — étoile personnelle, liste et paramètres
 export * from './message-star.js';

@@ -17,6 +17,8 @@ import {
   type StickerPackSummary,
   type StickerTextZone,
 } from '@meeshy/shared/types/sticker-pack';
+import type { PackAssetRef } from '@meeshy/shared/types/content-pack';
+import { stickerPackAssetRef } from '@meeshy/shared/types/sticker-pack-asset';
 import type { CommunityPackStore, PackDomainSpec, PackViewer, RegistryPack } from './PackCatalog';
 
 export type StickerItemRow = {
@@ -26,6 +28,9 @@ export type StickerItemRow = {
   readonly kind: string;
   readonly mimeType: string;
   readonly filePath: string;
+  /** Absente sur un fichier proposé avant #10188 et pas encore rattrapé : il n'est servi que par `fileUrl`. */
+  readonly sha256?: string | null;
+  readonly sizeBytes?: number;
   readonly width: number;
   readonly height: number;
   readonly zones: Prisma.JsonValue | null;
@@ -57,7 +62,12 @@ const asZones = (value: Prisma.JsonValue | null): readonly StickerTextZone[] =>
 const kindsOf = (items: readonly { readonly kind: string }[]): readonly StickerKind[] =>
   STICKER_KINDS.filter((kind) => items.some((item) => item.kind === kind));
 
+/** L'adresse du fichier dans le magasin `/pack-assets` (#10188), quand son empreinte est gravée. */
+const assetOf = (row: StickerItemRow): PackAssetRef | null =>
+  stickerPackAssetRef({ sha256: row.sha256, mimeType: row.mimeType, sizeBytes: row.sizeBytes ?? -1 });
+
 function toItem(row: StickerItemRow): StickerPackItem {
+  const asset = assetOf(row);
   return {
     key: row.key,
     title: row.title,
@@ -68,11 +78,13 @@ function toItem(row: StickerItemRow): StickerPackItem {
     width: row.width,
     height: row.height,
     zones: asZones(row.zones),
+    ...(asset === null ? {} : { asset }),
   };
 }
 
 /** Un pack proposé par un tiers. Le mot du modérateur n'est servi qu'à son auteur et aux modérateurs. */
 export function stickerPackDetail(row: StickerPackRow, installed: boolean, viewer?: PackViewer): StickerPackDetail {
+  const cover = row.items[0] === undefined ? null : assetOf(row.items[0]);
   const ownView = viewer !== undefined && (viewer.userId === row.submitterId || viewer.canModerate);
   return {
     slug: row.slug,
@@ -87,6 +99,7 @@ export function stickerPackDetail(row: StickerPackRow, installed: boolean, viewe
     installed,
     installCount: row.installCount,
     items: row.items.map(toItem),
+    ...(cover === null ? {} : { cover }),
     ...(ownView ? { reviewNote: row.reviewNote } : {}),
   };
 }

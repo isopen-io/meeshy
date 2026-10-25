@@ -42,7 +42,7 @@ function tempAssets(files: Record<string, string>) {
 async function buildApp(options: { index: PackIndex; assetsDir: string; globalMax?: number; community?: { approvedContract: (src: string) => Promise<string | null> }; lens?: { approvedFile: (src: string) => Promise<{ bytes: Buffer; contentType: string } | null> } }): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
   await app.register(rateLimit, { global: true, max: options.globalMax ?? 300, timeWindow: '1 minute' });
-  await app.register(packAssetsRoutes, { prefix: '/api/v1/pack-assets', index: options.index, assetsDir: options.assetsDir, community: options.community ?? { approvedContract: async () => null }, lens: options.lens ?? { approvedFile: async () => null } });
+  await app.register(packAssetsRoutes, { prefix: '/api/v1/pack-assets', index: options.index, assetsDir: options.assetsDir, community: options.community ?? { approvedContract: async () => null }, lens: options.lens ?? { approvedFile: async () => null }, stickers: { approvedFile: async () => null } });
   app.get('/api/v1/autre', async () => ({ ok: true }));
   await app.ready();
   return app;
