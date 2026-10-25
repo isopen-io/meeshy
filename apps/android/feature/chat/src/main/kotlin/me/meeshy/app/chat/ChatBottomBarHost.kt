@@ -46,7 +46,7 @@ internal fun ChatBottomBarHost(host: ChatHostContext) {
             editingOriginalText = editingOriginalText,
             onStageVoiceFile = { file -> actions.stageFile(file, "audio/mp4") },
             onStageCapturedUris = actions.stageCapturedUris,
-            selfAuthor = state.selfAuthor,
+            selfAuthor = actions.selfAuthor(),
             hasEffects = state.hasPendingEffects,
             clipboardContent = state.clipboardContent,
             sentiment = composerText.sentiment,
