@@ -53,6 +53,10 @@
           "status": "android-only"
         },
         {
+          "androidName": "encrypted_devices_dates",
+          "status": "android-only"
+        },
+        {
           "androidName": "encrypted_devices_current",
           "status": "android-only"
         },
