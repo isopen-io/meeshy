@@ -7,6 +7,7 @@
  * @jest-environment node
  */
 import { NotificationService } from '../../../../services/notifications/NotificationService';
+import { GAME_PUSH_THREAD_ID, pushThreadFields } from '../../../../services/notifications/push-thread';
 
 jest.mock('../../../../utils/logger-enhanced', () => ({
   notificationLogger: { info: jest.fn(), debug: jest.fn(), warn: jest.fn(), error: jest.fn() },
@@ -67,5 +68,19 @@ describe('la charge push de game_photo_moment', () => {
     expect(push?.payload.data).not.toHaveProperty('gameSection');
     expect(wire).not.toContain(STEP);
     expect(wire).not.toContain('echo');
+  });
+});
+
+describe('le fil « jeu » (#10267, § 5.16.4)', () => {
+  it('range la bannière d’un moment photo dans le fil « jeu », jamais dans celui d’une conversation', async () => {
+    const push = await sentPush();
+    expect((push?.payload as { threadId?: string } | undefined)?.threadId).toBe(GAME_PUSH_THREAD_ID);
+  });
+
+  it('une notification de jeu porte le fil « jeu » ; une conversation garde le sien ; le reste n’en porte aucun', () => {
+    expect(pushThreadFields({ type: 'game_duo_invited', conversationId: undefined })).toEqual({ threadId: GAME_PUSH_THREAD_ID });
+    expect(pushThreadFields({ type: 'new_message', conversationId: 'conv_1' })).toEqual({ threadId: 'conv_1' });
+    expect(pushThreadFields({ type: 'friend_request', conversationId: undefined })).toEqual({});
+    expect(pushThreadFields({ type: 'friend_request', conversationId: '' })).toEqual({});
   });
 });
