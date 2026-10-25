@@ -17,6 +17,7 @@ import helmet from '@fastify/helmet';
 import jwt from '@fastify/jwt';
 import sensible from '@fastify/sensible'; // Ajout pour httpErrors
 import multipart from '@fastify/multipart';
+import { MAX_DIRECT_UPLOAD_FILES } from '@meeshy/shared/types/attachment';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
@@ -367,7 +368,7 @@ class MeeshyServer {
     await this.server.register(multipart, {
       limits: {
         fileSize: 4294967296, // 4GB max file size
-        files: 30, // Max 30 files per request
+        files: MAX_DIRECT_UPLOAD_FILES,
       },
     });
 
@@ -537,7 +538,7 @@ class MeeshyServer {
       if (err && err.code === 'FST_FILES_LIMIT') {
         return reply.code(413).send({
           error: 'Too Many Files',
-          message: `You can only upload a maximum of 30 files at once. Please reduce the number of files.`
+          message: `You can only upload a maximum of ${MAX_DIRECT_UPLOAD_FILES} files at once. Please reduce the number of files.`
         });
       }
 
