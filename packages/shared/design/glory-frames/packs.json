@@ -47,13 +47,17 @@
       }
     ],
     "atmosphere": "afrique",
-    "version": 3,
+    "version": 4,
     "cover": {
       "src": "016694c090dcae9f.webp",
       "bytes": 16410,
       "sha256": "016694c090dcae9f552ebd3e0704bdc21aaf9b2c20bc947e90c7ab9feec1b002"
     },
-    "preview": null,
+    "preview": {
+      "src": "0cdd58dabc781105.webp",
+      "bytes": 132526,
+      "sha256": "0cdd58dabc781105df9a7ec71a82253708cd598bcbd343979ad232bde071041a"
+    },
     "contract": {
       "src": "845589dcfc12a8c3.json",
       "bytes": 278408,
@@ -70,7 +74,7 @@
       "story": 8061436,
       "square": null
     },
-    "fingerprint": "ff8d4e357e64667212a5e0606fb027e9cbade4fe4510eed4d1d0e67bd476cef8"
+    "fingerprint": "a9671cdde629eec0079b8212baf93348de58909278c1897096687da669cdefbe"
   },
   {
     "slug": "egypte",
@@ -117,13 +121,17 @@
       }
     ],
     "atmosphere": "egypte",
-    "version": 3,
+    "version": 4,
     "cover": {
       "src": "aa665278a4cd57bb.webp",
       "bytes": 17254,
       "sha256": "aa665278a4cd57bb7cfe3f171c9105e767f6badfc9575ed3f60f01ba2f9c4e67"
     },
-    "preview": null,
+    "preview": {
+      "src": "17141d539d52c54a.webp",
+      "bytes": 72408,
+      "sha256": "17141d539d52c54a0f921b29db96a8f3ad536f1171a8f199cc532c92cd291c37"
+    },
     "contract": {
       "src": "ac12aecb8a0c3c83.json",
       "bytes": 133184,
@@ -140,7 +148,7 @@
       "story": 4960648,
       "square": null
     },
-    "fingerprint": "6be2244027031fbdbe44946f74a612a6f3848067a1663f864baa091f229270e5"
+    "fingerprint": "b2c6b4b50f724dd6f9ea334d8bda80a2bd774abf6f744b1d4c48f235c5ed93c4"
   },
   {
     "slug": "olympe",
@@ -187,13 +195,17 @@
       }
     ],
     "atmosphere": "olympe",
-    "version": 3,
+    "version": 4,
     "cover": {
       "src": "2e187f928a1da8ce.webp",
       "bytes": 15602,
       "sha256": "2e187f928a1da8ceb49c8aa6bb86594af244504a6643b986d181ef7cc07f2d31"
     },
-    "preview": null,
+    "preview": {
+      "src": "099f8fafc845791e.webp",
+      "bytes": 71894,
+      "sha256": "099f8fafc845791e7469790d697a14b44a81376e27f75f805fb30129e3fcd728"
+    },
     "contract": {
       "src": "bfbedb41c8367399.json",
       "bytes": 147781,
@@ -210,7 +222,7 @@
       "story": 3778449,
       "square": null
     },
-    "fingerprint": "24c554daecf4345ebfba30404fa7299b0cbd45fadd649fb8a927f782848aa0fa"
+    "fingerprint": "766a29c1bd700486043ea574c16e6730fbbefd424f9523a17dff053579b85be3"
   },
   {
     "slug": "celeste",
@@ -257,13 +269,17 @@
       }
     ],
     "atmosphere": "celeste",
-    "version": 3,
+    "version": 4,
     "cover": {
       "src": "ddf815deaa09774f.webp",
       "bytes": 17238,
       "sha256": "ddf815deaa09774fd9d0d36e7542ac9b4a02b0768f79f8f001abebec69192d50"
     },
-    "preview": null,
+    "preview": {
+      "src": "6ef2be70ceb703b3.webp",
+      "bytes": 65780,
+      "sha256": "6ef2be70ceb703b3c91d2a77ce75d58db2f9b46de7340b334ac7287506992f2b"
+    },
     "contract": {
       "src": "f99fb2ecbcd338fa.json",
       "bytes": 167298,
@@ -280,7 +296,7 @@
       "story": 3532760,
       "square": null
     },
-    "fingerprint": "e32e5988b7b96f77bf52033bf3f2dae3255e6375fa8af6bf499fcc8573eddafe"
+    "fingerprint": "96bef5e25ea57a5d14d2d5887d88d4a250ea202af7f2408abc416bfe9f032fe9"
   },
   {
     "slug": "nord",
@@ -327,13 +343,17 @@
       }
     ],
     "atmosphere": "nord",
-    "version": 3,
+    "version": 4,
     "cover": {
       "src": "def2a7c4003689d2.webp",
       "bytes": 20838,
       "sha256": "def2a7c4003689d237c2c94228c261b9f22747bd3b70007e2cea2f50f3e5c446"
     },
-    "preview": null,
+    "preview": {
+      "src": "52c8b1142588f10b.webp",
+      "bytes": 72896,
+      "sha256": "52c8b1142588f10bc5784ba97565bf0b8d4233e777663c8d366db47997b09ece"
+    },
     "contract": {
       "src": "390a6bd0a8663932.json",
       "bytes": 140497,
@@ -350,7 +370,7 @@
       "story": 5179222,
       "square": null
     },
-    "fingerprint": "e0eeafe338277190e51e53bc8b34dd847eb6dbcbb2d33990c0acf92998d6a37f"
+    "fingerprint": "3843980763af39669934250b2a4ac856d1f346081ae3f42e3d281b6ca82b4736"
   },
   {
     "slug": "abysses",
@@ -397,13 +417,17 @@
       }
     ],
     "atmosphere": "abysses",
-    "version": 3,
+    "version": 4,
     "cover": {
       "src": "c142164470cf9a81.webp",
       "bytes": 17014,
       "sha256": "c142164470cf9a8194d28202103d24415357ad4affc0c14898d91541bd062674"
     },
-    "preview": null,
+    "preview": {
+      "src": "2e2d5f6532302344.webp",
+      "bytes": 72752,
+      "sha256": "2e2d5f653230234416f98ed9a6e26fdc859bc8fb88d0c4a920a30a58e9b30211"
+    },
     "contract": {
       "src": "066276a6bb0122c0.json",
       "bytes": 119950,
@@ -420,7 +444,7 @@
       "story": 5512585,
       "square": null
     },
-    "fingerprint": "4198eb833d1274b4eb499ae55abe720d640a2577ab338e9af39d4a5a8d6b858c"
+    "fingerprint": "8a1e76392da89d81cc659dc101b7bd828bf4cc1cbc668952cedd301a5ebafb4c"
   },
   {
     "slug": "neon",
@@ -467,13 +491,17 @@
       }
     ],
     "atmosphere": "neon",
-    "version": 3,
+    "version": 4,
     "cover": {
       "src": "7a11ab49f74f8d9e.webp",
       "bytes": 12348,
       "sha256": "7a11ab49f74f8d9e9ee84ccc504ac073ed9ccbeba8b0c6c61de6a4cb0ee63312"
     },
-    "preview": null,
+    "preview": {
+      "src": "44fe4cefb0c528e9.webp",
+      "bytes": 68608,
+      "sha256": "44fe4cefb0c528e91470c9f65402caae8c9aa91ef55a0bf8360d6aa6c688ae7b"
+    },
     "contract": {
       "src": "7a5f376228690a5b.json",
       "bytes": 152691,
@@ -490,7 +518,7 @@
       "story": 3959548,
       "square": null
     },
-    "fingerprint": "ba31fc50c92781f7b710222f590ac47e8174ca7decb9ef8c8330189ffc33527c"
+    "fingerprint": "eaec25cd57fb5457eca045ea8a4f71ab495765ece82c6f4073392caef33465c4"
   },
   {
     "slug": "moments",
@@ -536,13 +564,17 @@
         "slug": "moments"
       }
     ],
-    "version": 3,
+    "version": 4,
     "cover": {
       "src": "ac9e19b1eb404909.webp",
       "bytes": 13250,
       "sha256": "ac9e19b1eb4049090b7a3574f27d671704a7e0d2b54af7ad8697fbddf6d7ef3f"
     },
-    "preview": null,
+    "preview": {
+      "src": "167d9eadec1a2590.webp",
+      "bytes": 53740,
+      "sha256": "167d9eadec1a25904f4899a691158ddcf4d038b7780d72bd7ceaa80dbe35ff36"
+    },
     "contract": {
       "src": "dc945005e095dbce.json",
       "bytes": 134799,
@@ -559,7 +591,7 @@
       "story": 4474750,
       "square": null
     },
-    "fingerprint": "b683c0562889c989199bd69bffab28974711ae6bbda8294ae4a33faf14a9d930"
+    "fingerprint": "044b6569e0e7f5179855ba09a53a9b78e99fb634ac3942c681bc146c5a31110e"
   },
   {
     "slug": "tresor",
@@ -609,13 +641,17 @@
       "kind": "moment",
       "family": "treasury"
     },
-    "version": 3,
+    "version": 4,
     "cover": {
       "src": "0e558ffde0751e0c.webp",
       "bytes": 17176,
       "sha256": "0e558ffde0751e0c8ccf17b1e1d0d2661e770fb91528e7984adf649eccaa50f3"
     },
-    "preview": null,
+    "preview": {
+      "src": "312cf64c661395bf.webp",
+      "bytes": 54948,
+      "sha256": "312cf64c661395bf346c455e9d3fcd78b5abecb55c630b8a622d8f8255d7a0e9"
+    },
     "contract": {
       "src": "83bab60ea011fdaf.json",
       "bytes": 156239,
@@ -632,7 +668,7 @@
       "story": 3934644,
       "square": null
     },
-    "fingerprint": "1f2d67e3169809708629e3e386479f8330c9cb72b5da29ed1a9d61d0e3f09437"
+    "fingerprint": "71eb1b4f330c9ddf0b9c23f8aeeaf29c52c2e8deea99eccbc070b0498a406db4"
   },
   {
     "slug": "succes",
@@ -678,13 +714,17 @@
         "slug": "succes"
       }
     ],
-    "version": 3,
+    "version": 4,
     "cover": {
       "src": "8d804ea74f058bf8.webp",
       "bytes": 9892,
       "sha256": "8d804ea74f058bf8f8391aaa05af5b3511b40a8097c7831ef2db8d650b1dc857"
     },
-    "preview": null,
+    "preview": {
+      "src": "fe3036fcc9d8a883.webp",
+      "bytes": 14868,
+      "sha256": "fe3036fcc9d8a8834feb5a81ef9448888c57e5b62c0502d4619d7bc3722aeb52"
+    },
     "contract": {
       "src": "174055302160daa4.json",
       "bytes": 35478,
@@ -701,6 +741,6 @@
       "story": 1345439,
       "square": null
     },
-    "fingerprint": "89903d84d488ab409e90e47ca583940f9c8a6e747872c55433652099cd7035be"
+    "fingerprint": "bd66b5804cfe9966d3c9ed7d62a3e75271bbcab3d5dd3cbba2118552c71f7fa3"
   }
 ]

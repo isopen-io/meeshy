@@ -291,3 +291,48 @@ describe('les fichiers d’une lens publiée (#11271)', () => {
     }
   });
 });
+
+describe('l’atlas de chaque pack de cadres — le pack se montre sans s’installer (#10275)', () => {
+  it('l’atlas de chaque pack du registre réel est servi en WebP, immuable, aux octets déclarés', async () => {
+    const index = realIndex();
+    const app = await buildApp({ index, assetsDir: ASSETS });
+    try {
+      const entries = index.entries('glory-frame');
+      expect(entries.length).toBeGreaterThan(0);
+      for (const entry of entries) {
+        expect({ slug: entry.slug, preview: entry.preview === null ? null : 'atlas' }).toEqual({ slug: entry.slug, preview: 'atlas' });
+        if (entry.preview === null) continue;
+        const res = await app.inject({ method: 'GET', url: `/api/v1/pack-assets/${entry.preview.src}` });
+        expect({ slug: entry.slug, status: res.statusCode, type: res.headers['content-type'], cache: res.headers['cache-control'] }).toEqual({
+          slug: entry.slug,
+          status: 200,
+          type: 'image/webp',
+          cache: PACK_ASSETS_CACHE_CONTROL,
+        });
+        expect(createHash('sha256').update(res.rawPayload).digest('hex')).toBe(entry.preview.sha256);
+      }
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('un aperçu au-delà de la borne n’entre pas dans la liste blanche : 404, même présent sur le disque', async () => {
+    const real = realIndex().entries('glory-frame')[0];
+    if (real === undefined) throw new Error('registre réel vide');
+    const oversized = { src: 'abcdefabcdefabcd.webp', bytes: 262_145, sha256: 'abcdefabcdefabcd'.padEnd(64, '0') };
+    const bounded = { src: 'bcdefabcdefabcde.webp', bytes: 262_144, sha256: 'bcdefabcdefabcde'.padEnd(64, '0') };
+    const index = buildPackIndex({
+      registries: [[{ ...real, slug: 'trop-lourd', preview: oversized }, { ...real, slug: 'a-la-borne', preview: bounded }]],
+      retained: [],
+    });
+    const dir = tempAssets({ [oversized.src]: 'x', [bounded.src]: 'y' });
+    const app = await buildApp({ index, assetsDir: dir });
+    try {
+      expect((await app.inject({ method: 'GET', url: `/api/v1/pack-assets/${oversized.src}` })).statusCode).toBe(404);
+      expect((await app.inject({ method: 'GET', url: `/api/v1/pack-assets/${bounded.src}` })).statusCode).toBe(200);
+    } finally {
+      await app.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});

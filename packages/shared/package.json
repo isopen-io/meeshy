@@ -106,6 +106,7 @@
     "generate:lens-format": "bun scripts/generate-lens-format-swift.ts",
     "import:glory-frames": "bun scripts/import-glory-frames.ts",
     "generate:glory-frames": "bun scripts/generate-glory-frames.ts",
+    "compose:glory-frame-atlases": "bun scripts/compose-glory-frame-atlases.ts",
     "glory-frames:decor-texts": "bun scripts/apply-glory-decor-texts.ts",
     "glory-frames:bird-layouts": "bun scripts/apply-glory-bird-layouts.ts",
     "glory-frames:check-versions": "tsx scripts/glory-frame-version-ratchet.ts",

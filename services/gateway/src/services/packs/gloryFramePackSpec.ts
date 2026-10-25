@@ -19,6 +19,7 @@
 import type { FrameUsage } from '@meeshy/shared/types/frame-usage';
 import type { PackAssetRef, PackLanguage, PackSummary } from '@meeshy/shared/types/content-pack';
 import type { PackIndexEntry } from '@meeshy/shared/types/content-pack-index';
+import { servablePackPreview } from '@meeshy/shared/types/glory-frame-atlas';
 import { STICKER_PACK_AUTHOR_MEESHY } from '@meeshy/shared/types/sticker-pack';
 import type { PackDomainSpec, RegistryPack } from './PackCatalog';
 import type { PackIndex } from './PackIndex';
@@ -27,6 +28,11 @@ import type { PackIndex } from './PackIndex';
 export const PACK_ASSET_PATH = '/api/v1/pack-assets';
 
 export type FramePackSummary = PackSummary & {
+  /**
+   * L'atlas des vignettes (#10275), servi par `/pack-assets` comme la couverture : le pack se montre
+   * sans s'installer. `null` sans atlas, ou au-delà de `PACK_PREVIEW_MAX_BYTES` — `preview` l'est alors aussi.
+   */
+  readonly previewUrl: string | null;
   /** Quand les cadres de ce pack sont utilisables ; `null` ⇒ nulle part (fail-closed). */
   readonly usage: FrameUsage | null;
 };
@@ -42,6 +48,7 @@ export type FramePackDetail = FramePackSummary & {
 
 export function framePackDetail(entry: PackIndexEntry, installed: boolean, itemCount = 0): FramePackDetail {
   const fr = entry.names.fr;
+  const preview = servablePackPreview(entry.preview);
   return {
     slug: entry.slug,
     name: fr?.name ?? entry.slug,
@@ -59,7 +66,8 @@ export function framePackDetail(entry: PackIndexEntry, installed: boolean, itemC
     downloadBytes: { story: entry.downloadBytes.story, square: entry.downloadBytes.square ?? null },
     removable: entry.removable,
     names: entry.names,
-    preview: entry.preview,
+    preview,
+    previewUrl: preview === null ? null : `${PACK_ASSET_PATH}/${preview.src}`,
     usage: entry.usage ?? null,
     contractSchema: entry.contractSchema,
     contract: entry.contract,

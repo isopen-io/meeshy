@@ -7,7 +7,8 @@
  *   packages/shared/design/glory-frames/strings/<collection>/<langue>.json
  *   packages/shared/design/glory-frames/packs.json            (l'éditorial, écrit à la main)
  *     ├─ services/gateway/assets/packs/<sha16>.json           (contrat de chaque pack, chaînes par langue)
- *     ├─ packs.json, champs CALCULÉS seulement                (cover, contract, strings, downloadBytes, version, fingerprint)
+ *   packages/shared/design/glory-frames/atlases.json          (compose:glory-frame-atlases, #10275)
+ *     ├─ packs.json, champs CALCULÉS seulement                (cover, preview, contract, strings, downloadBytes, version, fingerprint)
  *     └─ packages/shared/design/packs/retained.json           (« glory-frame/<slug>@<version> » → fichiers encore servis)
  *
  * `version` porte sur l'empreinte de l'ENSEMBLE des références d'un pack
@@ -30,6 +31,14 @@
  * (`__tests__/glory-frames-generated.test.ts`) rejoue `buildGloryFramePacks`
  * en mémoire et exige l'égalité avec le dépôt.
  *
+ * L'atlas (`preview`, #10275) est composé par `compose:glory-frame-atlases`
+ * (sharp, hors de ce générateur, qui reste sans décodeur d'image) et rangé
+ * dans `atlases.json` sous la clé de SES entrées (`gloryFrameAtlasKey` : la
+ * cellule et les empreintes des vignettes visibles). Le générateur ne fait que
+ * le RELIRE : un atlas dont les vignettes ont changé ne correspond plus à
+ * aucune clé, le pack sert `preview: null`, et le témoin de fraîcheur rougit
+ * jusqu'à ce qu'on le recompose.
+ *
  * Le socle iOS (`apps/ios/Meeshy/Resources/Packs/`) et la fixture de
  * géométrie suivent au lot qui les branche : rien ne s'écrit qu'un lecteur ne lit.
  */
@@ -42,6 +51,7 @@ import { PACK_LANGUAGES, type PackAssetRef, type PackLanguage } from '../types/c
 import { parsePackIndex } from '../types/content-pack-index.js';
 import { gloryFrameAssets, parseGloryFrameCollection, parseGloryFrameContract, type GloryFrame, type GloryFrameCollection } from '../types/glory-frames.js';
 import { parsePackStrings, type PackStrings } from '../types/glory-frame-pack.js';
+import { GLORY_FRAME_ATLAS_CELL, gloryFrameAtlasFrames } from '../types/glory-frame-atlas.js';
 import { gloryDecorStringsOf, parseGloryDecorTextTable, type GloryDecorCatalogue, type GloryDecorTextTable } from '../types/glory-frame-decor.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -50,6 +60,7 @@ export const GLORY_FRAMES_DIR = join(REPO_ROOT, 'packages/shared/design/glory-fr
 export const REGISTRY_FILE = join(GLORY_FRAMES_DIR, 'packs.json');
 export const DECOR_TEXTS_FILE = join(GLORY_FRAMES_DIR, 'decor-texts.json');
 export const DECOR_STRINGS_DIR = join(GLORY_FRAMES_DIR, 'decor-strings');
+export const ATLASES_FILE = join(GLORY_FRAMES_DIR, 'atlases.json');
 export const RETAINED_FILE = join(REPO_ROOT, 'packages/shared/design/packs/retained.json');
 export const SAMPLE_REGISTRY_FILE = join(REPO_ROOT, 'packages/shared/design/packs/samples/glory-frame.json');
 export const PACK_ASSETS_DIR = join(REPO_ROOT, 'services/gateway/assets/packs');
@@ -64,6 +75,7 @@ export type RegistryEntry = Readonly<Record<string, unknown>> & {
   readonly fingerprint?: string;
   readonly contract?: PackAssetRef;
   readonly cover?: PackAssetRef;
+  readonly preview?: PackAssetRef | null;
   readonly strings?: Readonly<Record<string, PackAssetRef>>;
 };
 
@@ -76,6 +88,8 @@ export type GloryFrameSources = {
   /** Les textes de décor traduits, une table par langue : chaque pack sert ceux que ses cadres emploient. */
   readonly decorStrings: GloryDecorCatalogue;
   readonly retained: Readonly<Record<string, readonly string[]>>;
+  /** Les atlas composés (`atlases.json`), par clé d'entrées (`gloryFrameAtlasKey`) ; absent ⇒ aucun. */
+  readonly atlases?: Readonly<Record<string, PackAssetRef>>;
   /** Le contrat d'une version QUITTÉE, relu dans le magasin pour en retenir les fichiers ; `null` s'il est introuvable. */
   readonly readStoredJson: (src: string) => unknown;
   /**
@@ -102,6 +116,10 @@ export function addressedJson(value: unknown): { readonly ref: PackAssetRef; rea
   return { ref: { src: `${digest.slice(0, 16)}.json`, bytes: Buffer.byteLength(text), sha256: digest }, text };
 }
 
+/** Ce dont un atlas est fait : la cellule et, dans l'ordre, l'empreinte de chaque vignette visible. */
+export const gloryFrameAtlasKey = (frames: readonly Pick<GloryFrame, 'hidden' | 'thumb'>[]): string =>
+  sha256(JSON.stringify({ cell: GLORY_FRAME_ATLAS_CELL, thumbs: gloryFrameAtlasFrames(frames).map((frame) => frame.thumb.sha256) }));
+
 const framesOf = (entry: RegistryEntry, collections: GloryFrameSources['collections']): readonly GloryFrame[] =>
   entry.collections.flatMap(({ slug }) => {
     const collection = collections.get(slug);
@@ -122,7 +140,7 @@ const uniqueBytes = (refs: readonly PackAssetRef[]): number => [...new Map(refs.
 
 /** Tous les fichiers qu'une entrée publiée engage : ceux du registre et ceux de son contrat relu. */
 export function servedFilesOf(entry: RegistryEntry, readStoredJson: GloryFrameSources['readStoredJson']): readonly string[] {
-  const own = [entry.contract, entry.cover, ...Object.values(entry.strings ?? {})].filter((ref): ref is PackAssetRef => ref !== undefined);
+  const own = [entry.contract, entry.cover, entry.preview ?? undefined, ...Object.values(entry.strings ?? {})].filter((ref): ref is PackAssetRef => ref !== undefined);
   const contract = entry.contract === undefined ? null : parseGloryFrameContract(readStoredJson(entry.contract.src));
   const frames = contract?.contract.frames.flatMap(gloryFrameAssets) ?? [];
   return [...new Set([...own, ...frames].map((ref) => ref.src))].sort();
@@ -150,9 +168,10 @@ export function buildGloryFramePacks(sources: GloryFrameSources): GeneratedPacks
     const contract = addressedJson({ schema: 1, frames });
     const strings = Object.entries(stringsOf(entry, frames, sources)).map(([language, table]) => [language, addressedJson(table)] as const);
     const cover = coverFrame.thumb;
+    const preview = sources.atlases?.[gloryFrameAtlasKey(frames)] ?? null;
     files.set(contract.ref.src, contract.text);
     strings.forEach(([, file]) => files.set(file.ref.src, file.text));
-    const fingerprint = sha256(JSON.stringify({ contract: contract.ref.sha256, strings: strings.map(([language, file]) => [language, file.ref.sha256]), cover: cover.sha256, preview: null }));
+    const fingerprint = sha256(JSON.stringify({ contract: contract.ref.sha256, strings: strings.map(([language, file]) => [language, file.ref.sha256]), cover: cover.sha256, preview: preview?.sha256 ?? null }));
     const reference = sources.baseline?.find((candidate) => candidate.slug === entry.slug) ?? entry;
     const previous = reference.version ?? 1;
     const changed = reference.fingerprint !== undefined && reference.fingerprint !== fingerprint;
@@ -165,7 +184,7 @@ export function buildGloryFramePacks(sources: GloryFrameSources): GeneratedPacks
       ...editorial,
       version,
       cover,
-      preview: null,
+      preview,
       contract: contract.ref,
       strings: Object.fromEntries(strings.map(([language, file]) => [language, file.ref])),
       downloadBytes: { story: downloadBytes, square: null },
@@ -207,11 +226,12 @@ export function readGloryFrameSources(): GloryFrameSources {
   const decorStrings = Object.fromEntries(
     PACK_LANGUAGES.filter((language) => existsSync(join(DECOR_STRINGS_DIR, `${language}.json`))).map((language) => [language, parsePackStrings(readJson(join(DECOR_STRINGS_DIR, `${language}.json`)))]),
   ) as GloryDecorCatalogue;
+  const atlases = existsSync(ATLASES_FILE) ? ((readJson(ATLASES_FILE) as { readonly atlases?: Record<string, PackAssetRef> }).atlases ?? {}) : {};
   const readStoredJson = (src: string): unknown => {
     const path = join(PACK_ASSETS_DIR, src);
     return existsSync(path) ? readJson(path) : null;
   };
-  return { registry, collections, strings, decorTexts, decorStrings, retained, readStoredJson };
+  return { registry, collections, strings, decorTexts, decorStrings, retained, atlases, readStoredJson };
 }
 
 /** Lit le registre d'une référence git ; une base illisible est une erreur, jamais un registre vide. */

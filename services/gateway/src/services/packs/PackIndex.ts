@@ -44,6 +44,7 @@ import { parseAvatarRingPackContract } from '@meeshy/shared/types/avatar-ring-de
 import { parseBannerFramePackContract } from '@meeshy/shared/types/banner-frame-design';
 import { parseGloryFramePackContract } from '@meeshy/shared/types/glory-frame-pack';
 import { gloryFrameAssets, parseGloryFrameContract } from '@meeshy/shared/types/glory-frames';
+import { servablePackPreview } from '@meeshy/shared/types/glory-frame-atlas';
 import { PackRegistryOverrides, overlayPackIndex, type PackRegistryOverridesPrisma } from './PackRegistryOverrides';
 import { attachPackRegistryMetrics } from '../metrics/packRegistryMetrics';
 
@@ -78,7 +79,7 @@ const ASSET_SRC = /^[0-9a-f]{16}\.(?:webp|png|json|woff2)$/;
 const refsOf = (entry: PackIndexEntry): readonly PackAssetRef[] => [
   entry.cover,
   entry.contract,
-  ...(entry.preview === null ? [] : [entry.preview]),
+  ...[servablePackPreview(entry.preview)].filter((ref): ref is PackAssetRef => ref !== null),
   ...Object.values(entry.strings).filter((ref): ref is PackAssetRef => ref !== undefined),
 ];
 

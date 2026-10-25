@@ -88,6 +88,7 @@ export * from './glory-atmospheres.js';
 export * from './content-pack.js';
 export * from './content-pack-index.js';
 export * from './glory-frame-pack.js';
+export * from './glory-frame-atlas.js';
 export * from './pack-ownership.js';
 export * from './pack-availability.js';
 export * from './pack-unlock.js';

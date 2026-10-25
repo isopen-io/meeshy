@@ -7,6 +7,7 @@ import { parsePackIndex, type PackIndexEntry } from '../types/content-pack-index
 import { gloryFrameAssets, parseGloryFrameContract, type GloryFrame, type GloryFrameCollection } from '../types/glory-frames';
 import { parseGloryFramePackContract } from '../types/glory-frame-pack';
 import { GLORY_ATMOSPHERES } from '../types/glory-atmospheres';
+import { PACK_PREVIEW_MAX_BYTES, gloryFrameAtlasFrames, gloryFrameAtlasSize } from '../types/glory-frame-atlas';
 import { flameForm } from '../utils/game/flame';
 import {
   PACK_ASSETS_DIR,
@@ -15,6 +16,7 @@ import {
   RETAINED_FILE,
   SAMPLE_REGISTRY_FILE,
   buildGloryFramePacks,
+  gloryFrameAtlasKey,
   readGloryFrameSources,
   type GloryFrameSources,
   type RegistryEntry,
@@ -79,7 +81,7 @@ describe('le registre des packs de cadres de gloire est FRAIS (generate:glory-fr
 });
 
 describe('chaque fichier déclaré est servi, octets et empreinte égaux', () => {
-  const declared = entries.flatMap((entry) => [entry.cover, entry.contract, ...Object.values(entry.strings).flatMap((ref) => (ref === undefined ? [] : [ref])), ...contractOf(entry).flatMap(gloryFrameAssets)]);
+  const declared = entries.flatMap((entry) => [entry.cover, entry.contract, ...(entry.preview === null ? [] : [entry.preview]), ...Object.values(entry.strings).flatMap((ref) => (ref === undefined ? [] : [ref])), ...contractOf(entry).flatMap(gloryFrameAssets)]);
 
   it('existe dans le magasin, à la taille et au SHA-256 déclarés', () => {
     const wrong = [...new Map(declared.map((ref) => [ref.src, ref])).values()].filter((ref) => {
@@ -120,11 +122,65 @@ describe('chaque fichier déclaré est servi, octets et empreinte égaux', () =>
   });
 });
 
+/** Largeur et hauteur d'une image WebP, lues dans son en-tête (VP8, VP8L ou VP8X) — sans décodeur. */
+const webpSize = (bytes: Uint8Array): { readonly width: number; readonly height: number } | null => {
+  const tag = (offset: number) => String.fromCharCode(...bytes.subarray(offset, offset + 4));
+  if (tag(0) !== 'RIFF' || tag(8) !== 'WEBP') return null;
+  const at = (offset: number) => bytes[offset] ?? 0;
+  const u24 = (offset: number) => at(offset) | (at(offset + 1) << 8) | (at(offset + 2) << 16);
+  if (tag(12) === 'VP8X') return { width: u24(24) + 1, height: u24(27) + 1 };
+  if (tag(12) === 'VP8 ') return { width: (at(26) | (at(27) << 8)) & 0x3fff, height: (at(28) | (at(29) << 8)) & 0x3fff };
+  if (tag(12) === 'VP8L') {
+    const bits = at(21) | (at(22) << 8) | (at(23) << 16) | (at(24) << 24);
+    return { width: (bits & 0x3fff) + 1, height: ((bits >>> 14) & 0x3fff) + 1 };
+  }
+  return null;
+};
+
+describe('chaque pack se montre sans s’installer : l’atlas de ses vignettes (#10275, § 5.10.5)', () => {
+  it('chaque pack porte son atlas en `preview`, composé pour SES vignettes d’aujourd’hui', () => {
+    expect(entries.filter((entry) => entry.preview === null).map((entry) => entry.slug)).toEqual([]);
+    for (const entry of entries) expect({ slug: entry.slug, preview: entry.preview }).toEqual({ slug: entry.slug, preview: sources.atlases?.[gloryFrameAtlasKey(contractOf(entry))] ?? null });
+  });
+
+  it('une bande d’une cellule par cadre visible, sous la borne de taille', () => {
+    for (const entry of entries) {
+      const bytes = entry.preview === null ? new Uint8Array() : readFileSync(join(PACK_ASSETS_DIR, entry.preview.src));
+      const cells = gloryFrameAtlasFrames(contractOf(entry)).length;
+      expect({ slug: entry.slug, size: webpSize(bytes), bounded: bytes.length <= PACK_PREVIEW_MAX_BYTES }).toEqual({ slug: entry.slug, size: gloryFrameAtlasSize(cells), bounded: true });
+    }
+  });
+
+  it('un atlas PÉRIMÉ (les vignettes ont changé depuis sa composition) n’est jamais servi', () => {
+    const next = buildGloryFramePacks({ ...sources, registry: versioned, atlases: {} });
+    expect(next.registry.map((entry) => entry['preview'])).toEqual(versioned.map(() => null));
+  });
+
+  it('l’atlas compte dans l’empreinte : le changer monte la version et retient l’ancien', () => {
+    const afrique = versioned.find((entry) => entry.slug === 'afrique');
+    const previous = entries.find((entry) => entry.slug === 'afrique')?.preview;
+    const key = Object.entries(sources.atlases ?? {}).find(([, ref]) => ref.src === previous?.src)?.[0] ?? 'absent';
+    const other = { src: 'ffffffffffffffff.webp', bytes: 10, sha256: 'f'.repeat(64) };
+    const next = buildGloryFramePacks({ ...sources, registry: versioned, atlases: { ...sources.atlases, [key]: other } });
+    const after = next.registry.find((entry) => entry.slug === 'afrique');
+    expect(after?.['preview']).toEqual(other);
+    expect(after?.version).toBe((afrique?.version ?? 0) + 1);
+    expect(next.retained[`glory-frame/afrique@${afrique?.version}`]).toContain(previous?.src);
+  });
+
+  it('l’atlas n’entre pas dans le poids à télécharger : c’est le coût de VOIR un pack, pas de l’AVOIR', () => {
+    for (const entry of entries) {
+      const refs = [entry.cover, entry.contract, ...Object.values(entry.strings).flatMap((ref) => (ref === undefined ? [] : [ref])), ...contractOf(entry).flatMap(gloryFrameAssets)];
+      expect(refs.map((ref) => ref.src)).not.toContain(entry.preview?.src);
+    }
+  });
+});
+
 describe('les packs (§ 5.10.5, PP1, PP2)', () => {
   it('chaque collection appartient à EXACTEMENT un pack, et chaque collection versionnée à un pack', () => {
     const owners = entries.flatMap((entry) => (entry.collections ?? []).map((collection) => collection.slug));
     expect(new Set(owners).size).toBe(owners.length);
-    const files = readdirSync(join(REPO_ROOT, 'packages/shared/design/glory-frames')).filter((file) => file.endsWith('.json') && !['packs.json', 'known-gaps.json', 'decor-texts.json'].includes(file));
+    const files = readdirSync(join(REPO_ROOT, 'packages/shared/design/glory-frames')).filter((file) => file.endsWith('.json') && !['packs.json', 'known-gaps.json', 'decor-texts.json', 'atlases.json'].includes(file));
     expect(files.map((file) => file.slice(0, -5)).sort()).toEqual([...owners].sort());
   });
 
