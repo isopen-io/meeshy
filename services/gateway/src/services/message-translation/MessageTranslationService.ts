@@ -220,9 +220,10 @@ export class MessageTranslationService extends EventEmitter {
     try {
       // Skip translation for emoji-only messages (no translatable text)
       if (messageData.content && isEmojiOnly(messageData.content)) {
+        // #12822 — la longueur, jamais le texte : il peut être chiffré au repos.
         logger.debug('Skipping translation for emoji-only message', {
           conversationId: messageData.conversationId,
-          content: messageData.content.substring(0, 20)
+          contentLength: messageData.content.length
         });
 
         if (!messageData.id) {
@@ -239,7 +240,7 @@ export class MessageTranslationService extends EventEmitter {
       if (messageData.content && isUrlOnly(messageData.content)) {
         logger.debug('Skipping translation for URL-only message', {
           conversationId: messageData.conversationId,
-          content: messageData.content.substring(0, 40)
+          contentLength: messageData.content.length
         });
 
         if (!messageData.id) {

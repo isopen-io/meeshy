@@ -258,3 +258,34 @@ async def test_a_rejected_translation_is_reported_without_its_text(caplog):
 
     assert TRADUCTION[:20] not in _logged(caplog)
     assert SECRET[:20] not in _logged(caplog)
+
+
+ADRESSE_SECRETE = "https://coffre.example/porte-4471"
+MENTION_SECRETE = "@gardien4471"
+
+
+@pytest.mark.unit
+def test_protecting_entities_logs_a_count_never_the_entities(caplog):
+    from utils.text_segmentation import protect_entities
+
+    caplog.set_level(logging.DEBUG)
+    _masked, entities = protect_entities(f"Rendez-vous {ADRESSE_SECRETE} avec {MENTION_SECRETE}")
+
+    assert sorted(entities.values()) == sorted([ADRESSE_SECRETE, MENTION_SECRETE])
+    assert "4471" not in _logged(caplog)
+    assert "coffre.example" not in _logged(caplog)
+    assert "2 entités protégées" in _logged(caplog)
+
+
+@pytest.mark.unit
+def test_restoring_lost_markers_warns_with_a_count_never_the_entities(caplog):
+    from utils.text_segmentation import restore_entities
+
+    caplog.set_level(logging.DEBUG)
+    restored = restore_entities("le modèle a perdu les marqueurs", {0: ADRESSE_SECRETE, 1: MENTION_SECRETE})
+
+    assert ADRESSE_SECRETE in restored and MENTION_SECRETE in restored
+    warnings = "\n".join(r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING)
+    assert "2 marqueurs perdus" in warnings
+    assert "4471" not in _logged(caplog)
+    assert "coffre.example" not in _logged(caplog)

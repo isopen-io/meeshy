@@ -142,7 +142,9 @@ def protect_entities(text: str) -> Tuple[str, Dict[int, str]]:
 
     masked = PROTECTED_ENTITY_PATTERN.sub(_replace, text)
     if entities:
-        logger.debug(f"[SEGMENTER] {len(entities)} entités protégées: {list(entities.values())}")
+        # #12822 — un compte, jamais les entités : une adresse ou une mention
+        # est du texte du message, peut-être chiffré au repos par la passerelle.
+        logger.debug(f"[SEGMENTER] {len(entities)} entités protégées")
     return masked, entities
 
 
@@ -163,7 +165,7 @@ def restore_entities(text: str, entities: Dict[int, str]) -> str:
         result = marker.sub(lambda _m: value, result)
 
     if dropped:
-        logger.warning(f"[SEGMENTER] ⚠️  {len(dropped)} marqueurs perdus par le modèle, réinjectés en fin: {dropped}")
+        logger.warning(f"[SEGMENTER] ⚠️  {len(dropped)} marqueurs perdus par le modèle, réinjectés en fin")
         result = " ".join([result.rstrip(), *dropped]) if result.strip() else " ".join(dropped)
     return result
 
