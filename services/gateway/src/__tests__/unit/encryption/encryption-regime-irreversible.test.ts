@@ -109,7 +109,7 @@ describe('les deux prédicats du régime', () => {
     ['hybrid', false],
     [null, false],
   ])('regimeIsEndToEnd(%s) = %s', (encryptionMode, expected) => {
-    expect(regimeIsEndToEnd({ encryptionMode, encryptionEnabledAt: null })).toBe(expected);
+    expect(regimeIsEndToEnd({ encryptionMode })).toBe(expected);
   });
 
   it.each([
