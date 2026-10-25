@@ -98,6 +98,7 @@ object Routes {
     const val MEDIA_CACHE = "settings/media-cache"
     const val PRIVACY = "settings/privacy"
     const val ACTIVE_SESSIONS = "settings/sessions"
+    const val ENCRYPTED_DEVICES = "settings/encrypted-devices"
     const val BLOCKED_USERS = "contacts/blocked"
     const val DATA_EXPORT = "settings/data-export"
     const val DIAGNOSTICS = "settings/diagnostics"

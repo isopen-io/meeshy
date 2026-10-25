@@ -1,5 +1,7 @@
-import { describe, expect, test } from 'bun:test';
+import { beforeAll, describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
+
+import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 
 import { Badges, Check, EditedMark } from './message-blocks';
 
@@ -47,13 +49,31 @@ describe('Badges', () => {
 
   test('« modifié » n’est PAS peint ici — il a son propre composant', () => {
     const html = renderToStaticMarkup(
-      <Badges badges={[{ kind: 'edited' }]} />,
+      <Badges badges={[{ kind: 'edited', byModerator: false }]} />,
     );
     expect(html).toBe('');
   });
 });
 
 describe('EditedMark', () => {
+  beforeAll(async () => {
+    await loadInterfaceCatalog('fr');
+  });
+
+  /* #11375 — la modification d'un tiers se DIT à l'écran, pour tous : le
+     crayon seul laisserait croire que l'auteur a écrit ce texte. */
+  test('modifié par un modérateur : le crayon ET les mots, visibles de tous', () => {
+    const html = renderToStaticMarkup(<EditedMark onBrandBubble={false} byModerator />);
+    expect(html).toContain('data-badge="edited-by-moderator"');
+    expect(html).toContain('modifié par un modérateur');
+  });
+
+  test('modifié par l’auteur : le crayon seul, aucun mot', () => {
+    const html = renderToStaticMarkup(<EditedMark onBrandBubble={false} byModerator={false} />);
+    expect(html).toContain('data-badge="edited"');
+    expect(html).not.toContain('modérateur');
+  });
+
   test('« modifié » : le glyphe crayon SEUL (#7599), masqué du lecteur d’écran (déjà dans rowLabel), teinte selon la SURFACE', () => {
     const onBubble = renderToStaticMarkup(<EditedMark onBrandBubble />);
     expect(onBubble).toContain('data-badge="edited"');

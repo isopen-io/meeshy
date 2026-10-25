@@ -38,6 +38,7 @@ import { regimeEpochOf } from '../conversations/encryptionRegime';
 import { MESSAGE_ATTACHMENT_ORDER } from '../attachments/attachmentIncludes';
 import { clientOutdated, E2eeRelayRefusedError } from '../e2ee/e2ee-relay-errors';
 import { E2EE_ATTACHMENT_ERROR_CODES, isEndToEndAttachment } from '@meeshy/shared/types/e2ee-attachment';
+import { isServerAtRestMode, ServerAtRestCiphertextRefusedError } from './serverAtRest';
 import {
   E2EE_PLAINTEXT_ATTACHMENT_REFUSAL_MESSAGE,
   E2eePlaintextRefusedError,
@@ -87,10 +88,14 @@ export async function admitSendUnderRegime(prisma: AdmissionPrisma, request: Sen
     if (request.e2eeRelay) {
       throw new E2eeRelayRefusedError(E2EE_ERROR_CODES.REGIME_CHANGED, 409, 'Cette conversation n’est plus chiffrée de bout en bout');
     }
-    // Un transfert d'une source chiffrée ne recopie rien (`forwardAdmission`) :
-    // seules les pièces RATTACHÉES se relisent ici, sans requête de plus pour
-    // les autres envois.
-    if (carriesCiphertext || (await attachedPieces(prisma, request)).some(isEndToEndAttachment)) throw regimeChanged();
+    // #11381 — là où la passerelle chiffre elle-même (`server`/`hybrid`), un chiffré
+    // client est refusé avec sa phrase (« envoyez en clair ») ; ailleurs, #12562.
+    if (carriesCiphertext && isServerAtRestMode(regime?.encryptionMode)) throw new ServerAtRestCiphertextRefusedError();
+    if (carriesCiphertext) throw regimeChanged();
+    // #10789 — un blob chiffré sur l'appareil n'entre que dans une conversation
+    // e2ee. Un transfert d'une source chiffrée ne recopie rien (`forwardAdmission`) :
+    // seules les pièces RATTACHÉES se relisent ici, sans requête de plus pour les autres envois.
+    if ((await attachedPieces(prisma, request)).some(isEndToEndAttachment)) throw regimeChanged();
     return { regime, carriesCiphertext, endToEnd, relay: null };
   }
   const pieces = await carriedPieces(prisma, request);

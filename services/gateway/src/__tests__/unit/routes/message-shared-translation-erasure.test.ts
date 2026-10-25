@@ -126,7 +126,8 @@ jest.mock('../../../services/messaging/messageMentions', () => ({
 // `messageDeleteAdmission`, lui, reste RÉEL — l'auteur supprime sans aucune
 // lecture, et c'est le chemin que ces témoins empruntent.
 jest.mock('../../../services/messaging/messageEditAdmission', () => ({
-  admitMessageEdit: jest.fn<any>().mockResolvedValue({ admitted: true }),
+  ...jest.requireActual<typeof import('../../../services/messaging/messageEditAdmission')>('../../../services/messaging/messageEditAdmission'),
+  admitMessageEdit: jest.fn<any>().mockResolvedValue({ admitted: true, asModerator: false, windowBypassed: false }),
   isEditRefused: () => false,
   CONVERSATION_CLOSED_EDIT_MESSAGE: 'closed',
 }));

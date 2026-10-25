@@ -6,15 +6,22 @@ import androidx.lifecycle.viewModelScope
 import androidx.work.WorkManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.cache.valueOrNull
 import me.meeshy.sdk.friend.FriendshipCache
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.profile.ProfileEditDiff
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.network.InMemoryNetworkMonitor
+import me.meeshy.sdk.network.NetworkMonitor
 import me.meeshy.sdk.outbox.OutboxFlushWorker
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.status.StatusBarCache
@@ -57,6 +64,18 @@ sealed interface OwnProfileUiEvent {
     data class CustomDestinationLanguageChanged(val code: String) : OwnProfileUiEvent
 }
 
+/** Les effets ponctuels de l'enregistrement : haptiques, toast hors ligne, message d'échec. */
+sealed interface OwnProfileUiEffect {
+    /** Enregistrer touché : l'écran est déjà à jour (haptique succès). */
+    data object SaveSucceeded : OwnProfileUiEffect
+
+    /** Enregistré hors ligne : la file synchronisera au retour du réseau (toast). */
+    data object SavedOffline : OwnProfileUiEffect
+
+    /** L'envoi a échoué : haptique d'erreur, et le message générique quand [showDefaultMessage]. */
+    data class SaveFailed(val showDefaultMessage: Boolean) : OwnProfileUiEffect
+}
+
 /**
  * MA page de profil (parite iOS `ProfileView`, alimentee par `authManager.currentUser`) :
  * elle n'observe QUE la session — jamais un id de route, jamais `UserRepository.getProfile`.
@@ -71,10 +90,23 @@ class OwnProfileViewModel @Inject constructor(
     private val workManager: WorkManager,
     private val friendshipCache: FriendshipCache,
     private val statusBarCache: StatusBarCache,
+    private val networkMonitor: NetworkMonitor = InMemoryNetworkMonitor(),
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(OwnProfileUiState())
     val state: StateFlow<OwnProfileUiState> = _state.asStateFlow()
+
+    private val _effects = Channel<OwnProfileUiEffect>(Channel.BUFFERED)
+    val effects: Flow<OwnProfileUiEffect> = _effects.receiveAsFlow()
+
+    /** L'identité sur laquelle l'éditeur s'est ouvert : la référence de « ce qui a changé ». */
+    private var editOrigin: MeeshyUser? = null
+
+    /** Le cliché d'avant la PREMIÈRE édition non confirmée : la cible du retour arrière. */
+    private var rollbackSnapshot: MeeshyUser? = null
+
+    /** La dernière édition mise en file ; une plus ancienne remplacée ne confirme rien. */
+    private var latestCmid: String? = null
 
     private var statsLoadedForId: String? = null
     private var timelineLoaded = false
@@ -125,15 +157,18 @@ class OwnProfileViewModel @Inject constructor(
 
     fun onEvent(event: OwnProfileUiEvent) {
         when (event) {
-            OwnProfileUiEvent.StartEditing ->
-                _state.update { it.copy(isEditing = true).withBuffersFrom(it.user) }
+            OwnProfileUiEvent.StartEditing -> {
+                editOrigin = _state.value.user
+                _state.update { it.copy(isEditing = true, errorMessage = null).withBuffersFrom(it.user) }
+            }
             OwnProfileUiEvent.CancelEditing ->
                 _state.update { it.copy(isEditing = false).withBuffersFrom(it.user) }
             OwnProfileUiEvent.Save -> saveProfile()
             is OwnProfileUiEvent.FirstNameChanged -> _state.update { it.copy(firstName = event.value) }
             is OwnProfileUiEvent.LastNameChanged -> _state.update { it.copy(lastName = event.value) }
             is OwnProfileUiEvent.DisplayNameChanged -> _state.update { it.copy(displayName = event.value) }
-            is OwnProfileUiEvent.BioChanged -> _state.update { it.copy(bio = event.value) }
+            is OwnProfileUiEvent.BioChanged ->
+                _state.update { it.copy(bio = event.value.take(ProfileEditDiff.BIO_MAX_LENGTH)) }
             is OwnProfileUiEvent.SystemLanguageChanged -> _state.update { it.copy(systemLanguage = event.code) }
             is OwnProfileUiEvent.RegionalLanguageChanged -> _state.update { it.copy(regionalLanguage = event.code) }
             is OwnProfileUiEvent.CustomDestinationLanguageChanged ->
@@ -142,35 +177,102 @@ class OwnProfileViewModel @Inject constructor(
     }
 
     /**
-     * Saves the edit optimistically (ARCHITECTURE.md §4/§5). The editor closes
-     * immediately and [UserRepository.enqueueProfileEdit] re-paints the session
-     * identity locally, then durably queues the `UPDATE_PROFILE` mutation — so the
-     * save survives offline and process death. A non-`null` `cmid` wakes the flush
-     * worker; a local enqueue failure surfaces the error and reopens the editor so
-     * the user can retry.
+     * Saves the edit optimistically (ARCHITECTURE.md §4/§5; iOS `ProfileView.saveProfile`). Only the
+     * fields that changed against [editOrigin] leave ([ProfileEditRequestBuilder]); the editor closes
+     * at once with a success haptic and [UserRepository.enqueueProfileEdit] re-paints every surface,
+     * then durably queues the `UPDATE_PROFILE` mutation. Offline, a toast says it will sync. When the
+     * outbox ABANDONS the edit, the snapshot taken before it is restored and the editor reopens on
+     * what the user typed, with the error said and the error haptic played.
      */
     private fun saveProfile() {
-        val current = _state.value
+        val attempted = _state.value
         val request = ProfileEditRequestBuilder.build(
-            firstName = current.firstName,
-            lastName = current.lastName,
-            displayName = current.displayName,
-            bio = current.bio,
-            systemLanguage = current.systemLanguage,
-            regionalLanguage = current.regionalLanguage,
-            customDestinationLanguage = current.customDestinationLanguage,
+            original = editOrigin ?: attempted.user,
+            firstName = attempted.firstName,
+            lastName = attempted.lastName,
+            displayName = attempted.displayName,
+            bio = attempted.bio,
+            systemLanguage = attempted.systemLanguage,
+            regionalLanguage = attempted.regionalLanguage,
+            customDestinationLanguage = attempted.customDestinationLanguage,
         )
         _state.update { it.copy(isEditing = false, isSaving = false, errorMessage = null) }
+        _effects.trySend(OwnProfileUiEffect.SaveSucceeded)
+        if (ProfileEditDiff.isEmpty(request)) return
+        val snapshot = rollbackSnapshot ?: sessionRepository.currentUser.value
+        rollbackSnapshot = snapshot
+        val offline = !networkMonitor.isOnline.value
         viewModelScope.launch {
-            try {
-                val cmid = userRepository.enqueueProfileEdit(request)
-                if (cmid != null) workManager.enqueue(OutboxFlushWorker.buildRequest())
+            val cmid = try {
+                userRepository.enqueueProfileEdit(request)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _state.update { it.copy(isEditing = true, errorMessage = e.message) }
+                abandon(snapshot, attempted, message = e.message)
+                return@launch
+            }
+            if (cmid == null) {
+                rollbackSnapshot = null
+                return@launch
+            }
+            latestCmid = cmid
+            launch(start = CoroutineStart.UNDISPATCHED) { watchOutcome(cmid, snapshot, attempted) }
+            wakeFlushWorker()
+            if (offline) _effects.send(OwnProfileUiEffect.SavedOffline)
+        }
+    }
+
+    private fun wakeFlushWorker() {
+        try {
+            workManager.enqueue(OutboxFlushWorker.buildRequest())
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            // The row is durable: the next flush trigger (reconnect, start-up) delivers it.
+        }
+    }
+
+    /** Waits for the outbox verdict on [cmid]; an abandon rolls back, a confirmation clears the snapshot. */
+    private suspend fun watchOutcome(cmid: String, snapshot: MeeshyUser?, attempted: OwnProfileUiState) {
+        val abandoned = try {
+            userRepository.awaitProfileEditAbandoned(cmid)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            return
+        }
+        when {
+            abandoned -> abandon(snapshot, attempted, message = null)
+            cmid == latestCmid -> {
+                rollbackSnapshot = null
+                latestCmid = null
             }
         }
+    }
+
+    /**
+     * Rolls back to [snapshot] and reopens the editor on the [attempted] buffers so the user can fix
+     * and retry. [message] is a specific error; without one the screen says the generic save error.
+     */
+    private fun abandon(snapshot: MeeshyUser?, attempted: OwnProfileUiState, message: String?) {
+        rollbackSnapshot = null
+        latestCmid = null
+        snapshot?.let(sessionRepository::restoreProfileSnapshot)
+        editOrigin = snapshot ?: _state.value.user
+        _state.update {
+            it.copy(
+                isEditing = true,
+                errorMessage = message,
+                firstName = attempted.firstName,
+                lastName = attempted.lastName,
+                displayName = attempted.displayName,
+                bio = attempted.bio,
+                systemLanguage = attempted.systemLanguage,
+                regionalLanguage = attempted.regionalLanguage,
+                customDestinationLanguage = attempted.customDestinationLanguage,
+            )
+        }
+        _effects.trySend(OwnProfileUiEffect.SaveFailed(showDefaultMessage = message == null))
     }
 
     /**

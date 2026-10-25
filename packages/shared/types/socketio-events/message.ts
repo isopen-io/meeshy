@@ -574,6 +574,16 @@ export interface SocketIOMessage {
   readonly clientMessageId?: string;
   readonly isEdited?: boolean;
   readonly editedAt?: Date;
+  /**
+   * #11375 — l'auteur d'une modification faite par un TIERS (modérateur de
+   * plateforme), servi par `message:edited` : la marque
+   * `MASKED_MODERATOR_EDITOR` (une room n'a pas de lecteur nommé, l'identité
+   * n'y part jamais), `null` quand l'auteur a modifié lui-même, absent sur une
+   * charge d'une passerelle antérieure.
+   * @see packages/shared/utils/message-edit-attribution.ts
+   */
+  readonly editedById?: string | null;
+  readonly editedByRole?: string | null;
   readonly deletedAt?: Date;
   /**
    * ABSENT pour un éphémère (contrat #7451, point 4) : une diffusion en room

@@ -71,10 +71,15 @@ describe('editOffered — la règle du serveur, lue avant le geste', () => {
     expect(editOffered(mine(), menuScope({ id: 'u-moi' }, { encryptionMode: 'e2ee' }), { now: now() })).toBe(false);
   });
 
-  test('le message d’un autre ne se réécrit jamais depuis le web, même par un MODERATOR de plateforme : ni l’auteur de la modification ni sa mention ne seraient dits (#11372)', () => {
-    expect(editOffered(mine({ senderId: 'u-autre' }), menuScope({ id: 'u-moi', platformRole: 'MODERATOR' }), { now: now() })).toBe(false);
-    expect(editOffered(mine({ senderId: 'u-autre' }), menuScope({ id: 'u-moi', platformRole: 'ADMIN' }), { now: now() })).toBe(false);
+  test('#11375 — un modérateur de plateforme modifie le message d’un autre à visage découvert ; AUDIT et USER, non', () => {
+    expect(editOffered(mine({ senderId: 'u-autre' }), menuScope({ id: 'u-moi', platformRole: 'MODERATOR' }), { now: now() })).toBe(true);
+    expect(editOffered(mine({ senderId: 'u-autre' }), menuScope({ id: 'u-moi', platformRole: 'ADMIN' }), { now: now() })).toBe(true);
     expect(editOffered(mine({ senderId: 'u-autre' }), menuScope({ id: 'u-moi', platformRole: 'AUDIT' }), { now: now() })).toBe(false);
+    expect(editOffered(mine({ senderId: 'u-autre' }), menuScope({ id: 'u-moi', platformRole: 'USER' }), { now: now() })).toBe(false);
+  });
+
+  test('#11375 — jamais en bout en bout, même pour un modérateur de plateforme', () => {
+    expect(editOffered(mine({ senderId: 'u-autre' }), menuScope({ id: 'u-moi', platformRole: 'MODERATOR' }, { encryptionMode: 'e2ee' }), { now: now() })).toBe(false);
   });
 
   test('un MODERATOR de plateforme modifie SON message au-delà des 24 heures, comme la passerelle l’admet (#11210)', () => {

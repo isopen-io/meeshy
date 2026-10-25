@@ -38,8 +38,10 @@ class RouteManifestRatchetTest {
          * enveloppes), servies par la passerelle et que l'E2EE Android ne vise pas encore.
          * 263 : plus `DELETE /conversations/:conversationId/encryption` (#12522 : désactivation du
          * régime de chiffrement), servie par la passerelle et sans interface Retrofit encore côté Android.
+         * 262 : moins `DELETE /e2ee/devices/:deviceId`, que porte `E2eeDeviceApi` (#13014, « Mes appareils
+         * chiffrés ») ; `GET /e2ee/devices`, servie dans le même lot, y naît déjà implémentée.
          */
-        const val TO_PORT_CEILING = 263
+        const val TO_PORT_CEILING = 262
         val VERB_STATUSES = setOf("hors-perimetre-mobile", "ops-only", "a-porter", "implementee-par-url-serveur")
     }
 

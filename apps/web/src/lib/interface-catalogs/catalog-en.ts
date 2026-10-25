@@ -991,6 +991,7 @@ const en = {
   'message.forwarded': 'Forwarded',
   'message.forwarded.fromGroup': 'Forwarded from {name}',
   'message.forwarded.fromPerson': 'Forwarded from {name}',
+  'message.editedByModerator': 'edited by a moderator',
   'message.send.failed': 'Not sent',
   'message.send.failed.reason': 'Not sent — {reason}',
   'message.send.retry': 'Try again',

@@ -30,9 +30,14 @@ import {
   isEditRefused,
   describeEditRefusalForSocket,
   editRefusalCode,
+  isContentEditRefusal,
+  editAttributionOf,
   CONVERSATION_CLOSED_EDIT_MESSAGE,
 } from '../../services/messaging/messageEditAdmission';
+import { editAttributionReaderOf } from '../../services/messaging/editAttributionReader';
+import { withServedEditAttribution } from '@meeshy/shared/utils/message-edit-attribution';
 import { applyMessageEditEffects } from '../../services/messaging/messageEditEffects';
+import { attachmentProtectionSelect } from '../../services/attachments/attachmentIncludes';
 import { GLOBAL_ADULTS_ONLY_CODE, MINOR_GLOBAL_REFUSAL_MESSAGE } from '../../services/messaging/conversationWriteAdmission';
 import {
   admitEditedContent,
@@ -42,6 +47,7 @@ import {
 import { emitMentionCreated } from '../../socketio/emitMentionCreated';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
 import { broadcastMessageMutation } from '../../socketio/broadcastMessageMutation';
+import { queuedEventSealsAtRest } from '../../services/messaging/serverAtRest';
 import { buildMessageEditedCore } from '../../socketio/messageEditedPayload';
 import type {
   ConversationParams,
@@ -192,7 +198,8 @@ export function registerEditMessagePutRoute(
             // L'état TERMINAL du conteneur, exigé par `admitMessageEdit`. Deux
             // colonnes sur une lecture déjà là : aucun aller-retour de plus.
             conversation: { select: { isActive: true, closedAt: true, type: true, encryptionMode: true } },
-            attachments: { select: { id: true } }
+            // #12792 — la protection PROPRE de chaque pièce, lue par `admitMessageEdit`.
+            attachments: { select: { id: true, mimeType: true, ...attachmentProtectionSelect } }
           }
         })
       );
@@ -217,8 +224,11 @@ export function registerEditMessagePutRoute(
           createdAt: existingMessage.createdAt,
           messageType: existingMessage.messageType,
           metadata: existingMessage.metadata,
+          isViewOnce: existingMessage.isViewOnce,
+          effectFlags: existingMessage.effectFlags,
           isEncrypted: existingMessage.isEncrypted,
           encryptionMode: existingMessage.encryptionMode,
+          attachments: existingMessage.attachments,
         },
         onError: (err) => logger.error('Edit - admission lookup failed', err),
       });
@@ -230,8 +240,11 @@ export function registerEditMessagePutRoute(
         if (admission.reason === 'conversation-closed') {
           return sendError(reply, 410, CONVERSATION_CLOSED_EDIT_MESSAGE);
         }
-        if (admission.reason === 'end-to-end-encrypted') {
+        if (editRefusalCode(admission.reason) !== undefined) {
           return sendBadRequest(reply, describeEditRefusalForSocket(admission.reason), { code: editRefusalCode(admission.reason) });
+        }
+        if (isContentEditRefusal(admission.reason)) {
+          return sendForbidden(reply, describeEditRefusalForSocket(admission.reason));
         }
         if (admission.reason === 'minor-global') {
           return sendForbidden(reply, MINOR_GLOBAL_REFUSAL_MESSAGE, { code: GLOBAL_ADULTS_ONLY_CODE });
@@ -307,6 +320,8 @@ export function registerEditMessagePutRoute(
           ...(claimedCanonicalLanguage === undefined ? {} : { originalLanguage: claimedCanonicalLanguage }),
           isEdited: true,
           editedAt,
+          // #11375 — le tiers modérateur est enregistré ; l'auteur efface la mention.
+          ...editAttributionOf(admission, userId),
           translations: null,
           ...nextMetadata
         },
@@ -473,7 +488,10 @@ export function registerEditMessagePutRoute(
       // reflète cet état : `[]`. Cette phrase désignait auparavant la retraduction qui SUIT, qui invalidait
       // trop tard pour la charge déjà composée.
       const messageResponse = {
-        ...updatedMessage,
+        // #11375 — les colonnes de l'éditeur tiers ne partent jamais brutes : ce
+        // lecteur reçoit ce que `servedEditAttribution` lui accorde, et la
+        // diffusion (le noyau, étalé après) la mention seule.
+        ...withServedEditAttribution(updatedMessage, editAttributionReaderOf(authRequest.authContext)),
         conversationId,
         // #7927 — la citation passe par la garde UNIQUE : l'`include` sert la
         // ligne CITÉE entière, texte d'un parent supprimé ou protégé compris,
@@ -508,6 +526,7 @@ export function registerEditMessagePutRoute(
         actorUserId: userId,
         eventType: 'edited',
         messageId,
+        atRest: queuedEventSealsAtRest(existingMessage),
         sealedQuoteAudience,
         // Le NOYAU du contrat vient de `buildMessageEditedCore` (voir le
         // sibling `PUT /messages/:messageId`) : le `as unknown as
@@ -636,7 +655,8 @@ export function registerEditMessagePatchRoute(
               },
               // Sans elles, la garde de vacuité ne peut pas trancher : c'est la
               // pièce jointe qui autorise un texte vide (retrait de légende).
-              attachments: { select: { id: true } }
+              // #12792 — et leur protection PROPRE, lue par `admitMessageEdit`.
+              attachments: { select: { id: true, mimeType: true, ...attachmentProtectionSelect } }
             }
           })
       );
@@ -668,8 +688,11 @@ export function registerEditMessagePatchRoute(
           createdAt: message.createdAt,
           messageType: message.messageType,
           metadata: message.metadata,
+          isViewOnce: message.isViewOnce,
+          effectFlags: message.effectFlags,
           isEncrypted: message.isEncrypted,
           encryptionMode: message.encryptionMode,
+          attachments: message.attachments,
         },
         onError: (err) => logger.error('Patch edit - admission lookup failed', err),
       });
@@ -678,8 +701,11 @@ export function registerEditMessagePatchRoute(
         if (admission.reason === 'conversation-closed') {
           return sendError(reply, 410, CONVERSATION_CLOSED_EDIT_MESSAGE);
         }
-        if (admission.reason === 'end-to-end-encrypted') {
+        if (editRefusalCode(admission.reason) !== undefined) {
           return sendBadRequest(reply, describeEditRefusalForSocket(admission.reason), { code: editRefusalCode(admission.reason) });
+        }
+        if (isContentEditRefusal(admission.reason)) {
+          return sendForbidden(reply, describeEditRefusalForSocket(admission.reason));
         }
         if (admission.reason === 'minor-global') {
           return sendForbidden(reply, MINOR_GLOBAL_REFUSAL_MESSAGE, { code: GLOBAL_ADULTS_ONLY_CODE });
@@ -737,6 +763,8 @@ export function registerEditMessagePatchRoute(
           content: processedContent,
           isEdited: true,
           editedAt,
+          // #11375 — le tiers modérateur est enregistré ; l'auteur efface la mention.
+          ...editAttributionOf(admission, userId),
           translations: null,
           ...patchedMetadata
         },
@@ -826,7 +854,10 @@ export function registerEditMessagePatchRoute(
       }
 
       const messageResponse = {
-        ...updatedMessage,
+        // #11375 — les colonnes de l'éditeur tiers ne partent jamais brutes : ce
+        // lecteur reçoit ce que `servedEditAttribution` lui accorde, et la
+        // diffusion (le noyau, étalé après) la mention seule.
+        ...withServedEditAttribution(updatedMessage, editAttributionReaderOf(authRequest.authContext)),
         conversationId: message.conversationId,
         translations: transformTranslationsToArray(
           messageId,
@@ -843,6 +874,7 @@ export function registerEditMessagePatchRoute(
         actorUserId: userId,
         eventType: 'edited',
         messageId,
+        atRest: queuedEventSealsAtRest(message),
         // Même noyau, même raison que sur les deux siblings d'édition : ce
         // transport est celui du client ANDROID, et il servait lui aussi le
         // `Participant.id` en guise de `senderId`.

@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { hasMinimumMemberRole, memberRoleCasings, MemberRole } from '@meeshy/shared/types/role-types';
 import type { UnifiedAuthContext } from '../../middleware/auth';
-import { actorHasMinimumRole } from '../../utils/conversation-authority';
+import { actorHasMinimumRole } from '@meeshy/shared/utils/conversation-authority';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { participantUserRooms } from '../../socketio/emitToConversationParticipants';

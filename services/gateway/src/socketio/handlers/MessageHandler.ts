@@ -66,6 +66,8 @@ import {
 } from '../utils/message-payload-filter.js';
 import { resolveParticipant } from '../utils/participant-resolver.js';
 import { agentSenderIdentity } from './agentSenderIdentity.js';
+import { agentMayReadMessage, notifyAgentOfMessage } from './agentMessageNotification.js';
+import { isServerAtRestMode, queuedEventSealsAtRest } from '../../services/messaging/serverAtRest';
 import { resolvePeerBroadcastSplit } from '../peerBroadcastSplit.js';
 import { emitMessageNew } from '../messageNewEmission';
 import { readerSignedPlan, readerSignedPlanForMessageId } from '../readerSignedDelivery';
@@ -103,9 +105,9 @@ import {
   describeEditRefusalForSocket,
 } from '../../services/messaging/messageEditAdmission';
 import { admitMessageDelete } from '../../services/messaging/messageDeleteAdmission';
+import { writeGuardedMessageEdit } from '../../services/messaging/messageEditWrite';
 import { completeModeratedMessageRemoval, moderationReasonOf, MODERATION_REASON_MESSAGE, MODERATION_REASON_REQUIRED } from '../../services/moderation/contentRemoval';
 import { applyMessageRemovalEffects } from '../../services/messaging/messageRemovalEffects';
-import { applyMessageEditEffects } from '../../services/messaging/messageEditEffects';
 import {
   admitEditedContent,
   isEditedContentRefused,
@@ -427,19 +429,7 @@ export class MessageHandler {
           { ...corr, messageId: message.id }
         );
 
-        this._notifyAgent({
-          id: message.id,
-          conversationId: message.conversationId,
-          senderId: message.senderId,
-          ...agentSenderIdentity(message.sender),
-          content: message.content,
-          originalLanguage: message.originalLanguage,
-          replyToId: message.replyToId,
-          mentionedUserIds: await this._resolveMentionUserIds(
-            (message.validatedMentions as string[] | undefined) ?? []
-          ),
-          createdAt: message.createdAt,
-        });
+        await this._notifyAgent(message);
 
         // Le comptage du message n'est plus fait ici : il vit avec les trois
         // autres obligations post-commit, dans `runMessagePostSaveEffects`, que
@@ -654,19 +644,7 @@ export class MessageHandler {
           { ...corr, messageId: message.id }
         );
 
-        this._notifyAgent({
-          id: message.id,
-          conversationId: message.conversationId,
-          senderId: message.senderId,
-          ...agentSenderIdentity(message.sender),
-          content: message.content,
-          originalLanguage: message.originalLanguage,
-          replyToId: message.replyToId,
-          mentionedUserIds: await this._resolveMentionUserIds(
-            (message.validatedMentions as string[] | undefined) ?? []
-          ),
-          createdAt: message.createdAt,
-        });
+        await this._notifyAgent(message);
 
         // Idem : le comptage — pièces jointes comprises — vit dans
         // `runMessagePostSaveEffects`, qui lit les MIME du message committé au
@@ -768,6 +746,8 @@ export class MessageHandler {
               // PARTAGÉ, et le recomposer sans le lire écraserait `postReplyTo` et
               // `location`.
               metadata: true,
+              // #12792 — lus par `admitMessageEdit` (vue unique) ; le chiffré ci-dessus (#12881), les pièces par `attachmentSocketSelect`.
+              isViewOnce: true, effectFlags: true,
               sender: { select: { id: true, userId: true, displayName: true, avatar: true, role: true } },
               // #7014 — `attachmentSocketSelect`, jamais `attachmentMediaSelect`
               // nu : ce que cette requête charge repart par
@@ -785,14 +765,10 @@ export class MessageHandler {
         return;
       }
 
-      // L'unique énoncé de « qui peut éditer, et jusqu'à quand »
-      // (`services/messaging/messageEditAdmission`). Cette garde vivait ici
-      // dépliée, et les trois entrées REST en portaient chacune une variante
-      // différente. Le privilège de contournement est un rôle GLOBAL
-      // (`User.role`), JAMAIS le `Participant.role` minuscule qu'expose
-      // `message.sender.role` — confondre les deux avait déjà produit un bypass
-      // mort. L'unité garde ses lectures paresseuses : l'auteur dans sa fenêtre
-      // n'en déclenche aucune.
+      // L'unique énoncé de « qui peut éditer, et jusqu'à quand » (`messageEditAdmission`), jadis déplié ici
+      // et varié sur les trois entrées REST. Le privilège est un rôle GLOBAL (`User.role`), JAMAIS le
+      // `Participant.role` minuscule de `message.sender.role` — leur confusion avait produit un bypass mort.
+      // Lectures paresseuses : l'auteur dans sa fenêtre n'en déclenche aucune.
       const admission = await admitMessageEdit({
         prisma: this.prisma,
         editorUserId: userId,
@@ -801,7 +777,8 @@ export class MessageHandler {
           conversationId: message.conversationId,
           conversation: message.conversation,
           createdAt: message.createdAt, messageType: message.messageType, metadata: message.metadata,
-          isEncrypted: message.isEncrypted, encryptionMode: message.encryptionMode,
+          isViewOnce: message.isViewOnce, effectFlags: message.effectFlags, isEncrypted: message.isEncrypted,
+          encryptionMode: message.encryptionMode, attachments: message.attachments,
         },
         onError: (err) => console.error('[MESSAGE_HANDLER] Edit admission lookup failed:', err),
       });
@@ -852,43 +829,26 @@ export class MessageHandler {
         ? { metadata: mergeTrackingLinksIntoMetadata(message.metadata, editedLinks.trackingLinks) }
         : {};
 
-      // Optimistic-concurrency guard: only write while the message is still
-      // non-deleted. A `message:delete` landing between the read above and
-      // this write would otherwise resurrect the row with edited content
-      // (unconditional `update` by id succeeds regardless of `deletedAt`),
-      // and the gateway would broadcast MESSAGE_EDITED for a message clients
-      // already removed. Mirrors the guarded `updateMany` used by
-      // handleMessageDelete's lastMessageAt recompute.
-      const editedAt = new Date();
-      const editResult = await this.prisma.message.updateMany({
-        where: { id: validated.messageId, deletedAt: null },
-        data: {
-          content: editedContent,
-          isEdited: true,
-          editedAt,
-          translations: null,
-          ...nextMetadata,
+      const { written, editedAt, editedBy } = await writeGuardedMessageEdit({
+        prisma: this.prisma,
+        messageId: validated.messageId,
+        content: editedContent,
+        admission,
+        editorUserId: userId,
+        nextMetadata,
+        previous: {
+          id: message.id,
+          conversationId: message.conversationId,
+          senderId: message.senderId,
+          senderUserId: message.sender?.userId ?? null,
+          previousContent: message.content,
         },
       });
 
-      if (editResult.count === 0) {
+      if (!written) {
         this._sendGenericError(callback, 'Message not found or you are not authorized to edit it', socket);
         return;
       }
-
-      // Les effets DURABLES de l'édition (compteurs, notifications, traductions
-      // partagées d'avant) vivent dans `applyMessageEditEffects`, une fois pour
-      // les quatre transports. `editedAt` est l'instant ÉCRIT ci-dessus, remis
-      // tel quel : la version de source d'une traduction partagée en est l'ISO.
-      await applyMessageEditEffects(this.prisma, {
-        id: message.id,
-        conversationId: message.conversationId,
-        senderId: message.senderId,
-        senderUserId: message.sender?.userId ?? null,
-        previousContent: message.content,
-        content: editedContent,
-        editedAt,
-      });
 
       // Ce que ce message doit à ceux qu'il NOMME, après édition. Ce chemin
       // n'écrivait AUCUNE mention : ni ligne `Mention`, ni `validatedMentions`,
@@ -930,6 +890,7 @@ export class MessageHandler {
           content: editedContent,
           isEdited: true,
           editedAt,
+          editedBy,
         }),
         sender: message.sender,
       };
@@ -1017,6 +978,7 @@ export class MessageHandler {
         eventType: 'edited',
         messageId: validated.messageId,
         payload: editedPayload,
+        atRest: queuedEventSealsAtRest(message),
       }).catch((err) => handlerLogger.warn('offline enqueue (edit) failed', { error: err }));
 
       callback?.({ success: true, data: { messageId: validated.messageId } });
@@ -1442,6 +1404,7 @@ export class MessageHandler {
           actorUserId: message.senderId,
           eventType: 'new',
           messageId: message.id,
+          atRest: isServerAtRestMode(message.encryptionMode),
           payload: peerPayload,
           // La file est la TROISIÈME porte de sortie de ce message. Sans cette
           // ligne, un destinataire hors ligne qui a refusé les sources de
@@ -2080,32 +2043,25 @@ export class MessageHandler {
     }
   }
 
-  private _notifyAgent(message: {
-    id: string;
-    conversationId: string;
-    senderId: string | null;
-    senderDisplayName?: string;
-    senderUsername?: string;
-    content: string | null;
-    originalLanguage: string | null;
-    replyToId?: string | null;
-    mentionedUserIds?: string[];
-    createdAt: Date;
-  }): void {
-    if (!this.agentClient || !message.senderId || !message.content) return;
-    this.agentClient.sendEvent({
-      type: 'agent:new-message',
-      conversationId: message.conversationId,
-      messageId: message.id,
-      senderId: message.senderId,
-      senderDisplayName: message.senderDisplayName,
-      senderUsername: message.senderUsername,
-      content: message.content,
-      originalLanguage: message.originalLanguage ?? 'fr',
-      replyToId: message.replyToId ?? undefined,
-      mentionedUserIds: message.mentionedUserIds ?? [],
-      timestamp: message.createdAt.getTime(),
-    }).catch(err => handlerLogger.warn('agent event delivery failed (non-blocking)', { messageId: message.id, error: err }));
+  /** #12822 — `notifyAgentOfMessage` tait tout message chiffré au repos, avant même la résolution des mentions. */
+  private async _notifyAgent(message: Message): Promise<void> {
+    if (!this.agentClient || !agentMayReadMessage(message)) return;
+    notifyAgentOfMessage({
+      agent: this.agentClient,
+      message: {
+        id: message.id,
+        conversationId: message.conversationId,
+        senderId: message.senderId,
+        ...agentSenderIdentity(message.sender),
+        content: message.content,
+        originalLanguage: message.originalLanguage,
+        encryptionMode: message.encryptionMode,
+        replyToId: message.replyToId,
+        mentionedUserIds: await this._resolveMentionUserIds((message.validatedMentions as string[] | undefined) ?? []),
+        createdAt: message.createdAt,
+      },
+      onError: (err) => handlerLogger.warn('agent event delivery failed (non-blocking)', { messageId: message.id, error: err }),
+    });
   }
 
   private _sendError(

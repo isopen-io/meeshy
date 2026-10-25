@@ -14,6 +14,7 @@ import me.meeshy.app.settings.ActiveSessionsScreen
 import me.meeshy.app.settings.ChangePasswordScreen
 import me.meeshy.app.settings.CrashReportScreen
 import me.meeshy.app.settings.DataExportScreen
+import me.meeshy.app.settings.EncryptedDevicesScreen
 import me.meeshy.app.settings.LegalDocumentScreen
 import me.meeshy.app.settings.LicensesScreen
 import me.meeshy.app.settings.MediaCacheScreen
@@ -121,6 +122,9 @@ internal fun NavGraphBuilder.settingsNavGraph(
     composable(Routes.ACTIVE_SESSIONS) {
         ActiveSessionsScreen(onBack = { navController.popBackStack() })
     }
+    composable(Routes.ENCRYPTED_DEVICES) {
+        EncryptedDevicesScreen(onBack = { navController.popBackStack() })
+    }
 }
 
 /** Page Sécurité ; l'ancienne route `settings/account-contact` y mène aussi. */
@@ -131,5 +135,6 @@ private fun SecurityRoute(navController: NavHostController) {
         onOpenChangePassword = { navController.navigate(Routes.CHANGE_PASSWORD) },
         onOpenTwoFactor = { step -> navController.navigate("${Routes.TWO_FACTOR}?step=$step") },
         onOpenSessions = { navController.navigate(Routes.ACTIVE_SESSIONS) },
+        onOpenEncryptedDevices = { navController.navigate(Routes.ENCRYPTED_DEVICES) },
     )
 }

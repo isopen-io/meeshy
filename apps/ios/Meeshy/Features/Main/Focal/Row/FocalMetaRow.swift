@@ -38,6 +38,8 @@ struct FocalMetaRow: View, Equatable {
     /// Retrait — aligné sur la pastille. Défaut `FocalMetrics.Text.indent`.
     var indent: CGFloat = FocalMetrics.Text.indent
     var editedAt: Date? = nil
+    /// #11375 — « modifié par un modérateur », dit en mots.
+    var editedByModerator: Bool = false
     var isEditSaving: Bool = false
     var hasEditHistory: Bool = false
     /// Toucher les COCHES ouvre les « détails de lecture ». Cette affordance
@@ -67,6 +69,7 @@ struct FocalMetaRow: View, Equatable {
             && lhs.isDark == rhs.isDark
             && lhs.indent == rhs.indent
             && lhs.editedAt == rhs.editedAt
+            && lhs.editedByModerator == rhs.editedByModerator
             && lhs.isEditSaving == rhs.isEditSaving
             && lhs.hasEditHistory == rhs.hasEditHistory
             && lhs.fillsWidth == rhs.fillsWidth
@@ -132,7 +135,8 @@ struct FocalMetaRow: View, Equatable {
             // posée sur l'accent. La rangée plate n'a aucun fond — même règle
             // que son texte (`FocalRow.textBlock`) : blanc sur blanc, le
             // crayon de mes messages modifiés disparaissait en mode clair.
-            BubbleEditedIndicator(isMe: false, isSaving: isEditSaving, hasEditHistory: hasEditHistory, isDark: isDark)
+            BubbleEditedIndicator(isMe: false, isSaving: isEditSaving, hasEditHistory: hasEditHistory, isDark: isDark,
+                                  byModerator: editedByModerator)
         }
     }
 }

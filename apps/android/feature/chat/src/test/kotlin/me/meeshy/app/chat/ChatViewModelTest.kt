@@ -2147,14 +2147,15 @@ class ChatViewModelTest {
     }
 
     @Test
-    fun a_pinned_socket_event_refreshes_the_open_conversation() = runTest(dispatcher) {
+    fun a_pinned_socket_event_no_longer_reloads_the_open_conversation() = runTest(dispatcher) {
+        // Le delta d'épingle s'applique en place dans Room (ChatRealtimeController) : aucun aller-retour réseau.
         val h = harness(syncedConversation(), currentUser = me)
         advanceUntilIdle()
 
         messagePinned.emit(MessagePinnedEvent(messageId = "m2", conversationId = "c1"))
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { h.repo.refresh("c1") }
+        coVerify(exactly = 0) { h.repo.refresh("c1") }
     }
 
     @Test
@@ -2593,14 +2594,15 @@ class ChatViewModelTest {
     }
 
     @Test
-    fun an_unpinned_socket_event_refreshes_the_open_conversation() = runTest(dispatcher) {
+    fun an_unpinned_socket_event_no_longer_reloads_the_open_conversation() = runTest(dispatcher) {
+        // Le delta d'épingle s'applique en place dans Room (ChatRealtimeController) : aucun aller-retour réseau.
         val h = harness(syncedConversation(), currentUser = me)
         advanceUntilIdle()
 
         messageUnpinned.emit(MessageUnpinnedEvent(messageId = "m2", conversationId = "c1"))
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { h.repo.refresh("c1") }
+        coVerify(exactly = 0) { h.repo.refresh("c1") }
     }
 
     @Test

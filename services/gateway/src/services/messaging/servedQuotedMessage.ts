@@ -246,6 +246,11 @@ export function servedQuotedMessage(
   const tileCount = quoted._count?.attachments;
   served['visualAttachmentCount'] = !isProtected && typeof tileCount === 'number' ? tileCount : undefined;
   served['_count'] = undefined;
+  // #12792 — l'éditeur tiers d'un message CITÉ (#11375) : ses colonnes brutes
+  // voyagent avec la ligne que le site d'appel répand, et une diffusion de
+  // room n'a pas de schéma pour les retirer. Écrasées ici, fail-closed.
+  served['thirdPartyEditorId'] = undefined;
+  served['thirdPartyEditorRole'] = undefined;
 
   return served;
 }
@@ -271,6 +276,8 @@ function servedDeletedQuote(deletedAt: Date | string): Record<string, unknown> {
     attachmentReplyTo: undefined,
     visualAttachmentCount: undefined,
     _count: undefined,
+    thirdPartyEditorId: undefined,
+    thirdPartyEditorRole: undefined,
   };
 }
 

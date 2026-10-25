@@ -346,4 +346,30 @@ final class LocalizationCatalogGuardTests: XCTestCase {
         XCTAssertEqual(formatSpecifiers("Aucun marqueur ici"), [])
         XCTAssertEqual(formatSpecifiers("100 % de réussite"), [], "Un « % » isolé n'est pas un marqueur")
     }
+
+    // MARK: - Chiffrement au repos (#11374, #11381)
+
+    /// `server` et `hybrid` sont chiffrés AU REPOS : le serveur lit et traduit.
+    /// L'écran d'activation présentait `hybrid` comme « E2EE + serveur » — la
+    /// promesse de sécurité était fausse au moment même où l'on choisit.
+    func test_lesModesAuReposNePromettentJamaisLeBoutEnBout() throws {
+        let forbidden = ["E2EE", "bout en bout", "end-to-end", "Ende-zu-Ende", "extremo a extremo", "ponta a ponta", "تام"]
+        let keys = [
+            "conversation.encryption.mode.server.label", "conversation.encryption.mode.server.description",
+            "conversation.encryption.mode.hybrid.label", "conversation.encryption.mode.hybrid.description",
+        ]
+        let app = try XCTUnwrap(try catalogs().first { $0.name == "app" })
+        for key in keys {
+            let byLang = try XCTUnwrap(app.strings[key], "Clé absente du catalogue : \(key)")
+            XCTAssertEqual(byLang.count, 7, "\(key) doit exister dans les sept langues")
+            for (lang, value) in byLang {
+                for word in forbidden {
+                    XCTAssertFalse(value.localizedCaseInsensitiveContains(word), "\(key) [\(lang)] promet le bout en bout : « \(value) »")
+                }
+            }
+        }
+        let sheet = repoRoot().appendingPathComponent("apps/ios/Meeshy/Features/Main/Components/ConversationEncryptionDetailSheet.swift")
+        let source = try String(contentsOf: sheet, encoding: .utf8)
+        XCTAssertFalse(source.contains("E2EE + serveur"), "La valeur par défaut du libellé hybride promet encore le bout en bout")
+    }
 }
