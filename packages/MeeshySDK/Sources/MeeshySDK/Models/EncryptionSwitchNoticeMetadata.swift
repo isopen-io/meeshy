@@ -57,16 +57,22 @@ public struct EncryptionSwitchNoticeMetadata: Codable, Sendable, Equatable {
         )
     }
 
+    /// L'avis se dit-il depuis sa métadonnée (`text`), jamais depuis le texte
+    /// du serveur ? Seul un tel avis s'exempte du marqueur « non chiffré » (#12917).
+    public var composesItsText: Bool {
+        disablesEndToEnd || kind == Self.enabledKind
+    }
+
     /// La phrase de l'avis dans la langue du lecteur, composée depuis la
     /// métadonnée et non depuis le texte que le serveur a écrit : ce que
     /// l'utilisateur LIT est ce que l'envoi compte. Les clés sont celles de la
     /// ligne de liste (`system.encryption.*`). `nil` pour la désactivation d'un
     /// mode lisible par le serveur, que la ligne de liste ne dit pas non plus.
     public func text(_ strings: ConversationPreviewStrings) -> String? {
+        guard composesItsText else { return nil }
         if disablesEndToEnd {
             return strings(.systemEncryptionDisabled, ["actor": CaptureNoticeText.sanitizedName(actorName ?? "")])
         }
-        guard kind == Self.enabledKind else { return nil }
         return strings(enablesEndToEnd ? .systemEncryptionE2EE : .systemEncryptionEnabled, [:])
     }
 
