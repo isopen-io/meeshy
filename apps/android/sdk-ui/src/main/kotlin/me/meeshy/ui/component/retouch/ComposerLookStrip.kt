@@ -51,6 +51,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import me.meeshy.sdk.model.composer.look.CallFaceEffect
+import me.meeshy.sdk.model.composer.look.CallFaceLandmarks
 import me.meeshy.sdk.model.composer.look.ComposerLookCanvas
 import me.meeshy.sdk.model.composer.look.ComposerLookFamily
 import me.meeshy.sdk.model.composer.look.ComposerLookStripFollow
@@ -75,6 +76,7 @@ internal fun ComposerLookStrip(
     selects: Boolean,
     onChoose: (ComposerLookStripItem) -> Unit,
     effects: List<CallFaceEffect> = RetouchRenderableEffects,
+    face: CallFaceLandmarks? = null,
 ) {
     val items = remember(family, effects) { ComposerLookStripRule.items(family, effects = effects) }
     val chosen = ComposerLookStripRule.chosenIndex(items, look)
@@ -84,7 +86,7 @@ internal fun ComposerLookStrip(
     var follow by remember(family) { mutableStateOf(ComposerLookStripFollow().begin(chosen)) }
     val currentChosen by rememberUpdatedState(chosen)
     val currentSelects by rememberUpdatedState(selects)
-    val thumbnails = remember(family) { mutableStateMapOf<String, Bitmap>() }
+    val thumbnails = remember(family, face) { mutableStateMapOf<String, Bitmap>() }
 
     fun choose(index: Int) {
         val step = follow.chose(index)
@@ -136,7 +138,7 @@ internal fun ComposerLookStrip(
                         if (thumbnails[key] != null) return@LaunchedEffect
                         val combined = ComposerLookStripRule.look(item, look)
                         withContext(Dispatchers.Default) {
-                            ComposerLookPainter.paint(thumbSource, combined, author, ComposerLookCanvas.THUMBNAIL_LONG_SIDE)
+                            ComposerLookPainter.paint(thumbSource, combined, author, ComposerLookCanvas.THUMBNAIL_LONG_SIDE, face = face)
                         }?.let { thumbnails[key] = it }
                     }
                 }
