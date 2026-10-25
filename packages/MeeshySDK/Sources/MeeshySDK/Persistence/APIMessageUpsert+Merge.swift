@@ -20,7 +20,10 @@ extension APIMessageUpsert {
         MergeGuards(
             keepLocalPlaintext: api.isEncrypted == true
                 && !existing.isEncrypted
-                && !(existing.content ?? "").isEmpty,
+                && !(existing.content ?? "").isEmpty
+                // Le littéral servi n'est pas un clair local : une ligne née
+                // ainsi (rattrapage sans drapeau, #12916) redevient chiffrée.
+                && existing.content != E2EEWire.contentPlaceholder,
             pendingEdit: pending.edits.contains(api.id),
             pendingDelete: pending.deletes.contains(api.id),
             staleLiveCall: MessagePersistenceActor.isStaleLiveCallSnapshot(

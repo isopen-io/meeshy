@@ -9,6 +9,10 @@ package me.meeshy.sdk.model.chrome
  * entiere qui devient inatteignable.
  *
  * Pendant iOS : `ButtonPosition` (MeeshyUI/Primitives/FloatingButtons.swift).
+ *
+ * FORMAT HERITE : la place persistee est desormais `FloatingButtonPlacement` (cote + fraction
+ * de hauteur, `v3,L,0.5`). La forme `x,y` ecrite par [encodePosition] reste lue comme
+ * [FloatingButtonStoredPosition.Legacy] par `FloatingButtonGeometry.centerForStorage`.
  */
 public data class FloatingButtonPosition(val x: Float, val y: Float) {
 

@@ -149,6 +149,10 @@ data class ChatUiState(
      * to the capabilities the join hardened. */
     val composerAffordances: ComposerAffordances
         get() = ComposerAttachmentPolicy.affordances(composerPermissions)
+
+    /** Whether the reader may write here — what the message law reads before offering « Répondre ». */
+    val viewerMayWrite: Boolean
+        get() = composerPermissions?.canSendMessages != false
     val isEditing: Boolean get() = editingMessageId != null
 
     /** Whether the end-to-end-encryption notice sits at the top of the list — the

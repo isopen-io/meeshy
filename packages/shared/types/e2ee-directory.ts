@@ -76,6 +76,8 @@ export const E2EE_ERROR_CODES = {
   ENVELOPES_INVALID: 'E2EE_ENVELOPES_INVALID',
   KEYS_FORBIDDEN: 'E2EE_KEYS_FORBIDDEN',
   REGIME_CHANGED: 'E2EE_REGIME_CHANGED',
+  /** Une conversation chiffrée de bout en bout ne repasse jamais en clair (#12949). */
+  IRREVERSIBLE: 'E2EE_IRREVERSIBLE',
   BINDING_INVALID: 'E2EE_DEVICE_BINDING_INVALID',
   PREKEY_STOCK_FULL: 'E2EE_PREKEY_STOCK_FULL',
   IDENTITY_REVOKED: 'E2EE_IDENTITY_REVOKED',
@@ -87,6 +89,13 @@ export type E2EEErrorCode = (typeof E2EE_ERROR_CODES)[keyof typeof E2EE_ERROR_CO
 /** Le texte lisible servi à un client qui ne parle pas libsignal (#9223 : rien ne se perd en silence). */
 export const E2EE_CLIENT_OUTDATED_MESSAGE =
   'Cette conversation est chiffrée de bout en bout : mettez à jour Meeshy pour y écrire';
+
+/**
+ * Le texte servi avec `E2EE_IRREVERSIBLE` (#12949) : un ancien client qui
+ * appelle la désactivation l'affiche tel quel.
+ */
+export const E2EE_IRREVERSIBLE_MESSAGE =
+  'End-to-end encryption cannot be turned off for this conversation. To chat without it, start a new conversation.';
 
 const PRIVATE_KEY_FIELD = /private|secret|privkey|seed/i;
 

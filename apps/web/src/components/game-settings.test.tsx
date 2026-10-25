@@ -133,6 +133,60 @@ describe('les notifications du jeu', () => {
   });
 });
 
+/**
+ * « MOMENTS À IMMORTALISER » (#10268) — `notification.gamePhotoEnabled`, le push d'une étape franchie app fermée, rangé
+ * SOUS « Notifications du jeu » parce que les couper le coupe aussi (D8). Préférence du COMPTE, défaut reçu.
+ */
+describe('« Moments à immortaliser »', () => {
+  const photo = (patch: Partial<GameSettingsProps> = {}): GameSettingsProps =>
+    props({ gameNotifications: true, onGameNotifications: () => undefined, gamePhoto: true, onGamePhoto: () => undefined, ...patch });
+
+  test('un interrupteur dans la carte des notifications du jeu, coché par défaut, qui envoie son nouvel état', async () => {
+    const calls: boolean[] = [];
+    const host = await mount(<GameSettings {...photo({ onGamePhoto: (on) => calls.push(on) })} />);
+    const input = host.querySelector<HTMLInputElement>('#game-settings-notifications [data-game-setting-photo]');
+    expect(input?.checked).toBe(true);
+    expect(input?.disabled).toBe(false);
+    await click(input);
+    expect(calls).toEqual([false]);
+  });
+
+  test('l’interrupteur porte son nom et dit ce qu’il règle', () => {
+    const t = text(renderToStaticMarkup(<GameSettings {...photo()} />));
+    expect(t).toContain('Moments à immortaliser');
+    expect(t).toContain('app fermée');
+  });
+
+  test('réglage du compte éteint : décoché', async () => {
+    const host = await mount(<GameSettings {...photo({ gamePhoto: false })} />);
+    expect(host.querySelector<HTMLInputElement>('[data-game-setting-photo]')?.checked).toBe(false);
+  });
+
+  test('« Notifications du jeu » coupées : l’interrupteur est éteint et suspendu, et l’écran dit pourquoi — sans écraser le choix gardé', async () => {
+    const calls: boolean[] = [];
+    const host = await mount(<GameSettings {...photo({ gameNotifications: false, gamePhoto: true, onGamePhoto: (on) => calls.push(on) })} />);
+    const input = host.querySelector<HTMLInputElement>('[data-game-setting-photo]');
+    expect(input?.checked).toBe(false);
+    expect(input?.disabled).toBe(true);
+    expect(host.textContent).toContain('Coupés avec les notifications du jeu');
+    expect(calls).toEqual([]);
+  });
+
+  test('pas encore lu : l’interrupteur attend (désactivé) plutôt que de deviner un état', async () => {
+    const host = await mount(<GameSettings {...photo({ gamePhoto: undefined })} />);
+    expect(host.querySelector<HTMLInputElement>('[data-game-setting-photo]')?.disabled).toBe(true);
+  });
+
+  test('hors ligne : suspendu, comme tout geste qui écrit le compte', async () => {
+    const host = await mount(<GameSettings {...photo({ online: false })} />);
+    expect(host.querySelector<HTMLInputElement>('[data-game-setting-photo]')?.disabled).toBe(true);
+  });
+
+  test('sans branchement, pas d’interrupteur (l’écran d’avant)', () => {
+    expect(renderToStaticMarkup(<GameSettings {...props({ gameNotifications: true, onGameNotifications: () => undefined })} />)).not.toContain('data-game-setting-photo');
+  });
+});
+
 describe('qui voit quoi', () => {
   test('quatre sélecteurs : rang et niveau, trésor et Flamme, vitrine, Atlas', () => {
     const html = renderToStaticMarkup(<GameSettings {...props()} />);
@@ -182,5 +236,31 @@ describe('aucun lien transverse', () => {
   test('ni les règles, ni le carnet, ni le classement : un écran du jeu n’a qu’un parent', () => {
     const html = renderToStaticMarkup(<GameSettings {...props()} />);
     for (const path of ['/me/progression/regles', '/me/progression/carnet', '/me/progression/ligue']) expect(html).not.toContain(`href="${path}"`);
+  });
+});
+
+/**
+ * « ME PROPOSER D'IMMORTALISER » (#10174, L18) — trois choix, une préférence de compte ; le réglage dit que la
+ * Chronique garde tout ; sans branchement, pas de carte.
+ */
+describe('les invitations à immortaliser', () => {
+  test('trois choix, le courant coché, et le choix envoyé', async () => {
+    const calls: string[] = [];
+    const host = await mount(<GameSettings {...props({ invitations: { current: 'every', onChange: (next) => calls.push(next) } })} />);
+    const inputs = [...host.querySelectorAll<HTMLInputElement>('[data-game-setting-invitations]')];
+    expect(inputs.map((input) => [input.value, input.checked])).toEqual([
+      ['every', true],
+      ['major', false],
+      ['never', false],
+    ]);
+    await click(host.querySelector('[data-game-setting-invitations="major"]'));
+    expect(calls).toEqual(['major']);
+    expect(host.textContent).toContain('la Chronique garde tout');
+  });
+
+  test('sans branchement : pas de carte ; hors ligne, la carte dit que le choix partira avec la connexion', () => {
+    expect(renderToStaticMarkup(<GameSettings {...props()} />)).not.toContain('data-game-setting-invitations');
+    const queued = renderToStaticMarkup(<GameSettings {...props({ invitations: { current: 'never', onChange: () => undefined, notice: 'Hors ligne : ton choix partira avec la connexion.' } })} />);
+    expect(text(queued)).toContain('partira avec la connexion');
   });
 });

@@ -1,6 +1,11 @@
 import { describe, expect, test } from 'bun:test';
 
-import { fontFamilyFrom, paletteFrom } from './env';
+import { achievementStep, storedGloryAssets, succesCatalogPorts } from '@/test-support/glory-session-catalog';
+
+import { browserPhotoEnv, fontFamilyFrom, paletteFrom } from './env';
+import { loadGloryCatalog } from './glory/frame-catalog';
+
+const succesSessionCatalog = () => loadGloryCatalog(succesCatalogPorts);
 
 /**
  * L'ENVIRONNEMENT DU NAVIGATEUR (#9382) — le peu de colle entre l'écran et le
@@ -31,5 +36,28 @@ describe('fontFamilyFrom', () => {
 
   test('sans jeton : le système', () => {
     expect(fontFamilyFrom(() => '')).toBe('system-ui, sans-serif');
+  });
+});
+
+/**
+ * LA RARETÉ TRAVERSE L'ENVIRONNEMENT (#10168) : `glory` et `gloryOffer`
+ * remettent l'étape entière à la scène, rareté comprise — un environnement
+ * qui la perdrait repeindrait tout haut fait dans le neutre.
+ */
+describe('browserPhotoEnv — le cadre d’un haut fait', () => {
+  const texts = { kicker: 'Haut fait', title: 'Premier contenu', date: '25 octobre 2026', message: null, 'plate.1': null };
+  const env = () => browserPhotoEnv({ catalog: succesSessionCatalog, assets: storedGloryAssets() });
+
+  test('l’image d’une étape rare se compose dans le cadre rare ; sans rareté, dans le neutre', async () => {
+    const rare = await env().glory?.({ step: achievementStep('rare'), texts, scale: 0.5 });
+    expect(rare?.frame.id).toBe('succes.rare');
+    rare?.close();
+    const plain = await env().glory?.({ step: achievementStep(), texts, scale: 0.5 });
+    expect(plain?.frame.id).toBe('succes.neutre');
+    plain?.close();
+  });
+
+  test('la bande d’une étape épique présélectionne le cadre épique', async () => {
+    expect((await env().gloryOffer?.(achievementStep('epic')))?.preselected).toEqual({ pack: 'succes', frameId: 'succes.epic' });
   });
 });

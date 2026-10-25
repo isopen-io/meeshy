@@ -56,13 +56,8 @@ struct ConversationView: View {
     /// rien. Cette révision, lue par `liveConversation`, porte le redessin (#10751).
     @State private var repaintRevision = 0
 
-    /// Le pair d'un direct OUVERT renommé ou repeint à `user:updated` (#9359) :
-    /// l'annonce s'applique à la conversation AFFICHÉE et le résultat devient
-    /// l'override — l'override garde la priorité, la valeur figée reste le
-    /// repli, et un enregistrement des réglages repart du pair repeint. Une
-    /// annonce qui ne change rien n'écrit rien : l'écran ne se redessine pas.
-    func admitPeerUpdate(_ event: UserUpdatedEvent) { admitRepainted(DirectPeerRepaint.repainted(liveConversation, by: event)) }
-    /// Écrivain UNIQUE de l'override : pair (#9359), accent relayé (#10631), réglages enregistrés.
+    /// Écrivain UNIQUE de l'override : pair (#9359) et régime de chiffrement (#12522) repeints sur la conversation
+    /// AFFICHÉE (une annonce qui ne change rien n'écrit rien), accent relayé (#10631), réglages enregistrés.
     func admitRepainted(_ repainted: Conversation?) { guard let repainted else { return }; conversationOverride = repainted; repaintRevision &+= 1 }
 
     // NOTE: Properties below are internal (not private) for cross-file extension access (+MessageRow, +Header, …).
@@ -561,7 +556,7 @@ struct ConversationView: View {
             scrollState: $scrollState,
             overlayState: $overlayState,
             showScript: { readingModeController.select(.script) },
-            reply: { triggerReply(for: $0) }, menuAuthority: { menuAuthority }, presentMenu: { presentLongPressMenu(for: $0, cellFrame: nil) },
+            reply: { triggerReply(for: $0) }, menuAuthority: { menuAuthority }, presentMenu: { presentLongPressMenu(for: $0, cellFrame: $1.windowFrame, riverFace: $1.face) },
             openViewOnce: { openViewOnce(messageId: $0) },
             openMedia: openMediaFullscreen
         )

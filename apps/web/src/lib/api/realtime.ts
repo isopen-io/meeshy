@@ -2,6 +2,7 @@ import { bridgeCallEvents } from '@/lib/calls/call-socket-bridge';
 import { setCallEngineWake } from '@/lib/calls/call-transport';
 import { callsAvailable } from '@/lib/calls/calls-availability';
 import { conversationStore } from '@/lib/conversation-store';
+import { endToEndRegimeLedger } from '@/lib/end-to-end-regime-ledger';
 import { createSocketIOClient } from '@/lib/net/socket-io-factory';
 import { bridgeBannerRevocations } from '@/lib/notifications/banner-revocation';
 import { navigate } from '@/lib/router';
@@ -23,6 +24,7 @@ import { apiDeps } from './deps';
 import { endGuestAccess } from './guest-access-end';
 import { appQueryClient } from './query-client';
 import { setAttachmentReactionEmitter } from './attachment-reaction-emit';
+import { watchEndToEndConversations } from './end-to-end-cache-watch';
 import { watchIdentityScopedStores } from './identity-scoped-stores';
 import { createLiveSocketWatchers } from './live-socket-watchers';
 import { sendAttachmentReaction } from './attachment-reaction-socket';
@@ -209,7 +211,9 @@ function syncConnection(): void {
 
 /* Les magasins en mémoire d'une identité (outbox, overrides de rangée,
    frappe) se vident dès qu'elle change (#8674, `identity-scoped-stores.ts`). */
-watchIdentityScopedStores({ session: sessionStore, outbox: outboxStore, conversations: conversationStore, typing: typingStore, engagement: engagementStore });
+watchIdentityScopedStores({ session: sessionStore, outbox: outboxStore, conversations: conversationStore, typing: typingStore, engagement: engagementStore, endToEndRegime: endToEndRegimeLedger });
+/* Ce que le cache a servi chiffré de bout en bout, le compte l'a vu : il ne se rouvre plus au clair (#12949). */
+watchEndToEndConversations(appQueryClient, endToEndRegimeLedger);
 /* LE CLIENT SE DÉCLARE (#9611) — appris après la première peinture, publié
    pour le flux de connexion (`auth.ts`) ; la socket le relit elle-même. */
 void import('@/lib/net/client-session').then(({ publishClientDeclaration }) => publishClientDeclaration()).catch(() => undefined);

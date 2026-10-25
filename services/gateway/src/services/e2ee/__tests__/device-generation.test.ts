@@ -29,8 +29,9 @@ const closeSession = (store: FakeE2EEStore, id: string) =>
 
 const directoryOn = (store: FakeE2EEStore) => createE2EEDirectory({ prisma: store.prisma as never, verifier: fakeVerifier, now: () => NOW });
 
-const enrollmentOf = (keys: ReturnType<typeof fakeDeviceKeys>, userId: string) => ({
-  binding: keys.binding(userId, NOW.getTime()),
+/** iOS signe une preuve neuve à chaque enrôlement : `signedAt` avance d'un enrôlement à l'autre (#12933). */
+const enrollmentOf = (keys: ReturnType<typeof fakeDeviceKeys>, userId: string, signedAt = NOW.getTime()) => ({
+  binding: keys.binding(userId, signedAt),
   registrationId: keys.registrationId,
   identityKey: keys.identityKey,
   signedPreKey: keys.signedPreKey,
@@ -169,7 +170,7 @@ describe('une installation qui revient retrouve sa place (#12593)', () => {
     for (let cycle = 1; cycle <= E2EE_MAX_ACTIVE_DEVICES + 1; cycle += 1) {
       const sessionId = sessionIdOf(cycle);
       openSession(store, sessionId);
-      const { deviceId } = await directory.enrollDevice({ userId: ALICE, sessionId, request: enrollmentOf(keys, ALICE) });
+      const { deviceId } = await directory.enrollDevice({ userId: ALICE, sessionId, request: enrollmentOf(keys, ALICE, NOW.getTime() + cycle) });
       deviceIds.push(deviceId);
       closeSession(store, sessionId);
       await retireDevicesAfterSessionEnd(store.prisma as never, { sessionId }, (error) => {
@@ -192,7 +193,7 @@ describe('une installation qui revient retrouve sa place (#12593)', () => {
       throw error;
     });
 
-    const back = await directory.enrollDevice({ userId: ALICE, sessionId: sessionIdOf(2), request: enrollmentOf(keys, ALICE) });
+    const back = await directory.enrollDevice({ userId: ALICE, sessionId: sessionIdOf(2), request: enrollmentOf(keys, ALICE, NOW.getTime() + 1) });
 
     expect(back).toEqual({ deviceId: 1, created: false });
     expect(store.collections.E2EEDevice.rows[0]).toMatchObject({ retiredAt: null, sessionId: sessionIdOf(2), registrationId: 4242 });
@@ -355,7 +356,7 @@ describe("une identité révoquée ne revient ni sous une autre écriture, ni pa
     };
     const enrolling = createE2EEDirectory({ prisma: racing as never, verifier: fakeVerifier, now: () => NOW });
 
-    await expect(enrolling.enrollDevice({ userId: ALICE, sessionId: sessionIdOf(2), request: enrollmentOf(keys, ALICE) }))
+    await expect(enrolling.enrollDevice({ userId: ALICE, sessionId: sessionIdOf(2), request: enrollmentOf(keys, ALICE, NOW.getTime() + 1) }))
       .rejects.toMatchObject({ code: 'E2EE_IDENTITY_REVOKED' });
     expect(stateOf(store, ALICE)).toEqual({ active: [], preKeys: 0 });
     expect(deviceId).toBe(1);

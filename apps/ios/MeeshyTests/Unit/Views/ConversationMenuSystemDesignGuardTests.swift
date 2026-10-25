@@ -368,9 +368,22 @@ final class ConversationMenuSystemDesignGuardTests: XCTestCase {
         let catalog = try source(Self.catalogPath)
         XCTAssertTrue(catalog.contains("(.rename, law.rename)"), "Renommer suit le verdict de la loi.")
         XCTAssertTrue(catalog.contains("(.groupSettings, law.groupSettings)"), "Paramètres du groupe suit le verdict de la loi.")
+        XCTAssertTrue(catalog.contains("(.manageMembers, law.manageMembers)"), "Gérer les membres suit le verdict de la loi (#12631).")
 
         let rules = try source("Meeshy/Features/Main/Views/ConversationListView+ListRules.swift")
         XCTAssertTrue(rules.contains("ConversationActionPolicy.actions(for:"), "Les verdicts de la rangée projettent ConversationActionPolicy.")
+    }
+
+    /// « Gérer les membres » (#12631) ouvre la fiche de la conversation derrière
+    /// la porte du verrou, et la fiche s'ouvre sur son onglet Membres — là où
+    /// elle porte, au modérateur, sa propre entrée « Gérer les membres ».
+    func test_manageMembers_opensTheInfoSheet_onItsMembersTab() throws {
+        let overlays = try source("Meeshy/Features/Main/Views/ConversationListView+Overlays.swift")
+        XCTAssertTrue(overlays.contains("onManageMembers: { list.presentInfo(of: conversation) }"),
+                      "Le geste passe par `presentInfo(of:)`, la porte du verrou de « Détails ».")
+        let sheet = try source("Meeshy/Features/Main/Components/ConversationInfoSheet.swift")
+        XCTAssertTrue(sheet.contains("@State private var selectedTab: InfoTab = .members"),
+                      "La fiche s'ouvre sur ses membres : sinon « Gérer les membres » mènerait ailleurs.")
     }
 
     /// La tête compacte : un `ControlGroup` sur le menu natif, trois tuiles sur

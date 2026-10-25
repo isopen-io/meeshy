@@ -383,3 +383,20 @@ struct ComposerWaveformBar: View {
         }
     }
 }
+
+/// **La porte vocale du composeur** (#12918). `byMode` suit le mode de la barre ;
+/// `open` l'ouvre là où le mode la cache (commentaires) ; `closed` la ferme
+/// quoi qu'en dise le mode : une conversation chiffrée de bout en bout, dont
+/// les vocaux ne se chiffrent pas encore (#10789), ou un lien invité sans audio.
+/// Ni micro ni tuile « Vocal » : jamais un geste que l'envoi refuserait.
+enum ComposerVoiceDoor: Equatable {
+    case byMode, open, closed
+
+    func isOpen(byMode modeShowsVoice: Bool) -> Bool {
+        switch self {
+        case .byMode: modeShowsVoice
+        case .open: true
+        case .closed: false
+        }
+    }
+}

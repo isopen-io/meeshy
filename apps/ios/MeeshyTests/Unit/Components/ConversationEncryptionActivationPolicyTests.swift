@@ -28,25 +28,27 @@ final class ConversationEncryptionActivationPolicyTests: XCTestCase {
         for role in ["ANALYST", "audit", "MODERATOR"] {
             let mayActivate = ConversationEncryptionActivationPolicy.mayActivate(platformRole: role)
             XCTAssertEqual(
-                ConversationSecurityRowContent.resolve(isDirect: true, isEncrypted: false, mayActivate: mayActivate),
-                .directEntry(offersActivation: true), role
+                ConversationSecurityRowContent.resolve(isDirect: true, isEncrypted: false, mayToggle: mayActivate),
+                .directEntry(offersToggle: true), role
             )
             XCTAssertEqual(
-                ConversationEncryptionDetailContent.resolve(isLoading: false, isEncrypted: false, mayActivate: mayActivate),
+                ConversationEncryptionDetailContent.resolve(isLoading: false, isEncrypted: false, mayToggle: mayActivate),
                 .activation, role
             )
         }
     }
 
-    func test_mayActivate_userHidesRowAndActivation() {
+    /// #12880 — l'utilisateur ordinaire VOIT l'état et son explication ; seul
+    /// le bouton de bascule lui reste caché.
+    func test_mayActivate_userSeesTheRowWithoutTheToggle() {
         for role in ["USER", "user"] {
             let mayActivate = ConversationEncryptionActivationPolicy.mayActivate(platformRole: role)
             XCTAssertEqual(
-                ConversationSecurityRowContent.resolve(isDirect: true, isEncrypted: false, mayActivate: mayActivate),
-                .hidden, role
+                ConversationSecurityRowContent.resolve(isDirect: true, isEncrypted: false, mayToggle: mayActivate),
+                .directEntry(offersToggle: false), role
             )
             XCTAssertEqual(
-                ConversationEncryptionDetailContent.resolve(isLoading: false, isEncrypted: false, mayActivate: mayActivate),
+                ConversationEncryptionDetailContent.resolve(isLoading: false, isEncrypted: false, mayToggle: mayActivate),
                 .inactiveReadOnly, role
             )
         }
@@ -61,54 +63,86 @@ final class ConversationEncryptionActivationPolicyTests: XCTestCase {
 
     func test_securityRow_directUnencrypted_offersActivationOnlyWhenAllowed() {
         XCTAssertEqual(
-            ConversationSecurityRowContent.resolve(isDirect: true, isEncrypted: false, mayActivate: true),
-            .directEntry(offersActivation: true)
+            ConversationSecurityRowContent.resolve(isDirect: true, isEncrypted: false, mayToggle: true),
+            .directEntry(offersToggle: true)
         )
         XCTAssertEqual(
-            ConversationSecurityRowContent.resolve(isDirect: true, isEncrypted: false, mayActivate: false),
-            .hidden
+            ConversationSecurityRowContent.resolve(isDirect: true, isEncrypted: false, mayToggle: false),
+            .directEntry(offersToggle: false)
         )
     }
 
-    func test_securityRow_directEncrypted_showsStateWithoutActivation() {
-        for mayActivate in [true, false] {
-            XCTAssertEqual(
-                ConversationSecurityRowContent.resolve(isDirect: true, isEncrypted: true, mayActivate: mayActivate),
-                .directEntry(offersActivation: false)
-            )
-        }
-    }
-
-    func test_securityRow_group_keepsSafetyNumberEntryWhenEncrypted() {
+    func test_securityRow_directEncrypted_offersDeactivationOnlyToTheAllowedRole() {
         XCTAssertEqual(
-            ConversationSecurityRowContent.resolve(isDirect: false, isEncrypted: true, mayActivate: false),
-            .safetyNumberEntry
+            ConversationSecurityRowContent.resolve(isDirect: true, isEncrypted: true, mayToggle: true),
+            .directEntry(offersToggle: true)
         )
         XCTAssertEqual(
-            ConversationSecurityRowContent.resolve(isDirect: false, isEncrypted: false, mayActivate: true),
-            .hidden
+            ConversationSecurityRowContent.resolve(isDirect: true, isEncrypted: true, mayToggle: false),
+            .directEntry(offersToggle: false)
+        )
+    }
+
+    /// #12880 — un groupe explique aussi son chiffrement, sans proposer de
+    /// bascule (#12844), et garde l'entrée du numéro de sécurité s'il est chiffré.
+    func test_securityRow_group_explainsAndKeepsSafetyNumberEntryWhenEncrypted() {
+        XCTAssertEqual(
+            ConversationSecurityRowContent.resolve(isDirect: false, isEncrypted: true, mayToggle: true),
+            .groupEntry(showsSafetyNumber: true)
+        )
+        XCTAssertEqual(
+            ConversationSecurityRowContent.resolve(isDirect: false, isEncrypted: false, mayToggle: true),
+            .groupEntry(showsSafetyNumber: false)
         )
     }
 
     func test_detailSheet_unencrypted_rendersActivationOnlyWhenAllowed() {
         XCTAssertEqual(
-            ConversationEncryptionDetailContent.resolve(isLoading: false, isEncrypted: false, mayActivate: true),
+            ConversationEncryptionDetailContent.resolve(isLoading: false, isEncrypted: false, mayToggle: true),
             .activation
         )
         XCTAssertEqual(
-            ConversationEncryptionDetailContent.resolve(isLoading: false, isEncrypted: false, mayActivate: false),
+            ConversationEncryptionDetailContent.resolve(isLoading: false, isEncrypted: false, mayToggle: false),
             .inactiveReadOnly
         )
     }
 
-    func test_detailSheet_encryptedOrLoading_neverRendersActivation() {
+    func test_detailSheet_encrypted_offersDeactivationOnlyToTheAllowedRole() {
         XCTAssertEqual(
-            ConversationEncryptionDetailContent.resolve(isLoading: false, isEncrypted: true, mayActivate: true),
-            .active
+            ConversationEncryptionDetailContent.resolve(isLoading: false, isEncrypted: true, mayToggle: true),
+            .active(offersDeactivation: true)
         )
         XCTAssertEqual(
-            ConversationEncryptionDetailContent.resolve(isLoading: true, isEncrypted: false, mayActivate: true),
+            ConversationEncryptionDetailContent.resolve(isLoading: false, isEncrypted: true, mayToggle: false),
+            .active(offersDeactivation: false)
+        )
+        XCTAssertEqual(
+            ConversationEncryptionDetailContent.resolve(isLoading: true, isEncrypted: false, mayToggle: true),
             .loading
         )
+    }
+
+    /// La passerelle sert `canToggleEncryption` (#12522, spec § 5.3) : il fait
+    /// foi ; une passerelle plus ancienne ne le sert pas, la politique de rôle
+    /// prend alors le relais.
+    func test_mayToggle_readsTheServedRight_elseFallsBackToTheRole() {
+        XCTAssertTrue(ConversationEncryptionActivationPolicy.mayToggle(served: true, platformRole: "USER"))
+        XCTAssertFalse(ConversationEncryptionActivationPolicy.mayToggle(served: false, platformRole: "ADMIN"))
+        XCTAssertTrue(ConversationEncryptionActivationPolicy.mayToggle(served: nil, platformRole: "ANALYST"))
+        XCTAssertFalse(ConversationEncryptionActivationPolicy.mayToggle(served: nil, platformRole: "USER"))
+    }
+
+    /// La bascule vue depuis le fil ouvert se DIT (#12522) : désactiver annonce
+    /// le retour de la traduction et de la transcription par le serveur.
+    func test_switchAnnouncement_saysWhatComesBackAfterDeactivation() {
+        let disabled = ConversationEncryptionChangedEvent(
+            conversationId: "c1", isEncrypted: false, mode: nil, epoch: 2, changedByUserId: "u1", changedAt: "2026-10-25T10:00:00.000Z"
+        )
+        let enabled = ConversationEncryptionChangedEvent(
+            conversationId: "c1", isEncrypted: true, mode: "e2ee", epoch: 3, changedByUserId: "u1", changedAt: "2026-10-25T10:00:00.000Z"
+        )
+
+        XCTAssertFalse(EncryptionSwitchAnnouncement.text(for: disabled).isEmpty)
+        XCTAssertNotEqual(EncryptionSwitchAnnouncement.text(for: disabled), EncryptionSwitchAnnouncement.text(for: enabled))
     }
 }

@@ -52,7 +52,7 @@ export type NotificationTarget =
   | { readonly route: 'discover'; readonly search: Readonly<Record<string, string>> }
   | { readonly route: 'userProfile'; readonly params: { readonly username: string } }
   | { readonly route: 'progression'; readonly search?: Readonly<Record<string, string>> }
-  | { readonly route: 'progressionLigue' | 'progressionSaison' | 'settings' };
+  | { readonly route: 'progressionLigue' | 'progressionSaison' | 'progressionCarnet' | 'settings' };
 
 /**
  * **LA DESTINATION D'UN TAP DE BANNIÈRE — elle n'est JAMAIS nulle** (#7305).
@@ -166,6 +166,13 @@ const GAME_LEAGUE_TYPES: ReadonlySet<string> = new Set(['game_duo_invited', 'gam
 const GAME_SEASON_TYPES: ReadonlySet<string> = new Set(['game_season_step']);
 
 /**
+ * Les étapes franchies app fermée (#10175, § 5.16.4) : le résumé groupé ouvre le CARNET, où l'étape se
+ * photographie. L'ancre de l'étape (`metadata.focusStepId`) ne voyage pas sur le fil push : le carnet sait
+ * lui-même ce qui reste à immortaliser.
+ */
+const GAME_PHOTO_TYPES: ReadonlySet<string> = new Set(['game_photo_moment']);
+
+/**
  * La mission personnelle du jour (#9539) : l'annonce du début de plage ouvre la Progression À la section des
  * missions (`?section=missions`), là où la carte décompte — pas au haut de la page.
  */
@@ -243,6 +250,7 @@ export function resolveTarget(input: NotificationTargetInput): PushTapTarget | n
 
   if (GAME_LEAGUE_TYPES.has(type)) return { route: 'progressionLigue' };
   if (GAME_SEASON_TYPES.has(type)) return { route: 'progressionSaison' };
+  if (GAME_PHOTO_TYPES.has(type)) return { route: 'progressionCarnet' };
   if (GAME_MISSION_TYPES.has(type)) return MISSIONS_SECTION;
   if (PROGRESSION_TYPES.has(type) && Object.hasOwn(PROGRESSION_TYPE_SECTIONS, type)) {
     return { route: 'progression', search: { [PROGRESSION_SECTION_PARAM]: PROGRESSION_TYPE_SECTIONS[type] ?? '' } };

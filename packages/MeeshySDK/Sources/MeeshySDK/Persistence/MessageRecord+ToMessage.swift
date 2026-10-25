@@ -169,7 +169,7 @@ extension MessageRecord {
             callSummary: uiCallSummary,
             joinNotice: systemNotice.join,
             captureNotice: systemNotice.capture,
-            arrivalsNotice: systemNotice.arrivals,
+            arrivalsNotice: systemNotice.arrivals, encryptionSwitchNotice: systemNotice.encryptionSwitch,
             location: uiLocation,
             sticker: uiSticker
         )

@@ -262,7 +262,7 @@ extension APIMessage {
             callSummary: callSummary,
             joinNotice: joinNotice,
             captureNotice: captureNotice,
-            arrivalsNotice: arrivalsNotice,
+            arrivalsNotice: arrivalsNotice, encryptionSwitchNotice: encryptionSwitchNotice,
             sticker: sticker,
             trackedLinkMap: trackedLinkMap
         )

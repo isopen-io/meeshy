@@ -9,22 +9,38 @@ import os
 /// seul site qui les touche ; le reste de l'app parle à
 /// `EndToEndMessagingProviding`.
 nonisolated final class LibsignalDeviceProvisioning: EndToEndDeviceProvisioning, @unchecked Sendable {
-    private let opened = OSAllocatedUnfairLock<(vault: E2EEGRDBRecordVault, lock: E2EEProcessLock)?>(uncheckedState: nil)
-    private let secrets = E2EEKeychainSecretStore()
-    private let directory: any E2EEDirectoryClientProviding
+    typealias Storage = (vault: E2EEGRDBRecordVault, lock: E2EEProcessLock)
 
-    init(directory: any E2EEDirectoryClientProviding = E2EEDirectoryClient()) {
+    private let lock = OSAllocatedUnfairLock()
+    private var opened: Storage?
+    private let secrets: any E2EESecretStoreProviding
+    private let directory: any E2EEDirectoryClientProviding
+    private let openStorage: @Sendable (any E2EESecretStoreProviding) throws -> Storage
+
+    /// `storage` ouvre la base et son verrou : ceux du groupe d'apps par défaut,
+    /// une base en mémoire pour les témoins (#12916).
+    init(
+        directory: any E2EEDirectoryClientProviding = E2EEDirectoryClient(),
+        secrets: any E2EESecretStoreProviding = E2EEKeychainSecretStore(),
+        storage: @escaping @Sendable (any E2EESecretStoreProviding) throws -> Storage = LibsignalDeviceProvisioning.appGroupStorage
+    ) {
         self.directory = directory
+        self.secrets = secrets
+        self.openStorage = storage
+    }
+
+    @Sendable static func appGroupStorage(secrets: any E2EESecretStoreProviding) throws -> Storage {
+        let processLock = try E2EEProcessLock.shared()
+        return (try E2EEGRDBRecordVault.shared(secrets: secrets, lock: processLock), processLock)
     }
 
     /// La base et son verrou, ouverts une fois par processus.
-    private func storage() throws -> (vault: E2EEGRDBRecordVault, lock: E2EEProcessLock) {
-        try opened.withLockUnchecked { slot in
-            if let slot { return slot }
-            let processLock = try E2EEProcessLock.shared()
-            let vault = try E2EEGRDBRecordVault.shared(secrets: secrets, lock: processLock)
-            slot = (vault, processLock)
-            return (vault, processLock)
+    private func storage() throws -> Storage {
+        try lock.withLock { _ in
+            if let opened { return opened }
+            let storage = try openStorage(secrets)
+            opened = storage
+            return storage
         }
     }
 

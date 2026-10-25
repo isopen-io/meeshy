@@ -1,5 +1,7 @@
 import { QueryClient, dehydrate, hydrate, type DehydratedState } from '@tanstack/react-query';
 
+import { endToEndRegimeLedger } from '@/lib/end-to-end-regime-ledger';
+
 import { createAccountCacheShelf } from './account-caches';
 import { ENGAGEMENT_PROGRESS_QUERY_KEY, keepNewerGameState } from './game-state-order';
 import { pruneGoneEphemerals } from './ephemeral-cache';
@@ -421,6 +423,11 @@ function currentBuster(): string {
  * effet de bord supplémentaire.
  */
 sessionStore.getState().restoreSession();
+/* #12949 — le registre du bout en bout se lie au compte restauré DÈS ICI,
+   avant la première peinture : un envoi au démarrage (lien profond, partage
+   entrant à froid) lit déjà ce que ce compte a vu chiffré de bout en bout. La
+   surveillance d'identité (`realtime.ts`, chargé plus tard) le suit ensuite. */
+endToEndRegimeLedger.getState().bind(sessionIdentityKey(sessionStore.getState().session));
 
 export const appQueryClient: AppQueryClient = createAppQueryClient({
   buster: currentBuster(),

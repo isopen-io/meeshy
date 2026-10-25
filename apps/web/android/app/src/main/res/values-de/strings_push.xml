@@ -3,4 +3,7 @@
     <!-- #8678 — le canal des bannières sans son (SilentNotificationChannel). -->
     <string name="push_channel_silent_name">Lautlose Benachrichtigungen</string>
     <string name="push_channel_silent_description">Benachrichtigungen ohne Ton, wenn der Ton in Meeshy ausgeschaltet ist</string>
+    <!-- #10266 — le canal des notifications du jeu (GameNotificationChannel). -->
+    <string name="push_channel_game_name">Spiel</string>
+    <string name="push_channel_game_description">Dein Abenteuer: Momente für deine Chronik, Duos, Liga und die Mission des Tages</string>
 </resources>

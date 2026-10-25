@@ -357,7 +357,7 @@ function buildPhotoAlertVectors() {
 }
 
 function buildPhotoDayVectors() {
-  return ['2026-10-11', '2026-02-29', '2026-13-01', '11/10/2026', ''].map((dayKey) =>
+  return ['2026-10-11', '2028-02-29', '2026-13-01', '11/10/2026', ''].map((dayKey) =>
     ({ _label: `réalisation du jour « ${dayKey} »`, input: { law: 'photo-moment', dayKey } as GameVectorInputPhotoDay, expected: evaluatePhotoDayVector({ law: 'photo-moment', dayKey }) }),
   );
 }

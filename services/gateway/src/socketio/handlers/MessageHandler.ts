@@ -756,6 +756,10 @@ export class MessageHandler {
               // plus sur un `select` déjà là — aucun aller-retour supplémentaire.
               messageType: true,
               createdAt: true,
+              // #12881 — ce que la LIGNE porte : un message scellé sous e2ee ne
+              // s'édite pas en clair après une désactivation.
+              isEncrypted: true,
+              encryptionMode: true,
               // Lu pour la réconciliation des mentions : une mention ajoutée en
               // éditant un message éphémère ne doit pas survivre à ce message.
               expiresAt: true,
@@ -763,8 +767,8 @@ export class MessageHandler {
               // PARTAGÉ, et le recomposer sans le lire écraserait `postReplyTo` et
               // `location`.
               metadata: true,
-              // #12792 — lus par `admitMessageEdit` (vue unique, chiffré) ; les pièces par `attachmentSocketSelect`.
-              isViewOnce: true, effectFlags: true, isEncrypted: true, encryptionMode: true,
+              // #12792 — lus par `admitMessageEdit` (vue unique) ; le chiffré ci-dessus (#12881), les pièces par `attachmentSocketSelect`.
+              isViewOnce: true, effectFlags: true,
               sender: { select: { id: true, userId: true, displayName: true, avatar: true, role: true } },
               // #7014 — `attachmentSocketSelect`, jamais `attachmentMediaSelect`
               // nu : ce que cette requête charge repart par

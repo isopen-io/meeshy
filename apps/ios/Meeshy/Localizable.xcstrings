@@ -21492,6 +21492,53 @@
         }
       }
     },
+    "conversation.send.e2ee.sealedMessageUneditable": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أُرسلت هذه الرسالة مشفرة: لا يمكن تعديلها."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diese Nachricht wurde verschlüsselt gesendet: Sie kann nicht bearbeitet werden."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This message was sent encrypted: it can’t be edited."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este mensaje se envió cifrado: no se puede editar."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ce message a été envoyé chiffré : il ne peut pas être modifié."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Questo messaggio è stato inviato crittografato: non può essere modificato."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esta mensagem foi enviada criptografada: ela não pode ser editada."
+          }
+        }
+      }
+    },
     "conversation.send.slow_mode": {
       "extractionState": "manual",
       "localizations": {
@@ -94509,53 +94556,6 @@
         }
       }
     },
-    "conversation.encryption.detail.activationFooter": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "التفعيل لا يمكن التراجع عنه. اختر الوضع الذي يناسب احتياجاتك في الترجمة والخصوصية."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Die Aktivierung ist unumkehrbar. Wähle den Modus, der zu deinen Übersetzungs- und Datenschutzanforderungen passt."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Activation is irreversible. Choose the mode that fits your translation and privacy needs."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "La activación es irreversible. Elige el modo que se ajuste a tus necesidades de traducción y privacidad."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "L'activation est irréversible. Choisissez le mode adapté à vos besoins de traduction et de confidentialité."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "L'attivazione è irreversibile. Scegli la modalità adatta alle tue esigenze di traduzione e privacy."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "A ativação é irreversível. Escolha o modo que atende às suas necessidades de tradução e privacidade."
-          }
-        }
-      }
-    },
     "conversation.encryption.detail.activeLabel": {
       "extractionState": "manual",
       "localizations": {
@@ -94693,53 +94693,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Ativada em"
-          }
-        }
-      }
-    },
-    "conversation.encryption.detail.immutabilityFooter": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "بعد التفعيل، لا يمكن تعطيل التشفير في هذه المحادثة. هذا يحمي من التراجع الأمني."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Nach der Aktivierung kann die Verschlüsselung für diese Unterhaltung nicht mehr deaktiviert werden. Das schützt vor Sicherheitsregressionen."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Once enabled, encryption cannot be disabled for this conversation. This protects against security regressions."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Una vez activado, el cifrado no se puede desactivar en esta conversación. Esto protege frente a regresiones de seguridad."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Une fois activé, le chiffrement ne peut plus être désactivé pour cette conversation. Cela protège contre les régressions de sécurité."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Una volta attivata, la crittografia non può essere disattivata per questa conversazione. Questo protegge da regressioni di sicurezza."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Depois de ativada, a criptografia não pode ser desativada nesta conversa. Isso protege contra regressões de segurança."
           }
         }
       }
@@ -95073,53 +95026,6 @@
         }
       }
     },
-    "conversation.encryption.detail.toggleEnabled": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "تم تفعيل التشفير"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Verschlüsselung aktiviert"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Encryption enabled"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cifrado activado"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Chiffrement activé"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Crittografia attivata"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Criptografia ativada"
-          }
-        }
-      }
-    },
     "conversation.encryption.detail.translation": {
       "extractionState": "manual",
       "localizations": {
@@ -95355,190 +95261,49 @@
         }
       }
     },
-    "conversation.encryption.menu.active": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "التشفير مفعّل — %@"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Verschlüsselung aktiv — %@"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Encryption on — %@"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cifrado activo — %@"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Chiffrement actif — %@"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Crittografia attiva — %@"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Criptografia ativa — %@"
-          }
-        }
-      }
-    },
-    "conversation.encryption.menu.inactive": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "محادثة غير مشفّرة — اضغط للتفعيل"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Unverschlüsselte Unterhaltung — zum Aktivieren tippen"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Unencrypted conversation — tap to enable"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Conversación sin cifrar: toca para activar"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Conversation non chiffrée — appuyez pour activer"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Conversazione non crittografata — tocca per attivare"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Conversa não criptografada — toque para ativar"
-          }
-        }
-      }
-    },
-    "conversation.encryption.menu.title": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "التشفير التام بين الطرفين"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ende-zu-Ende-Verschlüsselung"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "End-to-end encryption"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cifrado de extremo a extremo"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Chiffrement de bout en bout"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Crittografia end-to-end"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Criptografia de ponta a ponta"
-          }
-        }
-      }
-    },
     "conversation.encryption.mode.e2ee.description": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "أقصى درجات الخصوصية. الترجمة التلقائية غير متاحة."
+            "value": "أجهزة المشاركين وحدها تقرأ الرسائل. تتم الترجمة على الجهاز."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Maximale Privatsphäre. Automatische Übersetzung ist nicht verfügbar."
+            "value": "Nur die Geräte der Teilnehmenden lesen die Nachrichten. Die Übersetzung erfolgt auf dem Gerät."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Maximum privacy. Automatic translation is not available."
+            "value": "Only the participants’ devices read the messages. Translation happens on the device."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Privacidad máxima. La traducción automática no está disponible."
+            "value": "Solo los dispositivos de los participantes leen los mensajes. La traducción se hace en el dispositivo."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Confidentialité maximale. La traduction automatique n'est pas disponible."
+            "value": "Seuls les appareils des participants lisent les messages. La traduction se fait sur l’appareil."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Massima privacy. La traduzione automatica non è disponibile."
+            "value": "Solo i dispositivi dei partecipanti leggono i messaggi. La traduzione avviene sul dispositivo."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Privacidade máxima. A tradução automática não está disponível."
+            "value": "Só os aparelhos dos participantes leem as mensagens. A tradução acontece no aparelho."
           }
         }
       }
@@ -95596,43 +95361,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "طبقة مزدوجة. أبطأ، مع الحفاظ على الترجمة."
+            "value": "مشفّر على الخادم مثل وضع الخادم: يمكن للخادم قراءة الرسائل وترجمتها."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Doppelte Schicht. Langsamer, Übersetzung bleibt erhalten."
+            "value": "Auf dem Server verschlüsselt, wie der Servermodus: Der Server kann Nachrichten lesen und übersetzen."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Double layer. Slower, translation preserved."
+            "value": "Encrypted on the server, like Server mode: the server can read and translate messages."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Doble capa. Más lento, se conserva la traducción."
+            "value": "Cifrado en el servidor, como el modo Servidor: el servidor puede leer y traducir los mensajes."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Double couche. Plus lent, traduction préservée."
+            "value": "Chiffré sur le serveur, comme le mode Serveur : le serveur peut lire et traduire les messages."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Doppio livello. Più lento, traduzione preservata."
+            "value": "Cifrato sul server, come la modalità Server: il server può leggere e tradurre i messaggi."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Camada dupla. Mais lento, tradução preservada."
+            "value": "Criptografado no servidor, como o modo Servidor: o servidor pode ler e traduzir as mensagens."
           }
         }
       }
@@ -95643,43 +95408,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "هجين (تشفير تام + خادم)"
+            "value": "هجين (مشفّر على الخادم)"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Hybrid (E2EE + Server)"
+            "value": "Hybrid (auf dem Server verschlüsselt)"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Hybrid (E2EE + server)"
+            "value": "Hybrid (encrypted on the server)"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Híbrido (E2EE + servidor)"
+            "value": "Híbrido (cifrado en el servidor)"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Hybride (E2EE + serveur)"
+            "value": "Hybride (chiffré sur le serveur)"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ibrido (E2EE + server)"
+            "value": "Ibrido (cifrato sul server)"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Híbrido (E2EE + servidor)"
+            "value": "Híbrido (criptografado no servidor)"
           }
         }
       }
@@ -95690,43 +95455,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "محمي على الخادم. تبقى الترجمة متاحة (موصى به)."
+            "value": "مشفّر على الخادم. يمكن للخادم قراءة الرسائل، لذا تبقى الترجمة متاحة (موصى به)."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Serverseitig geschützt. Übersetzung bleibt verfügbar (empfohlen)."
+            "value": "Auf dem Server verschlüsselt. Der Server kann Nachrichten lesen, die Übersetzung bleibt verfügbar (empfohlen)."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Server protected. Translation remains available (recommended)."
+            "value": "Encrypted on the server. The server can read messages, so translation remains available (recommended)."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Protegido en el servidor. La traducción sigue disponible (recomendado)."
+            "value": "Cifrado en el servidor. El servidor puede leer los mensajes: la traducción sigue disponible (recomendado)."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Protégé côté serveur. La traduction reste disponible (recommandé)."
+            "value": "Chiffré sur le serveur. Le serveur peut lire les messages : la traduction reste disponible (recommandé)."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Protetto lato server. La traduzione resta disponibile (consigliato)."
+            "value": "Cifrato sul server. Il server può leggere i messaggi: la traduzione resta disponibile (consigliato)."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Protegido no servidor. A tradução permanece disponível (recomendado)."
+            "value": "Criptografado no servidor. O servidor pode ler as mensagens: a tradução permanece disponível (recomendado)."
           }
         }
       }
@@ -212775,6 +212540,54 @@
         }
       }
     },
+    "system.encryption.disabled": {
+      "comment": "Ligne d'aperçu d'une conversation (#7546/#7548) — catalogue partagé packages/shared/utils/conversation-preview-strings.ts, jetons {nom} substitués par ConversationPreviewStrings.",
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أوقف {actor} التشفير التام بين الطرفين"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{actor} hat die Ende-zu-Ende-Verschlüsselung deaktiviert"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{actor} turned off end-to-end encryption"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{actor} desactivó el cifrado de extremo a extremo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{actor} a désactivé le chiffrement de bout en bout"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{actor} ha disattivato la crittografia end-to-end"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{actor} desativou a criptografia de ponta a ponta"
+          }
+        }
+      }
+    },
     "system.encryption.e2ee": {
       "comment": "Ligne d'aperçu d'une conversation (#7546/#7548) — catalogue partagé packages/shared/utils/conversation-preview-strings.ts, jetons {nom} substitués par ConversationPreviewStrings.",
       "extractionState": "manual",
@@ -308535,6 +308348,2356 @@
           "stringUnit": {
             "state": "translated",
             "value": "Mensagem não criptografada — o remetente não foi verificado"
+          }
+        }
+      }
+    },
+    "conversation.encryption.detail.activationFooterSwitchable": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يمكنك إيقافه لاحقًا: تبقى الرسائل المشفّرة مشفّرة. اختر الوضع المناسب لاحتياجاتك في الترجمة والخصوصية."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Du kannst sie später deaktivieren: Bereits verschlüsselte Nachrichten bleiben verschlüsselt. Wähle den Modus, der zu deinen Übersetzungs- und Datenschutzbedürfnissen passt."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You can turn it off later: messages already encrypted will stay encrypted. Choose the mode that fits your translation and privacy needs."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Podrás desactivarlo más tarde: los mensajes ya cifrados seguirán cifrados. Elige el modo que se adapte a tus necesidades de traducción y privacidad."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vous pourrez le désactiver plus tard : les messages déjà chiffrés le resteront. Choisissez le mode adapté à vos besoins de traduction et de confidentialité."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Potrai disattivarla in seguito: i messaggi già crittografati resteranno tali. Scegli la modalità adatta alle tue esigenze di traduzione e riservatezza."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Você poderá desativá-la depois: as mensagens já criptografadas continuarão criptografadas. Escolha o modo adequado às suas necessidades de tradução e privacidade."
+          }
+        }
+      }
+    },
+    "conversation.encryption.detail.deactivate": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إيقاف التشفير"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verschlüsselung deaktivieren"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turn off encryption"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desactivar el cifrado"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Désactiver le chiffrement"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Disattiva la crittografia"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desativar a criptografia"
+          }
+        }
+      }
+    },
+    "conversation.encryption.detail.deactivationFooter": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تبقى الرسائل المشفّرة مشفّرة ومقروءة على أجهزتك. ستُرسل الرسائل الجديدة دون تشفير تام بين الطرفين: تعود لها الترجمة والنسخ من الخادم."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bereits verschlüsselte Nachrichten bleiben verschlüsselt und auf deinen Geräten lesbar. Neue Nachrichten werden ohne Ende-zu-Ende-Verschlüsselung gesendet: Übersetzung und Transkription durch den Server stehen für sie wieder zur Verfügung."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Messages already encrypted stay encrypted and readable on your devices. New messages will be sent without end-to-end encryption: server translation and transcription will return for them."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los mensajes ya cifrados siguen cifrados y legibles en tus dispositivos. Los nuevos mensajes se enviarán sin cifrado de extremo a extremo: la traducción y la transcripción del servidor volverán para ellos."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les messages déjà chiffrés le restent et demeurent lisibles sur vos appareils. Les nouveaux messages partiront sans chiffrement de bout en bout : la traduction et la transcription par le serveur reviendront pour eux."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "I messaggi già crittografati restano tali e leggibili sui tuoi dispositivi. I nuovi messaggi partiranno senza crittografia end-to-end: la traduzione e la trascrizione del server torneranno per loro."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "As mensagens já criptografadas continuam criptografadas e legíveis nos seus aparelhos. As novas mensagens serão enviadas sem criptografia de ponta a ponta: a tradução e a transcrição pelo servidor voltarão para elas."
+          }
+        }
+      }
+    },
+    "conversation.encryption.detail.deactivateConfirmTitle": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إيقاف التشفير التام بين الطرفين؟"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ende-zu-Ende-Verschlüsselung deaktivieren?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turn off end-to-end encryption?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Desactivar el cifrado de extremo a extremo?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Désactiver le chiffrement de bout en bout ?"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Disattivare la crittografia end-to-end?"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desativar a criptografia de ponta a ponta?"
+          }
+        }
+      }
+    },
+    "conversation.encryption.detail.deactivateConfirmMessage": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ستصبح الرسائل الجديدة مقروءة للخادم الذي يمكنه ترجمتها ونسخها. تبقى الرسائل المشفّرة مشفّرة. سيرى كل عضو هذا التغيير في المحادثة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Neue Nachrichten sind für den Server lesbar, der sie übersetzen und transkribieren kann. Bereits verschlüsselte Nachrichten bleiben verschlüsselt. Alle Mitglieder sehen diese Änderung im Verlauf."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New messages will be readable by the server, which can translate and transcribe them. Messages already encrypted stay encrypted. Every member will see this change in the thread."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los nuevos mensajes serán legibles por el servidor, que podrá traducirlos y transcribirlos. Los mensajes ya cifrados siguen cifrados. Cada miembro verá este cambio en la conversación."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les nouveaux messages seront lisibles par le serveur, qui pourra les traduire et les transcrire. Les messages déjà chiffrés le restent. Chaque membre verra ce changement dans le fil."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "I nuovi messaggi saranno leggibili dal server, che potrà tradurli e trascriverli. I messaggi già crittografati restano tali. Ogni membro vedrà questa modifica nella conversazione."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "As novas mensagens poderão ser lidas pelo servidor, que poderá traduzi-las e transcrevê-las. As mensagens já criptografadas continuam criptografadas. Cada membro verá essa mudança na conversa."
+          }
+        }
+      }
+    },
+    "conversation.encryption.detail.disabledNotice": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أُوقف التشفير: أصبحت الترجمة والنسخ من الخادم متاحين من جديد للرسائل الجديدة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verschlüsselung deaktiviert: Übersetzung und Transkription durch den Server sind für neue Nachrichten wieder verfügbar."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Encryption turned off: server translation and transcription are available again for new messages."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cifrado desactivado: la traducción y la transcripción del servidor vuelven a estar disponibles para los nuevos mensajes."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chiffrement désactivé : la traduction et la transcription par le serveur sont de nouveau disponibles pour les nouveaux messages."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crittografia disattivata: traduzione e trascrizione del server sono di nuovo disponibili per i nuovi messaggi."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Criptografia desativada: a tradução e a transcrição pelo servidor voltam a estar disponíveis para as novas mensagens."
+          }
+        }
+      }
+    },
+    "conversation.encryption.detail.regimeChanged": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "عدّل عضو آخر التشفير للتو: تم تحديث الحالة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Verschlüsselung wurde gerade von einem anderen Mitglied geändert: Der Status wurde aktualisiert."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Encryption was just changed by another member: the status has been refreshed."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Otro miembro acaba de modificar el cifrado: el estado se ha actualizado."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le chiffrement vient d’être modifié par un autre membre : l’état est actualisé."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un altro membro ha appena modificato la crittografia: lo stato è stato aggiornato."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Outro membro acabou de alterar a criptografia: o estado foi atualizado."
+          }
+        }
+      }
+    },
+    "conversation.send.e2ee.regimeChanged": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تغيّر تشفير هذه المحادثة للتو: لم تُرسل الرسالة. انقر لإعادة إرسالها وفق الإعداد الجديد."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Verschlüsselung dieser Unterhaltung hat sich gerade geändert: Die Nachricht wurde nicht gesendet. Tippe, um sie mit der neuen Einstellung erneut zu senden."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This conversation’s encryption just changed: the message wasn’t sent. Tap to resend it with the new setting."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El cifrado de esta conversación acaba de cambiar: el mensaje no se envió. Toca para reenviarlo con el nuevo ajuste."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le chiffrement de cette conversation vient de changer : le message n’est pas parti. Touchez pour le renvoyer selon le nouveau réglage."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La crittografia di questa conversazione è appena cambiata: il messaggio non è stato inviato. Tocca per reinviarlo con la nuova impostazione."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A criptografia desta conversa acabou de mudar: a mensagem não foi enviada. Toque para reenviá-la com a nova configuração."
+          }
+        }
+      }
+    },
+    "conversation.encryption.switched.enabled": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تم تفعيل التشفير التام بين الطرفين: تُشفّر الرسائل الجديدة على أجهزتك."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ende-zu-Ende-Verschlüsselung aktiviert: Neue Nachrichten werden auf deinen Geräten verschlüsselt."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "End-to-end encryption turned on: new messages are encrypted on your devices."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cifrado de extremo a extremo activado: los nuevos mensajes se cifran en tus dispositivos."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chiffrement de bout en bout activé : les nouveaux messages sont chiffrés sur vos appareils."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crittografia end-to-end attivata: i nuovi messaggi sono crittografati sui tuoi dispositivi."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Criptografia de ponta a ponta ativada: as novas mensagens são criptografadas nos seus aparelhos."
+          }
+        }
+      }
+    },
+    "conversation.encryption.switched.disabled": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أُوقف التشفير التام بين الطرفين: تعود الترجمة والنسخ من الخادم للرسائل الجديدة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ende-zu-Ende-Verschlüsselung deaktiviert: Übersetzung und Transkription durch den Server kehren für neue Nachrichten zurück."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "End-to-end encryption turned off: server translation and transcription return for new messages."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cifrado de extremo a extremo desactivado: la traducción y la transcripción del servidor vuelven para los nuevos mensajes."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chiffrement de bout en bout désactivé : la traduction et la transcription par le serveur reviennent pour les nouveaux messages."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crittografia end-to-end disattivata: traduzione e trascrizione del server tornano per i nuovi messaggi."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Criptografia de ponta a ponta desativada: a tradução e a transcrição pelo servidor voltam para as novas mensagens."
+          }
+        }
+      }
+    },
+    "conversation.send.e2ee.regimeDowngradeUnconfirmed": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يشير الخادم إلى أن التشفير التام بين الطرفين لهذه المحادثة قد عُطّل، لكن هذا التغيير لا يظهر في المحادثة: لم تُرسل الرسالة. افتح «التشفير» في معلومات المحادثة للتحقق."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Laut Server wurde die Ende-zu-Ende-Verschlüsselung dieser Unterhaltung deaktiviert, doch die Änderung erscheint nicht im Verlauf: Die Nachricht wurde nicht gesendet. Öffne „Verschlüsselung“ in den Infos der Unterhaltung, um es zu prüfen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The server says end-to-end encryption was turned off for this conversation, but the change doesn’t appear in the chat: the message wasn’t sent. Open Encryption in the conversation info to check."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El servidor indica que el cifrado de extremo a extremo de esta conversación se desactivó, pero el cambio no aparece en el chat: el mensaje no se envió. Abre Cifrado en la información de la conversación para comprobarlo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le serveur indique que le chiffrement de bout en bout de cette conversation a été désactivé, mais ce changement n’apparaît pas dans le fil : le message n’est pas parti. Ouvrez Chiffrement dans les infos de la conversation pour vérifier."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Il server indica che la crittografia end-to-end di questa conversazione è stata disattivata, ma la modifica non compare nella chat: il messaggio non è stato inviato. Apri Crittografia nelle info della conversazione per verificare."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O servidor indica que a criptografia de ponta a ponta desta conversa foi desativada, mas a mudança não aparece na conversa: a mensagem não foi enviada. Abra Criptografia nas informações da conversa para conferir."
+          }
+        }
+      }
+    },
+    "conversation.encryption.detail.downgradePending": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "كانت هذه المحادثة مشفّرة تمامًا بين الطرفين، ويقول الخادم الآن إنها لم تعد كذلك. لن يُرسل أي شيء في هذه المحادثة ما لم تؤكّد ذلك."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diese Unterhaltung war Ende-zu-Ende-verschlüsselt, und der Server meldet jetzt, dass sie es nicht mehr ist. Solange du das nicht bestätigst, wird in dieser Unterhaltung nichts gesendet."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This conversation was end-to-end encrypted, and the server now says it no longer is. Until you confirm it, nothing is sent in this conversation."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esta conversación estaba cifrada de extremo a extremo y el servidor dice ahora que ya no lo está. Mientras no lo confirmes, no se envía nada en esta conversación."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cette conversation a été chiffrée de bout en bout, et le serveur la dit maintenant sans chiffrement de bout en bout. Tant que vous ne le confirmez pas, rien ne part dans cette conversation."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Questa conversazione era crittografata end-to-end e il server ora dice che non lo è più. Finché non lo confermi, in questa conversazione non parte nulla."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esta conversa era criptografada de ponta a ponta, e o servidor agora diz que não é mais. Enquanto você não confirmar, nada é enviado nesta conversa."
+          }
+        }
+      }
+    },
+    "conversation.encryption.detail.downgradeConfirm": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "فهمت، الكتابة دون تشفير تام بين الطرفين"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verstanden, ohne Ende-zu-Ende-Verschlüsselung schreiben"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Got it, write without end-to-end encryption"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Entendido, escribir sin cifrado de extremo a extremo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "J’ai compris, écrire sans chiffrement de bout en bout"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ho capito, scrivi senza crittografia end-to-end"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Entendi, escrever sem criptografia de ponta a ponta"
+          }
+        }
+      }
+    },
+    "conversation.encryption.detail.downgradeFooter": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تبقى الرسائل المشفّرة مشفّرة. أما الجديدة فسيتمكّن الخادم من قراءتها وترجمتها وتفريغها نصيًا."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bereits verschlüsselte Nachrichten bleiben verschlüsselt. Neue kann der Server lesen, übersetzen und transkribieren."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Messages already encrypted stay encrypted. New ones will be readable by the server, which can translate and transcribe them."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los mensajes ya cifrados siguen cifrados. Los nuevos serán legibles por el servidor, que podrá traducirlos y transcribirlos."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les messages déjà chiffrés le restent. Les nouveaux seront lisibles par le serveur, qui pourra les traduire et les transcrire."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "I messaggi già crittografati restano tali. I nuovi saranno leggibili dal server, che potrà tradurli e trascriverli."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "As mensagens já criptografadas continuam assim. As novas poderão ser lidas pelo servidor, que poderá traduzi-las e transcrevê-las."
+          }
+        }
+      }
+    },
+    "conversation.encryption.summary.none": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "غير مشفّرة: تُخزَّن الرسائل على الخادم دون تشفير"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nicht verschlüsselt: Nachrichten werden unverschlüsselt auf dem Server gespeichert"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not encrypted: messages are stored unencrypted on the server"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sin cifrar: los mensajes se guardan sin cifrar en el servidor"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Non chiffrée : les messages sont stockés sans chiffrement sur le serveur"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Non crittografata: i messaggi sono archiviati senza crittografia sul server"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não criptografada: as mensagens são armazenadas sem criptografia no servidor"
+          }
+        }
+      }
+    },
+    "conversation.encryption.summary.server": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مشفّرة على الخادم: يمكن لـ Meeshy قراءة الرسائل"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auf dem Server verschlüsselt: Meeshy kann die Nachrichten lesen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Encrypted on the server: Meeshy can read the messages"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cifrada en el servidor: Meeshy puede leer los mensajes"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chiffrée sur le serveur : Meeshy peut lire les messages"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crittografata sul server: Meeshy può leggere i messaggi"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Criptografada no servidor: o Meeshy pode ler as mensagens"
+          }
+        }
+      }
+    },
+    "conversation.encryption.summary.hybrid": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مشفّرة على الخادم (الوضع الهجين): يمكن لـ Meeshy قراءة الرسائل"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auf dem Server verschlüsselt (Hybridmodus): Meeshy kann die Nachrichten lesen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Encrypted on the server (hybrid mode): Meeshy can read the messages"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cifrada en el servidor (modo híbrido): Meeshy puede leer los mensajes"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chiffrée sur le serveur (mode hybride) : Meeshy peut lire les messages"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crittografata sul server (modalità ibrida): Meeshy può leggere i messaggi"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Criptografada no servidor (modo híbrido): o Meeshy pode ler as mensagens"
+          }
+        }
+      }
+    },
+    "conversation.encryption.summary.endToEnd": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مشفّرة تمامًا بين الطرفين: أجهزة المشاركين وحدها تقرأ الرسائل"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ende-zu-Ende-verschlüsselt: Nur die Geräte der Teilnehmenden können die Nachrichten lesen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "End-to-end encrypted: only the participants’ devices can read the messages"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cifrada de extremo a extremo: solo los dispositivos de los participantes leen los mensajes"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chiffrée de bout en bout : seuls les appareils des participants lisent les messages"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crittografata end-to-end: solo i dispositivi dei partecipanti leggono i messaggi"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Criptografada de ponta a ponta: só os aparelhos dos participantes leem as mensagens"
+          }
+        }
+      }
+    },
+    "conversation.encryption.topic.whoReads": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "من يمكنه القراءة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wer mitlesen kann"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Who can read"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quién puede leer"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Qui peut lire"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chi può leggere"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quem pode ler"
+          }
+        }
+      }
+    },
+    "conversation.encryption.topic.available": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ما الذي يعمل"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Was funktioniert"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "What works"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lo que funciona"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ce qui fonctionne"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cosa funziona"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O que funciona"
+          }
+        }
+      }
+    },
+    "conversation.encryption.topic.absent": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "غير متاح في هذا الوضع"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In diesem Modus nicht verfügbar"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not available in this mode"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No disponible en este modo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Absent dans ce mode"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Non disponibile in questa modalità"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Indisponível neste modo"
+          }
+        }
+      }
+    },
+    "conversation.encryption.topic.notYet": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "غير متاح بعد"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Noch nicht verfügbar"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not available yet"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aún no disponible"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pas encore disponible"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Non ancora disponibile"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ainda não disponível"
+          }
+        }
+      }
+    },
+    "conversation.encryption.topic.devices": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أجهزتك"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deine Geräte"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your devices"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tus dispositivos"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vos appareils"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "I tuoi dispositivi"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seus aparelhos"
+          }
+        }
+      }
+    },
+    "conversation.encryption.topic.switching": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "التفعيل أو التعطيل"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein- oder ausschalten"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turning it on or off"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Activar o desactivar"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Activer ou désactiver"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Attivare o disattivare"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ativar ou desativar"
+          }
+        }
+      }
+    },
+    "conversation.encryption.fact.transitProtected": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "بين جهازك والخادم، تنتقل الرسائل دائمًا محمية."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zwischen deinem Gerät und dem Server sind Nachrichten immer geschützt unterwegs."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Between your device and the server, messages always travel protected."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Entre tu dispositivo y el servidor, los mensajes siempre viajan protegidos."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Entre votre appareil et le serveur, les messages voyagent toujours protégés."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tra il tuo dispositivo e il server, i messaggi viaggiano sempre protetti."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Entre seu aparelho e o servidor, as mensagens sempre viajam protegidas."
+          }
+        }
+      }
+    },
+    "conversation.encryption.fact.storedWithoutEncryption": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "على الخادم، تُخزَّن الرسائل دون تشفير: يمكن لـ Meeshy قراءتها."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auf dem Server werden Nachrichten unverschlüsselt gespeichert: Meeshy kann sie lesen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "On the server, messages are stored unencrypted: Meeshy can read them."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "En el servidor, los mensajes se guardan sin cifrar: Meeshy puede leerlos."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sur le serveur, les messages sont stockés sans chiffrement : Meeshy peut les lire."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sul server i messaggi sono archiviati senza crittografia: Meeshy può leggerli."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No servidor, as mensagens são armazenadas sem criptografia: o Meeshy pode lê-las."
+          }
+        }
+      }
+    },
+    "conversation.encryption.fact.encryptedOnServerServerReads": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "على الخادم، تُشفَّر الرسائل بمفتاح يملكه Meeshy: يمكن لـ Meeshy قراءتها لترجمتها وتفريغها نصيًا."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auf dem Server werden Nachrichten mit einem Schlüssel verschlüsselt, den Meeshy besitzt: Meeshy kann sie lesen, um sie zu übersetzen und zu transkribieren."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "On the server, messages are encrypted with a key Meeshy holds: Meeshy can read them to translate and transcribe them."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "En el servidor, los mensajes se cifran con una clave que tiene Meeshy: Meeshy puede leerlos para traducirlos y transcribirlos."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sur le serveur, les messages sont chiffrés avec une clé que Meeshy détient : Meeshy peut les lire pour les traduire et les transcrire."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sul server i messaggi sono crittografati con una chiave che Meeshy possiede: Meeshy può leggerli per tradurli e trascriverli."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No servidor, as mensagens são criptografadas com uma chave que o Meeshy possui: o Meeshy pode lê-las para traduzi-las e transcrevê-las."
+          }
+        }
+      }
+    },
+    "conversation.encryption.fact.hybridIsServerToday": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يعمل الوضع الهجين حاليًا مثل وضع الخادم: لا تضيف الأجهزة أي تشفير تام بين الطرفين."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Hybridmodus funktioniert derzeit wie der Servermodus: Die Geräte fügen keine Ende-zu-Ende-Verschlüsselung hinzu."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hybrid mode currently works like Server mode: devices add no end-to-end encryption."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El modo híbrido funciona hoy como el modo Servidor: los dispositivos no añaden cifrado de extremo a extremo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le mode hybride fonctionne aujourd’hui comme le mode Serveur : les appareils n’ajoutent aucun chiffrement de bout en bout."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La modalità ibrida oggi funziona come la modalità Server: i dispositivi non aggiungono crittografia end-to-end."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O modo híbrido hoje funciona como o modo Servidor: os aparelhos não adicionam criptografia de ponta a ponta."
+          }
+        }
+      }
+    },
+    "conversation.encryption.fact.onlyParticipantsRead": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أجهزة المشاركين وحدها يمكنها قراءة الرسائل. لا يملك Meeshy المفاتيح ولا يمكنه قراءتها."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nur die Geräte der Teilnehmenden können die Nachrichten lesen. Meeshy hat die Schlüssel nicht und kann sie nicht lesen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Only the participants’ devices can read the messages. Meeshy doesn’t have the keys and can’t read them."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Solo los dispositivos de los participantes pueden leer los mensajes. Meeshy no tiene las claves y no puede leerlos."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seuls les appareils des participants peuvent lire les messages. Meeshy n’a pas les clés et ne peut pas les lire."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Solo i dispositivi dei partecipanti possono leggere i messaggi. Meeshy non ha le chiavi e non può leggerli."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Só os aparelhos dos participantes podem ler as mensagens. O Meeshy não tem as chaves e não pode lê-las."
+          }
+        }
+      }
+    },
+    "conversation.encryption.fact.everyServerFeature": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "جميع الميزات متاحة: الترجمة التلقائية، تفريغ الرسائل الصوتية، معاينة الإشعارات، البحث."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alle Funktionen sind verfügbar: automatische Übersetzung, Transkription von Sprachnachrichten, Benachrichtigungsvorschau, Suche."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Every feature is available: automatic translation, voice message transcription, notification previews, search."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Todas las funciones están disponibles: traducción automática, transcripción de audios, vista previa de notificaciones, búsqueda."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toutes les fonctions sont disponibles : traduction automatique, transcription des vocaux, aperçu des notifications, recherche."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tutte le funzioni sono disponibili: traduzione automatica, trascrizione dei vocali, anteprima delle notifiche, ricerca."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Todas as funções estão disponíveis: tradução automática, transcrição de áudios, prévia das notificações, busca."
+          }
+        }
+      }
+    },
+    "conversation.encryption.fact.translatedOnDevice": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تتم الترجمة التلقائية على جهازك، وليس على الخادم أبدًا."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die automatische Übersetzung erfolgt auf deinem Gerät, nie auf dem Server."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automatic translation happens on your device, never on the server."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La traducción automática se hace en tu dispositivo, nunca en el servidor."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La traduction automatique se fait sur votre appareil, jamais sur le serveur."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La traduzione automatica avviene sul tuo dispositivo, mai sul server."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A tradução automática acontece no seu aparelho, nunca no servidor."
+          }
+        }
+      }
+    },
+    "conversation.encryption.fact.noServerTranscription": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا يفرّغ الخادم الرسائل الصوتية نصيًا."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Server transkribiert keine Sprachnachrichten."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The server doesn’t transcribe voice messages."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El servidor no transcribe los mensajes de voz."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le serveur ne transcrit pas les messages vocaux."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Il server non trascrive i messaggi vocali."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O servidor não transcreve as mensagens de voz."
+          }
+        }
+      }
+    },
+    "conversation.encryption.fact.noNotificationPreview": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا تعرض الإشعارات نص الرسالة: فالخادم لا يعرفه."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Benachrichtigungen zeigen den Nachrichtentext nicht an: Der Server kennt ihn nicht."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Notifications don’t show the message text: the server doesn’t know it."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Las notificaciones no muestran el texto del mensaje: el servidor no lo conoce."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les notifications n’affichent pas le texte du message : le serveur ne le connaît pas."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le notifiche non mostrano il testo del messaggio: il server non lo conosce."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "As notificações não mostram o texto da mensagem: o servidor não o conhece."
+          }
+        }
+      }
+    },
+    "conversation.encryption.fact.noSearch": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا يجد بحث الخادم هذه الرسائل."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Serversuche findet diese Nachrichten nicht."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Server search doesn’t find these messages."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La búsqueda del servidor no encuentra estos mensajes."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La recherche du serveur ne trouve pas ces messages."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La ricerca del server non trova questi messaggi."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A busca do servidor não encontra estas mensagens."
+          }
+        }
+      }
+    },
+    "conversation.encryption.fact.noEdit": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا يمكن تعديل رسالة مُرسلة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eine gesendete Nachricht kann nicht bearbeitet werden."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A sent message can’t be edited."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un mensaje enviado no se puede editar."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un message envoyé ne peut pas être modifié."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un messaggio inviato non può essere modificato."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uma mensagem enviada não pode ser editada."
+          }
+        }
+      }
+    },
+    "conversation.encryption.fact.noForward": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا يمكن إعادة توجيه رسالة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eine Nachricht kann nicht weitergeleitet werden."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A message can’t be forwarded."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un mensaje no se puede reenviar."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un message ne peut pas être transféré."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un messaggio non può essere inoltrato."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uma mensagem não pode ser encaminhada."
+          }
+        }
+      }
+    },
+    "conversation.encryption.fact.noOfflineSending": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "دون اتصال، لا تُوضع الرسالة في قائمة الانتظار: أعد إرسالها بعد الاتصال."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Offline wird eine Nachricht nicht vorgemerkt: Sende sie erneut, sobald du verbunden bist."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Offline, a message isn’t queued: resend it once you’re connected."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sin conexión, el mensaje no queda en espera: reenvíalo cuando tengas conexión."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hors connexion, un message n’est pas mis en attente : renvoyez-le une fois connecté."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Offline un messaggio non viene messo in coda: rinvialo quando sei connesso."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sem conexão, a mensagem não fica na fila: reenvie quando estiver conectado."
+          }
+        }
+      }
+    },
+    "conversation.encryption.fact.notYetAttachments": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا يمكن بعد إرسال الصور والفيديوهات والملفات والرسائل الصوتية والمواقع والملصقات."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fotos, Videos, Dateien, Sprachnachrichten, Standorte und Sticker können noch nicht gesendet werden."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Photos, videos, files, voice messages, locations and stickers can’t be sent yet."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aún no se pueden enviar fotos, vídeos, archivos, audios, ubicaciones ni stickers."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Photos, vidéos, fichiers, vocaux, lieux et stickers ne peuvent pas encore être envoyés."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Foto, video, file, vocali, posizioni e sticker non possono ancora essere inviati."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fotos, vídeos, arquivos, áudios, locais e figurinhas ainda não podem ser enviados."
+          }
+        }
+      }
+    },
+    "conversation.encryption.fact.notYetDecryptedNotifications": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "فكّ تشفير الإشعارات على الجهاز لعرض نصها غير متاح بعد."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Entschlüsseln von Benachrichtigungen auf dem Gerät, um ihren Text anzuzeigen, ist noch nicht verfügbar."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Decrypting notifications on the device, to show their text, isn’t available yet."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aún no está disponible descifrar las notificaciones en el dispositivo para mostrar su texto."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le déchiffrement des notifications sur l’appareil, pour en afficher le texte, n’est pas encore disponible."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La decrittografia delle notifiche sul dispositivo, per mostrarne il testo, non è ancora disponibile."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A descriptografia das notificações no aparelho, para mostrar o texto, ainda não está disponível."
+          }
+        }
+      }
+    },
+    "conversation.encryption.fact.notYetGroups": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "التشفير التام بين الطرفين للمجموعات غير متاح بعد في التطبيق."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ende-zu-Ende-Verschlüsselung für Gruppen ist in der App noch nicht verfügbar."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "End-to-end encryption for groups isn’t available in the app yet."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El cifrado de extremo a extremo de los grupos aún no está disponible en la app."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le chiffrement de bout en bout des groupes n’est pas encore disponible dans l’application."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La crittografia end-to-end dei gruppi non è ancora disponibile nell’app."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A criptografia de ponta a ponta dos grupos ainda não está disponível no app."
+          }
+        }
+      }
+    },
+    "conversation.encryption.fact.groupSendingUnavailable": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "في هذه المجموعة، لا يستطيع التطبيق بعد إرسال رسائل مشفّرة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In dieser Gruppe kann die App noch keine verschlüsselten Nachrichten senden."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In this group, the app can’t send encrypted messages yet."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "En este grupo, la app aún no puede enviar mensajes cifrados."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dans ce groupe, l’application ne peut pas encore envoyer de message chiffré."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In questo gruppo l’app non può ancora inviare messaggi crittografati."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Neste grupo, o app ainda não pode enviar mensagens criptografadas."
+          }
+        }
+      }
+    },
+    "conversation.encryption.fact.notYetSafetyNumbers": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "التحقق من أرقام الأمان مع جهات اتصالك غير متاح بعد."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Überprüfen der Sicherheitsnummern mit deinen Kontakten ist noch nicht verfügbar."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verifying safety numbers with your contacts isn’t available yet."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La verificación de los números de seguridad con tus contactos aún no está disponible."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La vérification des numéros de sécurité avec vos contacts n’est pas encore disponible."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La verifica dei numeri di sicurezza con i tuoi contatti non è ancora disponibile."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A verificação dos números de segurança com seus contatos ainda não está disponível."
+          }
+        }
+      }
+    },
+    "conversation.encryption.fact.oneKeyPerDevice": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لكل جهاز مفتاحه الخاص، ولا يغادره أبدًا."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jedes Gerät hat seinen eigenen Schlüssel, der es nie verlässt."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Each device has its own key, which never leaves it."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada dispositivo tiene su propia clave, que nunca sale de él."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chaque appareil a sa propre clé, qui ne le quitte jamais."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ogni dispositivo ha la propria chiave, che non lo lascia mai."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada aparelho tem a própria chave, que nunca sai dele."
+          }
+        }
+      }
+    },
+    "conversation.encryption.fact.deviceLimit": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يمكن أن يضم حسابك حتى 16 جهازًا مشفّرًا. بعد ذلك، يقترح التطبيق إزالة أحدها؛ ولا يقرأ الجهاز المُزال الرسائل المشفّرة الجديدة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dein Konto kann bis zu 16 verschlüsselte Geräte haben. Darüber hinaus schlägt die App vor, eines zu entfernen; ein entferntes Gerät liest keine neuen verschlüsselten Nachrichten mehr."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your account can have up to 16 encrypted devices. Beyond that, the app offers to remove one; a removed device no longer reads new encrypted messages."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tu cuenta puede tener hasta 16 dispositivos cifrados. Más allá, la app te propone quitar uno; un dispositivo quitado ya no lee los nuevos mensajes cifrados."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Votre compte peut avoir jusqu’à 16 appareils chiffrés. Au-delà, l’application vous propose d’en retirer un ; un appareil retiré ne lit plus les nouveaux messages chiffrés."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Il tuo account può avere fino a 16 dispositivi crittografati. Oltre, l’app ti propone di rimuoverne uno; un dispositivo rimosso non legge più i nuovi messaggi crittografati."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sua conta pode ter até 16 aparelhos criptografados. Além disso, o app propõe remover um; um aparelho removido não lê mais as novas mensagens criptografadas."
+          }
+        }
+      }
+    },
+    "conversation.encryption.fact.restoredDeviceIsNew": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يُعدّ الجهاز المُعاد تثبيته أو استعادته جهازًا جديدًا: لا يقرأ الرسائل المشفّرة المستلمة قبل ذلك."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein neu installiertes oder wiederhergestelltes Gerät gilt als neues Gerät: Es liest zuvor empfangene verschlüsselte Nachrichten nicht."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A reinstalled or restored device counts as a new device: it can’t read encrypted messages received before."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un dispositivo reinstalado o restaurado cuenta como nuevo: no lee los mensajes cifrados recibidos antes."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un appareil réinstallé ou restauré compte comme un nouvel appareil : il ne lit pas les messages chiffrés reçus avant."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un dispositivo reinstallato o ripristinato conta come nuovo: non legge i messaggi crittografati ricevuti prima."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Um aparelho reinstalado ou restaurado conta como novo: ele não lê as mensagens criptografadas recebidas antes."
+          }
+        }
+      }
+    },
+    "conversation.encryption.fact.whoMayToggle": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "خلال مرحلة الاختبار، يمكن فقط لأعضاء المحادثة الذين لديهم دور في فريق Meeshy (محلّل أو أعلى) تفعيل التشفير أو تعطيله؛ وفي المجموعة يجب أن يكونوا مشرفين أيضًا."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Während der Testphase können nur Mitglieder der Unterhaltung mit einer Meeshy-Teamrolle (Analyst oder höher) die Verschlüsselung ein- oder ausschalten; in einer Gruppe müssen sie zudem Moderator sein."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "During the test phase, only conversation members with a Meeshy team role (analyst or above) can turn encryption on or off; in a group, they must also be a moderator."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Durante la fase de pruebas, solo los miembros de la conversación con un rol del equipo Meeshy (analista o superior) pueden activar o desactivar el cifrado; en un grupo, también deben ser moderadores."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pendant la phase de test, seuls les membres de la conversation qui ont un rôle d’équipe Meeshy (analyste ou plus) peuvent activer ou désactiver le chiffrement ; dans un groupe, il faut aussi en être modérateur."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Durante la fase di test, solo i membri della conversazione con un ruolo nel team Meeshy (analista o superiore) possono attivare o disattivare la crittografia; in un gruppo devono anche esserne moderatori."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Durante a fase de testes, só os membros da conversa com uma função na equipe Meeshy (analista ou acima) podem ativar ou desativar a criptografia; em um grupo, também precisam ser moderadores."
+          }
+        }
+      }
+    },
+    "conversation.encryption.fact.switchKeepsHistory": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا يغيّر التبديل إلا الرسائل الجديدة: تبقى الرسائل المشفّرة تمامًا بين الطرفين كذلك، مقروءة على الأجهزة التي استلمتها."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein Wechsel betrifft nur neue Nachrichten: Bereits Ende-zu-Ende-verschlüsselte bleiben es, lesbar auf den Geräten, die sie empfangen haben."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A switch only changes new messages: those already end-to-end encrypted stay so, readable on the devices that received them."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un cambio solo afecta a los mensajes nuevos: los ya cifrados de extremo a extremo siguen así, legibles en los dispositivos que los recibieron."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Une bascule ne change que les nouveaux messages : ceux déjà chiffrés de bout en bout le restent, lisibles sur les appareils qui les ont reçus."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un cambio riguarda solo i nuovi messaggi: quelli già crittografati end-to-end restano tali, leggibili sui dispositivi che li hanno ricevuti."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uma troca só muda as novas mensagens: as já criptografadas de ponta a ponta continuam assim, legíveis nos aparelhos que as receberam."
+          }
+        }
+      }
+    },
+    "conversation.encryption.fact.switchIsShownInThread": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يظهر كل تفعيل أو تعطيل في المحادثة لجميع الأعضاء."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jedes Ein- und Ausschalten wird im Verlauf für alle Mitglieder angezeigt."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Each time it’s turned on or off, it shows in the chat for every member."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada activación o desactivación aparece en el chat para todos los miembros."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chaque activation ou désactivation s’affiche dans le fil, pour tous les membres."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ogni attivazione o disattivazione compare nella chat per tutti i membri."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada ativação ou desativação aparece na conversa para todos os membros."
+          }
+        }
+      }
+    },
+    "conversation.encryption.fact.switchNeverResendsInClear": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إذا عُطّل التشفير التام بين الطرفين، فلن يُرسل شيء بدونه حتى ترى التغيير في المحادثة أو تؤكّده هنا."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wird die Ende-zu-Ende-Verschlüsselung ausgeschaltet, wird nichts ohne sie gesendet, bis du die Änderung im Verlauf gesehen oder hier bestätigt hast."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "If end-to-end encryption is turned off, nothing is sent without it until you’ve seen the change in the chat or confirmed it here."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Si se desactiva el cifrado de extremo a extremo, no se envía nada sin él hasta que veas el cambio en el chat o lo confirmes aquí."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Si le chiffrement de bout en bout est désactivé, rien ne part sans lui tant que vous n’avez pas vu ce changement dans le fil ou ne l’avez pas confirmé ici."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se la crittografia end-to-end viene disattivata, non parte nulla senza di essa finché non hai visto la modifica nella chat o non l’hai confermata qui."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se a criptografia de ponta a ponta for desativada, nada é enviado sem ela até você ver a mudança na conversa ou confirmá-la aqui."
+          }
+        }
+      }
+    },
+    "conversation.encryption.detail.translation.onDevice": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "على الجهاز"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auf dem Gerät"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "On the device"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "En el dispositivo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sur l’appareil"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sul dispositivo"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No aparelho"
           }
         }
       }
