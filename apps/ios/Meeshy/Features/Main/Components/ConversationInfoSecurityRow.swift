@@ -17,6 +17,9 @@ struct ConversationInfoSecurityRow: View {
     let isDark: Bool
     let appearAnimation: Bool
     let onVerifySafetyNumber: () -> Void
+    /// Le contact d'un tête-à-tête, pour ouvrir l'autre fil de la paire (#12966).
+    var peer: ConversationEncryptionPeer?
+    var onOpenConversation: (String) -> Void = { _ in }
     var mayToggleEncryption: Bool = ConversationEncryptionActivationPolicy.mayToggle(
         served: nil, platformRole: AuthManager.shared.currentUser?.role
     )
@@ -109,7 +112,9 @@ struct ConversationInfoSecurityRow: View {
                 conversationId: conversationId,
                 accentColor: accentColor,
                 fallbackMayToggle: offersToggle,
-                isDirect: isDirect
+                isDirect: isDirect,
+                peer: isDirect ? peer : nil,
+                onOpenConversation: onOpenConversation
             )
         }
     }

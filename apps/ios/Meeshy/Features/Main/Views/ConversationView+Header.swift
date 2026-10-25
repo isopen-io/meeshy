@@ -26,7 +26,7 @@ extension ConversationView {
             knownAttachment: { id in model.messages.lazy.flatMap(\.attachments).first { $0.id == id } },
             viewModel: model,
             deviceTranslationEnabled: !previewMode && anonymousSession == nil,
-            encryptionMode: liveConversation?.encryptionMode,
+            encryptionMode: model.startupDependencies.encryptedEra.encryptionMode(liveConversation?.encryptionMode, in: model),
             onRepaint: { admitRepainted($0(liveConversation)) },
             onAppearanceChange: { admitAppearance($0) }
         )
@@ -672,7 +672,9 @@ struct ConversationBackgroundLayer: View {
         .onReceive(ConversationEncryptionChannel.shared.changed.receive(on: DispatchQueue.main)) { event in
             guard event.conversationId == conversationId else { return }
             onRepaint { $0?.adoptingEncryption(event) }
-            FeedbackToastManager.shared.show(EncryptionSwitchAnnouncement.text(for: event), type: .info)
+            if let announcement = EncryptionSwitchAnnouncement.text(for: event) {
+                FeedbackToastManager.shared.show(announcement, type: .info)
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: ConversationAppearanceChange.notification).receive(on: DispatchQueue.main)) { note in
             onAppearanceChange(note)

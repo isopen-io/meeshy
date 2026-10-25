@@ -161,10 +161,9 @@ final class EndToEndPlaintextLawTests: XCTestCase {
     func test_wireTranslations_refusedForMessagesOfTheEncryptedEra() {
         let regime = EndToEndRegime(encryptionMode: "e2ee", enabledAt: activation)
 
-        XCTAssertFalse(regime.admitsWireTranslations(forMessageCreatedAt: Date(timeIntervalSince1970: 900)))
-        XCTAssertFalse(regime.admitsWireTranslations(forMessageCreatedAt: nil), "un message inconnu se lit dans l'ère chiffrée")
-        XCTAssertTrue(regime.admitsWireTranslations(forMessageCreatedAt: Date(timeIntervalSince1970: 100)))
-        XCTAssertTrue(EndToEndRegime.serverReadable.admitsWireTranslations(forMessageCreatedAt: nil))
+        XCTAssertFalse(regime.admitsWireTranslations(of: message(createdAt: Date(timeIntervalSince1970: 900))))
+        XCTAssertTrue(regime.admitsWireTranslations(of: message(createdAt: Date(timeIntervalSince1970: 100))))
+        XCTAssertTrue(EndToEndRegime.serverReadable.admitsWireTranslations(of: message(createdAt: Date(timeIntervalSince1970: 900))))
     }
 
     func test_myOwnMessage_isOrdinary() {

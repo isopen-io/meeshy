@@ -6,9 +6,12 @@ public struct CreateConversationRequest: Encodable {
     public let type: String
     public let title: String?
     public let participantIds: [String]
+    /// Un tête-à-tête que le serveur lit, à côté du chiffré de bout en bout de
+    /// la paire (#12966) ; absent du corps quand il n'est pas demandé.
+    public let plaintext: Bool?
 
-    public init(type: String, title: String? = nil, participantIds: [String]) {
-        self.type = type; self.title = title; self.participantIds = participantIds
+    public init(type: String, title: String? = nil, participantIds: [String], plaintext: Bool? = nil) {
+        self.type = type; self.title = title; self.participantIds = participantIds; self.plaintext = plaintext
     }
 }
 

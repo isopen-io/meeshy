@@ -303,7 +303,7 @@ final class ConversationListPreviewLoader: ObservableObject {
     ) -> ConversationPreviewSnapshot {
         let sealed = messages.map { Self.isReadableOnDevice($0) ? $0 : Self.sealedForPreview($0) }
         let unencrypted = Set(sealed.filter { EndToEndPlaintextLaw.standing(of: $0, in: regime).isUnencrypted }.map(\.id))
-        let wireWithheld = Set(sealed.filter { !regime.admitsWireTranslations(forMessageCreatedAt: $0.createdAt) }.map(\.id))
+        let wireWithheld = Set(sealed.filter { !regime.admitsWireTranslations(of: $0) }.map(\.id))
         let withheldIds = Set(sealed.filter { $0.isEncrypted || Self.holdsBurnOnRead($0) }.map(\.id))
             .union(unencrypted)
             .union(wireWithheld)

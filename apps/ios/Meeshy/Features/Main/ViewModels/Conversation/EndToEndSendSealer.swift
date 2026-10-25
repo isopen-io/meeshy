@@ -29,27 +29,19 @@ struct EndToEndSendSealer {
     let endToEnd: any EndToEndMessagingProviding
     /// L'époque du régime appris (#12522), déclarée par l'envoi scellé.
     var regimeEpoch: Int?
-    /// Le serveur annonce une désactivation que l'utilisateur n'a pas vue
-    /// (#12846) : rien ne part, ni scellé ni en clair, et l'interface le dit.
-    var downgradeUnconfirmed = false
     /// Le régime a changé côté serveur : le fil le relit.
     var onRegimeStale: @MainActor () -> Void = {}
     var toast: any FeedbackToastSurfacing = FeedbackToastManager.shared
 
-    /// Une désactivation non vue garde le chemin scellé : aucun clair n'en sort.
     var requiresSeal: Bool {
-        downgradeUnconfirmed || EndToEndSendGate.requiresSeal(conversationEncryptionModes: encryptionModes)
-    }
-
-    private var downgradeRefusal: EndToEndSendRefusal? {
-        downgradeUnconfirmed ? .regimeDowngradeUnconfirmed : nil
+        EndToEndSendGate.requiresSeal(conversationEncryptionModes: encryptionModes)
     }
 
     /// L'édition d'un message chiffré n'a pas encore d'enveloppe (#12541).
-    var editRefusal: EndToEndSendRefusal? { downgradeRefusal ?? (requiresSeal ? .editUnsealable : nil) }
+    var editRefusal: EndToEndSendRefusal? { requiresSeal ? .editUnsealable : nil }
 
     /// Un message envoyé chiffré reste chiffré à jamais (#12881, spec § 5.2) :
-    /// après une désactivation, son clair déchiffré sur l'appareil ne part pas.
+    /// son clair déchiffré sur l'appareil ne part pas en clair.
     func editRefusal(for message: Message?) -> EndToEndSendRefusal? {
         if let refusal = editRefusal { return refusal }
         guard let message, message.isEncrypted || message.isContentDecryptedOnDevice else { return nil }
@@ -58,7 +50,7 @@ struct EndToEndSendSealer {
 
     /// Une pièce se téléverse EN CLAIR avant même que le message parte : en
     /// E2EE, elle ne se téléverse pas.
-    var pieceRefusal: EndToEndSendRefusal? { downgradeRefusal ?? (requiresSeal ? .contentUnsealable : nil) }
+    var pieceRefusal: EndToEndSendRefusal? { requiresSeal ? .contentUnsealable : nil }
 
     /// Hors ligne, rien de chiffré ne peut attendre dans l'outbox.
     func offlineRefusal(for outgoing: OutgoingMessage) -> EndToEndSendRefusal? {
@@ -68,7 +60,6 @@ struct EndToEndSendSealer {
 
     /// Ce qui interdit de sceller cet envoi avant toute tentative.
     func sealRefusal(for outgoing: OutgoingMessage) -> EndToEndSendRefusal? {
-        if let downgradeRefusal { return downgradeRefusal }
         if let refusal = EndToEndSendGate.refusal(for: outgoing, isDirect: isDirect, peerUserId: peerUserId) { return refusal }
         return senderUserId.isEmpty ? .recipientUnsealable : nil
     }
@@ -219,29 +210,27 @@ extension Notification.Name {
 }
 
 extension EndToEndSendSealer {
-    /// Le régime se lit à TROIS sources — la ligne qui a ouvert le fil, la
-    /// conversation relue du cache, et ce que le fil a appris depuis
-    /// (`EndToEndRegimeLedger`) — plus l'avis de désactivation affiché dans le
-    /// fil. Un régime DATÉ appris depuis fait foi pour sceller ; pour rendre
-    /// le clair là où cet appareil a vu le bout en bout, il faut en plus que
-    /// l'utilisateur ait vu la bascule (#12846).
+    /// Le régime se lit à QUATRE sources — la ligne qui a ouvert le fil, la
+    /// conversation relue du cache, la mémoire du compte que le registre tient
+    /// (`EndToEndRegimeLedger`) et l'avis d'activation affiché dans le fil :
+    /// une seule qui dit le bout en bout scelle, et aucune rétrogradation
+    /// servie ne rouvre le clair (#12949).
     init(_ viewModel: ConversationViewModel) {
         let ledger = viewModel.collaborators.regimeLedger
-        let sending = ledger.sending(
+        let seals = ledger.seals(
             for: viewModel.conversationId,
             opening: viewModel.encryptionModeAtOpening,
             cached: viewModel.currentConversation?.encryptionMode,
-            evidence: EncryptionSwitchNoticeTrail.evidence(in: viewModel.messages)
+            activationShownAt: EncryptionSwitchNoticeTrail.activationShownAt(in: viewModel.messages)
         )
         self.init(
             conversationId: viewModel.conversationId,
-            encryptionModes: sending == .plaintext ? [] : [E2EEWire.mode],
+            encryptionModes: seals ? [E2EEWire.mode] : [],
             isDirect: viewModel.isDirect,
             peerUserId: viewModel.participantUserId,
             senderUserId: viewModel.currentUserId,
             endToEnd: viewModel.endToEnd,
-            regimeEpoch: ledger.regime(for: viewModel.conversationId)?.epoch,
-            downgradeUnconfirmed: sending.awaitsConfirmation,
+            regimeEpoch: ledger.epoch(for: viewModel.conversationId),
             onRegimeStale: { [refresher = viewModel.collaborators.regimeRefresher, id = viewModel.conversationId] in
                 refresher.refresh(conversationId: id)
             }
@@ -249,36 +238,17 @@ extension EndToEndSendSealer {
     }
 }
 
-/// Ce que le fil OUVERT montre du régime (#12846) : ses signaux, datés par
-/// le serveur — messages chiffrés de bout en bout (un message supprimé reste la
-/// preuve qu'on l'a vu), avis de bascule (lignes système non supprimées,
-/// rendues depuis leur métadonnée). Seul un message d'utilisateur compte pour
-/// « bout en bout vu » ; seule une ligne système compte pour une bascule.
+/// L'activation du bout en bout que le fil OUVERT affiche (#12846, #12949) :
+/// la ligne système d'activation, rendue depuis sa métadonnée. Un avis de
+/// désactivation déjà en base s'affiche comme un historique et ne rouvre rien ;
+/// un message chiffré isolé n'est pas un régime (des tête-à-tête sans régime en
+/// portent sur staging). Rend l'instant de la première activation affichée.
 enum EncryptionSwitchNoticeTrail {
-    typealias Signal = EndToEndRegimeLedger.ThreadEvidence.Signal
-
-    static func evidence(in messages: [Message]) -> EndToEndRegimeLedger.ThreadEvidence {
-        let signals = messages.compactMap(signal(of:))
-        return EndToEndRegimeLedger.ThreadEvidence(
-            latest: signals.max { $0.at < $1.at }?.signal,
-            endToEndShown: signals.contains { $0.signal == .endToEnd || isEnable($0.signal) }
-        )
-    }
-
-    private static func signal(of message: Message) -> (signal: Signal, at: Date)? {
-        if message.messageSource == .user, message.isEncrypted,
-           DeviceTranslationEligibility.isEndToEnd(message, conversationEncryptionMode: nil) {
-            return (.endToEnd, message.createdAt)
-        }
-        guard message.messageSource == .system, message.deletedAt == nil, let notice = message.encryptionSwitchNotice else { return nil }
-        if notice.disablesEndToEnd { return (.disabled(epoch: notice.epoch), message.createdAt) }
-        if notice.enablesEndToEnd { return (.enabled(epoch: notice.epoch), message.createdAt) }
-        return nil
-    }
-
-    private static func isEnable(_ signal: Signal) -> Bool {
-        if case .enabled = signal { return true }
-        return false
+    static func activationShownAt(in messages: [Message]) -> Date? {
+        messages
+            .filter { $0.messageSource == .system && $0.encryptionSwitchNotice?.enablesEndToEnd == true }
+            .map(\.createdAt)
+            .min()
     }
 }
 
@@ -337,9 +307,6 @@ extension EndToEndSendRefusal {
         case .deviceLimitReached:
             String(localized: "conversation.send.e2ee.deviceLimitReached",
                    defaultValue: "Votre compte a atteint le nombre maximal d’appareils chiffrés : retirez-en un pour écrire depuis celui-ci.", bundle: .main)
-        case .regimeDowngradeUnconfirmed:
-            String(localized: "conversation.send.e2ee.regimeDowngradeUnconfirmed",
-                   defaultValue: "Le serveur indique que le chiffrement de bout en bout de cette conversation a été désactivé, mais ce changement n’apparaît pas dans le fil : le message n’est pas parti. Ouvrez Chiffrement dans les infos de la conversation pour vérifier.", bundle: .main)
         }
     }
 }

@@ -75,8 +75,14 @@ class PostCommentsViewModelTest {
         every { socialSocket.commentReactionRemoved } returns commentReactionRemoved
         every { socialSocket.commentTranslationUpdated } returns commentTranslationUpdated
         val handle = SavedStateHandle(if (postId == null) emptyMap() else mapOf("postId" to postId))
-        return PostCommentsViewModel(repository, session, socialSocket, config, mentionSearch, handle)
+        return PostCommentsViewModel(repository, session, socialSocket, config, mentionSearch, handle, mediaUploader = uploader)
     }
+
+    private val uploader: CommentMediaUploader = mockk(relaxed = true)
+
+    private fun uploadedMedia(id: String) = me.meeshy.sdk.model.UploadedMedia(id, "https://x/$id.jpg", "image/jpeg", 2, 10, 10, null, null)
+
+    private fun photo(name: String = "a.jpg") = me.meeshy.sdk.media.MediaUploadItem(byteArrayOf(1, 2), name, "image/jpeg")
 
     /** Fake directory lookup: records the queries it saw, returns a per-query or default candidate list. */
     private class FakeMentionSearch(
@@ -244,6 +250,38 @@ class PostCommentsViewModelTest {
             assertThat(s.comments.map { it.id }).containsExactly("a")
             assertThat(s.errorMessage).isEqualTo("nope")
         }
+    }
+
+    @Test
+    fun `a photo joined to a comment uploads as a comment and leaves with its id, even without text`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns NetworkResult.Success(emptyList())
+        coEvery { uploader.upload(any()) } returns NetworkResult.Success(listOf(uploadedMedia("m1")))
+        coEvery { repository.addComment("p1", "", any(), any(), any(), any(), listOf("m1")) } returns
+            NetworkResult.Success(comment("real", content = ""))
+        val vm = viewModel()
+        vm.attachMedia(photo())
+        assertThat(vm.state.value.attachments.attachmentIds).containsExactly("m1")
+        vm.submit()
+        coVerify(exactly = 1) { repository.addComment("p1", "", null, null, any(), any(), listOf("m1")) }
+        assertThat(vm.state.value.attachments.hasMedia).isFalse()
+    }
+
+    @Test
+    fun `a retouched piece replaces the old one in place and uploads again, and a failed upload leaves the tray`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns NetworkResult.Success(emptyList())
+        coEvery { uploader.upload(any()) } returnsMany listOf(
+            NetworkResult.Success(listOf(uploadedMedia("m1"))),
+            NetworkResult.Success(listOf(uploadedMedia("m2"))),
+            NetworkResult.Failure(ApiError(message = "nope")),
+        )
+        val vm = viewModel()
+        vm.attachMedia(photo())
+        val id = vm.state.value.attachments.pieces.single().id
+        vm.replaceMedia(id, photo("a_retouche.jpg"))
+        assertThat(vm.state.value.attachments.pieces.single().item.fileName).isEqualTo("a_retouche.jpg")
+        assertThat(vm.state.value.attachments.attachmentIds).containsExactly("m2")
+        vm.attachMedia(photo("b.jpg"))
+        assertThat(vm.state.value.attachments.pieces.map { it.id }).containsExactly(id)
     }
 
     @Test

@@ -15,9 +15,9 @@ import type { ConversationEncryptionCatalogKey } from '@/lib/i18n-conversation-e
  * Le bout en bout ne se désactive pas (#12949, décision porteur du
  * 2026-10-25) : la fiche d'une conversation e2ee le dit — avec, pour un
  * groupe, la seule façon de revenir au clair (une nouvelle conversation) ; un
- * tête-à-tête ne la promet pas, la passerelle rendant le tête-à-tête existant
- * (#12966) — et celle d'une conversation que le serveur lit prévient avant
- * d'activer.
+ * tête-à-tête mène à la conversation non chiffrée qui existe à côté de lui
+ * (#12966, `PLAINTEXT_DIRECT_KEY`) — et celle d'une conversation que le
+ * serveur lit prévient avant d'activer.
  *
  * Toute évolution touche les deux.
  */
@@ -126,3 +126,11 @@ export const FACT_KEY = {
   endToEndNeverTurnedOffDirect: 'conversationEncryption.fact.endToEndNeverTurnedOffDirect',
   serverCannotTurnItOff: 'conversationEncryption.fact.serverCannotTurnItOff',
 } as const satisfies Record<ExplanationFact, ConversationEncryptionCatalogKey>;
+
+/** Le geste d'un tête-à-tête chiffré de bout en bout : la conversation non chiffrée à côté (#12966). */
+export const PLAINTEXT_DIRECT_KEY = {
+  open: 'conversationEncryption.plaintextDirect.open',
+  busy: 'conversationEncryption.plaintextDirect.busy',
+  failed: 'conversationEncryption.plaintextDirect.failed',
+  offline: 'conversationEncryption.plaintextDirect.offline',
+} as const satisfies Record<string, ConversationEncryptionCatalogKey>;

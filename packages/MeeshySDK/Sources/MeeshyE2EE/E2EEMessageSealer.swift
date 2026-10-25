@@ -1,4 +1,5 @@
 import Foundation
+import LibSignalClient
 import MeeshySDK
 
 /// Ce qu'un envoi libsignal porte sur le fil (spec § 4.3) : une enveloppe par
@@ -66,7 +67,7 @@ public final class E2EEMessageSealer: E2EEMessageSealing {
     }
 
     public func seal(_ content: E2EEContent, to peerUserId: String) async throws -> E2EESealedMessage {
-        let plaintext = try content.encoded()
+        let plaintext = try content.authored(by: local.userId, deviceId: local.deviceId).encoded()
         let peerTargets = try await targets(of: peerUserId)
         guard !peerTargets.isEmpty else { throw E2EESealError.recipientHasNoDevice(userId: peerUserId) }
         let own = try await ownTargets()
@@ -117,8 +118,20 @@ public final class E2EEMessageSealer: E2EEMessageSealing {
     /// Mes autres appareils : approuvés (ils reçoivent leur enveloppe) ou non.
     private func ownTargets() async throws -> (approved: [Target], unapproved: [UInt32]) {
         let others = try await directory.devices(userId: local.userId).devices.filter { $0.deviceId != local.deviceId }
-        let pinned = try others.filter { try approvals.approvedIdentity(of: $0.deviceId) != nil }
-        let opened = try await withSessions(userId: local.userId, pinned)
+        let pinned = try others.filter { device in
+            try approvals.approval(of: device.deviceId)?.covers(registrationId: device.registrationId) == true
+        }
+        var opened: [Target] = []
+        for device in pinned {
+            do {
+                if let target = try await withSessions(userId: local.userId, [device]).first { opened.append(target) }
+            } catch SignalError.untrustedIdentity {
+                // Son bundle ne porte pas la clé épinglée : le store le refuse
+                // (isTrustedIdentity), il ne reçoit rien et l'envoi continue.
+                // Toute autre erreur remonte : une copie ne se perd pas en silence.
+                continue
+            }
+        }
         let approved = try opened.filter { target in
             try cipher.remoteIdentity(of: target.address) == approvals.approvedIdentity(of: target.address.deviceId)
         }

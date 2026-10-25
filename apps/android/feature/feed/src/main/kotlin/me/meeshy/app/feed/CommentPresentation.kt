@@ -14,6 +14,10 @@ import me.meeshy.ui.component.bubble.PostLanguageStrip
  * by [CommentProjection] so the resolution stays unit-testable and the Compose layer
  * stays dumb.
  */
+/** Un média d'un commentaire : sa vignette (absente pour une vidéo sans image d'aperçu) et sa nature. */
+@Immutable
+data class CommentMediaPreview(val id: String, val thumbnailUrl: String?, val isVideo: Boolean)
+
 @Immutable
 data class CommentPresentation(
     val id: String,
@@ -31,6 +35,8 @@ data class CommentPresentation(
     val isPending: Boolean,
     val isOwn: Boolean,
     val depth: Int = 0,
+    /** Les médias joints au commentaire (#12972), dans leur ordre. */
+    val media: List<CommentMediaPreview> = emptyList(),
 ) {
     /**
      * Libellé TalkBack d'une ligne — iso `ReplyCell.accessibilityLabel` : « <nom>, réponse. <contenu>.
@@ -98,8 +104,16 @@ object CommentProjection {
             isPending = isPending,
             isOwn = currentUserId != null && comment.author?.id == currentUserId,
             depth = depth,
+            media = mediaPreviews(comment, mediaBaseUrl),
         )
     }
+
+    private fun mediaPreviews(comment: ApiPostComment, mediaBaseUrl: String?): List<CommentMediaPreview> =
+        comment.media.orEmpty().sortedBy { it.order ?: 0 }.map { media ->
+            val isVideo = media.mimeType?.startsWith("video") == true
+            val still = media.thumbnailUrl?.takeIf { it.isNotBlank() } ?: media.fileUrl?.takeIf { it.isNotBlank() && !isVideo }
+            CommentMediaPreview(media.id, still?.let { resolveFeedMediaUrl(it, mediaBaseUrl) }, isVideo)
+        }
 
     /**
      * The effective displayed language for [comment]: the viewer's [override] when it

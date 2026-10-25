@@ -103,15 +103,24 @@ type ConvShape = {
   type?: string;
 } | null;
 
+/**
+ * #12966 — un tête-à-tête a DEUX membres : l'autre membre, inscrit et sans
+ * rôle, s'ajoute aux participants que le cas déclare (un tête-à-tête ne se
+ * chiffre de bout en bout qu'entre deux personnes).
+ */
+const DIRECT_PEER = { userId: '507f1f77bcf86cd7994390d0', role: 'member', user: { role: 'USER' } };
+
 function makeConversation(conv: ConvShape) {
   if (!conv) return null;
+  const type = conv.type ?? 'group';
+  const declared = conv.participants ?? [{ userId: USER_ID, role: 'MEMBER' }];
   return {
     id: CONV_ID,
     encryptionEnabledAt: conv.encryptionEnabledAt ?? null,
     encryptionMode: conv.encryptionMode ?? null,
     encryptionEnabledBy: conv.encryptionEnabledBy ?? null,
-    participants: conv.participants ?? [{ userId: USER_ID, role: 'MEMBER' }],
-    type: conv.type ?? 'group',
+    participants: type === 'direct' && declared.length === 1 ? [...declared, DIRECT_PEER] : declared,
+    type,
   };
 }
 
@@ -127,6 +136,8 @@ function makePrisma(opts: {
         ? jest.fn().mockRejectedValue(conversationFindError)
         : jest.fn().mockResolvedValue(makeConversation(conversation)),
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      // #12966 — la paire n'a pas d'autre tête-à-tête.
+      findMany: jest.fn().mockResolvedValue([]),
       update: jest.fn().mockResolvedValue({
         id: CONV_ID,
         encryptionEnabledAt: new Date(),

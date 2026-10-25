@@ -355,10 +355,10 @@ final class ConversationViewModelDirectEncryptionSendTests: XCTestCase {
 
         ledger.learn(mode: "server", for: conversationId)
 
-        XCTAssertNil(ledger.mode(for: conversationId))
+        XCTAssertFalse(ledger.seals(for: conversationId, opening: nil, cached: nil))
         ledger.learn(mode: "e2ee", for: conversationId)
         ledger.learn(mode: "server", for: conversationId)
-        XCTAssertEqual(ledger.mode(for: conversationId), "e2ee", "l'activation ne se défait pas")
+        XCTAssertTrue(ledger.seals(for: conversationId, opening: nil, cached: nil), "l'activation ne se défait pas")
     }
 
     /// Le geste du jour et la flamme ne se posent que pour un message qui PART.
@@ -508,12 +508,10 @@ final class ConversationViewModelDirectEncryptionSendTests: XCTestCase {
     }
 
     /// #12881 — un message scellé sous e2ee reste chiffré à jamais (spec § 5.2) :
-    /// même après une désactivation que l'utilisateur a VUE (#12846), son clair
+    /// même dans une conversation que rien ne dit plus chiffrée, son clair
     /// déchiffré sur l'appareil ne part pas.
-    func test_editMessage_messageScelleApresDesactivation_refuseSansAppelReseau() async throws {
+    func test_editMessage_messageScelleDansUneConversationEnClair_refuseSansAppelReseau() async throws {
         let ledger = EndToEndRegimeLedger()
-        ledger.learn(ConversationEncryptionStatus(isEncrypted: false, mode: nil, epoch: 2), for: conversationId)
-        ledger.confirmDowngrade(epoch: 2, for: conversationId)
         let sut = try await makeSUT(endToEnd: failingEndToEnd(), encryptionMode: nil, ledger: ledger)
         var sealed = Message(
             id: "00000000000000000000cd44", conversationId: conversationId, senderId: userId,

@@ -726,6 +726,8 @@ export interface CreateConversationRequest {
   readonly participants?: readonly string[]; // Alias pour la rétrocompatibilité
   readonly communityId?: string;
   readonly identifier?: string;
+  /** Tête-à-tête seulement (#12966) : obtenir ou créer celui que le serveur lit, à côté d'un tête-à-tête chiffré de bout en bout. */
+  readonly plaintext?: boolean;
 }
 
 /**

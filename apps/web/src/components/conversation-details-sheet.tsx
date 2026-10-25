@@ -21,6 +21,8 @@ import type { PortailPartage } from '@/lib/view/invitation';
 import { canCreateShareLink } from '@/lib/view/share-link-eligibility';
 import type { StoryRingOf } from '@/lib/view/use-author-story-rings';
 import { useConversationManageCatalog } from '@/lib/view/use-conversation-manage-catalog';
+import { plaintextDirectGesture } from '@/lib/view/plaintext-direct-gesture';
+import { href, navigate } from '@/routes/route-table';
 
 import { ConversationDetailsAvatar } from './conversation-details-avatar';
 import { ConversationMembersSection } from './conversation-details-members';
@@ -162,6 +164,19 @@ export function ConversationDetailsSheet({
   const canViewStats = signedIn;
   const createdOn = createdOnOf(conversation.createdAt, language);
 
+  /* #12966 — la conversation non chiffrée à côté d'un tête-à-tête chiffré : la feuille se referme, le fil s'ouvre. */
+  const plaintextDirect = plaintextDirectGesture({
+    deps,
+    conversation,
+    viewerId,
+    fallbackName: title,
+    online: () => navigator.onLine,
+    go: (id) => {
+      onClose();
+      navigate(href('thread', { conversation: id }));
+    },
+  });
+
   const departures = onRequestDeparture === undefined ? [] : departureKindsOf(conversation);
   const canLeave = departures.includes('leave');
   const canShare = canCreateShareLink(conversation);
@@ -234,7 +249,7 @@ export function ConversationDetailsSheet({
         ) : null}
 
         <Suspense fallback={null}>
-          <ConversationEncryptionSection conversation={conversation} />
+          <ConversationEncryptionSection conversation={conversation} plaintextDirect={plaintextDirect} />
         </Suspense>
 
         <ConversationMediaSection

@@ -40,9 +40,13 @@ const ar = {
   'conversationEncryption.fact.switchIsShownInThread': 'يظهر كل تفعيل أو تعطيل في المحادثة لجميع الأعضاء.',
   'conversationEncryption.fact.endToEndIsFinal': 'بعد تفعيله، لا يمكن إيقاف التشفير التام بين الطرفين.',
   'conversationEncryption.fact.endToEndNeverTurnedOff': 'لا يمكن إيقاف التشفير التام بين الطرفين. للدردشة بدونه، أنشئ محادثة جديدة.',
-  'conversationEncryption.fact.endToEndNeverTurnedOffDirect': 'لا يمكن إيقاف التشفير التام بين الطرفين: تبقى هذه المحادثة الثنائية مشفّرة.',
+  'conversationEncryption.fact.endToEndNeverTurnedOffDirect': 'لا يمكن إيقاف التشفير التام بين الطرفين: تبقى هذه المحادثة الثنائية مشفّرة. للدردشة بدونه مع هذا الشخص، افتح بجانبها محادثة غير مشفّرة: كلتاهما في القائمة، وهذه مميّزة بقفل.',
   'conversationEncryption.fact.serverCannotTurnItOff': 'على هذا المتصفح، بعد رؤية هذه المحادثة مشفّرة تمامًا بين الطرفين، لن يكتب حسابك فيها أبدًا دون تشفير، حتى لو عرضها الخادم لاحقًا بشكل مختلف.',
   'conversationEncryption.fact.webCannotReadYet': 'على الويب، لا يمكن بعد قراءة الرسائل المشفّرة تمامًا بين الطرفين أو كتابتها: افتح هذه المحادثة في تطبيق iOS.',
+  'conversationEncryption.plaintextDirect.open': 'فتح محادثة غير مشفّرة مع {name}',
+  'conversationEncryption.plaintextDirect.busy': 'جارٍ الفتح…',
+  'conversationEncryption.plaintextDirect.failed': 'تعذّر فتح المحادثة غير المشفّرة. حاول مجددًا.',
+  'conversationEncryption.plaintextDirect.offline': 'أنت غير متصل: أعد الاتصال لفتح المحادثة غير المشفّرة.',
 } satisfies ConversationEncryptionCatalog;
 
 export default ar;
