@@ -155,13 +155,20 @@ nonisolated enum NSEAttachmentPolicy {
     /// Ce qui survit au scellé : router le toucher (conversation, message,
     /// post, commentaire, appel), dater, compter, nommer l'expéditeur, et
     /// déclarer la protection. Rien qui décrive le contenu.
+    ///
+    /// Un appel entrant se scelle comme le reste : ses clés sont ADMISES une
+    /// à une plutôt que son type exempté, pour qu'une clé de contenu ajoutée
+    /// demain à sa charge reste refusée. Décrocher depuis la bannière exige
+    /// les serveurs ICE (`iceServers`, le relais TURN) et l'avatar de
+    /// l'appelant : ni l'un ni l'autre ne décrit le contenu de la conversation.
     static let sealedConversationKeys: Set<String> = [
         "type", "notificationId", "conversationId", "conversationTitle", "conversationType", "messageId",
         "postId", "postType", "commentId", "parentCommentId", "friendRequestId", "route",
         "contentId", "contentType",
         "senderId", "senderUsername", "senderDisplayName", "senderAvatar", "imageURL",
         "unreadCount", "badge", "createdAt", "ephemeralDuration", "effectFlags", "replacesActorSubject",
-        "callType", "isVideo", "callBackLabel", "callId", "callerUserId", "callerName",
+        "callType", "isVideo", "callBackLabel", "callId", "callerUserId", "callerName", "callerAvatar",
+        "iceServers",
         "isEncrypted", "apiBaseURL",
     ]
 
