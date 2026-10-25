@@ -10,8 +10,10 @@ import type { ApiFailure, ApiResult, HttpTransport } from './http';
  *  - `GET /e2ee/devices` (#13014, `E2EEOwnDevice`) — MES appareils où le
  *    chiffrement de bout en bout est activé : numéro, plateforme, nom déclaré,
  *    enrôlé le, vu le, et s'il est celui de la session qui lit (`current`) ;
- *  - `DELETE /e2ee/devices/:deviceId` — le retirer. La passerelle révoque son
- *    identité ET ferme sa session (un appareil volé ne se réenrôle pas).
+ *  - `DELETE /e2ee/devices/:deviceId?registrationId=` — le retirer, en nommant
+ *    la génération lue. La passerelle
+ *    ferme sa session PUIS révoque son identité (un appareil volé ne se
+ *    réenrôle pas) ; une session qui ne se ferme pas rend 503, rien retiré.
  *
  * Le navigateur n'a aucune pile libsignal (#12975) : il ne s'enrôle pas, il
  * n'approuve rien. L'APPROBATION d'un appareil par un autre vit sur chaque
@@ -40,6 +42,12 @@ export type E2eeDevice = {
   readonly enrolledAt: string | null;
   readonly lastSeenAt: string | null;
   readonly current: boolean;
+  /**
+   * La GÉNÉRATION de la place, telle que lue (#13014) : le retrait la nomme, et
+   * une place reprise depuis est refusée (409 `E2EE_DEVICE_CHANGED`) au lieu
+   * de retirer un autre appareil. Absente ⇒ l'écran ne propose pas le retrait.
+   */
+  readonly registrationId: number | null;
 };
 
 const optionalText = z.optional(z.nullable(z.string()));
@@ -51,7 +59,10 @@ const WireDevice = z.object({
   enrolledAt: optionalText,
   lastSeenAt: optionalText,
   current: z.optional(z.nullable(z.boolean())),
+  registrationId: z.optional(z.unknown()),
 });
+
+const RegistrationId = z.number().check(z.int(), z.gte(1), z.lte(0x3fff));
 
 /** Un nom DÉCLARÉ ne porte ni contrôle ni renversement d'orientation (U+202E) : « iPhone de Awa » ne se maquille pas. */
 const UNSAFE_CHARACTERS = /[\u0000-\u001f\u007f-\u009f؜‎‏‪-‮⁦-⁩]/g;
@@ -78,6 +89,7 @@ export function decodeE2eeDevice(raw: unknown): E2eeDevice | null {
     enrolledAt: textOrNull(wire.enrolledAt),
     lastSeenAt: textOrNull(wire.lastSeenAt),
     current: wire.current === true,
+    registrationId: RegistrationId.safeParse(wire.registrationId).success ? (wire.registrationId as number) : null,
   };
 }
 
@@ -99,9 +111,15 @@ export async function loadE2eeDevices(params: E2eeDeviceDeps & { readonly signal
   return { ok: true, data: devices };
 }
 
-export async function retireE2eeDevice(deps: E2eeDeviceDeps, deviceId: number): Promise<ApiResult<unknown>> {
+export type E2eeDeviceGeneration = { readonly deviceId: number; readonly registrationId: number };
+
+export const E2EE_DEVICE_CHANGED = 'E2EE_DEVICE_CHANGED';
+
+/** Retire la génération LUE, jamais la place : celle-ci a pu être reprise par un autre appareil depuis la liste. */
+export async function retireE2eeDevice(deps: E2eeDeviceDeps, device: E2eeDeviceGeneration): Promise<ApiResult<unknown>> {
   if (__FIXTURES__ && deps.source === 'fixtures') return NOT_SERVED;
-  return deps.transport.request<unknown>({ method: 'DELETE', path: e2eeEndpoints.devicesByDeviceId(String(deviceId)) });
+  const query = new URLSearchParams({ registrationId: String(device.registrationId) });
+  return deps.transport.request<unknown>({ method: 'DELETE', path: `${e2eeEndpoints.devicesByDeviceId(String(device.deviceId))}?${query.toString()}` });
 }
 
 /** La courante en tête, puis la plus récemment vue. */

@@ -251,6 +251,28 @@ describe('routes /e2ee', () => {
     expect(stillListed.json().data.devices).toHaveLength(1);
     expect(retried.json().data).toEqual({ deviceId: 1, retired: true, signedOut: true });
   });
+  it("le retrait depuis une autre session ferme la session de l'appareil PAR DÉFAUT — aucun client n'a à le demander", async () => {
+    const { app, closedSessions } = await buildApp();
+    await app.inject({ method: 'POST', url: '/e2ee/devices', headers: { 'x-test-user': 'alice' }, payload: enrollment(ALICE) });
+
+    const res = await app.inject({ method: 'DELETE', url: '/e2ee/devices/1', headers: { 'x-test-user': 'aliceAndroid' } });
+
+    expect(res.json().data).toEqual({ deviceId: 1, retired: true, signedOut: true });
+    expect(closedSessions).toEqual([{ userId: ALICE, sessionId: SESSIONS.alice }]);
+  });
+
+  it("une session dont l'appareil a été retiré ne réenrôle plus aucun appareil : il faut une nouvelle connexion", async () => {
+    const { app } = await buildApp();
+    await app.inject({ method: 'POST', url: '/e2ee/devices', headers: { 'x-test-user': 'alice' }, payload: enrollment(ALICE) });
+    await app.inject({ method: 'DELETE', url: '/e2ee/devices/1', headers: { 'x-test-user': 'alice' } });
+
+    const sameSession = await app.inject({ method: 'POST', url: '/e2ee/devices', headers: { 'x-test-user': 'alice' }, payload: enrollment(ALICE) });
+    const freshLogin = await app.inject({ method: 'POST', url: '/e2ee/devices', headers: { 'x-test-user': 'aliceWeb' }, payload: enrollment(ALICE) });
+
+    expect(sameSession.statusCode).toBe(403);
+    expect(sameSession.json().code).toBe(E2EE_ERROR_CODES.SESSION_RETIRED);
+    expect(freshLogin.statusCode).toBe(201);
+  });
 
   it("un retrait qui nomme une génération périmée ne ferme ni ne retire l'appareil qui a repris la place", async () => {
     const { app, store, closedSessions } = await buildApp();

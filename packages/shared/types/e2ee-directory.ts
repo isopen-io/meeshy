@@ -89,6 +89,8 @@ export const E2EE_ERROR_CODES = {
   IDENTITY_REVOKED: 'E2EE_IDENTITY_REVOKED',
   /** Retirer un appareil depuis une autre session ferme la sienne ; si elle ne se ferme pas, rien n'est retiré (#13013). */
   DEVICE_SESSION_NOT_CLOSED: 'E2EE_DEVICE_SESSION_NOT_CLOSED',
+  /** Une session dont l'appareil a été retiré n'enrôle plus rien : il faut une nouvelle connexion (#13013). */
+  SESSION_RETIRED: 'E2EE_SESSION_RETIRED',
   IDENTITY_KEY_INVALID: 'E2EE_IDENTITY_KEY_INVALID',
 } as const;
 

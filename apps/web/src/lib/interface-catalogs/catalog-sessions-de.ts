@@ -76,6 +76,7 @@ const de = {
   'e2eeDevices.retire.title': 'Dieses Gerät entfernen?',
   'e2eeDevices.retire.body': '{device} wird abgemeldet und erhält deine Ende-zu-Ende-verschlüsselten Nachrichten nicht mehr. Um sie wieder zu lesen, muss es sich neu anmelden und die Verschlüsselung erneut aktivieren.',
   'e2eeDevices.retire.done': 'Gerät entfernt',
+  'e2eeDevices.retire.changed': 'Dieses Gerät hat sich seit dem Anzeigen der Liste geändert: Sie wurde neu geladen. Prüfe sie, bevor du etwas entfernst.',
   'e2eeDevices.retire.error': 'Das Gerät konnte nicht entfernt werden. Versuche es erneut.',
   'e2eeDevices.empty.title': 'Keine verschlüsselten Geräte',
   'e2eeDevices.empty.body': 'Aktiviere die Ende-zu-Ende-Verschlüsselung in der Meeshy-App auf deinem Telefon oder Computer: Das Gerät erscheint dann hier.',

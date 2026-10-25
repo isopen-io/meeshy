@@ -3333,6 +3333,10 @@ model E2EERevokedIdentity {
   /// Clé d'identité publique révoquée, base64.
   identityKey String
   revokedAt   DateTime @default(now())
+  /// La session qui portait l'identité révoquée (#13013) : elle n'enrôle plus
+  /// aucun appareil, il faut une nouvelle connexion. Absent sur les lignes
+  /// antérieures, qui ne barrent aucune session.
+  sessionId   String?  @db.ObjectId
 
   @@unique([userId, identityKey])
 }

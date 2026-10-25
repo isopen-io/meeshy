@@ -76,6 +76,7 @@ const es = {
   'e2eeDevices.retire.title': '¿Quitar este dispositivo?',
   'e2eeDevices.retire.body': 'Se cerrará la sesión de {device} y ya no recibirá tus mensajes cifrados de extremo a extremo. Para volver a leerlos, tendrá que iniciar sesión y reactivar el cifrado.',
   'e2eeDevices.retire.done': 'Dispositivo quitado',
+  'e2eeDevices.retire.changed': 'Este dispositivo cambió desde que se mostró la lista: se ha vuelto a cargar. Revísala antes de quitar.',
   'e2eeDevices.retire.error': 'No se pudo quitar el dispositivo. Inténtalo de nuevo.',
   'e2eeDevices.empty.title': 'Ningún dispositivo cifrado',
   'e2eeDevices.empty.body': 'Activa el cifrado de extremo a extremo en la aplicación Meeshy de tu teléfono o tu ordenador: el dispositivo aparecerá aquí.',

@@ -158,6 +158,7 @@ struct SecurityView: View {
             phoneSection
             conversationLockSection
             activeSessionsSection
+            EncryptedDevicesEntry()
             Spacer().frame(height: 40)
         }
         .padding(.horizontal, MeeshySpacing.lg)

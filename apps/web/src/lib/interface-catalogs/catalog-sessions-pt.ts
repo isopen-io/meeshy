@@ -76,6 +76,7 @@ const pt = {
   'e2eeDevices.retire.title': 'Remover este dispositivo?',
   'e2eeDevices.retire.body': 'A sessão de {device} será encerrada e ele não receberá mais suas mensagens criptografadas de ponta a ponta. Para lê-las de novo, ele terá de entrar novamente e reativar a criptografia.',
   'e2eeDevices.retire.done': 'Dispositivo removido',
+  'e2eeDevices.retire.changed': 'Este dispositivo mudou desde que a lista foi exibida: ela foi recarregada. Confira antes de remover.',
   'e2eeDevices.retire.error': 'Não foi possível remover o dispositivo. Tente novamente.',
   'e2eeDevices.empty.title': 'Nenhum dispositivo criptografado',
   'e2eeDevices.empty.body': 'Ative a criptografia de ponta a ponta no aplicativo Meeshy do seu celular ou computador: o dispositivo aparecerá aqui.',

@@ -76,6 +76,7 @@ const en = {
   'e2eeDevices.retire.title': 'Remove this device?',
   'e2eeDevices.retire.body': '{device} will be signed out and will no longer receive your end-to-end encrypted messages. To read them again, it will have to sign in and turn encryption back on.',
   'e2eeDevices.retire.done': 'Device removed',
+  'e2eeDevices.retire.changed': 'This device changed since the list was shown: it has been reloaded. Check it before removing.',
   'e2eeDevices.retire.error': 'The device couldn’t be removed. Try again.',
   'e2eeDevices.empty.title': 'No encrypted devices',
   'e2eeDevices.empty.body': 'Turn on end-to-end encryption in the Meeshy app on your phone or computer: the device will show up here.',
