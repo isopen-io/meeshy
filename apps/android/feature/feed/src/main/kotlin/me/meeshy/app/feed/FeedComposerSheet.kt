@@ -245,6 +245,20 @@ fun FeedComposerSheet(
     retouch?.let { pending ->
         FeedCaptureRetouchHost(pending, onDeliver = { item -> retouch = null; dispatchItems(listOf(item)) }, onDismiss = { retouch = null })
     }
+    var videoRetouch by remember { mutableStateOf<FeedVideoRetouchPending?>(null) }
+    videoRetouch?.let { pending ->
+        FeedVideoRetouchHost(
+            pending,
+            onDeliver = { item ->
+                videoRetouch = null
+                item?.let { dispatchItems(listOf(it)) } ?: onMediaError(mediaUnusableMessage)
+            },
+            onDismiss = {
+                pending.discard()
+                videoRetouch = null
+            },
+        )
+    }
     val camera = rememberFeedCameraCapture(
         onPhoto = { uri ->
             scope.launch {
@@ -253,7 +267,13 @@ fun FeedComposerSheet(
                 if (pending != null) retouch = pending else dispatchPicked(listOf(uri))
             }
         },
-        onVideo = { uri -> dispatchPicked(listOf(uri)) },
+        onVideo = { uri ->
+            scope.launch {
+                val name = withContext(Dispatchers.IO) { context.contentResolver.captureName(uri) }
+                val pending = FeedVideoRetouchPending.of(context, uri, name, System.currentTimeMillis())
+                if (pending != null) videoRetouch = pending else dispatchPicked(listOf(uri))
+            }
+        },
     )
 
     fun launchCapture(capture: () -> Unit) {
