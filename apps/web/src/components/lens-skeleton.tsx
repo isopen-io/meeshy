@@ -20,7 +20,7 @@ import { currentInterfaceLanguage } from '@/lib/interface-language';
  * L'APPARITION est un `transition` d'`opacity` (JAMAIS une `@keyframes` —
  * la charte n'en autorise qu'UNE dans tout le dépôt, déjà prise par
  * `typingDot`, `app.css`) ; la règle 32 (`prefers-reduced-motion`) la coupe
- * déjà GLOBALEMENT (`app.css`, `transition-duration: 0.01ms !important`),
+ * déjà GLOBALEMENT (`app.css`, `transition-duration: 0s !important`),
  * donc rien de spécifique à écrire ici pour ce cas.
  */
 const PLACEHOLDER_BAR_STYLE = { borderRadius: 4, backgroundColor: 'var(--color-ios-card)' } as const;

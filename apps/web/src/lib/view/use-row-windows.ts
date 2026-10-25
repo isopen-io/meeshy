@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 
-import { EMPTY_RANGE, entryRanges, rowsInView, settleRange, type RowRange } from './row-window';
+import { EMPTY_RANGE, entryRanges, rowsInView, settleRange, widenRange, type RowRange } from './row-window';
 
 /**
  * LES FENÊTRES DE RANGÉES D'UN DÉFILEUR (#11228) — une par BLOC (une section
@@ -31,8 +31,16 @@ import { EMPTY_RANGE, entryRanges, rowsInView, settleRange, type RowRange } from
  *
  * La passe court aussi après CHAQUE rendu : une section qui se déplie, un rail
  * qui change de hauteur ou une page qui arrive déplacent les sections sans
- * aucun défilement. Elle ne pose un état que si une fenêtre a changé — la
- * boucle se referme d'elle-même.
+ * aucun défilement. Elle ne pose un état que si une fenêtre a changé.
+ *
+ * ELLE NE PEUT PAS OSCILLER (#12893). Après chaque rendu, elle court aussi
+ * après le SIEN, dans la même tâche : si la géométrie relue dépend de la
+ * fenêtre qu'elle vient de poser (une hauteur encore en transition, un
+ * ancrage de défilement qui suit le contenu), deux fenêtres pourraient se
+ * renvoyer l'une à l'autre sans jamais rendre la main. La passe qui suit
+ * son propre rendu (`echo`) n'a donc que le droit d'ÉLARGIR (`widenRange`) :
+ * croissante et bornée, la suite se fige. Le resserrement revient à la passe
+ * libre d'une image suivante — défilement, redimensionnement, montage.
  */
 
 export type RowBlock = { readonly id: string; readonly count: number };
@@ -54,6 +62,7 @@ export function useRowWindows(input: {
   const { frame, blocks, rowHeight, marginPx, extraRows } = input;
   const [ranges, setRanges] = useState(NO_RANGES);
   const measured = useRef(ranges);
+  const echo = useRef(false);
   const blocksRef = useRef(blocks);
   blocksRef.current = blocks;
 
@@ -61,7 +70,7 @@ export function useRowWindows(input: {
   const entryOf = (block: RowBlock): RowRange => entries.get(block.id) ?? EMPTY_RANGE;
   const rangeOf = (block: RowBlock): RowRange => ranges.get(block.id) ?? entryOf(block);
 
-  const measure = () => {
+  const measure = (pass: 'free' | 'echo') => {
     const element = frame.current;
     if (element === null) return;
     const frameTop = element.getBoundingClientRect().top;
@@ -73,22 +82,26 @@ export function useRowWindows(input: {
       const anchor = anchors.get(block.id);
       if (anchor === undefined) return [block.id, current];
       const need = rowsInView({ top: anchor.getBoundingClientRect().top - frameTop, viewport, rowHeight, count: block.count, marginPx });
-      return [block.id, settleRange(current, need, { count: block.count, extraRows })];
+      const settled = settleRange(current, need, { count: block.count, extraRows });
+      return [block.id, pass === 'echo' && current.end <= block.count ? widenRange(current, settled) : settled];
     });
     if (entries.length === previous.size && entries.every(([id, range]) => previous.get(id) === range)) return;
     const next: ReadonlyMap<string, RowRange> = new Map(entries);
     measured.current = next;
+    echo.current = true;
     setRanges(next);
   };
   const measureRef = useRef(measure);
   measureRef.current = measure;
 
   useLayoutEffect(() => {
-    measureRef.current();
+    const pass = echo.current ? 'echo' : 'free';
+    echo.current = false;
+    measureRef.current(pass);
   });
 
   useLayoutEffect(() => {
-    const request = requestAnimationFrame(() => measureRef.current());
+    const request = requestAnimationFrame(() => measureRef.current('free'));
     return () => cancelAnimationFrame(request);
   }, []);
 
@@ -100,7 +113,7 @@ export function useRowWindows(input: {
       if (pending.request !== 0) return;
       pending.request = requestAnimationFrame(() => {
         pending.request = 0;
-        measureRef.current();
+        measureRef.current('free');
       });
     };
     element.addEventListener('scroll', schedule, { passive: true });
