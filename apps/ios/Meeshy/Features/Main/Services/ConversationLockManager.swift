@@ -467,9 +467,6 @@ final class ConversationLockManager: ObservableObject, ConversationLockGating {
         knownBiometricUnlock = enabled
     }
 
-    /// P7-11 — pattern calqué sur `FeedbackToastManager.wireAuthLogoutHook` :
-    /// à la déconnexion (`isAuthenticated` → false, valeur initiale ignorée),
-    /// wipe des verrous + master PIN pour qu'aucun état de A ne s'applique à B.
     /// La liste se relit dès que les données protégées le deviennent : un
     /// processus lancé en arrière-plan avant le premier déverrouillage (PushKit,
     /// VoIP) n'avait lu qu'une liste vide.
@@ -485,6 +482,9 @@ final class ConversationLockManager: ObservableObject, ConversationLockGating {
         loadLockedIds()
     }
 
+    /// P7-11 — pattern calqué sur `FeedbackToastManager.wireAuthLogoutHook` :
+    /// à la déconnexion (`isAuthenticated` → false, valeur initiale ignorée),
+    /// wipe des verrous + master PIN pour qu'aucun état de A ne s'applique à B.
     private func wireAuthLogoutHook() {
         AuthManager.shared.$isAuthenticated
             .removeDuplicates()
