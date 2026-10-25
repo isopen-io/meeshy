@@ -1,5 +1,6 @@
 package me.meeshy.app.chat
 
+import me.meeshy.sdk.model.composer.look.ComposerLookPerson
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -573,6 +574,10 @@ class ChatViewModel @Inject constructor(
      * the call is over. The probe never breaks the screen — a failure degrades
      * to `null` (see [ActiveCallRepository]).
      */
+    /** L'auteur que les cadres de la retouche écrivent (#12734), lu de la session à l'ouverture. */
+    fun selfAuthor(): ComposerLookPerson? =
+        sessionRepository.currentUser.value?.let { user -> ComposerLookPerson.author(user.id, user.displayName, user.username) }
+
     fun refreshActiveCall() {
         viewModelScope.launch {
             val active = activeCallRepository.activeCallFor(conversationId)

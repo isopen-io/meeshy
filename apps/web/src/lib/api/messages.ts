@@ -5,6 +5,7 @@ import type { ConversationsDeps } from './conversations';
 import { hasOlderMessagesOf, messagesOf, recordSentMessage } from './fixtures';
 import { fixtureHold } from './fixture-hold';
 import type { ApiResult, HttpTransport } from './http';
+import { canSendPlaintext, E2EE_PLAINTEXT_WITHHELD } from '@/lib/end-to-end-regime-ledger';
 import type { SharedPlace } from '@/lib/send/shared-place';
 import type { MessageSticker } from '@meeshy/shared/types/message-sticker';
 import * as conversationsEndpoints from '@meeshy/shared/api/endpoints/conversations';
@@ -640,6 +641,10 @@ export async function sendMessage(
     readonly signal?: AbortSignal;
   },
 ): Promise<ApiResult<SentMessageAck>> {
+  /* #12949 — une conversation vue chiffrée de bout en bout reste fermée au clair, quoi que le serveur serve ensuite. */
+  if (!canSendPlaintext({ conversationId: params.conversationId })) {
+    return { ok: false, status: 0, error: 'Cette conversation est chiffrée de bout en bout : rien n’y part en clair', code: E2EE_PLAINTEXT_WITHHELD };
+  }
   if (__FIXTURES__ && params.source === 'fixtures') {
     const created = recordSentMessage(params.conversationId, params.body);
     return { ok: true, data: ackOf(created, params.body.clientMessageId) };

@@ -3,6 +3,7 @@ import { apiDeps, postMediaUploadDeps } from '@/lib/api/deps';
 import { createDirectConversation, createGroupConversation, type ConversationsDeps } from '@/lib/api/conversations';
 import { uploadAttachments, uploadShortfall } from '@/lib/api/attachments';
 import { newClientMessageId } from '@/lib/api/client-message-id';
+import { endToEndRegimeLedger, isEndToEndMode } from '@/lib/end-to-end-regime-ledger';
 import { browserImagePreparer, type ImagePreparer } from '@/lib/media/prepare-image-upload';
 import { servedMediaFile } from '@/lib/media/served-media';
 import type { ApiResult } from '@/lib/api/http';
@@ -30,6 +31,16 @@ export type SendSheetPortsParams = {
   readonly online?: () => boolean;
   /** La préparation des photos avant téléversement (#11310) — le worker d'image par défaut. */
   readonly prepare?: ImagePreparer;
+};
+
+/**
+ * #12949 — ouvrir un tête-à-tête rend la conversation EXISTANTE (la passerelle
+ * déduplique), avec son régime : un mode e2ee servi est inscrit au registre
+ * avant que le moteur ne téléverse quoi que ce soit vers elle.
+ */
+const learnServedRegime = (conversation: { readonly id: string; readonly encryptionMode?: string | null }): { readonly id: string } => {
+  if (isEndToEndMode(conversation.encryptionMode)) endToEndRegimeLedger.getState().learnEndToEnd(conversation.id);
+  return { id: conversation.id };
 };
 
 const browserOnline = (): boolean => typeof navigator === 'undefined' || navigator.onLine !== false;
@@ -73,11 +84,11 @@ export function createSendSheetPorts(params: SendSheetPortsParams): SendSheetPor
     online: params.online ?? browserOnline,
     openDirect: async (userId) => {
       const result = await createDirectConversation(deps, userId);
-      return result.ok ? { ok: true, data: { id: result.data.id } } : result;
+      return result.ok ? { ok: true, data: learnServedRegime(result.data) } : result;
     },
     openGroup: async ({ userIds, title }) => {
       const result = await createGroupConversation(deps, { title, participantIds: userIds });
-      return result.ok ? { ok: true, data: { id: result.data.id } } : result;
+      return result.ok ? { ok: true, data: learnServedRegime(result.data) } : result;
     },
     forward: (forward) => forwardMessages({ ...deps, ...forward }),
     sendMessage: (message) => sendMessage({ ...deps, ...message }),

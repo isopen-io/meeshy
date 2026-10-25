@@ -36,10 +36,9 @@ enum MessageAccessibilityLabelComposer {
     static func compose(_ content: BubbleContent) -> String {
         var parts: [String] = []
 
-        if !content.isMe, let senderName = content.senderName {
-            parts.append(senderName)
-        } else if !content.isMe {
-            parts.append(String(localized: "a11y.message.unknown_sender", bundle: .main))
+        // Un avis système n'est la parole de personne (#12917) : aucun auteur, jamais « Inconnu ».
+        if !content.isMe, content.kind != .system {
+            parts.append(content.senderName ?? String(localized: "a11y.message.unknown_sender", bundle: .main))
         }
 
         // #7618 — une vue unique non ouverte ne se DIT pas plus qu'elle ne se

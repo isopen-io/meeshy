@@ -10,6 +10,7 @@ import type { TypingActionData, TypingEvent } from '@meeshy/shared/types/socketi
 import type { PostRoomActionData } from '@meeshy/shared/types/socketio-events/social';
 
 import type { ConversationStoreState } from '@/lib/conversation-store';
+import { endToEndRegimeLedger } from '@/lib/end-to-end-regime-ledger';
 import { noteGalleryReception } from '@/lib/gallery/auto-save-runtime';
 import type { SocketAuth, SocketClient, SocketFactory } from '@/lib/net/socket';
 import type { OutboxState } from '@/lib/send/outbox-store';
@@ -23,6 +24,7 @@ import { CONVERSATION_CATEGORIES_QUERY_KEY, CONVERSATIONS_QUERY_KEY } from './co
 import { messagesQueryKey } from './messages';
 import { applyAttachmentReactionUpdate, isAttachmentReactionUpdate } from './realtime-attachment-reactions';
 import { applyCitedPostWithdrawn, isCitedPostWithdrawnEvent } from './realtime-cited-post';
+import { applyEncryptionChanged, isEncryptionChanged } from './realtime-encryption-changed';
 import {
   applyMessageDeleted,
   applyMessageEdited,
@@ -995,12 +997,18 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
     void deps.queryClient.invalidateQueries({ queryKey: STARRED_MESSAGES_QUERY_ROOT });
   };
 
+  /** `conversation:encryption-changed` — pour fermer, jamais pour rouvrir le clair (#12949). */
+  const onEncryptionChanged = (payload: unknown): void => {
+    if (isEncryptionChanged(payload)) applyEncryptionChanged(deps.queryClient, endToEndRegimeLedger, payload);
+  };
+
   socket.on<unknown>(SERVER_EVENTS.AUTHENTICATED, onAuthenticated);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_NEW, onMessageNew);
   socket.on<unknown>(SERVER_EVENTS.TYPING_START, onTypingStart);
   socket.on<unknown>(SERVER_EVENTS.TYPING_STOP, onTypingStop);
   socket.on<unknown>(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, onUnreadUpdated);
   socket.on<unknown>(SERVER_EVENTS.CONVERSATION_UPDATED, onConversationUpdated);
+  socket.on<unknown>(SERVER_EVENTS.CONVERSATION_ENCRYPTION_CHANGED, onEncryptionChanged);
   socket.on<unknown>(SERVER_EVENTS.CONVERSATION_NEW, onConversationNew);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_TRANSLATION, onMessageTranslation);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED, onAttachmentUpdated);
@@ -1094,6 +1102,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
       socket.off<unknown>(SERVER_EVENTS.TYPING_STOP, onTypingStop);
       socket.off<unknown>(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, onUnreadUpdated);
       socket.off<unknown>(SERVER_EVENTS.CONVERSATION_UPDATED, onConversationUpdated);
+      socket.off<unknown>(SERVER_EVENTS.CONVERSATION_ENCRYPTION_CHANGED, onEncryptionChanged);
       socket.off<unknown>(SERVER_EVENTS.CONVERSATION_NEW, onConversationNew);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_TRANSLATION, onMessageTranslation);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED, onAttachmentUpdated);
