@@ -123,6 +123,6 @@ class NoLocalHexColorGuardTest {
 
     private companion object {
         /** Measured on `dev` when the guard landed (2026-10-22). Lower it, never raise it. */
-        const val BASELINE = 29
+        const val BASELINE = 25
     }
 }

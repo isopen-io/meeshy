@@ -561,6 +561,26 @@ class ConversationRepositoryTest {
     }
 
     @Test
+    fun `markReadLocally zeroes the cached unread count and queues nothing`() = runTest {
+        val repo = repository(
+            FakeConversationApi(
+                ApiResponse(
+                    success = true,
+                    data = listOf(ApiConversation(id = "c1", title = "Team", unreadCount = 4)),
+                ),
+            ),
+        )
+        repo.refresh()
+
+        val applied = repo.markReadLocally("c1")
+
+        assertThat(applied).isTrue()
+        assertThat(repo.conversationStream("c1").first()?.unreadCount).isEqualTo(0)
+        assertThat(OutboxRepository(db, db.outboxDao()).deliverable(OutboxLanes.READ_RECEIPT)).isEmpty()
+        assertThat(repo.markReadLocally("c1")).isFalse()
+    }
+
+    @Test
     fun `markReadOptimistic is a no-op when the conversation is already read`() = runTest {
         val repo = repository(
             FakeConversationApi(

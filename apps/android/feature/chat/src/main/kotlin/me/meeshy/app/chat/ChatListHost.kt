@@ -147,6 +147,7 @@ internal fun ChatListHost(host: ChatHostContext, modifier: Modifier = Modifier) 
     val rowActions = remember(actions, bubbleFrames) {
         ChatMessageRowActions(
             onReply = { messageId -> actions.startReply(messageId) },
+            onForward = { messageId -> actions.openForward(messageId) },
             onLongPress = { messageId -> actions.onMessageLongPress(messageId) },
             onReactionClick = { messageId, emoji -> actions.toggleReaction(messageId, emoji) },
             onReactionLongPress = { messageId -> actions.openReactionDetails(messageId) },
@@ -250,6 +251,7 @@ internal fun ChatListHost(host: ChatHostContext, modifier: Modifier = Modifier) 
                         actions = rowActions,
                         audioPlayer = audioPlayer,
                         isGroup = state.isGroup,
+                        canWrite = state.viewerMayWrite,
                     )
                 }
                 TypingIndicator(participants = state.typingParticipants)

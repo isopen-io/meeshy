@@ -248,6 +248,7 @@
    "reason": "Route servie pour laquelle aucune interface Retrofit n'existe encore : à porter par le lot de son écran iOS, puis à retirer de cette liste.",
    "routes": [
     "DELETE /api/v1/attachments/:attachmentId",
+    "DELETE /api/v1/conversations/:conversationId/encryption",
     "DELETE /api/v1/conversations/:id/messages/:messageId",
     "DELETE /api/v1/e2ee/devices/:deviceId",
     "DELETE /api/v1/guest-sessions/me",

@@ -38,6 +38,8 @@
  * c'est ce repli que la règle refuse.
  */
 
+import { sharedTranslationServerReadsMessage } from '@meeshy/shared/utils/shared-translation-eligibility';
+
 export const E2EE_PLAINTEXT_REFUSED = 'E2EE_PLAINTEXT_REFUSED';
 
 export const E2EE_PLAINTEXT_REFUSAL_MESSAGE =
@@ -56,6 +58,25 @@ export const plaintextBesideCiphertext = (content: string | null | undefined): s
 /** Le mode arrive avec la casse de son émetteur : iOS écrit « E2EE ». */
 export const isEndToEndMode = (mode: string | null | undefined): boolean =>
   typeof mode === 'string' && mode.toLowerCase() === 'e2ee';
+
+/**
+ * La LIGNE d'un message porte-t-elle un texte que le serveur ne lit pas ?
+ *
+ * Le régime COURANT de la conversation ne le dit plus depuis que le chiffrement
+ * se désactive (#12522) : un message e2ee d'hier vit dans une conversation
+ * repassée en clair, et il reste chiffré à jamais (spec § 5.2, #12881). Même
+ * lecture que la traduction partagée : bout en bout, mode inconnu ou ligne
+ * chiffrée sans mode ⇒ scellée ; `server` et `hybrid` ⇒ lue par le serveur.
+ */
+export const messageRowSealedFromServer = (row: {
+  readonly isEncrypted: boolean | null | undefined;
+  readonly encryptionMode: string | null | undefined;
+}): boolean =>
+  !sharedTranslationServerReadsMessage({
+    conversationEncryptionMode: null,
+    messageIsEncrypted: row.isEncrypted,
+    messageEncryptionMode: row.encryptionMode,
+  });
 
 /** Le régime de chiffrement d'une conversation, tel que la passerelle le lit. */
 export type EncryptionRegime = {

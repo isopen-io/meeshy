@@ -756,6 +756,10 @@ export class MessageHandler {
               // plus sur un `select` déjà là — aucun aller-retour supplémentaire.
               messageType: true,
               createdAt: true,
+              // #12881 — ce que la LIGNE porte : un message scellé sous e2ee ne
+              // s'édite pas en clair après une désactivation.
+              isEncrypted: true,
+              encryptionMode: true,
               // Lu pour la réconciliation des mentions : une mention ajoutée en
               // éditant un message éphémère ne doit pas survivre à ce message.
               expiresAt: true,
@@ -796,6 +800,7 @@ export class MessageHandler {
           conversationId: message.conversationId,
           conversation: message.conversation,
           createdAt: message.createdAt, messageType: message.messageType, metadata: message.metadata,
+          isEncrypted: message.isEncrypted, encryptionMode: message.encryptionMode,
         },
         onError: (err) => console.error('[MESSAGE_HANDLER] Edit admission lookup failed:', err),
       });

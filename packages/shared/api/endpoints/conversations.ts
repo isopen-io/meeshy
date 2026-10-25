@@ -21,7 +21,7 @@ export const byConversationIdAttachments = (conversationId: string): string => `
 /** POST /api/v1/conversations/:conversationId/clear-history */
 export const byConversationIdClearHistory = (conversationId: string): string => `/api/v1/conversations/${encodeURIComponent(conversationId)}/clear-history`;
 
-/** POST /api/v1/conversations/:conversationId/encryption */
+/** POST · DELETE /api/v1/conversations/:conversationId/encryption */
 export const byConversationIdEncryption = (conversationId: string): string => `/api/v1/conversations/${encodeURIComponent(conversationId)}/encryption`;
 
 /** GET /api/v1/conversations/:conversationId/encryption-status */
