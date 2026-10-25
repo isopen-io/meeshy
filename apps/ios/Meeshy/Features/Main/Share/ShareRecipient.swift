@@ -29,7 +29,9 @@ nonisolated struct ShareRecipient: Identifiable, Equatable, Codable, Sendable {
     var title: String
     var detail: Detail
     var avatarURL: String?
-    /// La conversation est chiffrée de bout en bout (D7, V8).
+    /// La conversation est chiffrée de bout en bout (D7, V8) : le serveur n'y
+    /// reçoit aucun clair. `server` et `hybrid` n'en sont pas — le serveur y
+    /// reçoit le clair et le chiffre lui-même (#12978).
     let isEncrypted: Bool
     /// Le titre est le NOM DE PROFIL : un renommage le suit. Faux pour un contact
     /// titré par le nom du carnet.
@@ -71,7 +73,7 @@ nonisolated extension ShareRecipient {
             title: conversation.displayName,
             detail: communityName.map { .channel(community: $0) } ?? (isDirect ? .direct : .group(members: conversation.memberCount)),
             avatarURL: conversation.avatar ?? conversation.participantAvatarURL,
-            isEncrypted: conversation.encryptionMode != nil
+            isEncrypted: EndToEndSendGate.requiresSeal(conversationEncryptionModes: [conversation.encryptionMode])
         )
     }
 
