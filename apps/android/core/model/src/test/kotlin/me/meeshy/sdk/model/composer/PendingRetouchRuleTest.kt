@@ -20,6 +20,12 @@ class PendingRetouchRuleTest {
     }
 
     @Test
+    fun `une video prete avec son fichier s ouvre dans la retouche video`() {
+        assertThat(PendingRetouchRule.opens(item(type = PendingAttachmentType.VIDEO))).isTrue()
+        assertThat(PendingRetouchRule.opens(item(type = PendingAttachmentType.VIDEO, ready = false))).isFalse()
+    }
+
+    @Test
     fun `une piece qui se prepare, sans fichier, un son ou un fichier ne s ouvrent pas`() {
         assertThat(PendingRetouchRule.opens(item(ready = false))).isFalse()
         assertThat(PendingRetouchRule.opens(item(path = null))).isFalse()
