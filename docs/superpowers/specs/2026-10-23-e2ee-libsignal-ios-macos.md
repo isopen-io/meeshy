@@ -147,6 +147,12 @@ Conforme à Sesame § 3 et au comportement public de Signal-Server :
 Le serveur pourrait ajouter un « appareil » à mon compte pour recevoir une copie de mes messages. Parade, sans construction cryptographique nouvelle :
 - Mes appareils n'envoient d'enveloppe à un autre de **mes** appareils que s'il figure dans leur **liste locale d'appareils approuvés** (clé d'identité épinglée).
 - Approbation : le nouvel appareil (le Mac) affiche le QR de son `ScannableFingerprint` libsignal (calculé entre sa clé d'identité et celle de l'appareil qui approuve) ; l'iPhone le scanne et compare (`ScannableFingerprint.compareWith`). Réussite : l'iPhone épingle la clé du Mac, et inversement par le QR réciproque.
+- Paramètres, identiques sur toutes les plateformes (#12976, `E2EEFingerprint` et `E2EEPairingPayload` du SDK) : `NumericFingerprintGenerator`, version 2, 5 200 itérations (les valeurs de Signal, vérifiées sur les vecteurs officiels de libsignal) ; identifiant stable d'un appareil de compte `meeshy-own-device:v1:<userId en minuscules>.<deviceId décimal>` en UTF-8, préfixé pour ne jamais valoir comme numéro de sécurité d'un contact (#12520) ; le QR porte du **texte**, `meeshy-device-link:v1:<base64url sans remplissage de l'encodage scannable>`.
+- Le scan désigne de lui-même l'appareil (le code lu est comparé à l'empreinte de chacun de mes appareils ; un appareil dont le bundle manque ne bloque pas les autres) mais **n'épingle rien** : l'utilisateur voit l'appareil trouvé et confirme. L'empreinte se calcule sur la clé publique de la session courante si elle vise la génération annoncée, sinon sur celle du bundle ; l'appairage n'ouvre ni n'efface aucune session.
+- Les 60 chiffres s'affichent mais **n'approuvent pas** dans ce lot : l'affichage libsignal trie les deux moitiés, et la moitié de l'appareil qui approuve est la même sur les deux écrans quoi qu'il arrive. Une comparaison à l'œil sûre (tous les groupes, ou un groupe tiré au hasard à saisir) est un suivi.
+- L'épinglage est **appliqué par libsignal** : `isTrustedIdentity` refuse, dans la transaction même de `processPreKeyBundle` et `signalEncrypt`, un envoi vers un de mes appareils sous une autre clé que la clé épinglée. Un appareil refusé ne reçoit rien, l'envoi aux autres continue.
+- Une enveloppe d'un de mes appareils pas encore approuvé n'est ni déchiffrée ni acquittée : elle attend au serveur (30 jours au plus) et s'ouvre au rattrapage qui suit l'approbation. C'est ce qui rend l'appairage en deux temps sans perte.
+- Une approbation épingle le couple (clé d'identité, `registrationId`) : une place reprise par une autre installation n'en hérite pas, ni à l'affichage ni à l'envoi, et une copie qu'elle m'envoie sous une autre clé attend la réapprobation au lieu de se juger illisible. Une approbation d'un appareil que l'annuaire n'annonce plus s'efface. L'épingle se relit dans la transaction de déchiffrement. Seul un refus de confiance de libsignal écarte un de mes appareils d'un envoi ; toute autre erreur fait échouer l'envoi, jamais une copie perdue en silence.
 - Un appareil que le serveur annonce sans approbation locale apparaît dans les réglages comme « appareil non approuvé » et ne reçoit rien. Le 409 de la passerelle ne peut donc pas forcer l'envoi vers lui : le client répond par une enveloppe absente pour cet appareil et un drapeau `unapprovedOwnDevices`, que la passerelle accepte (seuls MES appareils peuvent être ainsi exclus, jamais ceux d'un contact).
 - Les appareils d'un **contact** suivent le TOFU avec alerte (§ 7.3).
 
@@ -169,6 +175,8 @@ Le clair chiffré par libsignal n'est pas le texte nu mais une structure **`E2EE
 ```
 
 Tout ce qui part à côté du corps (aperçu de citation, mentions, lieu, sticker, pointeur de pièce, langue détectée) voyage **dans** l'enveloppe, jamais en champ libre du message (#12526).
+
+L'**auteur** voyage aussi dans le chiffré : `authorUserId` et `authorDeviceId`, posés par le scelleur (#12976), facultatifs pour qu'un client plus ancien reste lisible. libsignal authentifie la clé de l'expéditeur, pas le nom que le serveur donne à l'enveloppe. L'ouvreur refuse un contenu dont l'auteur n'est pas l'expéditeur annoncé : sans cela, un serveur pouvait réétiqueter, comme venant de mon contact, la copie qu'un de mes appareils m'envoie.
 
 ### 4.3 Format sur le fil
 

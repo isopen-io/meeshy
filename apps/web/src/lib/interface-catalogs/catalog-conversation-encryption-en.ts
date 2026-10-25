@@ -40,9 +40,13 @@ const en = {
   'conversationEncryption.fact.switchIsShownInThread': 'Each time it’s turned on or off, it shows in the chat for every member.',
   'conversationEncryption.fact.endToEndIsFinal': 'Once turned on, end-to-end encryption can’t be turned off.',
   'conversationEncryption.fact.endToEndNeverTurnedOff': 'End-to-end encryption can’t be turned off. To chat without it, start a new conversation.',
-  'conversationEncryption.fact.endToEndNeverTurnedOffDirect': 'End-to-end encryption can’t be turned off: this one-to-one chat stays encrypted.',
+  'conversationEncryption.fact.endToEndNeverTurnedOffDirect': 'End-to-end encryption can’t be turned off: this one-to-one chat stays encrypted. To chat without it with this person, open an unencrypted conversation alongside: both are in the list, this one marked with a padlock.',
   'conversationEncryption.fact.serverCannotTurnItOff': 'On this browser, once this conversation has been seen end-to-end encrypted, your account never writes in it without encryption again, even if the server later presented it otherwise.',
   'conversationEncryption.fact.webCannotReadYet': 'On the web, end-to-end encrypted messages can’t be read or written yet: open this conversation in the iOS app.',
+  'conversationEncryption.plaintextDirect.open': 'Open an unencrypted conversation with {name}',
+  'conversationEncryption.plaintextDirect.busy': 'Opening…',
+  'conversationEncryption.plaintextDirect.failed': 'The unencrypted conversation couldn’t be opened. Try again.',
+  'conversationEncryption.plaintextDirect.offline': 'You’re offline: reconnect to open the unencrypted conversation.',
 } satisfies ConversationEncryptionCatalog;
 
 export default en;

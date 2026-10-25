@@ -45,9 +45,13 @@ const fr = {
   'conversationEncryption.fact.switchIsShownInThread': 'Chaque activation ou désactivation s’affiche dans le fil, pour tous les membres.',
   'conversationEncryption.fact.endToEndIsFinal': 'Une fois activé, le chiffrement de bout en bout ne se désactive plus.',
   'conversationEncryption.fact.endToEndNeverTurnedOff': 'Le chiffrement de bout en bout ne se désactive pas. Pour échanger en clair, créez une nouvelle conversation.',
-  'conversationEncryption.fact.endToEndNeverTurnedOffDirect': 'Le chiffrement de bout en bout ne se désactive pas : ce tête-à-tête reste chiffré.',
+  'conversationEncryption.fact.endToEndNeverTurnedOffDirect': 'Le chiffrement de bout en bout ne se désactive pas : ce tête-à-tête reste chiffré. Pour échanger en clair avec cette personne, ouvrez une conversation non chiffrée à côté : les deux sont dans la liste, celle-ci marquée d’un cadenas.',
   'conversationEncryption.fact.serverCannotTurnItOff': 'Sur ce navigateur, une fois cette conversation vue chiffrée de bout en bout, votre compte n’y écrit plus jamais en clair, même si le serveur la présentait ensuite autrement.',
   'conversationEncryption.fact.webCannotReadYet': 'Sur le web, les messages chiffrés de bout en bout ne peuvent pas encore être lus ni écrits : ouvrez cette conversation dans l’application iOS.',
+  'conversationEncryption.plaintextDirect.open': 'Ouvrir une conversation non chiffrée avec {name}',
+  'conversationEncryption.plaintextDirect.busy': 'Ouverture…',
+  'conversationEncryption.plaintextDirect.failed': 'La conversation non chiffrée n’a pas pu être ouverte. Réessayez.',
+  'conversationEncryption.plaintextDirect.offline': 'Hors connexion : reconnectez-vous pour ouvrir la conversation non chiffrée.',
 } as const;
 
 export default fr;

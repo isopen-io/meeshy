@@ -40,9 +40,13 @@ const pt = {
   'conversationEncryption.fact.switchIsShownInThread': 'Cada ativação ou desativação aparece na conversa para todos os membros.',
   'conversationEncryption.fact.endToEndIsFinal': 'Depois de ativada, a criptografia de ponta a ponta não pode mais ser desativada.',
   'conversationEncryption.fact.endToEndNeverTurnedOff': 'A criptografia de ponta a ponta não pode ser desativada. Para conversar sem ela, crie uma nova conversa.',
-  'conversationEncryption.fact.endToEndNeverTurnedOffDirect': 'A criptografia de ponta a ponta não pode ser desativada: esta conversa individual continua criptografada.',
+  'conversationEncryption.fact.endToEndNeverTurnedOffDirect': 'A criptografia de ponta a ponta não pode ser desativada: esta conversa individual continua criptografada. Para conversar sem ela com esta pessoa, abra ao lado uma conversa sem criptografia: as duas estão na lista, esta marcada com um cadeado.',
   'conversationEncryption.fact.serverCannotTurnItOff': 'Neste navegador, depois de ver esta conversa criptografada de ponta a ponta, sua conta nunca mais escreve nela sem criptografia, mesmo que o servidor a apresente de outra forma depois.',
   'conversationEncryption.fact.webCannotReadYet': 'Na web, as mensagens criptografadas de ponta a ponta ainda não podem ser lidas nem escritas: abra esta conversa no app para iOS.',
+  'conversationEncryption.plaintextDirect.open': 'Abrir uma conversa sem criptografia com {name}',
+  'conversationEncryption.plaintextDirect.busy': 'Abrindo…',
+  'conversationEncryption.plaintextDirect.failed': 'Não foi possível abrir a conversa sem criptografia. Tente novamente.',
+  'conversationEncryption.plaintextDirect.offline': 'Sem conexão: reconecte-se para abrir a conversa sem criptografia.',
 } satisfies ConversationEncryptionCatalog;
 
 export default pt;
