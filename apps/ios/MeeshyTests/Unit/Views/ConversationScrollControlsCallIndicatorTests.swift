@@ -201,6 +201,43 @@ final class ConversationScrollPillProtectionTests: XCTestCase {
         XCTAssertNil(afterwards.attachment)
     }
 
+    func test_aPieceDeclaredViewOnceByItsFlagsOnly_isWithheld() {
+        let piece = MeeshyMessageAttachment(id: "a1", mimeType: "image/jpeg", fileUrl: "https://cdn.example/secret.jpg",
+                                            isViewOnce: false, effectFlags: MessageEffectFlags.viewOnce.rawValue)
+
+        let shown = preview(message(attachments: [piece]))
+
+        XCTAssertNil(shown.text)
+        XCTAssertNil(shown.attachment)
+    }
+
+    func test_aPieceDeclaredBlurredByItsFlagsOnly_isWithheld() {
+        let piece = MeeshyMessageAttachment(id: "a1", mimeType: "image/jpeg", fileUrl: "https://cdn.example/secret.jpg",
+                                            isBlurred: false, effectFlags: MessageEffectFlags.blurred.rawValue)
+
+        XCTAssertNil(preview(message(attachments: [piece])).attachment)
+    }
+
+    func test_aDeadlineCenturiesAway_waitsAtMostAnHourPerTurn_withoutOverflow() {
+        let wait = ConversationView.unreadPreviewWait(until: now.addingTimeInterval(400 * 365 * 86_400), now: now)
+
+        XCTAssertEqual(wait, 3_600 * 1_000_000_000)
+    }
+
+    func test_aPassedOrNonFiniteDeadline_waitsNoMore() {
+        XCTAssertNil(ConversationView.unreadPreviewWait(until: now.addingTimeInterval(-1), now: now))
+        XCTAssertNil(ConversationView.unreadPreviewWait(until: Date(timeIntervalSinceReferenceDate: .nan), now: now))
+        XCTAssertNil(ConversationView.unreadPreviewWait(until: .distantPast, now: now))
+    }
+
+    func test_aServedDeadlineCenturiesAway_keepsAnOrdinaryPreviewAndNamesTheDeadline() {
+        let far = now.addingTimeInterval(400 * 365 * 86_400)
+        let shown = preview(message(expiresAt: far))
+
+        XCTAssertEqual(shown.text, secret)
+        XCTAssertEqual(shown.expiresAt, far)
+    }
+
     func test_anEndToEndMessageThisDeviceOpened_showsItsPlaintext() {
         let shown = preview(message(content: "Bonjour", isEncrypted: true, encryptionMode: "e2ee", attachments: []))
 

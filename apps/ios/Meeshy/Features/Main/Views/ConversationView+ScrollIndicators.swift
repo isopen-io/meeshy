@@ -63,7 +63,7 @@ extension ConversationView {
     ) -> UnreadPillPreview {
         guard let message, !message.isDeleted, message.content != E2EEWire.contentPlaceholder else { return .withheld }
         let protection = message.protection(ledger: ledger, now: now)
-        let veiledPiece = message.attachments.contains { $0.isBlurred || $0.isViewOnce }
+        let veiledPiece = message.attachments.contains { $0.declaresBlur }
         guard !protection.isExpired, !protection.requiresVeil, !message.holdsViewOnce, !veiledPiece else { return .withheld }
         return UnreadPillPreview(text: message.content, attachment: message.attachments.first,
                                  expiresAt: protection.ephemeralState.deadline)
@@ -267,6 +267,18 @@ extension ConversationView {
     // (`MessageListItem.typingIndicator` + `TypingIndicatorBubble`).
 }
 
+extension ConversationView {
+    /// L'attente avant de réévaluer la pastille, en nanosecondes, PLAFONNÉE à
+    /// une heure par tour (#13109) : une échéance servie dans des siècles, non
+    /// finie ou NaN ne fait jamais déborder la conversion — l'attente boucle.
+    /// `nil` une fois l'échéance passée (avec une marge de 50 ms).
+    nonisolated static func unreadPreviewWait(until deadline: Date, now: Date) -> UInt64? {
+        let remaining = deadline.timeIntervalSince(now) + 0.05
+        guard remaining.isFinite, remaining > 0 else { return nil }
+        return UInt64(min(remaining, 3_600) * 1_000_000_000)
+    }
+}
+
 /// La clé qui relance l'attente de l'échéance quand le message ou son échéance change.
 struct UnreadPillExpiry: Equatable {
     let messageId: String?
@@ -276,9 +288,8 @@ struct UnreadPillExpiry: Equatable {
 extension ConversationView {
     func clearUnreadPreviewAtItsDeadline() async {
         guard let messageId = viewModel.lastUnreadMessage?.id, let deadline = unreadPreview.expiresAt else { return }
-        let delay = deadline.timeIntervalSinceNow + 0.05
-        if delay > 0 {
-            do { try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000)) } catch { return }
+        while let delay = Self.unreadPreviewWait(until: deadline, now: Date()) {
+            do { try await Task.sleep(nanoseconds: delay) } catch { return }
         }
         guard viewModel.lastUnreadMessage?.id == messageId, unreadPreview.text == nil else { return }
         viewModel.lastUnreadMessage = nil

@@ -123,7 +123,7 @@ public struct MessageCardSubject: Equatable, Sendable {
     /// message cité : sa propre citation n'est pas peinte.
     static func holdsExportableContent(_ message: MeeshyMessage, now: Date) -> Bool {
         guard message.contentExitLaw.exportable else { return false }
-        if message.holdsViewOnce || message.isBlurred || message.attachments.contains(where: { $0.isBlurred || $0.isViewOnce }) { return false }
+        if message.holdsViewOnce || message.isBlurred || message.attachments.contains(where: { $0.declaresBlur || $0.declaresViewOnce }) { return false }
         if message.isDeleted || message.messageSource == .system { return false }
         if let expiresAt = message.expiresAt, expiresAt <= now { return false }
         return MessageCardText.nonBlank(message.content) != nil || !paintableMedia(of: message).isEmpty

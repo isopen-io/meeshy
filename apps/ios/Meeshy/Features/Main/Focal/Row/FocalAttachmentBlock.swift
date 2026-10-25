@@ -152,7 +152,7 @@ nonisolated enum FocalMediaProtection {
     /// réutilisé tel quel côté vue, §WS-0-adjacent : lifecycle PUR, non
     /// `fileprivate`).
     static func state(for attachment: MessageAttachment, isRevealed: Bool, messageRevealed: Bool = false) -> FocalMediaProtectionState {
-        guard !isRevealed, attachment.isBlurred || attachment.isViewOnce else { return .none }
+        guard !isRevealed, attachment.declaresBlur || attachment.declaresViewOnce else { return .none }
         guard !(messageRevealed && !attachment.isViewOnce) else { return .none }
         return .blurred(isViewOnce: attachment.isViewOnce)
     }
