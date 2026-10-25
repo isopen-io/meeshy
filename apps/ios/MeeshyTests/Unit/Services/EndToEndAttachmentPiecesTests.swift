@@ -291,4 +291,265 @@ final class EndToEndAttachmentPiecesTests: XCTestCase {
         XCTAssertEqual(shown.mimeType, "application/octet-stream")
         XCTAssertEqual(shown.fileUrl, "")
     }
+
+    // MARK: - Revue de sécurité du 2026-10-25 : le coffre se vide avec la pièce
+
+    /// Une vue unique consommée, un éphémère échu : `discard` efface la pièce et son affiche.
+    func test_discard_effaceLaPieceEtSonAffiche() async throws {
+        let dir = try temporaryDirectory()
+        let gateway = InMemoryBlobGateway()
+        let pointer = try await sealedOnServer(Data("vue unique".utf8), by: gateway, in: dir)
+        let receiver = vault(gateway, in: dir.appendingPathComponent("receiver"))
+        _ = await receiver.materialize([pointer])
+
+        await receiver.discard([pointer])
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: receiver.paths.file(for: pointer).path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: try XCTUnwrap(receiver.paths.thumbnail(of: pointer)).path))
+    }
+}
+
+/// Ce que le fil demande au coffre : rien d'autre n'est observé.
+nonisolated final class RecordingMaterializer: EndToEndAttachmentMaterializing, @unchecked Sendable {
+    private let lock = NSLock()
+    private var materializedCalls: [[E2EEAttachmentPointer]] = []
+    private var discardedCalls: [[E2EEAttachmentPointer]] = []
+    let paths = EndToEndMediaPaths(directory: URL(fileURLWithPath: "/tmp/e2ee-recording"))
+
+    var materialized: [[E2EEAttachmentPointer]] { lock.withLock { materializedCalls } }
+    var discarded: [[E2EEAttachmentPointer]] { lock.withLock { discardedCalls } }
+
+    func materialize(_ pointers: [E2EEAttachmentPointer]) async -> Int {
+        lock.withLock { materializedCalls.append(pointers) }
+        return pointers.count
+    }
+
+    func adopt(localFile: URL, secret: E2EEAttachmentSecret, contentType: String) async {}
+
+    func discard(_ pointers: [E2EEAttachmentPointer]) async {
+        lock.withLock { discardedCalls.append(pointers) }
+    }
+
+    func wipe() async {}
+}
+
+/// **Le fil ne fait venir que ce que la ligne servie autorise, et vide le
+/// coffre quand la pièce est consommée** (revue de sécurité du 2026-10-25,
+/// #12957). Modèle de menace : appareil saisi après la consommation d'une vue
+/// unique ou l'échéance d'un éphémère ; serveur qui rattache un pointeur à une
+/// autre ligne.
+@MainActor
+final class EndToEndThreadClearPiecesTests: XCTestCase {
+    private let conversationId = "00000000000000000000cd01"
+    private let peer = "00000000000000000000cd77"
+    private let photoId = "6add00000000000000000a01"
+    private let posterId = "6add00000000000000000a02"
+
+    private func pointer(id: String? = nil, posterId: String? = nil) -> E2EEAttachmentPointer {
+        E2EEAttachmentPointer(
+            id: id ?? photoId, key: Data(repeating: 1, count: 64), digest: Data(repeating: 2, count: 32), size: 5,
+            contentType: "image/jpeg", fileName: "a.jpg", kind: .image,
+            thumbnail: .init(id: posterId ?? self.posterId, key: Data(repeating: 3, count: 64), digest: Data(repeating: 4, count: 32), size: 3, contentType: "image/jpeg")
+        )
+    }
+
+    private func row(id: String = "m1", servedBlobIds: [String]? = nil, viewOnceOpenedAt: Date? = nil, expiresAt: Date? = nil) -> MeeshyMessage {
+        let attachments = (servedBlobIds ?? [photoId, posterId]).map {
+            MeeshyMessageAttachment(id: $0, messageId: id, mimeType: "application/octet-stream", uploadedBy: peer, createdAt: Date(), isEncrypted: true, encryptionMode: E2EEWire.mode)
+        }
+        var message = MeeshyMessage(
+            id: id, conversationId: conversationId, senderId: peer, content: E2EEWire.contentPlaceholder,
+            expiresAt: expiresAt, isEncrypted: true, encryptionMode: E2EEWire.mode, attachments: attachments, senderUserId: peer
+        )
+        message.viewOnceOpenedAt = viewOnceOpenedAt
+        return message
+    }
+
+    private func endToEnd(_ pointers: [E2EEAttachmentPointer], for messageId: String = "m1") -> MockEndToEndMessaging {
+        let mock = MockEndToEndMessaging()
+        let content = E2EEContent(text: nil, language: nil, replyTo: nil, conversationId: conversationId, clientMessageId: nil, sentAt: Date(), attachments: pointers)
+        mock.store(.readable(content, senderUserId: peer), for: messageId)
+        return mock
+    }
+
+    private func eventually(_ what: String, timeout: TimeInterval = 4, file: StaticString = #filePath, line: UInt = #line, _ condition: () -> Bool) async {
+        let deadline = Date().addingTimeInterval(timeout)
+        while !condition(), Date() < deadline { try? await Task.sleep(nanoseconds: 20_000_000) }
+        XCTAssertTrue(condition(), what, file: file, line: line)
+    }
+
+    private func settle() async { try? await Task.sleep(nanoseconds: 300_000_000) }
+
+    func test_uneVueUniqueDejaConsommee_neSeTelechargePas_etSeVide() async {
+        let media = RecordingMaterializer()
+        let clear = EndToEndThreadClear(media: media)
+        var messages = [row(viewOnceOpenedAt: Date())]
+
+        await clear.resolve(&messages, from: endToEnd([pointer()]), conversationId: conversationId)
+        await eventually("le coffre efface la pièce consommée") { !media.discarded.isEmpty }
+
+        XCTAssertTrue(media.materialized.isEmpty, "rien d'une vue unique consommée ne se télécharge")
+        XCTAssertEqual(media.discarded.first?.first?.id, photoId)
+    }
+
+    func test_unEphemereEchu_neSeTelechargePas_etSeVide() async {
+        let media = RecordingMaterializer()
+        let clear = EndToEndThreadClear(media: media)
+        var messages = [row(expiresAt: Date().addingTimeInterval(-1))]
+
+        await clear.resolve(&messages, from: endToEnd([pointer()]), conversationId: conversationId)
+        await eventually("le coffre efface la pièce échue") { !media.discarded.isEmpty }
+
+        XCTAssertTrue(media.materialized.isEmpty)
+    }
+
+    func test_unPointeurQueLaLigneServieNePortePas_neSeTelechargePas() async {
+        let media = RecordingMaterializer()
+        let clear = EndToEndThreadClear(media: media)
+        let foreign = pointer(id: "6add00000000000000000bad", posterId: "6add00000000000000000bae")
+        let poster = pointer(posterId: "6add00000000000000000baf")
+        var messages = [row()]
+
+        await clear.resolve(&messages, from: endToEnd([pointer(), foreign, poster]), conversationId: conversationId)
+        await eventually("la pièce rattachée à la ligne se télécharge") { !media.materialized.isEmpty }
+        await settle()
+
+        XCTAssertEqual(media.materialized.flatMap { $0.map(\.blobIds) }, [[photoId, posterId]],
+                       "ni le pointeur d'une autre ligne, ni celui dont l'affiche n'est pas rattachée")
+    }
+
+    func test_uneVueUniqueConsommeePendantLaVisite_videLeCoffre() async {
+        let media = RecordingMaterializer()
+        let clear = EndToEndThreadClear(media: media)
+        var messages = [row()]
+        await clear.resolve(&messages, from: endToEnd([pointer()]), conversationId: conversationId)
+        await eventually("la pièce se télécharge") { !media.materialized.isEmpty }
+
+        var consumed = row(viewOnceOpenedAt: Date())
+        clear.apply(to: &consumed, conversationId: conversationId)
+
+        await eventually("la consommation vide le coffre") { !media.discarded.isEmpty }
+        XCTAssertTrue(consumed.attachments.allSatisfy { $0.fileUrl.isEmpty }, "la bulle ne désigne plus aucun clair")
+    }
+
+    func test_unEphemere_seVideASonEcheance_pendantLaVisite() async {
+        let media = RecordingMaterializer()
+        let clear = EndToEndThreadClear(media: media)
+        var messages = [row(expiresAt: Date().addingTimeInterval(0.4))]
+
+        await clear.resolve(&messages, from: endToEnd([pointer()]), conversationId: conversationId)
+        await eventually("la pièce se télécharge") { !media.materialized.isEmpty }
+        XCTAssertTrue(media.discarded.isEmpty, "rien ne s'efface avant l'échéance")
+
+        await eventually("l'échéance vide le coffre", timeout: 3) { !media.discarded.isEmpty }
+    }
+}
+
+/// Un serveur de blobs simulé qui livre par morceaux et note où on l'a coupé.
+nonisolated final class ChunkedBlobProtocol: URLProtocol, @unchecked Sendable {
+    nonisolated struct Script: Sendable {
+        var status = 200
+        var declaredLength: Int?
+        var chunks: [Data]
+    }
+
+    private static let lock = NSLock()
+    nonisolated(unsafe) private static var script = Script(chunks: [])
+    nonisolated(unsafe) private static var delivered = 0
+    nonisolated(unsafe) private static var stopped = false
+
+    static func serve(_ next: Script) { lock.withLock { script = next; delivered = 0; stopped = false } }
+    static var deliveredChunks: Int { lock.withLock { delivered } }
+
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+    override func startLoading() {
+        let current = Self.lock.withLock { Self.script }
+        var headers = ["Content-Type": "application/octet-stream"]
+        if let length = current.declaredLength { headers["Content-Length"] = String(length) }
+        let response = HTTPURLResponse(url: request.url!, statusCode: current.status, httpVersion: "HTTP/1.1", headerFields: headers)!
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        DispatchQueue.global().async { [self] in
+            for chunk in current.chunks {
+                Thread.sleep(forTimeInterval: 0.03)
+                guard !Self.lock.withLock({ Self.stopped }) else { return }
+                Self.lock.withLock { Self.delivered += 1 }
+                client?.urlProtocol(self, didLoad: chunk)
+            }
+            guard !Self.lock.withLock({ Self.stopped }) else { return }
+            client?.urlProtocolDidFinishLoading(self)
+        }
+    }
+
+    override func stopLoading() { Self.lock.withLock { Self.stopped = true } }
+}
+
+/// **Un blob géant ne remplit pas le disque** (revue de sécurité du
+/// 2026-10-25) : la limite que le pointeur annonce se juge sur la taille
+/// DÉCLARÉE dès la réponse, puis octet par octet pendant le flux, et le
+/// téléchargement s'arrête au premier octet de trop. Modèle de menace : serveur
+/// compromis qui sert un blob sans fin sous un identifiant valide.
+final class BoundedBlobDownloadTests: XCTestCase {
+    private func configuration() -> URLSessionConfiguration {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [ChunkedBlobProtocol.self]
+        return configuration
+    }
+
+    private func destination() -> URL {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("e2ee-bounded-\(UUID().uuidString)")
+        addTeardownBlock { try? FileManager.default.removeItem(at: url) }
+        return url
+    }
+
+    private let request = URLRequest(url: URL(string: "https://blobs.test/api/v1/attachments/6add00000000000000000a01")!)
+    private let tenChunks = Array(repeating: Data(repeating: 9, count: 1_000), count: 10)
+
+    func test_uneTailleDeclareeTropGrande_estRefuseeDesLaReponse() async {
+        ChunkedBlobProtocol.serve(.init(declaredLength: 10_000, chunks: tenChunks))
+        let target = destination()
+
+        do {
+            try await BoundedBlobDownload.fetch(request, to: target, maxBytes: 1_000, configuration: configuration())
+            XCTFail("un blob déclaré plus grand que le pointeur est refusé")
+        } catch {}
+
+        XCTAssertEqual(ChunkedBlobProtocol.deliveredChunks, 0, "aucun octet n'est lu après la réponse")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: target.path))
+    }
+
+    func test_unFluxSansTailleDeclaree_sArreteAuPremierOctetDeTrop() async {
+        ChunkedBlobProtocol.serve(.init(declaredLength: nil, chunks: tenChunks))
+        let target = destination()
+
+        do {
+            try await BoundedBlobDownload.fetch(request, to: target, maxBytes: 2_500, configuration: configuration())
+            XCTFail("un flux qui dépasse le pointeur est refusé")
+        } catch {}
+
+        XCTAssertLessThanOrEqual(ChunkedBlobProtocol.deliveredChunks, 4, "le flux est coupé dès la limite franchie")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: target.path))
+    }
+
+    func test_unBlobDansLaLimite_arriveEntier() async throws {
+        ChunkedBlobProtocol.serve(.init(declaredLength: 3_000, chunks: Array(tenChunks.prefix(3))))
+        let target = destination()
+
+        try await BoundedBlobDownload.fetch(request, to: target, maxBytes: 3_000, configuration: configuration())
+
+        XCTAssertEqual(try Data(contentsOf: target), Data(repeating: 9, count: 3_000))
+    }
+
+    func test_uneReponseQuiNEstPasUnSucces_nEcritRien() async {
+        ChunkedBlobProtocol.serve(.init(status: 404, declaredLength: 10, chunks: [Data(repeating: 1, count: 10)]))
+        let target = destination()
+
+        do {
+            try await BoundedBlobDownload.fetch(request, to: target, maxBytes: 1_000, configuration: configuration())
+            XCTFail("un 404 n'est pas un blob")
+        } catch {}
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: target.path))
+    }
 }

@@ -47,10 +47,19 @@ implémentation indépendante d'OpenSSL) et TypeScript (WebCrypto, qui repose su
 vérifie l'usage de l'API, pas l'indépendance) reproduisent octet pour octet. Clé et IV ne s'imposent que
 dans les vecteurs (`encryptAttachmentForTestVector`, `seal(_:key:iv:)` interne).
 
-**Stockage local** : le blob téléchargé se garde tel quel, chiffré sous sa clé ; la clé ne vit que dans la
-base scellée `e2ee.sqlite` (pointeur du contenu). Le clair d'une image ou d'un vocal se déchiffre en
-mémoire ; celui d'une vidéo ou d'un document, que les lecteurs système lisent par URL, dans un dossier
-`NSFileProtectionComplete` exclu de la sauvegarde, vidé après usage et au lancement (#12952).
+**Stockage local** : le clair d'une pièce se range dans le coffre de l'app (`EndToEndAttachmentVault`), un
+fichier par pièce nommé par `SHA-256(condensat ‖ clé)`, en `NSFileProtectionCompleteUnlessOpen`, exclu de la
+sauvegarde ; jamais dans les caches média. La clé ne vit que dans la base scellée `e2ee.sqlite` (pointeur du
+contenu). Le coffre se vide à la fermeture de session, à la consommation d'une vue unique et à l'échéance d'un
+éphémère vue pendant une visite ; la suppression d'un message et l'échéance hors visite relèvent de #13065.
+Le téléchargement est borné par la taille du pointeur : la taille déclarée se juge dès la réponse, puis le
+flux se compte et s'annule au premier octet de trop.
+
+**Ouverture d'un document local** : le clair d'un document est fabriqué par un pair. Il s'ouvre sous une
+cage qui l'empêche de signaler sa lecture (accusé de lecture, adresse IP) : un balisage actif (HTML, SVG,
+XML, archive web, type inconnu) se lit en texte brut ; le reste (PDF, bureautique, texte, image) se rend
+sous une `WKContentRuleList` qui bloque tout chargement hors `file:`, sans script, sans navigation hors du
+document, sur un magasin de données non persistant (`LocalDocumentSandbox.swift`).
 
 **Alternatives rejetées** :
 - *AES-256-GCM par morceaux* : aucun format publié de Signal ne le décrit pour les pièces ; le découpage

@@ -52,6 +52,9 @@ nonisolated protocol EndToEndAttachmentMaterializing: Sendable {
     func materialize(_ pointers: [E2EEAttachmentPointer]) async -> Int
     /// L'expéditeur garde le clair qu'il vient de chiffrer : rien à télécharger.
     func adopt(localFile: URL, secret: E2EEAttachmentSecret, contentType: String) async
+    /// Une vue unique consommée, un éphémère échu : le clair de ses pièces et
+    /// de leurs affiches quitte l'appareil, téléchargement en cours compris.
+    func discard(_ pointers: [E2EEAttachmentPointer]) async
     /// Fermeture de session : plus aucun clair de pièce ne reste.
     func wipe() async
 }
@@ -157,6 +160,17 @@ actor EndToEndAttachmentVault: EndToEndAttachmentMaterializing {
         leftovers.filter { $0.pathExtension == "partial" }.forEach { try? FileManager.default.removeItem(at: $0) }
     }
 
+    func discard(_ pointers: [E2EEAttachmentPointer]) async {
+        let targets = pointers.flatMap { [paths.file(for: $0)] + (paths.thumbnail(of: $0).map { [$0] } ?? []) }
+        for target in targets {
+            if let running = inFlight.removeValue(forKey: target) {
+                running.cancel()
+                _ = await running.value
+            }
+            try? FileManager.default.removeItem(at: target)
+        }
+    }
+
     func wipe() async {
         inFlight.values.forEach { $0.cancel() }
         inFlight = [:]
@@ -184,8 +198,6 @@ actor EndToEndAttachmentVault: EndToEndAttachmentMaterializing {
 /// L'identifiant n'est qu'un segment d'adresse (`isReadable` l'a déjà borné à
 /// 24 hexadécimaux), et la taille ne dépasse jamais celle que le pointeur annonce.
 nonisolated struct GatewayEndToEndBlobFetcher: EndToEndBlobFetching {
-    var session: URLSession = .shared
-
     func blob(_ blobId: String, to destination: URL, maxBytes: Int) async throws {
         guard let credential = APIClient.shared.requestCredential,
               let base = URL(string: MeeshyConfig.shared.apiBaseURL) else {
@@ -193,13 +205,126 @@ nonisolated struct GatewayEndToEndBlobFetcher: EndToEndBlobFetching {
         }
         var request = URLRequest(url: base.appendingPathComponent("attachments").appendingPathComponent(blobId))
         request.setValue(credential.value, forHTTPHeaderField: credential.header)
-        let (downloaded, response) = try await session.download(for: request)
-        defer { try? FileManager.default.removeItem(at: downloaded) }
-        let size = (try? FileManager.default.attributesOfItem(atPath: downloaded.path)[.size] as? NSNumber)?.intValue ?? .max
-        guard (response as? HTTPURLResponse)?.statusCode == 200, size <= maxBytes else {
-            throw URLError(.badServerResponse)
+        try await BoundedBlobDownload.fetch(request, to: destination, maxBytes: maxBytes)
+    }
+}
+
+/// **Un blob se télécharge sous la taille que son pointeur annonce, et pas un
+/// octet de plus** (revue de sécurité du 2026-10-25) : la taille DÉCLARÉE
+/// (`expectedContentLength`, `Content-Length`) se juge dès la réponse, avant
+/// tout octet ; puis chaque morceau du flux se compte, et le téléchargement est
+/// annulé au premier octet de trop. Un serveur compromis qui sert un blob sans
+/// fin ne remplit donc pas le disque. Rien n'est posé à `destination` qu'un
+/// blob entier, dans la limite et sous un statut 200.
+nonisolated final class BoundedBlobDownload: NSObject, URLSessionDataDelegate, @unchecked Sendable {
+    enum Refusal: Error, Equatable {
+        case status(Int)
+        case tooLarge
+    }
+
+    private let maxBytes: Int
+    private let partial: URL
+    private let lock = NSLock()
+    private var handle: FileHandle?
+    private var received = 0
+    private var refusal: (any Error)?
+    private var continuation: CheckedContinuation<Void, any Error>?
+
+    private init(maxBytes: Int, partial: URL) {
+        self.maxBytes = maxBytes
+        self.partial = partial
+    }
+
+    static func fetch(
+        _ request: URLRequest, to destination: URL, maxBytes: Int,
+        configuration: URLSessionConfiguration = .ephemeral
+    ) async throws {
+        let partial = destination.appendingPathExtension("download")
+        let download = BoundedBlobDownload(maxBytes: maxBytes, partial: partial)
+        let session = URLSession(configuration: configuration, delegate: download, delegateQueue: nil)
+        defer {
+            session.invalidateAndCancel()
+            try? FileManager.default.removeItem(at: partial)
+        }
+        let task = session.dataTask(with: request)
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                download.lock.withLock { download.continuation = continuation }
+                task.resume()
+            }
+        } onCancel: {
+            task.cancel()
         }
         try? FileManager.default.removeItem(at: destination)
-        try FileManager.default.moveItem(at: downloaded, to: destination)
+        try FileManager.default.moveItem(at: partial, to: destination)
+    }
+
+    /// La taille que la réponse annonce, par l'un ou l'autre de ses deux canaux.
+    static func declaredLength(of response: HTTPURLResponse) -> Int? {
+        let header = response.value(forHTTPHeaderField: "Content-Length").flatMap { Int($0.trimmingCharacters(in: .whitespaces)) }
+        let expected = response.expectedContentLength >= 0 ? Int(response.expectedContentLength) : nil
+        return [header, expected].compactMap { $0 }.max()
+    }
+
+    func urlSession(
+        _ session: URLSession, dataTask: URLSessionDataTask, didReceive response: URLResponse,
+        completionHandler: @escaping @Sendable (URLSession.ResponseDisposition) -> Void
+    ) {
+        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+            refuse(Refusal.status((response as? HTTPURLResponse)?.statusCode ?? 0))
+            return completionHandler(.cancel)
+        }
+        if let declared = Self.declaredLength(of: http), declared > maxBytes {
+            refuse(Refusal.tooLarge)
+            return completionHandler(.cancel)
+        }
+        do {
+            try? FileManager.default.removeItem(at: partial)
+            guard FileManager.default.createFile(atPath: partial.path, contents: nil) else { throw URLError(.cannotCreateFile) }
+            let opened = try FileHandle(forWritingTo: partial)
+            lock.withLock { handle = opened }
+            completionHandler(.allow)
+        } catch {
+            refuse(error)
+            completionHandler(.cancel)
+        }
+    }
+
+    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
+        let accepted = lock.withLock { () -> FileHandle? in
+            guard refusal == nil else { return nil }
+            received += data.count
+            return received <= maxBytes ? handle : nil
+        }
+        guard let accepted else {
+            refuse(Refusal.tooLarge)
+            return dataTask.cancel()
+        }
+        do {
+            try accepted.write(contentsOf: data)
+        } catch {
+            refuse(error)
+            dataTask.cancel()
+        }
+    }
+
+    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: (any Error)?) {
+        let (continuation, outcome) = lock.withLock { () -> (CheckedContinuation<Void, any Error>?, (any Error)?) in
+            try? handle?.close()
+            handle = nil
+            let pending = self.continuation
+            self.continuation = nil
+            return (pending, refusal ?? error)
+        }
+        guard let continuation else { return }
+        if let outcome {
+            continuation.resume(throwing: outcome)
+        } else {
+            continuation.resume()
+        }
+    }
+
+    private func refuse(_ error: any Error) {
+        lock.withLock { if refusal == nil { refusal = error } }
     }
 }

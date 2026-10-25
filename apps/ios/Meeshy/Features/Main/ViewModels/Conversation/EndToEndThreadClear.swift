@@ -20,6 +20,9 @@ final class EndToEndThreadClear {
     /// arrive, et passe de son ThumbHash à l'image, au son, au document.
     @Published private(set) var materialized: [String: Int] = [:]
     private var requested: Set<String> = []
+    private var discarded: Set<String> = []
+    private var loads: [String: Task<Void, Never>] = [:]
+    private var deadlines: [String: Task<Void, Never>] = [:]
     private let media: any EndToEndAttachmentMaterializing
 
     init(media: any EndToEndAttachmentMaterializing = EndToEndAttachmentVault.shared) {
@@ -35,22 +38,58 @@ final class EndToEndThreadClear {
 
     /// Lit puis pose le clair de tout message scellé du lot, et le retient.
     func resolve(_ messages: inout [MeeshyMessage], from endToEnd: any EndToEndMessagingProviding, conversationId: String) async {
+        let served = Dictionary(messages.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         let found = await EndToEndThreadPlaintexts.resolve(&messages, from: endToEnd, conversationId: conversationId, media: media.paths)
-        materializePieces(of: found)
+        for (messageId, entry) in found {
+            guard let row = served[messageId] else { continue }
+            settlePieces(of: entry, on: row)
+        }
         guard found.contains(where: { adopted[$0.key] != $0.value }) else { return }
         adopted.merge(found) { _, fresh in fresh }
     }
 
     /// Les pièces d'un message adopté se téléchargent, se vérifient et se
-    /// déchiffrent une fois par visite ; un échec se retente à la suivante.
-    private func materializePieces(of found: [String: E2EEPlaintextEntry]) {
-        for (messageId, entry) in found where !requested.contains(messageId) {
-            guard case .readable(let content, _) = entry, let pointers = content.attachments, !pointers.isEmpty else { continue }
-            requested.insert(messageId)
-            Task { [weak self, media] in
-                let present = await media.materialize(pointers)
-                self?.materialized[messageId] = present
-            }
+    /// déchiffrent une fois par visite, et seulement celles que la ligne servie
+    /// autorise (`EndToEndAttachmentOverlay.materializable`) ; un échec se
+    /// retente à la suivante. Une vue unique consommée ou un éphémère échu ne
+    /// télécharge rien et vide le coffre de ses pièces ; un éphémère encore en
+    /// vie le videra à son échéance (#12957).
+    private func settlePieces(of entry: E2EEPlaintextEntry, on row: MeeshyMessage, now: Date = Date()) {
+        guard case .readable(let content, _) = entry, let pointers = content.attachments, !pointers.isEmpty else { return }
+        guard !EndToEndAttachmentOverlay.isSpent(row, now: now) else { return discardPieces(pointers, of: row.id) }
+        guard !requested.contains(row.id) else { return }
+        let wanted = EndToEndAttachmentOverlay.materializable(pointers, for: row, now: now)
+        guard !wanted.isEmpty else { return }
+        requested.insert(row.id)
+        let messageId = row.id
+        loads[messageId] = Task { [weak self, media] in
+            let present = await media.materialize(wanted)
+            guard let self, !self.discarded.contains(messageId) else { return }
+            self.materialized[messageId] = present
+        }
+        if let expiresAt = row.expiresAt { discardPieces(pointers, of: messageId, at: expiresAt) }
+    }
+
+    private func discardPieces(_ pointers: [E2EEAttachmentPointer], of messageId: String, at deadline: Date) {
+        deadlines[messageId]?.cancel()
+        deadlines[messageId] = Task { [weak self, media] in
+            let delay = deadline.timeIntervalSinceNow
+            if delay > 0 { try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000)) }
+            guard !Task.isCancelled else { return }
+            guard let self else { return await media.discard(pointers) }
+            self.discardPieces(pointers, of: messageId)
+        }
+    }
+
+    private func discardPieces(_ pointers: [E2EEAttachmentPointer], of messageId: String) {
+        guard !discarded.contains(messageId) else { return }
+        discarded.insert(messageId)
+        deadlines.removeValue(forKey: messageId)?.cancel()
+        let load = loads.removeValue(forKey: messageId)
+        if materialized[messageId] != nil { materialized.removeValue(forKey: messageId) }
+        Task { [media] in
+            _ = await load?.value
+            await media.discard(pointers)
         }
     }
 
@@ -60,6 +99,9 @@ final class EndToEndThreadClear {
     /// écrit (audit #12916) ; rien ne change pour un message en clair.
     func apply(to message: inout MeeshyMessage, conversationId: String) {
         guard EndToEndThreadPlaintexts.awaitsPlaintext(message) else { return }
+        if let entry = adopted[message.id], EndToEndAttachmentOverlay.isSpent(message) {
+            settlePieces(of: entry, on: message)
+        }
         guard let entry = adopted[message.id],
               let readable = EndToEndThreadPlaintexts.adoption(of: entry, by: message, conversationId: conversationId, media: media.paths) else {
             message.content = E2EEWire.contentPlaceholder

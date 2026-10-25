@@ -52,6 +52,16 @@ nonisolated enum EndToEndAttachmentOverlay {
         }
     }
 
+    /// Ce que la ligne SERVIE autorise à faire venir sur l'appareil : rien d'une
+    /// vue unique consommée ou d'un éphémère échu, et seulement les pointeurs
+    /// lisibles dont TOUS les blobs (la pièce et son affiche) sont rattachés à
+    /// cette ligne (revue de sécurité du 2026-10-25) — la même règle que la bulle.
+    static func materializable(_ pointers: [E2EEAttachmentPointer], for row: MeeshyMessage, now: Date = Date()) -> [E2EEAttachmentPointer] {
+        guard !isSpent(row, now: now) else { return [] }
+        let served = Set(row.attachments.map(\.id))
+        return pointers.filter { $0.isReadable && Set($0.blobIds).isSubset(of: served) }
+    }
+
     /// Une vue unique déjà ouverte, un éphémère échu : ses pièces ne se remontrent pas.
     static func isSpent(_ message: MeeshyMessage, now: Date = Date()) -> Bool {
         message.viewOnceOpenedAt != nil || message.expiresAt.map { $0 <= now } == true

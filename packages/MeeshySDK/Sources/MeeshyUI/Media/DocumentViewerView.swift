@@ -409,9 +409,12 @@ public struct DocumentWebView: UIViewRepresentable {
     }
 
     /// La vue web configurée pour ce portillon — sans rien charger encore.
-    public static func makeWebView(mayLeave: Bool, runsScripts: Bool = true) -> WKWebView {
+    public static func makeWebView(
+        mayLeave: Bool, runsScripts: Bool = true, websiteDataStore: WKWebsiteDataStore = .default()
+    ) -> WKWebView {
         let interaction = Interaction(mayLeave: mayLeave)
         let config = WKWebViewConfiguration()
+        config.websiteDataStore = websiteDataStore
         config.defaultWebpagePreferences.allowsContentJavaScript = runsScripts
         config.preferences.isTextInteractionEnabled = interaction.selectsText
         if let style = interaction.sealingStyle {
@@ -440,17 +443,28 @@ public struct DocumentWebView: UIViewRepresentable {
         }
     }
 
+    public final class Coordinator {
+        var navigationGuard: LocalDocumentNavigationGuard?
+    }
+
+    public func makeCoordinator() -> Coordinator { Coordinator() }
+
     public func makeUIView(context: Context) -> WKWebView {
-        // Un document LOCAL (#10789 : le clair d'une pièce chiffrée de bout en
-        // bout, dans le dossier protégé de l'app) ne se lit que par `loadFileURL`,
-        // seulement son propre fichier, et sans script : un HTML ou un SVG d'un
-        // pair ne signale pas son ouverture.
-        let webView = Self.makeWebView(mayLeave: mayLeave, runsScripts: !url.isFileURL)
-        if url.isFileURL {
-            webView.loadFileURL(url, allowingReadAccessTo: url)
-        } else {
+        guard url.isFileURL else {
+            let webView = Self.makeWebView(mayLeave: mayLeave)
             webView.load(URLRequest(url: url))
+            return webView
         }
+        // Un document LOCAL (#10789 : le clair d'une pièce chiffrée de bout en
+        // bout, fabriqué par un pair) s'ouvre sous la cage : balisage en texte
+        // brut, aucun chargement hors `file:`, aucune navigation hors de lui,
+        // aucun script, aucune donnée de site gardée — son ouverture ne
+        // prévient personne (`LocalDocumentRendering`).
+        let webView = Self.makeLocalWebView(mayLeave: mayLeave)
+        let navigationGuard = LocalDocumentNavigationGuard(document: url)
+        context.coordinator.navigationGuard = navigationGuard
+        webView.navigationDelegate = navigationGuard
+        Task { await Self.loadLocal(url, into: webView) }
         return webView
     }
 
