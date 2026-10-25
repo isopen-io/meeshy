@@ -11,7 +11,7 @@
 |---|---|
 | **Base de départ** de chaque itération web | `origin/dev` (resync à chaque tour) |
 | **Cible de la PR** | `dev` |
-| Branche de travail de la session courante | `claude/practical-fermat-o9iiqc` |
+| Branche de travail de la session courante | `claude/practical-fermat-1peq83` |
 
 **Pourquoi `dev` et non `main`.** La directive porteur (CLAUDE.md §🚦) tranche :
 `dev` **est le staging**, et Claude y est autonome sur tout — toute PR vers `dev`
@@ -39,7 +39,16 @@ normal.
 | itération | date | branche de travail | PR | état |
 |---|---|---|---|---|
 | **74w** | 2026-10-21 | `claude/practical-fermat-to2xb3` | [#11384](https://github.com/isopen-io/meeshy/pull/11384) → `dev` | ✅ mergé |
-| **75w** | 2026-10-24 | `claude/practical-fermat-o9iiqc` | [#12599](https://github.com/isopen-io/meeshy/pull/12599) → `dev` | ⏳ CI |
+| **75w** | 2026-10-24 | `claude/practical-fermat-o9iiqc` | [#12599](https://github.com/isopen-io/meeshy/pull/12599) → `dev` | ✅ mergé |
+| **76w** | 2026-10-25 | `claude/practical-fermat-1peq83` | (à ouvrir) → `dev` | ⏳ CI |
+
+**76w** — cohérence du thème : deux littéraux que le gate d'harmonie (#8879) prenait
+pour du chrome n'en sont pas — le code QR du lien de parrainage
+(`lib/game-photo/referral-qr.ts`, noir-sur-blanc lu par une caméra) et la luminance
+d'un masque SVG (`components/game/author-plate.tsx`, blanc = visible / noir = masqué).
+Marqués `harmony-exempt` motivés ; gate 96 → 92 ; témoin
+`harmony-nonpaint-literals.test.ts`. Housekeeping : 14 analyses web legacy de juin
+2026 annotées CLOS — LEGACY. Analyse : `docs/analyses/uiux/2026-10-25-iteration-76w.md`.
 
 **75w** — cohérence du thème clair/sombre : la vignette « Signature » du sélecteur
 d'apparence (`appearance-picker-sections.tsx`) DÉRIVE désormais des cotes canoniques
@@ -60,6 +69,6 @@ du code supprimé et ne se rejouent pas.** La routine repart d'une revue fraîch
 l'`apps/web` actuel (Vite + Preact). Toutes sont annotées `CORRIGÉ` et closes pour
 leur époque.
 
-## Prochaine itération : **76w**
-Revue fraîche `apps/web` — voir les pistes 76w+ en pied de
-`docs/analyses/uiux/2026-10-24-iteration-75w.md`.
+## Prochaine itération : **77w**
+Revue fraîche `apps/web` — voir les pistes 77w+ en pied de
+`docs/analyses/uiux/2026-10-25-iteration-76w.md`.
