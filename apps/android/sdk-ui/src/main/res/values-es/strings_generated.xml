@@ -67,6 +67,12 @@
     <string name="presence_online">En línea</string>
     <string name="reactions_more">Más reacciones</string>
     <string name="retouch_crop_original">Original</string>
+    <string name="retouch_effect_angel">Ángel</string>
+    <string name="retouch_effect_demon">Demonio</string>
+    <string name="retouch_effect_none">Ninguno</string>
+    <string name="retouch_effect_smoothing">Suavizado de piel</string>
+    <string name="retouch_effect_toad">Sapo</string>
+    <string name="retouch_effect_volcano">Erupción</string>
     <string name="retouch_family_effects">Efectos</string>
     <string name="retouch_family_filters">Filtros</string>
     <string name="retouch_family_frames">Marcos</string>

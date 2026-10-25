@@ -160,6 +160,33 @@ class ComposerTrayController @Inject constructor(
     }
 
     /**
+     * Une vidéo retouchée (#12735) remplace sa pièce à sa place : le fichier rendu est copié sans passer
+     * par la mémoire, puis supprimé. Une pièce partie entre-temps ne revient pas, et le rendu s'efface.
+     */
+    fun replaceFile(id: String, file: File, declaredMimeType: String?) {
+        val scope = host?.scope
+        if (scope == null || _state.value.items.none { it.id == id }) {
+            file.delete()
+            return
+        }
+        val info = AttachmentSourceInfo(file.name, MimeTypeResolver.resolve(declaredMimeType, file.name), file.length())
+        scope.launch {
+            try {
+                val copied = runCatching { ingestor.ingest(Uri.fromFile(file), "$id-${idFactory()}", info) }.getOrNull() ?: return@launch
+                if (!ComposerAttachmentLimits.admitsUpload(copied.sizeBytes)) {
+                    deleteFiles(listOfNotNull(copied.localPath, copied.thumbnail?.thumbnailPath))
+                    return@launch reportTooLarge(info.fileName)
+                }
+                val replacement = readyFrom(placeholderFor(info).copy(id = id), copied)
+                val reduction = reduce { PendingAttachmentsReducer.replace(it, id, replacement) }
+                if (!reduction.applied) deleteFiles(replacement.ownedPaths)
+            } finally {
+                ingestor.delete(listOf(file.path))
+            }
+        }
+    }
+
+    /**
      * L'envoi consomme le plateau : `null` s'il est vide ou si une pièce se prépare encore
      * (le bouton Envoyer attend), sinon toutes les pièces prêtes, en un seul lot.
      */

@@ -118,6 +118,56 @@ final class ShareExtensionLocalizationTests: XCTestCase {
         )
     }
 
+    // MARK: - The share ceilings are ShareLimits', never a copy in the catalogue (#12974)
+
+    /// The two limit sentences used to write « 20 fichiers et 500 Mo » in seven
+    /// languages: raising the ceilings meant fourteen hand edits, and one missed
+    /// translation would have announced a ceiling the app no longer applies. The
+    /// numbers are now arguments formatted from `ShareLimits`.
+    func test_theLimitSentences_carryNoCeilingOfTheirOwn_andTheSameArgumentsInEveryLocale() throws {
+        let strings = try catalogStrings("Meeshy/Localizable.xcstrings")
+        let expected: [String: [String]] = [
+            "share.sheet.content.over-budget": ["%1$d", "%2$d", "%3$@"],
+            "share.sheet.limits.too-heavy": ["%1$d", "%2$@", "%3$d", "%4$@"]
+        ]
+        let specifier = try NSRegularExpression(pattern: "%[0-9]\\$[d@]")
+        let literalNumber = try NSRegularExpression(pattern: "[0-9]{2,}")
+        for (key, specifiers) in expected {
+            let entry = strings[key] as? [String: Any]
+            let localizations = entry?["localizations"] as? [String: Any] ?? [:]
+            XCTAssertEqual(Set(localizations.keys), supportedLocales, key)
+            for (locale, value) in localizations {
+                let unit = (value as? [String: Any])?["stringUnit"] as? [String: Any]
+                let text = unit?["value"] as? String ?? ""
+                let range = NSRange(text.startIndex..., in: text)
+                let found = specifier.matches(in: text, range: range).compactMap { Range($0.range, in: text).map { String(text[$0]) } }
+                XCTAssertEqual(found.sorted(), specifiers.sorted(), "\(key) [\(locale)] must take the ceilings as arguments")
+                XCTAssertEqual(
+                    literalNumber.numberOfMatches(in: text, range: range), 0,
+                    "\(key) [\(locale)] writes a ceiling in the catalogue: \(text)"
+                )
+            }
+        }
+    }
+
+    func test_theTooHeavySentence_saysTheCeilingsOfShareLimits() {
+        let french = Bundle.shareCatalog(
+            in: .main,
+            store: ShareLanguageStoreStub(publishedCode: "fr"),
+            devicePreferred: ["en-US"]
+        )
+        let locale = Locale.shareCatalog(french)
+        let text = String(
+            format: String(localized: "share.sheet.limits.too-heavy", defaultValue: "?", bundle: french),
+            102,
+            ShareSheetCopy.limitSize(6 * 1024 * 1024 * 1024, locale: locale),
+            ShareLimits.maxFiles,
+            ShareSheetCopy.limitSize(ShareLimits.maxTotalBytes, locale: locale)
+        )
+        let plain = text.replacingOccurrences(of: "\u{202F}", with: " ").replacingOccurrences(of: "\u{00A0}", with: " ")
+        XCTAssertEqual(plain, "102 fichiers, 6 Go. Un partage emporte au plus 100 fichiers et 5 Go.")
+    }
+
     func test_shareSheetDisplayNameIsLocalized() throws {
         // CFBundleDisplayName is what iOS shows in the system share sheet — the single
         // most visible string of the extension, and the one users see before anything
