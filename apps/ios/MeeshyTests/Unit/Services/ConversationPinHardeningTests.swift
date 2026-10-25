@@ -340,6 +340,12 @@ final class InMemoryConversationLockVault: ConversationLockVault {
     /// `true` : les écritures échouent (trousseau plein, erreur du système) ;
     /// ce qui est déjà écrit reste.
     var refusesWrites = false
+    /// `true` : l'effacement en bloc échoue (erreur du système) alors que
+    /// les écritures passent.
+    var refusesDeleteAll = false
+    /// `true` : scellé, le trousseau répond « aucun élément » à l'effacement
+    /// en bloc au lieu de le refuser — sans rien effacer.
+    var answersNotFoundWhileSealed = false
 
     init(items: [String: String] = [:]) {
         self.items = items
@@ -367,7 +373,8 @@ final class InMemoryConversationLockVault: ConversationLockVault {
 
     @discardableResult
     func deleteAll() -> Bool {
-        guard !sealed else { return false }
+        guard !sealed else { return answersNotFoundWhileSealed }
+        guard !refusesDeleteAll else { return false }
         items.removeAll()
         return true
     }

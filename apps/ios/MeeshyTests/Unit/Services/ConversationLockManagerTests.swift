@@ -639,6 +639,79 @@ final class ConversationLockManagerTests: XCTestCase {
         XCTAssertTrue(sut.verifyMasterPin("123456"))
     }
 
+    /// L'effacement rejoué échoue encore : rien ne s'écrit. Écrit, le code
+    /// tomberait au rejeu suivant, et la conversation resterait dans la liste
+    /// sans aucun code.
+    func test_aPendingLogoutWipe_thatFailsAgain_refusesEveryWrite_untilItSucceeds() throws {
+        let fixture = try makeLaunchFixture()
+        let vault = InMemoryConversationLockVault(items: ["meeshy_lock_coffre": "code", "compte-sortant": "reste"])
+        let sut = makeLaunchedManager(fixture, protectedData: ProtectedData(available: true), vault: vault)
+        vault.refusesDeleteAll = true
+        sut.resetForLogout()
+
+        XCTAssertFalse(sut.setMasterPin("123456"))
+        XCTAssertFalse(sut.masterPinConfigured)
+        XCTAssertFalse(sut.setLock(conversationId: "neuve", pin: "1234"))
+        XCTAssertFalse(sut.isLocked("neuve"))
+        XCTAssertNil(vault.read("meeshy_lock_neuve"))
+
+        vault.refusesDeleteAll = false
+        fixture.center.post(name: UIApplication.didBecomeActiveNotification, object: nil)
+        drainMainQueue()
+
+        XCTAssertTrue(vault.items.isEmpty, "restes : \(vault.items.keys.sorted())")
+        XCTAssertTrue(sut.setMasterPin("123456"))
+        XCTAssertTrue(sut.setLock(conversationId: "neuve", pin: "1234"))
+        XCTAssertEqual(sut.attemptLock(conversationId: "neuve", pin: "1234"), .granted)
+    }
+
+    /// Avant le premier déverrouillage, un trousseau peut répondre « aucun
+    /// élément » à l'effacement sans rien effacer : faite sans données
+    /// protégées, la déconnexion rejoue l'effacement dès qu'elles le deviennent.
+    func test_aLogoutWithoutProtectedData_whoseWipeAnswersNotFound_isReplayedOnceTheyBecomeAvailable() throws {
+        let fixture = try makeLaunchFixture()
+        let vault = InMemoryConversationLockVault(items: ["meeshy_master_pin": "pin-maître", "meeshy_lock_coffre": "code"])
+        vault.sealed = true
+        vault.answersNotFoundWhileSealed = true
+        let protectedData = ProtectedData(available: false)
+        let sut = makeLaunchedManager(fixture, protectedData: protectedData, vault: vault)
+
+        sut.resetForLogout()
+        vault.sealed = false
+        protectedData.available = true
+        fixture.center.post(name: UIApplication.protectedDataDidBecomeAvailableNotification, object: nil)
+        drainMainQueue()
+
+        XCTAssertTrue(vault.items.isEmpty, "restes : \(vault.items.keys.sorted())")
+    }
+
+    // MARK: - #12655 : un PIN maître qui ne s'écrit pas le dit
+
+    func test_aFirstMasterPinThatCannotBeWritten_isNotConfigured_andSaysSo() throws {
+        let fixture = try makeLaunchFixture()
+        let vault = InMemoryConversationLockVault()
+        let sut = makeLaunchedManager(fixture, protectedData: ProtectedData(available: true), vault: vault)
+        vault.refusesWrites = true
+
+        XCTAssertFalse(sut.setMasterPin("123456"))
+
+        XCTAssertFalse(sut.masterPinConfigured)
+        XCTAssertFalse(sut.hasMasterPin())
+    }
+
+    func test_aMasterPinChangeThatCannotBeWritten_keepsTheOldPin_andSaysSo() throws {
+        let fixture = try makeLaunchFixture()
+        let vault = InMemoryConversationLockVault()
+        let sut = makeLaunchedManager(fixture, protectedData: ProtectedData(available: true), vault: vault)
+        XCTAssertTrue(sut.setMasterPin("111111"))
+        vault.refusesWrites = true
+
+        XCTAssertFalse(sut.setMasterPin("222222"))
+
+        XCTAssertTrue(sut.masterPinConfigured)
+        XCTAssertTrue(sut.verifyMasterPin("111111"))
+    }
+
     // MARK: - #12655 : un verrou n'entre dans la liste qu'une fois son code écrit
 
     /// La liste est un sous-ensemble des codes du trousseau — c'est ce que la
@@ -719,6 +792,36 @@ final class ConversationLockManagerTests: XCTestCase {
         XCTAssertEqual(vault.read("meeshy_lock_coffre"), "nouveau")
     }
 
+    /// Les versions antérieures posaient le PIN maître et les codes en
+    /// `WhenUnlockedThisDeviceOnly` : la réécriture les fait passer en
+    /// `AfterFirstUnlockThisDeviceOnly`, que l'extension de notification lit
+    /// écran verrouillé.
+    func test_theKeychainVault_rewritingALegacyCode_movesItToAfterFirstUnlock() {
+        let vault = makeKeychainVault()
+        defer { vault.deleteAll() }
+        let item = keychainItem(vault, "meeshy_lock_coffre")
+        let legacy = item.merging([
+            kSecValueData as String: Data("ancien".utf8),
+            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
+        ]) { _, new in new }
+        let added = SecItemAdd(legacy as CFDictionary, nil)
+        XCTAssertEqual(added, errSecSuccess)
+
+        XCTAssertTrue(vault.write("nouveau", for: "meeshy_lock_coffre"))
+
+        var found: AnyObject?
+        let query = item.merging([
+            kSecReturnAttributes as String: true, kSecMatchLimit as String: kSecMatchLimitOne,
+        ]) { _, new in new }
+        let status = SecItemCopyMatching(query as CFDictionary, &found)
+        XCTAssertEqual(status, errSecSuccess)
+        XCTAssertEqual(
+            (found as? [String: Any])?[kSecAttrAccessible as String] as? String,
+            kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly as String
+        )
+        XCTAssertEqual(vault.read("meeshy_lock_coffre"), "nouveau")
+    }
+
     func test_theKeychainVault_deleteAll_leavesNoAccount() {
         let vault = makeKeychainVault()
         defer { vault.deleteAll() }
@@ -741,7 +844,7 @@ final class ConversationLockManagerTests: XCTestCase {
         sut.setMasterPin("123456")
 
         XCTAssertFalse(sut.offersMasterPinRemoval)
-        sut.removeMasterPin()
+        XCTAssertFalse(sut.removeMasterPin(), "le refus se dit")
         XCTAssertTrue(sut.hasMasterPin(), "le code de la conversation dépend encore du PIN maître")
     }
 
@@ -751,8 +854,49 @@ final class ConversationLockManagerTests: XCTestCase {
         sut.setMasterPin("123456")
 
         XCTAssertTrue(sut.offersMasterPinRemoval)
-        sut.removeMasterPin()
+        XCTAssertTrue(sut.removeMasterPin())
         XCTAssertFalse(sut.hasMasterPin())
+    }
+
+    /// Un verrou posé APRÈS que les Réglages ont proposé la suppression (la
+    /// feuille est ouverte) : le gestionnaire refuse encore, et le dit.
+    func test_aLockSetWhileTheRemovalSheetIsOpen_stillKeepsTheMasterPin() throws {
+        let fixture = try makeLaunchFixture()
+        let sut = makeLaunchedManager(fixture, protectedData: ProtectedData(available: true))
+        sut.setMasterPin("123456")
+        XCTAssertTrue(sut.offersMasterPinRemoval)
+        XCTAssertTrue(sut.setLock(conversationId: "coffre", pin: "1234"))
+
+        XCTAssertFalse(sut.removeMasterPin())
+
+        XCTAssertTrue(sut.verifyMasterPin("123456"))
+    }
+
+    /// Garde de SOURCE, la feuille étant une vue : elle ne force rien. Elle
+    /// demande au gestionnaire de retirer le PIN maître et dit son refus ; un
+    /// PIN maître qui ne s'écrit pas se dit aussi, à la création comme au
+    /// changement.
+    func test_theLockSheet_asksTheManager_andSaysWhenItRefuses() throws {
+        let code = AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Main/Components/ConversationLockSheet.swift")
+        )
+
+        XCTAssertFalse(code.contains("forceRemoveMasterPin"))
+        XCTAssertTrue(code.contains("guard lockManager.removeMasterPin() else { return shakeAndReset(errMasterPinStillNeeded) }"))
+        let guardedMasterPinWrites = code.components(
+            separatedBy: "guard lockManager.setMasterPin(pin) else { return shakeAndReset(errCodeNotSaved) }"
+        ).count - 1
+        XCTAssertEqual(guardedMasterPinWrites, 2)
+    }
+
+    /// Un refus à la confirmation reprend au choix du code. La création du
+    /// PIN maître n'a pas d'étape 1 : elle repart de l'étape 0, sans quoi la
+    /// saisie suivante se comparait à une confirmation vide, sans fin.
+    func test_aRefusalAtConfirmation_resumesAtTheCodeChoice() {
+        XCTAssertEqual(ConversationLockSheet.step(afterRefusalAt: 2, in: .setupMasterPin), 0)
+        XCTAssertEqual(ConversationLockSheet.step(afterRefusalAt: 2, in: .changeMasterPin), 1)
+        XCTAssertEqual(ConversationLockSheet.step(afterRefusalAt: 2, in: .lockConversation), 1)
+        XCTAssertEqual(ConversationLockSheet.step(afterRefusalAt: 0, in: .removeMasterPin), 0)
     }
 
     /// Garde de SOURCE : les Réglages comptent le jeu de verrous (liste, et
