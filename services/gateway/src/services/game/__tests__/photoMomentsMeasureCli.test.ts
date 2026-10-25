@@ -63,7 +63,6 @@ describe('le point d’entrée de la mesure photo', () => {
       window: { week: '2026-W43', from: '2026-10-19T00:00:00.000Z', to: '2026-10-26T00:00:00.000Z' },
       minAccounts: 10,
       families: [],
-      keptBacklog: [],
       push: null,
       pushReadMeaning: 'ceiling-includes-carnet-visits',
       suppressed: 0,

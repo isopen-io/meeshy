@@ -15,8 +15,13 @@
  *
  *  - `families` : par famille, `announced` (comptes à qui un moment de la famille a été ANNONCÉ pour la première fois
  *    dans la semaine) et `kept` (ceux d'entre eux qui en ont gardé un avant sa fin) ;
- *  - `keptBacklog` : par famille, les comptes qui ont gardé dans la semaine un moment annoncé AVANT elle ;
  *  - `push` : `sent` (comptes poussés dans la semaine) et `read` (ceux d'entre eux qui en ont lu un avant sa fin).
+ *
+ * Chaque ligne ne dépend QUE de la semaine mesurée : un moment est annoncé dans une seule semaine, une notification
+ * créée dans une seule, et une garde ne compte que dans la semaine d'annonce de son moment. Une garde posée plus tard
+ * (un rattrapage depuis le carnet) n'entre dans aucune ligne : la publier reliait deux semaines, et les familles à un
+ * seul moment par compte (`start`, une saison, un palier de sommet — `@@unique([userId, stepId])`) rendaient ces
+ * lignes DISJOINTES, donc sommables jusqu'à un compte (troisième audit, #10176).
  *
  * Aucun jour, aucune clé, aucune surface, aucun nombre de lignes. Une ligne ne sort que si chacun de ses nombres ET
  * leur complément valent zéro ou au moins `PHOTO_MEASURE_MIN_ACCOUNTS`, et si elle ne s'emboîte dans aucune ligne
@@ -30,7 +35,7 @@
 import { PHOTO_MEASURE_FAMILIES, photoMeasureKeyOf, type PhotoMeasureFamily } from '@meeshy/shared/utils/game/photo-measure';
 
 import { complement, publishLines, type Accounts, type CandidateLine } from './photoMeasureRates';
-import { isClosedWeek, isoWeekOf, isoWeekWindow, lastClosedIsoWeek, type IsoWeekWindow } from './photoMeasureWeek';
+import { isClosedWeek, isoWeekWindow, lastClosedIsoWeek, type IsoWeekWindow } from './photoMeasureWeek';
 
 /** Le k-anonymat de la sortie : en dessous de dix comptes distincts, une ligne ne sort pas (D15). */
 export const PHOTO_MEASURE_MIN_ACCOUNTS = 10;
@@ -45,15 +50,12 @@ export type PhotoMeasureFamilyRate = {
   readonly kept: number;
   readonly rate: number;
 };
-/** Les comptes qui ont gardé dans la semaine un moment de la famille annoncé avant elle. */
-export type PhotoMeasureBacklog = { readonly family: PhotoMeasureFamily; readonly accounts: number };
 export type PhotoMeasurePush = { readonly sent: number; readonly read: number };
 
 export type PhotoMeasureReport = {
   readonly window: { readonly week: string; readonly from: string; readonly to: string };
   readonly minAccounts: number;
   readonly families: readonly PhotoMeasureFamilyRate[];
-  readonly keptBacklog: readonly PhotoMeasureBacklog[];
   readonly push: PhotoMeasurePush | null;
   readonly pushReadMeaning: 'ceiling-includes-carnet-visits';
   /** Le nombre de lignes retenues, sans étiquette. */
@@ -78,7 +80,7 @@ export type PhotoMeasureReader = {
   readonly gamePhotoMoment: {
     findMany(
       args: Paging & {
-        where: { OR: [{ presentedAt: DateRange }, { notifiedAt: DateRange }, { keptAt: DateRange }] };
+        where: { OR: [{ presentedAt: DateRange }, { notifiedAt: DateRange }] };
         select: { id: true; userId: true; stepId: true; presentedAt: true; notifiedAt: true; keptAt: true };
       },
     ): Promise<readonly MomentRow[]>;
@@ -132,28 +134,19 @@ const measured = (rows: readonly MomentRow[]): readonly Measured[] =>
 
 const accountsOf = (moments: readonly Measured[]): Accounts => new Set(moments.map((moment) => moment.userId));
 
-/** Ce qu'une famille publie d'une semaine : annoncés, gardés parmi eux, rattrapages — et d'où viennent ces derniers. */
-type Population = { readonly announced: Accounts; readonly kept: Accounts; readonly backlog: readonly Measured[] };
+/** Ce qu'une famille publie d'une semaine : les comptes annoncés, et ceux d'entre eux qui ont gardé avant sa fin. */
+type Population = { readonly announced: Accounts; readonly kept: Accounts };
 
 function populationOf(moments: readonly Measured[], window: Window): Population {
   const announced = moments.filter((moment) => inWindow(moment.announcedAt, window));
-  return {
-    announced: accountsOf(announced),
-    kept: accountsOf(announced.filter((moment) => before(moment.keptAt, window.to))),
-    backlog: moments.filter((moment) => inWindow(moment.keptAt, window) && before(moment.announcedAt, window.from)),
-  };
+  return { announced: accountsOf(announced), kept: accountsOf(announced.filter((moment) => before(moment.keptAt, window.to))) };
 }
 
 const byFamily = (moments: readonly Measured[], window: Window): ReadonlyMap<PhotoMeasureFamily, Population> =>
   new Map(PHOTO_MEASURE_FAMILIES.map((family) => [family, populationOf(moments.filter((moment) => moment.family === family), window)]));
 
-/** Ce qu'un lecteur relit d'une famille dans le rapport d'une semaine : annoncés, gardés, et leur complément. */
-const familySets = (population: Pick<Population, 'announced' | 'kept'> | undefined): readonly Accounts[] =>
-  population === undefined ? [] : [population.announced, population.kept, complement(population.announced, population.kept)];
-
 type Line =
   | { readonly kind: 'family'; readonly value: PhotoMeasureFamilyRate }
-  | { readonly kind: 'backlog'; readonly value: PhotoMeasureBacklog }
   | { readonly kind: 'push'; readonly value: PhotoMeasurePush };
 
 const rateOf = (kept: number, announced: number): number => Math.round((kept / announced) * 1000) / 1000;
@@ -162,74 +155,33 @@ const familyCandidates = (populations: ReadonlyMap<PhotoMeasureFamily, Populatio
   [...populations].flatMap(([family, { announced, kept }]) =>
     announced.size === 0
       ? []
-      : [{ line: { kind: 'family', value: { family, announced: announced.size, kept: kept.size, rate: rateOf(kept.size, announced.size) } }, base: announced, sets: familySets({ announced, kept }), guards: [] }],
+      : [{ line: { kind: 'family', value: { family, announced: announced.size, kept: kept.size, rate: rateOf(kept.size, announced.size) } }, base: announced, sets: [announced, kept, complement(announced, kept)] }],
   );
-
-/**
- * La semaine d'où viennent TOUS les rattrapages d'une famille, quand il n'y en a qu'une. Un rattrapage de la semaine W
- * a été annoncé avant W : l'ensemble de ces comptes est contenu dans l'UNION des annoncés des semaines antérieures,
- * union qu'aucun rapport ne publie — sauf quand toute l'histoire de la famille tient en une semaine w0, où il est
- * contenu dans les annoncés de w0, publiés par le rapport de w0. C'est alors contre ce rapport-là qu'il se garde.
- */
-const singleSourceWeek = (backlog: readonly Measured[]): string | null => {
-  const weeks = new Set(backlog.flatMap((moment) => (moment.announcedAt === null ? [] : [isoWeekOf(moment.announcedAt)])));
-  const [only] = weeks;
-  return weeks.size === 1 && only !== undefined ? only : null;
-};
-
-/** Les ensembles d'une semaine antérieure contre lesquels un rattrapage se garde ; `null` ⇒ illisible, retenu. */
-type EarlierWeeks = ReadonlyMap<string, ReadonlyMap<PhotoMeasureFamily, Population> | null>;
-
-const backlogCandidates = (populations: ReadonlyMap<PhotoMeasureFamily, Population>, earlier: EarlierWeeks): readonly CandidateLine<Line>[] =>
-  [...populations].flatMap(([family, { backlog }]) => {
-    if (backlog.length === 0) return [];
-    const accounts = accountsOf(backlog);
-    const source = singleSourceWeek(backlog);
-    const sourcePopulations = source === null ? undefined : earlier.get(source);
-    const guards = source === null ? [] : sourcePopulations === null || sourcePopulations === undefined ? null : familySets(sourcePopulations.get(family));
-    return [{ line: { kind: 'backlog', value: { family, accounts: accounts.size } }, base: accounts, sets: [accounts], guards }];
-  });
 
 function pushCandidates(notifications: readonly NotificationRow[], window: Window): readonly CandidateLine<Line>[] {
   const sentRows = notifications.filter((row) => inWindow(row.createdAt, window));
   const sent: Accounts = new Set(sentRows.map((row) => row.userId));
   const read: Accounts = new Set(sentRows.filter((row) => before(row.readAt, window.to)).map((row) => row.userId));
-  return sent.size === 0 ? [] : [{ line: { kind: 'push', value: { sent: sent.size, read: read.size } }, base: sent, sets: [sent, read, complement(sent, read)], guards: [] }];
+  return sent.size === 0 ? [] : [{ line: { kind: 'push', value: { sent: sent.size, read: read.size } }, base: sent, sets: [sent, read, complement(sent, read)] }];
 }
 
 const momentsOf = (reader: PhotoMeasureReader, range: DateRange): Promise<readonly MomentRow[]> =>
   readAll((paging) =>
     reader.gamePhotoMoment.findMany({
       ...paging,
-      where: { OR: [{ presentedAt: range }, { notifiedAt: range }, { keptAt: range }] },
+      where: { OR: [{ presentedAt: range }, { notifiedAt: range }] },
       select: { id: true, userId: true, stepId: true, presentedAt: true, notifiedAt: true, keptAt: true },
     }),
   );
-
-/** Relit, pour les seules semaines sources uniques des rattrapages, ce que leur rapport a publié ; au-delà de la conservation, rien. */
-async function earlierWeeks(
-  reader: PhotoMeasureReader,
-  populations: ReadonlyMap<PhotoMeasureFamily, Population>,
-  context: { readonly now: Date; readonly consenting: (rows: readonly MomentRow[]) => readonly MomentRow[] },
-): Promise<EarlierWeeks> {
-  const sources = [...new Set([...populations.values()].flatMap(({ backlog }) => singleSourceWeek(backlog) ?? []))];
-  const read = await Promise.all(
-    sources.map(async (source): Promise<readonly [string, ReadonlyMap<PhotoMeasureFamily, Population> | null]> => {
-      const window = isoWeekWindow(source);
-      if (window === null || window.from.getTime() < retentionStart(context.now).getTime()) return [source, null];
-      const rows = context.consenting(await momentsOf(reader, { gte: window.from, lt: window.to }));
-      return [source, byFamily(measured(rows), window)];
-    }),
-  );
-  return new Map(read);
-}
 
 /**
  * Lit une semaine ISO CLOSE, dans la conservation, et rend le rapport anonyme. Seules des lectures partent : rejouer
  * ne change rien en base. Une semaine invalide, encore ouverte ou au-delà de la conservation lève (`invalid-week`,
  * `week-not-closed`, `beyond-retention`) avant toute lecture.
  *
- * Tout ce que le rapport dit d'un moment se lit AVANT la fin de la semaine (première annonce, garde, lecture du push) :
+ * Seuls les moments présentés ou notifiés DANS la semaine sont lus — une garde seule ne fait pas servir sa ligne,
+ * puisqu'elle n'entre dans aucun nombre —, et les notifications créées dans la semaine. Tout ce que le rapport dit
+ * d'un moment se lit AVANT la fin de la semaine (première annonce, garde, lecture du push) :
  * une présentation, une garde ou une lecture postérieure ne change pas une semaine close. Mais une semaine relue plus
  * tard ne rend PAS forcément le même rapport — les lignes lues, elles, changent (refus de l'analyse posé ou retiré,
  * compte purgé, notifications supprimées) : le compte rendu se lit UNE fois par semaine, jamais deux pour comparaison
@@ -253,16 +205,13 @@ export async function measurePhotoMoments(
   const consenting = <T extends { readonly userId: string }>(rows: readonly T[]): readonly T[] => rows.filter((row) => !refused.has(row.userId));
   const window: Window = { from: week.from, to: week.to };
 
-  const populations = byFamily(measured(consenting(moments)), window);
-  const earlier = await earlierWeeks(reader, populations, { now: params.now, consenting });
-  const candidates = [...familyCandidates(populations), ...backlogCandidates(populations, earlier), ...pushCandidates(consenting(notifications), window)];
+  const candidates = [...familyCandidates(byFamily(measured(consenting(moments)), window)), ...pushCandidates(consenting(notifications), window)];
   const { published, withheld } = publishLines(candidates, PHOTO_MEASURE_MIN_ACCOUNTS);
 
   return {
     window: { week: week.week, from: week.from.toISOString(), to: week.to.toISOString() },
     minAccounts: PHOTO_MEASURE_MIN_ACCOUNTS,
     families: published.flatMap((line) => (line.kind === 'family' ? [line.value] : [])),
-    keptBacklog: published.flatMap((line) => (line.kind === 'backlog' ? [line.value] : [])),
     push: published.flatMap((line) => (line.kind === 'push' ? [line.value] : []))[0] ?? null,
     pushReadMeaning: 'ceiling-includes-carnet-visits',
     suppressed: withheld,

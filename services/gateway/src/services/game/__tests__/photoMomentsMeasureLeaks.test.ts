@@ -105,15 +105,14 @@ describe('un rembourrage de moments ne laisse jamais un compte en différence', 
 });
 
 describe('aucune ligne publiée n’en contient une autre à moins de dix comptes près', () => {
-  it('kept-backlog face à kept : onze rattrapages, dont les dix comptes qui ont aussi gardé une annonce neuve', async () => {
+  it('une garde d’un moment annoncé AVANT la semaine n’est publiée nulle part, pas même à côté de dix gardes neuves', async () => {
     const fresh = accounts(10).map((userId) => moment({ userId, keptAt: at(DAY, 11) }));
-    const backlog = accounts(11).map((userId) => moment({ userId, stepId: 'rank:echo:2', presentedAt: at('2026-10-12'), keptAt: at(DAY, 12) }));
+    const late = accounts(11).map((userId) => moment({ userId, stepId: 'rank:echo:2', presentedAt: at('2026-10-12'), keptAt: at(DAY, 12) }));
 
-    const report = await measure([...fresh, ...backlog]);
+    const report = await measure([...fresh, ...late]);
 
     expect(isolations(report)).toEqual([]);
-    expect(report.families).toEqual([{ family: 'rank', announced: 10, kept: 10, rate: 1 }]);
-    expect(report.keptBacklog).toEqual([]);
+    expect(report).toEqual(await measure(fresh));
   });
 
   it('push face à une famille : onze annoncés, dont dix par push ⇒ la ligne push est retenue', async () => {
@@ -127,39 +126,44 @@ describe('aucune ligne publiée n’en contient une autre à moins de dix compte
     expect(report.families).toEqual([{ family: 'rank', announced: 11, kept: 0, rate: 0 }]);
     expect(report.push).toBeNull();
   });
-
-  it('kept-backlog face au push et à la famille : dix rattrapages parmi onze comptes poussés et annoncés', async () => {
-    const announced = accounts(11).map((userId) => moment({ userId, stepId: 'meesh:20', presentedAt: null, notifiedAt: at(DAY, 8) }));
-    const notifications = announced.map((row) => pushed(row.userId, at(DAY, 8)));
-    const backlog = accounts(10).map((userId) => moment({ userId, stepId: 'meesh:10', presentedAt: at('2026-10-12'), keptAt: at(DAY, 12) }));
-
-    const report = await measure([...announced, ...backlog], notifications);
-
-    expect(isolations(report)).toEqual([]);
-    expect(report.keptBacklog).toEqual([]);
-  });
 });
 
-describe('une semaine ne se soustrait pas de la précédente', () => {
-  it('une famille dont toute l’histoire tient en une semaine : ses rattrapages de la suivante ne sortent pas à un compte près', async () => {
-    const announcedW42 = accounts(11).map((userId, i) =>
-      moment({ userId, stepId: 'season:3', presentedAt: at('2026-10-13'), keptAt: i < 10 ? at(DAY, 12) : null }),
+/** Une ligne par (compte, étape) — `@@unique([userId, stepId])` : `start` n'a qu'un moment par compte, annoncé dans UNE semaine. */
+const reports = (moments: readonly MomentRow[], notifications: readonly NotificationRow[] = []) =>
+  Promise.all(['2026-W41', '2026-W42', '2026-W43'].map((week) => measure(moments, notifications, week)));
+
+describe('aucune combinaison de lignes, sur plusieurs semaines, n’isole un compte (troisième audit)', () => {
+  it('S1 — 21 départs annoncés en W41, 10 gardés en W42, 10 en W43, 1 jamais : A − B(W42) − B(W43) ne vaut plus 1', async () => {
+    const rows = accounts(21).map((userId, i) =>
+      moment({ userId, stepId: 'start', presentedAt: at('2026-10-06'), keptAt: i < 10 ? at('2026-10-13', 12) : i < 20 ? at(DAY, 12) : null }),
     );
 
-    const w42 = await measure(announcedW42, [], '2026-W42');
-    const w43 = await measure(announcedW42);
+    const [w41, w42, w43] = await reports(rows);
 
-    expect(w42.families).toEqual([{ family: 'season', announced: 11, kept: 0, rate: 0 }]);
-    expect(isolations(w42, w43)).toEqual([]);
+    expect(isolations(w41, w42, w43)).toEqual([]);
+    expect(w41?.families).toEqual([{ family: 'start', announced: 21, kept: 0, rate: 0 }]);
   });
 
-  it('des rattrapages venus de deux semaines différentes sortent, puisque l’union de deux semaines n’est publiée nulle part', async () => {
-    const fromW41 = accounts(6).map((userId) => moment({ userId, stepId: 'season:3', presentedAt: at('2026-10-06'), keptAt: at(DAY, 12) }));
-    const fromW42 = accounts(6, 6).map((userId) => moment({ userId, stepId: 'season:3', presentedAt: at('2026-10-13'), keptAt: at(DAY, 12) }));
+  it('S2 — deux semaines sources : A(W41) + A(W42) − B(W43) ne vaut plus 1', async () => {
+    const fromW41 = accounts(10).map((userId) => moment({ userId, stepId: 'start', presentedAt: at('2026-10-06'), keptAt: at(DAY, 12) }));
+    const fromW42 = accounts(10, 10).map((userId, i) => moment({ userId, stepId: 'start', presentedAt: at('2026-10-13'), keptAt: i < 9 ? at(DAY, 12) : null }));
 
-    const report = await measure([...fromW41, ...fromW42]);
+    const [w41, w42, w43] = await reports([...fromW41, ...fromW42]);
 
-    expect(report.keptBacklog).toEqual([{ family: 'season', accounts: 12 }]);
+    expect(isolations(w41, w42, w43)).toEqual([]);
+  });
+
+  it('trois familles à clé unique par compte et le push, sur trois semaines : chaque semaine porte des groupes, leur somme n’isole personne', async () => {
+    const start = accounts(30).map((userId, i) =>
+      moment({ userId, stepId: 'start', presentedAt: at(['2026-10-06', '2026-10-13', DAY][i % 3] ?? DAY), keptAt: i < 29 ? at(['2026-10-06', '2026-10-13', DAY][i % 3] ?? DAY, 12) : null }),
+    );
+    const season = accounts(20, 100).map((userId, i) => moment({ userId, stepId: 'season:3', presentedAt: null, notifiedAt: at(i < 10 ? '2026-10-07' : '2026-10-21', 8) }));
+    const summit = accounts(11, 200).map((userId, i) => moment({ userId, stepId: 'level-100:0', presentedAt: at('2026-10-14'), keptAt: i < 10 ? at('2026-10-14', 12) : at(DAY, 12) }));
+    const notifications = season.map((row) => pushed(row.userId, row.notifiedAt ?? at(DAY), null));
+
+    const weeks = await reports([...start, ...season, ...summit], notifications);
+
+    expect(isolations(...weeks)).toEqual([]);
   });
 });
 
@@ -171,7 +175,6 @@ describe('« annoncé » ne se lit jamais dans l’horodatage que la garde a pos
     const report = await measure([...announcedKept, ...fromCarnet]);
 
     expect(report.families).toEqual([{ family: 'rank', announced: 10, kept: 10, rate: 1 }]);
-    expect(report.keptBacklog).toEqual([]);
   });
 
   it('une étape notifiée puis gardée depuis le carnet est annoncée par son push, et gardée', async () => {
@@ -182,12 +185,12 @@ describe('« annoncé » ne se lit jamais dans l’horodatage que la garde a pos
     expect(report.families).toEqual([{ family: 'rank', announced: 10, kept: 10, rate: 1 }]);
   });
 
-  it('une étape notifiée en W42 et présentée en W43 a été annoncée en W42 : sa garde en W43 est un rattrapage', async () => {
+  it('une étape notifiée en W42 et présentée en W43 a été annoncée en W42 : sa garde en W43 n’entre dans aucune ligne de W43', async () => {
     const rows = accounts(10).map((userId) => moment({ userId, notifiedAt: at('2026-10-14', 8), presentedAt: at(DAY), keptAt: at(DAY, 11) }));
 
     const report = await measure(rows);
 
     expect(report.families).toEqual([]);
-    expect(report.keptBacklog).toEqual([{ family: 'rank', accounts: 10 }]);
+    expect(report.suppressed).toBe(0);
   });
 });

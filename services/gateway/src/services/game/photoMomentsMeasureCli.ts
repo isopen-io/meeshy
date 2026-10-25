@@ -3,9 +3,10 @@
  * LECTURE SEULE.
  *
  * Rend, en JSON sur la sortie standard, les agrégats ANONYMES d'une semaine ISO close (`photoMomentsMeasure.ts`) — un
- * seul niveau : par famille d'étape, les comptes annoncés et ceux qui ont gardé (`families`), les rattrapages
- * (`keptBacklog`) ; le push de la semaine (`push`) ; et le nombre de lignes retenues (`suppressed`). Aucun jour, aucune
- * clé, aucune surface : le grain par clé attend la décision du porteur (#13094).
+ * seul niveau : par famille d'étape, les comptes annoncés et ceux qui ont gardé (`families`) ; le push de la semaine
+ * (`push`) ; et le nombre de lignes retenues (`suppressed`). Aucun jour, aucune clé, aucune surface, aucune ligne qui
+ * relie deux semaines : le grain par clé attend la décision du porteur (#13094). Le compte rendu se remet EN PRIVÉ au
+ * porteur, jamais sur une issue ni une page : le dépôt est public (fiche de décision, « Limites connues »).
  * Sous `src/` pour être COMPILÉ dans l'image : le conteneur de la passerelle ne porte que `dist/` et les dépendances
  * de production. Rien n'est écrit : rejouer la requête ne change rien en base.
  *

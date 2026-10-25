@@ -18,8 +18,10 @@
  * isole aussi bien qu'une inclusion par définition. Deux ensembles qui se recouvrent sans s'emboîter ne se soustraient
  * pas : leur différence n'est le cardinal d'aucun ensemble.
  *
- * Les lignes sont examinées dans un ordre FIXE, indépendant des données (familles, puis rattrapages, puis push) : une
- * ligne retenue n'est comptée que dans `withheld`, sans étiquette.
+ * Les lignes sont examinées dans un ordre FIXE, indépendant des données (familles, puis push) : une ligne retenue n'est
+ * comptée que dans `withheld`, sans étiquette. Toutes les candidates viennent d'UNE semaine : aucune ligne ne se garde
+ * contre un autre rapport, parce qu'aucune ne dépend d'une autre semaine (fiche de décision, « une semaine face à une
+ * autre »).
  */
 
 export type Accounts = ReadonlySet<string>;
@@ -31,11 +33,6 @@ export type CandidateLine<L> = {
   readonly base: Accounts;
   /** Tout ce qu'on lit dans la ligne : le porteur, ses sous-ensembles publiés, et leurs compléments. */
   readonly sets: readonly Accounts[];
-  /**
-   * Des ensembles publiés AILLEURS — un autre rapport — dont aucun ensemble de la ligne ne doit s'emboîter à moins de
-   * `minAccounts` près ; `null` quand ils ne peuvent pas être relus : la ligne est alors retenue (fail-closed).
-   */
-  readonly guards: readonly Accounts[] | null;
 };
 
 const isSubset = (inner: Accounts, outer: Accounts): boolean => inner.size <= outer.size && [...inner].every((id) => outer.has(id));
@@ -48,10 +45,9 @@ const separable = (a: Accounts, b: Accounts, minAccounts: number): boolean =>
   !(isSubset(a, b) || isSubset(b, a)) || safeCount(Math.abs(a.size - b.size), minAccounts);
 
 function publishable<L>(candidate: CandidateLine<L>, published: readonly Accounts[], minAccounts: number): boolean {
-  if (candidate.guards === null || candidate.base.size < minAccounts) return false;
+  if (candidate.base.size < minAccounts) return false;
   if (!candidate.sets.every((set) => safeCount(set.size, minAccounts))) return false;
-  const others = [...published, ...candidate.guards];
-  return candidate.sets.every((set) => others.every((other) => separable(set, other, minAccounts)));
+  return candidate.sets.every((set) => published.every((other) => separable(set, other, minAccounts)));
 }
 
 /** Les lignes publiables, dans l'ordre des candidates, et le nombre de lignes retenues. */

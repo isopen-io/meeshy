@@ -33,20 +33,15 @@ describe('ce que le rapport sort, et rien d’autre', () => {
 
   it('les clés du rapport et de chacune de ses lignes sont celles du contrat, et seulement elles', async () => {
     const { reader } = registry({
-      moments: [
-        ...accounts(10).map((userId) => moment({ userId })),
-        ...accounts(10, 10).map((userId) => moment({ userId, stepId: 'start', presentedAt: at('2026-10-12'), keptAt: at(DAY, 11) })),
-      ],
+      moments: accounts(10).map((userId) => moment({ userId })),
       notifications: accounts(10).map((userId) => pushed(userId, at(DAY, 8))),
     });
 
     const report = await measurePhotoMoments(reader, { ...WINDOW, now: NOW });
 
-    expect(Object.keys(report).sort()).toEqual(['families', 'keptBacklog', 'minAccounts', 'push', 'pushReadMeaning', 'suppressed', 'window']);
+    expect(Object.keys(report).sort()).toEqual(['families', 'minAccounts', 'push', 'pushReadMeaning', 'suppressed', 'window']);
     report.families.forEach((line) => expect(Object.keys(line).sort()).toEqual(['announced', 'family', 'kept', 'rate']));
-    report.keptBacklog.forEach((line) => expect(Object.keys(line).sort()).toEqual(['accounts', 'family']));
     expect(Object.keys(report.push ?? {}).sort()).toEqual(['read', 'sent']);
-    expect(report.keptBacklog).toEqual([{ family: 'start', accounts: 10 }]);
   });
 
   it('le taux se lit par famille sur la semaine : deux clés d’une même famille font une seule ligne', async () => {
@@ -110,18 +105,6 @@ describe('aucun nombre de comptes sous dix ne sort', () => {
 
     expect(report.push).toBeNull();
     expect(report.suppressed).toBe(1);
-  });
-
-  it('les rattrapages suivent le même seuil : dix ⇒ la ligne sort, neuf ⇒ elle est retenue', async () => {
-    const late = (count: number) => accounts(count).map((userId) => moment({ userId, presentedAt: at('2026-10-12'), keptAt: at(DAY, 12) }));
-
-    const ten = await measurePhotoMoments(registry({ moments: late(10) }).reader, { ...WINDOW, now: NOW });
-    const nine = await measurePhotoMoments(registry({ moments: late(9) }).reader, { ...WINDOW, now: NOW });
-
-    expect(ten.keptBacklog).toEqual([{ family: 'rank', accounts: 10 }]);
-    expect(ten.families).toEqual([]);
-    expect(nine.keptBacklog).toEqual([]);
-    expect(nine.suppressed).toBe(1);
   });
 });
 
@@ -215,6 +198,21 @@ describe('rejouer le script ne modifie rien en base', () => {
     expect(report.families).toEqual([{ family: 'rank', announced: 2_100, kept: 0, rate: 0 }]);
   });
 
+  it('une ligne dont seule la GARDE tombe dans la semaine n’est pas servie : elle n’entre dans aucun nombre publié', async () => {
+    const inside = accounts(10).map((userId) => moment({ userId }));
+    const keptOnly = [
+      ...accounts(10, 10).map((userId) => moment({ userId, presentedAt: at('2026-10-12'), keptAt: at(DAY, 12) })),
+      ...accounts(10, 20).map((userId) => moment({ userId, presentedAt: at('2024-03-04'), keptAt: at(DAY, 12) })),
+    ];
+    const { reader, calls } = registry({ moments: [...inside, ...keptOnly] });
+
+    const report = await measurePhotoMoments(reader, { ...WINDOW, now: NOW });
+
+    expect(calls.served.filter((row) => row.startsWith('gamePhotoMoment:')).sort()).toEqual(inside.map((row) => `gamePhotoMoment:${row.id}`).sort());
+    expect(calls.reads.filter((name) => name === 'gamePhotoMoment')).toHaveLength(1);
+    expect(report.families).toEqual([{ family: 'rank', announced: 10, kept: 0, rate: 0 }]);
+  });
+
   it('les moments sans aucun événement dans la semaine ne sont même pas servis', async () => {
     const inside = accounts(10).map((userId) => moment({ userId }));
     const outside = accounts(10, 10).map((userId) => moment({ userId, presentedAt: at('2026-10-10'), keptAt: at('2026-10-27') }));
@@ -300,15 +298,13 @@ describe('la conservation de 25 mois borne la mesure elle-même, pas seulement s
     await expect(measurePhotoMoments(reader, { week: '2024-W40', now: NOW })).resolves.toMatchObject({ window: { week: '2024-W40' } });
     await expect(measurePhotoMoments(reader, { week: '2024-W39', now: NOW })).rejects.toThrow('beyond-retention');
   });
+});
 
-  it('des rattrapages annoncés tous dans une semaine au-delà de la conservation sont retenus, sans la relire', async () => {
-    const ancient = accounts(10).map((userId) => moment({ userId, presentedAt: at('2024-03-04'), keptAt: at(DAY, 12) }));
-    const { reader, calls } = registry({ moments: ancient });
-
-    const report = await measurePhotoMoments(reader, { ...WINDOW, now: NOW });
-
-    expect(report.keptBacklog).toEqual([]);
-    expect(report.suppressed).toBe(1);
-    expect(calls.reads.filter((name) => name === 'gamePhotoMoment')).toHaveLength(1);
+describe('les témoins n’emploient que des états que la production écrit', () => {
+  it('le fabricant lève sur une garde sans présentation, une présentation postérieure à sa garde, une présentation antérieure à son push', () => {
+    expect(() => moment({ userId: accountId(1), presentedAt: null, keptAt: at(DAY, 11) })).toThrow('une garde pose presentedAt');
+    expect(() => moment({ userId: accountId(1), presentedAt: at(DAY, 12), keptAt: at(DAY, 11) })).toThrow('une garde pose presentedAt');
+    expect(() => moment({ userId: accountId(1), presentedAt: at(DAY, 7), notifiedAt: at(DAY, 8) })).toThrow('le push n');
+    expect(() => moment({ userId: accountId(1), notifiedAt: at(DAY, 8), presentedAt: at(DAY, 9), keptAt: at(DAY, 9) })).not.toThrow();
   });
 });

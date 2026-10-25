@@ -5,7 +5,9 @@
  *
  * Les lignes de moment ne prennent que des états que la PRODUCTION écrit (`GamePhotoService`,
  * `GamePhotoMomentService`) : une garde pose `presentedAt = keptAt` quand la présentation manque, donc aucune ligne
- * gardée n'a `presentedAt: null`, ni une présentation postérieure à sa garde — le fabricant lève sur ces états.
+ * gardée n'a `presentedAt: null`, ni une présentation postérieure à sa garde ; et l'envoi du push n'annonce qu'une
+ * étape ni présentée ni notifiée (`deliverTo`, filtre `PENDING`), donc aucune ligne n'a une présentation ANTÉRIEURE à
+ * sa notification — le fabricant lève sur ces états.
  */
 
 import type { PhotoMeasureReader } from '../photoMomentsMeasure';
@@ -38,6 +40,9 @@ export function moment(overrides: Partial<MomentRow> & { readonly userId: string
   const row: MomentRow = { id: nextId('67'), stepId: 'rank:echo:5', detectedAt: null, presentedAt: at(DAY), notifiedAt: null, keptAt: null, ...overrides };
   if (row.keptAt !== null && (row.presentedAt === null || row.presentedAt.getTime() > row.keptAt.getTime())) {
     throw new Error(`état impossible : une garde pose presentedAt (${row.stepId})`);
+  }
+  if (row.presentedAt !== null && row.notifiedAt !== null && row.presentedAt.getTime() < row.notifiedAt.getTime()) {
+    throw new Error(`état impossible : le push n'annonce pas une étape déjà présentée (${row.stepId})`);
   }
   return row;
 }
@@ -123,14 +128,21 @@ function publishedCounts(value: unknown, key = ''): readonly number[] {
 }
 
 /**
- * Ce qu'un lecteur isole des rapports publiés : un nombre de comptes de 1 à 9, ou deux nombres publiés dont la
- * différence va de 1 à 9 (le reste d'une soustraction). Les témoins de fuite construisent des scénarios où AUCUN
- * écart de cette sorte n'est légitime, et exigent une liste vide.
+ * Ce qu'un lecteur isole d'une LISTE de rapports publiés : un nombre de comptes de 1 à 9, ou une SOMME SIGNÉE de
+ * nombres publiés — deux, trois ou davantage, pris dans un ou plusieurs rapports — qui vaut de 1 à 9 (`A − K − B − B`
+ * quand des lignes sont disjointes par construction, `A(W41) + A(W42) − B(W43)`…). Les témoins de fuite construisent
+ * des scénarios où AUCUNE combinaison de cette sorte n'est légitime, et exigent une liste vide.
  */
 export function isolations(...reports: readonly unknown[]): readonly string[] {
-  const counts = reports.flatMap((report) => publishedCounts(report));
-  const small = (n: number): boolean => n >= 1 && n < 10;
-  const alone = counts.filter(small).map((n) => `${n}`);
-  const gaps = counts.flatMap((a, i) => counts.slice(i + 1).flatMap((b) => (small(Math.abs(a - b)) ? [`${Math.max(a, b)} − ${Math.min(a, b)}`] : [])));
-  return [...alone, ...gaps];
+  const counts = reports.flatMap((report) => publishedCounts(report)).filter((count) => count > 0);
+  const reachable = counts.reduce<ReadonlyMap<number, string>>((sums, count) => {
+    const next = new Map(sums);
+    [...sums].forEach(([sum, expression]) => {
+      const terms = expression === '' ? '' : `${expression} `;
+      if (!next.has(sum + count)) next.set(sum + count, `${terms}+ ${count}`);
+      if (!next.has(sum - count)) next.set(sum - count, `${terms}− ${count}`);
+    });
+    return next;
+  }, new Map([[0, '']]));
+  return [...reachable].filter(([sum]) => sum >= 1 && sum < 10).map(([sum, expression]) => `${expression} = ${sum}`);
 }
