@@ -18,6 +18,7 @@ import {
   e2eeDeviceIdSchema,
   e2eeEnrollDeviceRequestSchema,
   e2eePublishKeysRequestSchema,
+  e2eeRegistrationIdSchema,
 } from '@meeshy/shared/types/e2ee-directory';
 import { createUnifiedAuthMiddleware, type UnifiedAuthRequest } from '../middleware/auth';
 import { sendBadRequest, sendError, sendForbidden, sendInternalError, sendSuccess, sendUnauthorized } from '../utils/response.js';
@@ -30,6 +31,7 @@ import { libsignalSignatureVerifier, loadLibsignal } from '../services/e2ee/sign
 import { mayReadKeysOf } from '../services/e2ee/key-access';
 import { joinSessionSocketsToDeviceRoom } from '../services/e2ee/device-room';
 import { currentE2EEIO } from '../services/e2ee/envelope-delivery';
+import { disconnectSession } from '../socketio/disconnectSession';
 
 const logger = enhancedLogger.child({ module: 'E2EERoutes' });
 
@@ -41,6 +43,7 @@ const deviceIdsQuery = z
   .transform((raw) => raw.split(',').map((part) => Number(part.trim())))
   .pipe(z.array(e2eeDeviceIdSchema).max(127));
 const envelopeListQuery = z.object({ after: objectIdParam.optional(), limit: z.coerce.number().int().min(1).max(200).optional() });
+const retireQuery = z.object({ registrationId: z.coerce.number().pipe(e2eeRegistrationIdSchema).optional() });
 const ackBody = z.object({ ids: z.array(objectIdParam).min(1).max(200) });
 
 /** Lecture de bundles : 30 par minute et par couple (demandeur, cible). */
@@ -75,6 +78,8 @@ export type E2EERouteDeps = {
   readonly mayReadKeysOf: (requesterUserId: string, targetUserId: string) => Promise<boolean>;
   /** Après un enrôlement : les sockets déjà ouvertes de la session rejoignent la room de l'appareil. */
   readonly onEnrolled?: (enrolled: Caller & { readonly deviceId: number; readonly registrationId: number }) => Promise<void>;
+  /** Après un retrait qui a mis fin à la session de l'appareil : son socket déjà ouvert est coupé (un socket ne se revérifie pas). */
+  readonly onDeviceSessionEnded?: (ended: { readonly userId: string; readonly sessionId: string }) => Promise<void>;
 };
 
 function callerOf(request: FastifyRequest): Caller | null {
@@ -145,9 +150,20 @@ function registerDeviceRoutes(fastify: FastifyInstance, deps: E2EERouteDeps): vo
 
   fastify.delete('/e2ee/devices/:deviceId', { preValidation }, guarded(async (request, reply, caller) => {
     const deviceId = parsedOr400(reply, deviceIdParam.safeParse((request.params as { deviceId?: string }).deviceId));
-    if (deviceId === null) return;
-    await deps.directory.retireDevice({ userId: caller.userId, deviceId });
-    return sendSuccess(reply, { deviceId, retired: true });
+    const query = deviceId === null ? null : parsedOr400(reply, retireQuery.safeParse(request.query ?? {}));
+    if (deviceId === null || !query) return;
+    const { sessionEnded, endedSessionId } = await deps.directory.retireDevice({
+      userId: caller.userId,
+      deviceId,
+      callerSessionId: caller.sessionId,
+      expectedRegistrationId: query.registrationId,
+    });
+    if (endedSessionId) {
+      await deps.onDeviceSessionEnded?.({ userId: caller.userId, sessionId: endedSessionId }).catch((error: unknown) =>
+        logger.warn('e2ee retired device socket not cut', { error }),
+      );
+    }
+    return sendSuccess(reply, { deviceId, retired: true, sessionEnded });
   }));
 
   fastify.get('/e2ee/devices/self/prekey-count', { preValidation }, guarded(async (_request, reply, caller) =>
@@ -215,5 +231,14 @@ export default async function e2eeRoutes(fastify: FastifyInstance): Promise<void
     relay: createE2EEEnvelopeRelay({ prisma }),
     mayReadKeysOf: (requester, target) => mayReadKeysOf(prisma, requester, target),
     onEnrolled: (enrolled) => joinSessionSocketsToDeviceRoom(currentE2EEIO(), enrolled),
+    onDeviceSessionEnded: async ({ userId, sessionId }) => {
+      await disconnectSession({
+        io: fastify.socketIOHandler?.getManager?.()?.getIO(),
+        userId,
+        sessionId,
+        reason: 'user_revoke',
+        onError: (error) => logger.warn('e2ee retired device socket cut failed', { error }),
+      });
+    },
   });
 }

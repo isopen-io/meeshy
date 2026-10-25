@@ -9,24 +9,36 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.e2ee.OwnEncryptedDevicesProviding
+import me.meeshy.sdk.e2ee.OwnEncryptedDevicesRepository
 import me.meeshy.sdk.model.e2ee.OwnEncryptedDevice
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
 import javax.inject.Inject
 
-/** Pourquoi la passerelle n'a pas répondu : hors ligne se dit autrement qu'une panne. */
-enum class EncryptedDevicesFailure { OFFLINE, UNAVAILABLE }
+/**
+ * Pourquoi la passerelle n'a pas fait ce qu'on attendait : hors ligne se dit autrement qu'une panne,
+ * et un appareil qui a changé depuis l'affichage (place reprise, liste vidée) autrement encore.
+ */
+enum class EncryptedDevicesFailure { OFFLINE, UNAVAILABLE, CHANGED }
 
 data class EncryptedDevicesUiState(
     /** `null` tant qu'aucune liste n'a été confirmée pour ce compte (démarrage à froid). */
     val devices: List<OwnEncryptedDevice>? = null,
     val isRefreshing: Boolean = false,
     val loadFailure: EncryptedDevicesFailure? = null,
+    /** Une liste FRAÎCHE a été confirmée depuis l'ouverture de l'écran : seule elle permet un retrait. */
+    val listConfirmed: Boolean = false,
     val retiringIds: Set<Int> = emptySet(),
     /** L'appareil dont le retrait attend un « oui » explicite. */
     val pendingRetirement: OwnEncryptedDevice? = null,
     val retireFailure: EncryptedDevicesFailure? = null,
 )
+
+/**
+ * Retirer exige la liste que la passerelle vient de confirmer : un `deviceId` lu dans une liste
+ * périmée peut désigner l'appareil qui a repris la place depuis.
+ */
+val EncryptedDevicesUiState.canRetire: Boolean get() = listConfirmed && !isRefreshing && loadFailure == null
 
 /** Ce que l'écran rend, dérivé de l'état et de lui seul. */
 sealed interface EncryptedDevicesContent {
@@ -51,9 +63,10 @@ fun EncryptedDevicesUiState.content(): EncryptedDevicesContent {
 
 /**
  * Réglages › Sécurité › « Mes appareils chiffrés » (#13014). La dernière liste s'affiche sans
- * attente et se relit en silence. Le retrait d'un appareil RÉVOQUE son identité : il se demande,
- * puis se confirme, et l'appareil ne quitte la liste qu'une fois la passerelle d'accord — pour une
- * mesure de sécurité, l'écran ne promet jamais ce que le serveur n'a pas fait.
+ * attente et se relit en silence. Le retrait d'un appareil RÉVOQUE son identité et met fin à sa
+ * session : il ne s'offre que sur une liste fraîche, se demande, puis se confirme, et l'appareil ne
+ * quitte la liste qu'une fois la passerelle d'accord — pour une mesure de sécurité, l'écran ne
+ * promet jamais ce que le serveur n'a pas fait.
  */
 @HiltViewModel
 class EncryptedDevicesViewModel @Inject constructor(
@@ -77,13 +90,14 @@ class EncryptedDevicesViewModel @Inject constructor(
                 it.copy(
                     isRefreshing = false,
                     loadFailure = (result as? NetworkResult.Failure)?.error?.let(::failureOf),
+                    listConfirmed = it.listConfirmed || result is NetworkResult.Success,
                 )
             }
         }
     }
 
     fun requestRetire(device: OwnEncryptedDevice) {
-        if (!device.isRetirable) return
+        if (!device.isRetirable || !_state.value.canRetire) return
         _state.update { it.copy(pendingRetirement = device, retireFailure = null) }
     }
 
@@ -100,7 +114,7 @@ class EncryptedDevicesViewModel @Inject constructor(
         if (device.deviceId in _state.value.retiringIds) return
         _state.update { it.copy(pendingRetirement = null, retiringIds = it.retiringIds + device.deviceId) }
         viewModelScope.launch {
-            val result = repository.retire(device.deviceId)
+            val result = repository.retire(device)
             _state.update {
                 it.copy(
                     retiringIds = it.retiringIds - device.deviceId,
@@ -110,8 +124,11 @@ class EncryptedDevicesViewModel @Inject constructor(
         }
     }
 
-    private fun failureOf(error: ApiError): EncryptedDevicesFailure =
-        if (error.code == OFFLINE_CODE) EncryptedDevicesFailure.OFFLINE else EncryptedDevicesFailure.UNAVAILABLE
+    private fun failureOf(error: ApiError): EncryptedDevicesFailure = when (error.code) {
+        OFFLINE_CODE -> EncryptedDevicesFailure.OFFLINE
+        OwnEncryptedDevicesRepository.DEVICE_CHANGED, OwnEncryptedDevicesRepository.UNKNOWN_DEVICE_CODE -> EncryptedDevicesFailure.CHANGED
+        else -> EncryptedDevicesFailure.UNAVAILABLE
+    }
 
     private companion object {
         const val OFFLINE_CODE = "NETWORK"

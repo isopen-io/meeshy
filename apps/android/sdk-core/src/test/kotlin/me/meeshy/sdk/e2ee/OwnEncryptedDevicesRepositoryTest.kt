@@ -35,13 +35,19 @@ class OwnEncryptedDevicesRepositoryTest {
         var list: suspend () -> ApiResponse<JsonObject> = { error("unused") },
         var retire: suspend (Int) -> ApiResponse<JsonObject> = { error("unused") },
     ) : E2eeDeviceApi {
-        val retired = mutableListOf<Int>()
-        override suspend fun ownDevices() = list()
-        override suspend fun retireDevice(deviceId: Int): ApiResponse<JsonObject> {
-            retired += deviceId
+        val retired = mutableListOf<Pair<Int, Int>>()
+        var lists = 0
+        override suspend fun ownDevices(): ApiResponse<JsonObject> {
+            lists += 1
+            return list()
+        }
+        override suspend fun retireDevice(deviceId: Int, registrationId: Int): ApiResponse<JsonObject> {
+            retired += deviceId to registrationId
             return retire(deviceId)
         }
     }
+
+    private fun OwnEncryptedDevicesRepository.listed(deviceId: Int) = devices.value!!.single { it.deviceId == deviceId }
 
     @Test
     fun `a refresh serves the devices in display order and remembers them`() = runTest {
@@ -87,10 +93,10 @@ class OwnEncryptedDevicesRepositoryTest {
         val repo = OwnEncryptedDevicesRepository(api)
         repo.refresh()
 
-        val result = repo.retire(2)
+        val result = repo.retire(repo.listed(2))
 
         assertThat(result).isEqualTo(NetworkResult.Success(Unit))
-        assertThat(api.retired).containsExactly(2)
+        assertThat(api.retired).containsExactly(2 to 102)
         assertThat(repo.devices.value!!.map { it.deviceId }).containsExactly(1)
     }
 
@@ -103,7 +109,7 @@ class OwnEncryptedDevicesRepositoryTest {
         val repo = OwnEncryptedDevicesRepository(api)
         repo.refresh()
 
-        assertThat(repo.retire(2)).isEqualTo(NetworkResult.Success(Unit))
+        assertThat(repo.retire(repo.listed(2))).isEqualTo(NetworkResult.Success(Unit))
         assertThat(repo.devices.value!!.map { it.deviceId }).containsExactly(1)
     }
 
@@ -113,12 +119,13 @@ class OwnEncryptedDevicesRepositoryTest {
         val repo = OwnEncryptedDevicesRepository(api)
         repo.refresh()
 
+        val tablet = repo.listed(2)
         api.retire = { throw http(500, """{"success":false,"error":"boom"}""") }
-        val refused = repo.retire(2)
+        val refused = repo.retire(tablet)
         api.retire = { ApiResponse(true, obj("""{"deviceId":1,"retired":true}""")) }
-        val otherDevice = repo.retire(2)
+        val otherDevice = repo.retire(tablet)
         api.retire = { throw http(404, """{"success":false,"error":"route"}""") }
-        val bare404 = repo.retire(2)
+        val bare404 = repo.retire(tablet)
 
         assertThat(refused).isInstanceOf(NetworkResult.Failure::class.java)
         assertThat(otherDevice).isInstanceOf(NetworkResult.Failure::class.java)
@@ -141,5 +148,36 @@ class OwnEncryptedDevicesRepositoryTest {
         inFlight.await()
 
         assertThat(repo.devices.value).isNull()
+    }
+
+    @Test
+    fun `a device that is not in this account's list is never sent for removal`() = runTest {
+        val api = FakeApi(list = { listed(device(1), device(2)) }, retire = { ApiResponse(true, obj("""{"deviceId":$it,"retired":true}""")) })
+        val repo = OwnEncryptedDevicesRepository(api)
+        repo.refresh()
+        val tablet = repo.listed(2)
+
+        val otherGeneration = repo.retire(tablet.copy(registrationId = 999))
+        repo.clear()
+        val afterSignOut = repo.retire(tablet)
+
+        assertThat((otherGeneration as NetworkResult.Failure).error.code).isEqualTo(OwnEncryptedDevicesRepository.UNKNOWN_DEVICE_CODE)
+        assertThat((afterSignOut as NetworkResult.Failure).error.code).isEqualTo(OwnEncryptedDevicesRepository.UNKNOWN_DEVICE_CODE)
+        assertThat(api.retired).isEmpty()
+    }
+
+    @Test
+    fun `a place taken over by another device is refused, and the list is reread`() = runTest {
+        val api = FakeApi(list = { listed(device(1), device(2)) })
+        val repo = OwnEncryptedDevicesRepository(api)
+        repo.refresh()
+        api.retire = {
+            throw http(409, """{"success":false,"error":"changé","code":"${OwnEncryptedDevicesRepository.DEVICE_CHANGED}"}""")
+        }
+
+        val result = repo.retire(repo.listed(2))
+
+        assertThat((result as NetworkResult.Failure).error.code).isEqualTo(OwnEncryptedDevicesRepository.DEVICE_CHANGED)
+        assertThat(api.lists).isEqualTo(2)
     }
 }

@@ -21,6 +21,7 @@ const USERS: Record<string, string> = { alice: ALICE, aliceAndroid: ALICE, bob: 
 
 async function buildApp() {
   const store = createFakeE2EEStore();
+  const cutSessions: { userId: string; sessionId: string }[] = [];
   const app: FastifyInstance = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
   const auth = async (request: FastifyRequest) => {
     const who = String(request.headers['x-test-user'] ?? '');
@@ -33,9 +34,12 @@ async function buildApp() {
     directory: createE2EEDirectory({ prisma: store.prisma as never, verifier: fakeVerifier }),
     relay: createE2EEEnvelopeRelay({ prisma: store.prisma as never }),
     mayReadKeysOf: async (requester, target) => requester === target || target !== STRANGER,
+    onDeviceSessionEnded: async (ended) => {
+      cutSessions.push(ended);
+    },
   });
   await app.ready();
-  return { app, store };
+  return { app, store, cutSessions };
 }
 
 const enrollment = (userId: string, keys = fakeDeviceKeys({ oneTime: 2, kyber: 2 })) => ({
@@ -181,4 +185,53 @@ describe('routes /e2ee', () => {
     expect(JSON.stringify(seenByContact.json())).not.toMatch(/Pixel de Bob|platform|lastSeenAt/);
     expect(afterRetirement.json().data.devices).toEqual([]);
   });
+
+  it("retirer un de mes appareils depuis un autre met fin à sa session : il ne se réinscrit pas en silence", async () => {
+    const { app, store, cutSessions } = await buildApp();
+    store.collections.UserSession.insert({ id: SESSIONS.alice, userId: ALICE });
+    store.collections.UserSession.insert({ id: SESSIONS.aliceAndroid, userId: ALICE });
+    await app.inject({ method: 'POST', url: '/e2ee/devices', headers: { 'x-test-user': 'alice' }, payload: enrollment(ALICE) });
+
+    const res = await app.inject({ method: 'DELETE', url: '/e2ee/devices/1', headers: { 'x-test-user': 'aliceAndroid' } });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data).toEqual({ deviceId: 1, retired: true, sessionEnded: true });
+    const [retiredSession, callerSession] = [SESSIONS.alice, SESSIONS.aliceAndroid]
+      .map((id) => store.collections.UserSession.rows.find((row) => row.id === id));
+    expect(retiredSession).toMatchObject({ isValid: false, invalidatedReason: 'e2ee_device_retired' });
+    expect(callerSession).toMatchObject({ isValid: true });
+    expect(cutSessions).toEqual([{ userId: ALICE, sessionId: SESSIONS.alice }]);
+  });
+
+  it("retirer l'appareil de sa propre session ne déconnecte pas l'appelant", async () => {
+    const { app, store, cutSessions } = await buildApp();
+    store.collections.UserSession.insert({ id: SESSIONS.alice, userId: ALICE });
+    await app.inject({ method: 'POST', url: '/e2ee/devices', headers: { 'x-test-user': 'alice' }, payload: enrollment(ALICE) });
+
+    const res = await app.inject({ method: 'DELETE', url: '/e2ee/devices/1', headers: { 'x-test-user': 'alice' } });
+    expect(cutSessions).toEqual([]);
+
+    expect(res.json().data).toEqual({ deviceId: 1, retired: true, sessionEnded: false });
+    expect(store.collections.UserSession.rows.find((row) => row.id === SESSIONS.alice)).toMatchObject({ isValid: true });
+  });
+
+  it("un retrait qui nomme une génération périmée ne retire pas l'appareil qui a repris la place", async () => {
+    const { app, store } = await buildApp();
+    await app.inject({ method: 'POST', url: '/e2ee/devices', headers: { 'x-test-user': 'alice' }, payload: enrollment(ALICE) });
+    const [device] = store.collections.E2EEDevice.rows;
+    const stale = Number(device.registrationId) === 1 ? 2 : 1;
+
+    const refused = await app.inject({ method: 'DELETE', url: `/e2ee/devices/1?registrationId=${stale}`, headers: { 'x-test-user': 'aliceAndroid' } });
+    const listed = await app.inject({ method: 'GET', url: '/e2ee/devices', headers: { 'x-test-user': 'alice' } });
+    const matching = await app.inject({
+      method: 'DELETE', url: `/e2ee/devices/1?registrationId=${device.registrationId}`, headers: { 'x-test-user': 'aliceAndroid' },
+    });
+
+    expect(refused.statusCode).toBe(409);
+    expect(refused.json().code).toBe(E2EE_ERROR_CODES.DEVICE_CHANGED);
+    expect(listed.json().data.devices).toHaveLength(1);
+    expect(store.collections.E2EERevokedIdentity.rows).toHaveLength(1);
+    expect(matching.statusCode).toBe(200);
+  });
 });
+

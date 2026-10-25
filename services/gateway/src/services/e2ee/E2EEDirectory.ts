@@ -391,22 +391,42 @@ export class E2EEDirectory {
    * reprend jamais sa place et ne se réenrôle plus sur ce compte, même avec une
    * preuve de liaison fraîche — un appareil révoqué, ou un jeton volé qui l'a
    * révoqué, ne la ramène pas. L'installation doit tirer une nouvelle identité.
+   *
+   * Il met aussi fin à la SESSION de l'appareil retiré, sauf si c'est celle de
+   * l'appelant (#13014) : sans cela, la même session réenrôlait aussitôt une
+   * identité neuve et l'appareil perdu recevait de nouveau mes messages. Une
+   * `expectedRegistrationId` qui ne correspond plus (la place a été reprise par
+   * une autre génération) refuse le retrait au lieu de révoquer le nouvel occupant.
    */
-  async retireDevice(params: { userId: string; deviceId: number }): Promise<void> {
+  async retireDevice(params: {
+    userId: string;
+    deviceId: number;
+    callerSessionId?: string;
+    expectedRegistrationId?: number;
+  }): Promise<{ sessionEnded: boolean; endedSessionId: string | null }> {
     const device = await this.prisma.e2EEDevice.findFirst({
       where: { userId: params.userId, deviceId: params.deviceId, ...ACTIVE },
-      select: { identityKey: true },
+      select: { identityKey: true, registrationId: true, sessionId: true },
     });
     if (!device) {
       throw new E2EEDirectoryError(E2EE_ERROR_CODES.DEVICE_NOT_BOUND, 404, 'Appareil chiffré introuvable sur ce compte');
+    }
+    if (params.expectedRegistrationId !== undefined && params.expectedRegistrationId !== device.registrationId) {
+      throw new E2EEDirectoryError(E2EE_ERROR_CODES.DEVICE_CHANGED, 409, 'Cet appareil a changé depuis la liste affichée : relisez-la avant de retirer');
     }
     await this.prisma.e2EERevokedIdentity.upsert({
       where: { userId_identityKey: { userId: params.userId, identityKey: device.identityKey } },
       create: { userId: params.userId, identityKey: device.identityKey, revokedAt: this.now() },
       update: {},
     });
-    await this.retireDevices({ userId: params.userId, deviceId: params.deviceId });
+    await this.retireDevices({ userId: params.userId, deviceId: params.deviceId, identityKey: device.identityKey });
     await this.retireDevices({ userId: params.userId, identityKey: device.identityKey });
+    if (device.sessionId === params.callerSessionId) return { sessionEnded: false, endedSessionId: null };
+    const ended = await this.prisma.userSession.updateMany({
+      where: { id: device.sessionId, userId: params.userId, isValid: true },
+      data: { isValid: false, invalidatedAt: this.now(), invalidatedReason: 'e2ee_device_retired' },
+    });
+    return ended.count > 0 ? { sessionEnded: true, endedSessionId: device.sessionId } : { sessionEnded: false, endedSessionId: null };
   }
 
   private async undoIfRevoked(userId: string, identityKey: string): Promise<void> {
