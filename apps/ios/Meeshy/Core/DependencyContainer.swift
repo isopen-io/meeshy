@@ -423,7 +423,7 @@ final class DependencyContainer {
         .filter { $0 }
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
-                ConversationListPreviewLoader.purgeAllLive(signedOutUserId: AuthManager.shared.currentUser?.id) // EN TÊTE (#11232, #12766)
+                ConversationListPreviewLoader.purgeAllLive() // EN TÊTE, avant toute purge attendue (#11232)
                 let invalidated = self?.sessionWasInvalidated ?? false
                 self?.sessionWasInvalidated = false
                 // La purge vise les bases QUITTÉES, que la bascule

@@ -181,6 +181,7 @@ final class ConversationListPreviewLoader: ObservableObject {
     private var generation = 0
     private var lockObservation: AnyCancellable?
     private var sessionObservation: AnyCancellable?
+    private var accountObservation: AnyCancellable?
     /// Le régime de chiffrement de chaque conversation chargée — celui que la
     /// liste sert, fusionné avec celui que l'appareil retient : la loi du clair
     /// (#11380) le lit à chaque publication. Purgé avec le compte.
@@ -209,6 +210,9 @@ final class ConversationListPreviewLoader: ObservableObject {
     private var isSignedOut = false
     /// Le dernier lecteur admis : c'est lui qui sort à la prochaine purge.
     private var lastReaderId: String?
+    /// Le dernier compte CONNECTÉ, retenu au fil de la session : la sortie
+    /// efface `currentUser` avant la purge, qui ne peut donc pas le lire.
+    private var lastSignedInUserId: String?
     /// Les comptes SORTIS à la dernière purge (#12766) : un chargement qui lit
     /// encore leur identifiant ne rouvre pas le chargeur. Seule une connexion
     /// neuve (`sessionsDidBegin`) les réadmet.
@@ -226,7 +230,8 @@ final class ConversationListPreviewLoader: ObservableObject {
             .map { _ in () }
             .eraseToAnyPublisher(),
         regimeMemory: any EndToEndRegimeMemoryProviding = EndToEndRegimeMemory.shared,
-        sessionsDidBegin: AnyPublisher<Void, Never>? = nil
+        sessionsDidBegin: AnyPublisher<Void, Never>? = nil,
+        signedInUsers: AnyPublisher<MeeshyUser?, Never>? = nil
     ) {
         self.messageService = messageService
         self.regimeMemory = regimeMemory
@@ -237,6 +242,10 @@ final class ConversationListPreviewLoader: ObservableObject {
         lockObservation = locksDidChange.sink { [weak self] _ in self?.dropLockedConversations() }
         sessionObservation = (sessionsDidBegin ?? Self.authenticatedSessions())
             .sink { [weak self] _ in self?.signedOutReaders = [] }
+        accountObservation = (signedInUsers ?? AuthManager.shared.currentUserPublisher)
+            .compactMap { $0?.id }
+            .filter { !$0.isEmpty }
+            .sink { [weak self] in self?.lastSignedInUserId = $0 }
         Self.live.add(self)
     }
 
@@ -253,13 +262,14 @@ final class ConversationListPreviewLoader: ObservableObject {
     // MARK: - Purge (#11232)
 
     /// Le compte sort : aucun clair, aucune provenance, aucun chargement en vol
-    /// ne survit, et le compte sorti — celui que la déconnexion nomme, et le
-    /// dernier lecteur admis — ne rouvre pas le chargeur (#12766).
-    func purge(signedOutUserId: String? = nil) {
+    /// ne survit, et le compte sorti — le dernier connecté, et le dernier
+    /// lecteur admis — ne rouvre pas le chargeur (#12766).
+    func purge() {
         generation += 1
         isSignedOut = true
-        signedOutReaders = Set([signedOutUserId, lastReaderId].compactMap { $0 }.filter { !$0.isEmpty })
+        signedOutReaders = Set([lastSignedInUserId, lastReaderId].compactMap { $0 })
         lastReaderId = nil
+        lastSignedInUserId = nil
         inFlight.values.forEach { $0.task.cancel() }
         inFlight = [:]
         states = [:]
@@ -269,8 +279,8 @@ final class ConversationListPreviewLoader: ObservableObject {
 
     /// Appelé en TÊTE du puits de déconnexion de `DependencyContainer`, avant
     /// toute purge attendue : aucun chargement ne publie pendant qu'elles courent.
-    static func purgeAllLive(signedOutUserId: String? = nil) {
-        live.allObjects.forEach { $0.purge(signedOutUserId: signedOutUserId) }
+    static func purgeAllLive() {
+        live.allObjects.forEach { $0.purge() }
     }
 
     /// Un verrou posé ne se contente pas de MASQUER (`state(for:)`) : le clair
