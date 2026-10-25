@@ -1054,7 +1054,10 @@ mettre à jour un texte, pas publier un secret.
 
 Et rien n'interdit d'éditer un message protégé (mesuré : `messageEditAdmission`
 et `messageEditContent` ne portent aucune occurrence de `isViewOnce`,
-`isBlurred`, `effectFlags` ni `expiresAt`).
+`isBlurred`, `effectFlags` ni `expiresAt`). Depuis #12792, la vue unique et le
+message chiffré refusent l'édition (`editContentRefusal`, loi partagée) ; un
+message FLOUTÉ ou ÉPHÉMÈRE reste éditable, et les relectures ci-dessous restent
+nécessaires.
 
 ### Une garde de confidentialité se relit CHEZ ELLE, pas dans ses paramètres
 

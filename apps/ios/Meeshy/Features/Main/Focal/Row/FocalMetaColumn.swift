@@ -82,6 +82,7 @@ struct FocalMetaColumn: View, Equatable {
     let deliveryStatus: Message.DeliveryStatus?
     let isDark: Bool
     var editedAt: Date? = nil
+    var editedByModerator: Bool = false
     var isEditSaving: Bool = false
     var hasEditHistory: Bool = false
     /// Toucher les COCHES ouvre les détails de lecture. Relayé tel quel à
@@ -99,6 +100,7 @@ struct FocalMetaColumn: View, Equatable {
             && lhs.deliveryStatus == rhs.deliveryStatus
             && lhs.isDark == rhs.isDark
             && lhs.editedAt == rhs.editedAt
+            && lhs.editedByModerator == rhs.editedByModerator
             && lhs.isEditSaving == rhs.isEditSaving
             && lhs.hasEditHistory == rhs.hasEditHistory
     }
@@ -110,6 +112,7 @@ struct FocalMetaColumn: View, Equatable {
             deliveryStatus: deliveryStatus,
             isDark: isDark,
             editedAt: editedAt,
+            editedByModerator: editedByModerator,
             isEditSaving: isEditSaving,
             hasEditHistory: hasEditHistory,
             onShowReadStatus: onShowReadStatus,

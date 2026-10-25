@@ -15,8 +15,8 @@ import os
 public enum RealtimeMessageMutation: Sendable, Equatable {
     /// `marksEdited` recopie l'`isEdited` servi : `false` pour un avis que le
     /// SERVEUR complète sur place (la ligne d'arrivées, #8633) — le contenu
-    /// suit, le drapeau « modifié » ne se pose pas.
-    case edited(messageId: String, content: String, editedAt: Date, marksEdited: Bool = true)
+    /// suit, le drapeau « modifié » ne se pose pas. `authorship` : voir `EditAuthorship`.
+    case edited(messageId: String, content: String, editedAt: Date, marksEdited: Bool = true, authorship: EditAuthorship = .untouched)
     /// `message:edited` porteur d'un résumé d'appel : la transition live →
     /// terminal (« en cours » → « Appel · 04:32 »). Distincte de `.edited`
     /// parce qu'un avis d'appel ne doit JAMAIS porter le drapeau « modifié ».
@@ -53,6 +53,17 @@ public enum RealtimeMessageMutation: Sendable, Equatable {
     /// dénormalisé de SES messages suit, toutes conversations confondues
     /// (`MessagePersistenceActor.repaintSender`).
     case senderRepainted(UserUpdatedEvent)
+}
+
+extension RealtimeMessageMutation {
+    /// Une modification SERVIE (`message:edited`), avec ce qu'elle dit de son
+    /// auteur (#11375). L'horloge SERVEUR, jamais celle de l'appareil :
+    /// `markEdited` compare cet instant au précédent pour rejeter les échos
+    /// désordonnés, ce qui n'a de sens qu'entre horloges comparables.
+    static func servedEdit(of apiMessage: APIMessage, content: String) -> RealtimeMessageMutation {
+        .edited(messageId: apiMessage.id, content: content, editedAt: apiMessage.editedAt ?? Date(),
+                marksEdited: apiMessage.isEdited ?? true, authorship: apiMessage.editAuthorship)
+    }
 }
 
 // MARK: - Protocol

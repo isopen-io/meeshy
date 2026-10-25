@@ -18,6 +18,8 @@ nonisolated final class LibsignalTestGateway: @unchecked Sendable {
         let registrationId: UInt32
         let identityKey: String
         let sessionId: String
+        let platform: E2EEPlatform
+        let label: String?
         var signedPreKey: E2EESignedKey
         var kyberLastResort: E2EESignedKey
         var oneTimePreKeys: [E2EEOneTimeKey]
@@ -63,6 +65,7 @@ nonisolated final class LibsignalTestGateway: @unchecked Sendable {
             devices.append(Device(
                 userId: userId, deviceId: deviceId, registrationId: request.registrationId,
                 identityKey: request.identityKey, sessionId: sessionId,
+                platform: request.platform, label: request.label,
                 signedPreKey: request.signedPreKey, kyberLastResort: request.kyberLastResort,
                 oneTimePreKeys: request.oneTimePreKeys, kyberPreKeys: request.kyberPreKeys
             ))
@@ -115,6 +118,16 @@ nonisolated final class LibsignalTestGateway: @unchecked Sendable {
         let listed = lock.withLock { devices.filter { $0.userId == userId } }
             .map { ListingWire(deviceId: $0.deviceId, registrationId: $0.registrationId) }
         return Self.transcode(UserDevicesWire(userId: userId, devices: listed))
+    }
+
+    /// `GET /e2ee/devices` : mes appareils, leurs métadonnées, et le mien marqué.
+    fileprivate func ownDevices(userId: String, sessionId: String) -> [E2EEOwnDeviceDetails] {
+        lock.withLock { devices.filter { $0.userId == userId } }.map {
+            E2EEOwnDeviceDetails(
+                deviceId: $0.deviceId, registrationId: $0.registrationId, platform: $0.platform, label: $0.label,
+                enrolledAt: Date(timeIntervalSince1970: 1_792_929_600), lastSeenAt: nil, current: $0.sessionId == sessionId
+            )
+        }
     }
 
     fileprivate func envelopes(userId: String, sessionId: String) throws -> E2EEEnvelopePage {
@@ -196,6 +209,10 @@ nonisolated final class LibsignalTestDirectory: E2EEDirectoryClientProviding, @u
 
     func devices(userId: String) async throws -> E2EEUserDevices {
         gateway.listing(of: userId)
+    }
+
+    func ownDevices() async throws -> [E2EEOwnDeviceDetails] {
+        gateway.ownDevices(userId: userId, sessionId: sessionId)
     }
 
     func envelopes(after cursor: String?, limit: Int?) async throws -> E2EEEnvelopePage {

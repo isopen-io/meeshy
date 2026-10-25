@@ -22,7 +22,7 @@ import {
 } from '../../services/conversations/conversationEntryAdmission';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { MemberRole } from '@meeshy/shared/types/role-types';
-import { actorHasMinimumRole } from '../../utils/conversation-authority';
+import { actorHasMinimumRole } from '@meeshy/shared/utils/conversation-authority';
 import { recipientLanguage } from '../../utils/recipient-language';
 import { announceConversationLanguageChange } from '../../services/message-translation/conversationLanguageChanges';
 import { appliquerDroitsDeParticipant } from './participant-rights-core';

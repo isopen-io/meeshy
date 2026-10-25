@@ -29,6 +29,7 @@ import { E2EE_ERROR_CODES, type E2EERelayRequest } from '@meeshy/shared/types/e2
 import { createE2EEEnvelopeRelay, type AdmittedRelay } from '../e2ee/E2EEEnvelopeRelay';
 import { regimeEpochOf } from '../conversations/encryptionRegime';
 import { clientOutdated, E2eeRelayRefusedError } from '../e2ee/e2ee-relay-errors';
+import { isServerAtRestMode, ServerAtRestCiphertextRefusedError } from './serverAtRest';
 import {
   assertNoPlaintextPieces,
   assertPlaintextAdmitted,
@@ -77,6 +78,9 @@ export async function admitSendUnderRegime(prisma: AdmissionPrisma, request: Sen
     if (request.e2eeRelay) {
       throw new E2eeRelayRefusedError(E2EE_ERROR_CODES.REGIME_CHANGED, 409, 'Cette conversation n’est plus chiffrée de bout en bout');
     }
+    // #11381 — là où la passerelle chiffre elle-même (`server`/`hybrid`), un chiffré
+    // client est refusé avec sa phrase (« envoyez en clair ») ; ailleurs, #12562.
+    if (carriesCiphertext && isServerAtRestMode(regime?.encryptionMode)) throw new ServerAtRestCiphertextRefusedError();
     if (carriesCiphertext) throw regimeChanged();
     return { regime, carriesCiphertext, endToEnd, relay: null };
   }

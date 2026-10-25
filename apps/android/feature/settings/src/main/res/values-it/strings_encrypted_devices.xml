@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="security_section_encrypted_devices">Crittografia end-to-end</string>
+    <string name="encrypted_devices_title">I miei dispositivi crittografati</string>
+    <string name="encrypted_devices_notice_title">Questo telefono Android non legge ancora le chat crittografate end-to-end</string>
+    <string name="encrypted_devices_notice_body">Non compare ancora in questo elenco e per ora non può mostrare il suo codice né leggere quello di un altro dispositivo. Puoi già rimuovere un dispositivo perso: viene disconnesso e non riceve più i tuoi messaggi crittografati.</string>
+    <string name="encrypted_devices_loading">Caricamento dei tuoi dispositivi crittografati</string>
+    <string name="encrypted_devices_offline_empty">Sei offline. Connettiti per vedere i tuoi dispositivi crittografati.</string>
+    <string name="encrypted_devices_error">Impossibile caricare i tuoi dispositivi crittografati.</string>
+    <string name="encrypted_devices_retry">Riprova</string>
+    <string name="encrypted_devices_offline">Sei offline. Questo elenco potrebbe non essere aggiornato.</string>
+    <string name="encrypted_devices_stale">Impossibile aggiornare questo elenco, potrebbe non essere aggiornato.</string>
+    <string name="encrypted_devices_empty_title">Ancora nessun dispositivo crittografato</string>
+    <string name="encrypted_devices_empty_body">Un dispositivo compare qui non appena Meeshy vi ha configurato la crittografia end-to-end.</string>
+    <string name="encrypted_devices_current">Questo dispositivo</string>
+    <string name="encrypted_devices_retiring">Rimozione di %1$s in corso</string>
+    <string name="encrypted_devices_retire_a11y">Rimuovi %1$s</string>
+    <string name="encrypted_devices_retire">Rimuovi</string>
+    <string name="encrypted_devices_retire_confirm_title">Rimuovere questo dispositivo?</string>
+    <string name="encrypted_devices_retire_confirm_message">%1$s verrà disconnesso e non riceverà più i tuoi messaggi crittografati; le sue chiavi non potranno tornare. Ciò che ha già decrittato resta su di esso. Se è stato perso o rubato, cambia anche la password: altrimenti chi lo possiede potrebbe riaccedere come nuovo dispositivo.</string>
+    <string name="encrypted_devices_retire_confirm_action">Rimuovi</string>
+    <string name="encrypted_devices_cancel">Annulla</string>
+    <string name="encrypted_devices_retire_offline">Sei offline: un dispositivo si può rimuovere solo quando sei connesso.</string>
+    <string name="encrypted_devices_retire_failed">Impossibile rimuovere il dispositivo. Riprova.</string>
+    <string name="encrypted_devices_ok">OK</string>
+    <string name="encrypted_devices_unnamed">Dispositivo %1$s n. %2$d</string>
+    <string name="encrypted_devices_platform_ios">iOS</string>
+    <string name="encrypted_devices_platform_macos">macOS</string>
+    <string name="encrypted_devices_platform_android">Android</string>
+    <string name="encrypted_devices_platform_web">Browser web</string>
+    <string name="encrypted_devices_platform_unknown">Dispositivo sconosciuto</string>
+    <string name="encrypted_devices_enrolled">Aggiunto il %1$s</string>
+    <string name="encrypted_devices_retire_changed">Questo dispositivo è cambiato da quando è stato mostrato l’elenco. L’elenco è stato ricaricato: controllalo prima di rimuovere.</string>
+</resources>

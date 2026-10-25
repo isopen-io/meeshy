@@ -3,9 +3,10 @@ import { afterEach, describe, expect, test } from 'bun:test';
 
 import { recipientRows } from '@/components/send-sheet-model';
 import { performMessageEdit } from '@/lib/api/edit-message';
+import { watchEndToEndConversations } from '@/lib/api/end-to-end-cache-watch';
 import { createHttpTransport } from '@/lib/api/http';
 import { watchIdentityScopedStores } from '@/lib/api/identity-scoped-stores';
-import { sendMessage } from '@/lib/api/messages';
+import { messagesQueryKey, sendMessage } from '@/lib/api/messages';
 import { createSessionStore, type SessionStoreApi } from '@/lib/api/session';
 import type { Conversation, Message } from '@/lib/api/types';
 import { createTypingStore } from '@/lib/api/typing-store';
@@ -62,6 +63,24 @@ describe('l’envoi unique du web', () => {
     await sendMessage({ source: 'gateway', transport, conversationId: 'c-plain', body: { content: 'clair', originalLanguage: 'fr', clientMessageId: 'cid_2' } });
 
     expect(urls).toHaveLength(1);
+  });
+});
+
+describe('un fil chargé qui porte un message chiffré de bout en bout scelle tout envoi (#12986)', () => {
+  test('le fil est en cache, le serveur sert la conversation sans mode : sendMessage refuse SANS toucher au réseau', async () => {
+    const client = new QueryClient();
+    const unwatch = watchEndToEndConversations(client, endToEndRegimeLedger);
+    client.setQueryData(messagesQueryKey(ID), {
+      pages: [{ messages: [{ id: 'e1', conversationId: ID, messageType: 'text', content: '', isEncrypted: true, encryptionMode: 'e2ee' }], hasOlder: false, nextCursor: null }],
+      pageParams: [undefined],
+    });
+    const { urls, transport } = recordingFetch();
+
+    const result = await sendMessage({ source: 'gateway', transport, conversationId: ID, body: { content: 'clair', originalLanguage: 'fr', clientMessageId: 'cid_t' } });
+
+    expect(result).toMatchObject({ ok: false, code: E2EE_PLAINTEXT_WITHHELD });
+    expect(urls).toEqual([]);
+    unwatch();
   });
 });
 

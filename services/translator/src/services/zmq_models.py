@@ -29,6 +29,8 @@ class TranslationTask:
     model_type: str = "basic"
     created_at: float = None
     priority: int = 2  # 1=HIGH (short), 2=MEDIUM, 3=LOW (long), 4=BULK
+    # #12822 — texte chiffré au repos par la passerelle : ni cache, ni journal du texte.
+    at_rest: bool = False
 
     def __post_init__(self):
         if self.created_at is None:

@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="security_section_encrypted_devices">Cifrado de extremo a extremo</string>
+    <string name="encrypted_devices_title">Mis dispositivos cifrados</string>
+    <string name="encrypted_devices_notice_title">Este teléfono Android aún no lee los chats cifrados de extremo a extremo</string>
+    <string name="encrypted_devices_notice_body">Todavía no aparece en esta lista y, por ahora, no puede mostrar su código ni leer el de otro dispositivo. Ya puedes quitar un dispositivo perdido: se cierra su sesión y deja de recibir tus mensajes cifrados.</string>
+    <string name="encrypted_devices_loading">Cargando tus dispositivos cifrados</string>
+    <string name="encrypted_devices_offline_empty">No tienes conexión. Conéctate para ver tus dispositivos cifrados.</string>
+    <string name="encrypted_devices_error">No se pudieron cargar tus dispositivos cifrados.</string>
+    <string name="encrypted_devices_retry">Reintentar</string>
+    <string name="encrypted_devices_offline">No tienes conexión. Puede que esta lista no esté actualizada.</string>
+    <string name="encrypted_devices_stale">No se pudo actualizar esta lista y puede que no esté al día.</string>
+    <string name="encrypted_devices_empty_title">Aún no hay dispositivos cifrados</string>
+    <string name="encrypted_devices_empty_body">Un dispositivo aparece aquí en cuanto Meeshy configura en él el cifrado de extremo a extremo.</string>
+    <string name="encrypted_devices_current">Este dispositivo</string>
+    <string name="encrypted_devices_retiring">Quitando %1$s</string>
+    <string name="encrypted_devices_retire_a11y">Quitar %1$s</string>
+    <string name="encrypted_devices_retire">Quitar</string>
+    <string name="encrypted_devices_retire_confirm_title">¿Quitar este dispositivo?</string>
+    <string name="encrypted_devices_retire_confirm_message">Se cerrará la sesión de %1$s y dejará de recibir tus mensajes cifrados; sus claves no podrán volver. Lo que ya ha descifrado se queda en él. Si se perdió o te lo robaron, cambia también tu contraseña: si no, quien lo tenga podría volver a iniciar sesión como un dispositivo nuevo.</string>
+    <string name="encrypted_devices_retire_confirm_action">Quitar</string>
+    <string name="encrypted_devices_cancel">Cancelar</string>
+    <string name="encrypted_devices_retire_offline">No tienes conexión: un dispositivo solo se puede quitar cuando estés conectado.</string>
+    <string name="encrypted_devices_retire_failed">No se pudo quitar el dispositivo. Inténtalo de nuevo.</string>
+    <string name="encrypted_devices_ok">OK</string>
+    <string name="encrypted_devices_unnamed">Dispositivo %1$s n.º %2$d</string>
+    <string name="encrypted_devices_platform_ios">iOS</string>
+    <string name="encrypted_devices_platform_macos">macOS</string>
+    <string name="encrypted_devices_platform_android">Android</string>
+    <string name="encrypted_devices_platform_web">Navegador web</string>
+    <string name="encrypted_devices_platform_unknown">Dispositivo desconocido</string>
+    <string name="encrypted_devices_enrolled">Añadido el %1$s</string>
+    <string name="encrypted_devices_retire_changed">Este dispositivo cambió desde que se mostró la lista. Se ha vuelto a cargar: revísala antes de quitarlo.</string>
+</resources>

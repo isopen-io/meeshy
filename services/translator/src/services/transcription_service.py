@@ -32,7 +32,13 @@ from config.settings import get_settings
 
 # Import du smart segment merger pour fusionner intelligemment les mots courts
 from utils.smart_segment_merger import merge_short_segments
-from .audio_pipeline.transcription_guards import resolve_transcription_confidence
+
+def _resolve_confidence(text, probability):
+    # Import différé : `audio_pipeline/__init__` charge `transcription_stage`, qui
+    # importe ce module — un import en tête de fichier forme une boucle.
+    from .audio_pipeline.transcription_guards import resolve_transcription_confidence
+    return resolve_transcription_confidence(text, probability)
+
 
 # Configuration du logging
 logger = logging.getLogger(__name__)
@@ -512,7 +518,7 @@ class TranscriptionService:
             result = TranscriptionResult(
                 text=full_text,
                 language=info.language,
-                confidence=resolve_transcription_confidence(full_text, info.language_probability),
+                confidence=_resolve_confidence(full_text, info.language_probability),
                 segments=segments,
                 duration_ms=int(info.duration * 1000),
                 source="whisper",

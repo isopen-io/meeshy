@@ -57,6 +57,8 @@ export const SETTINGS_HEADER_HEIGHT = 64;
 /** Le volet Sécurité des réglages (#6720) — `/settings?volet=securite`. */
 export const SECURITY_PANEL_PARAM = 'volet';
 export const SECURITY_PANEL = 'securite';
+/** « Mes appareils chiffrés » (#13013), poussé depuis la Sécurité — `/settings?volet=appareils-chiffres`. */
+export const E2EE_DEVICES_PANEL = 'appareils-chiffres';
 /** Le volet des packs (#10149) — `/settings?volet=packs`, sans route neuve. */
 export const PACKS_PANEL = 'packs';
 

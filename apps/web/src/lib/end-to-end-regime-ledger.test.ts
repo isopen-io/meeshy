@@ -2,7 +2,10 @@ import { describe, expect, test } from 'bun:test';
 
 import type { Message } from '@/lib/api/types';
 
-import { canSendPlaintext, createEndToEndRegimeLedger, endToEndSealed, isEndToEndMode, threadShowsEndToEnd, type SealedStorage } from './end-to-end-regime-ledger';
+import { LIBSIGNAL_PROTOCOL } from '@meeshy/shared/types/e2ee-directory';
+
+import { canSendPlaintext, createEndToEndRegimeLedger, endToEndSealed, isEndToEndMode, type SealedStorage } from './end-to-end-regime-ledger';
+import { LIBSIGNAL_PROTOCOL_MARK, threadShowsEndToEnd } from './end-to-end-thread-signal';
 
 /**
  * #12949 — UNE CONVERSATION VUE CHIFFRÉE DE BOUT EN BOUT RESTE FERMÉE AU CLAIR
@@ -26,6 +29,12 @@ const memoryStorage = (): SealedStorage & { readonly data: Map<string, string> }
 const message = (extra: Record<string, unknown>): Message =>
   ({ id: 'm', conversationId: ID, messageType: 'text', messageSource: 'user', content: 'x', isEncrypted: false, createdAt: new Date(), ...extra }) as unknown as Message;
 
+describe('le protocole libsignal', () => {
+  test('la marque écrite à la main est celle du contrat partagé', () => {
+    expect(LIBSIGNAL_PROTOCOL_MARK).toBe(LIBSIGNAL_PROTOCOL);
+  });
+});
+
 describe('le mode de bout en bout', () => {
   test('quelle que soit la casse, et rien d’autre', () => {
     expect(isEndToEndMode('e2ee')).toBe(true);
@@ -38,8 +47,42 @@ describe('le mode de bout en bout', () => {
 });
 
 describe('ce que le fil montre du bout en bout', () => {
-  test('un message marqué e2ee dans une conversation sans régime ne suffit pas (mesuré sur staging le 2026-10-25 : trois tête-à-tête sans régime portent un ancien message iOS marqué e2ee)', () => {
-    expect(threadShowsEndToEnd([message({}), message({ encryptionMode: 'e2ee', isEncrypted: true, content: '' })])).toBe(false);
+  test('un message chiffré de bout en bout affiché suffit, même sans régime servi (#12986, option 2)', () => {
+    expect(threadShowsEndToEnd([message({}), message({ encryptionMode: 'e2ee', isEncrypted: true, content: '' })])).toBe(true);
+    expect(threadShowsEndToEnd([message({ encryptionMode: 'E2EE', isEncrypted: true, content: '' })])).toBe(true);
+  });
+
+  test('un envoi libsignal se reconnaît aussi à ses métadonnées', () => {
+    expect(threadShowsEndToEnd([message({ isEncrypted: true, content: '', encryptionMetadata: { protocol: 'libsignal-v1' } })])).toBe(true);
+  });
+
+  test('un message chiffré SUPPRIMÉ ne scelle pas : la passerelle ne le sert plus, seul un cache local en garde la trace (audit #12986)', () => {
+    expect(threadShowsEndToEnd([message({ encryptionMode: 'e2ee', isEncrypted: true, content: '', deletedAt: new Date() })])).toBe(false);
+    expect(threadShowsEndToEnd([message({ encryptionMode: 'e2ee', isEncrypted: true, content: '', deletedAt: '2026-10-25T02:07:01.630Z' })])).toBe(false);
+    expect(threadShowsEndToEnd([message({ encryptionMode: 'e2ee', isEncrypted: true, content: '', deletedAt: null })])).toBe(true);
+  });
+
+  test('seul un marqueur que la passerelle admet comme e2ee scelle : ni un chiffré sans mode, ni un mode inconnu, ni un mode de métadonnées seul (revue #12986)', () => {
+    expect(
+      threadShowsEndToEnd([
+        message({ isEncrypted: true, content: '[Encrypted]', encryptionMode: null }),
+        message({ isEncrypted: true, content: '[Encrypted]' }),
+        message({ isEncrypted: true, content: '[Encrypted]', encryptionMode: 'signal_v4' }),
+        message({ isEncrypted: true, content: '', encryptionMetadata: { mode: 'e2ee' } }),
+        message({ isEncrypted: true, content: '', encryptedContent: 'libsignal-v1' }),
+      ]),
+    ).toBe(false);
+  });
+
+  test('un chiffré SERVEUR ou hybride n’est pas du bout en bout', () => {
+    expect(
+      threadShowsEndToEnd([
+        message({ isEncrypted: true, encryptionMode: 'server', encryptionMetadata: { mode: 'server', protocol: 'aes-256-gcm' } }),
+        message({ isEncrypted: true, encryptionMode: 'hybrid' }),
+        message({ isEncrypted: true, encryptionMode: 'SERVER' }),
+        message({ encryptedContent: 'Y2xhaXI=' }),
+      ]),
+    ).toBe(false);
   });
 
   test('l’avis système d’activation du bout en bout, par métadonnée ou par évènement', () => {
@@ -81,10 +124,9 @@ describe('une conversation vue e2ee reste fermée au clair', () => {
     expect(endToEndSealed(ledger.getState(), { conversationId: ID, servedMode: 'server' })).toBe(true);
   });
 
-  test('le fil montre le bout en bout, le serveur ne dit rien : fermée', () => {
-    const ledger = createEndToEndRegimeLedger();
-    expect(endToEndSealed(ledger.getState(), { conversationId: ID, servedMode: null, messages: [message({ messageType: 'system', metadata: { kind: 'encryption-enabled', mode: 'e2ee' } })] })).toBe(true);
-  });
+  /* Que le fil montré FERME la conversation se prouve là où il est lu : le fil
+     ouvert (`thread-write-lock.test.tsx`) et la surveillance du cache
+     (`api/end-to-end-cache-watch.test.ts`, `send/plaintext-guard.test.ts`). */
 
   test('jamais vue chiffrée par ce navigateur : le clair, sans rien demander', () => {
     const ledger = createEndToEndRegimeLedger();

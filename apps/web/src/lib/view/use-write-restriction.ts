@@ -4,7 +4,8 @@ import { useStore } from 'zustand/react';
 import { CONVERSATIONS_QUERY_KEY } from '@/lib/api/conversations';
 import { appQueryClient } from '@/lib/api/query-client';
 import type { Conversation, Message } from '@/lib/api/types';
-import { endToEndRegimeLedger, endToEndSealed, isEndToEndMode, threadShowsEndToEnd } from '@/lib/end-to-end-regime-ledger';
+import { endToEndRegimeLedger, endToEndSealed, isEndToEndMode } from '@/lib/end-to-end-regime-ledger';
+import { threadShowsEndToEnd } from '@/lib/end-to-end-thread-signal';
 import { entriesOf, outboxStore } from '@/lib/send/outbox-store';
 import {
   GLOBAL_ADULTS_ONLY,
