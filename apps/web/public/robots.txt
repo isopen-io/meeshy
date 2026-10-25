@@ -71,7 +71,7 @@ Disallow: /hashtag
 Disallow: /links
 Disallow: /u
 
-# Crawlers d'AGENTS IA (#12939) — stance ASSUMÉE, identique au `User-Agent: *`
+# Crawlers d'AGENTS IA (#12939) — stance ASSUMÉE, identique à celle du groupe générique `*`
 # ci-dessus : la vitrine est autorisée, les surfaces applicatives refusées. On
 # les NOMME explicitement plutôt que de les laisser retomber en silence sur la
 # règle générique. La fiche agent et le pointeur OpenAPI sont annoncés plus bas.
