@@ -10,10 +10,10 @@ import {
   type NotificationsInfiniteData,
 } from '@/lib/api/notifications';
 import {
+  followNotificationsOfTypeRead,
   performDeleteNotification,
   performMarkAllNotificationsRead,
   performMarkNotificationRead,
-  performMarkNotificationsOfTypeRead,
 } from '@/lib/api/notifications-actions';
 import { appQueryClient } from '@/lib/api/query-client';
 import { sessionStore } from '@/lib/api/session';
@@ -63,8 +63,9 @@ const actionDeps = () => ({ ...apiDeps, queryClient: appQueryClient });
 export const markNotificationReadAction = (id: string): Promise<boolean> =>
   performMarkNotificationRead({ id, deps: actionDeps() });
 
-export const markNotificationsOfTypeReadAction = (type: string): Promise<boolean> =>
-  performMarkNotificationsOfTypeRead({ type, deps: actionDeps() });
+/** Rend l'arrêt : l'effet de l'écran le rend tel quel, et le suivi cesse quand l'écran se ferme. */
+export const followNotificationsOfTypeReadAction = (type: string): (() => void) =>
+  followNotificationsOfTypeRead({ type, deps: actionDeps() });
 
 export const markAllNotificationsReadAction = (): Promise<boolean> => performMarkAllNotificationsRead({ deps: actionDeps() });
 

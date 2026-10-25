@@ -55,7 +55,7 @@ const sentPush = async (): Promise<SentPush | undefined> => {
 };
 
 describe('la charge push de game_photo_moment', () => {
-  it('route le tap par le type et l’indice `progression`, rien de plus', async () => {
+  it('route le tap par le type et l’indice `progression`', async () => {
     const push = await sentPush();
     expect(push?.payload.data).toMatchObject({ type: 'game_photo_moment', route: 'progression', notificationId: 'notif_photo' });
   });

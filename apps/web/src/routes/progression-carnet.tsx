@@ -30,7 +30,7 @@ import { useObjectUrl } from '@/lib/game-photo/use-object-url';
 import { useAtmosphereGate } from '@/lib/game/use-atmosphere-gate';
 import type { GameCatalogKey } from '@/lib/i18n-game-catalog';
 import { gameText } from '@/lib/view/game-copy';
-import { markNotificationsOfTypeReadAction } from '@/lib/view/use-notifications';
+import { followNotificationsOfTypeReadAction } from '@/lib/view/use-notifications';
 import { ProgressionShell } from '@/routes/progression-shell';
 import { useViewerId } from '@/routes/game-friends';
 
@@ -408,8 +408,9 @@ export default function ProgressionCarnetScreen() {
   /* La pastille s'éteint dès l'ouverture du carnet (#10174), même avec douze étapes ouvertes. */
   const userId = useViewerId() ?? 'anonymous';
   useEffect(() => appPhotoAlerts.carnetVisited(userId), [userId]);
-  /* La ligne « moments à immortaliser » de la cloche passe lue quand le carnet s'ouvre (#10175, § 5.16.4). */
-  useEffect(() => void markNotificationsOfTypeReadAction('game_photo_moment'), []);
+  /* La ligne « moments à immortaliser » de la cloche passe lue quand le carnet s'ouvre, et celle qui arrive pendant
+     qu'il est ouvert aussi (#10175, § 5.16.4). */
+  useEffect(() => followNotificationsOfTypeReadAction('game_photo_moment'), []);
   return (
     <ProgressionShell title={gameText('game.notebook.page_title')}>
       <CarnetBody env={appPhotoEnv()} flameDays={game?.flame.days ?? null} game={game} />

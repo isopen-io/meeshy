@@ -7,7 +7,9 @@
  *  1. **la détection** du compte (`GamePhotoMomentService.detect`) : elle pose la ligne de base sur la situation
  *     d'AVANT le seed quand elle manque, sans quoi l'étape portée au point 2 serait absorbée par la ligne de base
  *     et jamais annoncée ;
- *  2. **la Flamme** : série courante et record portés au seuil, dernier jour actif = maintenant ;
+ *  2. **la Flamme** : série courante et record portés au seuil, dernier jour actif = AUJOURD'HUI dans le fuseau du
+ *     compte, au marqueur que le jeu écrit lui-même (`markerOfDayKey`, minuit UTC de la clé du jour local) — l'instant
+ *     brut placerait, à l'ouest d'UTC le soir, le dernier jour actif au lendemain du jour local ;
  *  3. **la marque** « à évaluer » dans l'ensemble Redis que vide le job (`PhotoMomentMarks`).
  *
  * **La garde est fail-closed** : la base doit être celle du staging (hôte `database-staging`, et lui seul), et
@@ -16,6 +18,7 @@
  * (`scripts/game-photo-staging-seed.ts`) teste la garde AVANT d'ouvrir la moindre connexion.
  */
 
+import { dayKeyOf, markerOfDayKey } from './gameClock';
 import type { PhotoMomentMarks } from './PhotoMomentMarks';
 import { PHOTO_FLAME_THRESHOLDS } from '@meeshy/shared/utils/game/photo-catch-up';
 
@@ -71,11 +74,16 @@ export function parsePhotoSeedArgs(argv: readonly string[]): PhotoSeedArgs {
   return { ok: true, userId, flameDays };
 }
 
-type SeedUserRow = { readonly isActive: boolean | null; readonly deletedAt: Date | null; readonly longestStreakDays: number | null };
+type SeedUserRow = {
+  readonly isActive: boolean | null;
+  readonly deletedAt: Date | null;
+  readonly longestStreakDays: number | null;
+  readonly timezone: string | null;
+};
 
 export type PhotoSeedDeps = {
   readonly users: {
-    findUnique(args: { where: { id: string }; select: { isActive: true; deletedAt: true; longestStreakDays: true } }): Promise<SeedUserRow | null>;
+    findUnique(args: { where: { id: string }; select: { isActive: true; deletedAt: true; longestStreakDays: true; timezone: true } }): Promise<SeedUserRow | null>;
     update(args: { where: { id: string }; data: { currentStreakDays: number; longestStreakDays: number; lastStreakDate: Date }; select: { id: true } }): Promise<unknown>;
   };
   /** La détection même du job : pose la ligne de base sur la situation d'avant le seed. */
@@ -86,13 +94,13 @@ export type PhotoSeedDeps = {
 export type PhotoSeedResult = 'seeded' | 'already-reached' | 'unknown-account';
 
 export async function seedFlameStep(deps: PhotoSeedDeps, input: { readonly userId: string; readonly flameDays: number; readonly now: Date }): Promise<PhotoSeedResult> {
-  const row = await deps.users.findUnique({ where: { id: input.userId }, select: { isActive: true, deletedAt: true, longestStreakDays: true } });
+  const row = await deps.users.findUnique({ where: { id: input.userId }, select: { isActive: true, deletedAt: true, longestStreakDays: true, timezone: true } });
   if (row === null || row.isActive === false || row.deletedAt != null) return 'unknown-account';
   if ((row.longestStreakDays ?? 0) >= input.flameDays) return 'already-reached';
   await deps.detect(input.userId, input.now);
   await deps.users.update({
     where: { id: input.userId },
-    data: { currentStreakDays: input.flameDays, longestStreakDays: input.flameDays, lastStreakDate: input.now },
+    data: { currentStreakDays: input.flameDays, longestStreakDays: input.flameDays, lastStreakDate: markerOfDayKey(dayKeyOf(input.now, row.timezone)) },
     select: { id: true },
   });
   await deps.marks.mark(input.userId);

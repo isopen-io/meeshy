@@ -64,14 +64,15 @@ describe('les arguments : un compte et un seuil de Flamme photographiable', () =
   });
 });
 
-type UserRow = { readonly isActive: boolean; readonly deletedAt: Date | null; readonly longestStreakDays: number | null };
+type UserRow = { readonly isActive: boolean; readonly deletedAt: Date | null; readonly longestStreakDays: number | null; readonly timezone?: string | null };
 
 const harness = (row: UserRow | null) => {
   const calls: string[] = [];
   const updates: Array<Record<string, unknown>> = [];
+  const selects: Array<Record<string, unknown>> = [];
   const deps: PhotoSeedDeps = {
     users: {
-      findUnique: async () => row,
+      findUnique: async (args) => (selects.push(args.select), row === null ? null : { timezone: null, ...row }),
       update: async (args) => {
         calls.push('update');
         updates.push(args.data);
@@ -87,7 +88,7 @@ const harness = (row: UserRow | null) => {
       },
     },
   };
-  return { deps, calls, updates };
+  return { deps, calls, updates, selects };
 };
 
 describe('amener le compte à l’étape de Flamme', () => {
@@ -95,7 +96,14 @@ describe('amener le compte à l’étape de Flamme', () => {
     const h = harness({ isActive: true, deletedAt: null, longestStreakDays: 0 });
     expect(await seedFlameStep(h.deps, { userId: USER, flameDays: 30, now: NOW })).toBe('seeded');
     expect(h.calls).toEqual(['detect', 'update', 'mark']);
-    expect(h.updates).toEqual([{ currentStreakDays: 30, longestStreakDays: 30, lastStreakDate: NOW }]);
+    expect(h.updates).toEqual([{ currentStreakDays: 30, longestStreakDays: 30, lastStreakDate: new Date('2026-10-25T00:00:00.000Z') }]);
+  });
+
+  it('le dernier jour actif est le jour LOCAL du compte, au marqueur que le jeu écrit (minuit UTC de sa clé)', async () => {
+    const h = harness({ isActive: true, deletedAt: null, longestStreakDays: 0, timezone: 'America/Los_Angeles' });
+    expect(await seedFlameStep(h.deps, { userId: USER, flameDays: 7, now: NOW })).toBe('seeded');
+    expect(h.updates).toEqual([{ currentStreakDays: 7, longestStreakDays: 7, lastStreakDate: new Date('2026-10-24T00:00:00.000Z') }]);
+    expect(h.selects).toEqual([expect.objectContaining({ timezone: true })]);
   });
 
   it('une Flamme déjà au-delà du seuil : rien n’est écrit — l’étape est déjà franchie', async () => {
