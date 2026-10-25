@@ -382,7 +382,12 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         }
     }
 
-    static func registerNotificationCategories(bundle: Bundle = InterfaceLanguageResolver.bundle()) {
+    /// `register` reçoit le jeu COMPLET des catégories : c'est lui que le
+    /// système connaît, et lui qu'un témoin éprouve (#12655).
+    static func registerNotificationCategories(
+        bundle: Bundle = InterfaceLanguageResolver.bundle(),
+        register: (Set<UNNotificationCategory>) -> Void = { UNUserNotificationCenter.current().setNotificationCategories($0) }
+    ) {
         let replyAction = UNTextInputNotificationAction(
             identifier: MeeshyNotificationAction.reply.rawValue,
             title: String(localized: "notifications.action.reply", defaultValue: "Répondre", bundle: bundle),
@@ -507,15 +512,9 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             options: [.customDismissAction]
         )
 
-        UNUserNotificationCenter.current().setNotificationCategories(Set([
-            messageCategory,
-            mentionCategory,
-            friendRequestCategory,
-            socialCategory,
-            socialCommentableCategory,
-            callIncomingCategory,
-            callMissedCategory,
-            legacyCallCategory
+        register(Set([
+            messageCategory, mentionCategory, friendRequestCategory, socialCategory, socialCommentableCategory,
+            callIncomingCategory, callMissedCategory, legacyCallCategory, LockedConversationNotificationCategory.category,
         ] + NotificationDetailCategories.categories(reply: replyAction, markRead: markReadAction, bundle: bundle)))
     }
 
@@ -654,6 +653,9 @@ enum MeeshyNotificationCategory: String {
     /// #7455 — un message éphémère : la notification DÉPLOYÉE montre son
     /// décompte vivant (`MeeshyNotificationContentExtension`).
     case ephemeral = "MEESHY_EPHEMERAL"
+    /// #12655 — une conversation verrouillée par PIN : aucune action rapide
+    /// (`NSEAttachmentPolicy.lockedConversationCategory`).
+    case lockedConversation = "MEESHY_LOCKED_CONVERSATION"
 }
 
 enum MeeshyNotificationAction: String {

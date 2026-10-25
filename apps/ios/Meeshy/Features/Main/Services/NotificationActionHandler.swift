@@ -94,6 +94,11 @@ final class NotificationActionHandler: NotificationActionHandling {
     private let openNotification: @MainActor ([AnyHashable: Any]) -> Void
     private let dialCallBack: @MainActor (CallBackRequest) -> Void
     private let localMarkRead: @MainActor (String) -> Void
+    /// #12655 — la conversation PEUT-elle être verrouillée par PIN sur cet
+    /// appareil ? Oui tant que la liste des verrous n'est pas lue (fail-closed).
+    private let conversationLocks: any ConversationLockProbing
+    /// #12655 — une réponse refusée sous PIN le dit, hors de l'app.
+    private let notifyRefusedReply: @MainActor (String?) -> Void
     /// L'unique consommation du SDK, injectée pour que les tests l'observent :
     /// `NotificationToastManager` est un singleton `@MainActor` sans couture de
     /// service, et un témoin ne peut pas mesurer un aller-retour REST réel.
@@ -197,6 +202,10 @@ final class NotificationActionHandler: NotificationActionHandling {
         openDeepLink: @escaping @MainActor (URL) -> Void = { _ = DeepLinkRouter.shared.handle(url: $0) },
         presentNewContact: @escaping @MainActor (NotificationContactCard) -> Void = {
             NotificationContactPresenter.present($0)
+        },
+        conversationLocks: any ConversationLockProbing = ConversationLockManager.shared,
+        notifyRefusedReply: @escaping @MainActor (String?) -> Void = {
+            NotificationReplyFailure.postRefusedUnderConversationPin(conversationId: $0)
         }
     ) {
         self.messageService = messageService
@@ -224,6 +233,8 @@ final class NotificationActionHandler: NotificationActionHandling {
         self.openExternalURL = openExternalURL
         self.openDeepLink = openDeepLink
         self.presentNewContact = presentNewContact
+        self.conversationLocks = conversationLocks
+        self.notifyRefusedReply = notifyRefusedReply
     }
 
     // MARK: - Révocation (features 4/5)
@@ -317,6 +328,7 @@ final class NotificationActionHandler: NotificationActionHandling {
         applyAuthToken(authTokenProvider())
 
         let payload = NotificationPayload(userInfo: userInfo)
+        guard !refusesUnderConversationPin(actionIdentifier, payload: payload, userInfo: userInfo) else { return }
 
         switch actionIdentifier {
         case UNNotificationDefaultActionIdentifier:
@@ -377,6 +389,43 @@ final class NotificationActionHandler: NotificationActionHandling {
             openNotification(userInfo)
             await consumeTapped(payload)
         }
+    }
+
+    // MARK: - Conversation verrouillée par PIN (#12655)
+
+    /// Les gestes qu'une conversation sous PIN refuse depuis l'écran
+    /// verrouillé : ceux qui ÉCRIVENT dans la conversation (répondre, marquer
+    /// lu) et ceux qui AGISSENT sur son contenu (suivre l'invitation, ajouter
+    /// le contact, ouvrir la position dans Plans).
+    static let pinGuardedActions: Set<String> = [
+        MeeshyNotificationAction.reply.rawValue,
+        MeeshyNotificationAction.markRead.rawValue,
+        MeeshyNotificationAction.joinInvite.rawValue,
+        MeeshyNotificationAction.addContact.rawValue,
+        MeeshyNotificationAction.openInMaps.rawValue,
+    ]
+
+    /// Défense en profondeur derrière la catégorie sans action de l'extension :
+    /// une bannière livrée avant le verrou, ou catégorisée par la passerelle
+    /// quand l'extension n'a pas tourné (tuée, hors budget), porte encore ses
+    /// gestes. Sur une conversation verrouillée (ou une charge scellée), rien
+    /// ne part, rien n'est marqué lu, aucun lien n'est suivi : l'app s'ouvre
+    /// sur la conversation, que la porte du routeur garde par le PIN. Une
+    /// réponse, exécutée en arrière-plan, le dit par une notification locale.
+    private func refusesUnderConversationPin(
+        _ actionIdentifier: String,
+        payload: NotificationPayload,
+        userInfo: [AnyHashable: Any]
+    ) -> Bool {
+        guard Self.pinGuardedActions.contains(actionIdentifier) else { return false }
+        let locked = payload.conversationId.map { conversationLocks.mayBeLocked($0) } ?? false
+        guard locked || NSEAttachmentPolicy.isSealedForLockedConversation(userInfo) else { return false }
+        logger.info("notification action refused: conversation locked by PIN")
+        if actionIdentifier == MeeshyNotificationAction.reply.rawValue {
+            notifyRefusedReply(payload.conversationId)
+        }
+        openNotification(userInfo)
+        return true
     }
 
     // MARK: - Détail d'un message (#8858)

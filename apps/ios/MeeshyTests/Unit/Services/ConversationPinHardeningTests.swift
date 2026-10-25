@@ -331,15 +331,23 @@ final class InMemoryConversationLockVault: ConversationLockVault {
     nonisolated deinit {}
 
     private(set) var items: [String: String]
+    /// `false` : le coffre ne se laisse pas énumérer (trousseau avant le
+    /// premier déverrouillage), comme `accounts()` le rend en production.
+    var enumerable = true
 
     init(items: [String: String] = [:]) {
         self.items = items
+    }
+
+    func accounts() -> [String]? {
+        enumerable ? Array(items.keys) : nil
     }
 
     func read(_ key: String) -> String? {
         items[key]
     }
 
+    @discardableResult
     func write(_ value: String, for key: String) -> Bool {
         items[key] = value
         return true

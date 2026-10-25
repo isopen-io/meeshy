@@ -7,6 +7,13 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		EDB157E1BD8055EB7751C754 /* DeliveredBannerRemovalTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEC29252CC4BCA6DC63A4DF6 /* DeliveredBannerRemovalTests.swift */; };
+		787A7655D111E71A8267621E /* NSELockedConversationMirror.swift in Sources */ = {isa = PBXBuildFile; fileRef = C43F309E8E0E3EAB55361CE8 /* NSELockedConversationMirror.swift */; };
+		704D9AB5D9F73B18C336836E /* LockedConversationNotificationCategory.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5DD5AF2B874394AD0758F70 /* LockedConversationNotificationCategory.swift */; };
+		4C85F564DEFDE2D613AEFDFD /* NSELockedConversationMirror.swift in Sources */ = {isa = PBXBuildFile; fileRef = C43F309E8E0E3EAB55361CE8 /* NSELockedConversationMirror.swift */; };
+		37DD38B991635ECEC6A1D658 /* NSELockedConversationMirrorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 449FD9CAF59ACDED93018B2B /* NSELockedConversationMirrorTests.swift */; };
+		2B9627261EA871069BFBE909 /* NotificationActionLockedConversationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6FA23061A3B2986A41ABDA78 /* NotificationActionLockedConversationTests.swift */; };
+		1E7101730392E91FDE4226A0 /* NSELockedConversationMirror.swift in Sources */ = {isa = PBXBuildFile; fileRef = C43F309E8E0E3EAB55361CE8 /* NSELockedConversationMirror.swift */; };
 		DADEC26230D748BBBFA5C76C /* ThreadVisitState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8528360A4E0B2D4476473ADA /* ThreadVisitState.swift */; };
 		9E4B122F09F7966580888C05 /* EndToEndThreadClear.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71880AE6F69C82CC3CA6A56A /* EndToEndThreadClear.swift */; };
 		D69A62D8CE146A4B83899B3B /* EndToEndThreadDisplayTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE2BCFEA1A56F3A5B109233A /* EndToEndThreadDisplayTests.swift */; };
@@ -4108,6 +4115,11 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		D5DD5AF2B874394AD0758F70 /* LockedConversationNotificationCategory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LockedConversationNotificationCategory.swift; sourceTree = "<group>"; };
+		CEC29252CC4BCA6DC63A4DF6 /* DeliveredBannerRemovalTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeliveredBannerRemovalTests.swift; sourceTree = "<group>"; };
+		C43F309E8E0E3EAB55361CE8 /* NSELockedConversationMirror.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSELockedConversationMirror.swift; sourceTree = "<group>"; };
+		6FA23061A3B2986A41ABDA78 /* NotificationActionLockedConversationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationActionLockedConversationTests.swift; sourceTree = "<group>"; };
+		449FD9CAF59ACDED93018B2B /* NSELockedConversationMirrorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSELockedConversationMirrorTests.swift; sourceTree = "<group>"; };
 		8528360A4E0B2D4476473ADA /* ThreadVisitState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThreadVisitState.swift; sourceTree = "<group>"; };
 		71880AE6F69C82CC3CA6A56A /* EndToEndThreadClear.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EndToEndThreadClear.swift; sourceTree = "<group>"; };
 		CE2BCFEA1A56F3A5B109233A /* EndToEndThreadDisplayTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EndToEndThreadDisplayTests.swift; sourceTree = "<group>"; };
@@ -9484,6 +9496,7 @@
 				681EED810676555E5D63EA74 /* PickedMediaIngestionGuardTests.swift */,
 				0173CDDEC0093EC4FC3A26F9 /* StoryVideoUploadFileTests.swift */,
 				09F6185882D15B12B02D0B81 /* VideoEngineSessionReleaseOffMainGuardTests.swift */,
+				449FD9CAF59ACDED93018B2B /* NSELockedConversationMirrorTests.swift */,
 			);
 			path = Media;
 			sourceTree = "<group>";
@@ -10189,6 +10202,8 @@
 				FEF38E3D047682661CD7F272 /* WidgetPresenceContractTests.swift */,
 				B26746C8D05D72EDC0D3942B /* XcodeCloudBuildNumberGuardTests.swift */,
 				1C572E7AC204BD30C9671215 /* CallFrames */,
+				CEC29252CC4BCA6DC63A4DF6 /* DeliveredBannerRemovalTests.swift */,
+				6FA23061A3B2986A41ABDA78 /* NotificationActionLockedConversationTests.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -11825,6 +11840,7 @@
 				9C4BBFCD11FC212DDF6EAA5D /* NSEMessagePrePersister.swift */,
 				E7A39C6068F33E49A5E85D7E /* NSEPreferencesGate.swift */,
 				2362B04A9F32D673D1D15679 /* NSETrustedOrigin.swift */,
+				C43F309E8E0E3EAB55361CE8 /* NSELockedConversationMirror.swift */,
 			);
 			path = MeeshyNotificationExtension;
 			sourceTree = "<group>";
@@ -12407,6 +12423,7 @@
 				566F0C9C5403E04DF7ECBBB2 /* ScreenShare */,
 				835A0CA915EA10296D15D6D7 /* Shaders */,
 				536A4386C95B0CEAD73C0E83 /* WebRTC */,
+				D5DD5AF2B874394AD0758F70 /* LockedConversationNotificationCategory.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -13679,6 +13696,7 @@
 				A0FA688FBDD21A9371192420 /* NotificationService+Detail.swift in Sources */,
 				8BF9BC710833156A62F29EB2 /* NotificationService+Enrichment.swift in Sources */,
 				FD182119EC3BFA56CAC2E259 /* NotificationService.swift in Sources */,
+				1E7101730392E91FDE4226A0 /* NSELockedConversationMirror.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -15795,6 +15813,8 @@
 				D80C5E90A3DEBBFBEF2F263F /* iPadRootView+Panels.swift in Sources */,
 				093FD15F134FB6E4505E3522 /* iPadRootView.swift in Sources */,
 				8D53525079B5BFB90D7BD960 /* iPadRootViewLayers.swift in Sources */,
+				704D9AB5D9F73B18C336836E /* LockedConversationNotificationCategory.swift in Sources */,
+				4C85F564DEFDE2D613AEFDFD /* NSELockedConversationMirror.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -17582,6 +17602,10 @@
 				3F895E2432174155DA3C8FD2 /* iPadDetailColumnCoherenceTests.swift in Sources */,
 				B91F955A597C93347D104202 /* iPadRightPanelNavigationGuardTests.swift in Sources */,
 				FEE768A6D398A3EBEF1A8948 /* iPadRootViewPerfRerenderTests.swift in Sources */,
+				EDB157E1BD8055EB7751C754 /* DeliveredBannerRemovalTests.swift in Sources */,
+				787A7655D111E71A8267621E /* NSELockedConversationMirror.swift in Sources */,
+				37DD38B991635ECEC6A1D658 /* NSELockedConversationMirrorTests.swift in Sources */,
+				2B9627261EA871069BFBE909 /* NotificationActionLockedConversationTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

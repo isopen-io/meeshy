@@ -4,6 +4,7 @@ import CommonCrypto
 import CryptoKit
 import LocalAuthentication
 import Security
+import UIKit
 import MeeshySDK
 
 /// Où vivent les empreintes des PIN, vu comme trois fonctions : un double en
@@ -37,6 +38,18 @@ protocol ConversationLockGating: AnyObject {
     func admitsOpening(_ conversationId: String) -> Bool
 }
 
+// MARK: - La question des gestes de notification (#12655)
+
+/// La SEULE question qu'un geste de notification (Répondre, Marquer comme lu,
+/// Rejoindre, Ajouter le contact, Ouvrir dans Plans) pose au verrou :
+/// `mayBeLocked`, fail-closed tant que la liste des verrous n'est pas lue.
+/// `isLocked` n'y est pas : un geste ne peut pas lire une liste vide comme
+/// « aucun verrou ».
+@MainActor
+protocol ConversationLockProbing: AnyObject {
+    func mayBeLocked(_ conversationId: String) -> Bool
+}
+
 // MARK: - Le coffre
 
 /// Où vivent les codes, leurs compteurs d'échecs et l'état d'enrôlement
@@ -47,6 +60,10 @@ protocol ConversationLockVault {
     @discardableResult
     func write(_ value: String, for key: String) -> Bool
     func delete(_ key: String)
+    /// Les comptes que le coffre tient ; `nil` quand il ne se laisse pas
+    /// énumérer (trousseau avant le premier déverrouillage) : « aucun compte »
+    /// et « illisible » ne se confondent pas.
+    func accounts() -> [String]?
 }
 
 struct KeychainConversationLockVault: ConversationLockVault {
@@ -91,6 +108,20 @@ struct KeychainConversationLockVault: ConversationLockVault {
         ]
         SecItemDelete(query as CFDictionary)
     }
+
+    func accounts() -> [String]? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecReturnAttributes as String: true,
+            kSecMatchLimit as String: kSecMatchLimitAll
+        ]
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        guard status != errSecItemNotFound else { return [] }
+        guard status == errSecSuccess, let items = result as? [[String: Any]] else { return nil }
+        return items.compactMap { $0[kSecAttrAccount as String] as? String }
+    }
 }
 
 /// Un coffre bâti sur trois fonctions : les tests de lecture paresseuse
@@ -104,6 +135,9 @@ struct SecretsConversationLockVault: ConversationLockVault {
     func write(_ value: String, for key: String) -> Bool { secrets.save(key, value) }
 
     func delete(_ key: String) { secrets.delete(key) }
+
+    /// Trois fonctions ne s'énumèrent pas : le coffre ne dit rien.
+    func accounts() -> [String]? { nil }
 }
 
 // MARK: - Le code dérivé (#11388)
@@ -353,7 +387,7 @@ struct DeviceBiometricUnlocker: BiometricUnlocking {
 // MARK: - Le gestionnaire
 
 @MainActor
-final class ConversationLockManager: ObservableObject, ConversationLockGating {
+final class ConversationLockManager: ObservableObject, ConversationLockGating, ConversationLockProbing {
     // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
     // défaut) → double-free `pointer being freed was not allocated` (abrt)
     // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
@@ -361,6 +395,11 @@ final class ConversationLockManager: ObservableObject, ConversationLockGating {
     nonisolated deinit {}
     static let shared = ConversationLockManager(
         contentLockMirror: UserDefaults(suiteName: UserPreferencesManager.appGroupSuiteName),
+        contentLockMirrorFile: NSELockedConversationMirror.fileURL(
+            inContainer: FileManager.default.containerURL(
+                forSecurityApplicationGroupIdentifier: UserPreferencesManager.appGroupSuiteName
+            )
+        ),
         purgeDeliveredBanners: { conversationId in
             NotificationActionHandler.removeDeliveredBanners(forThreadOf: .conversation(id: conversationId))
         }
@@ -381,12 +420,27 @@ final class ConversationLockManager: ObservableObject, ConversationLockGating {
     /// #11387 — le jeu COMPLET des conversations verrouillées, miroité dans
     /// l'App Group pour l'extension de notification (le cliché de la liste
     /// n'en couvre que les pages chargées). `nil` : aucun miroir (tests).
+    /// La clé `UserDefaults` est le renfort des versions antérieures ; le
+    /// FICHIER est ce que l'extension lit d'abord (#12655).
     private let contentLockMirror: UserDefaults?
+    private let contentLockMirrorFile: URL?
     /// #11387 — verrouiller retire du Centre de notifications les bannières
     /// DÉJÀ délivrées de la conversation : elles montraient son contenu.
     private let purgeDeliveredBanners: @MainActor (String) -> Void
+    /// #12655 — `.standard` ne se lit pas tant que les données protégées sont
+    /// indisponibles (lancement en arrière-plan avant le premier déverrouillage,
+    /// ou appareil verrouillé) : une liste lue alors est VIDE sans le dire.
+    private let isProtectedDataAvailable: @MainActor () -> Bool
+    /// La liste persistée a-t-elle été lue, données protégées disponibles ?
+    /// Tant que non, rien ne la réécrit.
+    private var hasLoadedLockedIds = false
+    /// La liste en mémoire vient-elle d'une LECTURE (liste persistée ou
+    /// miroir) ? Tant que non, toute conversation peut être sous PIN.
+    private var knowsLockedIds = false
 
     private let masterPinKey = "meeshy_master_pin"
+    private let lockKeyPrefix = "meeshy_lock_"
+    private let throttleSuffix = ".attempts"
     private let biometricStateKey = "meeshy_lock_biometric_state"
     private let lockedIdsDefaultsKey = "meeshy.lockedConversationIds"
 
@@ -400,7 +454,10 @@ final class ConversationLockManager: ObservableObject, ConversationLockGating {
         iterations: Int = ConversationPinCredential.defaultIterations,
         now: @escaping () -> Date = { Date() },
         contentLockMirror: UserDefaults? = nil,
-        purgeDeliveredBanners: @escaping @MainActor (String) -> Void = { _ in }
+        contentLockMirrorFile: URL? = nil,
+        purgeDeliveredBanners: @escaping @MainActor (String) -> Void = { _ in },
+        isProtectedDataAvailable: @escaping @MainActor () -> Bool = { UIApplication.shared.isProtectedDataAvailable },
+        notificationCenter: NotificationCenter = .default
     ) {
         self.vault = vault
         self.defaults = defaults
@@ -408,8 +465,11 @@ final class ConversationLockManager: ObservableObject, ConversationLockGating {
         self.iterations = iterations
         self.now = now
         self.contentLockMirror = contentLockMirror
+        self.contentLockMirrorFile = contentLockMirrorFile
         self.purgeDeliveredBanners = purgeDeliveredBanners
+        self.isProtectedDataAvailable = isProtectedDataAvailable
         loadLockedIds()
+        wireProtectedDataReload(notificationCenter)
         wireAuthLogoutHook()
     }
 
@@ -443,6 +503,25 @@ final class ConversationLockManager: ObservableObject, ConversationLockGating {
     private func noteBiometricUnlock(_ enabled: Bool) {
         objectWillChange.send()
         knownBiometricUnlock = enabled
+    }
+
+    /// La liste se relit dès que les données protégées le deviennent : un
+    /// processus lancé en arrière-plan avant le premier déverrouillage (PushKit,
+    /// VoIP) n'avait lu qu'une liste vide. Restée inconnue, elle se relit
+    /// aussi à chaque retour au premier plan.
+    private func wireProtectedDataReload(_ notificationCenter: NotificationCenter) {
+        Publishers.Merge(
+            notificationCenter.publisher(for: UIApplication.protectedDataDidBecomeAvailableNotification),
+            notificationCenter.publisher(for: UIApplication.didBecomeActiveNotification)
+        )
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.loadLockedIdsIfNeeded() }
+            .store(in: &cancellables)
+    }
+
+    private func loadLockedIdsIfNeeded() {
+        guard !hasLoadedLockedIds else { return }
+        loadLockedIds()
     }
 
     /// P7-11 — pattern calqué sur `FeedbackToastManager.wireAuthLogoutHook` :
@@ -504,8 +583,23 @@ final class ConversationLockManager: ObservableObject, ConversationLockGating {
 
     // MARK: - Per-conversation PIN (4 digits)
 
+    /// La conversation est-elle sous PIN ? La liste LUE fait foi. Tant
+    /// qu'elle est inconnue (#12655), le code que le trousseau tient pour la
+    /// conversation la verrouille aussi : la rangée, l'aperçu, le balayage,
+    /// l'ouverture et la porte du routeur ne traitent jamais en ouverte une
+    /// conversation dont le PIN existe.
     func isLocked(_ conversationId: String) -> Bool {
         lockedConversationIds.contains(conversationId)
+            || (!knowsLockedIds && vault.read(lockKey(conversationId)) != nil)
+    }
+
+    /// **La conversation PEUT-elle être sous PIN ?** (#12655) Avant que la
+    /// liste des verrous soit lue (données protégées indisponibles, miroir
+    /// illisible ou absent), oui, toute conversation : ce qui écrit dans une
+    /// conversation depuis l'écran verrouillé se refuse (fail-closed). Une fois
+    /// lue, seules les conversations de la liste.
+    func mayBeLocked(_ conversationId: String) -> Bool {
+        !knowsLockedIds || isLocked(conversationId)
     }
 
     /// **LA décision « contenu masqué »** (#11387 : le verrou PIN protège le
@@ -522,7 +616,16 @@ final class ConversationLockManager: ObservableObject, ConversationLockGating {
     }
 
     func hidesContent(of conversationId: String) -> Bool {
-        Self.hidesContent(of: conversationId, lockedConversationIds: lockedConversationIds)
+        isLocked(conversationId)
+    }
+
+    /// Le JEU que lisent les surfaces qui publient hors de l'app (widget) ou
+    /// mettent en cache (préchargement) : la liste lue, et tant qu'elle est
+    /// inconnue, les conversations dont le trousseau tient le code — même
+    /// règle que `isLocked`.
+    var contentLockedConversationIds: Set<String> {
+        guard !knowsLockedIds, let inVault = lockedIdsInVault() else { return lockedConversationIds }
+        return lockedConversationIds.union(inVault)
     }
 
     func setLock(conversationId: String, pin: String) {
@@ -556,7 +659,7 @@ final class ConversationLockManager: ObservableObject, ConversationLockGating {
         lockedConversationIds.forEach { erase(lockKey($0)) }
         openingPasses.removeAll()
         lockedConversationIds.removeAll()
-        saveLockedIds()
+        saveLockedIds(wipingAll: true)
     }
 
     // MARK: - La porte (#11386)
@@ -612,11 +715,24 @@ final class ConversationLockManager: ObservableObject, ConversationLockGating {
     // MARK: - Private helpers
 
     private func lockKey(_ conversationId: String) -> String {
-        "meeshy_lock_\(conversationId)"
+        lockKeyPrefix + conversationId
     }
 
     private func throttleKey(_ key: String) -> String {
-        "\(key).attempts"
+        key + throttleSuffix
+    }
+
+    /// Les conversations dont le coffre tient un code — ni le compte
+    /// biométrique, ni les compteurs d'échecs ; `nil` quand il ne s'énumère pas.
+    private func lockedIdsInVault() -> Set<String>? {
+        vault.accounts().map { accounts -> Set<String> in
+            Set(accounts.compactMap { (account: String) -> String? in
+                guard account.hasPrefix(lockKeyPrefix), account != biometricStateKey,
+                      !account.hasSuffix(throttleSuffix) else { return nil }
+                let conversationId = String(account.dropFirst(lockKeyPrefix.count))
+                return conversationId.isEmpty ? nil : conversationId
+            })
+        }
     }
 
     private func attempt(_ pin: String, against key: String) -> PinAttemptOutcome {
@@ -667,18 +783,78 @@ final class ConversationLockManager: ObservableObject, ConversationLockGating {
 
     // MARK: - Persistence
 
-    private func saveLockedIds() {
+    /// Une liste qui n'a pas été LUE (données protégées indisponibles) ne se
+    /// réécrit pas : elle effacerait les verrous qu'elle ignore. La
+    /// déconnexion, qui lève tous les verrous, est une intention, pas une
+    /// lecture : elle s'écrit toujours.
+    private func saveLockedIds(wipingAll: Bool = false) {
+        defer { NotificationCenter.default.post(name: .conversationContentLocksDidChange, object: nil) }
+        guard hasLoadedLockedIds || wipingAll else { return }
+        hasLoadedLockedIds = true
+        knowsLockedIds = true
         defaults.set(Array(lockedConversationIds), forKey: lockedIdsDefaultsKey)
-        NSEAttachmentPolicy.mirrorLockedConversationIds(lockedConversationIds, into: contentLockMirror)
-        NotificationCenter.default.post(name: .conversationContentLocksDidChange, object: nil)
+        mirrorLockedIds()
     }
 
     /// Le miroir se réécrit aussi au lancement : un verrou posé avant que le
     /// miroir existe (mise à jour de l'app) rejoint l'extension sans attendre
-    /// le prochain changement.
+    /// le prochain changement. Données protégées indisponibles : ni lecture
+    /// de `.standard`, ni écriture du miroir — la liste en mémoire reprend le
+    /// miroir s'il se lit, sans rien persister.
+    ///
+    /// Une liste écrite l'est toujours, vide comprise : une clé ABSENTE de
+    /// `.standard` ne dit donc pas « aucun verrou » mais « jamais écrite » ou
+    /// « illisible » (`CFPreferences` sert encore le domaine vide d'avant le
+    /// premier déverrouillage). Le miroir fait alors foi et ne se réécrit pas.
+    ///
+    /// Sans miroir non plus (mise à jour depuis une version qui ne l'écrivait
+    /// pas, ou première installation), le TROUSSEAU tranche : `setLock` y écrit
+    /// le code avant que la conversation entre dans la liste, donc ses comptes
+    /// `meeshy_lock_*` reconstruisent la liste — vide seulement s'il n'en tient
+    /// aucun. Un trousseau qui ne s'énumère pas laisse la liste inconnue, sans
+    /// rien écrire ; le retour au premier plan la relit.
     private func loadLockedIds() {
-        let ids = defaults.stringArray(forKey: lockedIdsDefaultsKey) ?? []
-        lockedConversationIds = Set(ids)
-        NSEAttachmentPolicy.mirrorLockedConversationIds(lockedConversationIds, into: contentLockMirror)
+        let mirrored = mirroredLockedIds()
+        guard isProtectedDataAvailable() else {
+            if let mirrored { adopt(mirrored, persisting: false) }
+            return
+        }
+        if let stored = defaults.stringArray(forKey: lockedIdsDefaultsKey) {
+            adopt(Set(stored), persisting: true)
+            mirrorLockedIds()
+            return
+        }
+        if let mirrored {
+            adopt(mirrored, persisting: true)
+            return
+        }
+        guard NSELockedConversationMirror.readFile(at: contentLockMirrorFile) == .absent,
+              let inVault = lockedIdsInVault() else { return }
+        adopt(inVault, persisting: true)
+        mirrorLockedIds()
+    }
+
+    /// Une liste LUE : la mémoire la connaît ; `persisting` dit si elle a
+    /// aussi le droit d'être réécrite.
+    private func adopt(_ ids: Set<String>, persisting: Bool) {
+        lockedConversationIds = ids
+        knowsLockedIds = true
+        if persisting { hasLoadedLockedIds = true }
+    }
+
+    /// Ce que le miroir DIT des verrous — le fichier, et la clé de renfort qui
+    /// ne peut qu'en ajouter ; `nil` quand ni l'un ni l'autre ne se lit.
+    private func mirroredLockedIds() -> Set<String>? {
+        let legacy = contentLockMirror?.stringArray(forKey: NSELockedConversationMirror.legacyDefaultsKey)
+        guard case .ids(let fromFile) = NSELockedConversationMirror.readFile(at: contentLockMirrorFile) else {
+            return legacy.map(Set.init)
+        }
+        return Set(fromFile).union(legacy ?? [])
+    }
+
+    private func mirrorLockedIds() {
+        NSELockedConversationMirror.mirror(
+            lockedConversationIds, toFile: contentLockMirrorFile, defaults: contentLockMirror
+        )
     }
 }

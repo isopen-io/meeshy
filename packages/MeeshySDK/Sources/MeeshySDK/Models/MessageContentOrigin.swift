@@ -40,14 +40,15 @@ public enum MessageContentOrigin: Sendable, Equatable {
     }
 
     /// Cette provenance couvre-t-elle CE texte, pour CE message, sur CET
-    /// appareil ? `.wire` ne couvre jamais rien.
+    /// appareil ? `.wire` ne couvre jamais rien, et ne lit donc pas le
+    /// trousseau : la clé ne s'évalue qu'après le genre (#12721).
     public func vouches(for content: String, messageId: String) -> Bool {
         vouches(for: content, messageId: messageId, key: ContentOriginDeviceKey.current)
     }
 
-    func vouches(for content: String, messageId: String, key: Data) -> Bool {
+    func vouches(for content: String, messageId: String, key: @autoclosure () -> Data) -> Bool {
         guard case .decryptedOnDevice(let digest) = self else { return false }
-        return Self.constantTimeEquals(digest, Self.digest(of: content, messageId: messageId, key: key))
+        return Self.constantTimeEquals(digest, Self.digest(of: content, messageId: messageId, key: key()))
     }
 
     private static let domain = Data("meeshy.message.contentOrigin.v2".utf8)
