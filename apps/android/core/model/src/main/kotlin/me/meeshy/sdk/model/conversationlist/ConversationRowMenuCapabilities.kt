@@ -28,7 +28,20 @@ data class ConversationRowMenuCapabilities(
     val removal: Removal?,
     /** « Archiver » / « Désarchiver » : absent quand la passerelle IMPOSE l'archive (Global d'un mineur). */
     val canToggleArchive: Boolean,
+    /**
+     * « Gérer les membres » (#12865, miroir de #12631) : modérateur ou plus d'un groupe, d'une
+     * conversation publique, d'une chaîne ou de Global encore ouverts ; jamais un direct. Le rôle
+     * de plateforme privilégié vaut créateur une fois DANS (#11217).
+     */
+    val manageMembers: Boolean,
 ) {
+
+    /**
+     * L'entrée de la rangée : la loi, et une conversation qui n'est pas sous code. iOS ouvre la
+     * fiche derrière la porte du verrou ; Android ne sait pas encore faire passer une autre action
+     * que l'ouverture par cette porte, donc il ne propose rien sur une rangée scellée.
+     */
+    fun offersManageMembers(isLocked: Boolean): Boolean = manageMembers && !isLocked
 
     /** Ce que l'entrée qui retire DIT, pour un geste qui ne masque que pour soi. */
     enum class Removal {
@@ -63,6 +76,7 @@ data class ConversationRowMenuCapabilities(
                 adminOpen = actions.adminOpen,
                 removal = if (!actions.hide) null else if (direct) Removal.DELETE else Removal.HIDE,
                 canToggleArchive = !conversation.isArchiveImposed,
+                manageMembers = actions.manageMembers,
             )
         }
 
