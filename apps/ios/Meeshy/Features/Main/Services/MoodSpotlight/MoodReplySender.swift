@@ -63,7 +63,8 @@ final class MoodReplySender: MoodReplySending {
     }
 
     func sendReply(_ text: String, to entry: StatusEntry) async throws -> String {
-        let conversation = try await DirectConversationResolver.resolve(with: entry.userId, conversations: conversations)
+        let conversation = try await DirectConversationResolver.resolve(with: entry.userId, conversations: conversations,
+                                                                        ledger: destinationGuard.ledger)
         let language = ConversationViewModel.composeLanguage(for: text, preferred: await composingLanguages())
         guard await destinationGuard.seals(conversation.id, served: [conversation.encryptionMode]) else {
             try await sendThroughOutbox(text, language: language, storyId: entry.id, conversationId: conversation.id)

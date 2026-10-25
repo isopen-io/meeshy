@@ -150,6 +150,7 @@ final class NotificationActionHandlerTests: XCTestCase {
         /// Ce que le SEUL chemin réseau d'un commentaire a créé (#9743).
         let comments: CommentPublisherSpy
         let unsentNotices: () -> Int
+        let refusedReplyNotices: () -> Int
         let friendService: MockFriendService
         let queue: MockReplyQueue
         let persistence: MockOptimisticPersistence
@@ -181,6 +182,7 @@ final class NotificationActionHandlerTests: XCTestCase {
         let sessionToken = authToken ?? currentUserId.map { TestSessionToken.make(userId: $0) }
         let comments = CommentPublisherSpy(token: currentUserId.map { TestSessionToken.make(userId: $0) })
         var unsentNotices = 0
+        var refusedReplyNotices = 0
         let friendService = MockFriendService()
         let queue = MockReplyQueue()
         let persistence = MockOptimisticPersistence()
@@ -217,7 +219,8 @@ final class NotificationActionHandlerTests: XCTestCase {
             removeDeliveredForPost: { removedPostBanners.append($0) },
             removeDeliveredForNotificationIds: { revokedIds.append($0) },
             prepareReplyQueue: { preparedReplyQueueCount += 1 },
-            destinationGuard: Self.destinationGuard(remembering: rememberedEndToEnd)
+            destinationGuard: Self.destinationGuard(remembering: rememberedEndToEnd),
+            notifyRefusedEndToEndReply: { refusedReplyNotices += 1 }
         )
 
         return SUTContext(
@@ -227,6 +230,7 @@ final class NotificationActionHandlerTests: XCTestCase {
             postService: postService,
             comments: comments,
             unsentNotices: { unsentNotices },
+            refusedReplyNotices: { refusedReplyNotices },
             friendService: friendService,
             queue: queue,
             persistence: persistence,
@@ -255,11 +259,7 @@ final class NotificationActionHandlerTests: XCTestCase {
     }
 
     private static func destinationGuard(remembering ids: [String]) -> EndToEndDestinationGuard {
-        let ledger = EndToEndRegimeLedger(memory: EndToEndRegimeMemory(defaults: nil))
-        ids.forEach { ledger.learnEndToEnd(for: $0) }
-        return EndToEndDestinationGuard(
-            ledger: ledger, cache: ConversationCacheReader(loadConversations: { .empty }, loadThread: { _ in .empty })
-        )
+        .isolated(remembering: ids)
     }
 
     /// #12641 — une réponse depuis la bannière d'une conversation vue chiffrée
@@ -277,6 +277,7 @@ final class NotificationActionHandlerTests: XCTestCase {
         XCTAssertEqual(ctx.messageService.sendCallCount, 0)
         XCTAssertTrue(ctx.queue.enqueuedItems.isEmpty)
         XCTAssertEqual(ctx.persistence.markFailedCalls.map { $0.reason }, [EndToEndSendRefusal.sealedOnlyInConversation.userMessage])
+        XCTAssertEqual(ctx.refusedReplyNotices(), 1, "audit M4 — le refus se dit, la bannière ne disparaît pas en silence")
     }
 
     // MARK: - (a) Work completes inside handle(), wrapped in a background task
@@ -377,7 +378,8 @@ final class NotificationActionHandlerTests: XCTestCase {
             localMarkRead: { _ in },
             removeDeliveredForConversation: { _ in },
             removeDeliveredForPost: { _ in },
-            prepareReplyQueue: { }
+            prepareReplyQueue: { },
+            destinationGuard: .isolated()
         )
 
         await sut.handle(

@@ -11,9 +11,10 @@ import MeeshySDK
 enum DirectConversationResolver {
     static func resolve(
         with userId: String,
-        conversations: ConversationServiceProviding = ConversationService.shared
+        conversations: ConversationServiceProviding = ConversationService.shared,
+        ledger: EndToEndRegimeLedger = .shared
     ) async throws -> APIConversation {
-        if let existing = try await conversations.findDirectWith(userId: userId) {
+        if let existing = try await existing(with: userId, conversations: conversations, ledger: ledger) {
             return existing
         }
         let created = try await conversations.create(type: "direct", title: nil, participantIds: [userId])
@@ -22,6 +23,18 @@ enum DirectConversationResolver {
 }
 
 extension DirectConversationResolver {
+    /// Le tête-à-tête EXISTANT avec `userId`, rendu par la passerelle : le
+    /// chiffré d'abord — servi tel, ou vu tel par ce compte même servi sans
+    /// mode (#12949, audit #12985 M5) —, sinon le plus récent.
+    static func existing(
+        with userId: String,
+        conversations: ConversationServiceProviding = ConversationService.shared,
+        ledger: EndToEndRegimeLedger = .shared
+    ) async throws -> APIConversation? {
+        let candidates = try await conversations.findDirectsWith(userId: userId)
+        return DirectPairChoice.preferred(among: candidates) { ledger.remembersEndToEnd($0) }
+    }
+
     /// Le tête-à-tête avec `userId` parmi ceux déjà chargés (liste, cache) :
     /// le chiffré de bout en bout d'abord — servi tel, ou vu tel par ce compte
     /// (#12949) —, sinon le plus récemment actif. Deux tête-à-tête avec le même

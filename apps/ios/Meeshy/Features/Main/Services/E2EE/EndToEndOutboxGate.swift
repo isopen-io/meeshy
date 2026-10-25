@@ -26,16 +26,28 @@ struct EndToEndOutboxGate: OutboxDispatching {
     }
 
     func dispatch(_ record: OutboxRecord) async throws {
-        guard record.kind == .sendMessage, let destination = Self.destination(of: record),
+        guard let refusal = Self.refusal(for: record.kind), let destination = Self.destination(of: record),
               await sealsDestination(destination) else {
             return try await inner.dispatch(record)
         }
         Self.logger.warning("E2EE outbox replay refused before transport record=\(record.id, privacy: .public)")
-        let refusal = EndToEndSendRefusal.outboxUnsealable
-        let localId = record.messageLocalId ?? record.clientMessageId
-        let store = await inner.persistence()
-        _ = try? await store.applyEvent(localId: localId, event: .sendFailed(refusal))
+        if record.kind == .sendMessage {
+            let localId = record.messageLocalId ?? record.clientMessageId
+            let store = await inner.persistence()
+            _ = try? await store.applyEvent(localId: localId, event: .sendFailed(refusal))
+        }
         throw refusal
+    }
+
+    /// Ce que la file porterait en clair vers la conversation : un message (la
+    /// bulle reste en échec, le fil le scelle au renvoi) ou une modification
+    /// (audit #12985, M2). Le reste — réactions, accusés — ne porte aucun texte.
+    private static func refusal(for kind: OutboxKind) -> EndToEndSendRefusal? {
+        switch kind {
+        case .sendMessage: .sealedOnlyInConversation
+        case .editMessage: .editUnsealable
+        default: nil
+        }
     }
 
     /// La conversation de la ligne, ou celle de sa charge pour une ligne

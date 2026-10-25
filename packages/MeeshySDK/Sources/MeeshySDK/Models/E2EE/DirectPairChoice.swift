@@ -33,8 +33,11 @@ public enum DirectPairChoice {
 
     /// Les tête-à-tête que la passerelle a rendus pour ce pair, dans son ordre
     /// (le plus récent d'abord).
-    public static func preferred(among served: [APIConversation]) -> APIConversation? {
-        pick(served.filter { $0.type.lowercased() == "direct" }, id: \.id, mode: \.encryptionMode, remembersEndToEnd: { _ in false })
+    public static func preferred(
+        among served: [APIConversation],
+        remembersEndToEnd: (String) -> Bool = { _ in false }
+    ) -> APIConversation? {
+        pick(served.filter { $0.type.lowercased() == "direct" }, id: \.id, mode: \.encryptionMode, remembersEndToEnd: remembersEndToEnd)
     }
 
     private static func pick<C>(

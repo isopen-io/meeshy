@@ -94,6 +94,15 @@ final class EndToEndRegimeLedger {
     /// L'époque du régime chiffré apprise, ou `nil`.
     func epoch(for conversationId: String) -> Int? { epochs[conversationId] }
 
+    /// La mémoire est-elle liée au compte ? Un réveil à froid en arrière-plan
+    /// (réponse depuis une bannière, file vidée par BGAppRefresh) précède la
+    /// liaison de `DependencyContainer` : la mémoire se lie alors au compte
+    /// actif que `account` rend. `false` ⇒ aucun compte connu.
+    func ensureBound(to account: @MainActor () -> String?) -> Bool {
+        if !memory.isBound, let account = account() { memory.bind(account: account) }
+        return memory.isBound
+    }
+
     /// Cet appareil a-t-il vu cette conversation chiffrée de bout en bout ?
     func remembersEndToEnd(_ conversationId: String) -> Bool {
         memory.resolve(conversationId: conversationId, served: .serverReadable).isEndToEnd

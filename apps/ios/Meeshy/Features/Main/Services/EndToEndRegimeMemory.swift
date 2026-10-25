@@ -24,6 +24,9 @@ import os
 nonisolated protocol EndToEndRegimeMemoryProviding: Sendable {
     func resolve(conversationId: String, served: EndToEndRegime) -> EndToEndRegime
     func bind(account: String?)
+    /// Un compte est-il lié ? Sans lui, la mémoire ne relit rien de ce que
+    /// l'appareil a vu (réveil à froid en arrière-plan, #12985).
+    var isBound: Bool { get }
 }
 
 nonisolated final class EndToEndRegimeMemory: EndToEndRegimeMemoryProviding, @unchecked Sendable {
@@ -53,6 +56,8 @@ nonisolated final class EndToEndRegimeMemory: EndToEndRegimeMemoryProviding, @un
         self.defaults = defaults
         self.mirror = mirror
     }
+
+    var isBound: Bool { state.withLock { $0.account != nil } }
 
     func bind(account: String?) {
         state.withLock { current in

@@ -108,6 +108,8 @@ final class NotificationActionHandler: NotificationActionHandling {
     private let presentNewContact: @MainActor (NotificationContactCard) -> Void
     /// La loi du fil appliquée à la conversation de la réponse (#12641, #12985).
     private let destinationGuard: EndToEndDestinationGuard
+    /// Le refus d'une réponse vers une conversation chiffrée se DIT (audit M4).
+    private let notifyRefusedEndToEndReply: @MainActor () -> Void
     private var revocationSubscription: AnyCancellable?
     /// #7453 — l'abonnement au retour au premier plan, qui rejoue le balayage
     /// des bannières éphémères échues. Un nouvel appel REMPLACE l'abonnement :
@@ -200,9 +202,11 @@ final class NotificationActionHandler: NotificationActionHandling {
         presentNewContact: @escaping @MainActor (NotificationContactCard) -> Void = {
             NotificationContactPresenter.present($0)
         },
-        destinationGuard: EndToEndDestinationGuard = EndToEndDestinationGuard()
+        destinationGuard: EndToEndDestinationGuard = EndToEndDestinationGuard(),
+        notifyRefusedEndToEndReply: @escaping @MainActor () -> Void = { NotificationReplyFailure.postEndToEndReplyRefused() }
     ) {
         self.destinationGuard = destinationGuard
+        self.notifyRefusedEndToEndReply = notifyRefusedEndToEndReply
         self.messageService = messageService
         self.conversationService = conversationService
         self.postService = postService
@@ -539,6 +543,7 @@ final class NotificationActionHandler: NotificationActionHandling {
             localId: item.clientMessageId, reason: EndToEndSendRefusal.sealedOnlyInConversation.userMessage
         )
         removeDeliveredForConversation(conversationId)
+        notifyRefusedEndToEndReply()
         return true
     }
 

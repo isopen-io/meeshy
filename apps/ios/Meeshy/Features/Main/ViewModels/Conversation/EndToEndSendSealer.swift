@@ -235,7 +235,8 @@ extension EndToEndSendSealer {
             for: viewModel.conversationId,
             opening: viewModel.encryptionModeAtOpening,
             cached: viewModel.currentConversation?.encryptionMode,
-            activationShownAt: EncryptionSwitchNoticeTrail.endToEndShownAt(in: viewModel.messages)
+            trail: viewModel.messages,
+            isDirect: viewModel.isDirect
         )
         self.init(
             conversationId: viewModel.conversationId,
@@ -267,13 +268,22 @@ extension EndToEndSendSealer {
 /// refuse le chiffré et l'envoi s'arrête dans l'état lisible de #12987.
 enum EncryptionSwitchNoticeTrail {
     /// La première trace du bout en bout dans le fil : un avis d'activation ou
-    /// un message chiffré de bout en bout (`DeviceTranslationEligibility.isEndToEnd`,
-    /// provenance comprise).
+    /// un message chiffré de bout en bout.
     static func endToEndShownAt(in messages: [Message]) -> Date? {
-        let sealedMessages = messages
-            .filter { $0.messageSource != .system && DeviceTranslationEligibility.isEndToEnd($0, conversationEncryptionMode: nil) }
+        [activationShownAt(in: messages), endToEndMessageShownAt(in: messages)].compactMap { $0 }.min()
+    }
+
+    /// Le premier message chiffré DE BOUT EN BOUT affiché : déchiffré sur cet
+    /// appareil, ou annoncé `e2ee`. Ni un message chiffré au repos par le
+    /// serveur (`server`, `hybrid`), ni un message chiffré sans mode : la
+    /// mémoire ne recule pas, et une trace ambiguë verrouillerait la
+    /// conversation pour toujours (audit #12985, B2 ; mesuré le 2026-10-25 :
+    /// aucune en staging ni en production).
+    static func endToEndMessageShownAt(in messages: [Message]) -> Date? {
+        messages
+            .filter { $0.messageSource != .system && ($0.isContentDecryptedOnDevice || EndToEndWireMode.isEndToEnd($0.encryptionMode)) }
             .map(\.createdAt)
-        return (sealedMessages + [activationShownAt(in: messages)].compactMap { $0 }).min()
+            .min()
     }
 
     static func activationShownAt(in messages: [Message]) -> Date? {
@@ -281,6 +291,29 @@ enum EncryptionSwitchNoticeTrail {
             .filter { $0.messageSource == .system && $0.encryptionSwitchNotice?.enablesEndToEnd == true }
             .map(\.createdAt)
             .min()
+    }
+}
+
+/// Le mode `e2ee` annoncé, sans blancs ni casse. Un mode inconnu n'est pas
+/// une PREUVE du bout en bout : il ne fait rien apprendre à la mémoire.
+enum EndToEndWireMode {
+    static func isEndToEnd(_ mode: String?) -> Bool {
+        (mode ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == E2EEWire.mode
+    }
+}
+
+extension EndToEndRegimeLedger {
+    /// Le régime vu par le FIL : ses sources servies, et ce qu'il affiche.
+    /// Un avis d'activation s'apprend partout ; un message chiffré affiché
+    /// s'apprend dans un tête-à-tête, et dans un groupe il scelle sans entrer
+    /// dans la mémoire, qui ne recule jamais (audit #12985, B2) : un groupe
+    /// ne se verrouille pas pour toujours sur une trace.
+    func seals(for conversationId: String, opening: String?, cached: String?, trail: [Message], isDirect: Bool) -> Bool {
+        let activation = EncryptionSwitchNoticeTrail.activationShownAt(in: trail)
+        let sealedMessage = EncryptionSwitchNoticeTrail.endToEndMessageShownAt(in: trail)
+        let learned = isDirect ? [activation, sealedMessage].compactMap { $0 }.min() : activation
+        let seals = self.seals(for: conversationId, opening: opening, cached: cached, activationShownAt: learned)
+        return seals || sealedMessage != nil
     }
 }
 

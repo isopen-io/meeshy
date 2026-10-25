@@ -23,7 +23,9 @@ final class EndToEndOffThreadSendTests: XCTestCase {
     // MARK: - Fixtures
 
     private func ledger(remembering ids: [String] = []) -> EndToEndRegimeLedger {
-        let ledger = EndToEndRegimeLedger(memory: EndToEndRegimeMemory(defaults: nil))
+        let memory = EndToEndRegimeMemory(defaults: nil)
+        memory.bind(account: "gate.staging.meeshy.me/me-1")
+        let ledger = EndToEndRegimeLedger(memory: memory)
         ids.forEach { ledger.learnEndToEnd(for: $0) }
         return ledger
     }
@@ -115,6 +117,57 @@ final class EndToEndOffThreadSendTests: XCTestCase {
         let seals = await guardOf(remembering: [sealed], thread: [message(in: readable)]).seals(readable, served: [nil, "server"])
 
         XCTAssertFalse(seals)
+    }
+
+    /// Audit B1 — réveil à froid en arrière-plan (réponse depuis une bannière,
+    /// file vidée par BGAppRefresh) : la mémoire n'est pas encore liée au
+    /// compte. La garde la lie elle-même ; sans compte connu, elle ferme.
+    func test_guard_coldLaunch_unboundMemory_bindsTheActiveAccount_andSeals() async throws {
+        let suite = "test.e2ee.cold.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let warm = EndToEndRegimeMemory(defaults: defaults)
+        warm.bind(account: "gate.meeshy.me/me-1")
+        _ = warm.resolve(conversationId: sealed, served: EndToEndRegime(encryptionMode: "e2ee", enabledAt: nil))
+        let cold = EndToEndRegimeMemory(defaults: defaults)
+        let empty = ConversationCacheReader(loadConversations: { .empty }, loadThread: { _ in .empty })
+
+        let bound = await EndToEndDestinationGuard(ledger: EndToEndRegimeLedger(memory: cold), cache: empty,
+                                                   account: { "gate.meeshy.me/me-1" }).seals(sealed)
+        let unknown = await EndToEndDestinationGuard(ledger: EndToEndRegimeLedger(memory: EndToEndRegimeMemory(defaults: nil)),
+                                                     cache: empty, account: { nil }).seals(readable)
+
+        XCTAssertTrue(bound, "la mémoire du compte relue au réveil scelle")
+        XCTAssertTrue(unknown, "sans compte connu, la garde ne sait rien : elle ferme")
+    }
+
+    /// Audit B2 — seul un message chiffré DE BOUT EN BOUT compte : un message
+    /// chiffré au repos par le serveur, ou chiffré sans mode, ne verrouille
+    /// jamais une conversation pour toujours.
+    func test_guard_aServerAtRestOrModelessEncryptedMessage_neverLocksTheConversation() async {
+        let atRest = Message(conversationId: readable, senderId: "peer", content: "x", messageSource: .user,
+                             isEncrypted: true, encryptionMode: "server", createdAt: Date())
+        let modeless = Message(conversationId: readable, senderId: "peer", content: "x", messageSource: .user,
+                               isEncrypted: true, encryptionMode: nil, createdAt: Date())
+        let sut = guardOf(thread: [atRest, modeless])
+
+        let seals = await sut.seals(readable, served: [nil])
+
+        XCTAssertFalse(seals)
+        XCTAssertFalse(sut.ledger.remembersEndToEnd(readable))
+    }
+
+    /// Audit B2 — dans un GROUPE, un message chiffré affiché scelle l'envoi
+    /// (rien ne part en clair) sans entrer dans la mémoire, qui ne recule
+    /// jamais : le groupe ne se verrouille pas pour toujours.
+    func test_guard_anEndToEndMessageInAGroup_sealsWithoutBeingRemembered() async {
+        let group = MeeshyConversation(id: sealed, identifier: sealed, type: .group)
+        let sut = guardOf(list: [group], thread: [endToEndMessage(at: 100)])
+
+        let seals = await sut.seals(sealed)
+
+        XCTAssertTrue(seals)
+        XCTAssertFalse(sut.ledger.remembersEndToEnd(sealed))
     }
 
     // MARK: - Le transfert
@@ -221,8 +274,8 @@ final class EndToEndOffThreadSendTests: XCTestCase {
             try await sut.dispatch(outboxRecord(item))
             XCTFail("la ligne doit être refusée")
         } catch {
-            XCTAssertEqual(error as? EndToEndSendRefusal, .outboxUnsealable, "un refus que la file classe définitif")
-            XCTAssertEqual(error.localizedDescription, EndToEndSendRefusal.outboxUnsealable.userMessage)
+            XCTAssertEqual(error as? EndToEndSendRefusal, .sealedOnlyInConversation, "un refus que la file classe définitif")
+            XCTAssertEqual(error.localizedDescription, EndToEndSendRefusal.sealedOnlyInConversation.userMessage)
         }
         XCTAssertEqual(service.sendCallCount, 0)
     }
@@ -238,17 +291,37 @@ final class EndToEndOffThreadSendTests: XCTestCase {
         XCTAssertEqual(service.lastSendRequest?.content, "Bonjour")
     }
 
-    /// La garde de production est montée devant le dispatcher, aux trois sites
-    /// qui vident la file.
-    func test_outbox_everyFlusherSite_mountsTheEndToEndGate() throws {
-        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
-            .deletingLastPathComponent().deletingLastPathComponent()
-        for path in ["Meeshy/MeeshyApp+LaunchSequence.swift", "Meeshy/Features/Main/Services/BackgroundTransitionCoordinator.swift",
-                     "Meeshy/Features/Main/Services/OutboxFlushScheduling.swift"] {
-            let code = try String(contentsOf: root.appendingPathComponent(path), encoding: .utf8)
-            XCTAssertTrue(code.contains("dispatcher: EndToEndOutboxGate()"), path)
-            XCTAssertFalse(code.contains("dispatcher: OutboxDispatcher()"), path)
+    /// Audit M2 — une MODIFICATION enfilée avant l'activation ne part pas en clair.
+    func test_outbox_aQueuedEdit_toARememberedEndToEndConversation_neverLeaves() async throws {
+        let service = MockMessageService()
+        let (sut, _) = try gate(service)
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let edit = OfflineEditPayload(messageId: "00000000000000000000bb01", clientMessageId: ClientMessageId.generate(),
+                                      content: secret, conversationId: sealed)
+        let record = OutboxRecord(id: "ofq_edit_1", kind: .editMessage, conversationId: sealed,
+                                  clientMessageId: ClientMessageId.generate(), payload: try encoder.encode(edit))
+
+        do {
+            try await sut.dispatch(record)
+            XCTFail("la modification doit être refusée")
+        } catch {
+            XCTAssertEqual(error as? EndToEndSendRefusal, .editUnsealable)
         }
+        XCTAssertEqual(service.editCallCount, 0)
+    }
+
+    /// La garde de production est montée devant le dispatcher partout où la
+    /// file se vide : aucun `OutboxFlusher` ne reçoit un `OutboxDispatcher` nu.
+    func test_outbox_noFlusherReceivesABareDispatcher() throws {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("Meeshy")
+        let files = FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil)?
+            .compactMap { $0 as? URL }.filter { $0.pathExtension == "swift" } ?? []
+        let bare = try files.filter { try String(contentsOf: $0, encoding: .utf8).contains("dispatcher: OutboxDispatcher(") }
+        let gated = try files.filter { try String(contentsOf: $0, encoding: .utf8).contains("dispatcher: EndToEndOutboxGate(") }
+        XCTAssertEqual(bare.map(\.lastPathComponent), [])
+        XCTAssertGreaterThanOrEqual(gated.count, 3)
     }
 
     // MARK: - Réponse depuis une notification, refus d'appel, humeur (#12641)
@@ -303,6 +376,30 @@ final class EndToEndOffThreadSendTests: XCTestCase {
         XCTAssertEqual(e2ee.deliverCallCount, 1)
         XCTAssertNotEqual(messages.lastSendRequest?.content, secret)
         XCTAssertTrue(queue.enqueuedItems.isEmpty, "une réponse scellée n'entre jamais dans la file")
+    }
+
+    /// Audit M5 (#13006) — deux tête-à-tête avec l'auteur ; le chiffré, servi
+    /// sans mode mais vu chiffré par ce compte, est moins récent : la réponse
+    /// part dans LUI, scellée, jamais dans le lisible.
+    func test_moodReply_withTwoDirects_theRememberedEndToEndOneIsChosen_andSealed() async throws {
+        let conversations = MockConversationService()
+        conversations.findDirectsWithResult = .success([
+            JSONStub.decode(#"{"id":"\#(readable)","type":"direct","createdAt":"2026-01-01T00:00:00.000Z"}"#),
+            JSONStub.decode(#"{"id":"\#(sealed)","type":"direct","createdAt":"2026-01-01T00:00:00.000Z"}"#),
+        ])
+        let messages = MockMessageService()
+        let e2ee = MockEndToEndMessaging()
+        let sut = MoodReplySender(conversations: conversations, messages: messages, endToEnd: e2ee,
+                                  replyQueue: ReplyQueueSpy(), messagePersistence: PersistenceSpy(),
+                                  currentUserId: { "me-1" }, prepareReplyQueue: {}, composingLanguages: { ["fr"] },
+                                  destinationGuard: guardOf(remembering: [sealed]))
+        let entry = StatusEntry(id: "mood-1", userId: "author-1", username: "Alice", avatarColor: "6366F1", moodEmoji: "😄", content: "Heureux")
+
+        let conversationId = try await sut.sendReply(secret, to: entry)
+
+        XCTAssertEqual(conversationId, sealed)
+        XCTAssertEqual(e2ee.deliverCallCount, 1)
+        XCTAssertNotEqual(messages.lastSendRequest?.content, secret)
     }
 
     // MARK: - L'extension de partage (#12985)

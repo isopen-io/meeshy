@@ -64,6 +64,13 @@ struct DirectPairChoiceTests {
         #expect(DirectPairChoice.preferred(among: []) == nil)
     }
 
+    /// Audit M5 — servi sans mode, vu chiffré par le compte : il passe devant.
+    @Test func servedDirects_aRememberedEndToEndOne_winsOverTheMoreRecent() {
+        let chosen = DirectPairChoice.preferred(among: [served("readable"), served("remembered")]) { $0 == "remembered" }
+
+        #expect(chosen?.id == "remembered")
+    }
+
     /// Un refus E2EE posé avant tout transport ne se rejoue jamais : la file
     /// le classe définitif (#12985).
     @Test func anEndToEndRefusal_isAPermanentOutboxRejection() {

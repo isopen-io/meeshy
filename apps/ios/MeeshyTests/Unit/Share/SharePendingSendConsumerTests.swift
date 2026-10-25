@@ -156,6 +156,27 @@ final class SharePendingSendConsumerTests: XCTestCase {
         XCTAssertEqual(items.map(\.conversationId), ["conv1", "conv3"])
     }
 
+    /// Audit M3 — l'ORIGINE refusée (vue chiffrée par ce compte) : une autre
+    /// cible porte les octets, et la fiche se solde au lieu d'attendre une
+    /// origine qui ne partira jamais.
+    func test_consumeAll_aRefusedOrigin_handsTheBytesToTheNextTarget_andSettlesTheFiche() async throws {
+        let dir = try makeDirectory()
+        let mediaRoot = try makeMediaRoot()
+        try writeShare(media: [photo], in: dir, mediaRoot: mediaRoot)
+        let queue = FakeOfflineMessageQueue()
+
+        await SharePendingSendConsumer(queue: queue, destinationGuard: .isolated(remembering: ["conv1"]))
+            .consumeAll(in: dir, mediaRoot: mediaRoot, now: fixtureNow)
+
+        let mediaCalls = await queue.enqueuedMediaCalls
+        XCTAssertEqual(mediaCalls.map(\.conversationId), ["conv2"])
+        let items = await queue.enqueuedItems
+        XCTAssertEqual(items.map(\.conversationId), ["conv3"])
+        XCTAssertEqual(items.first?.copyAttachmentsFromClientMessageId, "cid_abc_t1")
+        let remaining = try FileManager.default.contentsOfDirectory(atPath: dir.path)
+        XCTAssertTrue(remaining.isEmpty, "la fiche servie est soldée")
+    }
+
     /// Les identifiants sont PROPRES à chaque cible, écrits une seule fois par
     /// l'extension et jamais recalculés — le consommateur se contente de les
     /// LIRE depuis la fiche. Un identifiant unique pour trois cibles écrirait
@@ -243,7 +264,7 @@ final class SharePendingSendConsumerTests: XCTestCase {
         let mediaRoot = try makeMediaRoot()
         try writeShare(in: dir)
 
-        await SharePendingSendConsumer(queue: FakeOfflineMessageQueue())
+        await SharePendingSendConsumer(queue: FakeOfflineMessageQueue(), destinationGuard: .isolated())
             .consumeAll(in: dir, mediaRoot: mediaRoot, now: fixtureNow)
 
         XCTAssertTrue(files(in: dir).isEmpty)
@@ -352,7 +373,7 @@ final class SharePendingSendConsumerTests: XCTestCase {
         let mediaRoot = try makeMediaRoot()
         try writeShare(media: [photo], in: dir, mediaRoot: mediaRoot)
 
-        await SharePendingSendConsumer(queue: FakeOfflineMessageQueue())
+        await SharePendingSendConsumer(queue: FakeOfflineMessageQueue(), destinationGuard: .isolated())
             .consumeAll(in: dir, mediaRoot: mediaRoot, now: fixtureNow)
 
         XCTAssertFalse(FileManager.default.fileExists(
@@ -422,11 +443,11 @@ final class SharePendingSendConsumerTests: XCTestCase {
         try writeShare(in: dir)
         let failing = FakeOfflineMessageQueue()
         await failing.setThrowFromCallIndex(1)
-        await SharePendingSendConsumer(queue: failing)
+        await SharePendingSendConsumer(queue: failing, destinationGuard: .isolated())
             .consumeAll(in: dir, mediaRoot: mediaRoot, now: fixtureNow)
 
         let recovering = FakeOfflineMessageQueue()
-        await SharePendingSendConsumer(queue: recovering)
+        await SharePendingSendConsumer(queue: recovering, destinationGuard: .isolated())
             .consumeAll(in: dir, mediaRoot: mediaRoot, now: fixtureNow)
 
         let items = await recovering.enqueuedItems
@@ -903,7 +924,7 @@ final class SharePendingSendConsumerTests: XCTestCase {
         try writeShare(media: [photo], createdAt: now.addingTimeInterval(-604_801),
                        in: dir, mediaRoot: mediaRoot)
 
-        await SharePendingSendConsumer(queue: FakeOfflineMessageQueue())
+        await SharePendingSendConsumer(queue: FakeOfflineMessageQueue(), destinationGuard: .isolated())
             .consumeAll(in: dir, mediaRoot: mediaRoot, now: now)
 
         XCTAssertFalse(FileManager.default.fileExists(
@@ -971,7 +992,7 @@ final class SharePendingSendConsumerTests: XCTestCase {
         try backdateCreation(
             of: orphan, by: SharePendingSendConsumer.orphanMediaGracePeriod + 1, from: now)
 
-        await SharePendingSendConsumer(queue: FakeOfflineMessageQueue())
+        await SharePendingSendConsumer(queue: FakeOfflineMessageQueue(), destinationGuard: .isolated())
             .consumeAll(in: dir, mediaRoot: mediaRoot, now: now)
 
         XCTAssertFalse(
@@ -1005,7 +1026,7 @@ final class SharePendingSendConsumerTests: XCTestCase {
         try FileManager.default.createDirectory(at: inProgress, withIntermediateDirectories: true)
         try Data(repeating: 7, count: 16).write(to: inProgress.appendingPathComponent("0.jpg"))
 
-        await SharePendingSendConsumer(queue: FakeOfflineMessageQueue())
+        await SharePendingSendConsumer(queue: FakeOfflineMessageQueue(), destinationGuard: .isolated())
             .consumeAll(in: dir, mediaRoot: mediaRoot, now: Date())
 
         XCTAssertTrue(

@@ -18,7 +18,7 @@ import MeeshySDK
 ///   en bout qui y est affiché (`EncryptionSwitchNoticeTrail`, #12986).
 ///
 /// Une seule source qui dit le bout en bout scelle, et ce qui est vu est
-/// retenu. Un chemin qui sait sceller scelle ; les autres refusent avant tout
+/// retenu. Sans compte connu, la mémoire ne dit rien : la garde FERME. Un chemin qui sait sceller scelle ; les autres refusent avant tout
 /// téléversement, transport ou mise en file.
 ///
 /// Modèle de menace : serveur compromis ou divergent qui sert sans mode une
@@ -27,6 +27,9 @@ import MeeshySDK
 struct EndToEndDestinationGuard {
     var ledger: EndToEndRegimeLedger = .shared
     var cache: any ConversationCacheReaderProviding = ConversationCacheReader()
+    /// Le compte actif, pour lier la mémoire quand l'envoi précède la liaison
+    /// de `DependencyContainer` (réveil à froid en arrière-plan).
+    var account: @MainActor () -> String? = { DependencyContainer.activeAccountStoreKey().map(EndToEndRegimeMemory.account(of:)) }
 
     /// La garde de l'app, pour un appel hors de toute injection (file héritée).
     static func live(_ conversationId: String) async -> Bool {
@@ -34,14 +37,13 @@ struct EndToEndDestinationGuard {
     }
 
     func seals(_ conversationId: String, served modes: [String?] = []) async -> Bool {
+        guard ledger.ensureBound(to: account) else { return true }
         modes.forEach { ledger.learn(mode: $0, for: conversationId) }
         let row = await cache.currentConversation(id: conversationId)
         let thread = await cache.cachedThread(id: conversationId) ?? []
         return ledger.seals(
-            for: conversationId,
-            opening: nil,
-            cached: row?.encryptionMode,
-            activationShownAt: EncryptionSwitchNoticeTrail.endToEndShownAt(in: thread)
+            for: conversationId, opening: nil, cached: row?.encryptionMode,
+            trail: thread, isDirect: row?.type == .direct
         )
     }
 }

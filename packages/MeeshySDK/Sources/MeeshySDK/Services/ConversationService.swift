@@ -88,6 +88,9 @@ public protocol ConversationServiceProviding: Sendable {
     func deleteForMe(conversationId: String) async throws
     func listSharedWith(userId: String, limit: Int) async throws -> [APIConversation]
     func findDirectWith(userId: String) async throws -> APIConversation?
+    /// Les tête-à-tête existants avec `userId`, le plus récent d'abord : le
+    /// choix du chiffré revient à l'appelant, qui a la mémoire (#13006).
+    func findDirectsWith(userId: String) async throws -> [APIConversation]
     func removeParticipant(conversationId: String, key: String) async throws
     func updateParticipantRole(conversationId: String, userId: String, role: String) async throws
     func update(
@@ -482,6 +485,10 @@ public final class ConversationService: ConversationServiceProviding, Sendable {
     /// page d'un seul rendait le tête-à-tête lisible dès qu'il était le plus
     /// récent.
     public func findDirectWith(userId: String) async throws -> APIConversation? {
+        DirectPairChoice.preferred(among: try await findDirectsWith(userId: userId))
+    }
+
+    public func findDirectsWith(userId: String) async throws -> [APIConversation] {
         let response: APIResponse<[APIConversation]> = try await api.request(
             ConversationsEndpoint.root,
             queryItems: [
@@ -490,7 +497,14 @@ public final class ConversationService: ConversationServiceProviding, Sendable {
                 URLQueryItem(name: "limit", value: "\(DirectPairChoice.candidateLimit)")
             ]
         )
-        return DirectPairChoice.preferred(among: response.data)
+        return response.data
+    }
+}
+
+public extension ConversationServiceProviding {
+    /// Un service qui ne sait rendre qu'un tête-à-tête n'en rend qu'un.
+    func findDirectsWith(userId: String) async throws -> [APIConversation] {
+        try await findDirectWith(userId: userId).map { [$0] } ?? []
     }
 }
 
