@@ -8,8 +8,10 @@
  * `server` ou `hybrid`).
  *
  * - Sans `plaintext` (tout ancien client, et « ouvrir la conversation avec X ») :
- *   le tête-à-tête existant le PLUS RÉCEMMENT ACTIF, quel que soit son régime —
- *   exactement le comportement d'avant ; sans aucun, on en crée un.
+ *   le tête-à-tête CHIFFRÉ s'il existe, sinon le plus récemment actif — le
+ *   comportement d'avant tant qu'une paire n'a qu'un régime ; sans aucun, on en
+ *   crée un. Jamais une bascule silencieuse vers le clair : écrire dans le fil
+ *   lisible n'y attire pas l'autre.
  * - `plaintext: true` : le tête-à-tête lisible existant, ou un nouveau, même si
  *   un `e2ee` existe. Jamais un `e2ee` (ni un mode inconnu) rendu pour lisible.
  *
@@ -70,6 +72,7 @@ function world(docs: DirectDoc[]) {
     conversation: {
       findFirst: jest.fn(async (args: any) => (args?.where?.identifier !== undefined ? null : directs.findFirst(args))),
       findMany: jest.fn(async (args: any) => directs.findMany(args)),
+      findUnique: jest.fn(async (args: any) => directs.findFirst({ where: { id: args?.where?.id } })),
       create: conversationCreate,
       updateMany: jest.fn(async () => ({ count: 0 })),
     },
@@ -118,7 +121,7 @@ async function openDirect(docs: DirectDoc[], extra: Record<string, unknown> = {}
   return { status: res.statusCode, id: res.json()?.data?.id as string | undefined, conversationCreate };
 }
 
-describe('sans précision, on rouvre le tête-à-tête le plus récemment actif, quel que soit son régime (#12966)', () => {
+describe('sans précision, on rouvre le tête-à-tête chiffré s’il existe, sinon le plus récemment actif (#12966)', () => {
   it('le chiffré, quand c’est lui qui a vécu le plus récemment', async () => {
     const opened = await openDirect([
       direct(READABLE_DM, { lastMessageAt: EARLIER }),
@@ -128,12 +131,29 @@ describe('sans précision, on rouvre le tête-à-tête le plus récemment actif,
     expect(opened.conversationCreate).not.toHaveBeenCalled();
   });
 
-  it('le lisible, quand c’est lui qui a vécu le plus récemment', async () => {
+  it('le chiffré encore, quand le lisible a vécu plus récemment : y écrire n’y attire pas l’autre', async () => {
     const opened = await openDirect([
       direct(READABLE_DM, { lastMessageAt: LATER }),
       direct(SEALED_DM, { encryptionMode: 'e2ee', lastMessageAt: EARLIER }),
     ]);
-    expect(opened).toMatchObject({ status: 200, id: READABLE_DM });
+    expect(opened).toMatchObject({ status: 200, id: SEALED_DM });
+  });
+
+  it('sans chiffré, le plus récemment actif des doublons historiques lisibles, comme avant', async () => {
+    const opened = await openDirect([
+      direct(READABLE_DM, { lastMessageAt: EARLIER }),
+      direct(CREATED_DM, { lastMessageAt: LATER }),
+    ]);
+    expect(opened).toMatchObject({ status: 200, id: CREATED_DM });
+    expect(opened.conversationCreate).not.toHaveBeenCalled();
+  });
+
+  it('un mode inconnu ne se rouvre jamais pour lisible par défaut : il passe avant le lisible', async () => {
+    const opened = await openDirect([
+      direct(READABLE_DM, { lastMessageAt: LATER }),
+      direct(SEALED_DM, { encryptionMode: 'quantum', lastMessageAt: EARLIER }),
+    ]);
+    expect(opened).toMatchObject({ status: 200, id: SEALED_DM });
   });
 
   it('un ancien client dont le seul tête-à-tête est chiffré le retrouve, sans qu’un second soit créé', async () => {

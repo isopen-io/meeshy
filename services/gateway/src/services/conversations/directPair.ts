@@ -9,15 +9,18 @@
  * `server` ou `hybrid` — `SERVER_READABLE_REGIME_FILTER`).
  *
  * - Sans précision (tout ancien client, « ouvrir la conversation avec X ») :
- *   le tête-à-tête le plus récemment actif, quel que soit son régime — le
- *   comportement d'avant, à l'identique.
+ *   le tête-à-tête que le serveur ne lit pas (`e2ee`, ou un mode inconnu) s'il
+ *   existe, sinon le plus récemment actif — le comportement d'avant tant
+ *   qu'une paire n'a qu'un régime. Jamais une bascule silencieuse vers le
+ *   clair : écrire dans le fil lisible n'y attire pas l'autre, et un ancien
+ *   client qui ne distingue pas les deux fils retombe dans le chiffré.
  * - `plaintext: true` : le tête-à-tête lisible, ou rien (l'appelant le crée).
  *
  * Une paire, ce sont deux participations ACTIVES : un tête-à-tête que l'un a
  * quitté n'est plus celui de la paire.
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import { isEndToEndMode, SERVER_READABLE_REGIME_FILTER } from './encryptionRegime';
+import { isEndToEndMode, SERVER_BLIND_REGIME_FILTER, SERVER_READABLE_REGIME_FILTER } from './encryptionRegime';
 
 export type DirectPair = { readonly userId: string; readonly peerId: string };
 
@@ -26,12 +29,26 @@ const bothActive = (pair: DirectPair): readonly Record<string, unknown>[] => [
   { participants: { some: { userId: pair.peerId, isActive: true } } },
 ];
 
-/** Le `where` de la recherche du tête-à-tête à rouvrir. */
-export function directLookupWhere(pair: DirectPair, request: { readonly plaintext: boolean }): Record<string, unknown> {
-  return {
-    type: 'direct',
-    AND: request.plaintext ? [...bothActive(pair), SERVER_READABLE_REGIME_FILTER] : [...bothActive(pair)],
-  };
+const lookup = (pair: DirectPair, regime: Readonly<Record<string, unknown>> | null): Record<string, unknown> => ({
+  type: 'direct',
+  AND: regime === null ? [...bothActive(pair)] : [...bothActive(pair), regime],
+});
+
+/** Les `where` à essayer DANS L'ORDRE pour trouver le tête-à-tête à rouvrir ; le premier trouvé gagne. */
+export function directLookupWheres(pair: DirectPair, request: { readonly plaintext: boolean }): readonly Record<string, unknown>[] {
+  return request.plaintext
+    ? [lookup(pair, SERVER_READABLE_REGIME_FILTER)]
+    : [lookup(pair, SERVER_BLIND_REGIME_FILTER), lookup(pair, null)];
+}
+
+/** Le premier tête-à-tête trouvé par `find` le long des `where`, ou `null`. */
+export async function firstFound<T>(
+  wheres: readonly Record<string, unknown>[],
+  find: (where: Record<string, unknown>) => Promise<T | null>,
+): Promise<T | null> {
+  const [where, ...rest] = wheres;
+  if (where === undefined) return null;
+  return (await find(where)) ?? firstFound(rest, find);
 }
 
 /** Les deux personnes d'un tête-à-tête, ou `null` s'il n'en reste pas deux actives. */

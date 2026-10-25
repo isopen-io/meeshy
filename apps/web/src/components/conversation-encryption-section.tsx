@@ -9,7 +9,8 @@ import {
   translateConversationEncryption,
 } from '@/lib/i18n-conversation-encryption-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
-import { encryptionExplanation, FACT_KEY, REGIME_SUMMARY_KEY, TOPIC_KEY } from '@/lib/view/conversation-encryption-explanation';
+import { encryptionExplanation, FACT_KEY, PLAINTEXT_DIRECT_KEY, REGIME_SUMMARY_KEY, TOPIC_KEY } from '@/lib/view/conversation-encryption-explanation';
+import type { PlaintextDirectGesture, PlaintextDirectOutcome } from '@/lib/view/plaintext-direct';
 
 /**
  * **LA SECTION « CHIFFREMENT » DE LA FEUILLE DE DÉTAILS** (#12880) — miroir de
@@ -45,25 +46,40 @@ function useEncryptionCatalog(language: InterfaceLanguage): boolean {
   return ready;
 }
 
+type GestureState = { readonly busy: boolean; readonly outcome: PlaintextDirectOutcome | null };
+
 /**
  * #12949 — une conversation que ce compte a VUE chiffrée de bout en bout se
  * décrit comme telle, même servie sans mode : elle ne repasse jamais en clair.
  */
 export function ConversationEncryptionSection({
   conversation,
+  plaintextDirect,
 }: {
   readonly conversation: { readonly id?: string; readonly type: string; readonly encryptionMode?: string | null };
+  readonly plaintextDirect?: PlaintextDirectGesture | undefined;
 }) {
   const language = currentInterfaceLanguage();
   const ready = useEncryptionCatalog(language);
   const headingId = useId();
   const sealedIds = useStore(endToEndRegimeLedger, (state) => state.sealed);
   const sealed = conversation.id !== undefined && endToEndSealed({ sealed: sealedIds }, { conversationId: conversation.id });
+  const [gesture, setGesture] = useState<GestureState>({ busy: false, outcome: null });
 
   if (!ready) return <div aria-busy="true" className="px-4 pb-6" data-conversation-encryption-catalog-loading />;
 
-  const t = (key: Parameters<typeof translateConversationEncryption>[1]): string => translateConversationEncryption(language, key);
-  const explanation = encryptionExplanation({ mode: sealed ? 'e2ee' : conversation.encryptionMode, isDirect: conversation.type === 'direct' });
+  const t = (key: Parameters<typeof translateConversationEncryption>[1], params?: Readonly<Record<string, string>>): string =>
+    translateConversationEncryption(language, key, params);
+  const isDirect = conversation.type === 'direct';
+  const explanation = encryptionExplanation({ mode: sealed ? 'e2ee' : conversation.encryptionMode, isDirect });
+  const offersPlaintextDirect = isDirect && explanation.regime === 'end-to-end' && plaintextDirect !== undefined;
+  const onOpenPlaintextDirect = async () => {
+    if (plaintextDirect === undefined) return;
+    setGesture({ busy: true, outcome: null });
+    const outcome = await plaintextDirect.open().catch((): PlaintextDirectOutcome => 'failed');
+    setGesture({ busy: false, outcome });
+  };
+  const gestureFeedback = gesture.outcome === 'failed' || gesture.outcome === 'offline' ? t(PLAINTEXT_DIRECT_KEY[gesture.outcome]) : '';
 
   return (
     <section aria-labelledby={headingId} className="pb-6" data-conversation-encryption={explanation.regime}>
@@ -89,6 +105,24 @@ export function ConversationEncryptionSection({
           </div>
         ))}
       </details>
+      {offersPlaintextDirect ? (
+        <div className="flex flex-col gap-1 px-4 pt-1">
+          <button
+            type="button"
+            disabled={gesture.busy}
+            aria-busy={gesture.busy}
+            onClick={() => void onOpenPlaintextDirect()}
+            data-conversation-encryption-open-plaintext
+            className="flex items-center justify-center gap-2 rounded-chip px-4 text-body font-semibold disabled:opacity-50"
+            style={{ minHeight: 44, color: 'var(--accent)', border: '1px solid var(--accent)' }}
+          >
+            {gesture.busy ? t(PLAINTEXT_DIRECT_KEY.busy) : t(PLAINTEXT_DIRECT_KEY.open, { name: plaintextDirect.peerName })}
+          </button>
+          <p role="status" aria-live="polite" className="text-caption" style={{ color: MUTED }} data-conversation-encryption-open-plaintext-status>
+            {gestureFeedback}
+          </p>
+        </div>
+      ) : null}
     </section>
   );
 }

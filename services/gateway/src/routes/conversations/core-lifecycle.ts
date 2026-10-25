@@ -44,7 +44,7 @@ import { EngagementService } from '../../services/engagement/EngagementService';
 import { FOUNDING_MEMBER_PERMISSIONS } from '../../services/participantRights';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
 import { postConversationNotice, noticeActor, noticeBroadcast } from '../../services/conversations/conversationNotice';
-import { directLookupWhere } from '../../services/conversations/directPair';
+import { directLookupWheres, firstFound } from '../../services/conversations/directPair';
 import {
   composeConversationUpdate,
   broadcastConversationUpdated,
@@ -174,11 +174,13 @@ export function registerCreateConversationRoute(
         // dupliquer. Groupes : jamais dédupliqués (même-membres légitime).
         //
         // #12966 — une paire a au plus UN tête-à-tête `e2ee` et au plus UN
-        // que le serveur lit. Sans précision, le plus récemment actif, quel
-        // que soit son régime (inchangé) ; `plaintext: true` ne rouvre que le
-        // lisible, et en crée un à côté du chiffré s'il n'y en a pas.
-        const existingDirect = await prisma.conversation.findFirst({
-          where: directLookupWhere({ userId, peerId: uniqueParticipantIds[0] }, { plaintext: plaintext === true }),
+        // que le serveur lit. Sans précision, le chiffré d'abord, puis le plus
+        // récemment actif (inchangé tant qu'une paire n'a qu'un régime) ;
+        // `plaintext: true` ne rouvre que le lisible, et en crée un à côté du
+        // chiffré s'il n'y en a pas.
+        const lookups = directLookupWheres({ userId, peerId: uniqueParticipantIds[0] }, { plaintext: plaintext === true });
+        const existingDirect = await firstFound(lookups, (where) => prisma.conversation.findFirst({
+          where,
           // Des doublons historiques existent (5 DM atabeth↔jcnm datant
           // d'avant ce fix) : rouvrir la plus RÉCEMMENT ACTIVE, pas une
           // arbitraire — sinon l'utilisateur retombe sur une DM morte.
@@ -198,7 +200,7 @@ export function registerCreateConversationRoute(
               }
             }
           }
-        });
+        }));
         if (existingDirect) {
           const callerParticipant = existingDirect.participants.find((p: any) => p.userId === userId);
           const creatorParticipant = existingDirect.participants.find((p: any) => isMemberCreator(p.role ?? 'member'));

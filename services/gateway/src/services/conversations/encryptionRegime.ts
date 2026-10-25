@@ -136,6 +136,15 @@ const LEAVABLE_FILTER: Record<string, unknown> = {
 export const SERVER_READABLE_REGIME_FILTER: Readonly<Record<string, unknown>> = LEAVABLE_FILTER;
 
 /**
+ * L'inverse POSITIF (#12966) : un mode posé, non nul, hors du chiffrement au
+ * repos — `e2ee` quelle que soit sa casse, ou un mode inconnu. Écrit sans
+ * négation de document : un champ absent n'y entre jamais.
+ */
+export const SERVER_BLIND_REGIME_FILTER: Readonly<Record<string, unknown>> = {
+  AND: [{ encryptionMode: { isSet: true } }, { encryptionMode: { not: null } }, { encryptionMode: { notIn: [...LEAVABLE_ACTIVE_MODES] } }],
+};
+
+/**
  * Bascule le régime si l'époque n'a pas bougé depuis sa lecture ET si le
  * régime courant se quitte ; `null` sinon. Une conversation `e2ee` ne se
  * réécrit vers aucun régime (#12949).
@@ -166,6 +175,11 @@ export type EncryptionStatusView = {
   readonly epoch: number;
   readonly canToggleEncryption: boolean;
   readonly canDisableEncryption: boolean;
+  /**
+   * #12966 — le tête-à-tête chiffré de bout en bout que la paire a déjà, à
+   * côté de celui-ci ; `null` sinon. Le lecteur en est membre actif.
+   */
+  readonly pairEndToEndConversationId: string | null;
 };
 
 /**
@@ -177,11 +191,13 @@ export type EncryptionStatusView = {
  */
 export function encryptionStatusView(
   regime: RegimeFields,
-  options: { readonly mayToggle: boolean },
+  options: { readonly mayToggle: boolean; readonly pairEndToEndConversationId?: string | null },
 ): EncryptionStatusView {
   const mode = regime.encryptionMode;
   const active = regimeIsActive(regime);
   const mayDisable = options.mayToggle && regimeMayBeLeft(regime);
+  const pairEndToEndConversationId = options.pairEndToEndConversationId ?? null;
+  const mayEnable = options.mayToggle && pairEndToEndConversationId === null;
   return {
     isEncrypted: Boolean(regime.encryptionEnabledAt),
     mode,
@@ -189,7 +205,8 @@ export function encryptionStatusView(
     enabledBy: regime.encryptionEnabledBy ?? null,
     canTranslate: mode === 'server' || mode === 'hybrid',
     epoch: regimeEpochOf(regime),
-    canToggleEncryption: active ? mayDisable : options.mayToggle,
+    canToggleEncryption: active ? mayDisable : mayEnable,
     canDisableEncryption: mayDisable,
+    pairEndToEndConversationId,
   };
 }

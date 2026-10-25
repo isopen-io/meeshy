@@ -200,3 +200,56 @@ describe('un second tête-à-tête chiffré de bout en bout pour la même paire 
     expect(JSON.stringify(plainUser.json())).not.toContain(SEALED_DM);
   });
 });
+
+describe('un tête-à-tête ne se chiffre de bout en bout qu’entre deux personnes (#12966)', () => {
+  beforeEach(() => as(ALICE));
+
+  it('trois membres actifs : 409 E2EE_DIRECT_NOT_A_PAIR, rien d’écrit — la règle de la paire ne se contourne pas par un tiers', async () => {
+    const world = makeWorld({ members: [analyst(ALICE), user(BOB), user(CAROL)], others: [sealedDirectOf(ALICE_AND_BOB)] });
+    const res = await enable(world);
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toMatchObject({ success: false, code: 'E2EE_DIRECT_NOT_A_PAIR' });
+    expect(world.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('seul membre actif restant : même refus', async () => {
+    const world = makeWorld({ members: [analyst(ALICE), user(BOB, false)] });
+    const res = await enable(world);
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe('E2EE_DIRECT_NOT_A_PAIR');
+  });
+
+  it('le chiffrement au repos ne demande pas de paire', async () => {
+    const world = makeWorld({ members: [analyst(ALICE), user(BOB), user(CAROL)] });
+    expect((await enable(world, 'server')).statusCode).toBe(200);
+  });
+});
+
+describe('le statut ne propose pas un chiffrement qui serait refusé (#12966)', () => {
+  beforeEach(() => as(ALICE));
+
+  const status = async (world: World) => {
+    const app = await buildApp(world);
+    const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/encryption-status` });
+    await app.close();
+    return res;
+  };
+
+  it('la paire a déjà un tête-à-tête chiffré : rien à activer ici, et le chiffré est nommé', async () => {
+    const res = await status(makeWorld({ others: [sealedDirectOf(ALICE_AND_BOB)] }));
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data).toMatchObject({ canToggleEncryption: false, pairEndToEndConversationId: SEALED_DM });
+  });
+
+  it('sinon, rien ne change : activable, aucun chiffré nommé', async () => {
+    const res = await status(makeWorld({ others: [sealedDirectOf(ALICE_AND_BOB, {})] }));
+    expect(res.json().data).toMatchObject({ canToggleEncryption: true, pairEndToEndConversationId: null });
+  });
+
+  it('un étranger reçoit le 404 sans le chiffré de la paire', async () => {
+    as(STRANGER);
+    const res = await status(makeWorld({ others: [sealedDirectOf(ALICE_AND_BOB)] }));
+    expect(res.statusCode).toBe(404);
+    expect(JSON.stringify(res.json())).not.toContain(SEALED_DM);
+  });
+});

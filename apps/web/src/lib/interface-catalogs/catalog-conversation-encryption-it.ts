@@ -40,9 +40,13 @@ const it = {
   'conversationEncryption.fact.switchIsShownInThread': 'Ogni attivazione o disattivazione compare nella chat per tutti i membri.',
   'conversationEncryption.fact.endToEndIsFinal': 'Una volta attivata, la crittografia end-to-end non si può più disattivare.',
   'conversationEncryption.fact.endToEndNeverTurnedOff': 'La crittografia end-to-end non si può disattivare. Per scrivere senza, crea una nuova conversazione.',
-  'conversationEncryption.fact.endToEndNeverTurnedOffDirect': 'La crittografia end-to-end non si può disattivare: questa chat individuale resta crittografata.',
+  'conversationEncryption.fact.endToEndNeverTurnedOffDirect': 'La crittografia end-to-end non si può disattivare: questa chat individuale resta crittografata. Per scrivere senza con questa persona, apri accanto una conversazione non crittografata: entrambe sono nell’elenco, questa segnata da un lucchetto.',
   'conversationEncryption.fact.serverCannotTurnItOff': 'Su questo browser, una volta vista questa conversazione crittografata end-to-end, il tuo account non vi scrive mai più senza crittografia, anche se il server la presentasse poi diversamente.',
   'conversationEncryption.fact.webCannotReadYet': 'Sul web i messaggi crittografati end-to-end non possono ancora essere letti né scritti: apri questa conversazione nell’app iOS.',
+  'conversationEncryption.plaintextDirect.open': 'Apri una conversazione non crittografata con {name}',
+  'conversationEncryption.plaintextDirect.busy': 'Apertura…',
+  'conversationEncryption.plaintextDirect.failed': 'Impossibile aprire la conversazione non crittografata. Riprova.',
+  'conversationEncryption.plaintextDirect.offline': 'Sei offline: riconnettiti per aprire la conversazione non crittografata.',
 } satisfies ConversationEncryptionCatalog;
 
 export default it;

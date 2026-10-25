@@ -3,6 +3,7 @@ import { ConversationSchemas } from '../utils/validation.js';
 import { createConversationRequestSchema } from '../types/api-schemas/conversation-request.js';
 import {
   E2EE_DIRECT_ALREADY_END_TO_END_MESSAGE,
+  E2EE_DIRECT_NOT_A_PAIR_MESSAGE,
   E2EE_ERROR_CODES,
 } from '../types/e2ee-directory.js';
 
@@ -36,5 +37,12 @@ describe('le refus d’un second tête-à-tête chiffré de bout en bout (#12966
   it('a un code stable et un texte lisible par un ancien client', () => {
     expect(E2EE_ERROR_CODES.DIRECT_ALREADY_END_TO_END).toBe('E2EE_DIRECT_ALREADY_END_TO_END');
     expect(E2EE_DIRECT_ALREADY_END_TO_END_MESSAGE).toMatch(/already/i);
+  });
+});
+
+describe('un tête-à-tête ne se chiffre de bout en bout qu’entre deux personnes (#12966)', () => {
+  it('a un code stable et un texte lisible', () => {
+    expect(E2EE_ERROR_CODES.DIRECT_NOT_A_PAIR).toBe('E2EE_DIRECT_NOT_A_PAIR');
+    expect(E2EE_DIRECT_NOT_A_PAIR_MESSAGE).toMatch(/two/i);
   });
 });
