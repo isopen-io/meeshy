@@ -219,9 +219,9 @@ model MessageEnvelope {
 
 ### 5.1 Régime de conversation
 
-- `Conversation.encryptionMode` redevient modifiable : `"e2ee"` ou `null`. Champ additif `encryptionEpoch Int @default(0)`, incrémenté à chaque bascule. `encryptionEnabledAt` garde sa sémantique pour les anciens clients (non nul ⇔ `e2ee` actif) ; un champ additif `encryptionDisabledAt` n'est pas nécessaire : l'historique des bascules est dans les lignes système.
-- **Bascule atomique (#12521)** : `updateMany({ id, encryptionEpoch: n }, { encryptionMode, encryptionEnabledAt, encryptionEpoch: n + 1 })` ; `count === 0` ⇒ 409 `E2EE_REGIME_CHANGED`. Test de concurrence à deux requêtes.
-- Chaque bascule écrit, **dans la même transaction**, une ligne système (`messageSource: "system"`, nature `encryption_enabled` / `encryption_disabled`, auteur, époque) visible des deux côtés et des anciens clients (texte de repli servi).
+- `Conversation.encryptionMode` redevient modifiable : `"e2ee"` ou `null`. Champ additif `encryptionEpoch Int?` (absent = 0 : aucune conversation existante n'est réécrite), incrémenté à chaque bascule. Désactiver : `DELETE /conversations/:id/encryption` ; `serverEncryptionKeyId` n'est pas touché, les messages `server`/`hybrid` déjà écrits restent lisibles par leur clé. `encryptionEnabledAt` garde sa sémantique pour les anciens clients (non nul ⇔ `e2ee` actif) ; un champ additif `encryptionDisabledAt` n'est pas nécessaire : l'historique des bascules est dans les lignes système.
+- **Bascule atomique (#12521)** : `updateMany({ id, encryptionEpoch: n }, { encryptionMode, encryptionEnabledAt, encryptionEpoch: n + 1 })` (l'époque 0 se lit « absent, nul ou 0 ») ; `count === 0` ⇒ 409 `E2EE_REGIME_CHANGED`. Test de concurrence à deux requêtes.
+- Chaque bascule écrit ensuite une ligne système (`messageSource: "system"`, `metadata.kind` `encryption-enabled` / `encryption-disabled`, auteur, époque) visible des deux côtés et des anciens clients (texte de repli servi), et émet `conversation:encryption-changed` vers la room personnelle de chaque membre actif. **Écart assumé à la première version de ce paragraphe** : la ligne n'est pas dans la même transaction que la bascule. Elle suit la doctrine des avis système (#11416 : l'avis est un accessoire du geste, jamais sa condition) ; une panne d'écriture de l'avis laisse la bascule faite et se journalise. Seule l'écriture conditionnelle porte la garantie d'atomicité.
 
 ### 5.2 Ce que la bascule change
 

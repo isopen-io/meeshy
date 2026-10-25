@@ -110,24 +110,6 @@ const SERVER_AT_REST_MODES: ReadonlySet<string> = new Set(['server', 'hybrid']);
 export const isServerAtRestMode = (mode: string | null | undefined): boolean =>
   typeof mode === 'string' && SERVER_AT_REST_MODES.has(mode.toLowerCase());
 
-/**
- * Un chiffré apporté par le CLIENT est-il admissible hors bout en bout ? Non
- * s'il se déclare `server`/`hybrid`, ni dans une conversation `server`/`hybrid` :
- * dans les deux cas, seule la passerelle écrit le chiffré.
- */
-export function assertNoClientAtRestCiphertext(params: {
-  readonly conversationMode: string | null | undefined;
-  readonly declaredMetadata: unknown;
-}): void {
-  const declared = typeof params.declaredMetadata === 'object' && params.declaredMetadata !== null
-    ? (params.declaredMetadata as Record<string, unknown>)['mode']
-    : undefined;
-  const declaredMode = typeof declared === 'string' ? declared : null;
-  if (isServerAtRestMode(declaredMode) || isServerAtRestMode(params.conversationMode)) {
-    throw new ServerAtRestCiphertextRefusedError();
-  }
-}
-
 export const AT_REST_AAD_V1 = 'conversation:v1';
 
 export const atRestAad = (conversationId: string): Buffer =>

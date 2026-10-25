@@ -465,7 +465,7 @@ struct ConversationHeaderState {
 /// et le cache se repeignent à `user:updated`, pas elle. Cette loi repeint la
 /// conversation AFFICHÉE par la loi de la ligne d'un direct
 /// (`ConversationStore.merging(_:withUserUpdate:)`) — aucune règle parallèle —
-/// et `ConversationView.admitPeerUpdate` en fait l'override de l'écran. Les
+/// et `ConversationView.admitRepainted` en fait l'override de l'écran. Les
 /// annonces successives se replient donc d'elles-mêmes, chacune sur la
 /// précédente.
 enum DirectPeerRepaint {

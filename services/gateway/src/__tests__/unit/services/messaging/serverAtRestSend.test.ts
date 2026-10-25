@@ -178,10 +178,10 @@ describe('seule la passerelle écrit un chiffré au repos', () => {
     encryptionMetadata: { mode, keyId: 'cle-d-une-autre-conversation', iv: 'aXY=', authTag: 'dGFn' },
   });
 
-  it.each(['server', 'hybrid', 'Server'])('un chiffré client déclaré « %s » dans une conversation non chiffrée est REFUSÉ', async (mode) => {
+  it.each(['server', 'hybrid', 'Server'])('un chiffré client déclaré « %s » dans une conversation non chiffrée est REFUSÉ (#12562)', async (mode) => {
     const h = harness({ encryptionMode: null, encryptionEnabledAt: null, serverEncryptionKeyId: null });
     await expect(new MessageProcessor(h.prisma).saveMessage(clientCiphertext(mode)))
-      .rejects.toMatchObject({ code: SERVER_AT_REST_CIPHERTEXT_REFUSED });
+      .rejects.toMatchObject({ code: 'E2EE_REGIME_CHANGED', status: 409 });
     expect(h.created).toHaveLength(0);
   });
 

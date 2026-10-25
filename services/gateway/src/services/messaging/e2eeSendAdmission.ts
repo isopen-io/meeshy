@@ -15,12 +15,21 @@
  * (Sesame), sinon 409. Un chiffré à l'ancienne — que plus aucun appareil ne
  * sait lire — est refusé `E2EE_CLIENT_OUTDATED`, phrase lisible comprise ; des
  * enveloppes vers une conversation qui n'est plus chiffrée, `E2EE_REGIME_CHANGED`.
+ *
+ * Depuis #12522 et #12562, le régime est COMMUTABLE : TOUT chiffré vers une
+ * conversation qui n'est pas `e2ee` est refusé `E2EE_REGIME_CHANGED` (aucun
+ * appareil n'y a de quoi le lire : il était rangé en bulle vide), et un
+ * chiffré qui déclare l'époque sous laquelle il a été scellé
+ * (`encryptionMetadata.regimeEpoch`) est refusé de même quand l'époque a
+ * changé depuis. Un envoi sans époque déclarée (client antérieur) n'est pas
+ * jugé sur elle.
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { E2EE_ERROR_CODES, type E2EERelayRequest } from '@meeshy/shared/types/e2ee-directory';
 import { createE2EEEnvelopeRelay, type AdmittedRelay } from '../e2ee/E2EEEnvelopeRelay';
+import { regimeEpochOf } from '../conversations/encryptionRegime';
 import { clientOutdated, E2eeRelayRefusedError } from '../e2ee/e2ee-relay-errors';
-import { assertNoClientAtRestCiphertext } from './serverAtRest';
+import { isServerAtRestMode, ServerAtRestCiphertextRefusedError } from './serverAtRest';
 import {
   assertNoPlaintextPieces,
   assertPlaintextAdmitted,
@@ -58,7 +67,7 @@ export async function admitSendUnderRegime(prisma: AdmissionPrisma, request: Sen
   const carriesCiphertext = Boolean(request.encryptedContent && request.encryptionMetadata);
   const regime = await prisma.conversation.findUnique({
     where: { id: request.conversationId },
-    select: { encryptionMode: true, encryptionEnabledAt: true, serverEncryptionKeyId: true },
+    select: { encryptionMode: true, encryptionEnabledAt: true, serverEncryptionKeyId: true, encryptionEpoch: true },
   });
   const endToEnd = isEndToEndMode(regime?.encryptionMode);
   assertPlaintextAdmitted({
@@ -69,12 +78,15 @@ export async function admitSendUnderRegime(prisma: AdmissionPrisma, request: Sen
     if (request.e2eeRelay) {
       throw new E2eeRelayRefusedError(E2EE_ERROR_CODES.REGIME_CHANGED, 409, 'Cette conversation n’est plus chiffrée de bout en bout');
     }
-    // #11381 — hors bout en bout, un chiffré client n'entre pas là où la passerelle chiffre elle-même.
-    if (carriesCiphertext) assertNoClientAtRestCiphertext({ conversationMode: regime?.encryptionMode, declaredMetadata: request.encryptionMetadata });
+    // #11381 — là où la passerelle chiffre elle-même (`server`/`hybrid`), un chiffré
+    // client est refusé avec sa phrase (« envoyez en clair ») ; ailleurs, #12562.
+    if (carriesCiphertext && isServerAtRestMode(regime?.encryptionMode)) throw new ServerAtRestCiphertextRefusedError();
+    if (carriesCiphertext) throw regimeChanged();
     return { regime, carriesCiphertext, endToEnd, relay: null };
   }
   assertNoPlaintextPieces({ encryptionMode: regime?.encryptionMode, carriedPieceCount: await countCarriedPieces(prisma, request) });
   if (!carriesCiphertext) return { regime, carriesCiphertext, endToEnd, relay: null };
+  if (sealedUnderStaleEpoch(request.encryptionMetadata, regimeEpochOf(regime))) throw regimeChanged();
   if (!request.e2eeRelay) throw clientOutdated();
   const relay = await createE2EEEnvelopeRelay({ prisma }).admit({
     conversationId: request.conversationId,
@@ -82,6 +94,20 @@ export async function admitSendUnderRegime(prisma: AdmissionPrisma, request: Sen
     relay: request.e2eeRelay,
   });
   return { regime, carriesCiphertext, endToEnd, relay };
+}
+
+const regimeChanged = (): E2eeRelayRefusedError =>
+  new E2eeRelayRefusedError(
+    E2EE_ERROR_CODES.REGIME_CHANGED,
+    409,
+    'Le chiffrement de cette conversation a changé depuis la rédaction de ce message : renvoyez-le',
+  );
+
+/** L'époque déclarée par l'envoi, quand il en déclare une, n'est plus la courante. */
+function sealedUnderStaleEpoch(metadata: unknown, currentEpoch: number): boolean {
+  if (typeof metadata !== 'object' || metadata === null) return false;
+  const declared = (metadata as Record<string, unknown>).regimeEpoch;
+  return typeof declared === 'number' && declared !== currentEpoch;
 }
 
 async function senderUserIdOf(prisma: AdmissionPrisma, participantId: string | undefined): Promise<string> {

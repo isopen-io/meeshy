@@ -487,17 +487,14 @@ describe('MessageProcessor.saveMessage', () => {
     expect(findFirstArgs.include?.replyTo?.include).toHaveProperty('attachments');
   });
 
-  it('uses provided encryptedContent + encryptionMetadata', async () => {
-    await processor.saveMessage({ ...baseData, encryptedContent: 'encrypted', encryptionMetadata: { mode: 'e2ee', keyId: 'k1' } });
-    const createArgs = msgCreate.mock.calls[0][0] as { data: Record<string, unknown> };
-    expect(createArgs.data.isEncrypted).toBe(true);
-    expect(createArgs.data.encryptedContent).toBe('encrypted');
-  });
-
-  it('sets content to empty string when message is encrypted', async () => {
-    await processor.saveMessage({ ...baseData, encryptedContent: 'ct', encryptionMetadata: { mode: 'e2ee' } });
-    const createArgs = msgCreate.mock.calls[0][0] as { data: Record<string, unknown> };
-    expect(createArgs.data.content).toBe('');
+  it.each([
+    ['un chiffré déclaré e2ee', { mode: 'e2ee', keyId: 'k1' }],
+    ['un chiffré déclaré server', { mode: 'server' }],
+  ])('refuse %s dans une conversation en clair, sans rien ranger (#12562)', async (_label, encryptionMetadata) => {
+    await expect(
+      processor.saveMessage({ ...baseData, encryptedContent: 'encrypted', encryptionMetadata }),
+    ).rejects.toMatchObject({ code: 'E2EE_REGIME_CHANGED', status: 409 });
+    expect(msgCreate).not.toHaveBeenCalled();
   });
 
   it('derives effectFlags from isBlurred/expiresAt/isViewOnce', async () => {

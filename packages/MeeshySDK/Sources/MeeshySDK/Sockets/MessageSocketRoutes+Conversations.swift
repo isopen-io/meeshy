@@ -17,6 +17,7 @@ extension MessageSocketRoutes {
             m.route(.conversationParticipantBanned, ParticipantBannedEvent.self) { $0.participantBanned.send($1) },
             m.route(.conversationParticipantUnbanned, ParticipantUnbannedEvent.self) { $0.participantUnbanned.send($1) },
             m.route(.conversationClosed, ConversationClosedEvent.self) { $0.conversationClosed.send($1) },
+            m.route(.conversationEncryptionChanged, ConversationEncryptionChangedEvent.self) { _, event in ConversationEncryptionChannel.shared.changed.send(event) },
             m.route(.userUpdated, UserUpdatedEvent.self) { $0.userUpdated.send($1) },
             m.route(.userPreferencesReordered, UserPreferencesReorderedSocketEvent.self) { $0.userPreferencesReordered.send($1) },
             m.route(.conversationDeleted, ConversationDeletedSocketEvent.self) { $0.conversationDeleted.send($1) },
