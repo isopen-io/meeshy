@@ -6,7 +6,7 @@ struct ConversationLockSheet: View {
     enum Mode {
         case setupMasterPin           // Settings: entrer 6ch → confirmer 6ch → setMasterPin
         case changeMasterPin          // Settings: vérifier 6ch → entrer nouveau 6ch → confirmer
-        case removeMasterPin          // Settings: vérifier 6ch → forceRemoveMasterPin
+        case removeMasterPin          // Settings: vérifier 6ch → removeMasterPin
         case lockConversation         // Menu: vérifier master 6ch → entrer 4ch → confirmer 4ch
         case unlockConversation       // Menu: entrer 4ch → removeLock
         case openConversation         // Tap: entrer 4ch → onSuccess()
@@ -292,6 +292,12 @@ struct ConversationLockSheet: View {
     private var errCodeIncorrect: String {
         String(localized: "conversation.lock.error.codeIncorrect", defaultValue: "Code incorrect", bundle: .main)
     }
+    private var errCodeNotSaved: String {
+        String(localized: "conversation.lock.error.codeNotSaved", defaultValue: "Le code n'a pas pu être enregistré. Réessayez.", bundle: .main)
+    }
+    private var errMasterPinStillNeeded: String {
+        String(localized: "conversation.lock.error.masterPinStillNeeded", defaultValue: "Des conversations sont encore verrouillées. Déverrouillez-les d'abord.", bundle: .main)
+    }
 
     /// Ce que dit un essai refusé (#11388) : « incorrect », ou, la temporisation
     /// engagée, combien de temps attendre — un refus muet pousserait à
@@ -344,7 +350,7 @@ struct ConversationLockSheet: View {
                 withAnimation { step = 2 }
             } else {
                 guard pin == confirmPin else { return shakeAndReset(errPinMismatch) }
-                lockManager.setMasterPin(pin)
+                guard lockManager.setMasterPin(pin) else { return shakeAndReset(errCodeNotSaved) }
                 HapticFeedback.success()
                 onSuccess()
                 dismiss()
@@ -358,7 +364,7 @@ struct ConversationLockSheet: View {
                 withAnimation { step = 2 }
             } else {
                 guard pin == confirmPin else { return shakeAndReset(errPinMismatch) }
-                lockManager.setMasterPin(pin)
+                guard lockManager.setMasterPin(pin) else { return shakeAndReset(errCodeNotSaved) }
                 HapticFeedback.success()
                 onSuccess()
                 dismiss()
@@ -366,7 +372,7 @@ struct ConversationLockSheet: View {
 
         case .removeMasterPin:
             if let message = masterPinRefusal() { return shakeAndReset(message) }
-            lockManager.forceRemoveMasterPin()
+            guard lockManager.removeMasterPin() else { return shakeAndReset(errMasterPinStillNeeded) }
             HapticFeedback.success()
             onSuccess()
             dismiss()
@@ -380,7 +386,7 @@ struct ConversationLockSheet: View {
             } else {
                 guard pin == confirmPin else { return shakeAndReset(errCodeMismatch) }
                 guard let id = conversationId else { return }
-                lockManager.setLock(conversationId: id, pin: pin)
+                guard lockManager.setLock(conversationId: id, pin: pin) else { return shakeAndReset(errCodeNotSaved) }
                 HapticFeedback.success()
                 onSuccess()
                 dismiss()
@@ -451,8 +457,15 @@ struct ConversationLockSheet: View {
             shakeOffset = 0
             pin = ""
             confirmPin = ""
-            if step == 2 { step = 1 }
+            step = Self.resumedStep(afterRefusalAt: step, in: mode)
         }
+    }
+
+    /// Un refus à la confirmation reprend au choix du code : l'étape 1, ou
+    /// l'étape 0 pour la création du PIN maître, qui n'en a pas d'autre.
+    static func resumedStep(afterRefusalAt step: Int, in mode: Mode) -> Int {
+        guard step == 2 else { return step }
+        return mode == .setupMasterPin ? 0 : 1
     }
 }
 

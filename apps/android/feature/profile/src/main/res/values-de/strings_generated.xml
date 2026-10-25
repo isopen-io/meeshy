@@ -53,6 +53,7 @@
     <string name="profile_progression_subtitle">Abzeichen, Level und Serie</string>
     <string name="profile_progression_title">Fortschritt</string>
     <string name="profile_save">Speichern</string>
+    <string name="profile_save_error">Fehler beim Speichern</string>
     <string name="profile_section_about">Info</string>
     <string name="profile_section_actions">Aktionen</string>
     <string name="profile_section_contact">KONTAKT</string>

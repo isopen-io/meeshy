@@ -991,6 +991,7 @@ const es = {
   'message.forwarded': 'Reenviado',
   'message.forwarded.fromGroup': 'Reenviado desde {name}',
   'message.forwarded.fromPerson': 'Reenviado de {name}',
+  'message.editedByModerator': 'editado por un moderador',
   'message.send.failed': 'No enviado',
   'message.send.failed.reason': 'No enviado — {reason}',
   'message.send.retry': 'Reintentar',

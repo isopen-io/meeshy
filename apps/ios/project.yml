@@ -195,6 +195,10 @@ targets:
       # l’écran de partage unique (`Meeshy/Features/Main/Share/`) pour l’extension de partage, en sens
       # inverse. Il n'importe QUE Foundation ; garde : `NSEAttachmentPolicyTests`.
       - path: MeeshyNotificationExtension/NSEAttachmentPolicy.swift
+      # #12655 — le miroir des conversations verrouillées par PIN : l'app
+      # l'ÉCRIT, l'extension le LIT. Une seule définition tient les deux bouts
+      # du fichier. Foundation seul ; garde : `NSELockedConversationMirrorTests`.
+      - path: MeeshyNotificationExtension/NSELockedConversationMirror.swift
       # #8858 — ce que la NSE et les ACTIONS de notification tirent du détail
       # d'un message (catégorie, vignette vidéo, corps détaillé) : une seule
       # lecture pour l'extension qui choisit la catégorie et l'app qui exécute
@@ -574,6 +578,7 @@ targets:
       - path: MeeshyNotificationExtension/NSEDeadline.swift
       - path: MeeshyNotificationExtension/NSEEnrichmentPlan.swift
       - path: MeeshyNotificationExtension/NSEAttachmentPolicy.swift
+      - path: MeeshyNotificationExtension/NSELockedConversationMirror.swift
       - path: MeeshyNotificationExtension/NotificationDetailPolicy.swift
       # #8858 — l'instantané de carte d'une position partagée (MapKit + UIKit).
       # `xcrun simctl push` n'exécute PAS la NSE : c'est le seul endroit d'où

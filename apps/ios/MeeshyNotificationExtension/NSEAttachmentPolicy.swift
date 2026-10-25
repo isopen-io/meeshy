@@ -138,39 +138,71 @@ nonisolated enum NSEAttachmentPolicy {
     /// qu'aucun n'ait à connaître le verrou, et le corps se lit au catalogue.
     /// Les clés de routage restent : toucher la bannière ouvre la
     /// conversation, que la porte du routeur garde par le PIN (#11386).
+    ///
+    /// La charge scellée ne garde QUE ce qui route (#12655) : le `userInfo`
+    /// livré reste dans le Centre de notifications et se relit par quiconque
+    /// l'énumère. Une liste d'EXCLUSION ratait toute clé de contenu qu'elle ne
+    /// nommait pas (média, position, contact, invitation, lien, réaction,
+    /// langues, et l'alerte APNs, dont le corps est l'aperçu) ; une liste
+    /// d'ADMISSION refuse par défaut ce qu'une passerelle future ajoutera.
     static func sealingLockedConversation(_ userInfo: [AnyHashable: Any], isLocked: Bool) -> [AnyHashable: Any] {
         guard isLocked else { return userInfo }
-        return userInfo.merging([AnyHashable("notificationLocKey"): lockedConversationLocKey]) { _, sealed in sealed }
+        return userInfo
+            .filter { key, _ in (key as? String).map(sealedConversationKeys.contains) ?? false }
+            .merging([AnyHashable("notificationLocKey"): lockedConversationLocKey]) { _, sealed in sealed }
     }
 
-    /// La clé App Group où l'app MIROITE le jeu COMPLET des conversations
-    /// verrouillées (#11387). Le cliché `conversation_snapshots` ne connaît que
-    /// la liste chargée (pages de 100) : un « coffre » ancien en sortait, et sa
-    /// bannière partait en clair. Le miroir, lui, est écrit par le gestionnaire
-    /// de verrous à chaque changement et au lancement.
-    static let lockedConversationIdsKey = "locked_conversation_ids"
+    /// Ce qui survit au scellé : router le toucher (conversation, message,
+    /// post, commentaire, appel), dater, compter, nommer l'expéditeur, et
+    /// déclarer la protection. Rien qui décrive le contenu.
+    ///
+    /// Un appel entrant se scelle comme le reste : ses clés sont ADMISES une
+    /// à une plutôt que son type exempté, pour qu'une clé de contenu ajoutée
+    /// demain à sa charge reste refusée. Décrocher depuis la bannière exige
+    /// les serveurs ICE (`iceServers`, le relais TURN) et l'avatar de
+    /// l'appelant : ni l'un ni l'autre ne décrit le contenu de la conversation.
+    static let sealedConversationKeys: Set<String> = [
+        "type", "notificationId", "conversationId", "conversationTitle", "conversationType", "messageId",
+        "postId", "postType", "commentId", "parentCommentId", "friendRequestId", "route",
+        "contentId", "contentType",
+        "senderId", "senderUsername", "senderDisplayName", "senderAvatar", "imageURL",
+        "unreadCount", "badge", "createdAt", "ephemeralDuration", "effectFlags", "replacesActorSubject",
+        "callType", "isVideo", "callBackLabel", "callId", "callerUserId", "callerName", "callerAvatar",
+        "iceServers",
+        "isEncrypted", "apiBaseURL",
+    ]
 
-    /// Écrit le miroir. Un jeu vide RETIRE la clé : la déconnexion (qui lève
-    /// tous les verrous) ne laisse rien derrière elle.
-    static func mirrorLockedConversationIds(_ ids: Set<String>, into defaults: UserDefaults?) {
-        guard let defaults else { return }
-        guard !ids.isEmpty else {
-            defaults.removeObject(forKey: lockedConversationIdsKey)
-            return
+    /// La charge a-t-elle été scellée pour une conversation verrouillée ?
+    static func isSealedForLockedConversation(_ userInfo: [AnyHashable: Any]) -> Bool {
+        (userInfo["notificationLocKey"] as? String) == lockedConversationLocKey
+    }
+
+    /// La catégorie, SANS aucune action, d'une bannière de conversation
+    /// verrouillée (#12655, décision porteur : le PIN est exigé). Ni
+    /// « Répondre » ni « Marquer comme lu » : toucher la bannière ouvre la
+    /// conversation, que la porte du routeur garde par le PIN (#11386).
+    static let lockedConversationCategory = "MEESHY_LOCKED_CONVERSATION"
+
+    /// Les appels gardent leurs gestes : décrocher ou rappeler n'écrit rien
+    /// dans le fil, et la décision ne vise que la réponse et la lecture.
+    private static let callCategories: Set<String> = ["MEESHY_CALL_INCOMING", "MEESHY_CALL_MISSED", "MEESHY_CALL"]
+
+    /// **La catégorie que garde une bannière, verrou compris.** Une charge
+    /// scellée, d'une conversation verrouillée, ou dont l'extension ne peut pas
+    /// savoir si elle l'est (fail-closed), perd toute action rapide : elle prend
+    /// `lockedConversationCategory`, quelle que soit la catégorie choisie avant
+    /// (message, mention, vocal, éphémère, détail, ou celle posée par la
+    /// passerelle).
+    static func category(
+        _ chosen: String,
+        under lock: NSEConversationLock,
+        userInfo: [AnyHashable: Any]
+    ) -> String {
+        guard !chosen.isEmpty, !callCategories.contains(chosen) else { return chosen }
+        guard lock.offersQuickActions, !isSealedForLockedConversation(userInfo) else {
+            return lockedConversationCategory
         }
-        defaults.set(ids.sorted(), forKey: lockedConversationIdsKey)
-    }
-
-    /// **La conversation de cette charge est-elle verrouillée par PIN sur cet
-    /// appareil ?** Le miroir fait foi ; le drapeau du cliché ne sert que de
-    /// renfort (il ne peut qu'AJOUTER un verrou, jamais en retirer un).
-    static func isContentLocked(
-        conversationId: String?,
-        mirroredLockedIds: [String]?,
-        snapshotDeclaresLock: Bool
-    ) -> Bool {
-        guard let conversationId, !conversationId.isEmpty else { return false }
-        return snapshotDeclaresLock || (mirroredLockedIds ?? []).contains(conversationId)
+        return chosen
     }
 
     /// Masque des bits de cycle de vie de `MessageEffectFlags` — éphémère (0),
@@ -210,6 +242,22 @@ nonisolated enum NSEAttachmentPolicy {
     }
 }
 
+/// **Ce que l'extension sait du verrou PIN de la conversation d'une charge**
+/// (#12655). `unknown` n'est pas `open` : avant le premier déverrouillage,
+/// l'extension ne peut pas savoir si la conversation est sous PIN, et la traite
+/// comme si elle l'était — contenu scellé, rien du message déposé dans le
+/// groupe d'apps, aucune action rapide (fail-closed).
+nonisolated enum NSEConversationLock: Equatable, Sendable {
+    case noConversation
+    case open
+    case locked
+    case unknown
+
+    var sealsContent: Bool { self == .locked || self == .unknown }
+
+    var offersQuickActions: Bool { self == .open || self == .noConversation }
+}
+
 /// **L'ordre dans lequel l'extension prépare une bannière** (#11387), extrait de
 /// `NotificationService.prepareBestAttempt` pour être ÉPROUVABLE : un verrou PIN
 /// ne se garde que si la charge est scellée AVANT toute décision (catégorie,
@@ -232,6 +280,12 @@ nonisolated enum NSEPreparationStep: Equatable, Sendable {
     case applyEphemeralDeadline
     case sweepExpiredBanners
     case replaceBodyWithLockLabel
+
+    /// Le plan de la bannière d'une conversation dont l'extension sait CE
+    /// verrou : un verrou connu ou inconnu scelle (#12655).
+    static func plan(for lock: NSEConversationLock) -> [NSEPreparationStep] {
+        plan(isLockedConversation: lock.sealsContent)
+    }
 
     static func plan(isLockedConversation: Bool) -> [NSEPreparationStep] {
         let decisions: [NSEPreparationStep] = [

@@ -3,6 +3,7 @@ import { conversationPreviewString } from '@meeshy/shared/utils/conversation-pre
 import { parseJoinNotice } from '@meeshy/shared/utils/join-notice';
 import { arrivalsNoticeText, parseArrivalsNotice, type ArrivalsNoticeMetadata } from '@meeshy/shared/utils/arrivals-notice';
 import { captureNoticeText, parseCaptureNotice, type CaptureNoticeMetadata } from '@meeshy/shared/utils/capture-notice';
+import { editedByThirdParty } from '@meeshy/shared/utils/message-edit-attribution';
 
 import type { Message } from '@/lib/api/types';
 import { translate } from '@/lib/i18n-catalog';
@@ -34,7 +35,8 @@ export type ForwardAttribution =
 export type MessageBadge =
   | { readonly kind: 'pinned' }
   | { readonly kind: 'forwarded'; readonly attribution: ForwardAttribution }
-  | { readonly kind: 'edited' };
+  /** `byModerator` (#11375) — la dernière modification est celle d'un modérateur de plateforme, à visage découvert. */
+  | { readonly kind: 'edited'; readonly byModerator: boolean };
 
 /**
  * Un message système, au sens `event-names.ts:109-116` : « il arrive sous
@@ -257,7 +259,7 @@ export function forwardLabelOf(attribution: ForwardAttribution, language: Interf
 
 type BadgeFields = Pick<
   Message,
-  'pinnedAt' | 'forwardedFromId' | 'forwardedFromConversationId' | 'forwardedFromConversation' | 'expiresAt' | 'isEdited'
+  'pinnedAt' | 'forwardedFromId' | 'forwardedFromConversationId' | 'forwardedFromConversation' | 'expiresAt' | 'isEdited' | 'editedById'
 >;
 
 /**
@@ -276,7 +278,7 @@ export function badgesOf(message: BadgeFields): readonly MessageBadge[] {
   const attribution = forwardAttributionOf(message);
   if (attribution !== null) badges.push({ kind: 'forwarded', attribution });
 
-  if (message.isEdited) badges.push({ kind: 'edited' });
+  if (message.isEdited) badges.push({ kind: 'edited', byModerator: editedByThirdParty(message) });
 
   return badges;
 }
@@ -312,4 +314,9 @@ export function badgesOf(message: BadgeFields): readonly MessageBadge[] {
  */
 export function editedOf(badges: readonly MessageBadge[]): boolean {
   return badges.some((badge) => badge.kind === 'edited');
+}
+
+/** « MODIFIÉ PAR UN MODÉRATEUR » (#11375) — même site unique, lu par les deux peaux. */
+export function editedByModeratorOf(badges: readonly MessageBadge[]): boolean {
+  return badges.some((badge) => badge.kind === 'edited' && badge.byModerator);
 }

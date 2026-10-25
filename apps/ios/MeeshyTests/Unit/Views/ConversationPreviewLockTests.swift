@@ -43,7 +43,8 @@ final class ConversationPreviewLockTests: XCTestCase {
             messageService: service,
             cache: cacheMock,
             readerPrism: { ["fr"] },
-            isLocked: isLocked
+            isLocked: isLocked,
+            endToEnd: MockEndToEndMessaging()
         )
         return (sut, service, cacheMock)
     }
@@ -208,6 +209,7 @@ final class ConversationPreviewLockTests: XCTestCase {
 
     private func makeMirroredLockManager(
         mirror: UserDefaults,
+        file: URL? = nil,
         purged: PurgedBanners
     ) -> ConversationLockManager {
         ConversationLockManager(
@@ -216,6 +218,7 @@ final class ConversationPreviewLockTests: XCTestCase {
             biometrics: StubBiometricUnlocker(),
             iterations: 1_000,
             contentLockMirror: mirror,
+            contentLockMirrorFile: file,
             purgeDeliveredBanners: { purged.conversationIds.append($0) }
         )
     }
@@ -227,32 +230,46 @@ final class ConversationPreviewLockTests: XCTestCase {
         return mirror
     }
 
+    private func makeMirrorFile() throws -> URL {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: directory) }
+        return try XCTUnwrap(NSELockedConversationMirror.fileURL(inContainer: directory))
+    }
+
     /// Une conversation verrouillée hors de la liste chargée (un « coffre »
     /// ancien) n'a pas de cliché : le miroir porte le jeu COMPLET, et
-    /// l'extension la voit verrouillée.
+    /// l'extension la voit verrouillée — au fichier qu'elle lit d'abord (#12655).
     func test_setLock_mirrorsTheFullLockedSet_soTheExtensionSeesAConversationAbsentFromTheList() throws {
         let mirror = try makeMirror()
-        let sut = makeMirroredLockManager(mirror: mirror, purged: PurgedBanners())
+        let file = try makeMirrorFile()
+        let sut = makeMirroredLockManager(mirror: mirror, file: file, purged: PurgedBanners())
 
         sut.setLock(conversationId: "coffre-hors-liste", pin: "1234")
 
-        let mirrored = mirror.stringArray(forKey: NSEAttachmentPolicy.lockedConversationIdsKey)
-        XCTAssertTrue(NSEAttachmentPolicy.isContentLocked(
-            conversationId: "coffre-hors-liste", mirroredLockedIds: mirrored, snapshotDeclaresLock: false
-        ))
+        let lock = NSELockedConversationMirror.conversationLock(
+            conversationId: "coffre-hors-liste",
+            readFile: { NSELockedConversationMirror.readFile(at: file) },
+            readLegacyKey: { nil },
+            snapshotDeclaresLock: { _ in false }
+        )
+        XCTAssertEqual(lock, .locked)
     }
 
     func test_removeLock_andLogout_clearTheMirror() throws {
         let mirror = try makeMirror()
-        let sut = makeMirroredLockManager(mirror: mirror, purged: PurgedBanners())
+        let file = try makeMirrorFile()
+        let sut = makeMirroredLockManager(mirror: mirror, file: file, purged: PurgedBanners())
         sut.setLock(conversationId: "a", pin: "1234")
         sut.setLock(conversationId: "b", pin: "1234")
 
         sut.removeLock(conversationId: "a")
-        XCTAssertEqual(mirror.stringArray(forKey: NSEAttachmentPolicy.lockedConversationIdsKey), ["b"])
+        XCTAssertEqual(mirror.stringArray(forKey: NSELockedConversationMirror.legacyDefaultsKey), ["b"])
+        XCTAssertEqual(NSELockedConversationMirror.readFile(at: file), .ids(["b"]))
 
         sut.resetForLogout()
-        XCTAssertNil(mirror.object(forKey: NSEAttachmentPolicy.lockedConversationIdsKey))
+        XCTAssertEqual(mirror.stringArray(forKey: NSELockedConversationMirror.legacyDefaultsKey), [])
+        XCTAssertEqual(NSELockedConversationMirror.readFile(at: file), .ids([]), "« aucun verrou » est un savoir")
     }
 
     /// Les bannières déjà délivrées montraient le contenu : verrouiller les

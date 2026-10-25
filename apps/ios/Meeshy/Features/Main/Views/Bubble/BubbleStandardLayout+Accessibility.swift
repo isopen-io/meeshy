@@ -45,7 +45,7 @@ extension BubbleStandardLayout {
             parts.append(MessageAccessibilityLabelComposer.deliveryStatusAccessibilityLabel(content.meta.deliveryStatus))
         }
         if content.editedAt != nil {
-            parts.append(String(localized: "a11y.message.edited", bundle: .main))
+            parts.append(BubbleEditMark.accessibilityLabel(byModerator: content.editedByModerator))
         }
         if content.isPinned {
             parts.append(String(localized: "a11y.message.pinned", bundle: .main))

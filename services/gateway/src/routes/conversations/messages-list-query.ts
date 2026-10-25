@@ -48,6 +48,7 @@ import { messageSenderUserSelect } from './utils/message-sender-select';
 import { logger } from './messages-shared';
 import { discoverConversationIdsByMessageIds, withOrphanedSenderRepair } from '../../services/messaging/withOrphanedSenderRepair';
 import { servedLinkMetadata } from '../../services/messaging/linkTrackingAuthor';
+import { servedEditAttribution, type EditAttributionReader } from '@meeshy/shared/utils/message-edit-attribution';
 import { authorProfileDecor } from '../../services/appearance/authorProfileDecor';
 import type {
   AttachmentAudioTranslationEntry,
@@ -262,6 +263,9 @@ export function buildMessageListSelect(options: {
         // ===== ÉDITION / SUPPRESSION =====
         isEdited: true,
         editedAt: true,
+        // #11375 — l'auteur d'une modification faite par un modérateur.
+        thirdPartyEditorId: true,
+        thirdPartyEditorRole: true,
         deletedAt: true,
 
         // ===== REPLY / FORWARD =====
@@ -290,8 +294,12 @@ export function buildMessageListSelect(options: {
         reactionCount: true,
 
         // ===== CHIFFREMENT =====
+        // #11381 — le chiffré et ses métadonnées sont LUS pour que la passerelle
+        // ouvre un message `server`/`hybrid` (`revealAtRestRows`) ; ils ne sortent pas.
         isEncrypted: true,
         encryptionMode: true,
+        encryptedContent: true,
+        encryptionMetadata: true,
 
         // ===== TIMESTAMPS =====
         createdAt: true,
@@ -371,6 +379,10 @@ export function buildMessageListSelect(options: {
             effectFlags: true,
             isEncrypted: true,
             encryptionMode: true,
+            // #11381 — la citation d'un message au repos s'ouvre comme la racine.
+            conversationId: true,
+            encryptedContent: true,
+            encryptionMetadata: true,
             // Le TYPE porte l'icône du placeholder servi à un message protégé
             // (`protectedPreview` : « 👁️ 🖼️ ») ; sans lui toute citation
             // masquée se lit « 👁️ 💬 », quel que soit son média.
@@ -467,6 +479,8 @@ export type MessageRowMappingContext = {
    * protégées. Absent ou `null` (aucune clé posée) ⇒ l'adresse d'avant.
    */
   readerFileUrlSigner?: ReaderFileUrlSigner | null;
+  /** #11375 — le lecteur, juge de ce qu'il lit de l'auteur d'une modification. Absent ⇒ la mention seule. */
+  editAttributionReader?: EditAttributionReader;
 };
 
 /** Retour `any` DÉLIBÉRÉ : l'appelant (`messages-list.ts`) lit `mappedMessages` sans annotation propre. `mappedMessage`, construit ci-dessous, est lui pleinement typé. */
@@ -510,6 +524,8 @@ export function mapMessageRowForList(message: RawMessageRow, ctx: MessageRowMapp
           // Édition/Suppression
           isEdited: message.isEdited,
           editedAt: message.editedAt,
+          // #11375 — servi PAR LECTEUR : la mention à tous, l'identité à qui en rend compte.
+          ...servedEditAttribution(message, ctx.editAttributionReader),
           deletedAt: message.deletedAt,
 
           // Reply/Forward

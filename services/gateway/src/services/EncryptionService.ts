@@ -7,13 +7,16 @@
  * Encryption Modes:
  * - 'e2ee': End-to-end encryption only (client-side Signal Protocol) - NO translation
  * - 'server': Server-side encryption only (AES-256-GCM) - translation supported
- * - 'hybrid': Double encryption - E2EE + server layer - translation supported
+ * - 'hybrid': chiffré AU REPOS comme 'server' (#11374) — jamais de bout en bout - translation supported
  */
 
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import * as crypto from 'crypto';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { guardedInterval, guardedTimeout } from '../utils/guarded-timer';
+import type { SealedQueuedPayload } from '@meeshy/shared/types/delivery-queue';
+import { AT_REST_AAD_V1, atRestAad, DELIVERY_QUEUE_AAD_V1, DELIVERY_QUEUE_AAD_V2, deliveryQueueAad, deliveryQueueAadV2, type DeliveryQueueBinding, openBytes, sealBytes, ServerAtRestUnavailableError, ServerAtRestUnreadableError, type AtRestEnvelope, type AtRestKeyring } from './messaging/serverAtRest';
+import { ServerKeyVault } from './ServerKeyVault';
 
 // Create a child logger for encryption operations
 const logger = enhancedLogger.child({ module: 'EncryptionService' });
@@ -49,6 +52,19 @@ try {
     error: error instanceof Error ? error.message : 'Unknown error'
   });
 }
+
+
+/** Le chiffré au repos tel que la ligne `Message` le range (`encryptionMetadata`). */
+type AtRestSealed = {
+  readonly ciphertext: string;
+  readonly metadata: {
+    readonly protocol: 'aes-256-gcm';
+    readonly keyId: string;
+    readonly iv: string;
+    readonly authTag: string;
+    readonly aad: typeof AT_REST_AAD_V1;
+  };
+};
 
 // Types defined locally to avoid build order issues with shared package
 type EncryptionMode = 'e2ee' | 'server' | 'hybrid';
@@ -108,270 +124,6 @@ interface PreKeyBundle {
   kyberPreKeySignature: Uint8Array | null;
 }
 
-/**
- * Server Key Vault - Manages encryption keys with database persistence
- *
- * Keys are persisted to MongoDB using the ServerEncryptionKey model.
- * Uses envelope encryption: data keys are encrypted with a master key before storage.
- * Includes in-memory LRU cache for performance.
- */
-class ServerKeyVault {
-  private prisma: PrismaClient;
-  private masterKey: Buffer;
-  private keyCache: Map<string, { key: Buffer; lastAccessed: number }> = new Map();
-  private conversationKeyMap: Map<string, string> = new Map();
-  private readonly CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
-  private readonly MAX_CACHE_SIZE = 500;
-
-  constructor(prisma: PrismaClient) {
-    this.prisma = prisma;
-    // Load master key from environment (required for production)
-    const masterKeyB64 = process.env.ENCRYPTION_MASTER_KEY;
-    if (!masterKeyB64) {
-      if (process.env.NODE_ENV === 'production') {
-        throw new Error('ENCRYPTION_MASTER_KEY environment variable is required in production');
-      }
-      // Development fallback - generate ephemeral key (keys will be lost on restart)
-      logger.warn('No ENCRYPTION_MASTER_KEY set - using ephemeral key (development only)');
-      this.masterKey = crypto.randomBytes(32);
-    } else {
-      this.masterKey = Buffer.from(masterKeyB64, 'base64');
-      if (this.masterKey.length !== 32) {
-        throw new Error('ENCRYPTION_MASTER_KEY must be 32 bytes (256 bits) base64 encoded');
-      }
-    }
-  }
-
-  /**
-   * Initialize vault - load existing keys from database
-   */
-  async initialize(): Promise<void> {
-    logger.info('Initializing ServerKeyVault');
-
-    try {
-      // Load conversation key mappings from database
-      const existingKeys = await this.prisma.serverEncryptionKey.findMany({
-        where: {
-          purpose: 'conversation',
-          expiresAt: { equals: null }, // Non-expired keys
-        },
-        select: {
-          id: true,
-          conversationId: true,
-        },
-      });
-
-      for (const key of existingKeys) {
-        if (key.conversationId) {
-          this.conversationKeyMap.set(key.conversationId, key.id);
-        }
-      }
-
-      logger.info('ServerKeyVault initialized', {
-        conversationKeysLoaded: existingKeys.length,
-        cacheSize: this.keyCache.size
-      });
-    } catch (error) {
-      logger.error('Failed to initialize ServerKeyVault', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Generate a new encryption key and persist to database
-   */
-  async generateKey(conversationId?: string, purpose: string = 'message'): Promise<{ keyId: string; key: Buffer }> {
-    const keyId = crypto.randomUUID();
-    const key = crypto.randomBytes(32); // AES-256
-
-    logger.debug('Generating new encryption key', { keyId, purpose, conversationId });
-
-    // Encrypt the key with master key before storage (envelope encryption)
-    const iv = crypto.randomBytes(12);
-    const cipher = crypto.createCipheriv('aes-256-gcm', this.masterKey, iv);
-    const encryptedKey = Buffer.concat([cipher.update(key), cipher.final()]);
-    const authTag = cipher.getAuthTag();
-
-    try {
-      // Persist to database
-      await this.prisma.serverEncryptionKey.create({
-        data: {
-          id: keyId,
-          encryptedKey: encryptedKey.toString('base64'),
-          iv: iv.toString('base64'),
-          authTag: authTag.toString('base64'),
-          algorithm: 'aes-256-gcm',
-          purpose,
-          conversationId: conversationId || null,
-          createdAt: new Date(),
-        },
-      });
-
-      // Cache the key in memory
-      this.cacheKey(keyId, key);
-
-      logger.debug('Encryption key generated and persisted', { keyId, purpose });
-      return { keyId, key };
-    } catch (error) {
-      logger.error('Failed to persist encryption key', error, { keyId });
-      throw error;
-    }
-  }
-
-  /**
-   * Get a key by ID (from cache or database)
-   */
-  async getKey(keyId: string): Promise<Buffer | undefined> {
-    // Check cache first
-    const cached = this.keyCache.get(keyId);
-    if (cached) {
-      cached.lastAccessed = Date.now();
-      logger.trace('Key retrieved from cache', { keyId });
-      return cached.key;
-    }
-
-    // Load from database
-    logger.debug('Loading key from database', { keyId });
-    try {
-      const keyRecord = await this.prisma.serverEncryptionKey.findUnique({
-        where: { id: keyId },
-      });
-
-      if (!keyRecord) {
-        logger.warn('Key not found in database', { keyId });
-        return undefined;
-      }
-
-      // Decrypt the key using master key
-      const encryptedKey = Buffer.from(keyRecord.encryptedKey, 'base64');
-      const iv = Buffer.from(keyRecord.iv, 'base64');
-      const authTag = Buffer.from(keyRecord.authTag, 'base64');
-
-      const decipher = crypto.createDecipheriv('aes-256-gcm', this.masterKey, iv);
-      decipher.setAuthTag(authTag);
-      const key = Buffer.concat([decipher.update(encryptedKey), decipher.final()]);
-
-      // Cache for future use
-      this.cacheKey(keyId, key);
-
-      // Update last accessed timestamp (fire-and-forget)
-      this.prisma.serverEncryptionKey.update({
-        where: { id: keyId },
-        data: { lastAccessedAt: new Date() },
-      }).catch((err) => {
-        logger.warn('Failed to update key lastAccessedAt', { keyId, error: err.message });
-      });
-
-      logger.debug('Key loaded from database', { keyId });
-      return key;
-    } catch (error) {
-      logger.error('Failed to load key from database', error, { keyId });
-      return undefined;
-    }
-  }
-
-  /**
-   * Set conversation to key mapping
-   */
-  async setConversationKey(conversationId: string, keyId: string): Promise<void> {
-    this.conversationKeyMap.set(conversationId, keyId);
-
-    // Update database record with conversation association
-    try {
-      await this.prisma.serverEncryptionKey.update({
-        where: { id: keyId },
-        data: {
-          conversationId,
-          purpose: 'conversation',
-        },
-      });
-      logger.debug('Conversation key mapping saved', { conversationId, keyId });
-    } catch (error) {
-      logger.warn('Failed to update conversation key mapping in database', { conversationId, keyId });
-    }
-  }
-
-  /**
-   * Get the key ID for a conversation
-   */
-  getConversationKeyId(conversationId: string): string | undefined {
-    return this.conversationKeyMap.get(conversationId);
-  }
-
-  /**
-   * Cache a key in memory with LRU eviction
-   */
-  private cacheKey(keyId: string, key: Buffer): void {
-    // Evict oldest entries if cache is full
-    if (this.keyCache.size >= this.MAX_CACHE_SIZE) {
-      this.evictOldestCacheEntries();
-    }
-
-    this.keyCache.set(keyId, { key, lastAccessed: Date.now() });
-  }
-
-  /**
-   * Evict oldest 10% of cache entries
-   */
-  private evictOldestCacheEntries(): void {
-    const entries = Array.from(this.keyCache.entries());
-    entries.sort((a, b) => a[1].lastAccessed - b[1].lastAccessed);
-
-    const toEvict = Math.ceil(entries.length * 0.1);
-    for (let i = 0; i < toEvict; i++) {
-      this.keyCache.delete(entries[i][0]);
-    }
-
-    logger.debug('Evicted cache entries', { evicted: toEvict, remaining: this.keyCache.size });
-  }
-
-  /**
-   * Clean up expired cache entries
-   */
-  cleanupCache(): void {
-    const now = Date.now();
-    let evicted = 0;
-
-    for (const [keyId, entry] of this.keyCache.entries()) {
-      if (now - entry.lastAccessed > this.CACHE_TTL_MS) {
-        this.keyCache.delete(keyId);
-        evicted++;
-      }
-    }
-
-    if (evicted > 0) {
-      logger.debug('Cleaned up expired cache entries', { evicted, remaining: this.keyCache.size });
-    }
-  }
-
-  /**
-   * Securely clear all keys from memory
-   *
-   * SECURITY: Zeroizes all cached keys and clears mappings
-   * Should be called during graceful server shutdown
-   */
-  clearAllKeys(): void {
-    logger.info('Clearing all encryption keys from memory');
-
-    // Zeroize all cached keys
-    for (const entry of this.keyCache.values()) {
-      if (entry.key) {
-        entry.key.fill(0); // Zeroize key data
-      }
-    }
-
-    // Clear caches and mappings
-    this.keyCache.clear();
-    this.conversationKeyMap.clear();
-
-    // Zeroize master key
-    if (this.masterKey) {
-      this.masterKey.fill(0);
-    }
-
-    logger.info('All encryption keys cleared from memory');
-  }
-}
 
 /**
  * Gateway Encryption Service
@@ -381,7 +133,7 @@ class ServerKeyVault {
  * - Key management for conversations
  * - Signal Protocol pre-key bundle generation
  */
-export class EncryptionService {
+export class EncryptionService implements AtRestKeyring {
   private keyVault: ServerKeyVault;
   private signalService: any = null; // Will be initialized when @signalapp/libsignal-client is available
   private initialized = false;
@@ -481,6 +233,163 @@ export class EncryptionService {
     // No conversationId - generate a standalone key (no locking needed)
     const { keyId } = await this.keyVault.generateKey(undefined, 'conversation');
     return keyId;
+  }
+
+  /**
+   * #11381 — chiffre un texte AU REPOS pour sa conversation, lié à elle
+   * (`aad`). La clé est celle que la conversation désigne
+   * (`serverEncryptionKeyId`) quand elle en a une — la même que ses
+   * traductions — sinon la clé de conversation du coffre.
+   */
+  async sealAtRest(params: {
+    readonly plaintext: string;
+    readonly conversationId: string;
+    readonly preferredKeyId?: string | null;
+  }): Promise<AtRestSealed> {
+    if (!this.keyVault.masterKeyAvailable) {
+      throw new ServerAtRestUnavailableError('missing');
+    }
+    const { keyId, key } = await this.writableConversationKey(params.conversationId, params.preferredKeyId ?? null);
+    const iv = crypto.randomBytes(12);
+    const sealed = sealBytes({ key, iv, plaintext: Buffer.from(params.plaintext, 'utf8'), aad: atRestAad(params.conversationId) });
+    return {
+      ciphertext: sealed.ciphertext.toString('base64'),
+      metadata: {
+        protocol: 'aes-256-gcm',
+        keyId,
+        iv: iv.toString('base64'),
+        authTag: sealed.authTag.toString('base64'),
+        aad: AT_REST_AAD_V1,
+      },
+    };
+  }
+
+  /**
+   * La clé sous laquelle ÉCRIRE dans cette conversation.
+   *
+   * #12822 — FAIL-CLOSED. Une clé qui EXISTE mais que la clé maîtresse présente
+   * ne désenveloppe pas (`unwrap-failed`) ne se remplace JAMAIS : la cause la
+   * plus probable est une `ENCRYPTION_MASTER_KEY` erronée au déploiement, et
+   * remplacer réécrirait chaque conversation sous une clé que la bonne clé
+   * maîtresse n'ouvrira plus, en scellant au passage tout leur historique.
+   * L'envoi est refusé (`SERVER_AT_REST_UNAVAILABLE`, 503) et journalisé en
+   * ERROR, sans aucun secret. Seule une clé ABSENTE de la base (`missing`) est
+   * remplacée par une clé neuve rattachée à la conversation : rien ne pourrait
+   * plus l'ouvrir. Une panne (base injoignable) ne remplace rien non plus.
+   */
+  private async writableConversationKey(conversationId: string, preferredKeyId: string | null): Promise<{ keyId: string; key: Buffer }> {
+    const keyId = preferredKeyId || await this.getOrCreateConversationKey(conversationId);
+    const loaded = await this.keyVault.loadKey(keyId);
+    if (loaded.status === 'ok') {
+      if (loaded.owner === null && keyId === preferredKeyId) await this.keyVault.claimDesignatedKey(conversationId, keyId);
+      return { keyId, key: loaded.key };
+    }
+    if (loaded.status === 'unavailable') throw new ServerAtRestUnavailableError('key-unavailable');
+    if (loaded.status === 'unwrap-failed') {
+      logger.error('clé de conversation illisible sous la clé maîtresse présente : envoi refusé, rien n’est remplacé', undefined, {
+        conversationId, keyId, code: 'SERVER_AT_REST_UNAVAILABLE', reason: 'key-unwrap-failed',
+      });
+      throw new ServerAtRestUnavailableError('key-unwrap-failed');
+    }
+    const fresh = await this.keyVault.generateKey(conversationId, 'conversation');
+    await this.keyVault.setConversationKey(conversationId, fresh.keyId);
+    logger.warn('clé de conversation absente remplacée : les messages d’avant restent scellés', {
+      conversationId, previousKeyId: keyId, nextKeyId: fresh.keyId, reason: loaded.status,
+    });
+    if (!preferredKeyId) return fresh;
+    const designated = await this.keyVault.redesignate(conversationId, preferredKeyId, fresh.keyId);
+    if (designated === fresh.keyId) return fresh;
+    const winner = await this.keyVault.getKeyFor(designated, conversationId);
+    if (!winner) throw new ServerAtRestUnavailableError('key-unavailable');
+    return { keyId: designated, key: winner };
+  }
+
+  /**
+   * #12822 (M1) — la clé qu'une ACTIVATION `server`/`hybrid` désigne.
+   *
+   * La conversation qui désigne déjà une clé qui s'ouvre (la sienne, ou une
+   * clé sans propriétaire d'avant #11381) la REPREND, rattachée : désactiver
+   * puis réactiver ne laisse aucun message scellé sous une clé que plus rien
+   * ne désigne. Seule une clé ABSENTE de la base (ou rattachée à une autre
+   * conversation) cède la place à une clé neuve. Une clé qui existe mais ne se
+   * désenveloppe pas sous la clé maîtresse présente refuse l'activation, comme
+   * elle refuse l'envoi : remplacer scellerait l'historique en silence.
+   */
+  async activationKeyId(conversationId: string, designatedKeyId: string | null): Promise<string> {
+    if (!this.keyVault.masterKeyAvailable) throw new ServerAtRestUnavailableError('missing');
+    if (!designatedKeyId) return this.getOrCreateConversationKey(conversationId);
+    const loaded = await this.keyVault.loadKey(designatedKeyId);
+    if (loaded.status === 'unavailable') throw new ServerAtRestUnavailableError('key-unavailable');
+    if (loaded.status === 'unwrap-failed') {
+      logger.error('clé désignée illisible sous la clé maîtresse présente : activation refusée, rien n’est remplacé', undefined, {
+        conversationId, keyId: designatedKeyId, code: 'SERVER_AT_REST_UNAVAILABLE', reason: 'key-unwrap-failed',
+      });
+      throw new ServerAtRestUnavailableError('key-unwrap-failed');
+    }
+    if (loaded.status === 'ok' && (loaded.owner === null || loaded.owner === conversationId)) {
+      if (loaded.owner === null) await this.keyVault.claimDesignatedKey(conversationId, designatedKeyId);
+      return designatedKeyId;
+    }
+    return this.getOrCreateConversationKey(conversationId);
+  }
+
+  /** Ouvre un chiffré au repos ; tout échec est EXPLICITE (`ServerAtRestUnreadableError`). */
+  async openAtRest(envelope: AtRestEnvelope, conversationId: string): Promise<string> {
+    return this.openUnder(envelope, conversationId, envelope.aad === AT_REST_AAD_V1 ? atRestAad(conversationId) : undefined);
+  }
+
+  /**
+   * #12822 — scelle la charge d'une entrée de file hors ligne d'une
+   * conversation au repos, sous la clé que la conversation désigne, liée à sa
+   * conversation, son message, son destinataire, son événement et sa clé de
+   * dédup (`delivery-queue:v2`, L1).
+   */
+  async sealQueuedPayload(params: DeliveryQueueBinding & { readonly plaintext: string }): Promise<SealedQueuedPayload> {
+    if (!this.keyVault.masterKeyAvailable) throw new ServerAtRestUnavailableError('missing');
+    const designated = await this.keyVault.designatedKeyId(params.conversationId);
+    const { keyId, key } = await this.writableConversationKey(params.conversationId, designated);
+    const iv = crypto.randomBytes(12);
+    const sealed = sealBytes({
+      key,
+      iv,
+      plaintext: Buffer.from(params.plaintext, 'utf8'),
+      aad: deliveryQueueAadV2(params),
+    });
+    return {
+      ciphertext: sealed.ciphertext.toString('base64'),
+      keyId,
+      iv: iv.toString('base64'),
+      authTag: sealed.authTag.toString('base64'),
+      aad: DELIVERY_QUEUE_AAD_V2,
+    };
+  }
+
+  /**
+   * Rouvre une charge de file sous la liaison qu'elle déclare : v2 (tout ce qui
+   * décide du rejeu), ou v1 (conversation et message) pour une entrée enfilée
+   * avant v2. Toute autre liaison est refusée.
+   */
+  async openQueuedPayload(sealed: SealedQueuedPayload, binding: DeliveryQueueBinding): Promise<string> {
+    if (sealed.aad === DELIVERY_QUEUE_AAD_V2) return this.openUnder(sealed, binding.conversationId, deliveryQueueAadV2(binding));
+    if (sealed.aad === DELIVERY_QUEUE_AAD_V1) return this.openUnder(sealed, binding.conversationId, deliveryQueueAad(binding.conversationId, binding.messageId));
+    throw new ServerAtRestUnreadableError('malformed');
+  }
+
+  private async openUnder(envelope: AtRestEnvelope, conversationId: string, aad: Buffer | undefined): Promise<string> {
+    if (!this.keyVault.masterKeyAvailable) throw new ServerAtRestUnreadableError('master-key-unavailable');
+    const key = await this.keyVault.getKeyFor(envelope.keyId, conversationId);
+    if (!key) throw new ServerAtRestUnreadableError('data-key-unavailable');
+    try {
+      return openBytes({
+        key,
+        iv: Buffer.from(envelope.iv, 'base64'),
+        ciphertext: Buffer.from(envelope.ciphertext, 'base64'),
+        authTag: Buffer.from(envelope.authTag, 'base64'),
+        ...(aad ? { aad } : {}),
+      }).toString('utf8');
+    } catch {
+      throw new ServerAtRestUnreadableError('authentication-failed');
+    }
   }
 
   /**

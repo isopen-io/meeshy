@@ -66,6 +66,20 @@ class MessageActionPolicyTest {
     }
 
     @Test
+    fun `at rest on the server, edit is never offered, to the author or to a platform moderator`() {
+        listOf("server", "hybrid", "Server").forEach { mode ->
+            val result = actions(mine = true, encryptionMode = mode)
+            assertThat(result.verdicts.edit).isNull()
+            assertThat(result.groups.primary + result.groups.more).doesNotContain(Action.EDIT)
+        }
+        val sealedMessage = MessageContentKind.Subject(id = "65f000000000000000000001", content = "Bonjour", encryptionMode = "hybrid")
+        assertThat(actions(mine = true, subject = sealedMessage).verdicts.edit).isNull()
+        val moderator = viewer(platformRole = "MODERATOR")
+        assertThat(actions(mine = false, viewer = moderator, encryptionMode = "server").verdicts.edit).isNull()
+        assertThat(actions(mine = true).verdicts.edit).isNotNull()
+    }
+
+    @Test
     fun `the 24 hour edit window includes its bounds and carries windowEndsAt`() {
         val window = MessageActionPolicy.EDIT_WINDOW_MILLIS
         val atBound = actions(mine = true, now = created + window).verdicts.edit

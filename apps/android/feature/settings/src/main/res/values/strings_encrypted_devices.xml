@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="security_section_encrypted_devices">End-to-end encryption</string>
+    <string name="encrypted_devices_title">My encrypted devices</string>
+    <string name="encrypted_devices_notice_title">This Android phone doesn’t read end-to-end encrypted chats yet</string>
+    <string name="encrypted_devices_notice_body">It isn’t in this list yet, and can’t show its code or scan another device’s code for now. You can already remove a device you’ve lost: it will stop receiving your encrypted messages.</string>
+    <string name="encrypted_devices_loading">Loading your encrypted devices</string>
+    <string name="encrypted_devices_offline_empty">You’re offline. Connect to see your encrypted devices.</string>
+    <string name="encrypted_devices_error">Your encrypted devices couldn’t be loaded.</string>
+    <string name="encrypted_devices_retry">Retry</string>
+    <string name="encrypted_devices_offline">You’re offline. This list may be out of date.</string>
+    <string name="encrypted_devices_stale">This list couldn’t be refreshed and may be out of date.</string>
+    <string name="encrypted_devices_empty_title">No encrypted device yet</string>
+    <string name="encrypted_devices_empty_body">A device shows up here once Meeshy has set up end-to-end encryption on it.</string>
+    <string name="encrypted_devices_dates">Added %1$s · last active %2$s</string>
+    <string name="encrypted_devices_current">This device</string>
+    <string name="encrypted_devices_retiring">Removing %1$s</string>
+    <string name="encrypted_devices_retire_a11y">Remove %1$s</string>
+    <string name="encrypted_devices_retire">Remove</string>
+    <string name="encrypted_devices_retire_confirm_title">Remove this device?</string>
+    <string name="encrypted_devices_retire_confirm_message">%1$s will no longer receive your encrypted messages and can’t come back with the same keys. What it has already decrypted stays on it: if it was lost or stolen, also sign it out in Sessions and change your password.</string>
+    <string name="encrypted_devices_retire_confirm_action">Remove</string>
+    <string name="encrypted_devices_cancel">Cancel</string>
+    <string name="encrypted_devices_retire_offline">You’re offline: a device can only be removed once you’re connected.</string>
+    <string name="encrypted_devices_retire_failed">The device couldn’t be removed. Try again.</string>
+    <string name="encrypted_devices_ok">OK</string>
+    <string name="encrypted_devices_unnamed">%1$s device %2$d</string>
+    <string name="encrypted_devices_platform_ios">iOS</string>
+    <string name="encrypted_devices_platform_macos">macOS</string>
+    <string name="encrypted_devices_platform_android">Android</string>
+    <string name="encrypted_devices_platform_web">Web browser</string>
+    <string name="encrypted_devices_platform_unknown">Unknown device</string>
+</resources>
