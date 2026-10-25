@@ -72,7 +72,9 @@ final class ConversationEncryptionActivationPolicyTests: XCTestCase {
         )
     }
 
-    func test_securityRow_directEncrypted_offersDeactivationOnlyToTheAllowedRole() {
+    /// La rangée passe le droit d'activer à la fiche ; une conversation déjà
+    /// chiffrée n'y propose rien (#12949).
+    func test_securityRow_directEncrypted_passesTheRightToTheSheet() {
         XCTAssertEqual(
             ConversationSecurityRowContent.resolve(isDirect: true, isEncrypted: true, mayToggle: true),
             .directEntry(offersToggle: true)
@@ -107,14 +109,15 @@ final class ConversationEncryptionActivationPolicyTests: XCTestCase {
         )
     }
 
-    func test_detailSheet_encrypted_offersDeactivationOnlyToTheAllowedRole() {
+    /// #12949 — un régime actif ne se désactive pas : la fiche ne propose rien, quel que soit le rôle.
+    func test_detailSheet_encrypted_offersNoDeactivation_whateverTheRole() {
         XCTAssertEqual(
             ConversationEncryptionDetailContent.resolve(isLoading: false, isEncrypted: true, mayToggle: true),
-            .active(offersDeactivation: true)
+            .active
         )
         XCTAssertEqual(
             ConversationEncryptionDetailContent.resolve(isLoading: false, isEncrypted: true, mayToggle: false),
-            .active(offersDeactivation: false)
+            .active
         )
         XCTAssertEqual(
             ConversationEncryptionDetailContent.resolve(isLoading: true, isEncrypted: false, mayToggle: true),
@@ -132,18 +135,13 @@ final class ConversationEncryptionActivationPolicyTests: XCTestCase {
         XCTAssertFalse(ConversationEncryptionActivationPolicy.mayToggle(served: nil, platformRole: "USER"))
     }
 
-    /// La bascule vue depuis le fil ouvert se DIT (#12522) : désactiver annonce
-    /// le retour de la traduction et de la transcription par le serveur.
-    func test_switchAnnouncement_saysWhatComesBackAfterDeactivation() {
-        let disabled = ConversationEncryptionChangedEvent(
-            conversationId: "c1", isEncrypted: false, mode: nil, epoch: 2, changedByUserId: "u1", changedAt: "2026-10-25T10:00:00.000Z"
-        )
+    /// L'activation vue depuis le fil ouvert se DIT (#12522).
+    func test_switchAnnouncement_saysTheActivation() {
         let enabled = ConversationEncryptionChangedEvent(
             conversationId: "c1", isEncrypted: true, mode: "e2ee", epoch: 3, changedByUserId: "u1", changedAt: "2026-10-25T10:00:00.000Z"
         )
 
-        XCTAssertFalse(EncryptionSwitchAnnouncement.text(for: disabled).isEmpty)
-        XCTAssertNotEqual(EncryptionSwitchAnnouncement.text(for: disabled), EncryptionSwitchAnnouncement.text(for: enabled))
+        XCTAssertFalse(EncryptionSwitchAnnouncement.text(for: enabled)?.isEmpty ?? true)
     }
 
     /// #12949 — une désactivation annoncée par le socket ne s'annonce pas : le
@@ -157,5 +155,15 @@ final class ConversationEncryptionActivationPolicyTests: XCTestCase {
 
         XCTAssertNil(EncryptionSwitchAnnouncement.text(for: disabled) as String?)
         XCTAssertNil(conversation.adoptingEncryption(disabled))
+    }
+
+    /// #12949, audit #12950 — une conversation vue chiffrée que le serveur sert
+    /// sans bout en bout : la fiche dit l'écart, et ne propose que de rétablir.
+    func test_servedGap_isShown_andOnlyRestoringIsOffered() {
+        XCTAssertNil(ConversationEncryptionServedGap.resolve(remembersEndToEnd: false, servedEndToEnd: false, mayRestore: true))
+        XCTAssertNil(ConversationEncryptionServedGap.resolve(remembersEndToEnd: true, servedEndToEnd: true, mayRestore: true))
+        XCTAssertNil(ConversationEncryptionServedGap.resolve(remembersEndToEnd: true, servedEndToEnd: nil, mayRestore: true))
+        XCTAssertEqual(ConversationEncryptionServedGap.resolve(remembersEndToEnd: true, servedEndToEnd: false, mayRestore: false), .shown)
+        XCTAssertEqual(ConversationEncryptionServedGap.resolve(remembersEndToEnd: true, servedEndToEnd: false, mayRestore: true), .restorable)
     }
 }

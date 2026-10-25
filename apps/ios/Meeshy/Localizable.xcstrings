@@ -308305,284 +308305,143 @@
         }
       }
     },
-    "conversation.encryption.detail.activationFooterSwitchable": {
+    "conversation.encryption.detail.activationFooterFinal": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "يمكنك إيقافه لاحقًا: تبقى الرسائل المشفّرة مشفّرة. اختر الوضع المناسب لاحتياجاتك في الترجمة والخصوصية."
+            "value": "بعد تفعيله، لا يمكن إيقاف التشفير التام بين الطرفين: للدردشة بدونه، ستحتاج إلى محادثة جديدة. اختر الوضع المناسب لاحتياجاتك في الترجمة والخصوصية."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Du kannst sie später deaktivieren: Bereits verschlüsselte Nachrichten bleiben verschlüsselt. Wähle den Modus, der zu deinen Übersetzungs- und Datenschutzbedürfnissen passt."
+            "value": "Einmal eingeschaltet, lässt sich die Ende-zu-Ende-Verschlüsselung nicht mehr ausschalten: Um ohne sie zu schreiben, brauchst du eine neue Unterhaltung. Wähle den Modus, der zu deinen Bedürfnissen bei Übersetzung und Privatsphäre passt."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "You can turn it off later: messages already encrypted will stay encrypted. Choose the mode that fits your translation and privacy needs."
+            "value": "Once turned on, end-to-end encryption can’t be turned off: to chat without it, you’ll need a new conversation. Choose the mode that fits your translation and privacy needs."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Podrás desactivarlo más tarde: los mensajes ya cifrados seguirán cifrados. Elige el modo que se adapte a tus necesidades de traducción y privacidad."
+            "value": "Una vez activado, el cifrado de extremo a extremo ya no se puede desactivar: para chatear sin él, necesitarás una conversación nueva. Elige el modo que se ajuste a tus necesidades de traducción y privacidad."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Vous pourrez le désactiver plus tard : les messages déjà chiffrés le resteront. Choisissez le mode adapté à vos besoins de traduction et de confidentialité."
+            "value": "Une fois activé, le chiffrement de bout en bout ne se désactive plus : pour échanger en clair, il faudra une nouvelle conversation. Choisissez le mode adapté à vos besoins de traduction et de confidentialité."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Potrai disattivarla in seguito: i messaggi già crittografati resteranno tali. Scegli la modalità adatta alle tue esigenze di traduzione e riservatezza."
+            "value": "Una volta attivata, la crittografia end-to-end non si può più disattivare: per scrivere senza, servirà una nuova conversazione. Scegli la modalità adatta alle tue esigenze di traduzione e riservatezza."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Você poderá desativá-la depois: as mensagens já criptografadas continuarão criptografadas. Escolha o modo adequado às suas necessidades de tradução e privacidade."
+            "value": "Depois de ativada, a criptografia de ponta a ponta não pode mais ser desativada: para conversar sem ela, será preciso uma nova conversa. Escolha o modo que atende às suas necessidades de tradução e privacidade."
           }
         }
       }
     },
-    "conversation.encryption.detail.deactivate": {
+    "conversation.encryption.detail.servedGap": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "إيقاف التشفير"
+            "value": "يعرض الخادم هذه المحادثة دون تشفير تام بين الطرفين، لكن هذا الجهاز رآها مشفّرة: لا يُرسل فيها أي شيء دون تشفير. للدردشة بدونه، أنشئ محادثة جديدة."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Verschlüsselung deaktivieren"
+            "value": "Der Server zeigt diese Unterhaltung ohne Ende-zu-Ende-Verschlüsselung an, aber dieses Gerät hat sie verschlüsselt gesehen: Darin wird nichts unverschlüsselt gesendet. Um ohne sie zu schreiben, starte eine neue Unterhaltung."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Turn off encryption"
+            "value": "The server presents this conversation without end-to-end encryption, but this device has seen it encrypted: nothing is sent in it without encryption. To chat without it, start a new conversation."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Desactivar el cifrado"
+            "value": "El servidor presenta esta conversación sin cifrado de extremo a extremo, pero este dispositivo la ha visto cifrada: no se envía nada en ella sin cifrado. Para chatear sin él, crea una conversación nueva."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Désactiver le chiffrement"
+            "value": "Le serveur présente cette conversation sans chiffrement de bout en bout, mais cet appareil l’a vue chiffrée : rien n’y part en clair. Pour échanger en clair, créez une nouvelle conversation."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Disattiva la crittografia"
+            "value": "Il server presenta questa conversazione senza crittografia end-to-end, ma questo dispositivo l’ha vista crittografata: non vi parte nulla senza crittografia. Per scrivere senza, crea una nuova conversazione."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Desativar a criptografia"
+            "value": "O servidor apresenta esta conversa sem criptografia de ponta a ponta, mas este dispositivo a viu criptografada: nada é enviado nela sem criptografia. Para conversar sem ela, crie uma nova conversa."
           }
         }
       }
     },
-    "conversation.encryption.detail.deactivationFooter": {
+    "conversation.encryption.detail.restoreEndToEnd": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تبقى الرسائل المشفّرة مشفّرة ومقروءة على أجهزتك. ستُرسل الرسائل الجديدة دون تشفير تام بين الطرفين: تعود لها الترجمة والنسخ من الخادم."
+            "value": "استعادة التشفير التام بين الطرفين"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Bereits verschlüsselte Nachrichten bleiben verschlüsselt und auf deinen Geräten lesbar. Neue Nachrichten werden ohne Ende-zu-Ende-Verschlüsselung gesendet: Übersetzung und Transkription durch den Server stehen für sie wieder zur Verfügung."
+            "value": "Ende-zu-Ende-Verschlüsselung wiederherstellen"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Messages already encrypted stay encrypted and readable on your devices. New messages will be sent without end-to-end encryption: server translation and transcription will return for them."
+            "value": "Restore end-to-end encryption"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Los mensajes ya cifrados siguen cifrados y legibles en tus dispositivos. Los nuevos mensajes se enviarán sin cifrado de extremo a extremo: la traducción y la transcripción del servidor volverán para ellos."
+            "value": "Restablecer el cifrado de extremo a extremo"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Les messages déjà chiffrés le restent et demeurent lisibles sur vos appareils. Les nouveaux messages partiront sans chiffrement de bout en bout : la traduction et la transcription par le serveur reviendront pour eux."
+            "value": "Rétablir le chiffrement de bout en bout"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "I messaggi già crittografati restano tali e leggibili sui tuoi dispositivi. I nuovi messaggi partiranno senza crittografia end-to-end: la traduzione e la trascrizione del server torneranno per loro."
+            "value": "Ripristina la crittografia end-to-end"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "As mensagens já criptografadas continuam criptografadas e legíveis nos seus aparelhos. As novas mensagens serão enviadas sem criptografia de ponta a ponta: a tradução e a transcrição pelo servidor voltarão para elas."
-          }
-        }
-      }
-    },
-    "conversation.encryption.detail.deactivateConfirmTitle": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "إيقاف التشفير التام بين الطرفين؟"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ende-zu-Ende-Verschlüsselung deaktivieren?"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Turn off end-to-end encryption?"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "¿Desactivar el cifrado de extremo a extremo?"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Désactiver le chiffrement de bout en bout ?"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Disattivare la crittografia end-to-end?"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Desativar a criptografia de ponta a ponta?"
-          }
-        }
-      }
-    },
-    "conversation.encryption.detail.deactivateConfirmMessage": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ستصبح الرسائل الجديدة مقروءة للخادم الذي يمكنه ترجمتها ونسخها. تبقى الرسائل المشفّرة مشفّرة. سيرى كل عضو هذا التغيير في المحادثة."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Neue Nachrichten sind für den Server lesbar, der sie übersetzen und transkribieren kann. Bereits verschlüsselte Nachrichten bleiben verschlüsselt. Alle Mitglieder sehen diese Änderung im Verlauf."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "New messages will be readable by the server, which can translate and transcribe them. Messages already encrypted stay encrypted. Every member will see this change in the thread."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Los nuevos mensajes serán legibles por el servidor, que podrá traducirlos y transcribirlos. Los mensajes ya cifrados siguen cifrados. Cada miembro verá este cambio en la conversación."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Les nouveaux messages seront lisibles par le serveur, qui pourra les traduire et les transcrire. Les messages déjà chiffrés le restent. Chaque membre verra ce changement dans le fil."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "I nuovi messaggi saranno leggibili dal server, che potrà tradurli e trascriverli. I messaggi già crittografati restano tali. Ogni membro vedrà questa modifica nella conversazione."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "As novas mensagens poderão ser lidas pelo servidor, que poderá traduzi-las e transcrevê-las. As mensagens já criptografadas continuam criptografadas. Cada membro verá essa mudança na conversa."
-          }
-        }
-      }
-    },
-    "conversation.encryption.detail.disabledNotice": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "أُوقف التشفير: أصبحت الترجمة والنسخ من الخادم متاحين من جديد للرسائل الجديدة."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Verschlüsselung deaktiviert: Übersetzung und Transkription durch den Server sind für neue Nachrichten wieder verfügbar."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Encryption turned off: server translation and transcription are available again for new messages."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cifrado desactivado: la traducción y la transcripción del servidor vuelven a estar disponibles para los nuevos mensajes."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Chiffrement désactivé : la traduction et la transcription par le serveur sont de nouveau disponibles pour les nouveaux messages."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Crittografia disattivata: traduzione e trascrizione del server sono di nuovo disponibili per i nuovi messaggi."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Criptografia desativada: a tradução e a transcrição pelo servidor voltam a estar disponíveis para as novas mensagens."
+            "value": "Restabelecer a criptografia de ponta a ponta"
           }
         }
       }
@@ -308724,241 +308583,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Criptografia de ponta a ponta ativada: as novas mensagens são criptografadas nos seus aparelhos."
-          }
-        }
-      }
-    },
-    "conversation.encryption.switched.disabled": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "أُوقف التشفير التام بين الطرفين: تعود الترجمة والنسخ من الخادم للرسائل الجديدة."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ende-zu-Ende-Verschlüsselung deaktiviert: Übersetzung und Transkription durch den Server kehren für neue Nachrichten zurück."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "End-to-end encryption turned off: server translation and transcription return for new messages."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cifrado de extremo a extremo desactivado: la traducción y la transcripción del servidor vuelven para los nuevos mensajes."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Chiffrement de bout en bout désactivé : la traduction et la transcription par le serveur reviennent pour les nouveaux messages."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Crittografia end-to-end disattivata: traduzione e trascrizione del server tornano per i nuovi messaggi."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Criptografia de ponta a ponta desativada: a tradução e a transcrição pelo servidor voltam para as novas mensagens."
-          }
-        }
-      }
-    },
-    "conversation.send.e2ee.regimeDowngradeUnconfirmed": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "يشير الخادم إلى أن التشفير التام بين الطرفين لهذه المحادثة قد عُطّل، لكن هذا التغيير لا يظهر في المحادثة: لم تُرسل الرسالة. افتح «التشفير» في معلومات المحادثة للتحقق."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Laut Server wurde die Ende-zu-Ende-Verschlüsselung dieser Unterhaltung deaktiviert, doch die Änderung erscheint nicht im Verlauf: Die Nachricht wurde nicht gesendet. Öffne „Verschlüsselung“ in den Infos der Unterhaltung, um es zu prüfen."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "The server says end-to-end encryption was turned off for this conversation, but the change doesn’t appear in the chat: the message wasn’t sent. Open Encryption in the conversation info to check."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "El servidor indica que el cifrado de extremo a extremo de esta conversación se desactivó, pero el cambio no aparece en el chat: el mensaje no se envió. Abre Cifrado en la información de la conversación para comprobarlo."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Le serveur indique que le chiffrement de bout en bout de cette conversation a été désactivé, mais ce changement n’apparaît pas dans le fil : le message n’est pas parti. Ouvrez Chiffrement dans les infos de la conversation pour vérifier."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Il server indica che la crittografia end-to-end di questa conversazione è stata disattivata, ma la modifica non compare nella chat: il messaggio non è stato inviato. Apri Crittografia nelle info della conversazione per verificare."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "O servidor indica que a criptografia de ponta a ponta desta conversa foi desativada, mas a mudança não aparece na conversa: a mensagem não foi enviada. Abra Criptografia nas informações da conversa para conferir."
-          }
-        }
-      }
-    },
-    "conversation.encryption.detail.downgradePending": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "كانت هذه المحادثة مشفّرة تمامًا بين الطرفين، ويقول الخادم الآن إنها لم تعد كذلك. لن يُرسل أي شيء في هذه المحادثة ما لم تؤكّد ذلك."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Diese Unterhaltung war Ende-zu-Ende-verschlüsselt, und der Server meldet jetzt, dass sie es nicht mehr ist. Solange du das nicht bestätigst, wird in dieser Unterhaltung nichts gesendet."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "This conversation was end-to-end encrypted, and the server now says it no longer is. Until you confirm it, nothing is sent in this conversation."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Esta conversación estaba cifrada de extremo a extremo y el servidor dice ahora que ya no lo está. Mientras no lo confirmes, no se envía nada en esta conversación."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cette conversation a été chiffrée de bout en bout, et le serveur la dit maintenant sans chiffrement de bout en bout. Tant que vous ne le confirmez pas, rien ne part dans cette conversation."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Questa conversazione era crittografata end-to-end e il server ora dice che non lo è più. Finché non lo confermi, in questa conversazione non parte nulla."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Esta conversa era criptografada de ponta a ponta, e o servidor agora diz que não é mais. Enquanto você não confirmar, nada é enviado nesta conversa."
-          }
-        }
-      }
-    },
-    "conversation.encryption.detail.downgradeConfirm": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "فهمت، الكتابة دون تشفير تام بين الطرفين"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Verstanden, ohne Ende-zu-Ende-Verschlüsselung schreiben"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Got it, write without end-to-end encryption"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Entendido, escribir sin cifrado de extremo a extremo"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "J’ai compris, écrire sans chiffrement de bout en bout"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ho capito, scrivi senza crittografia end-to-end"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Entendi, escrever sem criptografia de ponta a ponta"
-          }
-        }
-      }
-    },
-    "conversation.encryption.detail.downgradeFooter": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "تبقى الرسائل المشفّرة مشفّرة. أما الجديدة فسيتمكّن الخادم من قراءتها وترجمتها وتفريغها نصيًا."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Bereits verschlüsselte Nachrichten bleiben verschlüsselt. Neue kann der Server lesen, übersetzen und transkribieren."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Messages already encrypted stay encrypted. New ones will be readable by the server, which can translate and transcribe them."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Los mensajes ya cifrados siguen cifrados. Los nuevos serán legibles por el servidor, que podrá traducirlos y transcribirlos."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Les messages déjà chiffrés le restent. Les nouveaux seront lisibles par le serveur, qui pourra les traduire et les transcrire."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "I messaggi già crittografati restano tali. I nuovi saranno leggibili dal server, che potrà tradurli e trascriverli."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "As mensagens já criptografadas continuam assim. As novas poderão ser lidas pelo servidor, que poderá traduzi-las e transcrevê-las."
           }
         }
       }
@@ -309429,6 +309053,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Ativar ou desativar"
+          }
+        }
+      }
+    },
+    "conversation.encryption.topic.permanence": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "دائم"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Endgültig"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Permanent"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Definitivo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Définitif"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Definitivo"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Definitivo"
           }
         }
       }
@@ -310561,49 +310232,190 @@
         }
       }
     },
-    "conversation.encryption.fact.switchNeverResendsInClear": {
+    "conversation.encryption.fact.endToEndIsFinal": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "إذا عُطّل التشفير التام بين الطرفين، فلن يُرسل شيء بدونه حتى ترى التغيير في المحادثة أو تؤكّده هنا."
+            "value": "بعد تفعيله، لا يمكن إيقاف التشفير التام بين الطرفين."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Wird die Ende-zu-Ende-Verschlüsselung ausgeschaltet, wird nichts ohne sie gesendet, bis du die Änderung im Verlauf gesehen oder hier bestätigt hast."
+            "value": "Einmal eingeschaltet, lässt sich die Ende-zu-Ende-Verschlüsselung nicht mehr ausschalten."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "If end-to-end encryption is turned off, nothing is sent without it until you’ve seen the change in the chat or confirmed it here."
+            "value": "Once turned on, end-to-end encryption can’t be turned off."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Si se desactiva el cifrado de extremo a extremo, no se envía nada sin él hasta que veas el cambio en el chat o lo confirmes aquí."
+            "value": "Una vez activado, el cifrado de extremo a extremo ya no se puede desactivar."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Si le chiffrement de bout en bout est désactivé, rien ne part sans lui tant que vous n’avez pas vu ce changement dans le fil ou ne l’avez pas confirmé ici."
+            "value": "Une fois activé, le chiffrement de bout en bout ne se désactive plus."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Se la crittografia end-to-end viene disattivata, non parte nulla senza di essa finché non hai visto la modifica nella chat o non l’hai confermata qui."
+            "value": "Una volta attivata, la crittografia end-to-end non si può più disattivare."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Se a criptografia de ponta a ponta for desativada, nada é enviado sem ela até você ver a mudança na conversa ou confirmá-la aqui."
+            "value": "Depois de ativada, a criptografia de ponta a ponta não pode mais ser desativada."
+          }
+        }
+      }
+    },
+    "conversation.encryption.fact.endToEndNeverTurnedOff": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا يمكن إيقاف التشفير التام بين الطرفين. للدردشة بدونه، أنشئ محادثة جديدة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Ende-zu-Ende-Verschlüsselung lässt sich nicht ausschalten. Um ohne sie zu schreiben, starte eine neue Unterhaltung."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "End-to-end encryption can’t be turned off. To chat without it, start a new conversation."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El cifrado de extremo a extremo no se puede desactivar. Para chatear sin él, crea una conversación nueva."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le chiffrement de bout en bout ne se désactive pas. Pour échanger en clair, créez une nouvelle conversation."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La crittografia end-to-end non si può disattivare. Per scrivere senza, crea una nuova conversazione."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A criptografia de ponta a ponta não pode ser desativada. Para conversar sem ela, crie uma nova conversa."
+          }
+        }
+      }
+    },
+    "conversation.encryption.fact.endToEndNeverTurnedOffDirect": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا يمكن إيقاف التشفير التام بين الطرفين: تبقى هذه المحادثة الثنائية مشفّرة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Ende-zu-Ende-Verschlüsselung lässt sich nicht ausschalten: Dieser Einzelchat bleibt verschlüsselt."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "End-to-end encryption can’t be turned off: this one-to-one chat stays encrypted."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El cifrado de extremo a extremo no se puede desactivar: este chat individual sigue cifrado."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le chiffrement de bout en bout ne se désactive pas : ce tête-à-tête reste chiffré."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La crittografia end-to-end non si può disattivare: questa chat individuale resta crittografata."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A criptografia de ponta a ponta não pode ser desativada: esta conversa individual continua criptografada."
+          }
+        }
+      }
+    },
+    "conversation.encryption.fact.serverCannotTurnItOff": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "على هذا الجهاز، بعد رؤية هذه المحادثة مشفّرة تمامًا بين الطرفين، لن يكتب حسابك فيها أبدًا دون تشفير، حتى لو عرضها الخادم لاحقًا بشكل مختلف."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auf diesem Gerät schreibt dein Konto, sobald diese Unterhaltung als Ende-zu-Ende-verschlüsselt gesehen wurde, nie wieder unverschlüsselt darin, selbst wenn der Server sie später anders darstellt."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "On this device, once this conversation has been seen end-to-end encrypted, your account never writes in it without encryption again, even if the server later presented it otherwise."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "En este dispositivo, una vez vista esta conversación cifrada de extremo a extremo, tu cuenta ya no escribe nunca en ella sin cifrado, aunque el servidor la presentara después de otra forma."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sur cet appareil, une fois cette conversation vue chiffrée de bout en bout, votre compte n’y écrit plus jamais en clair, même si le serveur la présentait ensuite autrement."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Su questo dispositivo, una volta vista questa conversazione crittografata end-to-end, il tuo account non vi scrive mai più senza crittografia, anche se il server la presentasse poi diversamente."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Neste dispositivo, depois de ver esta conversa criptografada de ponta a ponta, sua conta nunca mais escreve nela sem criptografia, mesmo que o servidor a apresente de outra forma depois."
           }
         }
       }

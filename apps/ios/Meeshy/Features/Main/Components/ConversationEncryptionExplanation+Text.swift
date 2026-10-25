@@ -17,6 +17,8 @@ extension ConversationEncryptionExplanation.Topic {
             String(localized: "conversation.encryption.topic.devices", defaultValue: "Vos appareils", bundle: .main)
         case .switching:
             String(localized: "conversation.encryption.topic.switching", defaultValue: "Activer ou désactiver", bundle: .main)
+        case .permanence:
+            String(localized: "conversation.encryption.topic.permanence", defaultValue: "Définitif", bundle: .main)
         }
     }
 }
@@ -49,7 +51,9 @@ extension ConversationEncryptionExplanation.Fact {
         case .whoMayToggle: "person.crop.circle.badge.checkmark"
         case .switchKeepsHistory: "clock.arrow.circlepath"
         case .switchIsShownInThread: "text.bubble"
-        case .switchNeverResendsInClear: "hand.raised"
+        case .endToEndIsFinal: "lock.fill"
+        case .endToEndNeverTurnedOff, .endToEndNeverTurnedOffDirect: "lock.shield"
+        case .serverCannotTurnItOff: "iphone"
         }
     }
 
@@ -113,8 +117,21 @@ extension ConversationEncryptionExplanation.Fact {
             String(localized: "conversation.encryption.fact.switchKeepsHistory", defaultValue: "Une bascule ne change que les nouveaux messages : ceux déjà chiffrés de bout en bout le restent, lisibles sur les appareils qui les ont reçus.", bundle: .main)
         case .switchIsShownInThread:
             String(localized: "conversation.encryption.fact.switchIsShownInThread", defaultValue: "Chaque activation ou désactivation s’affiche dans le fil, pour tous les membres.", bundle: .main)
-        case .switchNeverResendsInClear:
-            String(localized: "conversation.encryption.fact.switchNeverResendsInClear", defaultValue: "Si le chiffrement de bout en bout est désactivé, rien ne part sans lui tant que vous n’avez pas vu ce changement dans le fil ou ne l’avez pas confirmé ici.", bundle: .main)
+        default: permanenceText
+        }
+    }
+
+    /// Le bout en bout ne se désactive pas (#12949).
+    private var permanenceText: String? {
+        switch self {
+        case .endToEndIsFinal:
+            String(localized: "conversation.encryption.fact.endToEndIsFinal", defaultValue: "Une fois activé, le chiffrement de bout en bout ne se désactive plus.", bundle: .main)
+        case .endToEndNeverTurnedOff:
+            String(localized: "conversation.encryption.fact.endToEndNeverTurnedOff", defaultValue: "Le chiffrement de bout en bout ne se désactive pas. Pour échanger en clair, créez une nouvelle conversation.", bundle: .main)
+        case .endToEndNeverTurnedOffDirect:
+            String(localized: "conversation.encryption.fact.endToEndNeverTurnedOffDirect", defaultValue: "Le chiffrement de bout en bout ne se désactive pas : ce tête-à-tête reste chiffré.", bundle: .main)
+        case .serverCannotTurnItOff:
+            String(localized: "conversation.encryption.fact.serverCannotTurnItOff", defaultValue: "Sur cet appareil, une fois cette conversation vue chiffrée de bout en bout, votre compte n’y écrit plus jamais en clair, même si le serveur la présentait ensuite autrement.", bundle: .main)
         default: nil
         }
     }

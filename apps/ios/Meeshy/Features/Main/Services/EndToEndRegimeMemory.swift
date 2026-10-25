@@ -2,77 +2,128 @@ import Foundation
 import MeeshySDK
 import os
 
-/// **Ce que l'appareil retient du chiffrement d'une conversation** (#11380,
-/// daté par l'époque depuis #12883).
+/// **Ce que l'appareil retient du chiffrement d'une conversation, pour un
+/// compte** (#11380, #12937, #12949).
 ///
-/// Le régime vient du serveur. Une ligne servie SANS époque (`encryptionMode`,
-/// `encryptionEnabledAt` de la liste ou du détail) ne fait qu'ajouter le bout
-/// en bout : une passerelle compromise qui retirerait le régime d'une ligne ne
-/// fait rien servir en clair sans marqueur. Une bascule DATÉE par son époque
-/// (statut, réponse d'une bascule, événement socket — apprise par
-/// `EndToEndRegimeLedger`, la même que l'envoi lit) fait foi dans les deux
-/// sens : après une désactivation, les messages suivants retrouvent les
-/// features serveur, ceux de l'ère chiffrée gardent leur verdict
-/// (`EndToEndRegime`). Une ligne non datée ne réécrit jamais ce qu'une bascule
-/// datée a établi : elle resserre la lecture le temps qu'elle est servie.
+/// Une conversation vue chiffrée de bout en bout le reste, pour la lecture
+/// comme pour l'envoi : la mémoire est MONOTONE (`EndToEndRegime.merging`).
+/// Aucune rétrogradation servie — ligne sans mode, statut, événement socket,
+/// avis de désactivation — ne l'efface ; seule la frontière d'activation peut
+/// reculer vers une date plus ancienne, ce qui ferme davantage.
+///
+/// Elle est rangée PAR COMPTE (`bind(account:)`, environnement et
+/// utilisateur) : un compte ne lit jamais ce qu'un autre a vu. Ce qu'elle garde
+/// ne peut que fermer (des identifiants de conversation et une date
+/// d'activation, aucun contenu) : elle survit à la déconnexion, pour qu'un
+/// serveur ne puisse pas rouvrir le clair d'un compte qui se reconnecte. Sans
+/// compte lié, elle ne retient que pour le processus, et ce qu'elle a appris
+/// rejoint le compte qui se lie. La mémoire de l'appareil d'avant le
+/// rangement par compte (`legacyStorageKey`) valait pour tout l'appareil :
+/// chaque compte la reprend à sa liaison, aucun ne la perd parce qu'un autre
+/// s'est lié avant lui.
 nonisolated protocol EndToEndRegimeMemoryProviding: Sendable {
     func resolve(conversationId: String, served: EndToEndRegime) -> EndToEndRegime
-    /// Une bascule datée par son `epoch`, bornée du côté fermé (revue #12846) :
-    /// une désactivation ne prend effet qu'à l'instant où l'appareil l'apprend,
-    /// une activation au plus tard à cet instant.
-    func learn(isEndToEnd: Bool, epoch: Int, changedAt: Date?, enabledAt: Date?, for conversationId: String)
+    func bind(account: String?)
 }
 
 nonisolated final class EndToEndRegimeMemory: EndToEndRegimeMemoryProviding, @unchecked Sendable {
     static let shared = EndToEndRegimeMemory(defaults: .standard)
 
-    static let storageKey = "meeshy.e2ee.regime.v1"
+    static let legacyStorageKey = "meeshy.e2ee.regime.v1"
+
+    static func storageKey(account: String) -> String { "meeshy.e2ee.regime.v2.\(account)" }
+
+    /// Le compte d'une base locale : son environnement et son utilisateur.
+    static func account(of key: MessageStoreAccountKey) -> String { "\(key.environmentHost)/\(key.userId)" }
+
+    private struct State {
+        var account: String?
+        var known: [String: EndToEndRegime]
+    }
 
     private let defaults: UserDefaults?
-    private let now: @Sendable () -> Date
-    private let remembered: OSAllocatedUnfairLock<[String: EndToEndRegime]>
+    private let state = OSAllocatedUnfairLock(initialState: State(account: nil, known: [:]))
 
     /// `defaults: nil` : une mémoire du seul processus (tests, aperçus).
-    init(defaults: UserDefaults?, now: @escaping @Sendable () -> Date = { Date() }) {
+    init(defaults: UserDefaults?) {
         self.defaults = defaults
-        self.now = now
-        self.remembered = OSAllocatedUnfairLock(initialState: defaults?.data(forKey: Self.storageKey)
-            .flatMap { try? JSONDecoder().decode([String: EndToEndRegime].self, from: $0) } ?? [:])
     }
 
-    func bind(account: String?) {}
+    func bind(account: String?) {
+        state.withLock { current in
+            guard account == nil || account != current.account else { return }
+            guard let account else {
+                current = State(account: nil, known: [:])
+                return
+            }
+            let learnedUnbound = current.account == nil ? current.known : [:]
+            let known = [load(account), legacy(), learnedUnbound].reduce(into: [String: EndToEndRegime]()) { known, more in
+                known.merge(more) { $0.merging($1) }
+            }
+            current = State(account: account, known: known)
+            persist(known, for: account)
+        }
+    }
 
     func resolve(conversationId: String, served: EndToEndRegime) -> EndToEndRegime {
-        let (merged, changed) = remembered.withLock { known -> (EndToEndRegime, [String: EndToEndRegime]?) in
-            let previous = known[conversationId]
+        state.withLock { current in
+            let previous = current.known[conversationId]
             let merged = served.merging(previous)
-            guard previous?.epoch == nil, merged.isEndToEnd, merged != previous else { return (merged, nil) }
-            known[conversationId] = merged
-            return (merged, known)
+            guard merged.isEndToEnd, merged != previous else { return merged }
+            current.known[conversationId] = merged
+            if let account = current.account { persist(current.known, for: account) }
+            return merged
         }
-        persist(changed)
-        return merged
     }
 
-    func learn(isEndToEnd: Bool, epoch: Int, changedAt: Date?, enabledAt: Date?, for conversationId: String) {
-        let learnedAt = now()
-        let served = changedAt ?? learnedAt
-        let boundary = isEndToEnd ? min(served, learnedAt) : max(served, learnedAt)
-        let observed = EndToEndRegime.dated(
-            isEndToEnd: isEndToEnd, epoch: epoch, at: boundary, enabledAt: enabledAt.map { min($0, learnedAt) }
-        )
-        let changed = remembered.withLock { known -> [String: EndToEndRegime]? in
-            let previous = known[conversationId]
-            let learned = observed.superseding(previous)
-            guard learned != previous, previous != nil || learned.hasEncryptedEra else { return nil }
-            known[conversationId] = learned
-            return known
-        }
-        persist(changed)
+    private func load(_ account: String) -> [String: EndToEndRegime] {
+        decode(defaults?.data(forKey: Self.storageKey(account: account)))
     }
 
-    private func persist(_ known: [String: EndToEndRegime]?) {
-        guard let known, let data = try? JSONEncoder().encode(known) else { return }
-        defaults?.set(data, forKey: Self.storageKey)
+    private func legacy() -> [String: EndToEndRegime] {
+        decode(defaults?.data(forKey: Self.legacyStorageKey))
+    }
+
+    /// Une entrée illisible ne fait pas perdre les autres ; une date retenue
+    /// dans le futur est bornée à l'instant de la relecture (#12936).
+    private func decode(_ data: Data?) -> [String: EndToEndRegime] {
+        data.flatMap { try? JSONDecoder().decode([String: RetainedRegime].self, from: $0) }?
+            .compactMapValues(\.regime) ?? [:]
+    }
+
+    private func persist(_ known: [String: EndToEndRegime], for account: String) {
+        guard let data = try? JSONEncoder().encode(known) else { return }
+        defaults?.set(data, forKey: Self.storageKey(account: account))
+    }
+}
+
+/// Un régime retenu, y compris sous la forme des versions où le chiffrement se
+/// désactivait (#12883) : une conversation qui a connu une ère chiffrée, même
+/// close, reste chiffrée de bout en bout depuis le début de sa première ère.
+/// Un champ illisible ne fait pas perdre les autres conversations.
+private nonisolated struct RetainedRegime: Decodable {
+    let regime: EndToEndRegime?
+
+    private struct Era: Decodable {
+        let start: Date?
+    }
+
+    private enum CodingKeys: String, CodingKey { case isEndToEnd, enabledAt, closedEras }
+
+    init(from decoder: Decoder) {
+        guard let container = try? decoder.container(keyedBy: CodingKeys.self) else {
+            regime = nil
+            return
+        }
+        let eras = (try? container.decodeIfPresent([Era].self, forKey: .closedEras)) ?? []
+        let isEndToEnd = (try? container.decode(Bool.self, forKey: .isEndToEnd)) ?? false
+        let enabledAt = try? container.decodeIfPresent(Date.self, forKey: .enabledAt)
+        guard isEndToEnd || !eras.isEmpty else {
+            regime = nil
+            return
+        }
+        let starts: [Date?] = (isEndToEnd ? [enabledAt] : []) + eras.map(\.start)
+        let earliest = starts.contains(nil) ? nil : starts.compactMap { $0 }.min()
+        regime = EndToEndRegime(isEndToEnd: true, enabledAt: earliest.map { min($0, Date()) })
     }
 }

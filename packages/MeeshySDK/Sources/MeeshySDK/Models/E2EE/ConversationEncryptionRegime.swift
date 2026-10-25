@@ -1,8 +1,8 @@
 import Foundation
 
 /// Le régime de chiffrement d'une conversation, tel que
-/// `GET /conversations/:id/encryption-status` et ses deux bascules le servent
-/// (#12522, spec E2EE libsignal iOS/macOS § 5). `epoch` et `canToggleEncryption` sont nuls
+/// `GET /conversations/:id/encryption-status` et l'activation le servent
+/// (#12522, #12949, spec E2EE libsignal iOS/macOS § 5). `epoch` et `canToggleEncryption` sont nuls
 /// quand la passerelle est antérieure à la commutation : le client retombe
 /// alors sur la politique de rôle (`ConversationEncryptionActivationPolicy`).
 public struct ConversationEncryptionStatus: Decodable, Equatable, Sendable {
@@ -32,7 +32,8 @@ public struct ConversationEncryptionStatus: Decodable, Equatable, Sendable {
 }
 
 /// `conversation:encryption-changed` (#12522) : le régime a basculé, avec sa
-/// nouvelle époque. Aucun contenu de message n'y voyage.
+/// nouvelle époque. Aucun contenu de message n'y voyage. Une annonce qui
+/// quitterait le bout en bout est ignorée (#12949).
 public struct ConversationEncryptionChangedEvent: Decodable, Equatable, Sendable {
     public let conversationId: String
     public let isEncrypted: Bool
@@ -56,14 +57,18 @@ public struct ConversationEncryptionChangedEvent: Decodable, Equatable, Sendable
 
 public extension MeeshyConversation {
     /// La conversation sous le régime annoncé ; `nil` quand l'annonce vise une
-    /// autre conversation ou ne change rien de ce qu'elle dit. Activer ouvre
-    /// l'ère chiffrée à l'instant de la bascule (`EndToEndPlaintextLaw`) ;
-    /// désactiver la ferme.
-    func adoptingEncryption(_ event: ConversationEncryptionChangedEvent) -> MeeshyConversation? {
-        guard event.conversationId == id, encryptionMode != event.mode else { return nil }
+    /// autre conversation, ne change rien de ce qu'elle dit, ou ferait quitter
+    /// le bout en bout — qui ne se désactive pas (#12949) : une annonce servie
+    /// vers le clair ne repeint jamais une conversation chiffrée de bout en
+    /// bout. Activer ouvre l'ère chiffrée à l'instant de la bascule, borné par
+    /// l'horloge de l'appareil (`EndToEndRegime`, #12936).
+    func adoptingEncryption(_ event: ConversationEncryptionChangedEvent, now: Date = Date()) -> MeeshyConversation? {
+        guard event.conversationId == id, encryptionMode != event.mode,
+              !EndToEndPlaintextLaw.isEndToEndConversation(encryptionMode) || EndToEndPlaintextLaw.isEndToEndConversation(event.mode)
+        else { return nil }
         var adopted = self
         adopted.encryptionMode = event.mode
-        adopted.encryptionEnabledAt = event.mode == nil ? nil : (event.changedAtDate ?? Date())
+        adopted.encryptionEnabledAt = event.mode == nil ? nil : min(event.changedAtDate ?? now, now)
         return adopted
     }
 }

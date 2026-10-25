@@ -1,9 +1,10 @@
 import XCTest
 @testable import MeeshySDK
 
-/// Le chiffrement d'une conversation est COMMUTABLE (#12522) : le service lit
-/// et bascule le régime, l'époque voyage avec un envoi libsignal, et un
-/// événement socket repeint la conversation sans relecture.
+/// Le chiffrement d'une conversation s'ACTIVE (#12522) et le bout en bout ne se
+/// désactive pas (#12949) : le service lit et active le régime, l'époque voyage
+/// avec un envoi libsignal, et un événement socket repeint la conversation sans
+/// relecture — jamais vers le clair depuis le bout en bout.
 final class ConversationEncryptionRegimeTests: XCTestCase {
 
     private func makeSUT() -> (sut: ConversationEncryptionService, api: MockAPIClient) {
@@ -60,20 +61,6 @@ final class ConversationEncryptionRegimeTests: XCTestCase {
         XCTAssertEqual(api.lastRequest?.method, "POST")
         XCTAssertEqual(api.lastRequest?.bodyJSON?["mode"] as? String, "e2ee")
         XCTAssertEqual(result.epoch, 1)
-    }
-
-    func test_disable_deletesTheRegimeAndReturnsItInClear() async throws {
-        let (sut, api) = makeSUT()
-        api.stub("/conversations/c1/encryption", result: try status("""
-        {"success":true,"data":{"isEncrypted":false,"mode":null,"enabledAt":null,"enabledBy":null,"canTranslate":false,"epoch":2,"canToggleEncryption":true}}
-        """))
-
-        let result = try await sut.disable(conversationId: "c1")
-
-        XCTAssertEqual(api.lastRequest?.method, "DELETE")
-        XCTAssertFalse(result.isEncrypted)
-        XCTAssertNil(result.mode)
-        XCTAssertEqual(result.epoch, 2)
     }
 
     // MARK: - Fil
