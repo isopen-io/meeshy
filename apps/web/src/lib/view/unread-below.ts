@@ -12,7 +12,10 @@
  * à cette loi.
  */
 
+import { messageProtection } from '@meeshy/shared/utils/message-protection';
+
 import type { Message } from '@/lib/api/types';
+import { protectionOf } from '@/lib/reading-mode/protection';
 import { endToEndSealed } from '@/lib/view/end-to-end-sealed';
 
 export type UnreadBelowMessage = {
@@ -71,15 +74,30 @@ export function reduceUnreadBelow(state: UnreadBelowState, event: UnreadBelowEve
 }
 
 /**
- * LE TEXTE DU BOUTON « REVENIR EN BAS » (#12983) — le texte servi par le
- * Prisme, sauf pour un message que le serveur ne lit pas : le web n'en tient
- * que le littéral `[Encrypted]`, et le bouton se tait plutôt que de le montrer
- * (même loi que le fil, `endToEndSealed`).
+ * LE TEXTE DU BOUTON « REVENIR EN BAS » (#12983, #12993) — le texte servi par
+ * le Prisme, sauf pour un message dont la bulle ne montre pas le texte :
+ * - scellé de bout en bout : le web n'en tient que le littéral `[Encrypted]`
+ *   (même loi que le fil, `endToEndSealed`) ;
+ * - protégé : la passerelle sert aux membres le texte d'une vue unique ou
+ *   d'un message flouté pour que le client le VOILE. Le bouton se tait dès
+ *   que `protectionOf` (la loi que la bulle consomme) n'est pas `standard`,
+ *   ou que les drapeaux d'effet déclarent une vue unique ou un flou
+ *   (`messageProtection`, fail-closed sur une charge qui ne pose que
+ *   `effectFlags`).
  */
+export type UnreadPreviewMessage = Pick<
+  Message,
+  'isEncrypted' | 'encryptionMode' | 'deletedAt' | 'isViewOnce' | 'viewOnceCount' | 'isBlurred' | 'expiresAt' | 'effectFlags'
+> & { readonly ephemeralDuration?: number };
+
 export function unreadPreviewText(
-  message: Pick<Message, 'isEncrypted' | 'encryptionMode'> | undefined,
+  message: UnreadPreviewMessage | undefined,
   servedText: string | undefined,
+  now: number,
 ): string | null {
   if (message === undefined || endToEndSealed(message)) return null;
+  if (protectionOf(message, now) !== 'standard') return null;
+  const declared = messageProtection(message);
+  if (declared.viewOnce || declared.blurred) return null;
   return servedText ?? null;
 }
