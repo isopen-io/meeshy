@@ -5,7 +5,6 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.core.database.dao.MessageDao
-import me.meeshy.core.database.dao.upsertKeepingLocal
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.chat.HeldMessageWindow
@@ -38,7 +37,7 @@ internal class RoomMessagePrefetchStore @Inject constructor(
     override suspend fun persist(page: List<ApiMessage>, conversationId: String): Boolean {
         val now = clock.nowMillis()
         database.withTransaction {
-            messageDao.upsertKeepingLocal(page.map { MessageEntityFactory.cached(it, now, conversationId) })
+            MessageIngestPipeline(database).mergeInTransaction(page, now, conversationId)
         }
         return true
     }

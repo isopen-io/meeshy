@@ -8,6 +8,8 @@ struct ConversationEncryptionDetailSheet: View {
     let accentColor: String
     /// Le droit de basculer selon le rôle, tant que la passerelle n'a pas servi le sien (`canToggleEncryption`).
     let fallbackMayToggle: Bool
+    /// Un groupe s'explique sans se basculer depuis iOS (#12844).
+    var isDirect: Bool = true
     var service: any ConversationEncryptionServiceProviding = ConversationEncryptionService.shared
     var ledger: EndToEndRegimeLedger = .shared
 
@@ -19,8 +21,14 @@ struct ConversationEncryptionDetailSheet: View {
     @State private var justDisabled = false
     @State private var selectedMode: ConversationEncryptionModeChoice = .server
     @State private var errorMessage: String?
+    @State private var pendingDowngrade: EndToEndRegimeLedger.PendingDowngrade?
 
-    private var mayToggle: Bool { status?.canToggleEncryption ?? fallbackMayToggle }
+    private var mayToggle: Bool { isDirect && (status?.canToggleEncryption ?? fallbackMayToggle) }
+
+    /// Ce que la fiche explique de la conversation ouverte (#12880), d'après le régime servi.
+    private var explanation: ConversationEncryptionExplanation {
+        ConversationEncryptionExplanation(mode: status?.isEncrypted == true ? status?.mode : nil, isDirect: isDirect)
+    }
 
     private static let logger = MeeshyLog.logger(.conversationEncryption)
 
@@ -46,13 +54,18 @@ struct ConversationEncryptionDetailSheet: View {
                 case .active(let offersDeactivation):
                     if let status, let mode = status.mode.flatMap(ConversationEncryptionModeChoice.init(rawValue:)) {
                         activeStateSections(mode: mode, status: status)
+                        ConversationEncryptionExplanationSections(explanation: explanation)
                         if offersDeactivation { deactivationSection }
                     }
                 case .activation:
                     inactiveStateSection
+                    downgradeConfirmationSection
+                    ConversationEncryptionExplanationSections(explanation: explanation)
                     enableStateSections
                 case .inactiveReadOnly:
                     inactiveStateSection
+                    downgradeConfirmationSection
+                    ConversationEncryptionExplanationSections(explanation: explanation)
                 }
 
                 if let errorMessage {
@@ -134,13 +147,7 @@ struct ConversationEncryptionDetailSheet: View {
             LabeledContent(String(localized: "conversation.encryption.detail.translation",
                                   defaultValue: "Traduction",
                                   bundle: .main),
-                           value: status.canTranslate
-                                ? String(localized: "conversation.encryption.detail.translation.available",
-                                         defaultValue: "Disponible",
-                                         bundle: .main)
-                                : String(localized: "conversation.encryption.detail.translation.disabled",
-                                         defaultValue: "Désactivé",
-                                         bundle: .main))
+                           value: translationLabel(status))
         } header: {
             Text(String(localized: "conversation.encryption.detail.detailsHeader",
                         defaultValue: "Détails",
@@ -177,6 +184,39 @@ struct ConversationEncryptionDetailSheet: View {
                         defaultValue: "Les messages déjà chiffrés le restent et demeurent lisibles sur vos appareils. Les nouveaux messages partiront sans chiffrement de bout en bout : la traduction et la transcription par le serveur reviendront pour eux.",
                         bundle: .main))
                 .font(.caption)
+        }
+    }
+
+    // MARK: - Désactivation annoncée par le serveur (#12846)
+
+    /// Le serveur dit le chiffrement de bout en bout désactivé, et
+    /// l'utilisateur ne l'a pas encore vu : l'envoi reste suspendu jusqu'à ce
+    /// qu'il le confirme ici, ou que l'avis s'affiche dans le fil.
+    @ViewBuilder
+    private var downgradeConfirmationSection: some View {
+        if let pendingDowngrade {
+            Section {
+                Text(String(localized: "conversation.encryption.detail.downgradePending",
+                            defaultValue: "Cette conversation a été chiffrée de bout en bout, et le serveur la dit maintenant sans chiffrement de bout en bout. Tant que vous ne le confirmez pas, rien ne part dans cette conversation.",
+                            bundle: .main))
+                    .font(.subheadline)
+                Button {
+                    ledger.confirm(pendingDowngrade, for: conversationId)
+                    self.pendingDowngrade = nil
+                    HapticFeedback.success()
+                } label: {
+                    Text(String(localized: "conversation.encryption.detail.downgradeConfirm",
+                                defaultValue: "J’ai compris, écrire sans chiffrement de bout en bout",
+                                bundle: .main))
+                        .fontWeight(.semibold)
+                }
+                .accessibilityIdentifier("encryption-downgrade-confirm")
+            } footer: {
+                Text(String(localized: "conversation.encryption.detail.downgradeFooter",
+                            defaultValue: "Les messages déjà chiffrés le restent. Les nouveaux seront lisibles par le serveur, qui pourra les traduire et les transcrire.",
+                            bundle: .main))
+                    .font(.caption)
+            }
         }
     }
 
@@ -273,6 +313,17 @@ struct ConversationEncryptionDetailSheet: View {
 
     // MARK: - Helpers
 
+    /// En bout en bout, la traduction n'est pas absente : elle se fait sur l'appareil (#12880).
+    private func translationLabel(_ status: ConversationEncryptionStatus) -> String {
+        if status.canTranslate {
+            return String(localized: "conversation.encryption.detail.translation.available", defaultValue: "Disponible", bundle: .main)
+        }
+        if explanation.regime == .endToEnd {
+            return String(localized: "conversation.encryption.detail.translation.onDevice", defaultValue: "Sur l’appareil", bundle: .main)
+        }
+        return String(localized: "conversation.encryption.detail.translation.disabled", defaultValue: "Désactivé", bundle: .main)
+    }
+
     private func modeLabel(_ mode: ConversationEncryptionModeChoice) -> String {
         switch mode {
         case .e2ee:
@@ -294,7 +345,7 @@ struct ConversationEncryptionDetailSheet: View {
         switch mode {
         case .e2ee:
             return String(localized: "conversation.encryption.mode.e2ee.description",
-                          defaultValue: "Confidentialité maximale. La traduction automatique n'est pas disponible.",
+                          defaultValue: "Seuls les appareils des participants lisent les messages. La traduction se fait sur l’appareil.",
                           bundle: .main)
         case .server:
             return String(localized: "conversation.encryption.mode.server.description",
@@ -314,6 +365,7 @@ struct ConversationEncryptionDetailSheet: View {
             let fetched = try await service.fetchStatus(conversationId: conversationId)
             status = fetched
             ledger.learn(fetched, for: conversationId)
+            pendingDowngrade = ledger.pendingDowngrade(for: conversationId)
         } catch {
             Self.logger.error("loadStatus failed: \(error.localizedDescription)")
             errorMessage = String(localized: "conversation.encryption.detail.readStatusError",
@@ -326,9 +378,14 @@ struct ConversationEncryptionDetailSheet: View {
         await switchRegime { try await service.enable(conversationId: conversationId, mode: selectedMode.rawValue) }
     }
 
+    /// Désactiver est le geste de l'utilisateur : il a vu la bascule (#12846).
     private func deactivate() async {
         await switchRegime { try await service.disable(conversationId: conversationId) }
         justDisabled = status?.isEncrypted == false
+        if justDisabled, let epoch = status?.epoch {
+            ledger.confirmDowngrade(epoch: epoch, for: conversationId)
+        }
+        pendingDowngrade = ledger.pendingDowngrade(for: conversationId)
     }
 
     /// Une bascule : le régime servi devient l'état de la fiche ET ce que le fil

@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useStore } from 'zustand/react';
 
 import { GameBird } from '@/components/game';
 import { GameHiddenCard } from '@/components/game-hidden-card';
@@ -11,6 +12,7 @@ import { ConceptCard, ProgressionRow, RowEmblem } from '@/components/progression
 import { unwrap } from '@/lib/api/client';
 import { apiDeps } from '@/lib/api/deps';
 import { ENGAGEMENT_PROGRESS_QUERY_KEY, loadEngagementProgress, type EngagementWithGame } from '@/lib/api/engagement';
+import { appPhotoAlerts } from '@/lib/game-photo/app-alerts';
 import { useGamePrefs } from '@/lib/game/preferences';
 import { redirectOf } from '@/lib/game/progression-nav';
 import { useGameSettings } from '@/lib/game/use-game-settings';
@@ -71,9 +73,12 @@ export function ProgressionBody({
   mascotEvent = null,
   now,
   entering = false,
+  photoBadge = false,
 }: {
   /** Première ouverture de la visite : les cartes entrent en scène, l'une après l'autre. */
   readonly entering?: boolean;
+  /** La pastille de la Chronique (#10174) : une étape nouvelle depuis la dernière visite, point neutre sans chiffre. */
+  readonly photoBadge?: boolean;
   readonly progress: EngagementWithGame;
   readonly guide?: ReactNode;
   /** Ce qui vient de se passer (#8907) — la mascotte le célèbre avant de revenir à l'état. */
@@ -100,7 +105,13 @@ export function ProgressionBody({
       </ul>
       {playing && !hidden ? (
         <nav aria-label={gameText('game.doors.label')} className={ROW_GAP}>
-          <ProgressionRow target={{ to: 'progressionCarnet' }} marker="carnet" emblem={<RowEmblem tint={GAME_WARM} />} name={gameText('game.door.notebook')} />
+          <ProgressionRow
+            target={{ to: 'progressionCarnet' }}
+            marker="carnet"
+            emblem={<RowEmblem tint={GAME_WARM} />}
+            name={gameText('game.door.notebook')}
+            {...(photoBadge ? { badge: gameText('game.photo.alert.badge_a11y') } : {})}
+          />
           <ProgressionRow target={{ to: 'progressionRegles' }} marker="regles" emblem={<RowEmblem />} name={gameText('game.door.rules')} />
           <ProgressionRow target={{ to: 'progressionReglages' }} marker="reglages" emblem={<RowEmblem tint={GAME_INK_2} />} name={gameText('game.door.settings')} />
         </nav>
@@ -227,6 +238,7 @@ export default function ProgressionScreen() {
     queryKey: ENGAGEMENT_PROGRESS_QUERY_KEY,
     queryFn: async ({ signal }) => unwrap(await loadEngagementProgress({ ...apiDeps, signal })),
   });
+  const photoBadge = useStore(appPhotoAlerts.store, (state) => state.noticed.length > 0);
 
   useEffect(() => {
     if (query.data === undefined) return;
@@ -243,7 +255,7 @@ export default function ProgressionScreen() {
     >
       {query.data !== undefined ? (
         <>
-          <ProgressionBody progress={query.data} mascotEvent={mascotEvent} guide={<ProgressionGuide view={query.data} />} entering={entering} />
+          <ProgressionBody progress={query.data} mascotEvent={mascotEvent} guide={<ProgressionGuide view={query.data} />} entering={entering} photoBadge={photoBadge} />
           <GameDetailHost progress={query.data} />
         </>
       ) : query.isError ? (

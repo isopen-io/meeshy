@@ -86,6 +86,11 @@ const enStickerPacks = {
   'packs.shop.domains': "Shop category",
   'packs.shop.hint': "Every pack: stickers, frames, backgrounds, rings and banners. What you own shows up in the screens that use it.",
   'packs.retry': "Try again",
+  'packs.error.notRemovable': "This pack stays installed: it can’t be removed.",
+  'packs.frames.changeAtmosphere': "Change atmosphere",
+  'packs.frames.yourAtmosphere': "Your atmosphere",
+  'packs.frames.atmosphereKept': "This pack holds your atmosphere, so it stays installed. Change atmosphere to remove it.",
+  'packs.frames.atmosphereQueued': "Offline: your choice will be sent once you’re back online.",
 } satisfies StickerPacksCatalog;
 
 export default enStickerPacks;

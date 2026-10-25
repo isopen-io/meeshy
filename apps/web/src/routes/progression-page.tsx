@@ -3,13 +3,12 @@ import { useQuery } from '@tanstack/react-query';
 import { GameDetailHost } from '@/components/game-detail-sheet';
 import { unwrap } from '@/lib/api/client';
 import { apiDeps } from '@/lib/api/deps';
-import { ENGAGEMENT_PROGRESS_QUERY_KEY, loadEngagementProgress } from '@/lib/api/engagement';
+import { ENGAGEMENT_PROGRESS_QUERY_KEY, loadEngagementProgress, type EngagementWithGame } from '@/lib/api/engagement';
 import { useGameSettings } from '@/lib/game/use-game-settings';
 import { useOnline } from '@/lib/net/online';
 import { ProgressionError, ProgressionSkeleton } from '@/routes/progression-parts';
 import { OfflineNotice, ProgressionShell } from '@/routes/progression-shell';
 
-import type { EngagementProgress } from '@meeshy/shared/utils/engagement-progress';
 import type { ProgressionConcept } from '@meeshy/shared/utils/progression-layout';
 
 
@@ -43,8 +42,8 @@ export function ProgressionPage({
   titre: string;
   teinte: string;
   /** Ce qui s'affiche en haut à droite — `null` quand la page n'a rien à compter. */
-  compte: (progress: EngagementProgress) => string | null;
-  children: (progress: EngagementProgress) => React.ReactNode;
+  compte: (progress: EngagementWithGame) => string | null;
+  children: (progress: EngagementWithGame) => React.ReactNode;
 }) {
   const online = useOnline();
   useGameSettings(true);
