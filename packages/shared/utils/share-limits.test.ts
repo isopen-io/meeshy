@@ -3,9 +3,9 @@ import { MAX_POST_MEDIA } from '../types/attachment.js';
 import { SHARE_LIMITS } from './share-limits.js';
 
 describe('SHARE_LIMITS — les plafonds communs du partage (D10, #10949)', () => {
-  it('20 fichiers, 500 Mo, 10 destinataires', () => {
-    expect(SHARE_LIMITS.maxFiles).toBe(20);
-    expect(SHARE_LIMITS.maxTotalBytes).toBe(500 * 1024 * 1024);
+  it('100 fichiers, 5 Go, 10 destinataires (révision porteur du 2026-10-25, #12974)', () => {
+    expect(SHARE_LIMITS.maxFiles).toBe(100);
+    expect(SHARE_LIMITS.maxTotalBytes).toBe(5 * 1024 * 1024 * 1024);
     expect(SHARE_LIMITS.maxRecipients).toBe(10);
   });
 
