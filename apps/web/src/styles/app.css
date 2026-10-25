@@ -217,14 +217,19 @@
     box-shadow: none;
   }
 
-  /* Regle 32 : le mouvement ne deplace rien, et se coupe entierement. */
+  /* Regle 32 : le mouvement ne deplace rien, et se coupe entierement.
+     Les transitions tombent a 0s, jamais a une duree infime : tout element
+     porte `transition-property: all` par defaut, et une duree non nulle
+     ferait de CHAQUE changement de style une transition dont toute lecture
+     de la meme tache voit la valeur de depart (#12893). Les animations
+     gardent 0.01ms : leur `animationend` doit encore arriver. */
   @media (prefers-reduced-motion: reduce) {
     *,
     *::before,
     *::after {
       animation-duration: 0.01ms !important;
       animation-iteration-count: 1 !important;
-      transition-duration: 0.01ms !important;
+      transition-duration: 0s !important;
       scroll-behavior: auto !important;
     }
   }
