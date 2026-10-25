@@ -219,9 +219,13 @@ final class ConversationLockManagerTests: XCTestCase {
         return fixture
     }
 
-    private func makeLaunchedManager(_ fixture: LaunchFixture, protectedData: ProtectedData) -> ConversationLockManager {
+    private func makeLaunchedManager(
+        _ fixture: LaunchFixture,
+        protectedData: ProtectedData,
+        vault: InMemoryConversationLockVault = InMemoryConversationLockVault()
+    ) -> ConversationLockManager {
         ConversationLockManager(
-            vault: InMemoryConversationLockVault(),
+            vault: vault,
             defaults: fixture.standard,
             biometrics: StubBiometricUnlocker(),
             iterations: 1_000,
@@ -365,8 +369,8 @@ final class ConversationLockManagerTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: fixture.mirrorFile), Data("abîmé".utf8), "rien n'est réécrit")
     }
 
-    /// Première installation : ni liste, ni miroir. « Aucun verrou » est alors
-    /// un savoir, et l'extension l'apprend.
+    /// Première installation : ni liste, ni miroir, ni code au trousseau.
+    /// « Aucun verrou » est alors un savoir, et l'extension l'apprend.
     func test_aFirstInstall_knowsThereIsNoLock_andTellsTheExtension() throws {
         let fixture = try makeLaunchFixture()
 
@@ -374,6 +378,89 @@ final class ConversationLockManagerTests: XCTestCase {
 
         XCTAssertFalse(sut.mayBeLocked("ouverte"))
         XCTAssertEqual(NSELockedConversationMirror.readFile(at: fixture.mirrorFile), .ids([]))
+    }
+
+    // MARK: - #12655 : une mise à jour qui lit la liste ABSENTE, sans miroir
+
+    /// Première ouverture après une mise à jour depuis une version qui
+    /// n'écrivait pas le fichier miroir, en arrière-plan : `.standard` se lit
+    /// absent, le miroir aussi. Les codes du trousseau disent qu'il y a des
+    /// verrous : « aucun verrou » serait un mensonge que l'extension croirait.
+    func test_anUpgradeWhoseListReadsAbsent_withoutMirror_butWithPins_doesNotDeclareNoLock() throws {
+        let fixture = try makeLaunchFixture()
+        let vault = InMemoryConversationLockVault()
+        vault.write("pin-maître", for: "meeshy_master_pin")
+        vault.write("code", for: "meeshy_lock_coffre")
+
+        let sut = makeLaunchedManager(fixture, protectedData: ProtectedData(available: true), vault: vault)
+
+        XCTAssertTrue(sut.mayBeLocked("coffre"))
+        XCTAssertFalse(sut.admitsOpening("coffre"), "aucune ouverture sans PIN")
+        XCTAssertNotEqual(NSELockedConversationMirror.readFile(at: fixture.mirrorFile), .ids([]))
+    }
+
+    /// Le trousseau tient un code par verrou (`setLock` l'écrit avant que la
+    /// conversation entre dans la liste) : la liste se reconstruit depuis lui,
+    /// et l'extension l'apprend.
+    func test_anUpgradeWhoseListReadsAbsent_withoutMirror_rebuildsTheLocksFromTheirPins() throws {
+        let fixture = try makeLaunchFixture()
+        let vault = InMemoryConversationLockVault()
+        vault.write("pin-maître", for: "meeshy_master_pin")
+        vault.write("{}", for: "meeshy_master_pin.attempts")
+        vault.write("enrôlement", for: "meeshy_lock_biometric_state")
+        vault.write("code", for: "meeshy_lock_coffre")
+        vault.write("{}", for: "meeshy_lock_coffre.attempts")
+
+        let sut = makeLaunchedManager(fixture, protectedData: ProtectedData(available: true), vault: vault)
+
+        XCTAssertEqual(sut.lockedConversationIds, ["coffre"])
+        XCTAssertFalse(sut.mayBeLocked("ouverte"), "la liste reconstruite est un savoir")
+        XCTAssertEqual(NSELockedConversationMirror.readFile(at: fixture.mirrorFile), .ids(["coffre"]))
+    }
+
+    /// Un PIN maître sans aucun code de conversation est l'état normal après
+    /// le retrait du dernier verrou : il ne dit aucun verrou.
+    func test_aMasterPinAlone_withoutMirror_knowsThereIsNoLock() throws {
+        let fixture = try makeLaunchFixture()
+        let vault = InMemoryConversationLockVault()
+        vault.write("pin-maître", for: "meeshy_master_pin")
+
+        let sut = makeLaunchedManager(fixture, protectedData: ProtectedData(available: true), vault: vault)
+
+        XCTAssertFalse(sut.mayBeLocked("ouverte"))
+        XCTAssertEqual(NSELockedConversationMirror.readFile(at: fixture.mirrorFile), .ids([]))
+    }
+
+    /// Le trousseau ne se laisse pas énumérer : rien ne dit qu'il n'y a pas de
+    /// verrou. La liste reste inconnue, et rien ne s'écrit.
+    func test_aListReadAbsent_withoutMirror_andAnUnreadableVault_knowsNothing_andWritesNothing() throws {
+        let fixture = try makeLaunchFixture()
+        let vault = InMemoryConversationLockVault()
+        vault.enumerable = false
+
+        let sut = makeLaunchedManager(fixture, protectedData: ProtectedData(available: true), vault: vault)
+
+        XCTAssertTrue(sut.mayBeLocked("ouverte"))
+        XCTAssertEqual(NSELockedConversationMirror.readFile(at: fixture.mirrorFile), .absent)
+        XCTAssertNil(fixture.mirror.stringArray(forKey: NSELockedConversationMirror.legacyDefaultsKey))
+    }
+
+    /// Restée inconnue, la liste se relit au prochain retour au premier plan.
+    func test_anUnknownList_isReadAgain_whenTheAppBecomesActive() throws {
+        let fixture = try makeLaunchFixture()
+        let vault = InMemoryConversationLockVault()
+        vault.enumerable = false
+        let sut = makeLaunchedManager(fixture, protectedData: ProtectedData(available: true), vault: vault)
+        fixture.standard.set(["coffre"], forKey: lockedIdsKey)
+
+        let reloaded = expectation(description: "la liste se relit")
+        let subscription = sut.$lockedConversationIds.first { $0.contains("coffre") }.sink { _ in reloaded.fulfill() }
+        fixture.center.post(name: UIApplication.didBecomeActiveNotification, object: nil)
+        wait(for: [reloaded], timeout: 2)
+        subscription.cancel()
+
+        XCTAssertFalse(sut.mayBeLocked("ouverte"))
+        XCTAssertEqual(NSELockedConversationMirror.readFile(at: fixture.mirrorFile), .ids(["coffre"]))
     }
 
     func test_aLaunchWithProtectedData_readsTheListAndMirrorsIt() throws {
