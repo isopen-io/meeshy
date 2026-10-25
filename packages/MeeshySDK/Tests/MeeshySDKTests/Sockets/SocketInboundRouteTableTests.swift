@@ -33,7 +33,7 @@ final class SocketInboundRouteTableTests: XCTestCase {
         "call:recording-requested", "call:recording-started", "call:recording-stopped", "call:screen-capture-alert",
         "call:signal", "call:transcription-active", "call:translated-segment", "categories:reordered",
         "category:created", "category:deleted", "category:updated", "conversation:closed", "conversation:deleted",
-        "conversation:join-error", "conversation:joined", "conversation:left", "conversation:new",
+        "conversation:encryption-changed", "conversation:join-error", "conversation:joined", "conversation:left", "conversation:new",
         "conversation:participant-banned", "conversation:participant-joined", "conversation:participant-left",
         "conversation:participant-unbanned", "conversation:restored", "conversation:stats",
         "conversation:unread-updated", "conversation:updated", "e2ee:envelope", "engagement:conversation-updated",

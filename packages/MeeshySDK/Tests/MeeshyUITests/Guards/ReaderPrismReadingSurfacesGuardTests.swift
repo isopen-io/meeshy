@@ -20,7 +20,7 @@ final class ReaderPrismReadingSurfacesGuardTests: XCTestCase {
     /// Les seuls sites qui gardent les défauts de composition : ils PROPOSENT
     /// une langue (composer, réponse, export, document légal) et le disent.
     private static let compositionSites = [
-        "Views/StoryViewerView+Header.swift", "Views/StoryViewerView+Sidebar.swift",
+        "Views/StoryViewerView+Header.swift", "Views/StoryViewerView+Sidebar.swift", "Views/StoryViewerSheets.swift",
         "Services/MoodSpotlight/MoodReplySender.swift", "Services/NotificationActionHandler.swift",
         "Views/ConversationView.swift", "Views/CallDeclineSheet.swift",
         "Services/StoryPhotoSaveService.swift", "ViewModels/StoryExportShareViewModel.swift",
