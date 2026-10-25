@@ -27,6 +27,8 @@ struct ConversationPreviewLine: View {
     var authorFont: Font = MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold)
     var lineLimit: Int = 1
     var onJoin: (() -> Void)? = nil
+    /// Le clair que CET appareil tient du dernier message scellé (#12968).
+    var readOnDevice: ConversationPreviewDeviceText? = nil
 
     var body: some View {
         let now = Date()
@@ -45,7 +47,8 @@ struct ConversationPreviewLine: View {
             for: conversation,
             viewerId: AuthManager.shared.currentUser?.id ?? "",
             preferredLanguages: preferredLanguages,
-            now: now
+            now: now,
+            readOnDevice: readOnDevice
         )
     }
 
@@ -61,6 +64,7 @@ struct ConversationPreviewLine: View {
         viewerId: String,
         preferredLanguages: [String],
         now: Date,
+        readOnDevice: ConversationPreviewDeviceText? = nil,
         strings: ConversationPreviewStrings = ConversationPreviewCatalog.strings(),
         receipts: EphemeralReceiptRecording = EphemeralReceiptLedger.shared,
         memory: any EndToEndRegimeMemoryProviding = EndToEndRegimeMemory.shared
@@ -71,7 +75,8 @@ struct ConversationPreviewLine: View {
             language: strings.language.rawValue,
             preferredLanguages: preferredLanguages,
             now: now,
-            receivedAt: receivedAt(of: conversation, now: now, receipts: receipts)
+            receivedAt: receivedAt(of: conversation, now: now, receipts: receipts),
+            readOnDevice: readOnDevice
         )
         return ConversationPreviewComposer.compose(input, strings: strings)
     }
@@ -124,13 +129,17 @@ struct ConversationPreviewLine: View {
     /// Ce que VoiceOver dit de la ligne — la même valeur que l'œil lit, sans
     /// glyphe (l'icône se dit déjà par le libellé qu'elle précède). `nil` pour
     /// une conversation qui n'a rien à dire.
-    static func spokenPreview(for conversation: Conversation, preferredLanguages: [String], now: Date) -> String? {
+    static func spokenPreview(
+        for conversation: Conversation, preferredLanguages: [String], now: Date,
+        readOnDevice: ConversationPreviewDeviceText? = nil
+    ) -> String? {
         let strings = ConversationPreviewCatalog.strings()
         let preview = Self.preview(
             for: conversation,
             viewerId: AuthManager.shared.currentUser?.id ?? "",
             preferredLanguages: preferredLanguages,
             now: now,
+            readOnDevice: readOnDevice,
             strings: strings
         )
         guard preview.kind != .empty else { return nil }

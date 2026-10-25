@@ -223,4 +223,19 @@ class CommentProjectionTest {
         assertThat(es.isActive).isFalse()
         assertThat(es.isOriginal).isFalse()
     }
+
+    @Test
+    fun `the media joined to a comment project in order, a video keeping only its preview still`() {
+        val withMedia = comment().copy(
+            media = listOf(
+                me.meeshy.sdk.model.ApiPostMedia(id = "v", mimeType = "video/mp4", fileUrl = "/u/v.mp4", order = 1),
+                me.meeshy.sdk.model.ApiPostMedia(id = "p", mimeType = "image/jpeg", fileUrl = "/u/p.jpg", order = 0),
+            ),
+        )
+        val media = CommentProjection.build(withMedia, Prefs(systemLanguage = "fr"), "https://gate.meeshy.me").media
+        assertThat(media.map { it.id }).containsExactly("p", "v").inOrder()
+        assertThat(media.first().thumbnailUrl).endsWith("/u/p.jpg")
+        assertThat(media.last().isVideo).isTrue()
+        assertThat(media.last().thumbnailUrl).isNull()
+    }
 }

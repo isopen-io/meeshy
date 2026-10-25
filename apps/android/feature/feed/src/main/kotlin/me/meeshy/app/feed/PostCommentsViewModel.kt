@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.lang.ComposeLanguageDetector
+import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.lang.LanguageIdentifying
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.mention.MentionAutocompleteState
@@ -67,7 +68,12 @@ data class PostCommentsUiState(
     /** A one-shot localized feedback, cleared by [PostCommentsViewModel.consumeNotice]. */
     val notice: CommentNotice? = null,
     val translatingLanguages: Set<String> = emptySet(),
-)
+    /** Les pièces jointes au commentaire en cours (#12972). */
+    val attachments: CommentAttachmentTray = CommentAttachmentTray(),
+) {
+    /** Envoyer : du texte ou une pièce, rien qui se téléverse encore, aucun envoi en vol. */
+    val canSubmit: Boolean get() = (draft.isNotBlank() || attachments.hasMedia) && !attachments.isUploading && !isSubmitting
+}
 
 /**
  * The projected reply thread beneath one top-level comment. When [isExpanded] the full loaded
@@ -101,6 +107,7 @@ class PostCommentsViewModel @Inject constructor(
     private val mentionSearch: MentionSearch,
     savedStateHandle: SavedStateHandle,
     private val languageIdentifier: LanguageIdentifying = LanguageIdentifying.Unavailable,
+    private val mediaUploader: CommentMediaUploader? = null,
 ) : ViewModel() {
 
     private val postId: String = savedStateHandle[POST_ID_ARG] ?: ""
@@ -139,6 +146,9 @@ class PostCommentsViewModel @Inject constructor(
      *  a different reply strips exactly that prefix rather than any leading text. */
     private var prefilledMention: String? = null
 
+    private val attachments = MutableStateFlow(CommentAttachmentTray())
+    private var pieceSeq = 0
+
     private val _state = MutableStateFlow(PostCommentsUiState())
     val state: StateFlow<PostCommentsUiState> = _state.asStateFlow()
 
@@ -154,7 +164,8 @@ class PostCommentsViewModel @Inject constructor(
                 ProjectionBundle(inputs, replyTarget, langs, draft)
             }.combine(translatingLanguages) { bundle, translating ->
                 project(bundle.inputs, bundle.replyTarget, bundle.activeLanguages, bundle.draft, translating)
-            }.collect { projected -> _state.value = projected }
+            }.combine(attachments) { projected, tray -> projected.copy(attachments = tray) }
+                .collect { projected -> _state.value = projected }
         }
         observeRealtime()
         loadInitial()
@@ -395,10 +406,13 @@ class PostCommentsViewModel @Inject constructor(
      */
     fun submit() {
         val content = composerDraft.value.text.trim()
-        if (content.isEmpty() || postId.isBlank() || status.value.isSubmitting) return
+        val tray = attachments.value
+        if ((content.isEmpty() && !tray.hasMedia) || tray.isUploading || postId.isBlank() || status.value.isSubmitting) return
+        val attachmentIds = tray.attachmentIds.takeIf { it.isNotEmpty() }
+        attachments.value = CommentAttachmentTray()
         composer.value?.let { target ->
             clearDraft()
-            sendReply(target.parentId, content)
+            sendReply(target.parentId, content, attachmentIds)
             return
         }
         val tempId = "pending-${pendingSeq++}"
@@ -408,7 +422,7 @@ class PostCommentsViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val language = ComposeLanguageDetector.authoredLanguage(content, sessionRepository.currentUser.value, languageIdentifier)
-                when (val result = postRepository.addComment(postId, content, originalLanguage = language)) {
+                when (val result = postRepository.addComment(postId, content, originalLanguage = language, attachmentIds = attachmentIds)) {
                     is NetworkResult.Success -> {
                         thread.update { it.confirmed(tempId, result.data) }
                         status.update { it.copy(isSubmitting = false, error = null) }
@@ -424,6 +438,47 @@ class PostCommentsViewModel @Inject constructor(
                 thread.update { it.failed(tempId) }
                 sendFailed(e.message, content, CommentNotice.SEND_FAILED)
             }
+        }
+    }
+
+    /** Joint une photo ou une vidéo (#12972) : elle entre au bandeau et se téléverse aussitôt. */
+    fun attachMedia(item: MediaUploadItem) {
+        if (attachments.value.isFull) return
+        val id = "piece-${pieceSeq++}"
+        attachments.update { it.adding(id, item) }
+        upload(id, item)
+    }
+
+    /** La pièce retouchée (#12735) remplace l'autre à sa place, et se téléverse de nouveau. */
+    fun replaceMedia(id: String, item: MediaUploadItem) {
+        if (attachments.value.piece(id) == null) return
+        attachments.update { it.replacing(id, item) }
+        upload(id, item)
+    }
+
+    fun removeMedia(id: String) {
+        attachments.update { it.removing(id) }
+    }
+
+    /** Une réponse ne s'applique qu'à la pièce qu'elle téléversait : une pièce retouchée ou retirée entre-temps l'ignore. */
+    private fun upload(id: String, item: MediaUploadItem) {
+        viewModelScope.launch {
+            val result = try {
+                mediaUploader?.upload(item)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                null
+            }
+            val media = (result as? NetworkResult.Success)?.data?.firstOrNull()
+            attachments.update { tray ->
+                when {
+                    tray.piece(id)?.item !== item -> tray
+                    media != null -> tray.uploaded(id, media)
+                    else -> tray.failed(id)
+                }
+            }
+            if (media == null) status.update { it.copy(notice = CommentNotice.MEDIA_FAILED) }
         }
     }
 
@@ -526,7 +581,7 @@ class PostCommentsViewModel @Inject constructor(
         }
     }
 
-    private fun sendReply(parentId: String, content: String) {
+    private fun sendReply(parentId: String, content: String, attachmentIds: List<String>?) {
         val tempId = "pending-${pendingSeq++}"
         val row = optimisticRow(tempId, content).copy(parentId = parentId)
         replies.update { it.optimisticReply(parentId, row) }
@@ -536,7 +591,7 @@ class PostCommentsViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val language = ComposeLanguageDetector.authoredLanguage(content, sessionRepository.currentUser.value, languageIdentifier)
-                when (val result = postRepository.addComment(postId, content, parentId, originalLanguage = language)) {
+                when (val result = postRepository.addComment(postId, content, parentId, originalLanguage = language, attachmentIds = attachmentIds)) {
                     is NetworkResult.Success -> {
                         replies.update { it.confirmedReply(parentId, tempId, result.data) }
                         status.update { it.copy(isSubmitting = false, error = null) }
