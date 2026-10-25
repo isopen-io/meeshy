@@ -17,8 +17,8 @@ struct ConversationInfoSecurityRow: View {
     let isDark: Bool
     let appearAnimation: Bool
     let onVerifySafetyNumber: () -> Void
-    var mayActivateEncryption: Bool = ConversationEncryptionActivationPolicy.mayActivate(
-        platformRole: AuthManager.shared.currentUser?.role
+    var mayToggleEncryption: Bool = ConversationEncryptionActivationPolicy.mayToggle(
+        served: nil, platformRole: AuthManager.shared.currentUser?.role
     )
 
     @State private var showEncryptionDetail = false
@@ -26,7 +26,7 @@ struct ConversationInfoSecurityRow: View {
     private var theme: ThemeManager { ThemeManager.shared }
 
     private var content: ConversationSecurityRowContent {
-        .resolve(isDirect: isDirect, isEncrypted: isEncrypted, mayActivate: mayActivateEncryption)
+        .resolve(isDirect: isDirect, isEncrypted: isEncrypted, mayToggle: mayToggleEncryption)
     }
 
     @ViewBuilder
@@ -41,8 +41,8 @@ struct ConversationInfoSecurityRow: View {
         }
     }
 
-    // Tête-à-tête : l'entrée ouvre la feuille de détail ; l'activation n'y est
-    // proposée qu'à un rôle de plateforme ANALYST ou supérieur (#12517, #12588).
+    // Tête-à-tête : l'entrée ouvre la feuille de détail ; l'activation et la
+    // désactivation n'y sont proposées qu'au rôle autorisé (#12517, #12588, #12522).
     private var directEntry: some View {
         Button {
             HapticFeedback.light()
@@ -94,7 +94,7 @@ struct ConversationInfoSecurityRow: View {
             ConversationEncryptionDetailSheet(
                 conversationId: conversationId,
                 accentColor: accentColor,
-                mayActivate: mayActivateEncryption
+                fallbackMayToggle: mayToggleEncryption
             )
         }
     }

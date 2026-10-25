@@ -21398,6 +21398,100 @@
         }
       }
     },
+    "conversation.send.e2ee.deviceLimitReached": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "بلغ حسابك الحد الأقصى من الأجهزة المشفّرة: أزل جهازًا للكتابة من هذا الجهاز."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dein Konto hat die maximale Anzahl verschlüsselter Geräte erreicht: Entferne eines, um von diesem Gerät zu schreiben."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your account has reached the maximum number of encrypted devices: remove one to write from this device."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tu cuenta alcanzó el número máximo de dispositivos cifrados: elimina uno para escribir desde este."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Votre compte a atteint le nombre maximal d’appareils chiffrés : retirez-en un pour écrire depuis celui-ci."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Il tuo account ha raggiunto il numero massimo di dispositivi crittografati: rimuovine uno per scrivere da questo."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sua conta atingiu o número máximo de dispositivos criptografados: remova um para escrever deste."
+          }
+        }
+      }
+    },
+    "conversation.send.e2ee.recipientWithoutEncryptedDevice": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يجب على جهة الاتصال تحديث Meeshy لتلقي الرسائل المشفّرة: لم تُرسل الرسالة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dein Kontakt muss Meeshy aktualisieren, um verschlüsselte Nachrichten zu empfangen: Die Nachricht wurde nicht gesendet."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your contact needs to update Meeshy to receive encrypted messages: the message wasn’t sent."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tu contacto debe actualizar Meeshy para recibir mensajes cifrados: el mensaje no se envió."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Votre correspondant doit mettre à jour Meeshy pour recevoir des messages chiffrés : le message n’est pas parti."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Il tuo contatto deve aggiornare Meeshy per ricevere messaggi crittografati: il messaggio non è stato inviato."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seu contato precisa atualizar o Meeshy para receber mensagens criptografadas: a mensagem não foi enviada."
+          }
+        }
+      }
+    },
     "conversation.send.slow_mode": {
       "extractionState": "manual",
       "localizations": {
@@ -21441,6 +21535,382 @@
           "stringUnit": {
             "state": "translated",
             "value": "Uma mensagem a cada 30 s para contas novas — tente de novo em %lld s"
+          }
+        }
+      }
+    },
+    "e2ee.deviceLimit.confirm": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إزالة هذا الجهاز؟"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieses Gerät entfernen?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove this device?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Eliminar este dispositivo?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retirer cet appareil ?"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rimuovere questo dispositivo?"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remover este dispositivo?"
+          }
+        }
+      }
+    },
+    "e2ee.deviceLimit.device": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الجهاز رقم %d"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gerät Nr. %d"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Device no. %d"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dispositivo n.º %d"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Appareil n° %d"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dispositivo n. %d"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dispositivo nº %d"
+          }
+        }
+      }
+    },
+    "e2ee.deviceLimit.enrolled": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يقوم هذا الجهاز بالتشفير مجددًا. يمكنك إعادة إرسال رسالتك."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieses Gerät verschlüsselt wieder. Du kannst deine Nachricht erneut senden."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This device encrypts again. You can resend your message."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este dispositivo vuelve a cifrar. Puedes reenviar tu mensaje."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cet appareil chiffre de nouveau. Vous pouvez renvoyer votre message."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Questo dispositivo cripta di nuovo. Puoi inviare di nuovo il tuo messaggio."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este dispositivo voltou a criptografar. Você pode reenviar sua mensagem."
+          }
+        }
+      }
+    },
+    "e2ee.deviceLimit.explanation": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يستخدم حسابك بالفعل الحد الأقصى من الأجهزة للتشفير التام بين الطرفين. أزل جهازًا للكتابة من هذا الجهاز. الجهاز المُزال لن يقرأ الرسائل المشفّرة الجديدة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dein Konto nutzt bereits die maximale Anzahl an Geräten für die Ende-zu-Ende-Verschlüsselung. Entferne eines, um von diesem Gerät zu schreiben. Ein entferntes Gerät liest keine neuen verschlüsselten Nachrichten mehr."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your account already uses the maximum number of devices for end-to-end encryption. Remove one to write from this device. A removed device no longer reads new encrypted messages."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tu cuenta ya usa el número máximo de dispositivos para el cifrado de extremo a extremo. Elimina uno para escribir desde este. Un dispositivo eliminado ya no lee los nuevos mensajes cifrados."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Votre compte utilise déjà le nombre maximal d’appareils pour le chiffrement de bout en bout. Retirez-en un pour écrire depuis celui-ci. Un appareil retiré ne lit plus les nouveaux messages chiffrés."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Il tuo account usa già il numero massimo di dispositivi per la crittografia end-to-end. Rimuovine uno per scrivere da questo. Un dispositivo rimosso non legge più i nuovi messaggi crittografati."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sua conta já usa o número máximo de dispositivos para a criptografia de ponta a ponta. Remova um para escrever deste. Um dispositivo removido não lê mais as novas mensagens criptografadas."
+          }
+        }
+      }
+    },
+    "e2ee.deviceLimit.failed": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تعذّر تحميل أجهزتك."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deine Geräte konnten nicht geladen werden."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn’t load your devices."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudieron cargar tus dispositivos."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossible de lire vos appareils."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossibile caricare i tuoi dispositivi."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não foi possível carregar seus dispositivos."
+          }
+        }
+      }
+    },
+    "e2ee.deviceLimit.retire": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إزالة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Entfernen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eliminar"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retirer"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rimuovi"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remover"
+          }
+        }
+      }
+    },
+    "e2ee.deviceLimit.retry": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إعادة المحاولة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erneut versuchen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Try again"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reintentar"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Réessayer"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Riprova"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tentar novamente"
+          }
+        }
+      }
+    },
+    "e2ee.deviceLimit.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "عدد كبير جدًا من الأجهزة المشفّرة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zu viele verschlüsselte Geräte"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Too many encrypted devices"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Demasiados dispositivos cifrados"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trop d’appareils chiffrés"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Troppi dispositivi crittografati"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dispositivos criptografados demais"
           }
         }
       }
@@ -93992,53 +94462,6 @@
         }
       }
     },
-    "conversation.encryption.detail.activationFooter": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "التفعيل لا يمكن التراجع عنه. اختر الوضع الذي يناسب احتياجاتك في الترجمة والخصوصية."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Die Aktivierung ist unumkehrbar. Wähle den Modus, der zu deinen Übersetzungs- und Datenschutzanforderungen passt."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Activation is irreversible. Choose the mode that fits your translation and privacy needs."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "La activación es irreversible. Elige el modo que se ajuste a tus necesidades de traducción y privacidad."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "L'activation est irréversible. Choisissez le mode adapté à vos besoins de traduction et de confidentialité."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "L'attivazione è irreversibile. Scegli la modalità adatta alle tue esigenze di traduzione e privacy."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "A ativação é irreversível. Escolha o modo que atende às suas necessidades de tradução e privacidade."
-          }
-        }
-      }
-    },
     "conversation.encryption.detail.activeLabel": {
       "extractionState": "manual",
       "localizations": {
@@ -94176,53 +94599,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Ativada em"
-          }
-        }
-      }
-    },
-    "conversation.encryption.detail.immutabilityFooter": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "بعد التفعيل، لا يمكن تعطيل التشفير في هذه المحادثة. هذا يحمي من التراجع الأمني."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Nach der Aktivierung kann die Verschlüsselung für diese Unterhaltung nicht mehr deaktiviert werden. Das schützt vor Sicherheitsregressionen."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Once enabled, encryption cannot be disabled for this conversation. This protects against security regressions."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Una vez activado, el cifrado no se puede desactivar en esta conversación. Esto protege frente a regresiones de seguridad."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Une fois activé, le chiffrement ne peut plus être désactivé pour cette conversation. Cela protège contre les régressions de sécurité."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Una volta attivata, la crittografia non può essere disattivata per questa conversazione. Questo protegge da regressioni di sicurezza."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Depois de ativada, a criptografia não pode ser desativada nesta conversa. Isso protege contra regressões de segurança."
           }
         }
       }
@@ -94552,53 +94928,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Criptografia"
-          }
-        }
-      }
-    },
-    "conversation.encryption.detail.toggleEnabled": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "تم تفعيل التشفير"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Verschlüsselung aktiviert"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Encryption enabled"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cifrado activado"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Chiffrement activé"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Crittografia attivata"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Criptografia ativada"
           }
         }
       }
@@ -212258,6 +212587,54 @@
         }
       }
     },
+    "system.encryption.disabled": {
+      "comment": "Ligne d'aperçu d'une conversation (#7546/#7548) — catalogue partagé packages/shared/utils/conversation-preview-strings.ts, jetons {nom} substitués par ConversationPreviewStrings.",
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أوقف {actor} التشفير التام بين الطرفين"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{actor} hat die Ende-zu-Ende-Verschlüsselung deaktiviert"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{actor} turned off end-to-end encryption"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{actor} desactivó el cifrado de extremo a extremo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{actor} a désactivé le chiffrement de bout en bout"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{actor} ha disattivato la crittografia end-to-end"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{actor} desativou a criptografia de ponta a ponta"
+          }
+        }
+      }
+    },
     "system.encryption.e2ee": {
       "comment": "Ligne d'aperçu d'une conversation (#7546/#7548) — catalogue partagé packages/shared/utils/conversation-preview-strings.ts, jetons {nom} substitués par ConversationPreviewStrings.",
       "extractionState": "manual",
@@ -308018,6 +308395,476 @@
           "stringUnit": {
             "state": "translated",
             "value": "Mensagem não criptografada — o remetente não foi verificado"
+          }
+        }
+      }
+    },
+    "conversation.encryption.detail.activationFooterSwitchable": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يمكنك إيقافه لاحقًا: تبقى الرسائل المشفّرة مشفّرة. اختر الوضع المناسب لاحتياجاتك في الترجمة والخصوصية."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Du kannst sie später deaktivieren: Bereits verschlüsselte Nachrichten bleiben verschlüsselt. Wähle den Modus, der zu deinen Übersetzungs- und Datenschutzbedürfnissen passt."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You can turn it off later: messages already encrypted will stay encrypted. Choose the mode that fits your translation and privacy needs."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Podrás desactivarlo más tarde: los mensajes ya cifrados seguirán cifrados. Elige el modo que se adapte a tus necesidades de traducción y privacidad."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vous pourrez le désactiver plus tard : les messages déjà chiffrés le resteront. Choisissez le mode adapté à vos besoins de traduction et de confidentialité."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Potrai disattivarla in seguito: i messaggi già crittografati resteranno tali. Scegli la modalità adatta alle tue esigenze di traduzione e riservatezza."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Você poderá desativá-la depois: as mensagens já criptografadas continuarão criptografadas. Escolha o modo adequado às suas necessidades de tradução e privacidade."
+          }
+        }
+      }
+    },
+    "conversation.encryption.detail.deactivate": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إيقاف التشفير"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verschlüsselung deaktivieren"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turn off encryption"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desactivar el cifrado"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Désactiver le chiffrement"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Disattiva la crittografia"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desativar a criptografia"
+          }
+        }
+      }
+    },
+    "conversation.encryption.detail.deactivationFooter": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تبقى الرسائل المشفّرة مشفّرة ومقروءة على أجهزتك. ستُرسل الرسائل الجديدة دون تشفير تام بين الطرفين: تعود لها الترجمة والنسخ من الخادم."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bereits verschlüsselte Nachrichten bleiben verschlüsselt und auf deinen Geräten lesbar. Neue Nachrichten werden ohne Ende-zu-Ende-Verschlüsselung gesendet: Übersetzung und Transkription durch den Server stehen für sie wieder zur Verfügung."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Messages already encrypted stay encrypted and readable on your devices. New messages will be sent without end-to-end encryption: server translation and transcription will return for them."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los mensajes ya cifrados siguen cifrados y legibles en tus dispositivos. Los nuevos mensajes se enviarán sin cifrado de extremo a extremo: la traducción y la transcripción del servidor volverán para ellos."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les messages déjà chiffrés le restent et demeurent lisibles sur vos appareils. Les nouveaux messages partiront sans chiffrement de bout en bout : la traduction et la transcription par le serveur reviendront pour eux."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "I messaggi già crittografati restano tali e leggibili sui tuoi dispositivi. I nuovi messaggi partiranno senza crittografia end-to-end: la traduzione e la trascrizione del server torneranno per loro."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "As mensagens já criptografadas continuam criptografadas e legíveis nos seus aparelhos. As novas mensagens serão enviadas sem criptografia de ponta a ponta: a tradução e a transcrição pelo servidor voltarão para elas."
+          }
+        }
+      }
+    },
+    "conversation.encryption.detail.deactivateConfirmTitle": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إيقاف التشفير التام بين الطرفين؟"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ende-zu-Ende-Verschlüsselung deaktivieren?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turn off end-to-end encryption?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Desactivar el cifrado de extremo a extremo?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Désactiver le chiffrement de bout en bout ?"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Disattivare la crittografia end-to-end?"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desativar a criptografia de ponta a ponta?"
+          }
+        }
+      }
+    },
+    "conversation.encryption.detail.deactivateConfirmMessage": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ستصبح الرسائل الجديدة مقروءة للخادم الذي يمكنه ترجمتها ونسخها. تبقى الرسائل المشفّرة مشفّرة. سيرى كل عضو هذا التغيير في المحادثة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Neue Nachrichten sind für den Server lesbar, der sie übersetzen und transkribieren kann. Bereits verschlüsselte Nachrichten bleiben verschlüsselt. Alle Mitglieder sehen diese Änderung im Verlauf."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New messages will be readable by the server, which can translate and transcribe them. Messages already encrypted stay encrypted. Every member will see this change in the thread."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los nuevos mensajes serán legibles por el servidor, que podrá traducirlos y transcribirlos. Los mensajes ya cifrados siguen cifrados. Cada miembro verá este cambio en la conversación."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les nouveaux messages seront lisibles par le serveur, qui pourra les traduire et les transcrire. Les messages déjà chiffrés le restent. Chaque membre verra ce changement dans le fil."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "I nuovi messaggi saranno leggibili dal server, che potrà tradurli e trascriverli. I messaggi già crittografati restano tali. Ogni membro vedrà questa modifica nella conversazione."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "As novas mensagens poderão ser lidas pelo servidor, que poderá traduzi-las e transcrevê-las. As mensagens já criptografadas continuam criptografadas. Cada membro verá essa mudança na conversa."
+          }
+        }
+      }
+    },
+    "conversation.encryption.detail.disabledNotice": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أُوقف التشفير: أصبحت الترجمة والنسخ من الخادم متاحين من جديد للرسائل الجديدة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verschlüsselung deaktiviert: Übersetzung und Transkription durch den Server sind für neue Nachrichten wieder verfügbar."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Encryption turned off: server translation and transcription are available again for new messages."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cifrado desactivado: la traducción y la transcripción del servidor vuelven a estar disponibles para los nuevos mensajes."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chiffrement désactivé : la traduction et la transcription par le serveur sont de nouveau disponibles pour les nouveaux messages."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crittografia disattivata: traduzione e trascrizione del server sono di nuovo disponibili per i nuovi messaggi."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Criptografia desativada: a tradução e a transcrição pelo servidor voltam a estar disponíveis para as novas mensagens."
+          }
+        }
+      }
+    },
+    "conversation.encryption.detail.regimeChanged": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "عدّل عضو آخر التشفير للتو: تم تحديث الحالة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Verschlüsselung wurde gerade von einem anderen Mitglied geändert: Der Status wurde aktualisiert."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Encryption was just changed by another member: the status has been refreshed."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Otro miembro acaba de modificar el cifrado: el estado se ha actualizado."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le chiffrement vient d’être modifié par un autre membre : l’état est actualisé."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un altro membro ha appena modificato la crittografia: lo stato è stato aggiornato."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Outro membro acabou de alterar a criptografia: o estado foi atualizado."
+          }
+        }
+      }
+    },
+    "conversation.send.e2ee.regimeChanged": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تغيّر تشفير هذه المحادثة للتو: لم تُرسل الرسالة. انقر لإعادة إرسالها وفق الإعداد الجديد."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Verschlüsselung dieser Unterhaltung hat sich gerade geändert: Die Nachricht wurde nicht gesendet. Tippe, um sie mit der neuen Einstellung erneut zu senden."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This conversation’s encryption just changed: the message wasn’t sent. Tap to resend it with the new setting."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El cifrado de esta conversación acaba de cambiar: el mensaje no se envió. Toca para reenviarlo con el nuevo ajuste."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le chiffrement de cette conversation vient de changer : le message n’est pas parti. Touchez pour le renvoyer selon le nouveau réglage."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La crittografia di questa conversazione è appena cambiata: il messaggio non è stato inviato. Tocca per reinviarlo con la nuova impostazione."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A criptografia desta conversa acabou de mudar: a mensagem não foi enviada. Toque para reenviá-la com a nova configuração."
+          }
+        }
+      }
+    },
+    "conversation.encryption.switched.enabled": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تم تفعيل التشفير التام بين الطرفين: تُشفّر الرسائل الجديدة على أجهزتك."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ende-zu-Ende-Verschlüsselung aktiviert: Neue Nachrichten werden auf deinen Geräten verschlüsselt."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "End-to-end encryption turned on: new messages are encrypted on your devices."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cifrado de extremo a extremo activado: los nuevos mensajes se cifran en tus dispositivos."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chiffrement de bout en bout activé : les nouveaux messages sont chiffrés sur vos appareils."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crittografia end-to-end attivata: i nuovi messaggi sono crittografati sui tuoi dispositivi."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Criptografia de ponta a ponta ativada: as novas mensagens são criptografadas nos seus aparelhos."
+          }
+        }
+      }
+    },
+    "conversation.encryption.switched.disabled": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أُوقف التشفير التام بين الطرفين: تعود الترجمة والنسخ من الخادم للرسائل الجديدة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ende-zu-Ende-Verschlüsselung deaktiviert: Übersetzung und Transkription durch den Server kehren für neue Nachrichten zurück."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "End-to-end encryption turned off: server translation and transcription return for new messages."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cifrado de extremo a extremo desactivado: la traducción y la transcripción del servidor vuelven para los nuevos mensajes."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chiffrement de bout en bout désactivé : la traduction et la transcription par le serveur reviennent pour les nouveaux messages."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crittografia end-to-end disattivata: traduzione e trascrizione del server tornano per i nuovi messaggi."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Criptografia de ponta a ponta desativada: a tradução e a transcrição pelo servidor voltam para as novas mensagens."
           }
         }
       }

@@ -243,6 +243,68 @@ ol:has([data-unfolded]) .unfold-stage:not([data-unfolded]) {
   }
 }
 
+/* UN MESSAGE MASQUÉ « POUR MOI » SORT DU FIL EN SE REPLIANT (#12634,
+   `lib/view/row-exit-motion.ts`) — et revient de même si le serveur refuse.
+   Le repli passe par `transform` et `opacity`, jamais par la hauteur (#11314) :
+   le `<li>` qui sort ne compte plus dans la hauteur du fil (`height: 0` posé
+   en ligne, son contenu reste peint à sa place), le virtualiseur remonte les
+   suivantes, et `lib/view/row-settle-flip.ts` les fait GLISSER depuis leur
+   position À L'ÉCRAN — rabat du défilement compris quand le fil est calé en
+   bas. Pendant ce temps, la sortante s'efface (le `<li>` entier : séparateurs,
+   capsule et note partent avec elle) et se resserre (sa rangée). Au retour,
+   la rangée se déplie sur le nœud des deux peaux. La durée est `ROW_EXIT_MS`,
+   la courbe `ROW_EXIT_CURVE`. */
+.thread-row-leaving {
+  pointer-events: none;
+  animation: thread-row-leave 200ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+.thread-row-leaving > [role='article'] {
+  transform-origin: 50% 0;
+  animation: thread-row-shrink 200ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+@keyframes thread-row-leave {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+@keyframes thread-row-shrink {
+  from {
+    transform: none;
+  }
+  to {
+    transform: scale(0.96);
+  }
+}
+.thread-row-returning {
+  transform-origin: 50% 0;
+  animation: thread-row-return 200ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes thread-row-return {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .thread-row-leaving,
+  .thread-row-leaving > [role='article'] {
+    animation: none;
+  }
+  .thread-row-leaving {
+    opacity: 0;
+  }
+  .thread-row-returning {
+    animation: none;
+  }
+}
+
 /* DANS le cadre, à sa marge (#8506) : l'identité sur la ligne d'identité
    réservée (tête de groupe) ou au-dessus de la première ligne (suite) ; la
    bande et le tampon sur la ligne basse réservée de l'élue

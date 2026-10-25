@@ -47,6 +47,24 @@ struct OutgoingMessageWireTests {
         #expect(try json(request) == #"{"clientMessageId":"cid_1","content":"Salut","originalLanguage":"fr"}"#)
     }
 
+    @Test func libsignalWireRequest_carriesOnlyEnvelopes_neverTheTextNorItsLanguage() throws {
+        let envelope = E2EEOutgoingEnvelope(userId: "b", deviceId: 2, registrationId: 77, type: 3, body: "Y2lwaGVy")
+        let request = makeMessage(content: "Le code est 4512", relation: .reply(to: MessageID("m1"), citing: nil)).libsignalWireRequest(
+            context: makeContext(), wireEffectFlags: nil, senderDeviceId: 1, envelopes: [envelope], unapprovedOwnDevices: [3]
+        )
+
+        #expect(try json(request) == #"{"clientMessageId":"cid_1","encryptedContent":"libsignal-v1","encryptionMetadata":{"protocol":"libsignal-v1","senderDeviceId":1},"encryptionMode":"e2ee","encryptionProtocol":"libsignal-v1","envelopes":[{"body":"Y2lwaGVy","deviceId":2,"registrationId":77,"type":3,"userId":"b"}],"isEncrypted":true,"replyToId":"m1","unapprovedOwnDevices":[3]}"#)
+    }
+
+    @Test func libsignalWireRequest_withoutUnapprovedDevices_omitsTheKey() throws {
+        let request = makeMessage().libsignalWireRequest(
+            context: makeContext(), wireEffectFlags: nil, senderDeviceId: 1,
+            envelopes: [E2EEOutgoingEnvelope(userId: "b", deviceId: 1, registrationId: 5, type: 2, body: "eA==")], unapprovedOwnDevices: []
+        )
+
+        #expect(!(try json(request)).contains("unapprovedOwnDevices"))
+    }
+
     @Test func wireRequest_reply_matchesGoldenJSON() throws {
         let relation = MessageRelation.reply(to: MessageID("m1"), citing: QuotedAttachmentSend(attachmentId: "a3"))
         let request = makeMessage(relation: relation, attachmentIds: ["a1"]).wireRequest(

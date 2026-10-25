@@ -12,6 +12,7 @@ import { loadMessagePiecesCatalog } from '@/lib/i18n-message-pieces-catalog';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import { menuConversation, menuViewer } from '@/test-support/menu-viewer';
 
+import { ROW_EXIT_MS, rowExitStore } from './row-exit-motion';
 import { useMessageMenu } from './use-message-menu';
 
 /**
@@ -104,7 +105,7 @@ function mount(options: { readonly hasAccount?: boolean; readonly answer?: (requ
       </QueryClientProvider>,
     ),
   );
-  return { api: () => latest, requests, announced };
+  return { api: () => latest, requests, announced, queryClient };
 }
 
 const settle = () =>
@@ -243,5 +244,60 @@ describe('la barre de sélection — supprimer PLUSIEURS messages', () => {
     act(() => api().onDeleteSelection(PLACED));
     act(() => api().onDismissDelete());
     expect(api().selection?.ids).toEqual(['m-1', 'm-2']);
+  });
+});
+
+/**
+ * #12634 — LA SORTIE DU FIL CÂBLÉE PAR DÉFAUT : « pour moi » garde la rangée au
+ * cache (donc montée) le temps de son repli, la publie sortante, puis la retire ;
+ * un refus la rend et la publie revenante. Sous « Réduire les animations », elle
+ * part dans l'image du geste.
+ */
+describe('« pour moi » — la rangée sort du fil en se repliant', () => {
+  const rowIds = (queryClient: QueryClient): readonly string[] =>
+    queryClient.getQueryData<{ pages: { messages: Message[] }[] }>(messagesQueryKey('c-a'))?.pages.flatMap((p) => p.messages.map((m) => m.id)) ?? [];
+  const pastTheExit = () =>
+    act(async () => {
+      await new Promise((r) => setTimeout(r, ROW_EXIT_MS + 40));
+    });
+  const reduceMotion = (reduced: boolean) => {
+    const media = (query: string) => ({ matches: reduced && query.includes('prefers-reduced-motion'), media: query, addEventListener: () => {}, removeEventListener: () => {} });
+    Object.defineProperty(window, 'matchMedia', { configurable: true, writable: true, value: media });
+  };
+  afterEach(() => {
+    Reflect.deleteProperty(window, 'matchMedia');
+    rowExitStore.setState({ leaving: new Set(), returning: new Set() });
+  });
+
+  test('la rangée reste au fil pendant la sortie, publiée sortante, puis le quitte', async () => {
+    reduceMotion(false);
+    const { api, queryClient } = mount();
+    act(() => api().deleteOf('m-3')?.());
+    act(() => api().onConfirmDelete('me'));
+    await settle();
+    expect(rowIds(queryClient)).toContain('m-3');
+    expect(rowExitStore.getState().leaving.has('m-3')).toBe(true);
+    await pastTheExit();
+    expect(rowIds(queryClient)).not.toContain('m-3');
+  });
+
+  test('un refus la rend à sa place, publiée revenante, et l’issue se dit', async () => {
+    reduceMotion(false);
+    const { api, queryClient, announced } = mount({ answer: () => ({ ok: false, status: 0, error: 'offline' }) });
+    act(() => api().deleteOf('m-3')?.());
+    act(() => api().onConfirmDelete('me'));
+    await pastTheExit();
+    expect(rowIds(queryClient)).toEqual(['m-1', 'm-2', 'm-3']);
+    expect(rowExitStore.getState().returning.has('m-3')).toBe(true);
+    expect(announced).toHaveLength(1);
+  });
+
+  test('« Réduire les animations » : la rangée part dans l’image du geste, rien n’est publié', async () => {
+    reduceMotion(true);
+    const { api, queryClient } = mount();
+    act(() => api().deleteOf('m-3')?.());
+    act(() => api().onConfirmDelete('me'));
+    expect(rowIds(queryClient)).not.toContain('m-3');
+    expect(rowExitStore.getState().leaving.size).toBe(0);
   });
 });

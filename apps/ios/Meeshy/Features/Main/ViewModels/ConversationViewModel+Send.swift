@@ -230,12 +230,9 @@ extension ConversationViewModel {
 
         let context = makeSendContext(outgoing, intent: intent)
         await stageOptimistic(outgoing, context: context)
-        let payload: SealedOutgoingPayload
-        switch await prepareUpload(outgoing, context: context) {
-        case .success(let sealed): payload = sealed
-        case .failure(let refusal):
-            return .failure(await endToEndSealer.refuse(refusal, localId: context.clientMessageId.rawValue, coordinator: sendCoordinator))
-        }
+        let sealer = endToEndSealer
+        guard !sealer.requiresSeal else { return await sendSealed(outgoing, context: context, sealer: sealer) }
+        let payload = prepareUpload(outgoing, context: context)
         markDeparture()
         let outcome: Result<SentMessageReceipt, any Error>
         do {
@@ -321,10 +318,28 @@ extension ConversationViewModel {
         OptimisticAuthor(senderId: currentUserId, sender: authManager.currentUser)
     }
 
-    /// Ce qui quitte l'appareil selon le RÉGIME (#11379) : en E2EE, scellé ou
-    /// refusé — jamais de repli en clair. Ne touche aucun transport.
-    func prepareUpload(_ outgoing: OutgoingMessage, context: SendAttemptContext) async -> Result<SealedOutgoingPayload, EndToEndSendRefusal> {
-        await endToEndSealer.seal(outgoing, context: context, wireEffectFlags: wireEffectFlags(context.intent))
+    /// Le corps d'un envoi d'une conversation qui n'est PAS chiffrée (#11379) :
+    /// le clair, que la passerelle traduit et transcrit. Ne touche aucun transport.
+    func prepareUpload(_ outgoing: OutgoingMessage, context: SendAttemptContext) -> SealedOutgoingPayload {
+        endToEndSealer.plaintext(outgoing, context: context, wireEffectFlags: wireEffectFlags(context.intent))
+    }
+
+    /// L'envoi d'une conversation chiffrée de bout en bout (#3707) : libsignal
+    /// par appareil, REST seulement (le socket ne porte pas d'enveloppes), ni
+    /// repli socket ni file hors ligne — jamais de clair.
+    func sendSealed(_ outgoing: OutgoingMessage, context: SendAttemptContext, sealer: EndToEndSendSealer) async -> Result<SentMessageReceipt, SendFailure> {
+        await sealer.send(outgoing, context: context, wireEffectFlags: wireEffectFlags(context.intent), coordinator: sendCoordinator, hooks: EndToEndSendHooks(
+            departed: { [weak self] in self?.markDeparture() },
+            emit: { [weak self] payload in
+                guard let self else { throw CancellationError() }
+                return try await self.sendCoordinator.emit(outgoing, payload: payload, context: context, socketFirst: false)
+            },
+            acknowledged: { [weak self] receipt in await self?.finalizeAcknowledged(receipt, outgoing: outgoing, context: context) },
+            recover: { [weak self] error in
+                await self?.recover(from: error, outgoing: outgoing, payload: EndToEndSendSealer.sealedPlaceholderPayload, context: context, fallbackEligible: false)
+                    ?? .failure(.endToEndUnsealed(.sessionUnavailable))
+            }
+        ))
     }
 
     var endToEndSealer: EndToEndSendSealer { EndToEndSendSealer(self) }
@@ -380,11 +395,13 @@ extension ConversationViewModel {
         from error: any Error,
         outgoing: OutgoingMessage,
         payload: SealedOutgoingPayload,
-        context: SendAttemptContext
+        context: SendAttemptContext,
+        fallbackEligible: Bool? = nil
     ) async -> Result<SentMessageReceipt, SendFailure> {
         await collaborators.failureRecovery.recover(
             from: error, outgoing: outgoing, payload: payload, context: context,
-            fallbackEligible: outgoing.socketFallbackEligible(intent: context.intent, hasPendingEffects: pendingEffects.hasAnyEffect),
+            fallbackEligible: fallbackEligible
+                ?? outgoing.socketFallbackEligible(intent: context.intent, hasPendingEffects: pendingEffects.hasAnyEffect),
             coordinator: sendCoordinator,
             hooks: SendRecoveryHooks(
                 withdraw: { [weak self] in await self?.withdrawRefusedMessage(tempId: $0, restriction: $1) },

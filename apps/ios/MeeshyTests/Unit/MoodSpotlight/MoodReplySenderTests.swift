@@ -5,21 +5,10 @@ import MeeshySDK
 /// La réponse envoyée depuis la page d'une humeur (#10814) part en
 /// `storyReplyToId` dans la DERNIÈRE conversation directe avec l'auteur, ou
 /// dans une conversation directe créée pour elle — et elle est chiffrée
-/// exactement quand le composer de la conversation la chiffrerait.
+/// exactement quand le composer de la conversation la chiffrerait : selon le
+/// RÉGIME de la conversation (#3707), jamais selon les clés du pair.
 @MainActor
 final class MoodReplySenderTests: XCTestCase {
-
-    private struct FailingEncryptor: DirectMessageEncrypting {
-        func encryptMessage(_ payload: Data, for userId: String, conversationId: String) async throws -> Data {
-            throw URLError(.cannotConnectToHost)
-        }
-    }
-
-    private struct ReversingEncryptor: DirectMessageEncrypting {
-        func encryptMessage(_ payload: Data, for userId: String, conversationId: String) async throws -> Data {
-            Data(payload.reversed())
-        }
-    }
 
     private func makeEntry() -> StatusEntry {
         StatusEntry(id: "mood-1", userId: "author-1", username: "Alice", avatarColor: "6366F1", moodEmoji: "😄", content: "Heureux")
@@ -61,21 +50,22 @@ final class MoodReplySenderTests: XCTestCase {
     private var queue = MockReplyQueue()
     private var persistence = MockOptimisticPersistence()
 
-    private func makeSUT(encryptor: DirectMessageEncrypting = FailingEncryptor()) -> (MoodReplySender, MockConversationService, MockMessageService) {
+    private func makeSUT(endToEnd: MockEndToEndMessaging = MockEndToEndMessaging()) -> (MoodReplySender, MockConversationService, MockMessageService) {
         let conversations = MockConversationService()
         let messages = MockMessageService()
         queue = MockReplyQueue()
         persistence = MockOptimisticPersistence()
-        let sut = MoodReplySender(conversations: conversations, messages: messages, encryptor: encryptor,
+        let sut = MoodReplySender(conversations: conversations, messages: messages, endToEnd: endToEnd,
                                   replyQueue: queue, messagePersistence: persistence,
                                   currentUserId: { "me-1" }, prepareReplyQueue: {},
                                   composingLanguages: { ["fr"] })
         return (sut, conversations, messages)
     }
 
-    private func directConversation(id: String) -> APIConversation {
-        JSONStub.decode("""
-        {"id":"\(id)","type":"direct","createdAt":"2026-01-01T00:00:00.000Z"}
+    private func directConversation(id: String, encryptionMode: String? = nil) -> APIConversation {
+        let mode = encryptionMode.map { #","encryptionMode":"\#($0)""# } ?? ""
+        return JSONStub.decode("""
+        {"id":"\(id)","type":"direct","createdAt":"2026-01-01T00:00:00.000Z"\(mode)}
         """)
     }
 
@@ -104,23 +94,33 @@ final class MoodReplySenderTests: XCTestCase {
         XCTAssertEqual(messages.lastSendRequest?.storyReplyToId, "mood-1")
     }
 
-    func test_sendReply_withoutE2EESession_sendsInPlaintext() async throws {
-        let (sut, _, messages) = makeSUT()
+    func test_sendReply_inAPlaintextConversation_staysInPlaintext_evenWhenThePeerHasKeys() async throws {
+        let e2ee = MockEndToEndMessaging()
+        let (sut, conversations, messages) = makeSUT(endToEnd: e2ee)
+        conversations.findDirectWithResult = .success(directConversation(id: "0000000000000000000000aa"))
 
         _ = try await sut.sendReply("Salut", to: makeEntry())
 
         XCTAssertEqual(messages.lastSendRequest?.content, "Salut")
         XCTAssertNil(messages.lastSendRequest?.isEncrypted)
+        XCTAssertEqual(e2ee.deliverCallCount, 0, "la passerelle refuserait un chiffré dans une conversation en clair")
     }
 
-    func test_sendReply_withE2EESession_sendsSealed() async throws {
-        let (sut, _, messages) = makeSUT(encryptor: ReversingEncryptor())
+    func test_sendReply_inAnEncryptedConversation_leavesUnderLibsignal_neverInTheQueue() async throws {
+        let e2ee = MockEndToEndMessaging()
+        let (sut, conversations, messages) = makeSUT(endToEnd: e2ee)
+        conversations.findDirectWithResult = .success(directConversation(id: "0000000000000000000000aa", encryptionMode: "e2ee"))
 
         _ = try await sut.sendReply("Salut", to: makeEntry())
 
-        XCTAssertEqual(messages.lastSendRequest?.isEncrypted, true)
-        XCTAssertEqual(messages.lastSendRequest?.encryptionMode, "E2EE")
-        XCTAssertNotEqual(messages.lastSendRequest?.content, "Salut")
+        let request = try XCTUnwrap(messages.lastSendRequest)
+        XCTAssertEqual(request.encryptionProtocol, "libsignal-v1")
+        XCTAssertEqual(request.storyReplyToId, "mood-1")
+        XCTAssertNil(request.content)
+        XCTAssertEqual(e2ee.deliveredContents.first?.text, "Salut")
+        XCTAssertEqual(e2ee.deliveredContents.first?.conversationId, "0000000000000000000000aa")
+        XCTAssertTrue(queue.enqueuedItems.isEmpty, "la file rejoue en clair")
+        XCTAssertNotNil(e2ee.remembered[request.clientMessageId], "le clair de ma réponse reste sur l'appareil")
     }
 
     // MARK: - #10820 — la réponse en clair passe par la file hors ligne
@@ -173,7 +173,8 @@ final class MoodReplySenderTests: XCTestCase {
     /// La file rejoue en clair : une réponse CHIFFRÉE n'y entre jamais
     /// (fail-closed). Elle part directement, ou l'erreur remonte.
     func test_sendReply_sealedReplyFails_neverQueuesAndThrows() async {
-        let (sut, _, messages) = makeSUT(encryptor: ReversingEncryptor())
+        let (sut, conversations, messages) = makeSUT()
+        conversations.findDirectWithResult = .success(directConversation(id: "0000000000000000000000aa", encryptionMode: "e2ee"))
         messages.sendResult = .failure(URLError(.timedOut))
 
         do {

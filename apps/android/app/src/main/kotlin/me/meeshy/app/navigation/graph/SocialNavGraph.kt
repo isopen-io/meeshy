@@ -51,6 +51,7 @@ internal fun NavGraphBuilder.socialNavGraph(
         OwnProfileScreen(
             onBack = { navController.popBackStack() },
             onViewPosts = { userId -> navController.navigate(Routes.userPosts(userId)) },
+            onOpenFriendRequests = { navController.navigate(FriendRequestsDestinations.ROUTE) },
         )
     }
     composable(

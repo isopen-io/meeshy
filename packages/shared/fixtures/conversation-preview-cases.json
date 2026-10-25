@@ -3063,6 +3063,87 @@
       "text": "Encryption enabled"
     },
     {
+      "id": "system-encryption-disabled",
+      "matrix": "Système — chiffrement désactivé (#12522)",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "system",
+          "originalLanguage": "fr",
+          "content": "🔓 Alice a désactivé le chiffrement de bout en bout.",
+          "systemEvent": {
+            "key": "system.encryption-disabled",
+            "params": {
+              "actor": "Alice"
+            }
+          }
+        }
+      },
+      "expected": {
+        "tone": "system",
+        "icon": null,
+        "author": null,
+        "kind": "system",
+        "segments": [
+          {
+            "kind": "label",
+            "text": "Alice a désactivé le chiffrement de bout en bout"
+          }
+        ]
+      },
+      "text": "Alice a désactivé le chiffrement de bout en bout"
+    },
+    {
+      "id": "system-encryption-disabled-en",
+      "matrix": "Système — chiffrement désactivé (#12522)",
+      "input": {
+        "viewerId": "u-me",
+        "language": "en",
+        "preferredLanguages": [
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "system",
+          "originalLanguage": "fr",
+          "content": "🔓 Alice a désactivé le chiffrement de bout en bout.",
+          "systemEvent": {
+            "key": "system.encryption-disabled",
+            "params": {
+              "actor": "Alice"
+            }
+          }
+        }
+      },
+      "expected": {
+        "tone": "system",
+        "icon": null,
+        "author": null,
+        "kind": "system",
+        "segments": [
+          {
+            "kind": "label",
+            "text": "Alice turned off end-to-end encryption"
+          }
+        ]
+      },
+      "text": "Alice turned off end-to-end encryption"
+    },
+    {
       "id": "system-member-added",
       "matrix": "Système",
       "input": {
