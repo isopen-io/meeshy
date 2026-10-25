@@ -147,11 +147,19 @@ public interface MessageDao {
 /**
  * Upserts server-truth rows without erasing what only this device knows (retry counter, last
  * error, opened view-once, change version). Call it inside the transaction that writes the page.
+ * The message ingestion pipeline (`MessageIngestPipeline`) goes further and skips unchanged rows.
  */
 public suspend fun MessageDao.upsertKeepingLocal(rows: List<MessageEntity>) {
     if (rows.isEmpty()) return
     val previous = rows.map { it.id }.chunked(ID_CHUNK).flatMap { findAll(it) }.associateBy { it.id }
     upsertAll(rows.map { it.carryingLocalColumnsOf(previous[it.id]) })
 }
+
+/**
+ * Whether this row stores exactly what [other] stores, ignoring the bookkeeping that every write
+ * moves (`cachedAt`, `changeVersion`) — the test that decides whether an upsert is a real change.
+ */
+public fun MessageEntity.sameStoredContentAs(other: MessageEntity): Boolean =
+    copy(cachedAt = other.cachedAt, changeVersion = other.changeVersion) == other
 
 private const val ID_CHUNK = 500

@@ -67,6 +67,7 @@ internal fun NavGraphBuilder.conversationsNavGraph(
                 onViewProfile = { userId -> navController.navigate(Routes.profile(userId)) },
                 onCreateShareLink = { id -> navController.navigate(Routes.createShareLink(id)) },
             ),
+            onOpenSettings = { navController.navigate(Routes.SETTINGS) },
         )
     }
     composable(Routes.SHARE_LINK_PICKER) {
