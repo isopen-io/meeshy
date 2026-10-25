@@ -76,6 +76,12 @@
     <string name="presence_online">متصل</string>
     <string name="reactions_more">مزيد من التفاعلات</string>
     <string name="retouch_crop_original">الأصلي</string>
+    <string name="retouch_effect_angel">ملاك</string>
+    <string name="retouch_effect_demon">شيطان</string>
+    <string name="retouch_effect_none">بلا</string>
+    <string name="retouch_effect_smoothing">تنعيم البشرة</string>
+    <string name="retouch_effect_toad">ضفدع</string>
+    <string name="retouch_effect_volcano">ثوران</string>
     <string name="retouch_family_effects">تأثيرات</string>
     <string name="retouch_family_filters">المرشّحات</string>
     <string name="retouch_family_frames">الإطارات</string>

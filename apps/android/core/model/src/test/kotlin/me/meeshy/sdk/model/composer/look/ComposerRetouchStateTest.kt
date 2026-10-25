@@ -114,6 +114,14 @@ class ComposerRetouchStateTest {
     }
 
     @Test
+    fun `une video retouchee offre Filtres et Cadres, et un filtre la fait partir rendue`() {
+        val clip = ComposerRetouchState.opening(ComposerEditTake.Video(true), renderableEffects = emptyList(), tools = ComposerEditTool.entries, durationSeconds = 12.0)
+        assertThat(clip.families).containsExactly(ComposerLookFamily.FILTERS, ComposerLookFamily.FRAMES).inOrder()
+        val warm = clip.tappingFamily(ComposerLookFamily.FILTERS).choosing(ComposerLookStripItem.Filter(me.meeshy.sdk.model.call.VideoFilterPreset.Warm))
+        assertThat(warm.delivery).isEqualTo(ComposerRetouchDelivery.RENDERED)
+    }
+
+    @Test
     fun `une video offre recadrer, couper et le son, et sans look elle n a pas de familles`() {
         val clip = video()
         assertThat(clip.tools).containsExactly(ComposerEditTool.CROP, ComposerEditTool.TEXT, ComposerEditTool.TRIM, ComposerEditTool.SOUND).inOrder()
