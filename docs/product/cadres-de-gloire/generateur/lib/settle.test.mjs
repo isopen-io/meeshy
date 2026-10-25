@@ -3,15 +3,17 @@
 // une photo arrivée en retard sortait absente d'un des deux rendus d'une cible, déclarée alors instable
 // (« INSTABLE : poses-pied.message.webp — deux rendus Chromium diffèrent ») sans que le cadre ait changé.
 // Le témoin retarde la photo d'une seconde et demie — bien plus que la latence d'une capture — et exige qu'elle soit
-// sur l'image (lue par le navigateur lui-même : le job des témoins n'installe pas sharp). Usage : node --test lib/settle.test.mjs
+// sur l'image (lue par le navigateur lui-même : aucun module de ce témoin ne charge sharp, que le job des témoins n'installe pas). Usage : node --test lib/settle.test.mjs
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import path from 'node:path';
 import { test } from 'node:test';
-import { FIXTURE } from './fixture.mjs';
 import { launch } from './launch.mjs';
 import { H, openPage, shoot, showPhoto, showSvg, W } from './page.mjs';
 
 const FRAME = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"><g data-layer="root"><rect data-layer="photo" width="${W}" height="${H}" fill="none"/></g></svg>`;
+// La photo versionnée, lue par son chemin : lib/fixture.mjs charge sharp, que le job des témoins n'installe pas.
+const FIXTURE = path.join(path.dirname(new URL(import.meta.url).pathname), '../fixture/photo.jpg');
 const PHOTO = 'http://photo.cible.test/photo.jpg';
 const DELAY_MS = 1500;
 
