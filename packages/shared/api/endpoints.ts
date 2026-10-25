@@ -1020,7 +1020,7 @@ export const API_PATH_METHODS: Readonly<Record<ApiPath, readonly HttpMethod[]>> 
   '/api/v1/conversations/:conversationId/active-call': ['GET'],
   '/api/v1/conversations/:conversationId/attachments': ['GET'],
   '/api/v1/conversations/:conversationId/clear-history': ['POST'],
-  '/api/v1/conversations/:conversationId/encryption': ['POST'],
+  '/api/v1/conversations/:conversationId/encryption': ['POST', 'DELETE'],
   '/api/v1/conversations/:conversationId/encryption-status': ['GET'],
   '/api/v1/conversations/:conversationId/links': ['GET'],
   '/api/v1/conversations/:conversationId/mark-as-read': ['POST'],
