@@ -623,8 +623,9 @@ export class MessageHandler {
         // Enveloppe de chiffrement — même unité que handleMessageSend. Ce
         // chemin-ci ne la portait pas du tout : une pièce jointe envoyée dans
         // une conversation chiffrée perdait son chiffré sans qu'aucun type ni
-        // schéma ne puisse le dire.
-        encryptedPayload: toEncryptedPayload(validated),
+        // schéma ne puisse le dire. Et la SESSION, comme sur `message:send` :
+        // le relais libsignal n'admet que l'appareil lié à cette session (#10789).
+        encryptedPayload: toEncryptedPayload(validated, { sessionId: (socket.data as { sessionId?: string } | undefined)?.sessionId ?? null }),
         metadata: {
           source: 'websocket',
           socketId: socket.id,

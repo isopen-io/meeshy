@@ -51,6 +51,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { carrierMessageStillServesBytes } from './carrierMessageLifecycle';
 import { attachmentIsReaderBound } from './signedAttachmentUrls';
 import { prefixRange } from '../../utils/prefix-range';
+import { isEndToEndAttachment } from '@meeshy/shared/types/e2ee-attachment';
 
 /**
  * `readerBound` (#9600) : TOUS les porteurs vivants de ce fichier sont des
@@ -110,9 +111,10 @@ type OwnerRow = {
   readonly isViewOnce: boolean;
   readonly isBlurred?: boolean | null;
   readonly effectFlags?: number | null;
+  readonly encryptionMode?: string | null;
 };
 
-const OWNER_SELECT = { messageId: true, isViewOnce: true, isBlurred: true, effectFlags: true } as const;
+const OWNER_SELECT = { messageId: true, isViewOnce: true, isBlurred: true, effectFlags: true, encryptionMode: true } as const;
 
 const CARRIER_SELECT = {
   id: true,
@@ -131,6 +133,9 @@ export async function resolveFileRouteVerdict(
   now: Date
 ): Promise<FileRouteVerdict> {
   const owners = await ownerRowsOf(storageKey, prisma);
+  // #10789 — un blob chiffré de bout en bout ne se sert qu'aux membres, par
+  // identifiant : cette route ne connaît pas son lecteur.
+  if (owners.some(isEndToEndAttachment)) return { kind: 'gone' };
   if (owners.length > 0) return verdictFor(owners, prisma, now);
   return TRANSLATED_TRACK.test(storageKey) ? { kind: 'gone' } : { kind: 'not-an-attachment' };
 }

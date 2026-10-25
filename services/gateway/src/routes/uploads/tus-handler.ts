@@ -50,6 +50,7 @@ import { triggerMediaAltTranslations } from '../../services/posts/mediaAltWrites
 import { triggerMessageAttachmentAltTranslation } from '../../services/attachments/MessageAttachmentAltTranslationService';
 import { originIsAllowed } from '../../config/cors-origins';
 import { TUS_COLLECTION_METHODS, TUS_UPLOAD_METHODS } from './tus-methods';
+import { endToEndUploadRefusal, isEndToEndUploadContext, storeEndToEndBlob } from '../../services/attachments/endToEndBlobUpload';
 
 const logger = enhancedLogger.child({ module: 'TusHandler' });
 
@@ -400,6 +401,20 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
 
       const { userId, isAnonymous, anonymousShareLinkId } = identity;
 
+      // #10789 — un blob chiffré de bout en bout : liste blanche des
+      // métadonnées et condensat exigé, avant le premier octet. Aucune autre
+      // garde de média ne s'y applique (type, catégorie) : le serveur n'en sait rien.
+      if (isEndToEndUploadContext(upload.metadata?.uploadcontext)) {
+        const refused = endToEndUploadRefusal({ metadata: upload.metadata ?? {}, isAnonymous });
+        if (refused) throw refused;
+        if (upload.size && upload.size > getMaxFileSize()) {
+          throw { status_code: 413, body: 'File too large\n' };
+        }
+        return {
+          metadata: { ...upload.metadata, userId, isAnonymous: 'false', anonymousShareLinkId: '', uploadedAt: new Date().toISOString() },
+        };
+      }
+
       // PHASE 3 (2026-08-02) — un upload destiné à PostMedia sans uploadeur
       // identifiable est REFUSÉ avant le premier octet. Le laisser passer
       // créait un média que l'égalité stricte du claim rend irréclamable à
@@ -448,6 +463,16 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
       };
     },
     async onUploadFinish(_req, upload) {
+      // #10789 — le blob chiffré de bout en bout est rangé tel quel, AVANT tout
+      // traitement de média : aucun reniflage, EXIF, extraction ni rendu.
+      if (isEndToEndUploadContext(upload.metadata?.uploadcontext)) {
+        return storeEndToEndBlob({ prisma, uploadPath: UPLOAD_PATH }, {
+          sourcePath: upload.storage?.path ? upload.storage.path : path.join(TUS_TEMP_PATH, upload.id),
+          metadata: upload.metadata ?? {},
+          userId: upload.metadata?.userId || 'anonymous',
+          now: new Date(),
+        });
+      }
       const filename = upload.metadata?.filename || 'unknown';
       const declaredMimeType = upload.metadata?.filetype || 'application/octet-stream';
       const userId = upload.metadata?.userId || 'anonymous';

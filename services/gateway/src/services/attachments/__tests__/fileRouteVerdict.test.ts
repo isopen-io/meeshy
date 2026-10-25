@@ -39,6 +39,7 @@ type Piece = {
   isViewOnce: boolean;
   isBlurred: boolean;
   effectFlags: number;
+  encryptionMode?: string | null;
 };
 type Carrier = {
   id: string;
@@ -219,5 +220,29 @@ describe('un fichier dont TOUS les porteurs vivants disparaissent se lit par lec
     const { ephemeralDuration: _dropped, ...partial } = carrier({});
     const prisma = prismaWith([piece({})], [partial as Carrier]);
     expect(await resolveFileRouteVerdict(KEY, prisma, at)).toMatchObject({ readerBound: true });
+  });
+});
+
+/**
+ * #10789 — un blob chiffré de bout en bout ne se sert que par IDENTIFIANT, aux
+ * membres (`GET /attachments/:id`). La route par chemin ne connaît pas son
+ * lecteur : elle le refuse, rattaché ou non, vivant ou non.
+ */
+describe('un blob chiffré de bout en bout ne se sert jamais par chemin (#10789)', () => {
+  const BLOB_KEY = '2026/10/68f2a81417a557e8ce4ddfc1/e2ee_8b1f0c1e-0000-4000-8000-000000000000.bin';
+
+  it('refuse le blob d’un message vivant', async () => {
+    const prisma = prismaWith([piece({ filePath: BLOB_KEY, encryptionMode: 'e2ee' })], [carrier({})]);
+    expect(await resolveFileRouteVerdict(BLOB_KEY, prisma, FORWARDED_AT)).toEqual({ kind: 'gone' });
+  });
+
+  it('refuse le blob pas encore rattaché', async () => {
+    const prisma = prismaWith([piece({ filePath: BLOB_KEY, messageId: null, encryptionMode: 'E2EE' })], []);
+    expect(await resolveFileRouteVerdict(BLOB_KEY, prisma, FORWARDED_AT)).toEqual({ kind: 'gone' });
+  });
+
+  it('une pièce ordinaire reste servie par chemin (non-régression)', async () => {
+    const prisma = prismaWith([piece({})], [carrier({})]);
+    expect(await resolveFileRouteVerdict(KEY, prisma, FORWARDED_AT)).toMatchObject({ kind: 'serve' });
   });
 });

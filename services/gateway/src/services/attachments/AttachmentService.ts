@@ -582,6 +582,9 @@ export class AttachmentService {
         conversationId: conversationId,
         ...carrierMessageStillServesWhere(options.now ?? new Date()),
       },
+      // #10789 — un blob chiffré de bout en bout ne s'ouvre que par le pointeur
+      // du message déchiffré sur l'appareil : la galerie du serveur l'ignore.
+      NOT: [{ encryptionMode: 'e2ee' }],
     };
 
     if (options.type) {

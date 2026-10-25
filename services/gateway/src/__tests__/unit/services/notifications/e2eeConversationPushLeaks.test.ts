@@ -59,7 +59,7 @@ const voiceNote = {
   effectFlags: 0,
 };
 
-function makePrisma(encryptionMode: string | null) {
+function makePrisma(encryptionMode: string | null, attachment: Record<string, unknown> = voiceNote) {
   return {
     participant: {
       findUnique: jest.fn<any>().mockResolvedValue({ userId: SENDER_USER_ID, displayName: 'Alice P', avatar: null }),
@@ -107,7 +107,7 @@ function makePrisma(encryptionMode: string | null) {
       deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
       count: jest.fn<any>().mockResolvedValue(0),
     },
-    messageAttachment: { findMany: jest.fn<any>().mockResolvedValue([voiceNote]) },
+    messageAttachment: { findMany: jest.fn<any>().mockResolvedValue([attachment]) },
     userConversationPreferences: {
       findMany: jest.fn<any>().mockResolvedValue([]),
       findUnique: jest.fn<any>().mockResolvedValue(null),
@@ -118,8 +118,8 @@ function makePrisma(encryptionMode: string | null) {
 }
 
 /** Ce qui part réellement : la charge remise au service push, et la ligne `Notification`. */
-async function delivered(encryptionMode: string | null) {
-  const prisma = makePrisma(encryptionMode);
+async function delivered(encryptionMode: string | null, attachment?: Record<string, unknown>) {
+  const prisma = makePrisma(encryptionMode, attachment);
   const sendToUser = jest.fn<any>().mockResolvedValue(undefined);
   const service = new NotificationService(prisma);
   service.setSocketIO({
@@ -183,5 +183,19 @@ describe('conversation en clair — la bannière d’un vocal garde son contenu 
 
     expect(pushes.length).toBeGreaterThan(0);
     expect(pushes.join('\n')).toContain(SECRET_URL);
+  });
+});
+
+/**
+ * #10789 — un blob chiffré de bout en bout ne voyage dans AUCUN push, même si la
+ * ligne du message ne le disait pas : la garde lit la pièce elle-même.
+ */
+describe('un blob chiffré de bout en bout — aucun média, nom, taille ni identifiant dans le push', () => {
+  it('ni fichier, ni nom, ni identifiant de pièce, même hors régime e2ee déclaré', async () => {
+    const { pushes, rows } = await delivered(null, { ...voiceNote, encryptionMode: 'e2ee', isEncrypted: true, mimeType: 'application/octet-stream' });
+
+    for (const charge of [...pushes, ...rows]) {
+      for (const secret of [SECRET_URL, SECRET_FILENAME, ATTACHMENT_ID, SECRET_TRANSCRIPT]) expect(charge).not.toContain(secret);
+    }
   });
 });

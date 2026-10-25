@@ -9,10 +9,11 @@ import {
   type E2EEDevicesMismatch,
   type E2EEErrorCode,
 } from '@meeshy/shared/types/e2ee-directory';
+import { E2EE_ATTACHMENT_ERROR_CODES, type E2EEAttachmentErrorCode } from '@meeshy/shared/types/e2ee-attachment';
 
 export class E2eeRelayRefusedError extends Error {
   constructor(
-    readonly code: E2EEErrorCode,
+    readonly code: E2EEErrorCode | E2EEAttachmentErrorCode,
     readonly status: 400 | 403 | 409,
     message: string,
     readonly mismatch?: E2EEDevicesMismatch,
@@ -38,6 +39,7 @@ export function relayRefusalStatus(code: string | undefined): 400 | 403 | 409 | 
       return 403;
     case E2EE_ERROR_CODES.CLIENT_OUTDATED:
     case E2EE_ERROR_CODES.ENVELOPES_INVALID:
+    case E2EE_ATTACHMENT_ERROR_CODES.INVALID:
       return 400;
     default:
       return undefined;

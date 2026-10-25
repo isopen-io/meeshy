@@ -1,3 +1,4 @@
+import { isEndToEndAttachment } from '@meeshy/shared/types/e2ee-attachment';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { isEndToEndMode } from './e2eePlaintextAdmission';
 import { MESSAGE_ATTACHMENT_ORDER } from '../attachments/attachmentIncludes';
@@ -452,6 +453,8 @@ export async function notifyMessageRecipients(params: {
         // `select` ne lisait pas : `MessageAttachment` porte les siens, et ils
         // ne suivent pas ceux du message qui la porte. Cf. `maskedAttachment`.
         isViewOnce: true, isBlurred: true, effectFlags: true,
+        // #10789 — un blob chiffré de bout en bout ne voyage jamais dans un push.
+        encryptionMode: true,
         // #8857 — la vignette d'une VIDÉO, déjà en base : la bannière la montre.
         thumbnailUrl: true,
       },
@@ -477,7 +480,10 @@ export async function notifyMessageRecipients(params: {
     // `metadata.attachments.firstFilename`, donc relu longtemps après que la
     // bannière a disparu — et le placeholder porte déjà l'icône de type
     // (`contentTypeIcon`), si bien que le corps ne perd rien à ce silence.
-    const mediaMayTravel = protectedOverride === null && !maskedAttachment(first);
+    // #10789 — et un blob chiffré de bout en bout (n'importe laquelle des
+    // pièces) n'a ni fichier, ni nom, ni taille, ni durée à montrer : le serveur
+    // n'en a que le chiffré. Lu sur la PIÈCE, pas seulement sur le message.
+    const mediaMayTravel = protectedOverride === null && !maskedAttachment(first) && !attachments.some(isEndToEndAttachment);
 
     // Cycle 125 bis — ce que le média donne au CORPS d'une bannière, et que les
     // TROIS éventails doivent recevoir : `buildMessageNotificationBodyI18n`

@@ -23,14 +23,24 @@
  * (`encryptionMetadata.regimeEpoch`) est refusé de même quand l'époque a
  * changé depuis. Un envoi sans époque déclarée (client antérieur) n'est pas
  * jugé sur elle.
+ *
+ * Depuis #10789, la SEULE pièce admise en `e2ee` est un blob chiffré sur
+ * l'appareil (`encryptionMode: 'e2ee'`, rangé opaque par la porte TUS) :
+ * déposé par l'expéditeur, pas encore rattaché, et porté par un envoi
+ * libsignal — le pointeur qui l'ouvre voyage dans les enveloppes. Une pièce en
+ * clair, une copie ou un transfert de pièces gardent le refus de #12518. Hors
+ * `e2ee`, un blob est refusé `E2EE_REGIME_CHANGED`.
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { E2EE_ERROR_CODES, type E2EERelayRequest } from '@meeshy/shared/types/e2ee-directory';
 import { createE2EEEnvelopeRelay, type AdmittedRelay } from '../e2ee/E2EEEnvelopeRelay';
 import { regimeEpochOf } from '../conversations/encryptionRegime';
+import { MESSAGE_ATTACHMENT_ORDER } from '../attachments/attachmentIncludes';
 import { clientOutdated, E2eeRelayRefusedError } from '../e2ee/e2ee-relay-errors';
+import { E2EE_ATTACHMENT_ERROR_CODES, isEndToEndAttachment } from '@meeshy/shared/types/e2ee-attachment';
 import {
-  assertNoPlaintextPieces,
+  E2EE_PLAINTEXT_ATTACHMENT_REFUSAL_MESSAGE,
+  E2eePlaintextRefusedError,
   assertPlaintextAdmitted,
   isEndToEndMode,
   plaintextBesideCiphertext,
@@ -77,19 +87,44 @@ export async function admitSendUnderRegime(prisma: AdmissionPrisma, request: Sen
     if (request.e2eeRelay) {
       throw new E2eeRelayRefusedError(E2EE_ERROR_CODES.REGIME_CHANGED, 409, 'Cette conversation n’est plus chiffrée de bout en bout');
     }
-    if (carriesCiphertext) throw regimeChanged();
+    // Un transfert d'une source chiffrée ne recopie rien (`forwardAdmission`) :
+    // seules les pièces RATTACHÉES se relisent ici, sans requête de plus pour
+    // les autres envois.
+    if (carriesCiphertext || (await attachedPieces(prisma, request)).some(isEndToEndAttachment)) throw regimeChanged();
     return { regime, carriesCiphertext, endToEnd, relay: null };
   }
-  assertNoPlaintextPieces({ encryptionMode: regime?.encryptionMode, carriedPieceCount: await countCarriedPieces(prisma, request) });
+  const pieces = await carriedPieces(prisma, request);
+  assertOnlyDeviceSealedPieces(pieces, request.attachmentIds ?? []);
+  const sealedPieces = pieces.attached.length > 0;
+  if (sealedPieces && !(carriesCiphertext && request.e2eeRelay)) throw invalidPiece('une pièce chiffrée part avec ses enveloppes');
   if (!carriesCiphertext) return { regime, carriesCiphertext, endToEnd, relay: null };
   if (sealedUnderStaleEpoch(request.encryptionMetadata, regimeEpochOf(regime))) throw regimeChanged();
   if (!request.e2eeRelay) throw clientOutdated();
+  const senderUserId = await senderUserIdOf(prisma, request.senderId);
+  if (pieces.attached.some((piece) => piece.uploadedBy !== senderUserId || piece.messageId)) {
+    throw invalidPiece('une pièce chiffrée n’entre que dans l’envoi de celui qui l’a déposée');
+  }
   const relay = await createE2EEEnvelopeRelay({ prisma }).admit({
     conversationId: request.conversationId,
-    senderUserId: await senderUserIdOf(prisma, request.senderId),
+    senderUserId,
     relay: request.e2eeRelay,
   });
   return { regime, carriesCiphertext, endToEnd, relay };
+}
+
+const invalidPiece = (reason: string): E2eeRelayRefusedError =>
+  new E2eeRelayRefusedError(E2EE_ATTACHMENT_ERROR_CODES.INVALID, 400, `Pièce jointe chiffrée refusée : ${reason}`);
+
+/**
+ * En `e2ee`, toute pièce rattachée est un blob chiffré sur l'appareil ; une
+ * pièce inconnue, en clair, copiée ou transférée est refusée sous le code que
+ * les anciens clients savent dire (#12518, #9223).
+ */
+function assertOnlyDeviceSealedPieces(pieces: CarriedPieces, attachmentIds: readonly string[]): void {
+  const allSealed = pieces.attached.length === new Set(attachmentIds).size && pieces.attached.every(isEndToEndAttachment);
+  if (pieces.copied.length > 0 || pieces.copiesFromBroadcast || !allSealed) {
+    throw new E2eePlaintextRefusedError(E2EE_PLAINTEXT_ATTACHMENT_REFUSAL_MESSAGE);
+  }
 }
 
 const regimeChanged = (): E2eeRelayRefusedError =>
@@ -116,21 +151,57 @@ async function senderUserIdOf(prisma: AdmissionPrisma, participantId: string | u
   return participant.userId;
 }
 
+type CarriedPiece = {
+  readonly id: string;
+  readonly encryptionMode: string | null;
+  readonly uploadedBy: string;
+  readonly messageId: string | null;
+};
+
+type CarriedPieces = {
+  /** Les pièces pré-téléversées que l'envoi rattache (`attachmentIds`). */
+  readonly attached: readonly CarriedPiece[];
+  /** Les pièces qu'une diffusion ou un transfert recopieraient. */
+  readonly copied: readonly CarriedPiece[];
+  /** Une diffusion recopie toujours au moins une pièce, même si sa source n'en montre aucune ici. */
+  readonly copiesFromBroadcast: boolean;
+};
+
+const PIECE_SELECT = { id: true, encryptionMode: true, uploadedBy: true, messageId: true } as const;
+
 /**
  * Les pièces que cet envoi ferait porter à son message, quel que soit le
  * chemin que `handleAttachments` prendra : rattachées, recopiées par une
  * diffusion, ou recopiées d'une source transférée (sauf verdict vide).
  */
-async function countCarriedPieces(prisma: AdmissionPrisma, request: SendUnderRegime): Promise<number> {
-  if (request.attachmentIds?.length) return request.attachmentIds.length;
-  if (request.copyAttachmentsFromMessageId) return 1;
-  if (!request.forwardedFromId || request.forwardCopySelection?.length === 0) return 0;
+async function attachedPieces(prisma: AdmissionPrisma, request: SendUnderRegime): Promise<readonly CarriedPiece[]> {
+  if (!request.attachmentIds?.length) return [];
+  return prisma.messageAttachment.findMany({
+    where: { id: { in: [...new Set(request.attachmentIds)] } },
+    select: PIECE_SELECT,
+  });
+}
+
+async function carriedPieces(prisma: AdmissionPrisma, request: SendUnderRegime): Promise<CarriedPieces> {
+  if (request.attachmentIds?.length) {
+    return { attached: await attachedPieces(prisma, request), copied: [], copiesFromBroadcast: false };
+  }
+  if (request.copyAttachmentsFromMessageId) {
+    const copied = await prisma.messageAttachment.findMany({
+      where: { messageId: request.copyAttachmentsFromMessageId },
+      orderBy: MESSAGE_ATTACHMENT_ORDER,
+      select: PIECE_SELECT,
+    });
+    return { attached: [], copied, copiesFromBroadcast: true };
+  }
+  if (!request.forwardedFromId || request.forwardCopySelection?.length === 0) return { attached: [], copied: [], copiesFromBroadcast: false };
   const copied = await prisma.messageAttachment.findMany({
     where: {
       messageId: request.forwardedFromId,
       ...(request.forwardCopySelection ? { id: { in: [...request.forwardCopySelection] } } : {}),
     },
-    select: { id: true },
+    orderBy: MESSAGE_ATTACHMENT_ORDER,
+    select: PIECE_SELECT,
   });
-  return copied.length;
+  return { attached: [], copied, copiesFromBroadcast: false };
 }

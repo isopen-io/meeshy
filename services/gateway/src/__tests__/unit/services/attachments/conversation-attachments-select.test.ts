@@ -177,6 +177,9 @@ describe('AttachmentService.getConversationAttachments — ce que la REQUÊTE de
    * `carrierMessageStillServesBytes` applique au détail. C'est pourquoi elle
    * est comparée à la SSOT plutôt que recopiée ici : une copie dériverait, et
    * c'est la dérive entre les deux formes qui a laissé la liste en retard.
+   *
+   * #10789 — et la galerie écarte les blobs chiffrés de bout en bout : le
+   * serveur n'en a que l'octet opaque (`conversation-attachments-e2ee-blobs.test.ts`).
    */
   it("borne la page, le porteur et rien d'autre — le filtre de l'appelant survit intact", async () => {
     const { service, findMany } = makeService([]);
@@ -200,6 +203,7 @@ describe('AttachmentService.getConversationAttachments — ce que la REQUÊTE de
             conversationId: CONVERSATION_ID,
             ...carrierMessageStillServesWhere(now),
           },
+          NOT: [{ encryptionMode: 'e2ee' }],
         },
       })
     );
