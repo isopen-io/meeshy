@@ -38,6 +38,7 @@ const device = (overrides: Partial<E2eeDevice>): E2eeDevice => ({
   enrolledAt: '2026-10-20T09:00:00.000Z',
   lastSeenAt: '2026-10-25T08:00:00.000Z',
   current: false,
+  registrationId: 4242,
   ...overrides,
 });
 
@@ -51,8 +52,8 @@ function harness(overrides: Partial<E2eeDevicesScreenDeps> = {}, host: 'browser'
   const server = { state: served() };
   const deps: E2eeDevicesScreenDeps = {
     load: async () => ({ ok: true, data: server.state, status: 200 }),
-    retire: async (deviceId) => {
-      calls.push(`retire:${deviceId}`);
+    retire: async ({ deviceId, registrationId }) => {
+      calls.push(`retire:${deviceId}:${registrationId}`);
       server.state = server.state.filter((row) => row.deviceId !== deviceId);
       return { ok: true, data: { deviceId, retired: true, signedOut: true }, status: 200 };
     },
@@ -172,7 +173,7 @@ describe('retirer', () => {
     const confirm = confirmButton('Retirer cet appareil');
     if (confirm !== null) await click(confirm);
     await settle();
-    expect(calls).toEqual(['retire:1']);
+    expect(calls).toEqual(['retire:1:4242']);
     expect(host.querySelector('[data-e2ee-device="1"]')).toBeNull();
     expect(host.querySelector('[data-e2ee-devices-announce]')?.textContent).toBe('Appareil retiré');
   });
@@ -200,5 +201,55 @@ describe('retirer', () => {
     if (confirm !== null) await click(confirm);
     await settle();
     expect(host.querySelector('[data-e2ee-devices-announce]')?.textContent).toBe('Appareil retiré');
+  });
+});
+
+describe('une liste confirmée, une génération nommée', () => {
+  test('une liste venue du cache ne propose pas encore le retrait : il attend sa relecture dans cet écran', async () => {
+    const { element, queryClient } = harness({ load: () => new Promise<ApiResult<readonly E2eeDevice[]>>(() => undefined) });
+    queryClient.setQueryData(E2EE_DEVICES_QUERY_KEY, served());
+    const host = await mount(element);
+    const buttons = [...host.querySelectorAll<HTMLButtonElement>('[data-e2ee-device-retire]')];
+    expect(buttons).toHaveLength(2);
+    expect(buttons.every((button) => button.disabled)).toBe(true);
+  });
+
+  test('une fois relue, la liste propose le retrait', async () => {
+    const { element, queryClient } = harness();
+    queryClient.setQueryData(E2EE_DEVICES_QUERY_KEY, served());
+    const host = await mount(element);
+    await settle();
+    expect([...host.querySelectorAll<HTMLButtonElement>('[data-e2ee-device-retire]')].every((button) => !button.disabled)).toBe(true);
+  });
+
+  test('un appareil sans génération servie ne se retire pas d’ici', async () => {
+    const { element } = harness({ load: async () => ({ ok: true, data: [device({ deviceId: 5, registrationId: null })], status: 200 }) });
+    const host = await mount(element);
+    await settle();
+    expect(host.querySelector('[data-e2ee-device="5"] [data-e2ee-device-retire]')).toBeNull();
+  });
+
+  test('un appareil qui a changé (409) remet la liste à jour et le dit', async () => {
+    const loads = { count: 0 };
+    const fresh = [device({ deviceId: 1, label: 'iPhone neuf', registrationId: 777 })];
+    const { element } = harness({
+      load: async () => {
+        loads.count += 1;
+        return { ok: true, data: loads.count === 1 ? served() : fresh, status: 200 };
+      },
+      retire: async () => ({ ok: false, status: 409, error: 'changé', code: 'E2EE_DEVICE_CHANGED' }),
+    });
+    const host = await mount(element);
+    await settle();
+    const retire = host.querySelector<HTMLButtonElement>('[data-e2ee-device="1"] [data-e2ee-device-retire]');
+    if (retire !== null) await click(retire);
+    const confirm = confirmButton('Retirer cet appareil');
+    if (confirm !== null) await click(confirm);
+    await settle();
+    expect(loads.count).toBe(2);
+    expect(host.querySelector('[data-e2ee-device="1"]')?.textContent).toContain('iPhone neuf');
+    expect(host.querySelector('[data-e2ee-devices-announce]')?.textContent).toBe(
+      'Cet appareil a changé depuis l’affichage de la liste : elle a été rechargée. Vérifiez-la avant de retirer.',
+    );
   });
 });
