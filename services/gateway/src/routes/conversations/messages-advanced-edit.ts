@@ -217,6 +217,8 @@ export function registerEditMessagePutRoute(
           createdAt: existingMessage.createdAt,
           messageType: existingMessage.messageType,
           metadata: existingMessage.metadata,
+          isEncrypted: existingMessage.isEncrypted,
+          encryptionMode: existingMessage.encryptionMode,
         },
         onError: (err) => logger.error('Edit - admission lookup failed', err),
       });
@@ -666,6 +668,8 @@ export function registerEditMessagePatchRoute(
           createdAt: message.createdAt,
           messageType: message.messageType,
           metadata: message.metadata,
+          isEncrypted: message.isEncrypted,
+          encryptionMode: message.encryptionMode,
         },
         onError: (err) => logger.error('Patch edit - admission lookup failed', err),
       });
