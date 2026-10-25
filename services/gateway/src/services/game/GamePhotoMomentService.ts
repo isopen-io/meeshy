@@ -17,7 +17,8 @@
  *    compte en ligne (l'hôte de l'app est la surface), pendant son « Ne pas déranger » quand il l'a posé
  *    (`isWithinDnd`, la règle même de `NotificationService`, testée AVANT `GameNotifier` pour qu'une suppression ne
  *    consomme pas sa clé), sinon la nuit dans SON fuseau (`effectiveZone`), ou quand le créneau du jour est pris. Il n'envoie rien à un compte
- *    qui a coupé le push photo ou le jeu. Une étape notifiée ne repart jamais (`notifiedAt` fait foi) ; une Flamme
+ *    qui a coupé le push photo ou le jeu, ni à un compte dont aucun appareil ne sait ouvrir le push
+ *    (`accountRoutesPushType`, la loi du chokepoint, #10267) : l'étape reste alors à présenter dans l'app. Une étape notifiée ne repart jamais (`notifiedAt` fait foi) ; une Flamme
  *    déjà annoncée par `streak_milestone` ne part pas en push photo (l'invitation dans l'app reste).
  *
  * Une étape non présentée ni notifiée au-delà de `PENDING_WINDOW_DAYS` sort de l'envoi : le carnet la garde, sans
@@ -37,6 +38,7 @@ import { catchUpStandingOf, photoStepsReached, type PhotoCatchUpStanding } from 
 import { PHOTO_MOMENTS_ACCOUNT_MAX, isKnownPhotoStepId } from '@meeshy/shared/utils/game/photo-step-ids';
 import { TREASURY_TIERS, type TreasuryTierKey } from '@meeshy/shared/utils/game/treasury';
 import { enhancedLogger } from '../../utils/logger-enhanced';
+import { accountRoutesPushType } from '../push-type-routing';
 import { GameBlockService } from './GameBlockService';
 import { GameNotifier, type GameNotifyResult } from './GameNotifier';
 import { photoMomentId } from './GamePhotoService';
@@ -201,6 +203,9 @@ export class GamePhotoMomentService {
     if (user.isOnline === true) return 'deferred';
     // UNE règle d'heures calmes : le « Ne pas déranger » de l'utilisateur quand il l'a posé, sinon la nuit de la politique.
     if (prefs.dndEnabled ? isWithinDnd(prefs, now) : this.isNight(now, user.timezone)) return 'deferred';
+
+    // #10267 — aucun appareil ne saurait l'ouvrir : rien ne s'annonce, l'étape reste à présenter dans l'app.
+    if (!(await accountRoutesPushType(this.prisma, userId, 'game_photo_moment'))) return 'skipped';
 
     const announced = await this.flamesAnnounced(userId, pending);
     const records: PhotoMomentRecord[] = pending.filter((row) => !announced.has(row.stepId)).map((row) => ({ stepId: row.stepId, presentedAt: null, notifiedAt: null }));

@@ -83,15 +83,18 @@ function isPushAllowed(prefs: NotifPrefs, bypassDnd = false, isCallPush = false)
  *   - `notificationBadgeEnabled:false` → `aps.badge` forcé à 0 (miroir du
  *     gate icône de NotificationCoordinator iOS ; `data.unreadCount` reste
  *     intact pour le widget, qui garde le vrai total)
- *   - `groupNotifications:false` → `threadId` retiré (plus d'empilement
- *     par conversation)
+ *   - `groupNotifications:false` → `threadId` et `apnsThreadId` retirés
+ *     (plus d'empilement, ni par conversation ni dans le fil « jeu »)
  * Jamais appliqué aux pushes d'appel (data-only, sonnerie à part entière).
  */
 function applyDeliveryPreferences(payload: PushNotificationPayload, prefs: NotifPrefs): PushNotificationPayload {
   const out: PushNotificationPayload = { ...payload };
   if (prefs.soundEnabled === false) out.muted = true;
   if (prefs.notificationBadgeEnabled === false && out.badge !== undefined) out.badge = 0;
-  if (prefs.groupNotifications === false) delete out.threadId;
+  if (prefs.groupNotifications === false) {
+    delete out.threadId;
+    delete out.apnsThreadId;
+  }
   return out;
 }
 
