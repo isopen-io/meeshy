@@ -216,6 +216,7 @@
     <string name="row_join_call">الانضمام</string>
     <string name="row_join_call_a11y">مكالمة جارية، انقر للانضمام</string>
     <string name="row_menu_info">معلومات المحادثة</string>
+    <string name="row_menu_manage_members">إدارة الأعضاء</string>
     <string name="row_menu_view_profile">عرض الملف الشخصي</string>
     <string name="shareLink_a11y_copied">تم نسخ الرابط</string>
     <string name="shareLink_detail_allLanguages">جميع اللغات</string>

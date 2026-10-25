@@ -5,6 +5,7 @@ import { BADGE_THRESHOLDS, ENGAGEMENT_ACHIEVEMENT_KEYS, ENGAGEMENT_AXES } from '
 import { ENGAGEMENT_FAMILY_TOP_POINTS } from '@meeshy/shared/types/engagement-operations';
 import { axesByFamily, resolveEngagementProgress } from '@meeshy/shared/utils/engagement-progress';
 
+import { gameBlockWithExtrasFixture } from '@/lib/api/game-fixture';
 import { ENGAGEMENT_PROGRESS_FIXTURE } from '@/lib/api/engagement-fixture';
 import { familyName, formatCount } from '@/lib/view/game-copy';
 import { achievementCopy, axisLabel } from '@/lib/view/progression';
@@ -684,5 +685,20 @@ describe('la frappe d’avant le jeu vit dans la fiche des Meeshes', () => {
     const sansMeesh = { ...ENGAGEMENT_PROGRESS_FIXTURE };
     delete (sansMeesh as { meesh?: unknown }).meesh;
     expect(premierePage(resolveEngagementProgress(sansMeesh))).not.toContain('data-concept-card="meesh"');
+  });
+});
+
+/**
+ * LA PASTILLE DE LA CHRONIQUE (#10174, L18) — un point neutre d'accent, sans chiffre ni animation, nommé pour le
+ * lecteur d'écran ; absente quand rien n'est nouveau depuis la dernière visite du carnet.
+ */
+describe('la pastille de la Chronique', () => {
+  test('allumée : un point sur la porte de la Chronique, dit au lecteur d’écran ; éteinte : rien', () => {
+    const avecJeu = { ...fixture, game: gameBlockWithExtrasFixture() };
+    const lit = renderToStaticMarkup(<ProgressionBody progress={avecJeu} photoBadge />);
+    expect(lit).toContain('data-progression-badge="carnet"');
+    expect(lit).toContain('Un moment nouveau à immortaliser');
+    expect(lit).not.toMatch(/data-progression-badge="carnet"[^>]*>\s*\d/);
+    expect(renderToStaticMarkup(<ProgressionBody progress={avecJeu} />)).not.toContain('data-progression-badge');
   });
 });
