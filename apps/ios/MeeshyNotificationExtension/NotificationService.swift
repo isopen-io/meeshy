@@ -121,25 +121,20 @@ class NotificationService: UNNotificationServiceExtension {
     }
 
     /// La conversation est-elle verrouillée par PIN sur cet appareil ? Le
-    /// miroir COMPLET que l'app dépose dans l'App Group fait foi (#11387) — le
-    /// cliché `conversation_snapshots` ne couvre que la liste chargée. Un
-    /// miroir absent d'un domaine illisible rend `unknown` (#12655).
+    /// fichier miroir que l'app dépose dans le groupe d'apps fait foi (#11387),
+    /// lu en UNE fois : s'ouvrir est son signal, son contenu la donnée
+    /// (#12655). Le cliché `conversation_snapshots` et la clé de renfort ne
+    /// peuvent qu'ajouter un verrou.
     private static func conversationLock(_ userInfo: [AnyHashable: Any]) -> NSEConversationLock {
         let suiteName = "group.me.meeshy.apps"
-        let conversationId = userInfo["conversationId"] as? String
-        let mirrored = UserDefaults(suiteName: suiteName)?
-            .stringArray(forKey: NSEAttachmentPolicy.lockedConversationIdsKey)
-        let mirrorDomainReadable = mirrored != nil || NSEAttachmentPolicy.isAppGroupDomainReadable(
-            containerURL: FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: suiteName),
-            suiteName: suiteName
-        )
-        let snapshotDeclaresLock = conversationId
-            .flatMap { NSEDataSync.conversationDetails(forId: $0)?.isLocked } ?? false
-        return NSEAttachmentPolicy.conversationLock(
-            conversationId: conversationId,
-            mirroredLockedIds: mirrored,
-            mirrorDomainReadable: mirrorDomainReadable,
-            snapshotDeclaresLock: snapshotDeclaresLock
+        let container = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: suiteName)
+        return NSELockedConversationMirror.conversationLock(
+            conversationId: userInfo["conversationId"] as? String,
+            readFile: { NSELockedConversationMirror.readFile(at: NSELockedConversationMirror.fileURL(inContainer: container)) },
+            readLegacyKey: {
+                UserDefaults(suiteName: suiteName)?.stringArray(forKey: NSELockedConversationMirror.legacyDefaultsKey)
+            },
+            snapshotDeclaresLock: { NSEDataSync.conversationDetails(forId: $0)?.isLocked ?? false }
         )
     }
 

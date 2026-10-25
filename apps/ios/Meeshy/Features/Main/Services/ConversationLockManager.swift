@@ -361,6 +361,11 @@ final class ConversationLockManager: ObservableObject, ConversationLockGating {
     nonisolated deinit {}
     static let shared = ConversationLockManager(
         contentLockMirror: UserDefaults(suiteName: UserPreferencesManager.appGroupSuiteName),
+        contentLockMirrorFile: NSELockedConversationMirror.fileURL(
+            inContainer: FileManager.default.containerURL(
+                forSecurityApplicationGroupIdentifier: UserPreferencesManager.appGroupSuiteName
+            )
+        ),
         purgeDeliveredBanners: { conversationId in
             NotificationActionHandler.removeDeliveredBanners(forThreadOf: .conversation(id: conversationId))
         }
@@ -381,7 +386,10 @@ final class ConversationLockManager: ObservableObject, ConversationLockGating {
     /// #11387 — le jeu COMPLET des conversations verrouillées, miroité dans
     /// l'App Group pour l'extension de notification (le cliché de la liste
     /// n'en couvre que les pages chargées). `nil` : aucun miroir (tests).
+    /// La clé `UserDefaults` est le renfort des versions antérieures ; le
+    /// FICHIER est ce que l'extension lit d'abord (#12655).
     private let contentLockMirror: UserDefaults?
+    private let contentLockMirrorFile: URL?
     /// #11387 — verrouiller retire du Centre de notifications les bannières
     /// DÉJÀ délivrées de la conversation : elles montraient son contenu.
     private let purgeDeliveredBanners: @MainActor (String) -> Void
@@ -400,6 +408,7 @@ final class ConversationLockManager: ObservableObject, ConversationLockGating {
         iterations: Int = ConversationPinCredential.defaultIterations,
         now: @escaping () -> Date = { Date() },
         contentLockMirror: UserDefaults? = nil,
+        contentLockMirrorFile: URL? = nil,
         purgeDeliveredBanners: @escaping @MainActor (String) -> Void = { _ in }
     ) {
         self.vault = vault
@@ -408,6 +417,7 @@ final class ConversationLockManager: ObservableObject, ConversationLockGating {
         self.iterations = iterations
         self.now = now
         self.contentLockMirror = contentLockMirror
+        self.contentLockMirrorFile = contentLockMirrorFile
         self.purgeDeliveredBanners = purgeDeliveredBanners
         loadLockedIds()
         wireAuthLogoutHook()
@@ -669,7 +679,7 @@ final class ConversationLockManager: ObservableObject, ConversationLockGating {
 
     private func saveLockedIds() {
         defaults.set(Array(lockedConversationIds), forKey: lockedIdsDefaultsKey)
-        NSEAttachmentPolicy.mirrorLockedConversationIds(lockedConversationIds, into: contentLockMirror)
+        mirrorLockedIds()
         NotificationCenter.default.post(name: .conversationContentLocksDidChange, object: nil)
     }
 
@@ -679,6 +689,12 @@ final class ConversationLockManager: ObservableObject, ConversationLockGating {
     private func loadLockedIds() {
         let ids = defaults.stringArray(forKey: lockedIdsDefaultsKey) ?? []
         lockedConversationIds = Set(ids)
-        NSEAttachmentPolicy.mirrorLockedConversationIds(lockedConversationIds, into: contentLockMirror)
+        mirrorLockedIds()
+    }
+
+    private func mirrorLockedIds() {
+        NSELockedConversationMirror.mirror(
+            lockedConversationIds, toFile: contentLockMirrorFile, defaults: contentLockMirror
+        )
     }
 }
