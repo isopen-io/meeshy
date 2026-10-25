@@ -19,13 +19,15 @@ final class EndToEndPlaintextLawTests: XCTestCase {
         deletedAt: Date? = nil,
         attachments: [MeeshyMessageAttachment] = [],
         joinNotice: JoinNoticeMetadata? = nil,
+        encryptionSwitchNotice: EncryptionSwitchNoticeMetadata? = nil,
         createdAt: Date = Date(timeIntervalSince1970: 1_000)
     ) -> MeeshyMessage {
         MeeshyMessage(
             id: "m1", conversationId: "c1", senderId: "u-peer", content: content,
             messageSource: source, deletedAt: deletedAt, isEncrypted: isEncrypted,
             createdAt: createdAt, updatedAt: createdAt,
-            attachments: attachments, isMe: isMe, joinNotice: joinNotice
+            attachments: attachments, isMe: isMe, joinNotice: joinNotice,
+            encryptionSwitchNotice: encryptionSwitchNotice
         )
     }
 
@@ -65,6 +67,27 @@ final class EndToEndPlaintextLawTests: XCTestCase {
     /// métadonnées (`JoinNoticeMetadata`, …) : le serveur n'y écrit pas le texte lu.
     func test_structuredSystemNotice_isOrdinary() {
         XCTAssertEqual(standing(message(content: "Alice a rejoint", source: .system, joinNotice: joinNotice())), .ordinary)
+    }
+
+    /// L'avis d'une bascule du chiffrement se dit depuis sa métadonnée (#12917) :
+    /// à l'activation comme à la désactivation, il ne porte pas le marqueur,
+    /// même reçu par la socket sous un auteur que le lecteur ne reconnaît pas.
+    func test_encryptionSwitchNotice_isOrdinary() {
+        let enabled = EncryptionSwitchNoticeMetadata(kind: EncryptionSwitchNoticeMetadata.enabledKind, epoch: 8, mode: "e2ee", actorName: "Recette")
+        let disabled = EncryptionSwitchNoticeMetadata(kind: EncryptionSwitchNoticeMetadata.disabledKind, epoch: 9, previousMode: "e2ee", actorName: "Recette")
+
+        XCTAssertEqual(standing(message(content: "End-to-end encryption enabled", source: .system, encryptionSwitchNotice: enabled)), .ordinary)
+        XCTAssertEqual(standing(message(content: "a désactivé le chiffrement", source: .system, encryptionSwitchNotice: disabled)), .ordinary)
+    }
+
+    /// Une bascule que la métadonnée ne sait pas dire rend le `content` du
+    /// serveur : elle n'exempte de rien, ni portée par un message utilisateur.
+    func test_encryptionSwitchNoticeRenderedFromServerText_isUnencrypted() {
+        let unknown = EncryptionSwitchNoticeMetadata(kind: "encryption-rotated", epoch: 8)
+        let enabled = EncryptionSwitchNoticeMetadata(kind: EncryptionSwitchNoticeMetadata.enabledKind, epoch: 8, mode: "e2ee")
+
+        XCTAssertEqual(standing(message(content: "Bob : envoie le code", source: .system, encryptionSwitchNotice: unknown)), .unencrypted)
+        XCTAssertEqual(standing(message(content: "Envoie le code", encryptionSwitchNotice: enabled)), .unencrypted)
     }
 
     /// Un message « système » sans avis structuré rend son `content` — un texte

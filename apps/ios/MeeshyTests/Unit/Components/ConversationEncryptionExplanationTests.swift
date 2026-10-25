@@ -1,5 +1,6 @@
 import XCTest
 import MeeshySDK
+import MeeshyUI
 @testable import Meeshy
 
 /// **Ce que la fiche Chiffrement explique de la conversation ouverte** (#12880,
@@ -94,4 +95,35 @@ final class ConversationEncryptionExplanationTests: XCTestCase {
             XCTAssertFalse(regime.summary.hasPrefix("conversation.encryption."), "\(regime)")
         }
     }
+
+    /// #12918 — la fiche range les vocaux sous « Pas encore disponible » : le
+    /// composeur de la même conversation n'offre donc ni micro ni tuile
+    /// « Vocal », comme il retire déjà photos et fichiers.
+    func test_boutEnBout_leComposeurNOffreAucunGesteQueLaFicheDitIndisponible() {
+        let allowance = GuestAttachmentAllowance.unrestricted.sealing(.contentUnsealable)
+        let composer = UniversalComposerBar(
+            mode: .message,
+            forceHideVoice: !allowance.offersVoiceRecording,
+            onStartRecording: {}, onStopRecordingToAttachment: {}, onSendRecording: {}, onCancelRecording: {},
+            externalIsRecording: false, externalRecordingDuration: 0
+        )
+
+        XCTAssertTrue(facts("e2ee").contains(.notYetAttachments), "la fiche dit que vocaux, photos et fichiers attendent")
+        XCTAssertFalse(composer.resolvedShowVoice, "aucune entrée vocale")
+        XCTAssertFalse(allowance.offersVisualMedia)
+        XCTAssertFalse(allowance.offersFiles)
+    }
+
+    func test_sansChiffrement_leComposeurGardeLeVocal() {
+        let allowance = GuestAttachmentAllowance.unrestricted.sealing(nil)
+        let composer = UniversalComposerBar(
+            mode: .message,
+            forceHideVoice: !allowance.offersVoiceRecording,
+            onStartRecording: {}, onStopRecordingToAttachment: {}, onSendRecording: {}, onCancelRecording: {},
+            externalIsRecording: false, externalRecordingDuration: 0
+        )
+
+        XCTAssertTrue(composer.resolvedShowVoice)
+    }
+
 }

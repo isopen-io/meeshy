@@ -83,6 +83,11 @@ struct UniversalComposerBar: View {
     /// it (e.g. comments).
     var forceShowVoice: Bool = false
 
+    /// La porte vocale fermée par l'hôte — conversation chiffrée de bout en
+    /// bout, lien invité sans audio (#12918) : ni micro, ni tuile « Vocal ».
+    /// Gagne sur `mode` et `forceShowVoice`.
+    var forceHideVoice: Bool = false
+
     // MARK: - Language
 
     var selectedLanguage: String = "fr"
