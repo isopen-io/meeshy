@@ -123,7 +123,7 @@ describe('admitMessageEdit — l’avis de capture (#9641)', () => {
     admitMessageEdit({
       prisma: buildPrisma(MEMBERS) as never,
       editorUserId,
-      message: { authorUserId: CAPTURER_USER, conversationId: CONV, conversation: null, createdAt: new Date(), ...notice },
+      message: { authorUserId: CAPTURER_USER, conversationId: CONV, conversation: null, createdAt: new Date(), isEncrypted: false, encryptionMode: null, ...notice },
     });
 
   it('refuse celui qui a capturé', async () => {

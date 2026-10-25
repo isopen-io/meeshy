@@ -68,6 +68,8 @@ const admit = (params: {
       createdAt: params.createdAt === undefined ? freshCreatedAt : params.createdAt,
       messageType: 'text',
       metadata: null,
+      isEncrypted: false,
+      encryptionMode: null,
     },
     now: NOW,
     onError: params.onError,
