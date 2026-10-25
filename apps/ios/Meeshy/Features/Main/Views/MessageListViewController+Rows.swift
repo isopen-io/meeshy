@@ -343,11 +343,7 @@ extension MessageListViewController {
         )
     }
 
-    func applyMessageContent(
-        to cell: MessageListCell,
-        parts: MessageRowParts,
-        nativeMenu: (() -> AnyView)?
-    ) {
+    func applyMessageContent(to cell: MessageListCell, parts: MessageRowParts, nativeMenu: (() -> AnyView)?) {
         let message = parts.message
         let messageId = message.id
         let handlers = parts.handlers
