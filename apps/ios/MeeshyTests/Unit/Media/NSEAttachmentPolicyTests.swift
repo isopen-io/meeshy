@@ -257,18 +257,13 @@ final class NSEAttachmentPolicyTests: XCTestCase {
 
     // MARK: - Le scellé ne garde que ce qui ROUTE (#12655)
 
-    /// Ce qui a le droit de survivre au scellé : router le toucher, dater,
-    /// compter, nommer l'expéditeur, déclarer la protection. Rien qui décrive
-    /// le contenu. Oracle du TEST, indépendant de la constante de production.
-    private static let routingKeys: Set<String> = [
-        "type", "notificationId", "conversationId", "conversationTitle", "conversationType", "messageId",
-        "postId", "postType", "commentId", "parentCommentId", "friendRequestId", "route",
-        "contentId", "contentType",
-        "senderId", "senderUsername", "senderDisplayName", "senderAvatar", "imageURL",
-        "unreadCount", "createdAt", "ephemeralDuration", "effectFlags", "replacesActorSubject",
-        "callType", "isVideo", "callBackLabel",
-        "notificationLocKey",
-    ]
+    /// Ce qui survit au scellé : la constante de PRODUCTION, et la
+    /// déclaration de protection que le scellé pose. Une copie du test
+    /// divergerait d'elle sans que rien ne rougisse ; c'est l'oracle des clés
+    /// de CONTENU, ci-dessous, qui reste indépendant.
+    private static var routingKeys: Set<String> {
+        NSEAttachmentPolicy.sealedConversationKeys.union(["notificationLocKey"])
+    }
 
     /// Ce qui DÉCRIT le contenu : le texte et ses traductions, le chiffré, la
     /// pièce jointe, le détail (position, contact, invitation, lien, vignette),
@@ -287,25 +282,39 @@ final class NSEAttachmentPolicyTests: XCTestCase {
     /// Les clés que la passerelle pose dans `data` (`createNotification`) et
     /// dans ses champs composés, LUES dans ses sources : une clé ajoutée là
     /// sans être classée ici fait rougir le témoin.
+    private func gatewayServiceSource(_ relative: String) throws -> String {
+        let services = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("services/gateway/src/services")
+        return try String(contentsOf: services.appendingPathComponent(relative), encoding: .utf8)
+    }
+
+    private func matches(_ pattern: String, in text: Substring) throws -> Set<String> {
+        let regex = try NSRegularExpression(pattern: pattern, options: [.anchorsMatchLines])
+        let string = String(text)
+        return Set(regex.matches(in: string, range: NSRange(string.startIndex..., in: string)).compactMap {
+            Range($0.range(at: 1), in: string).map { String(string[$0]) }
+        })
+    }
+
+    private func between(_ text: String, _ from: String, _ to: String) throws -> Substring {
+        let start = try XCTUnwrap(text.range(of: from), from)
+        let end = try XCTUnwrap(text.range(of: to, range: start.upperBound..<text.endIndex), to)
+        return text[start.upperBound..<end.lowerBound]
+    }
+
+    /// Les clés de la charge `data` d'un APPEL ENTRANT
+    /// (`buildIncomingCallPushes`), que l'alerte APNs porte telle quelle à un
+    /// appareil sans jeton VoIP (Chine, ou VoIP inactif) — LUES dans la source.
+    private func incomingCallPushDataKeys() throws -> Set<String> {
+        let producer = try gatewayServiceSource("call-incoming-push.ts")
+        return try matches(#"^\s+(\w+):"#, in: try between(producer, "const data = {", "};"))
+    }
+
     private func gatewayPushDataKeys() throws -> Set<String> {
-        let notifications = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("services/gateway/src/services/notifications")
         func source(_ name: String) throws -> String {
-            try String(contentsOf: notifications.appendingPathComponent(name), encoding: .utf8)
-        }
-        func matches(_ pattern: String, in text: Substring) throws -> Set<String> {
-            let regex = try NSRegularExpression(pattern: pattern, options: [.anchorsMatchLines])
-            let string = String(text)
-            return Set(regex.matches(in: string, range: NSRange(string.startIndex..., in: string)).compactMap {
-                Range($0.range(at: 1), in: string).map { String(string[$0]) }
-            })
-        }
-        func between(_ text: String, _ from: String, _ to: String) throws -> Substring {
-            let start = try XCTUnwrap(text.range(of: from), from)
-            let end = try XCTUnwrap(text.range(of: to, range: start.upperBound..<text.endIndex), to)
-            return text[start.upperBound..<end.lowerBound]
+            try gatewayServiceSource("notifications/" + name)
         }
         let service = try source("NotificationService.ts")
         let payload = try between(service, "const pushPayload = {", "const boundedPayload")
@@ -330,10 +339,13 @@ final class NSEAttachmentPolicyTests: XCTestCase {
     }
 
     func test_everyKeyTheGatewayPushes_isClassifiedAsRoutingOrContent() throws {
-        let keys = try gatewayPushDataKeys()
+        let callKeys = try incomingCallPushDataKeys()
+        let keys = try gatewayPushDataKeys().union(callKeys)
 
         XCTAssertTrue(keys.isSuperset(of: ["conversationId", "attachmentUrl", "locationName", "linkUrl", "content"]),
                       "la lecture des sources de la passerelle a changé de forme : \(keys.sorted())")
+        XCTAssertTrue(callKeys.isSuperset(of: ["callId", "callerUserId", "iceServers"]),
+                      "la lecture de l'appel entrant a changé de forme : \(callKeys.sorted())")
         XCTAssertEqual(keys.subtracting(Self.routingKeys).subtracting(Self.contentKeys), [],
                        "une clé de la passerelle n'est ni de routage ni de contenu : la classer")
         XCTAssertTrue(Self.routingKeys.isDisjoint(with: Self.contentKeys))
@@ -344,18 +356,36 @@ final class NSEAttachmentPolicyTests: XCTestCase {
     /// charge du témoin porte TOUTES les clés que la passerelle émet, et
     /// l'alerte APNs, dont le corps est l'aperçu du message.
     func test_lockedConversation_sealing_keepsOnlyRoutingKeys() throws {
-        let gatewayKeys = try gatewayPushDataKeys()
-        var payload = Dictionary(uniqueKeysWithValues: gatewayKeys.map { (AnyHashable($0), "secret-\($0)" as Any) })
+        let emitted = try gatewayPushDataKeys()
+            .union(try incomingCallPushDataKeys())
+            .union(NSEAttachmentPolicy.sealedConversationKeys)
+        var payload = Dictionary(uniqueKeysWithValues: emitted.map { (AnyHashable($0), "secret-\($0)" as Any) })
         payload["aps"] = ["alert": ["title": "Alice", "body": "le secret"], "mutable-content": 1] as [String: Any]
 
         let sealed = NSEAttachmentPolicy.sealingLockedConversation(payload, isLocked: true)
 
         let survivors = Set(sealed.keys.compactMap { $0 as? String })
-        XCTAssertEqual(survivors.subtracting(Self.routingKeys), [], "le scellé laisse partir du contenu")
-        XCTAssertTrue(survivors.isDisjoint(with: Self.contentKeys))
+        XCTAssertEqual(survivors, Self.routingKeys, "chaque clé admise survit, et elle seule")
+        XCTAssertTrue(survivors.isDisjoint(with: Self.contentKeys), "le scellé laisse partir du contenu")
         XCTAssertNil(sealed["aps"], "l'alerte APNs porte l'aperçu du message")
         XCTAssertEqual(sealed["conversationId"] as? String, "secret-conversationId", "le toucher route encore")
         XCTAssertEqual(sealed["notificationLocKey"] as? String, NSEAttachmentPolicy.lockedConversationLocKey)
+    }
+
+    /// Un appel entrant vers une conversation sous PIN (ou dont le verrou est
+    /// inconnu) se scelle aussi : décrocher depuis la bannière exige encore
+    /// les serveurs ICE (TURN) et l'avatar de l'appelant, que la passerelle
+    /// pose dans `data`. Sans eux, l'appel s'établit sans relais.
+    func test_aSealedIncomingCall_keepsWhatAnswersTheCall() throws {
+        let callKeys = try incomingCallPushDataKeys()
+        let payload = Dictionary(uniqueKeysWithValues: callKeys.map { (AnyHashable($0), "valeur-\($0)" as Any) })
+
+        let sealed = NSEAttachmentPolicy.sealingLockedConversation(payload, isLocked: true)
+
+        let survivors = Set(sealed.keys.compactMap { $0 as? String })
+        XCTAssertEqual(callKeys.subtracting(survivors), [], "l'appel perd ce qui le décroche")
+        XCTAssertEqual(sealed["iceServers"] as? String, "valeur-iceServers")
+        XCTAssertEqual(sealed["callerAvatar"] as? String, "valeur-callerAvatar")
     }
 
     func test_unlockedConversation_payloadIsUntouched() {
