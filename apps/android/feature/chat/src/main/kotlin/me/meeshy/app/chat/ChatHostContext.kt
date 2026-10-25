@@ -17,6 +17,7 @@ import me.meeshy.sdk.model.EphemeralDuration
 import me.meeshy.sdk.model.MentionCandidate
 import me.meeshy.sdk.model.call.ActiveCallSession
 import me.meeshy.sdk.model.call.HeaderCallEntry
+import me.meeshy.sdk.model.composer.PendingAttachment
 import me.meeshy.sdk.model.composer.PendingAttachmentsState
 import me.meeshy.sdk.model.report.ReportReason
 
@@ -155,6 +156,11 @@ internal class ChatHostActions(
     val forwardTo: (String) -> Unit,
     val stageFile: (File, String?) -> Unit = { _, _ -> },
     val stageCapturedUris: suspend (List<Uri>) -> Unit = {},
+    /** Une pièce en attente retouchée (#12735) : elle est remplacée à sa place. */
+    val replacePendingAttachment: (id: String, bytes: ByteArray, fileName: String?, mimeType: String?) -> Unit = { _, _, _, _ -> },
+    val readPendingBytes: suspend (PendingAttachment) -> ByteArray? = { null },
+    /** L'auteur que les cadres de la retouche écrivent (#12734). */
+    val selfAuthor: () -> me.meeshy.sdk.model.composer.look.ComposerLookPerson? = { null },
     val trayNotices: Flow<String> = emptyFlow(),
 )
 
@@ -195,6 +201,9 @@ internal fun ChatViewModel.hostActions(): ChatHostActions = ChatHostActions(
     stagePendingUris = { uris -> controllers.find<ComposerTrayController>()?.stageUris(uris) },
     stageFile = { file, mime -> controllers.find<ComposerTrayController>()?.stageFile(file, mime) },
     stageCapturedUris = { uris -> controllers.find<ComposerTrayController>()?.stageUrisAndWait(uris) },
+    replacePendingAttachment = { id, bytes, name, mime -> controllers.find<ComposerTrayController>()?.replace(id, bytes, name, mime) },
+    readPendingBytes = { item -> controllers.find<ComposerTrayController>()?.readBytes(item) },
+    selfAuthor = this::selfAuthor,
     trayNotices = controllers.find<ComposerTrayController>()?.notices ?: emptyFlow(),
     dismissImageViewer = this::dismissImageViewer,
     openEmojiPicker = this::openEmojiPicker,
