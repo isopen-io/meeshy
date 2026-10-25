@@ -158,8 +158,7 @@ final class LentilleSkeletonGeometryTests: XCTestCase {
     /// une police concurrente sans que les tests ci-dessus (qui ne
     /// vérifient que la PRÉSENCE d'au moins une occurrence) ne le voient.
     /// Valeur de repère : 6 occurrences (verrou PIN, typing, brouillon × 2,
-    /// préview, statut d'appel en direct) — la branche du verrou (#11387) est
-    /// venue avec le token, pas avec une police littérale. Le repère était 11 tant que la rangée
+    /// préview, statut d'appel en direct). Le repère était 11 tant que la rangée
     /// composait elle-même six branches de préview ; depuis #7548 la préview
     /// est UNE ligne partagée (`ConversationPreviewLine`), qui reçoit le token
     /// en paramètre. Une VARIATION (à la hausse comme à la baisse) doit être
