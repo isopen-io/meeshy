@@ -4,7 +4,7 @@ import { describe, expect, test } from 'bun:test';
 import { canSendPlaintext, createEndToEndRegimeLedger } from '@/lib/end-to-end-regime-ledger';
 
 import { CONVERSATIONS_QUERY_KEY, conversationQueryKey } from './conversations';
-import { watchEndToEndConversations } from './end-to-end-cache-watch';
+import { CONVERSATIONS_KEY_ROOT, watchEndToEndConversations } from './end-to-end-cache-watch';
 
 /**
  * #12949 — UNE CONVERSATION SERVIE e2ee DANS LA LISTE EST VUE, même jamais
@@ -77,15 +77,22 @@ describe('le registre apprend le bout en bout depuis le cache des fils (#12986)'
     unwatch();
   });
 
-  test('un fil qui ne porte que du clair, ou une donnée d’une autre forme, n’apprend rien', () => {
+  test('un fil qui ne porte que du clair ou un chiffré supprimé, ou une donnée d’une autre forme, n’apprend rien', () => {
     const client = new QueryClient();
     const ledger = createEndToEndRegimeLedger({ storage: null });
     const unwatch = watchEndToEndConversations(client, ledger);
     client.setQueryData(['conversations', 'c-4', 'messages'], thread([plainRow('c-4')]));
     client.setQueryData(['conversations', 'c-5', 'messages'], { messages: 'pas une liste' });
     client.setQueryData(['conversations', 'c-6', 'media'], thread([sealedRow('c-6')]));
+    client.setQueryData(['conversations', 'c-7', 'messages'], thread([{ ...sealedRow('c-7'), deletedAt: '2026-10-25T02:07:01.630Z' }]));
 
     expect(ledger.getState().sealed).toEqual({});
     unwatch();
+  });
+});
+
+describe('les clés que la surveillance écrit à la main', () => {
+  test('la racine des conversations est celle du module des conversations', () => {
+    expect(CONVERSATIONS_KEY_ROOT).toBe(CONVERSATIONS_QUERY_KEY[0]);
   });
 });

@@ -1,8 +1,11 @@
 import { describe, expect, test } from 'bun:test';
 
 import type { Message } from '@/lib/api/types';
+import { endToEndSealed as bubbleSeals } from '@/lib/view/end-to-end-sealed';
 
-import { canSendPlaintext, createEndToEndRegimeLedger, endToEndSealed, isEndToEndMode, threadShowsEndToEnd, type SealedStorage } from './end-to-end-regime-ledger';
+import { LIBSIGNAL_PROTOCOL } from '@meeshy/shared/types/e2ee-directory';
+
+import { canSendPlaintext, createEndToEndRegimeLedger, LIBSIGNAL_PROTOCOL_MARK, endToEndSealed, isEndToEndMode, threadShowsEndToEnd, type SealedStorage } from './end-to-end-regime-ledger';
 
 /**
  * #12949 — UNE CONVERSATION VUE CHIFFRÉE DE BOUT EN BOUT RESTE FERMÉE AU CLAIR
@@ -26,6 +29,12 @@ const memoryStorage = (): SealedStorage & { readonly data: Map<string, string> }
 const message = (extra: Record<string, unknown>): Message =>
   ({ id: 'm', conversationId: ID, messageType: 'text', messageSource: 'user', content: 'x', isEncrypted: false, createdAt: new Date(), ...extra }) as unknown as Message;
 
+describe('le protocole libsignal', () => {
+  test('la marque écrite à la main est celle du contrat partagé', () => {
+    expect(LIBSIGNAL_PROTOCOL_MARK).toBe(LIBSIGNAL_PROTOCOL);
+  });
+});
+
 describe('le mode de bout en bout', () => {
   test('quelle que soit la casse, et rien d’autre', () => {
     expect(isEndToEndMode('e2ee')).toBe(true);
@@ -43,14 +52,35 @@ describe('ce que le fil montre du bout en bout', () => {
     expect(threadShowsEndToEnd([message({ encryptionMode: 'E2EE', isEncrypted: true, content: '' })])).toBe(true);
   });
 
-  test('un envoi libsignal se reconnaît aussi à son protocole, sur ses métadonnées ou son chiffré', () => {
+  test('un envoi libsignal se reconnaît aussi à ses métadonnées', () => {
     expect(threadShowsEndToEnd([message({ isEncrypted: true, content: '', encryptionMetadata: { protocol: 'libsignal-v1' } })])).toBe(true);
-    expect(threadShowsEndToEnd([message({ isEncrypted: true, content: '', encryptedContent: 'libsignal-v1' })])).toBe(true);
     expect(threadShowsEndToEnd([message({ isEncrypted: true, content: '', encryptionMetadata: { mode: 'e2ee' } })])).toBe(true);
   });
 
-  test('un message supprimé reste une preuve : son effacement ne rouvre pas le clair', () => {
-    expect(threadShowsEndToEnd([message({ encryptionMode: 'e2ee', isEncrypted: true, content: '', deletedAt: new Date() })])).toBe(true);
+  test('un message chiffré SUPPRIMÉ ne scelle pas : la passerelle ne le sert plus, seul un cache local en garde la trace (audit #12986)', () => {
+    expect(threadShowsEndToEnd([message({ encryptionMode: 'e2ee', isEncrypted: true, content: '', deletedAt: new Date() })])).toBe(false);
+    expect(threadShowsEndToEnd([message({ encryptionMode: 'e2ee', isEncrypted: true, content: '', deletedAt: '2026-10-25T02:07:01.630Z' })])).toBe(false);
+    expect(threadShowsEndToEnd([message({ encryptionMode: 'e2ee', isEncrypted: true, content: '', deletedAt: null })])).toBe(true);
+  });
+
+  test('ce que la bulle dit « chiffré de bout en bout » scelle aussi : chiffré sans mode, ou d’un mode inconnu (audit #12986)', () => {
+    expect(threadShowsEndToEnd([message({ isEncrypted: true, content: '[Encrypted]', encryptionMode: null })])).toBe(true);
+    expect(threadShowsEndToEnd([message({ isEncrypted: true, content: '[Encrypted]' })])).toBe(true);
+    expect(threadShowsEndToEnd([message({ isEncrypted: true, content: '[Encrypted]', encryptionMode: 'signal_v4' })])).toBe(true);
+  });
+
+  test('toute bulle que le web montre « chiffrée de bout en bout » scelle l’envoi : un seul verdict (audit #12986)', () => {
+    const rows = [
+      message({}),
+      message({ isEncrypted: true, encryptionMode: 'e2ee' }),
+      message({ isEncrypted: true, encryptionMode: null }),
+      message({ isEncrypted: true }),
+      message({ isEncrypted: true, encryptionMode: 'signal_v4' }),
+      message({ isEncrypted: true, encryptionMode: 'server' }),
+      message({ isEncrypted: true, encryptionMode: 'hybrid' }),
+      message({ isEncrypted: false, encryptionMode: 'server' }),
+    ];
+    expect(rows.filter((row) => bubbleSeals(row) && !threadShowsEndToEnd([row]))).toEqual([]);
   });
 
   test('un chiffré SERVEUR ou hybride n’est pas du bout en bout', () => {
@@ -58,6 +88,7 @@ describe('ce que le fil montre du bout en bout', () => {
       threadShowsEndToEnd([
         message({ isEncrypted: true, encryptionMode: 'server', encryptionMetadata: { mode: 'server', protocol: 'aes-256-gcm' } }),
         message({ isEncrypted: true, encryptionMode: 'hybrid' }),
+        message({ isEncrypted: true, encryptionMode: 'SERVER' }),
         message({ encryptedContent: 'Y2xhaXI=' }),
       ]),
     ).toBe(false);

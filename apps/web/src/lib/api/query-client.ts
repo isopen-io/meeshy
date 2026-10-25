@@ -3,6 +3,7 @@ import { QueryClient, dehydrate, hydrate, type DehydratedState } from '@tanstack
 import { endToEndRegimeLedger } from '@/lib/end-to-end-regime-ledger';
 
 import { createAccountCacheShelf } from './account-caches';
+import { bindEndToEndRegimeToSession, watchEndToEndConversations } from './end-to-end-cache-watch';
 import { ENGAGEMENT_PROGRESS_QUERY_KEY, keepNewerGameState } from './game-state-order';
 import { pruneGoneEphemerals } from './ephemeral-cache';
 import { ApiError } from './client';
@@ -425,12 +426,18 @@ function currentBuster(): string {
 sessionStore.getState().restoreSession();
 /* #12949 — le registre du bout en bout se lie au compte restauré DÈS ICI,
    avant la première peinture : un envoi au démarrage (lien profond, partage
-   entrant à froid) lit déjà ce que ce compte a vu chiffré de bout en bout. La
-   surveillance d'identité (`realtime.ts`, chargé plus tard) le suit ensuite. */
-endToEndRegimeLedger.getState().bind(sessionIdentityKey(sessionStore.getState().session));
+   entrant à froid) lit déjà ce que ce compte a vu chiffré de bout en bout.
+   #12986 — et il suit chaque changement de compte AVANT le client ci-dessous,
+   qui remet en place le cache du compte qui arrive. */
+bindEndToEndRegimeToSession(sessionStore, endToEndRegimeLedger);
 
 export const appQueryClient: AppQueryClient = createAppQueryClient({
   buster: currentBuster(),
   busterOf: busterFor,
   session: sessionStore,
 });
+
+/* Ce que le cache a servi chiffré de bout en bout — conversation ou fil —, le
+   compte l'a vu : il ne se rouvre plus au clair (#12949, #12986). Posé AVEC le
+   client, pas avec le temps réel chargé après la première peinture. */
+watchEndToEndConversations(appQueryClient, endToEndRegimeLedger);

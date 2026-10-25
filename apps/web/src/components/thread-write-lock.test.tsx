@@ -4,6 +4,7 @@ import { act } from 'react';
 import type { Conversation, Message } from '@/lib/api/types';
 import { canSendPlaintext, endToEndRegimeLedger } from '@/lib/end-to-end-regime-ledger';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
+import { loadConversationEncryptionCatalog } from '@/lib/i18n-conversation-encryption-catalog';
 import type { LocalMessage } from '@/lib/send/local-message';
 import type { PlaintextDirectGesture, PlaintextDirectOutcome } from '@/lib/view/plaintext-direct';
 import { outboxStore } from '@/lib/send/outbox-store';
@@ -25,6 +26,7 @@ beforeAll(async () => {
   ensureHappyDomRegistered({ url: 'http://localhost/chat/c-global' });
   globals.IS_REACT_ACT_ENVIRONMENT = true;
   await loadInterfaceCatalog('fr');
+  await loadConversationEncryptionCatalog('fr');
 });
 
 afterAll(async () => {
@@ -234,6 +236,24 @@ describe('l’état final d’un tête-à-tête chiffré sur le web : lisible, s
       expect(host.querySelector('[data-probe-field]')).toBeNull();
       unmountAll();
     }
+  });
+
+  test('le fil ouvert pose le geste lui-même, avec le nom du pair servi', async () => {
+    const id = 'c-direct-peer';
+    const served = conversation(id, {
+      type: 'direct',
+      encryptionMode: 'e2ee',
+      participants: [
+        { id: 'p-moi', userId: 'u-moi', displayName: 'Moi' },
+        { id: 'p-bea', userId: 'u-bea', displayName: 'Bea' },
+      ],
+    });
+    const host = await mount(
+      <ThreadWriteLock conversationId={id} conversation={served} viewerId="u-moi" title="Bea">
+        <textarea data-probe-field />
+      </ThreadWriteLock>,
+    );
+    expect(action(host)?.textContent).toBe('Ouvrir une conversation non chiffrée avec Bea');
   });
 
   test('un groupe chiffré, ou une restriction d’âge : aucun geste, même fourni', async () => {

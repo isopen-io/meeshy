@@ -1,6 +1,6 @@
 import { createStore, type StoreApi } from 'zustand/vanilla';
 
-import type { Message } from '@/lib/api/types';
+import { sharedTranslationServerReadsMessage } from '@meeshy/shared/utils/shared-translation-eligibility';
 
 /**
  * **UNE CONVERSATION VUE CHIFFRÉE DE BOUT EN BOUT RESTE FERMÉE AU CLAIR**
@@ -14,13 +14,19 @@ import type { Message } from '@/lib/api/types';
  * parole du serveur — un serveur compromis qui servirait la conversation sans
  * mode. Ce registre retient donc, par compte, les conversations que ce
  * navigateur a vues `e2ee` (mode servi, bascule temps réel, fil qui montre
- * l'avis système d'activation) et toute rétrogradation servie est ignorée : ni
- * confirmation, ni époque à départager, ni oubli.
+ * l'avis système d'activation ou un message chiffré de bout en bout) et toute
+ * rétrogradation servie est ignorée : ni confirmation, ni époque à départager,
+ * ni oubli.
  *
- * Un message isolé marqué `e2ee` n'est PAS un signal de régime : mesuré sur
- * staging le 2026-10-25, trois tête-à-tête sans aucun régime portent un ancien
- * message iOS marqué `e2ee` suivi de clair ; les fermer au composeur
- * fermerait des conversations qui n'ont jamais été chiffrées.
+ * #12986 (décision porteur du 2026-10-25, option 2) — un message chiffré de
+ * bout en bout AFFICHÉ dans le fil scelle l'envoi, même servi sans régime : ce
+ * que la bulle dit « chiffré de bout en bout » (`lib/view/end-to-end-sealed.ts`)
+ * ferme le composeur. Cela couvre une conversation dont le mode se perd en
+ * route alors que ses messages le gardent ; une passerelle compromise qui
+ * retirerait aussi les marques des messages n'est arrêtée que là où ce compte
+ * a déjà vu la conversation chiffrée. Les trois tête-à-tête du staging qui
+ * portaient de faux chiffrés de recette sans régime en ont été retirés d'abord ;
+ * la production n'en comptait aucun.
  *
  * Il survit au rechargement : la liste est rangée dans le stockage du
  * navigateur sous la clé du compte (`bind`). Un stockage absent, plein ou
@@ -104,7 +110,8 @@ export const endToEndRegimeLedger = createEndToEndRegimeLedger();
 
 export const isEndToEndMode = (mode: string | null | undefined): boolean => typeof mode === 'string' && mode.trim().toLowerCase() === 'e2ee';
 
-type SignalSource = Pick<Message, 'messageType' | 'metadata'> & { readonly systemEvent?: unknown };
+/** Ce que le signal lit d'un message — tout `unknown` : un `Message` servi comme une ligne brute du cache. */
+type SignalSource = { readonly [K in 'messageType' | 'metadata' | 'systemEvent' | 'isEncrypted' | 'encryptionMode' | 'encryptionMetadata' | 'deletedAt']?: unknown };
 
 const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> => typeof value === 'object' && value !== null;
 
@@ -119,9 +126,35 @@ function announcesEndToEnd(message: SignalSource): boolean {
   return false;
 }
 
-/** Le fil chargé montre-t-il l'activation du bout en bout ? Un avis de désactivation n'y retire rien. */
+const textOf = (value: unknown): string | null => (typeof value === 'string' ? value : null);
+
+/** `LIBSIGNAL_PROTOCOL` (`@meeshy/shared/types/e2ee-directory`), écrit ici pour ne pas tirer Zod dans le socle ; un témoin les tient égaux. */
+export const LIBSIGNAL_PROTOCOL_MARK = 'libsignal-v1';
+
+/**
+ * Le message AFFICHÉ est-il chiffré de bout en bout ? Ce que la bulle scelle —
+ * chiffré, et ni `server` ni `hybrid` (mode inconnu ou absent compris, la loi de
+ * `sharedTranslationServerReadsMessage`) —, ou marqué `e2ee` / libsignal par
+ * son mode ou ses métadonnées. Un message SUPPRIMÉ ne compte pas : la passerelle
+ * ne le sert plus (`deletedAt: null` filtré), seul un cache local en garde la
+ * trace, et une trace effacée n'apprend rien qu'un serveur ne puisse taire en
+ * ne la servant pas.
+ */
+function carriesEndToEnd(message: SignalSource): boolean {
+  if (message.deletedAt !== undefined && message.deletedAt !== null) return false;
+  const metadata = isRecord(message.encryptionMetadata) ? message.encryptionMetadata : {};
+  const mode = textOf(message.encryptionMode);
+  const sealedForTheWeb =
+    message.isEncrypted === true && !sharedTranslationServerReadsMessage({ conversationEncryptionMode: null, messageIsEncrypted: true, messageEncryptionMode: mode });
+  return sealedForTheWeb || isEndToEndMode(mode) || isEndToEndMode(textOf(metadata.mode)) || metadata.protocol === LIBSIGNAL_PROTOCOL_MARK;
+}
+
+/**
+ * Le fil chargé montre-t-il le bout en bout ? L'avis d'activation, ou un
+ * message chiffré de bout en bout (#12986). Un avis de désactivation n'y retire rien.
+ */
 export function threadShowsEndToEnd(messages: readonly SignalSource[]): boolean {
-  return messages.some(announcesEndToEnd);
+  return messages.some((message) => announcesEndToEnd(message) || carriesEndToEnd(message));
 }
 
 type SealedInput = {
