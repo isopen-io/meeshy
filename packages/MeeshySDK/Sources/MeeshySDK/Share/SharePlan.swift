@@ -1,7 +1,7 @@
 import Foundation
 
 /// **Les plafonds communs du partage** (D10, #10949, porteur 2026-10-18 ;
-/// révisés le 2026-10-25, #12974 : 100 fichiers et 5 Go, contre 20 et 500 Mo)
+/// révisés par #12974 : 100 fichiers et 5 Go, contre 20 et 500 Mo)
 /// — les mêmes sur iOS (app et extension), sur le web et dans la coque Android.
 ///
 /// Miroir JUMEAU de `SHARE_LIMITS` (`packages/shared/utils/share-limits.ts`) ;
