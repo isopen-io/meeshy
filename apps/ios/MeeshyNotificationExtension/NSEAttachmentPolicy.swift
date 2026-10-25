@@ -139,20 +139,30 @@ nonisolated enum NSEAttachmentPolicy {
     /// Les clés de routage restent : toucher la bannière ouvre la
     /// conversation, que la porte du routeur garde par le PIN (#11386).
     ///
-    /// Les clés qui PORTENT le contenu quittent la charge (#12655) : le
-    /// `userInfo` livré reste dans le Centre de notifications et se relit par
-    /// quiconque l'énumère ; une conversation sous PIN n'y laisse ni le texte,
-    /// ni sa traduction, ni la transcription, ni le chiffré.
+    /// La charge scellée ne garde QUE ce qui route (#12655) : le `userInfo`
+    /// livré reste dans le Centre de notifications et se relit par quiconque
+    /// l'énumère. Une liste d'EXCLUSION ratait toute clé de contenu qu'elle ne
+    /// nommait pas (média, position, contact, invitation, lien, réaction,
+    /// langues, et l'alerte APNs, dont le corps est l'aperçu) ; une liste
+    /// d'ADMISSION refuse par défaut ce qu'une passerelle future ajoutera.
     static func sealingLockedConversation(_ userInfo: [AnyHashable: Any], isLocked: Bool) -> [AnyHashable: Any] {
         guard isLocked else { return userInfo }
         return userInfo
-            .filter { key, _ in (key as? String).map { !lockedConversationContentKeys.contains($0) } ?? true }
+            .filter { key, _ in (key as? String).map(sealedConversationKeys.contains) ?? false }
             .merging([AnyHashable("notificationLocKey"): lockedConversationLocKey]) { _, sealed in sealed }
     }
 
-    /// Les clés de la charge qui portent le CONTENU d'un message.
-    static let lockedConversationContentKeys: Set<String> = [
-        "content", "translatedContent", "firstAttachmentTranscript", "encryptedContent",
+    /// Ce qui survit au scellé : router le toucher (conversation, message,
+    /// post, commentaire, appel), dater, compter, nommer l'expéditeur, et
+    /// déclarer la protection. Rien qui décrive le contenu.
+    static let sealedConversationKeys: Set<String> = [
+        "type", "notificationId", "conversationId", "conversationTitle", "conversationType", "messageId",
+        "postId", "postType", "commentId", "parentCommentId", "friendRequestId", "route",
+        "contentId", "contentType",
+        "senderId", "senderUsername", "senderDisplayName", "senderAvatar", "imageURL",
+        "unreadCount", "badge", "createdAt", "ephemeralDuration", "effectFlags", "replacesActorSubject",
+        "callType", "isVideo", "callBackLabel", "callId", "callerUserId", "callerName",
+        "isEncrypted", "apiBaseURL",
     ]
 
     /// La charge a-t-elle été scellée pour une conversation verrouillée ?
