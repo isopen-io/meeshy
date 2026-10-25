@@ -192,7 +192,7 @@ final class ConversationListMessagePrefetcher {
         messageService: any MessageServiceProviding = MessageService.shared,
         store: any ConversationListPrefetchStoreProviding = ConversationListPrefetchStore(),
         contentLocks: @escaping @MainActor @Sendable () -> Set<String> = {
-            ConversationLockManager.shared.lockedConversationIds
+            ConversationLockManager.shared.contentLockedConversationIds
         }
     ) {
         self.messageService = messageService

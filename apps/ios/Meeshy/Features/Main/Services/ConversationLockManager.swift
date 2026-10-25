@@ -607,6 +607,15 @@ final class ConversationLockManager: ObservableObject, ConversationLockGating {
         isLocked(conversationId)
     }
 
+    /// Le JEU que lisent les surfaces qui publient hors de l'app (widget) ou
+    /// mettent en cache (préchargement) : la liste lue, et tant qu'elle est
+    /// inconnue, les conversations dont le trousseau tient le code — même
+    /// règle que `isLocked`.
+    var contentLockedConversationIds: Set<String> {
+        guard !knowsLockedIds, let inVault = lockedIdsInVault() else { return lockedConversationIds }
+        return lockedConversationIds.union(inVault)
+    }
+
     func setLock(conversationId: String, pin: String) {
         store(pin, under: lockKey(conversationId))
         openingPasses[conversationId] = nil
