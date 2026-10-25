@@ -1,13 +1,19 @@
 import Foundation
+import MeeshySDK
 
 /// Ce que libsignal chiffre : pas le texte nu, une structure versionnée (spec
 /// § 4.2). Tout ce qui part À CÔTÉ du corps et qui dit quelque chose du
-/// contenu — la langue détectée, le message cité — voyage DEDANS, jamais en
-/// champ libre du message (#12526). Les champs que cette version ne connaît pas
-/// encore (mentions, pièces, lieu, sticker) sont ignorés à la lecture : une
-/// version suivante peut les ajouter sans casser celle-ci.
+/// contenu — la langue détectée, le message cité, les pièces jointes — voyage
+/// DEDANS, jamais en champ libre du message (#12526). Un champ qu'un lecteur ne
+/// connaît pas est ignoré : c'est sûr pour un champ qui QUALIFIE le message,
+/// pas pour un champ qui EN EST le contenu. Les pièces jointes (#10789) sont du
+/// contenu : un contenu qui en porte s'écrit `v: 2`, qu'un lecteur v1 refuse au
+/// lieu de perdre la pièce en silence.
 public struct E2EEContent: Codable, Equatable, Sendable {
-    public static let currentVersion = 1
+    /// La version la plus récente que cet appareil sait lire.
+    public static let currentVersion = 2
+    /// La version d'un contenu sans pièce jointe : lisible par tout lecteur.
+    public static let textVersion = 1
 
     public let v: Int
     public let text: String?
@@ -27,6 +33,9 @@ public struct E2EEContent: Codable, Equatable, Sendable {
     /// comme venant de mon contact. Absent chez un client plus ancien.
     public let authorUserId: String?
     public let authorDeviceId: UInt32?
+    /// Les pièces jointes chiffrées sur l'appareil (#10789) : leur pointeur,
+    /// clé et condensat compris. Absent d'un contenu sans pièce.
+    public let attachments: [E2EEAttachmentPointer]?
 
     public init(
         text: String?,
@@ -36,9 +45,12 @@ public struct E2EEContent: Codable, Equatable, Sendable {
         clientMessageId: String?,
         sentAt: Date,
         authorUserId: String? = nil,
-        authorDeviceId: UInt32? = nil
+        authorDeviceId: UInt32? = nil,
+        attachments: [E2EEAttachmentPointer]? = nil
     ) {
-        self.v = Self.currentVersion
+        let carried = attachments.flatMap { $0.isEmpty ? nil : $0 }
+        self.v = carried == nil ? Self.textVersion : Self.currentVersion
+        self.attachments = carried
         self.text = text
         self.language = language
         self.replyTo = replyTo
@@ -59,6 +71,7 @@ public struct E2EEContent: Codable, Equatable, Sendable {
         self.sentAt = content.sentAt
         self.authorUserId = authorUserId
         self.authorDeviceId = authorDeviceId
+        self.attachments = content.attachments
     }
 
     /// Le même contenu, signé de son auteur avant d'être chiffré.
@@ -90,7 +103,7 @@ public struct E2EEContent: Codable, Equatable, Sendable {
     /// version future ne s'affiche jamais à moitié.
     public static func decoded(from data: Data) throws -> E2EEContent {
         let content = try JSONDecoder().decode(E2EEContent.self, from: data)
-        guard content.v == currentVersion else { throw E2EEContentError.unsupportedVersion(content.v) }
+        guard (textVersion...currentVersion).contains(content.v) else { throw E2EEContentError.unsupportedVersion(content.v) }
         return content
     }
 }
@@ -101,4 +114,20 @@ public enum E2EEContentError: Error, Equatable {
     case misattributed
     /// Le serveur présente ce chiffré sous un autre expéditeur que son auteur.
     case misattributedAuthor
+}
+
+/// Ce qui reste lisible d'un contenu de N'IMPORTE QUELLE version : sa version,
+/// sa conversation et son auteur. Chaque version future les garde sous ces
+/// noms — c'est l'invariant du format, qui permet de juger un contenu à SA place
+/// avant de le garder pour une mise à jour.
+struct E2EEContentHeader: Decodable {
+    let v: Int
+    let conversationId: String?
+    let authorUserId: String?
+    let authorDeviceId: UInt32?
+
+    func isAuthored(by userId: String, deviceId: UInt32) -> Bool {
+        guard let authorUserId, let authorDeviceId else { return authorUserId == nil && authorDeviceId == nil }
+        return authorUserId == userId && authorDeviceId == deviceId
+    }
 }

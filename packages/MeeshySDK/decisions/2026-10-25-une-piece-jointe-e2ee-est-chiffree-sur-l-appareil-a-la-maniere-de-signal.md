@@ -41,7 +41,7 @@ CommonCrypto (`SignalServiceKit/Cryptography/Cryptography.swift`).
 données aléatoires), chaque couche est rejouée sur des vecteurs officiels — NIST SP 800-38A F.2.5
 (CBC-AES256), RFC 4231 cas 2 (HMAC-SHA256), FIPS 180-2 « abc » (SHA-256), les points de contrôle de
 `Cryptography.paddedSize` de Signal-iOS (`CryptographyTests.test_spotCheckBucketBoundaries`) — et la
-composition sur un vecteur commun (`packages/shared/utils/__vectors__/e2ee-attachment-client-v1.json`) que
+composition sur un vecteur commun (`packages/shared/fixtures/e2ee-attachment/client-v1.vectors.json`) que
 Swift et TypeScript, deux implémentations indépendantes, reproduisent octet pour octet.
 
 **Stockage local** : le blob téléchargé se garde tel quel, chiffré sous sa clé ; la clé ne vit que dans la

@@ -109,7 +109,7 @@ public final class E2EEEnvelopeOpener: E2EEEnvelopeOpening {
         }
         do {
             guard let body = Data(base64Encoded: envelope.body) else { throw E2EESessionCipherError.unknownMessageType(envelope.type) }
-            let content = try cipher.decrypt(E2EECiphertext(type: envelope.type, body: body), from: sender) { plaintext, transaction in
+            let entry = try cipher.decrypt(E2EECiphertext(type: envelope.type, body: body), from: sender) { plaintext, transaction in
                 // L'épingle se relit DANS la transaction : une révocation ou une
                 // réapprobation concurrente ne s'intercale pas. Une clé qui n'est
                 // pas l'épinglée annule la transaction (le ratchet n'avance pas) et
@@ -121,15 +121,11 @@ public final class E2EEEnvelopeOpener: E2EEEnvelopeOpening {
                         throw E2EEOpenError.unapprovedOwnDevice
                     }
                 }
-                let content = try E2EEContent.decoded(from: plaintext)
-                guard content.belongs(to: envelope.conversationId) else { throw E2EEContentError.misattributed }
-                guard content.isAuthored(by: envelope.senderUserId, deviceId: envelope.senderDeviceId) else {
-                    throw E2EEContentError.misattributedAuthor
-                }
-                try E2EEPlaintextRecords.save(.readable(content, senderUserId: envelope.senderUserId), for: envelope.messageId, in: transaction)
-                return content
+                let opened = try Self.entry(of: plaintext, in: envelope)
+                try E2EEPlaintextRecords.save(opened, for: envelope.messageId, in: transaction)
+                return opened
             }
-            return outcome(of: .readable(content, senderUserId: envelope.senderUserId), envelope)
+            return outcome(of: entry, envelope)
         } catch {
             // La socket et le rattrapage peuvent ouvrir la même enveloppe en même
             // temps : le verrou les sérialise, et le second échoue (clé de message
@@ -144,6 +140,27 @@ public final class E2EEEnvelopeOpener: E2EEEnvelopeOpening {
             try? plaintexts.save(.undecryptable, for: envelope.messageId)
             return outcome(of: .undecryptable, envelope)
         }
+    }
+
+    /// Le clair, à SA place : même conversation, même auteur que l'expéditeur
+    /// que libsignal authentifie. Un contenu d'une version future n'est pas lu,
+    /// mais son en-tête (`E2EEContentHeader`, stable d'une version à l'autre) est
+    /// jugé de même avant que son clair soit gardé.
+    static func entry(of plaintext: Data, in envelope: E2EEServedEnvelope) throws -> E2EEPlaintextEntry {
+        do {
+            let content = try E2EEContent.decoded(from: plaintext)
+            try place(conversationId: content.conversationId, authored: content.isAuthored(by: envelope.senderUserId, deviceId: envelope.senderDeviceId), envelope)
+            return .readable(content, senderUserId: envelope.senderUserId)
+        } catch E2EEContentError.unsupportedVersion(let version) where version > E2EEContent.currentVersion {
+            let header = try JSONDecoder().decode(E2EEContentHeader.self, from: plaintext)
+            try place(conversationId: header.conversationId, authored: header.isAuthored(by: envelope.senderUserId, deviceId: envelope.senderDeviceId), envelope)
+            return .newerFormat(plaintext, senderUserId: envelope.senderUserId)
+        }
+    }
+
+    private static func place(conversationId: String?, authored: Bool, _ envelope: E2EEServedEnvelope) throws {
+        guard conversationId == envelope.conversationId else { throw E2EEContentError.misattributed }
+        guard authored else { throw E2EEContentError.misattributedAuthor }
     }
 
     /// Une erreur qui JUGE l'enveloppe (libsignal la refuse, son contenu est
@@ -200,7 +217,7 @@ public final class E2EEEnvelopeOpener: E2EEEnvelopeOpening {
                 messageId: envelope.messageId, conversationId: envelope.conversationId,
                 senderUserId: senderUserId, senderDeviceId: envelope.senderDeviceId, content: content
             ))
-        case .undecryptable:
+        case .undecryptable, .newerFormat:
             return .undecryptable(messageId: envelope.messageId, conversationId: envelope.conversationId)
         }
     }

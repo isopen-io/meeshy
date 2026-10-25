@@ -11,11 +11,15 @@ public enum E2EEPlaintextEntry: Equatable, Sendable {
     /// Le clair, et l'auteur que libsignal a AUTHENTIFIÉ (la session de son
     /// appareil) — pas celui que le serveur annonce à côté du message.
     case readable(E2EEContent, senderUserId: String)
+    /// Un contenu d'une version que cet appareil ne lit pas encore, à SA place
+    /// (conversation, auteur) : le clair est gardé tel quel, pour la version de
+    /// Meeshy qui saura le lire — l'enveloppe, elle, est acquittée et effacée.
+    case newerFormat(Data, senderUserId: String)
     case undecryptable
 }
 
 extension E2EEPlaintextEntry: Codable {
-    private enum CodingKeys: String, CodingKey { case state, content, sender }
+    private enum CodingKeys: String, CodingKey { case state, content, sender, raw }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -25,6 +29,10 @@ extension E2EEPlaintextEntry: Codable {
                 try container.decode(E2EEContent.self, forKey: .content),
                 senderUserId: try container.decode(String.self, forKey: .sender)
             )
+        case "newer":
+            let raw = try container.decode(Data.self, forKey: .raw)
+            let sender = try container.decode(String.self, forKey: .sender)
+            self = (try? E2EEContent.decoded(from: raw)).map { .readable($0, senderUserId: sender) } ?? .newerFormat(raw, senderUserId: sender)
         default: self = .undecryptable
         }
     }
@@ -35,6 +43,10 @@ extension E2EEPlaintextEntry: Codable {
         case .readable(let content, let senderUserId):
             try container.encode("readable", forKey: .state)
             try container.encode(content, forKey: .content)
+            try container.encode(senderUserId, forKey: .sender)
+        case .newerFormat(let raw, let senderUserId):
+            try container.encode("newer", forKey: .state)
+            try container.encode(raw, forKey: .raw)
             try container.encode(senderUserId, forKey: .sender)
         case .undecryptable:
             try container.encode("undecryptable", forKey: .state)
