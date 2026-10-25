@@ -624,6 +624,10 @@ export function registerMessagePinRoutes(
           // décider « est-ce moi qui l'ai envoyé ? »). Même résolution ici.
           senderId: sender?.userId ?? sender?.user?.id ?? message.senderId,
           content: message.content,
+          // #12822 — une épingle qu'aucune clé n'ouvre sort scellée (`content: ''`) :
+          // sans ce drapeau, le client rendait une bulle VIDE au lieu de « Message chiffré ».
+          isEncrypted: message.isEncrypted === true,
+          encryptionMode: message.encryptionMode ?? null,
           originalLanguage: message.originalLanguage,
           messageType: message.messageType,
           isEdited: !!message.editedAt,
