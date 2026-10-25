@@ -140,6 +140,19 @@ final class SocketInboundRouteTableTests: XCTestCase {
         }
     }
 
+    func test_conversationEncryptionChangedRoute_deliversTheRegimeToItsChannel() async {
+        let registrar = installed(MessageSocketRoutes.all(for: .shared))
+        let id = "regime-\(UUID().uuidString)"
+        let payload: [String: Any] = [
+            "conversationId": id, "isEncrypted": true, "mode": "e2ee", "epoch": 3,
+            "changedByUserId": "u1", "changedAt": "2026-10-25T10:00:00.000Z",
+        ]
+
+        await expectOneValue(from: ConversationEncryptionChannel.shared.changed, where: { $0.conversationId == id && $0.epoch == 3 }) {
+            registrar.deliver("conversation:encryption-changed", payload)
+        }
+    }
+
     func test_userPreferencesUpdated_routesByScope() async {
         let registrar = installed(MessageSocketRoutes.all(for: .shared))
         let conversationScope: [String: Any] = ["userId": "u1", "conversationId": "c1", "version": 1, "reset": true]

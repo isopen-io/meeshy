@@ -43,7 +43,8 @@ final class ConversationPreviewLockTests: XCTestCase {
             messageService: service,
             cache: cacheMock,
             readerPrism: { ["fr"] },
-            isLocked: isLocked
+            isLocked: isLocked,
+            endToEnd: MockEndToEndMessaging()
         )
         return (sut, service, cacheMock)
     }

@@ -14,8 +14,16 @@ struct BubbleLinkEmbed: View {
     let text: BubbleContent.Text
     let accentColor: String
     let isDark: Bool
+    @Environment(\.mountsLinkEmbeds) private var mountsLinkEmbeds
 
     var body: some View {
+        if mountsLinkEmbeds {
+            embed
+        }
+    }
+
+    @ViewBuilder
+    private var embed: some View {
         if let video = text.embeddedVideo {
             VideoEmbedContainer(video: video, accent: Color(hex: accentColor), trackedURL: text.embedTrackedURL)
                 .padding(.top, MeeshySpacing.xs)
@@ -30,5 +38,20 @@ struct BubbleLinkEmbed: View {
             }
             .padding(.top, MeeshySpacing.xs)
         }
+    }
+}
+
+private struct MountsLinkEmbedsKey: EnvironmentKey {
+    static let defaultValue = true
+}
+
+extension EnvironmentValues {
+    /// Faux là où le texte rendu vient d'un déchiffrement SUR L'APPAREIL
+    /// (#11232, F3) : une carte de lien interrogerait un site tiers (OpenGraph)
+    /// ou le serveur (`ConversationCardService.refresh`) avec une URL que seul
+    /// l'appareil a lue. Posée par l'aperçu d'appui long, par message.
+    var mountsLinkEmbeds: Bool {
+        get { self[MountsLinkEmbedsKey.self] }
+        set { self[MountsLinkEmbedsKey.self] = newValue }
     }
 }
