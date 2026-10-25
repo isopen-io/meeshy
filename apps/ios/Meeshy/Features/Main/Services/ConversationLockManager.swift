@@ -66,7 +66,9 @@ protocol ConversationLockVault {
     func accounts() -> [String]?
     /// Efface TOUT ce que le coffre tient : codes, compteurs, PIN maître,
     /// biométrie. `false` quand il ne s'efface pas (trousseau avant le premier
-    /// déverrouillage) : la déconnexion rejoue alors l'effacement.
+    /// déverrouillage, erreur du système) : la déconnexion rejoue alors
+    /// l'effacement — et aussi après un `true` rendu sans données protégées,
+    /// qui peut n'être qu'un « aucun élément » de trousseau scellé.
     @discardableResult
     func deleteAll() -> Bool
 }

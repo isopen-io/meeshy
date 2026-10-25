@@ -685,6 +685,23 @@ final class ConversationLockManagerTests: XCTestCase {
         XCTAssertTrue(vault.items.isEmpty, "restes : \(vault.items.keys.sorted())")
     }
 
+    /// Sans données protégées, même un effacement qui dit avoir réussi
+    /// n'est pas acquis : rien ne s'écrit avant qu'elles le deviennent.
+    func test_aLogoutWithoutProtectedData_refusesWrites_untilTheyBecomeAvailable() throws {
+        let fixture = try makeLaunchFixture()
+        let vault = InMemoryConversationLockVault()
+        let protectedData = ProtectedData(available: false)
+        let sut = makeLaunchedManager(fixture, protectedData: protectedData, vault: vault)
+        sut.resetForLogout()
+
+        XCTAssertFalse(sut.setLock(conversationId: "neuve", pin: "1234"))
+        XCTAssertNil(vault.read("meeshy_lock_neuve"))
+
+        protectedData.available = true
+        XCTAssertTrue(sut.setLock(conversationId: "neuve", pin: "1234"))
+        XCTAssertEqual(sut.attemptLock(conversationId: "neuve", pin: "1234"), .granted)
+    }
+
     // MARK: - #12655 : un PIN maître qui ne s'écrit pas le dit
 
     func test_aFirstMasterPinThatCannotBeWritten_isNotConfigured_andSaysSo() throws {
