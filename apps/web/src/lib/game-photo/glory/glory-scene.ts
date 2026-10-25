@@ -99,6 +99,9 @@ function sessionCatalog(now = Date.now()): Promise<GloryCatalog> {
   return catalog;
 }
 
+/** D'où la scène lit le catalogue : celui de la session hors des témoins, qui passent le leur pour suivre une étape jusqu'au cadre. */
+export type GloryCatalogSource = () => Promise<GloryCatalog>;
+
 /** Oublie le catalogue de la session (après une installation, un changement d'atmosphère). */
 export const forgetGloryCatalog = (): void => {
   cached = null;
@@ -133,18 +136,18 @@ export function browserGloryAssetDeps(): GloryAssetDeps {
 }
 
 /** Le cadre que la loi retient pour cette étape, dans le catalogue de la session ; `null` : carte simple. */
-export async function gloryFrameFor(step: GloryStep): Promise<GloryFramePick | null> {
+export async function gloryFrameFor(step: GloryStep, catalog: GloryCatalogSource = sessionCatalog): Promise<GloryFramePick | null> {
   try {
-    return pickGloryFrame(await sessionCatalog(), step);
+    return pickGloryFrame(await catalog(), step);
   } catch {
     return null;
   }
 }
 
 /** Un cadre du catalogue de la session par sa référence (le choix de la bande, #10164) ; `null` : carte simple. */
-export async function gloryFrameAt(ref: FrameRef): Promise<GloryFramePick | null> {
+export async function gloryFrameAt(ref: FrameRef, catalog: GloryCatalogSource = sessionCatalog): Promise<GloryFramePick | null> {
   try {
-    return findGloryFrame(await sessionCatalog(), ref);
+    return findGloryFrame(await catalog(), ref);
   } catch {
     return null;
   }
@@ -186,11 +189,11 @@ async function tileOf(pick: GloryFramePick, language: InterfaceLanguage, deps: G
  * et sa PRÉSENCE au magasin (sans réseau). `null` : rien à proposer (étape sans
  * cadre, ancien serveur) — la bande ne s'affiche pas, la carte simple part.
  */
-export async function gloryOfferFor(step: GloryStep, deps: GloryAssetDeps = browserGloryAssetDeps()): Promise<GloryOffer | null> {
+export async function gloryOfferFor(step: GloryStep, deps: GloryAssetDeps = browserGloryAssetDeps(), catalog: GloryCatalogSource = sessionCatalog): Promise<GloryOffer | null> {
   try {
     const language = currentInterfaceLanguage();
-    const [catalog] = await Promise.all([sessionCatalog(), loadFrameUsageCatalog(language).catch(() => undefined)]);
-    const offered = offerGloryFrames(catalog, step);
+    const [loaded] = await Promise.all([catalog(), loadFrameUsageCatalog(language).catch(() => undefined)]);
+    const offered = offerGloryFrames(loaded, step);
     if (offered.suggested.length === 0) return null;
     const tiles = await Promise.all(offered.suggested.map((pick) => tileOf(pick, language, deps)));
     const preselected = offered.preselected === null ? null : { pack: offered.preselected.pack.slug, frameId: offered.preselected.frame.id };

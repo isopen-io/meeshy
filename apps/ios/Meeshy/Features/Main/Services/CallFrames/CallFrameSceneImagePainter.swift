@@ -1,6 +1,6 @@
 import CoreGraphics
 import Foundation
-import ImageIO
+import MeeshySDK
 
 /// D'où viennent les illustrations d'un cadre : une couche `image` nomme son fichier
 /// (`assets/call-frames/<nom>.webp`) ; une marque les livre dans son pack, le catalogue de base
@@ -20,14 +20,8 @@ nonisolated struct CallFrameBundleImages: CallFrameSceneImageProviding {
     }
 
     func image(for src: String, maxPixelSize: CGFloat) -> CGImage? {
-        guard let url = Self.url(for: src), let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
-        let options: [CFString: Any] = [
-            kCGImageSourceCreateThumbnailFromImageAlways: true,
-            kCGImageSourceCreateThumbnailWithTransform: true,
-            kCGImageSourceShouldCacheImmediately: true,
-            kCGImageSourceThumbnailMaxPixelSize: max(1, maxPixelSize.rounded(.up)),
-        ]
-        return CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
+        guard let url = Self.url(for: src) else { return nil }
+        return ImageDownsampler.thumbnail(fileURL: url, maxPixelSize: max(1, maxPixelSize.rounded(.up)), decodeImmediately: true)
     }
 }
 

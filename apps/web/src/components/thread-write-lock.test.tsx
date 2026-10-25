@@ -1,7 +1,8 @@
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 import { act } from 'react';
 
-import type { Conversation } from '@/lib/api/types';
+import type { Conversation, Message } from '@/lib/api/types';
+import { canSendPlaintext, endToEndRegimeLedger } from '@/lib/end-to-end-regime-ledger';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import type { LocalMessage } from '@/lib/send/local-message';
 import { outboxStore } from '@/lib/send/outbox-store';
@@ -32,6 +33,7 @@ afterAll(async () => {
 
 afterEach(() => {
   unmountAll();
+  endToEndRegimeLedger.getState().reset();
 });
 
 const conversation = (id: string, extra: Record<string, unknown> = {}): Conversation =>
@@ -49,9 +51,9 @@ const conversation = (id: string, extra: Record<string, unknown> = {}): Conversa
     ...extra,
   }) as Conversation;
 
-function Probe({ conversation: served }: { readonly conversation: Conversation }) {
+function Probe({ conversation: served, messages }: { readonly conversation: Conversation; readonly messages?: readonly Message[] }) {
   return (
-    <ThreadWriteLock conversationId={served.id} conversation={served}>
+    <ThreadWriteLock conversationId={served.id} conversation={served} messages={messages}>
       <textarea data-probe-field />
     </ThreadWriteLock>
   );
@@ -97,5 +99,77 @@ describe('le composeur d’une conversation chiffrée de bout en bout (#11216)',
       const host = await mount(<Probe conversation={conversation(`c-${String(mode)}`, { type: 'direct', encryptionMode: mode })} />);
       expect(host.querySelector('[data-probe-field]')).not.toBeNull();
     }
+  });
+});
+
+describe('une conversation vue chiffrée de bout en bout ne repasse jamais en clair (#12949)', () => {
+  const at = (minute: number) => new Date(Date.UTC(2026, 9, 25, 12, minute));
+  const enabledNotice = (id: string): Message =>
+    ({
+      id: `a-${id}`,
+      conversationId: id,
+      messageType: 'system',
+      messageSource: 'system',
+      content: '🔒 End-to-end encryption enabled.',
+      isEncrypted: false,
+      createdAt: at(1),
+      metadata: { kind: 'encryption-enabled', mode: 'e2ee', epoch: 1 },
+    }) as unknown as Message;
+  const sealedMessage = (id: string, minute = 2): Message =>
+    ({ id: `e-${id}-${minute}`, conversationId: id, messageType: 'text', messageSource: 'user', content: '', isEncrypted: true, encryptionMode: 'e2ee', createdAt: at(minute) }) as unknown as Message;
+  const disabledNotice = (id: string): Message =>
+    ({
+      id: `n-${id}`,
+      conversationId: id,
+      messageType: 'system',
+      messageSource: 'system',
+      content: '🔓 Ana a désactivé le chiffrement de bout en bout.',
+      isEncrypted: false,
+      createdAt: at(5),
+      metadata: { kind: 'encryption-disabled', previousMode: 'e2ee', epoch: 2 },
+    }) as unknown as Message;
+  const band = (host: Element) => host.querySelector('[data-write-restriction]')?.getAttribute('data-write-restriction');
+
+  test('vue e2ee, puis resservie sans mode par le serveur : aucun champ, le bandeau du bout en bout reste', async () => {
+    const id = 'c-downgraded';
+    await mount(<Probe conversation={conversation(id, { type: 'direct', encryptionMode: 'e2ee' })} />);
+    unmountAll();
+
+    const host = await mount(<Probe conversation={conversation(id, { type: 'direct', encryptionMode: null })} />);
+
+    expect(host.querySelector('textarea, input, [contenteditable]')).toBeNull();
+    expect(band(host)).toBe('end-to-end-encrypted');
+  });
+
+  test('le fil montre l’avis d’activation, le serveur sert le clair : fermé, et l’envoi unique l’apprend aussi', async () => {
+    const id = 'c-thread-shows';
+    const host = await mount(<Probe conversation={conversation(id, { type: 'direct', encryptionMode: null })} messages={[enabledNotice(id), sealedMessage(id)]} />);
+    expect(host.querySelector('[data-probe-field]')).toBeNull();
+    expect(canSendPlaintext({ conversationId: id })).toBe(false);
+  });
+
+  test('un avis de désactivation affiché en dernier ne rouvre RIEN', async () => {
+    const id = 'c-notice-last';
+    const host = await mount(<Probe conversation={conversation(id, { type: 'direct', encryptionMode: null })} messages={[enabledNotice(id), sealedMessage(id), disabledNotice(id)]} />);
+    expect(host.querySelector('[data-probe-field]')).toBeNull();
+    expect(band(host)).toBe('end-to-end-encrypted');
+  });
+
+  test('aucun bouton ne propose d’écrire sans chiffrement', async () => {
+    const id = 'c-no-gesture';
+    endToEndRegimeLedger.getState().learnEndToEnd(id);
+    const host = await mount(<Probe conversation={conversation(id, { type: 'direct', encryptionMode: null })} />);
+    expect(host.querySelector('button')).toBeNull();
+  });
+
+  test('un ancien message marqué e2ee dans une conversation sans régime ne ferme pas le composeur', async () => {
+    const id = 'c-legacy-marked';
+    const host = await mount(<Probe conversation={conversation(id, { type: 'direct', encryptionMode: null })} messages={[sealedMessage(id)]} />);
+    expect(host.querySelector('[data-probe-field]')).not.toBeNull();
+  });
+
+  test('une conversation jamais vue chiffrée : le composeur est là', async () => {
+    const host = await mount(<Probe conversation={conversation('c-never', { type: 'direct', encryptionMode: null })} messages={[]} />);
+    expect(host.querySelector('[data-probe-field]')).not.toBeNull();
   });
 });

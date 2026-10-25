@@ -44,6 +44,13 @@ export type GameSettingsProps = {
   readonly gameNotifications?: boolean | undefined;
   readonly onGameNotifications?: ((on: boolean) => void) | undefined;
   /**
+   * « Moments à immortaliser » (#10268) — `notification.gamePhotoEnabled`, le PUSH d'une étape franchie app fermée, rangé
+   * dans la carte des notifications du jeu : les couper le coupe aussi (D8), l'interrupteur s'éteint alors sans écraser le
+   * choix gardé. `undefined` : pas encore lu (il attend). Sans branchement (`onGamePhoto`), pas d'interrupteur.
+   */
+  readonly gamePhoto?: boolean | undefined;
+  readonly onGamePhoto?: ((on: boolean) => void) | undefined;
+  /**
    * « Mon atmosphère » (#10163) — l'atmosphère des cadres de rang, une préférence du COMPTE ; `null` : pas encore
    * choisie, l'Afrique éternelle décore. Le geste ouvre l'écran de choix chez l'hôte. Sans branchement, pas de carte.
    */
@@ -85,6 +92,24 @@ function SwitchRow({ marker, label, checked, disabled, onChange }: { readonly ma
         className="size-6 shrink-0 accent-[var(--color-ios-brand)]"
       />
     </label>
+  );
+}
+
+function GamePhotoSwitch({ online, game, photo, onChange }: { readonly online: boolean; readonly game: boolean | undefined; readonly photo: boolean | undefined; readonly onChange: (on: boolean) => void }) {
+  const cutByGame = game === false;
+  return (
+    <>
+      <SwitchRow
+        marker="data-game-setting-photo"
+        label={gameText('game.settings.notifications.photo_switch')}
+        checked={!cutByGame && (photo ?? true)}
+        disabled={!online || photo === undefined || cutByGame}
+        onChange={onChange}
+      />
+      <p className="text-caption" style={{ color: GAME_INK_2 }}>
+        {gameText(cutByGame ? 'game.settings.notifications.photo_cut' : 'game.settings.notifications.photo_body')}
+      </p>
+    </>
   );
 }
 
@@ -200,6 +225,9 @@ export function GameSettings(props: GameSettingsProps) {
             disabled={!online || props.gameNotifications === undefined}
             onChange={props.onGameNotifications}
           />
+          {props.onGamePhoto === undefined ? null : (
+            <GamePhotoSwitch online={online} game={props.gameNotifications} photo={props.gamePhoto} onChange={props.onGamePhoto} />
+          )}
           {errors.notifications === undefined ? null : (
             <p role="alert" className="text-caption" style={{ color: GAME_ERROR }}>
               {errors.notifications}

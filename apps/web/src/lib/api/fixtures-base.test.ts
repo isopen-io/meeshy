@@ -43,6 +43,14 @@ describe('resolveThreadAnchor — robuste à la traversée de minuit parisien (#
     expect(anchor.getTime()).toBe(at.getTime() - THREAD_SPAN_MINUTES * 60_000);
   });
 
+  test('navigateur en UTC entre 00:00 et 01:36 UTC ⇒ l’ancre tombe le même jour à Paris ET en UTC (#12878)', () => {
+    const at = new Date('2026-10-25T00:30:00.000Z'); // 02:30 CEST à Paris, 00:30 en UTC
+    const anchor = resolveThreadAnchor(at, THREAD_SPAN_MINUTES, ['Europe/Paris', 'UTC']);
+    const utcDay = (date: Date) => date.toISOString().slice(0, 10);
+    expect(parisCalendarDay(anchor)).toBe(parisCalendarDay(at));
+    expect(utcDay(anchor)).toBe(utcDay(at));
+  });
+
   test("FIXTURES_LOADED_AT est l'instant UNIQUE du module, un Date valide", () => {
     expect(FIXTURES_LOADED_AT).toBeInstanceOf(Date);
     expect(Number.isNaN(FIXTURES_LOADED_AT.getTime())).toBe(false);

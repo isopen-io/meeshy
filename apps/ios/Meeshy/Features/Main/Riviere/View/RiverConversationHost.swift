@@ -36,9 +36,10 @@ struct RiverConversationHost: View {
     var onOpenProfile: ((ProfileSheetUser) -> Void)? = nil
     var onViewStory: ((String) -> Void)? = nil
     /// « Ouvrir dans le fil » et l'appui long (#11224), DITS par l'appelant
-    /// qui possède le contrôleur de mode et LE menu du message.
+    /// qui possède le contrôleur de mode et LE menu du message. L'appui long
+    /// remet la bulle pressée et son cadre de fenêtre (#12630).
     var onOpenInThread: ((String) -> Void)? = nil
-    var onLongPress: ((String) -> Void)? = nil
+    var onLongPress: ((RiverPressedCell) -> Void)? = nil
     /// #7452 — la consommation d'une vue unique, relayée jusqu'à la bulle.
     var onConsumeViewOnce: ((String, @escaping (Bool) -> Void) -> Void)? = nil
     var onMediaTap: ((MessageAttachment) -> Void)? = nil
@@ -88,7 +89,7 @@ struct RiverConversationHost: View {
         onOpenProfile: ((ProfileSheetUser) -> Void)? = nil,
         onViewStory: ((String) -> Void)? = nil,
         onOpenInThread: ((String) -> Void)? = nil,
-        onLongPress: ((String) -> Void)? = nil,
+        onLongPress: ((RiverPressedCell) -> Void)? = nil,
         onConsumeViewOnce: ((String, @escaping (Bool) -> Void) -> Void)? = nil,
         onMediaTap: ((MessageAttachment) -> Void)? = nil,
         onPlayQuotedAudio: ((ReplyReference) -> Bool)? = nil,

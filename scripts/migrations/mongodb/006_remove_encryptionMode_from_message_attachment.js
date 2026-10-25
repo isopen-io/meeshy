@@ -1,105 +1,25 @@
 /**
- * Migration 006: Remove encryptionMode from Message and MessageAttachment
+ * Migration 006 — RETIRÉE (#12949, 2026-10-25). Elle n'écrit plus rien.
  *
- * encryptionMode should only exist on Conversation, not on Message or MessageAttachment.
- * This migration removes the field from documents where it was incorrectly added.
+ * Elle effaçait `encryptionMode` de chaque `Message` et `MessageAttachment`,
+ * au motif que le mode ne vivait qu'au niveau de la conversation. Ce n'est plus
+ * vrai : `Message.encryptionMode` (`e2ee`) est la marque qui garde un message
+ * chiffré de bout en bout contre l'édition, le transfert et la traduction en
+ * clair (#12881). La rejouer retirerait cette marque à tout l'historique
+ * chiffré. Une conversation chiffrée de bout en bout ne repasse jamais en clair,
+ * par aucun chemin, migrations comprises (garde
+ * `services/gateway/src/__tests__/unit/encryption/e2ee-irreversible-write-guard.test.ts`).
  *
- * Run with: docker exec meeshy-database mongosh meeshy --file /migrations/006_remove_encryptionMode_from_message_attachment.js
- *
- * SAFE: This only removes the encryptionMode field, does not affect other data.
+ * Ce fichier ne fait plus que compter, en lecture seule.
  */
 
-print("=== Migration 006: Remove encryptionMode from Message & MessageAttachment ===");
+print("=== Migration 006 : RETIRÉE (#12949), lecture seule ===");
 print("Database: " + db.getName());
-print("");
-print("Reason: encryptionMode should only exist on Conversation level.");
-print("");
-
-// ============================================================================
-// 1. Remove from MessageAttachment
-// ============================================================================
-print("--- MessageAttachment ---");
-
-const attachmentsWithField = db.MessageAttachment.countDocuments({ encryptionMode: { $exists: true } });
-print(`  Documents with encryptionMode: ${attachmentsWithField}`);
-
-if (attachmentsWithField > 0) {
-  // Show current values distribution
-  const attachmentModes = db.MessageAttachment.aggregate([
-    { $match: { encryptionMode: { $exists: true } } },
-    { $group: { _id: "$encryptionMode", count: { $sum: 1 } } }
-  ]).toArray();
-
-  print("  Current values:");
-  attachmentModes.forEach(m => {
-    print(`    - ${m._id === null ? 'null' : `"${m._id}"`}: ${m.count}`);
-  });
-
-  // Remove the field
-  const attachmentResult = db.MessageAttachment.updateMany(
-    { encryptionMode: { $exists: true } },
-    { $unset: { encryptionMode: "" } }
-  );
-
-  print(`  ✅ Removed from ${attachmentResult.modifiedCount} documents`);
-} else {
-  print("  ✅ No documents have encryptionMode field");
-}
-
-// ============================================================================
-// 2. Remove from Message
-// ============================================================================
-print("");
-print("--- Message ---");
-
-const messagesWithField = db.Message.countDocuments({ encryptionMode: { $exists: true } });
-print(`  Documents with encryptionMode: ${messagesWithField}`);
-
-if (messagesWithField > 0) {
-  // Show current values distribution
-  const messageModes = db.Message.aggregate([
-    { $match: { encryptionMode: { $exists: true } } },
-    { $group: { _id: "$encryptionMode", count: { $sum: 1 } } }
-  ]).toArray();
-
-  print("  Current values:");
-  messageModes.forEach(m => {
-    print(`    - ${m._id === null ? 'null' : `"${m._id}"`}: ${m.count}`);
-  });
-
-  // Remove the field
-  const messageResult = db.Message.updateMany(
-    { encryptionMode: { $exists: true } },
-    { $unset: { encryptionMode: "" } }
-  );
-
-  print(`  ✅ Removed from ${messageResult.modifiedCount} documents`);
-} else {
-  print("  ✅ No documents have encryptionMode field");
-}
-
-// ============================================================================
-// 3. Verify Conversation still has encryptionMode (should not be removed)
-// ============================================================================
-print("");
-print("--- Conversation (verification only) ---");
-
-const conversationsWithField = db.Conversation.countDocuments({ encryptionMode: { $exists: true } });
-const totalConversations = db.Conversation.countDocuments();
-print(`  Conversations with encryptionMode: ${conversationsWithField}/${totalConversations}`);
-
-if (conversationsWithField > 0) {
-  const convModes = db.Conversation.aggregate([
-    { $match: { encryptionMode: { $exists: true } } },
-    { $group: { _id: "$encryptionMode", count: { $sum: 1 } } }
-  ]).toArray();
-
-  print("  Distribution:");
-  convModes.forEach(m => {
-    print(`    - ${m._id === null ? 'null' : `"${m._id}"`}: ${m.count}`);
-  });
-}
-print("  (encryptionMode on Conversation is correct, not removed)");
-
-print("");
-print("✅ Migration 006 completed!");
+[
+  ["MessageAttachment", db.MessageAttachment],
+  ["Message", db.Message],
+  ["Conversation", db.Conversation],
+].forEach(([name, collection]) => {
+  print(`  ${name} avec encryptionMode : ${collection.countDocuments({ encryptionMode: { $exists: true } })}`);
+});
+print("Aucune écriture.");
