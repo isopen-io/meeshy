@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.ManageAccounts
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.MarkChatRead
 import androidx.compose.material.icons.filled.MarkChatUnread
@@ -113,6 +114,7 @@ internal fun ConversationContextMenu(
     onViewInfo: (() -> Unit)? = null,
     onViewProfile: (() -> Unit)? = null,
     onCreateShareLink: (() -> Unit)? = null,
+    onManageMembers: (() -> Unit)? = null,
 ) {
     var showLeaveConfirm by remember(expanded) { mutableStateOf(false) }
     var showDeleteForMeConfirm by remember(expanded) { mutableStateOf(false) }
@@ -268,6 +270,18 @@ internal fun ConversationContextMenu(
             leadingIcon = { Icon(Icons.Filled.Edit, contentDescription = null) },
             onClick = { showRenameDialog = true },
         )
+        // « Gérer les membres » (parity iOS `ConversationMenuCatalog`, #12631): right after
+        // Rename, before Favorite — present only when the law grants it (#12865).
+        onManageMembers?.let { open ->
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.row_menu_manage_members)) },
+                leadingIcon = { Icon(Icons.Filled.ManageAccounts, contentDescription = null) },
+                onClick = {
+                    onDismiss()
+                    open()
+                },
+            )
+        }
         // Favorite reaction (parity iOS `ConversationListView+Overlays`'s "Favori"
         // menu): a fixed 8-emoji set — no full picker, matching iOS exactly — plus
         // a conditional "Remove favorite" row shown only once one is set. Drives

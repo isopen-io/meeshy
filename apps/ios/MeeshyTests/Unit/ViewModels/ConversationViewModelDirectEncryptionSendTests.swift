@@ -3,6 +3,7 @@ import GRDB
 import CryptoKit
 import Combine
 @testable import Meeshy
+import MeeshyE2EE
 import MeeshySDK
 
 /// **Un message d'une conversation chiffrée ne part jamais en clair** (#11379,
@@ -16,6 +17,9 @@ import MeeshySDK
 ///
 /// Hors E2EE, le texte part en clair — même vers un pair qui a une session :
 /// le chiffrement suit le RÉGIME de la conversation, jamais l'opportunité.
+///
+/// En E2EE, il part sous libsignal (#3707) : des enveloppes par appareil, ni
+/// `content` ni langue sur le fil, REST seulement, et un 409 Sesame rechiffre.
 @MainActor
 final class ConversationViewModelDirectEncryptionSendTests: XCTestCase {
 
@@ -43,7 +47,7 @@ final class ConversationViewModelDirectEncryptionSendTests: XCTestCase {
     }
 
     private func makeSUT(
-        encryptor: DirectMessageEncrypting,
+        endToEnd: MockEndToEndMessaging,
         encryptionMode: String? = "e2ee",
         isDirect: Bool = true,
         online: Bool = true,
@@ -79,7 +83,7 @@ final class ConversationViewModelDirectEncryptionSendTests: XCTestCase {
             ),
             networkMonitor: FakeNetworkMonitor(isOnline: online),
             offlineQueue: queue,
-            messageEncryptor: encryptor
+            endToEnd: endToEnd
         )
         viewModel.start()
         return SUT(viewModel: viewModel, messageService: messageService, socket: socket, queue: queue, pool: pool)
@@ -102,7 +106,7 @@ final class ConversationViewModelDirectEncryptionSendTests: XCTestCase {
     // MARK: - E2EE sans session
 
     func test_send_e2eeSansSession_neToucheAucunTransport() async throws {
-        let sut = try await makeSUT(encryptor: FailingEncryptor())
+        let sut = try await makeSUT(endToEnd: failingEndToEnd())
 
         let result = await sut.viewModel.send(outgoingMessage(content: secret, conversationId: conversationId))
 
@@ -113,7 +117,7 @@ final class ConversationViewModelDirectEncryptionSendTests: XCTestCase {
     }
 
     func test_send_e2eeSansSession_laBulleResteEnEchecAvecSonMotif() async throws {
-        let sut = try await makeSUT(encryptor: FailingEncryptor())
+        let sut = try await makeSUT(endToEnd: failingEndToEnd())
 
         _ = await sut.viewModel.send(outgoingMessage(content: secret, conversationId: conversationId))
 
@@ -123,7 +127,7 @@ final class ConversationViewModelDirectEncryptionSendTests: XCTestCase {
     }
 
     func test_send_e2eeHorsLigne_rienNeVaDansLaFile() async throws {
-        let sut = try await makeSUT(encryptor: SucceedingEncryptor(), online: false)
+        let sut = try await makeSUT(endToEnd: workingEndToEnd(), online: false)
 
         let result = await sut.viewModel.send(outgoingMessage(content: secret, conversationId: conversationId))
 
@@ -135,7 +139,7 @@ final class ConversationViewModelDirectEncryptionSendTests: XCTestCase {
     }
 
     func test_send_e2eeGroupe_refuseFaute_deChiffrementDeGroupe() async throws {
-        let sut = try await makeSUT(encryptor: SucceedingEncryptor(), isDirect: false)
+        let sut = try await makeSUT(endToEnd: workingEndToEnd(), isDirect: false)
 
         let result = await sut.viewModel.send(outgoingMessage(content: secret, conversationId: conversationId))
 
@@ -146,7 +150,7 @@ final class ConversationViewModelDirectEncryptionSendTests: XCTestCase {
     }
 
     func test_send_e2eeLieuPartage_refuse() async throws {
-        let sut = try await makeSUT(encryptor: SucceedingEncryptor())
+        let sut = try await makeSUT(endToEnd: workingEndToEnd())
         let place = SharedPlace(latitude: 48.85, longitude: 2.35, name: "Paris")
 
         let result = await sut.viewModel.send(outgoingMessage(content: "", conversationId: conversationId, location: place))
@@ -158,7 +162,7 @@ final class ConversationViewModelDirectEncryptionSendTests: XCTestCase {
     }
 
     func test_send_e2eePiecesJointes_refusees() async throws {
-        let sut = try await makeSUT(encryptor: SucceedingEncryptor())
+        let sut = try await makeSUT(endToEnd: workingEndToEnd())
 
         let result = await sut.viewModel.send(outgoingMessage(content: secret, conversationId: conversationId, attachmentIds: ["a1"]))
 
@@ -169,7 +173,7 @@ final class ConversationViewModelDirectEncryptionSendTests: XCTestCase {
     }
 
     func test_send_e2eeModeInconnu_echoueFerme() async throws {
-        let sut = try await makeSUT(encryptor: FailingEncryptor(), encryptionMode: "signal-v2")
+        let sut = try await makeSUT(endToEnd: failingEndToEnd(), encryptionMode: "signal-v2")
 
         _ = await sut.viewModel.send(outgoingMessage(content: secret, conversationId: conversationId))
 
@@ -179,30 +183,113 @@ final class ConversationViewModelDirectEncryptionSendTests: XCTestCase {
     // MARK: - E2EE avec session
 
     func test_send_e2eeAvecSession_partChiffreParREST() async throws {
-        let sut = try await makeSUT(encryptor: SucceedingEncryptor())
+        let sut = try await makeSUT(endToEnd: workingEndToEnd())
 
         _ = await sut.viewModel.send(outgoingMessage(content: secret, conversationId: conversationId))
 
         XCTAssertEqual(sut.socket.sendViaSocketFallbackCallCount, 0,
                        "un message chiffré ne part jamais par le socket-first")
-        XCTAssertEqual(sut.messageService.lastSendRequest?.isEncrypted, true)
-        XCTAssertEqual(sut.messageService.lastSendRequest?.encryptionMode, "E2EE")
-        XCTAssertNotEqual(sut.messageService.lastSendRequest?.content, secret)
+        let request = try XCTUnwrap(sut.messageService.lastSendRequest)
+        XCTAssertEqual(request.isEncrypted, true)
+        XCTAssertEqual(request.encryptionMode, "e2ee")
+        XCTAssertEqual(request.encryptionProtocol, "libsignal-v1")
+        XCTAssertEqual(request.envelopes?.count, 1)
+        XCTAssertNil(request.content, "le texte ne voyage que dans les enveloppes")
+        XCTAssertNil(request.originalLanguage, "la langue détectée non plus")
+        try assertNoPlaintext(in: request)
+    }
+
+    /// Le corps encodé, tel qu'il part : aucun octet du secret.
+    private func assertNoPlaintext(in request: SendMessageRequest, file: StaticString = #filePath, line: UInt = #line) throws {
+        let body = String(decoding: try JSONEncoder().encode(request), as: UTF8.self)
+        XCTAssertFalse(body.contains(secret), "le clair n'est nulle part dans le corps", file: file, line: line)
+    }
+
+    func test_send_e2ee_scelleLeTexteSaLangueEtSaPlace() async throws {
+        let e2ee = MockEndToEndMessaging()
+        let sut = try await makeSUT(endToEnd: e2ee)
+
+        _ = await sut.viewModel.send(outgoingMessage(content: secret, conversationId: conversationId))
+
+        let content = try XCTUnwrap(e2ee.deliveredContents.first)
+        XCTAssertEqual(content.text, secret)
+        XCTAssertEqual(content.conversationId, conversationId)
+        XCTAssertEqual(content.clientMessageId, sut.messageService.lastSendRequest?.clientMessageId)
+    }
+
+    func test_send_e2ee_unRefusSesame_rechiffreEtRenvoie() async throws {
+        let e2ee = MockEndToEndMessaging()
+        let sut = try await makeSUT(endToEnd: e2ee)
+        let mismatch = E2EEDevicesMismatch(missing: [E2EEDeviceRef(userId: peerId, deviceId: 2)])
+        sut.messageService.sendResults = [.failure(MeeshyError.rejected(APIRejection(
+            statusCode: 409, code: E2EEErrorCode.devicesMismatch, message: "Appareils", e2eeMismatch: mismatch
+        )))]
+
+        let result = await sut.viewModel.send(outgoingMessage(content: secret, conversationId: conversationId))
+
+        XCTAssertTrue(result.isAccepted, "\(result)")
+        XCTAssertEqual(e2ee.deliverAttempts, 2)
+        XCTAssertEqual(sut.messageService.sendCallCount, 2)
+        XCTAssertEqual(Set(sut.messageService.sentRequests.map(\.clientMessageId)).count, 1, "le même message, rechiffré")
+    }
+
+    func test_send_e2ee_leClairDeMonMessageResteSurLAppareil_sousSesDeuxIdentifiants() async throws {
+        let e2ee = MockEndToEndMessaging()
+        let sut = try await makeSUT(endToEnd: e2ee)
+
+        _ = await sut.viewModel.send(outgoingMessage(content: secret, conversationId: conversationId))
+
+        let cid = try XCTUnwrap(sut.messageService.lastSendRequest?.clientMessageId)
+        guard case .readable(let mine, let author)? = e2ee.remembered[cid],
+              case .readable? = e2ee.remembered["000000000000000000000001"] else {
+            return XCTFail("le clair est rangé sous l'identifiant client et l'identifiant serveur")
+        }
+        XCTAssertEqual(mine.text, secret)
+        XCTAssertEqual(author, userId)
+    }
+
+    func test_send_e2ee_correspondantSansAppareil_refuseLisiblement() async throws {
+        let e2ee = MockEndToEndMessaging()
+        e2ee.sealError = E2EESealError.recipientHasNoDevice(userId: peerId)
+        let sut = try await makeSUT(endToEnd: e2ee)
+
+        let result = await sut.viewModel.send(outgoingMessage(content: secret, conversationId: conversationId))
+
+        guard case .failure(.endToEndUnsealed(.recipientWithoutEncryptedDevice)) = result else {
+            return XCTFail("refus lisible attendu, reçu \(result)")
+        }
+        await assertNothingLeftInClear(sut)
+        XCTAssertEqual(try onlyRecord(in: sut.pool)?.lastError, EndToEndSendRefusal.recipientWithoutEncryptedDevice.userMessage)
+    }
+
+    func test_send_e2ee_compteAuMaximumDAppareils_ouvreLEcranDeRetrait() async throws {
+        let e2ee = MockEndToEndMessaging()
+        e2ee.sealError = E2EEEnrollmentError.deviceLimitReached
+        let sut = try await makeSUT(endToEnd: e2ee)
+        let screen = expectation(forNotification: .endToEndDeviceLimitReached, object: nil)
+
+        let result = await sut.viewModel.send(outgoingMessage(content: secret, conversationId: conversationId))
+
+        guard case .failure(.endToEndUnsealed(.deviceLimitReached)) = result else {
+            return XCTFail("refus attendu, reçu \(result)")
+        }
+        await fulfillment(of: [screen], timeout: 1)
+        await assertNothingLeftInClear(sut)
     }
 
     func test_send_e2eeReponse_partChiffree() async throws {
-        let sut = try await makeSUT(encryptor: SucceedingEncryptor())
+        let sut = try await makeSUT(endToEnd: workingEndToEnd())
         let reply = outgoingMessage(content: secret, conversationId: conversationId, relation: .reply(to: MessageID("m1"), citing: nil))
 
         _ = await sut.viewModel.send(reply)
 
         XCTAssertEqual(sut.messageService.lastSendRequest?.isEncrypted, true)
         XCTAssertEqual(sut.messageService.lastSendRequest?.replyToId, "m1")
-        XCTAssertNotEqual(sut.messageService.lastSendRequest?.content, secret)
+        try assertNoPlaintext(in: try XCTUnwrap(sut.messageService.lastSendRequest))
     }
 
     func test_send_e2eeRESTEchoue_leClairNEntreJamaisDansLaFile() async throws {
-        let sut = try await makeSUT(encryptor: SucceedingEncryptor())
+        let sut = try await makeSUT(endToEnd: workingEndToEnd())
         sut.messageService.sendResult = .failure(URLError(.timedOut))
 
         let result = await sut.viewModel.send(outgoingMessage(content: secret, conversationId: conversationId))
@@ -212,9 +299,7 @@ final class ConversationViewModelDirectEncryptionSendTests: XCTestCase {
         }
         let queued = await sut.queue.enqueuedItems
         XCTAssertTrue(queued.isEmpty, "la file de relance porterait le texte en clair")
-        XCTAssertEqual(sut.socket.sendViaSocketFallbackCalls.count, 1, "un seul repli socket, et il est chiffré")
-        XCTAssertEqual(sut.socket.sendViaSocketFallbackCalls.first?.isEncrypted, true)
-        XCTAssertNotEqual(sut.socket.sendViaSocketFallbackCalls.first?.content, secret)
+        XCTAssertEqual(sut.socket.sendViaSocketFallbackCallCount, 0, "le socket ne porte pas d'enveloppes : aucun repli")
         XCTAssertEqual(try onlyRecord(in: sut.pool)?.state, .failed)
     }
 
@@ -228,7 +313,7 @@ final class ConversationViewModelDirectEncryptionSendTests: XCTestCase {
     /// serveur l'arrête net — ni repli socket, ni outbox —, et l'envoi suivant
     /// ne part plus en clair.
     func test_send_regimeInconnu_refusServeur_neRejoueRien_etLEnvoiSuivantNePartPlusEnClair() async throws {
-        let sut = try await makeSUT(encryptor: FailingEncryptor(), encryptionMode: nil)
+        let sut = try await makeSUT(endToEnd: failingEndToEnd(), encryptionMode: nil)
         sut.socket.isConnected = false
         sut.messageService.sendResult = .failure(serverPlaintextRefusal)
 
@@ -255,14 +340,14 @@ final class ConversationViewModelDirectEncryptionSendTests: XCTestCase {
     /// régime le dit au fil, et l'envoi suivant est scellé.
     func test_send_chiffrementActiveDansLeFilOuvert_lEnvoiSuivantEstScelle() async throws {
         let ledger = EndToEndRegimeLedger()
-        let sut = try await makeSUT(encryptor: SucceedingEncryptor(), encryptionMode: nil, ledger: ledger)
+        let sut = try await makeSUT(endToEnd: workingEndToEnd(), encryptionMode: nil, ledger: ledger)
         ledger.learn(mode: "e2ee", for: conversationId)
 
         _ = await sut.viewModel.send(outgoingMessage(content: secret, conversationId: conversationId))
 
         XCTAssertEqual(sut.socket.sendViaSocketFallbackCallCount, 0, "aucun socket-first en clair")
         XCTAssertEqual(sut.messageService.lastSendRequest?.isEncrypted, true)
-        XCTAssertNotEqual(sut.messageService.lastSendRequest?.content, secret)
+        try assertNoPlaintext(in: try XCTUnwrap(sut.messageService.lastSendRequest))
     }
 
     func test_regimeLedger_unModeLisibleParLeServeur_neScelleRien() {
@@ -278,7 +363,7 @@ final class ConversationViewModelDirectEncryptionSendTests: XCTestCase {
 
     /// Le geste du jour et la flamme ne se posent que pour un message qui PART.
     func test_send_e2eeRefuse_neRejouePasLaFlamme() async throws {
-        let sut = try await makeSUT(encryptor: SucceedingEncryptor(), isDirect: false)
+        let sut = try await makeSUT(endToEnd: workingEndToEnd(), isDirect: false)
         var replays: [String] = []
         let subscription = HeaderFlameReplay.sent.sink { replays.append($0) }
         defer { subscription.cancel() }
@@ -289,7 +374,7 @@ final class ConversationViewModelDirectEncryptionSendTests: XCTestCase {
     }
 
     func test_send_sansE2EE_rejoueLaFlamme() async throws {
-        let sut = try await makeSUT(encryptor: SucceedingEncryptor(), encryptionMode: nil)
+        let sut = try await makeSUT(endToEnd: workingEndToEnd(), encryptionMode: nil)
         sut.socket.sendViaSocketFallbackResult = MessageSocketManager.SendMessageAck(
             messageId: "00000000000000000000cd57", clientMessageId: nil
         )
@@ -331,7 +416,7 @@ final class ConversationViewModelDirectEncryptionSendTests: XCTestCase {
     /// clair dans l'outbox hors ligne. En E2EE, il passe par l'envoi de la
     /// conversation — scellé ou refusé, jamais en clair.
     func test_threadReply_e2ee_passeParLEnvoiDeLaConversation_aucunClair() async throws {
-        let sut = try await makeSUT(encryptor: FailingEncryptor())
+        let sut = try await makeSUT(endToEnd: failingEndToEnd())
         let log = SealedSendLog()
 
         let outcome = try await makeThreadDispatcher(sut: sut, log: log).dispatch(text: secret, clientMessageId: "cid_thread")
@@ -343,7 +428,7 @@ final class ConversationViewModelDirectEncryptionSendTests: XCTestCase {
     }
 
     func test_threadReply_e2eeHorsLigne_rienNeVaDansLaFile() async throws {
-        let sut = try await makeSUT(encryptor: SucceedingEncryptor(), online: false)
+        let sut = try await makeSUT(endToEnd: workingEndToEnd(), online: false)
         let log = SealedSendLog()
 
         let outcome = try await makeThreadDispatcher(sut: sut, online: false, log: log).dispatch(text: secret, clientMessageId: "cid_thread")
@@ -353,18 +438,18 @@ final class ConversationViewModelDirectEncryptionSendTests: XCTestCase {
     }
 
     func test_threadReply_e2eeAvecSession_partChiffree() async throws {
-        let sut = try await makeSUT(encryptor: SucceedingEncryptor())
+        let sut = try await makeSUT(endToEnd: workingEndToEnd())
         let log = SealedSendLog()
 
         _ = try await makeThreadDispatcher(sut: sut, log: log).dispatch(text: secret, clientMessageId: "cid_thread")
 
         XCTAssertEqual(sut.messageService.lastSendRequest?.isEncrypted, true)
         XCTAssertEqual(sut.messageService.lastSendRequest?.replyToId, "00000000000000000000cd33")
-        XCTAssertNotEqual(sut.messageService.lastSendRequest?.content, secret)
+        try assertNoPlaintext(in: try XCTUnwrap(sut.messageService.lastSendRequest))
     }
 
     func test_threadReply_sansE2EE_gardeSonChemin_RESTenLigne_fileHorsLigne() async throws {
-        let sut = try await makeSUT(encryptor: SucceedingEncryptor(), encryptionMode: nil)
+        let sut = try await makeSUT(endToEnd: workingEndToEnd(), encryptionMode: nil)
         let log = SealedSendLog()
 
         let sent = try await makeThreadDispatcher(sut: sut, log: log).dispatch(text: "Salut", clientMessageId: "cid_on")
@@ -382,7 +467,7 @@ final class ConversationViewModelDirectEncryptionSendTests: XCTestCase {
     // MARK: - Sans E2EE
 
     func test_send_sansE2EE_partEnClairMemeAvecUneSession() async throws {
-        let sut = try await makeSUT(encryptor: SucceedingEncryptor(), encryptionMode: nil)
+        let sut = try await makeSUT(endToEnd: workingEndToEnd(), encryptionMode: nil)
         sut.socket.sendViaSocketFallbackResult = MessageSocketManager.SendMessageAck(
             messageId: "00000000000000000000cd56", clientMessageId: nil
         )
@@ -395,7 +480,7 @@ final class ConversationViewModelDirectEncryptionSendTests: XCTestCase {
     }
 
     func test_send_sansE2EE_sessionIndisponible_neMarqueJamaisLaBulleEnEchec() async throws {
-        let sut = try await makeSUT(encryptor: FailingEncryptor(), encryptionMode: "server")
+        let sut = try await makeSUT(endToEnd: failingEndToEnd(), encryptionMode: "server")
         sut.socket.sendViaSocketFallbackResult = MessageSocketManager.SendMessageAck(
             messageId: "00000000000000000000cd55", clientMessageId: nil
         )
@@ -412,7 +497,7 @@ final class ConversationViewModelDirectEncryptionSendTests: XCTestCase {
     // MARK: - Édition
 
     func test_editMessage_e2ee_refuseeSansAppelReseau() async throws {
-        let sut = try await makeSUT(encryptor: FailingEncryptor())
+        let sut = try await makeSUT(endToEnd: failingEndToEnd())
 
         await sut.viewModel.editMessage(messageId: "00000000000000000000cd44", newContent: secret)
 
@@ -422,8 +507,42 @@ final class ConversationViewModelDirectEncryptionSendTests: XCTestCase {
         XCTAssertEqual(sut.viewModel.error, EndToEndSendRefusal.editUnsealable.userMessage)
     }
 
+    /// #12881 — un message scellé sous e2ee reste chiffré à jamais (spec § 5.2) :
+    /// même après une désactivation que l'utilisateur a VUE (#12846), son clair
+    /// déchiffré sur l'appareil ne part pas.
+    func test_editMessage_messageScelleApresDesactivation_refuseSansAppelReseau() async throws {
+        let ledger = EndToEndRegimeLedger()
+        ledger.learn(ConversationEncryptionStatus(isEncrypted: false, mode: nil, epoch: 2), for: conversationId)
+        ledger.confirmDowngrade(epoch: 2, for: conversationId)
+        let sut = try await makeSUT(endToEnd: failingEndToEnd(), encryptionMode: nil, ledger: ledger)
+        var sealed = Message(
+            id: "00000000000000000000cd44", conversationId: conversationId, senderId: userId,
+            content: "", isEncrypted: true, encryptionMode: "e2ee"
+        )
+        sealed.adoptDecryptedContent(secret)
+        sut.viewModel.messages = [sealed]
+
+        await sut.viewModel.editMessage(messageId: sealed.id, newContent: secret + " (corrigé)")
+
+        XCTAssertEqual(sut.messageService.editCallCount, 0, "le clair d'un message scellé partirait au serveur")
+        let edits = await sut.queue.enqueuedEdits
+        XCTAssertTrue(edits.isEmpty)
+        XCTAssertEqual(sut.viewModel.error, EndToEndSendRefusal.sealedMessageUneditable.userMessage)
+    }
+
+    func test_editMessage_messageEnClairApresDesactivation_partAuServeur() async throws {
+        let sut = try await makeSUT(endToEnd: failingEndToEnd(), encryptionMode: nil)
+        sut.viewModel.messages = [Message(
+            id: "00000000000000000000cd44", conversationId: conversationId, senderId: userId, content: "Salut"
+        )]
+
+        await sut.viewModel.editMessage(messageId: "00000000000000000000cd44", newContent: "Salut !")
+
+        XCTAssertEqual(sut.messageService.editCallCount, 1)
+    }
+
     func test_editMessage_sansE2EE_partAuServeur() async throws {
-        let sut = try await makeSUT(encryptor: FailingEncryptor(), encryptionMode: nil)
+        let sut = try await makeSUT(endToEnd: failingEndToEnd(), encryptionMode: nil)
 
         await sut.viewModel.editMessage(messageId: "00000000000000000000cd44", newContent: "Salut")
 
@@ -451,33 +570,10 @@ final class ConversationViewModelDirectEncryptionSendTests: XCTestCase {
         )
     }
 
-    func test_prepareUpload_e2ee_sealsContent_setsE2EEMode() async throws {
-        let sut = try await makeSUT(encryptor: SucceedingEncryptor())
-
-        let payload = try await sut.viewModel.prepareUpload(makeOutgoing(), context: makeContext()).get()
-
-        XCTAssertTrue(payload.isEncrypted)
-        XCTAssertEqual(payload.request.isEncrypted, true)
-        XCTAssertEqual(payload.request.encryptionMode, "E2EE")
-        XCTAssertEqual(payload.request.content, payload.content)
-        XCTAssertNotEqual(payload.content, "Salut")
-        XCTAssertEqual(payload.request.clientMessageId, "cid_prepare")
-    }
-
-    func test_prepareUpload_e2eeEncryptorThrows_refusesSessionUnavailable() async throws {
-        let sut = try await makeSUT(encryptor: FailingEncryptor())
-
-        let sealed = await sut.viewModel.prepareUpload(makeOutgoing(), context: makeContext())
-
-        guard case .failure(.sessionUnavailable) = sealed else {
-            return XCTFail("aucun repli en clair : refus attendu, reçu \(sealed)")
-        }
-    }
-
     func test_prepareUpload_sansE2EE_keepsPlaintext() async throws {
-        let sut = try await makeSUT(encryptor: SucceedingEncryptor(), encryptionMode: nil)
+        let sut = try await makeSUT(endToEnd: workingEndToEnd(), encryptionMode: nil)
 
-        let payload = try await sut.viewModel.prepareUpload(makeOutgoing(), context: makeContext()).get()
+        let payload = sut.viewModel.prepareUpload(makeOutgoing(), context: makeContext())
 
         XCTAssertFalse(payload.isEncrypted)
         XCTAssertEqual(payload.content, "Salut")
@@ -486,14 +582,10 @@ final class ConversationViewModelDirectEncryptionSendTests: XCTestCase {
     }
 }
 
-private struct FailingEncryptor: DirectMessageEncrypting {
-    func encryptMessage(_ payload: Data, for userId: String, conversationId: String) async throws -> Data {
-        throw SessionManager.SessionError.sessionUnavailable
-    }
+private func failingEndToEnd() -> MockEndToEndMessaging {
+    let failing = MockEndToEndMessaging()
+    failing.sealError = E2EESessionCipherError.malformedBundle
+    return failing
 }
 
-private struct SucceedingEncryptor: DirectMessageEncrypting {
-    func encryptMessage(_ payload: Data, for userId: String, conversationId: String) async throws -> Data {
-        Data(payload.reversed())
-    }
-}
+private func workingEndToEnd() -> MockEndToEndMessaging { MockEndToEndMessaging() }

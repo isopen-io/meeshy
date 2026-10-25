@@ -17,6 +17,7 @@ import { creditEngagedReaderView } from './posts/postViewCredit';
 import { recordEngagementBatch, recordView, type EngagementSessionInput } from './posts/postReach';
 import { recordAnonymousView } from './posts/anonymousReach';
 import { qualifiesAsReel } from '@meeshy/shared/utils/reel-composition';
+import { isPrivilegedPlatformRole } from '@meeshy/shared/utils/platform-privilege';
 import { ephemeralExpiresAt } from './posts/ephemeralPosts';
 import { isEphemeralPostType, type RepostPassage } from './posts/postVisibility';
 import {
@@ -1424,7 +1425,7 @@ export class PostService {
     if (!post) return null;
 
     const isAuthor = post.authorId === actorId;
-    const canModerate = ['BIGBOSS', 'ADMIN', 'MODERATOR'].includes(options.actorRole);
+    const canModerate = isPrivilegedPlatformRole(options.actorRole);
     if (!isAuthor && !canModerate) {
       throw new Error('FORBIDDEN');
     }

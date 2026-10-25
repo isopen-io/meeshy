@@ -14,10 +14,14 @@ import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.res.stringResource
+import me.meeshy.feature.chat.R
 import me.meeshy.sdk.link.LinkPreview
 import me.meeshy.sdk.link.LinkPreviewCache
 import me.meeshy.sdk.link.LinkPreviewOutcome
 import me.meeshy.sdk.link.LinkPreviewParser
+import me.meeshy.ui.component.bubble.BubbleAccessibilityAction
+import me.meeshy.ui.component.bubble.BubbleCallbacks
 import me.meeshy.ui.component.bubble.BubbleContent
 import me.meeshy.ui.component.bubble.DeliveryStatus
 import me.meeshy.ui.component.bubble.MessageBubble
@@ -31,6 +35,7 @@ import me.meeshy.ui.component.bubble.MessageBubble
 @Immutable
 internal class ChatMessageRowActions(
     val onReply: (messageId: String) -> Unit = {},
+    val onForward: (messageId: String) -> Unit = {},
     val onLongPress: (messageId: String) -> Unit = {},
     val onReactionClick: (messageId: String, emoji: String) -> Unit = { _, _ -> },
     val onReactionLongPress: (messageId: String) -> Unit = {},
@@ -50,6 +55,10 @@ internal class ChatMessageRowActions(
  * the reply-thread pill and the failed-send retry line. This is the single extension point for
  * everything that hangs off a message — later slices add their section here and nowhere else.
  *
+ * The swipe and the TalkBack actions of the bubble read [MessageRowOffer], the projection of the
+ * menu's law (#12760): a view-once, a notice, an unconfirmed bubble or a reader who may not write
+ * gets no reply gesture at all, and an encrypted message exposes no « Forward ».
+ *
  * It emits SIBLING layouts with no wrapping container, exactly as the list item did before the
  * split, so a `LazyColumn` item lays them out one under the other: host it as a lazy item or
  * inside a [androidx.compose.foundation.layout.Column].
@@ -65,6 +74,7 @@ internal fun ChatMessageRow(
     linkPreviewCache: LinkPreviewCache,
     actions: ChatMessageRowActions,
     audioPlayer: ChatAudioPlayer? = null,
+    canWrite: Boolean = true,
 ) {
     val uriHandler = LocalUriHandler.current
     val audioPlayback by remember(bubble.audios, audioPlayer) {
@@ -72,10 +82,41 @@ internal fun ChatMessageRow(
     }
     val linkContext = LocalContext.current
     val messageId = bubble.messageId
+    val offer = remember(bubble, canWrite) { MessageRowOffer.of(bubble, canWrite) }
+    val replyLabel = stringResource(R.string.chat_action_reply)
+    val forwardLabel = stringResource(R.string.chat_action_forward)
+    val callbacks = remember(messageId, actions, audioPlayer, uriHandler, offer, replyLabel, forwardLabel) {
+        BubbleCallbacks(
+            onLongPress = { actions.onLongPress(messageId) },
+            onReactionClick = { emoji -> actions.onReactionClick(messageId, emoji) },
+            onReactionLongPress = { actions.onReactionLongPress(messageId) },
+            onImageClick = { index -> actions.onImageClick(messageId, index) },
+            onLocationClick = { location ->
+                location.geoUri?.let { runCatching { uriHandler.openUri(it) } }
+            },
+            onAudioClick = { audio -> audioPlayer?.toggle(audio) },
+            onFileClick = { file -> actions.onFileClick(messageId, file.attachmentId) },
+            onReplyPreviewClick = { actions.onReplyPreviewClick(messageId) },
+            onFlagTap = { code -> actions.onFlagTap(messageId, code) },
+            accessibilityActions = offer.accessibilityActions.map { action ->
+                when (action) {
+                    MessageRowAction.Reply -> BubbleAccessibilityAction(replyLabel) { actions.onReply(messageId) }
+                    MessageRowAction.Forward -> BubbleAccessibilityAction(forwardLabel) { actions.onForward(messageId) }
+                }
+            },
+        )
+    }
+    val onSwipeReply: (() -> Unit)? = remember(messageId, actions, offer.canReply) {
+        if (offer.canReply) {
+            { actions.onReply(messageId) }
+        } else {
+            null
+        }
+    }
     SwipeToReplyContainer(
         isOutgoing = bubble.isOutgoing,
         accentColor = accentColor,
-        onReply = { actions.onReply(messageId) },
+        onReply = onSwipeReply,
         modifier = Modifier.onGloballyPositioned {
             actions.onBubbleFramed(messageId, it.boundsInWindow())
         },
@@ -85,18 +126,8 @@ internal fun ChatMessageRow(
             outgoingColor = accentColor,
             mentionDisplayNames = mentionDisplayNames,
             highlightTerm = highlightTerm,
-            onLongPress = { actions.onLongPress(messageId) },
-            onReactionClick = { emoji -> actions.onReactionClick(messageId, emoji) },
-            onReactionLongPress = { actions.onReactionLongPress(messageId) },
-            onImageClick = { index -> actions.onImageClick(messageId, index) },
-            onLocationClick = { location ->
-                location.geoUri?.let { runCatching { uriHandler.openUri(it) } }
-            },
-            onAudioClick = { audio -> audioPlayer?.toggle(audio) },
+            callbacks = callbacks,
             audioPlayback = audioPlayback,
-            onFileClick = { file -> actions.onFileClick(messageId, file.attachmentId) },
-            onReplyPreviewClick = { actions.onReplyPreviewClick(messageId) },
-            onFlagTap = { code -> actions.onFlagTap(messageId, code) },
         )
     }
     val linkUrl = remember(bubble.text) {

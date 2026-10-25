@@ -149,6 +149,10 @@ data class ChatUiState(
      * to the capabilities the join hardened. */
     val composerAffordances: ComposerAffordances
         get() = ComposerAttachmentPolicy.affordances(composerPermissions)
+
+    /** Whether the reader may write here — what the message law reads before offering « Répondre ». */
+    val viewerMayWrite: Boolean
+        get() = composerPermissions?.canSendMessages != false
     val isEditing: Boolean get() = editingMessageId != null
 
     /** Whether the end-to-end-encryption notice sits at the top of the list — the
@@ -216,6 +220,8 @@ data class ForwardUiState(
     val targets: List<ForwardTarget> = emptyList(),
     val sendingConversationId: String? = null,
     val sentConversationIds: Set<String> = emptySet(),
+    /** Why this message cannot leave Meeshy; non-null shows the refusal card instead of recipients. */
+    val refusal: me.meeshy.sdk.model.ForwardRefusalReason? = null,
 )
 
 internal fun BubbleContent.toPinnable(): PinnableMessage = object : PinnableMessage {

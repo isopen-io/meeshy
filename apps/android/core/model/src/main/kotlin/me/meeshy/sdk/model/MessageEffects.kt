@@ -13,6 +13,12 @@ object MessageEffectFlags {
     const val BLURRED: Long = 1L shl 1
     const val VIEW_ONCE: Long = 1L shl 2
 
+    /**
+     * Flamme-œil (#8302) : toujours avec [EPHEMERAL], sans durée — le message disparaît
+     * chez chaque lecteur quand il l'a vu puis a quitté la conversation.
+     */
+    const val EPHEMERAL_AFTER_READ: Long = 1L shl 3
+
     // Axe 2: one-shot appearance effects (bits 8-15)
     const val SHAKE: Long = 1L shl 8
     const val ZOOM: Long = 1L shl 9
@@ -27,7 +33,7 @@ object MessageEffectFlags {
     const val RAINBOW: Long = 1L shl 18
     const val SPARKLE: Long = 1L shl 19
 
-    const val LIFECYCLE_MASK: Long = EPHEMERAL or BLURRED or VIEW_ONCE
+    const val LIFECYCLE_MASK: Long = EPHEMERAL or EPHEMERAL_AFTER_READ or BLURRED or VIEW_ONCE
     const val APPEARANCE_MASK: Long = SHAKE or ZOOM or EXPLODE or CONFETTI or FIREWORKS or WAOO
     const val PERSISTENT_MASK: Long = GLOW or PULSE or RAINBOW or SPARKLE
 

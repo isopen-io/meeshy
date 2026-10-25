@@ -211,9 +211,14 @@ final class ConversationRowMenuCapabilitiesTests: XCTestCase {
         XCTAssertEqual(role, .admin)
     }
 
-    func test_settingsRole_plainMember_staysMember() {
+    func test_settingsRole_platformModeratorMember_isCreator() {
         let role = ConversationRowMenuCapabilities.settingsRole(of: makeConversation(currentUserRole: "member"), currentUser: makeUser(role: "MODERATOR"))
-        XCTAssertEqual(role, .member, "MODERATOR de plateforme n'est qu'un membre dans la conversation.")
+        XCTAssertEqual(role, .creator, "MODERATOR de plateforme membre ⇒ créateur, comme ADMIN (#11217).")
+    }
+
+    func test_settingsRole_plainMember_staysMember() {
+        let role = ConversationRowMenuCapabilities.settingsRole(of: makeConversation(currentUserRole: "member"), currentUser: makeUser(role: "AUDIT"))
+        XCTAssertEqual(role, .member, "AUDIT de plateforme n'est qu'un membre dans la conversation.")
     }
 
     func test_settingsRole_unreadableRole_fallsToMember() {

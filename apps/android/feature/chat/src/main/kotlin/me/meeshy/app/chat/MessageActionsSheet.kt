@@ -70,7 +70,6 @@ import me.meeshy.feature.chat.R
 import me.meeshy.sdk.model.PinAction
 import me.meeshy.ui.component.EmojiQuickStrip
 import me.meeshy.ui.component.bubble.BubbleContent
-import me.meeshy.ui.component.bubble.DeliveryStatus
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -113,23 +112,15 @@ internal fun MessageActionsSheet(
     onSentiment: () -> Unit = {},
     onSelect: () -> Unit = {},
     onExportCard: () -> Unit = {},
+    canWrite: Boolean = true,
 ) {
     val clipboard = LocalClipboardManager.current
     var confirmingDelete by remember { mutableStateOf(false) }
-    val ctx = MessageActionContext(
-        isDeleted = bubble.isDeleted,
-        isPending = bubble.isPending,
-        isFailed = bubble.deliveryStatus == DeliveryStatus.Failed,
-        isOutgoing = bubble.isOutgoing,
-        isTranslated = bubble.isTranslated,
-        isShowingOriginal = bubble.isShowingOriginal,
-        isStarred = bubble.isStarred,
+    val ctx = bubble.actionContext(
+        canWrite = canWrite,
         canEdit = canEdit,
         canDeleteForEveryone = canDeleteForEveryone,
         pinAction = pinAction,
-        hasOpenableFile = !bubble.isDeleted && bubble.files.isNotEmpty(),
-        isEdited = bubble.isEdited,
-        hasText = bubble.text.isNotBlank(),
         hostedEntries = hostedEntries,
     )
     // The vertical drag on the grabber is resolved by the pure [MessageOverlayDragLaw]

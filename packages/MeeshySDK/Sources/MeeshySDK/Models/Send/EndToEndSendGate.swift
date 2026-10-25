@@ -16,12 +16,30 @@ public enum EndToEndSendRefusal: String, Error, Equatable, Sendable, CaseIterabl
     case outboxUnsealable
     /// L'édition d'un message chiffré n'a pas encore d'enveloppe (#12541).
     case editUnsealable
+    /// Le message a été envoyé chiffré : il le reste à jamais, même après la
+    /// désactivation du chiffrement de sa conversation (#12881, spec § 5.2).
+    case sealedMessageUneditable
     /// La passerelle a refusé un clair (`E2EE_PLAINTEXT_REFUSED`, #11216) : la
     /// conversation est chiffrée sans que l'appareil le sût. Rien ne repart.
     case plaintextRefusedByServer
     /// La passerelle a refusé l'envoi SCELLÉ (4xx) : son enveloppe n'est pas
     /// encore acceptée (#12536). Ce n'est pas une coupure réseau.
     case envelopeRefusedByServer
+    /// Le correspondant n'a aucun appareil qui chiffre (#3707) : sa version de
+    /// Meeshy ne parle pas libsignal. Rien ne part, rien ne part en clair.
+    case recipientWithoutEncryptedDevice
+    /// Le régime de la conversation a changé depuis la rédaction
+    /// (`E2EE_REGIME_CHANGED`, #12522) : le fil relit le régime, et le geste
+    /// de l'utilisateur renvoie selon le nouveau — jamais en clair sans lui.
+    case regimeChanged
+    /// Mon compte a déjà le nombre maximal d'appareils chiffrés (#3707) : cet
+    /// appareil ne peut pas s'enrôler tant qu'un autre n'est pas retiré.
+    case deviceLimitReached
+    /// Le serveur annonce la désactivation du bout en bout d'une conversation
+    /// où cet appareil l'a vu, sans que l'utilisateur ait vu la bascule (avis
+    /// affiché dans le fil, son propre geste, sa confirmation) — #12846. Rien
+    /// ne part : ni en clair, ni scellé sous un régime que le serveur dit périmé.
+    case regimeDowngradeUnconfirmed
 }
 
 /// La loi PURE de l'envoi sous chiffrement de bout en bout (#11379, directives

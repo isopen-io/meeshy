@@ -30,6 +30,7 @@ import {
   isMessageEditedEvent,
 } from './realtime-message-mutations';
 import { applyMessageHiddenForMe, isMessageHiddenForMeEvent } from './realtime-message-hidden';
+import { applyViewerMembershipEnded, viewerMembershipEndedOf } from './realtime-membership-ended';
 import { applyMessagePinnedEvent, applyMessageUnpinnedEvent, isMessagePinnedEvent, isMessageUnpinnedEvent } from './realtime-message-pin';
 import { applyMessageReactionUpdate, isMessageReactionUpdate } from './realtime-message-reactions';
 import {
@@ -478,6 +479,12 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   /** `message:hidden-for-me` (#10587) — masqué pour moi sur un autre appareil : la rangée quitte le fil. Règle : `realtime-message-hidden.ts`. */
   const onMessageHiddenForMe = (payload: unknown): void => {
     if (isMessageHiddenForMeEvent(payload)) applyMessageHiddenForMe(deps.queryClient, payload, deps.viewerId());
+  };
+
+  /** `conversation:participant-left` / `-banned` qui nomment le lecteur (#11415) : il n'y est plus membre. Règle : `realtime-membership-ended.ts`. */
+  const onParticipantDeparture = (payload: unknown): void => {
+    const ended = viewerMembershipEndedOf(payload, deps.viewerId());
+    if (ended !== null) applyViewerMembershipEnded(deps.queryClient, ended);
   };
 
   /** `message:cited-post-withdrawn` (#7969) — la story citée est retirée : la carte passe « Story indisponible ». Règle : `realtime-cited-post.ts`. */
@@ -1008,6 +1015,8 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_PINNED, onMessagePinned);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_UNPINNED, onMessageUnpinned);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_HIDDEN_FOR_ME, onMessageHiddenForMe);
+  socket.on<unknown>(SERVER_EVENTS.CONVERSATION_PARTICIPANT_LEFT, onParticipantDeparture);
+  socket.on<unknown>(SERVER_EVENTS.CONVERSATION_PARTICIPANT_BANNED, onParticipantDeparture);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_CITED_POST_WITHDRAWN, onCitedPostWithdrawn);
   socket.on<unknown>(SERVER_EVENTS.READ_STATUS_UPDATED, onReadStatusUpdated);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_CONSUMED, onMessageConsumed);
@@ -1099,6 +1108,8 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_PINNED, onMessagePinned);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_UNPINNED, onMessageUnpinned);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_HIDDEN_FOR_ME, onMessageHiddenForMe);
+      socket.off<unknown>(SERVER_EVENTS.CONVERSATION_PARTICIPANT_LEFT, onParticipantDeparture);
+      socket.off<unknown>(SERVER_EVENTS.CONVERSATION_PARTICIPANT_BANNED, onParticipantDeparture);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_CITED_POST_WITHDRAWN, onCitedPostWithdrawn);
       socket.off<unknown>(SERVER_EVENTS.READ_STATUS_UPDATED, onReadStatusUpdated);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_CONSUMED, onMessageConsumed);

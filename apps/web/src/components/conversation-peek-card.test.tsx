@@ -6,7 +6,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 
 import type { ConversationReadingMode } from '@meeshy/shared/types/reading-modes';
 
-import { accentOf } from '@/lib/accent';
+import { accentOf, personalBubbleVars } from '@/lib/accent';
 import { messagesQueryKey } from '@/lib/api/messages';
 import type { Conversation, Message } from '@/lib/api/types';
 import { createHttpTransport } from '@/lib/api/http';
@@ -105,6 +105,7 @@ function mount(options: {
   readonly served?: readonly Message[];
   readonly fails?: boolean;
   readonly pages?: number;
+  readonly seed?: (client: QueryClient) => void;
 }) {
   const requests: string[] = [];
   const fetchImpl = (async (input: RequestInfo | URL) => {
@@ -126,6 +127,7 @@ function mount(options: {
       pageParams: Array.from({ length: options.pages ?? 1 }, (_, index) => (index === 0 ? undefined : `cursor-${index - 1}`)),
     }, options.updatedAt === undefined ? undefined : { updatedAt: options.updatedAt });
   }
+  options.seed?.(client);
   const store = createReadingModeStore(null);
   if (options.sticky !== undefined) store.setPreference(readingModeScopeOf({ id: VIEWER }), conversation.id, options.sticky);
   const opened: string[] = [];
@@ -152,6 +154,12 @@ function mount(options: {
   });
   return { client, opened, requests };
 }
+
+const settle = async (): Promise<void> => {
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 30));
+  });
+};
 
 const card = (): HTMLElement => {
   const node = container.querySelector<HTMLElement>('[data-peek-card]');
@@ -322,5 +330,140 @@ describe('conversation-peek.css — le fondu du haut', () => {
       if (client) Object.defineProperty(proto, 'clientHeight', client);
       else Reflect.deleteProperty(proto, 'clientHeight');
     }
+  });
+});
+
+describe('ConversationPeekCard — le fond et la peau de la conversation (#12633)', () => {
+  const chosen = (background: unknown, accent: string | null = null) => ({ userPreferences: [{ appearance: { v: 1, background, accent, animate: false } }] }) as Partial<Conversation>;
+  const backdrop = (): HTMLElement | null => card().querySelector<HTMLElement>(':scope > .thread-backdrop');
+
+  test('une conversation Signature n’ajoute rien : ni fond peint, ni peau personnelle', async () => {
+    mount({ messages: THREE, sticky: 'bubbles' });
+    await settle();
+    expect(backdrop()).toBeNull();
+    expect(card().hasAttribute('data-peek-backdrop')).toBe(false);
+    expect(card().style.getPropertyValue('--bubble-mine-personal')).toBe('');
+  });
+
+  test('une couleur unie se peint sous le corps de la carte, comme dans le fil', async () => {
+    mount({ messages: THREE, conversation: conversationOf(chosen({ kind: 'solid', color: 'azur' })) });
+    await settle();
+    expect(card().getAttribute('data-peek-backdrop')).toBe('solid');
+    expect(backdrop()?.dataset['appearance']).toBe('solid');
+    expect(backdrop()?.style.backgroundColor).not.toBe('');
+  });
+
+  test('un modèle de pack se peint depuis le catalogue embarqué', async () => {
+    mount({ messages: THREE, conversation: conversationOf(chosen({ kind: 'design', pack: 'essentiels', design: 'chevrons' })) });
+    for (let i = 0; i < 20 && backdrop()?.dataset['appearance'] === undefined; i += 1) await settle();
+    expect(card().getAttribute('data-peek-backdrop')).toBe('design');
+    expect(backdrop()?.dataset['appearance']).toBe('design');
+    expect(backdrop()?.style.backgroundImage).toContain('data:image/svg+xml');
+  });
+
+  test('une photo déjà en cache se peint sans aucune requête de plus', async () => {
+    const id = 'b'.repeat(24);
+    const conversation = conversationOf(chosen({ kind: 'photo', attachmentId: id, veil: 0.3, blur: 4 }));
+    const OriginalImage = globalThis.Image;
+    class LoadedImage {
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      set src(_value: string) {
+        setTimeout(() => this.onload?.(), 0);
+      }
+    }
+    (globalThis as { Image: unknown }).Image = LoadedImage;
+    try {
+      const { requests } = mount({ messages: THREE, conversation, seed: (client) => client.setQueryData(['appearance', 'photo', conversation.id, id], { thumb: null, full: 'https://cdn.x/fond.jpg' }) });
+      for (let i = 0; i < 10 && backdrop()?.dataset['appearance'] === undefined; i += 1) await settle();
+      expect(card().getAttribute('data-peek-backdrop')).toBe('photo');
+      expect(backdrop()?.dataset['appearance']).toBe('photo');
+      expect(backdrop()?.innerHTML).toContain('cdn.x/fond.jpg');
+      expect(requests).toEqual([]);
+    } finally {
+      (globalThis as { Image: unknown }).Image = OriginalImage;
+    }
+  });
+
+  test('un accent personnel peint les bulles envoyées de l’aperçu comme celles du fil', async () => {
+    const conversation = conversationOf(chosen({ kind: 'signature' }, 'azur'));
+    const skin = personalBubbleVars(conversation) as Record<string, string>;
+    mount({ messages: THREE, conversation, sticky: 'bubbles' });
+    await settle();
+    expect(skin['--bubble-mine-personal']).toBeDefined();
+    expect(card().style.getPropertyValue('--bubble-mine-personal')).toBe(skin['--bubble-mine-personal'] ?? '');
+    expect(card().style.getPropertyValue('--bubble-mine-personal-ink')).toBe(skin['--bubble-mine-personal-ink'] ?? '');
+    expect(card().style.getPropertyValue('--bubble-mine-personal-meta')).toBe(skin['--bubble-mine-personal-meta'] ?? '');
+    expect(backdrop()).toBeNull();
+  });
+});
+
+describe('conversation-peek.css — le fond sous la carte (#12633)', () => {
+  const CSS = readFileSync(new URL('../styles/conversation-peek.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+  const rule = (selector: string): string => {
+    const at = CSS.indexOf(`${selector} {`);
+    if (at < 0) throw new Error(`règle absente : ${selector}`);
+    return CSS.slice(at, CSS.indexOf('}', at));
+  };
+
+  test('la carte isole sa pile : le fond reste derrière le contenu, devant la surface', () => {
+    expect(rule('.conversation-peek-card')).toContain('isolation: isolate');
+    const layer = rule('.conversation-peek-card > .thread-backdrop');
+    expect(layer).toContain('position: absolute');
+    expect(layer).toContain('z-index: -1');
+    expect(layer).toContain('pointer-events: none');
+  });
+
+  test('tant que le fond choisi n’est pas prêt, la carte garde sa propre surface', () => {
+    expect(rule('.conversation-peek-card > .thread-backdrop:not([data-appearance])')).toContain('display: none');
+  });
+
+  test('un modèle ancré en bas à droite se retourne en RTL, sans le chunk du fil', () => {
+    expect(rule("[dir='rtl'] .conversation-peek-card > .thread-backdrop[data-flip-rtl]")).toContain('transform: scaleX(-1)');
+  });
+
+  test('sur un fond peint, l’en-tête garde la surface opaque de la carte', () => {
+    expect(rule('.conversation-peek-card[data-peek-backdrop] .conversation-peek-header')).toContain('background-color: var(--color-ios-card);');
+  });
+
+  test('l’en-tête tient AA (4,5:1) sur toute photo, en clair et en sombre', () => {
+    const TOKENS = readFileSync(new URL('../../../../packages/design-tokens/ios.css', import.meta.url), 'utf8');
+    const light = TOKENS.indexOf(':root.light');
+    const tokenOf = (name: string, scheme: 'dark' | 'light'): string => {
+      const scope = scheme === 'light' ? TOKENS.slice(light) : TOKENS.slice(0, light);
+      const found = new RegExp(`--${name}: ([^;]+);`).exec(scope);
+      if (found?.[1] === undefined) throw new Error(`jeton absent : ${name} (${scheme})`);
+      return found[1];
+    };
+    type Rgb = readonly [number, number, number];
+    const hex = (value: string): Rgb => {
+      const channel = (offset: number): number => Number.parseInt(value.replace('#', '').slice(offset, offset + 2), 16) / 255;
+      return [channel(0), channel(2), channel(4)];
+    };
+    const over = (top: Rgb, alpha: number, bottom: Rgb): Rgb => {
+      const blend = (index: 0 | 1 | 2): number => top[index] * alpha + bottom[index] * (1 - alpha);
+      return [blend(0), blend(1), blend(2)];
+    };
+    const ink = (value: string, surface: Rgb): Rgb => {
+      const mixed = /color-mix\(in srgb, (#[0-9a-f]{6}) (\d+)%, transparent\)/i.exec(value);
+      return mixed?.[1] === undefined ? hex(value) : over(hex(mixed[1]), Number(mixed[2]) / 100, surface);
+    };
+    const luminance = (rgb: Rgb): number => {
+      const linear = (c: number): number => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+      return 0.2126 * linear(rgb[0]) + 0.7152 * linear(rgb[1]) + 0.0722 * linear(rgb[2]);
+    };
+    const contrast = (a: Rgb, b: Rgb): number => {
+      const [high, low] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+      return ((high ?? 0) + 0.05) / ((low ?? 0) + 0.05);
+    };
+    const header = rule('.conversation-peek-card[data-peek-backdrop] .conversation-peek-header');
+    const opacity = header.includes('background-color: var(--color-ios-card);') ? 1 : 0;
+    const measured = (['dark', 'light'] as const).flatMap((scheme) =>
+      [hex('#000000'), hex('#ffffff')].flatMap((photo) => {
+        const surface = over(hex(tokenOf('ios-surface-card', scheme)), opacity, photo);
+        return [contrast(ink(tokenOf('ios-ink', scheme), surface), surface), contrast(ink(tokenOf('ios-ink-3', scheme), surface), surface)];
+      }),
+    );
+    expect(Math.min(...measured)).toBeGreaterThanOrEqual(4.5);
   });
 });

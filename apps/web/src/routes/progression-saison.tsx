@@ -118,7 +118,7 @@ export function ProgressionSaisonPage({ focus, moment }: { readonly focus: numbe
       titre={gameText('game.season.title')}
       teinte={GAME_BRAND}
       compte={(p) => {
-        const game = (p as EngagementWithGame).game;
+        const game = p.game;
         const shown = seasonShown(focus, game, { data: archive.data, error: null }, moment ?? localMoment(), schedule);
         return seasonHeaderCount(shown, game?.season);
       }}

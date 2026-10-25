@@ -60,6 +60,8 @@ public struct APIRejection: Error, Sendable, Equatable {
     public let resetAt: Date?
     /// Le plafond atteint d'une limite quotidienne — `nil` pour tout autre refus.
     public let limit: Int?
+    /// L'écart Sesame d'un 409 `E2EE_DEVICES_MISMATCH` (#3707) — `nil` pour tout autre refus.
+    public let e2eeMismatch: E2EEDevicesMismatch?
 
     public init(
         statusCode: Int,
@@ -70,7 +72,8 @@ public struct APIRejection: Error, Sendable, Equatable {
         violations: [Violation] = [],
         emailOwner: EmailOwner? = nil,
         resetAt: Date? = nil,
-        limit: Int? = nil
+        limit: Int? = nil,
+        e2eeMismatch: E2EEDevicesMismatch? = nil
     ) {
         self.statusCode = statusCode
         self.code = code
@@ -81,6 +84,7 @@ public struct APIRejection: Error, Sendable, Equatable {
         self.emailOwner = emailOwner
         self.resetAt = resetAt
         self.limit = limit
+        self.e2eeMismatch = e2eeMismatch
     }
 
     /// La phrase à poser SOUS `field`, en préférant la violation qui le nomme.
@@ -123,9 +127,10 @@ struct APIRejectionEnvelope: Decodable {
     let suggestions: [String]?
     let violations: [APIRejection.Violation]?
     let emailOwner: APIRejection.EmailOwner?
+    let e2eeMismatch: E2EEDevicesMismatch?
 
     private enum CodingKeys: String, CodingKey {
-        case error, message, code, field, suggestions, violations, emailOwner
+        case error, message, code, field, suggestions, violations, emailOwner, missing, extra, stale
     }
 
     init(from decoder: Decoder) throws {
@@ -140,6 +145,17 @@ struct APIRejectionEnvelope: Decodable {
         // transport lit l'enveloppe en `try?`, et `EMAIL_TAKEN` redeviendrait
         // une erreur serveur générique.
         emailOwner = try? container.decodeIfPresent(APIRejection.EmailOwner.self, forKey: .emailOwner)
+        e2eeMismatch = Self.mismatch(in: container)
+    }
+
+    /// L'écart Sesame est étalé à la RACINE par `sendError(..., { details })` :
+    /// `{ code, missing, extra, stale }`. Il n'existe que si les trois listes
+    /// se décodent — un écart partiel serait résolu à tort.
+    private static func mismatch(in container: KeyedDecodingContainer<CodingKeys>) -> E2EEDevicesMismatch? {
+        guard let missing = try? container.decode([E2EEDeviceRef].self, forKey: .missing),
+              let extra = try? container.decode([E2EEDeviceRef].self, forKey: .extra),
+              let stale = try? container.decode([E2EEDeviceRef].self, forKey: .stale) else { return nil }
+        return E2EEDevicesMismatch(missing: missing, extra: extra, stale: stale)
     }
 
     func rejection(statusCode: Int, fallbackMessage: String) -> APIRejection {
@@ -150,7 +166,8 @@ struct APIRejectionEnvelope: Decodable {
             message: message ?? error ?? fallbackMessage,
             suggestions: suggestions ?? [],
             violations: violations ?? [],
-            emailOwner: emailOwner
+            emailOwner: emailOwner,
+            e2eeMismatch: e2eeMismatch
         )
     }
 }

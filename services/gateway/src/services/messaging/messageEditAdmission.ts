@@ -45,6 +45,7 @@
 
 import { isDeclaredMinor } from '@meeshy/shared/utils/age';
 import { GLOBAL_CONVERSATION_TYPE } from '@meeshy/shared/utils/global-minor-restriction';
+import { isPrivilegedPlatformRole } from '@meeshy/shared/utils/platform-privilege';
 import { captureNoticeOf } from './captureNoticeVisibility.js';
 import {
   isConversationClosed,
@@ -55,6 +56,7 @@ import {
   E2EE_PLAINTEXT_REFUSAL_MESSAGE,
   E2EE_PLAINTEXT_REFUSED,
   isEndToEndMode,
+  messageRowSealedFromServer,
 } from './e2eePlaintextAdmission.js';
 
 /**
@@ -73,16 +75,6 @@ export type ConversationEditStateRow = ConversationTerminalStateRow & {
    */
   readonly encryptionMode: string | null | undefined;
 };
-
-/**
- * Les rôles GLOBAUX (`User.role`, en MAJUSCULES) qui ouvrent une porte de
- * modération sur le message d'autrui.
- *
- * Exporté pour `admitMessageDelete`, qui doit répondre EXACTEMENT la même chose
- * à « ce rôle global est-il privilégié ? ». Deux ensembles écrits séparément
- * dériveraient — c'est précisément la maladie que ces deux unités soignent.
- */
-export const PRIVILEGED_GLOBAL_ROLES = new Set(['MODERATOR', 'ADMIN', 'BIGBOSS']);
 
 /** 24 heures. La fenêtre ne vaut QUE pour l'auteur (voir `admitMessageEdit`). */
 export const MESSAGE_EDIT_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -188,6 +180,13 @@ export interface MessageEditAdmissionParams {
     /** Le type et la métadonnée — REQUIS : un avis de capture ne s'édite pas par celui qui a capturé (#9641). */
     messageType: string | null | undefined;
     metadata: unknown;
+    /**
+     * #12881 — ce que la LIGNE porte, EXIGÉ comme `conversation` : un message
+     * scellé sous e2ee reste chiffré après une désactivation, et le régime
+     * courant de sa conversation ne le dit plus.
+     */
+    isEncrypted: boolean | null | undefined;
+    encryptionMode: string | null | undefined;
   };
   /** Injectable pour les tests ; `Date.now()` en production. */
   now?: number;
@@ -273,6 +272,7 @@ export async function admitMessageEdit(
   if (!decision.admitted) return decision;
   if (isConversationClosed(params.message.conversation)) return REFUSE('conversation-closed');
   if (isEndToEndMode(params.message.conversation?.encryptionMode)) return REFUSE('end-to-end-encrypted');
+  if (messageRowSealedFromServer(params.message)) return REFUSE('end-to-end-encrypted');
   if (await editorIsMinorInGlobal(params)) return REFUSE('minor-global');
 
   return decision;
@@ -336,7 +336,7 @@ async function decideMessageEdit(
     if (!membership) return REFUSE('not-a-member');
 
     const role = membership.globalRole;
-    if (!role || !PRIVILEGED_GLOBAL_ROLES.has(role)) return REFUSE('not-author');
+    if (!isPrivilegedPlatformRole(role)) return REFUSE('not-author');
 
     return { admitted: true, asModerator: true, windowBypassed: false };
   }
@@ -347,7 +347,7 @@ async function decideMessageEdit(
   }
 
   const role = await readGlobalRole(prisma, editorUserId, onError);
-  if (!role || !PRIVILEGED_GLOBAL_ROLES.has(role)) return REFUSE('edit-window-expired');
+  if (!isPrivilegedPlatformRole(role)) return REFUSE('edit-window-expired');
 
   return { admitted: true, asModerator: false, windowBypassed: true };
 }

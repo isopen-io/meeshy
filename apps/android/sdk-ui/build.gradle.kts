@@ -43,6 +43,8 @@ dependencies {
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
+    // lot: mesures-de-fenetre-et-largeurs-de-lecture — mesure de la fenetre et posture de pliable
+    implementation(libs.androidx.window)
     implementation(platform(libs.compose.bom))
     api(libs.bundles.compose)
     implementation(libs.coil.compose)
