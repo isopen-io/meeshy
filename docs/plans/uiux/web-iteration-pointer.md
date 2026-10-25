@@ -40,7 +40,7 @@ normal.
 |---|---|---|---|---|
 | **74w** | 2026-10-21 | `claude/practical-fermat-to2xb3` | [#11384](https://github.com/isopen-io/meeshy/pull/11384) → `dev` | ✅ mergé |
 | **75w** | 2026-10-24 | `claude/practical-fermat-o9iiqc` | [#12599](https://github.com/isopen-io/meeshy/pull/12599) → `dev` | ✅ mergé |
-| **76w** | 2026-10-25 | `claude/practical-fermat-1peq83` | (à ouvrir) → `dev` | ⏳ CI |
+| **76w** | 2026-10-25 | `claude/practical-fermat-1peq83` | [#12925](https://github.com/isopen-io/meeshy/pull/12925) → `dev` | ⏳ CI |
 
 **76w** — cohérence du thème : deux littéraux que le gate d'harmonie (#8879) prenait
 pour du chrome n'en sont pas — le code QR du lien de parrainage
