@@ -28,7 +28,8 @@ public enum EndToEndMessageStanding: Equatable, Sendable {
 /// du serveur n'y est servie (`EndToEndRegime.admitsWireTranslations`).
 ///
 /// Seul un avis SYSTÈME STRUCTURÉ est exempté — son texte se compose chez le
-/// lecteur depuis ses métadonnées. Se déclarer `system`, `agent` ou porter une
+/// lecteur depuis ses métadonnées (appel, arrivée, capture, arrivées, bascule
+/// du chiffrement, #12917). Se déclarer `system`, `agent` ou porter une
 /// métadonnée d'avis sur un message utilisateur n'exempte de rien : ce sont des
 /// champs que le serveur écrit.
 ///
@@ -89,6 +90,7 @@ public enum EndToEndPlaintextLaw {
                 || message.joinNotice != nil
                 || message.captureNotice != nil
                 || message.arrivalsNotice != nil
+                || message.encryptionSwitchNotice?.composesItsText == true
         )
     }
 

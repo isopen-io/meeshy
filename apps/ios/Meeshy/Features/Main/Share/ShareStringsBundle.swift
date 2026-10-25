@@ -30,3 +30,14 @@ extension Bundle {
         InterfaceLanguageResolver.bundle(for: app, store: store, devicePreferred: devicePreferred)
     }
 }
+
+extension Locale {
+    /// La locale du catalogue de partage : celle de l'`.lproj` que la langue
+    /// publiée par l'app a élu (`Bundle.shareCatalog`), sinon celle de
+    /// l'appareil — pour qu'un nombre formaté parle la langue des mots qui
+    /// l'entourent.
+    nonisolated static func shareCatalog(_ bundle: Bundle = .meeshyShare) -> Locale {
+        guard bundle.bundleURL.pathExtension == "lproj" else { return .current }
+        return Locale(identifier: bundle.bundleURL.deletingPathExtension().lastPathComponent)
+    }
+}

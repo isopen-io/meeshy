@@ -353,6 +353,20 @@ jobs:
           node scripts/check-interface-language-bootstrap.mjs
           node scripts/check-docker-context.mjs
           node scripts/check-git-tracking.mjs
+          # #12939 — découvrabilité par un agent IA, mesurée par l'EFFET :
+          # `public/llms.txt` cite le spec OpenAPI, `.well-known/openapi` le
+          # pointe, et `robots.txt` nomme les crawlers IA. Lit des fichiers
+          # statiques de `public/`, aucun navigateur : sa place est ici.
+          node scripts/check-llms-discovery.mjs
+          # #12938 — la vitrine publique (accueil `/` + landings) reste
+          # indexable (Google) et citable (moteurs IA) : balises SEO + JSON-LD
+          # Organization/WebApplication émis par `landingHead` /
+          # `landingStructuredData`. Garde STATIQUE sur la source, sans build ni
+          # navigateur : sa place est ici. `--self-test` d'abord — il prouve que
+          # la garde refuse une vitrine amputée (sinon elle serait verte par
+          # omission).
+          node scripts/check-seo-vitrine.mjs --self-test
+          node scripts/check-seo-vitrine.mjs
 
       # #3679 — cliquet sur l'usage explicite de `any`, mesuré par motif
       # plutôt que par AST : aucun des trois paquets ne demande

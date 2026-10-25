@@ -20,9 +20,12 @@ import { TUS_CHECKPOINT_MAX_AGE_MS, claimTusLease, idbTusCheckpointStore, tusFin
  * là au lieu de recréer une session. Une panne réseau ou une annulation GARDE le
  * checkpoint, un refus définitif de la passerelle le PURGE.
  *
- * Ne CRÉE de `PostMedia` que pour un contexte `{post, story, status, comment}`
- * — `isPostMediaUploadContext`, `packages/shared/types/attachment.ts:477-480` —
- * jamais un `MessageAttachment` (`lib/api/attachments.ts`, route DISTINCTE).
+ * `uploadPostMedia` ne CRÉE de `PostMedia` que pour un contexte `{post, story,
+ * status, comment}` — `isPostMediaUploadContext`,
+ * `packages/shared/types/attachment.ts`. `uploadMessageAttachment` (#12974)
+ * ouvre la même session SANS contexte : la passerelle crée un
+ * `MessageAttachment` — la voie des fichiers trop lourds pour la route directe
+ * (`lib/api/attachments.ts`, `SMALL_FILE_THRESHOLD`).
  *
  * **Rend un `ApiResult`, et ne REJETTE JAMAIS** — réseau coupé, annulation,
  * délai dépassé, nom de fichier non ASCII : chaque panne est une VALEUR. Un
@@ -62,7 +65,17 @@ export type PostMediaUploadParams = PostMediaUploadDeps & {
   readonly chunkSize?: number;
   readonly checkpoints?: TusCheckpointStore | null;
   readonly now?: () => number;
+  /** Injectée par les témoins ; une vraie attente en production (débit 429). */
+  readonly sleep?: (ms: number) => Promise<void>;
 };
+
+/** La reprise d'une PIÈCE JOINTE de message (#12974) — la même session TUS,
+ * SANS contexte de publication : la passerelle crée alors un
+ * `MessageAttachment` (`tus-handler.ts`, branche hors `isPostMediaUploadContext`),
+ * comme `TusUploadManager.swift` pour l'outbox iOS. */
+export type MessageAttachmentUploadParams = Omit<PostMediaUploadParams, 'uploadContext'>;
+
+type TusParams = MessageAttachmentUploadParams & { readonly uploadContext?: PostMediaUploadContext };
 
 /**
  * LA TRANCHE WEB — 2 Mio, pas les 10 Mo de `TUS_CHUNK_SIZE` (calibrés pour
@@ -81,6 +94,22 @@ const TUS_RESUMABLE = '1.0.0';
 /** Réalignements sur 409 avant d'abandonner — une boucle BORNÉE : un serveur
  * dont l'offset ne progresse jamais rend la main plutôt que de tourner. */
 const MAX_OFFSET_REALIGNMENTS = 8;
+/** LE DÉBIT N'ARRÊTE PAS UNE MONTÉE (#12974) — le seau global de la passerelle
+ * (300 requêtes/minute par adresse) se remplit en moins d'une minute sur un
+ * partage de plusieurs gigaoctets. Une tranche refusée en 429 attend
+ * `Retry-After` (borné) puis repart du même offset ; au-delà de ces attentes,
+ * le 429 remonte et le checkpoint reste pour la reprise. */
+const MAX_THROTTLE_WAITS = 30;
+const MAX_THROTTLE_WAIT_MS = 60_000;
+const DEFAULT_THROTTLE_WAIT_MS = 5_000;
+
+function throttleWaitMs(response: Response): number {
+  const seconds = Number(response.headers.get('Retry-After'));
+  const wanted = Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : DEFAULT_THROTTLE_WAIT_MS;
+  return Math.min(MAX_THROTTLE_WAIT_MS, wanted);
+}
+
+const realSleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 function failure(status: number, error: string, code?: string): ApiFailure {
   return { ok: false, status, error, ...(code !== undefined ? { code } : {}) };
@@ -107,7 +136,7 @@ type Exchange = { readonly kind: 'response'; readonly response: Response } | { r
 async function exchange(
   url: string,
   init: RequestInit,
-  params: Pick<PostMediaUploadParams, 'signal' | 'fetchImpl'>,
+  params: Pick<TusParams, 'signal' | 'fetchImpl'>,
 ): Promise<Exchange> {
   const deadline = timeoutSignal(TUS_REQUEST_TIMEOUT_MS);
   const signal = params.signal === undefined ? deadline : anySignal([params.signal, deadline]);
@@ -147,11 +176,11 @@ function resolvedLocation(location: string, base: string): string {
   return `${base}${location.startsWith('/') ? '' : '/'}${location}`;
 }
 
-async function createUpload(params: PostMediaUploadParams, credential: Credential): Promise<string | ApiFailure> {
+async function createUpload(params: TusParams, credential: Credential): Promise<string | ApiFailure> {
   const entries: Array<readonly [string, string]> = [
     ['filename', params.file.name],
     ['filetype', params.file.type !== '' ? params.file.type : 'application/octet-stream'],
-    ['uploadcontext', params.uploadContext],
+    ...(params.uploadContext !== undefined ? [['uploadcontext', params.uploadContext] as const] : []),
     ...(params.thumbHash !== undefined ? [['thumbhash', params.thumbHash] as const] : []),
   ];
   const created = await exchange(
@@ -217,8 +246,29 @@ export async function uploadPostMedia(params: PostMediaUploadParams): Promise<Ap
     return failure(403, 'Post media upload requires an identifiable registered account', 'POST_MEDIA_REQUIRES_ACCOUNT');
   }
 
+  return resumableUpload(params, credential);
+}
+
+let fixtureAttachments = 0;
+
+export async function uploadMessageAttachment(params: MessageAttachmentUploadParams): Promise<ApiResult<{ readonly attachmentId: string }>> {
+  if (params.file.size === 0) return failure(400, 'Fichier vide', 'EMPTY_FILE');
+  if (__FIXTURES__ && params.source === 'fixtures') {
+    fixtureAttachments += 1;
+    params.onProgress?.(1);
+    return { ok: true, data: { attachmentId: `fx-att-tus-${fixtureAttachments}` } };
+  }
+  const credential = params.credential();
+  if (credential === null) return failure(401, 'Authentification requise', 'UNAUTHORIZED');
+  const result = await resumableUpload(params, credential);
+  return result.ok ? { ok: true, data: { attachmentId: result.data.postMediaId } } : result;
+}
+
+async function resumableUpload(params: TusParams, credential: Credential): Promise<ApiResult<PostMediaUploadResult>> {
   const store = params.checkpoints === undefined ? idbTusCheckpointStore() : params.checkpoints;
-  const fingerprint = tusFingerprint(params);
+  /* Une pièce jointe et un média de publication du MÊME fichier ne se reprennent jamais l'un l'autre :
+     la session TUS a créé une ligne de l'une OU de l'autre table. */
+  const fingerprint = tusFingerprint({ ...params, uploadContext: params.uploadContext ?? 'message' });
   const release = store === null ? null : claimTusLease(fingerprint);
   const checkpoints = release === null ? null : store;
   try {
@@ -249,7 +299,7 @@ type Session = { readonly location: string; readonly offset: number };
  * de la passerelle fait foi. `null` : repartir d'une session neuve (checkpoint périmé, d'une autre taille, déjà
  * entièrement envoyé, ou session oubliée du serveur). Un `HEAD` en panne rend la panne et GARDE le checkpoint. */
 async function resumedSession(
-  params: PostMediaUploadParams,
+  params: TusParams,
   credential: Credential,
   context: CheckpointContext & { readonly checkpoints: TusCheckpointStore },
 ): Promise<Session | ApiFailure | null> {
@@ -278,7 +328,7 @@ async function resumedSession(
 }
 
 async function transmit(
-  params: PostMediaUploadParams,
+  params: TusParams,
   credential: Credential,
   context: CheckpointContext,
 ): Promise<ApiResult<PostMediaUploadResult>> {
@@ -297,6 +347,7 @@ async function transmit(
   let offset = resumed === null ? 0 : resumed.offset;
   if (resumed === null) await remember(location, 0);
   let realignments = 0;
+  let throttleWaits = 0;
   let restarted = false;
 
   while (offset < total) {
@@ -331,6 +382,12 @@ async function transmit(
       }
       offset = next;
       await remember(location, offset);
+      continue;
+    }
+
+    if (response.status === 429 && throttleWaits < MAX_THROTTLE_WAITS) {
+      throttleWaits += 1;
+      await (params.sleep ?? realSleep)(throttleWaitMs(response));
       continue;
     }
 
