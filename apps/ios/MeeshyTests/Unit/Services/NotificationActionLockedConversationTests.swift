@@ -51,6 +51,9 @@ final class NotificationActionLockedConversationTests: XCTestCase {
         var opened = 0
         var markedRead: [String] = []
         var removedBanners: [String] = []
+        var externalURLs: [URL] = []
+        var deepLinks: [URL] = []
+        var contacts: [NotificationContactCard] = []
     }
 
     private struct SUT {
@@ -91,6 +94,9 @@ final class NotificationActionLockedConversationTests: XCTestCase {
             removeDeliveredForPost: { _ in },
             removeDeliveredForNotificationIds: { _ in },
             prepareReplyQueue: {},
+            openExternalURL: { ledger.externalURLs.append($0) },
+            openDeepLink: { ledger.deepLinks.append($0) },
+            presentNewContact: { ledger.contacts.append($0) },
             isConversationLocked: { lockedConversationIds.contains($0) }
         )
         return SUT(
@@ -161,6 +167,68 @@ final class NotificationActionLockedConversationTests: XCTestCase {
         )
 
         XCTAssertEqual(sut.queue.enqueued.map(\.conversationId), ["ouverte"])
+        XCTAssertEqual(sut.ledger.opened, 0)
+    }
+
+    // MARK: - Les gestes du détail (#8858) sous PIN
+
+    /// Une bannière NON scellée (extension tuée avant sa catégorie, bannière
+    /// livrée avant le verrou) porte encore « Rejoindre », « Ajouter le
+    /// contact » ou « Ouvrir dans Plans ». Sur une conversation verrouillée,
+    /// aucun ne suit son lien : l'app s'ouvre, que le PIN garde.
+    func test_joinInvite_onALockedConversation_followsNoLink_andOpensTheApp() async {
+        let sut = makeSUT(lockedConversationIds: ["coffre"])
+        let invite = payload().merging([
+            "inviteUrl": "https://meeshy.me/join/abc123", "inviteConversationTitle": "Les voisins",
+        ]) { _, new in new }
+
+        await sut.handler.handle(
+            actionIdentifier: MeeshyNotificationAction.joinInvite.rawValue, userInfo: invite, replyText: nil
+        )
+
+        XCTAssertTrue(sut.ledger.deepLinks.isEmpty, "aucun lien d'invitation suivi sans PIN")
+        XCTAssertEqual(sut.ledger.opened, 1)
+    }
+
+    func test_addContact_onALockedConversation_presentsNoCard_andOpensTheApp() async {
+        let sut = makeSUT(lockedConversationIds: ["coffre"])
+        let contact = payload().merging([
+            "contactName": "Jean Dupont", "contactPhone": "+33612345678", "contactEmail": "jean@exemple.fr",
+        ]) { _, new in new }
+
+        await sut.handler.handle(
+            actionIdentifier: MeeshyNotificationAction.addContact.rawValue, userInfo: contact, replyText: nil
+        )
+
+        XCTAssertTrue(sut.ledger.contacts.isEmpty)
+        XCTAssertEqual(sut.ledger.opened, 1)
+    }
+
+    func test_openInMaps_onALockedConversation_opensNoMap_andOpensTheApp() async {
+        let sut = makeSUT(lockedConversationIds: ["coffre"])
+        let place = payload().merging([
+            "locationLat": "48.8584", "locationLon": "2.2945", "locationName": "Tour Eiffel",
+        ]) { _, new in new }
+
+        await sut.handler.handle(
+            actionIdentifier: MeeshyNotificationAction.openInMaps.rawValue, userInfo: place, replyText: nil
+        )
+
+        XCTAssertTrue(sut.ledger.externalURLs.isEmpty)
+        XCTAssertEqual(sut.ledger.opened, 1)
+    }
+
+    func test_joinInvite_onAnOpenConversation_stillFollowsTheInvitation() async {
+        let sut = makeSUT(lockedConversationIds: ["coffre"])
+        let invite = payload(conversationId: "ouverte").merging([
+            "inviteUrl": "https://meeshy.me/join/abc123",
+        ]) { _, new in new }
+
+        await sut.handler.handle(
+            actionIdentifier: MeeshyNotificationAction.joinInvite.rawValue, userInfo: invite, replyText: nil
+        )
+
+        XCTAssertEqual(sut.ledger.deepLinks.map(\.absoluteString), ["https://meeshy.me/join/abc123"])
         XCTAssertEqual(sut.ledger.opened, 0)
     }
 

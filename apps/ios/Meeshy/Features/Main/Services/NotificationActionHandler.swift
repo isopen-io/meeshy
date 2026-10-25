@@ -321,7 +321,7 @@ final class NotificationActionHandler: NotificationActionHandling {
         applyAuthToken(authTokenProvider())
 
         let payload = NotificationPayload(userInfo: userInfo)
-        guard !refusesLockedConversationWrite(actionIdentifier, payload: payload, userInfo: userInfo) else { return }
+        guard !refusesUnderConversationPin(actionIdentifier, payload: payload, userInfo: userInfo) else { return }
 
         switch actionIdentifier {
         case UNNotificationDefaultActionIdentifier:
@@ -386,27 +386,33 @@ final class NotificationActionHandler: NotificationActionHandling {
 
     // MARK: - Conversation verrouillée par PIN (#12655)
 
-    /// Les gestes qui ÉCRIVENT dans une conversation depuis l'écran verrouillé.
-    nonisolated static let conversationWriteActions: Set<String> = [
+    /// Les gestes qu'une conversation sous PIN refuse depuis l'écran
+    /// verrouillé : ceux qui ÉCRIVENT dans la conversation (répondre, marquer
+    /// lu) et ceux qui AGISSENT sur son contenu (suivre l'invitation, ajouter
+    /// le contact, ouvrir la position dans Plans).
+    nonisolated static let pinGuardedActions: Set<String> = [
         MeeshyNotificationAction.reply.rawValue,
         MeeshyNotificationAction.markRead.rawValue,
+        MeeshyNotificationAction.joinInvite.rawValue,
+        MeeshyNotificationAction.addContact.rawValue,
+        MeeshyNotificationAction.openInMaps.rawValue,
     ]
 
     /// Défense en profondeur derrière la catégorie sans action de l'extension :
     /// une bannière livrée avant le verrou, ou catégorisée par la passerelle
-    /// quand l'extension n'a pas tourné, porte encore « Répondre » et « Marquer
-    /// comme lu ». Sur une conversation verrouillée (ou une charge scellée),
-    /// rien ne part ni n'est marqué lu : l'app s'ouvre sur la conversation, que
-    /// la porte du routeur garde par le PIN.
-    private func refusesLockedConversationWrite(
+    /// quand l'extension n'a pas tourné (tuée, hors budget), porte encore ses
+    /// gestes. Sur une conversation verrouillée (ou une charge scellée), rien
+    /// ne part, rien n'est marqué lu, aucun lien n'est suivi : l'app s'ouvre
+    /// sur la conversation, que la porte du routeur garde par le PIN.
+    private func refusesUnderConversationPin(
         _ actionIdentifier: String,
         payload: NotificationPayload,
         userInfo: [AnyHashable: Any]
     ) -> Bool {
-        guard Self.conversationWriteActions.contains(actionIdentifier) else { return false }
+        guard Self.pinGuardedActions.contains(actionIdentifier) else { return false }
         let locked = payload.conversationId.map { isConversationLocked($0) } ?? false
         guard locked || NSEAttachmentPolicy.isSealedForLockedConversation(userInfo) else { return false }
-        logger.info("notification write action refused: conversation locked by PIN")
+        logger.info("notification action refused: conversation locked by PIN")
         openNotification(userInfo)
         return true
     }
