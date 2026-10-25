@@ -97,7 +97,7 @@ final class ComposerLookPainterWiringTests: XCTestCase {
                       "la photo retouchée part aux proportions du viseur")
         XCTAssertTrue(edition.contains("aspect: proportions, person: auteur, date: date, uses: usages"),
                       "la vidéo retouchée part aux proportions du viseur")
-        XCTAssertTrue(edition.contains("untouchedTake(prise, of: photo, paints: ComposerLiveLookRule.rendersLive(regard) || !cadrage.isIdentity, aspect: proportions)"),
+        XCTAssertTrue(edition.contains("untouchedTake(prise, of: photo, paints: ComposerLiveLookRule.rendersLive(regard) || !cadrage.isIdentity || !textes.isEmpty, aspect: proportions)"),
                       "la prise ne part intacte (#11247) que si elle a déjà les proportions du viseur")
         XCTAssertFalse(edition.contains("ComposerLookPainter.designCanvas"), "le cadrage se règle sur la toile du viseur")
         let toucher = try Self.code("Meeshy/Features/Main/Composer/ComposerCaptureSession+Tap.swift")

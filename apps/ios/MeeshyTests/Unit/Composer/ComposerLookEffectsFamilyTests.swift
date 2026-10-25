@@ -69,7 +69,7 @@ final class ComposerLookEffectsFamilyTests: XCTestCase {
     func test_painter_photoAndExport_carryTheEffect() throws {
         let peintre = try Self.code("Meeshy/Features/Main/Composer/ComposerLookPainter.swift")
         XCTAssertTrue(peintre.contains("faces.apply(look.effect, to: tonifiee, probing: source, still: still)"))
-        XCTAssertTrue(peintre.contains("canvas: toile, declared: espace, still: true)"), "la photo cherche son visage sur elle")
+        XCTAssertTrue(peintre.contains("canvas: toile, declared: espace, still: true, overlay: overlay)"), "la photo cherche son visage sur elle")
         let export = try Self.code("Meeshy/Features/Main/Composer/ComposerLookVideoExporter.swift")
         XCTAssertTrue(export.contains("let visages = ComposerFaceEffects.export()"))
         XCTAssertTrue(export.contains("faces: visages)"), "la vidéo qui part porte l'effet vu à l'aperçu")
