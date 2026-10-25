@@ -1,6 +1,5 @@
 import { createStore, type StoreApi } from 'zustand/vanilla';
 
-import { sharedTranslationServerReadsMessage } from '@meeshy/shared/utils/shared-translation-eligibility';
 
 /**
  * **UNE CONVERSATION VUE CHIFFRÉE DE BOUT EN BOUT RESTE FERMÉE AU CLAIR**
@@ -19,9 +18,9 @@ import { sharedTranslationServerReadsMessage } from '@meeshy/shared/utils/shared
  * ni oubli.
  *
  * #12986 (décision porteur du 2026-10-25, option 2) — un message chiffré de
- * bout en bout AFFICHÉ dans le fil scelle l'envoi, même servi sans régime : ce
- * que la bulle dit « chiffré de bout en bout » (`lib/view/end-to-end-sealed.ts`)
- * ferme le composeur. Cela couvre une conversation dont le mode se perd en
+ * bout en bout AFFICHÉ dans le fil scelle l'envoi, même servi sans régime,
+ * dès qu'il porte un marqueur que la passerelle a admis comme tel
+ * (`carriesEndToEnd`). Cela couvre une conversation dont le mode se perd en
  * route alors que ses messages le gardent ; une passerelle compromise qui
  * retirerait aussi les marques des messages n'est arrêtée que là où ce compte
  * a déjà vu la conversation chiffrée. Les trois tête-à-tête du staging qui
@@ -111,7 +110,7 @@ export const endToEndRegimeLedger = createEndToEndRegimeLedger();
 export const isEndToEndMode = (mode: string | null | undefined): boolean => typeof mode === 'string' && mode.trim().toLowerCase() === 'e2ee';
 
 /** Ce que le signal lit d'un message — tout `unknown` : un `Message` servi comme une ligne brute du cache. */
-type SignalSource = { readonly [K in 'messageType' | 'metadata' | 'systemEvent' | 'isEncrypted' | 'encryptionMode' | 'encryptionMetadata' | 'deletedAt']?: unknown };
+type SignalSource = { readonly [K in 'messageType' | 'metadata' | 'systemEvent' | 'encryptionMode' | 'encryptionMetadata' | 'deletedAt']?: unknown };
 
 const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> => typeof value === 'object' && value !== null;
 
@@ -132,21 +131,21 @@ const textOf = (value: unknown): string | null => (typeof value === 'string' ? v
 export const LIBSIGNAL_PROTOCOL_MARK = 'libsignal-v1';
 
 /**
- * Le message AFFICHÉ est-il chiffré de bout en bout ? Ce que la bulle scelle —
- * chiffré, et ni `server` ni `hybrid` (mode inconnu ou absent compris, la loi de
- * `sharedTranslationServerReadsMessage`) —, ou marqué `e2ee` / libsignal par
- * son mode ou ses métadonnées. Un message SUPPRIMÉ ne compte pas : la passerelle
- * ne le sert plus (`deletedAt: null` filtré), seul un cache local en garde la
- * trace, et une trace effacée n'apprend rien qu'un serveur ne puisse taire en
- * ne la servant pas.
+ * Le message AFFICHÉ porte-t-il un marqueur que la passerelle a ADMIS comme
+ * bout en bout ? `encryptionMode: 'e2ee'` ou le protocole libsignal de ses
+ * métadonnées, et rien d'autre : la passerelle ne les écrit que dans une
+ * conversation e2ee (`admitSendUnderRegime` refuse tout chiffré ailleurs, #12562,
+ * et le mode de la ligne est celui de la conversation, jamais celui du client),
+ * si bien qu'aucun participant ne les forge dans une conversation en clair. Un
+ * `isEncrypted` sans mode ou un mode inconnu ne scellent pas (la bulle les dit
+ * illisibles, sans rien prouver du régime). Un message SUPPRIMÉ ne compte pas :
+ * la passerelle ne le sert plus (`deletedAt: null` filtré), seul un cache local
+ * en garde la trace.
  */
 function carriesEndToEnd(message: SignalSource): boolean {
   if (message.deletedAt !== undefined && message.deletedAt !== null) return false;
   const metadata = isRecord(message.encryptionMetadata) ? message.encryptionMetadata : {};
-  const mode = textOf(message.encryptionMode);
-  const sealedForTheWeb =
-    message.isEncrypted === true && !sharedTranslationServerReadsMessage({ conversationEncryptionMode: null, messageIsEncrypted: true, messageEncryptionMode: mode });
-  return sealedForTheWeb || isEndToEndMode(mode) || isEndToEndMode(textOf(metadata.mode)) || metadata.protocol === LIBSIGNAL_PROTOCOL_MARK;
+  return isEndToEndMode(textOf(message.encryptionMode)) || metadata.protocol === LIBSIGNAL_PROTOCOL_MARK;
 }
 
 /**
