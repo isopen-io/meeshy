@@ -84,11 +84,11 @@ describe('la coque Android reçoit un partage (#8884)', () => {
   test('les bornes du pont sont celles du service worker de la PWA ET les plafonds communs (D10)', () => {
     const regles = lire(join(JAVA, 'ShareIntentRules.java'));
     const worker = readFileSync(join(APP, 'public', 'sw-share-target.js'), 'utf8');
-    const mebibytes = SHARE_LIMITS.maxTotalBytes / (1024 * 1024);
+    const gibibytes = SHARE_LIMITS.maxTotalBytes / (1024 * 1024 * 1024);
     expect(regles).toContain(`MAX_FILES = ${SHARE_LIMITS.maxFiles};`);
     expect(worker).toContain(`SHARE_MAX_FILES = ${SHARE_LIMITS.maxFiles};`);
-    expect(regles).toContain(`MAX_TOTAL_BYTES = ${mebibytes}L * 1024 * 1024;`);
-    expect(worker).toContain(`SHARE_MAX_TOTAL_BYTES = ${mebibytes} * 1024 * 1024;`);
+    expect(regles).toContain(`MAX_TOTAL_BYTES = ${gibibytes}L * 1024 * 1024 * 1024;`);
+    expect(worker).toContain(`SHARE_MAX_TOTAL_BYTES = ${gibibytes} * 1024 * 1024 * 1024;`);
   });
 
   test('le manifeste COMMITÉ inscrit l’app aux partages — la garde du gate, rejouée sur le vrai fichier', () => {

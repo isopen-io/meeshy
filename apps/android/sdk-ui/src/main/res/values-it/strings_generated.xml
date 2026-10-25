@@ -67,6 +67,12 @@
     <string name="presence_online">In linea</string>
     <string name="reactions_more">Altre reazioni</string>
     <string name="retouch_crop_original">Originale</string>
+    <string name="retouch_effect_angel">Angelo</string>
+    <string name="retouch_effect_demon">Demone</string>
+    <string name="retouch_effect_none">Nessuno</string>
+    <string name="retouch_effect_smoothing">Pelle levigata</string>
+    <string name="retouch_effect_toad">Rospo</string>
+    <string name="retouch_effect_volcano">Eruzione</string>
     <string name="retouch_family_effects">Effetti</string>
     <string name="retouch_family_filters">Filtri</string>
     <string name="retouch_family_frames">Cornici</string>

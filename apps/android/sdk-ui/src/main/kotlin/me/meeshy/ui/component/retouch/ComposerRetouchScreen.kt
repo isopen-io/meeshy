@@ -15,6 +15,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -31,6 +32,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import me.meeshy.sdk.model.composer.look.CallFaceEffect
+import me.meeshy.sdk.model.composer.look.CallFaceLandmarks
 import me.meeshy.sdk.model.composer.look.ComposerCropPreset
 import me.meeshy.sdk.model.composer.look.ComposerEditTake
 import me.meeshy.sdk.model.composer.look.ComposerEditTool
@@ -47,8 +49,9 @@ public sealed interface ComposerRetouchResult {
     public data class Rendered(val bitmap: Bitmap) : ComposerRetouchResult
 }
 
-/** Les effets que la retouche Android sait peindre sur une prise : aucun encore (#12614 les suit). */
-public val RetouchRenderableEffects: List<CallFaceEffect> = emptyList()
+/** Les effets que la retouche Android sait peindre sur une photo (#12733) : ceux de l'appel, dans son ordre. */
+public val RetouchRenderableEffects: List<CallFaceEffect> =
+    listOf(CallFaceEffect.SMOOTHING, CallFaceEffect.TOAD, CallFaceEffect.ANGEL, CallFaceEffect.DEMON, CallFaceEffect.VOLCANO)
 
 /** Les outils de la retouche d'une photo sur Android : Recadrer et Texte. */
 public val RetouchPhotoTools: List<ComposerEditTool> = listOf(ComposerEditTool.CROP, ComposerEditTool.TEXT)
@@ -56,7 +59,7 @@ public val RetouchPhotoTools: List<ComposerEditTool> = listOf(ComposerEditTool.C
 /**
  * **LA RETOUCHE UNIQUE D'UNE PHOTO** (#11133, #12614) — miroir de `ConversationPieceRetouch` (iOS) : la prise
  * remplit l'écran, (x) et « Terminé » en haut tant qu'aucun élément d'édition ne s'affiche, et le rail
- * Filtres · Cadres · Recadrer en bas ; une famille ouverte déroule sa bande, dont la case au centre est
+ * Filtres · Effets · Cadres · Recadrer en bas ; une famille ouverte déroule sa bande, dont la case au centre est
  * choisie ; Recadrer pose ses équerres sur la prise entière et ses proportions par presets sous la scène.
  * L'aperçu se repeint hors du fil principal ; tant qu'il cuit, l'image d'avant reste — jamais de sablier.
  */
@@ -77,17 +80,18 @@ public fun ComposerRetouchScreen(
     val previewSource = remember(source) { scaledCopy(source, ComposerLookCanvas.PREVIEW_LONG_SIDE) }
     val thumbSource = remember(source) { scaledCopy(source, ComposerLookCanvas.THUMBNAIL_LONG_SIDE) }
     var preview by remember { mutableStateOf(previewSource) }
+    val face by produceState<CallFaceLandmarks?>(null, source) { value = withContext(Dispatchers.Default) { RetouchFaceDetector.detect(previewSource) } }
     val cropping = ComposerEditTools.showsBrackets(state.activeTools)
     val writing = ComposerEditTool.TEXT in state.activeTools && state.openFamily == null
     val previewCrop = if (cropping) null else state.crop
 
     val previewLook = if (cropping) state.look.withoutFrame else state.look
 
-    LaunchedEffect(previewLook, previewCrop) {
+    LaunchedEffect(previewLook, previewCrop, face) {
         val look = previewLook
         preview = if (look.isUntouched && previewCrop == null) previewSource
         else withContext(Dispatchers.Default) {
-            ComposerLookPainter.paint(previewSource, look, author, ComposerLookCanvas.PREVIEW_LONG_SIDE, previewCrop)
+            ComposerLookPainter.paint(previewSource, look, author, ComposerLookCanvas.PREVIEW_LONG_SIDE, previewCrop, face)
         } ?: preview
     }
 
@@ -108,7 +112,7 @@ public fun ComposerRetouchScreen(
                 ComposerRetouchResult.Original
             } else {
                 withContext(Dispatchers.Default) {
-                    ComposerLookPainter.paint(source, settled.look, author, ComposerLookCanvas.EXPORT_LONG_SIDE, settled.crop)
+                    ComposerLookPainter.paint(source, settled.look, author, ComposerLookCanvas.EXPORT_LONG_SIDE, settled.crop, face)
                         ?.let { RetouchTextPainter.composited(it, written) }
                 }?.let { ComposerRetouchResult.Rendered(it) }
             }
@@ -158,6 +162,7 @@ public fun ComposerRetouchScreen(
                     author = author,
                     selects = !finishing,
                     onChoose = { item -> state = state.choosing(item) },
+                    face = face,
                 )
             }
             if (writing) RetouchTextToolbar(board = text, newId = newTextId, onBoard = { text = it })

@@ -11,6 +11,7 @@ import type { AuthorStoryRing } from '@/lib/view/author-story-ring';
 import { prismFor, served } from '@/lib/api/prism';
 import { mediaCarrierOf } from '@/lib/view/media';
 import type { PlacedMessage } from '@/lib/grouping';
+import { endToEndSealed } from '@/lib/view/end-to-end-sealed';
 import { time } from '@/lib/grouping';
 import { languageBand, mountsBottomLine } from '@/lib/reading-mode/meta';
 import { protectionOf } from '@/lib/reading-mode/protection';
@@ -273,7 +274,8 @@ export function Bubble({
   const senderPhoto = participantAvatarOf(message.sender);
 
   // `kind === 'veiled' | 'burned'` toutes deux passent par `ProtectedContent`.
-  const isProtected = kind !== 'standard' || !revealable;
+  const sealedEndToEnd = endToEndSealed(message);
+  const isProtected = kind !== 'standard' || !revealable || sealedEndToEnd;
   /** LA LANGUE ACTIVE DU PIED (revue #5814, défaut majeur 12) — la langue
    * RÉELLEMENT servie par la rangée, jamais un état local. `servedRowLanguage`
    * (revue #5805) et non `rendered.language` : sur un message MÉDIA-SEUL le
@@ -465,6 +467,7 @@ export function Bubble({
       surface="bubble"
       isMine={isMine}
       revealable={revealable}
+      endToEnd={sealedEndToEnd}
       onConsumeViewOnce={onConsumeViewOnce}
       media={{
         frame: 'box',

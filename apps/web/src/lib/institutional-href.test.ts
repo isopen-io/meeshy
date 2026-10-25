@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { institutionalHref } from './institutional-href';
+import { institutionalHref, siteHref } from './institutional-href';
 
 describe('institutionalHref — la page institutionnelle que chaque cible sait servir (#8213)', () => {
   test('le web garde le chemin relatif, que nginx sert et que le staging sert pour lui-même', () => {
@@ -18,5 +18,12 @@ describe('institutionalHref — la page institutionnelle que chaque cible sait s
       expect(institutionalHref(page, { shell: false })).toBe(`/${page}`);
       expect(institutionalHref(page, { shell: true })).toBe(`https://meeshy.me/${page}`);
     }
+  });
+
+  test('une adresse du site suit la même règle — la landing par langue et ses ancres, que la coque ne sert pas (#12930)', () => {
+    expect(siteHref('/en#world', { shell: false })).toBe('/en#world');
+    expect(siteHref('/', { shell: false })).toBe('/');
+    expect(siteHref('/en#world', { shell: true })).toBe('https://meeshy.me/en#world');
+    expect(siteHref('/', { shell: true })).toBe('https://meeshy.me/');
   });
 });

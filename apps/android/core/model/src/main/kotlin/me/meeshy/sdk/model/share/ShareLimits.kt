@@ -11,10 +11,11 @@ import me.meeshy.sdk.model.ContentExitLaw
  * applique déjà aux posts (`MAX_POST_MEDIA`) ; `maxCaptionLength` est `MAX_SHARE_CAPTION`.
  */
 object ShareLimits {
-    const val MAX_FILES: Int = 20
+    /** Révisé par le porteur le 2026-10-25 (#12974) : 100 fichiers et 5 Gio, contre 20 et 500 Mio. */
+    const val MAX_FILES: Int = 100
 
-    /** 500 Mio, comme l'extension iOS l'a toujours compté. */
-    const val MAX_TOTAL_BYTES: Long = 500L * 1024L * 1024L
+    /** 5 Gio, comme l'extension iOS compte. */
+    const val MAX_TOTAL_BYTES: Long = 5L * 1024L * 1024L * 1024L
 
     /** Destinataires, publications comprises. */
     const val MAX_RECIPIENTS: Int = 10

@@ -87,6 +87,21 @@ export function isSocketMessage(payload: unknown): payload is SocketIOMessage {
  * deviner (D-11/D-28 : le MÊME champ que `upsertConfirmed`,
  * `send/perform-send.ts:149-157`).
  */
+const WIRE_ENCRYPTION_MODES = ['e2ee', 'server', 'hybrid'] as const;
+
+/**
+ * LE MODE DE CHIFFREMENT VOYAGE AVEC LE MESSAGE EN DIRECT (#12983). Sans lui, un
+ * message chiffré de bout en bout reçu par le socket rendait le littéral
+ * `[Encrypted]`, et une vue unique chiffrée offrait un tap qui la consommait
+ * pour tous mes appareils. Un mode inconnu n'est pas recopié : le message reste
+ * chiffré sans mode, donc scellé (`endToEndSealed`).
+ */
+function encryptionModeOf(mode: string | undefined): { readonly encryptionMode?: NonNullable<Message['encryptionMode']> } {
+  const normalized = (mode ?? '').trim().toLowerCase();
+  const known = WIRE_ENCRYPTION_MODES.find((candidate) => candidate === normalized);
+  return known === undefined ? {} : { encryptionMode: known };
+}
+
 export function rawMessageFromSocket(raw: SocketIOMessage): Message & { readonly clientMessageId?: string } {
   const sender = raw.sender;
   /* `postReplyTo` n'est pas déclaré sur `SocketIOMessage` alors que la
@@ -110,6 +125,7 @@ export function rawMessageFromSocket(raw: SocketIOMessage): Message & { readonly
     readCount: 0,
     reactionCount: 0,
     isEncrypted: raw.isEncrypted ?? false,
+    ...encryptionModeOf(raw.encryptionMode),
     createdAt: raw.createdAt,
     timestamp: raw.createdAt,
     translations: Array.isArray(raw.translations) ? (raw.translations as Message['translations']) : [],

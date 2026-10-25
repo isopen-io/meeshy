@@ -70,8 +70,8 @@ nonisolated struct ShareIncoming: Equatable, Sendable {
 nonisolated enum ShareShortfall: Hashable, Sendable {
     /// iCloud non téléchargé, disque plein, copie échouée.
     case unprepared
-    /// Ces pièces n'ont pas été copiées : elles dépassaient les 500 Mo d'un
-    /// partage (D10, #11429).
+    /// Ces pièces n'ont pas été copiées : elles dépassaient le plafond
+    /// d'octets d'un partage (`ShareLimits.maxTotalBytes`, D10, #11429).
     case overBudget(uncopied: Int)
     /// L'app n'a remis qu'un chemin de fichier, que Meeshy n'ouvre pas : seul
     /// le fichier lui-même se partage (#11134, #11430).

@@ -285,7 +285,7 @@ final class LiveShareDispatcher: ShareDispatching {
         }
         guard let userId = recipient.userId, isOnline(),
               let created = try? await conversationCreator.createDirectConversation(with: userId, currentUserId: currentUserId()) else { return nil }
-        return ResolvedConversation(id: created.id, isEncrypted: created.encryptionMode != nil)
+        return ResolvedConversation(id: created.id, isEncrypted: EndToEndSendGate.requiresSeal(conversationEncryptionModes: [created.encryptionMode]))
     }
 
     private static func outcome(_ outcome: ForwardOutcome) -> ShareDeliveryOutcome {
@@ -297,9 +297,8 @@ final class LiveShareDispatcher: ShareDispatching {
     }
 
     private static func reason(for error: Error) -> String {
-        if case let APIError.serverError(_, message) = error {
-            return ForwardRefusalReason.server(message: message)?.explanation ?? message ?? genericFailure
-        }
+        if let refusal = ForwardRefusalReason.server(error: error) { return refusal.explanation }
+        if case let APIError.serverError(_, message) = error { return message ?? genericFailure }
         return (error as? APIError)?.errorDescription ?? error.localizedDescription
     }
 

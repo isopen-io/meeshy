@@ -1015,6 +1015,8 @@ const de = {
   'message.mood.label': 'Stimmung',
   'message.withheld': 'Inhalt zurückgehalten',
   'message.withheld.a11y': 'Inhalt zurückgehalten: Diese Nachricht existiert und wird nicht angezeigt',
+  'message.endToEnd': 'Ende-zu-Ende-verschlüsselt — lies sie in der Meeshy-App auf deinen Geräten',
+  'message.endToEnd.a11y': 'Ende-zu-Ende-verschlüsselt: Diese Nachricht kannst du in der Meeshy-App auf deinen Geräten lesen',
   'message.veiled': 'Ausgeblendeter Inhalt',
   'message.veiled.hint': 'Zum Anzeigen tippen',
   'message.veiled.error': 'Anzeigen derzeit nicht möglich',
