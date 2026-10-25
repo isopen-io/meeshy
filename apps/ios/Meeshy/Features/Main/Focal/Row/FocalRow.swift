@@ -197,6 +197,7 @@ struct FocalRow: View {
                 deliveryStatus: BubbleFooterModel.glyphStatus(content.meta.deliveryStatus, retryBandShown: isFailedOutgoing),
                 isDark: input.isDark,
                 editedAt: content.editedAt,
+                editedByModerator: content.editedByModerator,
                 isEditSaving: content.isEditSaving,
                 hasEditHistory: content.hasEditHistory,
                 onShowReadStatus: actions.onShowReadStatus.map { show in { show(content.messageId) } }

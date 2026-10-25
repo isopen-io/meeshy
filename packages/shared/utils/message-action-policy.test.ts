@@ -3,11 +3,13 @@ import { describe, expect, it } from 'vitest';
 import {
   MAX_PRIMARY_ACTIONS,
   MESSAGE_EDIT_WINDOW_MS,
+  editContentRefusal,
   messageActionsFor,
   type ActionConversation,
   type ActionViewer,
   type MessageActionSubject,
 } from './message-action-policy';
+import { messageContentKind } from './message-content-kind';
 
 const NOW = Date.parse('2026-10-20T12:00:00Z');
 const HOUR = 60 * 60 * 1000;
@@ -237,5 +239,20 @@ describe('messageActionsFor — ce que la passerelle accorde sans le droit d’�
     expect(actions({ message: photo, conversation: { encryptionMode } }).verdicts.forward).toBe(false);
     expect(actions({ message: { ...photo, isEncrypted: true, encryptionMode } }).verdicts.forward).toBe(false);
     expect(actions({ message: photo }).verdicts.forward).toBe(true);
+  });
+});
+
+describe('editContentRefusal — ce que le CONTENU refuse à toute édition (#12792)', () => {
+  const refusal = (message: Parameters<typeof messageContentKind>[0]) => editContentRefusal(messageContentKind(message));
+
+  it('nomme chaque refus, et ne refuse rien au texte ni aux pièces ordinaires', () => {
+    expect(refusal({ id: 'm', content: 'x', isViewOnce: true })).toBe('view-once');
+    expect(refusal({ id: 'm', content: 'x', attachments: [{ mimeType: 'image/jpeg', isViewOnce: true }] })).toBe('view-once');
+    expect(refusal({ id: 'm', content: 'x', isEncrypted: true })).toBe('encrypted-message');
+    expect(refusal({ id: 'm', content: 'x', messageType: 'system' })).toBe('not-editable-kind');
+    expect(refusal({ id: 'm', content: 'x', messageType: 'system', metadata: { kind: 'call' } })).toBe('not-editable-kind');
+    expect(refusal({ id: 'm', content: 'x', metadata: { location: { latitude: 1, longitude: 2 } } })).toBe('not-editable-kind');
+    expect(refusal({ id: 'm', content: 'x' })).toBeNull();
+    expect(refusal({ id: 'm', content: 'x', isBlurred: true, attachments: [{ mimeType: 'image/jpeg' }] })).toBeNull();
   });
 });

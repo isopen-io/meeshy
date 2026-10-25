@@ -44,6 +44,9 @@
  */
 
 import { isDeclaredMinor } from '@meeshy/shared/utils/age';
+import { AUTHOR_EDIT, type MessageEditorColumns } from '@meeshy/shared/utils/message-edit-attribution';
+import { editContentRefusal, type EditContentRefusal } from '@meeshy/shared/utils/message-action-policy';
+import { messageContentKind } from '@meeshy/shared/utils/message-content-kind';
 import { GLOBAL_CONVERSATION_TYPE } from '@meeshy/shared/utils/global-minor-restriction';
 import { isPrivilegedPlatformRole } from '@meeshy/shared/utils/platform-privilege';
 import { captureNoticeOf } from './captureNoticeVisibility.js';
@@ -88,13 +91,22 @@ export type MessageEditRefusal =
   /** #9927 — l'éditeur est un mineur déclaré (13-17 ans) et le conteneur est Meeshy Global. */
   | 'minor-global'
   /** #11216 — la conversation est chiffrée de bout en bout : le serveur n'écrit aucun clair. */
-  | 'end-to-end-encrypted';
+  | 'end-to-end-encrypted'
+  /**
+   * #12792 — le CONTENU du message refuse toute édition, quel que soit l'éditeur :
+   * `view-once` · `encrypted-message` · `not-editable-kind` (avis système, résumé
+   * d'appel, lieu, sondage, sticker). La loi partagée (`editContentRefusal`) les
+   * nomme ; cette unité les répète telles quelles, sans les réécrire.
+   */
+  | EditContentRefusal;
 
 export type MessageEditAdmission =
   | {
       readonly admitted: true;
       /** L'éditeur n'est pas l'auteur : il édite au titre de son rôle global. */
       readonly asModerator: boolean;
+      /** #11375 — ce rôle global, posé sur la seule branche `asModerator` : il est ENREGISTRÉ avec la modification. */
+      readonly editorRole?: string;
       /** L'auteur a dépassé 24h et son rôle global lui a ouvert la porte. */
       readonly windowBypassed: boolean;
     }
@@ -180,20 +192,62 @@ export interface MessageEditAdmissionParams {
     /** Le type et la métadonnée — REQUIS : un avis de capture ne s'édite pas par celui qui a capturé (#9641). */
     messageType: string | null | undefined;
     metadata: unknown;
-    /**
-     * #12881 — ce que la LIGNE porte, EXIGÉ comme `conversation` : un message
-     * scellé sous e2ee reste chiffré après une désactivation, et le régime
-     * courant de sa conversation ne le dit plus.
-     */
-    isEncrypted: boolean | null | undefined;
-    encryptionMode: string | null | undefined;
-  };
+  } & MessageEditContentRow;
   /** Injectable pour les tests ; `Date.now()` en production. */
   now?: number;
   onError?: (error: unknown) => void;
 }
 
+/**
+ * #12792 — ce que `editContentRefusal` lit du message pour trancher « ce contenu
+ * se modifie-t-il ? ». Chaque clé est EXIGÉE, comme `conversation` : un transport
+ * qui en oublierait une dans son `select` ne compilerait pas, au lieu de laisser
+ * passer en silence la vue unique ou le chiffré qu'il n'a pas lus.
+ *
+ * Les pièces portent leur PROPRE protection (`attachmentProtectionSelect`) : une
+ * photo à vue unique dans un message ordinaire est un message à vue unique.
+ */
+export type MessageEditContentRow = {
+  isViewOnce: boolean | null | undefined;
+  effectFlags: number | null | undefined;
+  /**
+   * #12881 — ce que la LIGNE porte, EXIGÉ comme `conversation` : un message
+   * scellé sous e2ee reste chiffré après une désactivation, et le régime
+   * courant de sa conversation ne le dit plus.
+   */
+  isEncrypted: boolean | null | undefined;
+  encryptionMode: string | null | undefined;
+  attachments:
+    | ReadonlyArray<{
+        readonly mimeType?: string | null;
+        readonly isViewOnce?: boolean | null;
+        readonly effectFlags?: number | null;
+      }>
+    | null
+    | undefined;
+};
+
 const REFUSE = (reason: MessageEditRefusal): MessageEditAdmission => ({ admitted: false, reason });
+
+/**
+ * La même descente que `messageActionsFor` : `messageContentKind` puis
+ * `editContentRefusal`. L'identifiant n'entre que dans le drapeau `optimistic`
+ * (`cid_…`), sans objet pour une ligne lue en base.
+ */
+function contentRefusalOf(message: MessageEditAdmissionParams['message']): EditContentRefusal | null {
+  return editContentRefusal(
+    messageContentKind({
+      id: '',
+      messageType: message.messageType,
+      metadata: message.metadata,
+      isViewOnce: message.isViewOnce,
+      effectFlags: message.effectFlags,
+      isEncrypted: message.isEncrypted,
+      encryptionMode: message.encryptionMode,
+      attachments: message.attachments,
+    })
+  );
+}
 
 async function readGlobalRole(
   prisma: EditAdmissionReader,
@@ -238,6 +292,13 @@ async function readActiveMembership(
  *   qui traîne depuis longtemps.
  * - **Personne**, quel que soit son rang, quand le CONTENEUR porte son état
  *   terminal (§ ci-dessous).
+ * - **Personne**, auteur compris, quand le CONTENU refuse l'édition (#12792) :
+ *   vue unique, message chiffré, avis système ou d'appel, lieu, sondage,
+ *   sticker — exactement ce que `messageActionsFor` n'offre pas. Avant #11375 la
+ *   règle n'était tenue que par l'interface ; ouvrir la porte du modérateur sur
+ *   le message d'autrui l'a rendue exploitable par l'API directe. Comme la
+ *   clôture, elle ne se tranche que sur une décision qui allait être admise :
+ *   elle ne renseigne personne d'autre sur le message.
  *
  * Chaque branche coûte AU PLUS une lecture, et le chemin nominal (l'auteur,
  * dans sa fenêtre) n'en déclenche aucune. Toute lecture échoue FERMÉE : une
@@ -273,6 +334,8 @@ export async function admitMessageEdit(
   if (isConversationClosed(params.message.conversation)) return REFUSE('conversation-closed');
   if (isEndToEndMode(params.message.conversation?.encryptionMode)) return REFUSE('end-to-end-encrypted');
   if (messageRowSealedFromServer(params.message)) return REFUSE('end-to-end-encrypted');
+  const contentRefusal = contentRefusalOf(params.message);
+  if (contentRefusal) return REFUSE(contentRefusal);
   if (await editorIsMinorInGlobal(params)) return REFUSE('minor-global');
 
   return decision;
@@ -295,6 +358,20 @@ async function editorIsMinorInGlobal(params: MessageEditAdmissionParams): Promis
   return isDeclaredMinor(editor?.birthDate, new Date(params.now ?? Date.now()));
 }
 
+export const VIEW_ONCE_EDIT_REFUSAL_MESSAGE = 'Un message à vue unique ne se modifie pas';
+export const NOT_EDITABLE_KIND_REFUSAL_MESSAGE = 'Ce type de message ne se modifie pas';
+export const ENCRYPTED_MESSAGE_EDIT_REFUSAL_MESSAGE = 'Ce message est chiffré : le serveur n’en réécrit pas le contenu en clair';
+
+/**
+ * #12792 — les refus que le CONTENU oppose à l'édition, hors chiffrement (qui a
+ * son code stable, voir `editRefusalCode`). Les transports REST les servent en
+ * 403 : seul un éditeur qui aurait été admis les reçoit, et il n'y a rien à
+ * réessayer.
+ */
+export function isContentEditRefusal(reason: MessageEditRefusal): boolean {
+  return reason === 'view-once' || reason === 'not-editable-kind';
+}
+
 /**
  * La phrase d'un refus d'édition sur le transport SOCKET — en un exemplaire,
  * pour que le handler n'empile plus de ternaire à chaque motif ajouté.
@@ -309,14 +386,35 @@ export function describeEditRefusalForSocket(reason: MessageEditRefusal): string
       return MINOR_GLOBAL_REFUSAL_MESSAGE;
     case 'end-to-end-encrypted':
       return E2EE_PLAINTEXT_REFUSAL_MESSAGE;
+    case 'encrypted-message':
+      return ENCRYPTED_MESSAGE_EDIT_REFUSAL_MESSAGE;
+    case 'view-once':
+      return VIEW_ONCE_EDIT_REFUSAL_MESSAGE;
+    case 'not-editable-kind':
+      return NOT_EDITABLE_KIND_REFUSAL_MESSAGE;
     default:
       return 'Message not found or you are not authorized to edit it';
   }
 }
 
+/**
+ * #11375 — CE QUE L'ÉCRITURE ENREGISTRE comme auteur de la modification.
+ *
+ * Décision porteur du 2026-10-24 : un modérateur de plateforme modifie le
+ * message d'un autre À VISAGE DÉCOUVERT. Les quatre transports d'édition
+ * répandent ce résultat dans leur écriture (`thirdPartyEditorId` / `thirdPartyEditorRole`) :
+ * le tiers est enregistré avec son rôle, et l'AUTEUR qui réécrit remet les deux
+ * colonnes à `null` — la mention dit qui a écrit la DERNIÈRE version. Un refus
+ * n'enregistre personne.
+ */
+export function editAttributionOf(admission: MessageEditAdmission, editorUserId: string): MessageEditorColumns {
+  if (isEditRefused(admission) || !admission.asModerator) return AUTHOR_EDIT;
+  return { thirdPartyEditorId: editorUserId, thirdPartyEditorRole: admission.editorRole ?? null };
+}
+
 /** Le code STABLE d'un refus d'édition, quand il en a un — les transports le servent à côté de la phrase. */
 export function editRefusalCode(reason: MessageEditRefusal): string | undefined {
-  return reason === 'end-to-end-encrypted' ? E2EE_PLAINTEXT_REFUSED : undefined;
+  return reason === 'end-to-end-encrypted' || reason === 'encrypted-message' ? E2EE_PLAINTEXT_REFUSED : undefined;
 }
 
 async function decideMessageEdit(
@@ -338,7 +436,7 @@ async function decideMessageEdit(
     const role = membership.globalRole;
     if (!isPrivilegedPlatformRole(role)) return REFUSE('not-author');
 
-    return { admitted: true, asModerator: true, windowBypassed: false };
+    return { admitted: true, asModerator: true, windowBypassed: false, editorRole: role };
   }
 
   const ageMs = now - new Date(message.createdAt ?? NaN).getTime();

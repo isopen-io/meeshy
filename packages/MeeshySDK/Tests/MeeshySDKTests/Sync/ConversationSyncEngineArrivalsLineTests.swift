@@ -125,7 +125,7 @@ final class ConversationSyncEngineArrivalsLineTests: XCTestCase {
         let mutation = ConversationSyncEngine.mutation(
             for: try completion(names: ["Tom", "Aïcha"]), content: "Tom et Aïcha")
 
-        guard case let .edited(messageId, content, _, marksEdited) = mutation else {
+        guard case let .edited(messageId, content, _, marksEdited, _) = mutation else {
             return XCTFail("une ligne complétée garde le chemin d'écriture du contenu")
         }
         XCTAssertEqual(messageId, "m-arrivals")
@@ -136,7 +136,7 @@ final class ConversationSyncEngineArrivalsLineTests: XCTestCase {
     func test_mutation_userEditServedEdited_marksEdited() throws {
         let edit = try decodeWire(#"{"id":"m","conversationId":"c","senderId":"u","content":"x","isEdited":true,"createdAt":"2026-09-28T09:00:00.000Z"}"#)
 
-        guard case let .edited(_, _, _, marksEdited) = ConversationSyncEngine.mutation(for: edit, content: "x") else {
+        guard case let .edited(_, _, _, marksEdited, _) = ConversationSyncEngine.mutation(for: edit, content: "x") else {
             return XCTFail("une édition reste une édition")
         }
         XCTAssertTrue(marksEdited)
@@ -145,7 +145,7 @@ final class ConversationSyncEngineArrivalsLineTests: XCTestCase {
     func test_mutation_editWithoutTheFlag_staysAnEdit() throws {
         let edit = try decodeWire(#"{"id":"m","conversationId":"c","senderId":"u","content":"x","createdAt":"2026-09-28T09:00:00.000Z"}"#)
 
-        guard case let .edited(_, _, _, marksEdited) = ConversationSyncEngine.mutation(for: edit, content: "x") else {
+        guard case let .edited(_, _, _, marksEdited, _) = ConversationSyncEngine.mutation(for: edit, content: "x") else {
             return XCTFail("une édition reste une édition")
         }
         XCTAssertTrue(marksEdited, "une charge sans drapeau garde le sens historique de message:edited")

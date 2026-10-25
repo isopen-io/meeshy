@@ -6,7 +6,7 @@
  */
 import { FastifyInstance } from 'fastify';
 import { UnifiedAuthRequest } from '../middleware/auth.js';
-import { attachmentMediaSelect, MESSAGE_ATTACHMENT_ORDER } from '../services/attachments/attachmentIncludes';
+import { attachmentMediaSelect, attachmentProtectionSelect, MESSAGE_ATTACHMENT_ORDER } from '../services/attachments/attachmentIncludes';
 import { emitMentionCreated } from '../socketio/emitMentionCreated';
 import { reconcileEditedMentions } from '../services/messaging/messageMentions';
 import {
@@ -18,8 +18,12 @@ import {
   isEditRefused,
   describeEditRefusalForSocket,
   editRefusalCode,
+  isContentEditRefusal,
+  editAttributionOf,
   CONVERSATION_CLOSED_EDIT_MESSAGE,
 } from '../services/messaging/messageEditAdmission';
+import { editAttributionReaderOf } from '../services/messaging/editAttributionReader';
+import { withServedEditAttribution } from '@meeshy/shared/utils/message-edit-attribution';
 import { GLOBAL_ADULTS_ONLY_CODE, MINOR_GLOBAL_REFUSAL_MESSAGE } from '../services/messaging/conversationWriteAdmission';
 import { admitMessageDelete } from '../services/messaging/messageDeleteAdmission';
 import { completeModeratedMessageRemoval, moderationReasonOf, MODERATION_REASON_MESSAGE, MODERATION_REASON_REQUIRED } from '../services/moderation/contentRemoval';
@@ -161,7 +165,9 @@ export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: Mess
               // L'état TERMINAL du conteneur, exigé par `admitMessageEdit`. Deux
               // colonnes sur une lecture déjà là : aucun aller-retour de plus.
               conversation: { select: { isActive: true, closedAt: true, type: true, encryptionMode: true } },
-              attachments: { select: attachmentMediaSelect, orderBy: MESSAGE_ATTACHMENT_ORDER }
+              // #12792 — la protection PROPRE de chaque pièce : une pièce à vue
+              // unique refuse l'édition de son message (`admitMessageEdit`).
+              attachments: { select: { ...attachmentMediaSelect, ...attachmentProtectionSelect }, orderBy: MESSAGE_ATTACHMENT_ORDER }
             }
           })
       );
@@ -190,8 +196,11 @@ export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: Mess
           createdAt: message.createdAt,
           messageType: message.messageType,
           metadata: message.metadata,
+          isViewOnce: message.isViewOnce,
+          effectFlags: message.effectFlags,
           isEncrypted: message.isEncrypted,
           encryptionMode: message.encryptionMode,
+          attachments: message.attachments,
         },
         onError: (err) => logger.error('Edit - admission lookup failed', err as Error),
       });
@@ -205,8 +214,11 @@ export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: Mess
         if (admission.reason === 'conversation-closed') {
           return sendError(reply, 410, CONVERSATION_CLOSED_EDIT_MESSAGE);
         }
-        if (admission.reason === 'end-to-end-encrypted') {
+        if (editRefusalCode(admission.reason)) {
           return sendBadRequest(reply, describeEditRefusalForSocket(admission.reason), { code: editRefusalCode(admission.reason) });
+        }
+        if (isContentEditRefusal(admission.reason)) {
+          return sendForbidden(reply, describeEditRefusalForSocket(admission.reason));
         }
         if (admission.reason === 'minor-global') {
           return sendForbidden(reply, MINOR_GLOBAL_REFUSAL_MESSAGE, { code: GLOBAL_ADULTS_ONLY_CODE });
@@ -283,6 +295,8 @@ export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: Mess
           content: editedContent,
           isEdited: true,
           editedAt,
+          // #11375 — le tiers modérateur est enregistré ; l'auteur efface la mention.
+          ...editAttributionOf(admission, userId),
           translations: null,
           ...nextMetadata
         }
@@ -400,7 +414,10 @@ export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: Mess
       // l'invalidation qui vivait dans le bloc de retraduction — placée APRÈS
       // la relecture, elle arrivait trop tard pour la charge déjà composée.
       const transformedMessage = {
-        ...updatedMessage,
+        // #11375 — les colonnes de l'éditeur tiers ne partent jamais brutes : ce
+        // lecteur reçoit ce que `servedEditAttribution` lui accorde, et la
+        // diffusion (le noyau, étalé après) la mention seule.
+        ...withServedEditAttribution(updatedMessage, editAttributionReaderOf(authRequest.authContext)),
         translations: transformTranslationsToArray(
           messageId,
           (updatedMessage as unknown as { translations?: Record<string, MessageTranslationJSON> | null }).translations

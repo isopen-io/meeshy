@@ -4,6 +4,8 @@
  * GET /attachments/:attachmentId/status-details. Issue #4284. Point d'entrée :
  * messages.ts.
  */
+import { withServedEditAttribution } from '@meeshy/shared/utils/message-edit-attribution';
+import { editAttributionReaderOf } from '../services/messaging/editAttributionReader';
 import { FastifyInstance } from 'fastify';
 import { UnifiedAuthRequest } from '../middleware/auth.js';
 import { attachmentFullSelect, MESSAGE_ATTACHMENT_ORDER } from '../services/attachments/attachmentIncludes';
@@ -215,6 +217,8 @@ export function registerMessagesReadRoutes(fastify: FastifyInstance, deps: Messa
           messageSource: true,
           isEdited: true,
           editedAt: true,
+          thirdPartyEditorId: true,
+          thirdPartyEditorRole: true,
           deletedAt: true,
           replyToId: true,
           forwardedFromId: true,
@@ -387,7 +391,9 @@ export function registerMessagesReadRoutes(fastify: FastifyInstance, deps: Messa
       // #7950 — la citation d'une story retirée sort expurgée de `metadata`.
       const [citedMessage] = await servePostReplyCitations(prisma, [message]);
       return sendSuccess(reply, projectViewOnceForReader(hoistStickerOnto(hoistLocationOnto({
-        ...citedMessage,
+        // #11375 — `data` traverse entier : les colonnes de l'éditeur tiers en
+        // sortent, ce lecteur reçoit ce que `servedEditAttribution` lui accorde.
+        ...withServedEditAttribution(citedMessage, editAttributionReaderOf(authRequest.authContext)),
         // #10286 — un invité anonyme ne sert jamais sa carte de liens suivis.
         metadata: servedLinkMetadata(citedMessage.metadata, message.sender),
         sender: gatedSender,
