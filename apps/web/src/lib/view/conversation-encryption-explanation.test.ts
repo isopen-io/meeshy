@@ -40,7 +40,7 @@ describe('chaque mode dit qui lit et ce qui fonctionne', () => {
 
   test('bout en bout : seuls les appareils lisent, ce qui manque, ce qui n’est pas livré, et le web le dit', () => {
     const e2ee = facts('e2ee');
-    for (const fact of ['onlyParticipantsRead', 'translatedOnDevice', 'noServerTranscription', 'noNotificationPreview', 'noSearch', 'noEdit', 'noForward', 'noOfflineSending', 'webCannotReadYet', 'notYetAttachments', 'notYetDecryptedNotifications', 'notYetGroups', 'notYetSafetyNumbers', 'oneKeyPerDevice', 'deviceLimit', 'restoredDeviceIsNew', 'switchNeverResendsInClear'] as const) {
+    for (const fact of ['onlyParticipantsRead', 'translatedOnDevice', 'noServerTranscription', 'noNotificationPreview', 'noSearch', 'noEdit', 'noForward', 'noOfflineSending', 'webCannotReadYet', 'notYetAttachments', 'notYetDecryptedNotifications', 'notYetGroups', 'notYetSafetyNumbers', 'oneKeyPerDevice', 'deviceLimit', 'restoredDeviceIsNew', 'endToEndNeverTurnedOffDirect', 'serverCannotTurnItOff'] as const) {
       expect({ fact, present: e2ee.includes(fact) }).toEqual({ fact, present: true });
     }
     expect(e2ee).not.toContain('everyServerFeature');
@@ -48,11 +48,31 @@ describe('chaque mode dit qui lit et ce qui fonctionne', () => {
     expect(e2ee).not.toContain('groupSendingUnavailable');
   });
 
-  test('chaque mode dit qui peut basculer et ce que fait la bascule', () => {
-    for (const mode of [null, 'server', 'hybrid', 'e2ee']) {
-      for (const fact of ['whoMayToggle', 'switchKeepsHistory', 'switchIsShownInThread'] as const) {
+  test('chaque mode lisible par le serveur dit qui peut basculer, ce que fait la bascule, et que le bout en bout est définitif', () => {
+    for (const mode of [null, 'server', 'hybrid']) {
+      for (const fact of ['whoMayToggle', 'switchKeepsHistory', 'switchIsShownInThread', 'endToEndIsFinal'] as const) {
         expect({ mode, fact, present: facts(mode).includes(fact) }).toEqual({ mode, fact, present: true });
       }
+    }
+  });
+});
+
+describe('le bout en bout ne se désactive pas (#12949)', () => {
+  test('la fiche le dit, sous un titre qui ne propose plus de désactiver', () => {
+    const sections = encryptionExplanation({ mode: 'e2ee', isDirect: false }).sections;
+    expect(sections.map((section) => section.topic)).toContain('permanence');
+    expect(sections.map((section) => section.topic)).not.toContain('switching');
+    expect(sections.find((section) => section.topic === 'permanence')?.facts).toEqual(['endToEndNeverTurnedOff', 'serverCannotTurnItOff']);
+  });
+
+  test('un tête-à-tête ne promet pas une nouvelle conversation que la passerelle dédoublonne (audit #12949)', () => {
+    const permanence = encryptionExplanation({ mode: 'e2ee', isDirect: true }).sections.find((section) => section.topic === 'permanence');
+    expect(permanence?.facts).toEqual(['endToEndNeverTurnedOffDirect', 'serverCannotTurnItOff']);
+  });
+
+  test('aucun fait de bascule ni de confirmation n’y reste', () => {
+    for (const fact of ['whoMayToggle', 'switchKeepsHistory', 'switchIsShownInThread', 'switchNeverResendsInClear'] as const) {
+      expect({ fact, present: (facts('e2ee') as readonly string[]).includes(fact) }).toEqual({ fact, present: false });
     }
   });
 });

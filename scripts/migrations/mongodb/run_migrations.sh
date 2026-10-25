@@ -97,7 +97,6 @@ MIGRATIONS=(
     "002_normalize_audio_codec.js"
     "003_add_attachment_indexes.js"
     "004_report_missing_audio_duration.js"
-    "006_remove_encryptionMode_from_message_attachment.js"
     "007_migrate_snake_case_to_camel_case.js"
     "008_add_email_verification_code.js"
     "009_partial_index_post_originalRepostOfId.js"

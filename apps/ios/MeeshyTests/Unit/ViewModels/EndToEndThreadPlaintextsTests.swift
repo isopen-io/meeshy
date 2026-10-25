@@ -14,7 +14,8 @@ final class EndToEndThreadPlaintextsTests: XCTestCase {
     private func sealed(id: String = "m1", clientMessageId: String? = "cid_1", senderUserId: String? = nil) -> MeeshyMessage {
         MeeshyMessage(
             id: id, clientMessageId: clientMessageId, conversationId: conversationId, senderId: "p1",
-            content: E2EEWire.contentPlaceholder, isEncrypted: true, encryptionMode: "e2ee", senderUserId: senderUserId ?? peer
+            content: E2EEWire.contentPlaceholder, isEncrypted: true, encryptionMode: "e2ee", senderUserId: senderUserId ?? peer,
+            isMe: senderUserId == "me"
         )
     }
 
@@ -114,4 +115,30 @@ final class EndToEndThreadPlaintextsTests: XCTestCase {
 
         XCTAssertEqual(EndToEndThreadPlaintexts.lookupKeys(of: [sealed(), clear]), ["m1", "cid_1"])
     }
+
+    /// Audit #12916 — un avis système n'est la parole de personne : aucun clair ne s'y pose.
+    func test_aPlaintextServedUnderASystemLine_staysSealed() {
+        var system = sealed()
+        system.messageSource = .system
+        var messages = [system]
+
+        EndToEndThreadPlaintexts.apply(["m1": .readable(content("Oui"), senderUserId: peer)], to: &messages, conversationId: conversationId)
+
+        XCTAssertFalse(messages[0].isContentDecryptedOnDevice)
+    }
+
+    /// Audit #12916 — une ligne dont l'auteur n'est que l'identifiant brut du
+    /// magasin (`senderId`) se juge sur lui : un autre auteur reste scellé.
+    func test_aStoreRowOfAnotherAuthor_staysSealed() {
+        let row = MeeshyMessage(
+            id: "m1", conversationId: conversationId, senderId: "00000000000000000000cc33",
+            content: E2EEWire.contentPlaceholder, isEncrypted: true, encryptionMode: "e2ee"
+        )
+        var messages = [row]
+
+        EndToEndThreadPlaintexts.apply(["m1": .readable(content("Oui"), senderUserId: peer)], to: &messages, conversationId: conversationId)
+
+        XCTAssertFalse(messages[0].isContentDecryptedOnDevice)
+    }
+
 }

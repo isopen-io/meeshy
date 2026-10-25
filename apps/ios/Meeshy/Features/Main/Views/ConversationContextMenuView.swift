@@ -471,6 +471,8 @@ struct ConversationRowMenuActions {
     let onCall: () -> Void
     let onVideoCall: () -> Void
     let onGroupSettings: () -> Void
+    /// « Gérer les membres » (#12631) : la fiche de la conversation, sur ses membres.
+    let onManageMembers: () -> Void
 }
 
 // MARK: - Entrée VoiceOver

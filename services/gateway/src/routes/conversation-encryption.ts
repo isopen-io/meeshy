@@ -4,7 +4,9 @@
  * Handles encryption settings for conversations:
  * - Enable encryption (E2EE, Server, or Hybrid mode)
  * - Get encryption status
- * - Disable encryption (#12522) — the regime is switchable, every switch bumps its epoch
+ * - Disable encryption (#12522) — at-rest modes only (server, hybrid). An e2ee
+ *   conversation NEVER goes back to plaintext (#12949): DELETE answers
+ *   409 E2EE_IRREVERSIBLE, and so does a POST that would set another mode.
  *
  * Encryption Modes:
  * - e2ee: Full end-to-end encryption (Signal Protocol) - NO translation
@@ -33,7 +35,7 @@ import {
   ENCRYPTION_ACTIVATION_RESTRICTED_CODE,
   mayActivateConversationEncryption,
 } from '../utils/encryption-activation-policy';
-import { E2EE_ERROR_CODES } from '@meeshy/shared/types/e2ee-directory';
+import { E2EE_ERROR_CODES, E2EE_IRREVERSIBLE_MESSAGE } from '@meeshy/shared/types/e2ee-directory';
 import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import type { ConversationEncryptionChangedEventData } from '@meeshy/shared/types/socketio-events';
 import {
@@ -42,6 +44,8 @@ import {
   encryptionStatusView,
   regimeEpochOf,
   regimeIsActive,
+  regimeIsEndToEnd,
+  regimeMayBeLeft,
   switchEncryptionRegime,
   type SwitchedRegime,
 } from '../services/conversations/encryptionRegime';
@@ -148,11 +152,12 @@ function encryptionChange(conversationId: string, switched: SwitchedRegime, acto
   };
 }
 
-/** Le repli FRANÇAIS de l'avis de désactivation, pour les surfaces sans rendu dédié (anciens clients). */
-function disabledNoticeText(actorName: string, previousMode: string | null): string {
-  return previousMode === 'e2ee'
-    ? `🔓 ${actorName} a désactivé le chiffrement de bout en bout. Les nouveaux messages ne sont plus chiffrés de bout en bout ; les précédents le restent.`
-    : `🔓 ${actorName} a désactivé le chiffrement de cette conversation.`;
+/**
+ * Le repli FRANÇAIS de l'avis de désactivation, pour les surfaces sans rendu
+ * dédié (anciens clients). Seul le chiffrement au repos se désactive (#12949).
+ */
+function disabledNoticeText(actorName: string): string {
+  return `🔓 ${actorName} a désactivé le chiffrement de cette conversation.`;
 }
 
 export default async function encryptionRoutes(fastify: FastifyInstance) {
@@ -162,6 +167,10 @@ export default async function encryptionRoutes(fastify: FastifyInstance) {
     requireAuth: true,
     allowAnonymous: false
   });
+
+  /** #12949 — le bout en bout ne se quitte pas : lisible et stable pour un ancien client (#9223). */
+  const irreversible = (reply: FastifyReply) =>
+    sendError(reply, 409, E2EE_IRREVERSIBLE_MESSAGE, { code: E2EE_ERROR_CODES.IRREVERSIBLE });
 
   const regimeChanged = (reply: FastifyReply) =>
     sendError(reply, 409, 'The encryption of this conversation has just changed: reload it and try again', {
@@ -237,7 +246,7 @@ export default async function encryptionRoutes(fastify: FastifyInstance) {
         }
 
         const status = encryptionStatusView(conversation, {
-          canToggleEncryption: member !== undefined && toggleRefusal(conversation, member) === null,
+          mayToggle: member !== undefined && toggleRefusal(conversation, member) === null,
         });
 
         return sendSuccess(reply, status);
@@ -299,8 +308,12 @@ export default async function encryptionRoutes(fastify: FastifyInstance) {
           return refusal(reply);
         }
 
+        if (regimeIsEndToEnd(conversation) && mode !== 'e2ee') {
+          return irreversible(reply);
+        }
+
         if (regimeIsActive(conversation)) {
-          return sendBadRequest(reply, 'Encryption is already enabled for this conversation: disable it first', {
+          return sendBadRequest(reply, 'Encryption is already enabled for this conversation', {
             code: ENCRYPTION_ALREADY_ENABLED_CODE,
           });
         }
@@ -357,7 +370,7 @@ export default async function encryptionRoutes(fastify: FastifyInstance) {
 
         return sendSuccess(reply, encryptionStatusView(
           { encryptionMode: switched.mode, encryptionEnabledAt: switched.enabledAt, encryptionEnabledBy: switched.enabledBy, encryptionEpoch: switched.epoch },
-          { canToggleEncryption: true },
+          { mayToggle: true },
         ), { message: `${encryptionLabels[mode]} encryption enabled successfully` });
 
       } catch (error) {
@@ -368,10 +381,12 @@ export default async function encryptionRoutes(fastify: FastifyInstance) {
   );
   /**
    * DELETE /api/v1/conversations/:conversationId/encryption
-   * Disable encryption (#12522). Les messages déjà chiffrés le restent, sur le
-   * serveur comme sur les appareils ; les suivants partent en clair et
-   * retrouvent les features serveur. Même gardes que l'activation, dans le
-   * même ordre (#12563), même écriture conditionnelle (#12521).
+   * Disable AT-REST encryption (#12522) : `server` ou `hybrid` seulement, que
+   * le serveur lit déjà. Une conversation `e2ee` ne repasse JAMAIS en clair
+   * (#12949) : 409 E2EE_IRREVERSIBLE, rien n'est écrit ni annoncé — et
+   * l'écriture conditionnelle le refuserait de toute façon. Même gardes que
+   * l'activation, dans le même ordre (#12563) : un étranger reçoit le 404, un
+   * membre sans le rôle le 403, avant tout mot sur le régime.
    */
   fastify.delete<{
     Params: EncryptionStatusParams;
@@ -411,6 +426,11 @@ export default async function encryptionRoutes(fastify: FastifyInstance) {
           });
         }
 
+        if (!regimeMayBeLeft(conversation)) {
+          logger.warn('Refused to disable an irreversible encryption regime', { conversationId, mode: conversation.encryptionMode });
+          return irreversible(reply);
+        }
+
         const switched = await switchEncryptionRegime(fastify.prisma, {
           conversationId,
           observedEpoch: regimeEpochOf(conversation),
@@ -423,7 +443,7 @@ export default async function encryptionRoutes(fastify: FastifyInstance) {
 
         const previousMode = conversation.encryptionMode;
         await announceSwitch(conversation, switched, authContext.userId, (actor) => ({
-          content: disabledNoticeText(actor.displayName, previousMode),
+          content: disabledNoticeText(actor.displayName),
           metadata: { kind: 'encryption-disabled', previousMode, epoch: switched.epoch, actor },
         }));
 
@@ -431,7 +451,7 @@ export default async function encryptionRoutes(fastify: FastifyInstance) {
 
         return sendSuccess(reply, encryptionStatusView(
           { encryptionMode: null, encryptionEnabledAt: null, encryptionEnabledBy: null, encryptionEpoch: switched.epoch },
-          { canToggleEncryption: true },
+          { mayToggle: true },
         ), { message: 'Encryption disabled' });
 
       } catch (error) {

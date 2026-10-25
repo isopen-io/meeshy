@@ -649,7 +649,10 @@ extension ConversationRowMenuActions {
             onSearch: { list.openConversation(conversation, searching: true) },
             onCall: { startCall(to: conversation, isVideo: false) },
             onVideoCall: { startCall(to: conversation, isVideo: true) },
-            onGroupSettings: { list.presentSettings(of: conversation) }
+            onGroupSettings: { list.presentSettings(of: conversation) },
+            // La fiche s'ouvre sur son onglet Membres (`ConversationInfoSheet.InfoTab`),
+            // derrière la même porte du verrou que « Détails ».
+            onManageMembers: { list.presentInfo(of: conversation) }
         )
     }
 

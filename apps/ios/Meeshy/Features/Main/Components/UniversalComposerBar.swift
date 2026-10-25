@@ -79,9 +79,8 @@ struct UniversalComposerBar: View {
     /// anything. `forceHideAttachment` still wins if both are set.
     var forceShowAttachment: Bool = false
 
-    /// Opt-in override that enables voice recording even when `mode` would hide
-    /// it (e.g. comments).
-    var forceShowVoice: Bool = false
+    /// La porte vocale : selon `mode`, ouverte d'office (commentaires) ou fermée par l'hôte (#12918).
+    var voiceDoor: ComposerVoiceDoor = .byMode
 
     // MARK: - Language
 
@@ -456,7 +455,7 @@ struct UniversalComposerBar: View {
 
     var resolvedPlaceholder: String { mode?.placeholder ?? placeholder }
     var resolvedMaxLength: Int? { mode?.maxLength ?? maxLength }
-    var resolvedShowVoice: Bool { forceShowVoice || (mode?.showVoice ?? showVoice) }
+    var resolvedShowVoice: Bool { voiceDoor.isOpen(byMode: mode?.showVoice ?? showVoice) }
     var resolvedShowAttachment: Bool {
         if forceHideAttachment { return false }
         return forceShowAttachment || (mode?.showAttachment ?? showAttachment)

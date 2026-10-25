@@ -121,7 +121,7 @@ describe('startShellPush — le jeton FCM de la coque part sous le compte couran
       {
         method: 'POST',
         path: '/api/v1/users/register-device-token',
-        body: { token: 'fcm-token-1-xxxxxxxx', platform: 'android', type: 'fcm', appVersion: '2.0.12' },
+        body: { token: 'fcm-token-1-xxxxxxxx', platform: 'android', type: 'fcm', appVersion: '2.0.12', bundleId: 'me.meeshy.app' },
         credential: { kind: 'registered', token: 'jwt-u1' },
       },
     ]);
@@ -197,6 +197,7 @@ describe('le jeton part avec l’identité de l’appareil (#10858)', () => {
         platform: 'android',
         type: 'fcm',
         appVersion: '2.0.12',
+        bundleId: 'me.meeshy.app',
         deviceId: 'a1b2c3d4e5f60718',
         deviceName: 'Pixel 8',
       },
@@ -207,12 +208,12 @@ describe('le jeton part avec l’identité de l’appareil (#10858)', () => {
     const bodies = await registeredBody(async () => {
       throw new Error('not implemented');
     });
-    expect(bodies).toEqual([{ token: 'fcm-token-1-xxxxxxxx', platform: 'android', type: 'fcm', appVersion: '2.0.12' }]);
+    expect(bodies).toEqual([{ token: 'fcm-token-1-xxxxxxxx', platform: 'android', type: 'fcm', appVersion: '2.0.12', bundleId: 'me.meeshy.app' }]);
   });
 
   test('ce que le pont rend d’inattendu ne part pas', async () => {
     const bodies = await registeredBody(async () => ({ deviceId: '', deviceName: 42, extra: 'x' }));
-    expect(bodies).toEqual([{ token: 'fcm-token-1-xxxxxxxx', platform: 'android', type: 'fcm', appVersion: '2.0.12' }]);
+    expect(bodies).toEqual([{ token: 'fcm-token-1-xxxxxxxx', platform: 'android', type: 'fcm', appVersion: '2.0.12', bundleId: 'me.meeshy.app' }]);
   });
 });
 

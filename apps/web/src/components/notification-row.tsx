@@ -128,6 +128,8 @@ export function TargetLink({ target, onClick, ...rest }: SurfaceProps & { readon
       return <Link to="progressionLigue" {...surface} />;
     case 'progressionSaison':
       return <Link to="progressionSaison" {...surface} />;
+    case 'progressionCarnet':
+      return <Link to="progressionCarnet" {...surface} />;
     case 'settings':
       return <Link to="settings" {...surface} />;
   }

@@ -283,6 +283,7 @@ public class MainActivity extends BridgeActivity {
         setVolumeControlStream(VolumeStreamRules.stream(false));
         suivreTailleDuTexte(getResources().getConfiguration());
         SilentNotificationChannel.ensure(ShellLocale.wrap(this));
+        GameNotificationChannel.ensure(ShellLocale.wrap(this));
         photoPicker = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), this::photosPicked);
         // #12744 — Capacitor garde chaque prise de l'appareil photo ; la nouvelle
         // WebView ne tient plus les precedentes, la creation les balaie.

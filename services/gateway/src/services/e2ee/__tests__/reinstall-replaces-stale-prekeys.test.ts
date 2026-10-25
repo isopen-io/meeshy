@@ -30,8 +30,9 @@ const openSessions = (store: FakeE2EEStore) =>
   [SESSION_BEFORE, SESSION_AFTER].forEach((id) =>
     store.collections.UserSession.insert({ id, isValid: true, expiresAt: new Date(NOW.getTime() + 86_400_000) }));
 
-const requestOf = (keys: Keys, batches: { oneTimePreKeys: EcKey[]; kyberPreKeys: KyberKey[] }) => ({
-  binding: keys.binding(ALICE, NOW.getTime()),
+/** L'installation signe une preuve neuve à chaque enrôlement (#12933). */
+const requestOf = (keys: Keys, batches: { oneTimePreKeys: EcKey[]; kyberPreKeys: KyberKey[] }, signedAt = NOW.getTime()) => ({
+  binding: keys.binding(ALICE, signedAt),
   registrationId: keys.registrationId,
   identityKey: keys.identityKey,
   signedPreKey: keys.signedPreKey,
@@ -60,7 +61,7 @@ async function enrolledThenReinstalled() {
   const keys = fakeDeviceKeys({ oneTime: 3, kyber: 3 });
   await directory.enrollDevice({ userId: ALICE, sessionId: SESSION_BEFORE, request: requestOf(keys, publishedBatchOf(keys)) });
   const reinstalled = reinstalledBatchOf(keys);
-  await directory.enrollDevice({ userId: ALICE, sessionId: SESSION_AFTER, request: requestOf(keys, reinstalled) });
+  await directory.enrollDevice({ userId: ALICE, sessionId: SESSION_AFTER, request: requestOf(keys, reinstalled, NOW.getTime() + 1) });
   return { store, directory, keys, reinstalled };
 }
 
@@ -88,7 +89,7 @@ describe('#12882 — une réinstallation ne fait jamais servir les pré-clés de
     const keys = fakeDeviceKeys({ oneTime: 3, kyber: 3 });
     await directory.enrollDevice({ userId: ALICE, sessionId: SESSION_BEFORE, request: requestOf(keys, publishedBatchOf(keys)) });
 
-    await directory.enrollDevice({ userId: ALICE, sessionId: SESSION_AFTER, request: requestOf(keys, { oneTimePreKeys: [], kyberPreKeys: [] }) });
+    await directory.enrollDevice({ userId: ALICE, sessionId: SESSION_AFTER, request: requestOf(keys, { oneTimePreKeys: [], kyberPreKeys: [] }, NOW.getTime() + 1) });
 
     expect(unusedOf(store, 'ec').sort()).toEqual(keys.oneTimePreKeys.map((key) => key.publicKey).sort());
     expect(unusedOf(store, 'kyber').sort()).toEqual(keys.kyberPreKeys.map((key) => key.publicKey).sort());

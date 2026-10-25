@@ -7,6 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		DADEC26230D748BBBFA5C76C /* ThreadVisitState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8528360A4E0B2D4476473ADA /* ThreadVisitState.swift */; };
+		9E4B122F09F7966580888C05 /* EndToEndThreadClear.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71880AE6F69C82CC3CA6A56A /* EndToEndThreadClear.swift */; };
+		D69A62D8CE146A4B83899B3B /* EndToEndThreadDisplayTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE2BCFEA1A56F3A5B109233A /* EndToEndThreadDisplayTests.swift */; };
+		CD5156A2A2A8EBB5AD480206 /* LibsignalTestGateway.swift in Sources */ = {isa = PBXBuildFile; fileRef = 824662740C98A9B9AF8401D0 /* LibsignalTestGateway.swift */; };
 		0748473321C25E2D6CD65F33 /* EndToEndMessagingRuntimeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3106025634D4B48B75780286 /* EndToEndMessagingRuntimeTests.swift */; };
 		13BA889CBD961604BA20B3D4 /* EndToEndThreadPlaintextsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9AE269B2AFDC7E995C78B80B /* EndToEndThreadPlaintextsTests.swift */; };
 		C24F51449D3DB39C6B9DCB73 /* MockEndToEndMessaging.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B89D6C31EF2A1CC3A088852 /* MockEndToEndMessaging.swift */; };
@@ -4056,6 +4060,10 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		8528360A4E0B2D4476473ADA /* ThreadVisitState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThreadVisitState.swift; sourceTree = "<group>"; };
+		71880AE6F69C82CC3CA6A56A /* EndToEndThreadClear.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EndToEndThreadClear.swift; sourceTree = "<group>"; };
+		CE2BCFEA1A56F3A5B109233A /* EndToEndThreadDisplayTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EndToEndThreadDisplayTests.swift; sourceTree = "<group>"; };
+		824662740C98A9B9AF8401D0 /* LibsignalTestGateway.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibsignalTestGateway.swift; sourceTree = "<group>"; };
 		3106025634D4B48B75780286 /* EndToEndMessagingRuntimeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EndToEndMessagingRuntimeTests.swift; sourceTree = "<group>"; };
 		9AE269B2AFDC7E995C78B80B /* EndToEndThreadPlaintextsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EndToEndThreadPlaintextsTests.swift; sourceTree = "<group>"; };
 		9B89D6C31EF2A1CC3A088852 /* MockEndToEndMessaging.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockEndToEndMessaging.swift; sourceTree = "<group>"; };
@@ -9615,6 +9623,7 @@
 		3C1EB85D03F33257BF160353 /* Mocks */ = {
 			isa = PBXGroup;
 			children = (
+				824662740C98A9B9AF8401D0 /* LibsignalTestGateway.swift */,
 				9B89D6C31EF2A1CC3A088852 /* MockEndToEndMessaging.swift */,
 				03540BF30CB04670F7980F73 /* FakeNetworkMonitor.swift */,
 				FDED9440119014E9CA1A61DF /* FakeOfflineMessageQueue.swift */,
@@ -10643,6 +10652,7 @@
 		6400CAAFC101FD2D64E2617A /* Conversation */ = {
 			isa = PBXGroup;
 			children = (
+				71880AE6F69C82CC3CA6A56A /* EndToEndThreadClear.swift */,
 				092DB9E5B816DD6F280D970B /* EndToEndThreadPlaintexts.swift */,
 				56235CCBEC5160F455D12C8B /* AttachmentAudioMetadata.swift */,
 				0E8D58A0B3E977271F143098 /* AttachmentMetadataMapping.swift */,
@@ -11055,6 +11065,7 @@
 		937EE8EE8FCFAC22BCD07F51 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				8528360A4E0B2D4476473ADA /* ThreadVisitState.swift */,
 				3225C64F1DBE72267E5C6B32 /* AboutView.swift */,
 				A26A2A0F575B1CF12190E52F /* AccountSwitcherSheet.swift */,
 				53BE3A085CA57BF75D2EC143 /* AchievementBadgeView.swift */,
@@ -12497,6 +12508,7 @@
 		D431B818D9A1056ACF67B1B1 /* ViewModels */ = {
 			isa = PBXGroup;
 			children = (
+				CE2BCFEA1A56F3A5B109233A /* EndToEndThreadDisplayTests.swift */,
 				9AE269B2AFDC7E995C78B80B /* EndToEndThreadPlaintextsTests.swift */,
 				5A61A60CF1E1D14001985356 /* ActiveSessionsViewModelTests.swift */,
 				F0D34DA5C2F91268F510CA73 /* AffiliatesViewModelTests.swift */,
@@ -13497,6 +13509,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				DADEC26230D748BBBFA5C76C /* ThreadVisitState.swift in Sources */,
+				9E4B122F09F7966580888C05 /* EndToEndThreadClear.swift in Sources */,
 				DCDA6797EFE3D02FC5C4562F /* EndToEndSessionBridge.swift in Sources */,
 				3A45EF37BFDFE5D60C7AF67D /* LibsignalDeviceProvisioning.swift in Sources */,
 				F97DFECE3A88789F75B2E5F3 /* EndToEndMessagingRuntime.swift in Sources */,
@@ -15605,6 +15619,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D69A62D8CE146A4B83899B3B /* EndToEndThreadDisplayTests.swift in Sources */,
+				CD5156A2A2A8EBB5AD480206 /* LibsignalTestGateway.swift in Sources */,
 				0748473321C25E2D6CD65F33 /* EndToEndMessagingRuntimeTests.swift in Sources */,
 				13BA889CBD961604BA20B3D4 /* EndToEndThreadPlaintextsTests.swift in Sources */,
 				C24F51449D3DB39C6B9DCB73 /* MockEndToEndMessaging.swift in Sources */,

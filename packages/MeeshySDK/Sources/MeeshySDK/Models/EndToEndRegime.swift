@@ -11,6 +11,14 @@ public struct EndToEndEra: Equatable, Hashable, Sendable, Codable {
         self.end = end
     }
 
+    /// Une ère dont la fin précède le début n'est jamais jetée : elle ne se
+    /// clôt plus (revue #12846 — un serveur qui antidate une désactivation
+    /// faisait disparaître l'ère chiffrée, et ses messages se relisaient clairs).
+    static func failClosed(start: Date?, end: Date) -> EndToEndEra {
+        guard let start, end < start else { return EndToEndEra(start: start, end: end) }
+        return EndToEndEra(start: start, end: .distantFuture)
+    }
+
     func contains(_ instant: Date) -> Bool {
         (start.map { instant >= $0 } ?? true) && instant < end
     }
@@ -100,7 +108,8 @@ public struct EndToEndRegime: Equatable, Sendable {
     public func superseding(_ earlier: EndToEndRegime?) -> EndToEndRegime {
         guard let earlier else { return self }
         guard earlier.epoch == nil else { return merging(earlier) }
-        return with(closedEras: closedEras + earlier.closedEras + earlier.closed(by: self))
+        let learned = clampingDeactivation(after: earlier)
+        return learned.with(closedEras: closedEras + earlier.closedEras + earlier.closed(by: learned))
     }
 
     /// Un message créé à cet instant appartient-il à une ère chiffrée ? Un
@@ -134,8 +143,22 @@ public struct EndToEndRegime: Equatable, Sendable {
 
     private static func datedMerge(_ lhs: EndToEndRegime, _ lhsEpoch: Int, _ rhs: EndToEndRegime, _ rhsEpoch: Int) -> EndToEndRegime {
         guard lhsEpoch != rhsEpoch else { return sameEpoch(lhs, rhs) }
-        let (older, newer) = lhsEpoch < rhsEpoch ? (lhs, rhs) : (rhs, lhs)
+        let (older, earlier) = lhsEpoch < rhsEpoch ? (lhs, rhs) : (rhs, lhs)
+        let newer = earlier.clampingDeactivation(after: older)
         return newer.with(closedEras: older.closedEras + newer.closedEras + older.closed(by: newer))
+    }
+
+    /// Une désactivation datée AVANT ce que l'appareil savait déjà chiffré —
+    /// l'activation de l'ère qu'elle clôt, la fin des ères connues — n'a pas de
+    /// frontière crédible (revue #12846) : elle ne clôt rien, l'ère reste
+    /// ouverte (fail-closed). La remonter à l'activation viderait l'ère, ce qui
+    /// revient à l'effacer.
+    private func clampingDeactivation(after older: EndToEndRegime) -> EndToEndRegime {
+        guard !isEndToEnd, let disabledAt else { return self }
+        let floor = ([older.enabledAt] + older.closedEras.map { Optional($0.end) }).compactMap { $0 }
+            .filter { $0 != .distantFuture }.max()
+        guard let floor, floor > disabledAt else { return self }
+        return EndToEndRegime(isEndToEnd: false, enabledAt: nil, epoch: epoch, disabledAt: .distantFuture, closedEras: closedEras)
     }
 
     /// À époque égale, le bout en bout l'emporte ; deux désactivations gardent la plus tardive.
@@ -153,12 +176,12 @@ public struct EndToEndRegime: Equatable, Sendable {
         }
     }
 
-    /// L'ère chiffrée que `newer` clôt. Une fin inconnue ne clôt rien : l'ère
-    /// reste ouverte à jamais (fail-closed).
+    /// L'ère chiffrée que `newer` clôt. Une fin inconnue, ou antérieure au
+    /// début de l'ère, ne clôt rien : l'ère reste ouverte à jamais (fail-closed).
     private func closed(by newer: EndToEndRegime) -> [EndToEndEra] {
         guard isEndToEnd else { return [] }
         let end = (newer.isEndToEnd ? newer.enabledAt : newer.disabledAt) ?? .distantFuture
-        return [EndToEndEra(start: enabledAt, end: end)]
+        return [EndToEndEra.failClosed(start: enabledAt, end: end)]
     }
 
     /// Une observation non datée posée sur ce régime daté : un clair n'y change
@@ -184,7 +207,8 @@ public struct EndToEndRegime: Equatable, Sendable {
     }
 
     private static func ordered(_ eras: [EndToEndEra]) -> [EndToEndEra] {
-        Array(Set(eras.filter { era in era.start.map { $0 < era.end } ?? true })).sorted { ($0.end, $0.start ?? .distantPast) < ($1.end, $1.start ?? .distantPast) }
+        Array(Set(eras.map { EndToEndEra.failClosed(start: $0.start, end: $0.end) }))
+            .sorted { ($0.end, $0.start ?? .distantPast) < ($1.end, $1.start ?? .distantPast) }
     }
 }
 
