@@ -85,6 +85,23 @@ describe('la page Réglages du jeu', () => {
     expect(host.querySelector('#game-settings-notifications [role="alert"]')?.textContent).toBe('Réessaie.');
   });
 
+  test('« Moments à immortaliser » : l’interrupteur vit dans la carte des notifications du jeu et envoie son nouvel état (#10268)', async () => {
+    const calls: boolean[] = [];
+    const host = await mount(
+      <ReglagesBody
+        progress={progress}
+        actions={actions()}
+        online
+        hide={() => undefined}
+        notifications={{ enabled: true, onToggle: () => undefined, photo: { enabled: true, onToggle: (on) => calls.push(on) } }}
+      />,
+    );
+    const input = host.querySelector<HTMLInputElement>('#game-settings-notifications [data-game-setting-photo]');
+    expect(input?.checked).toBe(true);
+    await click(input);
+    expect(calls).toEqual([false]);
+  });
+
   test('masquer le jeu appelle le geste composé de l’écran', async () => {
     const hidden: boolean[] = [];
     const host = await mount(<ReglagesBody progress={progress} actions={actions()} online hide={(on) => hidden.push(on)} />);
