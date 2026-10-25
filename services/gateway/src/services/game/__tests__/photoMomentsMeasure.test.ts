@@ -1,7 +1,8 @@
 /**
  * LA MESURE DE L'IMMORTALISATION (D15, #10185 — lot L20 #10176) : des agrégats ANONYMES lus dans le registre que la
  * fonctionnalité tient déjà. Les témoins portent sur ce que le rapport SORT : aucun identifiant, aucune cellule sous
- * dix comptes distincts, aucun compte qui a refusé l'analyse, et une lecture qui n'écrit rien.
+ * dix comptes distincts, aucun compte qui a refusé l'analyse, une lecture qui n'écrit rien — et AUCUNE soustraction
+ * entre deux lignes publiées (famille − clés, clé − cellules, fenêtre − fenêtre) qui isolerait moins de dix comptes.
  */
 
 import {
@@ -10,9 +11,12 @@ import {
   parsePhotoMeasureArgs,
   type PhotoMeasureReader,
 } from '../photoMomentsMeasure';
+import { isoWeekOf, isoWeekWindow } from '../photoMeasureWeek';
 
-const NOW = new Date('2026-10-25T12:00:00.000Z');
-const WINDOW = { from: new Date('2026-10-18T00:00:00.000Z'), to: new Date('2026-10-25T00:00:00.000Z') };
+/** Mardi 27 octobre 2026 : la semaine ISO 2026-W43 (lundi 19 → lundi 26) est close, la W44 ne l'est pas. */
+const NOW = new Date('2026-10-27T12:00:00.000Z');
+const WEEK = '2026-W43';
+const WINDOW = { week: WEEK };
 const DAY = '2026-10-20';
 const at = (day: string, hour = 10): Date => new Date(`${day}T${String(hour).padStart(2, '0')}:00:00.000Z`);
 
@@ -242,23 +246,112 @@ describe('ce que le rapport mesure', () => {
 });
 
 describe('les arguments de la requête', () => {
-  it('sans argument : les sept derniers jours UTC complets', () => {
-    expect(parsePhotoMeasureArgs([], NOW)).toEqual({ from: new Date('2026-10-18T00:00:00.000Z'), to: new Date('2026-10-25T00:00:00.000Z') });
+  it('sans argument : la dernière semaine ISO close', () => {
+    expect(parsePhotoMeasureArgs([], NOW)).toEqual({ week: WEEK });
+    expect(parsePhotoMeasureArgs([], new Date('2026-10-26T00:00:00.000Z'))).toEqual({ week: WEEK });
   });
 
-  it('--from / --to : bornes en jours UTC, la seconde exclue', () => {
-    expect(parsePhotoMeasureArgs(['--from', '2026-10-01', '--to', '2026-10-08'], NOW)).toEqual({
-      from: new Date('2026-10-01T00:00:00.000Z'),
-      to: new Date('2026-10-08T00:00:00.000Z'),
-    });
+  it('--week : une semaine ISO close, entière', () => {
+    expect(parsePhotoMeasureArgs(['--week', '2026-W40'], NOW)).toEqual({ week: '2026-W40' });
   });
 
   it.each([
-    [['--from', '2026-02-30'], 'invalid-day'],
-    [['--from', '2026-10-10', '--to', '2026-10-10'], 'empty-window'],
-    [['--from', '2024-01-01', '--to', '2024-02-01'], 'beyond-retention'],
+    [['--from', '2026-10-20', '--to', '2026-10-21'], 'unknown-argument'],
+    [['--from', '2026-10-20'], 'unknown-argument'],
+    [['--week', '2026-W44'], 'week-not-closed'],
+    [['--week', '2026-W53'], 'week-not-closed'],
+    [['--week', '2025-W53'], 'invalid-week'],
+    [['--week', '2026-W00'], 'invalid-week'],
+    [['--week', '2026-43'], 'invalid-week'],
+    [['--week', '2024-W01'], 'beyond-retention'],
+    [['--week'], 'unknown-argument'],
     [['--bogus'], 'unknown-argument'],
   ])('%j ⇒ refus %s', (argv, reason) => {
     expect(parsePhotoMeasureArgs(argv, NOW)).toEqual({ reason });
+  });
+});
+
+describe('les fenêtres sont des semaines ISO fixes : deux fenêtres ne se chevauchent jamais', () => {
+  it('une semaine va du lundi 00:00 UTC au lundi suivant, et la suivante commence là où elle finit', () => {
+    expect(isoWeekWindow('2026-W43')).toEqual({ week: '2026-W43', from: new Date('2026-10-19T00:00:00.000Z'), to: new Date('2026-10-26T00:00:00.000Z') });
+    expect(isoWeekWindow('2026-W44')?.from).toEqual(isoWeekWindow('2026-W43')?.to);
+    expect(isoWeekWindow('2027-W01')?.from).toEqual(isoWeekWindow('2026-W53')?.to);
+  });
+
+  it('chaque jour appartient à UNE semaine, celle de son jeudi', () => {
+    expect(isoWeekOf(new Date('2026-01-01T12:00:00.000Z'))).toBe('2026-W01');
+    expect(isoWeekOf(new Date('2027-01-01T12:00:00.000Z'))).toBe('2026-W53');
+    expect(isoWeekOf(new Date('2026-10-25T23:59:59.000Z'))).toBe('2026-W43');
+    expect(isoWeekOf(new Date('2026-10-26T00:00:00.000Z'))).toBe('2026-W44');
+  });
+
+  it('une semaine encore ouverte ne se mesure pas : la relire demain soustrairait la journée', async () => {
+    const { reader } = registry({ moments: accounts(10).map((userId) => moment({ userId })) });
+
+    await expect(measurePhotoMoments(reader, { week: '2026-W44', now: NOW })).rejects.toThrow('week-not-closed');
+    await expect(measurePhotoMoments(reader, { week: '2026-43', now: NOW })).rejects.toThrow('invalid-week');
+  });
+
+  it('une semaine close relue plus tard rend le même rapport, même si ses étapes ont été présentées ou gardées depuis', async () => {
+    const users = accounts(10);
+    const then = registry({ moments: users.map((userId) => moment({ userId, presentedAt: null, notifiedAt: at(DAY, 7) })) });
+    const later = registry({
+      moments: users.map((userId) => moment({ userId, presentedAt: null, notifiedAt: at(DAY, 7) })).map((row, i) =>
+        i === 0 ? { ...row, presentedAt: at('2026-10-28'), keptAt: at('2026-10-28', 11) } : row,
+      ),
+    });
+
+    const first = await measurePhotoMoments(then.reader, { week: WEEK, now: NOW });
+    const second = await measurePhotoMoments(later.reader, { week: WEEK, now: new Date('2026-11-04T12:00:00.000Z') });
+
+    expect(second).toEqual(first);
+  });
+});
+
+describe('aucune soustraction entre lignes publiées n’isole moins de dix comptes', () => {
+  it('famille − clés : un seul compte Légende qui garde sa photo ne se déduit pas de la ligne de famille', async () => {
+    const echo = accounts(10).map((userId) => moment({ userId, stepId: 'rank:echo:5' }));
+    const legende = moment({ userId: accountId(11), stepId: 'rank:legende:5', keptAt: at(DAY, 11) });
+    const { reader } = registry({ moments: [...echo, legende] });
+
+    const report = await measurePhotoMoments(reader, { ...WINDOW, now: NOW });
+
+    expect(report.rates).toEqual([{ family: 'rank', key: 'rank:echo', announced: 10, kept: 0, accounts: 10, rate: 0 }]);
+    expect(report.cells).toEqual([{ day: DAY, family: 'rank', key: 'rank:echo', event: 'presented', surface: 'in-app', accounts: 10, moments: 10 }]);
+  });
+
+  it('clé − cellules : le compte qui seul a vu et gardé son rang un autre jour ne se déduit pas de la ligne de clé', async () => {
+    const sameDay = accounts(10).map((userId) => moment({ userId, stepId: 'rank:echo:5' }));
+    const otherDay = moment({ userId: accountId(11), stepId: 'rank:echo:3', presentedAt: at('2026-10-22'), keptAt: at('2026-10-22', 11) });
+    const { reader } = registry({ moments: [...sameDay, otherDay] });
+
+    const report = await measurePhotoMoments(reader, { ...WINDOW, now: NOW });
+
+    expect(report.rates).toEqual([]);
+    expect(report.cells).toEqual([{ day: DAY, family: 'rank', key: 'rank:echo', event: 'presented', surface: 'in-app', accounts: 10, moments: 10 }]);
+  });
+
+  it('clé − cellules, sur le seul taux de garde : un compte qui garde seul un autre jour ne se déduit pas', async () => {
+    const shown = accounts(11).map((userId) => moment({ userId, stepId: 'rank:echo:5' }));
+    const keptAlone = shown.map((row, i) => (i === 0 ? { ...row, keptAt: at('2026-10-23', 11) } : row));
+    const { reader } = registry({ moments: keptAlone });
+
+    const report = await measurePhotoMoments(reader, { ...WINDOW, now: NOW });
+
+    expect(report.rates).toEqual([]);
+  });
+
+  it('un reste de dix comptes ou plus ne se protège pas : la famille sort quand ses clés cachées pèsent ensemble dix comptes', async () => {
+    const echo = accounts(10).map((userId) => moment({ userId, stepId: 'rank:echo:5' }));
+    const voix = accounts(5, 10).map((userId) => moment({ userId, stepId: 'rank:voix:2' }));
+    const conteur = accounts(5, 15).map((userId) => moment({ userId, stepId: 'rank:conteur:1' }));
+    const { reader } = registry({ moments: [...echo, ...voix, ...conteur] });
+
+    const report = await measurePhotoMoments(reader, { ...WINDOW, now: NOW });
+
+    expect(report.rates).toEqual([
+      { family: 'rank', key: null, announced: 20, kept: 0, accounts: 20, rate: 0 },
+      { family: 'rank', key: 'rank:echo', announced: 10, kept: 0, accounts: 10, rate: 0 },
+    ]);
   });
 });
