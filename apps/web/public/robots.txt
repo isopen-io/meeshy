@@ -71,4 +71,45 @@ Disallow: /hashtag
 Disallow: /links
 Disallow: /u
 
+# Crawlers d'AGENTS IA (#12939) — stance ASSUMÉE, identique au `User-Agent: *`
+# ci-dessus : la vitrine est autorisée, les surfaces applicatives refusées. On
+# les NOMME explicitement plutôt que de les laisser retomber en silence sur la
+# règle générique. La fiche agent et le pointeur OpenAPI sont annoncés plus bas.
+User-Agent: GPTBot
+User-Agent: ChatGPT-User
+User-Agent: ClaudeBot
+User-Agent: Claude-Web
+User-Agent: PerplexityBot
+User-Agent: Google-Extended
+Allow: /
+Disallow: /api/
+Disallow: /admin
+Disallow: /dashboard
+Disallow: /account
+Disallow: /auth/
+Disallow: /auth-status
+Disallow: /settings
+Disallow: /notifications
+Disallow: /conversation
+Disallow: /conversations
+Disallow: /chats
+Disallow: /chat
+Disallow: /call
+Disallow: /feed
+Disallow: /feeds
+Disallow: /groups
+Disallow: /contacts
+Disallow: /search
+Disallow: /mood
+Disallow: /story
+Disallow: /reel
+Disallow: /post
+Disallow: /hashtag
+Disallow: /l/
+Disallow: /links
+Disallow: /u
+
+# Fiche pour agents IA et pointeur OpenAPI machine (#12939)
+# llms.txt : https://meeshy.me/llms.txt
+# OpenAPI  : https://gate.meeshy.me/docs/json (annoncé par /.well-known/openapi)
 Sitemap: https://meeshy.me/sitemap.xml
