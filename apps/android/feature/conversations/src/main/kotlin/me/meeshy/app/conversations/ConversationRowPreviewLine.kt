@@ -72,7 +72,7 @@ internal fun ConversationRowPreviewLine(
         )
         MessageSummaryKind.ENCRYPTED -> RowPreviewKindStyle(
             icon = Icons.Filled.Lock,
-            contentDescriptionRes = R.string.conversations_preview_end_to_end,
+            contentDescriptionRes = null,
             tint = textSecondary,
             italic = true,
         )

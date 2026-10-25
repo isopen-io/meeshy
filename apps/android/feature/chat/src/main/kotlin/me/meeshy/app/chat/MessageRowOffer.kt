@@ -37,6 +37,7 @@ internal fun BubbleContent.actionContext(
     isViewOnce = isViewOnce,
     isUnconfirmed = ObjectIdGuard.isLocalId(messageId),
     canWrite = canWrite,
+    isEndToEndSealed = isEndToEndSealed,
 )
 
 /** A gesture a message row offers outside the long-press menu. */

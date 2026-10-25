@@ -152,10 +152,13 @@ data class ChatUiState(
         get() = if (isEndToEnd) ComposerAffordances.CLOSED else ComposerAttachmentPolicy.affordances(composerPermissions)
 
     /**
-     * La conversation est chiffrée de bout en bout (#13110). L'Android natif ne sait
-     * ni chiffrer ni lire l'e2ee (#13015) : rien n'en part — chaque porte d'envoi lit
-     * [composerAffordances] fermé, AVANT tout octet émis (texte, pièce, vocal) —, et
-     * le composeur dit où elle s'écrit.
+     * La conversation est servie chiffrée de bout en bout (#13110). L'Android natif ne
+     * sait ni chiffrer ni lire l'e2ee (#13015) : rien n'en part du fil — chaque porte
+     * d'envoi du composeur lit [composerAffordances] fermé, AVANT tout octet émis
+     * (texte, pièce, vocal, édition) —, et le composeur dit où elle s'écrit. Le
+     * transfert, le partage et les stories l'excluent par `mayCurrentUserWrite`.
+     * Hors de ce lot : un régime qui change pendant que le fil est ouvert
+     * (`conversation:encryption-changed`) et la mémoire du régime vu (#12956).
      */
     val isEndToEnd: Boolean
         get() = EndToEndRegime.isEndToEnd(encryptionMode)

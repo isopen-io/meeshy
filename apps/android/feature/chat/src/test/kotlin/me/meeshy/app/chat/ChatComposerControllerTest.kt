@@ -500,6 +500,17 @@ class ChatComposerControllerTest {
     }
 
     @Test
+    fun `an end-to-end conversation sends no edit either`() = runTest {
+        val r = rig(initial = ChatUiState(conversationId = "c1", encryptionMode = "e2ee", editingMessageId = "m-old"))
+        r.controller.onDraftChange("texte modifié")
+
+        r.controller.send()
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { r.repo.editOptimistic(any(), any()) }
+    }
+
+    @Test
     fun `an end-to-end conversation offers no writing affordance and no reply`() {
         val state = ChatUiState(conversationId = "c1", encryptionMode = "e2ee")
 

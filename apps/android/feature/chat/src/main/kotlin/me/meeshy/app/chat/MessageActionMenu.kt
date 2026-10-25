@@ -81,6 +81,8 @@ data class MessageActionContext(
     val isUnconfirmed: Boolean = false,
     /** The reader may write in this conversation (`viewerCanWrite`): replying IS writing. */
     val canWrite: Boolean = true,
+    /** End-to-end encrypted and unopened here (#13110): nothing of it is copied or forwarded. */
+    val isEndToEndSealed: Boolean = false,
 ) {
     /**
      * A message is "actionable" — eligible for reply / forward / star / edit / delete —
@@ -97,7 +99,7 @@ data class MessageActionContext(
 
     /** `forward` of the shared law, its exit verdict aside ([MessageExitOffer]). */
     val offersForward: Boolean
-        get() = offersRelay && exitOffer.offers(MessageExit.FORWARD)
+        get() = offersRelay && !isEndToEndSealed && exitOffer.offers(MessageExit.FORWARD)
 
     private val offersRelay: Boolean
         get() = isActionable && !isNotice && !isUnconfirmed
@@ -116,7 +118,7 @@ object MessageActionMenu {
             add(if (ctx.isShowingOriginal) MessageAction.ShowTranslation else MessageAction.ShowOriginal)
             add(MessageAction.ExploreLanguages)
         }
-        if (!ctx.isDeleted && ctx.exitOffer.offers(MessageExit.COPY)) {
+        if (!ctx.isDeleted && !ctx.isEndToEndSealed && ctx.exitOffer.offers(MessageExit.COPY)) {
             add(MessageAction.Copy)
         }
         if (ctx.hasOpenableFile && ctx.exitOffer.offers(MessageExit.SHARE)) {
