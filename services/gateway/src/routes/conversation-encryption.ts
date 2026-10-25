@@ -35,7 +35,8 @@ import {
   ENCRYPTION_ACTIVATION_RESTRICTED_CODE,
   mayActivateConversationEncryption,
 } from '../utils/encryption-activation-policy';
-import { E2EE_ERROR_CODES, E2EE_IRREVERSIBLE_MESSAGE } from '@meeshy/shared/types/e2ee-directory';
+import { E2EE_DIRECT_ALREADY_END_TO_END_MESSAGE, E2EE_ERROR_CODES, E2EE_IRREVERSIBLE_MESSAGE } from '@meeshy/shared/types/e2ee-directory';
+import { otherEndToEndDirectOf, pairOfMembers } from '../services/conversations/directPair';
 import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import type { ConversationEncryptionChangedEventData } from '@meeshy/shared/types/socketio-events';
 import {
@@ -171,6 +172,17 @@ export default async function encryptionRoutes(fastify: FastifyInstance) {
   /** #12949 — le bout en bout ne se quitte pas : lisible et stable pour un ancien client (#9223). */
   const irreversible = (reply: FastifyReply) =>
     sendError(reply, 409, E2EE_IRREVERSIBLE_MESSAGE, { code: E2EE_ERROR_CODES.IRREVERSIBLE });
+
+  /**
+   * #12966 — une paire a au plus UN tête-à-tête chiffré de bout en bout. Le
+   * refus nomme celui qui existe : l'appelant, membre actif des deux, peut y
+   * être mené.
+   */
+  const pairAlreadyEndToEnd = (reply: FastifyReply, existingConversationId: string) =>
+    sendError(reply, 409, E2EE_DIRECT_ALREADY_END_TO_END_MESSAGE, {
+      code: E2EE_ERROR_CODES.DIRECT_ALREADY_END_TO_END,
+      details: { existingConversationId },
+    });
 
   const regimeChanged = (reply: FastifyReply) =>
     sendError(reply, 409, 'The encryption of this conversation has just changed: reload it and try again', {
@@ -316,6 +328,14 @@ export default async function encryptionRoutes(fastify: FastifyInstance) {
           return sendBadRequest(reply, 'Encryption is already enabled for this conversation', {
             code: ENCRYPTION_ALREADY_ENABLED_CODE,
           });
+        }
+
+        const pair = mode === 'e2ee' && conversation.type === 'direct'
+          ? pairOfMembers(conversation.participants.map((participant) => participant.userId))
+          : null;
+        const existingEndToEnd = pair ? await otherEndToEndDirectOf(fastify.prisma, { conversationId, pair }) : null;
+        if (existingEndToEnd) {
+          return pairAlreadyEndToEnd(reply, existingEndToEnd);
         }
 
         // Determine encryption protocol based on mode

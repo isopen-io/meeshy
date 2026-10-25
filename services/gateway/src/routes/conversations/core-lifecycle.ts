@@ -44,6 +44,7 @@ import { EngagementService } from '../../services/engagement/EngagementService';
 import { FOUNDING_MEMBER_PERMISSIONS } from '../../services/participantRights';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
 import { postConversationNotice, noticeActor, noticeBroadcast } from '../../services/conversations/conversationNotice';
+import { directLookupWhere } from '../../services/conversations/directPair';
 import {
   composeConversationUpdate,
   broadcastConversationUpdated,
@@ -86,7 +87,7 @@ export function registerCreateConversationRoute(
         'create-conversation'
       );
 
-      const { type, title: rawTitle, description: rawDescription, participantIds = [], communityId, identifier } = validatedData as { type: string; title?: string; description?: string; participantIds?: string[]; communityId?: string; identifier?: string };
+      const { type, title: rawTitle, description: rawDescription, participantIds = [], communityId, identifier, plaintext } = validatedData as { type: string; title?: string; description?: string; participantIds?: string[]; communityId?: string; identifier?: string; plaintext?: boolean };
       const title = rawTitle !== undefined ? SecuritySanitizer.sanitizeText(rawTitle) : undefined;
       const description = rawDescription !== undefined ? SecuritySanitizer.sanitizeText(rawDescription) : undefined;
 
@@ -171,14 +172,13 @@ export function registerCreateConversationRoute(
         // (200) au lieu d'en créer une deuxième. Les archivées comptent —
         // recréer la DM d'un contact archivé doit la ROUVRIR, pas la
         // dupliquer. Groupes : jamais dédupliqués (même-membres légitime).
+        //
+        // #12966 — une paire a au plus UN tête-à-tête `e2ee` et au plus UN
+        // que le serveur lit. Sans précision, le plus récemment actif, quel
+        // que soit son régime (inchangé) ; `plaintext: true` ne rouvre que le
+        // lisible, et en crée un à côté du chiffré s'il n'y en a pas.
         const existingDirect = await prisma.conversation.findFirst({
-          where: {
-            type: 'direct',
-            AND: [
-              { participants: { some: { userId, isActive: true } } },
-              { participants: { some: { userId: uniqueParticipantIds[0], isActive: true } } }
-            ]
-          },
+          where: directLookupWhere({ userId, peerId: uniqueParticipantIds[0] }, { plaintext: plaintext === true }),
           // Des doublons historiques existent (5 DM atabeth↔jcnm datant
           // d'avant ce fix) : rouvrir la plus RÉCEMMENT ACTIVE, pas une
           // arbitraire — sinon l'utilisateur retombe sur une DM morte.

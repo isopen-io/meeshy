@@ -128,6 +128,14 @@ const LEAVABLE_FILTER: Record<string, unknown> = {
 };
 
 /**
+ * Ce que le serveur LIT (#12966) : exactement ce qu'une bascule peut réécrire
+ * — le clair, ou le chiffrement au repos. Le tête-à-tête « en clair » d'une
+ * paire est celui-là ; un `e2ee`, quelle que soit sa casse, ou un mode inconnu
+ * n'en est jamais un.
+ */
+export const SERVER_READABLE_REGIME_FILTER: Readonly<Record<string, unknown>> = LEAVABLE_FILTER;
+
+/**
  * Bascule le régime si l'époque n'a pas bougé depuis sa lecture ET si le
  * régime courant se quitte ; `null` sinon. Une conversation `e2ee` ne se
  * réécrit vers aucun régime (#12949).
