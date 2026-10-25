@@ -699,7 +699,7 @@ final class ConversationLockManagerTests: XCTestCase {
     /// refusé ensuite laissait la conversation sans aucun code. Une marque
     /// posée sur l'élément survit à la réécriture, ce qu'un élément recréé ne
     /// ferait pas.
-    func test_theKeychainVault_rewritesACodeInPlace_neverDeletingItFirst() throws {
+    func test_theKeychainVault_rewritesACodeInPlace_neverDeletingItFirst() {
         let vault = makeKeychainVault()
         defer { vault.deleteAll() }
         let item = keychainItem(vault, "meeshy_lock_coffre")
@@ -713,7 +713,8 @@ final class ConversationLockManagerTests: XCTestCase {
         let query = item.merging([
             kSecReturnAttributes as String: true, kSecMatchLimit as String: kSecMatchLimitOne,
         ]) { _, new in new }
-        XCTAssertEqual(SecItemCopyMatching(query as CFDictionary, &found), errSecSuccess)
+        let status = SecItemCopyMatching(query as CFDictionary, &found)
+        XCTAssertEqual(status, errSecSuccess)
         XCTAssertEqual((found as? [String: Any])?[kSecAttrLabel as String] as? String, "marque", "l'élément a été recréé")
         XCTAssertEqual(vault.read("meeshy_lock_coffre"), "nouveau")
     }
