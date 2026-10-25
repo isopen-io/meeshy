@@ -716,8 +716,13 @@ model Conversation {
   /// Encryption protocol: "aes-256-gcm" (server), "signal_v3" (e2ee)
   encryptionProtocol String?
 
-  /// When encryption was enabled (immutable once set)
+  /// When encryption was enabled; null again once it is disabled (#12522)
   encryptionEnabledAt DateTime?
+
+  /// Le régime de chiffrement change à chaque bascule (#12522) : activer et
+  /// désactiver l'incrémentent atomiquement, un envoi qui déclare une époque
+  /// périmée est refusé (E2EE_REGIME_CHANGED). Absent = 0 (conversation jamais basculée).
+  encryptionEpoch Int?
 
   /// User who enabled encryption
   encryptionEnabledBy String? @db.ObjectId

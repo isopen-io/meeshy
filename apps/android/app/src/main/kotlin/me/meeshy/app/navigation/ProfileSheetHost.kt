@@ -22,7 +22,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import me.meeshy.app.profile.ProfileSheetEnvironment
 import me.meeshy.app.profile.UserProfileSheet
 import me.meeshy.app.startup.AppLocalsProvider
 import me.meeshy.app.startup.AppOverlay
@@ -76,11 +75,13 @@ class ProfileSheetLocalsProvider @Inject constructor(
 
 /**
  * Présente la fiche par-dessus le `NavHost`, sans toucher `MeeshyApp`. Les sorties de la feuille
- * deviennent des navigations différées ; une session fermée ferme la feuille.
+ * deviennent des navigations différées et ses signes en direct viennent de
+ * [ProfileSheetEnvironmentImpl] ; une session fermée ferme la feuille.
  */
 class ProfileSheetOverlay @Inject constructor(
     private val host: ProfileSheetHostState,
     private val sessionRepository: SessionRepository,
+    private val environmentFactory: ProfileSheetEnvironmentImpl,
 ) : AppOverlay {
     override val order: Int = 200
 
@@ -89,32 +90,12 @@ class ProfileSheetOverlay @Inject constructor(
         val presented by host.presented.collectAsStateWithLifecycle()
         val me by sessionRepository.currentUser.collectAsStateWithLifecycle()
         val scope = rememberCoroutineScope()
-        val environment = remember(navController, scope) { profileSheetEnvironment(host, scope, navController) }
+        val environment = remember(navController, scope) { environmentFactory.environment(host, scope, navController) }
         LaunchedEffect(me == null) { if (me == null) host.dismiss() }
         val user = presented ?: return
         if (me == null) return
         UserProfileSheet(user = user, onDismiss = host::dismiss, environment = environment)
     }
-}
-
-/** Les sorties de la fiche, chacune après fermeture et délai : conversation, signalement, postes, appel, story. */
-internal fun profileSheetEnvironment(
-    host: ProfileSheetHostState,
-    scope: CoroutineScope,
-    navController: NavHostController,
-): ProfileSheetEnvironment {
-    val after: (() -> Unit) -> Unit = { navigate -> host.dismissThen(scope, navigate) }
-    return ProfileSheetEnvironment(
-        onOpenConversation = { id -> after { navController.navigate(Routes.chat(id)) } },
-        onReport = { id, username -> after { navController.navigate(Routes.reportUser(id, username)) } },
-        onViewPosts = { id -> after { navController.navigate(Routes.userPosts(id)) } },
-        onCall = { request ->
-            request.conversationId?.let { conversationId ->
-                after { navController.navigate(CallRoute.path(conversationId, request.displayName, request.isVideo)) }
-            }
-        },
-        onViewStory = { id -> after { navController.navigate(Routes.story(id)) } },
-    )
 }
 
 @Module
