@@ -78,6 +78,8 @@ export const E2EE_ERROR_CODES = {
   REGIME_CHANGED: 'E2EE_REGIME_CHANGED',
   /** Une conversation chiffrée de bout en bout ne repasse jamais en clair (#12949). */
   IRREVERSIBLE: 'E2EE_IRREVERSIBLE',
+  /** Une paire de personnes a au plus UN tête-à-tête chiffré de bout en bout (#12966). */
+  DIRECT_ALREADY_END_TO_END: 'E2EE_DIRECT_ALREADY_END_TO_END',
   BINDING_INVALID: 'E2EE_DEVICE_BINDING_INVALID',
   PREKEY_STOCK_FULL: 'E2EE_PREKEY_STOCK_FULL',
   IDENTITY_REVOKED: 'E2EE_IDENTITY_REVOKED',
@@ -96,6 +98,15 @@ export const E2EE_CLIENT_OUTDATED_MESSAGE =
  */
 export const E2EE_IRREVERSIBLE_MESSAGE =
   'End-to-end encryption cannot be turned off for this conversation. To chat without it, start a new conversation.';
+
+/**
+ * Le texte servi avec `E2EE_DIRECT_ALREADY_END_TO_END` (#12966) : chiffrer un
+ * tête-à-tête alors que la paire en a déjà un chiffré de bout en bout. La
+ * réponse nomme ce tête-à-tête (`existingConversationId`), dont l'appelant est
+ * membre.
+ */
+export const E2EE_DIRECT_ALREADY_END_TO_END_MESSAGE =
+  'You already have an end-to-end encrypted conversation with this person. Open it to chat encrypted; this one stays readable by the server.';
 
 const PRIVATE_KEY_FIELD = /private|secret|privkey|seed/i;
 

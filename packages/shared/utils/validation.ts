@@ -629,6 +629,10 @@ export const ConversationSchemas = {
     participantIds: z.array(z.string()).max(250, { message: 'Au maximum 250 participants à la création — utiliser l\'ajout incrémental au-delà' }).optional().default([]),
     communityId: z.string().optional(),
     identifier: CommonSchemas.conversationIdentifier,
+    // #12966 — un tête-à-tête que le serveur lit, à côté d'un tête-à-tête
+    // chiffré de bout en bout avec la même personne. Absent : la demande d'un
+    // ancien client, inchangée.
+    plaintext: z.boolean().optional(),
   }),
   
   // Mettre à jour une conversation
