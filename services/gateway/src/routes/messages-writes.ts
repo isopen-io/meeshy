@@ -190,6 +190,8 @@ export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: Mess
           createdAt: message.createdAt,
           messageType: message.messageType,
           metadata: message.metadata,
+          isEncrypted: message.isEncrypted,
+          encryptionMode: message.encryptionMode,
         },
         onError: (err) => logger.error('Edit - admission lookup failed', err as Error),
       });
