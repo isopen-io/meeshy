@@ -81,7 +81,7 @@ final class EncryptedDevicesViewModelTests: XCTestCase {
         XCTAssertTrue(linking.approved.isEmpty, "rien n'est approuvé sans geste explicite")
     }
 
-    func test_confirmingTheApproval_approvesExactlyTheScannedCandidate_andReloads() async {
+    func test_confirmingTheApproval_approvesExactlyTheScannedCandidate_andReloads() async throws {
         let linking = MockEndToEndOwnDeviceLinking()
         linking.devicesResult = .success([device(1, trust: .thisDevice), device(2, trust: .pending)])
         linking.candidateResult = .success(candidate(2))
@@ -90,7 +90,7 @@ final class EncryptedDevicesViewModelTests: XCTestCase {
         await model.scanned("meeshy-device-link:v1:code")
         linking.devicesResult = .success([device(1, trust: .thisDevice), device(2, trust: .approved)])
 
-        await model.confirmApproval(XCTUnwrap(model.pendingApproval))
+        await model.confirmApproval(try XCTUnwrap(model.pendingApproval))
 
         XCTAssertEqual(linking.approved, [candidate(2)])
         XCTAssertNil(model.pendingApproval)
@@ -175,14 +175,14 @@ final class EncryptedDevicesViewModelTests: XCTestCase {
         XCTAssertEqual(linking.scannedPayloads, ["first"])
     }
 
-    func test_aFailingApproval_saysItFailed_andApprovesNothing() async {
+    func test_aFailingApproval_saysItFailed_andApprovesNothing() async throws {
         let linking = MockEndToEndOwnDeviceLinking()
         linking.candidateResult = .success(candidate(2))
         linking.approveError = CocoaError(.fileWriteUnknown)
         let model = makeModel(linking: linking)
         await model.scanned("code")
 
-        await model.confirmApproval(XCTUnwrap(model.pendingApproval))
+        await model.confirmApproval(try XCTUnwrap(model.pendingApproval))
 
         XCTAssertEqual(model.notice, .actionFailed)
         XCTAssertNil(model.pendingApproval)
