@@ -244,7 +244,7 @@ final class SharePendingSendConsumer {
     /// l'utilisateur sur Meeshy avant qu'il ait fini. Passé ce délai, ce qui
     /// reste est un VRAI orphelin (extension tuée entre la copie et
     /// l'écriture de la fiche, feuille abandonnée) — l'attendre une heure de
-    /// plus coûte au plus `ShareLimits.maxTotalBytes` (500 Mio) par partage
+    /// plus coûte au plus `ShareLimits.maxTotalBytes` (5 Gio) par partage
     /// abandonné, borné et négligeable face au risque de détruire un envoi
     /// en cours.
     nonisolated static let orphanMediaGracePeriod: TimeInterval = 3_600
