@@ -21,7 +21,7 @@ import type { PhotoReferral } from './referral';
 
 export const QR_QUIET_MODULES = 4;
 export const QR_MIN_MODULE_PX = 2;
-export const QR_LIGHT = '#ffffff';
+export const QR_LIGHT = '#ffffff'; // harmony-exempt: un QR se lit sombre sur clair quel que soit le thème ; le thématiser le rendrait illisible au scanner (#9554)
 export const QR_DARK = '#000000';
 
 /** Une suite horizontale de modules sombres, en pixels du carré. */
