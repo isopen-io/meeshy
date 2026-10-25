@@ -44,7 +44,7 @@ class ProfileVoiceVisibilityTest {
             voiceSampleUrl = "https://cdn/v.m4a",
             voiceSampleDurationMs = 3000,
         )
-        assertThat(ProfileHeaderBuilder.build(voiced, 0L).voiceSample?.durationMs).isEqualTo(3000)
+        assertThat(ProfileHeaderBuilder.build(voiced, 0L).voiceSample?.durationMs).isEqualTo(3000L)
         assertThat(ProfileHeaderBuilder.build(voiced.copy(voicePublic = false), 0L).voiceSample).isNull()
     }
 }
