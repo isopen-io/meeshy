@@ -77,7 +77,7 @@ internal data class ConversationRowActions(
             onAssignCategory = { viewModel.reassignCategory(conversationId, it) },
             onCreateCategory = { viewModel.createCategoryAndAssign(conversationId, it) },
             onLoadPreview = { viewModel.loadPreviewMessages(conversationId) },
-            onLockToggle = { viewModel.onLockToggle(conversationId) },
+            onLockToggle = { viewModel.dialogs.requestLock(conversationId) },
         )
     }
 }

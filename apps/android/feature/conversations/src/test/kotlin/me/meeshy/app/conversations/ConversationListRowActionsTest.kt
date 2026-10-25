@@ -30,10 +30,10 @@ class ConversationListRowActionsTest {
         val workManager: WorkManager,
     )
 
-    private fun TestScope.harness(vararg conversations: ApiConversation): Harness {
+    private fun TestScope.harness(vararg conversations: ApiConversation, active: String? = null): Harness {
         val repo = mockk<ConversationRepository>(relaxed = true)
         val workManager = mockk<WorkManager>(relaxed = true)
-        val state = MutableStateFlow(ConversationListUiState())
+        val state = MutableStateFlow(ConversationListUiState(conversations = conversations.toList()))
         val actions = ConversationListRowActions(
             scope = backgroundScope,
             state = state,
@@ -43,6 +43,7 @@ class ConversationListRowActionsTest {
             categoryRepository = mockk<CategoryRepository>(relaxed = true),
             draftStore = InMemoryConversationDraftStore(),
             workManager = workManager,
+            activeConversationId = { active },
         )
         return Harness(actions, state, repo, workManager)
     }
@@ -117,5 +118,54 @@ class ConversationListRowActionsTest {
         runCurrent()
 
         coVerify { h.repo.setCategoryOptimistic("c1", "ghost") }
+    }
+
+    @Test
+    fun `mark read on the open conversation clears the cache locally and never reaches the network`() =
+        runTest(StandardTestDispatcher()) {
+            val h = harness(ApiConversation(id = "c1", unreadCount = 3), active = "c1")
+
+            h.actions.markRead("c1")
+            runCurrent()
+
+            coVerify { h.repo.markReadLocally("c1") }
+            coVerify(exactly = 0) { h.repo.markReadOptimistic(any()) }
+            verify(exactly = 0) { h.workManager.enqueue(any<androidx.work.WorkRequest>()) }
+        }
+
+    @Test
+    fun `mark read on another conversation goes through the outbox`() = runTest(StandardTestDispatcher()) {
+        val h = harness(ApiConversation(id = "c1", unreadCount = 3), active = "c2")
+        coEvery { h.repo.markReadOptimistic("c1") } returns true
+
+        h.actions.markRead("c1")
+        runCurrent()
+
+        coVerify { h.repo.markReadOptimistic("c1") }
+        coVerify(exactly = 0) { h.repo.markReadLocally(any()) }
+        verify(exactly = 1) { h.workManager.enqueue(any<androidx.work.WorkRequest>()) }
+    }
+
+    @Test
+    fun `mark read clears the badge at once, sections included`() = runTest(StandardTestDispatcher()) {
+        val pinned = ApiConversation(id = "c1", unreadCount = 3, preferences = ApiConversationPreferences(isPinned = true))
+        val other = ApiConversation(id = "c2", unreadCount = 2)
+        val h = harness(pinned, other)
+
+        h.actions.markRead("c1")
+
+        val sections = ConversationSections.of(h.state.value.conversations, emptyList())
+        val unreadById = sections.flatMap { it.items }.associate { it.id to it.unreadCount }
+        assertThat(unreadById).containsExactly("c1", 0, "c2", 2)
+    }
+
+    @Test
+    fun `archive sets the archived preference without toggling`() = runTest(StandardTestDispatcher()) {
+        val h = harness(ApiConversation(id = "c1", preferences = ApiConversationPreferences(isArchived = true)))
+
+        h.actions.archive("c1")
+        runCurrent()
+
+        coVerify { h.repo.setArchivedOptimistic("c1", true) }
     }
 }
