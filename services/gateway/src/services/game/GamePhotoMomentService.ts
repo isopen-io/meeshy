@@ -51,7 +51,11 @@ const MINUTE = 60_000;
 const DAY = 24 * 60 * MINUTE;
 /** Une étape détectée et jamais montrée sort de l'envoi après une semaine : le carnet la garde, sans relance. */
 export const PENDING_WINDOW_DAYS = 7;
-/** Combien de lignes en attente un passage relit au plus. */
+/**
+ * La taille d'une PAGE du balayage de l'envoi. Un passage relit les pages jusqu'au bout de la fenêtre : un compte
+ * sauté (aucun appareil capable, push coupé) ou différé garde ses lignes en attente, et une seule page relue
+ * depuis la plus ancienne en serait bouchée pour toujours (#10267).
+ */
 export const PENDING_SCAN_MAX = 500;
 
 /** Une ligne pas encore présentée / notifiée : à null, ou ABSENTE (écrite par la détection, MongoDB). */
@@ -109,7 +113,7 @@ export type GamePhotoMomentDeps = {
 /** La forme stockée, défauts du schéma appliqués (un document antérieur à un réglage le lit « reçu »). */
 type StoredNotificationPreferences = z.infer<typeof NotificationPreferenceSchema>;
 
-type PendingRow = { readonly userId: string; readonly stepId: string; readonly detectedAt: Date | null };
+type PendingRow = { readonly id: string; readonly userId: string; readonly stepId: string; readonly detectedAt: Date | null };
 
 export class GamePhotoMomentService {
   private readonly blocks: Pick<GameBlockService, 'build'>;
@@ -169,30 +173,44 @@ export class GamePhotoMomentService {
     return { kind: 'detected', stepIds: written };
   }
 
-  /** Pousse, compte par compte, le résumé des étapes en attente depuis au moins le délai de la politique. */
+  /**
+   * Pousse, compte par compte, le résumé des étapes en attente depuis au moins le délai de la politique. Le balayage
+   * avance par curseur (`detectedAt`, puis `id` qui départage une détection groupée) jusqu'au bout de la fenêtre, et
+   * chaque compte n'est servi qu'une fois par passage : les lignes d'un compte qu'on saute restent en attente sans
+   * retenir celles des comptes suivants.
+   */
   async deliver(now: Date = new Date()): Promise<PhotoDelivery> {
-    const rows = (await this.prisma.gamePhotoMoment.findMany({
-      where: {
-        detectedAt: { lte: new Date(now.getTime() - this.policy.push.delayMinutes * MINUTE), gte: new Date(now.getTime() - PENDING_WINDOW_DAYS * DAY) },
-        ...PENDING,
-      },
-      select: { userId: true, stepId: true, detectedAt: true },
-      orderBy: { detectedAt: 'asc' },
-      take: PENDING_SCAN_MAX,
-    })) as PendingRow[];
-    const byUser = rows.reduce((groups, row) => groups.set(row.userId, [...(groups.get(row.userId) ?? []), row]), new Map<string, PendingRow[]>());
-
+    const window = { lte: new Date(now.getTime() - this.policy.push.delayMinutes * MINUTE), gte: new Date(now.getTime() - PENDING_WINDOW_DAYS * DAY) };
+    const served = new Set<string>();
+    let after: { readonly id: string; readonly detectedAt: Date } | null = null;
     let sent = 0;
     let deferred = 0;
-    for (const [userId, pending] of byUser) {
-      const outcome = await this.deliverTo(userId, pending, now).catch((error: unknown) => {
-        log.warn('photo moment delivery failed for one account', { userId, error: error instanceof Error ? error.message : String(error) });
-        return 'deferred' as const;
-      });
-      if (outcome === 'sent') sent += 1;
-      if (outcome === 'deferred') deferred += 1;
+    for (;;) {
+      const page = (await this.prisma.gamePhotoMoment.findMany({
+        where: {
+          detectedAt: window,
+          AND: [...PENDING.AND, ...(after === null ? [] : [{ OR: [{ detectedAt: { gt: after.detectedAt } }, { detectedAt: after.detectedAt, id: { gt: after.id } }] }])],
+        },
+        select: { id: true, userId: true, stepId: true, detectedAt: true },
+        orderBy: [{ detectedAt: 'asc' }, { id: 'asc' }],
+        take: PENDING_SCAN_MAX,
+      })) as PendingRow[];
+      const byUser = page
+        .filter((row) => !served.has(row.userId))
+        .reduce((groups, row) => groups.set(row.userId, [...(groups.get(row.userId) ?? []), row]), new Map<string, PendingRow[]>());
+      for (const [userId, pending] of byUser) {
+        served.add(userId);
+        const outcome = await this.deliverTo(userId, pending, now).catch((error: unknown) => {
+          log.warn('photo moment delivery failed for one account', { userId, error: error instanceof Error ? error.message : String(error) });
+          return 'deferred' as const;
+        });
+        if (outcome === 'sent') sent += 1;
+        if (outcome === 'deferred') deferred += 1;
+      }
+      const last = page.at(-1);
+      if (page.length < PENDING_SCAN_MAX || last?.detectedAt == null) return { sent, deferred };
+      after = { id: last.id, detectedAt: last.detectedAt };
     }
-    return { sent, deferred };
   }
 
   private async deliverTo(userId: string, pending: readonly PendingRow[], now: Date): Promise<DeliveryOutcome> {

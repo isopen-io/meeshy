@@ -41,7 +41,7 @@ const ANDROID_NATIVE_BUNDLE = /^me\.meeshy\.android(\.|$)/;
 const ANDROID_SHELL_BUNDLE = /^me\.meeshy\.app(\.|$)/;
 const READABLE_VERSION = /^\d+(\.\d+){0,2}(?=$|[\s(+-])/;
 
-export function pushRoutingClientOf(token: RoutableToken): PushRoutingClient | null {
+export function pushRoutingClientOf(token: Pick<RoutableToken, 'platform' | 'bundleId'>): PushRoutingClient | null {
   if (token.platform === 'ios') return 'ios';
   if (token.platform === 'web') return 'web';
   if (token.platform !== 'android') return null;
