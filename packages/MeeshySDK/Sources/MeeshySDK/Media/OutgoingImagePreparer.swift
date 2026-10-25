@@ -203,7 +203,8 @@ public struct OutgoingImagePreparer: OutgoingImagePreparing {
             return OutgoingImage(data: data, format: format, pixelSize: nil, encodedGenerations: 0)
         }
         let original = OriginalImage(data: data, source: source, properties: properties, format: format,
-                                     upright: OutgoingImageGeometry.upright(stored, properties: properties))
+                                     upright: OutgoingImageGeometry.upright(stored, properties: properties),
+                                     carriesLocation: OutgoingImageLocation.isCarried(by: source))
         switch OutgoingImagePlanner.plan(format: format, pixelSize: original.upright, byteCount: data.count,
                                          carriesLocation: original.carriesLocation, policy: policy) {
         case .passthrough:
@@ -235,7 +236,8 @@ struct OriginalImage {
     let format: OutgoingImageFormat
     let upright: CGSize
 
-    var carriesLocation: Bool { OutgoingImageLocation.isCarried(by: properties) }
+    /// Un lieu sur N'IMPORTE QUELLE image de la source, propriétés ou XMP.
+    let carriesLocation: Bool
 
     var asIs: OutgoingImage {
         OutgoingImage(data: data, format: format, pixelSize: upright, encodedGenerations: 0)
@@ -282,7 +284,8 @@ enum OutgoingImageWriter {
     static func withoutLocation(_ source: CGImageSource) -> Data? {
         guard let type = CGImageSourceGetType(source) else { return nil }
         let buffer = NSMutableData()
-        guard let destination = CGImageDestinationCreateWithData(buffer as CFMutableData, type, 1, nil),
+        guard let destination = CGImageDestinationCreateWithData(buffer as CFMutableData, type,
+                                                                 CGImageSourceGetCount(source), nil),
               OutgoingImageLocation.copyWithoutLocation(source, to: destination),
               let written = CGImageSourceCreateWithData(buffer as CFData, nil),
               !OutgoingImageLocation.isCarried(by: written) else { return nil }
@@ -404,8 +407,7 @@ public enum OutgoingImageLocationRemoval {
     public static func removeLocation(fromFileAt url: URL) -> Outcome {
         guard let source = CGImageSourceCreateWithURL(url as CFURL, [kCGImageSourceShouldCache: false] as CFDictionary),
               CGImageSourceGetCount(source) > 0,
-              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
-              OutgoingImageLocation.isCarried(by: properties) else { return .untouched }
+              OutgoingImageLocation.isCarried(by: source) else { return .untouched }
         guard let type = CGImageSourceGetType(source) else { return .failed }
         let copy = url.deletingLastPathComponent().appendingPathComponent(".\(UUID().uuidString).\(url.pathExtension)")
         guard writeWithoutLocation(source, type: type, to: copy),

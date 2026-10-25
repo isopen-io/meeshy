@@ -3,23 +3,30 @@ import ImageIO
 
 /// **Ce qui dit OÙ une photo a été prise, et son retrait sans ré-encodage** (#12905).
 ///
-/// Le lieu, ce sont les coordonnées GPS ET les noms de lieu IPTC (ville,
-/// sous-lieu, région, pays), que l'XMP double. `kCGImageMetadataShouldExcludeGPS`
-/// seul ne suffit pas : sur un HEIC, ImageIO l'ignore et recopie le GPS
-/// (mesuré sur le simulateur iOS et sur macOS). La copie réécrit donc l'arbre de
-/// métadonnées sans ces champs, les données compressées des pixels intactes,
-/// puis le retrait se VÉRIFIE sur les octets écrits : un lieu qui survit est un
-/// échec, jamais un envoi.
+/// Le lieu, ce sont les coordonnées GPS ET les noms de lieu IPTC — ville,
+/// sous-lieu, région, pays, lieu du contenu, lieux créé et montré de l'extension
+/// IPTC —, que l'XMP double ou porte seul. Une seule liste, `PlaceField`, sert
+/// la détection, le retrait et la vérification, sur CHAQUE image de la source,
+/// dans ses propriétés comme dans son arbre XMP.
+///
+/// `kCGImageMetadataShouldExcludeGPS` seul ne suffit pas : sur un HEIC, ImageIO
+/// l'ignore et recopie le GPS (mesuré sur le simulateur iOS et sur macOS). La
+/// copie réécrit donc l'arbre de métadonnées sans ces champs, les données
+/// compressées des pixels intactes, puis le retrait se VÉRIFIE sur les octets
+/// écrits : un lieu qui survit est un échec, jamais un envoi.
 enum OutgoingImageLocation {
     static func isCarried(by properties: [CFString: Any]) -> Bool {
         properties[kCGImagePropertyGPSDictionary] != nil
             || (properties[kCGImagePropertyIPTCDictionary] as? [CFString: Any])
-                .map { iptc in iptcPlaceKeys.contains { iptc[$0] != nil } } ?? false
+                .map { iptc in PlaceField.iptcKeys.contains { iptc[$0] != nil } } ?? false
     }
 
+    /// Chaque image de la source, propriétés et arbre XMP.
     static func isCarried(by source: CGImageSource) -> Bool {
         (0..<CGImageSourceGetCount(source)).contains { index in
-            (CGImageSourceCopyPropertiesAtIndex(source, index, nil) as? [CFString: Any]).map(isCarried(by:)) ?? false
+            let properties = CGImageSourceCopyPropertiesAtIndex(source, index, nil) as? [CFString: Any] ?? [:]
+            return isCarried(by: properties)
+                || CGImageSourceCopyMetadataAtIndex(source, index, nil).map { !placeTagPaths(in: $0).isEmpty } ?? false
         }
     }
 
@@ -36,9 +43,12 @@ enum OutgoingImageLocation {
         CGImageDestinationCopyImageSource(destination, source, copyOptions(source), nil)
     }
 
+    /// ImageIO n'applique qu'UN arbre à la copie, celui de l'image principale
+    /// privé de ses lieux ; la relecture de chaque image tranche.
     private static func copyOptions(_ source: CGImageSource) -> CFDictionary {
         let excludeGPS: [CFString: Any] = [kCGImageMetadataShouldExcludeGPS: true]
-        guard let metadata = CGImageSourceCopyMetadataAtIndex(source, 0, nil),
+        let primary = CGImageSourceGetPrimaryImageIndex(source)
+        guard let metadata = CGImageSourceCopyMetadataAtIndex(source, primary, nil),
               let placeless = CGImageMetadataCreateMutableCopy(metadata) else { return excludeGPS as CFDictionary }
         placeTagPaths(in: metadata).forEach { CGImageMetadataRemoveTagWithPath(placeless, nil, $0 as CFString) }
         return excludeGPS
@@ -49,35 +59,54 @@ enum OutgoingImageLocation {
     private static func placeTagPaths(in metadata: CGImageMetadata) -> [String] {
         let tags = CGImageMetadataCopyTags(metadata) as? [CGImageMetadataTag] ?? []
         return tags.compactMap { tag in
-            guard let prefix = CGImageMetadataTagCopyPrefix(tag) as String?,
-                  let name = CGImageMetadataTagCopyName(tag) as String? else { return nil }
-            let path = "\(prefix):\(name)"
-            return (prefix == "exif" && name.hasPrefix("GPS")) || xmpPlacePaths.contains(path) ? path : nil
+            guard let namespace = CGImageMetadataTagCopyNamespace(tag) as String?,
+                  let prefix = CGImageMetadataTagCopyPrefix(tag) as String?,
+                  let name = CGImageMetadataTagCopyName(tag) as String?,
+                  PlaceField.isPlace(namespace: namespace, name: name) else { return nil }
+            return "\(prefix):\(name)"
         }
     }
 
     private static func placelessIPTC(_ properties: [CFString: Any]) -> [CFString: Any] {
         guard let iptc = properties[kCGImagePropertyIPTCDictionary] as? [CFString: Any] else { return [:] }
-        return [kCGImagePropertyIPTCDictionary: iptc.filter { !iptcPlaceKeys.contains($0.key) }]
+        return [kCGImagePropertyIPTCDictionary: iptc.filter { !PlaceField.iptcKeys.contains($0.key) }]
     }
+}
 
-    private static var iptcPlaceKeys: [CFString] {
+/// La liste UNIQUE des champs de lieu : clés IPTC des propriétés, balises XMP par
+/// espace de noms. L'adresse de CONTACT du créateur (`ContactInfo`) n'est pas le
+/// lieu de la photo : elle n'y figure pas.
+enum PlaceField {
+    static var iptcKeys: [CFString] {
         [
             kCGImagePropertyIPTCCity,
             kCGImagePropertyIPTCSubLocation,
             kCGImagePropertyIPTCProvinceState,
             kCGImagePropertyIPTCCountryPrimaryLocationName,
             kCGImagePropertyIPTCCountryPrimaryLocationCode,
+            kCGImagePropertyIPTCContentLocationName,
+            kCGImagePropertyIPTCContentLocationCode,
+            kCGImagePropertyIPTCExtLocationCreated,
+            kCGImagePropertyIPTCExtLocationShown,
         ]
     }
 
-    private static let xmpPlacePaths: Set<String> = [
-        "photoshop:City",
-        "photoshop:State",
-        "photoshop:Country",
-        "Iptc4xmpCore:Location",
-        "Iptc4xmpCore:CountryCode",
-        "Iptc4xmpExt:LocationCreated",
-        "Iptc4xmpExt:LocationShown",
-    ]
+    static func isPlace(namespace: String, name: String) -> Bool {
+        (namespace == kCGImageMetadataNamespaceExif as String && name.hasPrefix("GPS"))
+            || xmpNames[namespace]?.contains(name) == true
+    }
+
+    /// Les datasets IIM sans équivalent XMP vivent dans `Iptc4xmpCore` sous leur
+    /// numéro : 2:26/2:27 lieu du contenu, 2:90 ville, 2:92 sous-lieu, 2:95 région,
+    /// 2:100/2:101 pays.
+    private static var xmpNames: [String: Set<String>] {
+        [
+            kCGImageMetadataNamespacePhotoshop as String: ["City", "State", "Country"],
+            kCGImageMetadataNamespaceIPTCCore as String: [
+                "Location", "CountryCode",
+                "IIM2-026", "IIM2-027", "IIM2-090", "IIM2-092", "IIM2-095", "IIM2-100", "IIM2-101",
+            ],
+            kCGImageMetadataNamespaceIPTCExtension as String: ["LocationCreated", "LocationShown"],
+        ]
+    }
 }
