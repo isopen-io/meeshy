@@ -39,6 +39,26 @@ nonisolated enum ComposerRetouchTextRule {
         if typing { return .endTyping }
         return textCount < cap ? .addText : .none
     }
+
+    /// Une passe de cuisson (#12753) : la vitre d'un texte de verre, puis l'encre qui se pose dessus —
+    /// ce texte et ceux qui le suivent jusqu'au verre suivant.
+    struct BakeRun {
+        let glass: StoryTextObject?
+        let ink: [StoryTextObject]
+    }
+
+    /// Les textes dans l'ordre du rendu (z croissant, l'ordre de pose à z égal), coupés à chaque
+    /// texte de verre : une vitre floute TOUT ce qui est peint avant elle, prise et textes inférieurs.
+    static func bakeRuns(_ texts: [StoryTextObject]) -> [BakeRun] {
+        let ordre = texts.enumerated().sorted { ($0.element.zIndex, $0.offset) < ($1.element.zIndex, $1.offset) }.map(\.element)
+        return ordre.reduce(into: [BakeRun(glass: nil, ink: [])]) { passes, texte in
+            guard case .glass = texte.resolvedBackgroundStyle else {
+                let derniere = passes.removeLast()
+                return passes.append(BakeRun(glass: derniere.glass, ink: derniere.ink + [texte]))
+            }
+            passes.append(BakeRun(glass: texte, ink: [texte]))
+        }.filter { $0.glass != nil || !$0.ink.isEmpty }
+    }
 }
 
 /// **La planche de texte de la retouche.** Possède son modèle de scène — créé au premier besoin,
@@ -142,9 +162,24 @@ final class ComposerRetouchTextBoard: ObservableObject {
     /// Les textes cuits sur fond transparent à la définition de sortie, avec leurs vitres (#12602) ;
     /// `nil` sans texte.
     func overlay(canvas: CGSize) -> ComposerTextOverlay? {
-        guard let slide = bakedSlide, canvas.width >= 1, canvas.height >= 1,
-              let encre = StoryStaticSnapshot.foreground(slide: slide, size: canvas) else { return nil }
-        return ComposerTextOverlay(ink: encre, glass: StoryStaticSnapshot.glassPanes(slide: slide, size: canvas))
+        guard let slide = bakedSlide, canvas.width >= 1, canvas.height >= 1 else { return nil }
+        let couches = ComposerRetouchTextRule.bakeRuns(slide.effects.textObjects ?? []).flatMap { passe in
+            Self.layers(of: passe, in: slide, canvas: canvas)
+        }
+        return couches.isEmpty ? nil : ComposerTextOverlay(layers: couches)
+    }
+
+    /// Une passe cuite : la vitre de son texte de verre s'il y en a un, puis l'encre de ses textes.
+    private static func layers(of passe: ComposerRetouchTextRule.BakeRun, in slide: StorySlide,
+                               canvas: CGSize) -> [ComposerTextOverlay.Layer] {
+        var seule = slide
+        let vitres = passe.glass.map { texte -> [ComposerTextOverlay.Layer] in
+            seule.effects.textObjects = [texte]
+            return StoryStaticSnapshot.glassPanes(slide: seule, size: canvas).map(ComposerTextOverlay.Layer.glass)
+        } ?? []
+        seule.effects.textObjects = passe.ink
+        let encre = passe.ink.isEmpty ? nil : StoryStaticSnapshot.foreground(slide: seule, size: canvas)
+        return vitres + (encre.map { [ComposerTextOverlay.Layer.ink($0)] } ?? [])
     }
 
     /// **Les vitres de l'aperçu** (#12602) : la prise se floute sous chaque texte Verre pendant que
