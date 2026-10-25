@@ -15,7 +15,7 @@ import * as crypto from 'crypto';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { guardedInterval, guardedTimeout } from '../utils/guarded-timer';
 import type { SealedQueuedPayload } from '@meeshy/shared/types/delivery-queue';
-import { AT_REST_AAD_V1, atRestAad, DELIVERY_QUEUE_AAD_V1, deliveryQueueAad, openBytes, sealBytes, ServerAtRestUnavailableError, ServerAtRestUnreadableError, type AtRestEnvelope, type AtRestKeyring } from './messaging/serverAtRest';
+import { AT_REST_AAD_V1, atRestAad, DELIVERY_QUEUE_AAD_V1, DELIVERY_QUEUE_AAD_V2, deliveryQueueAad, deliveryQueueAadV2, type DeliveryQueueBinding, openBytes, sealBytes, ServerAtRestUnavailableError, ServerAtRestUnreadableError, type AtRestEnvelope, type AtRestKeyring } from './messaging/serverAtRest';
 import { ServerKeyVault } from './ServerKeyVault';
 
 // Create a child logger for encryption operations
@@ -341,13 +341,10 @@ export class EncryptionService implements AtRestKeyring {
   /**
    * #12822 — scelle la charge d'une entrée de file hors ligne d'une
    * conversation au repos, sous la clé que la conversation désigne, liée à sa
-   * conversation ET à son message (`delivery-queue:v1`).
+   * conversation, son message, son destinataire, son événement et sa clé de
+   * dédup (`delivery-queue:v2`, L1).
    */
-  async sealQueuedPayload(params: {
-    readonly plaintext: string;
-    readonly conversationId: string;
-    readonly messageId: string;
-  }): Promise<SealedQueuedPayload> {
+  async sealQueuedPayload(params: DeliveryQueueBinding & { readonly plaintext: string }): Promise<SealedQueuedPayload> {
     if (!this.keyVault.masterKeyAvailable) throw new ServerAtRestUnavailableError('missing');
     const designated = await this.keyVault.designatedKeyId(params.conversationId);
     const { keyId, key } = await this.writableConversationKey(params.conversationId, designated);
@@ -356,24 +353,26 @@ export class EncryptionService implements AtRestKeyring {
       key,
       iv,
       plaintext: Buffer.from(params.plaintext, 'utf8'),
-      aad: deliveryQueueAad(params.conversationId, params.messageId),
+      aad: deliveryQueueAadV2(params),
     });
     return {
       ciphertext: sealed.ciphertext.toString('base64'),
       keyId,
       iv: iv.toString('base64'),
       authTag: sealed.authTag.toString('base64'),
-      aad: DELIVERY_QUEUE_AAD_V1,
+      aad: DELIVERY_QUEUE_AAD_V2,
     };
   }
 
-  /** Rouvre une charge de file ; une autre liaison que `delivery-queue:v1` est refusée. */
-  async openQueuedPayload(
-    sealed: SealedQueuedPayload,
-    ids: { readonly conversationId: string; readonly messageId: string }
-  ): Promise<string> {
-    if (sealed.aad !== DELIVERY_QUEUE_AAD_V1) throw new ServerAtRestUnreadableError('malformed');
-    return this.openUnder(sealed, ids.conversationId, deliveryQueueAad(ids.conversationId, ids.messageId));
+  /**
+   * Rouvre une charge de file sous la liaison qu'elle déclare : v2 (tout ce qui
+   * décide du rejeu), ou v1 (conversation et message) pour une entrée enfilée
+   * avant v2. Toute autre liaison est refusée.
+   */
+  async openQueuedPayload(sealed: SealedQueuedPayload, binding: DeliveryQueueBinding): Promise<string> {
+    if (sealed.aad === DELIVERY_QUEUE_AAD_V2) return this.openUnder(sealed, binding.conversationId, deliveryQueueAadV2(binding));
+    if (sealed.aad === DELIVERY_QUEUE_AAD_V1) return this.openUnder(sealed, binding.conversationId, deliveryQueueAad(binding.conversationId, binding.messageId));
+    throw new ServerAtRestUnreadableError('malformed');
   }
 
   private async openUnder(envelope: AtRestEnvelope, conversationId: string, aad: Buffer | undefined): Promise<string> {

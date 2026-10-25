@@ -129,11 +129,42 @@ export const atRestAad = (conversationId: string): Buffer =>
  * #12822 — la liaison d'une charge de file hors ligne : sa conversation ET son
  * message. Distincte de `conversation:v1` : recopiée dans une ligne `Message`,
  * une charge de file ne s'ouvre pas comme un texte au repos.
+ *
+ * v1 ne se LIT plus que pour les entrées déjà en file au déploiement de v2
+ * (48 h au plus, `DELIVERY_QUEUE_TTL_SECONDS`) ; rien ne l'écrit plus.
  */
 export const DELIVERY_QUEUE_AAD_V1 = 'delivery-queue:v1';
 
 export const deliveryQueueAad = (conversationId: string, messageId: string): Buffer =>
   Buffer.from(`meeshy:delivery-queue:v1:${conversationId}:${messageId}`, 'utf8');
+
+/**
+ * #12822 (L1) — la liaison v2 ajoute tout ce qui décide du REJEU de l'entrée :
+ * son destinataire (la clé de file), son événement (`eventType`, `new` par
+ * défaut, comme au drain) et sa clé de dédup. Une entrée déplacée dans la file
+ * d'un autre membre, ou rejouée sous un autre événement, ne s'authentifie plus.
+ * Encodée en tableau JSON : aucun séparateur ne peut se confondre avec un
+ * champ (une `dedupKey` contient des `:`).
+ */
+export const DELIVERY_QUEUE_AAD_V2 = 'delivery-queue:v2';
+
+export type DeliveryQueueBinding = {
+  readonly conversationId: string;
+  readonly messageId: string;
+  readonly recipient: string;
+  readonly eventType: string;
+  readonly dedupKey?: string;
+};
+
+export const deliveryQueueAadV2 = (binding: DeliveryQueueBinding): Buffer =>
+  Buffer.from(JSON.stringify([
+    'meeshy:delivery-queue:v2',
+    binding.conversationId,
+    binding.messageId,
+    binding.recipient,
+    binding.eventType,
+    binding.dedupKey ?? null,
+  ]), 'utf8');
 
 export type SealedBytes = { readonly ciphertext: Buffer; readonly authTag: Buffer };
 

@@ -6,7 +6,10 @@
 /**
  * #12822 — la charge d'une entrée d'une conversation `server`/`hybrid`, scellée
  * par la passerelle (AES-256-GCM, clé de la conversation, données authentifiées
- * liant la conversation ET le message). Base64 partout ; `aad` nomme la liaison.
+ * liant la conversation, le message, le destinataire, l'événement et la clé de
+ * dédup — `delivery-queue:v2` ; `v1`, conversation et message seuls, ne se lit
+ * plus que pour les entrées enfilées avant v2). Base64 partout ; `aad` nomme la
+ * liaison.
  */
 export type SealedQueuedPayload = {
   readonly ciphertext: string;

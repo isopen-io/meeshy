@@ -180,19 +180,21 @@ describe('la file hors ligne scelle la charge d’une conversation chiffrée au 
   });
 });
 
+const binding = () => ({ conversationId: CONV, messageId: MSG, recipient: 'u-1', eventType: 'new' });
+
 describe('le sceau de file est lié à SON message et à SA conversation', () => {
   it('une charge scellée ne se rouvre pas sous un autre message', async () => {
     const service = serviceUnder(MASTER_A, store.prisma);
-    const sealed = await service.sealQueuedPayload({ plaintext: SECRET, conversationId: CONV, messageId: MSG });
+    const sealed = await service.sealQueuedPayload({ plaintext: SECRET, ...binding() });
 
-    await expect(service.openQueuedPayload(sealed, { conversationId: CONV, messageId: 'aaaaaaaaaaaaaaaaaaaaaaaa' })).rejects.toThrow();
-    await expect(service.openQueuedPayload(sealed, { conversationId: OTHER_CONV, messageId: MSG })).rejects.toThrow();
-    await expect(service.openQueuedPayload(sealed, { conversationId: CONV, messageId: MSG })).resolves.toBe(SECRET);
+    await expect(service.openQueuedPayload(sealed, { ...binding(), messageId: 'aaaaaaaaaaaaaaaaaaaaaaaa' })).rejects.toThrow();
+    await expect(service.openQueuedPayload(sealed, { ...binding(), conversationId: OTHER_CONV })).rejects.toThrow();
+    await expect(service.openQueuedPayload(sealed, binding())).resolves.toBe(SECRET);
   });
 
   it('recopiée dans une ligne Message, elle ne parle pas comme un texte au repos', async () => {
     const service = serviceUnder(MASTER_A, store.prisma);
-    const sealed = await service.sealQueuedPayload({ plaintext: SECRET, conversationId: CONV, messageId: MSG });
+    const sealed = await service.sealQueuedPayload({ plaintext: SECRET, ...binding() });
 
     await expect(service.openAtRest({ ...sealed }, CONV)).rejects.toThrow();
   });

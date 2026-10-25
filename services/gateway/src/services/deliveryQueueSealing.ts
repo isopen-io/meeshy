@@ -6,7 +6,8 @@
  * `message:new` et de `message:translation`. L'entrée d'une telle conversation
  * part donc SCELLÉE : `payload` vide, la charge entière (texte, traductions,
  * noms de fichiers, tout ce qui voyage à côté) dans `sealedPayload`, sous la clé
- * de la conversation et liée à son message. Le drain la rouvre : le client,
+ * de la conversation et liée à son message, son destinataire, son événement et
+ * sa clé de dédup (`delivery-queue:v2`). Le drain la rouvre : le client,
  * ancien ou nouveau, reçoit l'événement d'avant, octet pour octet.
  *
  * Forme choisie plutôt qu'une simple référence (messageId + langue, relue par
@@ -19,10 +20,19 @@ import type { QueuedMessagePayload, SealedQueuedPayload } from '@meeshy/shared/t
 import { getEncryptionService, type EncryptionService } from './EncryptionService';
 import { ServerAtRestUnreadableError } from './messaging/serverAtRest';
 
+/** `recipient` : la clé de file (le `User.id`, ou le `Participant.id` d'un anonyme), liée au sceau (L1). */
 export type DeliveryQueueSealer = {
-  seal(entry: QueuedMessagePayload): Promise<QueuedMessagePayload>;
-  open(entry: QueuedMessagePayload & { readonly sealedPayload: SealedQueuedPayload }): Promise<QueuedMessagePayload>;
+  seal(entry: QueuedMessagePayload, recipient: string): Promise<QueuedMessagePayload>;
+  open(entry: QueuedMessagePayload & { readonly sealedPayload: SealedQueuedPayload }, recipient: string): Promise<QueuedMessagePayload>;
 };
+
+const bindingOf = (entry: QueuedMessagePayload, recipient: string) => ({
+  conversationId: entry.conversationId,
+  messageId: entry.messageId,
+  recipient,
+  eventType: entry.eventType ?? 'new',
+  ...(entry.dedupKey ? { dedupKey: entry.dedupKey } : {}),
+});
 
 type QueueCipher = Pick<EncryptionService, 'sealQueuedPayload' | 'openQueuedPayload'>;
 
@@ -31,21 +41,17 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 export function deliveryQueueSealer(cipher: () => Promise<QueueCipher>): DeliveryQueueSealer {
   return {
-    seal: async (entry) => {
+    seal: async (entry, recipient) => {
       const { sealedPayload: _previous, ...plain } = entry;
       const sealedPayload = await (await cipher()).sealQueuedPayload({
         plaintext: JSON.stringify(plain.payload),
-        conversationId: plain.conversationId,
-        messageId: plain.messageId,
+        ...bindingOf(plain, recipient),
       });
       return { ...plain, payload: {}, sealedPayload };
     },
-    open: async (entry) => {
+    open: async (entry, recipient) => {
       const { sealedPayload, ...rest } = entry;
-      const text = await (await cipher()).openQueuedPayload(sealedPayload, {
-        conversationId: rest.conversationId,
-        messageId: rest.messageId,
-      });
+      const text = await (await cipher()).openQueuedPayload(sealedPayload, bindingOf(rest, recipient));
       const payload: unknown = JSON.parse(text);
       if (!isRecord(payload)) throw new ServerAtRestUnreadableError('malformed');
       return { ...rest, payload };

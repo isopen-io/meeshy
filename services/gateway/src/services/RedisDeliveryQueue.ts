@@ -302,7 +302,7 @@ export class RedisDeliveryQueue {
     };
     if (!this.sealer) return refuse('no-sealer');
     try {
-      return await this.sealer.seal(entry);
+      return await this.sealer.seal(entry, userId);
     } catch (error) {
       return refuse(error instanceof Error && 'code' in error ? String(error.code) : 'seal-failed');
     }
@@ -320,7 +320,7 @@ export class RedisDeliveryQueue {
       if (!sealedPayload) return { replay: entry };
       try {
         if (!this.sealer) throw new Error('no-sealer');
-        return { replay: await this.sealer.open({ ...entry, sealedPayload }) };
+        return { replay: await this.sealer.open({ ...entry, sealedPayload }, userId) };
       } catch (error) {
         const permanent = isPermanentlyUnreadable(error);
         logger.error(permanent
