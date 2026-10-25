@@ -46,17 +46,18 @@ enum ConversationSecurityRowContent: Equatable {
     }
 }
 
-/// Ce que la feuille de détail du chiffrement rend : un régime actif ne se
-/// désactive pas depuis l'app (#12949).
+/// Ce que la feuille de détail du chiffrement rend : seul le chiffrement AU
+/// REPOS (`server`, `hybrid`) se désactive, au rôle autorisé ; le bout en bout
+/// ne se désactive jamais (#12949).
 enum ConversationEncryptionDetailContent: Equatable {
     case loading
-    case active
+    case active(offersDeactivation: Bool)
     case activation
     case inactiveReadOnly
 
-    static func resolve(isLoading: Bool, isEncrypted: Bool, mayToggle: Bool) -> ConversationEncryptionDetailContent {
+    static func resolve(isLoading: Bool, isEncrypted: Bool, isEndToEnd: Bool, mayToggle: Bool) -> ConversationEncryptionDetailContent {
         if isLoading { return .loading }
-        if isEncrypted { return .active }
+        if isEncrypted { return .active(offersDeactivation: mayToggle && !isEndToEnd) }
         return mayToggle ? .activation : .inactiveReadOnly
     }
 }

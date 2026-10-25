@@ -30,6 +30,8 @@ public enum E2EEErrorCode {
     public static let deviceLimitReached = "E2EE_DEVICE_LIMIT_REACHED"
     public static let envelopesInvalid = "E2EE_ENVELOPES_INVALID"
     public static let regimeChanged = "E2EE_REGIME_CHANGED"
+    /// Le bout en bout ne se désactive pas (#12949).
+    public static let irreversible = "E2EE_IRREVERSIBLE"
     public static let identityRevoked = "E2EE_IDENTITY_REVOKED"
     public static let prekeyStockFull = "E2EE_PREKEY_STOCK_FULL"
 

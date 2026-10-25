@@ -14,9 +14,14 @@ nonisolated final class MockConversationEncryptionService: ConversationEncryptio
         ConversationEncryptionStatus(isEncrypted: true, mode: "e2ee", epoch: 1, canToggleEncryption: true)
     )
 
+    var disableResult: Result<ConversationEncryptionStatus, Error> = .success(
+        ConversationEncryptionStatus(isEncrypted: false, mode: nil, epoch: 2, canToggleEncryption: true)
+    )
+
     private var counts: [String: Int] = [:]
     var fetchStatusCallCount: Int { lock.withLock { counts["status", default: 0] } }
     var enableCallCount: Int { lock.withLock { counts["enable", default: 0] } }
+    var disableCallCount: Int { lock.withLock { counts["disable", default: 0] } }
 
     private func count(_ key: String) { lock.withLock { counts[key, default: 0] += 1 } }
 
@@ -28,5 +33,10 @@ nonisolated final class MockConversationEncryptionService: ConversationEncryptio
     func enable(conversationId: String, mode: String) async throws -> ConversationEncryptionStatus {
         count("enable")
         return try enableResult.get()
+    }
+
+    func disable(conversationId: String) async throws -> ConversationEncryptionStatus {
+        count("disable")
+        return try disableResult.get()
     }
 }

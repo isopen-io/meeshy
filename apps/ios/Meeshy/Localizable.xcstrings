@@ -308446,6 +308446,194 @@
         }
       }
     },
+    "conversation.encryption.detail.deactivate": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إيقاف التشفير"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verschlüsselung deaktivieren"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turn off encryption"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desactivar el cifrado"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Désactiver le chiffrement"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Disattiva la crittografia"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desativar a criptografia"
+          }
+        }
+      }
+    },
+    "conversation.encryption.detail.deactivateAtRestConfirmTitle": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إيقاف التشفير على الخادم؟"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verschlüsselung auf dem Server ausschalten?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turn off encryption on the server?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Desactivar el cifrado en el servidor?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Désactiver le chiffrement sur le serveur ?"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Disattivare la crittografia sul server?"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desativar a criptografia no servidor?"
+          }
+        }
+      }
+    },
+    "conversation.encryption.detail.deactivateAtRestConfirmMessage": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ستُخزَّن الرسائل الجديدة دون تشفير على الخادم. تبقى الرسائل المشفّرة مسبقًا مشفّرة. سيرى كل عضو هذا التغيير في المحادثة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Neue Nachrichten werden ohne Verschlüsselung auf dem Server gespeichert. Bereits verschlüsselte Nachrichten bleiben verschlüsselt. Jedes Mitglied sieht diese Änderung im Verlauf."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New messages will be stored without encryption on the server. Messages already encrypted stay encrypted. Every member will see this change in the chat."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los mensajes nuevos se guardarán sin cifrado en el servidor. Los mensajes ya cifrados siguen cifrados. Cada miembro verá este cambio en el chat."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les nouveaux messages seront stockés sans chiffrement sur le serveur. Les messages déjà chiffrés le restent. Chaque membre verra ce changement dans le fil."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "I nuovi messaggi saranno conservati sul server senza crittografia. I messaggi già crittografati restano tali. Ogni membro vedrà questa modifica nella chat."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "As novas mensagens serão armazenadas sem criptografia no servidor. As mensagens já criptografadas continuam criptografadas. Cada membro verá essa mudança na conversa."
+          }
+        }
+      }
+    },
+    "conversation.encryption.detail.deactivateAtRestFooter": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يمكن إيقاف التشفير على الخادم فقط: يقرأ Meeshy هذه الرسائل أصلًا، فتبقى الترجمة والنسخ متاحتين. أما التشفير التام بين الطرفين فلا يمكن إيقافه."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nur die Verschlüsselung auf dem Server lässt sich ausschalten: Meeshy liest diese Nachrichten bereits, Übersetzung und Transkription bleiben verfügbar. Die Ende-zu-Ende-Verschlüsselung lässt sich nicht ausschalten."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Only encryption on the server can be turned off: Meeshy already reads these messages, so translation and transcription stay available. End-to-end encryption can’t be turned off."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Solo se desactiva el cifrado en el servidor: Meeshy ya lee estos mensajes, la traducción y la transcripción siguen disponibles. El cifrado de extremo a extremo no se puede desactivar."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seul le chiffrement sur le serveur se désactive : Meeshy lit déjà ces messages, la traduction et la transcription restent disponibles. Le chiffrement de bout en bout, lui, ne se désactive pas."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Si disattiva solo la crittografia sul server: Meeshy legge già questi messaggi, traduzione e trascrizione restano disponibili. La crittografia end-to-end non si può disattivare."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Só a criptografia no servidor pode ser desativada: o Meeshy já lê estas mensagens, a tradução e a transcrição continuam disponíveis. A criptografia de ponta a ponta não pode ser desativada."
+          }
+        }
+      }
+    },
     "conversation.encryption.detail.regimeChanged": {
       "extractionState": "manual",
       "localizations": {
@@ -310332,43 +310520,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لا يمكن إيقاف التشفير التام بين الطرفين: تبقى هذه المحادثة الثنائية مشفّرة."
+            "value": "لا يمكن إيقاف التشفير التام بين الطرفين. للدردشة بدونه، افتح محادثة غير مشفّرة مع جهة الاتصال هذه."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Die Ende-zu-Ende-Verschlüsselung lässt sich nicht ausschalten: Dieser Einzelchat bleibt verschlüsselt."
+            "value": "Die Ende-zu-Ende-Verschlüsselung lässt sich nicht ausschalten. Um ohne sie zu schreiben, öffne eine unverschlüsselte Unterhaltung mit diesem Kontakt."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "End-to-end encryption can’t be turned off: this one-to-one chat stays encrypted."
+            "value": "End-to-end encryption can’t be turned off. To chat without it, open an unencrypted conversation with this contact."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "El cifrado de extremo a extremo no se puede desactivar: este chat individual sigue cifrado."
+            "value": "El cifrado de extremo a extremo no se puede desactivar. Para chatear sin él, abre una conversación sin cifrar con este contacto."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le chiffrement de bout en bout ne se désactive pas : ce tête-à-tête reste chiffré."
+            "value": "Le chiffrement de bout en bout ne se désactive pas. Pour échanger en clair, ouvrez une conversation non chiffrée avec ce contact."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "La crittografia end-to-end non si può disattivare: questa chat individuale resta crittografata."
+            "value": "La crittografia end-to-end non si può disattivare. Per scrivere senza, apri una conversazione non crittografata con questo contatto."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "A criptografia de ponta a ponta não pode ser desativada: esta conversa individual continua criptografada."
+            "value": "A criptografia de ponta a ponta não pode ser desativada. Para conversar sem ela, abra uma conversa não criptografada com este contato."
           }
         }
       }

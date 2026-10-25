@@ -63,6 +63,21 @@ final class ConversationEncryptionRegimeTests: XCTestCase {
         XCTAssertEqual(result.epoch, 1)
     }
 
+    /// Le chiffrement AU REPOS se désactive encore (#12522) ; la passerelle
+    /// refuse la désactivation d'un bout en bout (#12949).
+    func test_disable_deletesTheAtRestRegimeAndReturnsItInClear() async throws {
+        let (sut, api) = makeSUT()
+        api.stub("/conversations/c1/encryption", result: try status("""
+        {"success":true,"data":{"isEncrypted":false,"mode":null,"enabledAt":null,"enabledBy":null,"canTranslate":true,"epoch":2,"canToggleEncryption":true}}
+        """))
+
+        let result = try await sut.disable(conversationId: "c1")
+
+        XCTAssertEqual(api.lastRequest?.method, "DELETE")
+        XCTAssertFalse(result.isEncrypted)
+        XCTAssertEqual(result.epoch, 2)
+    }
+
     // MARK: - Fil
 
     func test_libsignalWireMetadata_carriesTheRegimeEpochItWasSealedUnder() throws {

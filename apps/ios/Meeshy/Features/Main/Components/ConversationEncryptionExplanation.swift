@@ -54,9 +54,9 @@ enum ConversationEncryptionRegime: Equatable {
 /// - appareils : 16 au plus (`E2EE_MAX_ACTIVE_DEVICES`), clés du trousseau
 ///   `ThisDeviceOnly` ;
 /// - bascule : `mayActivateConversationEncryption`, avis système ; le bout en
-///   bout ne se désactive pas (#12949) : un tête-à-tête reste chiffré (la
-///   passerelle le déduplique, #12966), un groupe renvoie à une nouvelle
-///   conversation.
+///   bout ne se désactive pas (#12949) : un tête-à-tête renvoie à une
+///   conversation non chiffrée avec le même contact (#12966), un groupe à une
+///   nouvelle conversation. Le chiffrement au repos se désactive encore.
 struct ConversationEncryptionExplanation: Equatable {
 
     enum Topic: CaseIterable, Equatable {

@@ -32,7 +32,7 @@ final class ConversationEncryptionActivationPolicyTests: XCTestCase {
                 .directEntry(offersToggle: true), role
             )
             XCTAssertEqual(
-                ConversationEncryptionDetailContent.resolve(isLoading: false, isEncrypted: false, mayToggle: mayActivate),
+                ConversationEncryptionDetailContent.resolve(isLoading: false, isEncrypted: false, isEndToEnd: false, mayToggle: mayActivate),
                 .activation, role
             )
         }
@@ -48,7 +48,7 @@ final class ConversationEncryptionActivationPolicyTests: XCTestCase {
                 .directEntry(offersToggle: false), role
             )
             XCTAssertEqual(
-                ConversationEncryptionDetailContent.resolve(isLoading: false, isEncrypted: false, mayToggle: mayActivate),
+                ConversationEncryptionDetailContent.resolve(isLoading: false, isEncrypted: false, isEndToEnd: false, mayToggle: mayActivate),
                 .inactiveReadOnly, role
             )
         }
@@ -100,27 +100,32 @@ final class ConversationEncryptionActivationPolicyTests: XCTestCase {
 
     func test_detailSheet_unencrypted_rendersActivationOnlyWhenAllowed() {
         XCTAssertEqual(
-            ConversationEncryptionDetailContent.resolve(isLoading: false, isEncrypted: false, mayToggle: true),
+            ConversationEncryptionDetailContent.resolve(isLoading: false, isEncrypted: false, isEndToEnd: false, mayToggle: true),
             .activation
         )
         XCTAssertEqual(
-            ConversationEncryptionDetailContent.resolve(isLoading: false, isEncrypted: false, mayToggle: false),
+            ConversationEncryptionDetailContent.resolve(isLoading: false, isEncrypted: false, isEndToEnd: false, mayToggle: false),
             .inactiveReadOnly
         )
     }
 
-    /// #12949 — un régime actif ne se désactive pas : la fiche ne propose rien, quel que soit le rôle.
-    func test_detailSheet_encrypted_offersNoDeactivation_whateverTheRole() {
+    /// #12949 — le bout en bout ne se désactive jamais ; le chiffrement au repos
+    /// (`server`, `hybrid`) se désactive encore, au seul rôle autorisé.
+    func test_detailSheet_offersDeactivation_onlyForAtRestEncryption_toTheAllowedRole() {
         XCTAssertEqual(
-            ConversationEncryptionDetailContent.resolve(isLoading: false, isEncrypted: true, mayToggle: true),
-            .active
+            ConversationEncryptionDetailContent.resolve(isLoading: false, isEncrypted: true, isEndToEnd: true, mayToggle: true),
+            .active(offersDeactivation: false)
         )
         XCTAssertEqual(
-            ConversationEncryptionDetailContent.resolve(isLoading: false, isEncrypted: true, mayToggle: false),
-            .active
+            ConversationEncryptionDetailContent.resolve(isLoading: false, isEncrypted: true, isEndToEnd: false, mayToggle: true),
+            .active(offersDeactivation: true)
         )
         XCTAssertEqual(
-            ConversationEncryptionDetailContent.resolve(isLoading: true, isEncrypted: false, mayToggle: true),
+            ConversationEncryptionDetailContent.resolve(isLoading: false, isEncrypted: true, isEndToEnd: false, mayToggle: false),
+            .active(offersDeactivation: false)
+        )
+        XCTAssertEqual(
+            ConversationEncryptionDetailContent.resolve(isLoading: true, isEncrypted: false, isEndToEnd: false, mayToggle: true),
             .loading
         )
     }

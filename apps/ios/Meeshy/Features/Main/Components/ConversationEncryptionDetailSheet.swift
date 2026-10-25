@@ -19,6 +19,7 @@ struct ConversationEncryptionDetailSheet: View {
     @State private var isSwitching = false
     @State private var selectedMode: ConversationEncryptionModeChoice = .server
     @State private var errorMessage: String?
+    @State private var confirmsDeactivation = false
     /// Cet appareil a vu la conversation chiffrée de bout en bout : elle le reste (#12949).
     @State private var remembersEndToEnd = false
 
@@ -53,6 +54,7 @@ struct ConversationEncryptionDetailSheet: View {
                 switch ConversationEncryptionDetailContent.resolve(
                     isLoading: isLoading,
                     isEncrypted: displayedMode != nil,
+                    isEndToEnd: explanation.regime == .endToEnd,
                     mayToggle: mayToggle
                 ) {
                 case .loading:
@@ -66,12 +68,13 @@ struct ConversationEncryptionDetailSheet: View {
                                 .foregroundColor(.secondary)
                         }
                     }
-                case .active:
+                case .active(let offersDeactivation):
                     if let status, let mode = displayedMode.flatMap(ConversationEncryptionModeChoice.init(rawValue:)) {
                         activeStateSections(mode: mode, status: status)
                     }
                     if let servedGap { servedGapSection(servedGap) }
                     ConversationEncryptionExplanationSections(explanation: explanation)
+                    if offersDeactivation { atRestDeactivationSection }
                 case .activation:
                     inactiveStateSection
                     ConversationEncryptionExplanationSections(explanation: explanation)
@@ -101,6 +104,22 @@ struct ConversationEncryptionDetailSheet: View {
                 }
             }
             .task { await loadStatus() }
+            .confirmationDialog(
+                String(localized: "conversation.encryption.detail.deactivateAtRestConfirmTitle",
+                       defaultValue: "Désactiver le chiffrement sur le serveur ?", bundle: .main),
+                isPresented: $confirmsDeactivation,
+                titleVisibility: .visible
+            ) {
+                Button(String(localized: "conversation.encryption.detail.deactivate",
+                              defaultValue: "Désactiver le chiffrement", bundle: .main), role: .destructive) {
+                    Task { await switchRegime { try await service.disable(conversationId: conversationId) } }
+                }
+                Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) {}
+            } message: {
+                Text(String(localized: "conversation.encryption.detail.deactivateAtRestConfirmMessage",
+                            defaultValue: "Les nouveaux messages seront stockés sans chiffrement sur le serveur. Les messages déjà chiffrés le restent. Chaque membre verra ce changement dans le fil.",
+                            bundle: .main))
+            }
         }
     }
 
@@ -151,6 +170,37 @@ struct ConversationEncryptionDetailSheet: View {
                         bundle: .main))
         }
 
+    }
+
+    // MARK: - Le chiffrement au repos se désactive (#12522), jamais le bout en bout (#12949)
+
+    private var atRestDeactivationSection: some View {
+        Section {
+            Button(role: .destructive) {
+                confirmsDeactivation = true
+            } label: {
+                HStack {
+                    Spacer()
+                    if isSwitching {
+                        ProgressView()
+                    } else {
+                        Image(systemName: "lock.open")
+                            .accessibilityHidden(true)
+                        Text(String(localized: "conversation.encryption.detail.deactivate",
+                                    defaultValue: "Désactiver le chiffrement",
+                                    bundle: .main)).fontWeight(.semibold)
+                    }
+                    Spacer()
+                }
+            }
+            .disabled(isSwitching)
+            .accessibilityIdentifier("encryption-deactivate")
+        } footer: {
+            Text(String(localized: "conversation.encryption.detail.deactivateAtRestFooter",
+                        defaultValue: "Seul le chiffrement sur le serveur se désactive : Meeshy lit déjà ces messages, la traduction et la transcription restent disponibles. Le chiffrement de bout en bout, lui, ne se désactive pas.",
+                        bundle: .main))
+                .font(.caption)
+        }
     }
 
     // MARK: - Un régime servi qui ne dit plus le bout en bout
@@ -342,7 +392,7 @@ struct ConversationEncryptionDetailSheet: View {
             ledger.learn(result, for: conversationId)
             remembersEndToEnd = ledger.remembersEndToEnd(conversationId)
             HapticFeedback.success()
-        } catch let error as MeeshyError where error.e2eeCode == E2EEErrorCode.regimeChanged {
+        } catch let error as MeeshyError where error.e2eeCode == E2EEErrorCode.regimeChanged || error.e2eeCode == E2EEErrorCode.irreversible {
             await loadStatus()
             errorMessage = String(localized: "conversation.encryption.detail.regimeChanged",
                                   defaultValue: "Le chiffrement vient d’être modifié par un autre membre : l’état est actualisé.",
