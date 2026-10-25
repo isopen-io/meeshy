@@ -600,7 +600,7 @@ export function Badges({ badges }: { readonly badges: readonly MessageBadge[] })
  * citation et le texte (`BubbleStandardLayout.swift:1064-1066`) — chaque
  * peau choisit où la monter, ce composant ne fait que la DESSINER.
  */
-export function EditedMark({ onBrandBubble }: { readonly onBrandBubble: boolean }) {
+export function EditedMark({ onBrandBubble, byModerator = false }: { readonly onBrandBubble: boolean; readonly byModerator?: boolean }) {
   /* LA SURFACE DÉCIDE, PAS L'EXPÉDITEUR (revue-correction #5936).
      `--color-meta-mine` vaut `white 70%` (`ios.css:99`, dérivé de
      `BubbleFooter.swift:283`) : elle n'est AA que posée SUR l'indigo de
@@ -626,7 +626,7 @@ export function EditedMark({ onBrandBubble }: { readonly onBrandBubble: boolean 
      au site UNIQUE des deux peaux, plutôt qu'à chaque appelant. */
   return (
     <span
-      data-badge="edited"
+      data-badge={byModerator ? 'edited-by-moderator' : 'edited'}
       aria-hidden
       className="flex items-center gap-1 text-check italic"
       style={
@@ -638,6 +638,9 @@ export function EditedMark({ onBrandBubble }: { readonly onBrandBubble: boolean 
       {/* LE CRAYON SEUL (#7599) — le mot « modifié » vit dans le nom
           accessible de la rangée ; à l'écran, l'état se dit une fois. */}
       <GlyphSvg glyph={THREAD_STATES_GLYPHS.pencilSimple} size={11} />
+      {/* #11375 — la modification d'un TIERS se dit en MOTS, à tous : le
+          crayon seul laisserait lire ce texte comme celui de son auteur. */}
+      {byModerator ? translate(currentInterfaceLanguage(), 'message.editedByModerator') : null}
     </span>
   );
 }

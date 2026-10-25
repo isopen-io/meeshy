@@ -29,6 +29,8 @@ import { readerParticipantIdOf } from './readerParticipant';
 import { signMessagesAttachmentsForReader } from '../../services/attachments/signServedAttachments';
 import { readerFileUrlSignerFromEnv } from '../../services/attachments/readerFileSignature';
 import { captureNoticeWithheldFrom } from '../../services/messaging/captureNoticeVisibility';
+import { AT_REST_MESSAGE_SELECT, revealAtRestRowsForWire } from '../../services/messaging/serverAtRest';
+import { gatewayKeyring } from '../../services/messaging/atRestTranslationSource';
 
 const logger = enhancedLogger.child({ module: 'ThreadsRoute' });
 
@@ -61,6 +63,9 @@ const threadMessageSelect = {
   // message à vue unique ouvert par son fil de réponses était FORWARDABLE
   // au même titre que celui trouvé par `GET .../messages/search`.
   ...MESSAGE_PROTECTION_SELECT,
+  // #12822 — de quoi ouvrir un message `server`/`hybrid` et ses traductions
+  // (`revealAtRestRowsForWire`) ; le chiffré ne sort pas.
+  ...AT_REST_MESSAGE_SELECT,
   sender: {
     select: {
       id: true,
@@ -106,6 +111,11 @@ const threadMessageSelect = {
       isBlurred: true,
       isEncrypted: true,
       effectFlags: true,
+      // #12822 — le message CITÉ `server`/`hybrid` s'ouvre comme la racine.
+      conversationId: true,
+      encryptionMode: true,
+      encryptedContent: true,
+      encryptionMetadata: true,
       // #8562 — l'échéance du LECTEUR se résout depuis ces deux champs ; la
       // colonne brute n'est jamais resservie pour un éphémère.
       ephemeralDuration: true,
@@ -360,10 +370,8 @@ export function registerThreadsRoutes(
       };
       const served = (m: ThreadMessage) =>
         withInheritedExpiry(formatThreadMessage(m as unknown as Record<string, unknown>, readers) as Record<string, unknown> & { id: string }, readerPage.inherited);
-      const [servedParent, ...servedReplies] = await servePostReplyCitations(prisma, [
-        served(parent),
-        ...replies.map(served),
-      ]);
+      const opened = await revealAtRestRowsForWire([parent, ...replies], gatewayKeyring(prisma));
+      const [servedParent, ...servedReplies] = await servePostReplyCitations(prisma, opened.map((m) => served(m as unknown as ThreadMessage)));
       // #9646 — les pièces d'un message protégé du fil, signées pour CE lecteur.
       const [signedParent, ...signedReplies] = await signMessagesAttachmentsForReader(prisma, {
         messages: [servedParent, ...servedReplies],

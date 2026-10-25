@@ -31,6 +31,7 @@ import { libsignalSignatureVerifier, loadLibsignal } from '../services/e2ee/sign
 import { mayReadKeysOf } from '../services/e2ee/key-access';
 import { joinSessionSocketsToDeviceRoom } from '../services/e2ee/device-room';
 import { currentE2EEIO } from '../services/e2ee/envelope-delivery';
+import { invalidateSession } from '../services/SessionService';
 import { disconnectSession } from '../socketio/disconnectSession';
 
 const logger = enhancedLogger.child({ module: 'E2EERoutes' });
@@ -76,10 +77,15 @@ export type E2EERouteDeps = {
   readonly directory: E2EEDirectory;
   readonly relay: E2EEEnvelopeRelay;
   readonly mayReadKeysOf: (requesterUserId: string, targetUserId: string) => Promise<boolean>;
+  /**
+   * Retirer un appareil depuis une AUTRE session ferme aussi la sienne (#13013) :
+   * sans quoi un appareil volé, toujours connecté, se réenrôle aussitôt sous une
+   * identité neuve et reçoit de nouveau les messages chiffrés. Rend `true`
+   * seulement si la session n'est plus valide après l'appel.
+   */
+  readonly closeSession: (session: { readonly userId: string; readonly sessionId: string }) => Promise<boolean>;
   /** Après un enrôlement : les sockets déjà ouvertes de la session rejoignent la room de l'appareil. */
   readonly onEnrolled?: (enrolled: Caller & { readonly deviceId: number; readonly registrationId: number }) => Promise<void>;
-  /** Après un retrait qui a mis fin à la session de l'appareil : son socket déjà ouvert est coupé (un socket ne se revérifie pas). */
-  readonly onDeviceSessionEnded?: (ended: { readonly userId: string; readonly sessionId: string }) => Promise<void>;
 };
 
 function callerOf(request: FastifyRequest): Caller | null {
@@ -148,22 +154,17 @@ function registerDeviceRoutes(fastify: FastifyInstance, deps: E2EERouteDeps): vo
     return sendSuccess(reply, await deps.directory.publishKeys({ ...caller, deviceId, request: body }));
   }));
 
-  fastify.delete('/e2ee/devices/:deviceId', { preValidation }, guarded(async (request, reply, caller) => {
+  fastify.delete('/e2ee/devices/:deviceId', writes, guarded(async (request, reply, caller) => {
     const deviceId = parsedOr400(reply, deviceIdParam.safeParse((request.params as { deviceId?: string }).deviceId));
     const query = deviceId === null ? null : parsedOr400(reply, retireQuery.safeParse(request.query ?? {}));
     if (deviceId === null || !query) return;
-    const { sessionEnded, endedSessionId } = await deps.directory.retireDevice({
+    const { signedOut } = await deps.directory.retireDevice({
       userId: caller.userId,
       deviceId,
-      callerSessionId: caller.sessionId,
       expectedRegistrationId: query.registrationId,
+      signOut: { callerSessionId: caller.sessionId, close: (sessionId) => deps.closeSession({ userId: caller.userId, sessionId }) },
     });
-    if (endedSessionId) {
-      await deps.onDeviceSessionEnded?.({ userId: caller.userId, sessionId: endedSessionId }).catch((error: unknown) =>
-        logger.warn('e2ee retired device socket not cut', { error }),
-      );
-    }
-    return sendSuccess(reply, { deviceId, retired: true, sessionEnded });
+    return sendSuccess(reply, { deviceId, retired: true, signedOut });
   }));
 
   fastify.get('/e2ee/devices/self/prekey-count', { preValidation }, guarded(async (_request, reply, caller) =>
@@ -231,14 +232,20 @@ export default async function e2eeRoutes(fastify: FastifyInstance): Promise<void
     relay: createE2EEEnvelopeRelay({ prisma }),
     mayReadKeysOf: (requester, target) => mayReadKeysOf(prisma, requester, target),
     onEnrolled: (enrolled) => joinSessionSocketsToDeviceRoom(currentE2EEIO(), enrolled),
-    onDeviceSessionEnded: async ({ userId, sessionId }) => {
+    closeSession: async ({ userId, sessionId }) => {
+      const invalidated = await invalidateSession(sessionId, 'user_revoked');
+      const stillLive = invalidated
+        ? null
+        : await prisma.userSession.findFirst({ where: { id: sessionId, userId, isValid: true, expiresAt: { gt: new Date() } }, select: { id: true } });
+      if (stillLive !== null) return false;
       await disconnectSession({
         io: fastify.socketIOHandler?.getManager?.()?.getIO(),
         userId,
         sessionId,
         reason: 'user_revoke',
-        onError: (error) => logger.warn('e2ee retired device socket cut failed', { error }),
+        onError: (error) => logger.warn('e2ee retired device socket not cut', { error }),
       });
+      return true;
     },
   });
 }

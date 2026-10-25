@@ -118,6 +118,12 @@ export const conversationLastMessagePreviewSelect = {
   // #7545 — la protection (chiffré) et la NATURE du message (système, appel,
   // transfert) que `resolveLastMessageNature` lit.
   isEncrypted: true,
+  // #11381 — de quoi ouvrir un dernier message `server`/`hybrid` (`revealAtRestRows`) ;
+  // `messageMinimalSchema` ne déclare ni le chiffré ni ses métadonnées : ils ne sortent pas.
+  conversationId: true,
+  encryptionMode: true,
+  encryptedContent: true,
+  encryptionMetadata: true,
   messageSource: true,
   forwardedFromId: true,
   // Prisme Linguistique de l'aperçu. Les deux champs vivent dans le

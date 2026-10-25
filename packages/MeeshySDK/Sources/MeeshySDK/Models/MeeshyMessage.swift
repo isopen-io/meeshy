@@ -30,6 +30,9 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
     public var messageSource: MessageSource = .user
     public var isEdited: Bool = false
     public var editedAt: Date?
+    /// #11375 — `User.id` du modérateur de plateforme qui a fait la dernière
+    /// modification ; `nil` quand c'est l'auteur (voir `editedByModerator`).
+    public var editedById: String?
     public var deletedAt: Date?
     public var isDeleted: Bool { deletedAt != nil }
     public var replyToId: String?
@@ -213,7 +216,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
                 conversationId: String, senderId: String = "",
                 content: String, originalLanguage: String = "fr",
                 messageType: MessageType = .text, messageSource: MessageSource = .user,
-                isEdited: Bool = false, editedAt: Date? = nil, deletedAt: Date? = nil,
+                isEdited: Bool = false, editedAt: Date? = nil, editedById: String? = nil, deletedAt: Date? = nil,
                 replyToId: String? = nil, storyReplyToId: String? = nil, forwardedFromId: String? = nil, forwardedFromConversationId: String? = nil,
                 expiresAt: Date? = nil, effects: MessageEffects = .none, maxViewOnceCount: Int? = nil,
                 viewOnceCount: Int = 0, pinnedAt: Date? = nil, pinnedBy: String? = nil,
@@ -241,7 +244,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         self.conversationId = conversationId; self.senderId = senderId
         self.content = content
         self.originalLanguage = originalLanguage; self.messageType = messageType; self.messageSource = messageSource
-        self.isEdited = isEdited; self.editedAt = editedAt; self.deletedAt = deletedAt
+        self.isEdited = isEdited; self.editedAt = editedAt; self.editedById = editedById; self.deletedAt = deletedAt
         self.replyToId = replyToId; self.storyReplyToId = storyReplyToId; self.forwardedFromId = forwardedFromId
         self.forwardedFromConversationId = forwardedFromConversationId
         self.expiresAt = expiresAt; self.effects = effects; self.maxViewOnceCount = maxViewOnceCount
@@ -271,7 +274,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
 
     private enum CodingKeys: String, CodingKey {
         case id, clientMessageId, conversationId, senderId, content, originalLanguage
-        case messageType, messageSource, isEdited, editedAt, deletedAt
+        case messageType, messageSource, isEdited, editedAt, editedById, deletedAt
         case replyToId, storyReplyToId, forwardedFromId, forwardedFromConversationId
         case expiresAt, effects, maxViewOnceCount, viewOnceCount
         case pinnedAt, pinnedBy, isEncrypted, encryptionMode
@@ -306,6 +309,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         messageSource = try c.decodeIfPresent(MessageSource.self, forKey: .messageSource) ?? .user
         isEdited = try c.decodeIfPresent(Bool.self, forKey: .isEdited) ?? false
         editedAt = try c.decodeIfPresent(Date.self, forKey: .editedAt)
+        editedById = try c.decodeIfPresent(String.self, forKey: .editedById)
         deletedAt = try c.decodeIfPresent(Date.self, forKey: .deletedAt)
         replyToId = try c.decodeIfPresent(String.self, forKey: .replyToId)
         storyReplyToId = try c.decodeIfPresent(String.self, forKey: .storyReplyToId)
@@ -353,8 +357,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         joinNotice = try? c.decodeIfPresent(JoinNoticeMetadata.self, forKey: .joinNotice)
         captureNotice = try? c.decodeIfPresent(CaptureNoticeMetadata.self, forKey: .captureNotice)
         arrivalsNotice = try? c.decodeIfPresent(ArrivalsNoticeMetadata.self, forKey: .arrivalsNotice); encryptionSwitchNotice = try? c.decodeIfPresent(EncryptionSwitchNoticeMetadata.self, forKey: .encryptionSwitchNotice)
-        // Same tolerance as callSummary: a malformed location blob must not
-        // fail the whole cached-message decode.
+        // Same tolerance as callSummary: a malformed location blob must not fail the decode.
         location = try? c.decodeIfPresent(SharedPlace.self, forKey: .location)
         // Même tolérance — et la règle « non rendable ⇒ absent » appliquée dès
         // la relecture du cache, pour qu'une ligne ancienne ou malformée ne
@@ -387,6 +390,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         try c.encode(messageSource, forKey: .messageSource)
         try c.encode(isEdited, forKey: .isEdited)
         try c.encodeIfPresent(editedAt, forKey: .editedAt)
+        try c.encodeIfPresent(editedById, forKey: .editedById)
         try c.encodeIfPresent(deletedAt, forKey: .deletedAt)
         try c.encodeIfPresent(replyToId, forKey: .replyToId)
         try c.encodeIfPresent(storyReplyToId, forKey: .storyReplyToId)
@@ -440,6 +444,14 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
     public var text: String { content }
     public var timestamp: Date { createdAt }
     public var attachment: MeeshyMessageAttachment? { attachments.first }
+
+    /// #11375 — « modifié par un modérateur » plutôt que « modifié » : la
+    /// dernière modification est celle d'un TIERS (modérateur de plateforme),
+    /// enregistrée par la passerelle. Miroir de `editedByThirdParty`
+    /// (`packages/shared/utils/message-edit-attribution.ts`).
+    public var editedByModerator: Bool {
+        isEdited && !(editedById ?? "").isEmpty
+    }
 
     /// Whether the message is ephemeral and has not yet expired.
     public var isEphemeralActive: Bool {

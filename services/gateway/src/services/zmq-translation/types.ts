@@ -14,6 +14,8 @@ export interface TranslationRequest {
   targetLanguages: string[];
   conversationId: string;
   modelType?: string;
+  /** #12822 — texte chiffré au repos : le translator ne le met pas en cache et ne le journalise pas. */
+  atRest?: boolean;
 }
 
 export interface TranslationResult {

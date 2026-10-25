@@ -57,4 +57,14 @@ describe('preloadScreensWhenIdle', () => {
       expect(loaded).toEqual([]);
     }
   });
+
+  test('des écrans livrés avec l’application se préchargent même sur un réseau économe ou très lent (#13021)', async () => {
+    for (const network of [{ saveData: true }, { effectiveType: '2g' }, { effectiveType: 'slow-2g' }]) {
+      const loaded: string[] = [];
+      const clock = manualIdle();
+      preloadScreensWhenIdle({ preload: (key) => (loaded.push(key), Promise.resolve()), idle: clock.idle, network, bundled: true });
+      await clock.flush();
+      expect(loaded).toEqual([...PRELOADED_SCREENS]);
+    }
+  });
 });

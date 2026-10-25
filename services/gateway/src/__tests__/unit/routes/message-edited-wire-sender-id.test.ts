@@ -139,7 +139,8 @@ jest.mock('../../../services/messaging/messageMentions', () => ({
 // l'admission n'est pas le sujet de ce fichier. `admitEditedContent`, lui, est
 // PUR et reste réel — c'est lui qui décide ce que la charge porte comme texte.
 jest.mock('../../../services/messaging/messageEditAdmission', () => ({
-  admitMessageEdit: jest.fn<any>().mockResolvedValue({ admitted: true }),
+  ...jest.requireActual<typeof import('../../../services/messaging/messageEditAdmission')>('../../../services/messaging/messageEditAdmission'),
+  admitMessageEdit: jest.fn<any>().mockResolvedValue({ admitted: true, asModerator: false, windowBypassed: false }),
   isEditRefused: () => false,
   CONVERSATION_CLOSED_EDIT_MESSAGE: 'closed',
 }));

@@ -207,3 +207,14 @@ describe('fermer', () => {
     expect(host.querySelector('[data-sessions-announce]')?.textContent).toBe('Une session fermée');
   });
 });
+
+describe('le chiffrement de bout en bout', () => {
+  test('« Mes appareils chiffrés » se pousse depuis la Sécurité, à l’adresse de son volet', async () => {
+    const { element } = harness();
+    const host = await mount(element);
+    await settle();
+    const row = host.querySelector<HTMLAnchorElement>('[data-settings-e2ee-devices-row]');
+    expect(row?.textContent).toContain('Mes appareils chiffrés');
+    expect(row?.getAttribute('href')).toContain('volet=appareils-chiffres');
+  });
+});

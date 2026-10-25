@@ -65,6 +65,12 @@ type SignedKey = { readonly keyId: number; readonly publicKey: string; readonly 
 type OneTimeKey = { readonly keyId: number; readonly publicKey: string };
 type OneTimeBatches = { readonly oneTimePreKeys?: readonly OneTimeKey[]; readonly kyberPreKeys?: readonly SignedKey[] };
 
+export type DeviceSignOut = {
+  readonly callerSessionId: string;
+  /** `true` seulement si la session n'est plus valide après l'appel. */
+  readonly close: (sessionId: string) => Promise<boolean>;
+};
+
 export type PreKeyStock = { readonly deviceId: number; readonly oneTimePreKeys: number; readonly kyberPreKeys: number };
 
 const ACTIVE = { retiredAt: null } as const;
@@ -392,27 +398,36 @@ export class E2EEDirectory {
    * preuve de liaison fraîche — un appareil révoqué, ou un jeton volé qui l'a
    * révoqué, ne la ramène pas. L'installation doit tirer une nouvelle identité.
    *
-   * Il met aussi fin à la SESSION de l'appareil retiré, sauf si c'est celle de
-   * l'appelant (#13014) : sans cela, la même session réenrôlait aussitôt une
-   * identité neuve et l'appareil perdu recevait de nouveau mes messages. Une
-   * `expectedRegistrationId` qui ne correspond plus (la place a été reprise par
-   * une autre génération) refuse le retrait au lieu de révoquer le nouvel occupant.
+   * Demandé depuis une AUTRE session (`signOut`), il ferme d'abord celle de
+   * l'appareil (#13013) — sans quoi un appareil volé, toujours connecté, se
+   * réenrôle sous une identité neuve. Une session qui ne se ferme pas fait
+   * échouer le retrait AVANT toute révocation : on ne dit jamais « déconnecté »
+   * d'une session vivante, et un nouvel essai repart du même état.
    */
   async retireDevice(params: {
     userId: string;
     deviceId: number;
-    callerSessionId?: string;
+    signOut?: DeviceSignOut;
+    /** La génération lue par l'appelant (#13014) : une place reprise depuis est refusée AVANT toute fermeture ni révocation. */
     expectedRegistrationId?: number;
-  }): Promise<{ sessionEnded: boolean; endedSessionId: string | null }> {
+  }): Promise<{ signedOut: boolean }> {
     const device = await this.prisma.e2EEDevice.findFirst({
       where: { userId: params.userId, deviceId: params.deviceId, ...ACTIVE },
-      select: { identityKey: true, registrationId: true, sessionId: true },
+      select: { identityKey: true, sessionId: true, registrationId: true },
     });
     if (!device) {
       throw new E2EEDirectoryError(E2EE_ERROR_CODES.DEVICE_NOT_BOUND, 404, 'Appareil chiffré introuvable sur ce compte');
     }
     if (params.expectedRegistrationId !== undefined && params.expectedRegistrationId !== device.registrationId) {
       throw new E2EEDirectoryError(E2EE_ERROR_CODES.DEVICE_CHANGED, 409, 'Cet appareil a changé depuis la liste affichée : relisez-la avant de retirer');
+    }
+    const signsOut = params.signOut !== undefined && device.sessionId !== params.signOut.callerSessionId;
+    if (signsOut && !(await params.signOut!.close(device.sessionId))) {
+      throw new E2EEDirectoryError(
+        E2EE_ERROR_CODES.DEVICE_SESSION_NOT_CLOSED,
+        503,
+        'La session de cet appareil n’a pas pu être fermée : rien n’a été retiré. Réessayez.',
+      );
     }
     await this.prisma.e2EERevokedIdentity.upsert({
       where: { userId_identityKey: { userId: params.userId, identityKey: device.identityKey } },
@@ -421,12 +436,7 @@ export class E2EEDirectory {
     });
     await this.retireDevices({ userId: params.userId, deviceId: params.deviceId, identityKey: device.identityKey });
     await this.retireDevices({ userId: params.userId, identityKey: device.identityKey });
-    if (device.sessionId === params.callerSessionId) return { sessionEnded: false, endedSessionId: null };
-    const ended = await this.prisma.userSession.updateMany({
-      where: { id: device.sessionId, userId: params.userId, isValid: true },
-      data: { isValid: false, invalidatedAt: this.now(), invalidatedReason: 'e2ee_device_retired' },
-    });
-    return ended.count > 0 ? { sessionEnded: true, endedSessionId: device.sessionId } : { sessionEnded: false, endedSessionId: null };
+    return { signedOut: signsOut };
   }
 
   private async undoIfRevoked(userId: string, identityKey: string): Promise<void> {

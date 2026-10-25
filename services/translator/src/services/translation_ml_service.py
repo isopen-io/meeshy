@@ -194,14 +194,16 @@ class TranslationMLService:
         source_language: str = "auto",
         target_language: str = "en",
         model_type: str = "basic",
-        source_channel: str = "unknown"
+        source_channel: str = "unknown",
+        **cache_choice: bool
     ) -> Dict[str, Any]:
         """
         Traduction avec préservation de structure
         DÉLÉGATION vers TranslationService.translate_with_structure()
+        (`use_cache=False` transmis tel quel — #12822)
         """
         return await self.translation_service.translate_with_structure(
-            text, source_language, target_language, model_type, source_channel
+            text, source_language, target_language, model_type, source_channel, **cache_choice
         )
 
     async def get_stats(self) -> Dict[str, Any]:

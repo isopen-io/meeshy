@@ -988,6 +988,7 @@ const ar = {
   'message.forwarded': 'تمت إعادة التوجيه',
   'message.forwarded.fromGroup': 'تمت إعادة التوجيه من {name}',
   'message.forwarded.fromPerson': 'موجّهة من {name}',
+  'message.editedByModerator': 'عدّله مشرف',
   'message.send.failed': 'لم يُرسَل',
   'message.send.failed.reason': 'لم يُرسَل — {reason}',
   'message.send.retry': 'إعادة المحاولة',
