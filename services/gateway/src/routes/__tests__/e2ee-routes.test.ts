@@ -19,7 +19,7 @@ const STRANGER = 'e5'.repeat(12);
 const SESSIONS: Record<string, string> = { alice: 'c3'.repeat(12), aliceWeb: 'c7'.repeat(12), bob: 'd4'.repeat(12), stranger: 'f6'.repeat(12) };
 const USERS: Record<string, string> = { alice: ALICE, aliceWeb: ALICE, bob: BOB, stranger: STRANGER };
 
-async function buildApp() {
+async function buildApp(options: { sessionClosable?: () => boolean } = {}) {
   const store = createFakeE2EEStore();
   const closedSessions: { userId: string; sessionId: string }[] = [];
   const app: FastifyInstance = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
@@ -35,7 +35,9 @@ async function buildApp() {
     relay: createE2EEEnvelopeRelay({ prisma: store.prisma as never }),
     mayReadKeysOf: async (requester, target) => requester === target || target !== STRANGER,
     closeSession: async (closed) => {
+      if (options.sessionClosable?.() === false) return false;
       closedSessions.push(closed);
+      return true;
     },
   });
   await app.ready();
@@ -203,5 +205,23 @@ describe('routes /e2ee', () => {
 
     expect(res.json().data).toEqual({ deviceId: 1, retired: true, signedOut: false });
     expect(closedSessions).toEqual([]);
+  });
+
+  it("une session qui ne se ferme pas fait ÉCHOUER le retrait, sans rien révoquer : jamais « déconnecté » sur une session vivante", async () => {
+    const closable = { value: false };
+    const { app, store } = await buildApp({ sessionClosable: () => closable.value });
+    await app.inject({ method: 'POST', url: '/e2ee/devices', headers: { 'x-test-user': 'alice' }, payload: enrollment(ALICE) });
+
+    const refused = await app.inject({ method: 'DELETE', url: '/e2ee/devices/1', headers: { 'x-test-user': 'aliceWeb' } });
+    const stillListed = await app.inject({ method: 'GET', url: '/e2ee/devices', headers: { 'x-test-user': 'aliceWeb' } });
+    const revokedBeforeRetry = store.collections.E2EERevokedIdentity.rows.length;
+    closable.value = true;
+    const retried = await app.inject({ method: 'DELETE', url: '/e2ee/devices/1', headers: { 'x-test-user': 'aliceWeb' } });
+
+    expect(refused.statusCode).toBe(503);
+    expect(refused.json()).toMatchObject({ success: false, code: E2EE_ERROR_CODES.DEVICE_SESSION_NOT_CLOSED });
+    expect(revokedBeforeRetry).toBe(0);
+    expect(stillListed.json().data.devices).toHaveLength(1);
+    expect(retried.json().data).toEqual({ deviceId: 1, retired: true, signedOut: true });
   });
 });

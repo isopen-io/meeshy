@@ -72,6 +72,12 @@ export type OwnDevice = {
   readonly current: boolean;
 };
 
+export type DeviceSignOut = {
+  readonly callerSessionId: string;
+  /** `true` seulement si la session n'est plus valide après l'appel. */
+  readonly close: (sessionId: string) => Promise<boolean>;
+};
+
 export type PreKeyStock = { readonly deviceId: number; readonly oneTimePreKeys: number; readonly kyberPreKeys: number };
 
 const ACTIVE = { retiredAt: null } as const;
@@ -396,15 +402,28 @@ export class E2EEDirectory {
    * reprend jamais sa place et ne se réenrôle plus sur ce compte, même avec une
    * preuve de liaison fraîche — un appareil révoqué, ou un jeton volé qui l'a
    * révoqué, ne la ramène pas. L'installation doit tirer une nouvelle identité.
-   * Rend la session qui portait l'appareil : la route la ferme (#13013).
+   *
+   * Demandé depuis une AUTRE session (`signOut`), il ferme d'abord celle de
+   * l'appareil (#13013) — sans quoi un appareil volé, toujours connecté, se
+   * réenrôle sous une identité neuve. Une session qui ne se ferme pas fait
+   * échouer le retrait AVANT toute révocation : on ne dit jamais « déconnecté »
+   * d'une session vivante, et un nouvel essai repart du même état.
    */
-  async retireDevice(params: { userId: string; deviceId: number }): Promise<{ sessionId: string }> {
+  async retireDevice(params: { userId: string; deviceId: number; signOut?: DeviceSignOut }): Promise<{ signedOut: boolean }> {
     const device = await this.prisma.e2EEDevice.findFirst({
       where: { userId: params.userId, deviceId: params.deviceId, ...ACTIVE },
       select: { identityKey: true, sessionId: true },
     });
     if (!device) {
       throw new E2EEDirectoryError(E2EE_ERROR_CODES.DEVICE_NOT_BOUND, 404, 'Appareil chiffré introuvable sur ce compte');
+    }
+    const signsOut = params.signOut !== undefined && device.sessionId !== params.signOut.callerSessionId;
+    if (signsOut && !(await params.signOut!.close(device.sessionId))) {
+      throw new E2EEDirectoryError(
+        E2EE_ERROR_CODES.DEVICE_SESSION_NOT_CLOSED,
+        503,
+        'La session de cet appareil n’a pas pu être fermée : rien n’a été retiré. Réessayez.',
+      );
     }
     await this.prisma.e2EERevokedIdentity.upsert({
       where: { userId_identityKey: { userId: params.userId, identityKey: device.identityKey } },
@@ -413,7 +432,7 @@ export class E2EEDirectory {
     });
     await this.retireDevices({ userId: params.userId, deviceId: params.deviceId });
     await this.retireDevices({ userId: params.userId, identityKey: device.identityKey });
-    return { sessionId: device.sessionId };
+    return { signedOut: signsOut };
   }
 
   private async undoIfRevoked(userId: string, identityKey: string): Promise<void> {
