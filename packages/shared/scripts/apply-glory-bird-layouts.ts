@@ -19,7 +19,7 @@ export const CONTROLE_DIR = join(REPO_ROOT, 'docs/product/cadres-de-gloire/contr
 
 export type DeclaredFrame = RawBirdTable & { readonly frame: string };
 
-type CollectionDocument = { readonly frames: readonly { readonly id: string; readonly formats: { readonly story: Readonly<Record<string, unknown>> } }[] };
+export type CollectionDocument = { readonly frames: readonly { readonly id: string; readonly formats: { readonly story: Readonly<Record<string, unknown>> } }[] };
 
 /** Le contrat d'une collection, `birds` du format story remplacé par la table déclarée de chaque cadre. */
 export function withDeclaredBirds<D extends CollectionDocument>(document: D, records: readonly DeclaredFrame[]): D {
@@ -33,19 +33,33 @@ export function withDeclaredBirds<D extends CollectionDocument>(document: D, rec
   return { ...document, frames };
 }
 
-function main(): void {
+/** Les cadres dont le contrat ne porte pas, à l'octet, la table de son relevé : vide quand le contrat égale le relevé. */
+export function birdLayoutDrift<D extends CollectionDocument>(document: D, records: readonly DeclaredFrame[]): readonly string[] {
+  const expected = withDeclaredBirds(document, records);
+  return expected.frames.filter((frame, at) => jsonText(frame) !== jsonText(document.frames[at])).map((frame) => frame.id);
+}
+
+/** Les collections du registre, chacune avec son contrat versionné et son relevé de mises en page. */
+export function gloryBirdLayoutSlugs(): readonly string[] {
   const registry = JSON.parse(readFileSync(REGISTRY_FILE, 'utf8')) as readonly RegistryEntry[];
-  const slugs = [...new Set(registry.flatMap((entry) => entry.collections.map(({ slug }) => slug)))];
-  for (const slug of slugs) {
-    const declared = join(CONTROLE_DIR, `mises-en-page-${slug}.json`);
-    if (!existsSync(declared)) throw new Error(`${declared} absent : relancer \`node lib/overlap.mjs\` dans le générateur`);
-    const file = join(GLORY_FRAMES_DIR, `${slug}.json`);
-    const before = readFileSync(file, 'utf8');
-    const next = withDeclaredBirds(JSON.parse(before) as CollectionDocument, JSON.parse(readFileSync(declared, 'utf8')) as readonly DeclaredFrame[]);
+  return [...new Set(registry.flatMap((entry) => entry.collections.map(({ slug }) => slug)))];
+}
+
+export function readCollectionBirdLayouts(slug: string): { readonly text: string; readonly document: CollectionDocument; readonly records: readonly DeclaredFrame[] } {
+  const declared = join(CONTROLE_DIR, `mises-en-page-${slug}.json`);
+  if (!existsSync(declared)) throw new Error(`${declared} absent : relancer \`node lib/overlap.mjs\` dans le générateur`);
+  const text = readFileSync(join(GLORY_FRAMES_DIR, `${slug}.json`), 'utf8');
+  return { text, document: JSON.parse(text) as CollectionDocument, records: JSON.parse(readFileSync(declared, 'utf8')) as readonly DeclaredFrame[] };
+}
+
+function main(): void {
+  for (const slug of gloryBirdLayoutSlugs()) {
+    const { text: before, document, records } = readCollectionBirdLayouts(slug);
+    const next = withDeclaredBirds(document, records);
     const unreadable = next.frames.filter((frame) => readGloryFrame(frame) === null).map((frame) => frame.id);
     if (unreadable.length > 0) throw new Error(`${slug} : cadre(s) illisible(s) après la pose : ${unreadable.join(', ')}`);
     const after = jsonText(next);
-    if (after !== before) writeFileSync(file, after);
+    if (after !== before) writeFileSync(join(GLORY_FRAMES_DIR, `${slug}.json`), after);
     process.stdout.write(`${slug} : ${after === before ? 'inchangé' : 'mises en page posées'}\n`);
   }
 }

@@ -1577,20 +1577,25 @@ jobs:
         id: touched
         env:
           BASE: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || github.event.before }}
+        # L'affectation seule, sous `bash -e`, fait rougir l'étape quand touched.mjs plante ; dans un `echo`, son
+        # code de sortie se perdait et la sélection partait vide (lib/touched-ci.test.mjs).
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "only=all" >> "$GITHUB_OUTPUT"
+            only=all
           else
-            echo "only=$(node lib/touched.mjs "$BASE")" >> "$GITHUB_OUTPUT"
+            only="$(node lib/touched.mjs "$BASE")"
           fi
+          echo "only=$only" >> "$GITHUB_OUTPUT"
 
+      # « none » est la seule façon de ne rien re-mesurer ; une sélection vide est un défaut, jamais une garde verte.
       - name: Garde d'empiètement, chaque mise en page déclarée
         env:
           ONLY: ${{ steps.touched.outputs.only }}
         run: |
           case "$ONLY" in
             all) node lib/overlap.mjs --check --jobs 2 ;;
-            "") echo "aucune collection touchée : la garde ne re-mesure rien" ;;
+            none) echo "aucune collection touchée : la garde ne re-mesure rien" ;;
+            "") echo "::error::le choix des collections n'a rien rendu : la garde ne passe pas sans mesurer"; exit 1 ;;
             *) node lib/overlap.mjs --check --jobs 2 --only "$ONLY" ;;
           esac
 

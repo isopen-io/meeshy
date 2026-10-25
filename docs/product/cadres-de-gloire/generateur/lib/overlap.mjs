@@ -1,6 +1,7 @@
 // La règle d'empiètement (lot L2, prompt § 5.7) : Mee et Meo ne recouvrent jamais la photo — dans CHAQUE mise en page
 // qu'un cadre déclare (#10277).
 // Usage : node lib/overlap.mjs [--out out] [--controle ../controle] [--only neon,savane-orateur-a] [--jobs 3]
+//   --only : des collections ou des cadres ; un nom qui ne désigne rien, ou une sélection vide, sort en 1.
 //                              [--check] [--png dossier] [--mutate bird-in-window|layout-in-window]
 //   sans --check : mesure la mise en page dessinée de chaque cadre, CHERCHE les autres (pied, perchés, côtés, duo,
 //                  selfie : lib/bird-layouts.mjs), ne garde que celles que le détecteur valide, et RÉÉCRIT
@@ -20,7 +21,7 @@ import zlib from 'node:zlib';
 import { drawnLayoutOf, frameRecord, layoutsToTry, nominalAnchors, placeBody, posesFor, recordFailures } from './bird-layouts.mjs';
 import { launch } from './launch.mjs';
 import { bodyOf, declaredAnchor, injectable, loadPoses, measureBirds, openFrame, placeBirds, searchScene } from './overlap-measure.mjs';
-import { isSelfie, RULE, verdict } from './overlap-rule.mjs';
+import { isSelfie, RULE, selectFrames, verdict } from './overlap-rule.mjs';
 import { openPage, pool, SCALE } from './page.mjs';
 
 const HERE = path.dirname(new URL(import.meta.url).pathname);
@@ -30,7 +31,7 @@ const arg = (name, fallback) => {
 };
 const OUT = path.resolve(arg('--out', path.join(HERE, '../out')));
 const CONTROLE = path.resolve(arg('--controle', path.join(HERE, '../../controle')));
-const ONLY = arg('--only') ? new Set(arg('--only').split(',').filter(Boolean)) : null;
+const ONLY = process.argv.includes('--only') ? (arg('--only') ?? '').split(',').filter(Boolean) : null;
 const JOBS = Number(arg('--jobs', '3'));
 const CHECK = process.argv.includes('--check');
 const PNG = arg('--png', null);
@@ -155,13 +156,20 @@ async function check(handle, job, declared) {
 }
 
 const collections = fs.readdirSync(OUT).filter((d) => fs.existsSync(path.join(OUT, d, 'manifest.json'))).sort();
-const jobs = collections.flatMap((collection) => {
+const prose = new Map(collections.map((collection) => {
   const manifest = JSON.parse(fs.readFileSync(path.join(OUT, collection, 'manifest.json'), 'utf8'));
-  const layouts = new Map(manifest.map((e) => [e.file.replace(/\.jpg$/, ''), e.layout]));
-  return fs.readdirSync(path.join(OUT, collection)).filter((f) => f.endsWith('.svg')).map((f) => f.slice(0, -4)).sort()
-    .filter((name) => !ONLY || ONLY.has(collection) || ONLY.has(name))
-    .map((name) => ({ collection, name, prose: layouts.get(name) ?? null }));
-});
+  return [collection, new Map(manifest.map((e) => [e.file.replace(/\.jpg$/, ''), e.layout]))];
+}));
+const selection = selectFrames(
+  new Map(collections.map((collection) => [collection, fs.readdirSync(path.join(OUT, collection)).filter((f) => f.endsWith('.svg')).map((f) => f.slice(0, -4)).sort()])),
+  ONLY,
+);
+if (selection.failures.length > 0) {
+  for (const failure of selection.failures) console.error(`  SÉLECTION ${failure}`);
+  console.error(`ROUGE — sélection de la garde en défaut (${selection.failures.length})`);
+  process.exit(1);
+}
+const jobs = selection.jobs.map(({ collection, name }) => ({ collection, name, prose: prose.get(collection).get(name) ?? null }));
 const declared = new Map(collections.flatMap((collection) => readDeclared(collection).map((record) => [record.frame, record])));
 const browser = await launch();
 const handles = await Promise.all(Array.from({ length: JOBS }, () => openPage(browser)));
