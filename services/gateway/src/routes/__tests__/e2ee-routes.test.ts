@@ -251,4 +251,28 @@ describe('routes /e2ee', () => {
     expect(stillListed.json().data.devices).toHaveLength(1);
     expect(retried.json().data).toEqual({ deviceId: 1, retired: true, signedOut: true });
   });
+
+  it("un retrait qui nomme une génération périmée ne ferme ni ne retire l'appareil qui a repris la place", async () => {
+    const { app, store, closedSessions } = await buildApp();
+    await app.inject({ method: 'POST', url: '/e2ee/devices', headers: { 'x-test-user': 'alice' }, payload: enrollment(ALICE) });
+    const [device] = store.collections.E2EEDevice.rows;
+    const stale = Number(device.registrationId) === 1 ? 2 : 1;
+
+    const refused = await app.inject({ method: 'DELETE', url: `/e2ee/devices/1?registrationId=${stale}`, headers: { 'x-test-user': 'aliceAndroid' } });
+    const listed = await app.inject({ method: 'GET', url: '/e2ee/devices', headers: { 'x-test-user': 'alice' } });
+
+    expect(refused.statusCode).toBe(409);
+    expect(refused.json().code).toBe(E2EE_ERROR_CODES.DEVICE_CHANGED);
+    expect(listed.json().data.devices).toHaveLength(1);
+    expect(store.collections.E2EERevokedIdentity.rows).toHaveLength(0);
+    expect(closedSessions).toEqual([]);
+
+    const matching = await app.inject({
+      method: 'DELETE', url: `/e2ee/devices/1?registrationId=${device.registrationId}`, headers: { 'x-test-user': 'aliceAndroid' },
+    });
+    const malformed = await app.inject({ method: 'DELETE', url: '/e2ee/devices/1?registrationId=abc', headers: { 'x-test-user': 'aliceAndroid' } });
+
+    expect(matching.statusCode).toBe(200);
+    expect(malformed.statusCode).toBe(400);
+  });
 });

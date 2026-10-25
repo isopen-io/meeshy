@@ -40,7 +40,7 @@ class EncryptedDevicesScreenTest {
     private class Served(private val list: List<OwnEncryptedDevice>) : OwnEncryptedDevicesProviding {
         override val devices: StateFlow<List<OwnEncryptedDevice>?> = MutableStateFlow(list)
         override suspend fun refresh(): NetworkResult<List<OwnEncryptedDevice>> = NetworkResult.Success(list)
-        override suspend fun retire(deviceId: Int): NetworkResult<Unit> = NetworkResult.Success(Unit)
+        override suspend fun retire(device: OwnEncryptedDevice): NetworkResult<Unit> = NetworkResult.Success(Unit)
     }
 
     private fun show(devices: List<OwnEncryptedDevice>) {

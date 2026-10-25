@@ -57,11 +57,11 @@ class EncryptedDevicesViewModelTest {
             return served().also { result -> if (result is NetworkResult.Success) flow.value = result.data }
         }
 
-        override suspend fun retire(deviceId: Int): NetworkResult<Unit> {
-            retired += deviceId
+        override suspend fun retire(device: OwnEncryptedDevice): NetworkResult<Unit> {
+            retired += device.deviceId
             retireGate?.await()
             return retireResult().also { result ->
-                if (result is NetworkResult.Success) flow.value = flow.value?.filterNot { it.deviceId == deviceId }
+                if (result is NetworkResult.Success) flow.value = flow.value?.filterNot { it.deviceId == device.deviceId }
             }
         }
     }
@@ -218,5 +218,40 @@ class EncryptedDevicesViewModelTest {
 
         vm.dismissRetireFailure()
         assertThat(vm.state.value.retireFailure).isNull()
+    }
+
+    @Test
+    fun `a remembered list can be read but not acted on until the gateway confirms it again`() = runTest(dispatcher) {
+        val repo = FakeDevices(cached = listOf(device(1), device(2)), served = { offline })
+        val vm = EncryptedDevicesViewModel(repo)
+
+        vm.requestRetire(device(2))
+        assertThat(vm.state.value.pendingRetirement).isNull()
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.canRetire).isFalse()
+        vm.requestRetire(device(2))
+        assertThat(vm.state.value.pendingRetirement).isNull()
+
+        repo.served = { NetworkResult.Success(listOf(device(1), device(2))) }
+        vm.refresh()
+        advanceUntilIdle()
+        vm.requestRetire(device(2))
+
+        assertThat(vm.state.value.pendingRetirement).isEqualTo(device(2))
+    }
+
+    @Test
+    fun `a place taken over since the list was shown is said as such`() = runTest(dispatcher) {
+        val changed = NetworkResult.Failure(ApiError(message = "changé", code = "E2EE_DEVICE_CHANGED", httpStatus = 409))
+        val repo = FakeDevices(served = { NetworkResult.Success(listOf(device(1), device(2))) }, retireResult = { changed })
+        val vm = EncryptedDevicesViewModel(repo)
+        advanceUntilIdle()
+
+        vm.requestRetire(device(2))
+        vm.confirmRetire()
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.retireFailure).isEqualTo(EncryptedDevicesFailure.CHANGED)
     }
 }

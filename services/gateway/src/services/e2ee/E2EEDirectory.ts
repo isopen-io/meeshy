@@ -404,13 +404,22 @@ export class E2EEDirectory {
    * échouer le retrait AVANT toute révocation : on ne dit jamais « déconnecté »
    * d'une session vivante, et un nouvel essai repart du même état.
    */
-  async retireDevice(params: { userId: string; deviceId: number; signOut?: DeviceSignOut }): Promise<{ signedOut: boolean }> {
+  async retireDevice(params: {
+    userId: string;
+    deviceId: number;
+    signOut?: DeviceSignOut;
+    /** La génération lue par l'appelant (#13014) : une place reprise depuis est refusée AVANT toute fermeture ni révocation. */
+    expectedRegistrationId?: number;
+  }): Promise<{ signedOut: boolean }> {
     const device = await this.prisma.e2EEDevice.findFirst({
       where: { userId: params.userId, deviceId: params.deviceId, ...ACTIVE },
-      select: { identityKey: true, sessionId: true },
+      select: { identityKey: true, sessionId: true, registrationId: true },
     });
     if (!device) {
       throw new E2EEDirectoryError(E2EE_ERROR_CODES.DEVICE_NOT_BOUND, 404, 'Appareil chiffré introuvable sur ce compte');
+    }
+    if (params.expectedRegistrationId !== undefined && params.expectedRegistrationId !== device.registrationId) {
+      throw new E2EEDirectoryError(E2EE_ERROR_CODES.DEVICE_CHANGED, 409, 'Cet appareil a changé depuis la liste affichée : relisez-la avant de retirer');
     }
     const signsOut = params.signOut !== undefined && device.sessionId !== params.signOut.callerSessionId;
     if (signsOut && !(await params.signOut!.close(device.sessionId))) {
@@ -425,7 +434,7 @@ export class E2EEDirectory {
       create: { userId: params.userId, identityKey: device.identityKey, revokedAt: this.now() },
       update: {},
     });
-    await this.retireDevices({ userId: params.userId, deviceId: params.deviceId });
+    await this.retireDevices({ userId: params.userId, deviceId: params.deviceId, identityKey: device.identityKey });
     await this.retireDevices({ userId: params.userId, identityKey: device.identityKey });
     return { signedOut: signsOut };
   }

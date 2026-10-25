@@ -5,11 +5,15 @@ import me.meeshy.sdk.model.ApiResponse
 import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.Path
+import retrofit2.http.Query
 
 /**
  * Mes appareils de l'annuaire E2EE par appareil (`services/gateway/src/routes/e2ee.ts`, #13014) :
  * les lister, et en retirer un. Le retrait RÉVOQUE l'identité de l'appareil côté passerelle : il
  * ne reçoit plus aucune copie et ne se réenrôle pas avec la même identité.
+ *
+ * Le retrait nomme la GÉNÉRATION lue (`registrationId`) : une place reprise par un autre appareil
+ * depuis l'affichage est refusée (409 `E2EE_DEVICE_CHANGED`) au lieu de révoquer le nouvel occupant.
  *
  * La `data` reste un OBJET brut : `MeeshyApi.json` coerce, et un `deviceId` coercé enverrait le
  * retrait sur un autre appareil. Le décodage strict est `OwnEncryptedDevicesDecoder`.
@@ -19,5 +23,8 @@ interface E2eeDeviceApi {
     suspend fun ownDevices(): ApiResponse<JsonObject>
 
     @DELETE("e2ee/devices/{deviceId}")
-    suspend fun retireDevice(@Path("deviceId") deviceId: Int): ApiResponse<JsonObject>
+    suspend fun retireDevice(
+        @Path("deviceId") deviceId: Int,
+        @Query("registrationId") registrationId: Int,
+    ): ApiResponse<JsonObject>
 }

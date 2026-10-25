@@ -18,6 +18,7 @@ import {
   e2eeDeviceIdSchema,
   e2eeEnrollDeviceRequestSchema,
   e2eePublishKeysRequestSchema,
+  e2eeRegistrationIdSchema,
 } from '@meeshy/shared/types/e2ee-directory';
 import { createUnifiedAuthMiddleware, type UnifiedAuthRequest } from '../middleware/auth';
 import { sendBadRequest, sendError, sendForbidden, sendInternalError, sendSuccess, sendUnauthorized } from '../utils/response.js';
@@ -43,6 +44,7 @@ const deviceIdsQuery = z
   .transform((raw) => raw.split(',').map((part) => Number(part.trim())))
   .pipe(z.array(e2eeDeviceIdSchema).max(127));
 const envelopeListQuery = z.object({ after: objectIdParam.optional(), limit: z.coerce.number().int().min(1).max(200).optional() });
+const retireQuery = z.object({ registrationId: z.coerce.number().pipe(e2eeRegistrationIdSchema).optional() });
 const ackBody = z.object({ ids: z.array(objectIdParam).min(1).max(200) });
 
 /** Lecture de bundles : 30 par minute et par couple (demandeur, cible). */
@@ -154,10 +156,12 @@ function registerDeviceRoutes(fastify: FastifyInstance, deps: E2EERouteDeps): vo
 
   fastify.delete('/e2ee/devices/:deviceId', writes, guarded(async (request, reply, caller) => {
     const deviceId = parsedOr400(reply, deviceIdParam.safeParse((request.params as { deviceId?: string }).deviceId));
-    if (deviceId === null) return;
+    const query = deviceId === null ? null : parsedOr400(reply, retireQuery.safeParse(request.query ?? {}));
+    if (deviceId === null || !query) return;
     const { signedOut } = await deps.directory.retireDevice({
       userId: caller.userId,
       deviceId,
+      expectedRegistrationId: query.registrationId,
       signOut: { callerSessionId: caller.sessionId, close: (sessionId) => deps.closeSession({ userId: caller.userId, sessionId }) },
     });
     return sendSuccess(reply, { deviceId, retired: true, signedOut });
