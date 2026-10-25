@@ -1,3 +1,4 @@
+import { isEndToEndAttachment } from '@meeshy/shared/types/e2ee-attachment';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 
@@ -348,7 +349,11 @@ export function ProtectedContent({
     );
   }
 
-  if (endToEnd) return <ProtectionNotice kind="endToEnd" surface={surface} isMine={isMine} />;
+  if (endToEnd) {
+    return (
+      <ProtectionNotice kind="endToEnd" surface={surface} isMine={isMine} {...(attachments === undefined ? {} : { attachments })} />
+    );
+  }
 
   if (kind === 'standard') return <>{children}</>;
 
@@ -671,6 +676,11 @@ function ProtectedRest({ children }: { readonly children: ReactNode }) {
  * LE TOMBSTONE — deux peaux, les libellés iOS (`FocalSystemRows.swift:32-58`,
  * `BubbleSystemViews.swift:13-85`), jamais le contenu.
  */
+const END_TO_END_ATTACHMENT_LABEL = {
+  label: 'message.endToEnd.attachment',
+  aria: 'message.endToEnd.attachment.a11y',
+} as const satisfies { label: InterfaceCatalogKey; aria: InterfaceCatalogKey };
+
 export function ProtectionNotice({
   kind,
   surface,
@@ -727,8 +737,13 @@ export function ProtectionNotice({
     withheld: { label: 'message.withheld', aria: 'message.withheld.a11y' },
     endToEnd: { label: 'message.endToEnd', aria: 'message.endToEnd.a11y' },
   } as const satisfies Readonly<Record<'deleted' | 'withheld' | 'endToEnd', { label: InterfaceCatalogKey; aria: InterfaceCatalogKey }>>;
-  const label = translate(language, LABELS[kind].label);
-  const ariaLabel = translate(language, LABELS[kind].aria);
+  /* UNE PIÈCE CHIFFRÉE DE BOUT EN BOUT (#10789) : le web n'a ni sa clé ni son
+     nom, il dit seulement qu'elle s'ouvre dans l'application. Le blob servi
+     (`application/octet-stream`) ne devient ni un lien ni un fichier. */
+  const sealedPieces = kind === 'endToEnd' && (attachments ?? []).some(isEndToEndAttachment);
+  const keys = sealedPieces ? END_TO_END_ATTACHMENT_LABEL : LABELS[kind];
+  const label = translate(language, keys.label);
+  const ariaLabel = translate(language, keys.aria);
   /* Le MÊME vocabulaire que l'oreille — `attachmentSegments` est le site
      unique, importé et jamais recopié (§ `PROTECTED_LABEL`). */
   const constat = kind === 'withheld' ? attachmentSegments(attachments).join(', ') : '';

@@ -1020,6 +1020,8 @@ const pt = {
   'message.withheld.a11y': 'Conteúdo retido: esta mensagem existe e não é exibida',
   'message.endToEnd': 'Criptografada de ponta a ponta — leia no app Meeshy instalado nos seus dispositivos',
   'message.endToEnd.a11y': 'Criptografada de ponta a ponta: esta mensagem pode ser lida no app Meeshy instalado nos seus dispositivos',
+  'message.endToEnd.attachment': 'Anexo criptografado de ponta a ponta — abra no app Meeshy instalado nos seus dispositivos',
+  'message.endToEnd.attachment.a11y': 'Anexo criptografado de ponta a ponta: ele abre no app Meeshy instalado nos seus dispositivos',
   'message.veiled': 'Conteúdo oculto',
   'message.veiled.hint': 'Toque para ver',
   'message.veiled.error': 'Não é possível revelar por enquanto',

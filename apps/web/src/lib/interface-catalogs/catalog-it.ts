@@ -1016,6 +1016,8 @@ const it = {
   'message.withheld.a11y': 'Contenuto trattenuto: questo messaggio esiste e non viene mostrato',
   'message.endToEnd': 'Crittografato end-to-end — leggilo nell’app Meeshy installata sui tuoi dispositivi',
   'message.endToEnd.a11y': 'Crittografato end-to-end: questo messaggio si legge nell’app Meeshy installata sui tuoi dispositivi',
+  'message.endToEnd.attachment': 'Allegato crittografato end-to-end — aprilo nell’app Meeshy installata sui tuoi dispositivi',
+  'message.endToEnd.attachment.a11y': 'Allegato crittografato end-to-end: si apre nell’app Meeshy installata sui tuoi dispositivi',
   'message.veiled': 'Contenuto nascosto',
   'message.veiled.hint': 'Tocca per vedere',
   'message.veiled.error': 'Impossibile rivelare per ora',

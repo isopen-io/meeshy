@@ -321,8 +321,13 @@ export interface Attachment {
   readonly currentUserReactions?: readonly string[];
 
   // ===== ENCRYPTION =====
-  // Note: encryptionMode is only on Conversation, not Attachment
   readonly isEncrypted: boolean;
+  /**
+   * `e2ee` : un blob chiffré SUR L'APPAREIL (#10789), que le serveur range
+   * opaque (`application/octet-stream`). Il ne s'ouvre que par le pointeur du
+   * message déchiffré (`isEndToEndAttachment`, `types/e2ee-attachment.ts`).
+   */
+  readonly encryptionMode?: string | null;
   readonly encryptionIv?: string;
   readonly encryptionAuthTag?: string;
   readonly encryptionHmac?: string;

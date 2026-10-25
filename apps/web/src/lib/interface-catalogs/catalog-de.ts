@@ -1016,6 +1016,8 @@ const de = {
   'message.withheld.a11y': 'Inhalt zurückgehalten: Diese Nachricht existiert und wird nicht angezeigt',
   'message.endToEnd': 'Ende-zu-Ende-verschlüsselt — lies sie in der Meeshy-App auf deinen Geräten',
   'message.endToEnd.a11y': 'Ende-zu-Ende-verschlüsselt: Diese Nachricht kannst du in der Meeshy-App auf deinen Geräten lesen',
+  'message.endToEnd.attachment': 'Ende-zu-Ende-verschlüsselter Anhang — öffne ihn in der Meeshy-App auf deinen Geräten',
+  'message.endToEnd.attachment.a11y': 'Ende-zu-Ende-verschlüsselter Anhang: Er lässt sich in der Meeshy-App auf deinen Geräten öffnen',
   'message.veiled': 'Ausgeblendeter Inhalt',
   'message.veiled.hint': 'Zum Anzeigen tippen',
   'message.veiled.error': 'Anzeigen derzeit nicht möglich',

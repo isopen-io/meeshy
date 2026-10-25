@@ -1016,6 +1016,8 @@ const en = {
   'message.withheld.a11y': 'Content withheld: this message exists and is not shown',
   'message.endToEnd': 'End-to-end encrypted — read it in the Meeshy app installed on your devices',
   'message.endToEnd.a11y': 'End-to-end encrypted: this message can be read in the Meeshy app installed on your devices',
+  'message.endToEnd.attachment': 'End-to-end encrypted attachment — open it in the Meeshy app installed on your devices',
+  'message.endToEnd.attachment.a11y': 'End-to-end encrypted attachment: it opens in the Meeshy app installed on your devices',
   'message.veiled': 'Hidden content',
   'message.veiled.hint': 'Tap to view',
   'message.veiled.error': 'Can’t reveal this right now',
