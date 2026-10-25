@@ -32,6 +32,11 @@ public enum EndToEndSendRefusal: String, Error, Equatable, Sendable, CaseIterabl
     /// Mon compte a déjà le nombre maximal d'appareils chiffrés (#3707) : cet
     /// appareil ne peut pas s'enrôler tant qu'un autre n'est pas retiré.
     case deviceLimitReached
+    /// Le serveur annonce la désactivation du bout en bout d'une conversation
+    /// où cet appareil l'a vu, sans que l'utilisateur ait vu la bascule (avis
+    /// affiché dans le fil, son propre geste, sa confirmation) — #12846. Rien
+    /// ne part : ni en clair, ni scellé sous un régime que le serveur dit périmé.
+    case regimeDowngradeUnconfirmed
 }
 
 /// La loi PURE de l'envoi sous chiffrement de bout en bout (#11379, directives

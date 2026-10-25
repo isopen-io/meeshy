@@ -3,17 +3,17 @@ import MeeshySDK
 import MeeshyUI
 
 // Extrait de `ConversationInfoSheet.swift` (budget de taille) : la rangée de
-// sécurité de la fiche — l'entrée « Chiffrement de bout en bout » d'une
-// conversation directe (feuille de détail, état propre à la rangée) et, pour un
-// groupe chiffré, l'entrée de vérification du numéro de sécurité (la feuille
-// reste présentée par la fiche, qui reçoit l'action).
+// sécurité de la fiche (#12880). Tout membre y lit, sans jargon, comment la
+// conversation est chiffrée, et ouvre la fiche Chiffrement qui l'explique ; la
+// bascule n'y est proposée qu'au rôle autorisé, en tête-à-tête. Un groupe
+// chiffré garde en plus l'entrée de vérification du numéro de sécurité (la
+// feuille reste présentée par la fiche, qui reçoit l'action).
 
 struct ConversationInfoSecurityRow: View {
     let conversationId: String
     let accentColor: String
     let isDirect: Bool
-    let isEncrypted: Bool
-    let encryptionModeLabel: String
+    let encryptionMode: String?
     let isDark: Bool
     let appearAnimation: Bool
     let onVerifySafetyNumber: () -> Void
@@ -25,52 +25,61 @@ struct ConversationInfoSecurityRow: View {
 
     private var theme: ThemeManager { ThemeManager.shared }
 
+    private var regime: ConversationEncryptionRegime { ConversationEncryptionRegime(mode: encryptionMode) }
+
     private var content: ConversationSecurityRowContent {
-        .resolve(isDirect: isDirect, isEncrypted: isEncrypted, mayToggle: mayToggleEncryption)
+        .resolve(isDirect: isDirect, isEncrypted: regime != .none, mayToggle: mayToggleEncryption)
     }
 
     @ViewBuilder
     var body: some View {
         switch content {
-        case .hidden:
-            EmptyView()
-        case .directEntry:
-            directEntry
-        case .safetyNumberEntry:
-            safetyNumberEntry
+        case .directEntry(let offersToggle):
+            explanationEntry(offersToggle: offersToggle)
+        case .groupEntry(let showsSafetyNumber):
+            explanationEntry(offersToggle: false)
+            if showsSafetyNumber { safetyNumberEntry }
         }
     }
 
-    // Tête-à-tête : l'entrée ouvre la feuille de détail ; l'activation et la
-    // désactivation n'y sont proposées qu'au rôle autorisé (#12517, #12588, #12522).
-    private var directEntry: some View {
+    private var regimeSymbol: String {
+        switch regime {
+        case .none: "lock.open"
+        case .server, .hybrid: "lock.icloud"
+        case .endToEnd: "lock.shield.fill"
+        }
+    }
+
+    private var regimeTint: Color {
+        regime == .endToEnd ? MeeshyColors.success : Color(hex: accentColor)
+    }
+
+    // L'entrée ouvre la fiche Chiffrement ; la bascule n'y est proposée qu'au
+    // rôle autorisé (#12517, #12588, #12522), jamais pour un groupe (#12844).
+    private func explanationEntry(offersToggle: Bool) -> some View {
         Button {
             HapticFeedback.light()
             showEncryptionDetail = true
         } label: {
             HStack(spacing: MeeshySpacing.md) {
-                Image(systemName: isEncrypted ? "lock.shield.fill" : "lock.shield")
+                Image(systemName: regimeSymbol)
                     .font(MeeshyFont.relative(MeeshyIconSize.md))
-                    .foregroundColor(isEncrypted ? MeeshyColors.success : Color(hex: accentColor))
+                    .foregroundColor(regimeTint)
                     .frame(width: 24)
+                    .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
-                    Text(String(localized: "conversation.encryption.menu.title",
-                                defaultValue: "Chiffrement de bout en bout",
+                    Text(String(localized: "conversation.encryption.detail.title",
+                                defaultValue: "Chiffrement",
                                 bundle: .main))
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(theme.textPrimary)
 
-                    Text(isEncrypted
-                         ? String(localized: "conversation.encryption.menu.active",
-                                  defaultValue: "Chiffrement actif — \(encryptionModeLabel)",
-                                  bundle: .main)
-                         : String(localized: "conversation.encryption.menu.inactive",
-                                  defaultValue: "Conversation non chiffrée — appuyez pour activer",
-                                  bundle: .main))
+                    Text(regime.summary)
                         .font(.caption)
                         .foregroundStyle(theme.textMuted)
-                        .lineLimit(1)
+                        .lineLimit(3)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
 
                 Spacer()
@@ -78,6 +87,7 @@ struct ConversationInfoSecurityRow: View {
                 Image(systemName: "chevron.forward")
                     .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
                     .foregroundStyle(theme.textMuted)
+                    .accessibilityHidden(true)
             }
             .padding(.horizontal, MeeshySpacing.lg)
             .padding(.vertical, MeeshySpacing.mdPlus)
@@ -85,7 +95,11 @@ struct ConversationInfoSecurityRow: View {
                 RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                     .fill(isDark ? theme.textPrimary.opacity(MeeshyOpacity.faint) : theme.textPrimary.opacity(MeeshyOpacity.faint))
             )
+            .contentShape(Rectangle())
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityIdentifier("conversation-encryption-row")
         .padding(.horizontal, MeeshySpacing.xl)
         .padding(.bottom, MeeshySpacing.md)
         .opacity(appearAnimation ? 1 : 0)
@@ -94,7 +108,8 @@ struct ConversationInfoSecurityRow: View {
             ConversationEncryptionDetailSheet(
                 conversationId: conversationId,
                 accentColor: accentColor,
-                fallbackMayToggle: mayToggleEncryption
+                fallbackMayToggle: offersToggle,
+                isDirect: isDirect
             )
         }
     }
