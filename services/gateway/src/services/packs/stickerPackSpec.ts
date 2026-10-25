@@ -62,12 +62,16 @@ const asZones = (value: Prisma.JsonValue | null): readonly StickerTextZone[] =>
 const kindsOf = (items: readonly { readonly kind: string }[]): readonly StickerKind[] =>
   STICKER_KINDS.filter((kind) => items.some((item) => item.kind === kind));
 
-/** L'adresse du fichier dans le magasin `/pack-assets` (#10188), quand son empreinte est gravée. */
-const assetOf = (row: StickerItemRow): PackAssetRef | null =>
-  stickerPackAssetRef({ sha256: row.sha256, mimeType: row.mimeType, sizeBytes: row.sizeBytes ?? -1 });
+/**
+ * L'adresse du fichier dans le magasin `/pack-assets` (#10188), quand son empreinte est gravée ET que le pack est
+ * publié : `/pack-assets` ne sert que les packs `approved`, une adresse annoncée avant la modération serait une image
+ * cassée chez le premier client qui la préfère à `fileUrl`.
+ */
+const assetOf = (row: StickerItemRow, status: string): PackAssetRef | null =>
+  status === 'approved' ? stickerPackAssetRef({ sha256: row.sha256, mimeType: row.mimeType, sizeBytes: row.sizeBytes ?? -1 }) : null;
 
-function toItem(row: StickerItemRow): StickerPackItem {
-  const asset = assetOf(row);
+function toItem(row: StickerItemRow, status: string): StickerPackItem {
+  const asset = assetOf(row, status);
   return {
     key: row.key,
     title: row.title,
@@ -84,7 +88,7 @@ function toItem(row: StickerItemRow): StickerPackItem {
 
 /** Un pack proposé par un tiers. Le mot du modérateur n'est servi qu'à son auteur et aux modérateurs. */
 export function stickerPackDetail(row: StickerPackRow, installed: boolean, viewer?: PackViewer): StickerPackDetail {
-  const cover = row.items[0] === undefined ? null : assetOf(row.items[0]);
+  const cover = row.items[0] === undefined ? null : assetOf(row.items[0], row.status);
   const ownView = viewer !== undefined && (viewer.userId === row.submitterId || viewer.canModerate);
   return {
     slug: row.slug,
@@ -98,7 +102,7 @@ export function stickerPackDetail(row: StickerPackRow, installed: boolean, viewe
     coverUrl: row.items[0]?.filePath ?? null,
     installed,
     installCount: row.installCount,
-    items: row.items.map(toItem),
+    items: row.items.map((item) => toItem(item, row.status)),
     ...(cover === null ? {} : { cover }),
     ...(ownView ? { reviewNote: row.reviewNote } : {}),
   };

@@ -79,7 +79,13 @@ async function buildApps() {
   const db = memoryPrisma();
   const stored = new Map<string, Buffer>();
   const files: StickerFileStore = { write: async (p, b) => void stored.set(p, b), remove: async (p) => void stored.delete(p) };
-  const reader: StickerPackFileReader = { read: async (p) => stored.get(p) ?? null };
+  const reads: string[] = [];
+  const reader: StickerPackFileReader = {
+    read: async (p) => {
+      reads.push(p);
+      return stored.get(p) ?? null;
+    },
+  };
   let who = { userId: ALICE, role: 'USER' };
 
   const packsApp: FastifyInstance = Fastify({ logger: false });
@@ -110,7 +116,7 @@ async function buildApps() {
     await packsApp.close();
     await assetsApp.close();
   };
-  return { packsApp, assetsApp, db, stored, as, close };
+  return { packsApp, assetsApp, db, stored, reads, as, close };
 }
 
 type Served = { readonly key: string; readonly fileUrl: string; readonly asset?: { readonly src: string; readonly sha256: string; readonly bytes: number } };
@@ -153,6 +159,35 @@ describe('une proposition grave l’empreinte de chaque fichier gardé', () => {
       await packsApp.inject({ method: 'PUT', url: '/chats-de-paris/install' });
       const mine = (await packsApp.inject({ method: 'GET', url: '/installed' })).json().data as readonly { slug: string; items: readonly Served[] }[];
       expect(mine.find((pack) => pack.slug === 'chats-de-paris')?.items.map((item) => item.asset)).toEqual(detail.items.map((item) => item.asset));
+    } finally {
+      await close();
+    }
+  });
+
+  it('un pack EN ATTENTE ou REFUSÉ n’annonce aucune adresse que la porte publique refuserait : seul l’ancien fileUrl', async () => {
+    const { packsApp, as, close } = await buildApps();
+    type View = { readonly status: string; readonly cover?: unknown; readonly coverUrl: string | null; readonly items?: readonly Served[] };
+    const announcesNothing = (pack: View | undefined) => {
+      expect(pack).toBeDefined();
+      expect(Object.keys(pack as View)).not.toContain('cover');
+      expect((pack as View).coverUrl).toMatch(/^sticker-packs\//);
+      (pack?.items ?? []).forEach((item) => {
+        expect(Object.keys(item)).not.toContain('asset');
+        expect(item.fileUrl).toMatch(/^sticker-packs\//);
+      });
+    };
+    const mine = async () => ((await packsApp.inject({ method: 'GET', url: '/submissions' })).json().data as readonly (View & { slug: string })[]).find((pack) => pack.slug === 'chats-de-paris');
+    try {
+      announcesNothing((await packsApp.inject({ method: 'POST', url: '/submissions', ...submission(manifest()) })).json().data);
+      announcesNothing(await mine());
+      announcesNothing((await packsApp.inject({ method: 'GET', url: '/chats-de-paris' })).json().data);
+      as(MODO, 'MODERATOR');
+      announcesNothing(((await packsApp.inject({ method: 'GET', url: '/pending' })).json().data as readonly (View & { slug: string })[]).find((pack) => pack.slug === 'chats-de-paris'));
+      await packsApp.inject({ method: 'POST', url: '/chats-de-paris/review', payload: { decision: 'reject', note: 'Non' } });
+      as(ALICE);
+      const rejected = await mine();
+      expect(rejected?.status).toBe('rejected');
+      announcesNothing(rejected);
     } finally {
       await close();
     }
@@ -205,11 +240,38 @@ describe('GET /api/v1/pack-assets/<sha16>.<ext> — le fichier d’un pack de ti
     }
   });
 
-  it('un pack EN ATTENTE ou REFUSÉ ne sert rien : la porte publique ne précède jamais la modération', async () => {
+  it('une revalidation 304 ne lit ni ne hache aucun fichier du volume', async () => {
+    const { assetsApp, detail, reads, close } = await publishedPack();
+    try {
+      const src = detail.items[0].asset?.src as string;
+      const res = await assetsApp.inject({ method: 'GET', url: `/api/v1/pack-assets/${src}`, headers: { 'if-none-match': `"${src.slice(0, 16)}"` } });
+      expect(res.statusCode).toBe(304);
+      expect(res.headers.etag).toBe(`"${src.slice(0, 16)}"`);
+      expect(reads).toEqual([]);
+    } finally {
+      await close();
+    }
+  });
+
+  it('une revalidation d’un pack NON publié rend 404, jamais 304', async () => {
+    const { packsApp, assetsApp, reads, close } = await buildApps();
+    try {
+      await packsApp.inject({ method: 'POST', url: '/submissions', ...submission(manifest()) });
+      const src = `${sha256(ASSETS['bonjour.png']).slice(0, 16)}.png`;
+      const res = await assetsApp.inject({ method: 'GET', url: `/api/v1/pack-assets/${src}`, headers: { 'if-none-match': `"${src.slice(0, 16)}"` } });
+      expect(res.statusCode).toBe(404);
+      expect(res.headers.etag).toBeUndefined();
+      expect(reads).toEqual([]);
+    } finally {
+      await close();
+    }
+  });
+
+  it('un pack EN ATTENTE ou REFUSÉ ne sert rien, même à qui connaît ses octets : la porte publique ne précède jamais la modération', async () => {
     const { packsApp, assetsApp, as, close } = await buildApps();
     try {
-      const pending = (await packsApp.inject({ method: 'POST', url: '/submissions', ...submission(manifest()) })).json().data as { items: readonly Served[] };
-      const src = pending.items[0].asset?.src as string;
+      await packsApp.inject({ method: 'POST', url: '/submissions', ...submission(manifest()) });
+      const src = `${sha256(ASSETS['bonjour.png']).slice(0, 16)}.png`;
       expect((await assetsApp.inject({ method: 'GET', url: `/api/v1/pack-assets/${src}` })).statusCode).toBe(404);
       as(MODO, 'MODERATOR');
       await packsApp.inject({ method: 'POST', url: '/chats-de-paris/review', payload: { decision: 'reject', note: 'Non' } });

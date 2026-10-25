@@ -69,7 +69,7 @@ export type PackAssetsRoutesOptions = {
   /** Le document et les fichiers des lens PUBLIÉES (#11271) : lus en base seulement pour une empreinte hors liste blanche. */
   readonly lens?: Pick<LensPacks, 'approvedFile'>;
   /** Les fichiers des packs de stickers de tiers PUBLIÉS (#10188) : lus en base et sur le volume seulement pour une empreinte hors liste blanche. */
-  readonly stickers?: Pick<StickerPackAssets, 'approvedFile'>;
+  readonly stickers?: Pick<StickerPackAssets, 'approvedFile' | 'isApproved'>;
 };
 
 type FileRequest = FastifyRequest<{ Params: { file: string } }>;
@@ -127,15 +127,18 @@ export async function packAssetsRoutes(fastify: FastifyInstance, options: PackAs
     async (request: FileRequest, reply: FastifyReply) => {
       const { file } = request.params;
       if (!index.isServedAsset(file)) {
+        const communityEtag = `"${fingerprintOf(file)}"`;
+        const revalidating = ifNoneMatchMatches(request.headers['if-none-match'], communityEtag);
         const contract = COMMUNITY_CONTRACT.test(file) ? await community.approvedContract(file) : null;
         const lensFile = contract === null && LENS_FILE.test(file) ? await lens.approvedFile(file) : null;
-        const stickerFile = contract === null && lensFile === null && STICKER_PACK_ASSET_SRC.test(file) ? await stickers.approvedFile(file) : null;
-        if (contract === null && lensFile === null && stickerFile === null) return sendNotFound(reply, 'Pack asset not found', { code: NOT_FOUND_CODE });
-        const communityEtag = `"${fingerprintOf(file)}"`;
+        const stickerShaped = contract === null && lensFile === null && STICKER_PACK_ASSET_SRC.test(file);
+        const stickerRevalidated = stickerShaped && revalidating && (await stickers.isApproved(file));
+        const stickerFile = stickerShaped && !revalidating ? await stickers.approvedFile(file) : null;
+        if (contract === null && lensFile === null && stickerFile === null && !stickerRevalidated) return sendNotFound(reply, 'Pack asset not found', { code: NOT_FOUND_CODE });
         reply.header('ETag', communityEtag);
         reply.header('Cache-Control', PACK_ASSETS_CACHE_CONTROL);
         reply.header('X-Content-Type-Options', 'nosniff');
-        if (ifNoneMatchMatches(request.headers['if-none-match'], communityEtag)) return reply.code(304).send();
+        if (revalidating) return reply.code(304).send();
         if (lensFile !== null) return reply.type(lensFile.contentType).send(lensFile.bytes);
         if (stickerFile !== null) return reply.type(stickerFile.contentType).send(stickerFile.bytes);
         return reply.type(CONTENT_TYPES.json).send(contract);

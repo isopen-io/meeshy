@@ -76,26 +76,40 @@ export class StickerPackAssets {
     this.files = deps.files;
   }
 
+  /**
+   * Une adresse `<sha16>.png|webp|gif` appartient-elle à un pack PUBLIÉ ? Deux lectures de base, aucune lecture du
+   * volume ni hachage : c'est la réponse d'une revalidation (304), dont le client détient déjà les octets de l'empreinte.
+   */
+  async isApproved(src: string): Promise<boolean> {
+    return (await this.publishedCandidates(src)).length > 0;
+  }
+
   /** Les octets d'une adresse `<sha16>.png|webp|gif`, d'un pack PUBLIÉ et intacts — `null` sinon. */
   async approvedFile(src: string): Promise<StickerPackFile | null> {
     const contentType = stickerPackAssetContentType(src);
     if (contentType === null) return null;
+    for (const candidate of await this.publishedCandidates(src)) {
+      const bytes = await this.files.read(candidate.filePath);
+      if (bytes !== null && sha256Hex(bytes) === candidate.sha256) return { bytes, contentType };
+    }
+    return null;
+  }
+
+  private async publishedCandidates(src: string): Promise<readonly Candidate[]> {
+    const contentType = stickerPackAssetContentType(src);
+    if (contentType === null) return [];
     const rows: readonly Candidate[] = await this.prisma.stickerPackItem.findMany({
       where: { sha256: prefixRange(src.slice(0, 16)) },
       select: { packId: true, filePath: true, sha256: true, mimeType: true },
     });
     const candidates = rows.filter((row) => row.mimeType === contentType && row.sha256 !== null);
-    if (candidates.length === 0) return null;
+    if (candidates.length === 0) return [];
     const published = await this.prisma.stickerPack.findMany({
       where: { id: { in: [...new Set(candidates.map((row) => row.packId))] }, status: 'approved' },
       select: { id: true },
     });
     const publishedIds = new Set(published.map((pack) => pack.id));
-    for (const candidate of candidates.filter((row) => publishedIds.has(row.packId))) {
-      const bytes = await this.files.read(candidate.filePath);
-      if (bytes !== null && sha256Hex(bytes) === candidate.sha256) return { bytes, contentType };
-    }
-    return null;
+    return candidates.filter((row) => publishedIds.has(row.packId));
   }
 }
 

@@ -6,8 +6,8 @@ import { packAssetUrl } from '@/lib/packs/pack-asset-url';
 
 /**
  * **L'ADRESSE D'UN FICHIER DE PACK DE STICKERS DE TIERS** (#10188) — le
- * magasin adressé par contenu (`/api/v1/pack-assets/<sha16>.<ext>` : public,
- * immuable, ETag = empreinte) quand la passerelle sert la référence (`asset`
+ * magasin adressé par contenu (`packAssets.byFile`, un fichier `<sha16>.<ext>` :
+ * public, immuable, ETag = empreinte) quand la passerelle sert la référence (`asset`
  * d'un sticker, `cover` d'un pack) ; l'ancien chemin (`/attachments/file/*`,
  * par `attachmentSrc`) sinon — un ancien serveur, ou un fichier proposé avant
  * #10188 et pas encore rattrapé. Une origine illisible garde l'ancien chemin :
