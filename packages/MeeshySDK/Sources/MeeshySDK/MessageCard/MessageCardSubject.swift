@@ -141,7 +141,7 @@ public struct MessageCardSubject: Equatable, Sendable {
     static func paintableMedia(of attachments: [MeeshyMessageAttachment], audioLanguages: [String: String] = [:],
                                stickerMessage: Bool = false) -> [MessageCardSubjectMedia] {
         attachments.compactMap { attachment in
-            guard !attachment.isEncrypted, !attachment.isBlurred, !attachment.isViewOnce else { return nil }
+            guard !attachment.isEncrypted, !attachment.declaresBlur, !attachment.declaresViewOnce else { return nil }
             let kind: MessageCardMediaKind
             switch AttachmentKind(mimeType: attachment.mimeType) {
             case .image: kind = .image

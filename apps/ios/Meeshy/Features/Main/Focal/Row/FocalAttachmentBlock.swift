@@ -153,7 +153,7 @@ nonisolated enum FocalMediaProtection {
     /// `fileprivate`).
     static func state(for attachment: MessageAttachment, isRevealed: Bool, messageRevealed: Bool = false) -> FocalMediaProtectionState {
         guard !isRevealed, attachment.declaresBlur || attachment.declaresViewOnce else { return .none }
-        guard !(messageRevealed && !attachment.isViewOnce) else { return .none }
+        guard !(messageRevealed && !attachment.declaresViewOnce) else { return .none }
         return .blurred(isViewOnce: attachment.isViewOnce)
     }
 
@@ -167,7 +167,7 @@ nonisolated enum FocalMediaProtection {
     /// son plein écran directement (#8009).
     static func tap(on attachment: MessageAttachment, isRevealed: Bool, messageRevealed: Bool) -> FocalCellTap {
         guard case .blurred = state(for: attachment, isRevealed: isRevealed, messageRevealed: messageRevealed) else {
-            return .openFullscreen(reblurs: isRevealed && attachment.isBlurred && !attachment.isViewOnce)
+            return .openFullscreen(reblurs: isRevealed && attachment.declaresBlur && !attachment.declaresViewOnce)
         }
         switch ProtectedContentTap.resolve(cell: attachment) {
         case .revealInPlace: return .reveal
@@ -181,7 +181,7 @@ nonisolated enum FocalMediaProtection {
     /// `isRevealed` (le compte reste visible même après révélation — même
     /// règle que la source réelle).
     static func showsViewOnceBadge(for attachment: MessageAttachment) -> Bool {
-        attachment.isViewOnce && attachment.viewOnceCount > 0
+        attachment.declaresViewOnce && attachment.viewOnceCount > 0
     }
 }
 
@@ -336,7 +336,7 @@ struct FocalGridCell: View {
     /// La révélation d'une case a une FIN, comme celle d'un message : sans
     /// toucher, le flou revient après la durée de visibilité.
     private func reblurAfterVisibility() async {
-        guard isRevealed, attachment.isBlurred, !attachment.isViewOnce else { return }
+        guard isRevealed, attachment.declaresBlur, !attachment.declaresViewOnce else { return }
         guard await cancellableSleep(for: .seconds(BubbleBlurRevealLifecycle.defaultRevealDuration)), !Task.isCancelled else { return }
         withAnimation(.easeOut(duration: BubbleBlurRevealLifecycle.Phase.blurApply.duration)) { isRevealed = false }
     }

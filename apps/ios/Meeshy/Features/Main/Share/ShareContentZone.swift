@@ -260,7 +260,7 @@ struct ShareContentZone: View {
             .aspectRatio(contentMode: .fill)
             .frame(width: size, height: size)
             .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.xxs))
-            .blur(radius: attachment.isBlurred ? 12 : 0)
+            .blur(radius: attachment.declaresBlur ? 12 : 0)
             .accessibilityHidden(true)
         }
     }

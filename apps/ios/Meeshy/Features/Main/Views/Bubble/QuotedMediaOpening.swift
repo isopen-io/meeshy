@@ -52,7 +52,7 @@ nonisolated enum QuotedMediaOpening {
         let resolved = quoted.flatMap { reference.citedAttachment(among: $0.attachments) }
             ?? (quoted == nil ? reference.quotedAttachment : nil)
         guard let attachment = resolved,
-              !(attachment.isViewOnce || attachment.isBlurred),
+              !(attachment.declaresViewOnce || attachment.declaresBlur),
               !reference.quotedMediaIsProtected
         else { return nil }
         switch attachment.type {
