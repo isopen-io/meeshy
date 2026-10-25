@@ -1,7 +1,7 @@
 import Foundation
 import MeeshySDK
 
-/// Le client des huit routes de l'annuaire par appareil et du relais
+/// Le client des neuf routes de l'annuaire par appareil et du relais
 /// d'enveloppes (#3706, spec E2EE libsignal § 3.3 et § 4.3). Il ne connaît ni
 /// libsignal ni le trousseau : il transporte des clés publiques et des
 /// enveloppes opaques. Chaque appel part au nom de la session courante, que la
@@ -13,6 +13,9 @@ public protocol E2EEDirectoryClientProviding: Sendable {
     func retireDevice(deviceId: UInt32) async throws -> E2EERetirement
     func bundles(userId: String, deviceIds: [UInt32]?) async throws -> E2EEUserBundles
     func devices(userId: String) async throws -> E2EEUserDevices
+    /// MES appareils, avec leurs métadonnées (#13009). Une passerelle qui ne
+    /// sert pas encore la route répond 404 : l'appelant retombe sur `devices`.
+    func ownDevices() async throws -> [E2EEOwnDeviceDetails]
     func envelopes(after cursor: String?, limit: Int?) async throws -> E2EEEnvelopePage
     func acknowledge(envelopeIds: [String]) async throws -> E2EEAckResult
 }
@@ -64,6 +67,11 @@ public final class E2EEDirectoryClient: E2EEDirectoryClientProviding {
     public func devices(userId: String) async throws -> E2EEUserDevices {
         let response: APIResponse<E2EEUserDevices> = try await api.request(E2EeEndpoint.keysByUserIdDevices(userId: userId))
         return response.data
+    }
+
+    public func ownDevices() async throws -> [E2EEOwnDeviceDetails] {
+        let response: APIResponse<E2EEOwnDeviceList> = try await api.request(E2EeEndpoint.devices)
+        return response.data.devices
     }
 
     public func envelopes(after cursor: String?, limit: Int?) async throws -> E2EEEnvelopePage {

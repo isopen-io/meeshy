@@ -239,6 +239,16 @@ final class FakeE2EEDirectoryClient: E2EEDirectoryClientProviding, @unchecked Se
         })
     }
 
+    func ownDevices() async throws -> [E2EEOwnDeviceDetails] {
+        let bound = try? server.bound(userId: userId, sessionId: sessionId)
+        return server.activeDevices(of: userId).map {
+            E2EEOwnDeviceDetails(
+                deviceId: $0.deviceId, registrationId: $0.registrationId, platform: .ios, label: nil,
+                createdAt: nil, lastSeenAt: nil, current: $0.deviceId == bound?.deviceId
+            )
+        }
+    }
+
     func envelopes(after cursor: String?, limit: Int?) async throws -> E2EEEnvelopePage {
         try server.envelopes(userId: userId, sessionId: sessionId, after: cursor, limit: limit ?? 100)
     }

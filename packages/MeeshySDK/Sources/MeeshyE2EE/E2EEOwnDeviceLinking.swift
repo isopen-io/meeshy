@@ -64,6 +64,12 @@ public struct E2EEPairingCode: Equatable, Sendable {
     public let displayable: String
     /// Le texte du QR (`E2EEPairingPayload`).
     public let qrPayload: String
+
+    public init(deviceId: UInt32, displayable: String, qrPayload: String) {
+        self.deviceId = deviceId
+        self.displayable = displayable
+        self.qrPayload = qrPayload
+    }
 }
 
 /// L'appareil dont l'empreinte correspond au code lu. Rien n'est épinglé tant
@@ -73,12 +79,24 @@ public struct E2EEPairingCandidate: Equatable, Sendable {
     public let deviceId: UInt32
     public let registrationId: UInt32
     public let identityKey: Data
+
+    public init(deviceId: UInt32, registrationId: UInt32, identityKey: Data) {
+        self.deviceId = deviceId
+        self.registrationId = registrationId
+        self.identityKey = identityKey
+    }
 }
 
 public struct E2EEOwnDeviceStatus: Equatable, Sendable {
     public let deviceId: UInt32
     public let registrationId: UInt32
     public let approved: Bool
+
+    public init(deviceId: UInt32, registrationId: UInt32, approved: Bool) {
+        self.deviceId = deviceId
+        self.registrationId = registrationId
+        self.approved = approved
+    }
 }
 
 public enum E2EEOwnDeviceLinkingError: Error, Equatable {

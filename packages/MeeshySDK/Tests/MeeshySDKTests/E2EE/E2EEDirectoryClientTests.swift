@@ -53,6 +53,23 @@ struct E2EEDirectoryClientTests {
         #expect(try await client.devices(userId: user).devices == [E2EEDeviceListing(deviceId: 1, registrationId: 7)])
     }
 
+    @Test func ownDevicesReadMyListWithItsMetadataAndToleratesAnUnknownPlatform() async throws {
+        let api = MockE2EEAPIClient()
+        api.respond("GET", "/api/v1/e2ee/devices", json: #"{"success":true,"data":{"devices":[{"deviceId":1,"registrationId":7,"platform":"ios","label":"iPhone","createdAt":"2026-10-25T12:00:00.000Z","lastSeenAt":"2026-10-25T13:00:00.000Z","current":true},{"deviceId":2,"registrationId":9,"platform":"visionos","label":null,"createdAt":"2026-10-24T12:00:00.000Z","lastSeenAt":"2026-10-24T12:00:00.000Z","current":false}]}}"#)
+
+        let devices = try await E2EEDirectoryClient(api: api).ownDevices()
+
+        #expect(api.sent.map(\.method) == ["GET"])
+        #expect(devices.map(\.deviceId) == [1, 2])
+        #expect(devices[0].platform == .ios)
+        #expect(devices[0].label == "iPhone")
+        #expect(devices[0].current)
+        #expect(devices[0].createdAt == Date(timeIntervalSince1970: 1_792_929_600))
+        #expect(devices[1].platform == nil)
+        #expect(devices[1].label == nil)
+        #expect(!devices[1].current)
+    }
+
     @Test func bundlesNameTheRequestedDevicesAndAcceptAMissingOneTimeKey() async throws {
         let api = MockE2EEAPIClient()
         let bundle = #"{"deviceId":2,"registrationId":7,"identityKey":"aWs=","signedPreKey":\#(signed),"kyberPreKey":{"keyId":1,"publicKey":"cHVi","signature":"c2ln","lastResort":true},"preKey":null}"#
