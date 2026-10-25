@@ -78,6 +78,73 @@ final class EndToEndMessagingRuntimeTests: XCTestCase {
         XCTAssertEqual(provisioning.readyCount, 2, "une nouvelle session relie l'installation")
     }
 
+    /// Une préparation lente pour un compte, rapide pour l'autre : le changement
+    /// de compte survient pendant que la première est suspendue (#12769).
+    private final class AccountSwitchProvisioning: EndToEndDeviceProvisioning, @unchecked Sendable {
+        let slowUserId: String
+        let sealer = StubSealer()
+        private let lock = NSLock()
+        private var started: [String] = []
+
+        init(slowUserId: String) { self.slowUserId = slowUserId }
+
+        var startedUserIds: [String] { lock.withLock { started } }
+
+        func ready(for userId: String) async throws -> EndToEndReadyDevice {
+            lock.withLock { started.append(userId) }
+            try await Task.sleep(nanoseconds: userId == slowUserId ? 400_000_000 : 5_000_000)
+            return EndToEndReadyDevice(device: E2EELocalDevice(userId: userId, deviceId: 1, registrationId: 7), sealer: sealer, opener: StubOpener())
+        }
+        func plaintexts() throws -> any E2EEPlaintextStoring { throw CocoaError(.featureUnsupported) }
+        func registrar() throws -> any E2EEDeviceRegistering { throw CocoaError(.featureUnsupported) }
+    }
+
+    private func waitUntilStarted(_ userId: String, in provisioning: AccountSwitchProvisioning) async {
+        for _ in 0..<200 where !provisioning.startedUserIds.contains(userId) {
+            try? await Task.sleep(nanoseconds: 1_000_000)
+        }
+    }
+
+    func test_ready_afterForgetDuringAnotherAccountsPreparation_returnsTheRequestedAccountsDevice() async throws {
+        let provisioning = AccountSwitchProvisioning(slowUserId: "accountA")
+        let runtime = EndToEndMessagingRuntime(provisioning: provisioning)
+        let preparingA = Task { try await runtime.ready(for: "accountA") }
+        await waitUntilStarted("accountA", in: provisioning)
+
+        await runtime.forget()
+        let device = try await runtime.ready(for: "accountB")
+
+        XCTAssertEqual(device.device.userId, "accountB", "jamais l'appareil d'un autre compte")
+        _ = try? await preparingA.value
+    }
+
+    func test_ready_forAnotherAccountWhileOneIsPreparing_returnsTheRequestedAccountsDevice() async throws {
+        let provisioning = AccountSwitchProvisioning(slowUserId: "accountA")
+        let runtime = EndToEndMessagingRuntime(provisioning: provisioning)
+        let preparingA = Task { try await runtime.ready(for: "accountA") }
+        await waitUntilStarted("accountA", in: provisioning)
+
+        let device = try await runtime.ready(for: "accountB")
+
+        XCTAssertEqual(device.device.userId, "accountB")
+        _ = try? await preparingA.value
+    }
+
+    func test_ready_aPreparationForgottenMidway_isNeitherReturnedNorCached() async throws {
+        let provisioning = AccountSwitchProvisioning(slowUserId: "accountA")
+        let runtime = EndToEndMessagingRuntime(provisioning: provisioning)
+        let preparingA = Task { try await runtime.ready(for: "accountA") }
+        await waitUntilStarted("accountA", in: provisioning)
+
+        await runtime.forget()
+        let forgotten = await preparingA.result
+        let deviceB = try await runtime.ready(for: "accountB")
+
+        XCTAssertThrowsError(try forgotten.get(), "une préparation oubliée ne rend rien à la session fermée")
+        XCTAssertEqual(deviceB.device.userId, "accountB")
+        XCTAssertEqual(provisioning.startedUserIds, ["accountA", "accountB"])
+    }
+
     func test_aReceivedEnvelope_isAnnouncedToTheThread() async {
         let runtime = EndToEndMessagingRuntime(provisioning: StubProvisioning())
         let announced = expectation(description: "annoncée")
