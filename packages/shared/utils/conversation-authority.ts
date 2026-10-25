@@ -3,8 +3,8 @@ import {
   type MemberRoleType,
   isMemberRole,
   memberRoleLevel,
-} from '@meeshy/shared/types/role-types';
-import { isPrivilegedPlatformRole } from '@meeshy/shared/utils/platform-privilege';
+} from '../types/role-types.js';
+import { isPrivilegedPlatformRole } from './platform-privilege.js';
 
 /**
  * **L'autorité d'un acteur DANS une conversation** — rang de conversation et
