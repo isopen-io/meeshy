@@ -99,7 +99,64 @@ serveur », jamais « de bout en bout » (réservé à `e2ee`).
   conversation suffit à fermer la recopie inter-conversations ; dans la même
   conversation, ses membres lisent déjà le texte.
 
-### Ce que ça ne couvre pas
+### Après contre-audit (2026-10-25, #12822)
+
+Le chiffrement de MongoDB ne tenait sa promesse que si le clair ne se posait
+sur AUCUN autre disque. Trois l'y posaient encore ; ils sont fermés.
+
+- **Cache Redis et journaux du translator.** La requête ZMQ de traduction d'un
+  message `server`/`hybrid` porte `atRest: true` (champ absent = trame d'avant,
+  rétrocompatible dans les deux sens). Le translator ne lit ni n'écrit alors
+  aucun cache (texte entier ni segments). Ses journaux ne portent plus de texte,
+  pour aucune requête : longueurs, langues, identifiants.
+- **File de livraison hors ligne** (`RedisDeliveryQueue`, 48 h). `message:new`
+  et `message:translation` de ces conversations y partent SCELLÉS
+  (`sealedPayload`, AES-256-GCM sous la clé désignée de la conversation, AAD
+  `delivery-queue:v1` liant conversation ET message — distincte de
+  `conversation:v1`). Le drain les rouvre : le client, ancien ou nouveau,
+  reçoit l'événement d'avant. Forme choisie plutôt qu'une référence relue par
+  REST, qu'aucun client existant ne relit au reconnect. Fail-closed : une
+  entrée qui ne se scelle pas n'est pas enfilée, une entrée qui ne se rouvre
+  pas n'est pas rejouée (le message se relit en ouvrant la conversation).
+- **Traduction rangée en clair sur une panne** : une relecture du régime qui
+  échoue n'écrit plus rien (`EncryptionHelper.shouldEncryptTranslation` lève),
+  et le mode se lit sans égard à la casse.
+- Lectures : l'aperçu de liste RECALCULÉ (suppression, vue unique, masquage,
+  traduction) ouvre le repos ; l'épingle sert `isEncrypted`.
+
+### Ce que ça protège, et ce que ça ne protège pas
+
+Protège : une copie de MongoDB, de Redis (AOF compris) ou des journaux de la
+passerelle et du translator, SANS l'environnement de la passerelle
+(`ENCRYPTION_MASTER_KEY`), ne livre le texte d'aucun message `server`/`hybrid`
+écrit après ce lot, ni de sa traduction — sous réserve des points ci-dessous.
+
+Ne protège pas :
+
+- **Un serveur compromis** : la passerelle détient la clé maîtresse et lit tout
+  ce qu'elle relaie ; le translator reçoit le clair en mémoire. Ce n'est pas du
+  bout en bout (`e2ee` seul l'est).
+- **Les lignes déjà en base** : éditées avant le lot, avis système, ancien
+  repli « Encryption failed → plaintext ». Mesure puis re-scellement : #12875
+  (production après feu vert du porteur et sauvegarde vérifiée).
+- **L'audio** : transcriptions (Whisper), traductions de transcription, pistes
+  TTS et leurs journaux, et l'événement `message:attachment-updated` en file —
+  aucun n'est chiffré au repos.
+- **Les notifications** (ligne `Notification`, push) : elles gardent le
+  placeholder chiffré, mais les avis système et les métadonnées (expéditeur,
+  heure, conversation) restent en clair, comme `messageId`, `conversationId`
+  et `eventType` dans les entrées de file.
+- **Le cache mémoire de traduction de la passerelle** (non persistant) et la
+  mémoire de tout processus.
+- **La rotation de la clé maîtresse**, et le chemin des pièces jointes qui
+  re-désigne une clé de conversation (constat E5, #12854).
+- **Un retour arrière** vers une passerelle d'avant ce lot pendant les 48 h de
+  la file : elle rejouerait les entrées scellées avec une charge vide, que les
+  clients ignorent (le message se relit à l'ouverture de la conversation).
+- Aucune revue cryptographique tierce n'a eu lieu ; elle reste requise avant de
+  présenter ce mode comme une garantie.
+
+### Ce que ça ne couvre pas (lot initial)
 
 - Modèle de menace : une copie de la base sans l'environnement de la passerelle
   ne livre aucun texte. Un serveur compromis lit tout — ce n'est pas du bout en
@@ -110,8 +167,8 @@ serveur », jamais « de bout en bout » (réservé à `e2ee`).
   récupère. Ceux écrits sous la clé maîtresse en place redeviennent lisibles.
 - La rotation de la clé MAÎTRESSE (re-envelopper les clés de données) n'est
   pas outillée.
-- Le cache de traduction du translator et les journaux du translator ne sont
-  pas dans ce lot.
+- Le cache de traduction du translator et ses journaux : fermés au contre-audit
+  ci-dessus.
 
 ### Déploiement
 
