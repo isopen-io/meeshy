@@ -105,8 +105,9 @@ final class ContentOriginDeviceKeyTests: XCTestCase {
     // MARK: - La clé d'un processus lancé avant le premier déverrouillage (#12721)
 
     private final class Clock: @unchecked Sendable {
-        var instant = Date(timeIntervalSince1970: 1_000)
-        func advance(_ seconds: TimeInterval) { instant = instant.addingTimeInterval(seconds) }
+        var instant: TimeInterval = 1_000
+        func advance(_ seconds: TimeInterval) { instant += seconds }
+        func rewind(_ seconds: TimeInterval) { instant -= seconds }
     }
 
     private final class GeneratedKeys: @unchecked Sendable {
@@ -119,7 +120,7 @@ final class ContentOriginDeviceKeyTests: XCTestCase {
 
     private func holder(_ vault: FakeVault, clock: Clock) -> ContentOriginKeyHolder {
         let ephemeral = fresh
-        return ContentOriginKeyHolder(vault: vault, generate: { ephemeral }, now: { clock.instant }, retryInterval: 1)
+        return ContentOriginKeyHolder(vault: vault, generate: { ephemeral }, uptime: { clock.instant }, retryInterval: 1)
     }
 
     func test_aKeyUnavailableAtLaunch_isReadAgainAfterTheFirstUnlock() {
@@ -149,7 +150,7 @@ final class ContentOriginDeviceKeyTests: XCTestCase {
         let vault = FakeVault(reads: [.unavailable, .unavailable])
         let clock = Clock()
         let keys = GeneratedKeys()
-        let sut = ContentOriginKeyHolder(vault: vault, generate: { keys.next() }, now: { clock.instant }, retryInterval: 1)
+        let sut = ContentOriginKeyHolder(vault: vault, generate: { keys.next() }, uptime: { clock.instant }, retryInterval: 1)
 
         let first = sut.current()
         clock.advance(1)
@@ -168,6 +169,20 @@ final class ContentOriginDeviceKeyTests: XCTestCase {
         XCTAssertEqual(vault.readCount, 1)
         clock.advance(1)
         _ = sut.current()
+        XCTAssertEqual(vault.readCount, 2)
+    }
+
+    /// Une horloge qui RECULE (l'heure murale réglée en arrière) ne fige pas
+    /// l'éphémère : le trousseau se relit, et la clé gardée la remplace.
+    func test_aClockThatGoesBackwards_doesNotFreezeTheEphemeralKey() {
+        let vault = FakeVault(reads: [.unavailable, .value(stored)])
+        let clock = Clock()
+        let sut = holder(vault, clock: clock)
+
+        XCTAssertEqual(sut.current(), fresh)
+        clock.rewind(3_600)
+
+        XCTAssertEqual(sut.current(), stored, "une heure en arrière ne fige pas la clé éphémère")
         XCTAssertEqual(vault.readCount, 2)
     }
 

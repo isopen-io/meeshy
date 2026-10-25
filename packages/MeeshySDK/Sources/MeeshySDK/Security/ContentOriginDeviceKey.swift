@@ -93,38 +93,44 @@ enum ContentOriginKeyResolution: Equatable, Sendable {
 /// pour qu'une liste rendue avant le déverrouillage ne le sollicite pas à
 /// chaque bulle. S'il se rouvre VIDE, c'est l'éphémère qui s'y garde : ce
 /// qu'elle a scellé pendant le verrouillage reste vérifiable.
+///
+/// L'intervalle se mesure sur une horloge MONOTONE (`systemUptime`) : l'heure
+/// murale recule (réglage manuel, NTP, fuseau) et, mesurée sur elle, une clé
+/// éphémère se figeait jusqu'à ce que l'heure rattrape sa lecture. Une horloge
+/// injectée qui recule quand même relit le trousseau.
 final class ContentOriginKeyHolder: Sendable {
     private struct Held: Sendable {
         let resolution: ContentOriginKeyResolution
-        let readAt: Date
+        let readAt: TimeInterval
 
-        func isSettled(at instant: Date, retryInterval: TimeInterval) -> Bool {
+        func isSettled(at instant: TimeInterval, retryInterval: TimeInterval) -> Bool {
             guard case .ephemeral = resolution else { return true }
-            return instant.timeIntervalSince(readAt) < retryInterval
+            let elapsed = instant - readAt
+            return elapsed >= 0 && elapsed < retryInterval
         }
     }
 
     private let vault: any ContentOriginKeyVault
     private let generate: @Sendable () -> Data
-    private let now: @Sendable () -> Date
+    private let uptime: @Sendable () -> TimeInterval
     private let retryInterval: TimeInterval
     private let held = OSAllocatedUnfairLock<Held?>(initialState: nil)
 
     init(
         vault: any ContentOriginKeyVault,
         generate: @escaping @Sendable () -> Data,
-        now: @escaping @Sendable () -> Date = { Date() },
+        uptime: @escaping @Sendable () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },
         retryInterval: TimeInterval = 1
     ) {
         self.vault = vault
         self.generate = generate
-        self.now = now
+        self.uptime = uptime
         self.retryInterval = retryInterval
     }
 
     func current() -> Data {
         held.withLock { slot in
-            let instant = now()
+            let instant = uptime()
             if let settled = slot, settled.isSettled(at: instant, retryInterval: retryInterval) {
                 return settled.resolution.key
             }
