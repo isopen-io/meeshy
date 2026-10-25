@@ -12,15 +12,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
-import androidx.compose.material.icons.filled.AttachFile
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.PhotoCamera
-import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -38,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import me.meeshy.feature.feed.R
 import me.meeshy.sdk.model.UploadedMedia
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
@@ -82,11 +74,11 @@ internal fun MediaAttachmentsRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         val attachEnabled = canAddMore && !isUploading
-        AttachTile(Icons.Filled.Image, stringResource(R.string.feed_composer_attach_media), attachEnabled, onAdd)
-        AttachTile(Icons.Filled.PhotoCamera, stringResource(R.string.feed_composer_take_photo), attachEnabled, onCamera)
-        AttachTile(Icons.Filled.Videocam, stringResource(R.string.feed_composer_take_video), attachEnabled, onVideoCapture)
-        AttachTile(Icons.Filled.AttachFile, stringResource(R.string.feed_composer_attach_file), attachEnabled, onAttachFile)
-        AttachTile(Icons.Filled.Mic, stringResource(R.string.feed_composer_record_voice), attachEnabled, onRecordVoice)
+        AttachTile(MeeshyIcons.PhotoFilled, stringResource(R.string.feed_composer_attach_media), attachEnabled, onAdd)
+        AttachTile(MeeshyIcons.Camera, stringResource(R.string.feed_composer_take_photo), attachEnabled, onCamera)
+        AttachTile(MeeshyIcons.Video, stringResource(R.string.feed_composer_take_video), attachEnabled, onVideoCapture)
+        AttachTile(MeeshyIcons.AttachFile, stringResource(R.string.feed_composer_attach_file), attachEnabled, onAttachFile)
+        AttachTile(MeeshyIcons.Mic, stringResource(R.string.feed_composer_record_voice), attachEnabled, onRecordVoice)
 
         // Independent of attachEnabled: the location tile is not subject to MAX_MEDIA/upload —
         // only guarded against a concurrent capture in flight.
@@ -104,7 +96,7 @@ internal fun MediaAttachmentsRow(
                 CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
             } else {
                 Icon(
-                    imageVector = Icons.Filled.LocationOn,
+                    imageVector = MeeshyIcons.LocationFilled,
                     contentDescription = stringResource(R.string.feed_composer_add_location),
                     tint = MeeshyPalette.Indigo500,
                 )
@@ -132,7 +124,7 @@ internal fun MediaAttachmentsRow(
                         contentAlignment = Alignment.Center,
                     ) {
                         Icon(
-                            imageVector = Icons.AutoMirrored.Filled.InsertDriveFile,
+                            imageVector = MeeshyIcons.Document,
                             contentDescription = null,
                             tint = MeeshyPalette.Indigo500,
                             modifier = Modifier.size(24.dp),
@@ -147,7 +139,7 @@ internal fun MediaAttachmentsRow(
                         .background(Color.Black.copy(alpha = 0.6f), CircleShape),
                 ) {
                     Icon(
-                        imageVector = Icons.Filled.Close,
+                        imageVector = MeeshyIcons.Close,
                         contentDescription = stringResource(R.string.feed_composer_remove_media),
                         tint = MeeshyPalette.White,
                         modifier = Modifier.size(12.dp),
