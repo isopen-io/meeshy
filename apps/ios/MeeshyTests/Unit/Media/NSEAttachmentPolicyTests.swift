@@ -500,8 +500,24 @@ final class NSEAttachmentPolicyTests: XCTestCase {
         }
     }
 
-    /// L'extension applique la loi à la catégorie qu'elle vient de choisir.
-    func test_extension_gatesTheCategoryItChose() throws {
-        XCTAssertTrue(try nseSource().contains("NSEAttachmentPolicy.category("))
+    /// L'extension applique la loi à la catégorie qu'elle VIENT de choisir, avec
+    /// le verrou qui a décidé du plan. Garde de SOURCE, et seulement parce que
+    /// ce câblage n'a pas d'autre témoin : une extension de notification n'a
+    /// pas d'hôte de test, et la loi elle-même s'éprouve par comportement
+    /// ci-dessus (`category(_:under:userInfo:)`).
+    func test_extension_gatesTheCategoryItChose_rightAfterChoosingIt_underThePlansLock() throws {
+        let code = AppSourceGuard.stripComments(try nseSource())
+        let branch = try XCTUnwrap(code.range(of: "case .applyCategory:"), "l'étape de catégorie a changé de forme")
+        let next = try XCTUnwrap(code.range(of: "case .", range: branch.upperBound..<code.endIndex))
+        let body = code[branch.upperBound..<next.lowerBound]
+        let choose = try XCTUnwrap(body.range(of: "applyCategory(to: content)"))
+        let gate = try XCTUnwrap(body.range(of: "content.categoryIdentifier = NSEAttachmentPolicy.category("),
+                                 "la catégorie choisie doit passer par la loi du verrou")
+
+        XCTAssertLessThan(choose.lowerBound, gate.lowerBound, "la loi s'applique APRÈS le choix, sinon il l'écrase")
+        XCTAssertTrue(body.contains("content.categoryIdentifier, under: lock"))
+        XCTAssertTrue(code.contains("NSEPreparationStep.plan(for: lock)"))
+        XCTAssertTrue(code.contains("perform(step, on: content, lock: lock)"),
+                      "le verrou qui choisit le plan est celui qui garde la catégorie")
     }
 }

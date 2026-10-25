@@ -382,7 +382,12 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         }
     }
 
-    static func registerNotificationCategories(bundle: Bundle = InterfaceLanguageResolver.bundle()) {
+    /// `register` reçoit le jeu COMPLET des catégories : c'est lui que le
+    /// système connaît, et lui qu'un témoin éprouve (#12655).
+    static func registerNotificationCategories(
+        bundle: Bundle = InterfaceLanguageResolver.bundle(),
+        register: (Set<UNNotificationCategory>) -> Void = { UNUserNotificationCenter.current().setNotificationCategories($0) }
+    ) {
         let replyAction = UNTextInputNotificationAction(
             identifier: MeeshyNotificationAction.reply.rawValue,
             title: String(localized: "notifications.action.reply", defaultValue: "Répondre", bundle: bundle),
@@ -507,16 +512,10 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             options: [.customDismissAction]
         )
 
-        UNUserNotificationCenter.current().setNotificationCategories(Set([
-            messageCategory,
-            mentionCategory,
-            friendRequestCategory,
-            socialCategory,
-            socialCommentableCategory,
-            callIncomingCategory,
-            callMissedCategory,
-            legacyCallCategory
-        ] + NotificationDetailCategories.categories(reply: replyAction, markRead: markReadAction, bundle: bundle) + [LockedConversationNotificationCategory.category]))
+        register(Set([
+            messageCategory, mentionCategory, friendRequestCategory, socialCategory, socialCommentableCategory,
+            callIncomingCategory, callMissedCategory, legacyCallCategory, LockedConversationNotificationCategory.category,
+        ] + NotificationDetailCategories.categories(reply: replyAction, markRead: markReadAction, bundle: bundle)))
     }
 
     // MARK: - Crash Reporting Bootstrap

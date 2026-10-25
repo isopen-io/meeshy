@@ -241,15 +241,32 @@ final class NotificationActionLockedConversationTests: XCTestCase {
         XCTAssertEqual(category.identifier, NSEAttachmentPolicy.lockedConversationCategory)
     }
 
-    func test_theLockedConversationCategory_isRegistered() throws {
-        let appDelegate = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()   // Services/
-            .deletingLastPathComponent()   // Unit/
-            .deletingLastPathComponent()   // MeeshyTests/
-            .deletingLastPathComponent()   // ios/
-            .appendingPathComponent("Meeshy/AppDelegate.swift")
-        let source = try String(contentsOf: appDelegate, encoding: .utf8)
+    /// Le jeu que l'app remet au système porte la catégorie sans action :
+    /// sans elle, iOS retombe sur une bannière SANS catégorie connue, et la
+    /// loi de l'extension ne se verrait jamais.
+    func test_theRegisteredCategories_includeTheLockedConversationOne_withoutAnyAction() throws {
+        var registered: Set<UNNotificationCategory> = []
 
-        XCTAssertTrue(source.contains("LockedConversationNotificationCategory.category"))
+        AppDelegate.registerNotificationCategories(bundle: .main) { registered = $0 }
+
+        let locked = try XCTUnwrap(registered.first { $0.identifier == NSEAttachmentPolicy.lockedConversationCategory })
+        XCTAssertTrue(locked.actions.isEmpty)
+    }
+
+    /// Les catégories de conversation que la loi de l'extension remplace
+    /// restent enregistrées, avec leurs gestes, pour une conversation ouverte.
+    func test_theRegisteredCategories_keepTheConversationCategoriesTheExtensionMayReplace() {
+        var registered: Set<UNNotificationCategory> = []
+
+        AppDelegate.registerNotificationCategories(bundle: .main) { registered = $0 }
+
+        let identifiers = Set(registered.map(\.identifier))
+        for category in [MeeshyNotificationCategory.message, .mention, .location, .contact, .invite, .audio, .ephemeral] {
+            XCTAssertTrue(identifiers.contains(category.rawValue), category.rawValue)
+        }
+        let message = registered.first { $0.identifier == MeeshyNotificationCategory.message.rawValue }
+        XCTAssertEqual(message?.actions.map(\.identifier), [
+            MeeshyNotificationAction.reply.rawValue, MeeshyNotificationAction.markRead.rawValue,
+        ])
     }
 }
