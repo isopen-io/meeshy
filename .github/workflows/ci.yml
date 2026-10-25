@@ -232,8 +232,10 @@ jobs:
       # poussée sinon : `dev` figé ferait tomber une PR de correctif vers `main`
       # dès que `dev` a monté une version que `main` n'a pas encore reçue. La
       # seconde commande prouve que le cliquet rougit (chaque pack tombe, nommé,
-      # à sa version abaissée de 1 ⇒ sortie 1). La base se lit par `git show`,
-      # d'où le fetch : le checkout de ce job est à profondeur 1. Le témoin
+      # à sa version abaissée de 1 ⇒ sortie 1, et seulement 1 : une preuve
+      # incomplète sort 0, un plantage 2 — ni l'un ni l'autre ne passe pour une
+      # preuve). La base se lit par `git show`, d'où le fetch : le checkout de
+      # ce job est à profondeur 1. Le témoin
       # `__tests__/ci/glory-frame-ratchet-baseline.test.ts` garde cette forme.
       - name: Versions des packs de cadres de gloire (cliquet #10278)
         env:
@@ -242,8 +244,10 @@ jobs:
           git fetch --no-tags --depth=1 origin "$BASE_BRANCH"
           cd packages/shared
           ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} glory-frames:check-versions -- --baseline "origin/$BASE_BRANCH"
-          if ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} glory-frames:check-versions -- --baseline "origin/$BASE_BRANCH" --mutate lower-version; then
-            echo "::error::le cliquet des versions ne rougit pas sous mutation (version abaissée de 1)"
+          status=0
+          ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} glory-frames:check-versions -- --baseline "origin/$BASE_BRANCH" --mutate lower-version || status=$?
+          if [ "$status" -ne 1 ]; then
+            echo "::error::le cliquet des versions ne rougit pas sous mutation (version abaissée de 1) : sortie $status, attendu 1 (preuve tenue)"
             exit 1
           fi
 

@@ -127,6 +127,33 @@ describe('la preuve de ROUGE : chaque version abaissée de 1 tombe, nommée, con
     expect(lowerVersionProofHolds({ registry, violations: violations.filter((violation) => violation.slug !== 'afrique'), baseline })).toBe(false);
   });
 
+  it('un pack monté de DEUX crans au-dessus de la base (promotion dev → main après deux montées) tombe, nommé, sous la version quittée que retained.json tient à sa version abaissée', () => {
+    const registry = [entry('afrique', 3, 'a3', ['c'])];
+    const baseline = [entry('afrique', 1, 'a1', ['a'])];
+    const retained = { 'glory-frame/afrique@1': fixtureFiles(entry('afrique', 1, 'a1', ['a'])), 'glory-frame/afrique@2': fixtureFiles(entry('afrique', 2, 'a2', ['b'])) };
+    expect(gloryFrameVersionViolations({ registry, retained, baseline, servedFilesOf: fixtureFiles })).toEqual([]);
+    const violations = gloryFrameVersionViolations({ registry: lowerVersions(registry), retained, baseline, servedFilesOf: fixtureFiles });
+    expect(violations).toEqual([{ kind: 'reuses-retained', slug: 'afrique', version: 2, retained: 2 }]);
+    expect(lowerVersionProofHolds({ registry, violations, baseline })).toBe(true);
+    expect(lowerVersionProofHolds({ registry, violations: [], baseline })).toBe(false);
+  });
+
+  it('un pack dont la version a SAUTÉ sans changer d’empreinte (version déjà retenue par une autre branche) tombe, nommé, sous retained.json au numéro de la base', () => {
+    const registry = [entry('afrique', 2, 'a1', ['a'])];
+    const baseline = [entry('afrique', 1, 'a1', ['a'])];
+    const retained = { 'glory-frame/afrique@1': ['b'.repeat(16) + '.json'] };
+    expect(gloryFrameVersionViolations({ registry, retained, baseline, servedFilesOf: fixtureFiles })).toEqual([]);
+    const violations = gloryFrameVersionViolations({ registry: lowerVersions(registry), retained, baseline, servedFilesOf: fixtureFiles });
+    expect(violations).toEqual([{ kind: 'reuses-retained', slug: 'afrique', version: 1, retained: 1 }]);
+    expect(lowerVersionProofHolds({ registry, violations, baseline })).toBe(true);
+  });
+
+  it('une réutilisation nommée sous la base ne remplace pas la redescente : la base est la référence qui doit la voir', () => {
+    const registry = [entry('afrique', 2, 'a')];
+    const baseline = registry;
+    expect(lowerVersionProofHolds({ registry, violations: [{ kind: 'reuses-retained', slug: 'afrique', version: 1, retained: 1 }], baseline })).toBe(false);
+  });
+
   it('un pack NÉ sur la branche, absent de la base, ne défait pas la preuve : il n’a rien sous quoi redescendre', () => {
     const registry = [entry('afrique', 2, 'a'), entry('succes', 1, 's')];
     const baseline = [entry('afrique', 2, 'a')];
