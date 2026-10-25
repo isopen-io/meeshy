@@ -1,15 +1,17 @@
 import Foundation
 
-/// **Les plafonds communs du partage** (D10, #10949, porteur 2026-10-18) — les
-/// mêmes sur iOS (app et extension), sur le web et dans la coque Android.
+/// **Les plafonds communs du partage** (D10, #10949, porteur 2026-10-18 ;
+/// révisés le 2026-10-25, #12974 : 100 fichiers et 5 Go, contre 20 et 500 Mo)
+/// — les mêmes sur iOS (app et extension), sur le web et dans la coque Android.
 ///
 /// Miroir JUMEAU de `SHARE_LIMITS` (`packages/shared/utils/share-limits.ts`) ;
 /// toute évolution touche les deux sites. `maxPublicationMedia` est la borne
 /// que la passerelle applique déjà aux posts (`MAX_POST_MEDIA`).
 public enum ShareLimits {
-    public static let maxFiles = 20
-    /// 500 Mio, comme l'extension l'a toujours compté.
-    public static let maxTotalBytes = 500 * 1024 * 1024
+    public static let maxFiles = 100
+    /// 5 Gio (le Go que l'interface affiche se compte en Gio, comme les Mo
+    /// l'ont toujours été).
+    public static let maxTotalBytes = 5 * 1024 * 1024 * 1024
     /// Destinataires, publications comprises.
     public static let maxRecipients = 10
     public static let maxPublicationMedia = 10

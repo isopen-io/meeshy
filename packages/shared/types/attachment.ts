@@ -548,6 +548,17 @@ export const TUS_CHUNK_SIZE = 10 * 1024 * 1024; // 10 MB
 export const SMALL_FILE_THRESHOLD = 50 * 1024 * 1024; // 50 MB - below this, use direct REST upload
 
 /**
+ * Fichiers d'UNE requête directe (`POST /attachments/upload`, multipart) — la
+ * borne `limits.files` du plugin multipart de la passerelle (`server.ts`), qui
+ * rend 413 au-delà. Un client qui envoie davantage (un partage en porte 100,
+ * `SHARE_LIMITS`) découpe en plusieurs requêtes. La voie directe tient chaque
+ * fichier en mémoire (`part.toBuffer()`) : elle reste celle des petits
+ * fichiers, `SMALL_FILE_THRESHOLD` par requête au plus ; le reste passe par la
+ * reprise (TUS), qui écrit sur disque tranche par tranche.
+ */
+export const MAX_DIRECT_UPLOAD_FILES = 30;
+
+/**
  * Type des limites d'upload
  */
 export type UploadLimits = typeof UPLOAD_LIMITS;

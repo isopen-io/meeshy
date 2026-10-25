@@ -41,7 +41,7 @@ enum ShareSheetCopy {
         switch shortfall {
         case .unprepared: return unprepared
         case .overBudget(let uncopied):
-            return String(format: String(localized: "share.sheet.content.over-budget", defaultValue: "Fichiers non copiés : %d. Un partage emporte au plus 20 fichiers et 500 Mo.", bundle: .meeshyShare), uncopied)
+            return String(format: String(localized: "share.sheet.content.over-budget", defaultValue: "Fichiers non copiés : %1$d. Un partage emporte au plus %2$d fichiers et %3$@.", bundle: .meeshyShare), uncopied, ShareLimits.maxFiles, limitSize(ShareLimits.maxTotalBytes))
         case .refusedSource:
             return String(localized: "share.sheet.content.refused-source", defaultValue: "Cette app n’a remis qu’un chemin de fichier, que Meeshy n’ouvre pas. Partagez le fichier lui-même, ou enregistrez-le d’abord dans Photos ou Fichiers.", bundle: .meeshyShare)
         }
@@ -160,8 +160,17 @@ enum ShareSheetCopy {
     static func encryptionWarning(_ names: String) -> String {
         String(format: String(localized: "share.sheet.encryption.warning", defaultValue: "« %@ » n’est pas chiffrée : ce message y sortira du chiffrement de bout en bout.", bundle: .meeshyShare), names)
     }
-    static func tooHeavy(files: Int, megabytes: Int) -> String {
-        String(format: String(localized: "share.sheet.limits.too-heavy", defaultValue: "%1$d fichiers, %2$d Mo. Un partage emporte au plus 20 fichiers et 500 Mo.", bundle: .meeshyShare), files, megabytes)
+    static func tooHeavy(files: Int, bytes: Int) -> String {
+        String(format: String(localized: "share.sheet.limits.too-heavy", defaultValue: "%1$d fichiers, %2$@. Un partage emporte au plus %3$d fichiers et %4$@.", bundle: .meeshyShare), files, limitSize(bytes), ShareLimits.maxFiles, limitSize(ShareLimits.maxTotalBytes))
+    }
+
+    /// Un poids rapporté aux plafonds du partage (« 5 Go », « 6,2 Go »,
+    /// « 500 Mo ») — compté en puissances de 1 024, comme `ShareLimits` et le
+    /// `sizeIn` du web, pour que le plafond se lise « 5 Go » et jamais
+    /// « 5,37 Go ». Les chiffres viennent de `ShareLimits` : aucune copie des
+    /// plafonds ne vit dans le catalogue (#12974).
+    static func limitSize(_ bytes: Int, locale: Locale = .shareCatalog()) -> String {
+        Int64(max(0, bytes)).formatted(.byteCount(style: .memory).locale(locale))
     }
     static func trimLast(_ count: Int) -> String {
         String(format: String(localized: "share.sheet.limits.trim", defaultValue: "Retirez %d fichiers pour envoyer", bundle: .meeshyShare), count)
