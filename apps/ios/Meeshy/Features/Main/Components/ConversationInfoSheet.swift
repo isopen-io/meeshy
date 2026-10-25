@@ -109,7 +109,12 @@ struct ConversationInfoSheet: View {
                     encryptionMode: conversation.encryptionMode,
                     isDark: isDark,
                     appearAnimation: appearAnimation,
-                    onVerifySafetyNumber: { showSecurityVerification = true }
+                    onVerifySafetyNumber: { showSecurityVerification = true },
+                    peer: otherUserId.map { ConversationEncryptionPeer(userId: $0, name: conversation.name) },
+                    onOpenConversation: { id in
+                        dismiss()
+                        NotificationCenter.default.post(name: .meeshyNavigateToConversation, object: id)
+                    }
                 )
                 pinnedPreview
                 tabSelector

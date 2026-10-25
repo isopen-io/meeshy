@@ -10,6 +10,9 @@ public protocol ConversationEncryptionServiceProviding: Sendable {
     func fetchStatus(conversationId: String) async throws -> ConversationEncryptionStatus
     func enable(conversationId: String, mode: String) async throws -> ConversationEncryptionStatus
     func disable(conversationId: String) async throws -> ConversationEncryptionStatus
+    /// Le tête-à-tête que le serveur lit avec ce contact, rendu ou créé à côté
+    /// du chiffré de bout en bout (#12966) : son identifiant.
+    func openReadableDirect(with userId: String) async throws -> String
 }
 
 public final class ConversationEncryptionService: ConversationEncryptionServiceProviding, Sendable {
@@ -34,6 +37,14 @@ public final class ConversationEncryptionService: ConversationEncryptionServiceP
             body: ["mode": mode]
         )
         return response.data
+    }
+
+    public func openReadableDirect(with userId: String) async throws -> String {
+        let response: APIResponse<CreateConversationResponse> = try await api.post(
+            ConversationsEndpoint.root,
+            body: CreateConversationRequest(type: "direct", participantIds: [userId], plaintext: true)
+        )
+        return response.data.id
     }
 
     public func disable(conversationId: String) async throws -> ConversationEncryptionStatus {

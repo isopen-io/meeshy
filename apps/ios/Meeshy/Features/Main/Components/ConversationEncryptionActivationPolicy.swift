@@ -75,6 +75,24 @@ enum ConversationEncryptionServedGap: Equatable {
     }
 }
 
+/// Le contact d'un tête-à-tête, que la fiche Chiffrement nomme (#12966).
+struct ConversationEncryptionPeer: Equatable {
+    let userId: String
+    let name: String
+}
+
+/// L'autre tête-à-tête de la paire (#12966) : une paire a au plus un
+/// tête-à-tête chiffré de bout en bout et au plus un que le serveur lit. Ouvrir
+/// le lisible ne ramène JAMAIS dans un fil servi, ou déjà vu, chiffré de bout en
+/// bout (#12949) — ni dans celui d'où l'on part (passerelle antérieure qui
+/// ignore `plaintext`).
+enum ReadableDirectOpening {
+    static func destination(opened: String, from current: String, openedIsEndToEnd: Bool) -> String? {
+        guard !opened.isEmpty, opened != current, !openedIsEndToEnd else { return nil }
+        return opened
+    }
+}
+
 /// Ce que le fil OUVERT dit quand le bout en bout s'active sous ses yeux
 /// (#12522). Une annonce vers le clair ne se dit pas : le bout en bout ne se
 /// désactive pas (#12949), et le fil vu chiffré le reste.

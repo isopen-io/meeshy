@@ -18,6 +18,9 @@ nonisolated final class MockConversationEncryptionService: ConversationEncryptio
         ConversationEncryptionStatus(isEncrypted: false, mode: nil, epoch: 2, canToggleEncryption: true)
     )
 
+    var openReadableDirectResult: Result<String, Error> = .success("00000000000000000000aa01")
+    private(set) var openedReadableDirectWith: [String] = []
+
     private var counts: [String: Int] = [:]
     var fetchStatusCallCount: Int { lock.withLock { counts["status", default: 0] } }
     var enableCallCount: Int { lock.withLock { counts["enable", default: 0] } }
@@ -33,6 +36,11 @@ nonisolated final class MockConversationEncryptionService: ConversationEncryptio
     func enable(conversationId: String, mode: String) async throws -> ConversationEncryptionStatus {
         count("enable")
         return try enableResult.get()
+    }
+
+    func openReadableDirect(with userId: String) async throws -> String {
+        lock.withLock { openedReadableDirectWith.append(userId) }
+        return try openReadableDirectResult.get()
     }
 
     func disable(conversationId: String) async throws -> ConversationEncryptionStatus {

@@ -171,4 +171,14 @@ final class ConversationEncryptionActivationPolicyTests: XCTestCase {
         XCTAssertEqual(ConversationEncryptionServedGap.resolve(remembersEndToEnd: true, servedEndToEnd: false, mayRestore: false), .shown)
         XCTAssertEqual(ConversationEncryptionServedGap.resolve(remembersEndToEnd: true, servedEndToEnd: false, mayRestore: true), .restorable)
     }
+
+    /// #12966 — ouvrir le tête-à-tête lisible ne ramène jamais dans un fil
+    /// chiffré de bout en bout, ni dans celui d'où l'on part.
+    func test_readableDirect_neverLeadsBackToAnEndToEndThread() {
+        XCTAssertEqual(ReadableDirectOpening.destination(opened: "c-readable", from: "c-e2ee", openedIsEndToEnd: false), "c-readable")
+        XCTAssertNil(ReadableDirectOpening.destination(opened: "c-e2ee", from: "c-e2ee", openedIsEndToEnd: false),
+                     "une passerelle antérieure rend le tête-à-tête d'où l'on part")
+        XCTAssertNil(ReadableDirectOpening.destination(opened: "c-other", from: "c-e2ee", openedIsEndToEnd: true))
+        XCTAssertNil(ReadableDirectOpening.destination(opened: "", from: "c-e2ee", openedIsEndToEnd: false))
+    }
 }

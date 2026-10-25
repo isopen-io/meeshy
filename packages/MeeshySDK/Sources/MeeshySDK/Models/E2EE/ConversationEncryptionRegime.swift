@@ -13,10 +13,14 @@ public struct ConversationEncryptionStatus: Decodable, Equatable, Sendable {
     public let canTranslate: Bool
     public let epoch: Int?
     public let canToggleEncryption: Bool?
+    /// Le tête-à-tête chiffré de bout en bout de la même paire, quand celui-ci
+    /// est le lisible (#12966) ; `nil` sinon, ou d'une passerelle antérieure.
+    public let pairEndToEndConversationId: String?
 
     public init(
         isEncrypted: Bool, mode: String?, enabledAt: Date? = nil, enabledBy: String? = nil,
-        canTranslate: Bool = false, epoch: Int? = nil, canToggleEncryption: Bool? = nil
+        canTranslate: Bool = false, epoch: Int? = nil, canToggleEncryption: Bool? = nil,
+        pairEndToEndConversationId: String? = nil
     ) {
         self.isEncrypted = isEncrypted
         self.mode = mode
@@ -25,6 +29,7 @@ public struct ConversationEncryptionStatus: Decodable, Equatable, Sendable {
         self.canTranslate = canTranslate
         self.epoch = epoch
         self.canToggleEncryption = canToggleEncryption
+        self.pairEndToEndConversationId = pairEndToEndConversationId
     }
 
     /// Le serveur ne lit plus les messages : bout en bout.

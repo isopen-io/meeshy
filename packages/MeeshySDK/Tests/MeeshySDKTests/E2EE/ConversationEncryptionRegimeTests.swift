@@ -78,6 +78,38 @@ final class ConversationEncryptionRegimeTests: XCTestCase {
         XCTAssertEqual(result.epoch, 2)
     }
 
+    // MARK: - L'autre tête-à-tête de la paire (#12966)
+
+    func test_openReadableDirect_asksTheReadableOneOfThePair() async throws {
+        let (sut, api) = makeSUT()
+        api.stub("/conversations", result: try decode(APIResponse<CreateConversationResponse>.self, """
+        {"success":true,"data":{"id":"c-readable","type":"direct","title":null,"createdAt":"2026-10-25T10:00:00.000Z"}}
+        """))
+
+        let opened = try await sut.openReadableDirect(with: "u-peer")
+
+        XCTAssertEqual(opened, "c-readable")
+        XCTAssertEqual(api.lastRequest?.method, "POST")
+        XCTAssertEqual(api.lastRequest?.bodyJSON?["type"] as? String, "direct")
+        XCTAssertEqual(api.lastRequest?.bodyJSON?["participantIds"] as? [String], ["u-peer"])
+        XCTAssertEqual(api.lastRequest?.bodyJSON?["plaintext"] as? Bool, true)
+    }
+
+    func test_createConversationRequest_withoutPlaintext_staysTheBodyOfBefore() throws {
+        let body = try JSONSerialization.jsonObject(with: JSONEncoder().encode(CreateConversationRequest(type: "direct", participantIds: ["u"]))) as? [String: Any]
+
+        XCTAssertNil(body?["plaintext"], "un ancien appel ne change pas de forme (#9223)")
+    }
+
+    func test_status_readsThePairEndToEndConversation() throws {
+        let served = try status("""
+        {"success":true,"data":{"isEncrypted":false,"mode":null,"canTranslate":true,"epoch":0,"canToggleEncryption":false,"pairEndToEndConversationId":"c-e2ee"}}
+        """).data
+
+        XCTAssertEqual(served.pairEndToEndConversationId, "c-e2ee")
+        XCTAssertEqual(served.canToggleEncryption, false)
+    }
+
     // MARK: - Fil
 
     func test_libsignalWireMetadata_carriesTheRegimeEpochItWasSealedUnder() throws {

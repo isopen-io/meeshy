@@ -308446,6 +308446,288 @@
         }
       }
     },
+    "conversation.encryption.detail.openPlaintextDirect": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "فتح محادثة غير مشفّرة مع %@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unverschlüsselte Unterhaltung mit %@ öffnen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open an unencrypted conversation with %@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abrir una conversación sin cifrar con %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvrir une conversation non chiffrée avec %@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apri una conversazione non crittografata con %@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abrir uma conversa sem criptografia com %@"
+          }
+        }
+      }
+    },
+    "conversation.encryption.detail.plaintextDirectFailed": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تعذّر فتح المحادثة غير المشفّرة. حاول مجددًا."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die unverschlüsselte Unterhaltung konnte nicht geöffnet werden. Versuche es erneut."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The unencrypted conversation couldn’t be opened. Try again."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo abrir la conversación sin cifrar. Inténtalo de nuevo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La conversation non chiffrée n’a pas pu être ouverte. Réessayez."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossibile aprire la conversazione non crittografata. Riprova."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não foi possível abrir a conversa sem criptografia. Tente novamente."
+          }
+        }
+      }
+    },
+    "conversation.encryption.detail.plaintextDirectOffline": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أنت غير متصل: أعد الاتصال لفتح المحادثة غير المشفّرة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Offline: Verbinde dich erneut, um die unverschlüsselte Unterhaltung zu öffnen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You’re offline: reconnect to open the unencrypted conversation."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sin conexión: vuelve a conectarte para abrir la conversación sin cifrar."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hors connexion : reconnectez-vous pour ouvrir la conversation non chiffrée."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sei offline: riconnettiti per aprire la conversazione non crittografata."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sem conexão: reconecte-se para abrir a conversa sem criptografia."
+          }
+        }
+      }
+    },
+    "conversation.encryption.detail.openPairEndToEnd": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "فتح المحادثة المشفّرة تمامًا بين الطرفين مع %@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ende-zu-Ende-verschlüsselte Unterhaltung mit %@ öffnen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open the end-to-end encrypted conversation with %@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abrir la conversación cifrada de extremo a extremo con %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvrir la conversation chiffrée de bout en bout avec %@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apri la conversazione crittografata end-to-end con %@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abrir a conversa criptografada de ponta a ponta com %@"
+          }
+        }
+      }
+    },
+    "conversation.encryption.detail.directAlreadyEndToEnd": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لديك بالفعل محادثة مشفّرة تمامًا بين الطرفين مع هذا الشخص: افتحها للدردشة بتشفير. تبقى هذه المحادثة قابلة للقراءة من الخادم."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Du hast mit dieser Person bereits eine Ende-zu-Ende-verschlüsselte Unterhaltung: Öffne sie, um verschlüsselt zu schreiben. Diese hier bleibt für den Server lesbar."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You already have an end-to-end encrypted conversation with this person: open it to chat encrypted. This one stays readable by the server."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ya tienes una conversación cifrada de extremo a extremo con esta persona: ábrela para chatear cifrado. Esta sigue siendo legible por el servidor."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vous avez déjà une conversation chiffrée de bout en bout avec cette personne : ouvrez-la pour échanger chiffré. Celle-ci reste lisible par le serveur."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hai già una conversazione crittografata end-to-end con questa persona: aprila per scrivere in modo crittografato. Questa resta leggibile dal server."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Você já tem uma conversa criptografada de ponta a ponta com esta pessoa: abra-a para conversar com criptografia. Esta continua legível pelo servidor."
+          }
+        }
+      }
+    },
+    "conversation.encryption.detail.directNotAPair": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا تضم هذه المحادثة الثنائية عضوين مسجّلين بالضبط: التشفير التام بين الطرفين غير ممكن هنا."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieser Einzelchat hat nicht genau zwei registrierte Mitglieder: Ende-zu-Ende-Verschlüsselung ist hier nicht möglich."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This one-to-one chat doesn’t have exactly two registered members: end-to-end encryption isn’t possible here."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este chat individual no reúne exactamente a dos miembros registrados: el cifrado de extremo a extremo no es posible aquí."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ce tête-à-tête ne réunit pas exactement deux membres inscrits : le chiffrement de bout en bout n’y est pas possible."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Questa chat individuale non ha esattamente due membri registrati: qui la crittografia end-to-end non è possibile."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esta conversa individual não tem exatamente dois membros cadastrados: a criptografia de ponta a ponta não é possível aqui."
+          }
+        }
+      }
+    },
     "conversation.encryption.detail.deactivate": {
       "extractionState": "manual",
       "localizations": {
@@ -310520,43 +310802,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لا يمكن إيقاف التشفير التام بين الطرفين. للدردشة بدونه، افتح محادثة غير مشفّرة مع جهة الاتصال هذه."
+            "value": "لا يمكن إيقاف التشفير التام بين الطرفين: تبقى هذه المحادثة الثنائية مشفّرة. للدردشة بدونه مع هذا الشخص، افتح بجانبها محادثة غير مشفّرة: كلتاهما في القائمة، وهذه مميّزة بقفل."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Die Ende-zu-Ende-Verschlüsselung lässt sich nicht ausschalten. Um ohne sie zu schreiben, öffne eine unverschlüsselte Unterhaltung mit diesem Kontakt."
+            "value": "Die Ende-zu-Ende-Verschlüsselung lässt sich nicht ausschalten: Dieser Einzelchat bleibt verschlüsselt. Um mit dieser Person ohne sie zu schreiben, öffne daneben eine unverschlüsselte Unterhaltung: Beide stehen in der Liste, diese mit einem Schloss markiert."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "End-to-end encryption can’t be turned off. To chat without it, open an unencrypted conversation with this contact."
+            "value": "End-to-end encryption can’t be turned off: this one-to-one chat stays encrypted. To chat without it with this person, open an unencrypted conversation alongside: both are in the list, this one marked with a padlock."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "El cifrado de extremo a extremo no se puede desactivar. Para chatear sin él, abre una conversación sin cifrar con este contacto."
+            "value": "El cifrado de extremo a extremo no se puede desactivar: este chat individual sigue cifrado. Para chatear sin él con esta persona, abre al lado una conversación sin cifrar: las dos están en la lista, esta marcada con un candado."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le chiffrement de bout en bout ne se désactive pas. Pour échanger en clair, ouvrez une conversation non chiffrée avec ce contact."
+            "value": "Le chiffrement de bout en bout ne se désactive pas : ce tête-à-tête reste chiffré. Pour échanger en clair avec cette personne, ouvrez une conversation non chiffrée à côté : les deux sont dans la liste, celle-ci marquée d’un cadenas."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "La crittografia end-to-end non si può disattivare. Per scrivere senza, apri una conversazione non crittografata con questo contatto."
+            "value": "La crittografia end-to-end non si può disattivare: questa chat individuale resta crittografata. Per scrivere senza con questa persona, apri accanto una conversazione non crittografata: entrambe sono nell’elenco, questa segnata da un lucchetto."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "A criptografia de ponta a ponta não pode ser desativada. Para conversar sem ela, abra uma conversa não criptografada com este contato."
+            "value": "A criptografia de ponta a ponta não pode ser desativada: esta conversa individual continua criptografada. Para conversar sem ela com esta pessoa, abra ao lado uma conversa sem criptografia: as duas estão na lista, esta marcada com um cadeado."
           }
         }
       }

@@ -129,7 +129,7 @@ extension ConversationEncryptionExplanation.Fact {
         case .endToEndNeverTurnedOff:
             String(localized: "conversation.encryption.fact.endToEndNeverTurnedOff", defaultValue: "Le chiffrement de bout en bout ne se désactive pas. Pour échanger en clair, créez une nouvelle conversation.", bundle: .main)
         case .endToEndNeverTurnedOffDirect:
-            String(localized: "conversation.encryption.fact.endToEndNeverTurnedOffDirect", defaultValue: "Le chiffrement de bout en bout ne se désactive pas. Pour échanger en clair, ouvrez une conversation non chiffrée avec ce contact.", bundle: .main)
+            String(localized: "conversation.encryption.fact.endToEndNeverTurnedOffDirect", defaultValue: "Le chiffrement de bout en bout ne se désactive pas : ce tête-à-tête reste chiffré. Pour échanger en clair avec cette personne, ouvrez une conversation non chiffrée à côté : les deux sont dans la liste, celle-ci marquée d’un cadenas.", bundle: .main)
         case .serverCannotTurnItOff:
             String(localized: "conversation.encryption.fact.serverCannotTurnItOff", defaultValue: "Sur cet appareil, une fois cette conversation vue chiffrée de bout en bout, votre compte n’y écrit plus jamais en clair, même si le serveur la présentait ensuite autrement.", bundle: .main)
         default: nil

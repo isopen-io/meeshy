@@ -10,6 +10,10 @@ struct ConversationEncryptionDetailSheet: View {
     let fallbackMayToggle: Bool
     /// Un groupe s'explique sans s'activer depuis iOS (#12844).
     var isDirect: Bool = true
+    /// Le contact d'un tête-à-tête : l'autre fil de la paire s'ouvre à son nom (#12966).
+    var peer: ConversationEncryptionPeer?
+    var onOpenConversation: (String) -> Void = { _ in }
+    var isOnline: () -> Bool = { NetworkMonitor.shared.isOnline }
     var service: any ConversationEncryptionServiceProviding = ConversationEncryptionService.shared
     var ledger: EndToEndRegimeLedger = .shared
 
@@ -20,6 +24,7 @@ struct ConversationEncryptionDetailSheet: View {
     @State private var selectedMode: ConversationEncryptionModeChoice = .server
     @State private var errorMessage: String?
     @State private var confirmsDeactivation = false
+    @State private var isOpeningPair = false
     /// Cet appareil a vu la conversation chiffrée de bout en bout : elle le reste (#12949).
     @State private var remembersEndToEnd = false
 
@@ -73,14 +78,18 @@ struct ConversationEncryptionDetailSheet: View {
                         activeStateSections(mode: mode, status: status)
                     }
                     if let servedGap { servedGapSection(servedGap) }
+                    if explanation.regime == .endToEnd, let peer { readableDirectSection(peer) }
+                    pairEndToEndSection
                     ConversationEncryptionExplanationSections(explanation: explanation)
                     if offersDeactivation { atRestDeactivationSection }
                 case .activation:
                     inactiveStateSection
+                    pairEndToEndSection
                     ConversationEncryptionExplanationSections(explanation: explanation)
                     enableStateSections
                 case .inactiveReadOnly:
                     inactiveStateSection
+                    pairEndToEndSection
                     ConversationEncryptionExplanationSections(explanation: explanation)
                 }
 
@@ -201,6 +210,79 @@ struct ConversationEncryptionDetailSheet: View {
                         bundle: .main))
                 .font(.caption)
         }
+    }
+
+    // MARK: - L'autre tête-à-tête de la paire (#12966)
+
+    /// Dans un tête-à-tête chiffré de bout en bout : ouvrir, à côté, celui que le serveur lit.
+    private func readableDirectSection(_ peer: ConversationEncryptionPeer) -> some View {
+        Section {
+            Button {
+                Task { await openReadableDirect(with: peer) }
+            } label: {
+                HStack {
+                    Image(systemName: "bubble.left.and.bubble.right")
+                        .accessibilityHidden(true)
+                    Text(String(localized: "conversation.encryption.detail.openPlaintextDirect",
+                                defaultValue: "Ouvrir une conversation non chiffrée avec \(peer.name)",
+                                bundle: .main))
+                    Spacer()
+                    if isOpeningPair { ProgressView() }
+                }
+            }
+            .disabled(isOpeningPair)
+            .accessibilityIdentifier("encryption-open-plaintext-direct")
+        }
+    }
+
+    /// Dans le tête-à-tête lisible d'une paire qui en a un chiffré de bout en bout : y retourner.
+    @ViewBuilder
+    private var pairEndToEndSection: some View {
+        if explanation.regime != .endToEnd, let pairId = status?.pairEndToEndConversationId, !pairId.isEmpty {
+            Section {
+                Button {
+                    dismiss()
+                    onOpenConversation(pairId)
+                } label: {
+                    Label {
+                        Text(String(localized: "conversation.encryption.detail.openPairEndToEnd",
+                                    defaultValue: "Ouvrir la conversation chiffrée de bout en bout avec \(peer?.name ?? "")",
+                                    bundle: .main))
+                    } icon: {
+                        Image(systemName: "lock.shield").accessibilityHidden(true)
+                    }
+                }
+                .accessibilityIdentifier("encryption-open-pair-e2ee")
+            }
+        }
+    }
+
+    private func openReadableDirect(with peer: ConversationEncryptionPeer) async {
+        guard isOnline() else {
+            errorMessage = String(localized: "conversation.encryption.detail.plaintextDirectOffline",
+                                  defaultValue: "Hors connexion : reconnectez-vous pour ouvrir la conversation non chiffrée.",
+                                  bundle: .main)
+            return
+        }
+        isOpeningPair = true
+        errorMessage = nil
+        defer { isOpeningPair = false }
+        guard let opened = try? await service.openReadableDirect(with: peer.userId),
+              let served = try? await service.fetchStatus(conversationId: opened)
+        else { return failOpeningReadableDirect() }
+        ledger.learn(served, for: opened)
+        guard let destination = ReadableDirectOpening.destination(
+            opened: opened, from: conversationId, openedIsEndToEnd: ledger.remembersEndToEnd(opened)
+        ) else { return failOpeningReadableDirect() }
+        dismiss()
+        onOpenConversation(destination)
+    }
+
+    private func failOpeningReadableDirect() {
+        errorMessage = String(localized: "conversation.encryption.detail.plaintextDirectFailed",
+                              defaultValue: "La conversation non chiffrée n’a pas pu être ouverte. Réessayez.",
+                              bundle: .main)
+        HapticFeedback.error()
     }
 
     // MARK: - Un régime servi qui ne dit plus le bout en bout
@@ -392,6 +474,17 @@ struct ConversationEncryptionDetailSheet: View {
             ledger.learn(result, for: conversationId)
             remembersEndToEnd = ledger.remembersEndToEnd(conversationId)
             HapticFeedback.success()
+        } catch let error as MeeshyError where error.e2eeCode == E2EEErrorCode.directAlreadyEndToEnd {
+            await loadStatus()
+            errorMessage = String(localized: "conversation.encryption.detail.directAlreadyEndToEnd",
+                                  defaultValue: "Vous avez déjà une conversation chiffrée de bout en bout avec cette personne : ouvrez-la pour échanger chiffré. Celle-ci reste lisible par le serveur.",
+                                  bundle: .main)
+            HapticFeedback.error()
+        } catch let error as MeeshyError where error.e2eeCode == E2EEErrorCode.directNotAPair {
+            errorMessage = String(localized: "conversation.encryption.detail.directNotAPair",
+                                  defaultValue: "Ce tête-à-tête ne réunit pas exactement deux membres inscrits : le chiffrement de bout en bout n’y est pas possible.",
+                                  bundle: .main)
+            HapticFeedback.error()
         } catch let error as MeeshyError where error.e2eeCode == E2EEErrorCode.regimeChanged || error.e2eeCode == E2EEErrorCode.irreversible {
             await loadStatus()
             errorMessage = String(localized: "conversation.encryption.detail.regimeChanged",
