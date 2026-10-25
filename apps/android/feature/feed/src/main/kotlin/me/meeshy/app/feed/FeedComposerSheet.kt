@@ -288,13 +288,21 @@ fun FeedComposerSheet(
     // file/Uri is created up front and held only long enough to resolve the callback — cleared
     // either way so a second tap always starts from a fresh destination.
     var cameraCaptureUri by remember { mutableStateOf<Uri?>(null) }
+    var retouch by remember { mutableStateOf<FeedRetouchPending?>(null) }
+    retouch?.let { pending ->
+        FeedCaptureRetouchHost(pending, onDeliver = { item -> retouch = null; dispatchItems(listOf(item)) }, onDismiss = { retouch = null })
+    }
     val takePicture = rememberLauncherForActivityResult(
         ActivityResultContracts.TakePicture(),
     ) { success: Boolean ->
         val uri = cameraCaptureUri
         cameraCaptureUri = null
         if (success && uri != null) {
-            dispatchPicked(listOf(uri))
+            scope.launch {
+                val item = withContext(Dispatchers.IO) { context.contentResolver.readMediaUploadItem(uri) }
+                val pending = item?.let { withContext(Dispatchers.Default) { FeedRetouchPending.of(it) } }
+                if (pending != null) retouch = pending else dispatchPicked(listOf(uri))
+            }
         } else {
             // Cancelled/failed capture: the destination file may exist empty or not at all —
             // FileProvider.delete() is a no-op either way, never worth surfacing an error for.
