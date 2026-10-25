@@ -14,7 +14,7 @@ import Fastify, { FastifyInstance, FastifyRequest } from 'fastify';
 
 import { SocketMessageSendSchema } from '../../../validation/socket-event-schemas';
 import { sendMessageSchema } from '../../../routes/links/types';
-import { registerSendMessageRoute } from '../../../routes/conversations/messages-send';
+import { registerSendMessageRoute, SendMessageBodySchema } from '../../../routes/conversations/messages-send';
 
 const CONV_ID = '507f1f77bcf86cd799439022';
 const PARTICIPANT_ID = '507f1f77bcf86cd799439099';
@@ -23,6 +23,11 @@ const CLIENT_ID = 'cid_550e8400-e29b-41d4-a716-446655440000';
 describe.each(['system', 'System', 'SYSTEM'])('un messageType « %s » venu d’un client', (declared) => {
   it('est refusé par le schéma socket', () => {
     const parsed = SocketMessageSendSchema.safeParse({ conversationId: CONV_ID, content: 'x', clientMessageId: CLIENT_ID, messageType: declared });
+    expect(parsed.success).toBe(false);
+  });
+
+  it('est refusé par le schéma Zod REST — la garde elle-même, pas le schéma JSON qui la précède', () => {
+    const parsed = SendMessageBodySchema.safeParse({ content: 'x', messageType: declared });
     expect(parsed.success).toBe(false);
   });
 
@@ -36,6 +41,7 @@ describe('les types ordinaires passent toujours', () => {
   it.each(['text', 'image', 'audio', 'location'])('« %s »', (declared) => {
     expect(SocketMessageSendSchema.safeParse({ conversationId: CONV_ID, content: 'x', clientMessageId: CLIENT_ID, messageType: declared }).success).toBe(true);
     expect(sendMessageSchema.safeParse({ content: 'x', clientMessageId: CLIENT_ID, messageType: declared }).success).toBe(true);
+    expect(SendMessageBodySchema.safeParse({ content: 'x', messageType: declared }).success).toBe(true);
   });
 });
 
