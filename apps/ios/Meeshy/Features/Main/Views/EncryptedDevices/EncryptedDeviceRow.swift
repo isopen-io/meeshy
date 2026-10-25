@@ -15,7 +15,7 @@ struct EncryptedDeviceRow: View, Equatable {
         return HStack(spacing: MeeshySpacing.md) {
             Image(systemName: row.systemImage)
                 .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .medium))
-                .foregroundColor(row.tint)
+                .foregroundStyle(row.tint)
                 .frame(width: MeeshyControlSize.compact, height: MeeshyControlSize.compact)
                 .background(RoundedRectangle(cornerRadius: MeeshyRadius.xs).fill(row.tint.opacity(MeeshyOpacity.light)))
                 .accessibilityHidden(true)
@@ -23,15 +23,15 @@ struct EncryptedDeviceRow: View, Equatable {
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(row.title)
                     .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                     .fixedSize(horizontal: false, vertical: true)
                 Label(row.status, systemImage: statusSymbol)
                     .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
-                    .foregroundColor(row.tint)
+                    .foregroundStyle(row.tint)
                 if let detail = row.detail {
                     Text(detail)
                         .font(MeeshyFont.relative(MeeshyFont.smallSize))
-                        .foregroundColor(theme.textSecondary)
+                        .foregroundStyle(theme.textSecondary)
                 }
             }
 
@@ -42,7 +42,7 @@ struct EncryptedDeviceRow: View, Equatable {
             } else if !device.isCurrent {
                 Image(systemName: "chevron.forward")
                     .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                     .accessibilityHidden(true)
             }
         }

@@ -18,7 +18,7 @@ struct EncryptedDevicesEntry: View {
                     .tracking(1.2)
                     .accessibilityAddTraits(.isHeader)
             }
-            .foregroundColor(MeeshyColors.success)
+            .foregroundStyle(MeeshyColors.success)
             .padding(.leading, MeeshySpacing.xs)
 
             Button {
@@ -28,17 +28,17 @@ struct EncryptedDevicesEntry: View {
                 HStack(spacing: MeeshySpacing.md) {
                     Image(systemName: "iphone.and.arrow.forward")
                         .font(.subheadline.weight(.medium))
-                        .foregroundColor(MeeshyColors.success)
+                        .foregroundStyle(MeeshyColors.success)
                         .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
                         .background(RoundedRectangle(cornerRadius: MeeshyRadius.xs).fill(MeeshyColors.success.opacity(MeeshyOpacity.light)))
                         .accessibilityHidden(true)
                     Text(String(localized: "e2ee.devices.title", defaultValue: "Mes appareils chiffrés", bundle: .main))
                         .font(.subheadline.weight(.medium))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
                     Spacer()
                     Image(systemName: "chevron.forward")
                         .font(.caption.weight(.semibold))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                         .accessibilityHidden(true)
                 }
                 .padding(.horizontal, MeeshySpacing.mdPlus)

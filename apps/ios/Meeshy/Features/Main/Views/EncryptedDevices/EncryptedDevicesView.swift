@@ -25,7 +25,7 @@ struct EncryptedDevicesView: View {
     @StateObject private var model: EncryptedDevicesViewModel
     @State private var activeSheet: ActiveSheet?
 
-    init(model: @autoclosure @escaping () -> EncryptedDevicesViewModel = EncryptedDevicesViewModel()) {
+    init(model: @autoclosure @escaping () -> EncryptedDevicesViewModel = .live()) {
         _model = StateObject(wrappedValue: model())
     }
 
@@ -89,7 +89,7 @@ struct EncryptedDevicesView: View {
             bundle: .main
         ))
         .font(MeeshyFont.relative(MeeshyFont.subheadSize))
-        .foregroundColor(theme.textSecondary)
+        .foregroundStyle(theme.textSecondary)
         .fixedSize(horizontal: false, vertical: true)
     }
 
@@ -108,7 +108,7 @@ struct EncryptedDevicesView: View {
     private func banner(systemImage: String, text: String) -> some View {
         Label(text, systemImage: systemImage)
             .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
-            .foregroundColor(theme.textSecondary)
+            .foregroundStyle(theme.textSecondary)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(MeeshySpacing.md)
             .background(RoundedRectangle(cornerRadius: MeeshyRadius.md).fill(MeeshyColors.warning.opacity(MeeshyOpacity.light)))
@@ -143,7 +143,7 @@ struct EncryptedDevicesView: View {
             } label: {
                 Text(String(localized: "e2ee.devices.retry", defaultValue: "Réessayer", bundle: .main))
                     .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
-                    .foregroundColor(MeeshyColors.indigo500)
+                    .foregroundStyle(MeeshyColors.indigo500)
                     .padding(.horizontal, MeeshySpacing.xl)
                     .frame(minHeight: MeeshyControlSize.tapTarget)
             }
@@ -167,7 +167,7 @@ struct EncryptedDevicesView: View {
                     bundle: .main
                 ))
                 .font(MeeshyFont.relative(MeeshyFont.smallSize))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
                 .fixedSize(horizontal: false, vertical: true)
             }
             ForEach(model.otherDevices) { device in
@@ -186,7 +186,7 @@ struct EncryptedDevicesView: View {
     private func sectionTitle(_ title: String) -> some View {
         Text(title)
             .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
-            .foregroundColor(theme.textSecondary)
+            .foregroundStyle(theme.textSecondary)
             .textCase(.uppercase)
             .padding(.leading, MeeshySpacing.xs)
             .accessibilityAddTraits(.isHeader)
@@ -199,7 +199,7 @@ struct EncryptedDevicesView: View {
         } label: {
             Label(String(localized: "e2ee.devices.scan", defaultValue: "Lire le code d’un appareil", bundle: .main), systemImage: "qrcode.viewfinder")
                 .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
-                .foregroundColor(.white)
+                .foregroundStyle(.white)
                 .frame(maxWidth: .infinity, minHeight: MeeshyControlSize.buttonHeight)
                 .background(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus).fill(MeeshyColors.indigo500))
         }

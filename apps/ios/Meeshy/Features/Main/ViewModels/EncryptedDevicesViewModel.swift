@@ -3,22 +3,6 @@ import Foundation
 import MeeshyE2EE
 import MeeshySDK
 
-/// La dernière liste connue de mes appareils chiffrés, par compte, le temps du
-/// processus : l'écran rouvert s'affiche à l'instant (cache-first). Elle ne
-/// porte aucune clé — des numéros, des noms de modèle, un état d'approbation.
-@MainActor
-final class EncryptedDevicesCache {
-    nonisolated deinit {}
-
-    static let shared = EncryptedDevicesCache()
-
-    private var byUser: [String: [EndToEndOwnDevice]] = [:]
-
-    func devices(for userId: String) -> [EndToEndOwnDevice] { byUser[userId] ?? [] }
-
-    func store(_ devices: [EndToEndOwnDevice], for userId: String) { byUser[userId] = devices }
-}
-
 /// Sécurité › Mes appareils chiffrés (#13009, spec E2EE § 3.5). Un sens à la
 /// fois : cet appareil LIT le code d'un autre de mes appareils, l'utilisateur
 /// CONFIRME l'appareil nommé, et seulement alors la clé s'épingle. Montrer mon
@@ -81,10 +65,10 @@ final class EncryptedDevicesViewModel: ObservableObject {
     private var examiningScan = false
 
     init(
-        linking: any EndToEndOwnDeviceLinking = EndToEndMessagingRuntime.shared,
-        cache: EncryptedDevicesCache = .shared,
-        networkMonitor: any NetworkMonitorProviding = NetworkMonitor.shared,
-        userId: @escaping @MainActor () -> String? = { AuthManager.shared.currentUser?.id }
+        linking: any EndToEndOwnDeviceLinking,
+        cache: EncryptedDevicesCache,
+        networkMonitor: any NetworkMonitorProviding,
+        userId: @escaping @MainActor () -> String?
     ) {
         self.linking = linking
         self.cache = cache

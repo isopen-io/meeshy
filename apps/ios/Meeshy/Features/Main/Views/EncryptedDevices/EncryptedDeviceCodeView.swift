@@ -19,7 +19,7 @@ struct EncryptedDeviceCodeView: View {
                 ForEach(Array(shown.groups.enumerated()), id: \.offset) { _, group in
                     Text(group)
                         .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold, design: .monospaced))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
                         .minimumScaleFactor(0.7)
                         .lineLimit(1)
                 }
@@ -31,7 +31,7 @@ struct EncryptedDeviceCodeView: View {
             ))
             Text(String(localized: "e2ee.devices.code.digits.note", defaultValue: "Ces chiffres sont donnés pour information : seule la lecture du code approuve un appareil.", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.smallSize))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
         }

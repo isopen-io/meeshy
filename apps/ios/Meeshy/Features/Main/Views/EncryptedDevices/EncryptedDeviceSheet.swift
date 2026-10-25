@@ -102,13 +102,13 @@ struct EncryptedDeviceSheet: View {
         VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             Text(title)
                 .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .semibold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityAddTraits(.isHeader)
                 .accessibilityLabel(String(format: String(localized: "e2ee.devices.step.a11y", defaultValue: "Étape %d : %@", bundle: .main), number, title))
             Text(text)
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize))
-                .foregroundColor(theme.textSecondary)
+                .foregroundStyle(theme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
             actions()
         }
@@ -121,7 +121,7 @@ struct EncryptedDeviceSheet: View {
         } label: {
             Label(title, systemImage: systemImage)
                 .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
-                .foregroundColor(prominent ? .white : MeeshyColors.indigo500)
+                .foregroundStyle(prominent ? .white : MeeshyColors.indigo500)
                 .frame(maxWidth: .infinity, minHeight: MeeshyControlSize.tapTarget)
                 .background(
                     RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
@@ -149,7 +149,7 @@ struct EncryptedDeviceSheet: View {
         } label: {
             Text(title)
                 .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
-                .foregroundColor(MeeshyColors.error)
+                .foregroundStyle(MeeshyColors.error)
                 .frame(maxWidth: .infinity, minHeight: MeeshyControlSize.tapTarget)
         }
         .disabled(model.busyDeviceId != nil)

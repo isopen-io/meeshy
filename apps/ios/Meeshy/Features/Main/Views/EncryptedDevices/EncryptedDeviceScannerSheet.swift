@@ -18,7 +18,7 @@ struct EncryptedDeviceScannerSheet: View {
             VStack(spacing: MeeshySpacing.lg) {
                 Text(String(localized: "e2ee.devices.scanner.instruction", defaultValue: "Visez le code affiché par votre autre appareil, dans « Mes appareils chiffrés » › « Montrer mon code ».", bundle: .main))
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize))
-                    .foregroundColor(theme.textSecondary)
+                    .foregroundStyle(theme.textSecondary)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
                 camera
@@ -99,11 +99,11 @@ struct EncryptedDeviceScannerSheet: View {
         VStack(spacing: MeeshySpacing.md) {
             Image(systemName: "camera.fill")
                 .font(MeeshyFont.relative(MeeshyIconSize.xxxl))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
                 .accessibilityHidden(true)
             Text(text)
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize))
-                .foregroundColor(theme.textSecondary)
+                .foregroundStyle(theme.textSecondary)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
             if showsSettings, let url = URL(string: UIApplication.openSettingsURLString) {
