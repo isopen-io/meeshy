@@ -3,7 +3,7 @@
     <string name="security_section_encrypted_devices">Chiffrement de bout en bout</string>
     <string name="encrypted_devices_title">Mes appareils chiffrés</string>
     <string name="encrypted_devices_notice_title">Ce téléphone Android ne lit pas encore les conversations chiffrées de bout en bout</string>
-    <string name="encrypted_devices_notice_body">Il ne figure pas encore dans cette liste, et ne peut pour l’instant ni montrer son code ni lire celui d’un autre appareil. Vous pouvez déjà retirer un appareil perdu : il ne recevra plus vos messages chiffrés.</string>
+    <string name="encrypted_devices_notice_body">Il ne figure pas encore dans cette liste, et ne peut pour l’instant ni montrer son code ni lire celui d’un autre appareil. Vous pouvez déjà retirer un appareil perdu : il est déconnecté et ne reçoit plus vos messages chiffrés.</string>
     <string name="encrypted_devices_loading">Chargement de vos appareils chiffrés</string>
     <string name="encrypted_devices_offline_empty">Vous êtes hors ligne. Connectez-vous pour voir vos appareils chiffrés.</string>
     <string name="encrypted_devices_error">Vos appareils chiffrés n’ont pas pu être chargés.</string>
@@ -12,13 +12,12 @@
     <string name="encrypted_devices_stale">Cette liste n’a pas pu être actualisée et n’est peut-être pas à jour.</string>
     <string name="encrypted_devices_empty_title">Aucun appareil chiffré pour l’instant</string>
     <string name="encrypted_devices_empty_body">Un appareil apparaît ici dès que Meeshy y a mis en place le chiffrement de bout en bout.</string>
-    <string name="encrypted_devices_dates">Ajouté le %1$s · actif le %2$s</string>
     <string name="encrypted_devices_current">Cet appareil</string>
     <string name="encrypted_devices_retiring">Retrait de %1$s en cours</string>
     <string name="encrypted_devices_retire_a11y">Retirer %1$s</string>
     <string name="encrypted_devices_retire">Retirer</string>
     <string name="encrypted_devices_retire_confirm_title">Retirer cet appareil ?</string>
-    <string name="encrypted_devices_retire_confirm_message">%1$s ne recevra plus vos messages chiffrés et ne pourra pas revenir avec les mêmes clés. Ce qu’il a déjà déchiffré reste sur lui : s’il a été perdu ou volé, déconnectez-le aussi dans Sessions et changez votre mot de passe.</string>
+    <string name="encrypted_devices_retire_confirm_message">%1$s sera déconnecté et ne recevra plus vos messages chiffrés ; ses clés ne pourront pas revenir. Ce qu’il a déjà déchiffré reste sur lui. S’il a été perdu ou volé, changez aussi votre mot de passe : sinon, celui qui le détient pourrait se reconnecter comme un nouvel appareil.</string>
     <string name="encrypted_devices_retire_confirm_action">Retirer</string>
     <string name="encrypted_devices_cancel">Annuler</string>
     <string name="encrypted_devices_retire_offline">Vous êtes hors ligne : un appareil ne se retire qu’une fois connecté.</string>
@@ -30,4 +29,6 @@
     <string name="encrypted_devices_platform_android">Android</string>
     <string name="encrypted_devices_platform_web">Navigateur web</string>
     <string name="encrypted_devices_platform_unknown">Appareil inconnu</string>
+    <string name="encrypted_devices_enrolled">Ajouté le %1$s</string>
+    <string name="encrypted_devices_retire_changed">Cet appareil a changé depuis l’affichage de la liste. Elle a été relue : vérifiez-la avant de retirer.</string>
 </resources>
