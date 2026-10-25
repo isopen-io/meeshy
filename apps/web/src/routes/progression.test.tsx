@@ -697,7 +697,7 @@ describe('la pastille de la Chronique', () => {
     const avecJeu = { ...fixture, game: gameBlockWithExtrasFixture() };
     const lit = renderToStaticMarkup(<ProgressionBody progress={avecJeu} photoBadge />);
     expect(lit).toContain('data-progression-badge="carnet"');
-    expect(lit).toContain('Une étape nouvelle à immortaliser');
+    expect(lit).toContain('Un moment nouveau à immortaliser');
     expect(lit).not.toMatch(/data-progression-badge="carnet"[^>]*>\s*\d/);
     expect(renderToStaticMarkup(<ProgressionBody progress={avecJeu} />)).not.toContain('data-progression-badge');
   });
