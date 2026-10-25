@@ -57,10 +57,14 @@ export function loadConversationEncryptionCatalog(language: InterfaceLanguage): 
   return request;
 }
 
-export function translateConversationEncryption(language: InterfaceLanguage, key: ConversationEncryptionCatalogKey): string {
+export function translateConversationEncryption(
+  language: InterfaceLanguage,
+  key: ConversationEncryptionCatalogKey,
+  params: Readonly<Record<string, string>> = {},
+): string {
   const catalog = loaded.get(language);
   if (catalog === undefined) {
     throw new Error(`Catalogue du chiffrement « ${language} » lu avant d'être chargé (loadConversationEncryptionCatalog).`);
   }
-  return catalog[key];
+  return Object.entries(params).reduce((text, [name, value]) => text.replaceAll(`{${name}}`, value), catalog[key]);
 }

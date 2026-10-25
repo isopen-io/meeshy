@@ -40,9 +40,13 @@ const de = {
   'conversationEncryption.fact.switchIsShownInThread': 'Jedes Ein- und Ausschalten wird im Verlauf für alle Mitglieder angezeigt.',
   'conversationEncryption.fact.endToEndIsFinal': 'Einmal eingeschaltet, lässt sich die Ende-zu-Ende-Verschlüsselung nicht mehr ausschalten.',
   'conversationEncryption.fact.endToEndNeverTurnedOff': 'Die Ende-zu-Ende-Verschlüsselung lässt sich nicht ausschalten. Um ohne sie zu schreiben, starte eine neue Unterhaltung.',
-  'conversationEncryption.fact.endToEndNeverTurnedOffDirect': 'Die Ende-zu-Ende-Verschlüsselung lässt sich nicht ausschalten: Dieser Einzelchat bleibt verschlüsselt.',
+  'conversationEncryption.fact.endToEndNeverTurnedOffDirect': 'Die Ende-zu-Ende-Verschlüsselung lässt sich nicht ausschalten: Dieser Einzelchat bleibt verschlüsselt. Um mit dieser Person ohne sie zu schreiben, öffne daneben eine unverschlüsselte Unterhaltung: Beide stehen in der Liste, diese mit einem Schloss markiert.',
   'conversationEncryption.fact.serverCannotTurnItOff': 'In diesem Browser schreibt dein Konto, sobald diese Unterhaltung als Ende-zu-Ende-verschlüsselt gesehen wurde, nie wieder unverschlüsselt darin, selbst wenn der Server sie später anders darstellt.',
   'conversationEncryption.fact.webCannotReadYet': 'Im Web können Ende-zu-Ende-verschlüsselte Nachrichten noch nicht gelesen oder geschrieben werden: Öffne diese Unterhaltung in der iOS-App.',
+  'conversationEncryption.plaintextDirect.open': 'Unverschlüsselte Unterhaltung mit {name} öffnen',
+  'conversationEncryption.plaintextDirect.busy': 'Wird geöffnet…',
+  'conversationEncryption.plaintextDirect.failed': 'Die unverschlüsselte Unterhaltung konnte nicht geöffnet werden. Versuche es erneut.',
+  'conversationEncryption.plaintextDirect.offline': 'Offline: Verbinde dich erneut, um die unverschlüsselte Unterhaltung zu öffnen.',
 } satisfies ConversationEncryptionCatalog;
 
 export default de;

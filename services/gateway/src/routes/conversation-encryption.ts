@@ -35,7 +35,13 @@ import {
   ENCRYPTION_ACTIVATION_RESTRICTED_CODE,
   mayActivateConversationEncryption,
 } from '../utils/encryption-activation-policy';
-import { E2EE_ERROR_CODES, E2EE_IRREVERSIBLE_MESSAGE } from '@meeshy/shared/types/e2ee-directory';
+import {
+  E2EE_DIRECT_ALREADY_END_TO_END_MESSAGE,
+  E2EE_DIRECT_NOT_A_PAIR_MESSAGE,
+  E2EE_ERROR_CODES,
+  E2EE_IRREVERSIBLE_MESSAGE,
+} from '@meeshy/shared/types/e2ee-directory';
+import { otherEndToEndDirectOf, pairOfMembers } from '../services/conversations/directPair';
 import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import type { ConversationEncryptionChangedEventData } from '@meeshy/shared/types/socketio-events';
 import {
@@ -172,6 +178,28 @@ export default async function encryptionRoutes(fastify: FastifyInstance) {
   const irreversible = (reply: FastifyReply) =>
     sendError(reply, 409, E2EE_IRREVERSIBLE_MESSAGE, { code: E2EE_ERROR_CODES.IRREVERSIBLE });
 
+  /**
+   * #12966 — une paire a au plus UN tête-à-tête chiffré de bout en bout. Le
+   * refus nomme celui qui existe : l'appelant, membre actif des deux, peut y
+   * être mené.
+   */
+  const pairAlreadyEndToEnd = (reply: FastifyReply, existingConversationId: string) =>
+    sendError(reply, 409, E2EE_DIRECT_ALREADY_END_TO_END_MESSAGE, {
+      code: E2EE_ERROR_CODES.DIRECT_ALREADY_END_TO_END,
+      details: { existingConversationId },
+    });
+
+  /** #12966 — un tête-à-tête ne se chiffre de bout en bout qu'entre deux membres inscrits actifs : un tiers ne contourne pas la règle de la paire. */
+  const notAPair = (reply: FastifyReply) =>
+    sendError(reply, 409, E2EE_DIRECT_NOT_A_PAIR_MESSAGE, { code: E2EE_ERROR_CODES.DIRECT_NOT_A_PAIR });
+
+  /** Le tête-à-tête chiffré que la paire a déjà, à côté de ce tête-à-tête lisible, ou `null`. */
+  const pairEndToEndOf = async (conversation: RegimeConversation): Promise<string | null> => {
+    if (conversation.type !== 'direct' || regimeIsActive(conversation)) return null;
+    const pair = pairOfMembers(conversation.participants.map((participant) => participant.userId));
+    return pair ? otherEndToEndDirectOf(fastify.prisma, { conversationId: conversation.id, pair }) : null;
+  };
+
   const regimeChanged = (reply: FastifyReply) =>
     sendError(reply, 409, 'The encryption of this conversation has just changed: reload it and try again', {
       code: E2EE_ERROR_CODES.REGIME_CHANGED,
@@ -247,6 +275,7 @@ export default async function encryptionRoutes(fastify: FastifyInstance) {
 
         const status = encryptionStatusView(conversation, {
           mayToggle: member !== undefined && toggleRefusal(conversation, member) === null,
+          pairEndToEndConversationId: member === undefined ? null : await pairEndToEndOf(conversation),
         });
 
         return sendSuccess(reply, status);
@@ -316,6 +345,16 @@ export default async function encryptionRoutes(fastify: FastifyInstance) {
           return sendBadRequest(reply, 'Encryption is already enabled for this conversation', {
             code: ENCRYPTION_ALREADY_ENABLED_CODE,
           });
+        }
+
+        if (mode === 'e2ee' && conversation.type === 'direct') {
+          if (!pairOfMembers(conversation.participants.map((participant) => participant.userId))) {
+            return notAPair(reply);
+          }
+          const existingEndToEnd = await pairEndToEndOf(conversation);
+          if (existingEndToEnd) {
+            return pairAlreadyEndToEnd(reply, existingEndToEnd);
+          }
         }
 
         // Determine encryption protocol based on mode
