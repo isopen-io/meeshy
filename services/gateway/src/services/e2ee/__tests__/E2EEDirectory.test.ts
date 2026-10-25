@@ -31,8 +31,9 @@ function directoryWith(options: { store?: FakeE2EEStore; verifier?: SignatureVer
 
 const NOW = new Date('2026-10-23T12:00:00Z');
 
-const enrollmentOf = (keys: ReturnType<typeof fakeDeviceKeys>, userId: string) => ({
-  binding: keys.binding(userId, NOW.getTime()),
+/** iOS signe une preuve neuve à chaque enrôlement : `signedAt` avance d'un enrôlement à l'autre (#12933). */
+const enrollmentOf = (keys: ReturnType<typeof fakeDeviceKeys>, userId: string, signedAt = NOW.getTime()) => ({
+  binding: keys.binding(userId, signedAt),
   registrationId: keys.registrationId,
   identityKey: keys.identityKey,
   signedPreKey: keys.signedPreKey,
@@ -93,7 +94,7 @@ describe("l'annuaire E2EE par appareil", () => {
     it("est idempotent pour la même identité : même deviceId, session rattachée à la nouvelle connexion", async () => {
       const { directory, store } = directoryWith();
       const first = await enroll(directory, ALICE, SESSION_1);
-      const again = await directory.enrollDevice({ userId: ALICE, sessionId: SESSION_2, request: enrollmentOf(first.keys, ALICE) });
+      const again = await directory.enrollDevice({ userId: ALICE, sessionId: SESSION_2, request: enrollmentOf(first.keys, ALICE, NOW.getTime() + 1) });
 
       expect(again).toEqual({ deviceId: first.deviceId, created: false });
       expect(store.collections.E2EEDevice.rows).toHaveLength(1);

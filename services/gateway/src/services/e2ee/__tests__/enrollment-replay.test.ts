@@ -17,6 +17,7 @@
  */
 import { E2EE_ERROR_CODES } from '@meeshy/shared/types/e2ee-directory';
 import { createE2EEDirectory, type E2EEDirectory } from '../E2EEDirectory';
+import { retireDevicesOfEndedSessions } from '../device-retirement';
 import { createFakeE2EEStore, type FakeE2EEStore } from './fake-e2ee-store';
 import { fakeDeviceKeys, fakeSign, fakeVerifier, randomKey } from './fake-signatures';
 
@@ -65,6 +66,9 @@ function setup() {
 const advance = (clock: { now: Date }, minutes: number) => {
   clock.now = new Date(clock.now.getTime() + minutes * MINUTE);
 };
+
+const endSession = (store: FakeE2EEStore, sessionId: string) =>
+  store.collections.UserSession.rows.filter((row) => row.id === sessionId).forEach((row) => Object.assign(row, { isValid: false }));
 
 const refusal = (promise: Promise<unknown>) => promise.then(() => null, (error: unknown) => error);
 
@@ -173,13 +177,18 @@ describe('#12933 — une preuve de liaison ne sert qu’une fois par installatio
     const request = enrollmentOf(keys, NOW.getTime());
     const first = await directory.enrollDevice({ userId: ALICE, sessionId: SESSION_ALICE, request });
     await bundleFor(directory, BOB);
-    const before = store.collections.E2EEOneTimePreKey.rows.map((row) => ({ ...row }));
+    const stock = () =>
+      store.collections.E2EEOneTimePreKey.rows
+        .map((row) => `${row.kind}:${row.keyId}:${row.publicKey}:${String(row.usedBy)}`)
+        .sort();
+    const before = stock();
 
     advance(clock, 1);
     const retried = await directory.enrollDevice({ userId: ALICE, sessionId: SESSION_ALICE, request });
 
     expect(retried).toEqual({ deviceId: first.deviceId, created: false });
-    expect(store.collections.E2EEOneTimePreKey.rows).toEqual(before);
+    expect(stock()).toEqual(before);
+    expect(activeDevices(store).map((row) => row.sessionId)).toEqual([SESSION_ALICE]);
   });
 
   it('une preuve plus récente, d’une session nouvelle, est acceptée et rebranche l’appareil', async () => {
@@ -198,7 +207,7 @@ describe('#12933 — une preuve de liaison ne sert qu’une fois par installatio
     const keys = fakeDeviceKeys({ oneTime: 1, kyber: 1 });
     const request = enrollmentOf(keys, NOW.getTime());
     await directory.enrollDevice({ userId: ALICE, sessionId: SESSION_ALICE, request });
-    activeDevices(store).forEach((row) => delete row.bindingSignedAt);
+    store.collections.E2EEBindingProof.rows.splice(0);
 
     advance(clock, 1);
     await directory.enrollDevice({ userId: ALICE, sessionId: SESSION_LATER, request });
@@ -213,17 +222,34 @@ describe('#12933 — une preuve de liaison ne sert qu’une fois par installatio
     const keys = fakeDeviceKeys({ oneTime: 1, kyber: 1 });
     const captured = enrollmentOf(keys, NOW.getTime());
     const first = await directory.enrollDevice({ userId: ALICE, sessionId: SESSION_ALICE, request: captured });
-    store.collections.UserSession.rows.filter((row) => row.id === SESSION_ALICE).forEach((row) => Object.assign(row, { isValid: false }));
-    advance(clock, 1);
-    await directory.enrollDevice({ userId: ALICE, sessionId: SESSION_LATER, request: enrollmentOf(fakeDeviceKeys(), clock.now.getTime()) }).catch(() => undefined);
-    expect(store.collections.E2EEDevice.rows.find((row) => row.deviceId === first.deviceId)?.retiredAt).not.toBeNull();
+    endSession(store, SESSION_ALICE);
+    await retireDevicesOfEndedSessions(store.prisma as never, { userId: ALICE, now: clock.now });
+    expect(activeDevices(store)).toHaveLength(0);
 
+    advance(clock, 1);
     const error = await refusal(directory.enrollDevice({ userId: ALICE, sessionId: SESSION_REPLAY, request: captured }));
     expect(error).toMatchObject({ code: E2EE_ERROR_CODES.BINDING_INVALID });
+    expect(activeDevices(store)).toHaveLength(0);
 
-    advance(clock, 1);
     const fresh = await directory.enrollDevice({ userId: ALICE, sessionId: SESSION_REPLAY, request: enrollmentOf(keys, clock.now.getTime()) });
     expect(fresh.deviceId).toBe(first.deviceId);
+  });
+
+  it('la trace survit à la reprise de la place par une AUTRE installation : la preuve rejouée reste refusée', async () => {
+    const { store, directory, clock } = setup();
+    const keys = fakeDeviceKeys({ oneTime: 1, kyber: 1 });
+    const captured = enrollmentOf(keys, NOW.getTime());
+    const first = await directory.enrollDevice({ userId: ALICE, sessionId: SESSION_ALICE, request: captured });
+    endSession(store, SESSION_ALICE);
+    advance(clock, 1);
+    const other = fakeDeviceKeys();
+    const taken = await directory.enrollDevice({ userId: ALICE, sessionId: SESSION_LATER, request: enrollmentOf(other, clock.now.getTime()) });
+    expect(taken.deviceId).toBe(first.deviceId);
+
+    const error = await refusal(directory.enrollDevice({ userId: ALICE, sessionId: SESSION_REPLAY, request: captured }));
+
+    expect(error).toMatchObject({ code: E2EE_ERROR_CODES.BINDING_INVALID });
+    expect(activeDevices(store).map((row) => row.identityKey)).toEqual([other.identityKey]);
   });
 
   it('deux rejeux SIMULTANÉS depuis deux sessions : un seul appareil, une seule session', async () => {

@@ -3327,6 +3327,25 @@ model E2EERevokedIdentity {
   @@unique([userId, identityKey])
 }
 
+/// La dernière preuve de liaison ACCEPTÉE pour une installation (identité +
+/// registrationId) d'un compte (#12933). Une preuve ne sert qu'une fois : un
+/// enrôlement dont l'horodatage signé n'est pas strictement plus récent est
+/// refusé, sauf la reprise de la même requête par la même session. Distincte de
+/// E2EEDevice, dont la ligne se reprend par une autre installation : la trace
+/// survit à la reprise de la place. Effacée avec le compte.
+model E2EEBindingProof {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId         String   @db.ObjectId
+  identityKey    String
+  registrationId Int
+  /// L'horodatage signé par l'appareil dans la preuve (`binding.timestamp`).
+  signedAt       DateTime
+  /// La session qui l'a présentée.
+  sessionId      String   @db.ObjectId
+
+  @@unique([userId, identityKey, registrationId])
+}
+
 /// Une pré-clé à usage unique (EC ou Kyber), un document par clé. Réservée UNE
 /// fois, atomiquement (findAndModify sur usedAt: null).
 model E2EEOneTimePreKey {

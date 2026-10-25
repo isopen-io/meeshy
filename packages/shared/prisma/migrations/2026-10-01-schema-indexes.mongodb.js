@@ -73,6 +73,7 @@ const specs = [
   { collection: 'MessageEnvelope', name: 'MessageEnvelope_recipientUserId_recipientDeviceId_createdAt_idx', key: { recipientUserId: 1, recipientDeviceId: 1, createdAt: 1 } },
   { collection: 'MessageEnvelope', name: 'MessageEnvelope_createdAt_idx', key: { createdAt: 1 } },
   { collection: 'E2EERevokedIdentity', name: 'E2EERevokedIdentity_userId_identityKey_key', key: { userId: 1, identityKey: 1 }, unique: true },
+  { collection: 'E2EEBindingProof', name: 'E2EEBindingProof_userId_identityKey_registrationId_key', key: { userId: 1, identityKey: 1, registrationId: 1 }, unique: true },
 ];
 
 const sameKey = (a, b) => JSON.stringify(a) === JSON.stringify(b);

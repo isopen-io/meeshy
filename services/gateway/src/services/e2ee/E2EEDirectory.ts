@@ -32,12 +32,13 @@ import {
   type E2EEErrorCode,
   type E2EEPublishKeysRequest,
 } from '@meeshy/shared/types/e2ee-directory';
+import { unsetOrNull } from '../../utils/prisma-unset';
 import { RETIRABLE_DEVICE, retireDeviceRows, retireDevicesOfEndedSessions } from './device-retirement';
 import type { SignatureVerifier } from './signature-verifier';
 
 export type DirectoryPrisma = Pick<
   PrismaClient,
-  'e2EEDevice' | 'e2EEOneTimePreKey' | 'messageEnvelope' | 'userSession' | 'e2EERevokedIdentity' | '$runCommandRaw'
+  'e2EEDevice' | 'e2EEOneTimePreKey' | 'messageEnvelope' | 'userSession' | 'e2EERevokedIdentity' | 'e2EEBindingProof' | '$runCommandRaw'
 >;
 
 export type E2EEDirectoryDeps = {
@@ -93,6 +94,9 @@ async function assertSigned(verifier: SignatureVerifier, identityKey: string, ke
     throw new E2EEDirectoryError(E2EE_ERROR_CODES.SIGNATURE_INVALID, 400, 'Une pré-clé ne porte pas la signature de son identité');
   }
 }
+
+const bindingReplayed = () =>
+  new E2EEDirectoryError(E2EE_ERROR_CODES.BINDING_INVALID, 400, 'Cette preuve de possession de la clé d’identité a déjà servi');
 
 const unverifiable = () =>
   new E2EEDirectoryError(E2EE_ERROR_CODES.SIGNATURE_UNVERIFIABLE, 503, 'Vérification des signatures indisponible');
@@ -238,9 +242,40 @@ export class E2EEDirectory {
     await assertBinding(this.verifier, { userId: params.userId, request: params.request, now: at });
     await assertSigned(this.verifier, params.request.identityKey, signedKeysOf(params.request));
     await this.assertNotRevoked(params.userId, params.request.identityKey);
+    await this.consumeBinding(params);
     const placed = await this.placeDevice({ ...params, at });
     await this.undoIfRevoked(params.userId, params.request.identityKey);
     return placed;
+  }
+
+  /**
+   * Une preuve de liaison ne sert qu'une fois par installation (#12933). Elle
+   * vaut dix minutes de part et d'autre : rejouée, elle rebranchait l'appareil
+   * sur la session du rejoueur et republiait le lot capturé. Elle n'est donc
+   * acceptée que si son horodatage signé est STRICTEMENT plus récent que la
+   * dernière preuve acceptée pour cette identité et cette `registrationId` —
+   * une seule écriture conditionnelle, ou une création que l'index unique
+   * départage. Seule la reprise de la même requête par la même session (réponse
+   * perdue) passe encore : elle ne peut que refaire ce qui est déjà fait, et le
+   * remplacement des pré-clés épargne celles déjà remises.
+   */
+  private async consumeBinding(params: { userId: string; sessionId: string; request: E2EEEnrollDeviceRequest }): Promise<void> {
+    const { userId, sessionId, request } = params;
+    const installation = { userId, identityKey: request.identityKey, registrationId: request.registrationId };
+    const signedAt = new Date(request.binding.timestamp);
+    const { count } = await this.prisma.e2EEBindingProof.updateMany({ where: { ...installation, signedAt: { lt: signedAt } }, data: { signedAt, sessionId } });
+    if (count > 0) return;
+    const created = await this.prisma.e2EEBindingProof.create({ data: { ...installation, signedAt, sessionId } }).then(
+      () => true,
+      (error: unknown) => {
+        if (isUniqueViolation(error)) return false;
+        throw error;
+      },
+    );
+    if (created) return;
+    const last = await this.prisma.e2EEBindingProof.findFirst({ where: installation, select: { signedAt: true, sessionId: true } });
+    const isRetry = last !== null && last.sessionId === sessionId && last.signedAt.getTime() === signedAt.getTime();
+    if (!isRetry) throw bindingReplayed();
   }
 
   private async placeDevice(params: { userId: string; sessionId: string; request: E2EEEnrollDeviceRequest; at: Date }): Promise<{ deviceId: number; created: boolean }> {
@@ -363,15 +398,20 @@ export class E2EEDirectory {
    * Un enrôlement COMPLET d'une identité déjà active ouvre une nouvelle
    * génération de pré-clés uniques (#12882) : une installation réinstallée
    * garde son identité du trousseau mais a perdu ses clés privées, et son
-   * compteur repart de 1. Les clés de la nature qu'elle publie remplacent donc
-   * toutes celles d'avant, réservées comprises — aucune clé publique morte ne
-   * reste servie, aucun `keyId` neuf n'est écarté. Un réenrôlement sans lot
-   * (base intacte, session nouvelle) ne touche à rien.
+   * compteur repart de 1. Les clés NON RÉSERVÉES de la nature qu'elle publie
+   * sont donc remplacées — aucune clé publique morte ne reste servie.
+   *
+   * Une clé déjà remise à un pair, elle, n'est jamais effacée (#12933) : sa
+   * ligne garde la réservation, et `addOneTimeKeys` écarte ce `keyId` pour
+   * toute la génération. Effacer la ligne puis réinsérer le lot la remettait
+   * en service : deux pairs ouvraient leur session sur la même pré-clé
+   * « unique ». Un réenrôlement sans lot (base intacte, session nouvelle) ne
+   * touche à rien.
    */
   private async replaceOneTimeKeys(generation: Generation, batches: OneTimeBatches): Promise<void> {
     const kinds = [...new Set(oneTimeRowsOf(batches).map((key) => key.kind))];
     if (kinds.length === 0) return;
-    await this.prisma.e2EEOneTimePreKey.deleteMany({ where: { ...generationOf(generation), kind: { in: kinds } } });
+    await this.prisma.e2EEOneTimePreKey.deleteMany({ where: { ...generationOf(generation), kind: { in: kinds }, ...unsetOrNull('usedAt') } });
   }
 
   private async addOneTimeKeys(generation: Generation, batches: OneTimeBatches): Promise<void> {

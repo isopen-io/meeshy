@@ -97,6 +97,7 @@ function base() {
     e2EEOneTimePreKey: table([]),
     messageEnvelope: table([]),
     e2EERevokedIdentity: table([]),
+    e2EEBindingProof: table([]),
     // Le jeu (#9384) : des collections vides.
     ...Object.fromEntries(
       [...GAME_PURGED_MODELS, 'gameDuo', 'leagueGroupWeek', 'affiliateVisitSession', 'mythicSeat', 'mythicEdition'].map((model) => [model, table([])]),

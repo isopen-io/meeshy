@@ -49,6 +49,8 @@ const matchesCondition = (actual: unknown, condition: unknown, semantics: Semant
         return actual !== null && actual !== undefined && (comparable(actual) as number) < (comparable(operand) as number);
       case 'gt':
         return actual !== null && actual !== undefined && (comparable(actual) as number) > (comparable(operand) as number);
+      case 'isSet':
+        return operand ? actual !== undefined : actual === undefined;
       default:
         throw new Error(`opérateur non imité : ${operator}`);
     }
@@ -204,6 +206,7 @@ export function createFakeE2EEStore() {
     ),
     MessageEnvelope: new FakeCollection([['messageId', 'recipientUserId', 'recipientDeviceId']], () => ({ createdAt: new Date() }), () => ({ createdAt: new Date() })),
     E2EERevokedIdentity: new FakeCollection([['userId', 'identityKey']], () => ({ revokedAt: new Date() }), () => ({ revokedAt: new Date() })),
+    E2EEBindingProof: new FakeCollection([['userId', 'identityKey', 'registrationId']], () => ({})),
     Participant: new FakeCollection([], () => ({ isActive: true, type: 'user' })),
     UserSession: new FakeCollection([], () => ({ isValid: true, invalidatedAt: null, expiresAt: new Date(Date.now() + 86_400_000) })),
   };
@@ -239,6 +242,7 @@ export function createFakeE2EEStore() {
     e2EEOneTimePreKey: collections.E2EEOneTimePreKey.delegate(),
     messageEnvelope: collections.MessageEnvelope.delegate(),
     e2EERevokedIdentity: collections.E2EERevokedIdentity.delegate(),
+    e2EEBindingProof: collections.E2EEBindingProof.delegate(),
     participant: collections.Participant.delegate(),
     userSession: collections.UserSession.delegate(),
     $runCommandRaw: async (command: unknown) => {
