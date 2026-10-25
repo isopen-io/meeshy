@@ -268,3 +268,80 @@ describe('#12933 — une preuve de liaison ne sert qu’une fois par installatio
     expect(store.collections.E2EEOneTimePreKey.rows.filter((row) => row.kind === 'ec')).toHaveLength(2);
   });
 });
+
+describe('#12933 — revue adversariale : la reprise par la même session n’écrit rien, et l’unicité ne dépend d’aucun index', () => {
+  it('rejeu par la MÊME session après éviction de l’appareil : la pré-clé remise à Bob n’est pas remise à Carol', async () => {
+    const { directory, clock } = setup();
+    const victim = fakeDeviceKeys({ oneTime: 1, kyber: 1 });
+    const captured = enrollmentOf(victim, NOW.getTime());
+    await directory.enrollDevice({ userId: ALICE, sessionId: SESSION_ALICE, request: captured });
+    const toBob = await bundleFor(directory, BOB);
+
+    advance(clock, 2);
+    const intruder = fakeDeviceKeys();
+    await directory.enrollDevice({ userId: ALICE, sessionId: SESSION_ALICE, request: enrollmentOf(intruder, clock.now.getTime(), { oneTimePreKeys: [], kyberPreKeys: [] }) });
+    advance(clock, 1);
+    const error = await refusal(directory.enrollDevice({ userId: ALICE, sessionId: SESSION_ALICE, request: captured }));
+    const served = (await directory.reserveBundles({ requesterUserId: CAROL, targetUserId: ALICE })).map((bundle) => bundle.preKey?.publicKey);
+
+    expect(error).toMatchObject({ code: E2EE_ERROR_CODES.BINDING_INVALID });
+    expect(served).not.toContain(toBob.preKey?.publicKey);
+  });
+
+  it('le même rejeu depuis une AUTRE session puis la même : jamais la clé de Bob, sans aucun index secondaire', async () => {
+    const { directory, clock } = setup();
+    const victim = fakeDeviceKeys({ oneTime: 1, kyber: 1 });
+    const captured = enrollmentOf(victim, NOW.getTime());
+    await directory.enrollDevice({ userId: ALICE, sessionId: SESSION_ALICE, request: captured });
+    const toBob = await bundleFor(directory, BOB);
+
+    advance(clock, 2);
+    await directory.enrollDevice({ userId: ALICE, sessionId: SESSION_REPLAY, request: captured }).catch(() => undefined);
+    await directory.enrollDevice({ userId: ALICE, sessionId: SESSION_REPLAY, request: enrollmentOf(fakeDeviceKeys(), clock.now.getTime(), { oneTimePreKeys: [], kyberPreKeys: [] }) });
+    await directory.enrollDevice({ userId: ALICE, sessionId: SESSION_REPLAY, request: captured }).catch(() => undefined);
+    const served = (await directory.reserveBundles({ requesterUserId: CAROL, targetUserId: ALICE })).map((bundle) => bundle.preKey?.publicKey);
+
+    expect(served).not.toContain(toBob.preKey?.publicKey);
+  });
+
+  it('la reprise par la même session, appareil actif, n’efface pas le réapprovisionnement publié entre-temps', async () => {
+    const { store, directory, clock } = setup();
+    const keys = fakeDeviceKeys({ oneTime: 2, kyber: 0 });
+    const captured = enrollmentOf(keys, NOW.getTime(), { oneTimePreKeys: keys.oneTimePreKeys, kyberPreKeys: [] });
+    const { deviceId } = await directory.enrollDevice({ userId: ALICE, sessionId: SESSION_ALICE, request: captured });
+    const refill = fakeDeviceKeys({ oneTime: 3, kyber: 0, firstKeyId: 100 }).oneTimePreKeys;
+    await directory.publishKeys({ userId: ALICE, sessionId: SESSION_ALICE, deviceId, request: { oneTimePreKeys: refill } });
+    const before = store.collections.E2EEOneTimePreKey.rows.map((row) => row.publicKey).sort();
+
+    advance(clock, 1);
+    await directory.enrollDevice({ userId: ALICE, sessionId: SESSION_ALICE, request: captured });
+
+    expect(store.collections.E2EEOneTimePreKey.rows.map((row) => row.publicKey).sort()).toEqual(before);
+  });
+
+  it('deux envois SIMULTANÉS de la même requête par la même session (réessai réseau) : un seul appareil, chaque clé servie une fois', async () => {
+    const { store, directory } = setup();
+    const keys = fakeDeviceKeys({ oneTime: 2, kyber: 2 });
+    const request = enrollmentOf(keys, NOW.getTime());
+
+    await Promise.allSettled([
+      directory.enrollDevice({ userId: ALICE, sessionId: SESSION_ALICE, request }),
+      directory.enrollDevice({ userId: ALICE, sessionId: SESSION_ALICE, request }),
+    ]);
+    const served = (await directory.reserveBundles({ requesterUserId: BOB, targetUserId: ALICE })).map((bundle) => bundle.preKey?.publicKey);
+
+    expect(activeDevices(store)).toHaveLength(1);
+    expect(new Set(served).size).toBe(served.length);
+  });
+
+  it('la trace d’une installation est élaguée une fois sortie de la fenêtre de la preuve, celle des autres reste', async () => {
+    const { store, directory, clock } = setup();
+    const old = fakeDeviceKeys();
+    await directory.enrollDevice({ userId: ALICE, sessionId: SESSION_ALICE, request: enrollmentOf(old, NOW.getTime(), { oneTimePreKeys: [], kyberPreKeys: [] }) });
+    advance(clock, 30);
+    const recent = fakeDeviceKeys();
+    await directory.enrollDevice({ userId: ALICE, sessionId: SESSION_LATER, request: enrollmentOf(recent, clock.now.getTime(), { oneTimePreKeys: [], kyberPreKeys: [] }) });
+
+    expect(store.collections.E2EEBindingProof.rows.map((row) => row.identityKey)).toEqual([recent.identityKey]);
+  });
+});

@@ -19,6 +19,7 @@
  * La `registrationId` désigne la GÉNÉRATION d'une place : pré-clés et
  * enveloppes lui appartiennent, jamais à la place (#12592).
  */
+import { createHash } from 'crypto';
 import type { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
 import {
   deviceBindingMessage,
@@ -94,6 +95,17 @@ async function assertSigned(verifier: SignatureVerifier, identityKey: string, ke
     throw new E2EEDirectoryError(E2EE_ERROR_CODES.SIGNATURE_INVALID, 400, 'Une pré-clé ne porte pas la signature de son identité');
   }
 }
+
+/**
+ * L'`_id` de la trace d'une installation : 12 octets d'un condensat de
+ * (compte, identité, registrationId). Deux enrôlements de la même installation
+ * visent le MÊME document, quel que soit l'état des index de la base.
+ */
+const bindingProofId = (installation: { userId: string; identityKey: string; registrationId: number }): string =>
+  createHash('sha256').update(`${installation.userId}|${installation.identityKey}|${installation.registrationId}`).digest('hex').slice(0, 24);
+
+/** Au-delà de deux fenêtres, la fenêtre de la preuve la refuse d'elle-même : la trace ne sert plus. */
+const BINDING_PROOF_RETENTION_MS = 2 * E2EE_DEVICE_BINDING_MAX_SKEW_MS + 60_000;
 
 const bindingReplayed = () =>
   new E2EEDirectoryError(E2EE_ERROR_CODES.BINDING_INVALID, 400, 'Cette preuve de possession de la clé d’identité a déjà servi');
@@ -242,7 +254,8 @@ export class E2EEDirectory {
     await assertBinding(this.verifier, { userId: params.userId, request: params.request, now: at });
     await assertSigned(this.verifier, params.request.identityKey, signedKeysOf(params.request));
     await this.assertNotRevoked(params.userId, params.request.identityKey);
-    await this.consumeBinding(params);
+    const retried = await this.consumeBinding({ ...params, at });
+    if (retried) return retried;
     const placed = await this.placeDevice({ ...params, at });
     await this.undoIfRevoked(params.userId, params.request.identityKey);
     return placed;
@@ -251,31 +264,39 @@ export class E2EEDirectory {
   /**
    * Une preuve de liaison ne sert qu'une fois par installation (#12933). Elle
    * vaut dix minutes de part et d'autre : rejouée, elle rebranchait l'appareil
-   * sur la session du rejoueur et republiait le lot capturé. Elle n'est donc
-   * acceptée que si son horodatage signé est STRICTEMENT plus récent que la
-   * dernière preuve acceptée pour cette identité et cette `registrationId` —
-   * une seule écriture conditionnelle, ou une création que l'index unique
-   * départage. Seule la reprise de la même requête par la même session (réponse
-   * perdue) passe encore : elle ne peut que refaire ce qui est déjà fait, et le
-   * remplacement des pré-clés épargne celles déjà remises.
+   * sur la session du rejoueur et republiait le lot capturé — dont des
+   * pré-clés uniques déjà remises à des pairs. Elle n'est donc acceptée que si
+   * son horodatage signé est STRICTEMENT plus récent que la dernière preuve
+   * acceptée pour cette identité et cette `registrationId` : une écriture
+   * conditionnelle sur un document dont l'`_id` est dérivé de l'installation,
+   * ou sa création, que l'index de `_id` départage sans aucun index à déployer.
+   *
+   * La même preuve présentée de nouveau par la même session (réponse perdue,
+   * réessai réseau) n'écrit RIEN : elle rend l'appareil actif de cette
+   * installation lié à cette session, ou elle est refusée. Rejouer un
+   * placement republierait le lot capturé.
    */
-  private async consumeBinding(params: { userId: string; sessionId: string; request: E2EEEnrollDeviceRequest }): Promise<void> {
-    const { userId, sessionId, request } = params;
+  private async consumeBinding(params: { userId: string; sessionId: string; request: E2EEEnrollDeviceRequest; at: Date }): Promise<{ deviceId: number; created: false } | null> {
+    const { userId, sessionId, request, at } = params;
     const installation = { userId, identityKey: request.identityKey, registrationId: request.registrationId };
+    const id = bindingProofId(installation);
     const signedAt = new Date(request.binding.timestamp);
-    const { count } = await this.prisma.e2EEBindingProof.updateMany({ where: { ...installation, signedAt: { lt: signedAt } }, data: { signedAt, sessionId } });
-    if (count > 0) return;
-    const created = await this.prisma.e2EEBindingProof.create({ data: { ...installation, signedAt, sessionId } }).then(
+    await this.prisma.e2EEBindingProof.deleteMany({ where: { userId, signedAt: { lt: new Date(at.getTime() - BINDING_PROOF_RETENTION_MS) } } });
+    const { count } = await this.prisma.e2EEBindingProof.updateMany({ where: { id, signedAt: { lt: signedAt } }, data: { signedAt, sessionId } });
+    if (count > 0) return null;
+    const created = await this.prisma.e2EEBindingProof.create({ data: { id, ...installation, signedAt, sessionId } }).then(
       () => true,
       (error: unknown) => {
         if (isUniqueViolation(error)) return false;
         throw error;
       },
     );
-    if (created) return;
-    const last = await this.prisma.e2EEBindingProof.findFirst({ where: installation, select: { signedAt: true, sessionId: true } });
-    const isRetry = last !== null && last.sessionId === sessionId && last.signedAt.getTime() === signedAt.getTime();
-    if (!isRetry) throw bindingReplayed();
+    if (created) return null;
+    const last = await this.prisma.e2EEBindingProof.findUnique({ where: { id }, select: { signedAt: true, sessionId: true } });
+    if (last === null || last.sessionId !== sessionId || last.signedAt.getTime() !== signedAt.getTime()) throw bindingReplayed();
+    const bound = await this.prisma.e2EEDevice.findFirst({ where: { ...installation, sessionId, ...ACTIVE }, select: { deviceId: true } });
+    if (!bound) throw bindingReplayed();
+    return { deviceId: bound.deviceId, created: false };
   }
 
   private async placeDevice(params: { userId: string; sessionId: string; request: E2EEEnrollDeviceRequest; at: Date }): Promise<{ deviceId: number; created: boolean }> {
