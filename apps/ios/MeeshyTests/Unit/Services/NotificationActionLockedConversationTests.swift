@@ -68,7 +68,7 @@ final class NotificationActionLockedConversationTests: XCTestCase {
 
     private func makeSUT(
         lockedConversationIds: Set<String>,
-        isConversationLocked: (@MainActor (String) -> Bool)? = nil
+        locks: (any ConversationLockProbing)? = nil
     ) -> SUT {
         let messages = MockMessageService()
         let conversations = MockConversationService()
@@ -101,7 +101,7 @@ final class NotificationActionLockedConversationTests: XCTestCase {
             openExternalURL: { ledger.externalURLs.append($0) },
             openDeepLink: { ledger.deepLinks.append($0) },
             presentNewContact: { ledger.contacts.append($0) },
-            isConversationLocked: isConversationLocked ?? { lockedConversationIds.contains($0) },
+            conversationLocks: locks ?? DeclaredConversationLocks(lockedConversationIds),
             notifyRefusedReply: { ledger.refusedReplies.append($0) }
         )
         return SUT(
@@ -233,14 +233,11 @@ final class NotificationActionLockedConversationTests: XCTestCase {
         XCTAssertEqual(sut.ledger.opened, 0)
     }
 
-    /// Avant que le gestionnaire ait lu sa liste (données protégées
-    /// indisponibles, miroir illisible ou absent), une conversation PEUT être
-    /// sous PIN : le geste par défaut se refuse (fail-closed), il ne lit pas
-    /// une liste vide comme « aucun verrou ». Garde de SOURCE : le défaut de
-    /// production est le singleton, qu'un test ne reconstruit pas.
     /// Le gestionnaire n'a pas encore lu sa liste (lancement avant le premier
     /// déverrouillage, miroir absent) : une bannière NON scellée portant
-    /// « Répondre » ne fait rien partir, et le refus se dit.
+    /// « Répondre » ne fait rien partir, et le refus se dit. Le VRAI
+    /// gestionnaire de verrous est injecté : la question que pose le geste est
+    /// celle du code de production, pas une closure du test.
     func test_reply_beforeTheLockListIsRead_queuesNothing_andIsAnnounced() async throws {
         let suite = "pin-unread-\(UUID().uuidString)"
         let standard = try XCTUnwrap(UserDefaults(suiteName: suite))
@@ -253,7 +250,7 @@ final class NotificationActionLockedConversationTests: XCTestCase {
             isProtectedDataAvailable: { false },
             notificationCenter: NotificationCenter()
         )
-        let sut = makeSUT(lockedConversationIds: [], isConversationLocked: { locks.mayBeLocked($0) })
+        let sut = makeSUT(lockedConversationIds: [], locks: locks)
 
         await sut.handler.handle(
             actionIdentifier: MeeshyNotificationAction.reply.rawValue,
@@ -266,14 +263,56 @@ final class NotificationActionLockedConversationTests: XCTestCase {
         XCTAssertEqual(sut.ledger.refusedReplies, ["inconnue"])
     }
 
-    func test_theDefaultLockGate_isFailClosedBeforeTheListIsRead() throws {
+    /// Mise à jour depuis une version sans fichier miroir, liste lue ABSENTE
+    /// (F1) : le gestionnaire reconstruit ses verrous depuis le trousseau. Le
+    /// geste se refuse, et l'ouverture qu'il déclenche (`openNotification`,
+    /// puis la porte du routeur) demande le PIN.
+    func test_reply_afterAnUpgradeWhoseListReadsAbsent_isRefused_andItsOpeningAsksForThePin() async throws {
+        let suite = "pin-upgrade-\(UUID().uuidString)"
+        let standard = try XCTUnwrap(UserDefaults(suiteName: suite))
+        let container = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: container, withIntermediateDirectories: true)
+        defer {
+            standard.removePersistentDomain(forName: suite)
+            try? FileManager.default.removeItem(at: container)
+        }
+        let vault = InMemoryConversationLockVault()
+        vault.write("code", for: "meeshy_lock_coffre")
+        let locks = ConversationLockManager(
+            vault: vault,
+            defaults: standard,
+            biometrics: StubBiometricUnlocker(),
+            iterations: 1_000,
+            contentLockMirrorFile: NSELockedConversationMirror.fileURL(inContainer: container),
+            isProtectedDataAvailable: { true },
+            notificationCenter: NotificationCenter()
+        )
+        let sut = makeSUT(lockedConversationIds: [], locks: locks)
+
+        await sut.handler.handle(
+            actionIdentifier: MeeshyNotificationAction.reply.rawValue,
+            userInfo: payload(),
+            replyText: "écrit sans PIN"
+        )
+
+        XCTAssertTrue(sut.queue.enqueued.isEmpty)
+        XCTAssertEqual(sut.ledger.refusedReplies, ["coffre"])
+        XCTAssertEqual(sut.ledger.opened, 1)
+        XCTAssertFalse(locks.admitsOpening("coffre"), "l'ouverture déclenchée par le refus exige le PIN")
+    }
+
+    /// Le défaut de PRODUCTION est le singleton, qu'un test ne reconstruit
+    /// pas : garde de SOURCE. Le type du paramètre ne connaît que
+    /// `mayBeLocked`, donc le geste ne peut pas lire une liste vide comme
+    /// « aucun verrou ».
+    func test_theDefaultLockGate_isTheSharedManager() throws {
         let code = AppSourceGuard.stripComments(
             try AppSourceGuard.unit("Meeshy/Features/Main/Services/NotificationActionHandler.swift")
         )
 
-        XCTAssertTrue(code.contains("ConversationLockManager.shared.mayBeLocked("),
-                      "le geste par défaut doit refuser tant que la liste des verrous n'est pas lue")
-        XCTAssertFalse(code.contains("ConversationLockManager.shared.isLocked($0)"))
+        XCTAssertTrue(code.contains("conversationLocks: any ConversationLockProbing = ConversationLockManager.shared"),
+                      "le geste par défaut doit interroger le gestionnaire de verrous de l'app")
+        XCTAssertTrue(code.contains("conversationLocks.mayBeLocked("))
     }
 
     // MARK: - Les gestes du détail (#8858) sous PIN
@@ -374,5 +413,22 @@ final class NotificationActionLockedConversationTests: XCTestCase {
         XCTAssertEqual(message?.actions.map(\.identifier), [
             MeeshyNotificationAction.reply.rawValue, MeeshyNotificationAction.markRead.rawValue,
         ])
+    }
+}
+
+/// Un jeu de verrous déclaré, pour les gestes dont le test ne porte pas sur
+/// la lecture de la liste.
+@MainActor
+final class DeclaredConversationLocks: ConversationLockProbing {
+    nonisolated deinit {}
+
+    private let lockedConversationIds: Set<String>
+
+    init(_ lockedConversationIds: Set<String> = []) {
+        self.lockedConversationIds = lockedConversationIds
+    }
+
+    func mayBeLocked(_ conversationId: String) -> Bool {
+        lockedConversationIds.contains(conversationId)
     }
 }

@@ -38,6 +38,18 @@ protocol ConversationLockGating: AnyObject {
     func admitsOpening(_ conversationId: String) -> Bool
 }
 
+// MARK: - La question des gestes de notification (#12655)
+
+/// La SEULE question qu'un geste de notification (Répondre, Marquer comme lu,
+/// Rejoindre, Ajouter le contact, Ouvrir dans Plans) pose au verrou :
+/// `mayBeLocked`, fail-closed tant que la liste des verrous n'est pas lue.
+/// `isLocked` n'y est pas : un geste ne peut pas lire une liste vide comme
+/// « aucun verrou ».
+@MainActor
+protocol ConversationLockProbing: AnyObject {
+    func mayBeLocked(_ conversationId: String) -> Bool
+}
+
 // MARK: - Le coffre
 
 /// Où vivent les codes, leurs compteurs d'échecs et l'état d'enrôlement
@@ -375,7 +387,7 @@ struct DeviceBiometricUnlocker: BiometricUnlocking {
 // MARK: - Le gestionnaire
 
 @MainActor
-final class ConversationLockManager: ObservableObject, ConversationLockGating {
+final class ConversationLockManager: ObservableObject, ConversationLockGating, ConversationLockProbing {
     // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
     // défaut) → double-free `pointer being freed was not allocated` (abrt)
     // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).

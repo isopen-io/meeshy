@@ -96,7 +96,7 @@ final class NotificationActionHandler: NotificationActionHandling {
     private let localMarkRead: @MainActor (String) -> Void
     /// #12655 — la conversation PEUT-elle être verrouillée par PIN sur cet
     /// appareil ? Oui tant que la liste des verrous n'est pas lue (fail-closed).
-    private let isConversationLocked: @MainActor (String) -> Bool
+    private let conversationLocks: any ConversationLockProbing
     /// #12655 — une réponse refusée sous PIN le dit, hors de l'app.
     private let notifyRefusedReply: @MainActor (String?) -> Void
     /// L'unique consommation du SDK, injectée pour que les tests l'observent :
@@ -203,7 +203,7 @@ final class NotificationActionHandler: NotificationActionHandling {
         presentNewContact: @escaping @MainActor (NotificationContactCard) -> Void = {
             NotificationContactPresenter.present($0)
         },
-        isConversationLocked: @escaping @MainActor (String) -> Bool = { ConversationLockManager.shared.mayBeLocked($0) },
+        conversationLocks: any ConversationLockProbing = ConversationLockManager.shared,
         notifyRefusedReply: @escaping @MainActor (String?) -> Void = {
             NotificationReplyFailure.postRefusedUnderConversationPin(conversationId: $0)
         }
@@ -233,7 +233,7 @@ final class NotificationActionHandler: NotificationActionHandling {
         self.openExternalURL = openExternalURL
         self.openDeepLink = openDeepLink
         self.presentNewContact = presentNewContact
-        self.isConversationLocked = isConversationLocked
+        self.conversationLocks = conversationLocks
         self.notifyRefusedReply = notifyRefusedReply
     }
 
@@ -418,7 +418,7 @@ final class NotificationActionHandler: NotificationActionHandling {
         userInfo: [AnyHashable: Any]
     ) -> Bool {
         guard Self.pinGuardedActions.contains(actionIdentifier) else { return false }
-        let locked = payload.conversationId.map { isConversationLocked($0) } ?? false
+        let locked = payload.conversationId.map { conversationLocks.mayBeLocked($0) } ?? false
         guard locked || NSEAttachmentPolicy.isSealedForLockedConversation(userInfo) else { return false }
         logger.info("notification action refused: conversation locked by PIN")
         if actionIdentifier == MeeshyNotificationAction.reply.rawValue {

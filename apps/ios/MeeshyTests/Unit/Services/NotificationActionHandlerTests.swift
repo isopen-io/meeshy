@@ -216,7 +216,7 @@ final class NotificationActionHandlerTests: XCTestCase {
             removeDeliveredForPost: { removedPostBanners.append($0) },
             removeDeliveredForNotificationIds: { revokedIds.append($0) },
             prepareReplyQueue: { preparedReplyQueueCount += 1 },
-            isConversationLocked: { _ in false }
+            conversationLocks: DeclaredConversationLocks()
         )
 
         return SUTContext(
