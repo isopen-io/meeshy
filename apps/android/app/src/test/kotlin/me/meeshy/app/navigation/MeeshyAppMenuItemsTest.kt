@@ -99,4 +99,10 @@ class MeeshyAppMenuItemsTest {
         assertThat(floatingChromeVisible(Routes.REELS)).isFalse()
         assertThat(floatingChromeVisible(null)).isFalse()
     }
+
+    @Test
+    fun `the avatar opens my own page, never a third party route`() {
+        assertThat(floatingAvatarProfileRoute("64b7f0a1c2d3e4f5a6b7c8d9")).isEqualTo(ProfileRoutes.OWN)
+        assertThat(floatingAvatarProfileRoute(null)).isNull()
+    }
 }

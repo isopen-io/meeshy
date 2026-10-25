@@ -45,7 +45,7 @@ import me.meeshy.ui.theme.hexColor
  * resout ici la MEME instance Activity-scopee de [ChromeViewModel] que celle hissee dans `MeeshyApp`.
  *
  * Gestes (parite iOS) : Flux tap = bascule Flux <-> Conversations, appui long = Reels ; avatar
- * tap = deplie l'echelle, second tap ou appui long = MA page de profil ([ProfileRoutes.own]).
+ * tap = deplie l'echelle, second tap ou appui long = MA page de profil ([floatingAvatarProfileRoute]).
  * Un tap sur le voile, ou le retour systeme, referme l'echelle.
  */
 @Composable
@@ -65,7 +65,7 @@ internal fun MeeshyFloatingChrome(
     val feedOpen = currentRoute == Routes.FEED
     val ladderItems = rememberMenuLadderItems(navController, unread, pendingFriendRequests)
     val navigateToProfile: () -> Unit = {
-        ProfileRoutes.own(currentUser?.id)?.let { route -> navController.navigateToTopLevel(route) }
+        floatingAvatarProfileRoute(currentUser?.id)?.let { route -> navController.navigateToTopLevel(route) }
     }
 
     BackHandler(enabled = menuExpanded) { menuExpanded = false }

@@ -8,6 +8,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.DpRect
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -52,7 +54,7 @@ class MeeshyMenuFabTest {
     private fun showLadder(taps: Taps, expanded: Boolean, center: PointDp, opensDownward: Boolean) {
         compose.setContent {
             MeeshyTheme {
-                Box(Modifier.requiredSize(400.dp, 800.dp)) {
+                Box(Modifier.requiredSize(400.dp, 800.dp).testTag(HOST_TAG)) {
                     MeeshyMenuVeil(expanded = expanded, onDismiss = { taps.dismissed++ })
                     MeeshyMenuLadder(
                         items = items(taps),
@@ -68,11 +70,22 @@ class MeeshyMenuFabTest {
         compose.waitForIdle()
     }
 
+    /**
+     * Les bornes d'un barreau dans le repere de l'ecran simule (le Box de 400 x 800 dp). Sous
+     * Robolectric la fenetre fait ~320 dp : le Box impose par `requiredSize` y deborde et se
+     * centre, donc ses bornes dans la racine sont decalees — on les retranche.
+     */
+    private fun rungBounds(index: Int): DpRect {
+        val host = compose.onNodeWithTag(HOST_TAG).getBoundsInRoot()
+        val rung = compose.onNodeWithTag(menuLadderRungTag(index)).getBoundsInRoot()
+        return DpRect(rung.left - host.left, rung.top - host.top, rung.right - host.left, rung.bottom - host.top)
+    }
+
     @Test
     fun `a downward ladder stacks its rungs below the button, first rung nearest`() {
         showLadder(Taps(), expanded = true, center = PointDp(300f, 200f), opensDownward = true)
-        val first = compose.onNodeWithTag(menuLadderRungTag(0)).getBoundsInRoot()
-        val second = compose.onNodeWithTag(menuLadderRungTag(1)).getBoundsInRoot()
+        val first = rungBounds(0)
+        val second = rungBounds(1)
         assertThat(first.top.value).isGreaterThan(200f)
         assertThat(second.top.value).isGreaterThan(first.top.value)
     }
@@ -80,8 +93,8 @@ class MeeshyMenuFabTest {
     @Test
     fun `an upward ladder stacks its rungs above the button, first rung nearest`() {
         showLadder(Taps(), expanded = true, center = PointDp(300f, 600f), opensDownward = false)
-        val first = compose.onNodeWithTag(menuLadderRungTag(0)).getBoundsInRoot()
-        val second = compose.onNodeWithTag(menuLadderRungTag(1)).getBoundsInRoot()
+        val first = rungBounds(0)
+        val second = rungBounds(1)
         assertThat(first.bottom.value).isLessThan(600f)
         assertThat(second.top.value).isLessThan(first.top.value)
     }
@@ -89,7 +102,7 @@ class MeeshyMenuFabTest {
     @Test
     fun `the rungs stand on the button's vertical`() {
         showLadder(Taps(), expanded = true, center = PointDp(300f, 200f), opensDownward = true)
-        val rung = compose.onNodeWithTag(menuLadderRungTag(2)).getBoundsInRoot()
+        val rung = rungBounds(2)
         assertThat((rung.left.value + rung.right.value) / 2f).isWithin(0.5f).of(300f)
     }
 
@@ -129,7 +142,7 @@ class MeeshyMenuFabTest {
         var expanded by mutableStateOf(false)
         compose.setContent {
             MeeshyTheme {
-                Box(Modifier.requiredSize(400.dp, 800.dp)) {
+                Box(Modifier.requiredSize(400.dp, 800.dp).testTag(HOST_TAG)) {
                     MeeshyMenuLadder(
                         items = items(taps),
                         expanded = expanded,
@@ -145,5 +158,9 @@ class MeeshyMenuFabTest {
         expanded = true
         compose.waitForIdle()
         compose.onNodeWithContentDescription("Settings").assertHasClickAction()
+    }
+
+    private companion object {
+        const val HOST_TAG = "ladder-host"
     }
 }

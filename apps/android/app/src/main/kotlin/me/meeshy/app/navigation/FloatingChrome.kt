@@ -74,6 +74,13 @@ internal fun rootMenuLadderEntries(communitiesAvailable: Boolean = COMMUNITIES_A
 internal fun menuLadderLabelKeys(): List<String> = rootMenuLadderEntries().map { it.labelKey }
 
 /**
+ * Ou menent le second tap et l'appui long sur l'avatar flottant, et l'action TalkBack « Modifier
+ * le profil » : MA page, par la regle unique [ProfileRoutes.own] — jamais la route d'un tiers.
+ * `null` sans session (rien a ouvrir).
+ */
+internal fun floatingAvatarProfileRoute(selfId: String?): String? = ProfileRoutes.own(selfId)
+
+/**
  * Ou mene un tap sur le bouton gauche flottant, etant donne la route courante.
  *
  * Parite iOS : `RootFloatingChrome.onLeftTap` fait `showFeed.toggle()` — un aller-retour

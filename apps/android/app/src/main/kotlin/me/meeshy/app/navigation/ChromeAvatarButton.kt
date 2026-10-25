@@ -44,7 +44,7 @@ internal fun chromeAvatarRingColors(menuExpanded: Boolean): List<Color> = if (me
     listOf(MeeshyPalette.Indigo600, MeeshyPalette.Indigo300)
 }
 
-/** L'avatar dans le disque : `MeeshyAvatar(context: .custom(38))` iOS — l'anneau degrade fait 7 dp. */
+/** L'avatar dans le disque : 38 dp comme le `context: .custom(38)` iOS — l'anneau degrade fait 7 dp. */
 internal const val CHROME_AVATAR_SIZE_DP: Float = 38f
 
 /** La pastille de non-lus : seulement echelle FERMEE et compteur positif (iOS `!showMenu && unreadCount > 0`). */
