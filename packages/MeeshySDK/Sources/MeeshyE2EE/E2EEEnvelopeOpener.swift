@@ -98,6 +98,14 @@ public final class E2EEEnvelopeOpener: E2EEEnvelopeOpening {
             return outcome(of: known, envelope)
         }
         let sender = E2EEDeviceAddress(userId: envelope.senderUserId, deviceId: envelope.senderDeviceId)
+        // Un de mes appareils que je n'ai pas (encore) approuvé : l'enveloppe
+        // reste au serveur, NON déchiffrée (le ratchet n'avance pas), et
+        // s'ouvrira au rattrapage qui suit l'approbation (spec § 3.5). Sans
+        // cela, ce que mon iPhone écrit entre les deux sens de l'appairage se
+        // perdait sur le Mac. Le serveur la balaie au bout de 30 jours.
+        if sender.userId == local.userId, (try? approvals.approvedIdentity(of: sender.deviceId)) == .some(nil) {
+            return .deferred(envelopeId: envelope.id)
+        }
         do {
             guard let body = Data(base64Encoded: envelope.body) else { throw E2EESessionCipherError.unknownMessageType(envelope.type) }
             let pinned = try ownDevicePin(of: sender)

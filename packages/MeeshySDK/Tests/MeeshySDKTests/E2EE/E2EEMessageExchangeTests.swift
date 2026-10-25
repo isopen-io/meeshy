@@ -81,8 +81,9 @@ final class E2EEMessageExchangeTests: XCTestCase {
         _ = try await send(aliceIPhone.content("me faire dire"), from: aliceIPhone, to: bob, on: server)
         let copy = try XCTUnwrap(server.pending(userId: alice, deviceId: aliceMac.device.deviceId).first)
 
-        XCTAssertEqual(aliceMac.opener.open(copy), .undecryptable(messageId: "m1", conversationId: conversation),
-                       "un appareil de mon compte que je n'ai pas approuvé ne me fait rien dire")
+        XCTAssertEqual(aliceMac.opener.open(copy), .deferred(envelopeId: copy.id),
+                       "un appareil de mon compte que je n'ai pas approuvé ne me fait rien dire, et son enveloppe attend l'approbation (#12976)")
+        XCTAssertNil(try aliceMac.plaintexts.entry(for: "m1"), "rien n'est rangé, pas même « illisible »")
     }
 
     func test_anApprovalPinnedToAnotherIdentity_isNotHonoured() async throws {

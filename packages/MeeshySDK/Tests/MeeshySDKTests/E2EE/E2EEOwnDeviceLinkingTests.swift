@@ -6,8 +6,8 @@ import XCTest
 
 /// L'approbation de mes propres appareils (spec § 3.5, #12976) : sans elle, mes
 /// messages chiffrés n'atteignent jamais mon autre appareil. Modèle de menace :
-/// serveur compromis qui ajoute un appareil à mon compte ou substitue la clé
-/// d'identité d'un de mes appareils dans l'annuaire.
+/// serveur compromis qui ajoute un appareil à mon compte, substitue la clé
+/// d'identité d'un de mes appareils dans l'annuaire, ou reprend une place.
 final class E2EEOwnDeviceLinkingTests: XCTestCase {
     private let alice = String(repeating: "a1", count: 12)
     private let bob = String(repeating: "b2", count: 12)
@@ -16,10 +16,19 @@ final class E2EEOwnDeviceLinkingTests: XCTestCase {
         E2EEOwnDeviceLinking(local: peer.enrolled, cipher: peer.cipher, directory: directory ?? peer.directory, approvals: peer.approvals)
     }
 
-    private func send(_ text: String, from sender: E2EETestPeer, to peer: String, on server: FakeE2EEServer) async throws -> E2EESealedMessage {
+    private func send(
+        _ text: String, from sender: E2EETestPeer, to peer: String, on server: FakeE2EEServer, messageId: String = "m1"
+    ) async throws -> E2EESealedMessage {
         let sealed = try await sender.sealer.seal(sender.content(text), to: peer)
-        try server.relay(sealed, from: sender.userId, conversationId: "conv1", participants: [sender.userId, peer], messageId: "m1")
+        try server.relay(sealed, from: sender.userId, conversationId: "conv1", participants: [sender.userId, peer], messageId: messageId)
         return sealed
+    }
+
+    /// A lit le QR que B lui montre, puis confirme.
+    private func approve(_ approved: E2EETestPeer, by approver: E2EETestPeer) async throws {
+        let code = try await linking(of: approved).pairingCode(towards: approver.device.deviceId)
+        let candidate = try await linking(of: approver).candidate(matching: code.qrPayload)
+        try linking(of: approver).approve(try XCTUnwrap(candidate))
     }
 
     // MARK: - Vecteurs officiels (libsignal, PublicAPITests.testFingerprint, version 2)
@@ -50,13 +59,26 @@ final class E2EEOwnDeviceLinkingTests: XCTestCase {
         XCTAssertEqual(fingerprint.scannable.encoding, aliceScannableV2)
     }
 
-    func test_deviceIdentifier_isUserIdDotDeviceId_inUTF8() {
-        XCTAssertEqual(E2EEFingerprint.deviceIdentifier(userId: "abc", deviceId: 3), Data("abc.3".utf8))
+    // MARK: - Ce que deux plateformes doivent écrire à l'identique
+
+    func test_ownDeviceIdentifier_isDomainSeparated_lowercased_andDecimal() {
+        XCTAssertEqual(E2EEFingerprint.ownDeviceIdentifier(userId: "6ADA27BF", deviceId: 3), Data("meeshy-own-device:v1:6ada27bf.3".utf8))
+    }
+
+    func test_pairingPayload_isText_roundTrips_andRejectsAnythingElse() {
+        let bytes = Data((0...255).map(UInt8.init))
+        let text = E2EEPairingPayload.encode(bytes)
+
+        XCTAssertTrue(text.hasPrefix("meeshy-device-link:v1:"))
+        XCTAssertFalse(text.contains("+") || text.contains("/") || text.contains("="))
+        XCTAssertEqual(E2EEPairingPayload.decode(text), bytes)
+        XCTAssertNil(E2EEPairingPayload.decode("https://meeshy.me/world"))
+        XCTAssertNil(E2EEPairingPayload.decode("meeshy-device-link:v2:AAAA"))
     }
 
     // MARK: - Approbation
 
-    func test_myTwoDevices_showTheSameSixtyDigits() async throws {
+    func test_myTwoDevices_showTheSameSixtyDigits_andDifferentCodes() async throws {
         let server = FakeE2EEServer()
         let iPhone = try await E2EETestPeer.enroll(alice, on: server)
         let mac = try await E2EETestPeer.enroll(alice, on: server)
@@ -66,24 +88,20 @@ final class E2EEOwnDeviceLinkingTests: XCTestCase {
 
         XCTAssertEqual(onIPhone.displayable, onMac.displayable)
         XCTAssertEqual(onIPhone.displayable.count, 60)
-        XCTAssertNotEqual(onIPhone.scannable, onMac.scannable)
+        XCTAssertNotEqual(onIPhone.qrPayload, onMac.qrPayload)
     }
 
-    func test_scanningEachOthersCode_approvesBothWays_andMyMessageReachesMyOtherDevice() async throws {
+    func test_approvingBothWays_myMessageReachesMyOtherDevice_andNoPlaintextReachesTheWire() async throws {
         let server = FakeE2EEServer()
         let iPhone = try await E2EETestPeer.enroll(alice, on: server)
         let mac = try await E2EETestPeer.enroll(alice, on: server)
         _ = try await E2EETestPeer.enroll(bob, on: server)
         let sentinel = "sentinelle-\(UUID().uuidString)"
 
-        let macCode = try await linking(of: mac).pairingCode(towards: iPhone.device.deviceId)
-        let approvedByIPhone = try await linking(of: iPhone).approve(scanned: macCode.scannable)
-        let iPhoneCode = try await linking(of: iPhone).pairingCode(towards: mac.device.deviceId)
-        let approvedByMac = try await linking(of: mac).approve(scanned: iPhoneCode.scannable)
+        try await approve(mac, by: iPhone)
+        try await approve(iPhone, by: mac)
         let sealed = try await send(sentinel, from: iPhone, to: bob, on: server)
 
-        XCTAssertEqual(approvedByIPhone, mac.device.deviceId)
-        XCTAssertEqual(approvedByMac, iPhone.device.deviceId)
         XCTAssertEqual(sealed.unapprovedOwnDevices, [])
         let copy = try XCTUnwrap(server.pending(userId: alice, deviceId: mac.device.deviceId).first)
         guard case .opened(let message) = mac.opener.open(copy) else { return XCTFail("ma copie reste illisible") }
@@ -91,83 +109,154 @@ final class E2EEOwnDeviceLinkingTests: XCTestCase {
         XCTAssertNil(server.wire.reduce(Data(), +).range(of: Data(sentinel.utf8)), "aucun octet clair sur le fil")
     }
 
-    func test_ownDevices_saysWhichOfMyDevicesIsApproved() async throws {
+    func test_aCopySentBeforeTheSecondApproval_waits_thenOpens() async throws {
+        let server = FakeE2EEServer()
+        let iPhone = try await E2EETestPeer.enroll(alice, on: server)
+        let mac = try await E2EETestPeer.enroll(alice, on: server)
+        _ = try await E2EETestPeer.enroll(bob, on: server)
+        try await approve(mac, by: iPhone)
+        _ = try await send("entre les deux", from: iPhone, to: bob, on: server)
+        let copy = try XCTUnwrap(server.pending(userId: alice, deviceId: mac.device.deviceId).first)
+
+        let before = mac.opener.open(copy)
+        try await approve(iPhone, by: mac)
+        let after = mac.opener.open(copy)
+
+        XCTAssertEqual(before, .deferred(envelopeId: copy.id), "ni ouverte ni perdue : elle attend")
+        guard case .opened(let message) = after else { return XCTFail("la copie ne s'ouvre pas après l'approbation") }
+        XCTAssertEqual(message.content.text, "entre les deux")
+    }
+
+    func test_aMatchingCode_pinsNothingUntilConfirmed() async throws {
+        let server = FakeE2EEServer()
+        let iPhone = try await E2EETestPeer.enroll(alice, on: server)
+        let mac = try await E2EETestPeer.enroll(alice, on: server)
+
+        let code = try await linking(of: mac).pairingCode(towards: iPhone.device.deviceId)
+        let candidate = try await linking(of: iPhone).candidate(matching: code.qrPayload)
+
+        XCTAssertEqual(candidate?.deviceId, mac.device.deviceId)
+        XCTAssertEqual(candidate?.identityKey, mac.identityKey)
+        XCTAssertNil(try iPhone.approvals.approvedIdentity(of: mac.device.deviceId))
+    }
+
+    func test_ownDevices_saysWhichIsApproved_andForgetsADeviceNoLongerListed() async throws {
         let server = FakeE2EEServer()
         let iPhone = try await E2EETestPeer.enroll(alice, on: server)
         let mac = try await E2EETestPeer.enroll(alice, on: server)
         let iPad = try await E2EETestPeer.enroll(alice, on: server)
+        try await approve(mac, by: iPhone)
+        try await approve(iPad, by: iPhone)
 
-        let macCode = try await linking(of: mac).pairingCode(towards: iPhone.device.deviceId)
-        _ = try await linking(of: iPhone).approve(scanned: macCode.scannable)
         let listed = try await linking(of: iPhone).ownDevices()
+        server.revoke(userId: alice, deviceId: iPad.device.deviceId)
+        let afterRetirement = try await linking(of: iPhone).ownDevices()
 
         XCTAssertEqual(listed.map(\.deviceId), [mac.device.deviceId, iPad.device.deviceId])
-        XCTAssertEqual(listed.map(\.approved), [true, false])
+        XCTAssertEqual(listed.map(\.approved), [true, true])
+        XCTAssertEqual(afterRetirement.map(\.deviceId), [mac.device.deviceId])
+        XCTAssertNil(try iPhone.approvals.approvedIdentity(of: iPad.device.deviceId), "un appareil retiré ne garde pas son approbation")
     }
+
+    // MARK: - Serveur compromis
 
     func test_aKeySubstitutedByTheServer_neverMatches_andNothingIsPinned() async throws {
         let server = FakeE2EEServer()
         let iPhone = try await E2EETestPeer.enroll(alice, on: server)
         let mac = try await E2EETestPeer.enroll(alice, on: server)
         _ = try await E2EETestPeer.enroll(bob, on: server)
-        let elsewhere = FakeE2EEServer()
-        let mallory = try await E2EETestPeer.enroll(alice, on: elsewhere)
-        let malloryBundle = try XCTUnwrap(try await mallory.directory.bundles(userId: alice, deviceIds: nil).devices.first)
-        let lying = SubstitutingDirectory(
-            honest: iPhone.directory,
-            substitute: E2EEDeviceBundle(
-                deviceId: mac.device.deviceId, registrationId: mac.device.registrationId, identityKey: malloryBundle.identityKey,
-                signedPreKey: malloryBundle.signedPreKey, kyberPreKey: malloryBundle.kyberPreKey, preKey: malloryBundle.preKey
+        let mallory = try await E2EETestPeer.enroll(alice, on: FakeE2EEServer())
+        let lying = ScriptedDirectory(honest: iPhone.directory) { bundle in
+            guard bundle.deviceId == mac.device.deviceId else { return bundle }
+            return E2EEDeviceBundle(
+                deviceId: bundle.deviceId, registrationId: bundle.registrationId, identityKey: mallory.identityKey.base64EncodedString(),
+                signedPreKey: bundle.signedPreKey, kyberPreKey: bundle.kyberPreKey, preKey: bundle.preKey
             )
-        )
+        }
 
         let macCode = try await linking(of: mac).pairingCode(towards: iPhone.device.deviceId)
-        let approved = try await linking(of: iPhone, directory: lying).approve(scanned: macCode.scannable)
+        let candidate = try await linking(of: iPhone, directory: lying).candidate(matching: macCode.qrPayload)
         let sealed = try await send("non", from: iPhone, to: bob, on: server)
 
-        XCTAssertNil(approved)
+        XCTAssertNil(candidate)
         XCTAssertNil(try iPhone.approvals.approvedIdentity(of: mac.device.deviceId))
-        XCTAssertEqual(sealed.unapprovedOwnDevices, [mac.device.deviceId])
+        XCTAssertFalse(sealed.envelopes.contains { $0.userId == alice })
     }
 
-    func test_aContactsCode_orGarbage_approvesNothing_andDoesNotThrow() async throws {
+    func test_theStoreRefusesASessionToMyDeviceUnderAKeyIDidNotPin() async throws {
         let server = FakeE2EEServer()
         let iPhone = try await E2EETestPeer.enroll(alice, on: server)
         let mac = try await E2EETestPeer.enroll(alice, on: server)
+        try iPhone.approvals.approve(deviceId: mac.device.deviceId, identityKey: Data(repeating: 7, count: 33))
+        let served = try await iPhone.directory.bundles(userId: alice, deviceIds: [mac.device.deviceId])
+        let bundle = try XCTUnwrap(served.devices.first)
+
+        XCTAssertThrowsError(try iPhone.cipher.startSession(with: bundle, of: alice), "libsignal refuse, dans sa transaction, une clé non épinglée")
+        XCTAssertFalse(try iPhone.cipher.hasSession(with: mac.device.address))
+    }
+
+    func test_aContactsCode_orGarbage_matchesNothing() async throws {
+        let server = FakeE2EEServer()
+        let iPhone = try await E2EETestPeer.enroll(alice, on: server)
+        _ = try await E2EETestPeer.enroll(alice, on: server)
         let bobIPhone = try await E2EETestPeer.enroll(bob, on: server)
         let bobMac = try await E2EETestPeer.enroll(bob, on: server)
         let bobsOwnCode = try await linking(of: bobIPhone).pairingCode(towards: bobMac.device.deviceId)
 
-        let fromContact = try await linking(of: iPhone).approve(scanned: bobsOwnCode.scannable)
-        let fromGarbage = try await linking(of: iPhone).approve(scanned: Data("pas un code".utf8))
+        let fromContact = try await linking(of: iPhone).candidate(matching: bobsOwnCode.qrPayload)
+        let fromGarbage = try await linking(of: iPhone).candidate(matching: "meeshy-device-link:v1:cGFzIHVuIGNvZGU")
 
         XCTAssertNil(fromContact)
         XCTAssertNil(fromGarbage)
-        XCTAssertNil(try iPhone.approvals.approvedIdentity(of: mac.device.deviceId))
     }
 
-    func test_confirmingTheDigits_pinsTheKeyThatWasShown() async throws {
+    func test_aPhantomDeviceWithoutBundle_doesNotHideMyRealDevice() async throws {
+        let server = FakeE2EEServer()
+        let iPhone = try await E2EETestPeer.enroll(alice, on: server)
+        let phantom = try await E2EETestPeer.enroll(alice, on: server)
+        let mac = try await E2EETestPeer.enroll(alice, on: server)
+        let silent = ScriptedDirectory(honest: iPhone.directory, drops: phantom.device.deviceId) { $0 }
+
+        let code = try await linking(of: mac).pairingCode(towards: iPhone.device.deviceId)
+        let candidate = try await linking(of: iPhone, directory: silent).candidate(matching: code.qrPayload)
+
+        XCTAssertEqual(candidate?.deviceId, mac.device.deviceId)
+    }
+
+    func test_aReinstalledDeviceOnTheSameSlot_isNoLongerApproved_andCanBeApprovedAgain() async throws {
         let server = FakeE2EEServer()
         let iPhone = try await E2EETestPeer.enroll(alice, on: server)
         let mac = try await E2EETestPeer.enroll(alice, on: server)
+        _ = try await E2EETestPeer.enroll(bob, on: server)
+        try await approve(mac, by: iPhone)
+        _ = try await send("avant", from: iPhone, to: bob, on: server)
+        server.revoke(userId: alice, deviceId: mac.device.deviceId)
+        let reinstalled = try await E2EETestPeer.enroll(alice, on: server)
+        XCTAssertEqual(reinstalled.device.deviceId, mac.device.deviceId)
 
-        let code = try await linking(of: iPhone).pairingCode(towards: mac.device.deviceId)
-        try linking(of: iPhone).approve(confirmed: code)
+        let status = try await linking(of: iPhone).ownDevices()
+        try await approve(reinstalled, by: iPhone)
+        let sealed = try await send("après", from: iPhone, to: bob, on: server, messageId: "m2")
 
-        XCTAssertEqual(try iPhone.approvals.approvedIdentity(of: mac.device.deviceId), mac.identityKey)
+        XCTAssertEqual(status.map(\.approved), [false], "une place reprise n'hérite pas de l'approbation")
+        XCTAssertTrue(sealed.envelopes.contains { $0.userId == alice && $0.registrationId == reinstalled.device.registrationId })
     }
 
-    func test_confirmingACodeWhoseKeyChangedSince_isRefused() async throws {
+    func test_showingMyCode_keepsAnExistingSession_withItsRatchet() async throws {
         let server = FakeE2EEServer()
         let iPhone = try await E2EETestPeer.enroll(alice, on: server)
         let mac = try await E2EETestPeer.enroll(alice, on: server)
-        let code = try await linking(of: iPhone).pairingCode(towards: mac.device.deviceId)
-        let stale = E2EEPairingCode(deviceId: code.deviceId, identityKey: Data(repeating: 7, count: 33), displayable: code.displayable, scannable: code.scannable)
+        _ = try await E2EETestPeer.enroll(bob, on: server)
+        try await approve(mac, by: iPhone)
+        _ = try await send("un", from: iPhone, to: bob, on: server)
+        let sessionKey = "\(alice).\(mac.device.deviceId)"
+        let before = try iPhone.vault.read { try $0.load(.session, sessionKey) }
 
-        XCTAssertThrowsError(try linking(of: iPhone).approve(confirmed: stale)) { error in
-            XCTAssertEqual(error as? E2EEOwnDeviceLinkingError, .identityChanged(mac.device.deviceId))
-        }
-        XCTAssertNil(try iPhone.approvals.approvedIdentity(of: mac.device.deviceId))
+        _ = try await linking(of: iPhone).pairingCode(towards: mac.device.deviceId)
+        let after = try iPhone.vault.read { try $0.load(.session, sessionKey) }
+
+        XCTAssertNotNil(before)
+        XCTAssertEqual(after, before, "afficher mon code ne touche ni la session ni son ratchet")
     }
 
     func test_aCodeTowardsADeviceThatIsNotMine_isRefused() async throws {
@@ -187,8 +276,7 @@ final class E2EEOwnDeviceLinkingTests: XCTestCase {
         let iPhone = try await E2EETestPeer.enroll(alice, on: server)
         let mac = try await E2EETestPeer.enroll(alice, on: server)
         _ = try await E2EETestPeer.enroll(bob, on: server)
-        let macCode = try await linking(of: mac).pairingCode(towards: iPhone.device.deviceId)
-        _ = try await linking(of: iPhone).approve(scanned: macCode.scannable)
+        try await approve(mac, by: iPhone)
 
         try linking(of: iPhone).revoke(deviceId: mac.device.deviceId)
         let sealed = try await send("plus de copie", from: iPhone, to: bob, on: server)
@@ -198,20 +286,22 @@ final class E2EEOwnDeviceLinkingTests: XCTestCase {
     }
 }
 
-/// Un annuaire qui ment sur UN bundle de mon compte : celui qu'un serveur
-/// compromis servirait pour me faire épingler sa clé à la place de mon Mac.
-private final class SubstitutingDirectory: E2EEDirectoryClientProviding, @unchecked Sendable {
+/// Un annuaire qui ment sur les bundles de mon compte : il les réécrit (`rewrite`)
+/// ou en tait un (`drops`), comme le ferait un serveur compromis ou une place fantôme.
+private final class ScriptedDirectory: E2EEDirectoryClientProviding, @unchecked Sendable {
     private let honest: any E2EEDirectoryClientProviding
-    private let substitute: E2EEDeviceBundle
+    private let drops: UInt32?
+    private let rewrite: @Sendable (E2EEDeviceBundle) -> E2EEDeviceBundle
 
-    init(honest: any E2EEDirectoryClientProviding, substitute: E2EEDeviceBundle) {
+    init(honest: any E2EEDirectoryClientProviding, drops: UInt32? = nil, rewrite: @escaping @Sendable (E2EEDeviceBundle) -> E2EEDeviceBundle) {
         self.honest = honest
-        self.substitute = substitute
+        self.drops = drops
+        self.rewrite = rewrite
     }
 
     func bundles(userId: String, deviceIds: [UInt32]?) async throws -> E2EEUserBundles {
         let served = try await honest.bundles(userId: userId, deviceIds: deviceIds)
-        return E2EEUserBundles(userId: served.userId, devices: served.devices.map { $0.deviceId == substitute.deviceId ? substitute : $0 })
+        return E2EEUserBundles(userId: served.userId, devices: served.devices.filter { $0.deviceId != drops }.map(rewrite))
     }
 
     func enroll(_ request: E2EEEnrollDeviceRequest) async throws -> E2EEEnrollment { try await honest.enroll(request) }

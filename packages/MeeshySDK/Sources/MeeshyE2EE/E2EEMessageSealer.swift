@@ -118,7 +118,14 @@ public final class E2EEMessageSealer: E2EEMessageSealing {
     private func ownTargets() async throws -> (approved: [Target], unapproved: [UInt32]) {
         let others = try await directory.devices(userId: local.userId).devices.filter { $0.deviceId != local.deviceId }
         let pinned = try others.filter { try approvals.approvedIdentity(of: $0.deviceId) != nil }
-        let opened = try await withSessions(userId: local.userId, pinned)
+        var opened: [Target] = []
+        for device in pinned {
+            // Un de mes appareils dont le bundle ne porte pas la clé épinglée est
+            // refusé par le store (isTrustedIdentity) : il ne reçoit rien, et
+            // l'envoi aux autres continue.
+            guard let target = try? await withSessions(userId: local.userId, [device]).first else { continue }
+            opened.append(target)
+        }
         let approved = try opened.filter { target in
             try cipher.remoteIdentity(of: target.address) == approvals.approvedIdentity(of: target.address.deviceId)
         }

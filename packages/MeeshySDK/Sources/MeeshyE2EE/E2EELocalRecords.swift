@@ -112,6 +112,18 @@ public final class E2EEOwnDeviceApprovals: E2EEOwnDeviceApprovalProviding {
     public func revoke(deviceId: UInt32) throws {
         try vault.write { try $0.remove(.approvedOwnDevice, String(deviceId)) }
     }
+
+    public func approvedDeviceIds() throws -> [UInt32] {
+        try vault.read { try $0.keys(of: .approvedOwnDevice) }.compactMap(UInt32.init)
+    }
+
+    /// La clé épinglée, lue dans la transaction libsignal en cours : c'est là
+    /// que `MeeshySignalProtocolStore.isTrustedIdentity` fait respecter
+    /// l'approbation, pas dans une lecture séparée qu'un écrivain concurrent
+    /// pourrait devancer.
+    static func pinned(_ deviceId: UInt32, in transaction: any E2EERecordTransaction) throws -> Data? {
+        try transaction.load(.approvedOwnDevice, String(deviceId))
+    }
 }
 
 /// L'adresse de CET appareil telle que l'annuaire l'a enrôlé.

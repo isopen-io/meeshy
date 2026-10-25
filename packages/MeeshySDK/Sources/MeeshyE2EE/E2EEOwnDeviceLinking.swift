@@ -4,16 +4,19 @@ import LibSignalClient
 /// L'empreinte libsignal entre deux identités (le « numéro de sécurité ») :
 /// `NumericFingerprintGenerator`, version 2, 5 200 itérations — les valeurs de
 /// Signal. Les deux côtés affichent les MÊMES 60 chiffres ; le code scannable de
-/// l'un ne correspond qu'au code de l'autre (`compare(againstEncoding:)`).
+/// l'un ne correspond qu'au code de l'autre (`compare(againstEncoding:)`, qui
+/// vérifie les deux moitiés).
 public enum E2EEFingerprint {
     public static let version = 2
     public static let iterations = 5200
 
-    /// L'identifiant stable d'un appareil de compte : `<userId>.<deviceId>`, en
-    /// UTF-8. Chaque plateforme l'écrit à l'identique, sinon deux appareils du
-    /// même compte ne se reconnaîtraient jamais.
-    public static func deviceIdentifier(userId: String, deviceId: UInt32) -> Data {
-        Data("\(userId).\(deviceId)".utf8)
+    /// L'identifiant stable d'un appareil de MON compte (spec § 3.5) :
+    /// `meeshy-own-device:v1:<userId en minuscules>.<deviceId décimal>`, en
+    /// UTF-8. Le préfixe sépare ce domaine de celui des numéros de sécurité
+    /// d'un contact (#12520) : une empreinte calculée pour l'un ne vaut jamais
+    /// pour l'autre. Chaque plateforme l'écrit à l'identique.
+    public static func ownDeviceIdentifier(userId: String, deviceId: UInt32) -> Data {
+        Data("meeshy-own-device:v1:\(userId.lowercased()).\(deviceId)".utf8)
     }
 
     public static func between(
@@ -28,15 +31,48 @@ public enum E2EEFingerprint {
     }
 }
 
-/// Le code qu'un de mes appareils montre pour être approuvé par un autre (spec
-/// § 3.5) : 60 chiffres à comparer, et l'encodage du QR. Il porte la clé
-/// d'identité avec laquelle il a été calculé : c'est CETTE clé qui s'épingle si
-/// l'utilisateur confirme, jamais une clé relue entre-temps au serveur.
+/// Ce que porte le QR d'appairage : du TEXTE, pour que tout lecteur (caméra
+/// iOS, navigateur, Android) le rende tel quel —
+/// `meeshy-device-link:v1:<base64url sans remplissage de l'encodage scannable>`.
+public enum E2EEPairingPayload {
+    static let prefix = "meeshy-device-link:v1:"
+
+    public static func encode(_ scannable: Data) -> String {
+        prefix + scannable.base64EncodedString()
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
+    }
+
+    /// `nil` pour tout ce qui n'est pas un code d'appairage de cette version.
+    public static func decode(_ text: String) -> Data? {
+        guard text.hasPrefix(prefix) else { return nil }
+        let body = text.dropFirst(prefix.count)
+            .replacingOccurrences(of: "-", with: "+")
+            .replacingOccurrences(of: "_", with: "/")
+        let padded = body + String(repeating: "=", count: (4 - body.count % 4) % 4)
+        return Data(base64Encoded: padded)
+    }
+}
+
+/// Le code qu'un de mes appareils montre pour être approuvé par un autre.
 public struct E2EEPairingCode: Equatable, Sendable {
     public let deviceId: UInt32
-    public let identityKey: Data
+    /// Les 60 chiffres, à MONTRER seulement : leur comparaison à l'œil n'approuve
+    /// rien dans ce lot (une moitié est la même sur les deux écrans quoi qu'il
+    /// arrive ; spec § 3.5).
     public let displayable: String
-    public let scannable: Data
+    /// Le texte du QR (`E2EEPairingPayload`).
+    public let qrPayload: String
+}
+
+/// L'appareil dont l'empreinte correspond au code lu. Rien n'est épinglé tant
+/// que l'utilisateur ne l'a pas confirmé (`approve(_:)`), après avoir vu de
+/// quel appareil il s'agit.
+public struct E2EEPairingCandidate: Equatable, Sendable {
+    public let deviceId: UInt32
+    public let registrationId: UInt32
+    public let identityKey: Data
 }
 
 public struct E2EEOwnDeviceStatus: Equatable, Sendable {
@@ -48,22 +84,23 @@ public struct E2EEOwnDeviceStatus: Equatable, Sendable {
 public enum E2EEOwnDeviceLinkingError: Error, Equatable {
     /// L'annuaire n'annonce pas (ou plus) cet appareil sur mon compte.
     case unknownDevice(UInt32)
-    /// La clé que je connais pour cet appareil n'est plus celle du code montré.
-    case identityChanged(UInt32)
 }
 
 /// L'approbation de mes propres appareils (spec § 3.5, #12976). Un sens à la
-/// fois : l'appareil A approuve B en lisant le code de B, puis B approuve A en
-/// lisant celui de A. Rien n'est épinglé sans une correspondance d'empreinte :
-/// une clé substituée par le serveur donne une autre empreinte.
+/// fois : A lit le QR de B et confirme, puis B lit celui de A et confirme. Une
+/// clé substituée par le serveur donne une autre empreinte : rien ne
+/// correspond, rien ne s'épingle. Ce type ne touche JAMAIS aux sessions : il
+/// lit une clé publique (session courante ou bundle) et range une approbation.
 public protocol E2EEOwnDeviceLinkingProviding: Sendable {
+    /// Mes autres appareils actifs. Une approbation d'un appareil que l'annuaire
+    /// n'annonce plus est effacée : c'est le sens sûr.
     func ownDevices() async throws -> [E2EEOwnDeviceStatus]
     func pairingCode(towards deviceId: UInt32) async throws -> E2EEPairingCode
-    /// Approuve celui de mes appareils non approuvés dont l'empreinte correspond
-    /// au code lu ; `nil` si aucun ne correspond.
-    func approve(scanned encoding: Data) async throws -> UInt32?
-    /// Approuve après comparaison visuelle des 60 chiffres de `code`.
-    func approve(confirmed code: E2EEPairingCode) throws
+    /// Celui de mes appareils dont l'empreinte correspond au QR lu ; `nil` si
+    /// aucun, ou si le texte n'est pas un code d'appairage.
+    func candidate(matching qrPayload: String) async throws -> E2EEPairingCandidate?
+    /// Épingle la clé du candidat, après confirmation de l'utilisateur.
+    func approve(_ candidate: E2EEPairingCandidate) throws
     func revoke(deviceId: UInt32) throws
 }
 
@@ -86,11 +123,10 @@ public final class E2EEOwnDeviceLinking: E2EEOwnDeviceLinkingProviding {
     }
 
     public func ownDevices() async throws -> [E2EEOwnDeviceStatus] {
-        try await others().map { listing in
-            E2EEOwnDeviceStatus(
-                deviceId: listing.deviceId, registrationId: listing.registrationId,
-                approved: try isApproved(listing)
-            )
+        let listed = try await others()
+        try forgetApprovals(notIn: listed)
+        return try listed.map { listing in
+            E2EEOwnDeviceStatus(deviceId: listing.deviceId, registrationId: listing.registrationId, approved: try isApproved(listing))
         }
     }
 
@@ -98,26 +134,28 @@ public final class E2EEOwnDeviceLinking: E2EEOwnDeviceLinkingProviding {
         guard let listing = try await others().first(where: { $0.deviceId == deviceId }) else {
             throw E2EEOwnDeviceLinkingError.unknownDevice(deviceId)
         }
-        return try code(towards: listing.deviceId, identityKey: try await identity(of: listing))
+        let fingerprint = try fingerprint(towards: deviceId, identityKey: try await currentIdentity(of: listing))
+        return E2EEPairingCode(
+            deviceId: deviceId,
+            displayable: fingerprint.displayable.formatted,
+            qrPayload: E2EEPairingPayload.encode(fingerprint.scannable.encoding)
+        )
     }
 
-    public func approve(scanned encoding: Data) async throws -> UInt32? {
-        for listing in try await others() where try !isApproved(listing) {
-            let identityKey = try await identity(of: listing)
-            let fingerprint = try fingerprint(towards: listing.deviceId, identityKey: identityKey)
-            guard (try? fingerprint.scannable.compare(againstEncoding: encoding)) == true else { continue }
-            try approvals.approve(deviceId: listing.deviceId, identityKey: identityKey)
-            return listing.deviceId
+    public func candidate(matching qrPayload: String) async throws -> E2EEPairingCandidate? {
+        guard let scanned = E2EEPairingPayload.decode(qrPayload) else { return nil }
+        for listing in try await others() {
+            guard let identityKey = try? await currentIdentity(of: listing),
+                  let fingerprint = try? fingerprint(towards: listing.deviceId, identityKey: identityKey),
+                  (try? fingerprint.scannable.compare(againstEncoding: scanned)) == true
+            else { continue }
+            return E2EEPairingCandidate(deviceId: listing.deviceId, registrationId: listing.registrationId, identityKey: identityKey)
         }
         return nil
     }
 
-    public func approve(confirmed code: E2EEPairingCode) throws {
-        let address = E2EEDeviceAddress(userId: local.device.userId, deviceId: code.deviceId)
-        guard try cipher.remoteIdentity(of: address) == code.identityKey else {
-            throw E2EEOwnDeviceLinkingError.identityChanged(code.deviceId)
-        }
-        try approvals.approve(deviceId: code.deviceId, identityKey: code.identityKey)
+    public func approve(_ candidate: E2EEPairingCandidate) throws {
+        try approvals.approve(deviceId: candidate.deviceId, identityKey: candidate.identityKey)
     }
 
     public func revoke(deviceId: UInt32) throws {
@@ -128,49 +166,48 @@ public final class E2EEOwnDeviceLinking: E2EEOwnDeviceLinkingProviding {
         try await directory.devices(userId: local.device.userId).devices.filter { $0.deviceId != local.device.deviceId }
     }
 
-    private func address(of listing: E2EEDeviceListing) -> E2EEDeviceAddress {
-        E2EEDeviceAddress(userId: local.device.userId, deviceId: listing.deviceId)
+    private func address(of deviceId: UInt32) -> E2EEDeviceAddress {
+        E2EEDeviceAddress(userId: local.device.userId, deviceId: deviceId)
     }
 
+    private func forgetApprovals(notIn listed: [E2EEDeviceListing]) throws {
+        let active = Set(listed.map(\.deviceId))
+        try approvals.approvedDeviceIds().filter { !active.contains($0) }.forEach { try approvals.revoke(deviceId: $0) }
+    }
+
+    /// Approuvé : une clé épinglée, et aucune session qui dise une AUTRE clé
+    /// pour la génération que l'annuaire annonce. Une session d'une autre
+    /// génération (place reprise par une réinstallation, #12543) ne prouve rien :
+    /// l'appareil n'est plus celui qu'on a approuvé.
     private func isApproved(_ listing: E2EEDeviceListing) throws -> Bool {
         guard let pinned = try approvals.approvedIdentity(of: listing.deviceId) else { return false }
-        return try cipher.remoteIdentity(of: address(of: listing)) == pinned
+        let address = address(of: listing.deviceId)
+        guard let generation = try cipher.remoteRegistrationId(of: address) else { return true }
+        guard generation == listing.registrationId else { return false }
+        return try cipher.remoteIdentity(of: address) == pinned
     }
 
-    /// La clé d'identité de l'appareil : celle de la session courante si elle
-    /// vise la génération annoncée, sinon celle d'un bundle frais, dont la
-    /// session ouverte servira aussi au prochain envoi (la pré-clé réservée
-    /// n'est pas perdue).
-    private func identity(of listing: E2EEDeviceListing) async throws -> Data {
-        let address = address(of: listing)
+    /// La clé publique de la génération annoncée : celle de la session courante
+    /// si elle vise cette génération, sinon celle d'un bundle. Aucune session
+    /// n'est ouverte ni effacée ici (une session saine perdue, ce sont des
+    /// messages en vol perdus).
+    private func currentIdentity(of listing: E2EEDeviceListing) async throws -> Data {
+        let address = address(of: listing.deviceId)
         if try cipher.remoteRegistrationId(of: address) == listing.registrationId, let known = try cipher.remoteIdentity(of: address) {
             return known
         }
         let bundles = try await directory.bundles(userId: local.device.userId, deviceIds: [listing.deviceId]).devices
-        guard let bundle = bundles.first(where: { $0.deviceId == listing.deviceId }) else {
-            throw E2EEOwnDeviceLinkingError.unknownDevice(listing.deviceId)
-        }
-        try cipher.deleteSession(with: address)
-        try cipher.startSession(with: bundle, of: local.device.userId)
-        guard let opened = try cipher.remoteIdentity(of: address) else {
-            throw E2EEOwnDeviceLinkingError.unknownDevice(listing.deviceId)
-        }
-        return opened
+        guard let bundle = bundles.first(where: { $0.deviceId == listing.deviceId && $0.registrationId == listing.registrationId }),
+              let identityKey = Data(base64Encoded: bundle.identityKey)
+        else { throw E2EEOwnDeviceLinkingError.unknownDevice(listing.deviceId) }
+        return identityKey
     }
 
     private func fingerprint(towards deviceId: UInt32, identityKey: Data) throws -> Fingerprint {
         let userId = local.device.userId
         return try E2EEFingerprint.between(
-            local: (E2EEFingerprint.deviceIdentifier(userId: userId, deviceId: local.device.deviceId), local.identity.keyPair.publicKey),
-            remote: (E2EEFingerprint.deviceIdentifier(userId: userId, deviceId: deviceId), try PublicKey(identityKey))
-        )
-    }
-
-    private func code(towards deviceId: UInt32, identityKey: Data) throws -> E2EEPairingCode {
-        let fingerprint = try fingerprint(towards: deviceId, identityKey: identityKey)
-        return E2EEPairingCode(
-            deviceId: deviceId, identityKey: identityKey,
-            displayable: fingerprint.displayable.formatted, scannable: fingerprint.scannable.encoding
+            local: (E2EEFingerprint.ownDeviceIdentifier(userId: userId, deviceId: local.device.deviceId), local.identity.keyPair.publicKey),
+            remote: (E2EEFingerprint.ownDeviceIdentifier(userId: userId, deviceId: deviceId), try PublicKey(identityKey))
         )
     }
 }
