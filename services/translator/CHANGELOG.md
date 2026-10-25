@@ -1,5 +1,241 @@
 # @meeshy/translator
 
+## 1.92.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - le retrait d'un appareil chiffré nomme la génération lue, ne part que d'une liste relue dans l'écran, et un appareil changé (409) recharge la liste en le disant (#13013)
+  - une confirmation refusée (compte changé) se referme au lieu de se représenter, et le seul élément garanti de la confirmation est le numéro (#13009, contre-audit)
+  - la chaîne des dates d'un appareil chiffré, encore servie sur dev, est classée android-only au manifeste (#13038)
+  - les chaînes de « Mes appareils chiffrés » sont classées android-only au manifeste (#13014)
+  - le témoin des effets d'enregistrement du profil collecte sur un répartiteur immédiat, il reçoit chaque effet envoyé (#13038)
+  - le témoin du temps réel du fil abonne son collecteur avant d'émettre, et l'attente d'une ligne absente se prouve à l'horloge virtuelle (#13038)
+  - le retrait retire aussi tout appareil posé sur la session pendant sa fermeture, et la barrière posée en cours d'enrôlement a son témoin (#13013)
+  - le retrait d'un appareil ferme sa session PAR DÉFAUT, et une session dont l'appareil a été retiré n'en réenrôle plus aucun — il faut une nouvelle connexion (#13013)
+  - le retrait ne ferme la session de l'appareil que sur demande (?signOut=true, web) — les clients publiés gardent leur sens (#9223) — et la fermeture a son témoin (#13013)
+  - « Approuver » épingle exactement la confirmation présentée, le lecteur ouvert pour un appareil ne lit que lui, la confirmation dit son numéro et son heure, et un candidat ne se fabrique que par l'empreinte (#13009, audit)
+  - retirer un de mes appareils met fin à sa session et refuse une place reprise ; Android ne retire que sur une liste fraîche (#13014)
+  - « Mes appareils chiffrés » tient les règles maison — foregroundStyle, ViewModel sans singleton, cache à part (#13009)
+  - le SDK iOS lit le contrat GET /e2ee/devices de dev (enrolledAt, plateforme inconnue) (#13009)
+  - Réglages › Sécurité › « Mes appareils chiffrés » — la liste servie, le retrait d'un appareil perdu ou volé, et ce que ce navigateur ou la coque ne lit pas (#13013)
+  - une vitre de verre floute la prise ET les textes posés dessous, dans l'ordre des textes (#12753)
+  - « déconnecté » ne se dit que d'une session vraiment fermée — la session de l'appareil se ferme AVANT la révocation, et un échec rend 503 sans rien retirer (#13013)
+  - un code réécrit passe en AfterFirstUnlock, un effacement en attente qui échoue bloque toute écriture, la feuille ne force plus le retrait du PIN maître (#12655)
+  - Réglages › Sécurité › « Mes appareils chiffrés » liste mes appareils et retire celui que j'ai perdu, sans promettre de QR (#13014)
+  - la déconnexion efface tout le coffre des verrous, et un verrou n'entre dans la liste qu'une fois son code écrit (#12655)
+  - sur 2G, la coque Android précharge ses écrans livrés dans l'APK, comme le web en 4G (#13021)
+  - retirer un appareil chiffré depuis une autre session ferme aussi la sienne — un appareil volé ne se réenrôle plus — et le retrait a sa limite de débit (#13013)
+  - GET /e2ee/devices liste mes appareils chiffrés (plateforme, libellé, dates, appareil courant) à moi seul, sans aucune clé (#13014)
+  - la passerelle rend à l'appelant ses appareils chiffrés, avec plateforme, modèle et dates, et marque le sien — aucune clé n'y voyage (#13009)
+  - la passerelle sert GET /e2ee/devices, la liste de MES appareils chiffrés — plateforme, nom, dates, session courante, et rien d'autre (#13013)
+  - la reconstruction des verrous depuis le trousseau déclare ses types de closure (#12655)
+  - le gestionnaire d'actions de notification reçoit le gestionnaire de verrous, plus une closure — le témoin éprouve le câblage de production (#12655)
+  - « Ouvrir la conversation chiffrée » ne suit l'id servi que s'il est chiffré de bout en bout, et un statut chiffré sans mode s'apprend comme le bout en bout (#12966, #12950)
+  - un appel entrant vers une conversation sous PIN se décroche encore avec son relais — le scellé admet `iceServers` et `callerAvatar` (#12655)
+  - le widget et le préchargement lisent le jeu de verrous du contenu — tant que la liste est inconnue, il porte les conversations dont le trousseau tient le code (#12655)
+  - tant que la liste des verrous est inconnue, le code d'une conversation la verrouille — l'ouverture, la rangée, l'aperçu et le balayage ne la lisent plus ouverte (#12655)
+  - une liste des verrous lue absente sans miroir se reconstruit depuis les codes du trousseau — « aucun verrou » n'est plus déduit d'une mise à jour (#12655)
+  - sur iOS, la fiche Chiffrement d'un tête-à-tête chiffré ouvre, à côté, la conversation non chiffrée avec ce contact — jamais un fil vu chiffré (#12966, #12950)
+  - l'auteur voyage dans le chiffré, une approbation épingle sa génération, et une copie ne se perd jamais en silence (#12976)
+  - sur iOS, le chiffrement AU REPOS se désactive encore, seul le bout en bout est irréversible ; un tête-à-tête chiffré renvoie à une conversation non chiffrée avec ce contact (#12950, #12966)
+  - le chiffré d'abord, une paire de deux, le statut honnête, et le geste web vers le tête-à-tête lisible (#12966)
+  - le plafond du chunk d'envoi de médias suit sa mesure après le partage en lots (3,02 Ko, plafond 4)
+  - la relance de mon envoi scellé ne repeint plus une liste annulée — les règles maison iOS repassent au vert — run test
+  - le plafond du fil suit sa mesure après le badge de chiffrement au repos (49,01 Ko, plafond 50) — run test
+  - le commentaire des plafonds de partage ne date plus sa révision — les règles maison iOS repassent au vert — run test
+  - l'épinglage de mes appareils est appliqué par libsignal, l'appairage ne touche aucune session et rien ne se perd entre ses deux sens (#12976)
+  - mon envoi acquitté après la ligne y parvient sans autre changement, et la tolérance de composition a ses témoins de bord (#12968)
+  - « Éditer » d'une pièce de commentaire reprend la clé sans argument d'iOS (composer.recent.edit) (#12972)
+  - le plafond du chunk d'envoi de médias suit sa mesure après le partage en lots (3,02 Ko, plafond 4) — run test
+  - le commentaire des plafonds de partage ne date plus sa révision — run test
+  - le commentaire des plafonds de partage ne date plus sa révision — les règles maison iOS repassent au vert
+  - sur iOS, une conversation vue chiffrée de bout en bout ne repasse jamais en clair — ni geste de désactivation, ni rétrogradation servie (#12950)
+  - le commentaire des plafonds de partage nomme l'issue, pas la date — règle maison narrative-comment — run test (report de #12996, Refs #11287)
+  - le commentaire des plafonds de partage nomme l'issue, pas la date — règle maison narrative-comment
+  - un commentaire joint et montre une photo ou une vidéo, et sa pièce s'ouvre dans la retouche unique (#12972, #12735)
+  - le scellé e2ee se ferme par défaut, survit au socket et tait le bouton « revenir en bas » (#12983)
+  - la ligne lit le clair local à SA place, relue à chaque rendu — auteur dit comme la ligne le dit, ni avis système ni rejeu (#12968)
+  - j'approuve mon autre appareil par son empreinte libsignal, et mes messages chiffrés lui parviennent — SDK (#12976)
+  - un message chiffré de bout en bout dit où le lire au lieu d'afficher « [Encrypted] » (#12983)
+  - un partage vers une conversation chiffrée sur le serveur part, et un refus de transfert se dit dans la langue du lecteur
+  - le web envoie un partage de 100 fichiers et 5 Go en lots que la passerelle accepte, la reprise attend le débit (#12974)
+  - un partage emporte 100 fichiers et 5 Go sur tous les miroirs, chiffres formatés depuis ShareLimits (#12974)
+  - la retouche unique peint les effets de visage de l'appel (#12733)
+  - la feuille de création d'un post passe par MeeshyIcons, et le cliquet des icônes redevient vert (#12969)
+  - le registre du bout en bout ne traverse plus les témoins, et le témoin du régime ne dépasse plus le cliquet de typage (#12949)
+  - la retouche vidéo pose filtres et cadres, et son aperçu recadre la vidéo (#12736)
+  - une vidéo en attente et la vidéo prise pour un post s'ouvrent dans la retouche unique (#12735)
+  - la ligne de liste d'une conversation chiffrée montre le clair que l'appareil tient de son dernier message (#12968)
+  - la feuille de création d'un post se découpe par responsabilité, de 1 136 à 440 lignes (#12969)
+  - une conversation vue chiffrée de bout en bout reste fermée au clair, pour tout envoi, et la fiche dit que le bout en bout ne se désactive pas (#12949)
+  - une conversation chiffrée de bout en bout ne repasse jamais en clair — la seule écriture du régime refuse de quitter e2ee (#12949)
+  - « Ouvrir le lien » du menu garde un lien Meeshy dans l'app, comme le toucher, et ne quitte plus la coque Android (#12965)
+  - un clair libsignal ne s'adopte qu'à SA place sur la ligne que la cellule rend, et un texte servi chiffré ne s'affiche jamais (#12916)
+  - le commentaire du groupe crawlers IA ne contient plus la chaîne littérale `User-Agent: *` qui faisait compter deux groupes indexeurs (Refs #12939)
+  - la photo prise depuis la feuille de création d'un post s'ouvre dans la retouche unique (#12735)
+  - l'auteur de la retouche se lit de la session à l'ouverture, sans champ de plus dans ChatUiState (#12734)
+  - « Éditer » d'un média récent l'ouvre dans la retouche unique avant sa pose (#12735)
+  - toucher une photo en attente l'ouvre dans la retouche unique, et Terminé la remplace à sa place (#12735)
+  - le clair libsignal atteint la bulle, la ligne rattrapée naît chiffrée, et l'écho ne remplace plus le clair de l'expéditeur (#12916, #12917, #12918)
+  - les cadres de la retouche écrivent le nom de l'auteur (#12734)
+  - rendre Meeshy découvrable par un agent IA (GREEN)
+  - gate SEO vitrine — balises indexation + JSON-LD Organization/WebApplication citables par les moteurs IA
+  - la reprise d'une preuve de liaison par la même session n'écrit rien, et son usage unique ne dépend d'aucun index (#12933)
+  - une pré-clé unique remise à un pair n'est jamais remise en service, et une preuve de liaison ne sert qu'une fois (#12933)
+  - la lecture n'apprend une désactivation qu'une fois la bascule vue, et une désactivation antidatée n'efface jamais une ère chiffrée (#12846)
+  - dans la coque Android, l'en-tête de /download mène à l'adresse publique, comme son pied, et plus à « page introuvable » (#12930)
+  - l'aperçu d'appui long retient le compte connecté au fil de la session, et la déconnexion le refuse vraiment — run test (#12766)
+  - le témoin de la vidéo qui part lit son calque de texte, et la rétention suit le texte de #12912 (#12910)
+  - toucher le push « moments à immortaliser » ouvre le carnet, sans l’étape (Refs #10175)
+  - deux littéraux non-chrome marqués harmony-exempt (iter-76w)
+  - le scellé d'une conversation sous PIN admet les seules clés de routage au lieu d'en exclure quatre (#12655)
+  - tant que la liste des verrous n'est pas lue, les gestes gardés par le PIN se refusent (#12655)
+  - une liste des verrous lue absente ne vaut plus « aucun verrou » — le miroir fait foi et ne se réécrit pas à vide (#12655)
+  - ConversationEncryptionService est Sendable sans unchecked (report de #12830/#12722) — run test (Refs #11287)
+  - les illustrations des cadres d'appel passent par ImageDownsampler (report de #12722) — run test (Refs #11287)
+  - le fil fermé libère son contrôleur, et les témoins du composer suivent le texte de la retouche — run test
+  - ConversationEncryptionService déclare Sendable vérifié — la garde des services @unchecked repasse au vert
+  - l'aperçu d'appui long de la liste pose son voile en une ligne que la garde #11222 reconnaît
+  - « Moments à immortaliser » se règle sous « Notifications du jeu » (Refs #10268)
+  - le lieu se cherche sur chaque image d'une photo, propriétés et XMP, dans une liste unique
+  - verrouiller la baisse de foreground-color (2401 -> 2400)
+  - quitter le fil pendant un enregistrement arrête le moteur, contexte audio et vumètre compris (#12908)
+  - le refus d'éditer un message scellé tient aussi après une désactivation vue par l'utilisateur, sans grossir ConversationViewModel (#12881)
+  - les illustrations des cadres d'appel se sous-échantillonnent par ImageDownsampler
+  - une photo HEIC envoyée telle quelle ne garde plus son lieu GPS ni ses noms de lieu
+  - après une désactivation datée, la lecture iOS retraduit les messages suivants et ne les marque plus « non chiffrés » (#12883)
+  - une installation iOS sans enrôlement local tire une identité neuve au lieu de reprendre celle du trousseau (#12882)
+  - l'iOS n'envoie jamais le clair d'un message scellé à l'édition, même après la désactivation du chiffrement (#12881)
+  - l'utilisateur comprend, sans jargon, comment la conversation ouverte est chiffrée (#12880)
+  - la préparation de l'appareil chiffré suit la session ouverte, et deux préparations ne se chevauchent jamais sur le même coffre (#12769)
+  - une désactivation du chiffrement annoncée par le seul serveur ne fait plus partir de clair sans que l'utilisateur ait vu la bascule (#12846)
+  - les clés de contenu retirées au scellé sont des chaînes, une constante Sendable que l'extension compile en Swift 6 (#12655) — run test
+  - les journaux de traduction disent un compte, jamais le texte d'un message
+  - consigner le spécificateur nu de dialogs_removal_message
+  - l'aperçu d'appui long ne se rouvre pas pour le compte qui vient de sortir — run test (#12766)
+  - quatre gardes de source de dev relisent la forme que leur code a prise
+  - fermer une conversation libère de nouveau son écran — la cellule ne capture plus le contrôleur par le marqueur « non chiffré »
+  - les boucles vidéo d'un cadre d'appel suivent la politique média
+  - les illustrations d'un cadre d'appel se sous-échantillonnent par ImageDownsampler
+  - le repli des ambiances d'appel pointe vers l'arrière, pas vers la gauche
+  - une photo HEIC envoyée telle quelle ne transporte plus sa position GPS
+  - Progression ne se mesure pas sur son squelette
+  - la liste des conversations ne gèle plus sous mouvement réduit — la règle 32 ne crée plus de transition, et la passe de fenêtrage ne peut plus osciller
+  - la baisse de foreground-color venue de dev est verrouillée dans la référence des règles maison
+  - les gestes gardés par le PIN se lisent sur le main actor, comme l'énumération qui les nomme (#12655) — run test
+  - la clé de provenance éphémère relit le trousseau hors du verrou et de moins en moins souvent (#12721)
+  - la charge scellée d'une conversation sous PIN ne garde plus son texte, sa traduction, sa transcription ni son chiffré (#12655)
+  - une réponse refusée sous PIN le dit par une notification locale au lieu de disparaître (#12655)
+  - un lancement avant le premier déverrouillage ne réécrit plus la liste des verrous PIN (#12655)
+  - la baisse de foreground-color venue de dev est verrouillée, et le projet inscrit les deux témoins de chiffrement de dev [xcodegen]
+  - la liste virtualisée ne se fige plus sous « animations réduites » — une cale ne s'anime jamais (#12885)
+  - l'ancre du fil de démo tient le jour du navigateur ET celui de Paris — les gardes passent entre 00:00 et 01:36 UTC (#12878)
+  - l'onglet Détails présente bio, langues, pays, chiffrement, voix et ancienneté comme sur iOS
+  - le verrou PIN se lit en une fois au fichier miroir — un déverrouillage pendant la lecture n'ouvre plus une conversation sous PIN (#12655) [xcodegen]
+  - l'onglet Détails projette À propos, la voix publique et la bande de statistiques
+  - l'echelon pose de l'echelle tourne de 0 deg, plus de -0
+  - types explicites sur lock/dialogs, référence croisée
+  - le témoin de la photo peinte ne charge pas sharp, que le job des témoins n'installe pas
+  - un enrôlement complet d'une identité déjà active remplace ses pré-clés uniques, et ne sert plus celles de l'installation morte (#12882)
+  - feature:chat déclare sa dépendance Timber
+  - un message scellé sous e2ee ne s'édite jamais en clair, même après la désactivation de sa conversation (#12881)
+  - l'avatar flottant ouvre ma page par la regle de FloatingChrome, tests de l'echelle mesures dans leur repere
+  - les boucles vidéo des cadres d'appel adoptent la politique média — run test (Refs #11287)
+  - le cadre téléphone ne compte que le réseau du document courant, et Progression se mesure en entier
+  - la photo d'une cible est peinte avant la capture, et deux rendus Chromium coïncident
+  - la nouvelle route de désactivation du chiffrement rejoint le cliquet de classement
+  - une demande de micro abandonnée relâche le flux reçu en retard et ne démarre ni enregistrement ni service de la coque (#12874)
+  - l'enregistrement est optimiste, revient en arrière si la file abandonne
+  - seuls les champs modifiés partent et vider ma bio l'efface
+  - le menu de rangée offre « Gérer les membres » selon la loi d'actions
+  - glisser pour répondre et les actions TalkBack lisent la loi du message
+  - un changement de compte pendant la préparation de l'appareil chiffré ne rend jamais l'appareil de l'autre compte (#12769)
+  - la clé de provenance éphémère se retente sur une horloge monotone — une heure qui recule ne la fige plus (#12721)
+  - une conversation sous PIN refuse aussi Rejoindre, Ajouter le contact et Ouvrir dans Plans (#12655)
+  - un verrou PIN inconnu scelle aussi le contenu — rien en clair avant le premier déverrouillage (#12655)
+  - une clé de verrous absente d'un domaine lisible reste « ouverte » — la mise à jour ne retire pas Répondre (#12655)
+  - le lot commutable n'ajoute rien aux règles maison iOS — unchecked Sendable justifiés, foregroundStyle, aucune date en commentaire (#12522)
+  - en Bulles, le menu d'un message s'ancre sous sa bulle
+  - en Rivière, l'aperçu d'appui long est la bulle du couloir, à sa place — run test
+  - le menu d'une rangée offre « Gérer les membres » à qui la loi l'ouvre
+  - une conversation sous PIN n'accepte aucune action depuis l'écran verrouillé — run test
+  - l'échéance d'un lien de partage a sa ligne, et /links/share tient dans 320 px
+  - les règles maison redeviennent vertes après le lot E2EE libsignal
+  - la clé de provenance se relit après le premier déverrouillage, et une provenance réseau ne touche pas le trousseau
+  - le verrou E2EE est unique par processus, non réentrant, et son verrou local se prouve seul
+  - les sites du basculement de chiffrement suivent les règles maison — dev repasse les gardes iOS
+  - les sites libsignal suivent les règles maison — dev repasse les gardes iOS
+  - iOS active ET désactive le chiffrement d'une conversation, et le fil ouvert change de régime sans recharger (#12522)
+  - le chiffrement d'une conversation se désactive et se réactive, par une bascule atomique sur l'époque du régime (#12522)
+  - « Modifier » n'est plus offert en server/hybrid, et un vecteur partagé qui change relance la CI Android
+  - les sites libsignal suivent les règles maison — dev repasse les gardes iOS — run test
+  - la garde du fond de l'aperçu revient dans le composite gate — dev repasse la voie de parité
+  - le rang créateur par privilège ne plie plus la casse
+  - les témoins unitaires suivent le privilège MODERATOR (#11217)
+  - StoryBackgroundLayer initialise playbackQoE avant super.init — run test (Refs #11287)
+  - le rang effectif de conversation suit le privilège MODERATOR (#11217)
+  - « Modifier » n'est plus offert en server/hybrid, et hybrid ne se dit plus « E2EE + serveur »
+  - « Chiffré sur le serveur » pour server et hybrid, « de bout en bout » réservé à e2ee
+  - les boutons Flux et avatar reproduisent iOS, echelle de menu et voile compris
+  - la fiche défile d'un seul tenant, en-tête repliable et onglets épinglés
+  - le fil se met à jour en direct sans recharger la conversation
+  - bloquer, masquer, quitter, renommer, signaler et verrouiller passent par les confirmations d'iOS
+  - un message reçu deux fois ne produit ni doublon ni retour en arrière
+  - la QoE du fond de story compile sous l'isolation stricte
+  - le fil type ses 21 événements temps réel et leurs deltas locaux
+  - la fiche sait replier son en-tête et lire la présence en direct
+  - marquer lu sans réseau quand la conversation est déjà ouverte
+  - les boutons flottants se posent contre un bord, bornes par la zone sure reelle
+  - les témoins HEIC attendent l'acteur MediaCompressor — dev recompile, run test
+  - StoryBackgroundLayer pose playbackQoE après super.init() — run test
+  - la mention « modifié par un modérateur » survit à la revalidation et aux conversations fermées
+  - les deux témoins HEIC de MediaCompressorTests attendent l'acteur [xcodegen]
+  - le mémo du déchiffreur est lié à la clé, le verrou purge toujours sa mémoire, l'aperçu ne fait sortir aucun lien déchiffré (#11232)
+  - le fil et l'aperçu cherchent la clé sous le PAIR local de la conversation directe (#11232)
+  - « modifié par un modérateur » et « Modifier » réoffert au modérateur de plateforme
+  - le déchiffreur simulé de l'aperçu se conforme au protocole par extension, comme DecryptionActor (#11232)
+  - la QoE des stories ne mesure que la story publiée que le lecteur déclare, première image prise sur la seule composition (run test)
+  - la lecture d'une story remonte son QoE, première image mesurée depuis isReadyForDisplay (run test)
+  - la rangée passe son type à l'aperçu, et la référence de cohésion ne remonte pas
+  - l'aperçu chiffré cherche la session sous l'utilisateur, se purge à la déconnexion et au verrou
+  - l'aperçu d'appui long d'une conversation chiffrée déchiffre ses derniers messages sur l'appareil
+  - une seule définition du chiffré pour la paire, et un invité sans compte n'en fait pas une (#12966)
+  - un second tête-à-tête, lisible par le serveur, à côté du chiffré (#12966)
+  - regimeIsEndToEnd n'a jamais besoin de encryptionEnabledAt — le cliquet de typecheck repasse sous le plafond (#12967)
+  - le fil « jeu » ne remplace plus de bannière, le push photo n'annonce que s'il part (Refs #10267)
+  - le push photo ne part que vers les appareils qui savent l'ouvrir, dans le fil « jeu » (Refs #10267)
+  - 3 fixtures de messageEditAdmission suivent #12881 (isEncrypted/encryptionMode requis)
+  - le sceau d'une entrée de file la lie à son destinataire, son événement et sa clé de dédup
+  - une entrée scellée que le drain ne peut pas rouvrir pour le moment est remise en file
+  - une clé d'activation d'avant le chiffrement au repos ne devient jamais orpheline
+  - chaque entrée de file hors ligne qui porte du texte déclare le régime de sa conversation
+  - un message chiffré au repos ne part plus vers l'agent IA
+  - l'épingle d'un message chiffré au repos dit qu'elle est chiffrée, et deux portes de lecture ont leur témoin
+  - l'aperçu de liste recalculé d'une conversation chiffrée au repos sert le clair
+  - une traduction dont le régime ne se relit pas n'est plus rangée en clair
+  - le clair d'une conversation chiffrée au repos ne part plus dans Redis ni vers le cache du translator
+  - aucune surface ne sert plus le chiffré au repos comme du texte, et /sync rend le clair
+  - le refus REST de `system` passe par le même prédicat que le socket et le lien
+  - une ligne server éditée avant le chiffrement au repos sert son texte édité, jamais celui d'avant
+  - un messageType « system » déclaré par un client ne dispense plus du scellement, et il est refusé
+  - une clé maîtresse erronée refuse l'envoi au lieu de réécrire les clés des conversations
+  - la traduction automatique d'un message server/hybrid part enfin, depuis son clair
+  - toute lecture et toute écriture d'un message server/hybrid passent par le chiffrement au repos
+  - une clé au repos ne parle que pour sa conversation, et seule la passerelle écrit un chiffré au repos
+  - les messages server et hybrid sont chiffrés au repos et servis en clair
+  - l'édition refuse la vue unique, le chiffré et les avis système sur les quatre transports
+  - la citation d'un message modéré ne diffuse ni l'id ni le rang du modérateur (#12792)
+  - l'écriture socket d'une édition et ses effets durables vivent ensemble ; le cliquet de cohésion verrouille les gains
+  - l'auteur d'une modification par un modérateur est servi par lecteur, liste comprise
+  - la modification d'un modérateur de plateforme est enregistrée, servie et diffusée
+  - un texte chiffré au repos ne se pose ni dans le cache Redis ni dans les journaux
+  - un tête-à-tête lisible par le serveur se demande à côté du chiffré (#12966)
+  - le catalogue des endpoints suit la route DELETE de désactivation du chiffrement
+  - le catalogue des routes suit le manifeste de dev (report de #12873) — run test (Refs #11287)
+  - l'autorité de conversation est une loi partagée, les permissions mortes s'en vont
+
 ## 1.91.0
 
 ### Minor Changes
