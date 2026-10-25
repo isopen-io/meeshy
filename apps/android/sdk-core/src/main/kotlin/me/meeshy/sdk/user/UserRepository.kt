@@ -30,8 +30,13 @@ import me.meeshy.sdk.net.pagedApiCall
 import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.OutboxLanes
 import me.meeshy.sdk.outbox.OutboxMutation
+import me.meeshy.sdk.outbox.OutboxOutcome
 import me.meeshy.sdk.outbox.OutboxRepository
+import me.meeshy.sdk.outbox.OutboxState
+import me.meeshy.sdk.model.profile.ProfileEditDiff
+import me.meeshy.sdk.session.PendingProfileEdits
 import me.meeshy.sdk.session.SessionRepository
+import kotlinx.coroutines.flow.first
 import kotlinx.serialization.encodeToString
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -77,7 +82,10 @@ class UserRepository @Inject constructor(
      * lane — surviving offline and process death instead of an online-first REST
      * call a dropped connection would silently lose. The [OutboxFlushWorker]
      * delivers it (reconciling with the server-returned user, or reverting on a hard
-     * exhaust) and the coalescer keeps only the latest edit. Inert with no session
+     * exhaust) and the coalescer keeps only the latest row — so the edits still
+     * PENDING are folded into the new one first ([ProfileEditDiff.combine]): a
+     * request carries only the changed fields, and replacing an older one must
+     * never drop a field it was the only one to carry. Inert with no session
      * (returns `null`, no optimistic flip). Surpasses iOS, whose edit is online-only.
      *
      * @return the queued row's `cmid`, or `null` when there is no active session or
@@ -87,15 +95,31 @@ class UserRepository @Inject constructor(
     suspend fun enqueueProfileEdit(request: UpdateProfileRequest): String? {
         val userId = sessionRepository.currentUserId?.takeIf { it.isNotBlank() } ?: return null
         sessionRepository.applyProfileEdit(request)
+        val queued = PendingProfileEdits.decode(
+            rows = outboxRepository.deliverable(OutboxLanes.PROFILE),
+            userId = userId,
+            json = MeeshyApi.json,
+            states = setOf(OutboxState.PENDING),
+        )
+        val merged = (queued + request).reduce(ProfileEditDiff::combine)
         return outboxRepository.enqueue(
             OutboxMutation(
                 kind = OutboxKind.UPDATE_PROFILE,
                 lane = OutboxLanes.PROFILE,
                 targetId = userId,
-                payload = MeeshyApi.json.encodeToString(request),
+                payload = MeeshyApi.json.encodeToString(merged),
             ),
         )
     }
+
+    /**
+     * Suspends until the queued profile edit [cmid] reaches a terminal outcome and tells whether the
+     * outbox ABANDONED it (exhausted: retries spent or refused) — the screen then restores its snapshot
+     * and reopens the editor. Delivered, superseded by a newer edit or cancelled answers `false`.
+     * Call it before waking the flush worker: the outcome stream does not replay.
+     */
+    suspend fun awaitProfileEditAbandoned(cmid: String): Boolean =
+        outboxRepository.outcomes.first { it.cmid == cmid } is OutboxOutcome.Exhausted
 
     suspend fun updateAvatar(url: String): NetworkResult<MeeshyUser> =
         apiCall { userApi.updateAvatar(UpdateAvatarRequest(url)) }.map { it.user }

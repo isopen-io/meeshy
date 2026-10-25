@@ -50,6 +50,7 @@
     <string name="profile_progression_subtitle">Emblemas, nível e sequência</string>
     <string name="profile_progression_title">Progresso</string>
     <string name="profile_save">Salvar</string>
+    <string name="profile_save_error">Erro ao salvar</string>
     <string name="profile_section_contact">CONTATO</string>
     <string name="profile_section_identity">IDENTIDADE</string>
     <string name="profile_section_languages">IDIOMAS</string>

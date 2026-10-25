@@ -50,6 +50,7 @@
     <string name="profile_progression_subtitle">Insignias, nivel y racha</string>
     <string name="profile_progression_title">Progreso</string>
     <string name="profile_save">Guardar</string>
+    <string name="profile_save_error">Error al guardar</string>
     <string name="profile_section_contact">CONTACTO</string>
     <string name="profile_section_identity">IDENTIDAD</string>
     <string name="profile_section_languages">IDIOMAS</string>

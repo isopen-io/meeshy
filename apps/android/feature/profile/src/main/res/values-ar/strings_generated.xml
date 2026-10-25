@@ -50,6 +50,7 @@
     <string name="profile_progression_subtitle">الشارات والمستوى والسلسلة</string>
     <string name="profile_progression_title">التقدّم</string>
     <string name="profile_save">حفظ</string>
+    <string name="profile_save_error">خطأ أثناء الحفظ</string>
     <string name="profile_section_contact">الاتصال</string>
     <string name="profile_section_identity">الهوية</string>
     <string name="profile_section_languages">اللغات</string>
