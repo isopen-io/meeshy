@@ -401,6 +401,9 @@ final class ConversationLockManager: ObservableObject, ConversationLockGating {
     /// La liste persistée a-t-elle été lue, données protégées disponibles ?
     /// Tant que non, rien ne la réécrit.
     private var hasLoadedLockedIds = false
+    /// La liste en mémoire vient-elle d'une LECTURE (liste persistée ou
+    /// miroir) ? Tant que non, toute conversation peut être sous PIN.
+    private var knowsLockedIds = false
 
     private let masterPinKey = "meeshy_master_pin"
     private let biometricStateKey = "meeshy_lock_biometric_state"
@@ -543,6 +546,15 @@ final class ConversationLockManager: ObservableObject, ConversationLockGating {
 
     func isLocked(_ conversationId: String) -> Bool {
         lockedConversationIds.contains(conversationId)
+    }
+
+    /// **La conversation PEUT-elle être sous PIN ?** (#12655) Avant que la
+    /// liste des verrous soit lue (données protégées indisponibles, miroir
+    /// illisible ou absent), oui, toute conversation : ce qui écrit dans une
+    /// conversation depuis l'écran verrouillé se refuse (fail-closed). Une fois
+    /// lue, seules les conversations de la liste.
+    func mayBeLocked(_ conversationId: String) -> Bool {
+        !knowsLockedIds || isLocked(conversationId)
     }
 
     /// **LA décision « contenu masqué »** (#11387 : le verrou PIN protège le
@@ -712,6 +724,7 @@ final class ConversationLockManager: ObservableObject, ConversationLockGating {
         defer { NotificationCenter.default.post(name: .conversationContentLocksDidChange, object: nil) }
         guard hasLoadedLockedIds || wipingAll else { return }
         hasLoadedLockedIds = true
+        knowsLockedIds = true
         defaults.set(Array(lockedConversationIds), forKey: lockedIdsDefaultsKey)
         mirrorLockedIds()
     }
@@ -730,24 +743,29 @@ final class ConversationLockManager: ObservableObject, ConversationLockGating {
     private func loadLockedIds() {
         let mirrored = mirroredLockedIds()
         guard isProtectedDataAvailable() else {
-            if let mirrored { lockedConversationIds = mirrored }
+            if let mirrored { adopt(mirrored, persisting: false) }
             return
         }
         if let stored = defaults.stringArray(forKey: lockedIdsDefaultsKey) {
-            lockedConversationIds = Set(stored)
-            hasLoadedLockedIds = true
+            adopt(Set(stored), persisting: true)
             mirrorLockedIds()
             return
         }
         if let mirrored {
-            lockedConversationIds = mirrored
-            hasLoadedLockedIds = true
+            adopt(mirrored, persisting: true)
             return
         }
         guard NSELockedConversationMirror.readFile(at: contentLockMirrorFile) == .absent else { return }
-        lockedConversationIds = []
-        hasLoadedLockedIds = true
+        adopt([], persisting: true)
         mirrorLockedIds()
+    }
+
+    /// Une liste LUE : la mémoire la connaît ; `persisting` dit si elle a
+    /// aussi le droit d'être réécrite.
+    private func adopt(_ ids: Set<String>, persisting: Bool) {
+        lockedConversationIds = ids
+        knowsLockedIds = true
+        if persisting { hasLoadedLockedIds = true }
     }
 
     /// Ce que le miroir DIT des verrous — le fichier, et la clé de renfort qui

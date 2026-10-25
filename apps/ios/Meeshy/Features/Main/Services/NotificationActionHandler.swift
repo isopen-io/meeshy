@@ -94,7 +94,8 @@ final class NotificationActionHandler: NotificationActionHandling {
     private let openNotification: @MainActor ([AnyHashable: Any]) -> Void
     private let dialCallBack: @MainActor (CallBackRequest) -> Void
     private let localMarkRead: @MainActor (String) -> Void
-    /// #12655 — la conversation est-elle verrouillée par PIN sur cet appareil ?
+    /// #12655 — la conversation PEUT-elle être verrouillée par PIN sur cet
+    /// appareil ? Oui tant que la liste des verrous n'est pas lue (fail-closed).
     private let isConversationLocked: @MainActor (String) -> Bool
     /// #12655 — une réponse refusée sous PIN le dit, hors de l'app.
     private let notifyRefusedReply: @MainActor (String?) -> Void
@@ -202,7 +203,7 @@ final class NotificationActionHandler: NotificationActionHandling {
         presentNewContact: @escaping @MainActor (NotificationContactCard) -> Void = {
             NotificationContactPresenter.present($0)
         },
-        isConversationLocked: @escaping @MainActor (String) -> Bool = { ConversationLockManager.shared.isLocked($0) },
+        isConversationLocked: @escaping @MainActor (String) -> Bool = { ConversationLockManager.shared.mayBeLocked($0) },
         notifyRefusedReply: @escaping @MainActor (String?) -> Void = {
             NotificationReplyFailure.postRefusedUnderConversationPin(conversationId: $0)
         }

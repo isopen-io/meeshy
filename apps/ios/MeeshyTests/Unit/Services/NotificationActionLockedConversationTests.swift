@@ -66,7 +66,10 @@ final class NotificationActionLockedConversationTests: XCTestCase {
         let ledger: Ledger
     }
 
-    private func makeSUT(lockedConversationIds: Set<String>) -> SUT {
+    private func makeSUT(
+        lockedConversationIds: Set<String>,
+        isConversationLocked: (@MainActor (String) -> Bool)? = nil
+    ) -> SUT {
         let messages = MockMessageService()
         let conversations = MockConversationService()
         let queue = RecordingReplyQueue()
@@ -98,7 +101,7 @@ final class NotificationActionLockedConversationTests: XCTestCase {
             openExternalURL: { ledger.externalURLs.append($0) },
             openDeepLink: { ledger.deepLinks.append($0) },
             presentNewContact: { ledger.contacts.append($0) },
-            isConversationLocked: { lockedConversationIds.contains($0) },
+            isConversationLocked: isConversationLocked ?? { lockedConversationIds.contains($0) },
             notifyRefusedReply: { ledger.refusedReplies.append($0) }
         )
         return SUT(
@@ -235,6 +238,34 @@ final class NotificationActionLockedConversationTests: XCTestCase {
     /// sous PIN : le geste par défaut se refuse (fail-closed), il ne lit pas
     /// une liste vide comme « aucun verrou ». Garde de SOURCE : le défaut de
     /// production est le singleton, qu'un test ne reconstruit pas.
+    /// Le gestionnaire n'a pas encore lu sa liste (lancement avant le premier
+    /// déverrouillage, miroir absent) : une bannière NON scellée portant
+    /// « Répondre » ne fait rien partir, et le refus se dit.
+    func test_reply_beforeTheLockListIsRead_queuesNothing_andIsAnnounced() async throws {
+        let suite = "pin-unread-\(UUID().uuidString)"
+        let standard = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { standard.removePersistentDomain(forName: suite) }
+        let locks = ConversationLockManager(
+            vault: InMemoryConversationLockVault(),
+            defaults: standard,
+            biometrics: StubBiometricUnlocker(),
+            iterations: 1_000,
+            isProtectedDataAvailable: { false },
+            notificationCenter: NotificationCenter()
+        )
+        let sut = makeSUT(lockedConversationIds: [], isConversationLocked: { locks.mayBeLocked($0) })
+
+        await sut.handler.handle(
+            actionIdentifier: MeeshyNotificationAction.reply.rawValue,
+            userInfo: payload(conversationId: "inconnue"),
+            replyText: "écrit sans PIN"
+        )
+
+        XCTAssertTrue(sut.queue.enqueued.isEmpty)
+        XCTAssertEqual(sut.messages.sendCallCount, 0)
+        XCTAssertEqual(sut.ledger.refusedReplies, ["inconnue"])
+    }
+
     func test_theDefaultLockGate_isFailClosedBeforeTheListIsRead() throws {
         let code = AppSourceGuard.stripComments(
             try AppSourceGuard.unit("Meeshy/Features/Main/Services/NotificationActionHandler.swift")

@@ -320,6 +320,62 @@ final class ConversationLockManagerTests: XCTestCase {
         XCTAssertEqual(NSELockedConversationMirror.readFile(at: fixture.mirrorFile), .ids(["coffre"]))
     }
 
+    // MARK: - #12655 : tant que la liste n'est pas lue, toute conversation peut être sous PIN
+
+    func test_beforeTheListIsRead_everyConversationMayBeLocked() throws {
+        let fixture = try makeLaunchFixture()
+
+        let sut = makeLaunchedManager(fixture, protectedData: ProtectedData(available: false))
+
+        XCTAssertFalse(sut.isLocked("ouverte"), "la liste n'a rien dit")
+        XCTAssertTrue(sut.mayBeLocked("ouverte"), "rien n'est lu : fail-closed")
+    }
+
+    /// Écran verrouillé après le premier déverrouillage : `.standard` peut se
+    /// fermer, le miroir de fichier non. Il suffit à savoir.
+    func test_onceTheMirrorIsRead_onlyItsConversationsMayBeLocked() throws {
+        let fixture = try makeLaunchFixture()
+        NSELockedConversationMirror.mirror(["coffre"], toFile: fixture.mirrorFile, defaults: nil)
+
+        let sut = makeLaunchedManager(fixture, protectedData: ProtectedData(available: false))
+
+        XCTAssertTrue(sut.mayBeLocked("coffre"))
+        XCTAssertFalse(sut.mayBeLocked("ouverte"))
+    }
+
+    func test_onceTheListIsRead_onlyItsConversationsMayBeLocked() throws {
+        let fixture = try makeLaunchFixture()
+        fixture.standard.set(["coffre"], forKey: lockedIdsKey)
+
+        let sut = makeLaunchedManager(fixture, protectedData: ProtectedData(available: true))
+
+        XCTAssertTrue(sut.mayBeLocked("coffre"))
+        XCTAssertFalse(sut.mayBeLocked("ouverte"))
+    }
+
+    /// Un miroir présent mais illisible ne dit rien : rien n'est chargé, et
+    /// toute conversation reste possiblement sous PIN.
+    func test_anUnreadableMirror_withAnAbsentList_knowsNothing() throws {
+        let fixture = try makeLaunchFixture()
+        try Data("abîmé".utf8).write(to: fixture.mirrorFile)
+
+        let sut = makeLaunchedManager(fixture, protectedData: ProtectedData(available: true))
+
+        XCTAssertTrue(sut.mayBeLocked("ouverte"))
+        XCTAssertEqual(try Data(contentsOf: fixture.mirrorFile), Data("abîmé".utf8), "rien n'est réécrit")
+    }
+
+    /// Première installation : ni liste, ni miroir. « Aucun verrou » est alors
+    /// un savoir, et l'extension l'apprend.
+    func test_aFirstInstall_knowsThereIsNoLock_andTellsTheExtension() throws {
+        let fixture = try makeLaunchFixture()
+
+        let sut = makeLaunchedManager(fixture, protectedData: ProtectedData(available: true))
+
+        XCTAssertFalse(sut.mayBeLocked("ouverte"))
+        XCTAssertEqual(NSELockedConversationMirror.readFile(at: fixture.mirrorFile), .ids([]))
+    }
+
     func test_aLaunchWithProtectedData_readsTheListAndMirrorsIt() throws {
         let fixture = try makeLaunchFixture()
         fixture.standard.set(["coffre"], forKey: lockedIdsKey)
