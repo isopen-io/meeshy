@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
@@ -46,7 +45,6 @@ import me.meeshy.sdk.model.profile.ProfileHeaderMetrics
 import me.meeshy.sdk.model.profile.ProfileLayout
 import me.meeshy.sdk.model.profile.ProfileSheetUser
 import me.meeshy.sdk.model.profile.ProfileTab
-import me.meeshy.ui.component.MeeshySkeletonBox
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.profile.ProfileFullscreenImage
 import me.meeshy.ui.profile.ProfileFullscreenImageViewer
@@ -76,7 +74,9 @@ internal fun ProfileSheetLoadedContent(
 ) {
     val profile = state.profile ?: return
     val header = remember(profile) { ProfileHeaderBuilder.build(profile, System.currentTimeMillis()) }
-    val stats = remember(state.stats) { state.stats?.let { UserStatsBuilder.build(it) } }
+    val details = remember(header, state.stats, state.isLoadingStats) {
+        ProfileDetailsBuilder.build(header, state.stats, state.isLoadingStats)
+    }
     val tabs = rememberProfileTabBarState(profile.id)
     val signsFlow = remember(profile.id, environment.liveSigns) {
         environment.liveSigns?.invoke(profile.id) ?: flowOf(ProfileLiveSigns.NONE)
@@ -145,7 +145,8 @@ internal fun ProfileSheetLoadedContent(
                             state = state,
                             profile = profile,
                             header = header,
-                            stats = stats,
+                            details = details,
+                            accent = accent,
                             plan = plan,
                             isOpeningConversation = actionsState.isOpeningConversation,
                             isInteractionDisabled = isBlockedByMe || state.isBlockedByTarget,
@@ -197,7 +198,8 @@ private fun ProfileSheetTabContent(
     state: UserProfileSheetUiState,
     profile: MeeshyUser,
     header: ProfileHeaderPresentation,
-    stats: UserStatsPresentation?,
+    details: ProfileDetailsPresentation,
+    accent: Color,
     plan: ProfileActionPlan?,
     isOpeningConversation: Boolean,
     isInteractionDisabled: Boolean,
@@ -208,36 +210,29 @@ private fun ProfileSheetTabContent(
         ProfileTab.POSTS -> environment.postsContent?.invoke(profile.id)
             ?: ProfilePostsRow(onClick = { environment.onViewPosts(profile.id) })
         ProfileTab.CONVERSATIONS -> ProfileConversationsEmpty(isInteractionDisabled = isInteractionDisabled)
-        ProfileTab.DETAILS -> {
-            ProfileAboutSection(header)
-            if (!state.isSelf && plan != null) {
-                ProfileActionsSection(
-                    plan = plan,
-                    displayName = header.displayName,
-                    isOpeningConversation = isOpeningConversation,
-                    callbacks = actions,
-                )
-            }
-            when {
-                stats != null -> ProfileStatsSection(stats)
-                state.isLoadingStats -> MeeshySkeletonBox(Modifier.fillMaxWidth().height(60.dp))
-            }
-        }
+        ProfileTab.DETAILS -> ProfileDetailsTab(
+            details = details,
+            accent = accent,
+            actions = profileActionsSlot(plan, state.isSelf, header.displayName, isOpeningConversation, actions),
+        )
     }
 }
 
-/** « À propos » (miroir de `aboutSection` iOS) : bio, langues, pays, fuseau, membre depuis. */
-@Composable
-private fun ProfileAboutSection(header: ProfileHeaderPresentation) {
-    header.bio?.let {
-        Text(text = it, style = MaterialTheme.typography.bodyMedium, color = MeeshyTheme.tokens.textPrimary)
-    }
-    ProfileDetailsSection(header)
-    header.memberSinceEpochMillis?.let { millis ->
-        Text(
-            text = stringResource(R.string.profile_member_since, formatMemberSince(millis)),
-            style = MaterialTheme.typography.labelMedium,
-            color = MeeshyTheme.tokens.textSecondary,
+/** Le contenu du point d'insertion « Actions » de l'onglet Détails ; `null` = aucune section. */
+private fun profileActionsSlot(
+    plan: ProfileActionPlan?,
+    isSelf: Boolean,
+    displayName: String,
+    isOpeningConversation: Boolean,
+    callbacks: ProfileActionCallbacks,
+): (@Composable () -> Unit)? {
+    val shown = plan?.takeIf { !isSelf && it.layout != ProfileLayout.CLOSED } ?: return null
+    return {
+        ProfileActionsSection(
+            plan = shown,
+            displayName = displayName,
+            isOpeningConversation = isOpeningConversation,
+            callbacks = callbacks,
         )
     }
 }
