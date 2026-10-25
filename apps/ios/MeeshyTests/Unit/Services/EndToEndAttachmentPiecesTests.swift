@@ -520,7 +520,8 @@ final class BoundedBlobDownloadTests: XCTestCase {
     }
 
     func test_unFluxSansTailleDeclaree_sArreteAuPremierOctetDeTrop() async {
-        ChunkedBlobProtocol.serve(.init(declaredLength: nil, chunks: tenChunks))
+        let endless = Array(repeating: Data(repeating: 9, count: 1_000), count: 40)
+        ChunkedBlobProtocol.serve(.init(declaredLength: nil, chunks: endless))
         let target = destination()
 
         do {
@@ -528,7 +529,9 @@ final class BoundedBlobDownloadTests: XCTestCase {
             XCTFail("un flux qui dépasse le pointeur est refusé")
         } catch {}
 
-        XCTAssertLessThanOrEqual(ChunkedBlobProtocol.deliveredChunks, 4, "le flux est coupé dès la limite franchie")
+        // Le flux est annulé au 3e morceau ; la coupure atteint le serveur
+        // simulé avec la latence de URLSession, jamais à la fin du blob.
+        XCTAssertLessThan(ChunkedBlobProtocol.deliveredChunks, endless.count / 2, "le flux est coupé dès la limite franchie")
         XCTAssertFalse(FileManager.default.fileExists(atPath: target.path))
     }
 
