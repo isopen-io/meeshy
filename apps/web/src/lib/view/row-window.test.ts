@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { EMPTY_RANGE, entryRanges, keptRowIds, rowSlices, rowsInView, settleRange } from './row-window';
+import { EMPTY_RANGE, entryRanges, keptRowIds, rowSlices, rowsInView, settleRange, widenRange } from './row-window';
 
 /**
  * LA FENÊTRE DE RANGÉES (#11228) — la loi pure qui dit, pour une liste de
@@ -49,6 +49,28 @@ describe('settleRange — la fenêtre ne bouge que quand il le faut', () => {
 
   test('rien à montrer : la fenêtre se vide', () => {
     expect(settleRange({ start: 10, end: 40 }, EMPTY_RANGE, { count: 500, extraRows: 6 })).toBe(EMPTY_RANGE);
+  });
+});
+
+describe('widenRange — la passe qui suit son propre rendu ne fait qu’élargir (#12893)', () => {
+  test('une fenêtre qui tient déjà la suivante ne change pas (même référence)', () => {
+    const current = { start: 10, end: 40 };
+    expect(widenRange(current, { start: 12, end: 30 })).toBe(current);
+    expect(widenRange(current, EMPTY_RANGE)).toBe(current);
+  });
+
+  test('une fenêtre vide prend la suivante telle quelle', () => {
+    const next = { start: 3, end: 9 };
+    expect(widenRange(EMPTY_RANGE, next)).toBe(next);
+  });
+
+  test('deux fenêtres disjointes donnent leur enveloppe, jamais l’une ou l’autre', () => {
+    expect(widenRange({ start: 0, end: 2 }, { start: 20, end: 30 })).toEqual({ start: 0, end: 30 });
+  });
+
+  test('élargir est idempotent : la même mesure rejouée ne bouge plus rien', () => {
+    const once = widenRange({ start: 0, end: 2 }, { start: 20, end: 30 });
+    expect(widenRange(once, { start: 20, end: 30 })).toBe(once);
   });
 });
 
