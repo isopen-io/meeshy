@@ -277,6 +277,26 @@ final class ComposerLookPainterTests: XCTestCase {
         XCTAssertLessThan(Int(p.blue), 10)
     }
 
+    /// #12753 — une vitre posée AU-DESSUS d'un texte floute aussi ce texte, comme au composer.
+    func test_photo_glassAboveAnInk_blursThatInk() throws {
+        let toile = CGSize(width: 216, height: 384)
+        let dessous = Self.calqueRouge(at: (x: 160, y: 192), size: toile)
+        let vitre = Self.vitre(at: (x: 160, y: 192), cote: 40, size: toile, sigma: 8)
+        let calque = ComposerTextOverlay(layers: [.ink(dessous), .glass(vitre)])
+        let rendu = try XCTUnwrap(ComposerLookPainter.photo(Self.cgSource(), look: ComposerPhotoLook(), framing: .identity,
+                                                            scene: nil, canvas: toile, overlay: calque))
+        let p = Self.pixel(try Self.rgba(CIImage(cgImage: rendu), size: toile), x: 160, y: 192, width: 216)
+        XCTAssertLessThan(Int(p.red), 230, "le carré rouge sous la vitre se mêle au bleu de la prise : il est flouté")
+        XCTAssertGreaterThan(Int(p.red), 20, "et il reste là, flou")
+        XCTAssertGreaterThan(Int(p.blue), 20)
+        let net = try XCTUnwrap(ComposerLookPainter.photo(Self.cgSource(), look: ComposerPhotoLook(), framing: .identity,
+                                                          scene: nil, canvas: toile,
+                                                          overlay: ComposerTextOverlay(layers: [.glass(vitre), .ink(dessous)])))
+        let q = Self.pixel(try Self.rgba(CIImage(cgImage: net), size: toile), x: 160, y: 192, width: 216)
+        XCTAssertGreaterThan(Int(q.red), 240, "fusible : une encre AU-DESSUS de la vitre reste nette")
+        XCTAssertLessThan(Int(q.blue), 10)
+    }
+
     func test_overlay_sameBitmaps_areEqual_aNewBakeIsNot() {
         let toile = CGSize(width: 108, height: 192)
         let vitre = Self.vitre(at: (x: 54, y: 96), size: toile)
