@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import { createOfflineQueue } from './offline-queue';
+import type { SafeStorage } from './storage';
 
 describe('createOfflineQueue — FIFO générique (#7367, W3)', () => {
   test('enqueue puis flush : le job part, réussi ⇒ retiré de la file', async () => {
@@ -110,5 +111,63 @@ describe('createOfflineQueue.remove — le job périmé se retire (revue #7367)'
     queue.remove('inconnue');
 
     expect(queue.size()).toBe(1);
+  });
+});
+
+const memoryStorage = (): SafeStorage => {
+  const cells = new Map<string, string>();
+  return {
+    getItem: (key) => cells.get(key) ?? null,
+    setItem: (key, value) => {
+      cells.set(key, value);
+    },
+    removeItem: (key) => {
+      cells.delete(key);
+    },
+  };
+};
+
+const asWord = (raw: unknown): string | null => (typeof raw === 'string' && raw.startsWith('mot-') ? raw : null);
+
+describe('createOfflineQueue — persistée (#10174)', () => {
+  test('un job mis en file survit au rechargement de la page et part au flush suivant ; réussi, il ne revient plus', async () => {
+    const storage = memoryStorage();
+    const persistence = { storage, key: 'file', parse: asWord };
+    createOfflineQueue<string>(persistence).enqueue('a', 'mot-1');
+
+    const reloaded = createOfflineQueue<string>(persistence);
+    expect(reloaded.pending()).toEqual(['mot-1']);
+    const ran: string[] = [];
+    await reloaded.flush(async (payload) => {
+      ran.push(payload);
+      return true;
+    });
+
+    expect(ran).toEqual(['mot-1']);
+    expect(createOfflineQueue<string>(persistence).size()).toBe(0);
+  });
+
+  test('une entrée stockée illisible est écartée, les autres se rejouent', () => {
+    const storage = memoryStorage();
+    storage.setItem('file', JSON.stringify([['a', 42], ['b', 'mot-2'], 'bruit']));
+
+    expect(createOfflineQueue<string>({ storage, key: 'file', parse: asWord }).pending()).toEqual(['mot-2']);
+    storage.setItem('file', '{pas du json');
+    expect(createOfflineQueue<string>({ storage, key: 'file', parse: asWord }).size()).toBe(0);
+  });
+
+  test('un job REMPLACÉ pendant son envoi n’est pas perdu : la valeur la plus récente part à son tour', async () => {
+    const queue = createOfflineQueue<string>();
+    const ran: string[] = [];
+    queue.enqueue('reglage', 'ancien');
+
+    await queue.flush(async (payload) => {
+      ran.push(payload);
+      if (payload === 'ancien') queue.enqueue('reglage', 'nouveau');
+      return true;
+    });
+
+    expect(ran).toEqual(['ancien', 'nouveau']);
+    expect(queue.size()).toBe(0);
   });
 });

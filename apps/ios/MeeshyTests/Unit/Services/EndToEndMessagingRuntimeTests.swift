@@ -88,11 +88,22 @@ final class EndToEndMessagingRuntimeTests: XCTestCase {
 
         init(slowUserId: String) { self.slowUserId = slowUserId }
 
+        private var running = 0
+        private var peak = 0
+
         var startedUserIds: [String] { lock.withLock { started } }
+        /// Le plus grand nombre de préparations simultanées sur le même coffre.
+        var peakConcurrency: Int { lock.withLock { peak } }
 
         func ready(for userId: String) async throws -> EndToEndReadyDevice {
-            lock.withLock { started.append(userId) }
-            try await Task.sleep(nanoseconds: userId == slowUserId ? 400_000_000 : 5_000_000)
+            lock.withLock {
+                started.append(userId)
+                running += 1
+                peak = max(peak, running)
+            }
+            defer { lock.withLock { running -= 1 } }
+            // Une préparation réelle ne s'annule pas à mi-chemin : le coffre est écrit jusqu'au bout.
+            try? await Task.sleep(nanoseconds: userId == slowUserId ? 300_000_000 : 5_000_000)
             return EndToEndReadyDevice(device: E2EELocalDevice(userId: userId, deviceId: 1, registrationId: 7), sealer: sealer, opener: StubOpener())
         }
         func plaintexts() throws -> any E2EEPlaintextStoring { throw CocoaError(.featureUnsupported) }
@@ -143,6 +154,79 @@ final class EndToEndMessagingRuntimeTests: XCTestCase {
         XCTAssertThrowsError(try forgotten.get(), "une préparation oubliée ne rend rien à la session fermée")
         XCTAssertEqual(deviceB.device.userId, "accountB")
         XCTAssertEqual(provisioning.startedUserIds, ["accountA", "accountB"])
+    }
+
+    /// Audit #12769 — annuler ne suffit pas : la préparation remplacée écrit
+    /// encore le coffre partagé. La suivante attend qu'elle soit finie.
+    func test_ready_aReplacingPreparationStartsOnlyOnceThePreviousOneEnded() async throws {
+        let provisioning = AccountSwitchProvisioning(slowUserId: "accountA")
+        let runtime = EndToEndMessagingRuntime(provisioning: provisioning)
+        let preparingA = Task { try await runtime.ready(for: "accountA") }
+        await waitUntilStarted("accountA", in: provisioning)
+
+        _ = try await runtime.ready(for: "accountB")
+
+        XCTAssertEqual(provisioning.peakConcurrency, 1, "deux préparations ne tournent jamais ensemble sur le même coffre")
+        _ = try? await preparingA.value
+    }
+
+    /// Contre-audit #12769 — le vrai chemin d'un changement de compte (fermer,
+    /// ouvrir l'autre) attend aussi la préparation annulée.
+    func test_switchingSessions_waitsForTheCancelledPreparationBeforePreparingTheNextAccount() async throws {
+        let provisioning = AccountSwitchProvisioning(slowUserId: "accountA")
+        let runtime = EndToEndMessagingRuntime(provisioning: provisioning)
+        await runtime.open(session: "accountA")
+        let preparingA = Task { try await runtime.ready(for: "accountA") }
+        await waitUntilStarted("accountA", in: provisioning)
+
+        await runtime.close()
+        await runtime.open(session: "accountB")
+        _ = try await runtime.ready(for: "accountB")
+
+        XCTAssertEqual(provisioning.peakConcurrency, 1)
+        _ = try? await preparingA.value
+    }
+
+    /// Audit #12769 — un appel resté en file pour l'ancien compte ne touche
+    /// pas la session ouverte.
+    func test_ready_forAnAccountOtherThanTheOpenSession_isRefusedWithoutPreparing() async throws {
+        let provisioning = AccountSwitchProvisioning(slowUserId: "none")
+        let runtime = EndToEndMessagingRuntime(provisioning: provisioning)
+        await runtime.open(session: "accountB")
+
+        do {
+            _ = try await runtime.ready(for: "accountA")
+            XCTFail("l'ancien compte ne prépare rien sous la session de B")
+        } catch {}
+        _ = try await runtime.ready(for: "accountB")
+
+        XCTAssertEqual(provisioning.startedUserIds, ["accountB"])
+    }
+
+    func test_ready_afterTheSessionCloses_isRefused() async {
+        let provisioning = AccountSwitchProvisioning(slowUserId: "none")
+        let runtime = EndToEndMessagingRuntime(provisioning: provisioning)
+        await runtime.open(session: "accountA")
+        await runtime.close()
+
+        let device = try? await runtime.ready(for: "accountA")
+
+        XCTAssertNil(device)
+        XCTAssertTrue(provisioning.startedUserIds.isEmpty)
+    }
+
+    /// Audit #12769 — l'appareil délié d'un compte n'annule pas la préparation d'un autre.
+    func test_forgetting_oneAccountsDevice_leavesAnotherAccountsPreparationRunning() async throws {
+        let provisioning = AccountSwitchProvisioning(slowUserId: "accountB")
+        let runtime = EndToEndMessagingRuntime(provisioning: provisioning)
+        let preparingB = Task { try await runtime.ready(for: "accountB") }
+        await waitUntilStarted("accountB", in: provisioning)
+
+        await runtime.forgetDevice(of: "accountA")
+
+        let device = try await preparingB.value
+        XCTAssertEqual(device.device.userId, "accountB")
+        XCTAssertEqual(provisioning.startedUserIds, ["accountB"])
     }
 
     func test_aReceivedEnvelope_isAnnouncedToTheThread() async {
