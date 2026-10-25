@@ -14,6 +14,7 @@ import {
   performDeleteNotification,
   performMarkAllNotificationsRead,
   performMarkNotificationRead,
+  performMarkNotificationsOfTypeRead,
 } from './notifications-actions';
 
 /**
@@ -178,5 +179,58 @@ describe('supprimer', () => {
     expect(unread(queryClient)).toBe(2);
     release({ ok: true, data: undefined });
     expect(await pending).toBe(true);
+  });
+});
+
+/* LE CARNET OUVERT ÉTEINT SA NOTIFICATION (#10175, § 5.16.4) : la ligne « moments à immortaliser » de la cloche
+   passe lue quand le carnet s'ouvre, sans toucher aux autres notifications non lues. */
+describe('marquer lues les notifications d’un TYPE', () => {
+  const photoSeeded = (): QueryClient => {
+    const queryClient = new QueryClient();
+    const rows = [record('p1', false, 'game_photo_moment'), record('n1', false), record('p0', true, 'game_photo_moment')];
+    queryClient.setQueryData(notificationListKey('all'), page(rows));
+    queryClient.setQueryData(notificationListKey('unread'), page(rows.filter((row) => !row.state.isRead)));
+    queryClient.setQueryData<NotificationCounts>(NOTIFICATION_COUNTS_QUERY_KEY, { total: 3, unread: 2, byType: {} });
+    return queryClient;
+  };
+
+  test('seules les lignes non lues de ce type passent lues, une requête chacune ; le reste ne bouge pas', async () => {
+    const queryClient = photoSeeded();
+    const requests: HttpRequest[] = [];
+    const transport = {
+      request: async (req: HttpRequest): Promise<ApiResult<unknown>> => {
+        requests.push(req);
+        return { ok: true, data: undefined };
+      },
+    } as unknown as HttpTransport;
+
+    expect(await performMarkNotificationsOfTypeRead({ type: 'game_photo_moment', deps: { source: 'gateway', transport, queryClient } })).toBe(true);
+    expect(requests.map((req) => `${req.method} ${req.path}`)).toEqual(['POST /api/v1/notifications/p1/read']);
+    expect(readState(queryClient, 'p1')).toBe(true);
+    expect(readState(queryClient, 'n1')).toBe(false);
+    expect(ids(queryClient, 'unread')).toEqual(['n1']);
+    expect(unread(queryClient)).toBe(1);
+  });
+
+  test('deux lignes : une requête à la fois, la seconde après la réponse de la première', async () => {
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(notificationListKey('all'), page([record('p1', false, 'game_photo_moment'), record('p2', false, 'game_photo_moment')]));
+    const { transport, requests, release } = suspended();
+    const pending = performMarkNotificationsOfTypeRead({ type: 'game_photo_moment', deps: { source: 'gateway', transport, queryClient } });
+    await Promise.resolve();
+    expect(requests.length).toBe(1);
+    release({ ok: true, data: undefined });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(requests.length).toBe(2);
+    release({ ok: true, data: undefined });
+    expect(await pending).toBe(true);
+  });
+
+  test('aucune ligne de ce type en attente : aucune requête', async () => {
+    const queryClient = seeded();
+    const requests: HttpRequest[] = [];
+    const transport = { request: async (req: HttpRequest) => (requests.push(req), { ok: true, data: undefined }) } as unknown as HttpTransport;
+    expect(await performMarkNotificationsOfTypeRead({ type: 'game_photo_moment', deps: { source: 'gateway', transport, queryClient } })).toBe(true);
+    expect(requests).toEqual([]);
   });
 });

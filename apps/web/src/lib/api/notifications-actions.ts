@@ -7,6 +7,7 @@ import {
   removeNotifications,
   restoreNotifications,
   snapshotNotifications,
+  unreadNotificationIds,
 } from './notifications-cache';
 import {
   NOTIFICATION_COUNTS_QUERY_KEY,
@@ -48,6 +49,22 @@ export async function performMarkNotificationRead(params: { readonly id: string;
   const result = await postNotificationRead(deps, id);
   if (!result.ok) restoreNotifications(deps.queryClient, snapshot);
   return result.ok;
+}
+
+/**
+ * Les lignes non lues d'UN type, une par une (#10175) : le carnet ouvert éteint « moments à immortaliser » sans
+ * toucher au reste de la cloche. En série, pour que le retour arrière d'un refus ne défasse pas une ligne voisine.
+ */
+export async function performMarkNotificationsOfTypeRead(params: { readonly type: string; readonly deps: NotificationActionDeps }): Promise<boolean> {
+  const { type, deps } = params;
+  const ids = unreadNotificationIds(deps.queryClient, (n) => n.type === type);
+  return ids.reduce<Promise<boolean>>(
+    async (previous, id) => {
+      const allOk = await previous;
+      return (await performMarkNotificationRead({ id, deps })) && allOk;
+    },
+    Promise.resolve(true),
+  );
 }
 
 export async function performMarkAllNotificationsRead(params: { readonly deps: NotificationActionDeps }): Promise<boolean> {

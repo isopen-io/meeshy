@@ -63,6 +63,14 @@ export function findNotification(queryClient: QueryClient, id: string): Notifica
   return undefined;
 }
 
+/** Les identifiants des lignes NON LUES en cache que `matches` retient, une fois chacun, toutes catégories confondues. */
+export function unreadNotificationIds(queryClient: QueryClient, matches: Matches): readonly string[] {
+  const rows = NOTIFICATION_CATEGORIES.flatMap(
+    (category) => queryClient.getQueryData<NotificationsInfiniteData>(notificationListKey(category))?.pages.flatMap((page) => page.notifications) ?? [],
+  );
+  return [...new Set(rows.filter((n) => !n.state.isRead && matches(n)).map((n) => n.id))];
+}
+
 export function markNotificationsRead(queryClient: QueryClient, matches: Matches): void {
   updateLists(queryClient, (data, category) =>
     mapNotifications(data, (notifications) =>

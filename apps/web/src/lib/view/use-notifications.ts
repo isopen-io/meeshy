@@ -13,6 +13,7 @@ import {
   performDeleteNotification,
   performMarkAllNotificationsRead,
   performMarkNotificationRead,
+  performMarkNotificationsOfTypeRead,
 } from '@/lib/api/notifications-actions';
 import { appQueryClient } from '@/lib/api/query-client';
 import { sessionStore } from '@/lib/api/session';
@@ -61,6 +62,9 @@ const actionDeps = () => ({ ...apiDeps, queryClient: appQueryClient });
 
 export const markNotificationReadAction = (id: string): Promise<boolean> =>
   performMarkNotificationRead({ id, deps: actionDeps() });
+
+export const markNotificationsOfTypeReadAction = (type: string): Promise<boolean> =>
+  performMarkNotificationsOfTypeRead({ type, deps: actionDeps() });
 
 export const markAllNotificationsReadAction = (): Promise<boolean> => performMarkAllNotificationsRead({ deps: actionDeps() });
 
