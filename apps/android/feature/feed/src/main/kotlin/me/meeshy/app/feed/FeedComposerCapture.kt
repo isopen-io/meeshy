@@ -70,6 +70,9 @@ internal fun ContentResolver.readMediaUploadItem(uri: Uri): MediaUploadItem? {
     return MediaUploadItem(bytes = bytes, fileName = fileName, mimeType = mimeType)
 }
 
+/** The captured file's advertised name, `video.mp4` when the provider gives none. */
+internal fun ContentResolver.captureName(uri: Uri): String = displayName(uri)?.takeIf { it.isNotBlank() } ?: "video.mp4"
+
 private fun ContentResolver.displayName(uri: Uri): String? =
     runCatching {
         query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->

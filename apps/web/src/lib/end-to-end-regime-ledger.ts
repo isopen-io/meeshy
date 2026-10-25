@@ -39,9 +39,9 @@ export type EndToEndRegimeState = {
   reset(): void;
 };
 
-const STORAGE_PREFIX = 'meeshy.e2ee-sealed.';
+export const SEALED_STORAGE_PREFIX = 'meeshy.e2ee-sealed.';
 
-const storageKey = (identity: string): string => `${STORAGE_PREFIX}${identity}`;
+const storageKey = (identity: string): string => `${SEALED_STORAGE_PREFIX}${identity}`;
 
 const browserStorage = (): SealedStorage | null => {
   try {

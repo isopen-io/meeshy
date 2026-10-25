@@ -78,6 +78,7 @@
     <string name="post_comments_copy_text">Text kopieren</string>
     <string name="post_comments_delete_error">Kommentar konnte nicht gelöscht werden</string>
     <string name="post_comments_deleted">Kommentar gelöscht</string>
+    <string name="post_comments_edit_media">Bearbeiten</string>
     <string name="post_comments_load_error">Fehler beim Laden der Kommentare</string>
     <plurals name="post_comments_load_more_replies">
         <item quantity="one">%d weitere Antwort anzeigen</item>
