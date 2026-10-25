@@ -461,27 +461,35 @@ class ConversationRepository @Inject constructor(
         }
 
     /**
+     * Local-only mark-as-read: the cached badge drops to zero, and NOTHING joins the outbox. The
+     * list's « mark read » takes this path for the conversation already on screen (parity iOS
+     * `shouldDispatchListMarkAsRead`): the open conversation owns the precise mark-read that names
+     * the messages actually shown, and a body-less list mark-read would declare unseen messages
+     * read. No-op (returns false) when the conversation is unknown or already read.
+     */
+    suspend fun markReadLocally(id: String): Boolean = database.withTransaction {
+        val row = conversationDao.find(id) ?: return@withTransaction false
+        val conversation = MeeshyApi.json.decodeFromString<ApiConversation>(row.payload)
+        if (conversation.unreadCount == 0) return@withTransaction false
+        conversationDao.upsertAll(
+            listOf(
+                row.copy(
+                    payload = MeeshyApi.json.encodeToString(conversation.copy(unreadCount = 0)),
+                    unreadCount = 0,
+                ),
+            ),
+        )
+        true
+    }
+
+    /**
      * Optimistic mark-as-read (ARCHITECTURE.md §5): the cached badge drops to
      * zero instantly and a `READ_RECEIPT` mutation joins its outbox lane (the
      * coalescer merges repeats). No-op when the conversation is unknown or
      * already read. Returns whether anything was queued.
      */
     suspend fun markReadOptimistic(id: String): Boolean {
-        val updated = database.withTransaction {
-            val row = conversationDao.find(id) ?: return@withTransaction false
-            val conversation = MeeshyApi.json.decodeFromString<ApiConversation>(row.payload)
-            if (conversation.unreadCount == 0) return@withTransaction false
-            conversationDao.upsertAll(
-                listOf(
-                    row.copy(
-                        payload = MeeshyApi.json.encodeToString(conversation.copy(unreadCount = 0)),
-                        unreadCount = 0,
-                    ),
-                ),
-            )
-            true
-        }
-        if (!updated) return false
+        if (!markReadLocally(id)) return false
         outboxRepository.enqueue(
             OutboxMutation(
                 kind = OutboxKind.READ_RECEIPT,

@@ -77,6 +77,19 @@ export function settleRange(current: RowRange, need: RowRange, input: { readonly
   return { start: Math.max(0, need.start - extraRows), end: Math.min(count, need.end + extraRows) };
 }
 
+/**
+ * L'enveloppe de deux fenêtres, rendue STABLE : la même référence quand la
+ * première tient déjà la seconde. C'est la loi de la passe qui suit un rendu
+ * déclenché par la fenêtre elle-même (`useRowWindows`) : elle n'a le droit
+ * que d'élargir, donc une suite de telles passes croît jusqu'à se figer, et
+ * ne peut pas alterner entre deux fenêtres.
+ */
+export function widenRange(current: RowRange, next: RowRange): RowRange {
+  if (next.start >= next.end || contains(current, next)) return current;
+  if (current.start >= current.end) return next;
+  return { start: Math.min(current.start, next.start), end: Math.max(current.end, next.end) };
+}
+
 type Run = { readonly from: number; readonly to: number };
 
 const mergeRuns = (runs: readonly Run[]): readonly Run[] =>

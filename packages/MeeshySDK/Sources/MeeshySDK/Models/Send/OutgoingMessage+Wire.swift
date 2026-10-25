@@ -45,7 +45,8 @@ extension OutgoingMessage {
         wireEffectFlags: UInt32?,
         senderDeviceId: UInt32,
         envelopes: [E2EEOutgoingEnvelope],
-        unapprovedOwnDevices: [UInt32]
+        unapprovedOwnDevices: [UInt32],
+        regimeEpoch: Int? = nil
     ) -> SendMessageRequest {
         var request = SendMessageRequest.libsignal(
             clientMessageId: context.clientMessageId.rawValue,
@@ -53,7 +54,8 @@ extension OutgoingMessage {
             storyReplyToId: relation.storyReplyToId,
             senderDeviceId: senderDeviceId,
             envelopes: envelopes,
-            unapprovedOwnDevices: unapprovedOwnDevices
+            unapprovedOwnDevices: unapprovedOwnDevices,
+            regimeEpoch: regimeEpoch
         )
         request.ephemeralDuration = context.intent.ephemeralDurationSeconds
         request.isViewOnce = context.intent.isViewOnce ? true : nil

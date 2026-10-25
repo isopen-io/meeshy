@@ -14,9 +14,9 @@ import java.util.Locale
  *   `effectiveConversationRole` (des lignes `CREATOR` héritées existent) ;
  * - [platformRole] EXACT pour modérer, sans casse pour administrer ([PlatformRole]).
  *
- * Rang EFFECTIF : un ADMIN ou BIGBOSS de plateforme MEMBRE ACTIF vaut le créateur, jamais
- * au-dessus ; MODERATOR, AUDIT et ANALYST gardent le rang de leur ligne. Un lecteur qui porte
- * [isAnonymous] est un invité, quel que soit [hasAccount] (fermé par défaut).
+ * Rang EFFECTIF : un rôle de plateforme PRIVILÉGIÉ (MODERATOR, ADMIN, BIGBOSS — #11217) MEMBRE
+ * ACTIF vaut le créateur, jamais au-dessus ; AUDIT et ANALYST gardent le rang de leur ligne. Un
+ * lecteur qui porte [isAnonymous] est un invité, quel que soit [hasAccount] (fermé par défaut).
  *
  * Aucun défaut hors [participantId] : un défaut sur [isAnonymous], [canSendMessages] ou
  * [isDeclaredMinor] serait OUVERT, donc chaque site le dit.
@@ -58,7 +58,7 @@ data class ConversationViewerAuthority(
     val effectiveRole: MemberRole?
         get() {
             if (!isActiveMember) return null
-            if (administersPlatform) return MemberRole.CREATOR
+            if (moderatesPlatform) return MemberRole.CREATOR
             return exactMemberRole(conversationRoleRaw?.lowercase(Locale.ROOT))
         }
 

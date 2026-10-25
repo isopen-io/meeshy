@@ -76,7 +76,7 @@ public final class E2EEEnvelopeOpener: E2EEEnvelopeOpening {
     private let plaintexts: any E2EEPlaintextStoring
     private let directory: any E2EEDirectoryClientProviding
     private let approvals: any E2EEOwnDeviceApprovalProviding
-    private let logger = Logger(subsystem: "me.meeshy.sdk", category: "e2ee")
+    private let logger = MeeshyLog.logger(.e2ee, subsystem: .sdk)
 
     public init(
         local: E2EELocalDevice,

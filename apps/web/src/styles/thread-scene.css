@@ -30,7 +30,7 @@
  *
  * `prefers-reduced-motion` n'a RIEN à couper ici de spécifique : la règle
  * générale de `@layer base` (ci-dessus, regle 32) ramène déjà toutes les
- * `transition-duration` à `0.01ms` — l'élection se pose sans transition,
+ * `transition-duration` à `0s` — l'élection se pose sans transition,
  * jamais sans se poser.
  */
 

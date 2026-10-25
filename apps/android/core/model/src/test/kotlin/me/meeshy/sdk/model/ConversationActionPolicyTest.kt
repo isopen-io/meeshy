@@ -38,9 +38,10 @@ class ConversationActionPolicyTest {
     }
 
     @Test
-    fun `only ADMIN and BIGBOSS invite into Global`() {
-        assertThat(actions("global", platformRole = "MODERATOR", conversationRole = "creator").invite).isFalse()
+    fun `only privileged platform roles invite into Global`() {
+        assertThat(actions("global", platformRole = "MODERATOR", conversationRole = "creator").invite).isTrue()
         assertThat(actions("global", platformRole = "ADMIN").invite).isTrue()
+        assertThat(actions("global", platformRole = "AUDIT", conversationRole = "creator").invite).isFalse()
     }
 
     @Test
