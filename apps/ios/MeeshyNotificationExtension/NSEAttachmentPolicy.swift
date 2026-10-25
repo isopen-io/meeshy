@@ -281,16 +281,17 @@ nonisolated enum NSEAttachmentPolicy {
 }
 
 /// **Ce que l'extension sait du verrou PIN de la conversation d'une charge**
-/// (#12655). `unknown` n'est pas `open` : sans miroir lisible, l'extension ne
-/// propose aucune action rapide, mais ne scelle pas le contenu — elle n'a pas
-/// la preuve d'un verrou.
+/// (#12655). `unknown` n'est pas `open` : avant le premier déverrouillage,
+/// l'extension ne peut pas savoir si la conversation est sous PIN, et la traite
+/// comme si elle l'était — contenu scellé, rien du message déposé dans le
+/// groupe d'apps, aucune action rapide (fail-closed).
 nonisolated enum NSEConversationLock: Equatable, Sendable {
     case noConversation
     case open
     case locked
     case unknown
 
-    var sealsContent: Bool { self == .locked }
+    var sealsContent: Bool { self == .locked || self == .unknown }
 
     var offersQuickActions: Bool { self == .open || self == .noConversation }
 }
@@ -317,6 +318,12 @@ nonisolated enum NSEPreparationStep: Equatable, Sendable {
     case applyEphemeralDeadline
     case sweepExpiredBanners
     case replaceBodyWithLockLabel
+
+    /// Le plan de la bannière d'une conversation dont l'extension sait CE
+    /// verrou : un verrou connu ou inconnu scelle (#12655).
+    static func plan(for lock: NSEConversationLock) -> [NSEPreparationStep] {
+        plan(isLockedConversation: lock.sealsContent)
+    }
 
     static func plan(isLockedConversation: Bool) -> [NSEPreparationStep] {
         let decisions: [NSEPreparationStep] = [

@@ -60,9 +60,10 @@ class NotificationService: UNNotificationServiceExtension {
     private func prepareBestAttempt(_ content: UNMutableNotificationContent) {
         let lock = Self.conversationLock(content.userInfo)
         // #11387 — l'ORDRE est une loi pure (`NSEPreparationStep.plan`) : une
-        // conversation verrouillée est scellée avant toute décision, ne dépose
-        // rien de son message, et son corps est remplacé en dernier.
-        for step in NSEPreparationStep.plan(isLockedConversation: lock.sealsContent) {
+        // conversation verrouillée, ou dont le verrou est inconnu (#12655), est
+        // scellée avant toute décision, ne dépose rien de son message, et son
+        // corps est remplacé en dernier.
+        for step in NSEPreparationStep.plan(for: lock) {
             perform(step, on: content, lock: lock)
         }
     }

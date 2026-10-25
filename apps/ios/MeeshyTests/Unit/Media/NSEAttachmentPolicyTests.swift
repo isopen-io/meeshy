@@ -336,6 +336,23 @@ final class NSEAttachmentPolicyTests: XCTestCase {
         XCTAssertFalse(plan.contains(.prePersistMessage))
     }
 
+    /// Avant le premier déverrouillage, une conversation peut-être sous PIN :
+    /// aucun corps en clair, rien du message déposé ni pré-enregistré.
+    func test_plan_forAnUnknownLock_sealsFirst_stagesNothing_andReplacesTheBodyLast() {
+        let plan = NSEPreparationStep.plan(for: .unknown)
+
+        XCTAssertEqual(plan.first, .sealLockedConversation)
+        XCTAssertEqual(plan.last, .replaceBodyWithLockLabel)
+        XCTAssertFalse(plan.contains(.syncMessage))
+        XCTAssertFalse(plan.contains(.prePersistMessage))
+    }
+
+    func test_plan_forAKnownLock_isTheLockedPlan_andForAnOpenOne_theHistoricalPipeline() {
+        XCTAssertEqual(NSEPreparationStep.plan(for: .locked), NSEPreparationStep.plan(isLockedConversation: true))
+        XCTAssertEqual(NSEPreparationStep.plan(for: .open), NSEPreparationStep.plan(isLockedConversation: false))
+        XCTAssertEqual(NSEPreparationStep.plan(for: .noConversation), NSEPreparationStep.plan(isLockedConversation: false))
+    }
+
     func test_plan_openConversation_isTheHistoricalPipeline() {
         XCTAssertEqual(NSEPreparationStep.plan(isLockedConversation: false), [
             .applyCategory, .applyBadge, .applyThreading, .applyPreferences, .updateUnreadCount,
@@ -348,7 +365,7 @@ final class NSEAttachmentPolicyTests: XCTestCase {
     /// qui pourrait s'en écarter — et lit le verrou au miroir complet.
     func test_extension_executesThePlan_andReadsTheMirror() throws {
         let source = try nseSource()
-        XCTAssertTrue(source.contains("NSEPreparationStep.plan(isLockedConversation:"))
+        XCTAssertTrue(source.contains("NSEPreparationStep.plan(for: lock)"))
         XCTAssertTrue(source.contains("NSEAttachmentPolicy.lockedConversationIdsKey"))
         XCTAssertTrue(source.contains("NSEAttachmentPolicy.conversationLock("))
     }
@@ -419,10 +436,14 @@ final class NSEAttachmentPolicyTests: XCTestCase {
         XCTAssertFalse(NSEAttachmentPolicy.isAppGroupDomainReadable(containerURL: nil, suiteName: "group.test"))
     }
 
-    /// Un verrou INCONNU ne scelle pas le contenu (aucune preuve de verrou),
-    /// mais retire les actions rapides (fail-closed).
-    func test_anUnknownLock_sealsNothing_butOffersNoQuickAction() {
-        XCTAssertFalse(NSEConversationLock.unknown.sealsContent)
+    /// Un verrou INCONNU (avant le premier déverrouillage) scelle le contenu
+    /// ET retire les actions rapides : la conversation est peut-être sous PIN
+    /// (fail-closed).
+    func test_anUnknownLock_sealsTheContent_andOffersNoQuickAction() {
+        XCTAssertTrue(NSEConversationLock.unknown.sealsContent)
+        XCTAssertTrue(NSEConversationLock.locked.sealsContent)
+        XCTAssertFalse(NSEConversationLock.open.sealsContent)
+        XCTAssertFalse(NSEConversationLock.noConversation.sealsContent)
         XCTAssertFalse(NSEConversationLock.unknown.offersQuickActions)
         XCTAssertFalse(NSEConversationLock.locked.offersQuickActions)
         XCTAssertTrue(NSEConversationLock.open.offersQuickActions)
