@@ -725,8 +725,8 @@ final class ConversationLockManager: ObservableObject, ConversationLockGating, C
     /// Les conversations dont le coffre tient un code — ni le compte
     /// biométrique, ni les compteurs d'échecs ; `nil` quand il ne s'énumère pas.
     private func lockedIdsInVault() -> Set<String>? {
-        vault.accounts().map { accounts in
-            Set(accounts.compactMap { account in
+        vault.accounts().map { accounts -> Set<String> in
+            Set(accounts.compactMap { (account: String) -> String? in
                 guard account.hasPrefix(lockKeyPrefix), account != biometricStateKey,
                       !account.hasSuffix(throttleSuffix) else { return nil }
                 let conversationId = String(account.dropFirst(lockKeyPrefix.count))
