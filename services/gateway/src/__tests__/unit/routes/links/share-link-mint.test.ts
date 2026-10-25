@@ -23,7 +23,7 @@ describe('mayMintShareLink', () => {
     });
   });
 
-  describe('conversation type: global — ADMIN ou BIGBOSS de la PLATEFORME, jamais le rang de conversation', () => {
+  describe('conversation type: global — rôle de PLATEFORME privilégié (MODERATOR, ADMIN, BIGBOSS, #11217) d\'un MEMBRE, jamais le rang de conversation', () => {
     it('refuses a plain USER platform role', () => {
       expect(mayMintShareLink({ conversationRole: 'creator', platformRole: 'USER' }, { type: 'global' })).toBe(false);
     });
@@ -32,12 +32,12 @@ describe('mayMintShareLink', () => {
       expect(mayMintShareLink({ conversationRole: 'moderator', platformRole: 'USER' }, { type: 'global' })).toBe(false);
     });
 
-    it('allows ADMIN — critère de fin #2, BIGBOSS OU ADMIN, pas BIGBOSS seul', () => {
-      expect(mayMintShareLink({ conversationRole: null, platformRole: 'ADMIN' }, { type: 'global' })).toBe(true);
+    it.each(['MODERATOR', 'ADMIN', 'BIGBOSS'])('allows a member whose platform role is %s — critère de fin #2 élargi par #11217', (platformRole) => {
+      expect(mayMintShareLink({ conversationRole: 'member', platformRole }, { type: 'global' })).toBe(true);
     });
 
-    it('allows BIGBOSS', () => {
-      expect(mayMintShareLink({ conversationRole: null, platformRole: 'BIGBOSS' }, { type: 'global' })).toBe(true);
+    it.each(['MODERATOR', 'ADMIN', 'BIGBOSS'])('refuses a %s with no participation row — « une fois DANS » (#11217)', (platformRole) => {
+      expect(mayMintShareLink({ conversationRole: null, platformRole }, { type: 'global' })).toBe(false);
     });
   });
 
@@ -66,12 +66,12 @@ describe('mayMintShareLink', () => {
       expect(mayMintShareLink({ conversationRole: 'creator', platformRole: 'USER' }, { type: 'group' })).toBe(true);
     });
 
-    it('allows a platform ADMIN with no conversation role — le bypass de conversation-authority.ts (§ "avec les droits DU CRÉATEUR")', () => {
-      expect(mayMintShareLink({ conversationRole: null, platformRole: 'ADMIN' }, { type: 'group' })).toBe(true);
+    it.each(['MODERATOR', 'ADMIN', 'BIGBOSS'])('allows a plain member whose platform role is %s — le bypass de conversation-authority.ts (§ "avec les droits DU CRÉATEUR")', (platformRole) => {
+      expect(mayMintShareLink({ conversationRole: 'member', platformRole }, { type: 'group' })).toBe(true);
     });
 
-    it('allows a platform BIGBOSS with no conversation role', () => {
-      expect(mayMintShareLink({ conversationRole: null, platformRole: 'BIGBOSS' }, { type: 'group' })).toBe(true);
+    it.each(['MODERATOR', 'ADMIN', 'BIGBOSS'])('refuses a %s stranger to the conversation — aucun rôle de plateforme ne vaut un rang sans ligne de participation (#11217)', (platformRole) => {
+      expect(mayMintShareLink({ conversationRole: null, platformRole }, { type: 'group' })).toBe(false);
     });
   });
 

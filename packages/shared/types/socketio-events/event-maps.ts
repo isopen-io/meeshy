@@ -148,6 +148,7 @@ import type {
   ConversationActionData,
   ConversationClosedEventData,
   ConversationDeletedEventData,
+  ConversationEncryptionChangedEventData,
   ConversationJoinErrorEventData,
   ConversationNewEventData,
   ConversationParticipationEventData,
@@ -452,6 +453,7 @@ export interface ServerToClientEvents {
 
   // Conversation lifecycle
   [SERVER_EVENTS.CONVERSATION_UPDATED]: (data: ConversationUpdatedEventData) => void;
+  [SERVER_EVENTS.CONVERSATION_ENCRYPTION_CHANGED]: (data: ConversationEncryptionChangedEventData) => void;
   [SERVER_EVENTS.CONVERSATION_CLOSED]: (data: ConversationClosedEventData) => void;
   [SERVER_EVENTS.CONVERSATION_DELETED]: (data: ConversationDeletedEventData) => void;
   [SERVER_EVENTS.CONVERSATION_RESTORED]: (data: ConversationRestoredEventData) => void;

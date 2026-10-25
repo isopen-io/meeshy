@@ -831,12 +831,14 @@ final class NearbyDiscoveryViewModelTests: XCTestCase {
     /// des publications du fil — pas le point consenti — c'est pourquoi elle
     /// n'est pas offerte à tout le monde.
     func test_availableSections_offerDiscoverToPlatformStaffOnly() {
-        for role in ["BIGBOSS", "ADMIN", "MODERATOR", "moderator"] {
+        for role in ["BIGBOSS", "ADMIN", "MODERATOR"] {
             let (sut, _, _, _) = makeSUT(viewerRole: role)
             XCTAssertTrue(sut.canDiscover, "\(role) doit voir la section Discover")
             XCTAssertEqual(sut.availableSections, [.nearby, .discover], role)
         }
-        for role in ["USER", "AUDIT", "ANALYST", "", nil] as [String?] {
+        // La table des rôles privilégiés compare EXACTEMENT (#11217) : un
+        // « moderator » en minuscules ne vient que d'une charge forgée.
+        for role in ["USER", "AUDIT", "ANALYST", "", "moderator", nil] as [String?] {
             let (sut, _, _, _) = makeSUT(viewerRole: role)
             XCTAssertFalse(sut.canDiscover, "\(role ?? "nil") ne doit pas voir Discover")
             XCTAssertEqual(sut.availableSections, [.nearby], role ?? "nil")

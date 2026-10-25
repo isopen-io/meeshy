@@ -133,6 +133,21 @@ export interface ConversationUnreadUpdatedEventData {
 }
 
 /**
+ * Payload de `CONVERSATION_ENCRYPTION_CHANGED` (#12522). `mode` vaut `null`
+ * quand le chiffrement vient d'être désactivé. `epoch` est l'époque du régime
+ * APRÈS la bascule : un envoi qui déclare une autre époque est refusé
+ * `E2EE_REGIME_CHANGED`. Aucun contenu de message n'y voyage.
+ */
+export interface ConversationEncryptionChangedEventData {
+  readonly conversationId: string;
+  readonly isEncrypted: boolean;
+  readonly mode: 'e2ee' | 'server' | 'hybrid' | null;
+  readonly epoch: number;
+  readonly changedByUserId: string;
+  readonly changedAt: string;
+}
+
+/**
  * Émis par `DELETE /conversations/:id/delete-for-me` vers la room de
  * l'utilisateur, pour que ses autres appareils retirent la conversation
  * de leur liste (per-user soft delete). Consommé iOS par

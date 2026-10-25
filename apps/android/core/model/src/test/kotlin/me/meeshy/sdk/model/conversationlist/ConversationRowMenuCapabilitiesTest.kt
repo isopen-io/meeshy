@@ -68,9 +68,9 @@ class ConversationRowMenuCapabilitiesTest {
     }
 
     @Test
-    fun `only ADMIN and BIGBOSS invite into Global`() {
+    fun `only privileged platform roles invite into Global`() {
         assertThat(caps(conversation(type = "global", currentUserRole = "creator"), user()).invite).isFalse()
-        assertThat(caps(conversation(type = "global"), user(role = "MODERATOR")).invite).isFalse()
+        assertThat(caps(conversation(type = "global"), user(role = "MODERATOR")).invite).isTrue()
         assertThat(caps(conversation(type = "global"), user(role = "ADMIN")).invite).isTrue()
         assertThat(caps(conversation(type = "global"), user(role = "BIGBOSS")).invite).isTrue()
     }
