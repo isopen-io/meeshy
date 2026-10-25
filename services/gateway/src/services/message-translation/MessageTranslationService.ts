@@ -19,7 +19,7 @@ import { ConversationLanguages } from './ConversationLanguages';
 import { ArrivalHistoryBackfill } from './ArrivalHistoryBackfill';
 import { TranslationStats, TranslationServiceStats } from './TranslationStats';
 import { EncryptionHelper } from './EncryptionHelper';
-import { gatewayKeyring, translatableTextOf } from '../messaging/atRestTranslationSource';
+import { atRestRequestFlag, gatewayKeyring, translatableTextOf } from '../messaging/atRestTranslationSource';
 import type { AtRestKeyring } from '../messaging/serverAtRest';
 import { ConsentValidationService } from '../ConsentValidationService';
 import { MultiLevelJobMappingCache } from '../MultiLevelJobMappingCache';
@@ -623,7 +623,7 @@ export class MessageTranslationService extends EventEmitter {
         sourceLanguage: this._normalizeSourceLanguage(message.originalLanguage),
         targetLanguages: cacheMisses,  // ✨ Seulement les langues non cachées
         conversationId: message.conversationId,
-        modelType: finalModelType
+        modelType: finalModelType, ...atRestRequestFlag(message.encryptionMode),
       };
 
       await this.zmqClient.sendTranslationRequest(request);
@@ -769,7 +769,7 @@ export class MessageTranslationService extends EventEmitter {
         sourceLanguage: this._normalizeSourceLanguage(existingMessage.originalLanguage),
         targetLanguages: filteredTargetLanguages,
         conversationId: existingMessage.conversationId,
-        modelType: finalModelType
+        modelType: finalModelType, ...atRestRequestFlag(existingMessage.encryptionMode),
       };
       
       const taskId = await this.zmqClient.sendTranslationRequest(request);

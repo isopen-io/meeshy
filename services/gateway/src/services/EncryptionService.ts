@@ -14,7 +14,8 @@ import { PrismaClient } from '@meeshy/shared/prisma/client';
 import * as crypto from 'crypto';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { guardedInterval, guardedTimeout } from '../utils/guarded-timer';
-import { AT_REST_AAD_V1, atRestAad, openBytes, sealBytes, ServerAtRestUnavailableError, ServerAtRestUnreadableError, type AtRestEnvelope, type AtRestKeyring } from './messaging/serverAtRest';
+import type { SealedQueuedPayload } from '@meeshy/shared/types/delivery-queue';
+import { AT_REST_AAD_V1, atRestAad, DELIVERY_QUEUE_AAD_V1, deliveryQueueAad, openBytes, sealBytes, ServerAtRestUnavailableError, ServerAtRestUnreadableError, type AtRestEnvelope, type AtRestKeyring } from './messaging/serverAtRest';
 import { ServerKeyVault } from './ServerKeyVault';
 
 // Create a child logger for encryption operations
@@ -302,6 +303,48 @@ export class EncryptionService implements AtRestKeyring {
 
   /** Ouvre un chiffré au repos ; tout échec est EXPLICITE (`ServerAtRestUnreadableError`). */
   async openAtRest(envelope: AtRestEnvelope, conversationId: string): Promise<string> {
+    return this.openUnder(envelope, conversationId, envelope.aad === AT_REST_AAD_V1 ? atRestAad(conversationId) : undefined);
+  }
+
+  /**
+   * #12822 — scelle la charge d'une entrée de file hors ligne d'une
+   * conversation au repos, sous la clé que la conversation désigne, liée à sa
+   * conversation ET à son message (`delivery-queue:v1`).
+   */
+  async sealQueuedPayload(params: {
+    readonly plaintext: string;
+    readonly conversationId: string;
+    readonly messageId: string;
+  }): Promise<SealedQueuedPayload> {
+    if (!this.keyVault.masterKeyAvailable) throw new ServerAtRestUnavailableError('missing');
+    const designated = await this.keyVault.designatedKeyId(params.conversationId);
+    const { keyId, key } = await this.writableConversationKey(params.conversationId, designated);
+    const iv = crypto.randomBytes(12);
+    const sealed = sealBytes({
+      key,
+      iv,
+      plaintext: Buffer.from(params.plaintext, 'utf8'),
+      aad: deliveryQueueAad(params.conversationId, params.messageId),
+    });
+    return {
+      ciphertext: sealed.ciphertext.toString('base64'),
+      keyId,
+      iv: iv.toString('base64'),
+      authTag: sealed.authTag.toString('base64'),
+      aad: DELIVERY_QUEUE_AAD_V1,
+    };
+  }
+
+  /** Rouvre une charge de file ; une autre liaison que `delivery-queue:v1` est refusée. */
+  async openQueuedPayload(
+    sealed: SealedQueuedPayload,
+    ids: { readonly conversationId: string; readonly messageId: string }
+  ): Promise<string> {
+    if (sealed.aad !== DELIVERY_QUEUE_AAD_V1) throw new ServerAtRestUnreadableError('malformed');
+    return this.openUnder(sealed, ids.conversationId, deliveryQueueAad(ids.conversationId, ids.messageId));
+  }
+
+  private async openUnder(envelope: AtRestEnvelope, conversationId: string, aad: Buffer | undefined): Promise<string> {
     if (!this.keyVault.masterKeyAvailable) throw new ServerAtRestUnreadableError('master-key-unavailable');
     const key = await this.keyVault.getKeyFor(envelope.keyId, conversationId);
     if (!key) throw new ServerAtRestUnreadableError('data-key-unavailable');
@@ -311,7 +354,7 @@ export class EncryptionService implements AtRestKeyring {
         iv: Buffer.from(envelope.iv, 'base64'),
         ciphertext: Buffer.from(envelope.ciphertext, 'base64'),
         authTag: Buffer.from(envelope.authTag, 'base64'),
-        ...(envelope.aad === AT_REST_AAD_V1 ? { aad: atRestAad(conversationId) } : {}),
+        ...(aad ? { aad } : {}),
       }).toString('utf8');
     } catch {
       throw new ServerAtRestUnreadableError('authentication-failed');

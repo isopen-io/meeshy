@@ -15,6 +15,7 @@ import { resolveLastMessagePreviewGroup } from './utils/lastMessagePreviewGroup'
 import type { QueuedPayloadFor } from './queuedEventContract';
 import { quotedDeathFor } from './quotedEphemeralAudience';
 import { enhancedLogger } from '../utils/logger-enhanced';
+import { isServerAtRestMode } from '../services/messaging/serverAtRest';
 
 const logger = enhancedLogger.child({ module: 'postMessageSyncFanOut' });
 
@@ -132,6 +133,8 @@ export async function syncConversationListOnNewMessage(
       // espace d'ids optimistes dans celui d'un autre utilisateur.
       payload: broadcastPayload,
       ...(params.payloadForReader ? { resolvePayloadForReader: params.payloadForReader } : {}),
+      // #12822 — le clair d'une conversation chiffrée au repos part scellé dans Redis.
+      ...(isServerAtRestMode(message.encryptionMode) ? { atRest: true } : {}),
       participants: allParticipants,
     }
   );

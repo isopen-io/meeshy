@@ -124,3 +124,48 @@ describe.each(['server', 'hybrid'] as const)('traduction automatique d’un mess
     expect(zmq.sendTranslationRequest).not.toHaveBeenCalled();
   });
 });
+
+const requests = (): Row[] => zmq.sendTranslationRequest.mock.calls.map(([request]) => request as Row);
+
+describe('E1 — le translator apprend qu’un texte est chiffré au repos (ni cache Redis, ni journal)', () => {
+  it.each(['server', 'hybrid'] as const)('la traduction automatique d’un message %s porte atRest', async (mode) => {
+    state.row = await sealedRow(mode);
+    const service = new MessageTranslationService(prisma);
+    await service.initialize();
+
+    await service.handleNewMessage({
+      id: MSG_ID, conversationId: CONV_ID, content: SECRET, originalLanguage: 'fr',
+    } as Parameters<MessageTranslationService['handleNewMessage']>[0]);
+    await settle();
+
+    expect(requests()).toEqual([expect.objectContaining({ text: SECRET, atRest: true })]);
+  });
+
+  it('la retraduction d’un message server porte atRest', async () => {
+    state.row = await sealedRow('server');
+    const service = new MessageTranslationService(prisma);
+    await service.initialize();
+
+    await service.retranslateMessageAsync(MSG_ID, { conversationId: CONV_ID, content: SECRET, targetLanguage: 'en' } as Parameters<MessageTranslationService['retranslateMessageAsync']>[1]);
+    await settle();
+
+    expect(requests()).toEqual([expect.objectContaining({ text: SECRET, atRest: true })]);
+  });
+
+  it('un message non chiffré ne porte pas le drapeau : le translator garde son cache', async () => {
+    state.row = {
+      id: MSG_ID, conversationId: CONV_ID, senderId: 'sender-1', content: SECRET, originalLanguage: 'fr',
+      messageType: 'text', isEncrypted: false, encryptionMode: null, deletedAt: null, translations: null,
+    };
+    const service = new MessageTranslationService(prisma);
+    await service.initialize();
+
+    await service.handleNewMessage({
+      id: MSG_ID, conversationId: CONV_ID, content: SECRET, originalLanguage: 'fr',
+    } as Parameters<MessageTranslationService['handleNewMessage']>[0]);
+    await settle();
+
+    expect(requests()).toHaveLength(1);
+    expect(requests()[0]).not.toHaveProperty('atRest');
+  });
+});

@@ -7,6 +7,7 @@ import {
 import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 import type { QueuedEventVariant } from './queuedEventContract';
+import { isServerAtRestMode } from '../services/messaging/serverAtRest';
 
 const logger = enhancedLogger.child({ module: 'offlineParticipantQueue' });
 
@@ -16,7 +17,9 @@ const logger = enhancedLogger.child({ module: 'offlineParticipantQueue' });
  * without importing each other.
  */
 export interface OfflineParticipantQueueDeps {
-  deliveryQueue: { enqueue(userId: string, entry: QueuedMessagePayload): Promise<void> } | null | undefined;
+  deliveryQueue: {
+    enqueue(userId: string, entry: QueuedMessagePayload, options?: { readonly sealAtRest?: boolean }): Promise<void>;
+  } | null | undefined;
   prisma: Pick<PrismaClient, 'participant'>;
   connectedUsers: { has(key: string): boolean };
 }
@@ -111,6 +114,13 @@ export type OfflineParticipantQueueParams = QueuedEventVariant & {
    */
   resolvePayloadForReader?: (queueKey: string) => Record<string, unknown>;
   /**
+   * #12822 — la conversation est chiffrée au repos (`server`/`hybrid`) : la
+   * charge se scelle avant Redis. Une charge qui DÉCLARE elle-même ce mode
+   * (`encryptionMode` du message, ou de l'enveloppe de lien) se scelle aussi,
+   * sans que l'appelant ait à le dire.
+   */
+  atRest?: boolean;
+  /**
    * Les clés de file qui ne reçoivent RIEN — un lecteur dont le plancher
    * d'historique est postérieur au message (`translationReaders`, #9709).
    */
@@ -150,6 +160,17 @@ function readableLanguagesFor(participant: OfflineQueueParticipant): string[] {
     }),
   ];
 }
+
+const asRecord = (value: unknown): Record<string, unknown> | null =>
+  typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+
+const modeOf = (record: Record<string, unknown> | null): string | null =>
+  typeof record?.['encryptionMode'] === 'string' ? record['encryptionMode'] : null;
+
+const declaresAtRest = (payload: Record<string, unknown>): boolean =>
+  isServerAtRestMode(modeOf(payload)) || isServerAtRestMode(modeOf(asRecord(payload['message'])));
+
+const SEAL_AT_REST = { sealAtRest: true } as const;
 
 /**
  * THE implementation of the "offline participants" audience, shared by every
@@ -244,15 +265,19 @@ export async function enqueueForOfflineParticipants(
         const readable = readableLanguagesFor(p);
         if (readable.length > 0 && !readable.includes(restrictToLanguage)) continue;
       }
-      deliveryQueue
-        .enqueue(queueKey, {
-          messageId,
-          conversationId,
-          payload: resolvePayloadForReader ? resolvePayloadForReader(queueKey) : payload,
-          enqueuedAt: new Date().toISOString(),
-          eventType,
-          ...(dedupKey ? { dedupKey } : {}),
-        })
+      const body = resolvePayloadForReader ? resolvePayloadForReader(queueKey) : payload;
+      const entry: QueuedMessagePayload = {
+        messageId,
+        conversationId,
+        payload: body,
+        enqueuedAt: new Date().toISOString(),
+        eventType,
+        ...(dedupKey ? { dedupKey } : {}),
+      };
+      const queued = params.atRest === true || declaresAtRest(body)
+        ? deliveryQueue.enqueue(queueKey, entry, SEAL_AT_REST)
+        : deliveryQueue.enqueue(queueKey, entry);
+      queued
         .catch((err) => logger.warn('Failed to enqueue offline event', { userId: queueKey, eventType, error: err }));
     }
   } catch (err) {

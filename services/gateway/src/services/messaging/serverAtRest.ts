@@ -133,6 +133,16 @@ export const AT_REST_AAD_V1 = 'conversation:v1';
 export const atRestAad = (conversationId: string): Buffer =>
   Buffer.from(`meeshy:at-rest:v1:${conversationId}`, 'utf8');
 
+/**
+ * #12822 — la liaison d'une charge de file hors ligne : sa conversation ET son
+ * message. Distincte de `conversation:v1` : recopiée dans une ligne `Message`,
+ * une charge de file ne s'ouvre pas comme un texte au repos.
+ */
+export const DELIVERY_QUEUE_AAD_V1 = 'delivery-queue:v1';
+
+export const deliveryQueueAad = (conversationId: string, messageId: string): Buffer =>
+  Buffer.from(`meeshy:delivery-queue:v1:${conversationId}:${messageId}`, 'utf8');
+
 export type SealedBytes = { readonly ciphertext: Buffer; readonly authTag: Buffer };
 
 const ALGORITHM = 'aes-256-gcm';

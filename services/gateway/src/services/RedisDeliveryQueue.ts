@@ -7,6 +7,7 @@ import {
   DELIVERY_QUEUE_TTL_SECONDS,
 } from '@meeshy/shared/types/delivery-queue';
 import { enhancedLogger } from '../utils/logger-enhanced';
+import type { DeliveryQueueSealer } from './deliveryQueueSealing';
 
 const logger = enhancedLogger.child({ module: 'RedisDeliveryQueue' });
 
@@ -217,16 +218,65 @@ function collapseCrossSliceDuplicates(sorted: QueuedMessagePayload[]): QueuedMes
 const MEMORY_QUEUE_MAX_USERS = 1000;
 const MEMORY_QUEUE_MAX_PER_USER = 50;
 
+/** #12822 — `sealAtRest` : la charge appartient à une conversation chiffrée au repos. */
+export type DeliveryQueueEnqueueOptions = { readonly sealAtRest?: boolean };
+
 export class RedisDeliveryQueue {
   private memoryQueue: Map<string, QueuedMessagePayload[]> = new Map();
 
-  constructor(private cacheStore: CacheStore) {}
+  constructor(
+    private cacheStore: CacheStore,
+    private readonly sealer: DeliveryQueueSealer | null = null,
+  ) {}
 
   private getRedis(): Redis | null {
     return this.cacheStore.getNativeClient();
   }
 
-  async enqueue(userId: string, entry: QueuedMessagePayload): Promise<void> {
+  /**
+   * #12822 — FAIL-CLOSED : une entrée à sceller qui ne se scelle pas (aucun
+   * sceau, clé maîtresse absente, clé de conversation illisible) n'est PAS
+   * enfilée. Le destinataire relira le message en ouvrant la conversation ;
+   * le clair ne se pose jamais dans Redis à la place.
+   */
+  private async sealedForStorage(userId: string, entry: QueuedMessagePayload): Promise<QueuedMessagePayload | null> {
+    const refuse = (reason: string): null => {
+      logger.error('Offline entry of an at-rest conversation not queued: it cannot be sealed', {
+        userId, conversationId: entry.conversationId, messageId: entry.messageId, eventType: normalizedEventType(entry), reason,
+      });
+      return null;
+    };
+    if (!this.sealer) return refuse('no-sealer');
+    try {
+      return await this.sealer.seal(entry);
+    } catch (error) {
+      return refuse(error instanceof Error && 'code' in error ? String(error.code) : 'seal-failed');
+    }
+  }
+
+  /** Les entrées scellées sont rouvertes ; celle qui ne se rouvre pas n'est pas rejouée. */
+  private async openedForReplay(userId: string, entries: QueuedMessagePayload[]): Promise<QueuedMessagePayload[]> {
+    if (!entries.some((entry) => entry.sealedPayload)) return entries;
+    const opened = await Promise.all(entries.map(async (entry): Promise<QueuedMessagePayload | null> => {
+      const { sealedPayload } = entry;
+      if (!sealedPayload) return entry;
+      try {
+        if (!this.sealer) throw new Error('no-sealer');
+        return await this.sealer.open({ ...entry, sealedPayload });
+      } catch (error) {
+        logger.error('Sealed offline entry dropped: it cannot be opened', {
+          userId, conversationId: entry.conversationId, messageId: entry.messageId, eventType: normalizedEventType(entry),
+          reason: error instanceof Error && 'code' in error ? String(error.code) : 'open-failed',
+        });
+        return null;
+      }
+    }));
+    return opened.filter((entry): entry is QueuedMessagePayload => entry !== null);
+  }
+
+  async enqueue(userId: string, incoming: QueuedMessagePayload, options: DeliveryQueueEnqueueOptions = {}): Promise<void> {
+    const entry = options.sealAtRest ? await this.sealedForStorage(userId, incoming) : incoming;
+    if (!entry) return;
     const redis = this.getRedis();
     const serialized = JSON.stringify(entry);
     const dedupId = entry.dedupKey ?? entry.messageId;
@@ -301,6 +351,14 @@ export class RedisDeliveryQueue {
   }
 
   async drain(userId: string): Promise<QueuedMessagePayload[]> {
+    return this.openedForReplay(userId, await this.drainStored(userId));
+  }
+
+  async peek(userId: string, limit?: number): Promise<QueuedMessagePayload[]> {
+    return this.openedForReplay(userId, await this.peekStored(userId, limit));
+  }
+
+  private async drainStored(userId: string): Promise<QueuedMessagePayload[]> {
     const redis = this.getRedis();
 
     // Entries stashed here were queued during a transient Redis outage before
@@ -335,7 +393,7 @@ export class RedisDeliveryQueue {
     return [...memoryEntries].sort(byEnqueuedAt);
   }
 
-  async peek(userId: string, limit?: number): Promise<QueuedMessagePayload[]> {
+  private async peekStored(userId: string, limit?: number): Promise<QueuedMessagePayload[]> {
     const redis = this.getRedis();
     const memoryEntries = this.memoryQueue.get(userId) ?? [];
 

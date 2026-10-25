@@ -14,6 +14,7 @@ import { getEncryptionService } from '../EncryptionService';
 import {
   AT_REST_MESSAGE_SELECT,
   isSealedAtRest,
+  isServerAtRestMode,
   lazyKeyring,
   revealAtRest,
   type AtRestKeyring,
@@ -46,6 +47,14 @@ export async function translatableTextOf(row: AtRestReadableRow, keyring: AtRest
   const text = source.row.content;
   return typeof text === 'string' && text.trim().length > 0 ? text : null;
 }
+
+/**
+ * #12822 — le drapeau de la requête ZMQ : un texte chiffré au repos ne se pose
+ * ni dans le cache Redis du translator ni dans ses journaux. Absent sinon, pour
+ * que la trame des autres messages reste celle d'avant.
+ */
+export const atRestRequestFlag = (encryptionMode: string | null | undefined): { readonly atRest?: true } =>
+  isServerAtRestMode(encryptionMode) ? { atRest: true } : {};
 
 /** Le message que `translation:request` retraduit, son texte ouvert ; `content` vide s'il reste scellé. */
 export async function loadTranslatableMessage(prisma: PrismaClient, messageId: string) {
