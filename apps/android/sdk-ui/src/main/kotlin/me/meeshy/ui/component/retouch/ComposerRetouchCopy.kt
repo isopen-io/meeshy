@@ -8,6 +8,7 @@ import me.meeshy.sdk.model.call.VideoFilterPreset
 import me.meeshy.sdk.model.call.montage.CallMontageChoice
 import me.meeshy.sdk.model.call.montage.CallMontageFrameRule
 import me.meeshy.sdk.model.call.montage.CallMontageStyle
+import me.meeshy.sdk.model.composer.look.CallFaceEffect
 import me.meeshy.sdk.model.composer.look.ComposerLookFamily
 import me.meeshy.sdk.model.composer.look.ComposerLookStripItem
 import me.meeshy.sdk.model.composer.look.ComposerPhotoFrame
@@ -56,11 +57,21 @@ internal object ComposerRetouchCopy {
         CallMontageStyle.HEART -> R.string.retouch_style_heart
     }
 
-    /** Le nom d'une case : le filtre, la famille des effets (aucun effet ne s'offre encore sur Android), le classique ou le nom du cadre. */
+    @StringRes
+    fun effect(effect: CallFaceEffect): Int = when (effect) {
+        CallFaceEffect.NONE -> R.string.retouch_effect_none
+        CallFaceEffect.SMOOTHING -> R.string.retouch_effect_smoothing
+        CallFaceEffect.TOAD -> R.string.retouch_effect_toad
+        CallFaceEffect.ANGEL -> R.string.retouch_effect_angel
+        CallFaceEffect.DEMON -> R.string.retouch_effect_demon
+        CallFaceEffect.VOLCANO -> R.string.retouch_effect_volcano
+    }
+
+    /** Le nom d'une case : le filtre, l'effet (`call.effects.face.*`), le classique ou le nom du cadre. */
     @Composable
     fun itemName(item: ComposerLookStripItem): String = when (item) {
         is ComposerLookStripItem.Filter -> stringResource(filter(item.preset))
-        is ComposerLookStripItem.Effect -> stringResource(R.string.retouch_family_effects)
+        is ComposerLookStripItem.Effect -> stringResource(effect(item.effect))
         is ComposerLookStripItem.Frame -> frameName(item.frame)
     }
 

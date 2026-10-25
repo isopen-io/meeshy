@@ -255,6 +255,42 @@
           "iosKey": "story.textEdit.tool.color",
           "androidName": "retouch_text_color",
           "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.effects.face.none",
+          "androidName": "retouch_effect_none",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.effects.face.smoothing",
+          "androidName": "retouch_effect_smoothing",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.effects.face.toad",
+          "androidName": "retouch_effect_toad",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.effects.face.angel",
+          "androidName": "retouch_effect_angel",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.effects.face.demon",
+          "androidName": "retouch_effect_demon",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.effects.face.volcano",
+          "androidName": "retouch_effect_volcano",
+          "status": "adopted"
         }
       ]
     }
