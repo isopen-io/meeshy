@@ -121,7 +121,9 @@ public final class E2EEPlaintextVault: E2EEPlaintextStoring {
             }
             try messageIds.forEach { try transaction.remove(.plaintext, $0) }
         }
-        try vault.compact()
+        // Au mieux : un lecteur actif retarde la troncature, la ligne est déjà
+        // retirée et ses octets mis à zéro (`secure_delete`).
+        _ = try? vault.compact()
     }
 
     public func servesItsOwner() throws -> Bool {

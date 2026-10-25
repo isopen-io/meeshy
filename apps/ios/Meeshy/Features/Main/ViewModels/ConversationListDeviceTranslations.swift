@@ -72,9 +72,11 @@ final class ConversationListDeviceTranslations {
               let descent = DeviceTranslationTarget.candidates(
                 preferredLanguages: readers, originalLanguage: source, translatedLanguages: []
               ) else { return nil }
+        // Seules les paires déjà installées : la liste n'ouvre jamais la feuille
+        // système de téléchargement d'une langue, le fil s'en charge.
         var supported: Set<String> = []
         for target in descent.targets
-        where await engine.availability(of: DeviceTranslationPair(source: descent.source, target: target)) != .unsupported {
+        where await engine.availability(of: DeviceTranslationPair(source: descent.source, target: target)) == .ready {
             supported.insert(target)
         }
         return DeviceTranslationTarget.resolve(

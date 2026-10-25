@@ -227,4 +227,44 @@ final class MessagePlaintextErasuresTests: XCTestCase {
         let recorded = try await pending(actor)
         XCTAssertEqual(recorded, ["srv_16"])
     }
+
+    /// Audit (M-1) — une modification reçue avant sa ligne n'est pas une suppression.
+    func test_anEditBeforeItsRow_recordsNothing() async throws {
+        let (actor, _) = try makeActor()
+
+        try await actor.markEdited(localId: "srv_20", newContent: "modifié", editedAt: Date())
+
+        let recorded = try await pending(actor)
+        XCTAssertEqual(recorded, [])
+    }
+
+    /// Audit (m-7) — un message en clair supprimé n'encombre pas la file.
+    func test_aClearMessageDeleted_recordsNothing() async throws {
+        let (actor, queue) = try makeActor()
+        try insert(MessageRecordFactory.make(localId: "srv_21", conversationId: conversationId, content: "en clair", state: .sent), into: queue)
+
+        try await actor.markDeleted(localId: "srv_21", deletedAt: Date())
+
+        let recorded = try await pending(actor)
+        XCTAssertEqual(recorded, [])
+    }
+
+    /// Audit (M-2) — un effacement retiré du coffre reste connu pendant la
+    /// rétention des enveloppes, puis s'oublie.
+    func test_anAcknowledgedErasure_staysKnown_untilItsRetentionEnds() async throws {
+        let (actor, queue) = try makeActor()
+        try insert(sealedRow(localId: "srv_22", serverId: "srv_22"), into: queue)
+        try await actor.markDeleted(localId: "srv_22", deletedAt: Date())
+        let now = Date()
+
+        try await actor.plaintextErasures.acknowledge(["srv_22"], now: now)
+
+        let left = try await pending(actor)
+        XCTAssertEqual(left, [])
+        let known = try await actor.plaintextErasures.isErased("srv_22")
+        XCTAssertTrue(known)
+        try await actor.plaintextErasures.acknowledge(["other"], now: now.addingTimeInterval(MessagePlaintextErasureQueue.retention + 1))
+        let forgotten = try await actor.plaintextErasures.isErased("srv_22")
+        XCTAssertFalse(forgotten)
+    }
 }

@@ -224,6 +224,39 @@ final class ConversationListEndToEndTextsTests: XCTestCase {
         XCTAssertEqual(store.text(for: conversationId)?.translations, [:])
     }
 
+    /// Audit (M-4) — la liste lue avant l'ouverture de la session n'a rien
+    /// reçu du coffre : l'ouverture la relit, la ligne ne reste pas scellée.
+    func test_store_readBeforeTheSessionOpened_isReadAgainWhenItOpens() async {
+        let vault = MockEndToEndMessaging()
+        vault.vaultAccount = "pas-encore"
+        vault.store(.readable(content("Bien reçu"), senderUserId: peer), for: messageId)
+        let rows = CurrentValueSubject<[Conversation], Never>([sealedRow(from: peer)])
+        let store = makeStore(rows: rows, vault: vault)
+        try? await Task.sleep(for: .milliseconds(80))
+        XCTAssertNil(store.text(for: conversationId))
+
+        vault.vaultAccount = me
+        vault.announceSession(me)
+        await waitUntil { store.text(for: self.conversationId) != nil }
+
+        XCTAssertEqual(store.text(for: conversationId)?.text, "Bien reçu")
+    }
+
+    /// Audit (M-8) — la liste n'ouvre jamais la feuille de téléchargement d'une langue.
+    func test_store_pairNeedingADownload_isNotTranslatedFromTheList() async {
+        let vault = MockEndToEndMessaging()
+        vault.store(.readable(peerContent("See you at 6", language: "en"), senderUserId: peer), for: messageId)
+        let engine = ListTranslationEngine()
+        engine.availability = .needsDownload
+        let rows = CurrentValueSubject<[Conversation], Never>([sealedRow(from: peer)])
+        let store = makeStore(rows: rows, vault: vault, engine: engine, readers: ["fr"])
+
+        await waitUntil { store.text(for: self.conversationId) != nil }
+        try? await Task.sleep(for: .milliseconds(80))
+
+        XCTAssertEqual(engine.pairs, [])
+    }
+
     /// #13002 — la liste lit le coffre dès sa première émission, sans le délai
     /// de regroupement : la ligne ne passe pas par « Message chiffré ».
     func test_store_firstList_isReadWithoutTheCoalescingDelay() async {

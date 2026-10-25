@@ -8,7 +8,8 @@ import os
 nonisolated protocol EndToEndPlaintextErasureQueue: Sendable {
     var account: String? { get }
     func pending(limit: Int) async throws -> [String]
-    func acknowledge(_ keys: [String]) async throws
+    func acknowledge(_ keys: [String], now: Date) async throws
+    func isErased(_ messageKey: String) async throws -> Bool
 }
 
 extension MessagePlaintextErasureQueue: EndToEndPlaintextErasureQueue {}
@@ -49,11 +50,21 @@ actor EndToEndPlaintextJanitor {
             while true {
                 let keys = try await erasures.pending(limit: Self.batch)
                 guard !keys.isEmpty, await endToEnd.erase(keys, as: account) else { return }
-                try await erasures.acknowledge(keys)
+                try await erasures.acknowledge(keys, now: Date())
                 guard keys.count == Self.batch else { return }
             }
         } catch {
             Logger.e2ee.warning("e2ee plaintext erasures deferred: \(String(describing: type(of: error)), privacy: .public)")
         }
+    }
+
+    /// Une enveloppe s'ouvre APRÈS l'effacement de son message (appareil hors
+    /// ligne pendant la suppression, enveloppe encore en file) : son clair,
+    /// tout juste rangé, repart aussitôt.
+    func reconsider(_ messageId: String) async {
+        let erasures = await queue()
+        guard let account = erasures.account, !account.isEmpty,
+              (try? await erasures.isErased(messageId)) == true else { return }
+        _ = await endToEnd.erase([messageId], as: account)
     }
 }

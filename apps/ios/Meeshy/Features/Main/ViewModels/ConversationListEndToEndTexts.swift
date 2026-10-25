@@ -133,7 +133,10 @@ final class ConversationListEndToEndTextStore {
             .debounce(for: .milliseconds(16), scheduler: DispatchQueue.main)
             .sink { [weak self] rows in self?.refresh(rows) }
             .store(in: &cancellables)
-        endToEnd.opened
+        // #13000 — une lecture faite avant l'ouverture de la session n'a rien
+        // rendu : elle n'est pas un manque, la session ouverte relit tout.
+        endToEnd.opened.map { _ in () }
+            .merge(with: endToEnd.sessions.map { _ in () })
             .debounce(for: .milliseconds(50), scheduler: DispatchQueue.main)
             .sink { [weak self] _ in
                 guard let self else { return }

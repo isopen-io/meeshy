@@ -397,4 +397,17 @@ final class EndToEndDeviceLimitViewModelTests: XCTestCase {
         let erasedClosed = await runtime.erase(["m2"], as: alice)
         XCTAssertFalse(erasedClosed, "hors session, l'effacement attend")
     }
+
+    /// Audit (M-7) — un premier envoi juste après la connexion, avant que
+    /// l'installation se soit enrôlée, range son clair : il attend l'enrôlement.
+    func test_remember_beforeEnrollment_waitsForIt_andKeepsTheClear() async throws {
+        let runtime = try XCTUnwrap(try device([alice])[alice])
+        await runtime.open(session: alice)
+
+        let kept = await runtime.remember(written(by: alice), from: alice, as: ["cid_1"])
+
+        XCTAssertTrue(kept)
+        let stored = await runtime.storedMessageIds(as: alice)
+        XCTAssertEqual(stored, ["cid_1"])
+    }
 }

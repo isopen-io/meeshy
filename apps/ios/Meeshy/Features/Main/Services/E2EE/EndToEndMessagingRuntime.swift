@@ -38,6 +38,9 @@ nonisolated protocol EndToEndMessagingProviding: Sendable {
     func storedMessageIds(as account: String) async -> [String]?
     /// Chaque enveloppe ouverte, par la socket ou le rattrapage.
     var opened: AnyPublisher<E2EEOpenOutcome, Never> { get }
+    /// Le compte de chaque session qui s'ouvre (`nil` à la fermeture) : ce qui
+    /// a lu le coffre avant elle le relit (#13000).
+    var sessions: AnyPublisher<String?, Never> { get }
 }
 
 /// Une installation prête à chiffrer : enrôlée, et ses outils construits sur
@@ -136,6 +139,7 @@ actor EndToEndMessagingRuntime: EndToEndMessagingProviding, EndToEndDeviceManagi
     }
 
     nonisolated var opened: AnyPublisher<E2EEOpenOutcome, Never> { relay.publisher }
+    nonisolated var sessions: AnyPublisher<String?, Never> { relay.sessions }
 
     /// L'installation de ce compte, enrôlée une fois ; une préparation en cours
     /// pour CE compte est partagée. Celle d'un autre compte est annulée et
@@ -192,12 +196,14 @@ actor EndToEndMessagingRuntime: EndToEndMessagingProviding, EndToEndDeviceManagi
     func open(session userId: String) {
         if session != .open(userId) { forget() }
         session = .open(userId)
+        relay.announce(userId)
     }
 
     /// La fermeture de la session : plus aucun compte n'est servi jusqu'à la suivante.
     func close() {
         session = .closed
         forget()
+        relay.announce(nil)
     }
 
     /// La passerelle dit cet appareil délié pour CE compte : seul son appareil
@@ -230,6 +236,8 @@ actor EndToEndMessagingRuntime: EndToEndMessagingProviding, EndToEndDeviceManagi
         }
         do {
             let store = try provisioning.plaintexts(owner: owner)
+            // Un premier envoi peut précéder l'enrôlement de la session : il l'attend.
+            if try !store.servesItsOwner() { _ = try await ready(for: owner) }
             try messageIds.forEach { id in try store.save(.readable(content, senderUserId: senderUserId), for: id) }
             return true
         } catch {
@@ -314,9 +322,12 @@ actor EndToEndMessagingRuntime: EndToEndMessagingProviding, EndToEndDeviceManagi
 
 /// Le relais des enveloppes ouvertes, lisible hors de l'acteur. Il n'est
 /// alimenté QUE par l'acteur, donc jamais par deux fils à la fois.
-/// unchecked: `PassthroughSubject` sérialise déjà ses envois, et `subject` n'est jamais réassigné après l'init.
+/// unchecked: `PassthroughSubject` sérialise déjà ses envois, et aucun des deux sujets n'est réassigné après l'init.
 nonisolated final class OutcomeRelay: @unchecked Sendable {
     private let subject = PassthroughSubject<E2EEOpenOutcome, Never>()
+    private let sessionSubject = PassthroughSubject<String?, Never>()
     var publisher: AnyPublisher<E2EEOpenOutcome, Never> { subject.eraseToAnyPublisher() }
+    var sessions: AnyPublisher<String?, Never> { sessionSubject.eraseToAnyPublisher() }
     func send(_ outcome: E2EEOpenOutcome) { subject.send(outcome) }
+    func announce(_ account: String?) { sessionSubject.send(account) }
 }

@@ -28,6 +28,10 @@ nonisolated final class MockEndToEndMessaging: EndToEndMessagingProviding, @unch
 
     var opened: AnyPublisher<E2EEOpenOutcome, Never> { outcomes.eraseToAnyPublisher() }
 
+    private let sessionSubject = PassthroughSubject<String?, Never>()
+    var sessions: AnyPublisher<String?, Never> { sessionSubject.eraseToAnyPublisher() }
+    func announceSession(_ account: String?) { sessionSubject.send(account) }
+
     func publish(_ outcome: E2EEOpenOutcome) { outcomes.send(outcome) }
 
     func store(_ entry: E2EEPlaintextEntry, for messageId: String) {

@@ -81,7 +81,9 @@ final class MoodReplySender: MoodReplySending {
             text: text, language: language, replyTo: nil,
             conversationId: conversationId, clientMessageId: clientMessageId, sentAt: Date()
         )
-        await endToEnd.remember(content, from: senderUserId, as: [clientMessageId])
+        guard await endToEnd.remember(content, from: senderUserId, as: [clientMessageId]) else {
+            throw EndToEndSendRefusal.sessionUnavailable
+        }
         let messages = messages
         let sent = try await endToEnd.deliver(content, from: senderUserId, to: peerUserId) { sealed in
             do {

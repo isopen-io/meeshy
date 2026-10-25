@@ -82,6 +82,13 @@ final class EndToEndSessionBridge: EndToEndSessionBridging {
         // #13001 — un effacement écrit dans la base des messages vide le coffre.
         let janitor = janitor
         enqueue { await janitor.drain() }
+        runtime.opened
+            .compactMap { outcome -> String? in
+                guard case .opened(let message) = outcome else { return nil }
+                return message.messageId
+            }
+            .sink { [weak self] messageId in Task { @MainActor in self?.enqueue { await janitor.reconsider(messageId) } } }
+            .store(in: &subscriptions)
         storeChanges
             .debounce(for: .seconds(1), scheduler: DispatchQueue.main)
             .sink { [weak self] in Task { @MainActor in self?.enqueue { await janitor.drain() } } }

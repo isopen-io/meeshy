@@ -102,4 +102,28 @@ final class EndToEndPlaintextJanitorTests: XCTestCase {
         let left = try await queue.plaintextErasures.pending(limit: 10)
         XCTAssertEqual(Set(left), ["cid_1", "srv_1"], "le coffre d'un autre compte ne se vide pas pour celui-ci")
     }
+
+    /// Audit (M-2) — l'enveloppe d'un message supprimé pendant que l'appareil
+    /// était hors ligne s'ouvre APRÈS l'effacement : son clair repart aussitôt.
+    func test_anEnvelopeOpenedAfterTheErasure_leavesTheVaultAgain() async throws {
+        let queue = try await persistence(with: [("srv_1", "srv_1")])
+        let endToEnd = MockEndToEndMessaging()
+        try await queue.markDeleted(localId: "srv_1", deletedAt: Date())
+        await janitor(endToEnd, queue).drain()
+        await endToEnd.remember(content(), from: me, as: ["srv_1"])
+
+        await janitor(endToEnd, queue).reconsider("srv_1")
+
+        XCTAssertEqual(endToEnd.storedIds, [])
+    }
+
+    func test_aLiveMessageOpened_isNotErased() async throws {
+        let queue = try await persistence(with: [("srv_1", "srv_1")])
+        let endToEnd = MockEndToEndMessaging()
+        await endToEnd.remember(content(), from: me, as: ["srv_1"])
+
+        await janitor(endToEnd, queue).reconsider("srv_1")
+
+        XCTAssertEqual(endToEnd.storedIds, ["srv_1"])
+    }
 }

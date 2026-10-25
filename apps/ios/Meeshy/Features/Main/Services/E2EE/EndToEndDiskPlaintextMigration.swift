@@ -4,7 +4,7 @@ import os
 
 /// Ce qui rescelle, dans la base des messages, les lignes des messages chiffrés de bout en bout.
 nonisolated protocol EndToEndPlaintextRowSealing: Sendable {
-    func seal(messageKeys: [String]) async throws -> Int
+    func seal(messageKeys: [String]) async throws -> EndToEndPlaintextRowSealer.Outcome
 }
 
 /// **Le clair qu'une version antérieure a écrit hors du coffre s'en va** (#12999).
@@ -34,7 +34,7 @@ struct EndToEndDiskPlaintextMigration: Sendable {
               let sealedIds = await endToEnd.storedMessageIds(as: account) else { return }
         do {
             let rescued = try await rows().seal(messageKeys: sealedIds)
-            let endToEndConversations = await resealListPreviews(naming: Set(sealedIds))
+            let endToEndConversations = await resealListPreviews(naming: Set(sealedIds)).union(rescued.conversationIds)
             for id in endToEndConversations {
                 await caches.messages.invalidate(for: id)
                 await caches.conversationMedia.invalidate(for: id)
@@ -42,7 +42,7 @@ struct EndToEndDiskPlaintextMigration: Sendable {
             }
             await resealStarred(Set(sealedIds))
             defaults.set(true, forKey: doneKey)
-            Logger.e2ee.info("e2ee disk plaintext sealed rows=\(rescued, privacy: .public) conversations=\(endToEndConversations.count, privacy: .public)")
+            Logger.e2ee.info("e2ee disk plaintext sealed rows=\(rescued.rows, privacy: .public) conversations=\(endToEndConversations.count, privacy: .public)")
         } catch {
             Logger.e2ee.error("e2ee disk plaintext migration deferred: \(String(describing: type(of: error)), privacy: .public)")
         }
@@ -50,7 +50,7 @@ struct EndToEndDiskPlaintextMigration: Sendable {
 
     /// Rescelle l'aperçu de chaque ligne dont le dernier message est au coffre,
     /// et rend les conversations chiffrées de bout en bout de la liste.
-    private func resealListPreviews(naming sealedIds: Set<String>) async -> [String] {
+    private func resealListPreviews(naming sealedIds: Set<String>) async -> Set<String> {
         let cached = await caches.conversations.loadIgnoringExpiry(for: "list")?.items ?? []
         await caches.conversations.update(for: "list") { conversations in
             conversations.map { conversation in
@@ -62,10 +62,11 @@ struct EndToEndDiskPlaintextMigration: Sendable {
         }
         let resealed = await caches.conversations.loadIgnoringExpiry(for: "list")?.items ?? []
         await searchIndex.indexConversations(resealed)
-        return cached
+        await searchIndex.compactConversations()
+        return Set(cached
             .filter { EndToEndPlaintextLaw.isEndToEndConversation($0.encryptionMode)
                 || $0.lastMessageId.map(sealedIds.contains) == true }
-            .map(\.id)
+            .map(\.id))
     }
 
     @MainActor

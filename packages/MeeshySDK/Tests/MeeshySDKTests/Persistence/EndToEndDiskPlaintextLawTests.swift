@@ -90,7 +90,8 @@ final class EndToEndDiskPlaintextLawTests: XCTestCase {
 
         let sealed = try await actor.endToEndRowSealer.seal(messageKeys: ["srv_5"])
 
-        XCTAssertEqual(sealed, 1)
+        XCTAssertEqual(sealed.rows, 1)
+        XCTAssertEqual(sealed.conversationIds, ["conv_default"])
         XCTAssertEqual(Set(try storedContents(in: queue)), [E2EEWire.contentPlaceholder, "réponse en clair", "autre conversation"])
         let quotes = try await queue.read { db in try Data.fetchAll(db, sql: "SELECT replyToJson FROM messages WHERE replyToJson IS NOT NULL") }
         XCTAssertFalse(quotes.contains { String(decoding: $0, as: UTF8.self).contains(secret) })
@@ -101,5 +102,28 @@ final class EndToEndDiskPlaintextLawTests: XCTestCase {
         let row = try await queue.read { db in try MessageRecord.fetchOne(db, key: "cid_5") }
         XCTAssertEqual(row?.isEncrypted, true)
         XCTAssertEqual(row?.encryptionMode, E2EEWire.mode)
+    }
+
+    /// Audit #12999 (B-1) — l'écho de mon envoi réécrivait le clair par du SQL
+    /// brut, hors de l'encodage de `MessageRecord`. La base le rescelle.
+    func test_aRawSQLWriteOfAnEndToEndRow_isSealedByTheDatabase() async throws {
+        let (actor, queue) = try makeActor()
+        var row = MessageRecordFactory.make(localId: "cid_9", content: E2EEWire.contentPlaceholder)
+        row.isEncrypted = true
+        row.encryptionMode = E2EEWire.mode
+        let inserted = row
+        try await queue.write { db in try inserted.insert(db) }
+
+        try await actor.updateServerAckedFields(
+            localId: "cid_9", content: secret, attachmentsJson: nil, reactionsJson: nil, pinnedAt: nil, pinnedBy: nil,
+            isEdited: false, editedAt: nil, deletedAt: nil, deliveredCount: 0, readCount: 0,
+            deliveredToAllAt: nil, readByAllAt: nil, updatedAt: Date()
+        )
+        let secret = secret
+        try await queue.write { db in
+            try db.execute(sql: "UPDATE messages SET content = ? WHERE localId = 'cid_9'", arguments: [secret])
+        }
+
+        XCTAssertEqual(try storedContents(in: queue), [E2EEWire.contentPlaceholder])
     }
 }
