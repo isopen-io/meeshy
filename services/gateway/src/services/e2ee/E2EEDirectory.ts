@@ -63,6 +63,15 @@ type SignedKey = { readonly keyId: number; readonly publicKey: string; readonly 
 type OneTimeKey = { readonly keyId: number; readonly publicKey: string };
 type OneTimeBatches = { readonly oneTimePreKeys?: readonly OneTimeKey[]; readonly kyberPreKeys?: readonly SignedKey[] };
 
+export type OwnDevice = {
+  readonly deviceId: number;
+  readonly platform: string;
+  readonly label: string | null;
+  readonly createdAt: string;
+  readonly lastSeenAt: string;
+  readonly current: boolean;
+};
+
 export type PreKeyStock = { readonly deviceId: number; readonly oneTimePreKeys: number; readonly kyberPreKeys: number };
 
 const ACTIVE = { retiredAt: null } as const;
@@ -363,6 +372,23 @@ export class E2EEDirectory {
   async listDevices(userId: string): Promise<{ deviceId: number; registrationId: number }[]> {
     const devices = await this.activeDevices(userId);
     return devices.map((device) => ({ deviceId: device.deviceId, registrationId: device.registrationId }));
+  }
+
+  /**
+   * MES appareils chiffrés, pour l'écran « Mes appareils chiffrés » (#13013) :
+   * le seul compte appelant, champ par champ — ni clé, ni session, ni pré-clé.
+   * `current` dit si l'appareil est celui de la session qui demande.
+   */
+  async listOwnDevices(params: { userId: string; sessionId: string }): Promise<OwnDevice[]> {
+    const devices = await this.activeDevices(params.userId);
+    return devices.map((device) => ({
+      deviceId: device.deviceId,
+      platform: device.platform,
+      label: device.label ?? null,
+      createdAt: device.createdAt.toISOString(),
+      lastSeenAt: device.lastSeenAt.toISOString(),
+      current: device.sessionId === params.sessionId,
+    }));
   }
 
   /**

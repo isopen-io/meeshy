@@ -146,6 +146,10 @@ function registerDeviceRoutes(fastify: FastifyInstance, deps: E2EERouteDeps): vo
     return sendSuccess(reply, { deviceId, retired: true });
   }));
 
+  fastify.get('/e2ee/devices', { preValidation }, guarded(async (_request, reply, caller) =>
+    sendSuccess(reply, { devices: await deps.directory.listOwnDevices(caller) }),
+  ));
+
   fastify.get('/e2ee/devices/self/prekey-count', { preValidation }, guarded(async (_request, reply, caller) =>
     sendSuccess(reply, await deps.directory.prekeyStock(caller)),
   ));
