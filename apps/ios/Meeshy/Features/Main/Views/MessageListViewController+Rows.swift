@@ -366,6 +366,8 @@ extension MessageListViewController {
         let pieceLongPressHandler = handlers.pieceLongPress
         let selectedIds = parts.selectedIds
         let longMessageExpansion = parts.longMessageExpansion
+        let isUnencrypted = parts.inputs.isUnencrypted
+        let isDark = self.isDark
         let offer = callbacks.rowOffer?(message) ?? .closed // #12626 — la loi, lue une fois par configuration
         cell.contentConfiguration = UIHostingConfiguration {
             BubbleSwipeContainer(
@@ -384,9 +386,9 @@ extension MessageListViewController {
                 editMenuActions: self.messageEditMenuActions(message: message, callbacks: callbacks, offer: offer)
             ) {
                 if let focalRow {
-                    focalRow.equatable().modifier(UnencryptedMessageMarking(isUnencrypted: parts.inputs.isUnencrypted, isDark: self.isDark))
+                    focalRow.equatable().modifier(UnencryptedMessageMarking(isUnencrypted: isUnencrypted, isDark: isDark))
                 } else {
-                    messageBubble.longMessageFocus(longMessageExpansion).modifier(UnencryptedMessageMarking(isUnencrypted: parts.inputs.isUnencrypted, isDark: self.isDark))
+                    messageBubble.longMessageFocus(longMessageExpansion).modifier(UnencryptedMessageMarking(isUnencrypted: isUnencrypted, isDark: isDark))
                 }
             }
             .environmentObject(host)
