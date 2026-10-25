@@ -148,4 +148,18 @@ final class EndToEndOwnDeviceLinkingRuntimeTests: XCTestCase {
         XCTAssertEqual(listed[2].label, "Mac")
         XCTAssertEqual(listed[0].label, "iPhone")
     }
+
+    func test_aDeviceServedTwice_isListedOnce() {
+        let current = E2EELocalDevice(userId: alice, deviceId: 1, registrationId: 10)
+        let twice = [
+            E2EEOwnDeviceStatus(deviceId: 2, registrationId: 20, approved: false),
+            E2EEOwnDeviceStatus(deviceId: 2, registrationId: 21, approved: true),
+            E2EEOwnDeviceStatus(deviceId: 1, registrationId: 10, approved: true),
+        ]
+
+        let listed = EndToEndOwnDevice.list(current: current, others: twice, details: [])
+
+        XCTAssertEqual(listed.map(\.deviceId), [1, 2])
+        XCTAssertEqual(listed.last?.trust, .pending, "le doublon servi ne rend pas un appareil approuvé")
+    }
 }

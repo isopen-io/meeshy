@@ -55,8 +55,8 @@ struct EncryptedDeviceSheet: View {
         }
         .alert(
             EncryptedDeviceNoticeText.title(model.notice, devices: model.devices),
-            isPresented: Binding(get: { model.notice == .actionFailed }, set: { if !$0 { model.notice = nil } }),
-            actions: { Button(String(localized: "common.ok", defaultValue: "OK", bundle: .main), role: .cancel) {} },
+            isPresented: Binding(get: { model.notice == .actionFailed }, set: { _ in }),
+            actions: { Button(String(localized: "common.ok", defaultValue: "OK", bundle: .main), role: .cancel) { model.notice = nil } },
             message: { Text(EncryptedDeviceNoticeText.message(model.notice)) }
         )
     }

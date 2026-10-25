@@ -1,5 +1,5 @@
 import Foundation
-import MeeshyE2EE
+@_spi(Testing) import MeeshyE2EE
 import MeeshySDK
 @testable import Meeshy
 
@@ -14,6 +14,12 @@ nonisolated final class MockEndToEndOwnDeviceLinking: EndToEndOwnDeviceLinking, 
     var approveError: (any Error)?
     var revokeError: (any Error)?
     var retireError: (any Error)?
+
+    /// Vrai : `candidate` attend `releaseCandidate()` — pour deux lectures simultanées.
+    var holdsCandidate = false
+    private var held: CheckedContinuation<Void, Never>?
+    private var asked: CheckedContinuation<Void, Never>?
+    private var wasAsked = false
 
     private(set) var listCallCount = 0
     private(set) var codeRequests: [UInt32] = []
@@ -34,7 +40,32 @@ nonisolated final class MockEndToEndOwnDeviceLinking: EndToEndOwnDeviceLinking, 
 
     func candidate(matching payload: String, as userId: String) async throws -> E2EEPairingCandidate? {
         lock.withLock { scannedPayloads.append(payload) }
+        if holdsCandidate {
+            await withCheckedContinuation { continuation in
+                lock.withLock {
+                    held = continuation
+                    wasAsked = true
+                    asked?.resume()
+                    asked = nil
+                }
+            }
+        }
         return try candidateResult.get()
+    }
+
+    func waitUntilACandidateIsAsked() async {
+        await withCheckedContinuation { continuation in
+            lock.withLock {
+                if wasAsked { continuation.resume() } else { asked = continuation }
+            }
+        }
+    }
+
+    func releaseCandidate() {
+        lock.withLock {
+            held?.resume()
+            held = nil
+        }
     }
 
     func approve(_ candidate: E2EEPairingCandidate, as userId: String) async throws {

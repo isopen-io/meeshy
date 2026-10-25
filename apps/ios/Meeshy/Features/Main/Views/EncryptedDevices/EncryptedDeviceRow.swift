@@ -75,6 +75,8 @@ enum EncryptedDeviceNoticeText {
         switch notice {
         case .noMatch:
             String(localized: "e2ee.devices.notice.noMatch.title", defaultValue: "Code non reconnu", bundle: .main)
+        case .otherDevice:
+            String(localized: "e2ee.devices.notice.otherDevice.title", defaultValue: "Ce n’est pas cet appareil", bundle: .main)
         case .approved(let deviceId):
             String(
                 format: String(localized: "e2ee.devices.notice.approved.title", defaultValue: "« %@ » est approuvé", bundle: .main),
@@ -92,6 +94,12 @@ enum EncryptedDeviceNoticeText {
             String(
                 localized: "e2ee.devices.notice.noMatch.message",
                 defaultValue: "Ce code ne correspond à aucun de vos appareils. Rien n’a été approuvé. Lisez le code affiché dans « Mes appareils chiffrés » sur votre autre appareil.",
+                bundle: .main
+            )
+        case .otherDevice:
+            String(
+                localized: "e2ee.devices.notice.otherDevice.message",
+                defaultValue: "Ce code est celui d’un autre de vos appareils. Rien n’a été approuvé. Lisez le code affiché par l’appareil que vous approuvez.",
                 bundle: .main
             )
         case .approved:

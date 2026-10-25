@@ -10,12 +10,13 @@ import MeeshyUI
 struct EncryptedDevicesView: View {
     enum ActiveSheet: Identifiable, Equatable {
         case device(EndToEndOwnDevice)
-        case scanner
+        /// Ouvert depuis la feuille d'un appareil : seul son code s'approuve.
+        case scanner(expecting: EndToEndOwnDevice?)
 
         var id: String {
             switch self {
             case .device(let device): "device-\(device.deviceId)"
-            case .scanner: "scanner"
+            case .scanner(let expected): "scanner-\(expected?.deviceId ?? 0)"
             }
         }
     }
@@ -47,15 +48,15 @@ struct EncryptedDevicesView: View {
         .sheet(item: $activeSheet) { sheet in
             switch sheet {
             case .device(let device):
-                EncryptedDeviceSheet(device: device, model: model) { activeSheet = .scanner }
-            case .scanner:
-                EncryptedDeviceScannerSheet(model: model)
+                EncryptedDeviceSheet(device: device, model: model) { activeSheet = .scanner(expecting: device) }
+            case .scanner(let expected):
+                EncryptedDeviceScannerSheet(model: model, expected: expected)
             }
         }
         .alert(
             noticeTitle,
-            isPresented: Binding(get: { activeSheet == nil && model.notice != nil }, set: { if !$0 { model.notice = nil } }),
-            actions: { Button(String(localized: "common.ok", defaultValue: "OK", bundle: .main), role: .cancel) {} },
+            isPresented: Binding(get: { activeSheet == nil && model.notice != nil }, set: { _ in }),
+            actions: { Button(String(localized: "common.ok", defaultValue: "OK", bundle: .main), role: .cancel) { model.notice = nil } },
             message: { Text(noticeMessage) }
         )
     }
@@ -195,7 +196,7 @@ struct EncryptedDevicesView: View {
     private var scanButton: some View {
         Button {
             HapticFeedback.light()
-            activeSheet = .scanner
+            activeSheet = .scanner(expecting: nil)
         } label: {
             Label(String(localized: "e2ee.devices.scan", defaultValue: "Lire le code d’un appareil", bundle: .main), systemImage: "qrcode.viewfinder")
                 .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))

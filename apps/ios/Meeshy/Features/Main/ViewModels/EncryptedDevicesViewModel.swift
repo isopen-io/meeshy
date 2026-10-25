@@ -33,17 +33,22 @@ final class EncryptedDevicesViewModel: ObservableObject {
         let candidate: E2EEPairingCandidate
         /// La ligne connue de cet appareil, pour le NOMMER ; `nil` s'il vient de s'inscrire.
         let device: EndToEndOwnDevice?
+        /// Le compte sous lequel le code a été lu : il seul peut confirmer.
+        let userId: String
         var id: UInt32 { candidate.deviceId }
     }
 
     enum Notice: Equatable, Identifiable {
         case noMatch
+        /// Le code lu est celui d'un autre de mes appareils que celui qu'on approuve.
+        case otherDevice
         case approved(deviceId: UInt32)
         case actionFailed
 
         var id: String {
             switch self {
             case .noMatch: "noMatch"
+            case .otherDevice: "otherDevice"
             case .approved(let deviceId): "approved-\(deviceId)"
             case .actionFailed: "actionFailed"
             }
@@ -117,8 +122,9 @@ final class EncryptedDevicesViewModel: ObservableObject {
         }
     }
 
-    /// Le texte d'un QR lu par la caméra. Il ne fait que DÉSIGNER un appareil.
-    func scanned(_ payload: String) async {
+    /// Le texte d'un QR lu par la caméra. Il ne fait que DÉSIGNER un appareil ;
+    /// ouvert depuis la feuille d'un appareil (`expecting`), il ne désigne que lui.
+    func scanned(_ payload: String, expecting expectedDeviceId: UInt32? = nil) async {
         guard pendingApproval == nil, !examiningScan, let userId = userId() else { return }
         examiningScan = true
         defer { examiningScan = false }
@@ -127,7 +133,11 @@ final class EncryptedDevicesViewModel: ObservableObject {
                 notice = .noMatch
                 return
             }
-            pendingApproval = PendingApproval(candidate: candidate, device: devices.first { $0.deviceId == candidate.deviceId })
+            guard expectedDeviceId == nil || candidate.deviceId == expectedDeviceId else {
+                notice = .otherDevice
+                return
+            }
+            pendingApproval = PendingApproval(candidate: candidate, device: devices.first { $0.deviceId == candidate.deviceId }, userId: userId)
         } catch {
             notice = .actionFailed
         }
@@ -137,19 +147,40 @@ final class EncryptedDevicesViewModel: ObservableObject {
         pendingApproval = nil
     }
 
-    /// Le SEUL chemin qui épingle une clé : le geste « Approuver » de la confirmation.
-    func confirmApproval() async {
-        guard let pending = pendingApproval, let userId = userId() else { return }
+    /// Une confirmation acceptée par le geste « Approuver » : seule
+    /// `acceptApproval(_:)` en fabrique une.
+    struct AcceptedApproval {
+        fileprivate let pending: PendingApproval
+    }
+
+    /// Le geste « Approuver », SYNCHRONE : la confirmation présentée se
+    /// referme dans le même tour que le geste, pour que l'alerte ne se
+    /// représente pas. Annulée, remplacée ou lue sous un autre compte, elle
+    /// n'est pas acceptée.
+    func acceptApproval(_ presented: PendingApproval) -> AcceptedApproval? {
+        guard let pending = pendingApproval, pending == presented, userId() == pending.userId else { return nil }
         pendingApproval = nil
         busyDeviceId = pending.candidate.deviceId
+        return AcceptedApproval(pending: pending)
+    }
+
+    /// Le SEUL chemin qui épingle une clé : une confirmation acceptée.
+    func approve(_ accepted: AcceptedApproval) async {
+        let pending = accepted.pending
         defer { busyDeviceId = nil }
+        guard userId() == pending.userId else { return }
         do {
-            try await linking.approve(pending.candidate, as: userId)
+            try await linking.approve(pending.candidate, as: pending.userId)
             notice = .approved(deviceId: pending.candidate.deviceId)
         } catch {
             notice = .actionFailed
         }
-        await revalidate(as: userId)
+        await revalidate(as: pending.userId)
+    }
+
+    func confirmApproval(_ presented: PendingApproval) async {
+        guard let accepted = acceptApproval(presented) else { return }
+        await approve(accepted)
     }
 
     func revokeApproval(of device: EndToEndOwnDevice) async {

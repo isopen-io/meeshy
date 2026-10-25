@@ -312588,43 +312588,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لا تعتمد إلا جهازًا يخصّك وأمامك. سيتمكن من قراءة الرسائل المشفّرة التي تكتبها من هذا الجهاز."
+            "value": "لا تعتمد إلا جهازًا يخصّك وأمامك، ولا تعتمد أبدًا رمزًا وصلك في رسالة أو عرضه عليك شخص آخر. سيتمكن من قراءة الرسائل المشفّرة التي تكتبها من هذا الجهاز."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Genehmige nur ein Gerät, das dir gehört und vor dir liegt. Es kann die verschlüsselten Nachrichten lesen, die du von diesem schreibst."
+            "value": "Genehmige nur ein Gerät, das dir gehört und vor dir liegt – niemals einen Code aus einer Nachricht oder von jemand anderem. Es kann die verschlüsselten Nachrichten lesen, die du von diesem schreibst."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Only approve a device that is yours and in front of you. It will be able to read the encrypted messages you write from this one."
+            "value": "Only approve a device that is yours and in front of you — never a code received in a message or shown by someone else. It will be able to read the encrypted messages you write from this one."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aprueba solo un dispositivo que sea tuyo y esté delante de ti. Podrá leer los mensajes cifrados que escribas desde este."
+            "value": "Aprueba solo un dispositivo que sea tuyo y esté delante de ti, nunca un código recibido por mensaje o mostrado por otra persona. Podrá leer los mensajes cifrados que escribas desde este."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "N’approuvez qu’un appareil qui est à vous et devant vous. Il pourra lire les messages chiffrés que vous écrivez depuis celui-ci."
+            "value": "N’approuvez qu’un appareil qui est à vous et devant vous, jamais un code reçu par message ou montré par quelqu’un d’autre. Il pourra lire les messages chiffrés que vous écrivez depuis celui-ci."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Approva solo un dispositivo tuo e davanti a te. Potrà leggere i messaggi crittografati che scrivi da questo."
+            "value": "Approva solo un dispositivo tuo e davanti a te, mai un codice ricevuto per messaggio o mostrato da altri. Potrà leggere i messaggi crittografati che scrivi da questo."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aprove apenas um dispositivo que seja seu e esteja à sua frente. Ele poderá ler as mensagens criptografadas que você escreve a partir deste."
+            "value": "Aprove apenas um dispositivo que seja seu e esteja à sua frente, nunca um código recebido por mensagem ou mostrado por outra pessoa. Ele poderá ler as mensagens criptografadas que você escreve a partir deste."
           }
         }
       }
@@ -312635,43 +312635,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "اعتماد «%@»؟"
+            "value": "اعتماد «%@» (رقم %d)؟"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "„%@“ genehmigen?"
+            "value": "„%@“ (Nr. %d) genehmigen?"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Approve “%@”?"
+            "value": "Approve “%@” (no. %d)?"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "¿Aprobar «%@»?"
+            "value": "¿Aprobar «%@» (n.º %d)?"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Approuver « %@ » ?"
+            "value": "Approuver « %@ » (n° %d) ?"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Approvare «%@»?"
+            "value": "Approvare «%@» (n. %d)?"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aprovar “%@”?"
+            "value": "Aprovar “%@” (nº %d)?"
           }
         }
       }
@@ -314082,6 +314082,147 @@
           "stringUnit": {
             "state": "translated",
             "value": "Ver meus dispositivos criptografados"
+          }
+        }
+      }
+    },
+    "e2ee.devices.notice.otherDevice.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ليس هذا الجهاز"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das ist nicht dieses Gerät"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "That’s not this device"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No es este dispositivo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ce n’est pas cet appareil"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Non è questo dispositivo"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não é este dispositivo"
+          }
+        }
+      }
+    },
+    "e2ee.devices.notice.otherDevice.message": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هذا الرمز لجهاز آخر من أجهزتك. لم يُعتمد أي شيء. اقرأ الرمز الذي يعرضه الجهاز الذي تعتمده."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieser Code gehört zu einem anderen deiner Geräte. Nichts wurde genehmigt. Scanne den Code des Geräts, das du genehmigst."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This code belongs to another of your devices. Nothing was approved. Scan the code shown by the device you are approving."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este código es de otro de tus dispositivos. No se ha aprobado nada. Lee el código que muestra el dispositivo que estás aprobando."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ce code est celui d’un autre de vos appareils. Rien n’a été approuvé. Lisez le code affiché par l’appareil que vous approuvez."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Questo codice appartiene a un altro dei tuoi dispositivi. Non è stato approvato nulla. Leggi il codice mostrato dal dispositivo che stai approvando."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este código é de outro dos seus dispositivos. Nada foi aprovado. Leia o código exibido pelo dispositivo que você está aprovando."
+          }
+        }
+      }
+    },
+    "e2ee.devices.approve.enrolled": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مسجّل في %@."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Registriert am %@."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Registered on %@."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Registrado el %@."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inscrit le %@."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Registrato il %@."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Registrado em %@."
           }
         }
       }

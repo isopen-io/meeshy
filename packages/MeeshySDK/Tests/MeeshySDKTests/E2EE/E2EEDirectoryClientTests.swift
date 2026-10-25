@@ -84,7 +84,7 @@ struct E2EEDirectoryClientTests {
 
     @Test func envelopesArePagedByCursorThenAcknowledged() async throws {
         let api = MockE2EEAPIClient()
-        let envelope = #"{"id":"e1","messageId":"m1","conversationId":"c1","recipientRegistrationId":7,"senderUserId":"\#(user)","senderDeviceId":1,"type":3,"body":"Y2lwaGVy","enrolledAt":"2026-10-24T00:00:00.000Z"}"#
+        let envelope = #"{"id":"e1","messageId":"m1","conversationId":"c1","recipientRegistrationId":7,"senderUserId":"\#(user)","senderDeviceId":1,"type":3,"body":"Y2lwaGVy","createdAt":"2026-10-24T00:00:00.000Z"}"#
         api.respond("GET", "/api/v1/e2ee/envelopes", json: #"{"success":true,"data":{"envelopes":[\#(envelope)],"nextCursor":"e1"}}"#)
         api.respond("POST", "/api/v1/e2ee/envelopes/ack", json: #"{"success":true,"data":{"deleted":1}}"#)
         let client = E2EEDirectoryClient(api: api)
@@ -99,7 +99,7 @@ struct E2EEDirectoryClientTests {
     }
 
     @Test func anEnvelopeForAnotherGenerationOfTheSlotIsNotForMe() throws {
-        let json = #"{"id":"e1","messageId":"m1","conversationId":"c1","recipientRegistrationId":7,"senderUserId":"u","senderDeviceId":1,"type":3,"body":"eA==","enrolledAt":"t"}"#
+        let json = #"{"id":"e1","messageId":"m1","conversationId":"c1","recipientRegistrationId":7,"senderUserId":"u","senderDeviceId":1,"type":3,"body":"eA==","createdAt":"t"}"#
         let envelope = try JSONDecoder().decode(E2EEServedEnvelope.self, from: Data(json.utf8))
 
         #expect(envelope.isAddressed(to: 7))

@@ -31,7 +31,8 @@ nonisolated struct EndToEndOwnDevice: Equatable, Sendable, Identifiable {
     /// métadonnée ne s'attache qu'à la MÊME génération (numéro ET
     /// `registrationId`) : une place reprise ne garde pas le nom de l'ancienne.
     /// Le drapeau `current` servi n'est jamais lu : c'est cet appareil qui sait
-    /// qui il est.
+    /// qui il est. Un appareil servi deux fois n'apparaît qu'une fois, et en
+    /// attente : un doublon ne vaut pas approbation.
     static func list(current: E2EELocalDevice, others: [E2EEOwnDeviceStatus], details: [E2EEOwnDeviceDetails]) -> [EndToEndOwnDevice] {
         let named = { (deviceId: UInt32, registrationId: UInt32) in
             details.first { $0.deviceId == deviceId && $0.registrationId == registrationId }
@@ -40,9 +41,14 @@ nonisolated struct EndToEndOwnDevice: Equatable, Sendable, Identifiable {
             current.deviceId, current.registrationId, trust: .thisDevice,
             details: named(current.deviceId, current.registrationId)
         )
-        return [this] + others.filter { $0.deviceId != current.deviceId }.map { status in
-            EndToEndOwnDevice(
-                status.deviceId, status.registrationId, trust: status.approved ? .approved : .pending,
+        let listed = others.filter { $0.deviceId != current.deviceId }
+        let unique = listed.enumerated().filter { index, status in
+            !listed[..<index].contains { $0.deviceId == status.deviceId }
+        }.map(\.element)
+        return [this] + unique.map { status in
+            let servedTwice = listed.filter { $0.deviceId == status.deviceId }.count > 1
+            return EndToEndOwnDevice(
+                status.deviceId, status.registrationId, trust: status.approved && !servedTwice ? .approved : .pending,
                 details: named(status.deviceId, status.registrationId)
             )
         }

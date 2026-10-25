@@ -64,7 +64,7 @@ final class FakeE2EEServer: @unchecked Sendable {
                     id: "env\(nextEnvelope)", messageId: messageId, conversationId: conversationId,
                     recipientRegistrationId: envelope.registrationId, senderUserId: sender,
                     senderDeviceId: sealed.senderDeviceId, type: envelope.type, body: envelope.body,
-                    enrolledAt: "2026-10-24T12:00:00.000Z"
+                    createdAt: "2026-10-24T12:00:00.000Z"
                 )
                 queued["\(envelope.userId).\(envelope.deviceId)", default: []].append(served)
             }

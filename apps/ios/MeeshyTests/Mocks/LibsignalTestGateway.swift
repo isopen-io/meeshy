@@ -46,7 +46,7 @@ nonisolated final class LibsignalTestGateway: @unchecked Sendable {
                     id: "env\(nextEnvelope)", messageId: messageId, conversationId: conversationId,
                     recipientRegistrationId: envelope.registrationId, senderUserId: sender,
                     senderDeviceId: sealed.senderDeviceId, type: envelope.type, body: envelope.body,
-                    enrolledAt: "2026-10-25T12:00:00.000Z"
+                    createdAt: "2026-10-25T12:00:00.000Z"
                 ))
             }
         }

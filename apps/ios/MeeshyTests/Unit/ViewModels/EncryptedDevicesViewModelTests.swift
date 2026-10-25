@@ -1,5 +1,5 @@
 import XCTest
-import MeeshyE2EE
+@_spi(Testing) import MeeshyE2EE
 import MeeshySDK
 @testable import Meeshy
 
@@ -90,7 +90,7 @@ final class EncryptedDevicesViewModelTests: XCTestCase {
         await model.scanned("meeshy-device-link:v1:code")
         linking.devicesResult = .success([device(1, trust: .thisDevice), device(2, trust: .approved)])
 
-        await model.confirmApproval()
+        await model.confirmApproval(XCTUnwrap(model.pendingApproval))
 
         XCTAssertEqual(linking.approved, [candidate(2)])
         XCTAssertNil(model.pendingApproval)
@@ -98,14 +98,15 @@ final class EncryptedDevicesViewModelTests: XCTestCase {
         XCTAssertEqual(model.notice, .approved(deviceId: 2))
     }
 
-    func test_cancellingTheApproval_approvesNothing() async {
+    func test_cancellingTheApproval_approvesNothing_evenIfTheAlertStillConfirms() async throws {
         let linking = MockEndToEndOwnDeviceLinking()
         linking.candidateResult = .success(candidate(2))
         let model = makeModel(linking: linking)
         await model.scanned("meeshy-device-link:v1:code")
+        let presented = try XCTUnwrap(model.pendingApproval)
 
         model.cancelApproval()
-        await model.confirmApproval()
+        await model.confirmApproval(presented)
 
         XCTAssertTrue(linking.approved.isEmpty)
     }
@@ -119,6 +120,46 @@ final class EncryptedDevicesViewModelTests: XCTestCase {
 
         XCTAssertNil(model.pendingApproval)
         XCTAssertEqual(model.notice, .noMatch)
+    }
+
+    func test_twoCodesReadAtOnce_onlyTheFirstIsExamined() async {
+        let linking = MockEndToEndOwnDeviceLinking()
+        linking.candidateResult = .success(candidate(2))
+        linking.holdsCandidate = true
+        let model = makeModel(linking: linking)
+
+        async let first: Void = model.scanned("first")
+        await linking.waitUntilACandidateIsAsked()
+        await model.scanned("second")
+        linking.releaseCandidate()
+        await first
+
+        XCTAssertEqual(linking.scannedPayloads, ["first"], "un code lu pendant l'examen d'un autre n'est pas lu")
+    }
+
+    func test_aScanOpenedForOneDevice_refusesTheCodeOfAnother_andAsksNothing() async {
+        let linking = MockEndToEndOwnDeviceLinking()
+        linking.candidateResult = .success(candidate(3))
+        let model = makeModel(linking: linking)
+
+        await model.scanned("code", expecting: 2)
+
+        XCTAssertNil(model.pendingApproval, "le code d'un autre appareil que celui qu'on approuve ne s'approuve pas")
+        XCTAssertEqual(model.notice, .otherDevice)
+    }
+
+    func test_anApprovalReadUnderOneAccount_isNotConfirmedUnderAnother() async throws {
+        let linking = MockEndToEndOwnDeviceLinking()
+        linking.candidateResult = .success(candidate(2))
+        var account: String? = me
+        let model = EncryptedDevicesViewModel(linking: linking, cache: EncryptedDevicesCache(), networkMonitor: FakeNetworkMonitor(isOnline: true), userId: { account })
+        await model.scanned("code")
+        let presented = try XCTUnwrap(model.pendingApproval)
+
+        account = "00000000000000000000ee55"
+        await model.confirmApproval(presented)
+
+        XCTAssertTrue(linking.approved.isEmpty)
     }
 
     func test_aScanWhileAConfirmationIsOpen_doesNotReplaceIt() async {
@@ -141,7 +182,7 @@ final class EncryptedDevicesViewModelTests: XCTestCase {
         let model = makeModel(linking: linking)
         await model.scanned("code")
 
-        await model.confirmApproval()
+        await model.confirmApproval(XCTUnwrap(model.pendingApproval))
 
         XCTAssertEqual(model.notice, .actionFailed)
         XCTAssertNil(model.pendingApproval)
