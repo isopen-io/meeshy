@@ -49,9 +49,12 @@ final class EndToEndRegimeLedger {
         epochs[conversationId] = epoch
     }
 
-    /// Un statut servi par la passerelle : seul le bout en bout s'apprend.
+    /// Un statut servi par la passerelle : seul le bout en bout s'apprend. Un
+    /// statut chiffré sans mode se lit comme le bout en bout (fail-closed).
     func learn(_ status: ConversationEncryptionStatus, for conversationId: String) {
-        guard EndToEndSendGate.requiresSeal(conversationEncryptionModes: [status.mode]) else { return }
+        guard EndToEndSendGate.requiresSeal(conversationEncryptionModes: [status.mode])
+                || (status.isEncrypted && status.mode == nil)
+        else { return }
         learnEndToEnd(for: conversationId, enabledAt: status.enabledAt, epoch: status.epoch)
     }
 

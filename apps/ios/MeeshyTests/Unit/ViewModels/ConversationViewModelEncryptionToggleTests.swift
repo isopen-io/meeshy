@@ -85,6 +85,16 @@ final class ConversationViewModelEncryptionToggleTests: XCTestCase {
         XCTAssertTrue(ledger.seals(for: conversationId, opening: nil, cached: nil))
     }
 
+    /// Audit #12950 — un statut chiffré sans mode se lit comme le bout en bout.
+    func test_ledger_unStatutChiffreSansMode_estAppris_commeLeBoutEnBout() {
+        let ledger = EndToEndRegimeLedger()
+
+        ledger.learn(ConversationEncryptionStatus(isEncrypted: true, mode: nil, epoch: 3), for: conversationId)
+
+        XCTAssertTrue(ledger.remembersEndToEnd(conversationId))
+        XCTAssertEqual(ledger.epoch(for: conversationId), 3)
+    }
+
     func test_ledger_unRefusDuClairParLaPasserelle_rendLeBoutEnBout() {
         let ledger = EndToEndRegimeLedger()
 

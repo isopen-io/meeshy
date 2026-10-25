@@ -308634,6 +308634,53 @@
         }
       }
     },
+    "conversation.encryption.detail.openPairEndToEndFailed": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تعذّر فتح المحادثة المشفّرة تمامًا بين الطرفين. حاول مجددًا."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Ende-zu-Ende-verschlüsselte Unterhaltung konnte nicht geöffnet werden. Versuche es erneut."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The end-to-end encrypted conversation couldn’t be opened. Try again."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo abrir la conversación cifrada de extremo a extremo. Inténtalo de nuevo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La conversation chiffrée de bout en bout n’a pas pu être ouverte. Réessayez."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossibile aprire la conversazione crittografata end-to-end. Riprova."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não foi possível abrir a conversa criptografada de ponta a ponta. Tente novamente."
+          }
+        }
+      }
+    },
     "conversation.encryption.detail.directAlreadyEndToEnd": {
       "extractionState": "manual",
       "localizations": {

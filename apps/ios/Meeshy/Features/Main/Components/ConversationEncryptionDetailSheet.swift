@@ -241,8 +241,7 @@ struct ConversationEncryptionDetailSheet: View {
         if explanation.regime != .endToEnd, let pairId = status?.pairEndToEndConversationId, !pairId.isEmpty {
             Section {
                 Button {
-                    dismiss()
-                    onOpenConversation(pairId)
+                    Task { await openPairEndToEnd(pairId) }
                 } label: {
                     Label {
                         Text(String(localized: "conversation.encryption.detail.openPairEndToEnd",
@@ -252,6 +251,7 @@ struct ConversationEncryptionDetailSheet: View {
                         Image(systemName: "lock.shield").accessibilityHidden(true)
                     }
                 }
+                .disabled(isOpeningPair)
                 .accessibilityIdentifier("encryption-open-pair-e2ee")
             }
         }
@@ -276,6 +276,23 @@ struct ConversationEncryptionDetailSheet: View {
         ) else { return failOpeningReadableDirect() }
         dismiss()
         onOpenConversation(destination)
+    }
+
+    /// Le chiffré annoncé par le serveur ne s'ouvre que s'il l'est, pour le
+    /// serveur ou pour cet appareil : le libellé promet le bout en bout.
+    private func openPairEndToEnd(_ pairId: String) async {
+        isOpeningPair = true
+        errorMessage = nil
+        defer { isOpeningPair = false }
+        if let served = try? await service.fetchStatus(conversationId: pairId) { ledger.learn(served, for: pairId) }
+        guard pairId != conversationId, ledger.remembersEndToEnd(pairId) else {
+            errorMessage = String(localized: "conversation.encryption.detail.openPairEndToEndFailed",
+                                  defaultValue: "La conversation chiffrée de bout en bout n’a pas pu être ouverte. Réessayez.",
+                                  bundle: .main)
+            return HapticFeedback.error()
+        }
+        dismiss()
+        onOpenConversation(pairId)
     }
 
     private func failOpeningReadableDirect() {

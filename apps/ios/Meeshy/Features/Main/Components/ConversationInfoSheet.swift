@@ -92,6 +92,24 @@ struct ConversationInfoSheet: View {
         MemberRole(rawValue: conversation.currentUserRole?.lowercased() ?? "member") ?? .member
     }
 
+    /// La rangée de sécurité : l'autre tête-à-tête de la paire s'ouvre par son id (#12966).
+    private var securityRow: ConversationInfoSecurityRow {
+        ConversationInfoSecurityRow(
+            conversationId: conversation.id,
+            accentColor: accentColor,
+            isDirect: isDirect,
+            encryptionMode: conversation.encryptionMode,
+            isDark: isDark,
+            appearAnimation: appearAnimation,
+            onVerifySafetyNumber: { showSecurityVerification = true },
+            peer: otherUserId.map { ConversationEncryptionPeer(userId: $0, name: conversation.name) },
+            onOpenConversation: { id in
+                dismiss()
+                NotificationCenter.default.post(name: .meeshyNavigateToConversation, object: id)
+            }
+        )
+    }
+
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
@@ -102,20 +120,7 @@ struct ConversationInfoSheet: View {
                     blockUserButton
                 }
                 actionButtons
-                ConversationInfoSecurityRow(
-                    conversationId: conversation.id,
-                    accentColor: accentColor,
-                    isDirect: isDirect,
-                    encryptionMode: conversation.encryptionMode,
-                    isDark: isDark,
-                    appearAnimation: appearAnimation,
-                    onVerifySafetyNumber: { showSecurityVerification = true },
-                    peer: otherUserId.map { ConversationEncryptionPeer(userId: $0, name: conversation.name) },
-                    onOpenConversation: { id in
-                        dismiss()
-                        NotificationCenter.default.post(name: .meeshyNavigateToConversation, object: id)
-                    }
-                )
+                securityRow
                 pinnedPreview
                 tabSelector
                 tabContent
