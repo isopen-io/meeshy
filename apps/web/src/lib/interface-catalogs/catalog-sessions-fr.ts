@@ -81,6 +81,7 @@ const fr = {
   'e2eeDevices.retire.title': 'Retirer cet appareil ?',
   'e2eeDevices.retire.body': '{device} sera déconnecté et ne recevra plus vos messages chiffrés de bout en bout. Pour les lire de nouveau, il devra se reconnecter et réactiver le chiffrement.',
   'e2eeDevices.retire.done': 'Appareil retiré',
+  'e2eeDevices.retire.changed': 'Cet appareil a changé depuis l’affichage de la liste : elle a été rechargée. Vérifiez-la avant de retirer.',
   'e2eeDevices.retire.error': 'L’appareil n’a pas pu être retiré. Réessayez.',
   'e2eeDevices.empty.title': 'Aucun appareil chiffré',
   'e2eeDevices.empty.body': 'Activez le chiffrement de bout en bout dans l’application Meeshy sur votre téléphone ou votre ordinateur : l’appareil apparaîtra ici.',

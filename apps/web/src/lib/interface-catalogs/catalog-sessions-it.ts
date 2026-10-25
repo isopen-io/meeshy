@@ -76,6 +76,7 @@ const it = {
   'e2eeDevices.retire.title': 'Rimuovere questo dispositivo?',
   'e2eeDevices.retire.body': '{device} verrà disconnesso e non riceverà più i tuoi messaggi crittografati end-to-end. Per leggerli di nuovo dovrà accedere e riattivare la crittografia.',
   'e2eeDevices.retire.done': 'Dispositivo rimosso',
+  'e2eeDevices.retire.changed': 'Questo dispositivo è cambiato da quando è stato mostrato l’elenco: è stato ricaricato. Controllalo prima di rimuovere.',
   'e2eeDevices.retire.error': 'Non è stato possibile rimuovere il dispositivo. Riprova.',
   'e2eeDevices.empty.title': 'Nessun dispositivo crittografato',
   'e2eeDevices.empty.body': 'Attiva la crittografia end-to-end nell’app Meeshy sul telefono o sul computer: il dispositivo comparirà qui.',

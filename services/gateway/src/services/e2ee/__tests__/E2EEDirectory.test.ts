@@ -143,12 +143,13 @@ describe("l'annuaire E2EE par appareil", () => {
 
     it('réallouer le plus petit numéro libre : 127 enrôlements suivis chacun d’un retrait laissent le 128e réussir', async () => {
       const { directory } = directoryWith();
+      const sessionOf = (round: number) => round.toString(16).padStart(24, '0');
       for (let round = 1; round <= 127; round += 1) {
-        const { deviceId } = await enroll(directory, ALICE, SESSION_1, fakeDeviceKeys({ registrationId: round }));
+        const { deviceId } = await enroll(directory, ALICE, sessionOf(round), fakeDeviceKeys({ registrationId: round }));
         await directory.retireDevice({ userId: ALICE, deviceId });
       }
 
-      const last = await enroll(directory, ALICE, SESSION_1, fakeDeviceKeys({ registrationId: 128 }));
+      const last = await enroll(directory, ALICE, sessionOf(128), fakeDeviceKeys({ registrationId: 128 }));
 
       expect(last).toMatchObject({ deviceId: 1, created: true });
     });

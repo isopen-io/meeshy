@@ -425,12 +425,25 @@ function currentBuster(): string {
 sessionStore.getState().restoreSession();
 /* #12949 — le registre du bout en bout se lie au compte restauré DÈS ICI,
    avant la première peinture : un envoi au démarrage (lien profond, partage
-   entrant à froid) lit déjà ce que ce compte a vu chiffré de bout en bout. La
-   surveillance d'identité (`realtime.ts`, chargé plus tard) le suit ensuite. */
+   entrant à froid) lit déjà ce que ce compte a vu chiffré de bout en bout.
+   #12986 — et il suit chaque changement de compte AVANT le client ci-dessous,
+   qui remet en place le cache du compte qui arrive. */
 endToEndRegimeLedger.getState().bind(sessionIdentityKey(sessionStore.getState().session));
+sessionStore.subscribe((state) => endToEndRegimeLedger.getState().bind(sessionIdentityKey(state.session)));
 
 export const appQueryClient: AppQueryClient = createAppQueryClient({
   buster: currentBuster(),
   busterOf: busterFor,
   session: sessionStore,
 });
+
+/* Ce que le cache a servi chiffré de bout en bout — conversation ou fil —, le
+   compte l'a vu : il ne se rouvre plus au clair (#12949, #12986). Demandé AVEC
+   le client, dans son propre petit morceau (le socle est à son plafond), et non
+   plus avec le temps réel chargé après la première peinture ; à sa pose, il relit
+   tout le cache déjà là. Ce qu'un compte a vu reste de toute façon retenu d'une
+   session à l'autre par le registre. */
+export const endToEndCacheWatch: Promise<void> = import('./end-to-end-cache-watch').then(
+  ({ watchEndToEndConversations }) => void watchEndToEndConversations(appQueryClient, endToEndRegimeLedger),
+  () => undefined,
+);
