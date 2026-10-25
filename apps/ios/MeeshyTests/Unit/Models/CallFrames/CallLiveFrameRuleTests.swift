@@ -96,9 +96,11 @@ final class CallLiveFrameRuleTests: XCTestCase {
     }
 
     /// Mesuré avant #10195 sous l'ancienne règle (duo + coût léger ou absent) : 45 cadres.
-    /// Le catalogue déclare désormais ses surfaces, et le direct en garde exactement autant.
-    func test_frames_catalogue_offersTheSameFortyFiveDuoFramesLive() {
-        XCTAssertEqual(CallLiveFrameRule.frames().count, 45)
+    /// Le catalogue déclare désormais ses surfaces, et le direct en garde exactement autant —
+    /// plus les deux motifs neufs de #12683, `glauque.prison.duo` et `morbide.tombe.duo`, qui
+    /// déclarent `[.capture, .live]` : 47.
+    func test_frames_catalogue_offersTheFortySevenDuoFramesLive() {
+        XCTAssertEqual(CallLiveFrameRule.frames().count, 47)
         XCTAssertTrue(CallLiveFrameRule.frames().allSatisfy { $0.isOffered(on: .live) })
     }
 
