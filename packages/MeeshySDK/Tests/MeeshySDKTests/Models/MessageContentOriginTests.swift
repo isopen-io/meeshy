@@ -89,6 +89,23 @@ final class MessageContentOriginTests: XCTestCase {
         XCTAssertFalse(MessageContentOrigin.wire.vouches(for: "Salut", messageId: "m1"))
     }
 
+    /// Une provenance réseau ne couvre rien : elle n'a aucune raison de lire le
+    /// trousseau, et la clé ne s'évalue qu'après le genre (#12721).
+    func test_wire_neverReadsTheDeviceKey() {
+        let probe = DeviceKeyProbe()
+
+        XCTAssertFalse(MessageContentOrigin.wire.vouches(for: "Salut", messageId: "m1", key: probe.read()))
+        XCTAssertEqual(probe.reads, 0)
+    }
+
+    func test_decryptedOrigin_readsTheDeviceKeyToVerify() {
+        let probe = DeviceKeyProbe()
+        let origin = MessageContentOrigin.decrypted("Salut", messageId: "m1", key: probe.key)
+
+        XCTAssertTrue(origin.vouches(for: "Salut", messageId: "m1", key: probe.read()))
+        XCTAssertEqual(probe.reads, 1)
+    }
+
     func test_decryptedOrigin_vouchesOnlyForTheTextItProduced() {
         let origin = MessageContentOrigin.decrypted("Salut", messageId: "m1")
 
@@ -330,5 +347,15 @@ final class MessageContentOriginTests: XCTestCase {
         let api = try APIClient.makeAPIPayloadDecoder().decode(APIMessage.self, from: Data(json.utf8))
 
         XCTAssertFalse(api.toMessage(currentUserId: "me").isContentDecryptedOnDevice)
+    }
+}
+
+private final class DeviceKeyProbe {
+    let key = Data(repeating: 0x5A, count: 32)
+    private(set) var reads = 0
+
+    func read() -> Data {
+        reads += 1
+        return key
     }
 }

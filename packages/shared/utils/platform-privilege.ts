@@ -4,7 +4,7 @@
  *
  * UNE table, lue par toutes les admissions qui privilégient un rôle de
  * plateforme : l'autorité dans une conversation (`conversation-authority`,
- * passerelle), l'édition et la suppression du message d'autrui, l'écriture et
+ * lue par la passerelle et par `conversation-action-policy`), l'édition et la suppression du message d'autrui, l'écriture et
  * l'épinglage là où le rang manque, l'historique entier, l'effectif exact, la
  * modération des posts, et la loi d'actions des clients (`message-action-policy`,
  * `conversation-action-policy`) avec son miroir Swift (`PlatformRole.privileged`).

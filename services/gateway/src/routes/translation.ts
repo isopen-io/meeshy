@@ -6,6 +6,8 @@ import { sendSuccess, sendError, sendNotFound, sendForbidden, sendBadRequest } f
 import type { UnifiedAuthRequest } from '../middleware/auth';
 import { sharedTranslationServerReadsMessage } from '@meeshy/shared/utils/shared-translation-eligibility';
 import { creditTranslationRequest, lazyTranslationRequestEngagement } from '../services/messaging/translationRequestCredit';
+import { gatewayKeyring, SERVER_AT_REST_UNREADABLE_TRANSLATION_MESSAGE, translationSourceOf } from '../services/messaging/atRestTranslationSource';
+import { SERVER_AT_REST_UNREADABLE } from '../services/messaging/serverAtRest';
 
 // Schémas de validation
 const TranslateRequestSchema = z.object({
@@ -305,8 +307,14 @@ export async function translationRoutes(fastify: FastifyInstance) {
 
         conversationId = existingMessage.conversationId;
 
+        // #11381 — un message `server`/`hybrid` se traduit depuis son CLAIR, jamais depuis `content: ''`.
+        const source = await translationSourceOf(existingMessage, gatewayKeyring(fastify.prisma));
+        if (!source.readable) {
+          return sendError(reply, 409, SERVER_AT_REST_UNREADABLE_TRANSLATION_MESSAGE, { code: SERVER_AT_REST_UNREADABLE });
+        }
+
         // Utiliser le texte du message existant si pas fourni
-        const messageText = validatedData.text || existingMessage.content;
+        const messageText = validatedData.text || source.row.content;
         const messageSourceLanguage = validatedData.source_language || existingMessage.originalLanguage;
 
         // OPTIMISATION: Éviter la traduction si source = target (après récupération du message)

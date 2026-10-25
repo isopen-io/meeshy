@@ -13,9 +13,10 @@ const wire = (overrides: Record<string, unknown> = {}) => ({
   deviceId: 2,
   platform: 'ios',
   label: 'iPhone de Awa',
-  createdAt: '2026-10-20T09:00:00.000Z',
+  enrolledAt: '2026-10-20T09:00:00.000Z',
   lastSeenAt: '2026-10-25T08:00:00.000Z',
   current: false,
+  registrationId: 4242,
   ...overrides,
 });
 
@@ -36,7 +37,7 @@ describe('le décodage', () => {
       deviceId: 2,
       platform: 'ios',
       label: 'iPhone de Awa',
-      createdAt: '2026-10-20T09:00:00.000Z',
+      enrolledAt: '2026-10-20T09:00:00.000Z',
       lastSeenAt: '2026-10-25T08:00:00.000Z',
       current: false,
     });
@@ -44,6 +45,7 @@ describe('le décodage', () => {
 
   test('une plateforme hors contrat ne s’invente pas, un nom vide se tait', () => {
     expect(decodeE2eeDevice(wire({ platform: 'toaster', label: '   ' }))).toMatchObject({ platform: null, label: null });
+    expect(decodeE2eeDevice(wire({ platform: 'unknown' }))?.platform).toBeNull();
   });
 
   test('un nom déclaré perd ses caractères de contrôle et de renversement d’orientation', () => {

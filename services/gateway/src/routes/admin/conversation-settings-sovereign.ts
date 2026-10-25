@@ -13,7 +13,7 @@
  * Les routes de MEMBRE (`PUT|PATCH /conversations/:id`,
  * `PATCH …/participants/:userId/role`, `DELETE …/participants/:userId`)
  * exigent que l'acteur soit DANS la conversation — « une fois dans »
- * (`utils/conversation-authority.ts`, qui le fait respecter lui-même : sans
+ * (`packages/shared/utils/conversation-authority.ts`, qui le fait respecter lui-même : sans
  * ligne de participation, aucun rôle de plateforme ne vaut un rang — #11217 ;
  * `PUT|PATCH` et `DELETE /conversations/:id` ne le vérifiaient pas
  * auparavant). C'est juste pour elles : le rang de

@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from concurrent.futures import ThreadPoolExecutor
 
 from utils.text_segmentation import TextSegmenter, protect_entities
+from .translation_cache import segments_without_cache
 
 logger = logging.getLogger(__name__)
 
@@ -240,8 +241,8 @@ class TranslationService:
             }
 
             logger.info(
-                f"✅ [ML-{source_channel.upper()}] '{text[:20]}...' → "
-                f"'{translated_text[:20]}...' ({processing_time:.3f}s)"
+                f"✅ [ML-{source_channel.upper()}] {len(text)}→{len(translated_text)} chars "
+                f"({processing_time:.3f}s)"
             )
             return result
 
@@ -257,13 +258,17 @@ class TranslationService:
         source_language: str = "auto",
         target_language: str = "en",
         model_type: str = "basic",
-        source_channel: str = "unknown"
+        source_channel: str = "unknown",
+        use_cache: bool = True
     ) -> Dict[str, Any]:
         """
         Traduction avec préservation de structure (paragraphes, emojis)
 
         AMÉLIORATION: Sélection automatique du modèle selon longueur
         OPTIMISATION: Batch ML + cache parallèle
+
+        `use_cache=False` (#12822, texte chiffré au repos) : aucun segment n'est
+        lu ni écrit dans le cache Redis.
         """
         start_time = time.time()
 
@@ -312,8 +317,10 @@ class TranslationService:
 
             # OPTIMISATION: Vérifier le cache en parallèle
             cache_hits = 0
-            translated_segments, segments_to_translate = await self.translation_cache.check_cache_batch(
-                segments, detected_lang, target_language, model_type
+            translated_segments, segments_to_translate = (
+                await self.translation_cache.check_cache_batch(segments, detected_lang, target_language, model_type)
+                if use_cache
+                else segments_without_cache(segments)
             )
 
             cache_hits = sum(1 for s in translated_segments if s is not None)
@@ -344,7 +351,7 @@ class TranslationService:
                         cache_items.append((original_text, translated_text))
 
                     # Cacher les résultats en arrière-plan
-                    if cache_items:
+                    if cache_items and use_cache:
                         await self.translation_cache.cache_batch_results(
                             cache_items, detected_lang, target_language, model_type
                         )

@@ -19,6 +19,7 @@ import { EPHEMERAL_DURATION_SHAPE } from './ephemeral-duration';
 import { OBJECT_ID_REGEX } from '@meeshy/shared/utils/object-id';
 import { MAX_CONTENT_BYTES } from './content-limits.js';
 import { FORWARDED_ATTACHMENT_IDS_SHAPE } from './forwarded-attachments.js';
+import { clientMessageTypeSchema } from './client-message-type.js';
 
 const mongoId = z
   .string()
@@ -48,7 +49,7 @@ export const SocketMessageSendSchema = z.object({
   conversationId: z.string().min(1).max(255),
   content: z.string().max(MAX_CONTENT_BYTES),
   originalLanguage: z.string().optional(),
-  messageType: z.string().optional(),
+  messageType: clientMessageTypeSchema.optional(),
   replyToId: mongoId.optional(),
   attachmentReplyTo: attachmentReplyToSchema.optional(),
   storyReplyToId: mongoId.optional(),

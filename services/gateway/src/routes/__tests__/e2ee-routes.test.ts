@@ -16,8 +16,8 @@ import { fakeDeviceKeys, fakeVerifier } from '../../services/e2ee/__tests__/fake
 const ALICE = 'a1'.repeat(12);
 const BOB = 'b2'.repeat(12);
 const STRANGER = 'e5'.repeat(12);
-const SESSIONS: Record<string, string> = { alice: 'c3'.repeat(12), aliceWeb: 'c7'.repeat(12), bob: 'd4'.repeat(12), stranger: 'f6'.repeat(12) };
-const USERS: Record<string, string> = { alice: ALICE, aliceWeb: ALICE, bob: BOB, stranger: STRANGER };
+const SESSIONS: Record<string, string> = { alice: 'c3'.repeat(12), aliceAndroid: 'c7'.repeat(12), aliceWeb: 'c8'.repeat(12), bob: 'd4'.repeat(12), stranger: 'f6'.repeat(12) };
+const USERS: Record<string, string> = { alice: ALICE, aliceAndroid: ALICE, aliceWeb: ALICE, bob: BOB, stranger: STRANGER };
 
 async function buildApp(options: { sessionClosable?: () => boolean } = {}) {
   const store = createFakeE2EEStore();
@@ -144,21 +144,48 @@ describe('routes /e2ee', () => {
     expect(again.statusCode).toBe(404);
   });
 
-  it("liste MES appareils chiffrés — nom, plateforme, dates, session courante — et rien d'autre", async () => {
+  it("liste MES appareils chiffrés avec plateforme, libellé, dates et l'appareil courant — à moi seul, sans aucune clé", async () => {
     const { app } = await buildApp();
-    await app.inject({ method: 'POST', url: '/e2ee/devices', headers: { 'x-test-user': 'alice' }, payload: { ...enrollment(ALICE), label: 'iPhone de Alice' } });
+    await app.inject({
+      method: 'POST', url: '/e2ee/devices', headers: { 'x-test-user': 'alice' },
+      payload: { ...enrollment(ALICE), label: 'iPhone d’Alice' },
+    });
     await app.inject({ method: 'POST', url: '/e2ee/devices', headers: { 'x-test-user': 'bob' }, payload: enrollment(BOB) });
 
-    const fromApp = await app.inject({ method: 'GET', url: '/e2ee/devices', headers: { 'x-test-user': 'alice' } });
-    const fromBrowser = await app.inject({ method: 'GET', url: '/e2ee/devices', headers: { 'x-test-user': 'aliceWeb' } });
+    const fromEnrolledDevice = await app.inject({ method: 'GET', url: '/e2ee/devices', headers: { 'x-test-user': 'alice' } });
+    const fromAnotherSession = await app.inject({ method: 'GET', url: '/e2ee/devices', headers: { 'x-test-user': 'aliceAndroid' } });
+    const anonymous = await app.inject({ method: 'GET', url: '/e2ee/devices' });
 
-    expect(fromApp.statusCode).toBe(200);
-    const [device] = fromApp.json().data.devices;
-    expect(fromApp.json().data.devices).toHaveLength(1);
-    expect(Object.keys(device).sort()).toEqual(['createdAt', 'current', 'deviceId', 'label', 'lastSeenAt', 'platform']);
-    expect(device).toMatchObject({ deviceId: 1, platform: 'ios', label: 'iPhone de Alice', current: true });
-    expect(new Date(device.createdAt).toString()).not.toBe('Invalid Date');
-    expect(fromBrowser.json().data.devices).toEqual([expect.objectContaining({ deviceId: 1, current: false })]);
+    expect(fromEnrolledDevice.statusCode).toBe(200);
+    const [device] = fromEnrolledDevice.json().data.devices;
+    expect(fromEnrolledDevice.json().data.devices).toHaveLength(1);
+    expect(device).toEqual({
+      deviceId: 1,
+      registrationId: expect.any(Number),
+      platform: 'ios',
+      label: 'iPhone d’Alice',
+      enrolledAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+      lastSeenAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+      current: true,
+    });
+    expect(fromAnotherSession.json().data.devices).toEqual([expect.objectContaining({ deviceId: 1, current: false })]);
+    expect(JSON.stringify(fromEnrolledDevice.json())).not.toMatch(/identityKey|sessionId|signedPreKey|kyber/);
+    expect(anonymous.statusCode).toBe(401);
+  });
+
+  it("ne liste plus un appareil retiré, et ne sert le libellé d'un appareil à aucun contact", async () => {
+    const { app } = await buildApp();
+    await app.inject({
+      method: 'POST', url: '/e2ee/devices', headers: { 'x-test-user': 'bob' },
+      payload: { ...enrollment(BOB), label: 'Pixel de Bob' },
+    });
+
+    const seenByContact = await app.inject({ method: 'GET', url: `/e2ee/keys/${BOB}/devices`, headers: { 'x-test-user': 'alice' } });
+    await app.inject({ method: 'DELETE', url: '/e2ee/devices/1', headers: { 'x-test-user': 'bob' } });
+    const afterRetirement = await app.inject({ method: 'GET', url: '/e2ee/devices', headers: { 'x-test-user': 'bob' } });
+
+    expect(JSON.stringify(seenByContact.json())).not.toMatch(/Pixel de Bob|platform|lastSeenAt/);
+    expect(afterRetirement.json().data.devices).toEqual([]);
   });
 
   it("ne sert à un compte sans appareil chiffré qu'une liste vide, et refuse un appelant sans compte", async () => {

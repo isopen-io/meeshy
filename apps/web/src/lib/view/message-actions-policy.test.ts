@@ -359,10 +359,14 @@ describe('menuViewerOf — le lecteur explicite, composé une fois pour l’écr
 });
 
 describe('audit #11372 — ce que le web ne sait pas servir honnêtement ne s’offre pas', () => {
-  test('B1 — un MODERATOR de plateforme ne MODIFIE pas le message d’un autre : la réécriture serait silencieuse', () => {
+  test('#11375 — un MODERATOR de plateforme MODIFIE le message d’un autre : la passerelle l’enregistre et tous le lisent', () => {
     const ctx = ctxOf(row(), scopeOf({ viewer: { platformRole: 'MODERATOR' } }), { canEdit: true });
     expect(ctx.actions?.verdicts.edit?.asModerator).toBe(true);
-    expect(ids(messageMenuItems(ctx))).not.toContain('edit');
+    expect(ids(messageMenuItems(ctx))).toContain('edit');
+  });
+
+  test('#11375 — un utilisateur ordinaire ne modifie toujours pas le message d’un autre', () => {
+    expect(ids(messageMenuItems(ctxOf(row(), scopeOf(), { canEdit: true })))).not.toContain('edit');
   });
 
   test('B1 — l’auteur garde « Modifier » sur son propre message', () => {

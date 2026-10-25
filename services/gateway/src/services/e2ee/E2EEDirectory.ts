@@ -28,9 +28,11 @@ import {
   E2EE_ERROR_CODES,
   E2EE_MAX_ACTIVE_DEVICES,
   E2EE_ONE_TIME_PREKEY_STOCK_MAX,
+  e2eePlatformSchema,
   type E2EEDeviceBundle,
   type E2EEEnrollDeviceRequest,
   type E2EEErrorCode,
+  type E2EEOwnDevice,
   type E2EEPublishKeysRequest,
 } from '@meeshy/shared/types/e2ee-directory';
 import { unsetOrNull } from '../../utils/prisma-unset';
@@ -62,15 +64,6 @@ export class E2EEDirectoryError extends Error {
 type SignedKey = { readonly keyId: number; readonly publicKey: string; readonly signature: string };
 type OneTimeKey = { readonly keyId: number; readonly publicKey: string };
 type OneTimeBatches = { readonly oneTimePreKeys?: readonly OneTimeKey[]; readonly kyberPreKeys?: readonly SignedKey[] };
-
-export type OwnDevice = {
-  readonly deviceId: number;
-  readonly platform: string;
-  readonly label: string | null;
-  readonly createdAt: string;
-  readonly lastSeenAt: string;
-  readonly current: boolean;
-};
 
 export type DeviceSignOut = {
   readonly callerSessionId: string;
@@ -184,6 +177,11 @@ const kyberLastResortFields = (key: SignedKey) => ({
   kyberLastResort: key.publicKey,
   kyberLastResortSignature: key.signature,
 });
+
+const ownPlatform = (raw: string): E2EEOwnDevice['platform'] => {
+  const parsed = e2eePlatformSchema.safeParse(raw);
+  return parsed.success ? parsed.data : 'unknown';
+};
 
 type ActiveDevice = Awaited<ReturnType<DirectoryPrisma['e2EEDevice']['findMany']>>[number];
 
@@ -380,20 +378,17 @@ export class E2EEDirectory {
     return devices.map((device) => ({ deviceId: device.deviceId, registrationId: device.registrationId }));
   }
 
-  /**
-   * MES appareils chiffrés, pour l'écran « Mes appareils chiffrés » (#13013) :
-   * le seul compte appelant, champ par champ — ni clé, ni session, ni pré-clé.
-   * `current` dit si l'appareil est celui de la session qui demande.
-   */
-  async listOwnDevices(params: { userId: string; sessionId: string }): Promise<OwnDevice[]> {
-    const devices = await this.activeDevices(params.userId);
+  /** Mes appareils actifs, pour moi seul (#13014) : jamais une clé, jamais la session d'un autre appareil. */
+  async ownDevices(caller: { userId: string; sessionId: string }): Promise<E2EEOwnDevice[]> {
+    const devices = await this.activeDevices(caller.userId);
     return devices.map((device) => ({
       deviceId: device.deviceId,
-      platform: device.platform,
+      registrationId: device.registrationId,
+      platform: ownPlatform(device.platform),
       label: device.label ?? null,
-      createdAt: device.createdAt.toISOString(),
+      enrolledAt: device.createdAt.toISOString(),
       lastSeenAt: device.lastSeenAt.toISOString(),
-      current: device.sessionId === params.sessionId,
+      current: device.sessionId === caller.sessionId,
     }));
   }
 

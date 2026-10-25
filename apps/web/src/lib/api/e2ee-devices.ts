@@ -7,9 +7,9 @@ import type { ApiFailure, ApiResult, HttpTransport } from './http';
 /**
  * **LE PORT DE « MES APPAREILS CHIFFRÉS »** (#13013, jumelle web de #13009).
  *
- *  - `GET /e2ee/devices` — MES appareils où le chiffrement de bout en bout est
- *    activé : numéro, plateforme, nom déclaré, enrôlé le, vu le, et s'il est
- *    celui de la session qui lit (`current`) ;
+ *  - `GET /e2ee/devices` (#13014, `E2EEOwnDevice`) — MES appareils où le
+ *    chiffrement de bout en bout est activé : numéro, plateforme, nom déclaré,
+ *    enrôlé le, vu le, et s'il est celui de la session qui lit (`current`) ;
  *  - `DELETE /e2ee/devices/:deviceId` — le retirer. La passerelle révoque son
  *    identité ET ferme sa session (un appareil volé ne se réenrôle pas).
  *
@@ -37,7 +37,7 @@ export type E2eeDevice = {
   readonly platform: E2eeDevicePlatform | null;
   /** Déclaré par l'appareil lui-même, nettoyé de ses caractères de contrôle et d'orientation. */
   readonly label: string | null;
-  readonly createdAt: string | null;
+  readonly enrolledAt: string | null;
   readonly lastSeenAt: string | null;
   readonly current: boolean;
 };
@@ -48,7 +48,7 @@ const WireDevice = z.object({
   deviceId: z.number().check(z.int(), z.gte(1), z.lte(127)),
   platform: optionalText,
   label: optionalText,
-  createdAt: optionalText,
+  enrolledAt: optionalText,
   lastSeenAt: optionalText,
   current: z.optional(z.nullable(z.boolean())),
 });
@@ -75,7 +75,7 @@ export function decodeE2eeDevice(raw: unknown): E2eeDevice | null {
     deviceId: wire.deviceId,
     platform: E2EE_DEVICE_PLATFORMS.find((platform) => platform === wire.platform) ?? null,
     label: labelOf(wire.label),
-    createdAt: textOrNull(wire.createdAt),
+    enrolledAt: textOrNull(wire.enrolledAt),
     lastSeenAt: textOrNull(wire.lastSeenAt),
     current: wire.current === true,
   };

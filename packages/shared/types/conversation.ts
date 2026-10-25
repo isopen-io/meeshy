@@ -126,6 +126,16 @@ export interface Message {
   // ===== ETAT DU MESSAGE =====
   readonly isEdited: boolean;
   readonly editedAt?: Date;
+  /**
+   * #11375 — le tiers (modérateur de plateforme) qui a fait la dernière
+   * modification, tel que servi à CE lecteur : son `User.id` pour ADMIN /
+   * BIGBOSS et lui-même, la marque `MASKED_MODERATOR_EDITOR` sinon ; absent
+   * quand c'est l'auteur.
+   * @see packages/shared/utils/message-edit-attribution.ts
+   */
+  readonly editedById?: string;
+  /** #11375 — son rôle global, servi avec son identité seulement. */
+  readonly editedByRole?: string;
   readonly deletedAt?: Date;
 
   // ===== REPONSE & FORWARDING =====

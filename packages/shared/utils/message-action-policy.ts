@@ -2,7 +2,7 @@
  * CE QU'UN LECTEUR PEUT FAIRE D'UN MESSAGE (#11205) — loi PURE des clients,
  * `now` injecté. Elle reprend `admitMessageEdit`, `admitMessageDelete` et
  * `admitConversationWriteFor`, qui font foi : elle n'offre jamais ce qu'ils
- * refusent, et peut offrir MOINS (E2EE, vue unique, message système) — tenu
+ * refusent, et peut offrir MOINS — tenu
  * par `action-policy-parity.test.ts` (passerelle) sur `fixtures/action-policy/`.
  * Rôle de plateforme comparé EXACTEMENT sur `PRIVILEGED_PLATFORM_ROLES` (AUDIT, ANALYST,
  * inconnu et minuscules ne modèrent pas) ; rang de conversation exact, inconnu
@@ -10,6 +10,7 @@
  * d'écriture, ni canal d'annonces, ni règle des mineurs. E2EE au sens de
  * `sharedTranslationServerReadsMessage` (régime inconnu ⇒ chiffré) : ni édition
  * ni transfert, traduction sur l'appareil, services qui lisent le clair ABSENTS.
+ * Chiffré au repos (`server`/`hybrid`) : lisible par le serveur, mais pas d'édition (#11381).
  * Transférer, copier, enregistrer : `contentExitLaw`.
  */
 
@@ -180,6 +181,11 @@ type Context = MessageActionInput & {
 
 const hasRegime = (mode: string | null | undefined): boolean => (mode ?? '').trim() !== '';
 
+const AT_REST_REGIMES: ReadonlySet<string> = new Set(['server', 'hybrid']);
+
+/** `server`/`hybrid` (#11374, #11381) : la passerelle refuse toute édition (`admitMessageEdit`, `server-encrypted-at-rest`). */
+const sealedAtRest = (mode: string | null | undefined): boolean => AT_REST_REGIMES.has((mode ?? '').trim().toLowerCase());
+
 const carriesPieces = (message: MessageActionSubject): boolean => (message.attachments ?? []).some((piece) => piece != null);
 
 /** Conversation ou message sous un régime de chiffrement quelconque : la passerelle n'y recopie aucune pièce. */
@@ -211,10 +217,23 @@ function contextOf(input: MessageActionInput): Context {
   };
 }
 
+/** Ce que le CONTENU d'un message refuse à toute édition, quel que soit l'éditeur (auteur, modérateur, rang). */
+export type EditContentRefusal = 'view-once' | 'encrypted-message' | 'not-editable-kind';
+
+/**
+ * Le message, PAR SON CONTENU, se modifie-t-il ? `null` : oui. Un site UNIQUE pour deux lecteurs —
+ * `editVerdict` ne l'offre pas, `admitMessageEdit` (passerelle) le refuse sur ses quatre transports (#12792).
+ */
+export function editContentRefusal(content: MessageContentShape): EditContentRefusal | null {
+  if (content.flags.viewOnce) return 'view-once';
+  if (content.flags.encrypted) return 'encrypted-message';
+  return EDITABLE_KINDS.has(content.kind) ? null : 'not-editable-kind';
+}
+
 /** `admitMessageEdit` — auteur 24 h, rôle global au-delà ou sur autrui — plus les refus propres au client. */
 function editVerdict(ctx: Context): EditVerdict | null {
-  const { flags } = ctx.content;
-  const offered = ctx.live && ctx.registered && ctx.hasText && EDITABLE_KINDS.has(ctx.content.kind) && !ctx.e2ee && !flags.viewOnce;
+  const atRest = sealedAtRest(ctx.conversation.encryptionMode) || sealedAtRest(ctx.message.encryptionMode);
+  const offered = ctx.live && ctx.registered && ctx.hasText && editContentRefusal(ctx.content) === null && !ctx.e2ee && !atRest;
   if (!offered || conversationIsClosed(ctx.conversation)) return null;
   if (ctx.conversation.type === GLOBAL_CONVERSATION_TYPE && ctx.viewer.isDeclaredMinor) return null;
   if (!ctx.isAuthor) return ctx.viewer.isActiveMember && platformModerates(ctx.viewer) ? { asModerator: true, windowEndsAt: null } : null;

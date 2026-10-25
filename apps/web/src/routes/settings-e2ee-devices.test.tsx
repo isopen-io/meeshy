@@ -35,7 +35,7 @@ const device = (overrides: Partial<E2eeDevice>): E2eeDevice => ({
   deviceId: 1,
   platform: 'ios',
   label: null,
-  createdAt: '2026-10-20T09:00:00.000Z',
+  enrolledAt: '2026-10-20T09:00:00.000Z',
   lastSeenAt: '2026-10-25T08:00:00.000Z',
   current: false,
   ...overrides,

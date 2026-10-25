@@ -30,7 +30,7 @@ export function e2eeDeviceFields(
   const rows: readonly (readonly [E2eeDeviceFieldKey, string | null])[] = [
     ['platform', platformName(device, t)],
     ['number', String(device.deviceId)],
-    ['enrolled', dateTime(device.createdAt, language)],
+    ['enrolled', dateTime(device.enrolledAt, language)],
     ['lastSeen', sinceNow(device.lastSeenAt, language, now)],
   ];
   return rows.flatMap(([key, value]) =>

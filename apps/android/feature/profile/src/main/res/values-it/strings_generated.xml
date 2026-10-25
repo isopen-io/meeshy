@@ -53,6 +53,7 @@
     <string name="profile_progression_subtitle">Badge, livello e serie</string>
     <string name="profile_progression_title">Progressi</string>
     <string name="profile_save">Salva</string>
+    <string name="profile_save_error">Errore durante il salvataggio</string>
     <string name="profile_section_about">Informazioni</string>
     <string name="profile_section_actions">Azioni</string>
     <string name="profile_section_contact">CONTATTO</string>

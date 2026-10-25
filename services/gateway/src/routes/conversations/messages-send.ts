@@ -41,6 +41,8 @@ import { admitMessageAttachments } from '../../services/messaging/attachmentSend
 import { GUEST_ATTACHMENT_REFUSAL_CODES } from '@meeshy/shared/types/guest-attachment-kinds';
 import { GLOBAL_ADULTS_ONLY_CODE, MINOR_GLOBAL_REFUSAL_MESSAGE } from '../../services/messaging/conversationWriteAdmission';
 import { E2EE_PLAINTEXT_REFUSED } from '../../services/messaging/e2eePlaintextAdmission';
+import { SERVER_AT_REST_CIPHERTEXT_REFUSED, SERVER_AT_REST_UNAVAILABLE } from '../../services/messaging/serverAtRest';
+import { isClientMessageType } from '../../validation/client-message-type';
 import { relayRefusalStatus } from '../../services/e2ee/e2ee-relay-errors';
 import type { UnifiedAuthRequest } from '../../middleware/auth';
 import { logger } from './messages-shared';
@@ -73,7 +75,8 @@ export const SendMessageBodySchema = z.object({
     .regex(CLIENT_MESSAGE_ID_REGEX, 'Invalid clientMessageId format (expected cid_<uuid v4 lowercase>)')
     .optional(),
   originalLanguage: CommonSchemas.language.optional(),
-  messageType: CommonSchemas.messageType.optional(),
+  // #12822 — `system` n'est écrit que par la passerelle.
+  messageType: CommonSchemas.messageType.refine(isClientMessageType, { message: 'messageType "system" is reserved to the gateway' }).optional(),
   replyToId: z.string().optional(),
   // #6164 — la PIÈCE NOMMÉE que cette réponse vise. Champ DÉDIÉ, jamais un
   // `metadata` brut (même doctrine que `location` / `sticker`) : le serveur
@@ -496,7 +499,10 @@ export function registerSendMessageRoute(
             ...(result.e2eeMismatch ? { details: { ...result.e2eeMismatch } } : {}),
           });
         }
-        if (isForwardRefusalCode(result.code) || result.code === E2EE_PLAINTEXT_REFUSED) {
+        if (result.code === SERVER_AT_REST_UNAVAILABLE) {
+          return sendError(reply, 503, result.error || 'Chiffrement sur le serveur indisponible', { code: result.code });
+        }
+        if (isForwardRefusalCode(result.code) || result.code === E2EE_PLAINTEXT_REFUSED || result.code === SERVER_AT_REST_CIPHERTEXT_REFUSED) {
           return sendBadRequest(reply, result.error || 'Invalid message request', { code: result.code });
         }
         return sendBadRequest(reply, result.error || 'Invalid message request');

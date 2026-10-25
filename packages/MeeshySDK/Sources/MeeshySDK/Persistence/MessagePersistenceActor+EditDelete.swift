@@ -10,10 +10,6 @@ import os
 
 extension MessagePersistenceActor {
 
-    /// Slack for the `markEdited` ordering guard — see its comment for why a
-    /// strict `<` is unsafe across a GRDB `Date` round-trip.
-    private static let editOrderingTolerance: TimeInterval = 0.05
-
     /// Applique une modification. Les citations du message suivent : leur
     /// texte devient le nouveau texte, sauf citation protégée (placeholder)
     /// ou déjà scellée. Ce texte est l'ORIGINAL ; la descente du Prisme de la
@@ -29,6 +25,18 @@ extension MessagePersistenceActor {
         localId: String, newContent: String, editedAt: Date, marksEdited: Bool = true,
         arrivalsNotice: ArrivalsNoticeMetadata? = nil
     ) throws {
+        try markEdited(localId: localId, newContent: newContent, editedAt: editedAt, marksEdited: marksEdited,
+                       arrivalsNotice: arrivalsNotice, authorship: .untouched)
+    }
+
+    /// #11375 — la même modification, avec l'auteur que la passerelle a SERVI
+    /// (`message:edited.editedById`) : un modérateur de plateforme est gravé,
+    /// `.served(editedById: nil)` (l'auteur a réécrit) efface la mention,
+    /// `.untouched` (la charge ne le dit pas) laisse la colonne.
+    public func markEdited(
+        localId: String, newContent: String, editedAt: Date, marksEdited: Bool = true,
+        arrivalsNotice: ArrivalsNoticeMetadata? = nil, authorship: EditAuthorship
+    ) throws {
         let noticeJson = arrivalsNotice.flatMap {
             JSONEncoder().encodeOrLog($0, field: "joinNoticeJson", id: localId)
         }
@@ -37,38 +45,24 @@ extension MessagePersistenceActor {
         guard try rowExists(localId) else {
             rememberPendingRowEvent(localId) { events in
                 let edit = PendingEdit(newContent: newContent, editedAt: editedAt,
-                                       marksEdited: marksEdited, noticeJson: noticeJson)
+                                       marksEdited: marksEdited, noticeJson: noticeJson, authorship: authorship)
                 if let kept = events.edit, kept.editedAt > edit.editedAt { return }
                 events.edit = edit
             }
             return
         }
         try applyServerEdit(localId: localId, newContent: newContent, editedAt: editedAt,
-                            marksEdited: marksEdited, noticeJson: noticeJson)
+                            marksEdited: marksEdited, noticeJson: noticeJson, authorship: authorship)
     }
 
     /// Une modification servie, sous la garde d'ordre.
     private func applyServerEdit(
-        localId: String, newContent: String, editedAt: Date, marksEdited: Bool, noticeJson: Data?
+        localId: String, newContent: String, editedAt: Date, marksEdited: Bool, noticeJson: Data?,
+        authorship: EditAuthorship = .untouched
     ) throws {
-        try applyEdit(localId: localId, newContent: newContent, marksEdited: marksEdited, noticeJson: noticeJson) { stored in
-            // Ordering guard: `message:edited` carries no monotonic sequence, so a
-            // delayed/duplicate socket delivery can arrive after a newer edit was
-            // already applied. Comparing against the stored `editedAt` stops a
-            // stale edit from permanently clobbering the current content.
-            //
-            // A tolerance (rather than a strict `<`) is required: GRDB round-trips
-            // `Date` through a millisecond-precision text column, so re-applying
-            // the exact same in-memory `Date` twice (e.g. an optimistic edit
-            // followed by its own failure rollback, which reuses the same
-            // `editedAt`) can read back a value a fraction of a millisecond off
-            // from what was passed in — enough to misfire a strict comparison.
-            // Genuine out-of-order deliveries differ by network-delay magnitudes
-            // (well beyond this), so the tolerance doesn't weaken the guard.
-            if let stored, editedAt.timeIntervalSince(stored) < -Self.editOrderingTolerance {
-                return nil
-            }
-            return editedAt
+        try applyEdit(localId: localId, newContent: newContent, marksEdited: marksEdited, noticeJson: noticeJson,
+                      authorship: authorship) { stored in
+            MessageEditOrdering.servedStamp(editedAt: editedAt, after: stored)
         }
     }
 
@@ -83,22 +77,16 @@ extension MessagePersistenceActor {
     @discardableResult
     public func markEditedLocally(localId: String, newContent: String, now: Date = Date()) throws -> Date? {
         try applyEdit(localId: localId, newContent: newContent, marksEdited: true) { stored in
-            Self.localEditStamp(now: now, after: stored)
+            MessageEditOrdering.localStamp(now: now, after: stored)
         }
     }
-
-    nonisolated static func localEditStamp(now: Date, after stored: Date?) -> Date {
-        guard let stored, stored >= now else { return now }
-        return stored.addingTimeInterval(Self.localEditStep)
-    }
-
-    private static let localEditStep: TimeInterval = 0.001
 
     /// `stamp` lit la date stockée et rend celle de l'édition, ou `nil` pour
     /// la refuser. Rend la date posée.
     @discardableResult
     private func applyEdit(
         localId: String, newContent: String, marksEdited: Bool, noticeJson: Data? = nil,
+        authorship: EditAuthorship = .untouched,
         stamp: @Sendable (Date?) -> Date?
     ) throws -> Date? {
         let applied: (conversationId: String, editedAt: Date)? = try dbWriter.write { db in
@@ -111,10 +99,12 @@ extension MessagePersistenceActor {
                 sql: """
                     UPDATE messages SET content = ?, isEdited = (isEdited OR ?), editedAt = ?,
                     joinNoticeJson = COALESCE(?, joinNoticeJson),
+                    editedById = CASE WHEN ? THEN ? ELSE editedById END,
                     updatedAt = ?, changeVersion = changeVersion + 1
                     WHERE localId = ? OR serverId = ?
                     """,
-                arguments: [newContent, marksEdited, editedAt, noticeJson, Date(), localId, localId]
+                arguments: [newContent, marksEdited, editedAt, noticeJson,
+                            authorship.servesEditor, authorship.servedEditorId, Date(), localId, localId]
             )
             if !Self.holdsProtectedContent(existing) {
                 try Self.followQuotes(of: existing, in: db) { quote in
@@ -209,7 +199,8 @@ extension MessagePersistenceActor {
             do {
                 if let edit = events.edit {
                     try applyServerEdit(localId: id, newContent: edit.newContent, editedAt: edit.editedAt,
-                                        marksEdited: edit.marksEdited, noticeJson: edit.noticeJson)
+                                        marksEdited: edit.marksEdited, noticeJson: edit.noticeJson,
+                                        authorship: edit.authorship)
                 }
                 for change in events.reactions {
                     try mutateReactions(localId: id, change: change)

@@ -560,7 +560,7 @@ final class PresenceManagerTests: XCTestCase {
 
         sut.presenceMap["user-1"] = AppUserPresence(isOnline: true, lastActiveAt: nil)
 
-        try await Task.sleep(nanoseconds: UInt64((PresenceManager.versionBumpDebounce + 0.3) * 1_000_000_000))
+        try await awaitBeat(after: before)
 
         XCTAssertGreaterThan(
             sut.refreshSignal.presenceVersion, before,
@@ -578,7 +578,8 @@ final class PresenceManagerTests: XCTestCase {
         sut.presenceMap["user-2"] = AppUserPresence(isOnline: true, lastActiveAt: nil)
         sut.presenceMap["user-3"] = AppUserPresence(isOnline: true, lastActiveAt: nil)
 
-        try await Task.sleep(nanoseconds: UInt64((PresenceManager.versionBumpDebounce + 0.3) * 1_000_000_000))
+        try await awaitBeat(after: before)
+        try await settle()
 
         XCTAssertEqual(
             sut.refreshSignal.presenceVersion, before + 1,
@@ -594,7 +595,7 @@ final class PresenceManagerTests: XCTestCase {
 
         sut.noteActivity(userId: "typer-1")
 
-        try await Task.sleep(nanoseconds: UInt64((PresenceManager.versionBumpDebounce + 0.3) * 1_000_000_000))
+        try await awaitBeat(after: before)
 
         XCTAssertGreaterThan(sut.refreshSignal.presenceVersion, before)
     }
