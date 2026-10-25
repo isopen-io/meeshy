@@ -64,7 +64,7 @@ describe('openDirect', () => {
     await ports.openDirect('u2');
     await ports.openGroup({ userIds: ['u3', 'u4'], title: 'g' });
     expect(canSendPlaintext({ conversationId: 'dm-e2ee' })).toBe(false);
-    endToEndRegimeLedger.getState().bind(null);
+    endToEndRegimeLedger.getState().reset();
   });
 });
 

@@ -33,7 +33,7 @@ afterAll(async () => {
 
 afterEach(() => {
   unmountAll();
-  endToEndRegimeLedger.getState().bind(null);
+  endToEndRegimeLedger.getState().reset();
 });
 
 const conversation = (id: string, extra: Record<string, unknown> = {}): Conversation =>
