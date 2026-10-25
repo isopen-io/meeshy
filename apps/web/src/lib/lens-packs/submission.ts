@@ -47,11 +47,16 @@ const parseJson = (text: string): unknown => {
 
 type Named = { readonly address: string; readonly bytes: Uint8Array<ArrayBuffer> };
 
+const addressOfBytes = async (bytes: Uint8Array<ArrayBuffer>, name: string, digest: Digest): Promise<string> => `${(await digest(bytes)).slice(0, 16)}.${extensionOf(name)}`;
+
+/** L'adresse d'un fichier (`<sha16>.<ext>`), celle que ses couches nomment : l'éditeur sans code la pose, la préparation la relit. */
+export const assetAddressOf = async (file: File, digest: Digest = browserDigest): Promise<string> => addressOfBytes(new Uint8Array(await file.arrayBuffer()), file.name, digest);
+
 async function addressed(files: readonly File[], digest: Digest): Promise<readonly Named[]> {
   return Promise.all(
     files.map(async (file) => {
       const bytes = new Uint8Array(await file.arrayBuffer());
-      return { address: `${(await digest(bytes)).slice(0, 16)}.${extensionOf(file.name)}`, bytes };
+      return { address: await addressOfBytes(bytes, file.name, digest), bytes };
     }),
   );
 }

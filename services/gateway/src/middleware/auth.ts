@@ -3,6 +3,7 @@ import { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { ParticipantType, ParticipantPermissions } from '@meeshy/shared/types/participant';
 import { resolveParticipantRights } from '../services/participantRights';
 import { resolveUserLanguage } from '@meeshy/shared/utils/conversation-helpers';
+import { PRIVILEGED_PLATFORM_ROLES } from '@meeshy/shared/utils/platform-privilege';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { StatusService } from '../services/StatusService';
@@ -928,7 +929,7 @@ export function requireRole(allowedRoles: string | string[]) {
 }
 
 export const requireAdmin = requireRole(['BIGBOSS', 'ADMIN']);
-export const requireModerator = requireRole(['BIGBOSS', 'ADMIN', 'MODERATOR']);
+export const requireModerator = requireRole([...PRIVILEGED_PLATFORM_ROLES]);
 export const requireAnalyst = requireRole(['BIGBOSS', 'ADMIN', 'ANALYST']);
 
 export {

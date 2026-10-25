@@ -27,7 +27,7 @@ extension ConversationView {
             viewModel: model,
             deviceTranslationEnabled: !previewMode && anonymousSession == nil,
             encryptionMode: liveConversation?.encryptionMode,
-            onPeerUpdate: { admitPeerUpdate($0) },
+            onRepaint: { admitRepainted($0(liveConversation)) },
             onAppearanceChange: { admitAppearance($0) }
         )
     }
@@ -642,7 +642,8 @@ struct HeaderOpenFullGlyph: View {
 // MARK: - Le fond de la conversation, en type NOMINAL
 
 /// Le fond vit toute la vie de l'écran : c'est là qu'il écoute le pair d'un
-/// direct (#9359) — seule une annonce qui CHANGE le pair affiché écrit l'état —
+/// direct (#9359) et la bascule du chiffrement (#12522) — seule une annonce qui
+/// CHANGE la conversation affichée écrit l'état —
 /// et l'accent personnel choisi ou rétabli (#10631), qui repeint le fil, ses
 /// bulles, son composeur et son en-tête sans relecture réseau. La traduction
 /// sur l'appareil (#9899) y vit aussi : la couche n'y peint rien.
@@ -654,7 +655,8 @@ struct ConversationBackgroundLayer: View {
     let viewModel: ConversationViewModel
     let deviceTranslationEnabled: Bool
     let encryptionMode: String?
-    let onPeerUpdate: (UserUpdatedEvent) -> Void
+    /// Repeint la conversation affichée par la loi donnée (`nil` : rien ne change).
+    let onRepaint: ((Conversation?) -> Conversation?) -> Void
     let onAppearanceChange: (Notification) -> Void
 
     var body: some View {
@@ -665,7 +667,12 @@ struct ConversationBackgroundLayer: View {
             knownAttachment: knownAttachment
         )
         .onReceive(MessageSocketManager.shared.userUpdated.receive(on: DispatchQueue.main)) { event in
-            onPeerUpdate(event)
+            onRepaint { DirectPeerRepaint.repainted($0, by: event) }
+        }
+        .onReceive(ConversationEncryptionChannel.shared.changed.receive(on: DispatchQueue.main)) { event in
+            guard event.conversationId == conversationId else { return }
+            onRepaint { $0?.adoptingEncryption(event) }
+            FeedbackToastManager.shared.show(EncryptionSwitchAnnouncement.text(for: event), type: .info)
         }
         .onReceive(NotificationCenter.default.publisher(for: ConversationAppearanceChange.notification).receive(on: DispatchQueue.main)) { note in
             onAppearanceChange(note)

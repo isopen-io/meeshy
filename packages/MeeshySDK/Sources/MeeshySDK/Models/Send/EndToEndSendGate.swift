@@ -22,6 +22,16 @@ public enum EndToEndSendRefusal: String, Error, Equatable, Sendable, CaseIterabl
     /// La passerelle a refusé l'envoi SCELLÉ (4xx) : son enveloppe n'est pas
     /// encore acceptée (#12536). Ce n'est pas une coupure réseau.
     case envelopeRefusedByServer
+    /// Le correspondant n'a aucun appareil qui chiffre (#3707) : sa version de
+    /// Meeshy ne parle pas libsignal. Rien ne part, rien ne part en clair.
+    case recipientWithoutEncryptedDevice
+    /// Le régime de la conversation a changé depuis la rédaction
+    /// (`E2EE_REGIME_CHANGED`, #12522) : le fil relit le régime, et le geste
+    /// de l'utilisateur renvoie selon le nouveau — jamais en clair sans lui.
+    case regimeChanged
+    /// Mon compte a déjà le nombre maximal d'appareils chiffrés (#3707) : cet
+    /// appareil ne peut pas s'enrôler tant qu'un autre n'est pas retiré.
+    case deviceLimitReached
 }
 
 /// La loi PURE de l'envoi sous chiffrement de bout en bout (#11379, directives
