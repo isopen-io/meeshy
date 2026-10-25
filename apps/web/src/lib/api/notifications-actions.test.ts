@@ -17,7 +17,7 @@ import {
   performMarkNotificationRead,
   performMarkNotificationsOfTypeRead,
 } from './notifications-actions';
-import { applyNotificationNew } from './notifications-realtime';
+import { applyNotificationCounts, applyNotificationNew } from './notifications-realtime';
 
 /**
  * LE MARQUAGE OPTIMISTE (#6288) — le compte bouge AVANT la réponse, et revient
@@ -328,6 +328,21 @@ describe('suivre les notifications d’un TYPE tant que l’écran est ouvert', 
     await tick();
     expect(requests).toHaveLength(0);
     applyNotificationNew(queryClient, record('p9', false, 'game_photo_moment'));
+    await tick();
+    expect(requests).toHaveLength(1);
+    stop();
+  });
+
+  test('une notification d’un AUTRE type arrive carnet ouvert : aucune requête — seul ce type relance le suivi', async () => {
+    const queryClient = opened(1);
+    const { transport, requests } = counting({ ok: true, data: undefined });
+    const stop = followNotificationsOfTypeRead({ type: 'game_photo_moment', deps: { source: 'gateway', transport, queryClient } });
+    await tick();
+    expect(requests).toHaveLength(1);
+
+    applyNotificationNew(queryClient, record('m1', false, 'new_message'));
+    await tick();
+    applyNotificationCounts(queryClient, { total: 5, unread: 4 });
     await tick();
     expect(requests).toHaveLength(1);
     stop();

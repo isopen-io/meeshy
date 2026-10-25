@@ -98,7 +98,15 @@ export function prependNotification(queryClient: QueryClient, notification: Noti
   });
 }
 
-export function adjustNotificationCounts(queryClient: QueryClient, delta: { readonly unread?: number; readonly total?: number }): void {
+/** `ofType` : le type des lignes que `total` compte — `byType` compte, comme la passerelle, TOUTES les lignes d'un type, lues ou non. */
+export function adjustNotificationCounts(
+  queryClient: QueryClient,
+  delta: { readonly unread?: number; readonly total?: number; readonly ofType?: string },
+): void {
+  const byTypeOf = (counts: NotificationCounts): NotificationCounts['byType'] =>
+    delta.ofType === undefined
+      ? counts.byType
+      : { ...counts.byType, [delta.ofType]: Math.max(0, (counts.byType[delta.ofType] ?? 0) + (delta.total ?? 0)) };
   queryClient.setQueryData<NotificationCounts>(NOTIFICATION_COUNTS_QUERY_KEY, (counts) =>
     counts === undefined
       ? counts
@@ -106,6 +114,7 @@ export function adjustNotificationCounts(queryClient: QueryClient, delta: { read
           ...counts,
           unread: Math.max(0, counts.unread + (delta.unread ?? 0)),
           total: Math.max(0, counts.total + (delta.total ?? 0)),
+          byType: byTypeOf(counts),
         },
   );
 }

@@ -84,18 +84,22 @@ export async function performMarkNotificationsOfTypeRead(params: { readonly type
 
 /**
  * Tant que l'écran est ouvert (#10175) : une non-lue arrivée pendant qu'il est à l'écran — la fenêtre visible, le
- * service worker se tait — s'éteint aussi. Une ARRIVÉE est un compte qui MONTE ou une ligne de ce type jamais vue ;
- * le retour arrière d'un refus fait monter le compte sur des lignes déjà vues, il ne relance donc rien, pas plus que
- * la confirmation, qui le fait baisser. Rend l'arrêt, à appeler quand l'écran se ferme.
+ * service worker se tait — s'éteint aussi. Une ARRIVÉE est le compte de CE type (`byType`) qui MONTE ou une ligne de ce
+ * type jamais vue — jamais le compte global : un message ou une réaction, carnet ouvert, ne relance rien, et aucun
+ * retour arrière ne vient effacer ce qui est arrivé entre-temps. `byType` compte les lignes lues comme non lues : ni la
+ * confirmation ni le retour arrière d'un refus ne le font monter. Rend l'arrêt, à appeler quand l'écran se ferme.
  */
 export function followNotificationsOfTypeRead(params: { readonly type: string; readonly deps: NotificationActionDeps }): () => void {
   const { type, deps } = params;
-  const unreadNow = () => deps.queryClient.getQueryData<NotificationCounts>(NOTIFICATION_COUNTS_QUERY_KEY)?.unread;
+  const ofTypeNow = (): number | undefined => {
+    const counts = deps.queryClient.getQueryData<NotificationCounts>(NOTIFICATION_COUNTS_QUERY_KEY);
+    return counts === undefined ? undefined : (counts.byType[type] ?? 0);
+  };
   const pendingOfType = () => unreadNotificationIds(deps.queryClient, (n) => n.type === type);
-  const state = { stopped: false, running: false, missed: false, observed: unreadNow(), handled: new Set<string>() };
+  const state = { stopped: false, running: false, missed: false, observed: ofTypeNow(), handled: new Set<string>() };
 
   const arrived = (): boolean => {
-    const now = unreadNow();
+    const now = ofTypeNow();
     const rose = now !== undefined && state.observed !== undefined && now > state.observed;
     state.observed = now;
     return rose || pendingOfType().some((id) => !state.handled.has(id));
@@ -107,7 +111,7 @@ export function followNotificationsOfTypeRead(params: { readonly type: string; r
     state.handled = new Set([...state.handled, ...pendingOfType()]);
     const ok = await performMarkNotificationsOfTypeRead({ type, deps });
     state.running = false;
-    state.observed = unreadNow();
+    state.observed = ofTypeNow();
     if (!state.stopped && ok && state.missed) await run();
   };
   const start = (): void =>
