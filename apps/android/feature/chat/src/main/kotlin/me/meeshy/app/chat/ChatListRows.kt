@@ -52,6 +52,7 @@ internal fun ChatListRow(
     actions: ChatMessageRowActions,
     audioPlayer: ChatAudioPlayer? = null,
     isGroup: Boolean = true,
+    canWrite: Boolean = true,
 ) {
     when (item) {
         is ChatListItem.DayHeader -> DaySeparator(item.dayMillis)
@@ -67,6 +68,7 @@ internal fun ChatListRow(
             linkPreviewCache = linkPreviewCache,
             actions = actions,
             audioPlayer = audioPlayer,
+            canWrite = canWrite,
         )
     }
 }

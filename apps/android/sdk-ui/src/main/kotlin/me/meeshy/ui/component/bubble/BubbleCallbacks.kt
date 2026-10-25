@@ -31,9 +31,21 @@ public data class BubbleCallbacks(
     val onReplyPreviewClick: (() -> Unit)? = null,
     /** Tap on a language flag of the Prisme strip, with its language code. */
     val onFlagTap: ((String) -> Unit)? = null,
+    /**
+     * The TalkBack actions of the bubble body, in order. The host passes exactly what the
+     * message's law offers (#12760): an empty list exposes none.
+     */
+    val accessibilityActions: List<BubbleAccessibilityAction> = emptyList(),
 ) {
     public companion object {
         /** No callback at all: a purely decorative bubble. */
         public val None: BubbleCallbacks = BubbleCallbacks()
     }
 }
+
+/** One named TalkBack action of a bubble: its spoken [label] and what it does. */
+@Immutable
+public data class BubbleAccessibilityAction(
+    val label: String,
+    val onAction: () -> Unit,
+)
