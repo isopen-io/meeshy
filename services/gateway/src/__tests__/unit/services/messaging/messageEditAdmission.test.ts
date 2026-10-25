@@ -68,7 +68,9 @@ const admit = (params: {
       createdAt: params.createdAt === undefined ? freshCreatedAt : params.createdAt,
       messageType: 'text',
       metadata: null,
-      isEncrypted: false,
+      // #12881 — même permissif explicite que `conversation` ci-dessus : ces
+      // témoins ne portent pas sur le régime de chiffrement.
+      isEncrypted: null,
       encryptionMode: null,
     },
     now: NOW,

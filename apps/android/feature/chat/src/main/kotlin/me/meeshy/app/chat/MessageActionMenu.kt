@@ -73,6 +73,14 @@ data class MessageActionContext(
     val hostedEntries: Set<MessageAction> = emptySet(),
     /** What the message lets out of Meeshy — an exit it refuses is absent from the menu, never greyed out. */
     val exitOffer: MessageExitOffer = MessageExitOffer.Unrestricted,
+    /** A conversation notice (join, leave, call summary): nobody answers or forwards a notice. */
+    val isNotice: Boolean = false,
+    /** A view-once message: it is opened, never quoted. */
+    val isViewOnce: Boolean = false,
+    /** The bubble still carries a client id (`cid_…`): the server does not know it yet. */
+    val isUnconfirmed: Boolean = false,
+    /** The reader may write in this conversation (`viewerCanWrite`): replying IS writing. */
+    val canWrite: Boolean = true,
 ) {
     /**
      * A message is "actionable" — eligible for reply / forward / star / edit / delete —
@@ -82,6 +90,17 @@ data class MessageActionContext(
      */
     val isActionable: Boolean
         get() = !isDeleted && !isPending && !isFailed
+
+    /** `canReply` of the shared law: a live, server-known message the reader may answer in writing. */
+    val offersReply: Boolean
+        get() = offersRelay && !isViewOnce && canWrite
+
+    /** `forward` of the shared law, its exit verdict aside ([MessageExitOffer]). */
+    val offersForward: Boolean
+        get() = offersRelay && exitOffer.offers(MessageExit.FORWARD)
+
+    private val offersRelay: Boolean
+        get() = isActionable && !isNotice && !isUnconfirmed
 }
 
 /**
@@ -91,10 +110,8 @@ data class MessageActionContext(
  */
 object MessageActionMenu {
     fun actions(ctx: MessageActionContext): List<MessageAction> = buildList {
-        if (ctx.isActionable) {
-            add(MessageAction.Reply)
-            if (ctx.exitOffer.offers(MessageExit.FORWARD)) add(MessageAction.Forward)
-        }
+        if (ctx.offersReply) add(MessageAction.Reply)
+        if (ctx.offersForward) add(MessageAction.Forward)
         if (ctx.isTranslated) {
             add(if (ctx.isShowingOriginal) MessageAction.ShowTranslation else MessageAction.ShowOriginal)
             add(MessageAction.ExploreLanguages)

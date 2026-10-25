@@ -123,7 +123,17 @@ describe('admitMessageEdit — l’avis de capture (#9641)', () => {
     admitMessageEdit({
       prisma: buildPrisma(MEMBERS) as never,
       editorUserId,
-      message: { authorUserId: CAPTURER_USER, conversationId: CONV, conversation: null, createdAt: new Date(), isEncrypted: false, encryptionMode: null, ...notice },
+      // #12881 — permissif explicite, même raison que `conversation: null` : ce
+      // témoin ne porte pas sur le régime de chiffrement.
+      message: {
+        authorUserId: CAPTURER_USER,
+        conversationId: CONV,
+        conversation: null,
+        createdAt: new Date(),
+        isEncrypted: null,
+        encryptionMode: null,
+        ...notice,
+      },
     });
 
   it('refuse celui qui a capturé', async () => {

@@ -1005,6 +1005,10 @@ bare-specifier :feature:contacts en contacts_blocked_unblock_message
 # Chaînes GÉNÉRÉES à un seul spécificateur (le générateur rend %s nu) relevées le 2026-10-23.
 bare-specifier :feature:auth en email_verification_subtitle
 bare-specifier :feature:auth en email_verification_subtitle_account_created
+
+# Chaîne GÉNÉRÉE à un seul spécificateur adoptée par #12810 (dialogues de confirmation
+# de la liste), relevée le 2026-10-25.
+bare-specifier :feature:conversations en dialogs_removal_message
 bare-specifier :feature:auth en email_verification_subtitle_activation_required
 bare-specifier :feature:profile en profile_connection_context_received
 bare-specifier :feature:profile en profile_connection_context_sent

@@ -106,8 +106,7 @@ struct ConversationInfoSheet: View {
                     conversationId: conversation.id,
                     accentColor: accentColor,
                     isDirect: isDirect,
-                    isEncrypted: conversation.encryptionMode != nil,
-                    encryptionModeLabel: conversation.encryptionMode?.uppercased() ?? "",
+                    encryptionMode: conversation.encryptionMode,
                     isDark: isDark,
                     appearAnimation: appearAnimation,
                     onVerifySafetyNumber: { showSecurityVerification = true }
