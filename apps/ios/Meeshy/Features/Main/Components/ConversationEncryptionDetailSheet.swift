@@ -8,6 +8,8 @@ struct ConversationEncryptionDetailSheet: View {
     let accentColor: String
     /// Le droit de basculer selon le rôle, tant que la passerelle n'a pas servi le sien (`canToggleEncryption`).
     let fallbackMayToggle: Bool
+    /// Un groupe s'explique sans se basculer depuis iOS (#12844).
+    var isDirect: Bool = true
     var service: any ConversationEncryptionServiceProviding = ConversationEncryptionService.shared
     var ledger: EndToEndRegimeLedger = .shared
 
@@ -21,7 +23,12 @@ struct ConversationEncryptionDetailSheet: View {
     @State private var errorMessage: String?
     @State private var pendingDowngrade: EndToEndRegimeLedger.PendingDowngrade?
 
-    private var mayToggle: Bool { status?.canToggleEncryption ?? fallbackMayToggle }
+    private var mayToggle: Bool { isDirect && (status?.canToggleEncryption ?? fallbackMayToggle) }
+
+    /// Ce que la fiche explique de la conversation ouverte (#12880), d'après le régime servi.
+    private var explanation: ConversationEncryptionExplanation {
+        ConversationEncryptionExplanation(mode: status?.isEncrypted == true ? status?.mode : nil, isDirect: isDirect)
+    }
 
     private static let logger = MeeshyLog.logger(.conversationEncryption)
 
@@ -47,15 +54,18 @@ struct ConversationEncryptionDetailSheet: View {
                 case .active(let offersDeactivation):
                     if let status, let mode = status.mode.flatMap(ConversationEncryptionModeChoice.init(rawValue:)) {
                         activeStateSections(mode: mode, status: status)
+                        ConversationEncryptionExplanationSections(explanation: explanation)
                         if offersDeactivation { deactivationSection }
                     }
                 case .activation:
                     inactiveStateSection
                     downgradeConfirmationSection
+                    ConversationEncryptionExplanationSections(explanation: explanation)
                     enableStateSections
                 case .inactiveReadOnly:
                     inactiveStateSection
                     downgradeConfirmationSection
+                    ConversationEncryptionExplanationSections(explanation: explanation)
                 }
 
                 if let errorMessage {
@@ -137,13 +147,7 @@ struct ConversationEncryptionDetailSheet: View {
             LabeledContent(String(localized: "conversation.encryption.detail.translation",
                                   defaultValue: "Traduction",
                                   bundle: .main),
-                           value: status.canTranslate
-                                ? String(localized: "conversation.encryption.detail.translation.available",
-                                         defaultValue: "Disponible",
-                                         bundle: .main)
-                                : String(localized: "conversation.encryption.detail.translation.disabled",
-                                         defaultValue: "Désactivé",
-                                         bundle: .main))
+                           value: translationLabel(status))
         } header: {
             Text(String(localized: "conversation.encryption.detail.detailsHeader",
                         defaultValue: "Détails",
@@ -309,6 +313,17 @@ struct ConversationEncryptionDetailSheet: View {
 
     // MARK: - Helpers
 
+    /// En bout en bout, la traduction n'est pas absente : elle se fait sur l'appareil (#12880).
+    private func translationLabel(_ status: ConversationEncryptionStatus) -> String {
+        if status.canTranslate {
+            return String(localized: "conversation.encryption.detail.translation.available", defaultValue: "Disponible", bundle: .main)
+        }
+        if explanation.regime == .endToEnd {
+            return String(localized: "conversation.encryption.detail.translation.onDevice", defaultValue: "Sur l’appareil", bundle: .main)
+        }
+        return String(localized: "conversation.encryption.detail.translation.disabled", defaultValue: "Désactivé", bundle: .main)
+    }
+
     private func modeLabel(_ mode: ConversationEncryptionModeChoice) -> String {
         switch mode {
         case .e2ee:
@@ -321,7 +336,7 @@ struct ConversationEncryptionDetailSheet: View {
                           bundle: .main)
         case .hybrid:
             return String(localized: "conversation.encryption.mode.hybrid.label",
-                          defaultValue: "Hybride (E2EE + serveur)",
+                          defaultValue: "Hybride (chiffré sur le serveur)",
                           bundle: .main)
         }
     }
@@ -330,15 +345,15 @@ struct ConversationEncryptionDetailSheet: View {
         switch mode {
         case .e2ee:
             return String(localized: "conversation.encryption.mode.e2ee.description",
-                          defaultValue: "Confidentialité maximale. La traduction automatique n'est pas disponible.",
+                          defaultValue: "Seuls les appareils des participants lisent les messages. La traduction se fait sur l’appareil.",
                           bundle: .main)
         case .server:
             return String(localized: "conversation.encryption.mode.server.description",
-                          defaultValue: "Protégé côté serveur. La traduction reste disponible (recommandé).",
+                          defaultValue: "Chiffré sur le serveur. Le serveur peut lire les messages : la traduction reste disponible (recommandé).",
                           bundle: .main)
         case .hybrid:
             return String(localized: "conversation.encryption.mode.hybrid.description",
-                          defaultValue: "Double couche. Plus lent, traduction préservée.",
+                          defaultValue: "Chiffré sur le serveur, comme le mode Serveur : le serveur peut lire et traduire les messages.",
                           bundle: .main)
         }
     }

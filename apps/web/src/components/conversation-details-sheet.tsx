@@ -40,6 +40,13 @@ import { Sheet } from './sheet';
 const ConversationStatsSection = lazy(() => import('./conversation-stats-section').then((m) => ({ default: m.ConversationStatsSection })));
 
 /**
+ * LA SECTION « CHIFFREMENT », À LA DEMANDE (#12880) — même mécanique : ni son
+ * explication ni son catalogue ne voyagent avec la feuille tant qu'elle n'est
+ * pas montrée. Placée, comme la rangée de sécurité d'iOS, sous les actions.
+ */
+const ConversationEncryptionSection = lazy(() => import('./conversation-encryption-section').then((m) => ({ default: m.ConversationEncryptionSection })));
+
+/**
  * **LES DÉTAILS D'UNE CONVERSATION** (#7829) — premier incrément de
  * `ConversationInfoSheet.swift` : l'EN-TÊTE (photo, nom, description, type,
  * nombre de membres), l'action « Partager un lien », la section « Médias »
@@ -225,6 +232,10 @@ export function ConversationDetailsSheet({
             </p>
           </div>
         ) : null}
+
+        <Suspense fallback={null}>
+          <ConversationEncryptionSection conversation={conversation} />
+        </Suspense>
 
         <ConversationMediaSection
           conversationId={conversation.id}
