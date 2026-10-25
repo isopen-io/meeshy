@@ -1,4 +1,5 @@
 import type { AndroidNotification } from 'firebase-admin/messaging';
+import { isGameNotificationType } from '@meeshy/shared/utils/game/notifications';
 import type { PushNotificationPayload } from './PushNotificationService';
 
 /**
@@ -26,8 +27,20 @@ import type { PushNotificationPayload } from './PushNotificationService';
  *   bannières que `notification_revoked` retire (#8624).
  *
  * `channelId` est celui que la coque crée au démarrage
- * (`SHELL_PUSH_CHANNEL_ID`, `apps/web/src/lib/push/shell-push.ts`).
+ * (`SHELL_PUSH_CHANNEL_ID`, `apps/web/src/lib/push/shell-push.ts`), sauf :
+ *
+ * - le JEU (#10266, § 5.16.4) a son canal, `meeshy_game`
+ *   (`GameNotificationChannel.java`), pour que « moments à immortaliser » et
+ *   les autres notifications du jeu se coupent aussi dans les réglages du
+ *   système sans toucher aux messages. Une coque qui ne l'a pas encore retombe
+ *   sur le canal par défaut du manifeste : rien ne se perd pendant la
+ *   transition ;
+ * - `muted` l'emporte sur le jeu : un lecteur qui a coupé le son ne sonne
+ *   jamais, quelle que soit la famille de la notification.
  */
+export const ANDROID_DEFAULT_CHANNEL_ID = 'meeshy_notifications';
+export const ANDROID_SILENT_CHANNEL_ID = 'meeshy_notifications_silent';
+export const ANDROID_GAME_CHANNEL_ID = 'meeshy_game';
 export type AndroidPushSource = Pick<PushNotificationPayload, 'title' | 'body' | 'muted' | 'sound' | 'badge' | 'threadId' | 'data'>;
 
 function bannerTag(payload: AndroidPushSource): string {
@@ -47,12 +60,17 @@ function bannerImage(payload: AndroidPushSource): string | undefined {
   return url.startsWith('https://') ? url : undefined;
 }
 
+function bannerChannel(payload: AndroidPushSource): string {
+  if (payload.muted) return ANDROID_SILENT_CHANNEL_ID;
+  return isGameNotificationType(payload.data?.type) ? ANDROID_GAME_CHANNEL_ID : ANDROID_DEFAULT_CHANNEL_ID;
+}
+
 export function androidNotificationConfig(payload: AndroidPushSource): AndroidNotification {
   const tag = bannerTag(payload);
   const imageUrl = bannerImage(payload);
   return {
     ...(payload.muted ? {} : { sound: payload.sound || 'default' }),
-    channelId: payload.muted ? 'meeshy_notifications_silent' : 'meeshy_notifications',
+    channelId: bannerChannel(payload),
     ...(payload.badge !== undefined ? { notificationCount: payload.badge } : {}),
     ...(tag ? { tag } : {}),
     ...(imageUrl ? { imageUrl } : {}),

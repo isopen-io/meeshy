@@ -3,4 +3,7 @@
     <!-- #8678 — le canal des bannières sans son (SilentNotificationChannel). -->
     <string name="push_channel_silent_name">إشعارات صامتة</string>
     <string name="push_channel_silent_description">إشعارات تُعرض دون صوت عند إيقاف الصوت في Meeshy</string>
+    <!-- #10266 — le canal des notifications du jeu (GameNotificationChannel). -->
+    <string name="push_channel_game_name">اللعبة</string>
+    <string name="push_channel_game_description">مغامرتك: لحظات لسيرتك، والثنائيات، والدوري، ومهمة اليوم</string>
 </resources>

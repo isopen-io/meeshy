@@ -8,6 +8,8 @@
  */
 import { describe, it, expect } from '@jest/globals';
 
+import { GAME_NOTIFICATION_TYPES } from '@meeshy/shared/utils/game/notifications';
+
 import { androidNotificationConfig } from '../../../services/android-push-config';
 
 const banner = { title: 'Alice', body: 'Salut' };
@@ -85,5 +87,31 @@ describe('androidNotificationConfig — la vignette d’une vidéo s’affiche d
     expect(
       androidNotificationConfig(video('https://gate.meeshy.me/t.jpg', { notificationLocKey: 'notification.viewOnce' })),
     ).not.toHaveProperty('imageUrl');
+  });
+});
+
+describe('androidNotificationConfig — le jeu a son canal, qui se coupe dans les réglages du système (#10266)', () => {
+  const game = (type: string, extra: Partial<Parameters<typeof androidNotificationConfig>[0]> = {}) =>
+    androidNotificationConfig({ ...banner, ...extra, data: { notificationId: 'n-1', type } });
+
+  it('« moments à immortaliser » arrive sur le canal Jeu de la coque', () => {
+    expect(game('game_photo_moment').channelId).toBe('meeshy_game');
+  });
+
+  it('every game notification shares the Game channel, so cutting it silences the whole game', () => {
+    expect(GAME_NOTIFICATION_TYPES.map((type) => game(type).channelId)).toEqual(GAME_NOTIFICATION_TYPES.map(() => 'meeshy_game'));
+  });
+
+  it('a game banner still rings like any other banner', () => {
+    expect(game('game_photo_moment').sound).toBe('default');
+  });
+
+  it('a muted reader stays silent: the silent channel wins over the Game channel', () => {
+    expect(game('game_photo_moment', { muted: true }).channelId).toBe('meeshy_notifications_silent');
+  });
+
+  it('a non-game notification stays on the default shell channel', () => {
+    expect(game('new_message').channelId).toBe('meeshy_notifications');
+    expect(androidNotificationConfig(banner).channelId).toBe('meeshy_notifications');
   });
 });
