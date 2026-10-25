@@ -369,6 +369,52 @@ final class ConversationLockManagerTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: fixture.mirrorFile), Data("abîmé".utf8), "rien n'est réécrit")
     }
 
+    // MARK: - #12655 : tant que la liste est inconnue, le code d'une conversation la verrouille
+
+    /// La liste ne se lit pas (miroir abîmé, `.standard` absent) : la
+    /// conversation dont le trousseau tient le code reste sous PIN — ni
+    /// ouverture, ni contenu, ni geste de rangée ne la traitent en ouverte.
+    func test_anUnreadableMirror_withAnAbsentList_butAPinForTheConversation_admitsNoOpening() throws {
+        let fixture = try makeLaunchFixture()
+        try Data("abîmé".utf8).write(to: fixture.mirrorFile)
+        let vault = InMemoryConversationLockVault()
+        vault.write("code", for: "meeshy_lock_coffre")
+
+        let sut = makeLaunchedManager(fixture, protectedData: ProtectedData(available: true), vault: vault)
+
+        XCTAssertFalse(sut.admitsOpening("coffre"))
+        XCTAssertTrue(sut.isLocked("coffre"))
+        XCTAssertTrue(sut.hidesContent(of: "coffre"))
+        XCTAssertFalse(sut.isLocked("ouverte"), "sans code, rien ne la verrouille")
+        XCTAssertTrue(sut.admitsOpening("ouverte"))
+    }
+
+    /// Avant le premier déverrouillage, sans miroir lisible : même règle.
+    func test_beforeTheListIsRead_aConversationWithAPin_hidesItsContent_andAdmitsNoOpening() throws {
+        let fixture = try makeLaunchFixture()
+        let vault = InMemoryConversationLockVault()
+        vault.write("code", for: "meeshy_lock_coffre")
+
+        let sut = makeLaunchedManager(fixture, protectedData: ProtectedData(available: false), vault: vault)
+
+        XCTAssertTrue(sut.hidesContent(of: "coffre"))
+        XCTAssertFalse(sut.admitsOpening("coffre"))
+    }
+
+    /// Une fois la liste LUE, elle seule fait foi : un code orphelin (verrou
+    /// retiré dont l'effacement a échoué) ne verrouille rien.
+    func test_onceTheListIsRead_anOrphanPin_locksNothing() throws {
+        let fixture = try makeLaunchFixture()
+        fixture.standard.set([String](), forKey: lockedIdsKey)
+        let vault = InMemoryConversationLockVault()
+        vault.write("code", for: "meeshy_lock_orpheline")
+
+        let sut = makeLaunchedManager(fixture, protectedData: ProtectedData(available: true), vault: vault)
+
+        XCTAssertFalse(sut.isLocked("orpheline"))
+        XCTAssertTrue(sut.admitsOpening("orpheline"))
+    }
+
     /// Première installation : ni liste, ni miroir, ni code au trousseau.
     /// « Aucun verrou » est alors un savoir, et l'extension l'apprend.
     func test_aFirstInstall_knowsThereIsNoLock_andTellsTheExtension() throws {
