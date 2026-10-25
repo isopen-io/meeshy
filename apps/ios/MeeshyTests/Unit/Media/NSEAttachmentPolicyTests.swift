@@ -269,25 +269,25 @@ final class NSEAttachmentPolicyTests: XCTestCase {
     /// premières) n'a pas de cliché : seul le miroir la dit verrouillée.
     func test_isContentLocked_aConversationAbsentFromTheSnapshot_isLockedByTheMirror() {
         XCTAssertTrue(NSEAttachmentPolicy.isContentLocked(
-            conversationId: "coffre", mirroredLockedIds: ["coffre"], snapshotDeclaresLock: false
+            conversationId: "coffre", mirroredLockedIds: ["coffre"], mirrorDomainReadable: true, snapshotDeclaresLock: false
         ))
     }
 
     func test_isContentLocked_neitherMirrorNorSnapshot_isOpen() {
         XCTAssertFalse(NSEAttachmentPolicy.isContentLocked(
-            conversationId: "c1", mirroredLockedIds: ["autre"], snapshotDeclaresLock: false
+            conversationId: "c1", mirroredLockedIds: ["autre"], mirrorDomainReadable: true, snapshotDeclaresLock: false
         ))
         XCTAssertFalse(NSEAttachmentPolicy.isContentLocked(
-            conversationId: "c1", mirroredLockedIds: nil, snapshotDeclaresLock: false
+            conversationId: "c1", mirroredLockedIds: nil, mirrorDomainReadable: true, snapshotDeclaresLock: false
         ))
         XCTAssertFalse(NSEAttachmentPolicy.isContentLocked(
-            conversationId: nil, mirroredLockedIds: ["c1"], snapshotDeclaresLock: true
+            conversationId: nil, mirroredLockedIds: ["c1"], mirrorDomainReadable: true, snapshotDeclaresLock: true
         ))
     }
 
     func test_isContentLocked_theSnapshotFlagStillLocks() {
         XCTAssertTrue(NSEAttachmentPolicy.isContentLocked(
-            conversationId: "c1", mirroredLockedIds: nil, snapshotDeclaresLock: true
+            conversationId: "c1", mirroredLockedIds: nil, mirrorDomainReadable: false, snapshotDeclaresLock: true
         ))
     }
 
@@ -362,20 +362,61 @@ final class NSEAttachmentPolicyTests: XCTestCase {
 
     func test_conversationLock_distinguishesOpenLockedAndUnknown() {
         XCTAssertEqual(NSEAttachmentPolicy.conversationLock(
-            conversationId: "c1", mirroredLockedIds: ["c1"], snapshotDeclaresLock: false
+            conversationId: "c1", mirroredLockedIds: ["c1"], mirrorDomainReadable: true, snapshotDeclaresLock: false
         ), .locked)
         XCTAssertEqual(NSEAttachmentPolicy.conversationLock(
-            conversationId: "c1", mirroredLockedIds: [], snapshotDeclaresLock: false
+            conversationId: "c1", mirroredLockedIds: [], mirrorDomainReadable: true, snapshotDeclaresLock: false
         ), .open)
         XCTAssertEqual(NSEAttachmentPolicy.conversationLock(
-            conversationId: "c1", mirroredLockedIds: nil, snapshotDeclaresLock: false
-        ), .unknown, "un miroir illisible ne dit pas « ouverte »")
+            conversationId: "c1", mirroredLockedIds: nil, mirrorDomainReadable: false, snapshotDeclaresLock: false
+        ), .unknown, "un domaine illisible ne dit pas « ouverte »")
         XCTAssertEqual(NSEAttachmentPolicy.conversationLock(
-            conversationId: "c1", mirroredLockedIds: nil, snapshotDeclaresLock: true
+            conversationId: "c1", mirroredLockedIds: nil, mirrorDomainReadable: false, snapshotDeclaresLock: true
         ), .locked)
         XCTAssertEqual(NSEAttachmentPolicy.conversationLock(
-            conversationId: nil, mirroredLockedIds: nil, snapshotDeclaresLock: false
+            conversationId: nil, mirroredLockedIds: nil, mirrorDomainReadable: false, snapshotDeclaresLock: false
         ), .noConversation)
+    }
+
+    // MARK: - #12655, transition #9223 — la clé absente d'une version antérieure
+
+    /// L'ancienne version RETIRAIT `locked_conversation_ids` faute de verrou.
+    /// Après la mise à jour, avant le premier lancement de la nouvelle, un
+    /// domaine LISIBLE sans cette clé dit « aucun verrou » : un utilisateur
+    /// sans PIN garde Répondre et Marquer comme lu.
+    func test_aMirrorNeverWrittenByTheOldVersion_inAReadableDomain_keepsTheMessageCategory() {
+        let lock = NSEAttachmentPolicy.conversationLock(
+            conversationId: "c1", mirroredLockedIds: nil, mirrorDomainReadable: true, snapshotDeclaresLock: false
+        )
+        let payload: [AnyHashable: Any] = ["type": "new_message", "conversationId": "c1"]
+
+        XCTAssertEqual(lock, .open)
+        XCTAssertEqual(NSEAttachmentPolicy.category("MEESHY_MESSAGE", under: lock, userInfo: payload), "MEESHY_MESSAGE")
+    }
+
+    func test_anUnreadableDomain_withoutTheMirror_isUnknown_andLosesItsActions() {
+        let lock = NSEAttachmentPolicy.conversationLock(
+            conversationId: "c1", mirroredLockedIds: nil, mirrorDomainReadable: false, snapshotDeclaresLock: false
+        )
+
+        XCTAssertEqual(lock, .unknown)
+        XCTAssertEqual(
+            NSEAttachmentPolicy.category("MEESHY_MESSAGE", under: lock, userInfo: ["conversationId": "c1"]),
+            NSEAttachmentPolicy.lockedConversationCategory
+        )
+    }
+
+    func test_isAppGroupDomainReadable_opensTheDomainFile() throws {
+        let container = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: container) }
+        let preferences = container.appendingPathComponent("Library/Preferences", isDirectory: true)
+        try FileManager.default.createDirectory(at: preferences, withIntermediateDirectories: true)
+
+        XCTAssertFalse(NSEAttachmentPolicy.isAppGroupDomainReadable(containerURL: container, suiteName: "group.test"),
+                       "aucun domaine écrit : l'extension ne sait pas")
+        try Data("<plist/>".utf8).write(to: preferences.appendingPathComponent("group.test.plist"))
+        XCTAssertTrue(NSEAttachmentPolicy.isAppGroupDomainReadable(containerURL: container, suiteName: "group.test"))
+        XCTAssertFalse(NSEAttachmentPolicy.isAppGroupDomainReadable(containerURL: nil, suiteName: "group.test"))
     }
 
     /// Un verrou INCONNU ne scelle pas le contenu (aucune preuve de verrou),

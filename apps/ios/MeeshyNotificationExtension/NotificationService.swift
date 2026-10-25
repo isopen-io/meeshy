@@ -122,16 +122,22 @@ class NotificationService: UNNotificationServiceExtension {
     /// La conversation est-elle verrouillée par PIN sur cet appareil ? Le
     /// miroir COMPLET que l'app dépose dans l'App Group fait foi (#11387) — le
     /// cliché `conversation_snapshots` ne couvre que la liste chargée. Un
-    /// miroir illisible rend `unknown` (#12655).
+    /// miroir absent d'un domaine illisible rend `unknown` (#12655).
     private static func conversationLock(_ userInfo: [AnyHashable: Any]) -> NSEConversationLock {
+        let suiteName = "group.me.meeshy.apps"
         let conversationId = userInfo["conversationId"] as? String
-        let mirrored = UserDefaults(suiteName: "group.me.meeshy.apps")?
+        let mirrored = UserDefaults(suiteName: suiteName)?
             .stringArray(forKey: NSEAttachmentPolicy.lockedConversationIdsKey)
+        let mirrorDomainReadable = mirrored != nil || NSEAttachmentPolicy.isAppGroupDomainReadable(
+            containerURL: FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: suiteName),
+            suiteName: suiteName
+        )
         let snapshotDeclaresLock = conversationId
             .flatMap { NSEDataSync.conversationDetails(forId: $0)?.isLocked } ?? false
         return NSEAttachmentPolicy.conversationLock(
             conversationId: conversationId,
             mirroredLockedIds: mirrored,
+            mirrorDomainReadable: mirrorDomainReadable,
             snapshotDeclaresLock: snapshotDeclaresLock
         )
     }

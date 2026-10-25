@@ -238,7 +238,7 @@ final class ConversationPreviewLockTests: XCTestCase {
 
         let mirrored = mirror.stringArray(forKey: NSEAttachmentPolicy.lockedConversationIdsKey)
         XCTAssertTrue(NSEAttachmentPolicy.isContentLocked(
-            conversationId: "coffre-hors-liste", mirroredLockedIds: mirrored, snapshotDeclaresLock: false
+            conversationId: "coffre-hors-liste", mirroredLockedIds: mirrored, mirrorDomainReadable: true, snapshotDeclaresLock: false
         ))
     }
 

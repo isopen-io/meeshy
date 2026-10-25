@@ -151,9 +151,8 @@ nonisolated enum NSEAttachmentPolicy {
     static let lockedConversationIdsKey = "locked_conversation_ids"
 
     /// Écrit le miroir, jeu VIDE compris (#12655) : une liste vide dit « aucun
-    /// verrou », une clé absente dit « l'extension ne sait pas » (miroir jamais
-    /// écrit, groupe d'apps illisible avant le premier déverrouillage). La
-    /// déconnexion, qui lève tous les verrous, ne laisse qu'une liste vide.
+    /// verrou ». La déconnexion, qui lève tous les verrous, ne laisse qu'une
+    /// liste vide.
     static func mirrorLockedConversationIds(_ ids: Set<String>, into defaults: UserDefaults?) {
         defaults?.set(ids.sorted(), forKey: lockedConversationIdsKey)
     }
@@ -161,26 +160,54 @@ nonisolated enum NSEAttachmentPolicy {
     /// **Ce que l'extension sait du verrou PIN de la conversation d'une charge.**
     /// Le miroir fait foi ; le drapeau du cliché ne sert que de renfort (il ne
     /// peut qu'AJOUTER un verrou, jamais en retirer un).
+    ///
+    /// Une clé ABSENTE a deux sens, et seul `mirrorDomainReadable` les sépare
+    /// (#12655, transition #9223) : le domaine du groupe d'apps est lisible et
+    /// la clé manque ⇒ une version antérieure la RETIRAIT faute de verrou, la
+    /// conversation est ouverte ; le domaine est illisible (avant le premier
+    /// déverrouillage) ⇒ l'extension ne sait pas.
     static func conversationLock(
         conversationId: String?,
         mirroredLockedIds: [String]?,
+        mirrorDomainReadable: Bool,
         snapshotDeclaresLock: Bool
     ) -> NSEConversationLock {
         guard let conversationId, !conversationId.isEmpty else { return .noConversation }
         if snapshotDeclaresLock || (mirroredLockedIds ?? []).contains(conversationId) { return .locked }
-        return mirroredLockedIds == nil ? .unknown : .open
+        guard mirroredLockedIds != nil || mirrorDomainReadable else { return .unknown }
+        return .open
     }
 
-    /// La conversation de cette charge est-elle verrouillée par PIN sur cet
-    /// appareil ? Seul un verrou CONNU scelle le contenu.
+    /// La conversation de cette charge a-t-elle son contenu scellé sur cet
+    /// appareil ?
     static func isContentLocked(
         conversationId: String?,
         mirroredLockedIds: [String]?,
+        mirrorDomainReadable: Bool,
         snapshotDeclaresLock: Bool
     ) -> Bool {
         conversationLock(
-            conversationId: conversationId, mirroredLockedIds: mirroredLockedIds, snapshotDeclaresLock: snapshotDeclaresLock
+            conversationId: conversationId,
+            mirroredLockedIds: mirroredLockedIds,
+            mirrorDomainReadable: mirrorDomainReadable,
+            snapshotDeclaresLock: snapshotDeclaresLock
         ).sealsContent
+    }
+
+    /// **Le domaine du groupe d'apps est-il lisible par ce processus ?**
+    /// (#12655). Avant le premier déverrouillage, `UserDefaults` rend un
+    /// domaine VIDE sans le dire : son fichier, protégé jusqu'au premier
+    /// déverrouillage, ne s'ouvre pas. Ouvrir ce fichier est donc le signal,
+    /// indépendant de toute clé qu'une version donnée de l'app aurait écrite.
+    /// Fichier absent (rien jamais écrit) ⇒ illisible : fail-closed.
+    static func isAppGroupDomainReadable(containerURL: URL?, suiteName: String) -> Bool {
+        guard let containerURL else { return false }
+        let domain = containerURL
+            .appendingPathComponent("Library/Preferences", isDirectory: true)
+            .appendingPathComponent("\(suiteName).plist")
+        guard let handle = try? FileHandle(forReadingFrom: domain) else { return false }
+        try? handle.close()
+        return true
     }
 
     /// La charge a-t-elle été scellée pour une conversation verrouillée ?
