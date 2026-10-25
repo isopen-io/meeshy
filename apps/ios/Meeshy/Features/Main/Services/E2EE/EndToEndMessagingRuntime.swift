@@ -4,7 +4,7 @@ import MeeshyE2EE
 import MeeshySDK
 import os
 
-/// L'E2EE libsignal de l'app (#3707, spec 2026-10-23 § 4) vu par ses deux
+/// L'E2EE libsignal de l'app (#3707, spec E2EE libsignal iOS/macOS § 4) vu par ses deux
 /// consommateurs : l'envoi d'une conversation chiffrée, qui scelle pour chaque
 /// appareil de la directe, et le fil, qui lit le clair que CET appareil a
 /// déchiffré ou envoyé. Le serveur ne voit jamais ce clair : il ne vit que dans
@@ -179,6 +179,7 @@ actor EndToEndMessagingRuntime: EndToEndMessagingProviding, EndToEndDeviceManagi
 
 /// Le relais des enveloppes ouvertes, lisible hors de l'acteur. Il n'est
 /// alimenté QUE par l'acteur, donc jamais par deux fils à la fois.
+/// unchecked: `PassthroughSubject` sérialise déjà ses envois, et `subject` n'est jamais réassigné après l'init.
 nonisolated final class OutcomeRelay: @unchecked Sendable {
     private let subject = PassthroughSubject<E2EEOpenOutcome, Never>()
     var publisher: AnyPublisher<E2EEOpenOutcome, Never> { subject.eraseToAnyPublisher() }

@@ -5,7 +5,7 @@ import { describe, expect, test } from 'bun:test';
 import { resolveConversationSections, type SectionableConversation } from '@meeshy/shared/utils/conversation-sections';
 
 import { CONVERSATIONS } from '@/lib/api/fixtures';
-import { FIXTURES_LOADED_AT } from '@/lib/api/fixtures-base';
+import { FIXTURES_LOADED_AT, nextParisDayInstant } from '@/lib/api/fixtures-base';
 import { applyFilter } from '@/lib/lens/filters';
 
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
@@ -169,9 +169,9 @@ describe('resolveLensSections — sur les fixtures web-v2', () => {
     expect(new Set(ids)).toEqual(new Set(visible.map((c) => c.id)));
   });
 
-  test('un témoin de RANG temporel autre que le premier : "now" avancé de 24h range le jour courant en "hier"', () => {
+  test('un témoin de RANG temporel autre que le premier : "now" avancé d’un jour parisien range le jour courant en "hier"', () => {
     const visible = applyFilter({ conversations: CONVERSATIONS, selection: ['all'], search: '', viewerId: 'u-viewer', overrides: {} });
-    const laterNow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+    const laterNow = nextParisDayInstant(now);
     const s = resolveLensSections({ conversations: visible, overrides: {}, now: laterNow, timeZone });
     const yesterday = s.find((section) => section.id === 'lentille.yesterday');
     expect(yesterday?.conversations.map((c) => c.id)).toContain('c-deploiement');
