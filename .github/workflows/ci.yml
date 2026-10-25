@@ -1534,6 +1534,21 @@ jobs:
       - name: Générer les SVG des ateliers
         run: for atelier in ateliers/*/; do (cd "$atelier" && python -B gen.py > /dev/null); done
 
+      # L'amendement L2 de la référence (#10265) : chaque cadre dont Mee et
+      # Meo ont bougé (lib/anchors.json) porte, dans reference/sha256.json,
+      # les ancres et l'empreinte du SVG que les ateliers viennent de produire.
+      # Une ancre corrigée sans `reference.mjs --amend l2` rejoué rougit ici,
+      # plutôt qu'au réexport (recompose.mjs). Le témoin décale une ancre.
+      - name: Témoin — la garde de l'amendement rougit sur une ancre décalée
+        run: |
+          if node lib/amendment.mjs --check --mutate anchor; then
+            echo "::error::la garde de l'amendement n'a pas rougi sur une ancre décalée"
+            exit 1
+          fi
+
+      - name: Garde de l'amendement L2 de la référence
+        run: node lib/amendment.mjs --check
+
       - name: Témoin — la garde rougit sur un empiètement injecté
         run: |
           if node lib/overlap.mjs --check --only neon-ambassadeur-1 --mutate bird-in-window; then
