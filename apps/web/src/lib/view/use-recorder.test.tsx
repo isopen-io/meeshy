@@ -397,3 +397,85 @@ describe('useRecorder — double tap pendant `requesting` (défaut 6, revue #566
     expect(calls).toBe(1);
   });
 });
+
+/**
+ * #12874 — dans la coque Android, `requesting` couvre la demande de
+ * permission native : on peut annuler ou quitter le fil avant que le flux
+ * n'arrive. Une demande abandonnée relâche le flux reçu en retard et ne
+ * démarre ni l'enregistrement ni le service de la coque.
+ */
+describe('useRecorder — demande de micro abandonnée pendant `requesting` (#12874)', () => {
+  function lateEngine() {
+    const calls = { start: 0, release: 0, hold: 0 };
+    let resolveRequest!: (result: RecorderEngineResult) => void;
+    const engine: RecorderEngine = {
+      requestStream: () =>
+        new Promise<RecorderEngineResult>((resolve) => {
+          resolveRequest = resolve;
+        }),
+      start: () => {
+        calls.start += 1;
+      },
+      stop: async () => ({ blob: new Blob([]), mimeType: 'audio/webm' }),
+      release: () => {
+        calls.release += 1;
+      },
+    };
+    const microphone = {
+      hold: () => {
+        calls.hold += 1;
+      },
+      release: () => {},
+    };
+    return { engine, microphone, calls, deliver: (result: RecorderEngineResult) => resolveRequest(result) };
+  }
+
+  function HeldHarness({ onReady, late }: { readonly onReady: (r: Recorder) => void; readonly late: ReturnType<typeof lateEngine> }) {
+    const recorder = useRecorder({ engine: late.engine, microphone: late.microphone, now: () => 0, interval: () => () => {} });
+    onReady(recorder);
+    return <div data-status={recorder.state.status} data-duration={0} data-levels={0} />;
+  }
+
+  function mountHeld(late: ReturnType<typeof lateEngine>, onReady: (r: Recorder) => void): HTMLDivElement {
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    act(() => {
+      root.render(<HeldHarness onReady={onReady} late={late} />);
+    });
+    return container;
+  }
+
+  test('annuler pendant `requesting` puis recevoir le flux ⇒ flux relâché, rien ne démarre', async () => {
+    let recorder!: Recorder;
+    const late = lateEngine();
+    const el = mountHeld(late, (r) => (recorder = r));
+
+    act(() => recorder.start());
+    act(() => recorder.cancel());
+    await act(async () => {
+      late.deliver({ ok: true, stream: fakeStream() });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(late.calls).toEqual({ start: 0, release: 1, hold: 0 });
+    expect(stateOf(el).status).toBe('idle');
+  });
+
+  test('quitter le fil pendant `requesting` puis recevoir le flux ⇒ flux relâché, ni enregistrement ni service', async () => {
+    let recorder!: Recorder;
+    const late = lateEngine();
+    mountHeld(late, (r) => (recorder = r));
+
+    act(() => recorder.start());
+    act(() => root.render(<div />));
+    await act(async () => {
+      late.deliver({ ok: true, stream: fakeStream() });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(late.calls).toEqual({ start: 0, release: 1, hold: 0 });
+  });
+});
