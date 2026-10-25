@@ -494,7 +494,11 @@ export const callersIn = (contents, nsNames) => {
 // Swift relevée le même jour (sous-titres WebVTT d'une pièce, servis depuis la fusion de #12375). Le lecteur
 // vidéo web la lira dans #9275. Entrée PRÉMATURÉE, pas un faux mort (#5427). Valeur MESURÉE le 2026-10-23 en
 // local sur origin/dev : une seule entrée nouvelle.
-const BASELINE_DEAD_ENTRIES = 277;
+// 277 -> 276 (#10175, 2026-10-25) : `notifications.readByTypes` (`POST /api/v1/notifications/read-by-types`) a son
+// appelant web — `apps/web/src/lib/api/notifications.ts`, qui éteint « moments à immortaliser » quand le carnet
+// s'ouvre à froid, sans liste de notifications en cache. Valeur MESURÉE le 2026-10-25 en CI (Gardes du dépôt, run
+// 40172020147, « AMÉLIORATION NON ENREGISTRÉE ») et en local.
+const BASELINE_DEAD_ENTRIES = 276;
 
 export const readWorld = (root) => {
   const groupFiles = readdirSync(join(root, GROUPS_DIR)).filter((name) => name.endsWith('.ts')).sort();
