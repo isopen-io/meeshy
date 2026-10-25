@@ -127,6 +127,10 @@ describe('parité des actions sur un message — admitMessageEdit / admitMessage
         createdAt: message.createdAt == null ? null : new Date(message.createdAt),
         messageType: message.messageType,
         metadata: message.metadata,
+        // Les vecteurs décrivent la LIGNE d'un message en clair (#12881) : c'est le régime de la
+        // conversation, ci-dessus, qui porte la loi testée.
+        isEncrypted: false,
+        encryptionMode: null,
       },
       now,
     });
