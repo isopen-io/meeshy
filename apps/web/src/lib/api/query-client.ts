@@ -3,7 +3,6 @@ import { QueryClient, dehydrate, hydrate, type DehydratedState } from '@tanstack
 import { endToEndRegimeLedger } from '@/lib/end-to-end-regime-ledger';
 
 import { createAccountCacheShelf } from './account-caches';
-import { bindEndToEndRegimeToSession, watchEndToEndConversations } from './end-to-end-cache-watch';
 import { ENGAGEMENT_PROGRESS_QUERY_KEY, keepNewerGameState } from './game-state-order';
 import { pruneGoneEphemerals } from './ephemeral-cache';
 import { ApiError } from './client';
@@ -429,7 +428,8 @@ sessionStore.getState().restoreSession();
    entrant à froid) lit déjà ce que ce compte a vu chiffré de bout en bout.
    #12986 — et il suit chaque changement de compte AVANT le client ci-dessous,
    qui remet en place le cache du compte qui arrive. */
-bindEndToEndRegimeToSession(sessionStore, endToEndRegimeLedger);
+endToEndRegimeLedger.getState().bind(sessionIdentityKey(sessionStore.getState().session));
+sessionStore.subscribe((state) => endToEndRegimeLedger.getState().bind(sessionIdentityKey(state.session)));
 
 export const appQueryClient: AppQueryClient = createAppQueryClient({
   buster: currentBuster(),
@@ -438,6 +438,12 @@ export const appQueryClient: AppQueryClient = createAppQueryClient({
 });
 
 /* Ce que le cache a servi chiffré de bout en bout — conversation ou fil —, le
-   compte l'a vu : il ne se rouvre plus au clair (#12949, #12986). Posé AVEC le
-   client, pas avec le temps réel chargé après la première peinture. */
-watchEndToEndConversations(appQueryClient, endToEndRegimeLedger);
+   compte l'a vu : il ne se rouvre plus au clair (#12949, #12986). Demandé AVEC
+   le client, dans son propre petit morceau (le socle est à son plafond), et non
+   plus avec le temps réel chargé après la première peinture ; à sa pose, il relit
+   tout le cache déjà là. Ce qu'un compte a vu reste de toute façon retenu d'une
+   session à l'autre par le registre. */
+export const endToEndCacheWatch: Promise<void> = import('./end-to-end-cache-watch').then(
+  ({ watchEndToEndConversations }) => void watchEndToEndConversations(appQueryClient, endToEndRegimeLedger),
+  () => undefined,
+);

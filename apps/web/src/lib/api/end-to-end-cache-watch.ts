@@ -1,9 +1,8 @@
 import type { QueryClient } from '@tanstack/react-query';
 import type { StoreApi } from 'zustand/vanilla';
 
-import { isEndToEndMode, threadShowsEndToEnd, type EndToEndRegimeState } from '@/lib/end-to-end-regime-ledger';
-
-import { sessionIdentityKey, type SessionStoreApi } from './session';
+import { isEndToEndMode, type EndToEndRegimeState } from '@/lib/end-to-end-regime-ledger';
+import { threadShowsEndToEnd } from '@/lib/end-to-end-thread-signal';
 
 
 /**
@@ -66,14 +65,3 @@ export function watchEndToEndConversations(queryClient: QueryClient, ledger: Sto
   });
 }
 
-/**
- * LE REGISTRE SUIT LE COMPTE, AVANT LE CACHE (#12949, #12986) — lié au compte
- * restauré dès la construction du client, puis à chaque changement de compte.
- * Posé AVANT le client de requêtes, cet abonnement passe avant le sien : le
- * registre est déjà au compte qui arrive quand son cache rangé revient et que
- * la surveillance y lit des fils chiffrés.
- */
-export function bindEndToEndRegimeToSession(session: SessionStoreApi, ledger: StoreApi<EndToEndRegimeState>): () => void {
-  ledger.getState().bind(sessionIdentityKey(session.getState().session));
-  return session.subscribe((state) => ledger.getState().bind(sessionIdentityKey(state.session)));
-}

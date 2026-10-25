@@ -4,7 +4,8 @@ import type { Message } from '@/lib/api/types';
 
 import { LIBSIGNAL_PROTOCOL } from '@meeshy/shared/types/e2ee-directory';
 
-import { canSendPlaintext, createEndToEndRegimeLedger, LIBSIGNAL_PROTOCOL_MARK, endToEndSealed, isEndToEndMode, threadShowsEndToEnd, type SealedStorage } from './end-to-end-regime-ledger';
+import { canSendPlaintext, createEndToEndRegimeLedger, endToEndSealed, isEndToEndMode, type SealedStorage } from './end-to-end-regime-ledger';
+import { LIBSIGNAL_PROTOCOL_MARK, threadShowsEndToEnd } from './end-to-end-thread-signal';
 
 /**
  * #12949 — UNE CONVERSATION VUE CHIFFRÉE DE BOUT EN BOUT RESTE FERMÉE AU CLAIR
@@ -123,17 +124,9 @@ describe('une conversation vue e2ee reste fermée au clair', () => {
     expect(endToEndSealed(ledger.getState(), { conversationId: ID, servedMode: 'server' })).toBe(true);
   });
 
-  test('le fil montre un message chiffré de bout en bout, le serveur ne dit rien : fermée, et la garde de l’envoi refuse (#12986)', () => {
-    const ledger = createEndToEndRegimeLedger();
-    const messages = [message({}), message({ encryptionMode: 'e2ee', isEncrypted: true, content: '' })];
-    expect(endToEndSealed(ledger.getState(), { conversationId: ID, servedMode: null, messages })).toBe(true);
-    expect(canSendPlaintext({ conversationId: ID, servedMode: null, messages }, ledger.getState())).toBe(false);
-  });
-
-  test('le fil montre le bout en bout, le serveur ne dit rien : fermée', () => {
-    const ledger = createEndToEndRegimeLedger();
-    expect(endToEndSealed(ledger.getState(), { conversationId: ID, servedMode: null, messages: [message({ messageType: 'system', metadata: { kind: 'encryption-enabled', mode: 'e2ee' } })] })).toBe(true);
-  });
+  /* Que le fil montré FERME la conversation se prouve là où il est lu : le fil
+     ouvert (`thread-write-lock.test.tsx`) et la surveillance du cache
+     (`api/end-to-end-cache-watch.test.ts`, `send/plaintext-guard.test.ts`). */
 
   test('jamais vue chiffrée par ce navigateur : le clair, sans rien demander', () => {
     const ledger = createEndToEndRegimeLedger();
