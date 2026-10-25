@@ -111,6 +111,8 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
     /// "members-arrived"`, #7759) : la phrase se compose chez le lecteur,
     /// `content` n'en est que le repli français.
     public var arrivalsNotice: ArrivalsNoticeMetadata?
+    /// Avis de bascule du chiffrement, daté de son époque (#12846).
+    public var encryptionSwitchNotice: EncryptionSwitchNoticeMetadata?
 
     /// Lieu partagé, restitué depuis la colonne `locationJson` du cache GRDB
     /// (`APIMessage.location` hissé côté serveur). `nil` pour un message sans
@@ -231,6 +233,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
                 joinNotice: JoinNoticeMetadata? = nil,
                 captureNotice: CaptureNoticeMetadata? = nil,
                 arrivalsNotice: ArrivalsNoticeMetadata? = nil,
+                encryptionSwitchNotice: EncryptionSwitchNoticeMetadata? = nil,
                 location: SharedPlace? = nil,
                 sticker: MessageSticker? = nil,
                 trackedLinkMap: [String: String] = [:]) {
@@ -260,6 +263,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         self.joinNotice = joinNotice
         self.captureNotice = captureNotice
         self.arrivalsNotice = arrivalsNotice
+        self.encryptionSwitchNotice = encryptionSwitchNotice
         self.location = location
         self.sticker = sticker
         self.trackedLinkMap = trackedLinkMap
@@ -281,6 +285,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         case joinNotice
         case captureNotice
         case arrivalsNotice
+        case encryptionSwitchNotice
         case location
         case sticker
         case trackedLinkMap
@@ -347,7 +352,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         // système générique (icône téléphone) avec le repli français.
         joinNotice = try? c.decodeIfPresent(JoinNoticeMetadata.self, forKey: .joinNotice)
         captureNotice = try? c.decodeIfPresent(CaptureNoticeMetadata.self, forKey: .captureNotice)
-        arrivalsNotice = try? c.decodeIfPresent(ArrivalsNoticeMetadata.self, forKey: .arrivalsNotice)
+        arrivalsNotice = try? c.decodeIfPresent(ArrivalsNoticeMetadata.self, forKey: .arrivalsNotice); encryptionSwitchNotice = try? c.decodeIfPresent(EncryptionSwitchNoticeMetadata.self, forKey: .encryptionSwitchNotice)
         // Same tolerance as callSummary: a malformed location blob must not
         // fail the whole cached-message decode.
         location = try? c.decodeIfPresent(SharedPlace.self, forKey: .location)
@@ -421,6 +426,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         try c.encodeIfPresent(joinNotice, forKey: .joinNotice)
         try c.encodeIfPresent(captureNotice, forKey: .captureNotice)
         try c.encodeIfPresent(arrivalsNotice, forKey: .arrivalsNotice)
+        try c.encodeIfPresent(encryptionSwitchNotice, forKey: .encryptionSwitchNotice)
         try c.encodeIfPresent(location, forKey: .location)
         try c.encodeIfPresent(sticker, forKey: .sticker)
         if !trackedLinkMap.isEmpty {

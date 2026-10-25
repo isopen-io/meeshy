@@ -38,12 +38,14 @@ final class ConversationEncryptionActivationPolicyTests: XCTestCase {
         }
     }
 
-    func test_mayActivate_userHidesRowAndActivation() {
+    /// #12880 — l'utilisateur ordinaire VOIT l'état et son explication ; seul
+    /// le bouton de bascule lui reste caché.
+    func test_mayActivate_userSeesTheRowWithoutTheToggle() {
         for role in ["USER", "user"] {
             let mayActivate = ConversationEncryptionActivationPolicy.mayActivate(platformRole: role)
             XCTAssertEqual(
                 ConversationSecurityRowContent.resolve(isDirect: true, isEncrypted: false, mayToggle: mayActivate),
-                .hidden, role
+                .directEntry(offersToggle: false), role
             )
             XCTAssertEqual(
                 ConversationEncryptionDetailContent.resolve(isLoading: false, isEncrypted: false, mayToggle: mayActivate),
@@ -66,7 +68,7 @@ final class ConversationEncryptionActivationPolicyTests: XCTestCase {
         )
         XCTAssertEqual(
             ConversationSecurityRowContent.resolve(isDirect: true, isEncrypted: false, mayToggle: false),
-            .hidden
+            .directEntry(offersToggle: false)
         )
     }
 
@@ -81,14 +83,16 @@ final class ConversationEncryptionActivationPolicyTests: XCTestCase {
         )
     }
 
-    func test_securityRow_group_keepsSafetyNumberEntryWhenEncrypted() {
+    /// #12880 — un groupe explique aussi son chiffrement, sans proposer de
+    /// bascule (#12844), et garde l'entrée du numéro de sécurité s'il est chiffré.
+    func test_securityRow_group_explainsAndKeepsSafetyNumberEntryWhenEncrypted() {
         XCTAssertEqual(
-            ConversationSecurityRowContent.resolve(isDirect: false, isEncrypted: true, mayToggle: false),
-            .safetyNumberEntry
+            ConversationSecurityRowContent.resolve(isDirect: false, isEncrypted: true, mayToggle: true),
+            .groupEntry(showsSafetyNumber: true)
         )
         XCTAssertEqual(
             ConversationSecurityRowContent.resolve(isDirect: false, isEncrypted: false, mayToggle: true),
-            .hidden
+            .groupEntry(showsSafetyNumber: false)
         )
     }
 

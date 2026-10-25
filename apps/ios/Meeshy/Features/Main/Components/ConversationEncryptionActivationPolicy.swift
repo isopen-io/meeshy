@@ -33,16 +33,16 @@ enum ConversationEncryptionModeChoice: String, CaseIterable, Sendable {
     case hybrid
 }
 
-/// Ce que la rangée de sécurité de la fiche de conversation rend.
+/// Ce que la rangée de sécurité de la fiche de conversation rend (#12880) :
+/// tout membre voit l'état de chiffrement et peut ouvrir son explication ; seul
+/// le rôle autorisé se voit proposer la bascule, en tête-à-tête seulement — un
+/// groupe ne se bascule pas depuis iOS (#12844).
 enum ConversationSecurityRowContent: Equatable {
-    case hidden
     case directEntry(offersToggle: Bool)
-    case safetyNumberEntry
+    case groupEntry(showsSafetyNumber: Bool)
 
     static func resolve(isDirect: Bool, isEncrypted: Bool, mayToggle: Bool) -> ConversationSecurityRowContent {
-        guard isDirect else { return isEncrypted ? .safetyNumberEntry : .hidden }
-        if isEncrypted { return .directEntry(offersToggle: mayToggle) }
-        return mayToggle ? .directEntry(offersToggle: true) : .hidden
+        isDirect ? .directEntry(offersToggle: mayToggle) : .groupEntry(showsSafetyNumber: isEncrypted)
     }
 }
 

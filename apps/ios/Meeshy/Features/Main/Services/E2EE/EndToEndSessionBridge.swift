@@ -26,6 +26,10 @@ final class EndToEndSessionBridge: EndToEndSessionBridging {
     private let regimeChanges: AnyPublisher<ConversationEncryptionChangedEvent, Never>
     private let regimeLedger: EndToEndRegimeLedger
     private var subscriptions: Set<AnyCancellable> = []
+    /// Les ouvertures et fermetures de session, dans l'ordre où elles sont
+    /// demandées : deux tâches libres pouvaient rattraper le nouveau compte
+    /// avant d'oublier l'ancien (audit #12769).
+    private var lifecycle: Task<Void, Never>?
 
     init(
         runtime: EndToEndMessagingRuntime = .shared,
@@ -45,22 +49,35 @@ final class EndToEndSessionBridge: EndToEndSessionBridging {
         stop()
         guard !userId.isEmpty else { return }
         let runtime = runtime
+        enqueue { await runtime.open(session: userId) }
+        // Réceptions et rattrapages passent par la même file que l'ouverture :
+        // une connexion déjà établie publie à l'abonnement, avant même que
+        // l'ouverture de la session ait atteint le runtime (audit #12769).
         envelopes
-            .sink { envelope in Task { await runtime.receive(envelope, as: userId) } }
+            .sink { [weak self] envelope in Task { @MainActor in self?.enqueue { await runtime.receive(envelope, as: userId) } } }
             .store(in: &subscriptions)
         connections
             .removeDuplicates()
             .filter { $0 }
-            .sink { _ in Task { await runtime.catchUp(as: userId) } }
+            .sink { [weak self] _ in Task { @MainActor in self?.enqueue { await runtime.catchUp(as: userId) } } }
             .store(in: &subscriptions)
         // #12522 — chaque bascule du régime est apprise, conversation ouverte ou non.
         regimeLedger.listen(to: regimeChanges).store(in: &subscriptions)
-        Task { await runtime.catchUp(as: userId) }
+        enqueue { await runtime.catchUp(as: userId) }
     }
 
     func stop() {
         subscriptions.removeAll()
+        regimeLedger.reset()
         let runtime = runtime
-        Task { await runtime.forget() }
+        enqueue { await runtime.close() }
+    }
+
+    private func enqueue(_ step: @escaping @concurrent @Sendable () async -> Void) {
+        let previous = lifecycle
+        lifecycle = Task {
+            await previous?.value
+            await step()
+        }
     }
 }

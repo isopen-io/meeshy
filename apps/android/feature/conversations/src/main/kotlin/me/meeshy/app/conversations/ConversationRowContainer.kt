@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import me.meeshy.feature.conversations.R
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.MemberRole
+import me.meeshy.sdk.model.conversationlist.ConversationRowMenuCapabilities
 import me.meeshy.sdk.model.currentUserRole
 import me.meeshy.sdk.model.isMeaningful
 import me.meeshy.sdk.model.resolvedLastMessagePreview
@@ -90,6 +91,10 @@ internal fun ConversationRowContainer(
         ),
     )
     val line2 = ConversationRowPrecedence.line2(hasTyping = typingLine != null, hasDraft = draftLine != null)
+    val managesMembers = remember(conversation, model.currentUserPrefs, model.isLocked) {
+        ConversationRowMenuCapabilities.make(conversation, model.currentUserPrefs)
+            .offersManageMembers(isLocked = model.isLocked)
+    }
     val palette = remember(conversation) { conversation.accentColorPalette() }
     val accent = hexColor(palette.primary)
     val secondary = hexColor(palette.secondary)
@@ -214,6 +219,9 @@ internal fun ConversationRowContainer(
             onViewInfo = actions.onViewInfo,
             onViewProfile = actions.onViewProfile,
             onCreateShareLink = actions.onCreateShareLink,
+            onManageMembers = actions.onManageMembers
+                ?.takeIf { managesMembers }
+                ?.let { open -> { open(accent) } },
         )
     }
 }
