@@ -1072,7 +1072,7 @@ export const API_PATH_METHODS: Readonly<Record<ApiPath, readonly HttpMethod[]>> 
   '/api/v1/directory/people': ['GET'],
   '/api/v1/directory/people/:handle': ['GET'],
   '/api/v1/directory/presence': ['GET'],
-  '/api/v1/e2ee/devices': ['POST'],
+  '/api/v1/e2ee/devices': ['GET', 'POST'],
   '/api/v1/e2ee/devices/:deviceId': ['DELETE'],
   '/api/v1/e2ee/devices/:deviceId/keys': ['PUT'],
   '/api/v1/e2ee/devices/self/prekey-count': ['GET'],

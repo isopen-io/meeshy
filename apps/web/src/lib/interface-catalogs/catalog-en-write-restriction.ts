@@ -3,7 +3,7 @@ import type { WriteRestrictionCatalogSlice } from './catalog-fr-write-restrictio
 /** La restriction d'écriture servie (#9928) — voir `catalog-fr-write-restriction.ts`. */
 const enWriteRestriction = {
   'composer.writeRestriction.minorGlobal': 'Global opens for writing when you turn 18',
-  'composer.writeRestriction.endToEnd': 'End-to-end encrypted conversation: the web app can’t write here yet',
+  'composer.writeRestriction.endToEnd': 'End-to-end encrypted conversation: write from the Meeshy app',
   'age.blocked.title': 'Meeshy is for people aged 13 and over',
   'age.blocked.body': 'This account can’t be used until you turn 13.',
   'age.blocked.confirm': 'Got it',

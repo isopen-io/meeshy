@@ -32,7 +32,7 @@ import { useConversationEngagement } from '@/lib/view/use-conversation-engagemen
 import { headerFlameShown } from '@/lib/view/header-memory';
 import { isWide, subscribeWide } from '@/lib/view/split-query';
 import { useGuestFocus, useSpeaksAsGuest } from '@/lib/view/guest-focus';
-import { conversationAvatarDoor, threadCallOffer, threadHeaderSubtitle } from '@/lib/view/thread-header-offer';
+import { conversationAvatarDoor, THREAD_ENCRYPTION_LABEL_KEY, threadCallOffer, threadHeaderSubtitle } from '@/lib/view/thread-header-offer';
 import { translate } from '@/lib/i18n-catalog';
 import { useServedGlobalRole } from '@/lib/view/use-admin-access';
 import { translateNotificationRow } from '@/lib/i18n-notification-row-catalog';
@@ -197,6 +197,8 @@ export function ThreadHeader({
   const sessionIsGuest = useSpeaksAsGuest();
   const details = sessionIsGuest ? undefined : onOpenDetails;
   const subtitle = threadHeaderSubtitle({ group, guest: sessionIsGuest, memberCount: conversation.memberCount, encryptionMode: conversation.encryptionMode });
+  /* #11374 — un direct dit son régime : « de bout en bout » (`e2ee`) ou « sur le serveur » (`server`, `hybrid`). */
+  const subtitleText = subtitle.label ?? (subtitle.encryption === null ? null : translate(currentInterfaceLanguage(), THREAD_ENCRYPTION_LABEL_KEY[subtitle.encryption]));
   /* L'APPEL PAR LA LOI PARTAGÉE (#10207, #10114) — `canStartCall`, jamais une
      réimplémentation : aucun en `global`, en `public` seuls le créateur et les
      administrateurs le lancent (les autres membres gardent « Rejoindre »). */
@@ -373,10 +375,10 @@ export function ThreadHeader({
                 taille (`text-mini`) plutôt que par l'opacité. */}
             {/* LE CADENAS NE DIT QUE CE QUI EST VRAI (#10114) : une conversation
                 chiffrée de bout en bout. L'effectif ne se lit qu'en membre (#10205). */}
-            {subtitle.locked || subtitle.label !== null ? (
-              <p className={`${bandToggles ? 'pointer-events-none relative ' : ''}flex items-center gap-1 text-mini`} style={{ color: 'var(--color-ios-ink)' }}>
+            {subtitleText !== null || subtitle.locked ? (
+              <p className={`${bandToggles ? 'pointer-events-none relative ' : ''}flex items-center gap-1 text-mini`} style={{ color: 'var(--color-ios-ink)' }} {...(subtitle.encryption === null ? {} : { 'data-thread-encryption': subtitle.encryption })}>
                 {subtitle.locked ? <Glyph name="lock" size={9} style={{ color: 'var(--color-ok)' }} /> : null}
-                {subtitle.label}
+                {subtitleText}
               </p>
             ) : null}
           </div>

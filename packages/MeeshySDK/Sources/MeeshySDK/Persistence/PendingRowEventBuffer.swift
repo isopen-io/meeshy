@@ -13,6 +13,7 @@ struct PendingEdit: Sendable {
     let editedAt: Date
     let marksEdited: Bool
     let noticeJson: Data?
+    var authorship: EditAuthorship = .untouched
 }
 
 typealias PendingReactionChange = @Sendable ([MeeshyReaction]) -> [MeeshyReaction]?

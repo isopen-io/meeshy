@@ -285,6 +285,31 @@ describe('MessagingService.handleMessage — envoi libsignal par appareil (#3706
       expect(mockPrisma.message.create).not.toHaveBeenCalled();
     });
 
+    it('refuse aussi le chiffré qui porte des pièces jointes, avant de les lire (#12986)', async () => {
+      conversationIn(CLEAR);
+
+      const response = await service.handleMessage({ ...legacyCiphertext(), attachmentIds: ['507f1f77bcf86cd799439099'] } as unknown as MessageRequest, senderParticipantId);
+
+      expect(response.success).toBe(false);
+      expect(response.code).toBe(E2EE_ERROR_CODES.REGIME_CHANGED);
+      expect(mockPrisma.message.create).not.toHaveBeenCalled();
+    });
+
+    it('aucun marqueur e2ee ne se forge dans une conversation en clair : le mode de la ligne n’est jamais celui que le client déclare (#12986)', async () => {
+      conversationIn(CLEAR);
+
+      const response = await service.handleMessage(
+        { conversationId, content: 'Bonjour', originalLanguage: 'fr', isEncrypted: true, encryptionMode: 'e2ee', encryptionMetadata: { mode: 'e2ee', protocol: 'libsignal-v1' }, encryptionProtocol: 'libsignal-v1' } as unknown as MessageRequest,
+        senderParticipantId,
+      );
+
+      expect(response.success).toBe(true);
+      const written = mockPrisma.message.create.mock.calls[0][0].data;
+      expect(written.isEncrypted).toBe(false);
+      expect(written.encryptionMode ?? null).not.toBe('e2ee');
+      expect(JSON.stringify(written.encryptionMetadata ?? null)).not.toContain('libsignal-v1');
+    });
+
     it('un texte en clair dans une conversation en clair garde son chemin', async () => {
       conversationIn(CLEAR);
 

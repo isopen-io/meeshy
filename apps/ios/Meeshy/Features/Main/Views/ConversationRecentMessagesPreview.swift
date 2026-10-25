@@ -124,6 +124,25 @@ enum ConversationPreviewRenderer {
         return (message.isEncrypted && message.content.isEmpty) || sealedBurn
     }
 
+    /// Pourquoi un message scellé ne se lit pas. La flamme « après lecture »
+    /// passe AVANT le chiffrement : l'appareil sait peut-être la lire, elle est
+    /// retenue parce qu'elle brûle à la lecture — dire « chiffré » mentirait.
+    enum SealedReason: Equatable {
+        case afterRead
+        case encrypted
+    }
+
+    static func sealedReason(_ message: Message) -> SealedReason {
+        ConversationListPreviewLoader.holdsBurnOnRead(message) ? .afterRead : .encrypted
+    }
+
+    /// Un simple appui long ne fait sortir aucun lien d'un message chiffré :
+    /// ni aperçu OpenGraph vers un site tiers, ni carte de conversation
+    /// interrogée au serveur (#11232, F3). Le clair déchiffré reste sur l'appareil.
+    static func mountsLinkEmbed(for message: Message) -> Bool {
+        !message.isEncrypted && !message.isContentDecryptedOnDevice
+    }
+
     /// Les messages arrivés EN CLAIR dans une conversation chiffrée
     /// (`EndToEndPlaintextLaw`, #11380) : la rangée porte leur marqueur.
     static func unencryptedIds(of messages: [Message], regime: EndToEndRegime) -> Set<String> {
@@ -418,6 +437,7 @@ struct ConversationRecentMessagesPreview: View {
                     UnencryptedMessageMarker(isDark: isDark)
                 }
             }
+            .environment(\.mountsLinkEmbeds, ConversationPreviewRenderer.mountsLinkEmbed(for: message))
         }
     }
 
@@ -465,12 +485,13 @@ struct ConversationRecentMessagesPreview: View {
     private func sealedRow(_ message: Message) -> some View {
         HStack(spacing: 0) {
             if message.isMe { Spacer(minLength: MeeshySpacing.xl) }
+            let isEncrypted = ConversationPreviewRenderer.sealedReason(message) == .encrypted
             Label {
-                Text(message.isEncrypted
+                Text(isEncrypted
                      ? String(localized: "protection.encrypted", bundle: .main)
                      : String(localized: "protection.afterRead", bundle: .main))
             } icon: {
-                Image(systemName: message.isEncrypted ? "lock.fill" : "flame.fill")
+                Image(systemName: isEncrypted ? "lock.fill" : "flame.fill")
             }
             .font(.footnote.weight(.medium))
             .foregroundColor(isDark ? MeeshyColors.indigo50.opacity(MeeshyOpacity.intense) : MeeshyColors.indigo950.opacity(MeeshyOpacity.intense))

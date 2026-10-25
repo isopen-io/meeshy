@@ -73,11 +73,14 @@ nonisolated final class MockEndToEndMessaging: EndToEndMessagingProviding, @unch
     }
 
     func plaintexts(for messageIds: [String], as account: String) async -> [String: E2EEPlaintextEntry] {
-        lock.withLock {
+        let hook = lock.withLock { () -> (@MainActor @Sendable () async -> Void)? in
+            plaintextsCallCount += 1
+            requestedPlaintextKeys.append(contentsOf: messageIds)
             readAccounts.append(account)
-            guard serves(account) else { return [:] }
-            return stored.filter { messageIds.contains($0.key) }
+            return onPlaintexts
         }
+        if let hook { await hook() }
+        return lock.withLock { serves(account) ? stored.filter { messageIds.contains($0.key) } : [:] }
     }
 
     /// `false` : le coffre refuse (session fermée, autre compte) et l'effacement attend.
@@ -103,4 +106,11 @@ nonisolated final class MockEndToEndMessaging: EndToEndMessagingProviding, @unch
     private func serves(_ account: String) -> Bool {
         vaultAccount.map { $0 == account } ?? true
     }
+
+    /// Combien de fois le clair a été LU, et sous quelles clés.
+    private(set) var plaintextsCallCount = 0
+    private(set) var requestedPlaintextKeys: [String] = []
+    /// Ce qui arrive PENDANT la lecture : un verrou, une déconnexion — ou une
+    /// barrière qui tient la lecture en vol tant que le témoin ne la lève pas.
+    var onPlaintexts: (@MainActor @Sendable () async -> Void)?
 }

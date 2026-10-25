@@ -95,6 +95,7 @@ REDIS_URL=redis://redis:6379
 # Auth
 JWT_SECRET=<change-in-production>
 ATTACHMENT_MASTER_KEY=<base64-32-bytes>
+ENCRYPTION_MASTER_KEY=<base64-32-bytes>   # enveloppe les clés des messages server/hybrid chiffrés au repos (#11381) ; absente : la passerelle démarre et refuse ces modes (503)
 SECRETS_AT_REST_KEY=<base64-32-bytes>   # chiffre la clé d'API LLM de l'agent au repos ; sans elle hors development/test, son écriture est refusée
 
 # Services

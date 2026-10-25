@@ -1,5 +1,7 @@
+import Combine
 import Foundation
 import os
+import MeeshyE2EE
 import MeeshySDK
 
 /// Ce que l'aperçu lit du cache local : les messages GRDB d'une conversation
@@ -71,6 +73,8 @@ struct ConversationPreviewFingerprint: Equatable {
         let editedAt: Date?
         let deletedAt: Date?
         let servedLanguage: String?
+        /// Un message chiffré qui passe de scellé à déchiffré change la rangée.
+        let isSealed: Bool
         let isUnencrypted: Bool
     }
 
@@ -87,6 +91,7 @@ struct ConversationPreviewFingerprint: Equatable {
                     editedAt: message.editedAt,
                     deletedAt: message.deletedAt,
                     servedLanguage: snapshot.servedLanguage(for: message.id),
+                    isSealed: message.isEncrypted && message.content.isEmpty,
                     isUnencrypted: snapshot.isUnencrypted(message.id)
                 )
             }
@@ -172,11 +177,19 @@ final class ConversationListPreviewLoader: ObservableObject {
     /// tomber (l'aperçu ouvert garderait sinon ce que le cache avait).
     private var inFlight: [String: InFlight] = [:]
     private var provenance: [String: Provenance] = [:]
+    /// Avance à chaque purge : un chargement lancé avant ne publie plus rien.
+    private var generation = 0
+    private var lockObservation: AnyCancellable?
+    private var sessionObservation: AnyCancellable?
+    private var accountObservation: AnyCancellable?
     /// Le régime de chiffrement de chaque conversation chargée — celui que la
     /// liste sert, fusionné avec celui que l'appareil retient : la loi du clair
-    /// (#11380) le lit à chaque publication.
+    /// (#11380) le lit à chaque publication. Purgé avec le compte.
     private var regimes: [String: EndToEndRegime] = [:]
     private let regimeMemory: any EndToEndRegimeMemoryProviding
+
+    /// Les chargeurs vivants, que la déconnexion purge tous (`purgeAllLive`).
+    private static let live = NSHashTable<ConversationListPreviewLoader>.weakObjects()
 
     private struct InFlight {
         let token: UUID
@@ -187,19 +200,95 @@ final class ConversationListPreviewLoader: ObservableObject {
     private let cache: ConversationPreviewCacheProviding
     private let readerPrism: () -> [String]
     private let isLocked: @MainActor (String) -> Bool
+    /// La SEULE source de clair d'un message chiffré (#3707), celle que le fil
+    /// lit aussi : la base scellée où libsignal a rangé ce que CET appareil a
+    /// ouvert ou écrit. L'aperçu ne déchiffre rien lui-même et ne tient aucune
+    /// clé : il lit, et n'en montre jamais plus que le fil.
+    private let endToEnd: any EndToEndMessagingProviding
+    /// Posé par la purge de déconnexion : rien ne s'écrit tant qu'aucun
+    /// lecteur ne s'est (re)connecté, même un chargement qui attendait.
+    private var isSignedOut = false
+    /// Le dernier lecteur admis : c'est lui qui sort à la prochaine purge.
+    private var lastReaderId: String?
+    /// Le dernier compte CONNECTÉ, retenu au fil de la session : la sortie
+    /// efface `currentUser` avant la purge, qui ne peut donc pas le lire.
+    private var lastSignedInUserId: String?
+    /// Les comptes SORTIS à la dernière purge (#12766) : un chargement qui lit
+    /// encore leur identifiant ne rouvre pas le chargeur. Seule une connexion
+    /// neuve (`sessionsDidBegin`) les réadmet.
+    private var signedOutReaders: Set<String> = []
 
     init(
         messageService: MessageServiceProviding,
         cache: ConversationPreviewCacheProviding = LiveConversationPreviewCache(),
         readerPrism: @escaping () -> [String] = { ReaderPrism.resolve(for: AuthManager.shared.currentUser) },
         isLocked: @escaping @MainActor (String) -> Bool = { ConversationLockManager.shared.hidesContent(of: $0) },
-        regimeMemory: any EndToEndRegimeMemoryProviding = EndToEndRegimeMemory.shared
+        endToEnd: any EndToEndMessagingProviding = EndToEndMessagingRuntime.shared,
+        locksDidChange: AnyPublisher<Void, Never> = NotificationCenter.default
+            .publisher(for: .conversationContentLocksDidChange)
+            .receive(on: DispatchQueue.main)
+            .map { _ in () }
+            .eraseToAnyPublisher(),
+        regimeMemory: any EndToEndRegimeMemoryProviding = EndToEndRegimeMemory.shared,
+        sessionsDidBegin: AnyPublisher<Void, Never>? = nil,
+        signedInUsers: AnyPublisher<MeeshyUser?, Never>? = nil
     ) {
         self.messageService = messageService
         self.regimeMemory = regimeMemory
         self.cache = cache
         self.readerPrism = readerPrism
         self.isLocked = isLocked
+        self.endToEnd = endToEnd
+        lockObservation = locksDidChange.sink { [weak self] _ in self?.dropLockedConversations() }
+        sessionObservation = (sessionsDidBegin ?? Self.authenticatedSessions())
+            .sink { [weak self] _ in self?.signedOutReaders = [] }
+        accountObservation = (signedInUsers ?? AuthManager.shared.currentUserPublisher)
+            .compactMap { $0?.id }
+            .filter { !$0.isEmpty }
+            .sink { [weak self] in self?.lastSignedInUserId = $0 }
+        Self.live.add(self)
+    }
+
+    /// Chaque connexion : le passage de `isAuthenticated` à vrai.
+    private static func authenticatedSessions() -> AnyPublisher<Void, Never> {
+        AuthManager.shared.$isAuthenticated
+            .removeDuplicates()
+            .filter { $0 }
+            .receive(on: DispatchQueue.main)
+            .map { _ in () }
+            .eraseToAnyPublisher()
+    }
+
+    // MARK: - Purge (#11232)
+
+    /// Le compte sort : aucun clair, aucune provenance, aucun chargement en vol
+    /// ne survit, et le compte sorti — le dernier connecté, et le dernier
+    /// lecteur admis — ne rouvre pas le chargeur (#12766).
+    func purge() {
+        generation += 1
+        isSignedOut = true
+        signedOutReaders = Set([lastSignedInUserId, lastReaderId].compactMap { $0 })
+        lastReaderId = nil
+        lastSignedInUserId = nil
+        inFlight.values.forEach { $0.task.cancel() }
+        inFlight = [:]
+        states = [:]
+        provenance = [:]
+        regimes = [:]
+    }
+
+    /// Appelé en TÊTE du puits de déconnexion de `DependencyContainer`, avant
+    /// toute purge attendue : aucun chargement ne publie pendant qu'elles courent.
+    static func purgeAllLive() {
+        live.allObjects.forEach { $0.purge() }
+    }
+
+    /// Un verrou posé ne se contente pas de MASQUER (`state(for:)`) : le clair
+    /// déjà servi quitte la mémoire.
+    func dropLockedConversations() {
+        guard states.keys.contains(where: { isLocked($0) }) || provenance.keys.contains(where: { isLocked($0) }) else { return }
+        states = states.filter { !isLocked($0.key) }
+        provenance = provenance.filter { !isLocked($0.key) }
     }
 
     /// Une conversation jamais chargée se lit `.loading` : l'aperçu n'affirme
@@ -226,6 +315,7 @@ final class ConversationListPreviewLoader: ObservableObject {
         regime: EndToEndRegime = .serverReadable,
         currentUserId: @escaping @MainActor @Sendable () -> String = { "" }
     ) async {
+        guard mayResume(readerUserId: currentUserId()) else { return }
         regimes[conversationId] = regimeMemory.resolve(conversationId: conversationId, served: regime)
         guard !isLocked(conversationId) else {
             states[conversationId] = nil
@@ -234,42 +324,112 @@ final class ConversationListPreviewLoader: ObservableObject {
         }
         while let running = inFlight[conversationId] {
             await running.task.value
-            guard running.intent.reach < intent.reach else { return }
+            guard running.intent.reach < intent.reach, !isSignedOut else { return }
         }
         guard !isSettled(conversationId, for: intent) else { return }
         let token = UUID()
+        let request = Request(conversationId: conversationId, intent: intent, generation: generation)
         // Le chargement se RETIRE lui-même du registre avant de rendre la
         // main : celui qui l'attendait relit donc un registre déjà à jour,
         // quel que soit l'ordre dans lequel les deux continuations reprennent.
         let task = Task { [weak self] in
             guard let self else { return }
-            await self.perform(conversationId, intent: intent, currentUserId: currentUserId)
+            await self.perform(request, currentUserId: currentUserId)
             if self.inFlight[conversationId]?.token == token { self.inFlight[conversationId] = nil }
         }
         inFlight[conversationId] = InFlight(token: token, intent: intent, task: task)
         await task.value
     }
 
-    private func perform(
-        _ conversationId: String,
-        intent: LoadIntent,
-        currentUserId: @escaping @MainActor @Sendable () -> String
-    ) async {
+    /// Ce qu'un chargement sait de sa demande : la conversation, jusqu'où il
+    /// va, et la génération qui l'a lancé.
+    private struct Request {
+        let conversationId: String
+        let intent: LoadIntent
+        let generation: Int
+    }
+
+    /// Le chargement peut-il encore écrire ? Ni purgé depuis, ni déconnecté, ni verrouillé.
+    private func mayWrite(_ request: Request) -> Bool {
+        request.generation == generation && !isSignedOut && !isLocked(request.conversationId)
+    }
+
+    /// Après une purge, seul un lecteur connu rouvre le chargeur : un appel
+    /// sans lecteur (session close) ne republie rien, ni un appel qui lit
+    /// encore l'identifiant du compte sorti (#12766).
+    private func mayResume(readerUserId: String) -> Bool {
+        guard isSignedOut else {
+            if !readerUserId.isEmpty { lastReaderId = readerUserId }
+            return true
+        }
+        guard !readerUserId.isEmpty, !signedOutReaders.contains(readerUserId) else { return false }
+        isSignedOut = false
+        signedOutReaders = []
+        lastReaderId = readerUserId
+        return true
+    }
+
+    private func perform(_ request: Request, currentUserId: @escaping @MainActor @Sendable () -> String) async {
+        let conversationId = request.conversationId
         let cached = await cache.messages(for: conversationId)
         // Verrouillée PENDANT la lecture du cache (#11387) : rien de lu ne se
         // publie, et le réseau ne revalide pas.
-        guard !isLocked(conversationId) else { return }
-        let fromCache = Self.cachedMessages(in: cached)
-        if let fromCache, provenance[conversationId] != .network {
-            let translations = await cache.translations(for: fromCache.map(\.id))
-            publish(fromCache, translations: translations, for: conversationId)
+        guard mayWrite(request) else { return }
+        // Le clair déjà servi recouvre la même version relue du cache : une
+        // réouverture ne re-scelle rien.
+        let known = plaintextOnDevice(conversationId, sources: [])
+        var plaintextSources = Self.carrying(known, onto: Self.cachedMessages(in: cached) ?? [])
+        if !plaintextSources.isEmpty, provenance[conversationId] != .network {
+            let translations = await cache.translations(for: plaintextSources.map(\.id))
+            guard mayWrite(request) else { return }
+            publish(plaintextSources, translations: translations, for: conversationId)
             provenance[conversationId] = Self.isFresh(cached) ? .freshCache : .staleCache
+            // Cache-first : le cache est DÉJÀ servi ; le clair que l'appareil a
+            // ouvert remplace ensuite ses placeholders scellés, sans spinner.
+            if let opened = await openedOnDevice(plaintextSources, for: request, account: currentUserId()) {
+                publish(opened, translations: translations, for: conversationId)
+                plaintextSources = opened
+            }
         }
-        guard Self.needsNetwork(intent: intent, cached: cached) else { return }
+        guard mayWrite(request), Self.needsNetwork(intent: request.intent, cached: cached) else { return }
         if states[conversationId]?.snapshot == nil, states[conversationId]?.phase != .empty {
             states[conversationId] = .loading
         }
-        await refresh(conversationId, plaintextSources: fromCache ?? [], currentUserId: currentUserId)
+        await refresh(request, plaintextSources: plaintextSources, currentUserId: currentUserId)
+    }
+
+    // MARK: - Clair ouvert sur l'appareil (#11232, #3707)
+
+    /// Les messages, ceux qui attendaient leur clair remplacés par celui que
+    /// CET appareil a ouvert ou écrit, posé par la règle du fil
+    /// (`EndToEndThreadPlaintexts`) : seulement à SA place — conversation,
+    /// auteur authentifié par libsignal, identifiant client. Une flamme
+    /// « après lecture » reçue n'est même pas demandée : la liste ne la livre
+    /// pas. `nil` : rien de neuf, tout reste scellé (fail-closed). Le clair ne
+    /// quitte pas ce chargeur : ni cache, ni réseau, ni journal.
+    private func openedOnDevice(_ messages: [Message], for request: Request, account: String) async -> [Message]? {
+        let keys = EndToEndThreadPlaintexts.lookupKeys(of: messages.filter { !Self.holdsBurnOnRead($0) })
+        guard !keys.isEmpty, !account.isEmpty, mayWrite(request) else { return nil }
+        let entries = await endToEnd.plaintexts(for: keys, as: account)
+        guard mayWrite(request) else { return nil }
+        return Self.adopting(entries, into: messages, conversationId: request.conversationId)
+    }
+
+    /// Le clair que la base scellée rend, posé par la règle du fil, jamais sur
+    /// une flamme « après lecture » reçue. Un message qui se déclare en clair
+    /// dans une conversation chiffrée (#11380) n'est jamais blanchi par une
+    /// provenance : `EndToEndThreadPlaintexts` n'ouvre que ce qui est chiffré.
+    /// `nil` quand aucun message n'a gagné de clair.
+    static func adopting(
+        _ entries: [String: E2EEPlaintextEntry],
+        into messages: [Message],
+        conversationId: String
+    ) -> [Message]? {
+        var opened = messages
+        EndToEndThreadPlaintexts.apply(entries, to: &opened, conversationId: conversationId)
+        let kept = zip(messages, opened).map { Self.holdsBurnOnRead($0.0) ? $0.0 : $0.1 }
+        let gained = zip(messages, kept).contains { !Self.isReadableOnDevice($0.0) && Self.isReadableOnDevice($0.1) }
+        return gained ? kept : nil
     }
 
     // MARK: - Lois pures
@@ -301,7 +461,7 @@ final class ConversationListPreviewLoader: ObservableObject {
         prism: [String],
         regime: EndToEndRegime = .serverReadable
     ) -> ConversationPreviewSnapshot {
-        let sealed = messages.map { Self.isReadableOnDevice($0) ? $0 : Self.sealedForPreview($0) }
+        let sealed = messages.map { Self.isReadableOnDevice($0) && !Self.holdsBurnOnRead($0) ? $0 : Self.sealedForPreview($0) }
         let unencrypted = Set(sealed.filter { EndToEndPlaintextLaw.standing(of: $0, in: regime).isUnencrypted }.map(\.id))
         let wireWithheld = Set(sealed.filter { !regime.admitsWireTranslations(of: $0) }.map(\.id))
         let withheldIds = Set(sealed.filter { $0.isEncrypted || Self.holdsBurnOnRead($0) }.map(\.id))
@@ -413,6 +573,22 @@ final class ConversationListPreviewLoader: ObservableObject {
         return isSameInstant(known.editedAt, rest.editedAt)
     }
 
+    /// Le clair connu recouvre le cryptogramme AVEC sa provenance, pour la
+    /// même version et le même auteur annoncé seulement : la revalidation
+    /// suivante le reconnaît encore, et un serveur qui réattribue le message
+    /// le retrouve scellé.
+    static func carrying(_ known: [String: Message], onto messages: [Message]) -> [Message] {
+        messages.map { message in
+            guard message.isEncrypted, !message.isContentDecryptedOnDevice,
+                  let clear = known[message.id], isSameVersion(clear, as: message),
+                  EndToEndThreadPlaintexts.announcedAuthor(of: clear) == EndToEndThreadPlaintexts.announcedAuthor(of: message)
+            else { return message }
+            var carried = message
+            carried.carryDecryptedContent(from: clear)
+            return carried
+        }
+    }
+
     private static func isSameInstant(_ lhs: Date?, _ rhs: Date?) -> Bool {
         switch (lhs, rhs) {
         case (nil, nil): return true
@@ -422,17 +598,18 @@ final class ConversationListPreviewLoader: ObservableObject {
     }
 
     private func refresh(
-        _ conversationId: String,
+        _ request: Request,
         plaintextSources: [Message],
         currentUserId: @MainActor @Sendable () -> String
     ) async {
+        let conversationId = request.conversationId
         let onDevice = plaintextOnDevice(conversationId, sources: plaintextSources)
         do {
             let response = try await messageService.list(
                 conversationId: conversationId, offset: 0, limit: Self.previewLimit,
                 includeReplies: false, includeTranslations: true
             )
-            guard !isLocked(conversationId) else { return }
+            guard mayWrite(request) else { return }
             let userId = currentUserId()
             let username = AuthManager.shared.currentUser?.username
             let prism = readerPrism()
@@ -444,14 +621,10 @@ final class ConversationListPreviewLoader: ObservableObject {
             }
             // Le clair connu recouvre le cryptogramme AVEC sa provenance : la
             // revalidation suivante le reconnaît encore.
-            let messages = decoded.map { message -> Message in
-                guard message.isEncrypted, let known = onDevice[message.id], Self.isSameVersion(known, as: message) else {
-                    return message
-                }
-                var clear = message
-                clear.carryDecryptedContent(from: known)
-                return clear
-            }
+            let carried = Self.carrying(onDevice, onto: decoded)
+            let opened = await openedOnDevice(carried, for: request, account: userId)
+            guard mayWrite(request) else { return }
+            let messages = opened ?? carried
             let translations = ordered.reduce(into: [String: [MessageTranslation]]()) { map, api in
                 let readable = (api.translations ?? []).filter { $0.isEncrypted != true }
                 guard !readable.isEmpty else { return }
@@ -461,7 +634,7 @@ final class ConversationListPreviewLoader: ObservableObject {
             provenance[conversationId] = .network
         } catch {
             Logger.messages.warning("[ConversationList] previewMessages fetch failed for \(conversationId, privacy: .public): \(error.localizedDescription, privacy: .public)")
-            guard states[conversationId]?.phase == .loading else { return }
+            guard mayWrite(request), states[conversationId]?.phase == .loading else { return }
             states[conversationId] = .unavailable
         }
     }

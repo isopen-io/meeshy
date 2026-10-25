@@ -5,7 +5,7 @@ import { CHROME_ACTION_HIT_CLASS, ChromeActionDisc } from '@/components/chrome-a
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { Glyph, GlyphSvg } from '@/components/glyph';
 import { SETTINGS_GLYPHS } from '@/components/glyphs-settings';
-import { GroupedSection, SECTION_BRAND_INK, SECTION_CARD_STYLE, SECTION_INK, SECTION_INK_2 } from '@/components/grouped-section';
+import { GroupedSection, RowIcon, SECTION_BRAND_INK, SECTION_CARD_STYLE, SECTION_INK, SECTION_INK_2 } from '@/components/grouped-section';
 import {
   loadActiveSessions,
   revokeOtherSessions,
@@ -26,6 +26,7 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
 import { orderedSessions, sessionFields, sessionTitle, withoutSessions } from '@/lib/view/sessions';
 import { Link } from '@/routes/route-table';
+import { E2EE_DEVICES_PANEL, SECURITY_PANEL_PARAM } from '@/routes/settings-sections';
 
 /**
  * **SÉCURITÉ > SESSIONS** (#6720) — miroir `ActiveSessionsView.swift`, monté
@@ -43,6 +44,8 @@ import { Link } from '@/routes/route-table';
  * - **Optimiste** : une fermeture retire la ligne au geste, la passerelle
  *   confirme, un refus la remet et le dit. Une session déjà fermée (404) est
  *   un succès. Hors ligne, aucun geste ne part : les boutons le disent.
+ * - **« Mes appareils chiffrés »** (#13013) se pousse d'ici, comme sur iOS
+ *   (Réglages › Sécurité) : `?volet=appareils-chiffres`.
  */
 
 export type SecurityScreenDeps = {
@@ -214,6 +217,25 @@ export function SettingsSecurityScreen({
               {t('sessions.others.none')}
             </p>
           )}
+          <GroupedSection id="security-e2ee" title={t('e2eeDevices.section').toLocaleUpperCase(language)} icon={<Glyph name="lock" size={12} />}>
+            <Link
+              to="settings"
+              search={{ [SECURITY_PANEL_PARAM]: E2EE_DEVICES_PANEL }}
+              data-settings-e2ee-devices-row
+              className="flex items-center gap-3 px-3.5 py-2.5 text-start focus-visible:outline-2"
+              style={{ minHeight: 52, outlineColor: 'var(--color-ios-brand)' }}
+            >
+              <RowIcon>
+                <Glyph name="lock" size={15} />
+              </RowIcon>
+              <span className="min-w-0 flex-1 break-words text-body font-medium" style={{ color: SECTION_INK }}>
+                {t('e2eeDevices.row')}
+              </span>
+              <span aria-hidden="true" className="shrink-0" style={{ color: SECTION_INK_2 }}>
+                <GlyphSvg glyph={SETTINGS_GLYPHS.caretRight} size={12} className="rtl:-scale-x-100" />
+              </span>
+            </Link>
+          </GroupedSection>
         </div>
       </main>
       {pending === null ? null : (

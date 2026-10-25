@@ -22,6 +22,16 @@ except ImportError:
     logger.warning("⚠️ Cache Redis non disponible")
 
 
+def segments_without_cache(segments: List[Dict[str, Any]]) -> Tuple[List[Optional[Dict]], List[Tuple[int, str]]]:
+    """Le résultat de `check_cache_batch` quand aucun cache ne sert : toute ligne non vide est à traduire."""
+    to_translate = [
+        (i, seg.get('text', ''))
+        for i, seg in enumerate(segments)
+        if seg.get('type') == 'line' and seg.get('text', '').strip()
+    ]
+    return [None] * len(segments), to_translate
+
+
 class TranslationCache:
     """
     Gestionnaire de cache pour traductions
@@ -142,12 +152,7 @@ class TranslationCache:
                 - segments_à_traduire: Liste de (index, texte) à traduire
         """
         if not self.is_available():
-            # Pas de cache, tout à traduire
-            segments_to_translate = []
-            for i, seg in enumerate(segments):
-                if seg.get('type') == 'line' and seg.get('text', '').strip():
-                    segments_to_translate.append((i, seg.get('text', '')))
-            return [None] * len(segments), segments_to_translate
+            return segments_without_cache(segments)
 
         cached_results = [None] * len(segments)
         segments_to_translate = []

@@ -41,6 +41,9 @@ on:
       - 'services/gateway/route-manifest.json'
       - 'packages/shared/api/**'
       - 'packages/shared/scripts/generate-android-endpoints.ts'
+      # Les tests de parité Kotlin rejouent ces vecteurs (loi d'actions, traduction, lecture) :
+      # un vecteur qui change sans que la CI Android tourne laisse le miroir diverger en silence (#12822).
+      - 'packages/shared/fixtures/**'
       - 'packages/MeeshySDK/Sources/MeeshyUI/Theme/MeeshyColors.swift'
       - 'packages/MeeshySDK/Sources/MeeshyUI/Theme/DesignTokens.swift'
       - 'packages/design-tokens/**'
@@ -58,6 +61,9 @@ on:
       - 'services/gateway/route-manifest.json'
       - 'packages/shared/api/**'
       - 'packages/shared/scripts/generate-android-endpoints.ts'
+      # Les tests de parité Kotlin rejouent ces vecteurs (loi d'actions, traduction, lecture) :
+      # un vecteur qui change sans que la CI Android tourne laisse le miroir diverger en silence (#12822).
+      - 'packages/shared/fixtures/**'
       - 'packages/MeeshySDK/Sources/MeeshyUI/Theme/MeeshyColors.swift'
       - 'packages/MeeshySDK/Sources/MeeshyUI/Theme/DesignTokens.swift'
       - 'packages/design-tokens/**'

@@ -402,7 +402,9 @@ enum MessageActionResolver {
         if ctx.canReply { out.append(.reply) }
         let showsContent = !ctx.isBlurred
         if showsContent { out.append(contentsOf: ctx.kindActions) }
-        if ctx.isMine && ctx.canEdit && ctx.hasText { out.append(.edit) }
+        // #11375 — `canEdit` porte le verdict de la loi : l'auteur, ou un
+        // modérateur de plateforme sur le message d'autrui, à visage découvert.
+        if ctx.canEdit && ctx.hasText { out.append(.edit) }
         // « Sélectionner » — retour porteur 2026-08-27 : juste À CÔTÉ
         // d'Éditer, parmi les premiers éléments (jamais dans « Plus… »).
         out.append(.select)
@@ -444,7 +446,7 @@ enum MessageActionResolver {
         // resserre pas ; glissé et VoiceOver lisent ce verdict (#12626).
         if ctx.canForward && ctx.exits.offers(.forward) { actions.append(.forward) }
         actions.append(.thread)
-        if ctx.isMine && ctx.canEdit && ctx.hasText { actions.append(.edit) }
+        if ctx.canEdit && ctx.hasText { actions.append(.edit) }
         if ctx.hasText && showsContent && ctx.exits.offers(.copy) { actions.append(.copy) }
         if showsContent && ctx.exits.offers(.share) { actions.append(.share) }
         if ctx.canImagine && showsContent && ctx.exits.offers(.imagine) { actions.append(.imager) }

@@ -35,6 +35,16 @@ INFERENCE_TIMEOUT_PER_500_CHARS_S = 45.0
 INFERENCE_TIMEOUT_MAX_S = 360.0
 
 
+def _is_at_rest(task: Any) -> bool:
+    """#12822 — un texte chiffré au repos par la passerelle ne se pose sur aucun cache."""
+    return getattr(task, 'at_rest', False) is True
+
+
+def _structure_kwargs(task: Any) -> dict:
+    """Le choix de cache transmis au service ML : absent pour un texte ordinaire (signature d'avant)."""
+    return {'use_cache': False} if _is_at_rest(task) else {}
+
+
 def inference_timeout_for(text_length: int) -> float:
     """Budget d'inférence (secondes) proportionnel à la longueur du texte.
 
@@ -172,7 +182,7 @@ async def process_batch_translation(
                     # Fallback: traduire un par un
                     translated_texts = []
                     item_failed = []
-                    for text in texts:
+                    for task, text in zip(tasks, texts):
                         single_budget = inference_timeout_for(len(text))
                         try:
                             result = await asyncio.wait_for(
@@ -181,7 +191,8 @@ async def process_batch_translation(
                                     source_language=source_lang,
                                     target_language=target_lang,
                                     model_type=model_type,
-                                    source_channel='zmq_batch'
+                                    source_channel='zmq_batch',
+                                    **_structure_kwargs(task)
                                 ),
                                 timeout=single_budget
                             )
@@ -266,7 +277,8 @@ async def _translate_single_language(
         # ═══════════════════════════════════════════════════════════════════
         # ÉTAPE 1: Vérifier le cache
         # ═══════════════════════════════════════════════════════════════════
-        if translation_cache:
+        use_cache = translation_cache is not None and not _is_at_rest(task)
+        if use_cache:
             cached = await translation_cache.get_translation(
                 text=task.text,
                 source_lang=task.source_language,
@@ -307,7 +319,8 @@ async def _translate_single_language(
                         source_language=task.source_language,
                         target_language=target_language,
                         model_type=task.model_type,
-                        source_channel='zmq'
+                        source_channel='zmq',
+                        **_structure_kwargs(task)
                     ),
                     timeout=inference_budget
                 )
@@ -327,8 +340,8 @@ async def _translate_single_language(
                 raise Exception("Translation service returned None")
 
             if not isinstance(result, dict) or 'translated_text' not in result:
-                logger.error(f"Invalid result for {worker_name}: {result}")
-                raise Exception(f"Invalid translation result: {result}")
+                logger.error(f"Invalid result for {worker_name}: {type(result).__name__}")
+                raise Exception(f"Invalid translation result: {type(result).__name__}")
 
             # `error` marque un texte de REPLI (`_fallback_translate`) — pas une
             # traduction ML. Un échec est un échec : jamais mis en cache (#3663),
@@ -339,7 +352,7 @@ async def _translate_single_language(
             # ═══════════════════════════════════════════════════════════════════
             # ÉTAPE 3: Mettre en cache la nouvelle traduction (jamais un repli)
             # ═══════════════════════════════════════════════════════════════════
-            if translation_cache and not translation_failed:
+            if use_cache and not translation_failed:
                 await translation_cache.set_translation(
                     text=task.text,
                     source_lang=task.source_language,

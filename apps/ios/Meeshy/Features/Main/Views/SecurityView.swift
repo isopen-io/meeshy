@@ -158,6 +158,7 @@ struct SecurityView: View {
             phoneSection
             conversationLockSection
             activeSessionsSection
+            EncryptedDevicesEntry()
             Spacer().frame(height: 40)
         }
         .padding(.horizontal, MeeshySpacing.lg)
@@ -582,7 +583,7 @@ struct SecurityView: View {
 
     private var conversationLockSection: some View {
         let hasMasterPIN = lockManager.masterPinConfigured
-        let lockedCount = lockManager.lockedConversationIds.count
+        let lockedCount = lockManager.contentLockedConversationIds.count
         let lockColor = "F87171"
         return VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             sectionHeader(title: String(localized: "settings.security.locked_conversations", defaultValue: "Conversations verrouillées", bundle: .main), icon: "lock.shield.fill", color: lockColor)
@@ -646,7 +647,7 @@ struct SecurityView: View {
                             }
                         }
 
-                        if lockedCount == 0 {
+                        if lockManager.offersMasterPinRemoval {
                             Button {
                                 HapticFeedback.medium()
                                 showPinRemoveSheet = true

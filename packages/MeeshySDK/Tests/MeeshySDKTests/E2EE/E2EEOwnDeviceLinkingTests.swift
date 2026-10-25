@@ -421,6 +421,7 @@ private final class ScriptedDirectory: E2EEDirectoryClientProviding, @unchecked 
     func preKeyStock() async throws -> E2EEPreKeyStock { try await honest.preKeyStock() }
     func retireDevice(deviceId: UInt32) async throws -> E2EERetirement { try await honest.retireDevice(deviceId: deviceId) }
     func devices(userId: String) async throws -> E2EEUserDevices { try await honest.devices(userId: userId) }
+    func ownDevices() async throws -> [E2EEOwnDeviceDetails] { try await honest.ownDevices() }
     func envelopes(after cursor: String?, limit: Int?) async throws -> E2EEEnvelopePage { try await honest.envelopes(after: cursor, limit: limit) }
     func acknowledge(envelopeIds: [String]) async throws -> E2EEAckResult { try await honest.acknowledge(envelopeIds: envelopeIds) }
 }

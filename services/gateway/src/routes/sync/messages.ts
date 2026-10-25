@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { withServedEditAttribution, type EditAttributionReader } from '@meeshy/shared/utils/message-edit-attribution';
 import { Prisma } from '@meeshy/shared/prisma/client';
 import { attachmentSocketSelect, MESSAGE_ATTACHMENT_ORDER } from '../../services/attachments/attachmentIncludes';
 import { messageSenderUserSelect } from '../conversations/utils/message-sender-select';
@@ -24,6 +25,8 @@ import { selectForFields, restrictFields, isFieldServed, type ColumnPlan, type F
 import { loadReaderReactionsByMessage } from '../conversations/messages-reader-reactions';
 import { withOrphanedSenderRepair } from '../../services/messaging/withOrphanedSenderRepair';
 import { loadViewOnceReaderStates, projectViewOnceForReader } from '../../services/messaging/viewOnceAudience';
+import { AT_REST_MESSAGE_SELECT, revealAtRestRows } from '../../services/messaging/serverAtRest';
+import { gatewayKeyring } from '../../services/messaging/atRestTranslationSource';
 
 /**
  * Collection `messages` de `/sync` — extrait tel quel de `routes/sync.ts`
@@ -88,6 +91,9 @@ export const SYNC_MESSAGE_RENDERABLE_KEYS = [
   'createdAt',
   'updatedAt',
   ...(Object.keys(MESSAGE_PROTECTION_SELECT) as (keyof typeof MESSAGE_PROTECTION_SELECT)[]),
+  // #12822 — une ligne scellée au repos qu'aucune clé n'ouvre se DIT chiffrée.
+  'isEncrypted',
+  'encryptionMode',
 ] as const;
 
 /**
@@ -112,6 +118,10 @@ export const syncMessageSelect = Prisma.validator<Prisma.MessageSelect>()({
   metadata: true,
   isEdited: true,
   editedAt: true,
+  // #11375 — l'auteur d'une modification faite par un modérateur : LU, jamais
+  // servi brut — `serializeSyncMessage` le projette par lecteur.
+  thirdPartyEditorId: true,
+  thirdPartyEditorRole: true,
   replyToId: true,
   reactionSummary: true,
   reactionCount: true,
@@ -122,6 +132,12 @@ export const syncMessageSelect = Prisma.validator<Prisma.MessageSelect>()({
   // (#4885 : c'est la recopie à la main qui avait laissé la recherche servir
   // un message à vue unique comme un message ordinaire).
   ...MESSAGE_PROTECTION_SELECT,
+  // #11381, #12822 — le chiffré au repos est LU pour que la passerelle ouvre un
+  // message `server`/`hybrid` et ses traductions (`revealAtRestRows`) ; il ne
+  // sort pas (`syncMessageSchema` ne déclare ni `encryptedContent` ni
+  // `encryptionMetadata`, et l'ouverture les vide). Sans lui, la bulle d'un
+  // client rattrapé se vidait (`content: ''`).
+  ...AT_REST_MESSAGE_SELECT,
   // #7014 — `attachmentSocketSelect`, jamais `attachmentMediaSelect` : cette
   // ligne part chez `serializeAttachmentForSocket` (plus bas dans ce fichier),
   // désormais FAIL-CLOSED sur l'absence de drapeau. Or `attachmentMediaSelect`
@@ -190,6 +206,12 @@ const PROTECTION_KEYS = Object.keys(MESSAGE_PROTECTION_SELECT) as ReadonlyArray<
   keyof typeof syncMessageSelect & string
 >;
 
+/** #12822 — ce que l'ouverture au repos lit, quand `content` ou `translations` est servi. */
+const AT_REST_KEYS = ['isEncrypted', 'encryptionMode', 'encryptedContent', 'encryptionMetadata'] as const;
+
+/** Ce qui DIT, sur le fil, qu'une ligne servie reste scellée. */
+const AT_REST_SERVED_KEYS = ['isEncrypted', 'encryptionMode'] as const;
+
 /**
  * Le `select` que `?fields=messages.content` doit charger.
  *
@@ -206,7 +228,8 @@ export const syncMessagePlan: ColumnPlan<typeof syncMessageSelect> = {
   full: syncMessageSelect,
   pinned: [...SYNC_MESSAGE_PINNED],
   columns: {
-    content: ['content', ...PROTECTION_KEYS],
+    content: ['content', ...PROTECTION_KEYS, ...AT_REST_KEYS],
+    translations: ['translations', ...AT_REST_KEYS],
     // #9600 — une pièce servie se signe sur la nature de son message : sans le
     // bloc chargé, `?fields=messages.attachments` signerait toute pièce,
     // ordinaire comprise (fail-closed), et ses caches clients changeraient
@@ -242,7 +265,7 @@ const SYNC_MESSAGE_SERVED_PINNED = ['id', 'conversationId'] as const;
  */
 function servedPinnedFor(fields: FieldSet): readonly string[] {
   const contentServi = fields === null || fields.has('content');
-  return contentServi ? [...SYNC_MESSAGE_SERVED_PINNED, ...PROTECTION_KEYS] : SYNC_MESSAGE_SERVED_PINNED;
+  return contentServi ? [...SYNC_MESSAGE_SERVED_PINNED, ...PROTECTION_KEYS, ...AT_REST_SERVED_KEYS] : SYNC_MESSAGE_SERVED_PINNED;
 }
 
 /**
@@ -271,6 +294,7 @@ function serializeSyncMessage(
   message: SyncMessage,
   readerParticipantId: string | undefined,
   signer: ReaderFileUrlSigner | null,
+  editReader: EditAttributionReader | undefined,
 ): Record<string, unknown> {
   // `translations` et `attachments` sont des colonnes PROJETABLES depuis
   // #4173 : une projection qui ne les nomme pas les laisse absentes de la
@@ -279,7 +303,9 @@ function serializeSyncMessage(
   // vide, qui affirmerait « ce message n'a ni traduction ni pièce jointe ».
   const brut = message as Partial<SyncMessage>;
   return {
-    ...message,
+    // #11375 — les colonnes de l'éditeur tiers ne partent jamais brutes ; lues
+    // (profil par défaut), elles se servent PAR LECTEUR, sinon rien ne part.
+    ...(brut.thirdPartyEditorId === undefined ? message : withServedEditAttribution(message, editReader)),
     ...(brut.translations === undefined
       ? {}
       : {
@@ -324,6 +350,8 @@ const syncMessageSchema = {
     metadata: { type: 'object', nullable: true, additionalProperties: true },
     isEdited: { type: 'boolean' },
     editedAt: { type: 'string', format: 'date-time', nullable: true },
+    editedById: { type: 'string', nullable: true },
+    editedByRole: { type: 'string', nullable: true },
     replyToId: { type: 'string', nullable: true },
     reactionSummary: { type: 'object', nullable: true, additionalProperties: true },
     reactionCount: { type: 'integer' },
@@ -339,6 +367,10 @@ const syncMessageSchema = {
     isViewOnce: { type: 'boolean' },
     maxViewOnceCount: { type: 'number', nullable: true },
     viewOnceCount: { type: 'number' },
+    // #12822 — une ligne qu'aucune clé n'ouvre sort `content: ''` ET `isEncrypted: true` :
+    // le client y dit « Message chiffré » au lieu de vider la bulle.
+    isEncrypted: { type: 'boolean' },
+    encryptionMode: { type: 'string', nullable: true },
     // #7578 — l'état PAR LECTEUR d'une vue unique (`projectViewOnceForReader`).
     consumedByMe: { type: 'boolean' },
     isFullyConsumed: { type: 'boolean' },
@@ -467,6 +499,8 @@ export async function syncMessages(opts: {
   cursor?: SyncCursor;
   /** `?fields=messages.…` déjà analysé — `null` ⇒ le profil par défaut, RENDABLE. */
   fields?: FieldSet;
+  /** #11375 — le lecteur, juge de ce qu'il lit de l'auteur d'une modification. Absent ⇒ la mention seule. */
+  editAttributionReader?: EditAttributionReader;
 }): Promise<SyncCollectionResult<Record<string, unknown>>> {
   const { prisma, identity, sinceDate, cap, scope, cursor } = opts;
   const fields = opts.fields ?? null;
@@ -603,7 +637,7 @@ export async function syncMessages(opts: {
         withReaderReactions(
           m,
           restrictFields(
-            serializeSyncMessage(m, readerParticipantIdByConversation.get(m.conversationId), fileUrlSigner),
+            serializeSyncMessage(m, readerParticipantIdByConversation.get(m.conversationId), fileUrlSigner, opts.editAttributionReader),
             fields,
             servedPinned,
           ),
@@ -613,8 +647,11 @@ export async function syncMessages(opts: {
     );
 
   // added = créé après `since` ; modified = pré-existant mais modifié.
-  const added = visible.filter((m) => m.createdAt > sinceDate).map(serialize);
-  const modified = visible.filter((m) => m.createdAt <= sinceDate).map(serialize);
+  // #11381, #12822 — un message `server`/`hybrid` et ses traductions sortent en
+  // clair pour le membre, ou SCELLÉS ; jamais leur chiffré présenté comme du texte.
+  const opened = await revealAtRestRows(visible, gatewayKeyring(prisma));
+  const added = opened.filter((m) => m.createdAt > sinceDate).map(serialize);
+  const modified = opened.filter((m) => m.createdAt <= sinceDate).map(serialize);
 
   // DELETED — tombstones supprimés depuis `since`. Même keyset `(deletedAt, id)`
   // avec cap+1. Ce stream n'est PAS soumis au budget d'octets : sa ligne est

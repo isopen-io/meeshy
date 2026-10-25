@@ -33,6 +33,7 @@ import {
   AccountSection,
   AppearanceSection,
   DataSection,
+  E2EE_DEVICES_PANEL,
   LogoutButton,
   NotificationsSection,
   PACKS_PANEL,
@@ -81,6 +82,18 @@ const SettingsSecurity = lazy(() =>
     const language = currentInterfaceLanguage();
     await module.prepareSecurityScreen(language);
     return { default: () => <module.SettingsSecurityScreen language={language} /> };
+  }),
+);
+
+/**
+ * « MES APPAREILS CHIFFRÉS » (#13013) — poussé depuis la Sécurité, chargé à la
+ * demande avec le catalogue des sessions.
+ */
+const SettingsE2eeDevices = lazy(() =>
+  import('@/routes/settings-e2ee-devices').then(async (module) => {
+    const language = currentInterfaceLanguage();
+    await module.prepareE2eeDevicesScreen(language);
+    return { default: () => <module.SettingsE2eeDevicesScreen language={language} /> };
   }),
 );
 
@@ -143,6 +156,13 @@ export default function SettingsScreen() {
     return (
       <Suspense fallback={null}>
         <SettingsSecurity />
+      </Suspense>
+    );
+  }
+  if (panel === E2EE_DEVICES_PANEL) {
+    return (
+      <Suspense fallback={null}>
+        <SettingsE2eeDevices />
       </Suspense>
     );
   }

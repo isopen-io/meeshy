@@ -60,7 +60,7 @@
  *
  * ─── CE QUE LA LOI N'EST PAS : UNE QUESTION D'AUTORITÉ ──────────────────────
  *
- * `utils/conversation-authority.ts` (#3892, #11217) dit qu'un MODERATOR, ADMIN
+ * `packages/shared/utils/conversation-authority.ts` (#3892, #11217) dit qu'un MODERATOR, ADMIN
  * ou BIGBOSS de la plateforme, une fois MEMBRE d'un fil, **agit avec les droits
  * du créateur**.
  * C'est le voisin d'apparence interchangeable de cette loi-ci, et l'employer ici

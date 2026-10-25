@@ -41,11 +41,30 @@ nonisolated protocol EndToEndMessagingProviding: Sendable {
 }
 
 /// Une installation prête à chiffrer : enrôlée, et ses outils construits sur
-/// l'identité de cet enrôlement.
+/// l'identité de cet enrôlement — l'appairage de mes appareils (#13009)
+/// partage le cipher, l'annuaire et les approbations du scelleur.
 nonisolated struct EndToEndReadyDevice: Sendable {
     let device: E2EELocalDevice
     let sealer: any E2EEMessageSealing
     let opener: any E2EEEnvelopeOpening
+    let linking: any E2EEOwnDeviceLinkingProviding
+    /// Les métadonnées de mes appareils (`GET /e2ee/devices`) : elles nomment,
+    /// elles n'approuvent jamais.
+    let ownDeviceDetails: @Sendable () async throws -> [E2EEOwnDeviceDetails]
+
+    init(
+        device: E2EELocalDevice,
+        sealer: any E2EEMessageSealing,
+        opener: any E2EEEnvelopeOpening,
+        linking: any E2EEOwnDeviceLinkingProviding = UnavailableOwnDeviceLinking(),
+        ownDeviceDetails: @escaping @Sendable () async throws -> [E2EEOwnDeviceDetails] = { [] }
+    ) {
+        self.device = device
+        self.sealer = sealer
+        self.opener = opener
+        self.linking = linking
+        self.ownDeviceDetails = ownDeviceDetails
+    }
 }
 
 /// Ce qui fabrique une installation prête : le seul site qui touche au

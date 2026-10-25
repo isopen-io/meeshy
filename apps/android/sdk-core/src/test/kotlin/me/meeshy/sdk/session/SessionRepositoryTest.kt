@@ -290,4 +290,52 @@ class SessionRepositoryTest {
 
         assertThat(repo.currentUserId).isEqualTo("new")
     }
+
+    @Test
+    fun `a restart before confirmation re-applies the pending profile edit over the server state`() = runTest {
+        val server = user("u1").copy(displayName = "Server", bio = "old bio")
+        val api = FakeAuthApi(ApiResponse(success = true, data = MeEnvelope(server)))
+        val pending = PendingProfileEdits { userId, _ ->
+            if (userId == "u1") listOf(UpdateProfileRequest(bio = ""), UpdateProfileRequest(displayName = "Pending")) else emptyList()
+        }
+        val repo = SessionRepository(api, InMemoryTokenStore(jwt = "jwt"), me.meeshy.sdk.net.SessionTransitionFlags(), pending)
+
+        repo.refresh()
+
+        assertThat(repo.currentUser.value?.displayName).isEqualTo("Pending")
+        assertThat(repo.currentUser.value?.bio).isNull()
+    }
+
+    @Test
+    fun `an unreadable outbox never blocks the re-read`() = runTest {
+        val api = FakeAuthApi(ApiResponse(success = true, data = MeEnvelope(user("u1").copy(displayName = "Server"))))
+        val broken = PendingProfileEdits { _, _ -> throw IllegalStateException("db closed") }
+        val repo = SessionRepository(api, InMemoryTokenStore(jwt = "jwt"), me.meeshy.sdk.net.SessionTransitionFlags(), broken)
+
+        repo.refresh()
+
+        assertThat(repo.currentUser.value?.displayName).isEqualTo("Server")
+    }
+
+    @Test
+    fun `restoreProfileSnapshot rolls the optimistic edit back`() {
+        val repo = SessionRepository(FakeAuthApi(ApiResponse(success = false)), InMemoryTokenStore())
+        val snapshot = user("u1").copy(bio = "before")
+        repo.adopt(snapshot)
+        repo.applyProfileEdit(UpdateProfileRequest(bio = ""))
+
+        repo.restoreProfileSnapshot(snapshot)
+
+        assertThat(repo.currentUser.value).isEqualTo(snapshot)
+    }
+
+    @Test
+    fun `restoreProfileSnapshot never paints another account`() {
+        val repo = SessionRepository(FakeAuthApi(ApiResponse(success = false)), InMemoryTokenStore())
+        repo.adopt(user("u2"))
+
+        repo.restoreProfileSnapshot(user("u1"))
+
+        assertThat(repo.currentUserId).isEqualTo("u2")
+    }
 }

@@ -47,6 +47,7 @@ public enum MessageDatabaseMigrations {
         MessagesSenderHasAccountMigration(),
         OutboxV4CancelRequestedAtMigration(),
         MessagesSenderRingMigration(),
+        MessagesEditedByIdMigration(),
         MessagesPlaintextErasuresMigration(),
     ]
 }

@@ -176,7 +176,7 @@ final class ConversationListEndToEndTextStore {
         retriedMine.formUnion(waiting)
         let delay = mineRetryDelay
         Task { [weak self] in
-            try? await Task.sleep(for: delay)
+            do { try await Task.sleep(for: delay) } catch { return }
             guard let self else { return }
             self.refresh(self.latestRows)
         }

@@ -1,5 +1,5 @@
 import { MemberRole, type MemberRoleType, memberRoleLevel } from '@meeshy/shared/types/role-types';
-import { actorRoleLevel, type ConversationActor } from '../../../utils/conversation-authority';
+import { actorRoleLevel, type ConversationActor } from '@meeshy/shared/utils/conversation-authority';
 
 /**
  * **Agir SUR quelqu'un dans une conversation** — la loi que quatre gestes

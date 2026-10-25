@@ -162,7 +162,7 @@ describe('admitMessageEdit — quelqu\'un d\'autre que l\'auteur', () => {
 
     const decision = await admit({ prisma, editorUserId: OTHER });
 
-    expect(decision).toEqual({ admitted: true, asModerator: true, windowBypassed: false });
+    expect(decision).toEqual({ admitted: true, asModerator: true, windowBypassed: false, editorRole: 'MODERATOR' });
     expect(prisma.participant.findFirst).toHaveBeenCalledWith({
       where: { conversationId: CONV, userId: OTHER, isActive: true },
       select: { id: true, user: { select: { role: true } } },

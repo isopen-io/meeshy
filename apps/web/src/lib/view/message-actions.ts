@@ -15,7 +15,7 @@ import { protectionOf } from '@/lib/reading-mode/protection';
 
 import { transcriptionOffered } from './audio-on-demand';
 
-import { menuRegimeKnown, messageActionsOf, webEditsAsAuthor, webSendsHere, type ActionMessage, type ActionScope } from './message-action-scope';
+import { menuRegimeKnown, messageActionsOf, webEdits, webSendsHere, type ActionMessage, type ActionScope } from './message-action-scope';
 import { placeOf, type SharedPlace } from './message-body';
 
 export { menuConversationOf, menuViewerOf, type ActionScope, type MenuViewer } from './message-action-scope';
@@ -370,8 +370,8 @@ const labels = (ctx: MessageMenuContext): boolean => ctx.piecesLabels === true;
 const exportsOut = (ctx: MessageMenuContext): boolean => !ctx.isProtected && ctx.leaves !== false;
 /** Un envoi que le web sait faire ici (`webSendsHere`) — jamais sans la loi. */
 const sends = (ctx: MessageMenuContext): boolean => ctx.actions !== undefined && webSendsHere(ctx.actions);
-/** « Modifier » en AUTEUR seulement (`webEditsAsAuthor`) — jamais le message d'un autre au titre d'un rôle. */
-const editsAsAuthor = (ctx: MessageMenuContext): boolean => ctx.actions !== undefined && webEditsAsAuthor(ctx.actions);
+/** « Modifier » : le verdict de la loi (`webEdits`), le message d'un autre au titre d'un rôle de plateforme compris (#11375). */
+const editsHere = (ctx: MessageMenuContext): boolean => ctx.actions !== undefined && webEdits(ctx.actions);
 
 type Servable = { readonly id: InterfaceId | PiecesId; readonly offered: (ctx: MessageMenuContext) => boolean };
 
@@ -384,7 +384,7 @@ const SERVABLE: Readonly<Partial<Record<PolicyActionId, Servable>>> = {
   openInMaps: { id: 'openInMaps', offered: (ctx) => ctx.place != null && labels(ctx) },
   copyAddress: { id: 'copyAddress', offered: (ctx) => ctx.place != null && labels(ctx) && exportsOut(ctx) },
   saveContact: { id: 'saveContact', offered: exportsOut },
-  edit: { id: 'edit', offered: (ctx) => ctx.canEdit === true && ctx.hasText && editsAsAuthor(ctx) },
+  edit: { id: 'edit', offered: (ctx) => ctx.canEdit === true && ctx.hasText && editsHere(ctx) },
   copy: { id: 'copy', offered: copyable },
   forward: { id: 'forward', offered: (ctx) => ctx.canForward },
   translate: { id: 'translate', offered: (ctx) => ctx.hasText && !ctx.isProtected && (ctx.languageCount > 1 || deviceTranslatable(ctx)) },
