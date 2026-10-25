@@ -218,7 +218,7 @@ describe('routes /e2ee', () => {
     const { app, closedSessions } = await buildApp();
     await app.inject({ method: 'POST', url: '/e2ee/devices', headers: { 'x-test-user': 'alice' }, payload: enrollment(ALICE) });
 
-    const res = await app.inject({ method: 'DELETE', url: '/e2ee/devices/1?signOut=true', headers: { 'x-test-user': 'aliceWeb' } });
+    const res = await app.inject({ method: 'DELETE', url: '/e2ee/devices/1', headers: { 'x-test-user': 'aliceWeb' } });
 
     expect(res.json().data).toEqual({ deviceId: 1, retired: true, signedOut: true });
     expect(closedSessions).toEqual([{ userId: ALICE, sessionId: SESSIONS.alice }]);
@@ -228,7 +228,7 @@ describe('routes /e2ee', () => {
     const { app, closedSessions } = await buildApp();
     await app.inject({ method: 'POST', url: '/e2ee/devices', headers: { 'x-test-user': 'alice' }, payload: enrollment(ALICE) });
 
-    const res = await app.inject({ method: 'DELETE', url: '/e2ee/devices/1?signOut=true', headers: { 'x-test-user': 'alice' } });
+    const res = await app.inject({ method: 'DELETE', url: '/e2ee/devices/1', headers: { 'x-test-user': 'alice' } });
 
     expect(res.json().data).toEqual({ deviceId: 1, retired: true, signedOut: false });
     expect(closedSessions).toEqual([]);
@@ -239,11 +239,11 @@ describe('routes /e2ee', () => {
     const { app, store } = await buildApp({ sessionClosable: () => closable.value });
     await app.inject({ method: 'POST', url: '/e2ee/devices', headers: { 'x-test-user': 'alice' }, payload: enrollment(ALICE) });
 
-    const refused = await app.inject({ method: 'DELETE', url: '/e2ee/devices/1?signOut=true', headers: { 'x-test-user': 'aliceWeb' } });
+    const refused = await app.inject({ method: 'DELETE', url: '/e2ee/devices/1', headers: { 'x-test-user': 'aliceWeb' } });
     const stillListed = await app.inject({ method: 'GET', url: '/e2ee/devices', headers: { 'x-test-user': 'aliceWeb' } });
     const revokedBeforeRetry = store.collections.E2EERevokedIdentity.rows.length;
     closable.value = true;
-    const retried = await app.inject({ method: 'DELETE', url: '/e2ee/devices/1?signOut=true', headers: { 'x-test-user': 'aliceWeb' } });
+    const retried = await app.inject({ method: 'DELETE', url: '/e2ee/devices/1', headers: { 'x-test-user': 'aliceWeb' } });
 
     expect(refused.statusCode).toBe(503);
     expect(refused.json()).toMatchObject({ success: false, code: E2EE_ERROR_CODES.DEVICE_SESSION_NOT_CLOSED });
@@ -251,14 +251,26 @@ describe('routes /e2ee', () => {
     expect(stillListed.json().data.devices).toHaveLength(1);
     expect(retried.json().data).toEqual({ deviceId: 1, retired: true, signedOut: true });
   });
-
-  it("sans signOut, le retrait garde le sens publié : l'appareil est retiré, sa session reste ouverte (#9223)", async () => {
+  it("le retrait depuis une autre session ferme la session de l'appareil PAR DÉFAUT — aucun client n'a à le demander", async () => {
     const { app, closedSessions } = await buildApp();
     await app.inject({ method: 'POST', url: '/e2ee/devices', headers: { 'x-test-user': 'alice' }, payload: enrollment(ALICE) });
 
     const res = await app.inject({ method: 'DELETE', url: '/e2ee/devices/1', headers: { 'x-test-user': 'aliceAndroid' } });
 
-    expect(res.json().data).toEqual({ deviceId: 1, retired: true, signedOut: false });
-    expect(closedSessions).toEqual([]);
+    expect(res.json().data).toEqual({ deviceId: 1, retired: true, signedOut: true });
+    expect(closedSessions).toEqual([{ userId: ALICE, sessionId: SESSIONS.alice }]);
+  });
+
+  it("une session dont l'appareil a été retiré ne réenrôle plus aucun appareil : il faut une nouvelle connexion", async () => {
+    const { app } = await buildApp();
+    await app.inject({ method: 'POST', url: '/e2ee/devices', headers: { 'x-test-user': 'alice' }, payload: enrollment(ALICE) });
+    await app.inject({ method: 'DELETE', url: '/e2ee/devices/1', headers: { 'x-test-user': 'alice' } });
+
+    const sameSession = await app.inject({ method: 'POST', url: '/e2ee/devices', headers: { 'x-test-user': 'alice' }, payload: enrollment(ALICE) });
+    const freshLogin = await app.inject({ method: 'POST', url: '/e2ee/devices', headers: { 'x-test-user': 'aliceWeb' }, payload: enrollment(ALICE) });
+
+    expect(sameSession.statusCode).toBe(403);
+    expect(sameSession.json().code).toBe(E2EE_ERROR_CODES.SESSION_RETIRED);
+    expect(freshLogin.statusCode).toBe(201);
   });
 });

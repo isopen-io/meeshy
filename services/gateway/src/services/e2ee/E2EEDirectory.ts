@@ -267,10 +267,12 @@ export class E2EEDirectory {
     await assertBinding(this.verifier, { userId: params.userId, request: params.request, now: at });
     await assertSigned(this.verifier, params.request.identityKey, signedKeysOf(params.request));
     await this.assertNotRevoked(params.userId, params.request.identityKey);
+    await this.assertSessionNotRetired(params);
     const retried = await this.consumeBinding({ ...params, at });
     if (retried) return retried;
     const placed = await this.placeDevice({ ...params, at });
     await this.undoIfRevoked(params.userId, params.request.identityKey);
+    await this.undoIfSessionRetired(params);
     return placed;
   }
 
@@ -422,12 +424,38 @@ export class E2EEDirectory {
     }
     await this.prisma.e2EERevokedIdentity.upsert({
       where: { userId_identityKey: { userId: params.userId, identityKey: device.identityKey } },
-      create: { userId: params.userId, identityKey: device.identityKey, revokedAt: this.now() },
-      update: {},
+      create: { userId: params.userId, identityKey: device.identityKey, revokedAt: this.now(), sessionId: device.sessionId },
+      update: { sessionId: device.sessionId },
     });
     await this.retireDevices({ userId: params.userId, deviceId: params.deviceId });
     await this.retireDevices({ userId: params.userId, identityKey: device.identityKey });
     return { signedOut: signsOut };
+  }
+
+  /**
+   * Une session dont le propriétaire a retiré l'appareil n'en enrôle plus
+   * aucun (#13013) : sans quoi un appareil volé dont la session survit — retrait
+   * depuis sa propre session, fermeture ratée — revenait sous une identité
+   * neuve. Une nouvelle connexion, elle, enrôle librement.
+   */
+  private async assertSessionNotRetired(params: { userId: string; sessionId: string }): Promise<void> {
+    const barred = await this.prisma.e2EERevokedIdentity.findFirst({ where: { userId: params.userId, sessionId: params.sessionId }, select: { id: true } });
+    if (barred) {
+      throw new E2EEDirectoryError(
+        E2EE_ERROR_CODES.SESSION_RETIRED,
+        403,
+        'Cet appareil a été retiré du compte : reconnectez-vous pour réactiver le chiffrement',
+      );
+    }
+  }
+
+  private async undoIfSessionRetired(params: { userId: string; sessionId: string }): Promise<void> {
+    try {
+      await this.assertSessionNotRetired(params);
+    } catch (error) {
+      await this.retireDevices({ userId: params.userId, sessionId: params.sessionId });
+      throw error;
+    }
   }
 
   private async undoIfRevoked(userId: string, identityKey: string): Promise<void> {
