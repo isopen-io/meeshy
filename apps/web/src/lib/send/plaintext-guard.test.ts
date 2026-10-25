@@ -33,7 +33,7 @@ import { createSendRun, type SendSheetPorts } from './send-sheet-run';
 const ID = 'c-sealed';
 
 afterEach(() => {
-  endToEndRegimeLedger.getState().bind(null);
+  endToEndRegimeLedger.getState().reset();
 });
 
 const recordingFetch = () => {
