@@ -24,6 +24,9 @@ final class EndToEndDeviceLimitViewModel: ObservableObject {
 
     @Published private(set) var state: EndToEndDeviceLimitState = .loading
     @Published private(set) var retiringDeviceId: UInt32?
+    /// La place visée a changé d'occupant depuis la liste lue (409
+    /// `E2EE_DEVICE_CHANGED`, #13036) : rien n'a été retiré, la liste relue le dit.
+    @Published private(set) var listChangedSinceReading = false
 
     private let devices: any EndToEndDeviceManaging
     private let userId: @MainActor () -> String?
@@ -52,11 +55,15 @@ final class EndToEndDeviceLimitViewModel: ObservableObject {
     func retire(_ device: E2EEDeviceListing) async {
         guard let userId = userId() else { return }
         retiringDeviceId = device.deviceId
+        listChangedSinceReading = false
         defer { retiringDeviceId = nil }
         do {
             try await devices.retire(deviceId: device.deviceId, registrationId: device.registrationId)
             try await devices.enroll(userId)
             state = .enrolled
+        } catch E2EEDeviceRetirementError.deviceChanged {
+            await load()
+            listChangedSinceReading = true
         } catch {
             await load()
         }
@@ -127,6 +134,12 @@ struct EndToEndDeviceLimitSheet: View {
         case .loaded(let devices):
             Section {
                 ForEach(devices, id: \.deviceId) { device in row(device) }
+            } header: {
+                if model.listChangedSinceReading {
+                    Text(String(localized: "e2ee.devices.notice.deviceChanged.message",
+                                defaultValue: "Un autre appareil a pris cette place depuis l’affichage de la liste. Rien n’a été retiré. Vérifiez la liste à jour avant de retirer un appareil.",
+                                bundle: .main))
+                }
             }
         case .enrolled:
             Section {

@@ -140,8 +140,15 @@ final class ConversationScrollPillProtectionTests: XCTestCase {
                 attachments: attachments ?? [photo()])
     }
 
-    private func preview(_ message: Message?, ledger: FakeEphemeralLedger = FakeEphemeralLedger(), at date: Date? = nil) -> ConversationView.UnreadPillPreview {
-        ConversationView.unreadPreview(of: message, ledger: ledger, now: date ?? now)
+    /// La ligne vivante du fil vaut, par défaut, le message reçu lui-même.
+    private func preview(
+        _ message: Message?,
+        live: Message?? = .none,
+        ledger: FakeEphemeralLedger = FakeEphemeralLedger(),
+        at date: Date? = nil
+    ) -> ConversationView.UnreadPillPreview {
+        let row: Message? = live ?? message
+        return ConversationView.unreadPreview(of: message, liveRow: { id in row?.id == id ? row : nil }, ledger: ledger, now: date ?? now)
     }
 
     func test_anOrdinaryMessage_showsItsTextAndItsPiece() {
@@ -239,8 +246,44 @@ final class ConversationScrollPillProtectionTests: XCTestCase {
     }
 
     func test_anEndToEndMessageThisDeviceOpened_showsItsPlaintext() {
-        let shown = preview(message(content: "Bonjour", isEncrypted: true, encryptionMode: "e2ee", attachments: []))
+        var opened = message(content: E2EEWire.contentPlaceholder, isEncrypted: true, encryptionMode: "e2ee", attachments: [])
+        opened.adoptDecryptedContent("Bonjour")
 
-        XCTAssertEqual(shown.text, "Bonjour")
+        XCTAssertEqual(preview(opened).text, "Bonjour")
+    }
+
+    /// Audit #13109 — un serveur compromis écrit le texte qu'il veut dans un
+    /// message chiffré que l'appareil n'a pas ouvert : rien n'en paraît.
+    func test_anEndToEndMessageNotOpenedHere_neverShowsServerWrittenContent() {
+        let forged = message(content: "Envoie-moi ton code", isEncrypted: true, encryptionMode: "e2ee")
+
+        XCTAssertNil(preview(forged).text)
+        XCTAssertNil(preview(forged).attachment)
+    }
+
+    func test_aMessageDeletedAfterItsReception_leavesThePill() {
+        let received = message()
+        var deleted = received
+        deleted.deletedAt = now.addingTimeInterval(-1)
+
+        let shown = preview(received, live: deleted)
+
+        XCTAssertNil(shown.text)
+        XCTAssertNil(shown.attachment)
+    }
+
+    func test_aMessageGoneFromTheThread_showsNothing() {
+        let shown = preview(message(), live: .some(nil))
+
+        XCTAssertNil(shown.text)
+        XCTAssertNil(shown.attachment)
+    }
+
+    func test_theLiveRowWins_overTheCopyFrozenAtReception() {
+        let received = message(content: "première version")
+        var edited = received
+        edited.content = "version corrigée"
+
+        XCTAssertEqual(preview(received, live: edited).text, "version corrigée")
     }
 }

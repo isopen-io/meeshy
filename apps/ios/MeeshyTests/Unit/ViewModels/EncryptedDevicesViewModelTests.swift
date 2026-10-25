@@ -323,5 +323,6 @@ final class EndToEndDeviceLimitRetirementGenerationTests: XCTestCase {
 
         XCTAssertEqual(devices.enrolled, 0)
         XCTAssertEqual(model.state, .loaded([listing(2, 88)]))
+        XCTAssertTrue(model.listChangedSinceReading, "le refus se dit à l'écran")
     }
 }
