@@ -273,10 +273,9 @@ extension ConversationViewModel {
     func editMessage(messageId: String, newContent: String) async {
         let edited = messageIndex(for: messageId).map { messages[$0] }
         if let refusal = endToEndSealer.editRefusal(for: edited) { error = refusal.userMessage; return }
-        let originalContent = edited?.content
         report(await commands.editMessage(
             messageId: messageId, serverId: serverId(for: messageId), content: newContent,
-            originalContent: originalContent,
+            originalContent: edited?.content,
             beforeOptimisticWrite: { self.invalidateTranslations(for: messageId) }
         ))
     }

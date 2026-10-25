@@ -508,9 +508,13 @@ final class ConversationViewModelDirectEncryptionSendTests: XCTestCase {
     }
 
     /// #12881 — un message scellé sous e2ee reste chiffré à jamais (spec § 5.2) :
-    /// après une désactivation, son clair déchiffré sur l'appareil ne part pas.
+    /// même après une désactivation que l'utilisateur a VUE (#12846), son clair
+    /// déchiffré sur l'appareil ne part pas.
     func test_editMessage_messageScelleApresDesactivation_refuseSansAppelReseau() async throws {
-        let sut = try await makeSUT(endToEnd: failingEndToEnd(), encryptionMode: nil)
+        let ledger = EndToEndRegimeLedger()
+        ledger.learn(ConversationEncryptionStatus(isEncrypted: false, mode: nil, epoch: 2), for: conversationId)
+        ledger.confirmDowngrade(epoch: 2, for: conversationId)
+        let sut = try await makeSUT(endToEnd: failingEndToEnd(), encryptionMode: nil, ledger: ledger)
         var sealed = Message(
             id: "00000000000000000000cd44", conversationId: conversationId, senderId: userId,
             content: "", isEncrypted: true, encryptionMode: "e2ee"
