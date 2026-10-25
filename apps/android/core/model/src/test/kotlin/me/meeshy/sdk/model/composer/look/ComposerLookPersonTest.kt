@@ -12,7 +12,7 @@ class ComposerLookPersonTest {
     }
 
     @Test
-    fun `sans nom d affichage, le pseudo ; sans rien, un nom vide et l identite de soi`() {
+    fun `sans nom d affichage, le pseudo, sans rien un nom vide et l identite de soi`() {
         assertThat(ComposerLookPerson.author("u1", "   ", "ana").name).isEqualTo("ana")
         assertThat(ComposerLookPerson.author(null, null, null)).isEqualTo(ComposerLookPerson(ComposerLookPerson.SELF_ID, "", null))
     }
