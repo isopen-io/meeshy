@@ -146,7 +146,13 @@ internal class ChatVideoRetouchPending(val source: File, val output: File, val p
 
 /** La retouche unique d'une vidéo prise depuis le composer (#12650) : [onDeliver] reçoit le fichier qui part. */
 @Composable
-internal fun ChatVideoRetouchHost(pending: ChatVideoRetouchPending, onDeliver: suspend (File) -> Unit, onDismiss: () -> Unit) {
+internal fun ChatVideoRetouchHost(
+    pending: ChatVideoRetouchPending,
+    person: ComposerLookPerson?,
+    onDeliver: suspend (File) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val author = rememberRetouchAuthor(person ?: ComposerLookPerson.author(null, null, null))
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnBackPress = false, dismissOnClickOutside = false, decorFitsSystemWindows = false),
@@ -155,6 +161,7 @@ internal fun ChatVideoRetouchHost(pending: ChatVideoRetouchPending, onDeliver: s
             source = pending.source,
             probe = pending.probe,
             output = pending.output,
+            author = author,
             onDone = { result ->
                 onDeliver(
                     when (result) {
