@@ -101,16 +101,39 @@ final class ConversationEncryptionRegimeTests: XCTestCase {
         XCTAssertFalse(event.isEncrypted)
     }
 
-    func test_adoptingEncryption_repaintsTheConversationInClear() throws {
+    /// #12949 — le bout en bout ne se désactive pas : une bascule servie vers
+    /// le clair ne repeint jamais une conversation chiffrée de bout en bout.
+    func test_adoptingEncryption_neverRepaintsAnEndToEndConversationInClear() throws {
         let event = try decode(ConversationEncryptionChangedEvent.self, changedJSON)
         var conversation = MeeshyConversation(id: "c1", identifier: "c1")
         conversation.encryptionMode = "e2ee"
         conversation.encryptionEnabledAt = Date(timeIntervalSince1970: 1_000)
 
+        XCTAssertNil(conversation.adoptingEncryption(event))
+    }
+
+    /// Le chiffrement AU REPOS se quitte encore : la passerelle le lit déjà.
+    func test_adoptingEncryption_repaintsAServerEncryptedConversationInClear() throws {
+        let event = try decode(ConversationEncryptionChangedEvent.self, changedJSON)
+        var conversation = MeeshyConversation(id: "c1", identifier: "c1")
+        conversation.encryptionMode = "server"
+
         let adopted = conversation.adoptingEncryption(event)
 
+        XCTAssertNotNil(adopted)
         XCTAssertNil(adopted?.encryptionMode)
-        XCTAssertNil(adopted?.encryptionEnabledAt)
+    }
+
+    /// #12936 — une activation servie dans le futur est bornée par l'horloge de l'appareil.
+    func test_regime_anActivationServedInTheFuture_isBoundedByTheDeviceClock() throws {
+        var conversation = MeeshyConversation(id: "c1", identifier: "c1")
+        conversation.encryptionMode = "e2ee"
+        conversation.encryptionEnabledAt = Date().addingTimeInterval(365 * 86_400)
+
+        let regime = EndToEndRegime(conversation: conversation)
+
+        XCTAssertLessThanOrEqual(try XCTUnwrap(regime.enabledAt), Date())
+        XCTAssertTrue(regime.governs(createdAt: Date()))
     }
 
     func test_adoptingEncryption_ignoresAnotherConversationAndAnUnchangedRegime() throws {

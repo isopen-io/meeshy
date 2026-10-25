@@ -286,6 +286,80 @@ final class ConversationTranslationE2EEGuardTests: XCTestCase {
         XCTAssertNil(sut.preferredTranslation(for: messageId))
     }
 
+    // MARK: - Un message déchiffré sur l'appareil (#12935)
+
+    private func decryptedOnDevice(createdAt: Date) -> Message {
+        var message = Message(id: messageId, conversationId: conversationId, senderId: "p-1",
+                              content: "Q2lwaGVydGV4dGU=", originalLanguage: "en", isEncrypted: true, encryptionMode: "e2ee",
+                              createdAt: createdAt, updatedAt: createdAt)
+        message.adoptDecryptedContent("Salut")
+        return message
+    }
+
+    /// Le serveur n'a pas lu un message que CET appareil a déchiffré : toute
+    /// traduction qu'il en sert est forgée, même s'il le date avant l'activation.
+    func test_thread_aMessageDecryptedOnDevice_datedBeforeTheActivation_servesNoServerTranslation() {
+        let message = decryptedOnDevice(createdAt: Date(timeIntervalSince1970: 500))
+        let sut = thread(mode: "e2ee", message: message)
+
+        XCTAssertEqual(UnencryptedMessageGate.translations(of: message, in: sut), [])
+        XCTAssertNil(sut.preferredTranslation(for: messageId))
+    }
+
+    /// Même loi dans une conversation que l'appareil n'a jamais vue chiffrée.
+    func test_thread_aMessageDecryptedOnDevice_inAConversationNeverSeenEncrypted_servesNoServerTranslation() {
+        let message = decryptedOnDevice(createdAt: afterActivation)
+        let sut = thread(mode: nil, message: message, enabledAt: nil)
+
+        XCTAssertEqual(UnencryptedMessageGate.translations(of: message, in: sut), [])
+        XCTAssertNil(sut.preferredTranslation(for: messageId))
+    }
+
+    // MARK: - Une activation servie dans le futur (#12936)
+
+    /// Une date d'activation lue sans époque est bornée par l'horloge de
+    /// l'appareil : une activation dans le futur ne range pas le fil avant l'ère chiffrée.
+    func test_thread_anActivationServedInTheFuture_doesNotUnflagAForgedPlaintext() {
+        let message = forgedPlaintext(createdAt: afterActivation)
+        let sut = thread(mode: "e2ee", message: message, enabledAt: Date().addingTimeInterval(10 * 365 * 86_400))
+
+        XCTAssertTrue(UnencryptedMessageGate.isUnencrypted(message, in: sut))
+        XCTAssertEqual(UnencryptedMessageGate.translations(of: message, in: sut), [])
+    }
+
+    // MARK: - La mémoire du régime appartient à un compte (#12937)
+
+    func test_memory_isKeptPerAccount_andSurvivesARelaunch() throws {
+        let suite = "meeshy.tests.regime.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let memory = EndToEndRegimeMemory(defaults: defaults)
+        memory.bind(account: "staging.meeshy.me/account-a")
+        _ = memory.resolve(conversationId: conversationId, served: EndToEndRegime(encryptionMode: "e2ee", enabledAt: activation))
+
+        memory.bind(account: "staging.meeshy.me/account-b")
+        XCTAssertFalse(memory.resolve(conversationId: conversationId, served: .serverReadable).isEndToEnd,
+                       "le compte B ne lit pas ce que le compte A a vu")
+
+        let relaunched = EndToEndRegimeMemory(defaults: defaults)
+        relaunched.bind(account: "staging.meeshy.me/account-a")
+        XCTAssertTrue(relaunched.resolve(conversationId: conversationId, served: .serverReadable).isEndToEnd)
+    }
+
+    func test_memory_theDeviceWideRecord_isAdoptedByTheFirstAccount_thenForgotten() throws {
+        let suite = "meeshy.tests.regime.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let legacy = try JSONEncoder().encode([conversationId: EndToEndRegime(encryptionMode: "e2ee", enabledAt: activation)])
+        defaults.set(legacy, forKey: "meeshy.e2ee.regime.v1")
+
+        let memory = EndToEndRegimeMemory(defaults: defaults)
+        memory.bind(account: "staging.meeshy.me/account-a")
+
+        XCTAssertTrue(memory.resolve(conversationId: conversationId, served: .serverReadable).isEndToEnd)
+        XCTAssertNil(defaults.data(forKey: "meeshy.e2ee.regime.v1"), "la mémoire de l'appareil ne passe pas à un second compte")
+    }
+
     // MARK: - Après une désactivation datée (#12883)
 
     private let deactivation = Date(timeIntervalSince1970: 5_000)

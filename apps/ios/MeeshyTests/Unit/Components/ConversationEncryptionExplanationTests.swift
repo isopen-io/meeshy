@@ -80,6 +80,30 @@ final class ConversationEncryptionExplanationTests: XCTestCase {
         XCTAssertTrue(facts("e2ee").contains(.switchNeverResendsInClear))
     }
 
+    /// #12949 — le bout en bout ne se désactive pas, et la fiche le dit.
+    private func texts(_ mode: String?, isDirect: Bool) -> [String] {
+        facts(mode, isDirect: isDirect).map(\.text)
+    }
+
+    func test_irreversible_unTeteATeteChiffre_resteChiffre_etNePromeutAucuneDesactivation() {
+        let texts = texts("e2ee", isDirect: true)
+        XCTAssertTrue(texts.contains("Le chiffrement de bout en bout ne se désactive pas : ce tête-à-tête reste chiffré."))
+        XCTAssertFalse(texts.contains { $0.contains("est désactivé, rien ne part") })
+    }
+
+    func test_irreversible_unGroupeChiffre_ditDeCreerUneNouvelleConversation() {
+        XCTAssertTrue(texts("e2ee", isDirect: false).contains(
+            "Le chiffrement de bout en bout ne se désactive pas. Pour échanger en clair, créez une nouvelle conversation."
+        ))
+    }
+
+    func test_irreversible_avantDActiver_laFicheDitQueLeBoutEnBoutEstDefinitif() {
+        for mode in [nil, "server", "hybrid"] {
+            XCTAssertTrue(texts(mode, isDirect: true).contains("Une fois activé, le chiffrement de bout en bout ne se désactive plus."),
+                          "\(String(describing: mode))")
+        }
+    }
+
     /// Aucun texte en dur : chaque fait et chaque titre se lit dans le catalogue,
     /// jamais sous sa clé.
     func test_chaqueTexte_estLocalise() {

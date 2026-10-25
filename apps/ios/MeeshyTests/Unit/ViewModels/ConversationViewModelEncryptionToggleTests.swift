@@ -425,6 +425,60 @@ final class ConversationViewModelEncryptionToggleTests: XCTestCase {
         )
     }
 
+    // MARK: - Une conversation vue chiffrée le reste (#12949)
+
+    private func rememberedEndToEnd() -> EndToEndRegimeMemory {
+        let memory = EndToEndRegimeMemory(defaults: nil)
+        _ = memory.resolve(conversationId: conversationId, served: EndToEndRegime(encryptionMode: "e2ee", enabledAt: Date(timeIntervalSince1970: 10)))
+        return memory
+    }
+
+    /// Un avis de désactivation déjà en base (staging) s'affiche comme un
+    /// historique : il ne rouvre ni l'envoi en clair, ni la lecture.
+    func test_irreversible_aDisabledNoticeShownInTheThread_neverReopensPlaintext() async throws {
+        let memory = rememberedEndToEnd()
+        let ledger = EndToEndRegimeLedger(memory: memory)
+        let sut = try await makeSUT(encryptionMode: "e2ee", ledger: ledger)
+        ledger.learn(status(nil, epoch: 2), for: conversationId)
+        sut.viewModel.messages = [downgradeNotice(epoch: 2, at: 200)]
+
+        _ = await sut.viewModel.send(outgoingMessage(content: secret, conversationId: conversationId))
+
+        let request = try XCTUnwrap(sut.messageService.lastSendRequest)
+        XCTAssertEqual(request.isEncrypted, true)
+        XCTAssertNotEqual(request.content, secret)
+        XCTAssertTrue(memory.resolve(conversationId: conversationId, served: .serverReadable).isEndToEnd)
+    }
+
+    /// Après un redémarrage, l'appareil se souvient : une conversation servie
+    /// sans mode, sans époque ni avis dans le fil, reste scellée.
+    func test_irreversible_aConversationRememberedEncrypted_staysSealed_whenServedWithoutMode() async throws {
+        let sut = try await makeSUT(encryptionMode: nil, ledger: EndToEndRegimeLedger(memory: rememberedEndToEnd()))
+
+        _ = await sut.viewModel.send(outgoingMessage(content: secret, conversationId: conversationId))
+
+        let request = try XCTUnwrap(sut.messageService.lastSendRequest)
+        XCTAssertEqual(request.isEncrypted, true)
+        XCTAssertNotEqual(request.content, secret)
+    }
+
+    /// Un 409 E2EE_REGIME_CHANGED suivi d'un statut « non chiffré » ne mène
+    /// jamais au clair : l'envoi suivant repart scellé.
+    func test_irreversible_aRegimeChangedRefusal_thenAServedDowngrade_staysSealed() async throws {
+        let encryption = MockConversationEncryptionService()
+        encryption.statusResult = .success(status(nil, epoch: 5))
+        let sut = try await makeSUT(encryptionMode: "e2ee", ledger: EndToEndRegimeLedger(), encryption: encryption)
+        sut.messageService.sendResult = .failure(MeeshyError.rejected(APIRejection(statusCode: 409, code: E2EEErrorCode.regimeChanged, message: "changé")))
+        _ = await sut.viewModel.send(outgoingMessage(content: secret, conversationId: conversationId))
+        await sut.viewModel.collaborators.regimeRefresher.settle()
+
+        _ = await sut.viewModel.send(outgoingMessage(content: "Bonjour", conversationId: conversationId))
+
+        XCTAssertEqual(sut.messageService.sendCallCount, 2)
+        XCTAssertEqual(sut.messageService.lastSendRequest?.isEncrypted, true)
+        XCTAssertNotEqual(sut.messageService.lastSendRequest?.content, "Bonjour")
+    }
+
     func test_send_e2ee_declareLEpoqueSousLaquelleIlEstScelle() async throws {
         let ledger = EndToEndRegimeLedger()
         let sut = try await makeSUT(encryptionMode: nil, ledger: ledger)

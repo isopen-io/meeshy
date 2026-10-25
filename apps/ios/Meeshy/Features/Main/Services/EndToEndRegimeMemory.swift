@@ -40,6 +40,8 @@ nonisolated final class EndToEndRegimeMemory: EndToEndRegimeMemoryProviding, @un
             .flatMap { try? JSONDecoder().decode([String: EndToEndRegime].self, from: $0) } ?? [:])
     }
 
+    func bind(account: String?) {}
+
     func resolve(conversationId: String, served: EndToEndRegime) -> EndToEndRegime {
         let (merged, changed) = remembered.withLock { known -> (EndToEndRegime, [String: EndToEndRegime]?) in
             let previous = known[conversationId]

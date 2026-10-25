@@ -145,4 +145,17 @@ final class ConversationEncryptionActivationPolicyTests: XCTestCase {
         XCTAssertFalse(EncryptionSwitchAnnouncement.text(for: disabled).isEmpty)
         XCTAssertNotEqual(EncryptionSwitchAnnouncement.text(for: disabled), EncryptionSwitchAnnouncement.text(for: enabled))
     }
+
+    /// #12949 — une désactivation annoncée par le socket ne s'annonce pas : le
+    /// fil vu chiffré le reste, rien ne « revient ».
+    func test_irreversible_aServedDeactivation_isNotAnnounced_andTheConversationKeepsItsRegime() {
+        let disabled = ConversationEncryptionChangedEvent(
+            conversationId: "c", isEncrypted: false, mode: nil, epoch: 2, changedByUserId: "u", changedAt: "2026-10-25T10:00:00.000Z"
+        )
+        var conversation = MeeshyConversation(id: "c", identifier: "c", encryptionMode: "e2ee")
+        conversation.encryptionEnabledAt = Date(timeIntervalSince1970: 10)
+
+        XCTAssertNil(EncryptionSwitchAnnouncement.text(for: disabled) as String?)
+        XCTAssertNil(conversation.adoptingEncryption(disabled))
+    }
 }
