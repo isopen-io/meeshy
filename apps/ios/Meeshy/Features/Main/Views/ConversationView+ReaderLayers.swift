@@ -26,8 +26,9 @@ struct ConversationRiverLayer: View {
     @EnvironmentObject private var storyViewModel: StoryViewModel
     @Environment(\.routerCommands) private var router
     let showScript: () -> Void
-    /// #11224 — LE point d'entrée du menu d'un message (`presentLongPressMenu`).
-    let presentMenu: (Message) -> Void
+    /// #11224 — LE point d'entrée du menu d'un message (`presentLongPressMenu`),
+    /// avec la bulle pressée : son cadre de fenêtre et sa face (#12630).
+    let presentMenu: (Message, RiverPressedCell) -> Void
     let openViewOnce: (String) -> Bool
     let openMedia: (MessageAttachment) -> Void
 
@@ -93,11 +94,11 @@ struct ConversationRiverLayer: View {
                 scrollState.scrollToMessageTrigger += 1
             },
             // #11224 — l'appui long ouvre LE menu du message, avec les gardes
-            // de la liste : la loi d'actions, l'aperçu dans le mode du fil.
-            onLongPress: { messageId in
+            // de la liste : la loi d'actions, la bulle de la Rivière à sa place (#12630).
+            onLongPress: { pressed in
                 guard overlayState.longPressEnabled, overlayState.quickReactionMessageId == nil,
-                      let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
-                presentMenu(msg)
+                      let msg = viewModel.messages.first(where: { $0.id == pressed.messageId }) else { return }
+                presentMenu(msg, pressed)
             },
             // #7618 — MÊME canal que le Fil : la puce OUVRE, la
             // sortie consomme. La Rivière consommait au toucher.

@@ -169,11 +169,11 @@ final class MessageMenuFollowupsTests: XCTestCase {
     func test_river_longPressReachesTheSinglePresentation() throws {
         let layer = try source("Features/Main/Views/ConversationView+ReaderLayers.swift")
         XCTAssertTrue(layer.contains("onLongPress:"), "la couche Rivière branche l'appui long")
-        XCTAssertTrue(layer.contains("presentMenu(msg)"), "la couche Rivière présente le menu par l'hôte")
+        XCTAssertTrue(layer.contains("presentMenu(msg, pressed)"), "la couche Rivière présente le menu par l'hôte, avec la bulle pressée")
         XCTAssertTrue(layer.contains("overlayState.longPressEnabled"), "mêmes gardes que la liste")
         let host = try source("Features/Main/Views/ConversationView.swift")
-        XCTAssertTrue(host.contains("presentMenu: { presentLongPressMenu(for: $0, cellFrame: nil) }"),
-                      "la Rivière ouvre le menu par `presentLongPressMenu`, le point d'entrée unique")
+        XCTAssertTrue(host.contains("presentMenu: { presentLongPressMenu(for: $0, cellFrame: $1.windowFrame, riverFace: $1.face) }"),
+                      "la Rivière ouvre le menu par `presentLongPressMenu`, le point d'entrée unique, à la place de la bulle (#12630)")
     }
 
     func test_river_isReadableWithoutTheLongPress_byVoiceOver() throws {

@@ -15,11 +15,15 @@ struct ConversationOverlayState {
     /// réécrit : la pièce affichée est toujours la cible des actions.
     var overlayPieceId: String? = nil
     /// **Le cadre de la cellule pressée, en coordonnées de fenêtre** (#11208).
-    /// Résolu côté UIKit au geste (`MessageListViewController.cellFrameInWindow`)
-    /// et gardé ici : l'aperçu s'ouvre À LA PLACE de la cellule, quel que soit
-    /// le mode de lecture. `frameTracker` ne suit que la Rivière, son repli.
-    /// `nil` hors appui long, ou quand la cellule n'est pas matérialisée.
+    /// Résolu au geste (`MessageListViewController.cellFrameInWindow`, ou la
+    /// Rivière qui convertit le sien, `RiverPressedCell`, #12630) et gardé ici :
+    /// l'aperçu s'ouvre À LA PLACE de la cellule, quel que soit le mode de
+    /// lecture. `nil` hors appui long, ou quand la cellule n'est pas matérialisée.
     var overlaySourceFrame: CGRect? = nil
+    /// **La bulle de la Rivière pressée, telle que son couloir la peint**
+    /// (#12630) : l'aperçu la rend à la place de la bulle du fil. `nil` hors
+    /// Rivière et hors appui long.
+    @Indirect var overlayRiverFace: RiverOverlayFace? = nil
     var showOverlayMenu = false
     var longPressEnabled = false
     /// **L'état à restituer à la fermeture du menu longpress (#4004).**
