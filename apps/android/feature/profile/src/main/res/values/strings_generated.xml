@@ -21,6 +21,8 @@
     <string name="profile_close_hint">Closes the profile</string>
     <string name="profile_connection_context_received">%s wants to connect with you. Accept to exchange messages.</string>
     <string name="profile_connection_context_sent">You sent a connection request to %s. Waiting for their reply.</string>
+    <string name="profile_conversations_interactionsDisabled">Interactions disabled</string>
+    <string name="profile_conversations_noShared">No shared conversations</string>
     <string name="profile_decor_subtitle">Visible to everyone on your profile</string>
     <string name="profile_decor_title">Ring and banner</string>
     <string name="profile_detail_country">Country</string>

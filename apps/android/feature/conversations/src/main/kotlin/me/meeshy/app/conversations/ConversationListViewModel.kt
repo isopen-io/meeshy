@@ -64,6 +64,7 @@ class ConversationListViewModel @Inject constructor(
     statusRepository: StatusRepository,
     rowSignalsSource: ConversationListRowSignals,
     private val loadingDeps: ConversationListLoadingDeps = ConversationListLoadingDeps.detached(),
+    dialogDeps: ConversationListDialogDeps = ConversationListDialogDeps.detached(),
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ConversationListUiState())
@@ -88,10 +89,10 @@ class ConversationListViewModel @Inject constructor(
     /** Liste brute faisant autorite ; [ConversationListUiState.conversations] en est la vue filtree. */
     private var rawConversations: List<ApiConversation> = emptyList()
 
-    private val lock = ConversationListLockCoordinator(
+    private val lock: ConversationListLockCoordinator = ConversationListLockCoordinator(
         state = _state,
         lockStore = lockStore,
-        openConversation = { openConversationRequests.trySend(it) },
+        openConversation = { dialogs.onConversationOpened(it); openConversationRequests.trySend(it) },
     )
     private val actions = ConversationListRowActions(
         scope = viewModelScope,
@@ -102,6 +103,11 @@ class ConversationListViewModel @Inject constructor(
         categoryRepository = categoryRepository,
         draftStore = draftStore,
         workManager = workManager,
+        activeConversationId = { loadingDeps.activeConversation.conversationId.value },
+    )
+    /** Les dialogues confirmés de la liste (bloquer, masquer, quitter, renommer, signaler, verrou). */
+    internal val dialogs: ConversationListDialogController = ConversationListDialogController(
+        viewModelScope, _state, { id -> rawConversations.firstOrNull { it.id == id } }, actions, repository, dialogDeps, lock, lockStore,
     )
     private val realtime = ConversationListRealtimeBinder(
         scope = viewModelScope,
@@ -236,7 +242,7 @@ class ConversationListViewModel @Inject constructor(
     fun onRemoveMasterPin() = lock.onRemoveMasterPin()
     fun onLockDigit(digit: Int) = lock.onLockDigit(digit)
     fun onLockDelete() = lock.onLockDelete()
-    fun dismissLockPrompt() = lock.dismissLockPrompt()
+    fun dismissLockPrompt() = dialogs.dismissLockPrompt()
 
     /**
      * Pull-to-refresh: the visible spinner tracks the user gesture only —

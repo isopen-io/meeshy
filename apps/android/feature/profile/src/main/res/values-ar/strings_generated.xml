@@ -21,6 +21,8 @@
     <string name="profile_close_hint">يغلق الملف الشخصي</string>
     <string name="profile_connection_context_received">يرغب %s في التواصل معك. اقبل لتبادل الرسائل.</string>
     <string name="profile_connection_context_sent">أرسلت طلب اتصال إلى %s. في انتظار ردّه.</string>
+    <string name="profile_conversations_interactionsDisabled">التفاعلات معطّلة</string>
+    <string name="profile_conversations_noShared">لا توجد محادثات مشتركة</string>
     <string name="profile_decor_subtitle">ظاهران للجميع على ملفك الشخصي</string>
     <string name="profile_decor_title">الإطار والبانر</string>
     <string name="profile_detail_country">البلد</string>
