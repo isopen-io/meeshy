@@ -3,6 +3,7 @@ import * as usersEndpoints from '@meeshy/shared/api/endpoints/users';
 import type { Credential, HttpTransport } from '@/lib/api/http';
 import { heldAccountOf, type SessionState } from '@/lib/api/session';
 import type { SocialEventV2Input } from '@/lib/api/social-events-v2-types';
+import { ANDROID_APP_PACKAGE } from '@/lib/links/app-handoff';
 import { notificationEventOf } from '@/lib/notifications/notification-telemetry';
 import { pushTapTarget, type NotificationTargetInput, type PushTapTarget } from '@/lib/notifications/target';
 
@@ -170,7 +171,9 @@ export async function startShellPush(env: ShellPushEnvironment): Promise<void> {
   const registerToken = (): void => {
     const credential = account();
     if (token === null || activeUser === null || credential === null) return;
-    const body = { token, platform: 'android', type: 'fcm', appVersion: env.appVersion };
+    // L'identifiant de publication sépare la coque de l'application native sur `platform: 'android'` : sans lui,
+    // la passerelle ne sert aucun type qui exige une version de client (#10267, `push-type-routing.ts`).
+    const body = { token, platform: 'android', type: 'fcm', appVersion: env.appVersion, bundleId: ANDROID_APP_PACKAGE };
     const send = (identity: ShellDeviceIdentity) =>
       transport.request({
         method: 'POST',

@@ -54,7 +54,7 @@ import { fileURLToPath } from 'node:url';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const APP = join(HERE, '..');
 
-/** Les dix tables de types du résolveur, plus la liste des routes qu'un indice serveur peut nommer. */
+/** Les onze tables de types du résolveur, plus la liste des routes qu'un indice serveur peut nommer. */
 const TABLES = [
   'EPHEMERAL_ENTITIES',
   'EPHEMERAL_ONLY_TYPES',
@@ -64,6 +64,7 @@ const TABLES = [
   'PROGRESSION_TYPES',
   'GAME_LEAGUE_TYPES',
   'GAME_SEASON_TYPES',
+  'GAME_PHOTO_TYPES',
   'SECURITY_TYPES',
   'HINTED_ROUTES',
 ];
@@ -144,6 +145,7 @@ const ADRESSES = [
   [{ type: 'game_duo_invited', route: 'progression' }, '/me/progression/ligue'],
   [{ type: 'game_league_result', route: 'progression' }, '/me/progression/ligue'],
   [{ type: 'game_season_step', route: 'progression' }, '/me/progression/saison'],
+  [{ type: 'game_photo_moment', route: 'progression' }, '/me/progression/carnet'],
   [{ type: 'un_type_sans_ecran' }, '/notifications'],
 ];
 

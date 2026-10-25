@@ -281,6 +281,8 @@ export type FakeGameDb = {
   readonly gamePhotoMoment: Model;
   readonly userStickerPack: Model;
   readonly engagementActStreak: Model;
+  /** Les jetons push du compte : qui peut recevoir un type neuf (#10267, `push-type-routing.ts`). */
+  readonly pushToken: Model;
 };
 
 export function fakeGameDb(): FakeGameDb {
@@ -332,6 +334,7 @@ export function fakeGameDb(): FakeGameDb {
   const engagementActStreak = flattenCompound(new Model({ uniques: [['userId', 'act']] }));
   // Le calendrier des saisons servi (#10016) : vide, la loi rend la constante.
   const gameSeasonDefinition = flattenCompound(new Model({ uniques: [['number'], ['revision']] }));
+  const pushToken = new Model();
   const models = {
     user,
     gloryLedger,
@@ -368,6 +371,7 @@ export function fakeGameDb(): FakeGameDb {
     userStickerPack,
     gameSeasonDefinition,
     engagementActStreak,
+    pushToken,
   };
 
   /**
