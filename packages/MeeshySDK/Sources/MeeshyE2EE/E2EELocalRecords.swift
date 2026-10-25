@@ -89,7 +89,7 @@ public final class E2EEPlaintextVault: E2EEPlaintextStoring {
 /// d'identité épinglée à l'approbation. Un appareil que le serveur annonce sur
 /// mon compte sans approbation locale ne reçoit RIEN : sans cela, un serveur
 /// compromis ajouterait un « appareil » pour recevoir une copie de mes messages.
-/// L'approbation elle-même (QR du `ScannableFingerprint`) est le lot #12520.
+/// L'approbation elle-même (QR du `ScannableFingerprint`) : `E2EEOwnDeviceLinking` (#12976).
 public protocol E2EEOwnDeviceApprovalProviding: Sendable {
     func approvedIdentity(of deviceId: UInt32) throws -> Data?
 }
