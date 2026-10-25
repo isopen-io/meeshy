@@ -157,6 +157,45 @@ final class ConversationMenuCatalogTests: XCTestCase {
         XCTAssertFalse(menu.entries.contains(.groupSettings))
     }
 
+    // MARK: - Gérer les membres (#12631)
+
+    func test_make_groupModerator_offersManageMembers_afterRename_beforeFavorite() {
+        let menu = catalog(makeInput(makeConversation(currentUserRole: "moderator")))
+        let rename = menu.organize.firstIndex(of: .rename)
+        let manage = menu.organize.firstIndex(of: .manageMembers)
+        let favorite = menu.organize.firstIndex(of: .favorite)
+        XCTAssertNotNil(manage, "Un modérateur de groupe gère les membres depuis la rangée, comme sur le web.")
+        if let rename, let manage, let favorite {
+            XCTAssertTrue(rename < manage && manage < favorite, "L'ordre du web : Renommer, Gérer les membres, Favori.")
+        }
+    }
+
+    func test_make_groupMember_offersNoManageMembers() {
+        let menu = catalog(makeInput(makeConversation(currentUserRole: "member")))
+        XCTAssertFalse(menu.entries.contains(.manageMembers), "Un simple membre ne gère pas les membres.")
+    }
+
+    func test_make_direct_neverOffersManageMembers() {
+        for role in ["USER", "ADMIN", "BIGBOSS"] {
+            let menu = catalog(makeInput(
+                makeConversation(type: .direct, currentUserRole: "creator", participantUserId: "peer"),
+                user: makeUser(role: role)
+            ))
+            XCTAssertFalse(menu.entries.contains(.manageMembers), "\(role) : un direct n'a pas de membres à gérer.")
+        }
+    }
+
+    func test_make_platformModeratorMemberOfGroup_offersManageMembers() {
+        let menu = catalog(makeInput(makeConversation(currentUserRole: "member"), user: makeUser(role: "MODERATOR")))
+        XCTAssertTrue(menu.organize.contains(.manageMembers), "MODERATOR de plateforme membre ⇒ créateur (#11217).")
+    }
+
+    func test_manageMembers_isAnActingEntry_neitherDestructiveNorSubmenu() {
+        XCTAssertFalse(ConversationMenuEntry.manageMembers.isDestructive)
+        XCTAssertFalse(ConversationMenuEntry.manageMembers.opensSubmenu)
+        XCTAssertFalse(ConversationMenuEntry.manageMembers.label.isEmpty)
+    }
+
     // MARK: - Fenêtre détachée et verrou
 
     func test_make_lockedConversation_neverDetaches() {
@@ -308,7 +347,8 @@ final class ConversationMenuCatalogDispatchTests: XCTestCase {
             onSearch: { recorder.calls.append("search") },
             onCall: { recorder.calls.append("call") },
             onVideoCall: { recorder.calls.append("videoCall") },
-            onGroupSettings: { recorder.calls.append("groupSettings") }
+            onGroupSettings: { recorder.calls.append("groupSettings") },
+            onManageMembers: { recorder.calls.append("manageMembers") }
         )
     }
 
@@ -333,8 +373,9 @@ final class ConversationMenuCatalogDispatchTests: XCTestCase {
         let actions = makeActions(recorder)
         actions.perform(.videoCall)
         actions.perform(.groupSettings)
+        actions.perform(.manageMembers)
         actions.perform(.hide)
-        XCTAssertEqual(recorder.calls, ["videoCall", "groupSettings", "delete"])
+        XCTAssertEqual(recorder.calls, ["videoCall", "groupSettings", "manageMembers", "delete"])
     }
 
     /// Les deux chemins rendent la MÊME liste : le menu custom expose à

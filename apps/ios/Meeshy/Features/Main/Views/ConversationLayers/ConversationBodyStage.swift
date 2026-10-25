@@ -94,7 +94,7 @@ struct ConversationReaderModeBranch: View {
     let showScript: () -> Void
     let reply: (Message) -> Void
     let menuAuthority: () -> ConversationMenuAuthority
-    let presentMenu: (Message) -> Void
+    let presentMenu: (Message, RiverPressedCell) -> Void
     let openViewOnce: (String) -> Bool
     let openMedia: (MessageAttachment) -> Void
 

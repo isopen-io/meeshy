@@ -98,6 +98,182 @@ final class MessageOverlayPreviewKindTests: XCTestCase {
     }
 }
 
+/// **En Rivière, l'aperçu d'appui long est la bulle de la Rivière, posée à sa
+/// place** (#12630, décision #11204 : l'aperçu suit le mode de lecture).
+///
+/// La cellule pressée est une `RiverBubbleView` — couleur de couloir, en-tête
+/// d'identité, largeur de couloir — et non une `ThemedMessageBubble`. Son cadre
+/// est publié dans le repère du pane (`RiverCoordinateSpace`), pas dans celui
+/// de la fenêtre que l'overlay attend : l'hôte de la Rivière le convertit.
+@MainActor
+final class RiverOverlayPreviewTests: XCTestCase {
+
+    // MARK: - Fabriques
+
+    private func content(messageId: String = "m1") -> RiverBubbleContent {
+        RiverBubbleContent(
+            bubble: RiverLaneResolver.RiverBubble(
+                messageId: messageId, laneId: "u2", laneIndex: 1, rank: 4, createdAtMs: 0,
+                isViewer: false, replyToMessageId: nil, isFirstInGroup: true, isSystem: false),
+            senderDisplayName: "Minjun",
+            colorSeed: "Minjun",
+            timeString: "10:42",
+            text: "On se retrouve à la gare ?",
+            layout: .lanes)
+    }
+
+    private func face(messageId: String = "m1", width: CGFloat = 252) -> RiverOverlayFace {
+        RiverOverlayFace(content: content(messageId: messageId), contentWidth: width)
+    }
+
+    private func message(id: String = "m1", clientMessageId: String? = nil) -> Message {
+        Message(id: id, clientMessageId: clientMessageId, conversationId: "c1", senderId: "u2",
+                content: "On se retrouve à la gare ?", senderName: "Minjun")
+    }
+
+    private func bubbleFace(for message: Message) -> MessageOverlayCellPreview.Face {
+        let overlay = MessageOverlayMenu(
+            message: message, contactColor: "#6366F1",
+            messageBubbleFrame: .zero, isPresented: .constant(true))
+        return .bubble(overlay.previewBubble)
+    }
+
+    // MARK: - La face montrée
+
+    func test_displayedFace_riverFaceForThePressedMessage_isTheRiverBubble() {
+        let message = message()
+        let shown = MessageOverlayCellPreview.displayedFace(bubbleFace(for: message), river: face(), message: message)
+        XCTAssertEqual(shown, .river(face()), "En Rivière, l'aperçu rend la bulle du couloir, pas celle du fil.")
+    }
+
+    func test_displayedFace_withoutRiverFace_keepsTheThreadBubble() {
+        let message = message()
+        let bubble = bubbleFace(for: message)
+        XCTAssertEqual(MessageOverlayCellPreview.displayedFace(bubble, river: nil, message: message), bubble)
+    }
+
+    func test_displayedFace_riverFaceOfAnotherMessage_isIgnored() {
+        let message = message(id: "m2")
+        let bubble = bubbleFace(for: message)
+        XCTAssertEqual(MessageOverlayCellPreview.displayedFace(bubble, river: face(messageId: "m1"), message: message), bubble,
+                       "La face d'un autre message ne s'impose jamais à l'aperçu.")
+    }
+
+    /// Un envoi optimiste accusé pendant que le menu est ouvert change d'id
+    /// (#12627) : la face reste celle de la bulle pressée.
+    func test_displayedFace_acknowledgedSend_keepsTheRiverFaceOfItsOptimisticRow() {
+        let served = message(id: "srv1", clientMessageId: "cid_1")
+        let shown = MessageOverlayCellPreview.displayedFace(bubbleFace(for: served), river: face(messageId: "cid_1"), message: served)
+        XCTAssertEqual(shown, .river(face(messageId: "cid_1")))
+    }
+
+    // MARK: - Le cadre, du pane à la fenêtre
+
+    /// iPad en vue partagée : la conversation commence à 320 pt du bord de la
+    /// fenêtre, sous 60 pt de barre. Le cadre publié dans le pane se décale
+    /// d'autant ; il ne se lit plus comme un cadre de fenêtre.
+    func test_windowFrame_iPadSplitView_shiftsByThePaneOrigin() {
+        let frame = RiverPressedCell.windowFrame(
+            paneFrame: CGRect(x: 40, y: 300, width: 252, height: 88),
+            paneInWindow: CGRect(x: 320, y: 60, width: 500, height: 1000),
+            width: 252)
+        XCTAssertEqual(frame, CGRect(x: 360, y: 360, width: 252, height: 88))
+    }
+
+    /// iPhone plein écran : le pane est à l'origine de la fenêtre, le cadre
+    /// d'une bulle visible ne bouge pas.
+    func test_windowFrame_iPhoneFullScreen_visibleBubble_isUnchanged() {
+        let bubble = CGRect(x: 30, y: 412, width: 252, height: 96)
+        let frame = RiverPressedCell.windowFrame(
+            paneFrame: bubble, paneInWindow: CGRect(x: 0, y: 0, width: 402, height: 874), width: 252)
+        XCTAssertEqual(frame, bubble)
+    }
+
+    /// Un couloir à moitié défilé hors de l'écran : l'aperçu ne se pose pas
+    /// coupé, il revient à 16 pt du bord du pane.
+    func test_windowFrame_laneScrolledOffTheLeadingEdge_isHeldSixteenPointsIn() {
+        let frame = RiverPressedCell.windowFrame(
+            paneFrame: CGRect(x: -120, y: 200, width: 252, height: 60),
+            paneInWindow: CGRect(x: 320, y: 0, width: 500, height: 1000),
+            width: 252)
+        XCTAssertEqual(frame.minX, 336)
+        XCTAssertEqual(frame.minY, 200)
+    }
+
+    func test_windowFrame_laneBeyondTheTrailingEdge_isHeldSixteenPointsIn() {
+        let frame = RiverPressedCell.windowFrame(
+            paneFrame: CGRect(x: 600, y: 200, width: 252, height: 60),
+            paneInWindow: CGRect(x: 0, y: 0, width: 402, height: 874),
+            width: 252)
+        XCTAssertEqual(frame.maxX, 386)
+    }
+
+    /// Un pince a élargi les couloirs au-delà de l'écran : la bulle de l'aperçu
+    /// prend la largeur qui tient entre les deux marges.
+    func test_make_bubbleWiderThanThePane_fitsBetweenTheMargins() {
+        let pressed = RiverPressedCell.make(
+            messageId: "m1", content: content(),
+            paneFrame: CGRect(x: 0, y: 100, width: 520, height: 60),
+            paneInWindow: CGRect(x: 0, y: 0, width: 402, height: 874),
+            bubbleWidth: 520)
+        XCTAssertEqual(pressed.windowFrame, CGRect(x: 16, y: 100, width: 370, height: 60))
+        XCTAssertEqual(pressed.face.contentWidth, 370)
+    }
+
+    func test_make_carriesTheBubbleAsPainted() {
+        let pressed = RiverPressedCell.make(
+            messageId: "m1", content: content(),
+            paneFrame: CGRect(x: 30, y: 100, width: 252, height: 60),
+            paneInWindow: CGRect(x: 0, y: 0, width: 402, height: 874),
+            bubbleWidth: 252)
+        XCTAssertEqual(pressed.messageId, "m1")
+        XCTAssertEqual(pressed.face, face())
+    }
+
+    /// La bulle n'a pas encore publié son cadre : aucun cadre fabriqué,
+    /// l'overlay retombe sur son placement par défaut.
+    func test_make_unmeasuredBubble_hasNoWindowFrame() {
+        let pressed = RiverPressedCell.make(
+            messageId: "m1", content: content(), paneFrame: nil,
+            paneInWindow: CGRect(x: 0, y: 0, width: 402, height: 874), bubbleWidth: 252)
+        XCTAssertNil(pressed.windowFrame)
+        XCTAssertEqual(pressed.face.contentWidth, 252)
+    }
+
+    func test_edgeMargin_isTheMarginOfEveryPreviewBubble() {
+        XCTAssertEqual(RiverPressedCell.edgeMargin, MessageOverlayCellPreview.bubbleMargin)
+        XCTAssertEqual(RiverPressedCell.edgeMargin, 16)
+    }
+
+    // MARK: - Le câblage, de la bulle pressée à l'aperçu
+
+    private func source(_ path: String) throws -> String {
+        AppSourceGuard.stripComments(try AppSourceGuard.unit(path))
+    }
+
+    func test_riverFace_rendersTheRiverBubbleView_withoutItsRowSeam() throws {
+        let cell = try source("Meeshy/Features/Main/Components/MessageOverlayCellPreview.swift")
+        XCTAssertTrue(cell.contains("switch Self.displayedFace(face, river: riverFace, message: message)"),
+                      "L'aperçu rend la face MONTRÉE, celle que la Rivière remet.")
+        XCTAssertTrue(cell.contains("RiverBubbleView(content: river.content, contentWidth: river.contentWidth, drawsTopSeam: false)"),
+                      "La face Rivière monte la `RiverBubbleView` du couloir, sans la respiration du rang.")
+        XCTAssertTrue(cell.contains(".transformPreference(MessageFramePreferenceKey.self) { $0 = [:] }"),
+                      "Le cadre de l'aperçu ne remonte pas jusqu'au suivi des bulles du fil.")
+    }
+
+    func test_pressedBubble_travelsFromTheRiverToTheOverlay() throws {
+        let stream = try source("Meeshy/Features/Main/Riviere/View/RiverStreamHost.swift")
+        XCTAssertTrue(stream.contains("paneFrame: frames[messageId]"), "L'hôte lit le cadre publié de la bulle pressée.")
+        XCTAssertTrue(stream.contains("paneInWindow: paneAnchor.frame"), "…et le convertit par l'origine du pane dans la fenêtre.")
+        let host = try source("Meeshy/Features/Main/Views/ConversationView.swift")
+        XCTAssertTrue(host.contains("presentMenu: { presentLongPressMenu(for: $0, cellFrame: $1.windowFrame, riverFace: $1.face) }"),
+                      "La Rivière ouvre le menu à la place de la bulle, avec sa face.")
+        let layer = try source("Meeshy/Features/Main/Views/ConversationLayers/ConversationBodyPresentations.swift")
+        XCTAssertTrue(layer.contains(".environment(\\.riverOverlayFace, overlayState.overlayRiverFace)"),
+                      "L'overlay reçoit la face tenue par l'état des surcouches.")
+    }
+}
+
 /// **L'aperçu d'appui long LIT les vocaux et les vidéos, dans les TROIS modes**
 /// (#11339, décision porteur, option B).
 ///
