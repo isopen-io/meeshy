@@ -308868,6 +308868,194 @@
           }
         }
       }
+    },
+    "conversation.send.e2ee.regimeDowngradeUnconfirmed": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يشير الخادم إلى أن التشفير التام بين الطرفين لهذه المحادثة قد عُطّل، لكن هذا التغيير لا يظهر في المحادثة: لم تُرسل الرسالة. افتح «التشفير» في معلومات المحادثة للتحقق."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Laut Server wurde die Ende-zu-Ende-Verschlüsselung dieser Unterhaltung deaktiviert, doch die Änderung erscheint nicht im Verlauf: Die Nachricht wurde nicht gesendet. Öffne „Verschlüsselung“ in den Infos der Unterhaltung, um es zu prüfen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The server says end-to-end encryption was turned off for this conversation, but the change doesn’t appear in the chat: the message wasn’t sent. Open Encryption in the conversation info to check."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El servidor indica que el cifrado de extremo a extremo de esta conversación se desactivó, pero el cambio no aparece en el chat: el mensaje no se envió. Abre Cifrado en la información de la conversación para comprobarlo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le serveur indique que le chiffrement de bout en bout de cette conversation a été désactivé, mais ce changement n’apparaît pas dans le fil : le message n’est pas parti. Ouvrez Chiffrement dans les infos de la conversation pour vérifier."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Il server indica che la crittografia end-to-end di questa conversazione è stata disattivata, ma la modifica non compare nella chat: il messaggio non è stato inviato. Apri Crittografia nelle info della conversazione per verificare."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O servidor indica que a criptografia de ponta a ponta desta conversa foi desativada, mas a mudança não aparece na conversa: a mensagem não foi enviada. Abra Criptografia nas informações da conversa para conferir."
+          }
+        }
+      }
+    },
+    "conversation.encryption.detail.downgradePending": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "كانت هذه المحادثة مشفّرة تمامًا بين الطرفين، ويقول الخادم الآن إنها لم تعد كذلك. لن يُرسل أي شيء في هذه المحادثة ما لم تؤكّد ذلك."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diese Unterhaltung war Ende-zu-Ende-verschlüsselt, und der Server meldet jetzt, dass sie es nicht mehr ist. Solange du das nicht bestätigst, wird in dieser Unterhaltung nichts gesendet."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This conversation was end-to-end encrypted, and the server now says it no longer is. Until you confirm it, nothing is sent in this conversation."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esta conversación estaba cifrada de extremo a extremo y el servidor dice ahora que ya no lo está. Mientras no lo confirmes, no se envía nada en esta conversación."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cette conversation a été chiffrée de bout en bout, et le serveur la dit maintenant sans chiffrement de bout en bout. Tant que vous ne le confirmez pas, rien ne part dans cette conversation."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Questa conversazione era crittografata end-to-end e il server ora dice che non lo è più. Finché non lo confermi, in questa conversazione non parte nulla."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esta conversa era criptografada de ponta a ponta, e o servidor agora diz que não é mais. Enquanto você não confirmar, nada é enviado nesta conversa."
+          }
+        }
+      }
+    },
+    "conversation.encryption.detail.downgradeConfirm": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "فهمت، الكتابة دون تشفير تام بين الطرفين"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verstanden, ohne Ende-zu-Ende-Verschlüsselung schreiben"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Got it, write without end-to-end encryption"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Entendido, escribir sin cifrado de extremo a extremo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "J’ai compris, écrire sans chiffrement de bout en bout"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ho capito, scrivi senza crittografia end-to-end"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Entendi, escrever sem criptografia de ponta a ponta"
+          }
+        }
+      }
+    },
+    "conversation.encryption.detail.downgradeFooter": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تبقى الرسائل المشفّرة مشفّرة. أما الجديدة فسيتمكّن الخادم من قراءتها وترجمتها وتفريغها نصيًا."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bereits verschlüsselte Nachrichten bleiben verschlüsselt. Neue kann der Server lesen, übersetzen und transkribieren."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Messages already encrypted stay encrypted. New ones will be readable by the server, which can translate and transcribe them."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los mensajes ya cifrados siguen cifrados. Los nuevos serán legibles por el servidor, que podrá traducirlos y transcribirlos."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les messages déjà chiffrés le restent. Les nouveaux seront lisibles par le serveur, qui pourra les traduire et les transcrire."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "I messaggi già crittografati restano tali. I nuovi saranno leggibili dal server, che potrà tradurli e trascriverli."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "As mensagens já criptografadas continuam assim. As novas poderão ser lidas pelo servidor, que poderá traduzi-las e transcrevê-las."
+          }
+        }
+      }
     }
   },
   "version": "1.1"

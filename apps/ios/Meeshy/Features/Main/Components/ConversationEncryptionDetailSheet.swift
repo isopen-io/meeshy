@@ -19,6 +19,7 @@ struct ConversationEncryptionDetailSheet: View {
     @State private var justDisabled = false
     @State private var selectedMode: ConversationEncryptionModeChoice = .server
     @State private var errorMessage: String?
+    @State private var pendingDowngrade: EndToEndRegimeLedger.PendingDowngrade?
 
     private var mayToggle: Bool { status?.canToggleEncryption ?? fallbackMayToggle }
 
@@ -50,9 +51,11 @@ struct ConversationEncryptionDetailSheet: View {
                     }
                 case .activation:
                     inactiveStateSection
+                    downgradeConfirmationSection
                     enableStateSections
                 case .inactiveReadOnly:
                     inactiveStateSection
+                    downgradeConfirmationSection
                 }
 
                 if let errorMessage {
@@ -177,6 +180,39 @@ struct ConversationEncryptionDetailSheet: View {
                         defaultValue: "Les messages déjà chiffrés le restent et demeurent lisibles sur vos appareils. Les nouveaux messages partiront sans chiffrement de bout en bout : la traduction et la transcription par le serveur reviendront pour eux.",
                         bundle: .main))
                 .font(.caption)
+        }
+    }
+
+    // MARK: - Désactivation annoncée par le serveur (#12846)
+
+    /// Le serveur dit le chiffrement de bout en bout désactivé, et
+    /// l'utilisateur ne l'a pas encore vu : l'envoi reste suspendu jusqu'à ce
+    /// qu'il le confirme ici, ou que l'avis s'affiche dans le fil.
+    @ViewBuilder
+    private var downgradeConfirmationSection: some View {
+        if let pendingDowngrade {
+            Section {
+                Text(String(localized: "conversation.encryption.detail.downgradePending",
+                            defaultValue: "Cette conversation a été chiffrée de bout en bout, et le serveur la dit maintenant sans chiffrement de bout en bout. Tant que vous ne le confirmez pas, rien ne part dans cette conversation.",
+                            bundle: .main))
+                    .font(.subheadline)
+                Button {
+                    ledger.confirm(pendingDowngrade, for: conversationId)
+                    self.pendingDowngrade = nil
+                    HapticFeedback.success()
+                } label: {
+                    Text(String(localized: "conversation.encryption.detail.downgradeConfirm",
+                                defaultValue: "J’ai compris, écrire sans chiffrement de bout en bout",
+                                bundle: .main))
+                        .fontWeight(.semibold)
+                }
+                .accessibilityIdentifier("encryption-downgrade-confirm")
+            } footer: {
+                Text(String(localized: "conversation.encryption.detail.downgradeFooter",
+                            defaultValue: "Les messages déjà chiffrés le restent. Les nouveaux seront lisibles par le serveur, qui pourra les traduire et les transcrire.",
+                            bundle: .main))
+                    .font(.caption)
+            }
         }
     }
 
@@ -314,6 +350,7 @@ struct ConversationEncryptionDetailSheet: View {
             let fetched = try await service.fetchStatus(conversationId: conversationId)
             status = fetched
             ledger.learn(fetched, for: conversationId)
+            pendingDowngrade = ledger.pendingDowngrade(for: conversationId)
         } catch {
             Self.logger.error("loadStatus failed: \(error.localizedDescription)")
             errorMessage = String(localized: "conversation.encryption.detail.readStatusError",
@@ -326,9 +363,14 @@ struct ConversationEncryptionDetailSheet: View {
         await switchRegime { try await service.enable(conversationId: conversationId, mode: selectedMode.rawValue) }
     }
 
+    /// Désactiver est le geste de l'utilisateur : il a vu la bascule (#12846).
     private func deactivate() async {
         await switchRegime { try await service.disable(conversationId: conversationId) }
         justDisabled = status?.isEncrypted == false
+        if justDisabled, let epoch = status?.epoch {
+            ledger.confirmDowngrade(epoch: epoch, for: conversationId)
+        }
+        pendingDowngrade = ledger.pendingDowngrade(for: conversationId)
     }
 
     /// Une bascule : le régime servi devient l'état de la fiche ET ce que le fil
