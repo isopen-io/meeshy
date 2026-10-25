@@ -80,6 +80,8 @@ const esStudioChrome = {
   'story.studio.background.cameraHold': 'Mantener: abrir la cámara',
   'story.studio.camera.close': 'Volver a la escena',
   'story.studio.camera.flip': 'Cambiar de cámara',
+  'story.studio.camera.frames': 'Marcos',
+  'story.studio.camera.frames.none': 'Sin marco',
   'story.studio.camera.flash': 'Flash',
   'story.studio.camera.shutter.photo': 'Hacer una foto',
   'story.studio.camera.shutter.start': 'Empezar a grabar',

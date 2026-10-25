@@ -5898,3 +5898,16 @@ Les deux voiles lisent ces jetons et importent la feuille eux-mêmes (`@import '
 - `withServedEditor` (`lib/api/realtime-message-mutations.ts`) distingue la clé absente (on garde l'état), `null` (l'auteur a réécrit, la mention s'efface) et une valeur.
 
 **Référence.** Décision passerelle : `services/gateway/decisions/2026-10-24-un-moderateur-qui-modifie-le-message-d-autrui-le-fait-a-visage-decouvert-11375.md`.
+
+## D-232 — La caméra du composer reçoit la famille « Cadres » : les cadres de capture embarqués, peints par l'atelier de l'appel, et l'aperçu est ce qui part (2026-10-25, #10190 ; applique #10184 PP4 et #10187)
+
+**Le contexte.** Le composer iOS pose les cadres de capture de l'appel vidéo sur sa photo et sa vidéo (#9295, #9329, bande Filtres · Effets · Cadres #9351) ; la caméra du composer web (`StudioCamera`, ouverte par la barre de composition comme par le studio de story) n'en avait aucun.
+
+**La décision.**
+- Un bouton « Cadres », du côté de début du déclencheur (la place du cadenas, qui ne paraît que pendant l'appui long qui filme), ouvre la bande des cadres : le carrousel des modes de l'appel (`ModeCarousel`), « Aucun cadre » en tête, puis chaque cadre une fois avec sa vignette vivante et son libellé d'usage (`describeFrameUsage`, #10146). La case qui s'arrête au centre est choisie, comme sur iOS (#9566).
+- Ce qui se propose est ce que l'atelier propose À LA CAPTURE (`CAPTURE_FRAME_USES` : `canUseFrame` vrai pour la photo ET la vidéo), aux deux personnes du composer iOS (`catalogPeople = 2`) : loi `lib/stories/studio-camera-frames.ts`. La résolution par identifiant reste sur le catalogue connu (`FrameStudio.find`).
+- L'aperçu, la photo et la vidéo passent par le MÊME peintre (`FrameStudio.draw`) avec le MÊME visage (la trame de l'objectif, recadrée au zoom numérique) : la photo se peint à la toile du Montage (`captureSize`, 9:16) et passe par le développement unique des photos (`developPhoto`, #8695, la garde l'inscrit comme site de prise de vue) ; la vidéo filme la toile de l'aperçu (30 i/s pendant le film) avec le son de la caméra. Sans toile filmable, la vidéo part sans cadre.
+- Une capture n'est jamais en miroir (#8696) : l'aperçu encadré non plus, même à l'objectif avant (écart assumé avec iOS, dont le look en direct se redresse en miroir).
+- Les treize montages « Classiques », que la bande iOS range aussi sous « Cadres », n'y entrent pas encore : ils n'ont pas de `FrameUsage` et leur peintre lit des tuiles d'appel ; suivi séparé. Filtres et Effets, les deux autres familles iOS, restent hors de ce lot.
+- Rien ne se télécharge : les douze ambiances sont embarquées (#10184, #10187). Les puces lisent l'offre de l'atelier, pas encore l'étagère `offered(shelf)` du lot LC (#10169), qui la remplacera sans changer ce contrat.
+- Le chunk `story_camera_frames` (budgets.json) se charge au premier toucher de « Cadres », jamais avec la caméra ; l'atelier (`call_frame_studio`) et les libellés d'usage le suivent.
