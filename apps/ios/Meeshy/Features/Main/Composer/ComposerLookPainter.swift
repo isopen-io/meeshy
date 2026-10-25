@@ -191,10 +191,12 @@ nonisolated enum ComposerLookPainter {
     }
 
     private static func overlayPasses(_ overlay: ComposerTextOverlay?, canvas: CGSize) -> [LensPass] {
-        guard let overlay else { return [] }
-        let vitres = overlay.glass.compactMap { frosted($0, canvas: canvas) }
-        let encre = overlay.ink.flatMap { posed(CIImage(cgImage: $0), canvas: canvas) }
-        return vitres + (encre.map { [LensPass.overlay($0, stage: .overlays)] } ?? [])
+        (overlay?.layers ?? []).compactMap { couche in
+            switch couche {
+            case .glass(let vitre): return frosted(vitre, canvas: canvas)
+            case .ink(let encre): return posed(CIImage(cgImage: encre), canvas: canvas).map { LensPass.overlay($0, stage: .overlays) }
+            }
+        }
     }
 
     /// Un calque mis à l'échelle de la toile.
