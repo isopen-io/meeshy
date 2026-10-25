@@ -10,12 +10,14 @@ import { securityFailureOf, type SecurityFailure } from '@/lib/api/account-secur
 import { ApiError, unwrap } from '@/lib/api/client';
 import { apiDeps } from '@/lib/api/deps';
 import {
+  E2EE_DEVICE_CHANGED,
   E2EE_DEVICES_QUERY_KEY,
   loadE2eeDevices,
   orderedE2eeDevices,
   retireE2eeDevice,
   type E2eeDevice,
   type E2eeDeviceDeps,
+  type E2eeDeviceGeneration,
 } from '@/lib/api/e2ee-devices';
 import type { ApiResult } from '@/lib/api/http';
 import { appQueryClient } from '@/lib/api/query-client';
@@ -42,19 +44,21 @@ import { SECURITY_PANEL, SECURITY_PANEL_PARAM } from '@/routes/settings-sections
  * - **L'approbation n'est pas montrée** : elle vit sur chaque appareil, le
  *   serveur ne la connaît pas. Un « en attente » ici serait inventé.
  * - **Cache d'abord, optimiste, hors ligne** : le motif de l'écran des
- *   sessions (`settings-security.tsx`).
+ *   sessions (`settings-security.tsx`) — mais le RETRAIT n'est proposé que sur
+ *   une liste relue dans l'écran ouvert, et il nomme la génération lue : une
+ *   place reprise depuis rend 409, et la liste se recharge en le disant.
  */
 
 export type E2eeDevicesScreenDeps = {
   readonly load: (signal: AbortSignal) => Promise<ApiResult<readonly E2eeDevice[]>>;
-  readonly retire: (deviceId: number) => Promise<ApiResult<unknown>>;
+  readonly retire: (device: E2eeDeviceGeneration) => Promise<ApiResult<unknown>>;
 };
 
 export type E2eeDevicesHost = 'browser' | 'android-shell';
 
 const gatewayDeps = (deps: E2eeDeviceDeps): E2eeDevicesScreenDeps => ({
   load: (signal) => loadE2eeDevices({ ...deps, signal }),
-  retire: (deviceId) => retireE2eeDevice(deps, deviceId),
+  retire: (device) => retireE2eeDevice(deps, device),
 });
 
 /** La coque Capacitor se reconnaît à `Capacitor.getPlatform()` ; un navigateur n'en a pas. */
@@ -101,11 +105,18 @@ export function SettingsE2eeDevicesScreen({
 
   const retire = async (target: E2eeDevice) => {
     setPending(null);
+    if (target.registrationId === null) return;
     const snapshot = queryClient.getQueryData<readonly E2eeDevice[]>(E2EE_DEVICES_QUERY_KEY);
     queryClient.setQueryData<readonly E2eeDevice[] | undefined>(E2EE_DEVICES_QUERY_KEY, (before) =>
       before?.filter((device) => device.deviceId !== target.deviceId),
     );
-    const result = await deps.retire(target.deviceId);
+    const result = await deps.retire({ deviceId: target.deviceId, registrationId: target.registrationId });
+    if (!result.ok && result.code === E2EE_DEVICE_CHANGED) {
+      queryClient.setQueryData(E2EE_DEVICES_QUERY_KEY, snapshot);
+      setAnnounce(t('e2eeDevices.retire.changed'));
+      await queryClient.refetchQueries({ queryKey: E2EE_DEVICES_QUERY_KEY });
+      return;
+    }
     if (!result.ok && securityFailureOf(result) !== 'not-found') {
       queryClient.setQueryData(E2EE_DEVICES_QUERY_KEY, snapshot);
       setAnnounce(t('e2eeDevices.retire.error'));
@@ -116,6 +127,10 @@ export function SettingsE2eeDevicesScreen({
   };
 
   const devices = query.data === undefined ? undefined : orderedE2eeDevices(query.data);
+  /* Un retrait ne part que d'une liste RELUE dans cet écran : celle du cache peut
+     nommer une place reprise depuis (la passerelle le refuserait, mais l'écran
+     ne propose pas un geste qu'il sait douteux). */
+  const confirmed = query.isFetchedAfterMount && query.isSuccess && !query.isFetching;
   const failure: SecurityFailure | null = query.error instanceof ApiError ? securityFailureOf(query.error) : query.error === null ? null : 'unavailable';
 
   return (
@@ -183,7 +198,7 @@ export function SettingsE2eeDevicesScreen({
                     language={language}
                     t={t}
                     now={now()}
-                    disabled={!online}
+                    disabled={!online || !confirmed}
                     onRetire={() => setPending(device)}
                   />
                 ))}
@@ -266,7 +281,7 @@ function DeviceCard({
           </div>
         ))}
       </dl>
-      {device.current ? null : (
+      {device.current || device.registrationId === null ? null : (
         <button
           type="button"
           data-e2ee-device-retire={String(device.deviceId)}
