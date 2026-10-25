@@ -22,6 +22,7 @@ import path from 'node:path';
 import { generateAteliers, PLATE_VARIANTS as VARIANTS } from './ateliers.mjs';
 import { launch } from './launch.mjs';
 import { bakedSlotsOf, DECOR_TEXTS_FILE, frameIdOf, readDecorTexts } from './decor-sorts.mjs';
+import { flatColor, slotsOf, underGlyphContrastOf } from './contrast-rule.mjs';
 import { classify, isFront, markBaked, read, show } from './layers.mjs';
 import { H, openPage, pool, SCALE, shoot, showSvg, W } from './page.mjs';
 import sharp, { sharpVersion } from './sharp.mjs';
@@ -95,45 +96,7 @@ async function encode(dir, name, buf, { quality = QUALITY.layer, lossless = fals
   return { src: path.basename(dir) + '/' + name + '.webp', box, bytes: webp.length, sha256: sha256(webp) };
 }
 
-const luminance = (r, g, b) => {
-  const lin = (c) => {
-    const v = c / 255;
-    return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
-  };
-  return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
-};
-const rgbOf = (css) => {
-  const m = /rgba?\(([^)]+)\)/.exec(css ?? '');
-  if (m) return m[1].split(',').slice(0, 3).map((v) => Number.parseFloat(v));
-  const h = /^#([0-9a-f]{6})/i.exec(css ?? '');
-  return h ? [0, 2, 4].map((i) => Number.parseInt(h[1].slice(i, i + 2), 16)) : null;
-};
-const fillColors = (fill) => (fill?.solid ? [rgbOf(fill.solid)] : (fill?.stops ?? []).map((s) => rgbOf(s.color))).filter(Boolean);
-const flatColor = (i) => [20 + (i % 8) * 30, 20 + Math.floor(i / 8) * 30, 200];
-
-function contrastOf(mask, color, bg, main) {
-  const colors = fillColors(main.fill);
-  if (colors.length === 0) return null;
-  const op = main.opacity;
-  const ratios = [];
-  const [bx, by, bw, bh] = main.bbox;
-  const x0 = Math.max(0, bx - 8), x1 = Math.min(FW, bx + bw + 8), y0 = Math.max(0, by - 8), y1 = Math.min(FH, by + bh + 8);
-  for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) {
-    const p = (y * FW + x) * 4;
-    if (mask[p + 3] !== 255 || mask[p] !== color[0] || mask[p + 1] !== color[1] || mask[p + 2] !== color[2]) continue;
-    const a = bg[p + 3] / 255;
-    const back = [bg[p] * a, bg[p + 1] * a, bg[p + 2] * a];
-    const lb = luminance(...back);
-    const worst = Math.min(...colors.map((c) => {
-      const lt = luminance(...c.map((v, k) => v * op + back[k] * (1 - op)));
-      return (Math.max(lt, lb) + 0.05) / (Math.min(lt, lb) + 0.05);
-    }));
-    ratios.push(worst);
-  }
-  if (ratios.length === 0) return null;
-  ratios.sort((x, y) => x - y);
-  return { contrast: Math.round(ratios[Math.floor(ratios.length * 0.05)] * 100) / 100, contrastMin: Math.round(ratios[0] * 100) / 100, glyphPixels: ratios.length };
-}
+const frameImage = (data) => ({ data, width: FW, height: FH });
 
 // Une couche posée sur le décor se lit DANS la scène où Chromium la peint, pas seule : un filtre en linearRGB
 // (l'ombre portée d'une plaque) quantifie les sombres sur 8 bits, et la trame de ce tramage dépend de ce qui est peint
@@ -151,21 +114,6 @@ function inScene(alone, full, without, above) {
     for (let c = 0; c < 3; c++) out[p + c] = Math.max(0, Math.min(255, Math.round((full[p + c] - (1 - k) * without[p + c]) / k)));
   }
   return out;
-}
-
-function slotsOf(texts) {
-  const groups = new Map();
-  texts.forEach((t) => groups.set(t.slot, [...(groups.get(t.slot) ?? []), t]));
-  return [...groups.entries()].map(([slot, members]) => {
-    const plain = members.filter((t) => !t.filter && t.opacity >= 0.5);
-    const main = (plain.length ? plain : members).at(-1);
-    const effects = members.filter((t) => t !== main).map((t) => ({
-      dx: Math.round((t.matrix[4] + t.x - main.matrix[4] - main.x) * 100) / 100,
-      dy: Math.round((t.matrix[5] + t.baseline - main.matrix[5] - main.baseline) * 100) / 100,
-      fill: t.fill, stroke: t.stroke, opacity: t.opacity, filter: t.filter, under: t.index < main.index,
-    }));
-    return { slot, main, effects };
-  });
 }
 
 function stackOf(order, runs) {
@@ -327,7 +275,7 @@ async function exportFrame(handle, { collection, name, message }) {
   fs.writeFileSync(path.join(dir, 'thumb.webp'), thumbBuf);
 
   const text = Object.fromEntries(slots.map((s, i) => {
-    const measured = MUTATE === 'no-contrast' ? null : contrastOf(masks.raw, flatColor(i), notext.raw, s.main);
+    const measured = MUTATE === 'no-contrast' ? null : underGlyphContrastOf({ mask: frameImage(masks.raw), color: flatColor(i), under: frameImage(notext.raw), slot: s.main });
     const { index, slot, ...main } = s.main;
     return [s.slot, { ...main, effects: s.effects, contrast: measured?.contrast ?? null, contrastMin: measured?.contrastMin ?? null, glyphPixels: measured?.glyphPixels ?? 0 }];
   }));

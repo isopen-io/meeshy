@@ -1477,6 +1477,9 @@ jobs:
   # Le domaine porte aussi les contrats (`packages/shared/design/glory-frames/`)
   # et le magasin des masques (`services/gateway/assets/packs/`) : le témoin
   # chemin ↔ masque les lit, une réimportation seule doit le lancer (#10254).
+  # Le même job tient la garde de lisibilité des textes (#10265,
+  # `lib/contrast.mjs`), qui lit le cliquet `lowContrast` et la table du tri
+  # des textes de décor sous `packages/shared/design/glory-frames/`.
   glory-frames:
     name: Cadres de gloire · empiètement
     runs-on: ubuntu-latest
@@ -1540,6 +1543,26 @@ jobs:
 
       - name: Garde d'empiètement (197 cadres)
         run: node lib/overlap.mjs --check --jobs 2
+
+      # La garde de lisibilité (#10265, prompt § 5.2) : chaque texte d'un
+      # cadre tient 4,5:1 (3:1 au-dessus de 24 px) contre ce qui est dessous,
+      # ou déclare un effet (ombre, lueur, contour) qui, mesuré au bord du
+      # glyphe sur le rendu, le rend lisible. Un texte bas hors du cliquet
+      # `lowContrast` (packages/shared/design/glory-frames/known-gaps.json)
+      # rougit. Le témoin qui précède efface presque un titre lisible.
+      - name: Témoin — la garde de lisibilité rougit sur un titre effacé
+        env:
+          SHARP_MODULE: sharp
+        run: |
+          if node lib/contrast.mjs --check --only olympe-legende-3 --mutate low-contrast; then
+            echo "::error::la garde de lisibilité n'a pas rougi sur un titre effacé"
+            exit 1
+          fi
+
+      - name: Garde de lisibilité des textes (#10265)
+        env:
+          SHARP_MODULE: sharp
+        run: node lib/contrast.mjs --check --jobs 2
 
       # Les cibles de fidélité (lot L21a, #10177, prompt § 8.3) : l'échantillon
       # versionné sous docs/product/cadres-de-gloire/cible/ se régénère ici,

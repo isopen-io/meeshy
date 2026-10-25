@@ -151,16 +151,16 @@
  },
  {
   "file": "neon-mythe-a",
-  "overlap": 62,
+  "overlap": 13,
   "face": 0,
-  "depth": 5,
+  "depth": 2,
   "bbox": [
-   156,
-   704,
-   178,
-   709
+   141,
+   706,
+   149,
+   708
   ],
-  "windowPx": 150718,
+  "windowPx": 150786,
   "layout": "duo",
   "verdict": "ok"
  },
