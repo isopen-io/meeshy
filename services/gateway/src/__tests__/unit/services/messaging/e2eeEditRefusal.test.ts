@@ -47,6 +47,8 @@ const edit = (params: { encryptionMode: string | null; editor?: string; globalRo
       createdAt: new Date(NOW - 60_000),
       messageType: 'text',
       metadata: null,
+      isEncrypted: false,
+      encryptionMode: null,
     },
     now: NOW,
   });
