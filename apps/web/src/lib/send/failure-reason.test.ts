@@ -65,7 +65,7 @@ describe('sendFailureReason', () => {
   /* #9928 — un mineur qui écrit dans Global (état périmé) : la cause dit
      quand Global s'ouvrira, jamais un refus générique. */
   test('E2EE_PLAINTEXT_REFUSED dit que la conversation est chiffrée, jamais « envoi refusé »', () => {
-    expect(sendFailureReason(failure(400, { code: 'E2EE_PLAINTEXT_REFUSED' }))).toBe('Conversation chiffrée de bout en bout : le web ne peut pas encore y écrire');
+    expect(sendFailureReason(failure(400, { code: 'E2EE_PLAINTEXT_REFUSED' }))).toBe('Conversation chiffrée de bout en bout : écrivez depuis l’app Meeshy');
     expect(sendFailureReasonIn(failure(400, { code: 'E2EE_PLAINTEXT_REFUSED' }), 'en')).toBe('End-to-end encrypted conversation: the web app can’t write here yet');
   });
 

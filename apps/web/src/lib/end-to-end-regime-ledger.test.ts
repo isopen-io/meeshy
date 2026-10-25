@@ -38,8 +38,29 @@ describe('le mode de bout en bout', () => {
 });
 
 describe('ce que le fil montre du bout en bout', () => {
-  test('un message marqué e2ee dans une conversation sans régime ne suffit pas (mesuré sur staging le 2026-10-25 : trois tête-à-tête sans régime portent un ancien message iOS marqué e2ee)', () => {
-    expect(threadShowsEndToEnd([message({}), message({ encryptionMode: 'e2ee', isEncrypted: true, content: '' })])).toBe(false);
+  test('un message chiffré de bout en bout affiché suffit, même sans régime servi (#12986, option 2)', () => {
+    expect(threadShowsEndToEnd([message({}), message({ encryptionMode: 'e2ee', isEncrypted: true, content: '' })])).toBe(true);
+    expect(threadShowsEndToEnd([message({ encryptionMode: 'E2EE', isEncrypted: true, content: '' })])).toBe(true);
+  });
+
+  test('un envoi libsignal se reconnaît aussi à son protocole, sur ses métadonnées ou son chiffré', () => {
+    expect(threadShowsEndToEnd([message({ isEncrypted: true, content: '', encryptionMetadata: { protocol: 'libsignal-v1' } })])).toBe(true);
+    expect(threadShowsEndToEnd([message({ isEncrypted: true, content: '', encryptedContent: 'libsignal-v1' })])).toBe(true);
+    expect(threadShowsEndToEnd([message({ isEncrypted: true, content: '', encryptionMetadata: { mode: 'e2ee' } })])).toBe(true);
+  });
+
+  test('un message supprimé reste une preuve : son effacement ne rouvre pas le clair', () => {
+    expect(threadShowsEndToEnd([message({ encryptionMode: 'e2ee', isEncrypted: true, content: '', deletedAt: new Date() })])).toBe(true);
+  });
+
+  test('un chiffré SERVEUR ou hybride n’est pas du bout en bout', () => {
+    expect(
+      threadShowsEndToEnd([
+        message({ isEncrypted: true, encryptionMode: 'server', encryptionMetadata: { mode: 'server', protocol: 'aes-256-gcm' } }),
+        message({ isEncrypted: true, encryptionMode: 'hybrid' }),
+        message({ encryptedContent: 'Y2xhaXI=' }),
+      ]),
+    ).toBe(false);
   });
 
   test('l’avis système d’activation du bout en bout, par métadonnée ou par évènement', () => {
@@ -79,6 +100,13 @@ describe('une conversation vue e2ee reste fermée au clair', () => {
     ledger.getState().learnEndToEnd(ID);
     expect(endToEndSealed(ledger.getState(), { conversationId: ID, servedMode: null })).toBe(true);
     expect(endToEndSealed(ledger.getState(), { conversationId: ID, servedMode: 'server' })).toBe(true);
+  });
+
+  test('le fil montre un message chiffré de bout en bout, le serveur ne dit rien : fermée, et la garde de l’envoi refuse (#12986)', () => {
+    const ledger = createEndToEndRegimeLedger();
+    const messages = [message({}), message({ encryptionMode: 'e2ee', isEncrypted: true, content: '' })];
+    expect(endToEndSealed(ledger.getState(), { conversationId: ID, servedMode: null, messages })).toBe(true);
+    expect(canSendPlaintext({ conversationId: ID, servedMode: null, messages }, ledger.getState())).toBe(false);
   });
 
   test('le fil montre le bout en bout, le serveur ne dit rien : fermée', () => {

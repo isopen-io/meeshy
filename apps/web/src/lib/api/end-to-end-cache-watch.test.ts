@@ -53,3 +53,39 @@ describe('le registre apprend le bout en bout depuis le cache des conversations'
     unwatch();
   });
 });
+
+/**
+ * #12986 (option 2) — UN FIL CHARGÉ QUI PORTE UN MESSAGE CHIFFRÉ DE BOUT EN
+ * BOUT scelle la conversation pour le compte, même servie sans mode : la
+ * feuille d'envoi, le transfert et le partage le lisent sans ouvrir le fil.
+ */
+const thread = (messages: readonly unknown[]) => ({ pages: [{ messages, hasOlder: false, nextCursor: null }], pageParams: [undefined] });
+const sealedRow = (conversationId: string) => ({ id: `e-${conversationId}`, conversationId, messageType: 'text', content: '', isEncrypted: true, encryptionMode: 'e2ee' });
+const plainRow = (conversationId: string) => ({ id: `p-${conversationId}`, conversationId, messageType: 'text', content: 'salut', isEncrypted: false });
+
+describe('le registre apprend le bout en bout depuis le cache des fils (#12986)', () => {
+  test('le fil d’une conversation servie sans mode porte un message e2ee : fermée', () => {
+    const client = new QueryClient();
+    const ledger = createEndToEndRegimeLedger({ storage: null });
+    client.setQueryData(['conversations', 'c-1', 'messages'], thread([plainRow('c-1'), sealedRow('c-1')]));
+
+    const unwatch = watchEndToEndConversations(client, ledger);
+    client.setQueryData(['conversations', 'c-2', 'messages'], thread([plainRow('c-2')]));
+    client.setQueryData(['conversations', 'c-3', 'messages', 'around', 'm-9'], thread([sealedRow('c-3')]));
+
+    expect(['c-1', 'c-2', 'c-3'].map((id) => canSendPlaintext({ conversationId: id }, ledger.getState()))).toEqual([false, true, false]);
+    unwatch();
+  });
+
+  test('un fil qui ne porte que du clair, ou une donnée d’une autre forme, n’apprend rien', () => {
+    const client = new QueryClient();
+    const ledger = createEndToEndRegimeLedger({ storage: null });
+    const unwatch = watchEndToEndConversations(client, ledger);
+    client.setQueryData(['conversations', 'c-4', 'messages'], thread([plainRow('c-4')]));
+    client.setQueryData(['conversations', 'c-5', 'messages'], { messages: 'pas une liste' });
+    client.setQueryData(['conversations', 'c-6', 'media'], thread([sealedRow('c-6')]));
+
+    expect(ledger.getState().sealed).toEqual({});
+    unwatch();
+  });
+});
