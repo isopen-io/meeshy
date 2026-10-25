@@ -89,3 +89,14 @@ utilisateur traduit). Aucun impact sur la résolution `resolveUserLanguage`.
 ## ✅ Status : itération soldée — corrections implémentées, voir plan 2026-06-14-plan-iteration-49wb
 NE PAS retraiter les findings ci-dessus (préfixe `admin.ranking.*`, labels `RANKING_CRITERIA`,
 chaînes LinkRankCard, syntax error/mock du test ranking).
+
+---
+
+## ✅ Statut : CLOS — LEGACY (annoté iter-76w, 2026-10-25)
+
+Cette analyse visait le **legacy Next.js** (`apps/web` d'avant #7668, routes
+`app/`, surfaces admin/ranking/tracking-links) retiré du dépôt le 2026-09-24.
+Son périmètre pointe du code **supprimé** : elle **ne se rejoue pas** et ses
+pistes différées sont caduques. Conservée pour l'histoire. La routine UI/UX web
+repart d'une revue fraîche de l'`apps/web` actuel (Vite + Preact) — voir le
+pointeur `docs/plans/uiux/web-iteration-pointer.md`.

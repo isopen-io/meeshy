@@ -90,7 +90,7 @@ function windowedRows(input: {
             {...(slice.at === 0 ? { [ROW_ANCHOR_ATTRIBUTE]: anchor } : {})}
             data-row-gap=""
             aria-hidden="true"
-            style={{ height: slice.rows * ROW_HEIGHT, flexShrink: 0 }}
+            style={{ height: slice.rows * ROW_HEIGHT, flexShrink: 0, transitionProperty: 'none' }}
           />,
         ],
   );

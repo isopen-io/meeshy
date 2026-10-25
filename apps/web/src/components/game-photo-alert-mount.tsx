@@ -1,7 +1,9 @@
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { lazy, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 import { browserIdle, type IdleScheduler } from '@/lib/view/screen-preload';
+
+import { OptionalChunk } from './optional-chunk';
 
 /**
  * L'HÔTE DES INVITATIONS À IMMORTALISER, ARMÉ HORS DE L'ENTRÉE (#10174, L18) — la bande du haut est dans le module
@@ -33,9 +35,9 @@ export function GamePhotoAlertMount({
   if (!signedIn || column === null) return null;
   return createPortal(
     <div data-photo-alert-host="" className="contents">
-      <Suspense fallback={null}>
+      <OptionalChunk>
         <Host routeKey={routeKey} />
-      </Suspense>
+      </OptionalChunk>
     </div>,
     column,
   );
