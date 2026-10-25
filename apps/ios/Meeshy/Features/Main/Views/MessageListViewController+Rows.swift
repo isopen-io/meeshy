@@ -364,9 +364,9 @@ extension MessageListViewController {
         let makeThemedBubble = parts.makeBubble
         let selectionModeActive = parts.selectionModeActive
         let pieceLongPressHandler = handlers.pieceLongPress
-        let selectedIds = parts.selectedIds
         let longMessageExpansion = parts.longMessageExpansion
         let offer = callbacks.rowOffer?(message) ?? .closed // #12626 — la loi, lue une fois par configuration
+        let unencryptedMarking = UnencryptedMessageMarking(isUnencrypted: parts.inputs.isUnencrypted, isDark: isDark) // hors du contenu STOCKÉ (#12910)
         cell.contentConfiguration = UIHostingConfiguration {
             BubbleSwipeContainer(
                 isMine: message.isMe,
@@ -379,14 +379,14 @@ extension MessageListViewController {
                 onLongPress: { handlers.longPress(messageId) },
                 enableLongPress: true,
                 isSelectionModeActive: selectionModeActive,
-                isSelected: selectedIds.contains(messageId),
+                isSelected: parts.selectedIds.contains(messageId),
                 onToggleSelection: { callbacks.toggleSelection?(messageId) },
                 editMenuActions: self.messageEditMenuActions(message: message, callbacks: callbacks, offer: offer)
             ) {
                 if let focalRow {
-                    focalRow.equatable().modifier(UnencryptedMessageMarking(isUnencrypted: parts.inputs.isUnencrypted, isDark: self.isDark))
+                    focalRow.equatable().modifier(unencryptedMarking)
                 } else {
-                    messageBubble.longMessageFocus(longMessageExpansion).modifier(UnencryptedMessageMarking(isUnencrypted: parts.inputs.isUnencrypted, isDark: self.isDark))
+                    messageBubble.longMessageFocus(longMessageExpansion).modifier(unencryptedMarking)
                 }
             }
             .environmentObject(host)

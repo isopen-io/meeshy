@@ -144,6 +144,14 @@ describe('les autres familles', () => {
     expect(pushTapTarget({ type: 'game_mission_window', route: 'progression' })).toEqual(expected);
   });
 
+  /* LES MOMENTS À IMMORTALISER (#10175, § 5.16.4) — une étape franchie app fermée s'annonce par UNE notification
+     groupée ; son toucher ouvre le CARNET, là où l'étape se photographie, jamais le hub que nomme l'indice. */
+  test('une notification « moments à immortaliser » ouvre le carnet, malgré l’indice `progression` du serveur', () => {
+    expect(notificationTarget(record({ type: 'game_photo_moment' }))).toEqual({ route: 'progressionCarnet' });
+    expect(resolveTarget({ type: 'game_photo_moment', route: 'progression' })).toEqual({ route: 'progressionCarnet' });
+    expect(pushTapTarget({ type: 'game_photo_moment', route: 'progression' })).toEqual({ route: 'progressionCarnet' });
+  });
+
   test('un tap de bannière du jeu atterrit sur la même page', () => {
     expect(pushTapTarget({ type: 'game_league_result', route: 'progression' })).toEqual({ route: 'progressionLigue' });
   });

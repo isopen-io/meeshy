@@ -8,7 +8,7 @@ import { translate } from '@/lib/i18n-catalog';
 import { translateMessagePieces } from '@/lib/i18n-message-pieces-catalog';
 import { projectMessagePreview } from '@/lib/view/message-preview';
 import { armPreviewPlayback, previewTabTarget, type PreviewPlayback } from '@/lib/view/message-preview-playback';
-import { previewSurfaceOf, readingModeOfRow } from '@/lib/view/message-preview-surface';
+import { bubbleSpanOfRow, previewSurfaceOf, readingModeOfRow } from '@/lib/view/message-preview-surface';
 import { liftMotion, liftOffset, playLift, playReturn, type ReturnFlight } from '@/lib/view/message-menu-lift';
 import { veilRow } from '@/lib/view/row-veil';
 import { prefersReducedMotion } from '@/lib/view/reduced-motion';
@@ -256,8 +256,12 @@ export function MessageMenu({
         : ((height: number) => ({ top: rect.top, bottom: rect.top + height, left: rect.left, right: rect.right, width: rect.width, height }))(
             height ?? rect.height,
           );
+    /* EN BULLES, L'ANCRE EST LA BULLE (#12635) — jamais en mode pièce, où
+       l'aperçu est la tuile centrée ; absente en rangée plate. */
+    const bubble = pieceBox === null ? bubbleSpanOfRow(target.element) : undefined;
     return placeMessageMenuCluster({
       anchor,
+      ...(bubble === undefined ? {} : { bubble }),
       viewport: { width: window.innerWidth, height: window.innerHeight },
       safe,
       menuHeight,
@@ -791,7 +795,8 @@ export function MessageMenu({
             width: placement.previewWidth,
             boxSizing: 'border-box',
             transform: previewTransform(committed),
-            transformOrigin: target.isMine ? 'top right' : 'top left',
+            /* Réduit depuis le bord que l'aperçu TIENT (#12635) — celui de la bulle en RTL. */
+            transformOrigin: `top ${placement.previewEdge}`,
             pointerEvents: 'none',
             /* L'ÉLÉVATION (revue #5814, défaut majeur 11) — posée sur
                l'HÔTE du clone, JAMAIS sur le clone lui-même (qui doit rester

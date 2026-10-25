@@ -81,14 +81,12 @@ Shell script to extract duration using `ffprobe` and update MongoDB.
 
 **Requires:** `ffprobe`, `jq`, `bc`
 
-### 006_remove_encryptionMode_from_message_attachment.js
+### 006_remove_encryptionMode_from_message_attachment.js — RETIRÉE (#12949)
 
-Removes the `encryptionMode` field from `Message` and `MessageAttachment` documents.
-
-**Reason:** `encryptionMode` should only exist at the `Conversation` level.
-The encryption mode is inherited by all messages and attachments in that conversation.
-
-**Safe:** Only removes the field, does not affect other data.
+Elle effaçait `encryptionMode` de `Message` et `MessageAttachment`. `Message.encryptionMode`
+marque aujourd'hui un message chiffré de bout en bout (#12881) : la rejouer retirerait cette
+marque à tout l'historique chiffré. Elle ne fait plus que compter, en lecture seule, et ne
+figure plus dans `run_migrations.sh`.
 
 ### 007_migrate_snake_case_to_camel_case.js
 

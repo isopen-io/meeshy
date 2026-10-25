@@ -14,6 +14,7 @@
 import { ACHIEVEMENT_FAMILIES } from '../../types/achievement-families.js';
 import { achievementKey, tiersOf } from '../../types/achievement-catalog.js';
 import { ENGAGEMENT_ACHIEVEMENT_KEYS, type EngagementAchievementKey } from '../../types/engagement.js';
+import { isDayKey } from './day-prng.js';
 import type { GuideEventV2 } from './guide-v2.js';
 import type { LeagueKey } from './league.js';
 
@@ -56,15 +57,15 @@ export function photoMomentId(emblem: PhotoMomentEmblemV2): string {
 
 /**
  * LA RÉALISATION DU JOUR (D6, #10173) — un moment par jour de jeu, réalisé par un geste (l'ouverture du Coffre
- * du jour). Son identité porte la journée : `day:<AAAA-MM-JJ>` ; une clé illisible n'a pas d'identité.
+ * du jour). Son identité porte la journée : `day:<AAAA-MM-JJ>` ; une clé qui n'est pas une VRAIE date du
+ * calendrier (`2026-02-30`) n'a pas d'identité. La grammaire est celle de la garde serveur (`isDayKey`) :
+ * un client ne nomme jamais un moment que la passerelle refuserait.
  */
-const DAY_KEY = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
-
-export const photoDayMomentId = (dayKey: string): string | null => (DAY_KEY.test(dayKey) ? `day:${dayKey}` : null);
+export const photoDayMomentId = (dayKey: string): string | null => (isDayKey(dayKey) ? `day:${dayKey}` : null);
 
 /** La journée d'une identité `day:<AAAA-MM-JJ>`, `null` pour toute autre identité. */
 export const photoDayOfMomentId = (momentId: string): string | null =>
-  momentId.startsWith('day:') && DAY_KEY.test(momentId.slice(4)) ? momentId.slice(4) : null;
+  momentId.startsWith('day:') && isDayKey(momentId.slice(4)) ? momentId.slice(4) : null;
 
 /**
  * LE HAUT FAIT (LS, #10168) — l'identité commune du web (`achievementMoment`) et d'iOS (`GamePhotoMoments.achievement`),

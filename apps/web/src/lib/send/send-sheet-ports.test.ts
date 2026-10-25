@@ -4,6 +4,7 @@ import type { ConversationsDeps } from '@/lib/api/conversations';
 import type { ApiResult, HttpRequest, HttpTransport } from '@/lib/api/http';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
+import { canSendPlaintext, endToEndRegimeLedger } from '@/lib/end-to-end-regime-ledger';
 import { createImagePreparer, type ImagePort } from '@/lib/media/prepare-image-upload';
 
 import { createSendSheetPorts } from './send-sheet-ports';
@@ -55,6 +56,15 @@ describe('openDirect', () => {
     const ports = createSendSheetPorts({ language: 'fr', deps });
     expect(await ports.openDirect('u1')).toEqual({ ok: true, data: { id: 'dm-1' } });
     expect(requests[0]?.body).toEqual({ type: 'direct', participantIds: ['u1'] });
+  });
+
+  test('le tête-à-tête existant servi e2ee est appris AVANT tout téléversement (audit #12949)', async () => {
+    const { deps } = scripted(() => ({ ok: true, data: { id: 'dm-e2ee', type: 'direct', encryptionMode: 'e2ee' } }));
+    const ports = createSendSheetPorts({ language: 'fr', deps });
+    await ports.openDirect('u2');
+    await ports.openGroup({ userIds: ['u3', 'u4'], title: 'g' });
+    expect(canSendPlaintext({ conversationId: 'dm-e2ee' })).toBe(false);
+    endToEndRegimeLedger.getState().reset();
   });
 });
 

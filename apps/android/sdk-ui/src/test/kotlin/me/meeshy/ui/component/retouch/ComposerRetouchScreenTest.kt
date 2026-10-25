@@ -9,6 +9,7 @@ import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -47,6 +48,12 @@ class ComposerRetouchScreenTest {
         compose.waitForIdle()
     }
 
+    /** « Terminé » revient quand l'outil ou la bande se referme : on l'attend avant de le toucher. */
+    private fun tapDone() {
+        compose.waitUntil(5_000) { compose.onAllNodesWithText("Done").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("Done").performClick()
+    }
+
     @Test
     fun `a l entree, Annuler et Termine sont la, et le rail offre Filtres et Cadres`() {
         show()
@@ -60,7 +67,7 @@ class ComposerRetouchScreenTest {
     @Test
     fun `une prise intouchee part telle quelle`() {
         show()
-        compose.onNodeWithText("Done").performClick()
+        tapDone()
         compose.waitUntil(5_000) { delivered.isNotEmpty() }
         assertThat(delivered).containsExactly(ComposerRetouchResult.Original)
     }
@@ -77,7 +84,7 @@ class ComposerRetouchScreenTest {
         compose.onNodeWithContentDescription("Screen").assertIsSelected()
         compose.onNodeWithText("Frames").performClick()
         compose.waitForIdle()
-        compose.onNodeWithText("Done").performClick()
+        tapDone()
         compose.waitUntil(10_000) { delivered.isNotEmpty() }
         val rendered = delivered.single() as ComposerRetouchResult.Rendered
         assertThat(rendered.bitmap.width % 2).isEqualTo(0)
@@ -106,7 +113,7 @@ class ComposerRetouchScreenTest {
         compose.onNodeWithText("1:1").assertIsSelected()
         compose.onNodeWithText("Crop").performClick()
         compose.waitForIdle()
-        compose.onNodeWithText("Done").performClick()
+        tapDone()
         compose.waitUntil(10_000) { delivered.isNotEmpty() }
         val rendered = delivered.single() as ComposerRetouchResult.Rendered
         assertThat(rendered.bitmap.width).isEqualTo(rendered.bitmap.height)
@@ -128,7 +135,7 @@ class ComposerRetouchScreenTest {
         compose.waitForIdle()
         compose.onNodeWithText("Text").performClick()
         compose.waitForIdle()
-        compose.onNodeWithText("Done").performClick()
+        tapDone()
         compose.waitUntil(10_000) { delivered.isNotEmpty() }
         val rendered = delivered.single() as ComposerRetouchResult.Rendered
         val pixels = IntArray(rendered.bitmap.width * rendered.bitmap.height)

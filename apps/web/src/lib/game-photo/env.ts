@@ -17,7 +17,8 @@ import type { FrameRef } from '@meeshy/shared/utils/game/glory-frames';
 
 import { rootVarReader } from './css-vars';
 import type { GloryOffer } from './glory-choice';
-import type { GloryScene, GloryStep, GloryTexts } from './glory/glory-scene';
+import type { GloryAssetDeps } from './glory/frame-assets';
+import type { GloryCatalogSource, GloryScene, GloryStep, GloryTexts } from './glory/glory-scene';
 import type { PhotoMoment } from './moments';
 import { accountBackend, createNotebook, developNotebookSource, notebookDbName, openIndexedDbBackend, type LegacyState, type Notebook, type NotebookBackend } from './notebook';
 import { indexedDbLegacyStore, knownAccountsOf, settleLegacyNotebook, type KeyedStorage } from './notebook-legacy';
@@ -256,7 +257,10 @@ function browserNotebook(now: () => Date): Notebook {
   });
 }
 
-export function browserPhotoEnv(): PhotoEnv {
+/** D'où la scène lit ses cadres : le catalogue et le magasin de la session hors des témoins. */
+export type BrowserGlorySources = { readonly catalog?: GloryCatalogSource; readonly assets?: GloryAssetDeps };
+
+export function browserPhotoEnv(glorySources: BrowserGlorySources = {}): PhotoEnv {
   const now = (): Date => new Date();
   const notebook = browserNotebook(now);
   return {
@@ -277,15 +281,15 @@ export function browserPhotoEnv(): PhotoEnv {
     glory: async ({ step, texts, scale, frame, pose = null }) => {
       try {
         const { gloryFrameAt, gloryFrameFor, openGloryScene } = await gloryModule();
-        const pick = frame === undefined ? await gloryFrameFor(step) : await gloryFrameAt(frame);
-        return pick === null ? null : openGloryScene({ pick, texts, pose, scale });
+        const pick = frame === undefined ? await gloryFrameFor(step, glorySources.catalog) : await gloryFrameAt(frame, glorySources.catalog);
+        return pick === null ? null : openGloryScene({ pick, texts, pose, scale, ...(glorySources.assets === undefined ? {} : { deps: glorySources.assets }) });
       } catch {
         return null;
       }
     },
     gloryOffer: async (step) => {
       try {
-        return await (await gloryModule()).gloryOfferFor(step);
+        return await (await gloryModule()).gloryOfferFor(step, glorySources.assets, glorySources.catalog);
       } catch {
         return null;
       }

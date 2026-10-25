@@ -13,7 +13,7 @@ import {
   type PhotoAlertPolicy,
 } from '../../utils/game/photo-alerts.js';
 import { photoCatchUp, photoStepsReached, type PhotoCatchUpStanding } from '../../utils/game/photo-catch-up.js';
-import { photoAchievementKeyOfMomentId, photoAchievementMomentId, photoDayMomentId } from '../../utils/game/photo-moments.js';
+import { photoAchievementKeyOfMomentId, photoAchievementMomentId, photoDayMomentId, photoDayOfMomentId } from '../../utils/game/photo-moments.js';
 import { PHOTO_STATIC_STEP_IDS } from '../../utils/game/photo-step-ids.js';
 
 const standing = (over: Partial<PhotoCatchUpStanding> = {}): PhotoCatchUpStanding => ({
@@ -169,6 +169,14 @@ describe('la réalisation du jour', () => {
   it('son identité est day:<AAAA-MM-JJ>', () => {
     expect(photoDayMomentId('2026-10-11')).toBe('day:2026-10-11');
     expect(photoDayMomentId('11/10/2026')).toBeNull();
+  });
+
+  it('une clé en forme de date qui n’en est pas une n’a pas d’identité, comme pour la garde serveur (`isDayKey`)', () => {
+    expect(photoDayMomentId('2026-02-30')).toBeNull();
+    expect(photoDayMomentId('2026-02-29')).toBeNull();
+    expect(photoDayMomentId('2028-02-29')).toBe('day:2028-02-29');
+    expect(photoDayOfMomentId('day:2026-02-30')).toBeNull();
+    expect(photoDayOfMomentId('day:2026-04-31')).toBeNull();
   });
 
   it('s’annonce une fois : présentée, elle ne revient pas le même jour', () => {

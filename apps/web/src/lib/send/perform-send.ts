@@ -2,6 +2,7 @@ import type { QueryClient } from '@tanstack/react-query';
 import type { StoreApi } from 'zustand/vanilla';
 
 import { uploadAttachments, uploadShortfall } from '@/lib/api/attachments';
+import { canSendPlaintext, E2EE_PLAINTEXT_WITHHELD } from '@/lib/end-to-end-regime-ledger';
 import { browserImagePreparer, type ImagePreparer } from '@/lib/media/prepare-image-upload';
 import { newClientMessageId } from '@/lib/api/client-message-id';
 import type { ConversationsDeps } from '@/lib/api/conversations';
@@ -261,6 +262,18 @@ async function attempt(params: {
   readonly deps: SendDeps;
 }): Promise<void> {
   const { conversationId, message, deps } = params;
+
+  /* #12949 — la garde AVANT le téléversement : retenir le seul message
+     laisserait le fichier déjà parti en clair au serveur. */
+  if (!canSendPlaintext({ conversationId })) {
+    deps.outbox.getState().markFailed(conversationId, message.clientMessageId, {
+      ok: false,
+      status: 0,
+      error: 'Cette conversation est chiffrée de bout en bout : rien n’y part en clair',
+      code: E2EE_PLAINTEXT_WITHHELD,
+    });
+    return;
+  }
 
   const attachmentIds = await uploadPhase(params);
   if (attachmentIds === null) return; // markFailed déjà posé par uploadPhase.

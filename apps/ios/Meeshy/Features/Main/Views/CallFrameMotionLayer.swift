@@ -1,4 +1,5 @@
 import AVFoundation
+import MeeshyUI
 import QuartzCore
 import UIKit
 
@@ -106,6 +107,7 @@ nonisolated final class CallFrameMotionLayer: CALayer {
     let sceneSize: CGSize
     /// Les boucles vidéo d'une scène tournent tant que la couche vit.
     private var loopers: [AVPlayerLooper] = []
+    private var players: [AVQueuePlayer] = []
 
     init(scene: CallFrameMotionScene) {
         sceneSize = scene.size
@@ -130,6 +132,13 @@ nonisolated final class CallFrameMotionLayer: CALayer {
         super.init(layer: layer)
     }
 
+    /// Les boucles vidéo suivent la politique média (#9880) : l'hôte les remet au moniteur, sur
+    /// le fil principal, dès que la couche est posée — la chaleur ou l'économie d'énergie
+    /// refroidissent leurs tampons comme ceux de tout autre lecteur.
+    @MainActor func adoptTheMediaPolicy() {
+        players.forEach { MediaPolicyMonitor.shared.adopt($0, role: .watched) }
+    }
+
     /// Une lumière (halo radial qui respire) ou une boucle vidéo (muette, transparente si le
     /// fichier porte un canal alpha — HEVC alpha), à la taille de la toile. `effects` passe sur
     /// les visages, `back` et `front` restent dans le masque.
@@ -142,6 +151,7 @@ nonisolated final class CallFrameMotionLayer: CALayer {
             player.isMuted = true
             player.preventsDisplaySleepDuringVideoPlayback = false
             loopers.append(AVPlayerLooper(player: player, templateItem: AVPlayerItem(url: url)))
+            players.append(player)
             let video = AVPlayerLayer(player: player)
             video.frame = frame
             video.videoGravity = .resizeAspectFill

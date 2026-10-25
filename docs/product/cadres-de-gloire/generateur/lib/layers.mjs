@@ -78,6 +78,8 @@ export function classify() {
 
 // `photo` : la photo FIXTURE des cibles (lib/cible.mjs) posée à la place des silhouettes, recadrée en `cover` sur la
 // boîte de la fenêtre (`box`, repère de design) — ce que l'app peint par défaut ; le décor la masque hors de la fenêtre.
+// Elle arrive APRÈS le chargement de la page, donc rien ne l'attend : son `load` est capturé avant de poser `href`
+// (`__loaded`), et `settle` (lib/page.mjs) l'attend avant toute capture (#12801).
 export function show({ kinds, probe = null, flatSlots = null, photo = null }) {
   const visible = new Set(kinds);
   const root = document.querySelector('g[data-layer="root"]');
@@ -111,6 +113,11 @@ export function show({ kinds, probe = null, flatSlots = null, photo = null }) {
     const anchor = root.querySelector('[data-layer="photo"]') ?? root.querySelector('[data-layer="photo-bg"]');
     const image = document.createElementNS('http://www.w3.org/2000/svg', 'image');
     image.setAttribute('data-probe', '1');
+    image.setAttribute('decoding', 'sync');
+    image.__loaded = new Promise((resolve) => {
+      image.addEventListener('load', resolve, { once: true });
+      image.addEventListener('error', resolve, { once: true });
+    });
     image.setAttribute('href', photo.href);
     const [x, y, w, h] = photo.box;
     image.setAttribute('x', String(x));

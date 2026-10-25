@@ -1,4 +1,7 @@
 import { useEffect, useId, useState } from 'react';
+import { useStore } from 'zustand/react';
+
+import { endToEndRegimeLedger, endToEndSealed } from '@/lib/end-to-end-regime-ledger';
 
 import {
   isConversationEncryptionCatalogLoaded,
@@ -42,15 +45,25 @@ function useEncryptionCatalog(language: InterfaceLanguage): boolean {
   return ready;
 }
 
-export function ConversationEncryptionSection({ conversation }: { readonly conversation: { readonly type: string; readonly encryptionMode?: string | null } }) {
+/**
+ * #12949 — une conversation que ce compte a VUE chiffrée de bout en bout se
+ * décrit comme telle, même servie sans mode : elle ne repasse jamais en clair.
+ */
+export function ConversationEncryptionSection({
+  conversation,
+}: {
+  readonly conversation: { readonly id?: string; readonly type: string; readonly encryptionMode?: string | null };
+}) {
   const language = currentInterfaceLanguage();
   const ready = useEncryptionCatalog(language);
   const headingId = useId();
+  const sealedIds = useStore(endToEndRegimeLedger, (state) => state.sealed);
+  const sealed = conversation.id !== undefined && endToEndSealed({ sealed: sealedIds }, { conversationId: conversation.id });
 
   if (!ready) return <div aria-busy="true" className="px-4 pb-6" data-conversation-encryption-catalog-loading />;
 
   const t = (key: Parameters<typeof translateConversationEncryption>[1]): string => translateConversationEncryption(language, key);
-  const explanation = encryptionExplanation({ mode: conversation.encryptionMode, isDirect: conversation.type === 'direct' });
+  const explanation = encryptionExplanation({ mode: sealed ? 'e2ee' : conversation.encryptionMode, isDirect: conversation.type === 'direct' });
 
   return (
     <section aria-labelledby={headingId} className="pb-6" data-conversation-encryption={explanation.regime}>

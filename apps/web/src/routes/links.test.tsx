@@ -97,14 +97,22 @@ describe('la liste', () => {
   test('#10381 — l’expiration choisie à la création se lit sur la ligne et s’annonce au lecteur d’écran', () => {
     const date = new Intl.DateTimeFormat('fr', { dateStyle: 'medium' }).format(new Date('2099-10-20T06:49:56.000Z'));
     const html = plain(renderToStaticMarkup(<ShareLinkRow language="fr" link={link({ expiresAt: '2099-10-20T06:49:56.000Z' })} copied={false} onCopy={noop} />));
-    expect(html).toMatch(new RegExp(`data-share-link-expiry[^>]*>· Expire le ${date.replace(/\s/gu, ' ')}<`));
+    expect(html).toMatch(new RegExp(`data-share-link-expiry[^>]*>Expire le ${date.replace(/\s/gu, ' ')}<`));
     expect(html).toContain(`aria-label="Invitation, Actif, 3 rejoints, Équipe déploiement et Expire le ${date.replace(/\s/gu, ' ')}"`);
   });
 
   test('#10381 — une échéance passée se dit « Lien expiré », un lien sans échéance n’ajoute rien', () => {
     const past = renderToStaticMarkup(<ShareLinkRow language="fr" link={link({ expiresAt: '2000-01-01T00:00:00.000Z' })} copied={false} onCopy={noop} />);
-    expect(past).toMatch(/data-share-link-expiry[^>]*>· Lien expiré</);
+    expect(past).toMatch(/data-share-link-expiry[^>]*>Lien expiré</);
     expect(renderToStaticMarkup(<ShareLinkRow language="fr" link={link()} copied={false} onCopy={noop} />)).not.toContain('data-share-link-expiry');
+  });
+
+  test('#12756 — l’échéance a SA ligne sous la rangée « rejoints · conversation », comme `ShareLinksView` : à 320 px, elle ne pousse plus la carte hors du cadre', () => {
+    const html = renderToStaticMarkup(<ShareLinkRow language="fr" link={link({ expiresAt: '2099-12-31T12:00:00.000Z' })} copied={false} onCopy={noop} />);
+    const meta = html.slice(html.indexOf('data-share-link-joined'), html.indexOf('data-share-link-expiry'));
+    expect(meta).toContain('</span></span>');
+    expect(html).toMatch(/<span data-share-link-expiry="true" class="[^"]*\btruncate\b[^"]*"/);
+    expect(html).not.toMatch(/<span data-share-link-expiry="true" class="[^"]*\bshrink-0\b/);
   });
 
   test('« copier » devient une coche quand le lien vient d’être copié', () => {
