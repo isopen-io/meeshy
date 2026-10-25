@@ -101,6 +101,32 @@ final class E2EEDeviceRegistrarTests: XCTestCase {
         }
     }
 
+    /// #12882 — le trousseau survit à la désinstallation d'iOS, pas `e2ee.sqlite`
+    /// (groupe d'apps). Une installation qui a perdu ses sessions, ses pré-clés
+    /// et son compteur d'identifiants ne reprend pas l'identité d'avant : ses
+    /// pairs garderaient leur session (même `registrationId`, aucun 409
+    /// `stale`) et chaque message qu'ils lui enverraient serait indéchiffrable.
+    func test_aReinstallThatKeepsTheKeychainButLosesTheDatabase_drawsANewIdentity() async throws {
+        let server = FakeE2EEServer()
+        let phone = try installation()
+        let before = try await phone.registrar(server.client(userId: alice, sessionId: "s1")).ensureEnrolled(userId: alice)
+        let reinstalled = Installation(
+            vault: try E2EEGRDBRecordVault(writer: DatabaseQueue(), sealingKey: SymmetricKey(size: .bits256)),
+            secrets: phone.secrets,
+            lock: phone.lock
+        )
+
+        let directory = server.client(userId: alice, sessionId: "s2")
+
+        let after = try await reinstalled.registrar(directory).ensureEnrolled(userId: alice)
+
+        XCTAssertNotEqual(
+            after.identity.keyPair.identityKey.serialize(), before.identity.keyPair.identityKey.serialize(),
+            "une installation sans état local n'a plus rien de l'identité d'avant : elle en tire une neuve"
+        )
+        XCTAssertEqual(directory.log, ["enroll:\(E2EEPreKeyPolicy.batchSize)"], "une identité neuve s'enrôle avec un lot complet")
+    }
+
     func test_anotherAccountOnTheSameInstallation_startsFromNothing() async throws {
         let server = FakeE2EEServer()
         let phone = try installation()

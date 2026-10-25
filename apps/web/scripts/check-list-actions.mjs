@@ -349,7 +349,18 @@ const act = async (row, label) => {
 const SUBJECT = 'c-deploiement';
 check(rows.includes(SUBJECT), `la rangée sujet « ${SUBJECT} » est bien dans le corpus`);
 
-const pinnedMark = (row) => page.$(`[data-row="${row}"] [aria-label="Épinglée"]`);
+/**
+ * La rangée MONTÉE, puis son sélecteur (#12885) : la liste est virtualisée
+ * (#11228) et une action la renvoie à son rang trié, souvent hors de la
+ * fenêtre montée. Lue sans `revealRow`, une rangée démontée faisait planter
+ * le témoin, ou pire, passer « l'épingle disparaît » parce que la rangée
+ * entière avait disparu.
+ */
+const mountedRow = async (row) => {
+  await revealRow(page, row);
+  return `[data-row="${row}"]`;
+};
+const pinnedMark = async (row) => page.$(`${await mountedRow(row)} [aria-label="Épinglée"]`);
 /**
  * LE FONDU DE SOURDINE NE PORTE PLUS SUR LE `<li>` ENTIER (#5559 revue-
  * correction, défauts 1/8) — il composait `MUTED_OPACITY` (0.55) avec
@@ -359,7 +370,7 @@ const pinnedMark = (row) => page.$(`[data-row="${row}"] [aria-label="Épinglée"
  * témoin STABLE — un petit-enfant du `<li>`, jamais son `firstElementChild`
  * que `useScene` réécrit à chaque image (`scene.ts:104-108`).
  */
-const avatarOpacity = (row) => page.$eval(`[data-row="${row}"] .avatar-root`, (el) => Number(getComputedStyle(el).opacity));
+const avatarOpacity = async (row) => page.$eval(`${await mountedRow(row)} .avatar-root`, (el) => Number(getComputedStyle(el).opacity));
 /**
  * Le TITRE et l'APERÇU, eux, gardent leur encre PLEINE sous sourdine — la
  * preuve DIRECTE que le lot ne compose plus le fondu avec le texte servi.
@@ -368,23 +379,23 @@ const avatarOpacity = (row) => page.$eval(`[data-row="${row}"] .avatar-root`, (e
  * de l'aperçu (`text-body` → `text-title`) — un sélecteur ancré sur une
  * classe de taille se serait mis à interroger le MAUVAIS nœud, en silence.
  */
-const rowTitleOpacity = (row) =>
-  page.$eval(`[data-row="${row}"] [data-name]`, (el) => Number(getComputedStyle(el).opacity));
-const rowPreviewOpacity = (row) =>
-  page.$eval(`[data-row="${row}"] [data-line2]`, (el) => Number(getComputedStyle(el).opacity));
+const rowTitleOpacity = async (row) =>
+  page.$eval(`${await mountedRow(row)} [data-name]`, (el) => Number(getComputedStyle(el).opacity));
+const rowPreviewOpacity = async (row) =>
+  page.$eval(`${await mountedRow(row)} [data-line2]`, (el) => Number(getComputedStyle(el).opacity));
 /**
  * L'HEURE (#5694, écart 8) — `[data-time]` est le crochet STABLE posé par
  * `LensTime`. Sa COULEUR ne doit JAMAIS dépendre du non-lu — c'est la preuve
  * directe que `LentilleConversationRow.timestampColor` (toujours tertiaire)
  * est bien respectée côté web.
  */
-const rowTimeColor = (row) =>
-  page.$eval(`[data-row="${row}"] [data-time]`, (el) => getComputedStyle(el).color);
+const rowTimeColor = async (row) =>
+  page.$eval(`${await mountedRow(row)} [data-time]`, (el) => getComputedStyle(el).color);
 /** `data-unread` est le crochet STABLE du badge — même parti que `data-row`,
  *  qui sert déjà `check-lens.mjs` : compter sur la position d'un `<span>` dans
  *  le lien rendrait ce témoin faux au premier remaniement de la rangée. */
-const unreadBadge = (row) =>
-  page.$eval(`[data-row="${row}"]`, (el) => el.querySelector('[data-unread]')?.getAttribute('data-unread') ?? null);
+const unreadBadge = async (row) =>
+  page.$eval(`${await mountedRow(row)}`, (el) => el.querySelector('[data-unread]')?.getAttribute('data-unread') ?? null);
 
 check((await pinnedMark(SUBJECT)) === null, 'avant action, la rangée sujet ne porte AUCUNE épingle');
 await act(SUBJECT, 'Épingler');
@@ -393,6 +404,7 @@ check((await rowIds(page))[0] === SUBJECT, `après « Épingler », la rangée p
 await act(SUBJECT, 'Désépingler');
 check((await pinnedMark(SUBJECT)) === null, 'après « Désépingler », l’épingle disparaît');
 
+check(await revealRow(page, SUBJECT), `désépinglée, la rangée « ${SUBJECT} » revient à l'écran`);
 check((await avatarOpacity(SUBJECT)) === 1, 'avant action, le CHROME de la rangée sujet est à pleine opacité');
 check((await rowTitleOpacity(SUBJECT)) === 1, 'avant action, le titre est à pleine opacité');
 check((await rowPreviewOpacity(SUBJECT)) === 1, "avant action, l'aperçu est à pleine opacité");
@@ -412,7 +424,7 @@ check((await rowPreviewOpacity(SUBJECT)) === 1, "après « Silence », l'aperçu
 /* LA SOURDINE SE VOIT ET SE DIT (#10598) — la cloche barrée après le nom,
    miroir du 🔕 d'iOS, nommée pour le lecteur d'écran ; le fondu seul ne se
    lisait pas. Repérée par `data-muted`, jamais par son nom, qui suit la langue. */
-const mutedMark = await page.$eval(`[data-row="${SUBJECT}"]`, (el) => {
+const mutedMark = await page.$eval(`${await mountedRow(SUBJECT)}`, (el) => {
   const glyph = el.querySelector('[data-muted] svg[role="img"]');
   const box = glyph?.getBoundingClientRect();
   return { label: glyph?.getAttribute('aria-label') ?? '', width: box?.width ?? 0 };
@@ -420,7 +432,7 @@ const mutedMark = await page.$eval(`[data-row="${SUBJECT}"]`, (el) => {
 check(mutedMark.label.length > 0 && mutedMark.width > 0, `la sourdine porte une cloche barrée VISIBLE et NOMMÉE (${JSON.stringify(mutedMark)})`);
 await act(SUBJECT, 'Son');
 check((await avatarOpacity(SUBJECT)) === 1, 'après « Son », le CHROME revient à pleine opacité');
-check((await page.$(`[data-row="${SUBJECT}"] [data-muted]`)) === null, 'après « Son », la cloche barrée disparaît');
+check((await page.$(`${await mountedRow(SUBJECT)} [data-muted]`)) === null, 'après « Son », la cloche barrée disparaît');
 
 check((await unreadBadge(SUBJECT)) === '2', `avant action, le badge de non-lus affiche 2 (${await unreadBadge(SUBJECT)})`);
 /**
@@ -437,7 +449,7 @@ check((await unreadBadge(SUBJECT)) === '2', `avant action, le badge de non-lus a
  * avant ce lot. Le témoin refuse explicitement la forme horaire : c'est
  * elle, et elle seule, que la régression rétablirait.
  */
-const timeLabel = await page.$eval(`[data-row="${SUBJECT}"] [data-time]`, (el) => el.textContent ?? '');
+const timeLabel = await page.$eval(`${await mountedRow(SUBJECT)} [data-time]`, (el) => el.textContent ?? '');
 check(
   !/^\d{1,2}:\d{2}$/.test(timeLabel.trim()),
   `l'heure de la rangée est RELATIVE, pas une horloge HH:MM (« ${timeLabel} »)`,

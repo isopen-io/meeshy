@@ -1114,6 +1114,14 @@ jobs:
           cd apps/web
           node scripts/check-list-folded-unread.mjs
 
+      # #12885 — la liste virtualisée ne se fige pas sous « animations réduites » :
+      # une cale ne s'anime jamais, chaque saut de défilement reste où on l'a posé.
+      - name: Gate fenêtre de rangées (animations réduites)
+        if: ${{ !cancelled() && matrix.tranche == 2 }}
+        run: |
+          cd apps/web
+          node scripts/check-list-window-reduced-motion.mjs
+
       - name: Gate mode de lecture (l'EFFET, pas le rendu du contrôle)
         if: ${{ !cancelled() && matrix.tranche == 2 }}
         run: |

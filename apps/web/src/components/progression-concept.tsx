@@ -236,16 +236,28 @@ export function ProgressionRow({
   name,
   value,
   marker,
+  badge,
 }: {
   readonly target: RowTarget;
   readonly emblem: ReactNode;
   readonly name: string;
   readonly value?: string;
   readonly marker: string;
+  /** La pastille NEUTRE (#10174) : un point d'accent, sans chiffre ni animation ; son texte pour le lecteur d'écran. */
+  readonly badge?: string;
 }) {
-  const className = `${PRESS} flex flex-col rounded-card px-4 py-3`;
+  const className = `${PRESS} relative flex flex-col rounded-card px-4 py-3`;
   const style = { minHeight: 44, backgroundColor: GAME_CARD } as const;
-  const head = <Head emblem={emblem} name={name} {...(value === undefined ? {} : { value })} />;
+  const head = (
+    <>
+      <Head emblem={emblem} name={name} {...(value === undefined ? {} : { value })} />
+      {badge === undefined ? null : (
+        <span data-progression-badge={marker} className="absolute end-3 top-3 size-2 rounded-chip" style={{ backgroundColor: GAME_BRAND }}>
+          <span className="sr-only">{badge}</span>
+        </span>
+      )}
+    </>
+  );
   return target.to === 'progressionConcept' ? (
     <Link to="progressionConcept" params={{ concept: target.concept }} data-progression-row={marker} className={className} style={style}>
       {head}

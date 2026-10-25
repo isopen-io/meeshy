@@ -47,6 +47,10 @@ const edit = (params: { encryptionMode: string | null; editor?: string; globalRo
       createdAt: new Date(NOW - 60_000),
       messageType: 'text',
       metadata: null,
+      // #12881 — ces témoins portent sur le régime de la CONVERSATION, pas sur
+      // ce que la LIGNE du message porte : permissif explicite.
+      isEncrypted: null,
+      encryptionMode: null,
     },
     now: NOW,
   });
