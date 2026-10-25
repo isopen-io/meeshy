@@ -255,24 +255,107 @@ final class NSEAttachmentPolicyTests: XCTestCase {
         XCTAssertEqual(sealed["messageId"] as? String, "m1")
     }
 
-    /// La charge livrée reste dans le Centre de notifications : sous PIN, elle
-    /// n'y garde ni le texte, ni sa traduction, ni la transcription, ni le
-    /// chiffré — les clés de routage, elles, restent.
-    func test_lockedConversation_sealing_stripsEveryContentKey() {
-        let payload: [AnyHashable: Any] = [
-            "conversationId": "c1", "messageId": "m1", "senderId": "s1", "type": "new_message",
-            "content": "le secret", "translatedContent": "the secret",
-            "firstAttachmentTranscript": "le secret dit", "encryptedContent": "c2VjcmV0",
-        ]
+    // MARK: - Le scellé ne garde que ce qui ROUTE (#12655)
+
+    /// Ce qui a le droit de survivre au scellé : router le toucher, dater,
+    /// compter, nommer l'expéditeur, déclarer la protection. Rien qui décrive
+    /// le contenu. Oracle du TEST, indépendant de la constante de production.
+    private static let routingKeys: Set<String> = [
+        "type", "notificationId", "conversationId", "conversationTitle", "conversationType", "messageId",
+        "postId", "postType", "commentId", "parentCommentId", "friendRequestId", "route",
+        "contentId", "contentType",
+        "senderId", "senderUsername", "senderDisplayName", "senderAvatar", "imageURL",
+        "unreadCount", "createdAt", "ephemeralDuration", "effectFlags", "replacesActorSubject",
+        "callType", "isVideo", "callBackLabel",
+        "notificationLocKey",
+    ]
+
+    /// Ce qui DÉCRIT le contenu : le texte et ses traductions, le chiffré, la
+    /// pièce jointe, le détail (position, contact, invitation, lien, vignette),
+    /// la réaction, le type de message, le motif d'un retrait, les libellés
+    /// d'action qui nomment le contenu.
+    private static let contentKeys: Set<String> = [
+        "content", "originalLanguage", "translatedContent", "translatedLanguage", "encryptedContent",
+        "reactionEmoji", "messageType", "reason", "contentActionLabel", "replyActionLabel",
+        "attachmentUrl", "attachmentMimeType", "attachmentDurationMs", "attachmentFileSize",
+        "attachmentId", "attachmentLanguage",
+        "locationLat", "locationLon", "locationName", "locationAddress", "contactName",
+        "inviteUrl", "inviteConversationTitle", "inviteMemberCount", "linkUrl", "linkDomain",
+        "thumbnailUrl", "storyReply",
+    ]
+
+    /// Les clés que la passerelle pose dans `data` (`createNotification`) et
+    /// dans ses champs composés, LUES dans ses sources : une clé ajoutée là
+    /// sans être classée ici fait rougir le témoin.
+    private func gatewayPushDataKeys() throws -> Set<String> {
+        let notifications = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("services/gateway/src/services/notifications")
+        func source(_ name: String) throws -> String {
+            try String(contentsOf: notifications.appendingPathComponent(name), encoding: .utf8)
+        }
+        func matches(_ pattern: String, in text: Substring) throws -> Set<String> {
+            let regex = try NSRegularExpression(pattern: pattern, options: [.anchorsMatchLines])
+            let string = String(text)
+            return Set(regex.matches(in: string, range: NSRange(string.startIndex..., in: string)).compactMap {
+                Range($0.range(at: 1), in: string).map { String(string[$0]) }
+            })
+        }
+        func between(_ text: String, _ from: String, _ to: String) throws -> Substring {
+            let start = try XCTUnwrap(text.range(of: from), from)
+            let end = try XCTUnwrap(text.range(of: to, range: start.upperBound..<text.endIndex), to)
+            return text[start.upperBound..<end.lowerBound]
+        }
+        let service = try source("NotificationService.ts")
+        let payload = try between(service, "const pushPayload = {", "const boundedPayload")
+        let dataStart = try XCTUnwrap(payload.range(of: "data: {"))
+        let data = payload[dataStart.upperBound...]
+        let code = data.split(separator: "\n")
+            .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
+            .map { $0.components(separatedBy: " // ")[0] }
+            .joined(separator: "\n")
+        let direct = try matches(#"(?:^|[{\s,(])([a-z][A-Za-z]*):\s"#, in: Substring(code))
+            .subtracting(["metadata", "language", "detail"])
+        let detail = try between(try source("content-detail.ts"), "export function contentDetailPushFields", "\n}\n")
+        return direct
+            .union(try matches(#"^\s+readonly (\w+): string;"#, in: Substring(try source("push-media-fields.ts"))))
+            .union(try matches(#"\['(\w+)',"#, in: detail))
+            .union(try matches(#"(\w+)\?: string"#, in: Substring(try source("ephemeralPushFields.ts"))))
+            .union(try matches(#"readonly (\w+)\?:"#, in: Substring(try source("callBackPushFields.ts"))))
+            .union(try matches(#"readonly (\w+)\?: string"#, in: Substring(try source("contentActionPushFields.ts"))))
+            .union(try matches(#"(\w+): (?:pickMetadataString|params\.showPreview)"#,
+                               in: Substring(try source("push-metadata-fields.ts"))))
+            .union(["replacesActorSubject"])
+    }
+
+    func test_everyKeyTheGatewayPushes_isClassifiedAsRoutingOrContent() throws {
+        let keys = try gatewayPushDataKeys()
+
+        XCTAssertTrue(keys.isSuperset(of: ["conversationId", "attachmentUrl", "locationName", "linkUrl", "content"]),
+                      "la lecture des sources de la passerelle a changé de forme : \(keys.sorted())")
+        XCTAssertEqual(keys.subtracting(Self.routingKeys).subtracting(Self.contentKeys), [],
+                       "une clé de la passerelle n'est ni de routage ni de contenu : la classer")
+        XCTAssertTrue(Self.routingKeys.isDisjoint(with: Self.contentKeys))
+    }
+
+    /// La charge livrée reste dans le Centre de notifications et se relit par
+    /// quiconque l'énumère : sous PIN, elle n'y garde QUE ce qui route. La
+    /// charge du témoin porte TOUTES les clés que la passerelle émet, et
+    /// l'alerte APNs, dont le corps est l'aperçu du message.
+    func test_lockedConversation_sealing_keepsOnlyRoutingKeys() throws {
+        let gatewayKeys = try gatewayPushDataKeys()
+        var payload = Dictionary(uniqueKeysWithValues: gatewayKeys.map { (AnyHashable($0), "secret-\($0)" as Any) })
+        payload["aps"] = ["alert": ["title": "Alice", "body": "le secret"], "mutable-content": 1] as [String: Any]
 
         let sealed = NSEAttachmentPolicy.sealingLockedConversation(payload, isLocked: true)
 
-        for key in ["content", "translatedContent", "firstAttachmentTranscript", "encryptedContent"] {
-            XCTAssertNil(sealed[key], "\(key) quitte la charge scellée")
-        }
-        XCTAssertEqual(Set(sealed.keys.compactMap { $0 as? String }), [
-            "conversationId", "messageId", "senderId", "type", "notificationLocKey",
-        ])
+        let survivors = Set(sealed.keys.compactMap { $0 as? String })
+        XCTAssertEqual(survivors.subtracting(Self.routingKeys), [], "le scellé laisse partir du contenu")
+        XCTAssertTrue(survivors.isDisjoint(with: Self.contentKeys))
+        XCTAssertNil(sealed["aps"], "l'alerte APNs porte l'aperçu du message")
+        XCTAssertEqual(sealed["conversationId"] as? String, "secret-conversationId", "le toucher route encore")
+        XCTAssertEqual(sealed["notificationLocKey"] as? String, NSEAttachmentPolicy.lockedConversationLocKey)
     }
 
     func test_unlockedConversation_payloadIsUntouched() {
