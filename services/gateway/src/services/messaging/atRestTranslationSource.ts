@@ -62,7 +62,7 @@ export const atRestRequestFlag = (encryptionMode: string | null | undefined): { 
  * quand le message est destiné à disparaître (vue unique, flamme, éphémère),
  * comme sa tâche audio (`contentDisappears`).
  */
-export const translationRequestRegime = (message: { readonly encryptionMode?: string | null } & object): { readonly atRest?: true } =>
+export const translationRequestRegime = (message: { readonly encryptionMode?: string | null; readonly [field: string]: unknown }): { readonly atRest?: true } =>
   isServerAtRestMode(message.encryptionMode) || contentDisappears(message) ? { atRest: true } : {};
 
 /** Le message que `translation:request` retraduit, son texte ouvert ; `content` vide s'il reste scellé. */
