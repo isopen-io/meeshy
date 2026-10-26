@@ -3,6 +3,7 @@ package me.meeshy.ui.component.bubble
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.isEndToEndBlob
+import me.meeshy.sdk.model.EndToEndRegimeMemory
 import me.meeshy.sdk.model.BlurRevealLifecycle
 import me.meeshy.sdk.model.DeliveryStatusResolver
 import me.meeshy.sdk.model.ForwardBadgePolicy
@@ -140,6 +141,7 @@ public object BubbleContentBuilder {
             isEdited = message.isEdited,
             isDeleted = isDeleted,
             isEndToEndSealed = isEndToEndSealed,
+            holdsEndToEndSend = isEndToEndSealed || EndToEndRegimeMemory.messageHoldsSend(message),
             createdAtIso = message.createdAt,
             deliveryStatus = deliveryStatus,
             reactions = reactions,

@@ -53,7 +53,7 @@ class BubbleEndToEndAttachmentTest {
             id = "m1",
             conversationId = "c1",
             senderId = "other",
-            content = "",
+            content = "U2FsdGVkX1+opaque",
             originalLanguage = "fr",
             isEncrypted = false,
             attachments = listOf(blob),
@@ -62,6 +62,7 @@ class BubbleEndToEndAttachmentTest {
         val content = BubbleContentBuilder.build(message, currentUserId = "me", preferences = prefs)
 
         assertThat(content.isEndToEndSealed).isTrue()
+        assertThat(content.holdsEndToEndSend).isTrue()
         assertThat(content.files).isEmpty()
         assertThat(content.text).isEmpty()
     }

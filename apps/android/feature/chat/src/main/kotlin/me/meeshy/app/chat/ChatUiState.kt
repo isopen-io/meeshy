@@ -165,7 +165,7 @@ data class ChatUiState(
      * (#13099) : `EndToEndRegimeController` n'en apprend que ce qui prouve le régime.
      */
     val isEndToEnd: Boolean
-        get() = EndToEndRegime.isEndToEnd(encryptionMode) || messages.any { it.isEndToEndSealed }
+        get() = EndToEndRegime.isEndToEnd(encryptionMode) || messages.any { it.isEndToEndSealed || it.holdsEndToEndSend }
 
     /** Whether the reader may write here — what the message law reads before offering « Répondre ». */
     val viewerMayWrite: Boolean

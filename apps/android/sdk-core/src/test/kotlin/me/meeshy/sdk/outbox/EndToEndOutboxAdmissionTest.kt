@@ -100,6 +100,36 @@ class EndToEndOutboxAdmissionTest {
     }
 
     @Test
+    fun `une pièce vidée avant que son message ne soit en file n'est pas téléversée vers une conversation e2ee`() = runTest {
+        cache("c-e2ee", "e2ee")
+        outbox.enqueue(
+            OutboxMutation(
+                OutboxKind.UPLOAD_MEDIA,
+                OutboxLanes.MEDIA,
+                targetId = "up1",
+                payload = MeeshyApi.json.encodeToString(MediaUploadPayload(conversationId = "c-e2ee")),
+                cmid = "up1",
+            ),
+        )
+        val sent = mutableListOf<String>()
+
+        drainer(sent).drainLane(OutboxLanes.MEDIA)
+
+        assertThat(sent).isEmpty()
+    }
+
+    @Test
+    fun `une modification dont le message a quitté Room reste gardée par la file de sa conversation`() = runTest {
+        ledger.learn("c-gone")
+        enqueue(OutboxKind.EDIT_MESSAGE, "e1", targetId = "msg-absent", lane = OutboxLanes.forMessage("c-gone"))
+        val sent = mutableListOf<String>()
+
+        drainer(sent).drainLane(OutboxLanes.forMessage("c-gone"))
+
+        assertThat(sent).isEmpty()
+    }
+
+    @Test
     fun `une modification d'un message d'une conversation e2ee ne part pas`() = runTest {
         cache("c-e2ee", "e2ee")
         db.messageDao().upsertAll(listOf(MessageEntityFactory.cached(ApiMessage(id = "msg-1", conversationId = "c-e2ee", content = "x"), 0)))

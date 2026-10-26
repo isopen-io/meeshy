@@ -1,5 +1,6 @@
 package me.meeshy.sdk.conversation
 
+import androidx.room.withTransaction
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -13,7 +14,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
-import me.meeshy.core.database.dao.ConversationDao
+import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.sdk.e2ee.EndToEndRegimeLedger
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.EndToEndRegime
@@ -34,18 +35,24 @@ import javax.inject.Singleton
 @Singleton
 class EndToEndRegimeKeeper @Inject constructor(
     private val ledger: EndToEndRegimeLedger,
-    private val conversationDao: ConversationDao,
+    private val database: MeeshyDatabase,
 ) {
     fun isSealed(conversationId: String): Boolean = ledger.isSealed(conversationId)
 
     suspend fun learn(conversationId: String) {
         if (conversationId.isBlank()) return
         ledger.learn(conversationId)
-        val row = conversationDao.find(conversationId) ?: return
-        val cached = runCatching { MeeshyApi.json.decodeFromString<ApiConversation>(row.payload) }.getOrNull() ?: return
-        val kept = EndToEndRegimeMemory.kept(cached, seenEndToEnd = true)
-        if (kept === cached) return
-        conversationDao.upsertAll(listOf(row.copy(payload = MeeshyApi.json.encodeToString(kept))))
+        // Lue et réécrite dans UNE transaction : une synchronisation concurrente (non-lus,
+        // dernier message, préférences) n'est jamais écrasée par une copie périmée de la ligne.
+        database.withTransaction {
+            val conversations = database.conversationDao()
+            val row = conversations.find(conversationId) ?: return@withTransaction
+            val cached = runCatching { MeeshyApi.json.decodeFromString<ApiConversation>(row.payload) }.getOrNull()
+                ?: return@withTransaction
+            val kept = EndToEndRegimeMemory.kept(cached, seenEndToEnd = true)
+            if (kept === cached) return@withTransaction
+            conversations.upsertAll(listOf(row.copy(payload = MeeshyApi.json.encodeToString(kept))))
+        }
     }
 }
 

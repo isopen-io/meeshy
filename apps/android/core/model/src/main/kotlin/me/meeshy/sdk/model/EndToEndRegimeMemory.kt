@@ -45,6 +45,13 @@ object EndToEndRegimeMemory {
     fun threadHoldsSend(messages: List<ApiMessage>, isDirect: Boolean): Boolean =
         messages.any { ambiguouslyEncrypted(it) || (!isDirect && carriesEndToEnd(it)) }
 
+    /**
+     * Ce message, MONTRÉ, retient l'envoi du fil quelle que soit la forme de la conversation : un
+     * chiffré sans mode ou d'un mode inconnu, ou un message e2ee (que le tête-à-tête apprend en
+     * plus, par [threadShowsEndToEnd]). Lu message par message par la bulle, que l'écran agrège.
+     */
+    fun messageHoldsSend(message: ApiMessage): Boolean = ambiguouslyEncrypted(message) || carriesEndToEnd(message)
+
     private fun isSystem(message: ApiMessage): Boolean =
         message.messageType == "system" || message.messageSource == "system"
 

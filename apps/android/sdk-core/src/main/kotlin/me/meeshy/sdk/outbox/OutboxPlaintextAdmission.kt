@@ -53,18 +53,37 @@ public class EndToEndOutboxAdmission @Inject constructor(
 
     private suspend fun conversationsOf(row: OutboxEntity): List<String> = when (row.kindEnum) {
         OutboxKind.SEND_MESSAGE -> listOf(row.targetId)
-        OutboxKind.EDIT_MESSAGE -> listOfNotNull(messageDao.find(row.targetId)?.conversationId)
-        OutboxKind.UPLOAD_MEDIA -> outbox.dependentsOf(row.cmid)
-            .filter { it.kindEnum == OutboxKind.SEND_MESSAGE }
-            .map { it.targetId }
+        // La file du message porte sa conversation : une modification dont le message a quitté
+        // Room reste gardée.
+        OutboxKind.EDIT_MESSAGE -> listOfNotNull(messageDao.find(row.targetId)?.conversationId, laneConversation(row.lane))
+        // La destination inscrite à la mise en file d'abord : un téléversement vidé AVANT que son
+        // message ne soit mis en file n'a pas encore de dépendant, et `attachments/upload` ne
+        // connaît pas la conversation — cette garde est la seule barrière.
+        OutboxKind.UPLOAD_MEDIA -> listOfNotNull(uploadDestination(row)) +
+            outbox.dependentsOf(row.cmid)
+                .filter { it.kindEnum == OutboxKind.SEND_MESSAGE }
+                .map { it.targetId }
         else -> emptyList()
     }
+
+    private fun laneConversation(lane: String): String? =
+        lane.takeIf { it.startsWith(MESSAGE_LANE_PREFIX) }?.removePrefix(MESSAGE_LANE_PREFIX)?.takeIf { it.isNotBlank() }
+
+    private fun uploadDestination(row: OutboxEntity): String? =
+        row.payload.takeIf { it.isNotBlank() }
+            ?.let { runCatching { MeeshyApi.json.decodeFromString<MediaUploadPayload>(it) }.getOrNull() }
+            ?.conversationId
+            ?.takeIf { it.isNotBlank() }
 
     private suspend fun sealed(conversationId: String): Boolean {
         if (ledger.isSealed(conversationId)) return true
         val payload = conversationDao.find(conversationId)?.payload ?: return false
         val cached = runCatching { MeeshyApi.json.decodeFromString<ApiConversation>(payload) }.getOrNull() ?: return false
         return EndToEndRegime.isEndToEnd(cached.encryptionMode)
+    }
+
+    private companion object {
+        val MESSAGE_LANE_PREFIX: String = OutboxLanes.forMessage("")
     }
 }
 

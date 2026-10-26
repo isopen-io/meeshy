@@ -103,7 +103,7 @@ class ConversationCacheSourceEndToEndTest {
     fun `apprise par le temps réel, la ligne Room ferme le fil ouvert à l'instant`() = runTest {
         source().remember(ApiConversation(id = "c5", encryptionMode = null))
 
-        EndToEndRegimeKeeper(ledger, db.conversationDao()).learn("c5")
+        EndToEndRegimeKeeper(ledger, db).learn("c5")
 
         assertThat(cachedMode("c5")).isEqualTo("e2ee")
         assertThat(ledger.isSealed("c5")).isTrue()

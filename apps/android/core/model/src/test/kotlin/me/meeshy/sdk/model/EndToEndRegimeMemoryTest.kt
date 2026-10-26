@@ -74,4 +74,12 @@ class EndToEndRegimeMemoryTest {
         )
         assertThat(EndToEndRegimeMemory.threadHoldsSend(quiet, isDirect = false)).isFalse()
     }
+
+    @Test
+    fun `un message montré retient l'envoi quelle que soit la forme du fil`() {
+        assertThat(EndToEndRegimeMemory.messageHoldsSend(message(isEncrypted = true))).isTrue()
+        assertThat(EndToEndRegimeMemory.messageHoldsSend(message(isEncrypted = null, mode = "e2ee"))).isTrue()
+        assertThat(EndToEndRegimeMemory.messageHoldsSend(message(isEncrypted = true, mode = "server"))).isFalse()
+        assertThat(EndToEndRegimeMemory.messageHoldsSend(message())).isFalse()
+    }
 }
