@@ -38,6 +38,28 @@ public struct FeedCommentThread: Sendable {
         return (FeedCommentThread(roots: parents, replies: remaining), 1)
     }
 
+    /// A refused optimistic send leaves: only its own row goes (what arrived
+    /// by socket or pagination meanwhile stays), and a reply undoes the bump
+    /// it gave its parent even when the thread was refetched without it.
+    /// `removed` says whether the row was still there.
+    public func withdrawingOptimistic(_ id: String, parentId: String?) -> (thread: FeedCommentThread, removed: Bool) {
+        guard let parentId else {
+            let kept = roots.filter { $0.id != id }
+            return (FeedCommentThread(roots: kept, replies: replies), kept.count != roots.count)
+        }
+        let thread = replies[parentId] ?? []
+        let kept = thread.filter { $0.id != id }
+        var remaining = replies
+        if replies[parentId] != nil { remaining[parentId] = kept }
+        let parents = roots.map { parent -> FeedComment in
+            guard parent.id == parentId else { return parent }
+            var undone = parent
+            undone.replies = max(0, parent.replies - 1)
+            return undone
+        }
+        return (FeedCommentThread(roots: parents, replies: remaining), kept.count != thread.count)
+    }
+
     /// A translation that ARRIVED (`comment:translation-updated`) joins the
     /// comment's map and its text re-resolves through the Prism
     /// (`FeedComment.mergingTranslation`), root or reply.

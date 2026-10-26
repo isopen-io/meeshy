@@ -155,24 +155,13 @@ extension PostDetailViewModel {
         replyingTo = nil
     }
 
-    /// Retire le commentaire optimiste `cmid` — et lui seul (`OptimisticRollback`) : ce qui est arrivé
-    /// par socket ou par pagination pendant l'attente reste. Les compteurs suivent la ligne retirée.
+    /// Retire le commentaire optimiste `cmid` — et lui seul (`FeedCommentThread.withdrawingOptimistic`) :
+    /// ce qui est arrivé par socket ou par pagination pendant l'attente reste. Le total suit la ligne retirée.
     func withdrawOptimisticComment(_ cmid: String, parentId: String?) {
-        let removed: Bool
-        if let parentId {
-            let result = OptimisticRollback.withdrawing(cmid, from: repliesMap[parentId] ?? [])
-            repliesMap[parentId] = result.items
-            removed = result.removed
-            if removed, let idx = comments.firstIndex(where: { $0.id == parentId }) {
-                comments[idx].replies = OptimisticRollback.decremented(comments[idx].replies, removed: true)
-            }
-        } else {
-            let result = OptimisticRollback.withdrawing(cmid, from: comments)
-            comments = result.items
-            removed = result.removed
-        }
+        let withdrawal = commentThread.withdrawingOptimistic(cmid, parentId: parentId)
+        commentThread = withdrawal.thread
         if let count = post?.commentCount {
-            post?.commentCount = OptimisticRollback.decremented(count, removed: removed)
+            post?.commentCount = OptimisticRollback.decremented(count, removed: withdrawal.removed)
         }
     }
 

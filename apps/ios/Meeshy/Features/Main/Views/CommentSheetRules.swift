@@ -96,19 +96,12 @@ enum CommentSheetRules {
         repliesMap: inout [String: [FeedComment]],
         liveCommentCount: inout Int?
     ) {
-        if let parentId {
-            var existing = repliesMap[parentId] ?? []
-            existing.removeAll { $0.id == tempId }
-            repliesMap[parentId] = existing
-            var current = liveComments ?? embeddedComments
-            if let idx = current.firstIndex(where: { $0.id == parentId }), current[idx].replies > 0 {
-                current[idx].replies -= 1
-                liveComments = current
-            }
-        } else {
-            var current = liveComments ?? embeddedComments
-            current.removeAll { $0.id == tempId }
-            liveComments = current
+        let current = liveComments ?? embeddedComments
+        let withdrawal = FeedCommentThread(roots: current, replies: repliesMap)
+            .withdrawingOptimistic(tempId, parentId: parentId)
+        repliesMap = withdrawal.thread.replies
+        if parentId == nil || current.contains(where: { $0.id == parentId && $0.replies > 0 }) {
+            liveComments = withdrawal.thread.roots
         }
         liveCommentCount = max((liveCommentCount ?? embeddedComments.count) - 1, 0)
     }

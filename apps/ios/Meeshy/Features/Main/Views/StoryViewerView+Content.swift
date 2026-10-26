@@ -477,20 +477,9 @@ extension StoryViewerView {
         repliesMap: [String: [FeedComment]],
         commentCount: Int
     ) -> (comments: [FeedComment], repliesMap: [String: [FeedComment]], commentCount: Int) {
-        var comments = comments
-        var repliesMap = repliesMap
-        if let parentId {
-            if var replies = repliesMap[parentId] {
-                replies.removeAll { $0.id == id }
-                repliesMap[parentId] = replies
-            }
-            if let idx = comments.firstIndex(where: { $0.id == parentId }) {
-                comments[idx].replies = max(0, comments[idx].replies - 1)
-            }
-        } else {
-            comments.removeAll { $0.id == id }
-        }
-        return (comments, repliesMap, max(0, commentCount - 1))
+        let withdrawn = FeedCommentThread(roots: comments, replies: repliesMap)
+            .withdrawingOptimistic(id, parentId: parentId).thread
+        return (withdrawn.roots, withdrawn.replies, max(0, commentCount - 1))
     }
 
     private func rollbackOptimisticComment(id: String, parentId: String?) {

@@ -107,4 +107,51 @@ final class FeedCommentThreadTests: XCTestCase {
         XCTAssertNil(result.roots.first?.translatedContent)
         XCTAssertNil(result.roots.first?.translations)
     }
+
+    // MARK: - Withdrawing a refused optimistic comment
+
+    func test_withdrawingOptimistic_aRoot_removesOnlyIt_andSaysSo() {
+        let thread = FeedCommentThread(roots: [comment("kept"), comment("cmid_1"), comment("socket")])
+
+        let result = thread.withdrawingOptimistic("cmid_1", parentId: nil)
+
+        XCTAssertEqual(result.thread.roots.map(\.id), ["kept", "socket"])
+        XCTAssertTrue(result.removed)
+    }
+
+    func test_withdrawingOptimistic_aReply_leavesItsThreadAndDecrementsItsParent() {
+        let thread = FeedCommentThread(roots: [comment("p", replies: 2)],
+                                       replies: ["p": [comment("r1", parentId: "p"), comment("cmid_r", parentId: "p")]])
+
+        let result = thread.withdrawingOptimistic("cmid_r", parentId: "p")
+
+        XCTAssertEqual(result.thread.replies["p"]?.map(\.id), ["r1"])
+        XCTAssertEqual(result.thread.roots.first?.replies, 1)
+        XCTAssertTrue(result.removed)
+    }
+
+    func test_withdrawingOptimistic_aReplyWhoseThreadWasRefetched_stillUndoesTheParentBump() {
+        let thread = FeedCommentThread(roots: [comment("p", replies: 1)])
+
+        let result = thread.withdrawingOptimistic("cmid_r", parentId: "p")
+
+        XCTAssertEqual(result.thread.roots.first?.replies, 0)
+        XCTAssertNil(result.thread.replies["p"])
+        XCTAssertFalse(result.removed)
+    }
+
+    func test_withdrawingOptimistic_neverTakesAParentBelowZero() {
+        let thread = FeedCommentThread(roots: [comment("p", replies: 0)])
+
+        XCTAssertEqual(thread.withdrawingOptimistic("cmid_r", parentId: "p").thread.roots.first?.replies, 0)
+    }
+
+    func test_withdrawingOptimistic_anUnknownRoot_changesNothing() {
+        let thread = FeedCommentThread(roots: [comment("kept")])
+
+        let result = thread.withdrawingOptimistic("gone", parentId: nil)
+
+        XCTAssertEqual(result.thread.roots.map(\.id), ["kept"])
+        XCTAssertFalse(result.removed)
+    }
 }
