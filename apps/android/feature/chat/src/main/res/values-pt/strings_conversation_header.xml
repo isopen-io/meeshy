@@ -18,6 +18,7 @@
     <string name="chat_header_encryption_server">Criptografado no servidor</string>
     <plurals name="chat_header_back_unread">
         <item quantity="one">Voltar, %1$d mensagem não lida</item>
+        <item quantity="many">Voltar, %1$d mensagens não lidas</item>
         <item quantity="other">Voltar, %1$d mensagens não lidas</item>
     </plurals>
 </resources>

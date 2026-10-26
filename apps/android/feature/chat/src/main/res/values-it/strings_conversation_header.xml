@@ -21,7 +21,7 @@
         <item quantity="other">Indietro, %1$d messaggi non letti</item>
     </plurals>
     <plurals name="chat_unread_separator_count">
-        <item quantity="one">%d messaggio non letto</item>
-        <item quantity="other">%d messaggi non letti</item>
+        <item quantity="one">%1$d messaggio non letto</item>
+        <item quantity="other">%1$d messaggi non letti</item>
     </plurals>
 </resources>
