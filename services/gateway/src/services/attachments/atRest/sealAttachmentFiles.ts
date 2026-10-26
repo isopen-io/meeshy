@@ -170,6 +170,34 @@ async function exists(absolute: string): Promise<boolean> {
   return fs.stat(absolute).then(() => true, () => false);
 }
 
+/** Ce qu'un scellement ferait, sans rien écrire : la migration à blanc le compte. */
+export type SealingPlan =
+  | { readonly kind: 'skip'; readonly outcome: SealOutcome }
+  | { readonly kind: 'seal'; readonly seed: SealRow; readonly rows: readonly SealRow[]; readonly toSeal: readonly Slot[] };
+
+/** LECTURE SEULE : lignes, scellements existants, présence sur le disque. */
+export async function planAttachmentSealing(
+  deps: Pick<SealAttachmentDeps, 'prisma' | 'uploadRoot' | 'access'>,
+  attachmentId: string
+): Promise<SealingPlan> {
+  const seed = await deps.prisma.messageAttachment.findUnique({ where: { id: attachmentId }, select: ROW_SELECT });
+  if (!seed) return { kind: 'skip', outcome: { status: 'skipped', reason: 'not-found' } };
+  if (isEndToEnd(seed)) return { kind: 'skip', outcome: { status: 'skipped', reason: 'end-to-end' } };
+  if (seed.processingState === 'pending') return { kind: 'skip', outcome: { status: 'skipped', reason: 'pending' } };
+
+  const rows: readonly SealRow[] = await deps.prisma.messageAttachment.findMany({ where: { filePath: seed.filePath }, select: ROW_SELECT });
+  if (rows.some(isEndToEnd)) return { kind: 'skip', outcome: { status: 'skipped', reason: 'end-to-end' } };
+
+  const unique = new Map<string, Slot>();
+  rows.flatMap(slotsOf).forEach((slot) => { if (!unique.has(slot.key)) unique.set(slot.key, slot); });
+  const found = await Promise.all([...unique.values()].map(async (slot) => ({ slot, record: await deps.access.store.find(slot.key) })));
+  const present = await Promise.all(
+    found.filter(({ record }) => record === null).map(async ({ slot }) => ({ slot, present: await exists(path.join(deps.uploadRoot, slot.key)) }))
+  );
+  const toSeal = present.filter(({ present: onDisk }) => onDisk).map(({ slot }) => slot);
+  return toSeal.length === 0 ? { kind: 'skip', outcome: { status: 'already-sealed' } } : { kind: 'seal', seed, rows, toSeal };
+}
+
 /**
  * Scelle les fichiers de la pièce `attachmentId` et de ses copies sous la clé
  * de `conversationId`. L'appelant a jugé que la pièce DOIT l'être
@@ -179,22 +207,9 @@ export async function sealAttachmentFiles(
   deps: SealAttachmentDeps,
   input: { readonly attachmentId: string; readonly conversationId: string }
 ): Promise<SealOutcome> {
-  const seed = await deps.prisma.messageAttachment.findUnique({ where: { id: input.attachmentId }, select: ROW_SELECT });
-  if (!seed) return { status: 'skipped', reason: 'not-found' };
-  if (isEndToEnd(seed)) return { status: 'skipped', reason: 'end-to-end' };
-  if (seed.processingState === 'pending') return { status: 'skipped', reason: 'pending' };
-
-  const rows: readonly SealRow[] = await deps.prisma.messageAttachment.findMany({ where: { filePath: seed.filePath }, select: ROW_SELECT });
-  if (rows.some(isEndToEnd)) return { status: 'skipped', reason: 'end-to-end' };
-
-  const unique = new Map<string, Slot>();
-  rows.flatMap(slotsOf).forEach((slot) => { if (!unique.has(slot.key)) unique.set(slot.key, slot); });
-  const found = await Promise.all([...unique.values()].map(async (slot) => ({ slot, record: await deps.access.store.find(slot.key) })));
-  const present = await Promise.all(
-    found.filter(({ record }) => record === null).map(async ({ slot }) => ({ slot, present: await exists(path.join(deps.uploadRoot, slot.key)) }))
-  );
-  const toSeal = present.filter(({ present: onDisk }) => onDisk).map(({ slot }) => slot);
-  if (toSeal.length === 0) return { status: 'already-sealed' };
+  const plan = await planAttachmentSealing(deps, input.attachmentId);
+  if (plan.kind === 'skip') return plan.outcome;
+  const { seed, rows, toSeal } = plan;
 
   const originalBase = seed.filePath.slice(0, seed.filePath.length - path.posix.extname(seed.filePath).length);
   const opaqueBase = isSealedStorageKey(seed.filePath) ? originalBase : opaqueBaseFor(seed.filePath);
