@@ -30,8 +30,8 @@ final class EndToEndDiskPlaintextMigrationTests: XCTestCase {
             localId: "cid_1", conversationId: conversationId, senderId: me, sender: nil, text: secret,
             originalLanguage: "fr", messageType: "text", replyToId: nil, storyReplyToId: nil,
             forwardedFromId: nil, forwardedFromConversationId: nil, replyToJson: nil, effectFlags: 0,
-            maxViewOnceCount: nil, locationJson: nil, stickerJson: nil, now: Date(), ephemeralDuration: nil,
-            sealedEndToEnd: false
+            maxViewOnceCount: nil, locationJson: nil, stickerJson: nil, sealedEndToEnd: false,
+            now: Date(), ephemeralDuration: nil
         )
         legacy.serverId = "srv_1"
         let legacyRow = legacy

@@ -14,6 +14,9 @@ import me.meeshy.sdk.model.SendLifecycle
 import me.meeshy.sdk.model.SendLifecycleResolver
 import me.meeshy.sdk.model.exitOffer
 import me.meeshy.sdk.model.isProtected
+import me.meeshy.sdk.model.profile.ProfileSheetUser
+import me.meeshy.sdk.model.profile.from
+import me.meeshy.sdk.theme.DynamicColorGenerator
 
 public object BubbleContentBuilder {
 
@@ -114,6 +117,8 @@ public object BubbleContentBuilder {
                 includeTranslatable = true,
             )
         }
+        val senderName = (message.sender?.displayName ?: message.sender?.username)
+            ?.takeIf { it.isNotBlank() }
         return BubbleContent(
             messageId = message.id,
             text = text,
@@ -122,9 +127,14 @@ public object BubbleContentBuilder {
             isShowingOriginal = isShowingOriginal,
             originalText = if (isTranslated && !isShowingOriginal) message.content else null,
             languageStrip = languageStrip,
-            senderName = (message.sender?.displayName ?: message.sender?.username)
-                ?.takeIf { it.isNotBlank() },
+            senderName = senderName,
             showSenderName = showSenderName && !isOutgoing,
+            senderId = message.senderId,
+            senderProfile = if (isOutgoing || message.isSystemMessage) null else ProfileSheetUser.from(message),
+            senderUsername = (message.sender?.username ?: message.sender?.user?.username)
+                ?.takeIf { it.isNotBlank() },
+            senderAvatarUrl = message.sender?.resolvedAvatar,
+            senderColorHex = (senderName ?: message.senderId)?.let(DynamicColorGenerator::colorForName),
             isEdited = message.isEdited,
             isDeleted = isDeleted,
             isEndToEndSealed = isEndToEndSealed,
