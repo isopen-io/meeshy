@@ -213,7 +213,7 @@ struct StoryActionSidebarView: View {
     let currentGroup: StoryGroup?
     let storyCommentCount: Int
     /// Impulsion dédiée à la réconciliation d'OUVERTURE de slide — voir
-    /// `StoryViewerView.storyCommentCountReconciledPulse`. Distincte de
+    /// `StoryCommentSession.reconciledCountPulse`. Distincte de
     /// `storyCommentCount` : celui-ci bouge aussi en temps réel (activité live,
     /// propre composer), cette impulsion NE bouge QUE quand
     /// `loadStoryCommentCount()` (+Content.swift) confirme un compteur plus

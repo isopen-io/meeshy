@@ -151,6 +151,7 @@ enum StoryViewerSources {
         "PrefetcherHostView.swift",
         "RenderableSlideCache.swift",
         "RevealCircleShape.swift",
+        "StoryCommentSession.swift",
         "StoryCommentThread.swift",
         "StoryCommentsOverlayView.swift",
         "StoryDraft.swift",

@@ -297,26 +297,9 @@ struct StoryViewerView: View {
     /// active state so it only lights up when *this* viewer has reacted —
     /// not when somebody else has (bug 2026-05-28).
     @State var storyCurrentUserReactions: [String] = []
-    /// Le fil de commentaires de la slide — racines, réponses, dépliage et
-    /// pagination — le view model partagé avec le post et le reel (#13133).
-    @StateObject var storyCommentThread = CommentThreadViewModel(entity: .story(""))
-    /// A spinner only over an empty overlay: a cached list never waits.
-    var isLoadingComments: Bool { storyCommentThread.isLoadingRoots && storyCommentThread.roots.isEmpty }
-    @State var storyCommentCount: Int = 0
-    /// Impulsion (mirroir `heartBouncePulse`) incrémentée UNIQUEMENT par la
-    /// réconciliation d'ouverture de `loadStoryCommentCount()` (+Content.swift :
-    /// cache commentaires local puis, si toujours à 0, une requête réseau
-    /// bornée ~400 ms) — jamais par une activité TEMPS RÉEL (`sendComment`,
-    /// le socket `comment:added` via `applyStoryCommentAdded` +Content.swift,
-    /// ou `StoryViewModel.applyStoryCommentCountDelta` qui tient
-    /// `currentStory?.commentCount` lui-même live). Ces trois derniers canaux
-    /// DOIVENT rester hors du gel du rail (directive 2026-07-10 : jamais de
-    /// bouton qui surgit en cours de lecture) ; seule cette impulsion dédiée
-    /// permet à `StoryActionSidebarView` de distinguer « le payload d'entrée
-    /// était périmé » de « quelqu'un vient de commenter pendant que je lis ».
-    @State var storyCommentCountReconciledPulse: Int = 0
-    @State var replyingToStoryComment: FeedComment? = nil
-    @State var commentHearts = CommentHeartLedger()
+    /// The slide's comments — thread, live count, opening-reconciliation
+    /// pulse, reply target, hearts (`StoryCommentSession`, #13135).
+    @StateObject var commentSession = StoryCommentSession()
     /// Latched once the `initialAction` (Phase F notification entry point) has
     /// been honoured. Guards against re-firing on every `.onAppear` cycle —
     /// scene phase transitions and parent re-renders both republish onAppear,
@@ -558,10 +541,10 @@ struct StoryViewerView: View {
             markCurrentViewed()
         }
         .onReceive(SocialSocketManager.shared.commentReactionAdded.receive(on: DispatchQueue.main)) { event in
-            applyCommentReactionEvent(event)
+            commentSession.applyReaction(event)
         }
         .onReceive(SocialSocketManager.shared.commentReactionRemoved.receive(on: DispatchQueue.main)) { event in
-            applyCommentReactionEvent(event)
+            commentSession.applyReaction(event)
         }
         // Realtime story reactions (it.23) : le `StoryViewModel` applique le delta
         // `story:reacted`/`story:unreacted` sur l'item (`storyGroups` @Published). On
@@ -577,24 +560,24 @@ struct StoryViewerView: View {
         // @State counter from it — a comment posted by another viewer never
         // moved the visible count until the user swiped away and back.
         .adaptiveOnChange(of: currentStory?.commentCount) { _, newCount in
-            storyCommentCount = newCount ?? 0
+            commentSession.count = newCount ?? 0
         }
         // The counter mirror above keeps the number honest, but the comments
         // OVERLAY itself (when open) never received the new comment's content —
         // only a full close/reopen picked it up. Mirrors
         // `PostDetailViewModel.subscribeToSocket`'s `commentAdded` sink.
         .onReceive(SocialSocketManager.shared.commentAdded.receive(on: DispatchQueue.main)) { data in
-            applyStoryCommentAdded(data)
+            commentSession.applyAdded(data, languages: resolvedViewerLanguageChain)
         }
         // Édition en temps réel : remplace la ligne EN PLACE dans l'overlay
         // (contenu, effets, traductions régénérées) — idempotent par id.
         .onReceive(SocialSocketManager.shared.commentUpdated.receive(on: DispatchQueue.main)) { data in
-            applyStoryCommentUpdated(data)
+            commentSession.applyUpdated(data, languages: resolvedViewerLanguageChain)
         }
         // Traduction de commentaire arrivée : pose `translatedContent` dans
         // l'overlay si la langue est préférée (chaîne du Prisme du viewer).
         .onReceive(SocialSocketManager.shared.commentTranslationUpdated.receive(on: DispatchQueue.main)) { data in
-            applyStoryCommentTranslationUpdated(data)
+            commentSession.applyTranslationUpdated(data, languages: resolvedViewerLanguageChain)
         }
     }
 
@@ -697,12 +680,12 @@ struct StoryViewerView: View {
             heartBouncePulse: $heartBouncePulse,
             storyReactionCount: storyReactionCount,
             storyCurrentUserHasReacted: !storyCurrentUserReactions.isEmpty,
-            storyCommentCount: storyCommentCount,
-            storyCommentCountReconciledPulse: storyCommentCountReconciledPulse,
+            storyCommentCount: commentSession.count,
+            storyCommentCountReconciledPulse: commentSession.reconciledCountPulse,
             storyShareCount: currentStory?.shareCount ?? 0,
             storyViewCount: currentStory?.viewCount ?? 0,
             storyRepostCount: currentStory?.repostCount ?? 0,
-            isStoryCommentsEmpty: storyCommentThread.roots.isEmpty,
+            isStoryCommentsEmpty: commentSession.thread.roots.isEmpty,
             storyHasAudibleSound: storyHasAudibleSound,
             storyHasTranslatableContent: storyHasTranslatableContent,
             backgroundSoundAnnouncement: backgroundSoundAnnouncement,
@@ -717,11 +700,11 @@ struct StoryViewerView: View {
                 withAnimation(.easeInOut(duration: 0.2)) { sessionLanguageOverride = lang }
             },
             composerAccentColor: currentGroup?.avatarColor ?? MeeshyColors.brandPrimaryHex,
-            storyComments: storyCommentThread.roots,
-            storyCommentRepliesMap: storyCommentThread.replies,
-            storyCommentExpandedThreads: storyCommentThread.expandedThreads,
-            storyCommentLoadingReplies: storyCommentThread.loadingReplies,
-            isLoadingComments: isLoadingComments,
+            storyComments: commentSession.thread.roots,
+            storyCommentRepliesMap: commentSession.thread.replies,
+            storyCommentExpandedThreads: commentSession.thread.expandedThreads,
+            storyCommentLoadingReplies: commentSession.thread.loadingReplies,
+            isLoadingComments: commentSession.isLoadingRoots,
             commentsReaderLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser),
             isContentReady: $isContentReady,
             showEmojiStrip: $showEmojiStrip,
@@ -741,7 +724,7 @@ struct StoryViewerView: View {
             isPresented: $isPresented,
             selectedProfileUser: $selectedProfileUser,
             showReportSheet: $showReportSheet,
-            replyingToStoryComment: $replyingToStoryComment,
+            replyingToStoryComment: $commentSession.replyTarget,
             composerLanguage: $composerLanguage,
             commentEffects: $commentEffects,
             commentBlurEnabled: $commentBlurEnabled,
@@ -765,7 +748,7 @@ struct StoryViewerView: View {
             pauseTimer: { pauseTimer() },
             resumeTimer: { resumeTimer() },
             onPlaybackProgressing: { progressing in slideTimer.setPlaybackStalled(!progressing) },
-            loadStoryComments: { loadStoryComments() },
+            loadStoryComments: { commentSession.loadRoots() },
             dismissComposer: { dismissComposer() },
             goToPrevious: { goToPrevious() },
             goToNext: { goToNext() },
@@ -775,7 +758,7 @@ struct StoryViewerView: View {
             makeStoryCommentRow: { comment, readerLanguages in
                 makeStoryCommentRow(comment, readerLanguages: readerLanguages)
             },
-            toggleStoryCommentThread: { await toggleStoryCommentThread($0) },
+            toggleStoryCommentThread: { await commentSession.toggleThread($0) },
             storyWithdrawal: StoryWithdrawalActions(delete: { deleteCurrentStory(reason: $0) }, makePrivate: { StoryPrivatization.makePrivate(currentStory, of: currentGroup, reason: $0, viewModel: viewModel, dismiss: dismissViewer) }),
             dismissViewer: { dismissViewer() },
             reportStory: { storyId, reportType, reason in
@@ -842,7 +825,7 @@ struct StoryViewerView: View {
     ///
     /// Internal (not private): `StoryViewerView+Content.swift` needs it for
     /// Prisme-correct resolution of realtime socket comments
-    /// (`applyStoryCommentAdded`) — the cross-file-private-access trap
+    /// (`StoryCommentSession.applyAdded`) — the cross-file-private-access trap
     /// documented in apps/ios/CLAUDE.md.
     var resolvedViewerLanguageChain: [String] {
         Self.viewerLanguageChain(

@@ -205,14 +205,10 @@ extension StoryViewerView {
         // for gestureAxis above): without this, isScrubbingRail could stay
         // stuck true and shouldPauseTimer would freeze the story forever.
         isScrubbingRail = false
-        replyingToStoryComment = nil
-        storyCommentThread.reset(to: .story(currentStory?.id ?? ""))
-        // Slide changed → drop previous slide's comment list, like overrides, and
-        // any in-flight heart taps. Without this, `isStoryCommentsEmpty` stays
-        // false in the sidebar tap path (Sidebar:277) and the overlay re-opens
-        // with the prior slide's comments without ever refetching.
-        commentHearts.reset()
-        loadStoryCommentCount()
+        // Slide changed → the previous slide's reply target, rows and hearts
+        // fall, and the count is seeded then reconciled for the new one.
+        commentSession.begin(storyId: currentStory?.id, payloadCount: currentStory?.commentCount ?? 0,
+                             viewing: { currentStory?.id })
         storyReactionCount = currentStory?.reactionCount ?? 0
         storyCurrentUserReactions = currentStory?.currentUserReactions ?? []
         updateStoryDuration()
@@ -322,8 +318,8 @@ extension StoryViewerView {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                     showCommentsOverlay = true
                 }
-                if storyCommentThread.roots.isEmpty {
-                    loadStoryComments()
+                if commentSession.thread.roots.isEmpty {
+                    commentSession.loadRoots()
                 }
             case .showViewersSheet:
                 showViewersSheet = true
@@ -358,12 +354,11 @@ extension StoryViewerView {
         let tempCommentId = ClientMutationId.generate()
         let language = composerLanguage
         let medias = [pendingMedia].compactMap { $0 }
-        storyCommentThread.insertOptimistic(.optimistic(
+        commentSession.insertOptimistic(.optimistic(
             id: tempCommentId, by: currentUser, content: text, parentId: parentId,
             effectFlags: effectFlags, originalLanguage: language, media: medias.map(\.optimistic),
             location: location,
-            fallbackName: String(localized: "story.tray.me", defaultValue: "Moi", bundle: .main)), at: .last)
-        storyCommentCount += 1
+            fallbackName: String(localized: "story.tray.me", defaultValue: "Moi", bundle: .main)))
 
         // La charge est bâtie UNE fois, avec son auteur relevé avant toute
         // attente : l'envoi direct et la file portent la même (#9743).
@@ -376,17 +371,17 @@ extension StoryViewerView {
         )
         Task {
             StoryInteractionService().noteComment(storyId: story.id)
-            switch await storyCommentThread.deliver(payload, media: medias, for: .story(story.id)) {
+            switch await commentSession.thread.deliver(payload, media: medias, for: .story(story.id)) {
             case .delivered:
                 break
             case .entrusted:
                 observeStoryCommentOutcome(cmid: tempCommentId, tempId: tempCommentId, parentId: parentId)
             case .refused(let cause):
-                if currentStory?.id == story.id { storyCommentCount = max(0, storyCommentCount - 1) }
+                commentSession.uncountRefused(storyId: story.id)
                 _ = DailyGestureLimitNotice.surface(cause)
                 returnRefusedStoryComment(storyId: story.id, text: text, medias: medias)
             case .unqueued:
-                if currentStory?.id == story.id { storyCommentCount = max(0, storyCommentCount - 1) }
+                commentSession.uncountRefused(storyId: story.id)
                 returnRefusedStoryComment(storyId: story.id, text: text, medias: medias)
             }
         }
@@ -397,34 +392,6 @@ extension StoryViewerView {
             self.dismissComposer()
             self.storyDrafts.removeValue(forKey: story.id)
         }
-    }
-
-    /// Pure core of the rollback — no `@State` access, so it's unit-testable
-    /// without a live view (mirrors the "extract the pure decision" pattern
-    /// used elsewhere in the codebase). Removes the failed `temp_` comment
-    /// (top-level) or reply (routes back out of the parent's reply count +
-    /// the replies map) and decrements the shared counter exactly once,
-    /// symmetrically with how `sendComment` incremented it.
-    static func rollingBackOptimisticComment(
-        id: String,
-        parentId: String?,
-        comments: [FeedComment],
-        repliesMap: [String: [FeedComment]],
-        commentCount: Int
-    ) -> (comments: [FeedComment], repliesMap: [String: [FeedComment]], commentCount: Int) {
-        let withdrawn = FeedCommentThread(roots: comments, replies: repliesMap)
-            .withdrawingOptimistic(id, parentId: parentId).thread
-        return (withdrawn.roots, withdrawn.replies, max(0, commentCount - 1))
-    }
-
-    private func rollbackOptimisticComment(id: String, parentId: String?) {
-        let result = Self.rollingBackOptimisticComment(
-            id: id, parentId: parentId,
-            comments: storyCommentThread.roots, repliesMap: storyCommentThread.replies, commentCount: storyCommentCount
-        )
-        storyCommentThread.roots = result.comments
-        storyCommentThread.replies = result.repliesMap
-        storyCommentCount = result.commentCount
     }
 
     // Le compte à rebours d'expiration a quitté le header du reader (directive
@@ -469,7 +436,7 @@ extension StoryViewerView {
             let stream = await OfflineQueue.shared.outcomeStream(for: cmid)
             for await event in stream {
                 if case .exhausted = event {
-                    rollbackOptimisticComment(id: tempId, parentId: parentId)
+                    commentSession.rollBack(id: tempId, parentId: parentId)
                     await OfflineQueue.shared.cancelCreateComment(clientMutationId: cmid, ownerId: CommentPublisher.currentAccountId())
                     FeedbackToastManager.shared.showError(
                         // Clé du feed réutilisée : message identique, et le

@@ -135,7 +135,7 @@ final class TrackedLinksSurfacesTests: XCTestCase {
         let api = try decode(APIPostComment.self,
                              commentaireJSON(extra: ",\"metadata\":{\"trackingLinks\":\(Self.carteJSON)}"))
 
-        XCTAssertEqual(StoryViewerView.storyComment(from: api, preferredLanguages: []).trackedLinkMap, Self.carte)
+        XCTAssertEqual(StoryCommentSession.comment(from: api, preferredLanguages: []).trackedLinkMap, Self.carte)
     }
 
     func test_commentaire_survitAuCache() throws {

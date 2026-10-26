@@ -114,20 +114,20 @@ extension StoryViewerView {
 
     var storyCommentsRenderInputs: StoryCommentsRenderInputs {
         StoryCommentsRenderInputs(
-            comments: storyCommentThread.roots,
-            commentCount: storyCommentCount,
-            replies: storyCommentThread.replies,
-            expandedThreads: storyCommentThread.expandedThreads,
-            loadingReplies: storyCommentThread.loadingReplies,
-            repliesHasMore: storyCommentThread.repliesHasMore,
-            isLoading: isLoadingComments,
+            comments: commentSession.thread.roots,
+            commentCount: commentSession.count,
+            replies: commentSession.thread.replies,
+            expandedThreads: commentSession.thread.expandedThreads,
+            loadingReplies: commentSession.thread.loadingReplies,
+            repliesHasMore: commentSession.thread.repliesHasMore,
+            isLoading: commentSession.isLoadingRoots,
             readerLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser),
             isStoryExpired: currentStory?.isExpired() ?? false,
             targetCommentId: targetCommentId,
             targetParentCommentId: targetParentCommentId,
             safeBottom: windowBottomInset,
-            replyingToId: replyingToStoryComment?.id,
-            hearts: commentHearts
+            replyingToId: commentSession.replyTarget?.id,
+            hearts: commentSession.hearts
         )
     }
 

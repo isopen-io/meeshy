@@ -224,7 +224,12 @@ extension StoryActionRailPlanTests {
     }
 
     private func contentSource() throws -> String {
-        try AppSourceGuard.unit("Meeshy/Features/Main/Views/StoryViewerView+Content.swift")
+        try AppSourceGuard.unit("Meeshy/Features/Main/Views/StoryViewerView.swift")
+    }
+
+    /// The opening reconciliation and its pulse live in `StoryCommentSession` (#13135).
+    private func sessionSource() throws -> String {
+        try AppSourceGuard.unit("Meeshy/Features/Main/Views/StoryCommentSession.swift")
     }
 
     /// Reproduit le cas confirmé cassé : le rail doit finir par réagir à la
@@ -256,9 +261,14 @@ extension StoryActionRailPlanTests {
         // Les deux seuls sites d'écriture du canal dédié sont les branches de
         // réconciliation d'ouverture (cache local + fallback réseau borné) —
         // jamais `sendComment`, jamais le handler socket `comment:added`.
-        let pulseWriteSites = content.components(separatedBy: "storyCommentCountReconciledPulse += 1").count - 1
-        XCTAssertEqual(pulseWriteSites, 2,
-            "storyCommentCountReconciledPulse ne doit être incrémenté que par les DEUX branches de réconciliation de loadStoryCommentCount()")
+        let session = try sessionSource()
+        let pulseWriteSites = session.components(separatedBy: "reconciledCountPulse += 1").count - 1
+        XCTAssertEqual(pulseWriteSites, 1,
+            "reconciledCountPulse ne s'incrémente qu'en UN site, `settleOpeningCount`")
+        XCTAssertEqual(session.components(separatedBy: "settleOpeningCount(").count - 1, 3,
+            "settleOpeningCount n'est appelé que par les DEUX branches de la réconciliation d'ouverture (cache local + réseau borné)")
+        XCTAssertFalse(content.contains("reconciledCountPulse +="),
+            "le lecteur ne bouge jamais l'impulsion lui-même")
 
         XCTAssertFalse(
             sidebar.contains("storyCommentCountReconciledPulse +="),

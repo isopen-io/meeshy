@@ -77,7 +77,7 @@ struct StoryCardView: View {
     let storyReactionCount: Int
     let storyCurrentUserHasReacted: Bool
     let storyCommentCount: Int
-    /// Voir `StoryViewerView.storyCommentCountReconciledPulse` — forwarded
+    /// Voir `StoryCommentSession.reconciledCountPulse` — forwarded
     /// verbatim, ne tique QUE sur la réconciliation d'ouverture, jamais sur
     /// une activité temps réel.
     let storyCommentCountReconciledPulse: Int

@@ -14,7 +14,7 @@ import MeeshySDK
 /// langue n° 1 du lecteur s'affichait donc traduit dans sa langue n° 2, dès
 /// que le serveur avait produit cette traduction pour d'autres lecteurs.
 ///
-/// Le chemin passe désormais par `StoryViewerView.storyComment(from:preferredLanguages:)`,
+/// Le chemin passe désormais par `StoryCommentSession.comment(from:preferredLanguages:)`,
 /// qui appelle le résolveur canonique ; les témoins de RANG lisent ce
 /// chemin-ci, pas seulement le résolveur.
 final class StoryCommentPrismeSingleResolverTests: XCTestCase {
@@ -50,7 +50,7 @@ final class StoryCommentPrismeSingleResolverTests: XCTestCase {
     func test_storyComment_originalInTheReadersFirstLanguage_keepsTheOriginal() {
         let comment = makeComment(originalLanguage: "fr", translations: ["en": "Hello"])
 
-        let row = StoryViewerView.storyComment(from: comment, preferredLanguages: ["fr", "en"])
+        let row = StoryCommentSession.comment(from: comment, preferredLanguages: ["fr", "en"])
 
         XCTAssertNil(row.translatedContent,
                      "La langue n° 1 du lecteur est déjà celle de l'original : " +
@@ -67,7 +67,7 @@ final class StoryCommentPrismeSingleResolverTests: XCTestCase {
     func test_storyComment_translationAtTheFirstRank_winsOverAnOriginalAtTheSecondRank() {
         let comment = makeComment(originalLanguage: "en", translations: ["fr": "Bonjour"])
 
-        let row = StoryViewerView.storyComment(from: comment, preferredLanguages: ["fr", "en"])
+        let row = StoryCommentSession.comment(from: comment, preferredLanguages: ["fr", "en"])
 
         XCTAssertEqual(row.translatedContent, "Bonjour",
                        "La langue d'origine concourt à son RANG : au rang 2, elle " +
@@ -80,7 +80,7 @@ final class StoryCommentPrismeSingleResolverTests: XCTestCase {
     func test_storyComment_matchesLanguageCodesCaseInsensitively() {
         let comment = makeComment(originalLanguage: "en", translations: ["fr": "Bonjour"])
 
-        let row = StoryViewerView.storyComment(from: comment, preferredLanguages: ["FR"])
+        let row = StoryCommentSession.comment(from: comment, preferredLanguages: ["FR"])
 
         XCTAssertEqual(row.translatedContent, "Bonjour")
     }
@@ -94,7 +94,7 @@ final class StoryCommentPrismeSingleResolverTests: XCTestCase {
     private static let adHocLookups = ["[lang]", "[language]", "for lang in", "for language in"]
 
     private func readerSource() throws -> String {
-        // L'UNITÉ : la gestion des commentaires vit dans `StoryViewerView+Content+Comments.swift`.
+        // Les commentaires de la slide vivent dans `StoryCommentSession` (#13135).
         AppSourceGuard.stripComments(
             try AppSourceGuard.unit("Meeshy/Features/Main/Views/StoryViewerView+Content.swift",
                                     alsoIncluding: Self.sharedThreadFiles))
@@ -136,8 +136,9 @@ final class StoryCommentPrismeSingleResolverTests: XCTestCase {
     private static let sharedThreadFiles = [
         "Meeshy/Features/Main/ViewModels/CommentThreadViewModel.swift",
         "Meeshy/Features/Main/ViewModels/CommentThreadViewModel+Roots.swift",
+        "Meeshy/Features/Main/Views/StoryCommentSession.swift",
     ]
-    private static let mapperAnchor = "static func storyComment(from"
+    private static let mapperAnchor = "static func comment(from"
     private static let pageMapperAnchor = "func mapped("
     private static let networkPathAnchor = "private func fetchRootsPage("
     /// Depuis #9075, les chemins ne nomment plus le résolveur eux-mêmes : ils

@@ -92,12 +92,12 @@ extension StoryViewerView {
         StoryCommentRowView(
             comment: comment,
             readerLanguages: readerLanguages,
-            isLiked: commentHearts.isLiked(comment.id),
-            likeCount: commentHearts.displayedLikes(of: comment),
-            isInFlight: commentHearts.isInFlight(comment.id),
+            isLiked: commentSession.hearts.isLiked(comment.id),
+            likeCount: commentSession.hearts.displayedLikes(of: comment),
+            isInFlight: commentSession.hearts.isInFlight(comment.id),
             onReply: {
                 withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                    replyingToStoryComment = comment
+                    commentSession.replyTarget = comment
                 }
                 // Répondre à une réponse (niveau 2) : la réponse reste plate au niveau 2
                 // (parent racine, cf. submitStoryComment) — on injecte une @mention de
@@ -118,10 +118,10 @@ extension StoryViewerView {
             },
             onToggleLike: {
                 HapticFeedback.light()
-                Task { await toggleStoryCommentLike(comment) }
+                Task { await commentSession.toggleLike(comment) }
             },
-            root: comment.parentId.flatMap { parentId in storyCommentThread.roots.first { $0.id == parentId } },
-            loadedReplies: comment.parentId == nil ? (storyCommentThread.replies[comment.id] ?? []) : [],
+            root: comment.parentId.flatMap { parentId in commentSession.thread.roots.first { $0.id == parentId } },
+            loadedReplies: comment.parentId == nil ? (commentSession.thread.replies[comment.id] ?? []) : [],
             story: commentCardStory,
             onCommitEdit: { text in
                 Task { await storyCommentWriter?.edit(comment, content: text) }
@@ -134,7 +134,7 @@ extension StoryViewerView {
 
     var storyCommentWriter: StoryCommentThreadWriter? {
         currentStory.map {
-            StoryCommentThreadWriter(postId: $0.id, comments: $storyCommentThread.roots, replies: $storyCommentThread.replies, count: $storyCommentCount)
+            StoryCommentThreadWriter(postId: $0.id, comments: $commentSession.roots, replies: $commentSession.replies, count: $commentSession.count)
         }
     }
 
