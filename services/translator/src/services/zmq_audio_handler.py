@@ -9,6 +9,7 @@ import asyncio
 import base64
 import json
 import logging
+import os
 import time
 import traceback
 import uuid
@@ -19,7 +20,7 @@ logger = logging.getLogger(__name__)
 from .segment_serialization import _get_voice_similarity_score, _segment_to_dict
 from utils.audio_format import read_audio_bytes
 from config.message_limits import validate_audio_duration
-from services.task_privacy import shown, under_declared_regime
+from services.task_privacy import in_at_rest_task, shown, under_declared_regime
 
 # Import du pipeline audio.
 #
@@ -382,6 +383,7 @@ class AudioHandler:
             logger.info(f"📤 [TRANSLATOR] Publication résultat audio: {task_id}")
             await self._publish_audio_result(task_id, result, processing_time)
             logger.info(f"✅ [TRANSLATOR] Résultat audio publié: {task_id}")
+            self._forget_translated_audio_files(result)
 
             # Le résultat porte la transcription même sans traduction : on le
             # publie d'abord, puis on signale l'échec pour sortir le client de
@@ -421,6 +423,29 @@ class AudioHandler:
                 error=str(e),
                 error_code="processing_failed"
             )
+
+    @staticmethod
+    def _forget_translated_audio_files(result) -> int:
+        """
+        #13102 — une tâche au repos ou éphémère ne laisse aucune piste sur le
+        disque du translator : une fois publiées à la passerelle (qui les
+        scelle), elles sont effacées. Une tâche ordinaire les garde.
+        """
+        if not in_at_rest_task():
+            return 0
+        removed = 0
+        for translation in (getattr(result, 'translations', None) or {}).values():
+            path = getattr(translation, 'audio_path', None)
+            if not path:
+                continue
+            try:
+                os.remove(path)
+                removed += 1
+            except FileNotFoundError:
+                continue
+            except OSError as error:
+                logger.warning(f"[TRANSLATOR] piste d'une tâche au repos non effacée ({type(error).__name__})")
+        return removed
 
     async def _report_total_translation_failure(self, task_id: str, request_data: dict, result) -> bool:
         """Signale au client l'échec de TOUTES les langues demandées.
