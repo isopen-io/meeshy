@@ -483,7 +483,7 @@ class ChatViewModel @Inject constructor(
             }
         }
 
-        controllers.attachAll(ChatScreenHost(conversationId, viewModelScope, screenState, latestMessages))
+        controllers.attachAll(ChatScreenHost(conversationId, viewModelScope, screenState, latestMessages, initialUnreadCount))
     }
 
     /**

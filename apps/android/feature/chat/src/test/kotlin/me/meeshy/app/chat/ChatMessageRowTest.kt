@@ -5,6 +5,7 @@ import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
@@ -49,7 +50,8 @@ class ChatMessageRowTest {
     ) = BubbleContent(
         messageId = id,
         text = text,
-        isOutgoing = false,
+        // Seul un message ENVOYÉ peut échouer : la bande de renvoi ne se pose que sur lui.
+        isOutgoing = deliveryStatus == DeliveryStatus.Failed,
         isTranslated = false,
         originalText = null,
         senderName = null,
@@ -65,6 +67,7 @@ class ChatMessageRowTest {
         replyCount: Int? = null,
         actions: ChatMessageRowActions = ChatMessageRowActions(),
         canWrite: Boolean = true,
+        showReplyCountPill: Boolean = false,
     ) {
         val store = LinkPreviewStore(CoroutineScope(Job()), SilentFetcher())
         compose.setContent {
@@ -80,6 +83,7 @@ class ChatMessageRowTest {
                         linkPreviewCache = LinkPreviewCache(),
                         actions = actions,
                         canWrite = canWrite,
+                        showReplyCountPill = showReplyCountPill,
                     )
                 }
             }
@@ -102,7 +106,7 @@ class ChatMessageRowTest {
     fun `a delivered message shows no retry line and no thread pill`() {
         show(bubble())
 
-        compose.onNodeWithText(retryLabel).assertDoesNotExist()
+        compose.onNodeWithContentDescription(retryLabel).assertDoesNotExist()
         compose.onNodeWithText(replyCountLabel(2)).assertDoesNotExist()
     }
 
@@ -114,17 +118,26 @@ class ChatMessageRowTest {
             actions = ChatMessageRowActions(onRetry = { retried += it }),
         )
 
-        compose.onNodeWithText(retryLabel).performClick()
+        // iOS : la bande orange intégrée au bord de la bulle (BubbleFailedRetryBar).
+        compose.onNodeWithContentDescription(retryLabel).performClick()
 
         assertThat(retried).containsExactly("m7")
     }
 
     @Test
-    fun `a message with replies shows the thread pill and a tap reports its own id`() {
+    fun `a message with replies shows no thread pill by default, like iOS`() {
+        show(bubble(id = "m3"), replyCount = 2)
+
+        compose.onNodeWithText(replyCountLabel(2)).assertDoesNotExist()
+    }
+
+    @Test
+    fun `a message with replies shows the thread pill when asked and a tap reports its own id`() {
         val tapped = mutableListOf<String>()
         show(
             bubble(id = "m3"),
             replyCount = 2,
+            showReplyCountPill = true,
             actions = ChatMessageRowActions(onReplyCountTap = { tapped += it }),
         )
 

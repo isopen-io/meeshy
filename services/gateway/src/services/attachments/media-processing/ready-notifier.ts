@@ -48,6 +48,12 @@ export type MediaReadyPorts = {
   emitToUser(userId: string, event: typeof SERVER_EVENTS.ATTACHMENT_READY, payload: AttachmentReadyEventData): void;
   /** La forme du canal socket, protection comprise (`serializeAttachmentForSocket`, fail-closed). */
   serialize(row: ReadyMessageAttachment | ReadyPostMedia): unknown;
+  /**
+   * #13100 — scelle au repos les fichiers d'une pièce `server` / `hybrid` dont
+   * le rendu vient de finir : le rendu différé lisait l'original en clair, il
+   * a maintenant tout écrit. Absent ⇒ rien à sceller.
+   */
+  sealAtRest?(id: string): Promise<void>;
 };
 
 export type MediaReadyNotice = {
@@ -72,8 +78,12 @@ async function notifyPostMedia(ports: MediaReadyPorts, id: string, requireState?
 }
 
 async function notifyMessageAttachment(ports: MediaReadyPorts, id: string, requireState?: MediaProcessingState): Promise<void> {
-  const attachment = await ports.loadMessageAttachment(id);
-  if (!attachment || (requireState && stateOf(attachment.processingState) !== requireState)) return;
+  const loaded = await ports.loadMessageAttachment(id);
+  if (!loaded || (requireState && stateOf(loaded.processingState) !== requireState)) return;
+  const finished = stateOf(loaded.processingState) !== 'pending' && ports.sealAtRest !== undefined;
+  if (finished) await ports.sealAtRest!(id);
+  const attachment = finished ? await ports.loadMessageAttachment(id) : loaded;
+  if (!attachment) return;
   const conversationId = attachment.message?.conversationId ?? null;
   if (attachment.messageId && conversationId) {
     await ports.emitAttachmentUpdated({ conversationId, messageId: attachment.messageId, attachment });

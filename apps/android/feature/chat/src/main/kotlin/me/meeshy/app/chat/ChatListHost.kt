@@ -1,9 +1,15 @@
 package me.meeshy.app.chat
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.Alignment
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
@@ -16,12 +22,20 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.time.ZoneId
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import me.meeshy.feature.chat.R
+import me.meeshy.sdk.model.reading.focal.FocalMetrics
+import me.meeshy.sdk.model.reading.focal.ScrollTimePillLaw
+import me.meeshy.ui.profile.LocalProfileSheetOpener
 import me.meeshy.ui.component.location.LiveLocationBadge
 import me.meeshy.ui.theme.MeeshySpacing
 
@@ -31,12 +45,57 @@ import me.meeshy.ui.theme.MeeshySpacing
  * and the skeleton / notice states. [modifier] carries the Scaffold content padding.
  */
 @Composable
-internal fun ChatListHost(host: ChatHostContext, modifier: Modifier = Modifier) {
+internal fun ChatListHost(
+    host: ChatHostContext,
+    modifier: Modifier = Modifier,
+    topInset: Dp = 0.dp,
+    bottomInset: Dp = 0.dp,
+) {
     val state = host.state
     val actions = host.actions
     val accentColor = host.accentColor
     val bubbleFrames = host.bubbleFrames
     val listState = rememberLazyListState()
+    // La fiche de l'auteur ouverte depuis l'avatar du pied d'identité (iOS `selectedProfileUser`).
+    val profileOpener = LocalProfileSheetOpener.current
+    // L'en-tête efface sa grappe d'actions pendant le défilement (iOS `hiddenWhileScrolling`).
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.isScrollInProgress }
+            .distinctUntilChanged()
+            .collect {
+                host.chrome.isScrolling = it
+                if (!it) host.chrome.isUserScrolling = false
+            }
+    }
+    // Seul un glissé du doigt arme le défilement « utilisateur » ; il retombe à l'arrêt de l'élan.
+    LaunchedEffect(listState) {
+        listState.interactionSource.interactions.collect { interaction ->
+            if (interaction is DragInteraction.Start) host.chrome.isUserScrolling = true
+        }
+    }
+    // Script / Focal : la rangée plate d'iOS (`FocalRow`) ; Bulles, Résumé, Rivière : la bulle.
+    val flatRows = host.readingMode?.state?.mode?.usesFlatRow == true
+    // L'heure et les coches de la rangée plate : visibles pendant le défilement du doigt puis
+    // 900 ms (ScrollTimePillLaw), fondu de 280 ms — lues au dessin, sans recomposer les rangées.
+    var metaRevealed by remember { mutableStateOf(false) }
+    LaunchedEffect(flatRows) {
+        if (!flatRows) return@LaunchedEffect
+        snapshotFlow { host.chrome.isUserScrolling }
+            .collectLatest { scrolling ->
+                if (scrolling) {
+                    metaRevealed = true
+                } else if (metaRevealed) {
+                    delay(ScrollTimePillLaw.LINGER_MS.toLong())
+                    metaRevealed = false
+                }
+            }
+    }
+    val metaAlphaState = animateFloatAsState(
+        targetValue = if (metaRevealed) 1f else 0f,
+        animationSpec = tween(FocalMetrics.Pill.FADE_DURATION_MS.toInt()),
+        label = "flat-meta",
+    )
+    val metaAlpha = remember(metaAlphaState) { { metaAlphaState.value } }
     val scope = rememberCoroutineScope()
     // Async OpenGraph link previews: one screen-scoped store dedupes fetches across bubbles and
     // dies with the screen (its cache is discarded on logout/leave — nothing leaks to the next
@@ -133,18 +192,38 @@ internal fun ChatListHost(host: ChatHostContext, modifier: Modifier = Modifier) 
             )
         }
     }
-    val pinnedDayMillis by remember(renderedItems) {
+    // La pastille de jour flottante suit la loi d'iOS `MessageDayStickyLaw` : elle nomme la rangée
+    // réellement en haut du fil, sous la bande d'en-tête, et se tait dès qu'un séparateur de jour
+    // est à l'écran — jamais deux pastilles empilées. Masquée quand l'en-tête est déplié.
+    val density = LocalDensity.current
+    val hasBanners = state.pinnedBanner != null || state.liveLocationBadges.isNotEmpty()
+    // Avec un bandeau, le fil démarre SOUS l'en-tête et ses bandeaux : la pastille aussi.
+    val listTopInset = if (hasBanners) 0.dp else topInset
+    val readingLinePx = with(density) { (MeeshySpacing.sm + listTopInset).toPx() }
+    val pinnedDayMillis by remember(renderedItems, readingLinePx, flatRows) {
         derivedStateOf {
-            val topIndex = ChatScrollGeometry.topEdgeIndex(
-                firstVisibleIndex = listState.firstVisibleItemIndex,
-                lastVisibleIndex = listState.lastVisibleItemIndex(),
-                orientation = orientation,
-            )
-            PinnedDayHeader.governingDayMillis(renderedItems, topIndex, orientation)
+            if (host.chrome.isHeaderExpanded) return@derivedStateOf null
+            // Rangée plate : la pastille de jour se retire pendant le défilement (iOS).
+            if (flatRows && host.chrome.isUserScrolling) return@derivedStateOf null
+            val info = listState.layoutInfo
+            val height = info.viewportSize.height.toFloat()
+            val before = info.beforeContentPadding.toFloat()
+            val visible = info.visibleItemsInfo.filter { it.index < renderedItems.size }
+            // `reverseLayout` : l'offset court depuis le bas du fil ; on le ramène à l'écran.
+            val rows = visible.map { item ->
+                val bottom = height - before - item.offset
+                PinnedDayHeader.Row(
+                    isDayHeader = renderedItems[item.index] is ChatListItem.DayHeader,
+                    minY = bottom - item.size,
+                    maxY = bottom,
+                )
+            }
+            val row = PinnedDayHeader.stickyRow(rows, readingLinePx, height) ?: return@derivedStateOf null
+            PinnedDayHeader.governingDayMillis(renderedItems, visible[row].index, orientation)
         }
     }
     var scrollAffordance by remember { mutableStateOf(ScrollAffordanceState()) }
-    val rowActions = remember(actions, bubbleFrames) {
+    val rowActions = remember(actions, bubbleFrames, profileOpener) {
         ChatMessageRowActions(
             onReply = { messageId -> actions.startReply(messageId) },
             onForward = { messageId -> actions.openForward(messageId) },
@@ -160,6 +239,8 @@ internal fun ChatListHost(host: ChatHostContext, modifier: Modifier = Modifier) 
             onReplyCountTap = { messageId -> actions.onReplyCountTap(messageId) },
             onReplyCountLongPress = { messageId -> actions.openReplyThread(messageId) },
             onRetry = { messageId -> actions.retryMessage(messageId) },
+            onSenderTap = { bubble -> bubble.senderProfile?.let(profileOpener::open) },
+            onAddReaction = { messageId -> actions.openEmojiPicker(messageId) },
             onBubbleFramed = { messageId, frame -> bubbleFrames[messageId] = frame },
         )
     }
@@ -188,15 +269,22 @@ internal fun ChatListHost(host: ChatHostContext, modifier: Modifier = Modifier) 
 
     Box(modifier = modifier.fillMaxSize()) {
         when {
-            state.showSkeleton -> ChatSkeleton()
+            state.showSkeleton -> Box(Modifier.padding(top = topInset, bottom = bottomInset)) { ChatSkeleton() }
 
-            state.messages.isEmpty() && state.errorMessage != null ->
+            state.messages.isEmpty() && state.errorMessage != null -> Box(Modifier.padding(top = topInset, bottom = bottomInset)) {
                 ChatNotice(state.errorMessage!!, onRetry = actions.refresh)
+            }
 
-            state.messages.isEmpty() ->
+            state.messages.isEmpty() -> Box(Modifier.padding(top = topInset, bottom = bottomInset)) {
                 ChatNotice(stringResource(R.string.chat_no_messages), onRetry = null)
+            }
 
-            else -> Column(modifier = Modifier.fillMaxSize()) {
+            else -> Box(Modifier.fillMaxSize()) {
+            val typingReserve = if (state.typingParticipants.isEmpty()) 0.dp else TYPING_RESERVE
+            Column(modifier = Modifier.fillMaxSize()) {
+                // Les bandeaux (épinglé, positions en direct) se posent sous l'en-tête
+                // flottant ; sans bandeau, le fil remonte sous l'en-tête comme sur iOS.
+                if (hasBanners) Spacer(Modifier.height(topInset))
                 state.pinnedBanner?.let { banner ->
                     PinnedBannerStrip(
                         banner = banner,
@@ -239,6 +327,8 @@ internal fun ChatListHost(host: ChatHostContext, modifier: Modifier = Modifier) 
                         }
                     },
                     modifier = Modifier.weight(1f),
+                    topInset = listTopInset,
+                    bottomInset = bottomInset + typingReserve,
                 ) { item ->
                     ChatListRow(
                         item = item,
@@ -252,10 +342,19 @@ internal fun ChatListHost(host: ChatHostContext, modifier: Modifier = Modifier) 
                         audioPlayer = audioPlayer,
                         isGroup = state.isGroup,
                         canWrite = state.viewerMayWrite,
+                        flat = flatRows,
+                        metaAlpha = metaAlpha,
                     )
                 }
+            }
+            // La frappe se pose juste au-dessus de la barre flottante, dans la réserve du fil.
+            Box(Modifier.align(Alignment.BottomStart).padding(bottom = bottomInset)) {
                 TypingIndicator(participants = state.typingParticipants)
+            }
             }
         }
     }
 }
+
+/** La place réservée au bas du fil pour l'indicateur de frappe qui flotte au-dessus de la barre. */
+private val TYPING_RESERVE = 28.dp
