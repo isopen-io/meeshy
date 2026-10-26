@@ -93,6 +93,32 @@ final class CallLiveFrameCompositorTests: XCTestCase {
         XCTAssertEqual(CallLiveFrameBudget.percentile95([0.3]), 0.3)
     }
 
+    func test_meter_record_reportsTheP95OncePerFullWindowThenStartsAfresh() {
+        let meter = CallLiveFrameBudgetMeter(limitMs: 1)
+        let size = CallLiveFrameBudget.windowSize
+        (1..<size).forEach { XCTAssertNil(meter.record(gpuMs: Double($0))) }
+        let expected = CallLiveFrameBudget.percentile95((1...size).map(Double.init))
+        XCTAssertEqual(meter.record(gpuMs: Double(size)), expected)
+        XCTAssertNil(meter.record(gpuMs: 1), "the window starts afresh after each report")
+    }
+
+    func test_meter_reset_dropsThePartialWindow() {
+        let meter = CallLiveFrameBudgetMeter()
+        let size = CallLiveFrameBudget.windowSize
+        (1..<size).forEach { _ in meter.record(gpuMs: 5) }
+        meter.reset(limitMs: 2.5)
+        (1..<size).forEach { _ in XCTAssertNil(meter.record(gpuMs: 1)) }
+        XCTAssertEqual(meter.record(gpuMs: 1), 1)
+    }
+
+    func test_meter_record_ignoresNonFiniteAndNegativeSamples() {
+        let meter = CallLiveFrameBudgetMeter()
+        let size = CallLiveFrameBudget.windowSize
+        (1..<size).forEach { _ in meter.record(gpuMs: 2) }
+        [Double.nan, .infinity, -1].forEach { XCTAssertNil(meter.record(gpuMs: $0)) }
+        XCTAssertEqual(meter.record(gpuMs: 2), 2)
+    }
+
     // MARK: - La scène cuite
 
     func test_paint_duo_bakesOneSlotPerPerson() throws {

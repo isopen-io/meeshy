@@ -30,12 +30,12 @@ nonisolated final class ComposerCameraFirstFrameClock: Sendable {
     /// `nil` pour toutes les suivantes.
     @discardableResult
     func report(at instant: CFTimeInterval = CACurrentMediaTime()) -> Int? {
-        guard let debut = armed.mutate({ state -> Armed? in
+        guard let started = armed.mutate({ state -> Armed? in
             defer { state = nil }
             return state
         }) else { return nil }
-        let duree = Int(((instant - debut.startedAt) * 1000).rounded())
-        Logger.media.info("camera first frame: \(duree, privacy: .public) ms (\(debut.prewarmed ? "prewarmed" : "cold", privacy: .public))")
-        return duree
+        let elapsedMs = Int(((instant - started.startedAt) * 1000).rounded())
+        Logger.media.info("camera first frame: \(elapsedMs, privacy: .public) ms (\(started.prewarmed ? "prewarmed" : "cold", privacy: .public))")
+        return elapsedMs
     }
 }

@@ -46,20 +46,22 @@ nonisolated final class CallLiveFrameBudgetMeter: Sendable {
         }
     }
 
-    func record(gpuMs: Double) {
-        guard gpuMs.isFinite, gpuMs >= 0 else { return }
+    @discardableResult
+    func record(gpuMs: Double) -> Double? {
+        guard gpuMs.isFinite, gpuMs >= 0 else { return nil }
         let full = window.mutate { state -> (samples: [Double], limit: Double)? in
             state.samples.append(gpuMs)
             guard state.samples.count >= CallLiveFrameBudget.windowSize else { return nil }
             defer { state.samples.removeAll(keepingCapacity: true) }
             return (state.samples, state.limitMs)
         }
-        guard let full, let p95 = CallLiveFrameBudget.percentile95(full.samples) else { return }
+        guard let full, let p95 = CallLiveFrameBudget.percentile95(full.samples) else { return nil }
         let limit = full.limit
         if p95 > limit {
             logger.warning("call-live-frame: p95 GPU \(p95, format: .fixed(precision: 3), privacy: .public) ms > \(limit, format: .fixed(precision: 1), privacy: .public) ms")
         } else {
             logger.debug("call-live-frame: p95 GPU \(p95, format: .fixed(precision: 3), privacy: .public) ms")
         }
+        return p95
     }
 }
