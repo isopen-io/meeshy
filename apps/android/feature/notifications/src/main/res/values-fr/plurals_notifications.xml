@@ -2,6 +2,7 @@
 <resources>
     <plurals name="notifications_unread_count">
         <item quantity="one">%1$d non lue</item>
+        <item quantity="many">%1$d non lues</item>
         <item quantity="other">%1$d non lues</item>
     </plurals>
 </resources>
