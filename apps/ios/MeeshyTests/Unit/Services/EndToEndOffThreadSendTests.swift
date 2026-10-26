@@ -367,13 +367,15 @@ final class EndToEndOffThreadSendTests: XCTestCase {
         let persistence = PersistenceSpy()
         let sut = CallDeclineMessenger(messageService: service, replyQueue: queue, messagePersistence: persistence,
                                        currentUserId: { "me" }, prepareReplyQueue: {},
-                                       destinationGuard: guardOf(remembering: [sealed]))
+                                       destinationGuard: guardOf(remembering: [sealed]),
+                                       endToEnd: MockEndToEndMessaging(), notifyRefusal: { _ in })
 
         await sut.send(CallDeclineReplyPlan(conversationId: sealed, content: secret, originalLanguage: "fr"))
 
         XCTAssertEqual(service.sendCallCount, 0)
         XCTAssertTrue(queue.enqueuedItems.isEmpty)
-        XCTAssertEqual(Array(persistence.failures.values), [EndToEndSendRefusal.sealedOnlyInConversation.userMessage])
+        XCTAssertEqual(persistence.inserted.map(\.content), [E2EEWire.contentPlaceholder], "#13067 — la bulle est scellée, le clair est au coffre")
+        XCTAssertEqual(persistence.inserted.map(\.lastError), [EndToEndSendRefusal.sealedOnlyInConversation.userMessage])
     }
 
     func test_moodReply_inARememberedEndToEndDirect_servedWithoutMode_leavesSealed() async throws {

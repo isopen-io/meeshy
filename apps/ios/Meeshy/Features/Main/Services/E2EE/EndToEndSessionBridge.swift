@@ -27,12 +27,16 @@ final class EndToEndSessionBridge: EndToEndSessionBridging {
     private let regimeLedger: EndToEndRegimeLedger
     private let janitor: EndToEndPlaintextJanitor
     private let diskMigration: EndToEndDiskPlaintextMigration
+    private let unsentRescue: EndToEndUnsentPlaintextRescue
     private let storeChanges: AnyPublisher<Void, Never>
     private var subscriptions: Set<AnyCancellable> = []
     /// Les ouvertures et fermetures de session, dans l'ordre où elles sont
     /// demandées : deux tâches libres pouvaient rattraper le nouveau compte
     /// avant d'oublier l'ancien (audit #12769).
     private var lifecycle: Task<Void, Never>?
+    /// L'ouverture de la dernière session demandée, que les gestes hors du fil
+    /// attendent avant de ranger un clair au coffre (#13067).
+    private var opening: Task<Void, Never>?
 
     init(
         runtime: EndToEndMessagingRuntime = .shared,
@@ -44,6 +48,7 @@ final class EndToEndSessionBridge: EndToEndSessionBridging {
         diskMigration: EndToEndDiskPlaintextMigration = EndToEndDiskPlaintextMigration(
             endToEnd: EndToEndMessagingRuntime.shared, rows: { DependencyContainer.shared.messagePersistence.endToEndRowSealer }
         ),
+        unsentRescue: EndToEndUnsentPlaintextRescue = .live,
         storeChanges: AnyPublisher<Void, Never> = NotificationCenter.default
             .publisher(for: .messageStoreShouldRefresh).map { _ in () }.eraseToAnyPublisher()
     ) {
@@ -54,6 +59,7 @@ final class EndToEndSessionBridge: EndToEndSessionBridging {
         self.regimeLedger = regimeLedger
         self.janitor = janitor
         self.diskMigration = diskMigration
+        self.unsentRescue = unsentRescue
         self.storeChanges = storeChanges
     }
 
@@ -62,6 +68,7 @@ final class EndToEndSessionBridge: EndToEndSessionBridging {
         guard !userId.isEmpty else { return }
         let runtime = runtime
         enqueue { await runtime.open(session: userId) }
+        opening = lifecycle
         // Réceptions et rattrapages passent par la même file que l'ouverture :
         // une connexion déjà établie publie à l'abonnement, avant même que
         // l'ouverture de la session ait atteint le runtime (audit #12769).
@@ -79,6 +86,9 @@ final class EndToEndSessionBridge: EndToEndSessionBridging {
         // #12999 — le clair qu'une version antérieure a écrit hors du coffre s'en va.
         let diskMigration = diskMigration
         enqueue { await diskMigration.run(for: userId) }
+        // #13067 — une bulle jamais partie d'une conversation chiffrée rend son clair au coffre.
+        let unsentRescue = unsentRescue
+        enqueue { await unsentRescue.run(for: userId) }
         // #13001 — un effacement écrit dans la base des messages vide le coffre.
         let janitor = janitor
         enqueue { await janitor.drain() }
@@ -96,7 +106,16 @@ final class EndToEndSessionBridge: EndToEndSessionBridging {
             .store(in: &subscriptions)
     }
 
+    /// Rend la main quand la session demandée est ouverte, aussitôt s'il n'y en
+    /// a aucune, et au plus tard après `limit` : la file qui précède l'ouverture
+    /// peut porter un rattrapage réseau, et un geste en arrière-plan a un budget.
+    func awaitOpening(limit: Duration = .seconds(5)) async {
+        guard let opening else { return }
+        await BoundedWait.first(of: opening, orAfter: limit)
+    }
+
     func stop() {
+        opening = nil
         subscriptions.removeAll()
         regimeLedger.reset()
         let runtime = runtime
@@ -108,6 +127,35 @@ final class EndToEndSessionBridge: EndToEndSessionBridging {
         lifecycle = Task {
             await previous?.value
             await step()
+        }
+    }
+}
+
+/// L'attente d'une tâche, bornée : rend la main à sa fin ou à l'échéance, la
+/// première des deux, sans annuler la tâche attendue.
+enum BoundedWait {
+    static func first(of task: Task<Void, Never>, orAfter limit: Duration) async {
+        let gate = ResumeOnce()
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            gate.arm(continuation)
+            Task { await task.value; gate.resume() }
+            Task { try? await Task.sleep(for: limit); gate.resume() }
+        }
+    }
+
+    private final class ResumeOnce: @unchecked Sendable {
+        private let lock = NSLock()
+        private var continuation: CheckedContinuation<Void, Never>?
+
+        func arm(_ continuation: CheckedContinuation<Void, Never>) {
+            lock.withLock { self.continuation = continuation }
+        }
+
+        func resume() {
+            lock.withLock { () -> CheckedContinuation<Void, Never>? in
+                defer { continuation = nil }
+                return continuation
+            }?.resume()
         }
     }
 }
