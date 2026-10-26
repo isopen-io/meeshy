@@ -30,7 +30,7 @@ export function mergeTranslationEntries(existing: AttachmentTranslations, incomi
   const kept = Object.fromEntries(
     Object.entries(incoming).map(([language, entry]) => {
       const previous = existing[language];
-      const lostTrack = entry.path === undefined && entry.url === undefined && previous !== undefined && (previous.path !== undefined || previous.url !== undefined);
+      const lostTrack = entry.path === undefined && entry.url === undefined && previous !== undefined && !previous.deletedAt && (previous.path !== undefined || previous.url !== undefined);
       return [language, lostTrack ? { ...entry, path: previous.path, url: previous.url } : entry];
     })
   );
