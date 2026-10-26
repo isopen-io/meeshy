@@ -107,6 +107,19 @@ class UncheckedSendable(unittest.TestCase):
             with self.subTest(lock=lock):
                 self.assertEqual(count("unchecked-sendable", self.BARE + "let l = " + lock + "\n"), 0)
 
+    def test_locked_state_in_file_clears_it(self):
+        self.assertEqual(count("unchecked-sendable", self.BARE + "let s = Locked<Int>(0)\n"), 0)
+
+
+class UncheckedSendableTotal(unittest.TestCase):
+    def test_counts_every_declaration_whatever_its_justification_or_lock(self):
+        src = (
+            "final class A: @unchecked Sendable {} // unchecked: verrou\n"
+            "final class B: @unchecked  Sendable { let l = NSLock() }\n"
+            "// final class C: @unchecked Sendable {}\n"
+        )
+        self.assertEqual(count("unchecked-sendable-total", src), 2)
+
 
 class AvailableFloor(unittest.TestCase):
     WIDGET = "apps/ios/MeeshyWidgets/Sample.swift"

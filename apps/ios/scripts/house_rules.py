@@ -76,6 +76,7 @@ RULES = (
     ),
     _named("viewmodel-shared", r"\.shared\b", r"ViewModel[^/]*\.swift$"),
     Rule("unchecked-sendable", re.compile(r"@unchecked\s+Sendable"), "unchecked"),
+    _pattern("unchecked-sendable-total", r"@unchecked\s+Sendable"),
     Rule("available-floor", re.compile(r"#available\(\s*iOS\s+(\d+)(?:\.(\d+))?"), "floor"),
     _pattern(
         "coder-strategy",
@@ -104,7 +105,7 @@ FLOORS = (("apps/ios/MeeshyWidgets/", (17, 0)),)
 DEFAULT_FLOOR = (16, 0)
 JUSTIFICATION = "unchecked:"
 JUSTIFICATION_WINDOW = 3
-LOCK_PRIMITIVES = re.compile(r"OSAllocatedUnfairLock|NSLock|os_unfair_lock|Mutex<")
+LOCK_PRIMITIVES = re.compile(r"OSAllocatedUnfairLock|NSLock|os_unfair_lock|Mutex<|Locked<")
 HEADER_LINES = 12
 
 

@@ -9,11 +9,11 @@
     "disable-autocorrection": 0,
     "environment-router": 12,
     "fixed-font": 754,
-    "foreground-color": 2400,
+    "foreground-color": 2396,
     "idiom": 0,
     "logger-subsystem": 0,
-    "narrative-comment": 2470,
-    "nonisolated-unsafe": 109,
+    "narrative-comment": 2469,
+    "nonisolated-unsafe": 107,
     "nslock": 39,
     "nslog": 0,
     "observed-theme-singleton": 0,
@@ -23,8 +23,9 @@
     "status-bar-hidden": 0,
     "try-sleep": 50,
     "uiscreen-main": 1,
-    "unchecked-sendable": 126,
-    "viewmodel-shared": 583
+    "unchecked-sendable": 125,
+    "unchecked-sendable-total": 217,
+    "viewmodel-shared": 582
   },
   "version": 1
 }
