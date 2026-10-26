@@ -209,8 +209,8 @@ extension StoryViewerView {
         // fall, and the count is seeded then reconciled for the new one.
         commentSession.begin(storyId: currentStory?.id, payloadCount: currentStory?.commentCount ?? 0,
                              viewing: { currentStory?.id })
-        storyReactionCount = currentStory?.reactionCount ?? 0
-        storyCurrentUserReactions = currentStory?.currentUserReactions ?? []
+        reactions.begin(count: currentStory?.reactionCount ?? 0,
+                        userReactions: currentStory?.currentUserReactions ?? [])
         updateStoryDuration()
 
         // PROGRESS = StoryReaderTimerController (SDK), unique display-link de

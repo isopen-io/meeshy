@@ -260,13 +260,9 @@ struct StoryViewerView: View {
     @State var showExportShareSheet = false
     @StateObject var exportShareViewModel = StoryExportShareViewModel()
     @State var showCommentsOverlay = false
-    @State var storyReactionCount: Int = 0
-    /// Emojis the logged-in user has applied to the CURRENT story. Seeded from
-    /// `currentStory?.currentUserReactions` in `startTimer()` and bumped
-    /// optimistically by `triggerStoryReaction`. Drives the sidebar heart's
-    /// active state so it only lights up when *this* viewer has reacted —
-    /// not when somebody else has (bug 2026-05-28).
-    @State var storyCurrentUserReactions: [String] = []
+    /// The current story's reaction count and this viewer's emojis, the
+    /// optimistic append and its rollback (`StoryReactionLedger`, #13135).
+    @StateObject var reactions = StoryReactionLedger()
     /// The slide's comments — thread, live count, opening-reconciliation
     /// pulse, reply target, hearts (`StoryCommentSession`, #13135).
     @StateObject var commentSession = StoryCommentSession()
@@ -521,8 +517,7 @@ struct StoryViewerView: View {
         // re-dérive ici le @State affiché par la sidebar dès que le compteur de la story
         // COURANTE change — sinon une réaction d'un autre viewer ne se voyait pas en direct.
         .adaptiveOnChange(of: currentStory?.reactionCount) { _, newCount in
-            storyReactionCount = newCount ?? 0
-            storyCurrentUserReactions = currentStory?.currentUserReactions ?? []
+            reactions.begin(count: newCount ?? 0, userReactions: currentStory?.currentUserReactions ?? [])
         }
         // Mirror of the reaction sink above (asymmetry fix): `StoryViewModel`
         // applies `comment:added`/`comment:deleted` to `storyGroups` the same
@@ -648,8 +643,8 @@ struct StoryViewerView: View {
             reactionFlight: $reactionFlight,
             heartFrame: $heartFrame,
             heartBouncePulse: $heartBouncePulse,
-            storyReactionCount: storyReactionCount,
-            storyCurrentUserHasReacted: !storyCurrentUserReactions.isEmpty,
+            storyReactionCount: reactions.count,
+            storyCurrentUserHasReacted: reactions.hasReacted,
             storyCommentCount: commentSession.count,
             storyCommentCountReconciledPulse: commentSession.reconciledCountPulse,
             storyShareCount: currentStory?.shareCount ?? 0,
