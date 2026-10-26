@@ -101,7 +101,7 @@ struct StoryViewerView: View {
     @State var isLongPressPaused = false // internal for cross-file extension access
     @State var isGlobalMuted = false // internal for cross-file extension access
     /// Audio-track presence for the current slide's foreground videos, keyed by
-    /// `StoryMediaObject.id`. Populated by `refreshVideoAudioTrackPresence()` —
+    /// `StoryMediaObject.id`. Populated by `probeVideoAudio(for:)` —
     /// a video only counts toward `storyHasAudibleSound` once probed `true`.
     @State private var videoAudioTrackPresence: [String: Bool] = [:]
     /// True when user is actively engaging with the composer (focused, recording, emoji panel, etc.)
@@ -121,8 +121,6 @@ struct StoryViewerView: View {
     /// arrondit à `ceil(base / loopPeriod) × loopPeriod` pour que chaque loop bg
     /// termine son cycle avant l'avance.
     @State var computedStoryDuration: Double = 6.0 // internal for cross-file extension access
-    @State var hasFiredNextPrefetch = false // filet du premier tic d'horloge : les voisines N±1, N±2 se préparent au plus tard quand la slide commence à compter (#10348).
-    @State var neighborPrefetch = StoryNeighborPrefetchQueue()
 
     /// Visibilité du chrome (header, sidebar droite, composer) — animé par
     /// glissements directionnels. En mode normal `chromeVisible = true` au
@@ -138,34 +136,10 @@ struct StoryViewerView: View {
     /// distinction avec le toggle ponctuel : ici l'état au repos est inversé.
     @State var isFullscreenStorySession: Bool = false // internal for cross-file extension access
 
-    // MARK: - P3 wire-up : Prefetcher + gated timer
-    //
-    // `StoryReaderPrefetcher` maintains a sliding window of 3 bootstrapped
-    // canvas views around `currentStoryIndex` so the next/previous slide is
-    // one CATransaction away when the user taps to advance. The
-    // prefetcher's offscreen canvas reports `onContentReady` once its
-    // background image lands in the shared cache — we use that signal to
-    // drive `StoryReaderTimerController` for the visible slide, since the
-    // visible `StoryReaderRepresentable` shares the same image cache (its
-    // canvas hits the cache directly on `setReaderContext` → `rebuildLayers`).
-    //
-    // Lot 2 (2026-06-11) : le timer gated est l'UNIQUE pilote — barre de
-    // progression (`onProgressChange`), seuil de prefetch N+1 et auto-advance
-    // (`onCompletion` → `goToNext()`). Le display-link legacy
-    // (`StoryProgressDisplayLinkProxy` + `timerCancellable`) est supprimé ;
-    // `startTimer()` (extension +Content) ne garde que les resets d'état de
-    // slide puis ré-arme via `refreshPrefetchWindowAndTimer()`.
-    @State var prefetcher = StoryReaderPrefetcher() // internal : `+PrefetchPipeline` et `+Lifecycle`
-    @State var slideTimer = StoryReaderTimerController() // internal for cross-file extension access
-    /// Handles des tasks de prefetch média (`prefetchAllMedia`, +Content) —
-    /// annulés à l'onDisappear pour ne pas continuer downloads + prerolls
-    /// AVPlayer après la fermeture du viewer. internal for cross-file
-    /// extension access.
-    @State var prefetchTasks: [Task<Void, Never>] = []
-    /// Latched once `attach(to:)` has been wired via the host
-    /// representable — guards against re-firing every onAppear cycle
-    /// (scene phase changes / parent re-renders).
-    @State var hasInstalledPrefetchPipeline = false // internal : `+PrefetchPipeline` et `+Lifecycle`
+    /// The gated slide clock, the prefetch window and their tasks
+    /// (`StoryPlaybackPipeline`, #13135) — the clock is the ONLY driver of the
+    /// progress bar, of the neighbour prefetch and of the auto-advance.
+    @State var playback = StoryPlaybackPipeline()
 
     @State var showFullEmojiPicker = false // internal for cross-file extension access
     @State var showTextEmojiPicker = false // internal for cross-file extension access
@@ -377,7 +351,7 @@ struct StoryViewerView: View {
     // structural identity / diffing.
     private var viewerContent: some View {
         StoryViewerContentView(
-            prefetcher: prefetcher,
+            prefetcher: playback.prefetcher,
             cardScale: cardTransform.scale,
             cardCornerRadius: cardTransform.cornerRadius,
             cardOpacity: cardTransform.opacity,
@@ -413,7 +387,7 @@ struct StoryViewerView: View {
         .statusBarHidden()
         .onAppear { viewerDidAppear() }
         .task(id: currentStory?.id) {
-            await refreshVideoAudioTrackPresence()
+            if let story = currentStory { await probeVideoAudio(for: story) }
         }
         .onDisappear { viewerWillDisappear() }
         .adaptiveOnChange(of: scenePhase) { _, newPhase in
@@ -842,7 +816,7 @@ struct StoryViewerView: View {
 
     /// Drives the sidebar sound/mute button. A silent video (muted by the author
     /// or shot without an audio track) keeps the button hidden — the video-track
-    /// presence is resolved asynchronously by `refreshVideoAudioTrackPresence()`.
+    /// presence is resolved asynchronously by `probeVideoAudio(for:)`.
     var storyHasAudibleSound: Bool { // internal for cross-file extension access
         StoryAudioAvailability.needsSoundButton(
             effects: currentStory?.storyEffects, videoAudioTracks: videoAudioTrackPresence,
@@ -864,45 +838,19 @@ struct StoryViewerView: View {
         BackgroundSoundBadge.announcement(for: currentStory?.storyEffects)
     }
 
-    /// Probes each foreground video of the current slide for a real audio track.
-    /// Until a video is confirmed to carry audio it does NOT count toward
-    /// `storyHasAudibleSound`, so the sound button never appears for a clip that
-    /// turns out silent. A probe failure (unreachable URL, decode error) is
-    /// treated as "no audio" — conservative, matching the no-false-button intent.
-    /// Backstop probe when `prefetchAllMedia` couldn't pre-resolve the audio
-    /// track presence (cold start on first slide, race after a rapid skip).
-    /// Merges into `videoAudioTrackPresence` instead of replacing — the dict
-    /// is shared across stories and entries seeded by `preProbeVideoAudio`
-    /// must not be wiped on slide change (regression 2026-05-28 « bouton son
-    /// apparait après affichage »).
+    /// Probes each foreground video of `story` for a real audio track and
+    /// merges the result into `videoAudioTrackPresence`. Until a video is
+    /// confirmed to carry audio it does NOT count toward `storyHasAudibleSound`,
+    /// so the sound button never appears for a clip that turns out silent (a
+    /// failed probe counts as silent). Runs from the prefetch, so the button is
+    /// settled before the slide shows, and again as a backstop when the slide
+    /// becomes current (cold start, rapid skip). Merges, never replaces: the
+    /// entries are shared across stories (regression 2026-05-28); resolved
+    /// entries are skipped, so probing again is cheap.
     @MainActor
-    private func refreshVideoAudioTrackPresence() async {
-        let videos = StoryAudioAvailability.videosNeedingAudioProbe(effects: currentStory?.storyEffects)
-        guard let story = currentStory, !videos.isEmpty else { return }
-        for video in videos {
-            // Already resolved (pre-probed during prefetch) — keep it.
-            if videoAudioTrackPresence[video.id] != nil { continue }
-            let count = await StoryVideoAudioProbe.trackCount(
-                for: video, in: story, preloadedVideoURLs: preloadedVideoURLs)
-            if Task.isCancelled { return }
-            videoAudioTrackPresence = StoryAudioAvailability.merging(
-                videoAudioTrackPresence, id: video.id, probedTrackCount: count)
-        }
-    }
-
-
-    /// Probes each foreground video of `story` for an audio track and merges
-    /// the result into `videoAudioTrackPresence`. Called from
-    /// `prefetchAllMedia` (in `+Content.swift`) so the sound-button
-    /// visibility is already settled by the time the slide becomes the
-    /// active `currentStory`. Idempotent — entries that are already resolved
-    /// are skipped, so re-prefetching the same story is cheap.
-    @MainActor
-    func preProbeVideoAudio(for story: StoryItem) async {
+    func probeVideoAudio(for story: StoryItem) async {
         let videos = StoryAudioAvailability.videosNeedingAudioProbe(effects: story.storyEffects)
-        guard !videos.isEmpty else { return }
-        for video in videos {
-            if videoAudioTrackPresence[video.id] != nil { continue }
+        for video in videos where videoAudioTrackPresence[video.id] == nil {
             let count = await StoryVideoAudioProbe.trackCount(
                 for: video, in: story, preloadedVideoURLs: preloadedVideoURLs)
             if Task.isCancelled { return }
@@ -910,8 +858,6 @@ struct StoryViewerView: View {
                 videoAudioTrackPresence, id: video.id, probedTrackCount: count)
         }
     }
-
-
 
     // MARK: - Header state
 

@@ -73,11 +73,10 @@ extension StoryViewerView {
     /// Relâche tout ce que l'apparition a armé : horloge, geste en cours,
     /// préchargement, lecteurs, salle de publication, session d'engagement.
     func viewerWillDisappear() {
-        // `invalidate()` (et non `reset()`) : coupe le CADisplayLink 60 Hz
-        // et libère les callbacks qui capturent l'état du viewer. Le
-        // pipeline est ré-installé au prochain onAppear
-        // (`hasInstalledPrefetchPipeline = false` ci-dessous).
-        slideTimer.invalidate()
+        // Coupe le CADisplayLink 60 Hz, libère les callbacks qui capturent
+        // l'état du viewer, annule les préchargements et rend les canvases ;
+        // le pipeline se ré-installe au prochain onAppear.
+        playback.tearDown()
         // Purge l'état gestuel transient : le lecteur peut être quitté au
         // beau milieu d'un drag (dismiss, background, navigation externe) et
         // le `onEnded` du recognizer ne viendra jamais. Sans ça, `gestureAxis`
@@ -86,10 +85,6 @@ extension StoryViewerView {
         resetGestureTracking()
         groupIntro.cancelPending()
         delays.cancelAll()
-        prefetchTasks.forEach { $0.cancel() }
-        prefetchTasks.removeAll()
-        prefetcher.detach()
-        hasInstalledPrefetchPipeline = false
         StoryMediaCoordinator.shared.deactivate()
         // RC4.5 — cut the reader audio engine on exit. `ReaderAudioMixer`
         // is a registered external player, so `stopAll()` reaches it

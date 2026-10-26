@@ -81,7 +81,7 @@ extension StoryViewerView {
 
         // La slide entrante d'abord ; ses voisines N±1, N±2 se préparent dès
         // sa première image (`prepareNeighborWindow`, #10348).
-        interruptNeighborWindow()
+        playback.interruptNeighbors()
         if let story = currentStory { prefetchAllMedia(for: story) }
 
         let incomingEffect = currentStory?.storyEffects?.opening
@@ -190,7 +190,7 @@ extension StoryViewerView {
     func startTimer() {
         progressClock.reset()
         isContentReady = false
-        hasFiredNextPrefetch = false
+        playback.slideDidStart()
         // Toutes les surfaces du reader tombent au changement de slide, pas
         // seulement les commentaires : un strip de langues ou une barre d'emojis
         // laissés ouverts se retrouvaient posés sur la story SUIVANTE, à laquelle

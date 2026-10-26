@@ -136,7 +136,7 @@ final class StoryPlaybackHoldWiringTests: XCTestCase {
     /// La fin de la story passe par la règle, jamais directement à la suivante.
     func test_theTimerCompletion_goesThroughTheRule() throws {
         let viewer = try StoryPlaybackHoldSource.pipeline()
-        XCTAssertTrue(viewer.contains("t.onCompletion = { [self] in\n            storyDidReachItsEnd()"))
+        XCTAssertTrue(viewer.contains("onCompletion: { [self] in storyDidReachItsEnd() }"))
         let end = try StoryPlaybackHoldSource.block(try StoryPlaybackHoldSource.hold(),
                                                     from: "func storyDidReachItsEnd() {")
         XCTAssertTrue(end.contains("slideTimer.seek(toFraction: 0)"), "La barre repart de zéro.")
