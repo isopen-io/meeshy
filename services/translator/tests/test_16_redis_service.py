@@ -349,7 +349,7 @@ class TestAudioCacheService:
         assert result is True
 
         # Verify TTL
-        ttl = await cache.redis.ttl("audio:transcription:custom_ttl")
+        ttl = await cache.redis.ttl("audio:v3:transcription:custom_ttl")
         assert 115 < ttl <= 120
 
 

@@ -29,11 +29,15 @@ c'est-à-dire élargir la frontière de confiance du chiffrement au repos.
 ### L'oubli, par identifiants seulement
 
 Tout ce qui se range est INDEXÉ dans la même transaction Redis (MULTI/EXEC),
-avec un TTL d'index au moins égal : une traduction sous son message
-(`translation:keys:message:<id>:<empreinte>` ; sans message nommé, rien n'est
-rangé), un contenu audio sous la correspondance `pièce → empreinte` (empreinte
-admise seulement sous sa forme réelle, celle des octets). Rien ne va dans le
-cache mémoire de repli.
+avec un TTL d'index au moins égal, dans l'espace `v3` : une traduction
+(`translation:text:v3:<empreinte>`) sous l'ENSEMBLE de son message
+(`translation:v3:message:<id>` ; sans message nommé, rien n'est rangé), un
+contenu audio sous la correspondance `pièce → empreinte`
+(`audio:v3:hash:mapping:<id>`, empreinte admise seulement sous sa forme réelle,
+celle des octets) et les ensembles de langues (`audio:v3:hash:langs:<empreinte>`,
+`audio:v3:attachment:langs:<id>`) ; les entrées par identifiant de pièce
+(`audio:v3:transcription:<id>`, `audio:v3:translation:<id>:<langue>`) aussi.
+Rien ne va dans le cache mémoire de repli.
 
 À l'effacement d'une pièce (`AttachmentService.deleteAttachment`) ou du contenu
 d'un message (`eraseSharedTranslations`, site unique de la vue unique, de
@@ -43,7 +47,24 @@ voyage ni ne se range dans la file. La file est durable dans le Redis de la
 passerelle (`translator:cache-forget`), rejouée toutes les deux minutes tant
 que le translator n'a pas acquitté (`cache_forget_done`), abandonnée après sept
 jours (le cache a alors expiré de lui-même). Le translator n'acquitte que ce
-que Redis a CONFIRMÉ (SCAN, DEL) ; Redis indisponible ⇒ aucun accusé, rejeu.
+que Redis a CONFIRMÉ (lecture des ensembles, DEL) ; Redis indisponible ⇒
+aucun accusé, rejeu. Aucun balayage (ni KEYS ni SCAN) sur le chemin de l'oubli.
+
+### Le cache d'avant v3 : purgé une fois, au déploiement
+
+Les entrées rangées avant l'espace `v3` (`translation:text:*` hors v3,
+`translation:keys:*`, `audio:hash:mapping:*`, `audio:transcription:*`,
+`audio:translation:*`) n'ont pas d'index que l'oubli sache lire, et ne sont
+plus jamais servies. Plutôt qu'un repli par balayage dans `forget_*` pendant
+30 jours, une PURGE UNIQUE les efface : ce n'est qu'un cache régénérable, rien
+ne se perd. `services/translator/src/services/legacy_cache_purge.py`, autonome,
+par SCAN, à blanc par défaut, idempotent, ne journalise que des comptes :
+
+    docker exec <translator> python -I /workspace/src/services/legacy_cache_purge.py
+    docker exec <translator> python -I /workspace/src/services/legacy_cache_purge.py --apply
+
+Le script vit dans l'image : rien n'est déposé sur le serveur. Staging : jouée
+au déploiement de ce lot. Production : attend le feu vert du porteur (#13102).
 
 ### Rétrocompatibilité
 
@@ -57,6 +78,7 @@ les tâches ordinaires comme avant, sous index.
 
 - Le translator voit le clair en mémoire pendant la tâche (c'est le traitement
   serveur des modes `server`/`hybrid`) ; un translator compromis le lit.
-- Les clés rangées avant ce lot n'ont pas d'index : elles expirent à 30 jours.
+- Tant que la purge n'a pas été jouée (production en attente du feu vert), les
+  clés d'avant v3 restent en Redis, non servies, jusqu'à leur TTL de 30 jours.
 - Les fichiers temporaires du translator (`/tmp/meeshy_audio`) sont effacés en
   fin de tâche, pas de façon sécurisée.

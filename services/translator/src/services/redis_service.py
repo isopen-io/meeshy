@@ -663,9 +663,10 @@ class AudioCacheService:
         self.key_attachment_langs = "audio:v3:attachment:langs:{attachment_id}"
         self.key_voice_profile = "voice:profile:{user_id}"
 
-        # Patterns legacy (pour compatibilité)
-        self.key_transcription = "audio:transcription:{attachment_id}"
-        self.key_translated_audio = "audio:translation:{attachment_id}:{lang}"
+        # Par identifiant de pièce, dans l'espace v3 lui aussi (#13102) : les
+        # entrées d'avant ne sont plus servies, `legacy_cache_purge` les efface.
+        self.key_transcription = "audio:v3:transcription:{attachment_id}"
+        self.key_translated_audio = "audio:v3:translation:{attachment_id}:{lang}"
 
         # TTL par défaut - 1 mois pour transcription/audio traduit
         self.ttl_transcription = 2592000  # 30 jours (audio réutilisable cross-conversation)

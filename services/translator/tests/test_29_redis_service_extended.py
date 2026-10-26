@@ -548,8 +548,8 @@ class TestAudioCacheServiceWithSettings:
         cache = audio_cache_with_settings
 
         # AudioCacheService uses hardcoded key patterns
-        assert cache.key_transcription == "audio:transcription:{attachment_id}"
-        assert cache.key_translated_audio == "audio:translation:{attachment_id}:{lang}"
+        assert cache.key_transcription == "audio:v3:transcription:{attachment_id}"
+        assert cache.key_translated_audio == "audio:v3:translation:{attachment_id}:{lang}"
         assert cache.key_voice_profile == "voice:profile:{user_id}"
 
     @pytest.mark.asyncio
@@ -568,7 +568,7 @@ class TestAudioCacheServiceWithSettings:
         await cache.set_transcription("att123", transcription)
 
         # #13102 — la clé est dans Redis, jamais dans le repli mémoire
-        expected_key = "audio:transcription:att123"
+        expected_key = "audio:v3:transcription:att123"
         assert expected_key in cache.redis.redis.data
 
     @pytest.mark.asyncio
@@ -580,7 +580,7 @@ class TestAudioCacheServiceWithSettings:
         await cache.set_translated_audio("att456", "fr", audio_data)
 
         # Uses default pattern
-        expected_key = "audio:translation:att456:fr"
+        expected_key = "audio:v3:translation:att456:fr"
         assert expected_key in cache.redis.redis.data
 
     @pytest.mark.asyncio
