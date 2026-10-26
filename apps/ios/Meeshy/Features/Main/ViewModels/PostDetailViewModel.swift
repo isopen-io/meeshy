@@ -10,29 +10,37 @@ class PostDetailViewModel: ObservableObject {
     // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
     nonisolated deinit {}
     @Published var post: FeedPost?
-    @Published var comments: [FeedComment] = [] {
-        didSet { _topLevelComments = comments.filter { $0.parentId == nil } }
-    }
     @Published var isLoading = false
     @Published var isLoadingComments = false
     @Published var hasMoreComments: Bool?  // nil = pas encore chargé ≠ « il y en a plus » (#4868)
     @Published var loadFailure: ContentFetchFailure?
     @Published var replyingTo: FeedComment? = nil
 
-    @Published var repliesMap: [String: [FeedComment]] = [:]
-    @Published var expandedThreads: Set<String> = []
-    @Published private(set) var loadingReplies: Set<String> = []
-    /// Pagination des réponses par commentaire racine (le endpoint replies est
-    /// paginé ASC, curseur `gt`, 20/page) — sans ce suivi, un fil de plus de
-    /// 20 réponses était silencieusement tronqué à la première page.
-    @Published var repliesHasMore: [String: Bool] = [:]
-    @Published var repliesNextCursor: [String: String] = [:]
-
-    /// Dérivé de `comments`, écrit UNIQUEMENT par son `didSet` : le `willSet`
-    /// de `comments` a déjà émis `objectWillChange`, une seconde publication ici
-    /// ne faisait que doubler chaque ré-évaluation de `PostDetailView`.
-    private var _topLevelComments: [FeedComment] = []
-    var topLevelComments: [FeedComment] { _topLevelComments }
+    /// The post's comment thread — roots, replies, expansion and reply
+    /// pagination — the same model as the sheet's and the story's (#13133).
+    let commentThreadModel: CommentThreadViewModel
+    var comments: [FeedComment] {
+        get { commentThreadModel.roots }
+        set { commentThreadModel.roots = newValue }
+    }
+    var repliesMap: [String: [FeedComment]] {
+        get { commentThreadModel.replies }
+        set { commentThreadModel.replies = newValue }
+    }
+    var expandedThreads: Set<String> {
+        get { commentThreadModel.expandedThreads }
+        set { commentThreadModel.expandedThreads = newValue }
+    }
+    var loadingReplies: Set<String> { commentThreadModel.loadingReplies }
+    var repliesHasMore: [String: Bool] {
+        get { commentThreadModel.repliesHasMore }
+        set { commentThreadModel.repliesHasMore = newValue }
+    }
+    var repliesNextCursor: [String: String] {
+        get { commentThreadModel.repliesNextCursor }
+        set { commentThreadModel.repliesNextCursor = newValue }
+    }
+    var topLevelComments: [FeedComment] { commentThreadModel.topLevelRoots }
 
     // Comment-like optimistic state — socket-reaction driven, miroir exact de
     // `CommentsSheetView`. Keyé par commentId. Semé depuis `currentUserReactions`
@@ -72,6 +80,13 @@ class PostDetailViewModel: ObservableObject {
         self.languageProvider = languageProvider
         self.offlineQueue = offlineQueue
         self.socialSocket = socialSocket
+        self.commentThreadModel = CommentThreadViewModel(
+            entity: .post(""), postService: postService,
+            preferredLanguages: { languageProvider.preferredLanguages })
+        commentThreadModel.objectWillChange
+            .sink { [weak self] _ in self?.objectWillChange.send() }
+            .store(in: &cancellables)
+        commentThreadModel.onRepliesLoaded = { [weak self] in self?.seedCommentLikes(from: $0) }
         observePreferredLanguageChanges()
     }
 
@@ -119,7 +134,7 @@ class PostDetailViewModel: ObservableObject {
     }
 
     func repliesFor(_ commentId: String) -> [FeedComment] {
-        repliesMap[commentId] ?? []
+        commentThreadModel.repliesFor(commentId)
     }
 
     func loadPost(_ postId: String) async {
@@ -296,113 +311,25 @@ class PostDetailViewModel: ObservableObject {
     // MARK: - Thread Management
 
     func toggleThread(_ commentId: String, postId: String) async {
-        if expandedThreads.contains(commentId) {
-            expandedThreads.remove(commentId)
-        } else {
-            expandedThreads.insert(commentId)
-            if repliesMap[commentId] == nil {
-                await loadReplies(postId: postId, commentId: commentId)
-            }
-        }
+        await onThread(postId).toggleThread(commentId)
     }
 
     func loadReplies(postId: String, commentId: String) async {
-        guard !loadingReplies.contains(commentId), repliesMap[commentId] == nil else { return }
-        loadingReplies.insert(commentId)
-        defer { loadingReplies.remove(commentId) }
-        do {
-            let response = try await postService.getCommentReplies(
-                postId: postId, commentId: commentId, cursor: nil, limit: 20
-            )
-            let replies = await Self.mapReplies(
-                response.data, parentId: commentId, preferredLanguages: preferredLanguages
-            )
-            repliesMap[commentId] = replies
-            recordRepliesPagination(response.pagination, for: commentId)
-            seedCommentLikes(from: replies)
-            // Persiste les réponses sous "replies-{commentId}" pour hydrater
-            // l'aperçu (2 premières) instantanément à la ré-ouverture du post
-            // (cache-first, miroir de `FeedCommentsSheet`).
-            await bestEffort("postDetailViewModel.comments.saveRepliesPreview", category: .cache) { try await CacheCoordinator.shared.comments.save(replies, for: "replies-\(commentId)") }
-        } catch {
-            expandedThreads.remove(commentId)
-        }
+        await onThread(postId).loadReplies(commentId: commentId)
     }
 
-    /// Page suivante des réponses d'un fil (curseur `gt`, tri ASC → les pages
-    /// suivantes sont plus récentes, donc APPEND). Jamais de remplacement :
-    /// les réponses insérées par le socket (`comment:added`) pendant la
-    /// pagination sont préservées via la dédup par id.
-    /// NOTE : `repliesHasMore[id] == nil` (fil hydraté du cache par
-    /// `preloadReplyPreviews`, pagination jamais enregistrée) n'est PAS
-    /// bloquant — même fix documenté que `loadMoreComments` : `cursor: nil`
-    /// signifie « page 1 », exactement ce qu'il faut pour récupérer un vrai
-    /// curseur. Seul `false` (fin de fil connue) stoppe.
     func loadMoreReplies(_ commentId: String, postId: String) async {
-        guard !loadingReplies.contains(commentId), repliesHasMore[commentId] != false else { return }
-        loadingReplies.insert(commentId)
-        defer { loadingReplies.remove(commentId) }
-        do {
-            let response = try await postService.getCommentReplies(
-                postId: postId, commentId: commentId,
-                cursor: repliesNextCursor[commentId], limit: 20
-            )
-            let fetched = await Self.mapReplies(
-                response.data, parentId: commentId, preferredLanguages: preferredLanguages
-            )
-            let existing = repliesMap[commentId] ?? []
-            let existingIds = Set(existing.map(\.id))
-            let unique = fetched.filter { !existingIds.contains($0.id) }
-            repliesMap[commentId] = existing + unique
-            recordRepliesPagination(response.pagination, for: commentId)
-            seedCommentLikes(from: unique)
-            await bestEffort("postDetailViewModel.comments.saveRepliesPage", category: .cache) { try await CacheCoordinator.shared.comments.save(
-                repliesMap[commentId] ?? [], for: "replies-\(commentId)"
-            ) }
-        } catch {
-            // Échec réseau : stopper proprement la pagination (et toute chasse
-            // en cours) — le fil reste utilisable avec les pages déjà chargées.
-            repliesHasMore[commentId] = false
-        }
+        await onThread(postId).loadMoreReplies(commentId: commentId)
     }
 
-    /// Notification → réponse hors de la première page de son fil : suit le
-    /// curseur des réponses jusqu'à ce que la réponse ciblée soit chargée
-    /// (borné — cf. `CommentTargetHunter`). Charge la première page si le fil
-    /// n'a pas encore été ouvert. Retourne `true` si la cible est présente.
     @discardableResult
     func loadRepliesUntilPresent(_ replyId: String, in commentId: String, postId: String) async -> Bool {
-        if repliesMap[commentId] == nil {
-            await loadReplies(postId: postId, commentId: commentId)
-        }
-        return await CommentTargetHunter.hunt(
-            isPresent: { [weak self] in
-                guard let self else { return true }
-                return self.repliesMap[commentId]?.contains(where: { $0.id == replyId }) ?? false
-            },
-            // `nil` = pagination inconnue (fil hydraté du cache) → tenter la
-            // page 1 pour récupérer un curseur ; seul `false` arrête la chasse.
-            hasMore: { [weak self] in
-                guard let self else { return false }
-                return self.repliesHasMore[commentId] != false
-            },
-            loadNextPage: { [weak self] in await self?.loadMoreReplies(commentId, postId: postId) }
-        )
+        await onThread(postId).loadRepliesUntilPresent(replyId, in: commentId)
     }
 
-    private func recordRepliesPagination(_ pagination: CursorPagination?, for commentId: String) {
-        repliesNextCursor[commentId] = pagination?.nextCursor
-        repliesHasMore[commentId] = pagination?.hasMore ?? false
-    }
-
-    /// Mappe une page de réponses API → domaine hors MainActor (décodage +
-    /// résolution Prisme off-main, même forme que `fetchCommentsFromNetwork`).
-    private static func mapReplies(
-        _ payload: [APIPostComment], parentId: String, preferredLanguages: [String]
-    ) async -> [FeedComment] {
-        await Task.detached(priority: .userInitiated) {
-            payload.map { FeedComment(api: $0, preferredLanguages: preferredLanguages, parentId: parentId) }
-        }.value
+    private func onThread(_ postId: String) -> CommentThreadViewModel {
+        commentThreadModel.entity = .post(postId)
+        return commentThreadModel
     }
 
     /// Précharge l'aperçu des réponses (les 2 premières s'affichent sans tap)

@@ -33,14 +33,19 @@ enum CommentThreadEntity: Equatable, Sendable {
 final class CommentThreadViewModel: ObservableObject {
     nonisolated deinit {}
 
-    @Published var roots: [FeedComment] = []
+    @Published var roots: [FeedComment] = [] {
+        didSet { topLevelRoots = roots.filter { $0.parentId == nil } }
+    }
     @Published var replies: [String: [FeedComment]] = [:]
     @Published var expandedThreads: Set<String> = []
     @Published private(set) var loadingReplies: Set<String> = []
     @Published var repliesHasMore: [String: Bool] = [:]
     @Published var repliesNextCursor: [String: String] = [:]
 
-    private(set) var entity: CommentThreadEntity
+    /// Derived from `roots`, written only by its `didSet`: `roots`' own
+    /// `willSet` already published the change.
+    private(set) var topLevelRoots: [FeedComment] = []
+    var entity: CommentThreadEntity
     private let postService: PostServiceProviding
     private let preferredLanguages: @MainActor () -> [String]
     private let persistReplies: @MainActor (String, [FeedComment]) async -> Void
