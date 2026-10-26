@@ -164,6 +164,7 @@ import communityPreferencesRoutes from './community-preferences';
 import conversationEncryptionRoutes from './conversation-encryption';
 import signalProtocolRoutes from './signal-protocol';
 import e2eeRoutes from './e2ee';
+import e2eeSignalRoutes from './e2ee-signals';
 import affiliateRoutes from './affiliate';
 import { userStatsRoutes } from './user-stats';
 import { maintenanceRoutes } from './maintenance';
@@ -403,6 +404,7 @@ export const ROUTE_TABLE_BEFORE_ATTACHMENTS: readonly RouteRegistrationEntry[] =
   { name: 'signal-protocol', prefix: API_PREFIX, module: signalProtocolRoutes },
   // L'annuaire E2EE par appareil et le relais d'enveloppes libsignal (#3706).
   { name: 'e2ee', prefix: API_PREFIX, module: e2eeRoutes },
+  { name: 'e2ee-signals', prefix: API_PREFIX, module: e2eeSignalRoutes },
   { name: 'affiliate', prefix: API_PREFIX, module: affiliateRoutes },
   { name: 'user-stats', prefix: API_PREFIX, module: userStatsRoutes },
   { name: 'maintenance', prefix: API_PREFIX, module: maintenanceRoutes },

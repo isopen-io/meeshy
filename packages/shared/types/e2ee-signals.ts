@@ -22,7 +22,7 @@
  * par `POST /conversations/:id/messages`) d'un SIGNAL (qui n'en crée aucune).
  */
 import { z } from 'zod';
-import { E2EE_SEND_SHAPE, e2eeDeviceIdSchema, LIBSIGNAL_PROTOCOL } from './e2ee-directory';
+import { E2EE_SEND_SHAPE, LIBSIGNAL_PROTOCOL, e2eeDeviceIdSchema, type E2EEDevicesMismatch } from './e2ee-directory.js';
 
 /** La route unique des signaux, sous `/api/v1`. */
 export const E2EE_SIGNAL_ROUTE = '/e2ee/conversations/:conversationId/signals' as const;
@@ -61,3 +61,14 @@ export type E2EESignalRelayResponse = {
   readonly signalId: string;
   readonly envelopes: number;
 };
+
+/**
+ * L'accusé de l'événement socket : comme celui de `message:send`, un refus Sesame
+ * porte à plat l'écart à résoudre (`missing`, `extra`, `stale`).
+ */
+export type E2EESignalAck = {
+  readonly success: boolean;
+  readonly data?: E2EESignalRelayResponse;
+  readonly error?: string;
+  readonly code?: string;
+} & Partial<E2EEDevicesMismatch>;
