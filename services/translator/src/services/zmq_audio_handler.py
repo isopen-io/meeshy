@@ -317,8 +317,11 @@ class AudioHandler:
                 await self._publish_transcription_result(task_id, transcription_data)
 
             # Callback pour publier chaque traduction dès qu'elle est prête
-            # (envoi progressif des traductions au lieu d'attendre la fin)
+            # (envoi progressif des traductions au lieu d'attendre la fin).
+            # #13102 — retenues pour être effacées même si la tâche échoue ensuite.
+            progressive_tracks = []
             async def on_translation_ready(translation_data: dict):
+                progressive_tracks.append(translation_data.get('translation'))
                 await self._publish_translation_ready(task_id, translation_data)
 
             # Exécuter le pipeline audio avec le chemin local acquis
@@ -406,6 +409,7 @@ class AudioHandler:
             logger.error(f"❌ [TRANSLATOR] Erreur audio process: {e}")
             import traceback
             traceback.print_exc()
+            self._forget_tracks(locals().get('progressive_tracks') or [])
 
             # Nettoyer le fichier temporaire en cas d'erreur
             try:
@@ -431,10 +435,15 @@ class AudioHandler:
         disque du translator : une fois publiées à la passerelle (qui les
         scelle), elles sont effacées. Une tâche ordinaire les garde.
         """
+        return AudioHandler._forget_tracks((getattr(result, 'translations', None) or {}).values())
+
+    @staticmethod
+    def _forget_tracks(translations) -> int:
+        """Efface du disque les pistes de ces traductions, pour une tâche au repos ou éphémère seulement."""
         if not in_at_rest_task():
             return 0
         removed = 0
-        for translation in (getattr(result, 'translations', None) or {}).values():
+        for translation in translations:
             path = getattr(translation, 'audio_path', None)
             if not path:
                 continue

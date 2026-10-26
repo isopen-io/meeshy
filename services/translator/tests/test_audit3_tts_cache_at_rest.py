@@ -68,3 +68,13 @@ def test_an_ordinary_task_keeps_its_translated_tracks(tmp_path):
     with at_rest_scope(False):
         assert AudioHandler._forget_translated_audio_files(_result_with_tracks([str(track)])) == 0
     assert track.exists()
+
+
+def test_tracks_published_progressively_are_erased_even_when_the_task_fails_later(tmp_path):
+    from services.zmq_audio_handler import AudioHandler
+
+    track = tmp_path / "a_en.mp3"
+    track.write_bytes(b"PISTE")
+    with at_rest_scope(True):
+        assert AudioHandler._forget_tracks([SimpleNamespace(audio_path=str(track)), None]) == 1
+    assert not track.exists()
