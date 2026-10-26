@@ -39,10 +39,10 @@ export type EndToEndRegimeView = {
   readonly sealed: boolean;
   readonly since: number;
   /**
-   * Les clairs que ce navigateur avait en cache quand il a appris le bout en
-   * bout (revue #12992) : seuls eux se lisent « d'avant l'activation ». `null`
-   * tant que la photographie n'est pas prise — la conversation n'est pas encore
-   * apprise, tout ce que le cache tient lui est donc antérieur.
+   * Les clairs que ce navigateur avait vus avant d'apprendre le bout en bout
+   * (revues #12992) : seuls eux se lisent « d'avant l'activation ». `null` :
+   * aucune photographie (régime servi ou montré par le seul fil, pas encore
+   * appris) — fermé, aucun clair ne se lit.
    */
   readonly clearKnown: ReadonlySet<string> | null;
 };
@@ -84,8 +84,9 @@ export function endToEndRegimeOf(
  * Le message se DIT en clair, d'un utilisateur, après l'ère : dans une
  * conversation chiffrée de bout en bout, la passerelle refuse ce clair (#11216)
  * — il ne peut venir que d'elle. Une date illisible ne le sauve pas. Daté
- * d'avant l'ère, il ne se lit que si ce navigateur le tenait déjà quand il a
- * appris le bout en bout : la date vient du serveur, qui peut antidater.
+ * d'avant l'ère, il ne se lit que si ce navigateur l'avait déjà vu quand il a
+ * appris le bout en bout (sans photographie : jamais) — la date vient du
+ * serveur, qui peut antidater.
  */
 export function isForgedPlaintext(message: Message, regime: EndToEndRegimeView): boolean {
   if (!regime.sealed || message.isEncrypted === true) return false;
@@ -93,7 +94,7 @@ export function isForgedPlaintext(message: Message, regime: EndToEndRegimeView):
   if ((message.messageSource ?? 'user') !== 'user' || message.messageType === 'system') return false;
   const at = instantOf(message.createdAt);
   if (at === null || at >= regime.since) return true;
-  return regime.clearKnown !== null && !regime.clearKnown.has(message.id);
+  return regime.clearKnown === null || !regime.clearKnown.has(message.id);
 }
 
 /** Le littéral que la passerelle sert pour un message qu'elle ne lit pas. */

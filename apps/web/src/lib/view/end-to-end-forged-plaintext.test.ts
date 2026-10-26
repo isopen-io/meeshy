@@ -47,9 +47,14 @@ describe('la loi du clair forgé', () => {
     expect(endToEndSealed(shown!)).toBe(true);
   });
 
-  test('avant l’activation, le clair reste lisible (#12919)', () => {
+  test('avant l’activation, un clair que ce navigateur avait vu reste lisible (#12919)', () => {
     const before = message({ createdAt: new Date('2026-10-19T10:00:00.000Z') });
-    expect(sealForgedPlaintext([before], sealedRegime())).toEqual([before]);
+    expect(sealForgedPlaintext([before], { ...sealedRegime(), clearKnown: new Set(['m-1']) })).toEqual([before]);
+  });
+
+  test('revue — sans photographie (régime servi ou montré, pas encore appris), aucun clair ne se lit, même daté d’avant', () => {
+    const before = message({ createdAt: new Date('2026-10-19T10:00:00.000Z') });
+    expect(endToEndSealed(sealForgedPlaintext([before], sealedRegime())[0]!)).toBe(true);
   });
 
   test('un message système, un supprimé, un message déjà chiffré : intacts', () => {

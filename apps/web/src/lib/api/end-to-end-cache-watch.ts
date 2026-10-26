@@ -84,30 +84,41 @@ function shapeOf(queryClient: QueryClient, conversationId: string): ThreadShape 
   return { isDirect: type === 'direct' };
 }
 
-/** Un clair d'utilisateur, daté avant l'ère : ce que la photographie retient (#12992). */
-const clearBefore = (row: Readonly<Record<string, unknown>>, since: number): string[] => {
-  const at = instantOf(row.createdAt);
-  const plain = row.isEncrypted !== true && row.messageType !== 'system' && row.messageSource !== 'system';
-  return typeof row.id === 'string' && plain && at !== undefined && at < since ? [row.id] : [];
-};
+type SeenClear = ReadonlyMap<string, number>;
+
+/** Les clairs d'utilisateur datés d'un fil : identifiant → instant. */
+const clearRowsOf = (rows: readonly Readonly<Record<string, unknown>>[]): ReadonlyArray<readonly [string, number]> =>
+  rows.flatMap((row) => {
+    const at = instantOf(row.createdAt);
+    const plain = row.isEncrypted !== true && row.messageType !== 'system' && row.messageSource !== 'system';
+    return typeof row.id === 'string' && plain && at !== undefined ? [[row.id, at] as const] : [];
+  });
 
 export function watchEndToEndConversations(queryClient: QueryClient, ledger: StoreApi<EndToEndRegimeState>): () => void {
   const cache = queryClient.getQueryCache();
   /**
-   * #12992 (revue) — À L'INSTANT où la conversation est apprise e2ee, les clairs
-   * déjà en cache sont photographiés : ce sont les seuls « d'avant l'activation »
-   * que ce navigateur croira. Un clair servi ensuite, même antidaté, reste scellé.
+   * #12992 (revues) — LES CLAIRS QUE CE NAVIGATEUR A VUS, conversation par
+   * conversation, AVANT l'écriture de cache en cours. À l'instant où une
+   * conversation est apprise e2ee OU retenue (#13099), ce registre est
+   * photographié (`rememberClearBefore`) : ce sont les seuls clairs « d'avant
+   * l'activation » qu'il croira. La charge qui RÉVÈLE le bout en bout est
+   * celle d'un attaquant possible : ses lignes n'entrent jamais dans la
+   * photographie — le registre ne les apprend qu'après.
    */
+  const seen = new Map<string, SeenClear>();
+  const record = (conversationId: string): void => {
+    const rows = cache.findAll({ queryKey: [CONVERSATIONS_KEY_ROOT, conversationId, 'messages'] }).flatMap((query) => threadRows(query.state.data));
+    seen.set(conversationId, new Map([...(seen.get(conversationId) ?? new Map<string, number>()), ...clearRowsOf(rows)]));
+  };
   const photograph = (state: EndToEndRegimeState): void => {
-    Object.keys(state.sealed)
+    Object.keys({ ...state.sealed, ...state.held })
       .filter((id) => state.clearKnown[id] === undefined)
       .forEach((id) => {
         const since = state.since[id] ?? Number.POSITIVE_INFINITY;
-        const rows = cache.findAll({ queryKey: [CONVERSATIONS_KEY_ROOT, id, 'messages'] }).flatMap((query) => threadRows(query.state.data));
-        ledger.getState().rememberClearBefore(id, rows.flatMap((row) => clearBefore(row, since)));
+        const known = [...(seen.get(id) ?? new Map<string, number>())].filter(([, at]) => at < since).map(([messageId]) => messageId);
+        ledger.getState().rememberClearBefore(id, known);
       });
   };
-  const unsubscribeLedger = ledger.subscribe(photograph);
   const watchThread = (conversationId: string): void => {
     const shape = shapeOf(queryClient, conversationId);
     const threads = cache.findAll({ queryKey: [CONVERSATIONS_KEY_ROOT, conversationId, 'messages'] }).map((query) => threadRows(query.state.data));
@@ -121,10 +132,17 @@ export function watchEndToEndConversations(queryClient: QueryClient, ledger: Sto
   const learn = (queryKey: readonly unknown[], data: unknown): void => {
     if (isThreadKey(queryKey)) {
       watchThread(queryKey[1]);
+      record(queryKey[1]);
       return;
     }
     servedEndToEnd(queryKey, data).forEach(({ id, since }) => ledger.getState().learnEndToEnd(id, since));
   };
+  /* Au démarrage, le cache restauré a été vu par la session précédente : il
+     précède toute écriture de celle-ci. */
+  cache.getAll().forEach((query) => {
+    if (isThreadKey(query.queryKey)) record(query.queryKey[1]);
+  });
+  const unsubscribeLedger = ledger.subscribe(photograph);
   photograph(ledger.getState());
   cache.getAll().forEach((query) => learn(query.queryKey, query.state.data));
   const unsubscribeCache = cache.subscribe((event) => {

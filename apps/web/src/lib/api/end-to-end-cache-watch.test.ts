@@ -179,3 +179,35 @@ describe('la photographie des clairs d’avant l’apprentissage', () => {
     unwatch();
   });
 });
+
+/** Deuxième revue — la retenue est photographiée aussi, et la charge qui révèle l'e2ee n'entre jamais dans la photographie. */
+describe('la photographie, deuxième revue', () => {
+  test('une conversation RETENUE (chiffré sans mode) a sa photographie', () => {
+    const client = new QueryClient();
+    const ledger = createEndToEndRegimeLedger({ storage: null });
+    const unwatch = watchEndToEndConversations(client, ledger);
+    client.setQueryData(['conversations', 'c-h', 'messages'], thread([{ ...plainRow('c-h'), createdAt: '2026-09-01T00:00:00.000Z' }]));
+    client.setQueryData(['conversations', 'c-h', 'messages'], thread([{ ...plainRow('c-h'), createdAt: '2026-09-01T00:00:00.000Z' }, noModeRow('c-h')]));
+
+    expect(ledger.getState().clearKnown['c-h']).toEqual(['p-c-h']);
+    unwatch();
+  });
+
+  test('les clairs de la charge même qui montre l’e2ee n’entrent pas dans la photographie (TOCTOU)', () => {
+    const client = new QueryClient();
+    const ledger = createEndToEndRegimeLedger({ storage: null });
+    const unwatch = watchEndToEndConversations(client, ledger);
+    client.setQueryData(conversationQueryKey('c-t'), row('c-t', null));
+    client.setQueryData(['conversations', 'c-t', 'messages'], thread([{ ...plainRow('c-t'), id: 'vu-avant', createdAt: '2026-09-01T00:00:00.000Z' }]));
+
+    client.setQueryData(['conversations', 'c-t', 'messages'], thread([
+      { ...plainRow('c-t'), id: 'vu-avant', createdAt: '2026-09-01T00:00:00.000Z' },
+      { ...plainRow('c-t'), id: 'forge-antidate', createdAt: '2026-09-02T00:00:00.000Z' },
+      { ...sealedRow('c-t'), createdAt: '2026-10-01T00:00:00.000Z' },
+    ]));
+
+    expect(ledger.getState().sealed['c-t']).toBe(true);
+    expect(ledger.getState().clearKnown['c-t']).toEqual(['vu-avant']);
+    unwatch();
+  });
+});

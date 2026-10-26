@@ -104,7 +104,7 @@ describe('un fil servi sans mode qui affiche un chiffré sans mode retient l’e
 });
 
 describe('le composeur ne téléverse rien vers une conversation vue e2ee', () => {
-  test('photo jointe : aucun téléversement, aucun message, l’envoi est marqué retenu', async () => {
+  test('photo jointe : aucun téléversement, aucun message, et le clair ne naît ni dans l’outbox ni dans la ligne de liste (#13171)', async () => {
     endToEndRegimeLedger.getState().learnEndToEnd(ID);
     const { urls, transport } = recordingFetch();
     const outbox = createOutboxStore();
@@ -118,7 +118,8 @@ describe('le composeur ne téléverse rien vers une conversation vue e2ee', () =
     });
 
     expect(urls).toEqual([]);
-    expect(entriesOf(outbox.getState(), ID)[0]?.lastError?.code).toBe(E2EE_PLAINTEXT_WITHHELD);
+    expect(entriesOf(outbox.getState(), ID)).toEqual([]);
+    expect(JSON.stringify(deps.queryClient.getQueryCache().getAll().map((query) => query.state.data))).not.toContain('regarde');
   });
 });
 

@@ -170,7 +170,12 @@ describe('le clair forgé dans la ligne (#12992)', () => {
     expect(shown).toBe(line(sealedConversation(message({ content: '[Encrypted]', isEncrypted: true, encryptionMode: 'e2ee' }))));
   });
 
-  test('avant l’activation : lisible', () => {
-    expect(line(sealedConversation(message({ content: 'Avant', createdAt: '2026-09-19T09:59:00.000Z' })))).toBe('Alice : Avant');
+  test('avant l’activation, vu par ce navigateur avant d’apprendre le bout en bout : lisible', () => {
+    const regime = { sealed: true, since: Date.parse('2026-09-20T00:00:00.000Z'), clearKnown: new Set(['m-1']) };
+    expect(line(sealedConversation(message({ content: 'Avant', createdAt: '2026-09-19T09:59:00.000Z' })), ctx({ regime }))).toBe('Alice : Avant');
+  });
+
+  test('avant l’activation mais jamais vu avant l’apprentissage (date servie, antidatable) : scellé', () => {
+    expect(line(sealedConversation(message({ content: 'Antidaté', createdAt: '2026-09-19T09:59:00.000Z' })))).not.toContain('Antidaté');
   });
 });

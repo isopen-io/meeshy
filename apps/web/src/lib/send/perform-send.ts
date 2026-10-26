@@ -336,6 +336,9 @@ async function attempt(params: {
  * clic sur « Envoyer » est tenu par le composeur, qui vide son brouillon à
  * l'instant de l'envoi (`composer.tsx`, `draftNow`).
  */
+/** L'envoi d'un clair vers cette conversation est-il retenu (#12949, #13171) ? */
+export const plaintextWithheld = (conversationId: string): boolean => !canSendPlaintext({ conversationId });
+
 export async function performSend(params: {
   readonly conversationId: string;
   readonly draft: Draft;
@@ -344,6 +347,12 @@ export async function performSend(params: {
   readonly deps: SendDeps;
 }): Promise<void> {
   const { conversationId, draft, viewerId, sender, deps } = params;
+  /* #13171 — dans une conversation vue chiffrée de bout en bout, le clair ne
+     naît nulle part : ni entrée d'outbox, ni ligne de liste optimiste (que le
+     cache RANGE sur le disque), ni requête. L'appelant dit le refus
+     (`plaintextWithheld`) ; un envoi déjà en file avant l'apprentissage reste
+     retenu par `attempt`. */
+  if (plaintextWithheld(conversationId)) return;
   const now = deps.now ?? Date.now;
   const nowMs = now();
 
