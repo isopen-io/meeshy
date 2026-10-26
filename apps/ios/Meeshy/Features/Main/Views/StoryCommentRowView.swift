@@ -62,7 +62,6 @@ struct StoryCommentRowView: View, Equatable {
         lhs.story?.id == rhs.story?.id
     }
 
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Posé par le viewer sur l'overlay (`readerChromeScheme`, cf.
     /// `StoryViewerView+Canvas.swift`) — suit la luminance du FOND de la story,
     /// pas le thème de l'app. Pilote `legibleOverlayColor` ci-dessous.
@@ -166,32 +165,24 @@ struct StoryCommentRowView: View, Equatable {
 
     private var headerRow: some View {
         let overlayColor = Self.legibleOverlayColor(for: colorScheme)
-        return HStack(spacing: MeeshySpacing.xsPlus) {
+        return CommentAuthorHeader(
+            comment: comment, readerLanguages: readerLanguages, showOriginal: $showOriginal,
+            metrics: .overlay, spacing: MeeshySpacing.xsPlus,
+            separatorFont: MeeshyFont.relative(MeeshyFont.captionSize),
+            separatorColor: overlayColor.opacity(MeeshyOpacity.strong),
+            time: Text(comment.timestamp, style: .relative)
+                .font(MeeshyFont.relative(MeeshyFont.captionSize))
+                .foregroundColor(overlayColor.opacity(MeeshyOpacity.heavy))
+        ) {
             Text(comment.author)
                 .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
                 .foregroundColor(Self.legibleAuthorColor(hex: comment.authorColor))
-
-            if comment.hasServedTranslation {
-                MetaSeparator().font(MeeshyFont.relative(MeeshyFont.captionSize)).foregroundColor(overlayColor.opacity(MeeshyOpacity.strong))
-                languageSwitcher
-            }
-
-            MetaSeparator().font(MeeshyFont.relative(MeeshyFont.captionSize)).foregroundColor(overlayColor.opacity(MeeshyOpacity.strong))
-
-            Text(comment.timestamp, style: .relative)
-                .font(MeeshyFont.relative(MeeshyFont.captionSize))
-                .foregroundColor(overlayColor.opacity(MeeshyOpacity.heavy))
+        } translationOffer: {
+            EmptyView()
         }
         // Halo lisibilité (cf. StoryActionButton sidebar) — le header reste net
         // sur n'importe quel fond de story, clair comme foncé. Pas de box.
         .storyOverlayLegible(isLightText: colorScheme == .dark)
-    }
-
-    private var languageSwitcher: some View {
-        HStack(spacing: MeeshySpacing.xs) {
-            CommentTranslationToggle(comment: comment, readerLanguages: readerLanguages,
-                                     showOriginal: $showOriginal, metrics: .overlay)
-        }
     }
 
     private var contentText: some View {
@@ -224,56 +215,19 @@ struct StoryCommentRowView: View, Equatable {
     private var actionRow: some View {
         let overlayColor = Self.legibleOverlayColor(for: colorScheme)
         return HStack(spacing: MeeshySpacing.lg) {
-            Button {
-                withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.6)) {
-                    onToggleLike()
-                }
-            } label: {
-                HStack(spacing: MeeshySpacing.xxs) {
-                    // Le contour à l'accent de l'auteur — « c'est MOI qui ai
-                    // aimé ce commentaire ». Sans lui, un commentaire de story
-                    // que j'avais aimé ne se distinguait que par sa teinte, la
-                    // même qu'un commentaire aimé par d'autres. Le `scaleEffect`
-                    // d'origine est conservé.
-                    EngagementGlyph(
-                        outline: "heart",
-                        filled: "heart.fill",
-                        participated: isLiked,
-                        accentHex: comment.authorColor,
-                        activeTint: MeeshyColors.error,
-                        inactiveTint: overlayColor.opacity(0.92),
-                        size: 13,
-                        // Posé sur un média : l'ombre porte la lisibilité.
-                        shadowed: true
-                    )
-                    .scaleEffect(isLiked ? 1.15 : 1.0)
-                    if likeCount > 0 {
-                        Text("\(likeCount)")
-                            .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
-                            .foregroundColor(isLiked ? MeeshyColors.error : overlayColor.opacity(MeeshyOpacity.intense))
-                    }
-                }
-                .contentShape(Rectangle())
-            }
+            // Le contour à l'accent de l'auteur — « c'est MOI qui ai aimé ce
+            // commentaire » ; posé sur un média, l'ombre porte la lisibilité.
+            CommentLikeButton(
+                isLiked: isLiked, likeCount: likeCount, isInFlight: isInFlight,
+                look: CommentLikeButton.Look(
+                    accentHex: comment.authorColor, inactiveTint: overlayColor.opacity(0.92),
+                    countColor: isLiked ? MeeshyColors.error : overlayColor.opacity(MeeshyOpacity.intense),
+                    countFont: MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold),
+                    glyphSize: 13, likedScale: 1.15, spacing: MeeshySpacing.xxs,
+                    shadowed: true, showsZeroCount: false),
+                action: onToggleLike
+            )
             .buttonStyle(.plain)
-            .disabled(isInFlight)
-            .frame(minHeight: 44)
-            // Ce « j'aime » n'avait AUCUNE étiquette : VoiceOver n'en tirait
-            // que le cœur et le compteur. Sa JUMELLE de `FeedCommentsSheet` —
-            // le même contrôle, sur la même entité — porte le vocabulaire
-            // complet depuis toujours ; il est repris ici à l'identique plutôt
-            // que réinventé (253i, #4266).
-            //
-            // Un « j'aime » n'est PAS un `.isToggle` : son nom dit l'ACTION
-            // (« J'aime » / « Je n'aime plus ») et sa valeur porte le COMPTE,
-            // pas un « Activé ». C'est le patron que la jumelle a établi.
-            .accessibilityElement(children: .ignore)
-            .accessibilityAddTraits(.isButton)
-            .accessibilityLabel(isLiked
-                ? String(localized: "a11y.comment.unlike", defaultValue: "Je n'aime plus", bundle: .main)
-                : String(localized: "a11y.comment.like", defaultValue: "J'aime", bundle: .main))
-            .accessibilityValue(LocalizedNumber.exact(likeCount))
-            .accessibilityHint(String(localized: "a11y.comment.like.hint", defaultValue: "Aimer ce commentaire", bundle: .main))
 
             Button(action: onReply) {
                 HStack(spacing: MeeshySpacing.xxs) {

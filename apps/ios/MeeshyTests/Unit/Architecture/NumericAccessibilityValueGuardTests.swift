@@ -110,8 +110,9 @@ final class NumericAccessibilityValueGuardTests: XCTestCase {
     func test_convertedHostsNameTheSingleSource() {
         let hosts = [
             // #6578 — la ligne de commentaire et son compteur de likes ont quitté
-            // `FeedCommentsSheet.swift` pour leur propre fichier : la liste SUIT l'hôte.
-            "Features/Main/Views/CommentRowView.swift",
+            // `FeedCommentsSheet.swift` pour leur propre fichier, puis (#13133) pour
+            // le « j'aime » partagé du post et de la story : la liste SUIT l'hôte.
+            "Features/Main/Views/CommentRowParts.swift",
             "Features/Main/Views/PostDetailView.swift",
             // #7625 — la barre de lecture d'un réel (sa valeur en pourcentage)
             // a quitté `ReelsPlayerView.swift` pour `ReelPageChrome.swift`.
