@@ -31,6 +31,9 @@ import os
 struct EndToEndOffThreadReply {
     let endToEnd: any EndToEndMessagingProviding
     let persistence: any OptimisticMessagePersisting
+    /// L'ouverture de la session libsignal que le pont a mise en file : au
+    /// réveil en arrière-plan, le geste peut la devancer.
+    var sessionOpening: @MainActor () async -> Void = { await EndToEndSessionBridge.shared.awaitOpening() }
 
     /// Range la réponse pour le fil, ou la refuse sans trace ; rend ce que
     /// l'interface dit à l'utilisateur.
@@ -40,7 +43,7 @@ struct EndToEndOffThreadReply {
             peerUserId: nil, senderUserId: senderId, endToEnd: endToEnd
         )
         let (outgoing, context) = Self.outgoing(item)
-        guard await sealer.keep(outgoing, context: context) else {
+        guard await kept(outgoing, context: context, by: sealer) else {
             Logger.e2ee.warning("e2ee off-thread reply refused: the vault did not keep it, nothing written")
             return .unkeptOutsideConversation
         }
@@ -49,10 +52,18 @@ struct EndToEndOffThreadReply {
             try await persistence.insertOptimistic(.sealedFailedText(item: item, senderId: senderId, reason: refusal.userMessage))
             return refusal
         } catch {
-            Logger.e2ee.error("e2ee off-thread reply bubble not written, vault entry withdrawn: \(String(describing: type(of: error)), privacy: .public)")
-            _ = await endToEnd.erase([item.clientMessageId], as: senderId)
+            let withdrawn = await endToEnd.erase([item.clientMessageId], as: senderId)
+            Logger.e2ee.error("e2ee off-thread reply bubble not written withdrawn=\(withdrawn, privacy: .public): \(String(describing: type(of: error)), privacy: .public)")
             return .unkeptOutsideConversation
         }
+    }
+
+    /// Le coffre range le clair ; s'il refuse, une session dont l'ouverture est
+    /// encore en file est attendue, une fois.
+    private func kept(_ outgoing: OutgoingMessage, context: SendAttemptContext, by sealer: EndToEndSendSealer) async -> Bool {
+        if await sealer.keep(outgoing, context: context) { return true }
+        await sessionOpening()
+        return await sealer.keep(outgoing, context: context)
     }
 
     /// La réponse telle que le fil l'aurait composée : même texte, même

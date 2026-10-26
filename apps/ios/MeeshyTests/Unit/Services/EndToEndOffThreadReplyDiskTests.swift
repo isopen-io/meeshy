@@ -284,4 +284,75 @@ final class EndToEndOffThreadReplyDiskTests: XCTestCase {
         XCTAssertEqual(sut.messages.sendCallCount, 1)
         XCTAssertTrue(sut.refusals.said.isEmpty)
     }
+
+    // MARK: - Le rangement lui-même
+
+    private final class FailingPersistence: OptimisticMessagePersisting {
+        struct WriteFailed: Error {}
+        func insertOptimistic(_ record: MessageRecord) async throws { throw WriteFailed() }
+        func markOptimisticFailed(localId: String, reason: String) async throws {}
+    }
+
+    private func item(_ text: String) -> OfflineQueueItem {
+        OfflineQueueItem(conversationId: sealed, content: text, originalLanguage: "fr", replyToId: notified)
+    }
+
+    /// Au réveil en arrière-plan, la session libsignal s'ouvre dans la file du
+    /// pont, peut-être APRÈS le geste : le rangement l'attend, puis réessaie.
+    func test_keep_whenTheSessionOpensAfterTheGesture_waitsForIt_andKeeps() async throws {
+        let disk = try makeDisk()
+        let vault = MockEndToEndMessaging()
+        vault.rememberAccepted = false
+        var openings = 0
+        let keeper = EndToEndOffThreadReply(endToEnd: vault, persistence: disk.persistence, sessionOpening: {
+            openings += 1
+            vault.rememberAccepted = true
+        })
+        let reply = item(secret)
+
+        let said = await keeper.keep(reply, senderId: me)
+
+        XCTAssertEqual(said, .sealedOnlyInConversation)
+        XCTAssertEqual(openings, 1)
+        XCTAssertNotNil(vault.remembered[reply.clientMessageId])
+        XCTAssertFalse(try disk.holds(secret))
+    }
+
+    func test_keep_whenTheSessionIsAlreadyOpen_doesNotWait() async throws {
+        let disk = try makeDisk()
+        var openings = 0
+        let keeper = EndToEndOffThreadReply(endToEnd: MockEndToEndMessaging(), persistence: disk.persistence, sessionOpening: {
+            openings += 1
+        })
+
+        _ = await keeper.keep(item(secret), senderId: me)
+
+        XCTAssertEqual(openings, 0)
+    }
+
+    /// La bulle ne s'écrit pas : le coffre ne garde pas un clair que rien ne montre.
+    func test_keep_whenTheBubbleCannotBeWritten_withdrawsTheVaultEntry() async {
+        let vault = MockEndToEndMessaging()
+        let keeper = EndToEndOffThreadReply(endToEnd: vault, persistence: FailingPersistence(), sessionOpening: {})
+        let reply = item(secret)
+
+        let said = await keeper.keep(reply, senderId: me)
+
+        XCTAssertEqual(said, .unkeptOutsideConversation)
+        XCTAssertTrue(vault.storedIds.isEmpty)
+        XCTAssertEqual(vault.erasedIds, [[reply.clientMessageId]])
+    }
+
+    /// La bannière du refus : un libellé du catalogue, jamais le texte saisi, et
+    /// la toucher ouvre la conversation.
+    func test_refusedReplyBanner_saysTheReason_neverTheText_andOpensTheConversation() {
+        for refusal in [EndToEndSendRefusal.sealedOnlyInConversation, .unkeptOutsideConversation] {
+            let content = NotificationReplyFailure.endToEndReplyRefusedContent(conversationId: sealed, refusal: refusal)
+
+            XCTAssertEqual(content.body, refusal.userMessage)
+            XCTAssertFalse(content.body.contains(secret))
+            XCTAssertEqual(content.userInfo["conversationId"] as? String, sealed)
+            XCTAssertEqual(content.threadIdentifier, "conversation:\(sealed)")
+        }
+    }
 }

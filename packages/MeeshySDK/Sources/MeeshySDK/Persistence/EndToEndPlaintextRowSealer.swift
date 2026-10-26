@@ -73,6 +73,39 @@ public struct EndToEndPlaintextRowSealer: Sendable {
 }
 
 extension EndToEndPlaintextRowSealer {
+    /// Un message que J'AI écrit, jamais acquitté par le serveur, dont la ligne
+    /// garde le texte en clair (#13067) : une version antérieure l'a posé ainsi
+    /// depuis un chemin hors du fil, même vers une conversation chiffrée.
+    public struct UnsentPlaintext: Equatable, Sendable {
+        public let localId: String
+        public let conversationId: String
+        public let content: String
+        public let originalLanguage: String
+        public let replyToId: String?
+        public let createdAt: Date
+    }
+
+    /// Mes messages jamais acquittés dont la ligne porte un texte en clair.
+    public func unsentPlaintexts(authoredBy userId: String) async throws -> [UnsentPlaintext] {
+        guard !userId.isEmpty else { return [] }
+        return try await dbWriter.read { db in
+            try Row.fetchAll(
+                db,
+                sql: """
+                    SELECT localId, conversationId, content, originalLanguage, replyToId, createdAt FROM messages
+                    WHERE senderId = ? AND serverId IS NULL AND isEncrypted = 0 AND messageSource = 'user'
+                      AND deletedAt IS NULL AND content IS NOT NULL AND content != ''
+                    """,
+                arguments: [userId]
+            ).map { row in
+                UnsentPlaintext(
+                    localId: row["localId"], conversationId: row["conversationId"], content: row["content"],
+                    originalLanguage: row["originalLanguage"], replyToId: row["replyToId"], createdAt: row["createdAt"]
+                )
+            }
+        }
+    }
+
     /// L'aperçu de citation du littéral « verrou » que `QuotedReferenceFactory`
     /// pose pour un message chiffré : une réponse ne garde pas le texte cité.
     static let sealedQuotePreview = "🔒 💬"
