@@ -44,8 +44,15 @@ struct StickerSheetDestination {
 /// monte nulle part ailleurs, app et SDK confondus.
 struct MeeshyStickerSheet: View {
     let destination: StickerSheetDestination
-    var accentColor: String = MeeshyColors.brandPrimaryHex
-    @ObservedObject var packs: StickerPackStore = .shared
+    var accentColor: String
+    @ObservedObject var packs: StickerPackStore
+
+    init(destination: StickerSheetDestination, accentColor: String = MeeshyColors.brandPrimaryHex,
+         packs: StickerPackStore = .shared) {
+        self.destination = destination
+        self.accentColor = accentColor
+        self.packs = packs
+    }
 
     var body: some View {
         let choose = destination.onChoice

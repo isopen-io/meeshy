@@ -168,7 +168,8 @@ final class LivePresenceRepaintGuardTests: XCTestCase {
 
     func test_livePresence_observesTheDebouncedSignal_neverTheManager() throws {
         let source = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Components/LivePresence.swift"))
-        XCTAssertTrue(source.contains("@ObservedObject private var presencePulse: PresenceRefreshSignal = PresenceManager.shared.refreshSignal"))
+        XCTAssertTrue(source.contains("@ObservedObject private var presencePulse: PresenceRefreshSignal"))
+        XCTAssertTrue(source.contains("presencePulse: PresenceRefreshSignal = PresenceManager.shared.refreshSignal"))
         XCTAssertFalse(source.contains("@ObservedObject private var presenceManager"))
     }
 

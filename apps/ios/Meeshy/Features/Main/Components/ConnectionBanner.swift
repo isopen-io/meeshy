@@ -33,7 +33,7 @@ struct ConnectionBanner: View {
     /// dont l'un est hors budget — et surtout évite une troisième écriture de
     /// la même question, que la règle `SyncPillVisibility` vient justement de
     /// rassembler.
-    @ObservedObject private var inAppNotices = NotificationToastManager.shared
+    @ObservedObject private var inAppNotices: NotificationToastManager
     @StateObject private var statusVM = ConnectionStatusViewModel()
     @StateObject private var syncPillVM = SyncPillViewModel()
     /// Source des frappes hors conversation. Injectée EXPLICITEMENT par
@@ -137,8 +137,10 @@ struct ConnectionBanner: View {
         conversationListViewModel: ConversationListViewModel?,
         isStoryViewerPresenting: Bool,
         onItemTap: ((OutboxUIItem.Source) -> Void)? = nil,
-        activeConversationId: (() -> String?)? = nil
+        activeConversationId: (() -> String?)? = nil,
+        inAppNotices: NotificationToastManager = .shared
     ) {
+        self.inAppNotices = inAppNotices
         self.isStoryViewerPresenting = isStoryViewerPresenting
         self.onItemTap = onItemTap
         self.activeConversationId = activeConversationId

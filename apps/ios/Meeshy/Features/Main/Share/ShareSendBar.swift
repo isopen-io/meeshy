@@ -12,7 +12,16 @@ struct ShareSendBar: View {
     let accentColor: String
     let onSend: () -> Void
 
-    @ObservedObject private var network = NetworkMonitor.shared
+    @ObservedObject private var network: NetworkMonitor
+
+    init(model: ShareSheetViewModel, plan: SharePlan, accentColor: String, onSend: @escaping () -> Void,
+         network: NetworkMonitor = .shared) {
+        self.model = model
+        self.plan = plan
+        self.accentColor = accentColor
+        self.onSend = onSend
+        self.network = network
+    }
     private var theme: ThemeManager { ThemeManager.shared }
     private var accent: Color { Color(hex: accentColor) }
 

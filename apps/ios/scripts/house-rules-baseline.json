@@ -1,7 +1,7 @@
 {
   "rules": {
     "anyview": 96,
-    "app-grdb-import": 8,
+    "app-grdb-import": 2,
     "async-after": 76,
     "autocapitalization": 0,
     "available-floor": 0,
@@ -13,11 +13,11 @@
     "foreground-color": 2396,
     "idiom": 0,
     "logger-subsystem": 0,
-    "narrative-comment": 2469,
+    "narrative-comment": 2467,
     "nonisolated-unsafe": 107,
     "nslock": 34,
     "nslog": 0,
-    "observed-singleton": 44,
+    "observed-singleton": 0,
     "observed-theme-singleton": 0,
     "onchange-single": 0,
     "plural-s": 0,
@@ -27,7 +27,7 @@
     "uiscreen-main": 1,
     "unchecked-sendable": 122,
     "unchecked-sendable-total": 211,
-    "viewmodel-shared": 582
+    "viewmodel-shared": 581
   },
   "version": 1
 }

@@ -65,10 +65,9 @@ public struct StickerPickerView: View {
     @Environment(\.dismiss) var dismiss
     /// Les favoris et les récents. Le magasin est un STORE DE PRÉFÉRENCES,
     /// donc SDK — il retient, il rend, il borne, il ne décide de rien.
-    @ObservedObject var usage: StickerUsageStore = .shared
+    @ObservedObject var usage: StickerUsageStore
 
-    /// V3-5 — « Mes stickers ». `nil` tant que l'app n'a pas injecté
-    /// `.storyStickerLibraryProvided()`.
+    /// « Mes stickers » : `nil` tant que l'app n'a pas injecté `.storyStickerLibraryProvided()`.
     @Environment(\.storyStickerLibrary) var stickerLibrary
     /// #4579 — les lieux alentour. `nil` tant que l'app n'a pas injecté son
     /// fournisseur : l'onglet « Lieu » n'existe alors pas.
@@ -89,7 +88,6 @@ public struct StickerPickerView: View {
     /// `nil` ⇒ la puce « Ma position… » n'est pas peinte : elle ouvrirait le
     /// vide, et un chip qui ouvre le vide est pire que pas de chip.
     @Environment(\.storyLocationPicker) var storyLocationPicker
-    /// La feuille du sélecteur est-elle ouverte ? (2026-09-05)
     @State var showsPlacePicker = false
     @State var places: [SharedPlace] = []
     @State var selectedPlaceIndex: Int = 0
@@ -103,7 +101,9 @@ public struct StickerPickerView: View {
     public init(onStickerSelected: @escaping (String) -> Void,
                 onLibraryStickerSelected: @escaping (StoryStickerLibraryItem) -> Void,
                 onTemplateSelected: @escaping (StickerTemplate, [String: String]) -> Void,
-                onLocationTemplateSelected: @escaping (SharedPlace, StickerTemplate) -> Void) {
+                onLocationTemplateSelected: @escaping (SharedPlace, StickerTemplate) -> Void,
+                usage: StickerUsageStore = .shared) {
+        self.usage = usage
         self.onStickerSelected = onStickerSelected
         self.onLibraryStickerSelected = onLibraryStickerSelected
         self.onTemplateSelected = onTemplateSelected

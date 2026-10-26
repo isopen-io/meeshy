@@ -597,12 +597,14 @@ public struct AudioForegroundReaderOverlay: View {
     /// il n'écrit cet état que si l'appartenance a bougé, donc le corps ne se
     /// ré-évalue qu'à l'ouverture ou à la fermeture d'une fenêtre.
     @State private var visibleAudioIds: [String] = []
-    @ObservedObject private var muteRegistry = StoryReaderAudioMuteRegistry.shared
+    @ObservedObject private var muteRegistry: StoryReaderAudioMuteRegistry
 
     public init(foregroundAudios: [StoryAudioPlayerObject],
                 slideDuration: TimeInterval,
                 fallbackElapsedTime: TimeInterval? = nil,
-                onTap: ((StoryAudioPlayerObject) -> Void)? = nil) {
+                onTap: ((StoryAudioPlayerObject) -> Void)? = nil,
+                muteRegistry: StoryReaderAudioMuteRegistry = .shared) {
+        self.muteRegistry = muteRegistry
         self.foregroundAudios = foregroundAudios
         self.slideDuration = slideDuration
         self.fallbackElapsedTime = fallbackElapsedTime

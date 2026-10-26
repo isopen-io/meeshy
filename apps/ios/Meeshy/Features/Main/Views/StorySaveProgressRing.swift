@@ -128,9 +128,17 @@ struct StorySaveProgressRing: View {
 /// qu'elle. Rien ne s'affiche tant qu'aucun job n'existe pour `jobKey`.
 struct SceneSaveProgressButton: View {
     let jobKey: String
-    var tint: Color = MeeshyColors.indigo400
-    var diameter: CGFloat = MeeshyControlSize.compact
-    @ObservedObject private var service = StoryPhotoSaveService.shared
+    var tint: Color
+    var diameter: CGFloat
+    @ObservedObject private var service: StoryPhotoSaveService
+
+    init(jobKey: String, tint: Color = MeeshyColors.indigo400, diameter: CGFloat = MeeshyControlSize.compact,
+         service: StoryPhotoSaveService = .shared) {
+        self.jobKey = jobKey
+        self.tint = tint
+        self.diameter = diameter
+        self.service = service
+    }
 
     var body: some View {
         if let progress = service.progress(for: jobKey) {

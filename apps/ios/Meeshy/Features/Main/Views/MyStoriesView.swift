@@ -47,7 +47,7 @@ struct MyStoriesView: View {
     /// with resume/retry/discard — the tray badge (`StoryUploadOverlay`) is
     /// purely informative (`allowsHitTesting(false)`, directive 2026-08-01) :
     /// this panel is the ONLY action surface for failed publishes.
-    @StateObject private var publishService = StoryPublishService.shared
+    @ObservedObject private var publishService: StoryPublishService
 
     /// Source de vérité des exports story → photothèque en vol
     /// (`StoryPhotoSaveService.shared`), même source que le rail du lecteur
@@ -55,7 +55,22 @@ struct MyStoriesView: View {
     /// surfaces progresse sur les deux. `@ObservedObject`, pas une simple
     /// lecture de `progress(for:)` — sinon la grille ne se redessinerait
     /// jamais quand la progression change.
-    @ObservedObject private var saveService = StoryPhotoSaveService.shared
+    @ObservedObject private var saveService: StoryPhotoSaveService
+
+    init(viewModel: StoryViewModel, userId: String, statusViewModel: StatusViewModel,
+         onOpen: @escaping (StoryItem) -> Void, onCreateStory: @escaping () -> Void,
+         onEditStory: @escaping (StoryItem) -> Void, onResumeDraft: @escaping (String) -> Void,
+         publishService: StoryPublishService = .shared, saveService: StoryPhotoSaveService = .shared) {
+        self.viewModel = viewModel
+        self.userId = userId
+        self.statusViewModel = statusViewModel
+        self.onOpen = onOpen
+        self.onCreateStory = onCreateStory
+        self.onEditStory = onEditStory
+        self.onResumeDraft = onResumeDraft
+        self.publishService = publishService
+        self.saveService = saveService
+    }
 
     @State private var viewersStory: StoryItem?
     @State private var exportStory: StoryItem?

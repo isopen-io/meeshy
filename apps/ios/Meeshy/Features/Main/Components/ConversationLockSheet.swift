@@ -504,8 +504,13 @@ struct ConversationLockGateLayer: ViewModifier {
 struct ConversationBiometricUnlockRow: View {
     let color: String
 
-    @ObservedObject private var lockManager = ConversationLockManager.shared
+    @ObservedObject private var lockManager: ConversationLockManager
     @State private var showsEnableSheet = false
+
+    init(color: String, lockManager: ConversationLockManager = .shared) {
+        self.color = color
+        self.lockManager = lockManager
+    }
 
     private var theme: ThemeManager { ThemeManager.shared }
 

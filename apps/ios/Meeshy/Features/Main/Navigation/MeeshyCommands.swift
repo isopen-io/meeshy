@@ -7,7 +7,11 @@ struct MeeshyCommands: Commands {
     @FocusedValue(\.meeshySearch) private var search
     @FocusedValue(\.meeshyCloseWindow) private var closeWindow
     @FocusedValue(\.meeshySendMessage) private var sendMessage
-    @ObservedObject private var preferences = UserPreferencesManager.shared
+    @ObservedObject private var preferences: UserPreferencesManager
+
+    init(preferences: UserPreferencesManager = .shared) {
+        self.preferences = preferences
+    }
 
     private var targets: SceneCommandTargets {
         SceneCommandTargets(

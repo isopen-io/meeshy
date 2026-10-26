@@ -192,9 +192,8 @@ extension StoryCardView {
             Spacer()
             StoryActionSidebarView(
                 isOwnStory: isOwnStory,
-                // Largeur RÉELLE du viewport (le ZStack parent la dépasse —
-                // cf. la note du Layer 8) : la barre de réactions s'y borne
-                // pour DÉFILER au lieu de sortir par la gauche.
+                // Largeur RÉELLE du viewport (le ZStack parent la dépasse, cf. Layer 8) :
+                // la barre de réactions s'y borne pour DÉFILER au lieu de sortir par la gauche.
                 viewportWidth: geometry.size.width,
                 storyReactionCount: storyReactionCount,
                 storyCurrentUserHasReacted: storyCurrentUserHasReacted,
@@ -229,7 +228,8 @@ extension StoryCardView {
                 triggerStoryReaction: triggerStoryReaction,
                 onScrubStateChanged: onScrubStateChanged,
                 pauseTimer: pauseTimer,
-                loadStoryComments: loadStoryComments
+                loadStoryComments: loadStoryComments,
+                saveService: .shared, participationStore: .shared
             )
                 .frame(maxHeight: sidebarMaxHeight)
                 // 16pt clears the iPhone Pro rounded-corner radius at the

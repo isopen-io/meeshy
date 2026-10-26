@@ -62,7 +62,7 @@ struct LocationPickerView: View {
     @Environment(\.colorScheme) private var colorScheme
     private var isDark: Bool { colorScheme == .dark }
     @StateObject private var viewModel = LocationPickerModel()
-    @ObservedObject private var preferencesStore = LocationSharingPreferencesStore.shared
+    @ObservedObject private var preferencesStore: LocationSharingPreferencesStore
     @State private var searchText = ""
     @State private var searchTask: Task<Void, Never>?
     @State private var mapTarget: MapTarget?
@@ -100,7 +100,9 @@ struct LocationPickerView: View {
     private let onMapDark: OnMapColors
     private var onMap: OnMapColors { isDark ? onMapDark : onMapLight }
 
-    init(accentColor: String, onSelect: @escaping (SharedPlace) -> Void) {
+    init(accentColor: String, onSelect: @escaping (SharedPlace) -> Void,
+         preferencesStore: LocationSharingPreferencesStore = .shared) {
+        self.preferencesStore = preferencesStore
         let accent = DynamicColorGenerator.hueShiftedHex(accentColor, degrees: -30)
         self.accentColor = accentColor
         self.secondaryAccent = accent

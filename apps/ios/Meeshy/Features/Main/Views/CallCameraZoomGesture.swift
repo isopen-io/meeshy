@@ -83,7 +83,11 @@ private struct CallCameraZoomModifier: ViewModifier {
 /// suivant (0,5× · 1× · 2× · 3× …). Posé À CÔTÉ de la vignette et non dessus,
 /// pour que le libellé « Permuter les vidéos » de la vignette ne le recouvre pas.
 struct CallCameraZoomAccessibilityElement: View {
-    @ObservedObject var zoom: CameraZoomController = .shared
+    @ObservedObject var zoom: CameraZoomController
+
+    init(zoom: CameraZoomController = .shared) {
+        self.zoom = zoom
+    }
     @Environment(\.locale) private var locale
 
     var body: some View {

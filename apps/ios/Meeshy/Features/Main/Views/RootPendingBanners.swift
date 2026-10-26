@@ -94,8 +94,12 @@ private struct PendingSettingsBannerInline: View {
 /// moment the count changes (a new story queued, or one resolves), so a
 /// swipe never permanently hides a genuinely new situation.
 private struct PendingStoryBannerInline: View {
-    @StateObject private var publishService = StoryPublishService.shared
+    @ObservedObject private var publishService: StoryPublishService
     @State private var dismissedAtCount: Int?
+
+    init(publishService: StoryPublishService = .shared) {
+        self.publishService = publishService
+    }
 
     private var isVisible: Bool {
         publishService.pendingCount > 0 && dismissedAtCount != publishService.pendingCount
