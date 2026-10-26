@@ -6,6 +6,9 @@
  * `messages.ts` pour le composeur (`registerMessagesRoutes`), qui appelle
  * `registerSendMessageRoute` et ré-exporte `SendMessageBodySchema`.
  */
+import { signReaderAttachmentsIn, type SignableAttachment } from '../../services/attachments/signedAttachmentUrls';
+import { readerFileUrlSignerFromEnv } from '../../services/attachments/readerFileSignature';
+import { protectionOfFullMessageRow } from '../../socketio/readerSignedDelivery';
 import { FastifyInstance } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { MessagingService } from '../../services/messaging/MessagingService';
@@ -531,7 +534,9 @@ export function registerSendMessageRoute(
       });
 
       // #8562 — la citation, telle que CET expéditeur a le droit de la lire.
-      return sendSuccess(reply, await withQuoteServedToReader(prisma, result.data, result.data?.senderId ?? undefined));
+      // #13100 — et ses pièces protégées ou scellées au repos, sous SES adresses signées.
+      const served = await withQuoteServedToReader(prisma, result.data, result.data?.senderId ?? undefined);
+      return sendSuccess(reply, served ? withAttachmentsSignedForSender(served) : served);
 
     } catch (error) {
       logger.error('Error in REST send message:', error);
@@ -539,3 +544,19 @@ export function registerSendMessageRoute(
     }
   });
 }
+
+/**
+ * #13100 — la réponse d'envoi rend à l'expéditeur ses pièces sous l'adresse
+ * que la route signée lui servira : une pièce scellée au repos (ou protégée)
+ * n'a pas d'adresse nue lisible. Les autres pièces passent telles quelles.
+ */
+function withAttachmentsSignedForSender<M extends { readonly senderId?: string | null; readonly attachments?: unknown }>(message: M): M {
+  if (!Array.isArray(message.attachments) || !message.senderId) return message;
+  const attachments = signReaderAttachmentsIn(message.attachments as SignableAttachment[], {
+    message: protectionOfFullMessageRow(message),
+    readerParticipantId: message.senderId,
+    signer: readerFileUrlSignerFromEnv(new Date()),
+  });
+  return { ...message, attachments };
+}
+
