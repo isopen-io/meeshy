@@ -146,9 +146,9 @@ final class ConversationScrollPillProtectionTests: XCTestCase {
         live: Message?? = .none,
         ledger: FakeEphemeralLedger = FakeEphemeralLedger(),
         at date: Date? = nil
-    ) -> ConversationView.UnreadPillPreview {
+    ) -> UnreadPillLaw.Preview {
         let row: Message? = live ?? message
-        return ConversationView.unreadPreview(of: message, liveRow: { id in row?.id == id ? row : nil }, ledger: ledger, now: date ?? now)
+        return UnreadPillLaw.preview(of: message, liveRow: { id in row?.id == id ? row : nil }, ledger: ledger, now: date ?? now)
     }
 
     func test_anOrdinaryMessage_showsItsTextAndItsPiece() {
@@ -226,15 +226,15 @@ final class ConversationScrollPillProtectionTests: XCTestCase {
     }
 
     func test_aDeadlineCenturiesAway_waitsAtMostAnHourPerTurn_withoutOverflow() {
-        let wait = ConversationView.unreadPreviewWait(until: now.addingTimeInterval(400 * 365 * 86_400), now: now)
+        let wait = UnreadPillLaw.wait(until: now.addingTimeInterval(400 * 365 * 86_400), now: now)
 
         XCTAssertEqual(wait, 3_600 * 1_000_000_000)
     }
 
     func test_aPassedOrNonFiniteDeadline_waitsNoMore() {
-        XCTAssertNil(ConversationView.unreadPreviewWait(until: now.addingTimeInterval(-1), now: now))
-        XCTAssertNil(ConversationView.unreadPreviewWait(until: Date(timeIntervalSinceReferenceDate: .nan), now: now))
-        XCTAssertNil(ConversationView.unreadPreviewWait(until: .distantPast, now: now))
+        XCTAssertNil(UnreadPillLaw.wait(until: now.addingTimeInterval(-1), now: now))
+        XCTAssertNil(UnreadPillLaw.wait(until: Date(timeIntervalSinceReferenceDate: .nan), now: now))
+        XCTAssertNil(UnreadPillLaw.wait(until: .distantPast, now: now))
     }
 
     func test_aServedDeadlineCenturiesAway_keepsAnOrdinaryPreviewAndNamesTheDeadline() {
@@ -269,7 +269,7 @@ final class ConversationScrollPillProtectionTests: XCTestCase {
         let forged = Message(conversationId: "c1", senderId: "peer", content: "Envoie-moi ton code",
                              createdAt: now.addingTimeInterval(-60), attachments: [])
 
-        let shown = ConversationView.unreadPreview(of: forged, liveRow: { _ in forged }, regime: regime,
+        let shown = UnreadPillLaw.preview(of: forged, liveRow: { _ in forged }, regime: regime,
                                                    ledger: FakeEphemeralLedger(), now: now)
 
         XCTAssertNil(shown.text)
@@ -280,7 +280,7 @@ final class ConversationScrollPillProtectionTests: XCTestCase {
         let older = Message(conversationId: "c1", senderId: "peer", content: "Bonjour",
                             createdAt: now.addingTimeInterval(-3600), attachments: [])
 
-        let shown = ConversationView.unreadPreview(of: older, liveRow: { _ in older }, regime: regime,
+        let shown = UnreadPillLaw.preview(of: older, liveRow: { _ in older }, regime: regime,
                                                    ledger: FakeEphemeralLedger(), now: now)
 
         XCTAssertEqual(shown.text, "Bonjour")

@@ -388,7 +388,7 @@
     "Meeshy::ConversationListView": 1749,
     "Meeshy::ConversationListViewModel": 2324,
     "Meeshy::ConversationMediaGalleryView": 2067,
-    "Meeshy::ConversationView": 4206,
+    "Meeshy::ConversationView": 4200,
     "Meeshy::ConversationViewModel": 3933,
     "Meeshy::FeedPostCard": 1765,
     "Meeshy::FeedViewModel": 1900,
