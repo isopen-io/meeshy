@@ -92,9 +92,9 @@ enum OptimisticTextRecordBuilder {
         maxViewOnceCount: Int?,
         locationJson: String?,
         stickerJson: String?,
+        sealedEndToEnd: Bool,
         now: Date,
-        ephemeralDuration: Int?,
-        sealedEndToEnd: Bool
+        ephemeralDuration: Int?
     ) -> MessageRecord {
         MessageRecord(
             localId: localId, serverId: nil,
