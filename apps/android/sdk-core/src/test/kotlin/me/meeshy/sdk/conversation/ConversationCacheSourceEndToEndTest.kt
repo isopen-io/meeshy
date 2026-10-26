@@ -65,7 +65,7 @@ class ConversationCacheSourceEndToEndTest {
         db.conversationDao().find(id)?.payload?.let { MeeshyApi.json.decodeFromString<ApiConversation>(it).encryptionMode }
 
     @Test
-    fun `servie e2ee puis sans mode : la ligne garde le mode e2ee`() = runTest {
+    fun `servie e2ee puis sans mode, la ligne garde le mode e2ee`() = runTest {
         source().remember(ApiConversation(id = "c1", encryptionMode = "e2ee"))
         source().remember(ApiConversation(id = "c1", encryptionMode = null))
 
@@ -74,7 +74,7 @@ class ConversationCacheSourceEndToEndTest {
     }
 
     @Test
-    fun `apprise par le registre : une rétrogradation vers server est ignorée`() = runTest {
+    fun `apprise par le registre, une rétrogradation vers server est ignorée`() = runTest {
         ledger.learn("c2")
         source().remember(ApiConversation(id = "c2", encryptionMode = "server"))
 
@@ -100,7 +100,7 @@ class ConversationCacheSourceEndToEndTest {
     }
 
     @Test
-    fun `apprise par le temps réel : la ligne Room ferme le fil ouvert à l'instant`() = runTest {
+    fun `apprise par le temps réel, la ligne Room ferme le fil ouvert à l'instant`() = runTest {
         source().remember(ApiConversation(id = "c5", encryptionMode = null))
 
         EndToEndRegimeKeeper(ledger, db.conversationDao()).learn("c5")

@@ -76,7 +76,7 @@ class EndToEndOutboxAdmissionTest {
     }
 
     @Test
-    fun `apprise e2ee puis servie sans mode : le registre la garde fermée`() = runTest {
+    fun `apprise e2ee puis servie sans mode, le registre la garde fermée`() = runTest {
         cache("c-down", null)
         ledger.learn("c-down")
         enqueue(OutboxKind.SEND_MESSAGE, "m1", "c-down")
