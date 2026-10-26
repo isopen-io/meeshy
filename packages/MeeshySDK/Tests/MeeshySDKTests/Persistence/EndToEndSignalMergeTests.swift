@@ -24,7 +24,7 @@ final class EndToEndSignalMergeTests: XCTestCase {
     }
 
     private func page(_ id: String, mode: String = "e2ee") throws -> APIMessage {
-        try APIClient.makeAPIPayloadDecoder().decode(APIMessage.self, from: Data("""
+        try MeeshyCoders.decoder(.api).decode(APIMessage.self, from: Data("""
         {"id":"\(id)","conversationId":"\(conversationId)","senderId":"u-peer","content":"","isEncrypted":true,
          "encryptionMode":"\(mode)","messageType":"text","messageSource":"user","reactions":[],
          "createdAt":"2026-10-25T12:00:00.000Z","updatedAt":"2026-10-25T12:05:00.000Z"}

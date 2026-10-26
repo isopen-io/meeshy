@@ -31,7 +31,7 @@ final class MessagePlaintextErasureAuthenticationTests: XCTestCase {
     }
 
     private func served(_ json: String) throws -> APIMessage {
-        try APIClient.makeAPIPayloadDecoder().decode(APIMessage.self, from: Data(json.utf8))
+        try MeeshyCoders.decoder(.api).decode(APIMessage.self, from: Data(json.utf8))
     }
 
     private func erasable(_ actor: MessagePersistenceActor) async throws -> [String] {
