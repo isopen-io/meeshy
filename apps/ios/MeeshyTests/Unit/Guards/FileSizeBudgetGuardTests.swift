@@ -651,7 +651,10 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     // et la ligne du fil à `FeedPostRow` ; `ConversationDashboardView.swift`
     // (1 213) ses sections à des sous-vues et ses calculs à des règles. La dette
     // héritée est VIDE : plus aucun fichier de l'app ne dépasse le budget.
-    private static let legacyLineCeiling = 3_052
+    //
+    // #10988 — 3 052 → 0. La liste étant vide, le cumul mesuré est nul : les
+    // 3 052 lignes restantes ne pesaient plus aucun fichier, c'était du mou.
+    private static let legacyLineCeiling = 0
 
     // MARK: - Règle 1 — pas de 43ᵉ
 
