@@ -36,14 +36,27 @@ enum NotificationReplyFailure {
         return owner
     }
 
-    /// Prévient, hors de l'app, qu'une réponse n'est pas partie.
     /// La réponse depuis une bannière n'est pas partie : la conversation est
-    /// chiffrée de bout en bout, seul le fil sait la sceller (#12641).
-    static func postEndToEndReplyRefused() {
+    /// chiffrée de bout en bout, seul le fil sait la sceller (#12641). La
+    /// bannière dit si la bulle attend dans le fil ou si le texte est perdu
+    /// (#13067), et la toucher ouvre la conversation. Son corps est un libellé
+    /// du catalogue, jamais le texte saisi.
+    static func endToEndReplyRefusedContent(conversationId: String, refusal: EndToEndSendRefusal) -> UNMutableNotificationContent {
         let content = UNMutableNotificationContent()
-        content.body = EndToEndSendRefusal.sealedOnlyInConversation.userMessage
+        content.body = refusal.userMessage
         content.sound = .default
-        let request = UNNotificationRequest(identifier: "e2ee-reply-unsent-\(UUID().uuidString)", content: content, trigger: nil)
+        guard !conversationId.isEmpty else { return content }
+        content.userInfo = ["type": "new_message", "conversationId": conversationId]
+        content.threadIdentifier = "conversation:\(conversationId)"
+        return content
+    }
+
+    static func postEndToEndReplyRefused(conversationId: String, refusal: EndToEndSendRefusal) {
+        let request = UNNotificationRequest(
+            identifier: "e2ee-reply-unsent-\(UUID().uuidString)",
+            content: endToEndReplyRefusedContent(conversationId: conversationId, refusal: refusal),
+            trigger: nil
+        )
         UNUserNotificationCenter.current().add(request)
     }
 
