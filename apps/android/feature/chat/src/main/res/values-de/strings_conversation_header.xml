@@ -21,7 +21,7 @@
         <item quantity="other">Zurück, %1$d ungelesene Nachrichten</item>
     </plurals>
     <plurals name="chat_unread_separator_count">
-        <item quantity="one">%d ungelesene Nachricht</item>
-        <item quantity="other">%d ungelesene Nachrichten</item>
+        <item quantity="one">%1$d ungelesene Nachricht</item>
+        <item quantity="other">%1$d ungelesene Nachrichten</item>
     </plurals>
 </resources>

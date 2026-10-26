@@ -416,6 +416,7 @@ internal class ChatComposerController(
                 fileName = CLIPBOARD_ATTACHMENT_NAME,
                 mimeType = CLIPBOARD_ATTACHMENT_MIME,
             ),
+            conversationId = conversationId,
         )
         messageRepository.sendOptimistic(
             conversationId = conversationId,
@@ -479,7 +480,7 @@ internal class ChatComposerController(
             val bytes = tray.readBytes(item) ?: return@mapNotNull null
             val name = item.fileName?.trim()?.ifBlank { null } ?: DEFAULT_ATTACHMENT_NAME
             val mime = MimeTypeResolver.resolve(item.mimeType, name)
-            val cmid = mediaUploadQueue.enqueue(MediaUploadItem(bytes = bytes, fileName = name, mimeType = mime))
+            val cmid = mediaUploadQueue.enqueue(MediaUploadItem(bytes = bytes, fileName = name, mimeType = mime), conversationId = conversationId)
             cmid to ApiMessageAttachment(
                 id = cmid,
                 fileName = name,
@@ -574,6 +575,7 @@ internal class ChatComposerController(
             try {
                 val uploadCmid = mediaUploadQueue.enqueue(
                     MediaUploadItem(bytes = bytes, fileName = safeName, mimeType = mime),
+                    conversationId = conversationId,
                 )
                 messageRepository.sendOptimistic(
                     conversationId = conversationId,

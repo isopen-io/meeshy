@@ -2,6 +2,8 @@ package me.meeshy.ui.component.bubble
 
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiMessage
+import me.meeshy.sdk.model.isEndToEndBlob
+import me.meeshy.sdk.model.EndToEndRegimeMemory
 import me.meeshy.sdk.model.BlurRevealLifecycle
 import me.meeshy.sdk.model.DeliveryStatusResolver
 import me.meeshy.sdk.model.ForwardBadgePolicy
@@ -44,7 +46,8 @@ public object BubbleContentBuilder {
         isSlowSend: Boolean = false,
     ): BubbleContent {
         val isDeleted = message.deletedAt != null
-        val isEndToEndSealed = !isDeleted && message.isEndToEndSealed
+        // #13106 — un blob chiffré de bout en bout scelle la bulle entière, même servie en clair.
+        val isEndToEndSealed = !isDeleted && (message.isEndToEndSealed || message.attachments.any { it.isEndToEndBlob })
         val isOutgoing = currentUserId != null && message.senderId == currentUserId
         val isTranslated = !isDeleted && message.isTranslated(preferences)
         // The active display language. A flag-tap `activeLanguageCode` override wins
@@ -138,6 +141,7 @@ public object BubbleContentBuilder {
             isEdited = message.isEdited,
             isDeleted = isDeleted,
             isEndToEndSealed = isEndToEndSealed,
+            holdsEndToEndSend = isEndToEndSealed || EndToEndRegimeMemory.messageHoldsSend(message),
             createdAtIso = message.createdAt,
             deliveryStatus = deliveryStatus,
             reactions = reactions,
