@@ -541,14 +541,14 @@ class ConversationViewModel: ObservableObject, AttachmentSendHosting, Transcript
 
         let stateStore = ConversationStateStore()
         self.stateStore = stateStore
-        self.commands = commands ?? ConversationCommandHandler(
+        self.commands = EndToEndConversationCommands(base: commands ?? ConversationCommandHandler(
             state: stateStore,
             conversationId: conversationId,
             messageService: messageService,
             persistence: dependencies.persistence,
             offlineQueue: offlineQueue,
             networkMonitor: networkMonitor
-        )
+        ))
         self.mediaHandler = ConversationMediaHandler(state: stateStore)
         self.searchHandler = ConversationSearchHandler(
             state: stateStore,
@@ -581,12 +581,10 @@ class ConversationViewModel: ObservableObject, AttachmentSendHosting, Transcript
         let handler = ConversationSocketHandler(
             conversationId: conversationId,
             currentUserId: authManager.currentUser?.id ?? "",
-            messageSocket: messageSocket
+            messageSocket: messageSocket, endToEndTyping: (commands as? EndToEndConversationCommands)?.bind(host: self)
         )
         handler.delegate = self
         handler.persistence = persistence
-        // #13142 — dans une conversation chiffrée, la frappe part en signal chiffré.
-        handler.endToEndTyping = { [weak self] active in self?.relayTypingEndToEnd(active) ?? false }
         socketHandler = handler
     }
 

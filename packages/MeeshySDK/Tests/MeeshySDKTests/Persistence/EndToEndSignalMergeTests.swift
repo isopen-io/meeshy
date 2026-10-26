@@ -78,7 +78,6 @@ final class SignalTargetConversationTests: XCTestCase {
     func test_eachMessageIsLocatedInItsConversation_byLocalOrServerId() async throws {
         let queue = try DatabaseQueue()
         try MessageDatabaseMigrations.runAll(on: queue)
-        let actor = MessagePersistenceActor(dbWriter: queue, currentUserId: "u-me")
         var mine = MessageRecordFactory.make(localId: "cid_1", conversationId: "conv-a", senderId: "u-me", content: "[Encrypted]", state: .sent)
         mine.serverId = "srv_1"
         let sent = mine
@@ -88,7 +87,7 @@ final class SignalTargetConversationTests: XCTestCase {
             try other.insert(db)
         }
 
-        let located = try await actor.conversationIds(of: ["srv_1", "cid_1", "srv_2", "inconnu"])
+        let located = try await queue.read { db in try MessageRecord.conversationIds(of: ["srv_1", "cid_1", "srv_2", "inconnu"], in: db) }
 
         XCTAssertEqual(located, ["srv_1": "conv-a", "cid_1": "conv-a", "srv_2": "conv-b"])
     }

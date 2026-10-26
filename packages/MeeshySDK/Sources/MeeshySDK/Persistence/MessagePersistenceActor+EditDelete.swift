@@ -135,15 +135,11 @@ extension MessagePersistenceActor {
     ///   le serveur ne l'a pas encore acceptée : le clair E2EE reste au coffre
     ///   jusqu'à `confirmDeletion` (#13001). Toute autre suppression (écho
     ///   `message:deleted`, socket, rejeu) est annoncée par le serveur, donc confirmée.
-    ///
-    /// Une suppression ANNONCÉE par la passerelle : la ligne se masque, le clair
-    /// E2EE reste au coffre (#13060). Un geste de cet appareil ou un signal
-    /// autorisé de l'auteur passe par `markDeleted(localId:deletedAt:origin:)`.
     public func markDeleted(localId: String, deletedAt: Date, sparingOpenedViewOnce: Bool = false, expired: Bool = false) throws {
         try markDeleted(localId: localId, deletedAt: deletedAt, sparingOpenedViewOnce: sparingOpenedViewOnce, expired: expired, origin: .announced)
     }
 
-    /// La suppression, d'origine déclarée : `.authenticated` vide aussi le coffre.
+    /// `.announced` (annoncée par la passerelle) garde le clair E2EE au coffre (#13060) ; `.authenticated` le vide.
     public func markDeleted(
         localId: String, deletedAt: Date, sparingOpenedViewOnce: Bool = false, expired: Bool = false,
         origin: PlaintextErasureOrigin

@@ -1,8 +1,8 @@
 import Foundation
 import GRDB
 
-/// **Une annonce du serveur ne vide jamais le coffre** (#13060, décision porteur
-/// du 2026-10-26, option A). Le coffre E2EE est la seule copie d'un clair : la
+/// **Une annonce du serveur ne vide jamais le coffre** (#13060, décision du
+/// porteur, option A). Le coffre E2EE est la seule copie d'un clair : la
 /// passerelle qui annonce un message supprimé pour tous (`deletedAt`, socket ou
 /// REST), une vue unique consommée (`consumedByMe`), un retrait pour moi depuis
 /// un autre appareil ou une citation emportée peut au plus MASQUER la ligne. Le

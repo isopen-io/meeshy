@@ -106,20 +106,16 @@ final class EndToEndSignalCommandsTests: XCTestCase {
         XCTAssertEqual(signaling.wakes, [true, true, false], "seule la frappe, éphémère, ne réveille pas")
     }
 
-    func test_erasureOfAMessageWrittenBeforeActivation_keepsThePlainRoute() {
-        let enabledAt = Date(timeIntervalSince1970: 1_800_000_000)
-        let regime = EndToEndRegime(isEndToEnd: true, enabledAt: enabledAt)
-        let before = MeeshyMessage(id: "m-old", conversationId: "c1", content: "d'avant", createdAt: enabledAt.addingTimeInterval(-60))
-        let after = MeeshyMessage(id: "m-new", conversationId: "c1", content: "", createdAt: enabledAt.addingTimeInterval(60))
-        let sealedBefore = MeeshyMessage(
-            id: "m-sealed", conversationId: "c1", content: "", isEncrypted: true, encryptionMode: "e2ee",
-            createdAt: enabledAt.addingTimeInterval(-60)
-        )
+    func test_erasureFollowsTheMessageLine_likeTheGateway() {
+        let clear = MeeshyMessage(id: "m-old", conversationId: "c1", content: "d'avant")
+        let sealed = MeeshyMessage(id: "m-sealed", conversationId: "c1", content: "", isEncrypted: true, encryptionMode: "e2ee")
+        let encryptedWithoutMode = MeeshyMessage(id: "m-unknown", conversationId: "c1", content: "", isEncrypted: true)
+        let hybrid = MeeshyMessage(id: "m-hybrid", conversationId: "c1", content: "lu", isEncrypted: true, encryptionMode: "hybrid")
 
-        XCTAssertFalse(EndToEndSignalCommands.erasureTravelsAsSignal(before, regime: regime), "le serveur lit déjà ce message : sa route en clair le supprime")
-        XCTAssertTrue(EndToEndSignalCommands.erasureTravelsAsSignal(after, regime: regime))
-        XCTAssertTrue(EndToEndSignalCommands.erasureTravelsAsSignal(sealedBefore, regime: regime), "un message chiffré l'est quelle que soit sa date")
-        XCTAssertTrue(EndToEndSignalCommands.erasureTravelsAsSignal(nil, regime: regime), "introuvable : fail-closed")
-        XCTAssertTrue(EndToEndSignalCommands.erasureTravelsAsSignal(before, regime: EndToEndRegime(isEndToEnd: true, enabledAt: nil)), "activation sans date : tout est chiffré")
+        XCTAssertFalse(EndToEndSignalCommands.erasureTravelsAsSignal(clear), "le serveur lit déjà ce message : sa route en clair le supprime")
+        XCTAssertFalse(EndToEndSignalCommands.erasureTravelsAsSignal(hybrid))
+        XCTAssertTrue(EndToEndSignalCommands.erasureTravelsAsSignal(sealed))
+        XCTAssertTrue(EndToEndSignalCommands.erasureTravelsAsSignal(encryptedWithoutMode), "chiffré sans mode : fail-closed, comme la passerelle")
+        XCTAssertTrue(EndToEndSignalCommands.erasureTravelsAsSignal(nil), "introuvable : fail-closed")
     }
 }

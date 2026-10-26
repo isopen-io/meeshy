@@ -52,11 +52,14 @@ final class ConversationSocketHandler {
     // MainActor via `Task { @MainActor [weak self] in ... }` before mutating.
     nonisolated(unsafe) private var typingTimer: Timer?
     nonisolated(unsafe) private var typingIdleTimer: Timer?
-    nonisolated(unsafe) private var isEmittingTyping = false
-    /// La frappe d'une conversation chiffrée part en signal chiffré (#13142) ;
-    /// `true` : le relais l'a prise, rien n'est émis en clair.
-    var endToEndTyping: (@MainActor (Bool) -> Bool)?
-    nonisolated(unsafe) private var typingIsEndToEnd = false
+    /// Le canal de la frappe en cours ; `nil` : rien n'est émis. Dans une
+    /// conversation chiffrée, la frappe part en signal chiffré (#13142) et son
+    /// arrêt suit le MÊME canal que son départ.
+    nonisolated(unsafe) private var typingChannel: TypingChannel?
+    /// Le relais chiffré de la frappe : `true` quand il l'a prise.
+    private let endToEndTyping: (@MainActor (Bool) -> Bool)?
+
+    nonisolated private enum TypingChannel { case clear, endToEnd }
     private static let typingDebounceInterval: TimeInterval = 3.0
     private static let typingReemitInterval: TimeInterval = 3.0
     private static let typingSafetyTimeout: TimeInterval = 15.0
@@ -91,11 +94,13 @@ final class ConversationSocketHandler {
     init(
         conversationId: String,
         currentUserId: String,
-        messageSocket: MessageSocketProviding = MessageSocketManager.shared
+        messageSocket: MessageSocketProviding = MessageSocketManager.shared,
+        endToEndTyping: (@MainActor (Bool) -> Bool)? = nil
     ) {
         self.conversationId = conversationId
         self.currentUserId = currentUserId
         self.messageSocket = messageSocket
+        self.endToEndTyping = endToEndTyping
     }
 
     /// Side-effects d'ouverture : join de la room socket + publication de la
@@ -176,7 +181,7 @@ final class ConversationSocketHandler {
                     MessageSocketManager.shared.leaveConversation(id)
                 }
             }
-            if isEmittingTyping && !typingIsEndToEnd {
+            if case .clear = typingChannel {
                 MessageSocketManager.shared.emitTypingStop(conversationId: conversationId)
             }
         }
@@ -226,32 +231,24 @@ final class ConversationSocketHandler {
     private func startTypingEmission() {
         guard UserPreferencesManager.shared.privacy.showTypingIndicator else { return }
 
-        if !isEmittingTyping {
-            isEmittingTyping = true
-            emitTyping(true)
+        if typingChannel == nil {
+            typingChannel = startTyping()
         }
 
         guard typingTimer == nil else { return }
         typingTimer = Timer.scheduledTimer(withTimeInterval: Self.typingReemitInterval, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
-                guard let self, self.isEmittingTyping else { return }
-                self.emitTyping(true)
+                guard let self, self.typingChannel != nil else { return }
+                self.typingChannel = self.startTyping()
             }
         }
     }
 
     /// Chiffrée par le relais dans une conversation e2ee, en clair ailleurs.
-    private func emitTyping(_ active: Bool) {
-        if endToEndTyping?(active) == true {
-            typingIsEndToEnd = true
-            return
-        }
-        typingIsEndToEnd = false
-        if active {
-            messageSocket.emitTypingStart(conversationId: conversationId)
-        } else {
-            messageSocket.emitTypingStop(conversationId: conversationId)
-        }
+    private func startTyping() -> TypingChannel {
+        if endToEndTyping?(true) == true { return .endToEnd }
+        messageSocket.emitTypingStart(conversationId: conversationId)
+        return .clear
     }
 
     func stopTypingEmission() {
@@ -260,9 +257,12 @@ final class ConversationSocketHandler {
         typingIdleTimer?.invalidate()
         typingIdleTimer = nil
 
-        guard isEmittingTyping else { return }
-        isEmittingTyping = false
-        emitTyping(false)
+        guard let channel = typingChannel else { return }
+        typingChannel = nil
+        switch channel {
+        case .clear: messageSocket.emitTypingStop(conversationId: conversationId)
+        case .endToEnd: _ = endToEndTyping?(false)
+        }
     }
 
     // MARK: - Typing Safety Timers

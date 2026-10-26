@@ -70,6 +70,24 @@ struct EndToEndSignalCommands {
         }
     }
 
+    /// La réaction se pose localement tout de suite (optimiste), puis part en
+    /// signal ; refusée, elle se retire.
+    func reactOptimistically(localId: String, serverId: String, participantId: String, emoji: String, removed: Bool) async {
+        if removed {
+            try? await persistence.removeReaction(
+                localId: localId, emoji: emoji, participantId: participantId, ownerUserId: nil,
+                aggregateCount: nil, aggregateParticipantIds: nil
+            )
+        } else {
+            ReactionAnimationGate.markAdded(messageId: localId, emoji: emoji)
+            try? await persistence.appendReaction(
+                localId: localId, reactionId: UUID().uuidString, messageId: serverId, participantId: participantId,
+                emoji: emoji, maxCount: nil, ownerUserId: nil
+            )
+        }
+        await react(localId: localId, serverId: serverId, participantId: participantId, emoji: emoji, removed: removed)
+    }
+
     /// La réaction est déjà posée localement (optimiste) ; refusée, elle se retire.
     func react(localId: String, serverId: String, participantId: String, emoji: String, removed: Bool) async {
         do {
@@ -109,15 +127,16 @@ struct EndToEndSignalCommands {
     }
 
     /// Supprimer pour tous ou consommer une vue unique : par signal pour un
-    /// message de l'ère chiffrée ; par la route en clair pour un message écrit
-    /// AVANT l'activation, que le serveur lit déjà et que la passerelle admet en
-    /// clair (`messageRefusesPlainErasure`). Sans cette porte, tout le passé
-    /// d'une conversation passée au chiffré devenait insupprimable : le
-    /// correspondant n'a pas ce message au coffre, le signal n'y trouvait rien.
-    /// Un message introuvable se range dans l'ère chiffrée (fail-closed).
-    static func erasureTravelsAsSignal(_ message: MeeshyMessage?, regime: EndToEndRegime) -> Bool {
+    /// message dont la LIGNE est chiffrée de bout en bout (ou déchiffrée sur cet
+    /// appareil) ; par la route en clair pour un message que le serveur lit déjà
+    /// — écrit avant l'activation —, que la passerelle admet en clair selon la
+    /// MÊME règle (`messageRefusesPlainErasure`). Une règle à dates divergeait de
+    /// la passerelle : une ligne en clair postérieure à l'activation partait en
+    /// signal que le correspondant, sans clair au coffre, attendait à jamais.
+    /// Un message introuvable part en signal (fail-closed).
+    static func erasureTravelsAsSignal(_ message: MeeshyMessage?) -> Bool {
         guard let message else { return true }
-        return !regime.admitsWireTranslations(of: message)
+        return DeviceTranslationEligibility.isEndToEnd(message, conversationEncryptionMode: nil)
     }
 
     static var offlineRefusal: ConversationCommandFailure {
@@ -127,4 +146,134 @@ struct EndToEndSignalCommands {
             bundle: .main
         ))
     }
+}
+
+extension EndToEndSignalCommands {
+    /// Les signaux du fil de `viewModel` ; `nil` hors bout en bout : les routes habituelles servent.
+    static func of(_ viewModel: ConversationViewModel) -> EndToEndSignalCommands? {
+        guard viewModel.endToEndSealer.requiresSeal else { return nil }
+        return EndToEndSignalCommands(
+            conversationId: viewModel.conversationId,
+            peerUserId: viewModel.participantUserId,
+            senderUserId: viewModel.currentUserId,
+            signaling: (viewModel.endToEnd as? any EndToEndSignalingProviding) ?? UnavailableEndToEndSignaling(),
+            persistence: viewModel.messagePersistence,
+            isOnline: { NetworkMonitor.shared.isOnline }
+        )
+    }
+
+    /// Les signaux d'un geste qui EFFACE (suppression pour tous, vue unique) :
+    /// `nil` pour un message écrit en clair avant l'activation, qui garde sa route.
+    static func erasure(of messageId: String, in viewModel: ConversationViewModel) -> EndToEndSignalCommands? {
+        guard let signals = of(viewModel) else { return nil }
+        let message = viewModel.messageIndex(for: messageId).map { viewModel.messages[$0] }
+        return erasureTravelsAsSignal(message) ? signals : nil
+    }
+}
+
+/// **Les commandes du fil, aiguillées par le régime** (#13142, #13060). Dans une
+/// conversation chiffrée de bout en bout, réagir, épingler, supprimer pour tous,
+/// consommer une vue unique et écrire partent en signaux chiffrés ; tout le reste,
+/// et tout geste hors bout en bout, va aux commandes en clair qu'il enveloppe.
+/// Le fil se lie après sa construction (`bind`), le régime se relit à chaque geste.
+@MainActor
+final class EndToEndConversationCommands: ConversationCommandProviding {
+    private let base: any ConversationCommandProviding
+    private weak var host: ConversationViewModel?
+
+    init(base: any ConversationCommandProviding) {
+        self.base = base
+    }
+
+    // Isolé au MainActor : une deinit isolée tue xctest au démontage hors
+    // d'une tâche (iOS 18.4+/26, Swift #85663).
+    nonisolated deinit {}
+
+    /// Lie le fil, et rend le relais de frappe de son gestionnaire de socket :
+    /// `true` quand la frappe est partie chiffrée (rien ne part alors en clair).
+    func bind(host: ConversationViewModel) -> @MainActor (Bool) -> Bool {
+        self.host = host
+        return { [weak self] active in
+            guard let signals = self?.signals else { return false }
+            Task { await signals.typing(active: active) }
+            return true
+        }
+    }
+
+    private var signals: EndToEndSignalCommands? { host.flatMap(EndToEndSignalCommands.of) }
+
+    private func erasureSignals(for messageId: String) -> EndToEndSignalCommands? {
+        host.flatMap { EndToEndSignalCommands.erasure(of: messageId, in: $0) }
+    }
+
+    func addReaction(localId: String, remoteId: String, participantId: String, emoji: String) {
+        guard let signals else { return base.addReaction(localId: localId, remoteId: remoteId, participantId: participantId, emoji: emoji) }
+        Task { await signals.reactOptimistically(localId: localId, serverId: remoteId, participantId: participantId, emoji: emoji, removed: false) }
+    }
+
+    func removeReaction(localId: String, remoteId: String, participantId: String, emoji: String) {
+        guard let signals else { return base.removeReaction(localId: localId, remoteId: remoteId, participantId: participantId, emoji: emoji) }
+        Task { await signals.reactOptimistically(localId: localId, serverId: remoteId, participantId: participantId, emoji: emoji, removed: true) }
+    }
+
+    func deleteForEveryone(messageId: String, serverId: String) async -> ConversationCommandFailure? {
+        guard let signals = erasureSignals(for: messageId) else { return await base.deleteForEveryone(messageId: messageId, serverId: serverId) }
+        return await signals.deleteForEveryone(messageId: messageId, serverId: serverId)
+    }
+
+    func consumeViewOnce(messageId: String, serverId: String) async -> Bool {
+        guard let signals = erasureSignals(for: messageId) else { return await base.consumeViewOnce(messageId: messageId, serverId: serverId) }
+        return await signals.viewOnceOpened(serverId: serverId)
+    }
+
+    func togglePin(messageId: String, serverId: String, previous: MessagePinState, currentUserId: String?) async -> ConversationCommandFailure? {
+        guard let signals else {
+            return await base.togglePin(messageId: messageId, serverId: serverId, previous: previous, currentUserId: currentUserId)
+        }
+        return await signals.togglePin(messageId: messageId, serverId: serverId, previous: previous)
+    }
+
+    // MARK: - Hors signaux : les commandes en clair
+
+    func canDeleteForEveryone(_ message: Message) -> Bool { base.canDeleteForEveryone(message) }
+    func markAsReceived() { base.markAsReceived() }
+    func consumeReactionToken() -> Bool { base.consumeReactionToken() }
+    func deleteForMe(_ targets: [ForMeTarget], projection: ForMeProjection) async -> ConversationCommandFailure? {
+        await base.deleteForMe(targets, projection: projection)
+    }
+    func withdrawUnsent(messageId: String) async { await base.withdrawUnsent(messageId: messageId) }
+    func removeForModeration(messageId: String, serverId: String, reason: String) async -> ConversationCommandFailure? {
+        await base.removeForModeration(messageId: messageId, serverId: serverId, reason: reason)
+    }
+    func removeSelection(
+        _ targets: [SelectionRemovalTarget], reason: String, discardUnsent: (String) async -> Void
+    ) async -> ConversationCommandFailure? {
+        await base.removeSelection(targets, reason: reason, discardUnsent: discardUnsent)
+    }
+    func removeAttachment(messageId: String, attachmentId: String, original: [MeeshyMessageAttachment]) async -> ConversationCommandFailure? {
+        await base.removeAttachment(messageId: messageId, attachmentId: attachmentId, original: original)
+    }
+    func editMessage(
+        messageId: String, serverId: String, content: String, originalContent: String?,
+        beforeOptimisticWrite: () -> Void
+    ) async -> ConversationCommandFailure? {
+        await base.editMessage(
+            messageId: messageId, serverId: serverId, content: content, originalContent: originalContent,
+            beforeOptimisticWrite: beforeOptimisticWrite
+        )
+    }
+    func compensate(_ payload: OfflineRetryExhausted, currentUserId: String, serverId: (String) -> String) async {
+        await base.compensate(payload, currentUserId: currentUserId, serverId: serverId)
+    }
+}
+
+/// Sans relais de signaux (témoins, runtime absent) : tout geste chiffré est refusé, rien ne part en clair.
+nonisolated struct UnavailableEndToEndSignaling: EndToEndSignalingProviding {
+    func send(_ signal: E2EESignal, from userId: String, to peerUserId: String, wake: Bool) async throws -> E2EESignalReceipt {
+        throw EndToEndSendRefusal.sessionUnavailable
+    }
+
+    func pendingSignals(as account: String) async -> [E2EEReceivedSignal] { [] }
+
+    func settleSignals(_ signalIds: [String], as account: String) async {}
 }

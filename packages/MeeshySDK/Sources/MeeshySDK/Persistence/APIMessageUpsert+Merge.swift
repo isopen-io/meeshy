@@ -34,7 +34,7 @@ extension APIMessageUpsert {
                 && existing.content != E2EEWire.contentPlaceholder,
             pendingEdit: pending.edits.contains(api.id),
             pendingDelete: pending.deletes.contains(api.id),
-            staleLiveCall: MessagePersistenceActor.isStaleLiveCallSnapshot(
+            staleLiveCall: CallSummaryMetadata.isStaleLiveSnapshot(
                 existing: existing.callSummaryJson,
                 incoming: columns.callSummaryJson
             ),

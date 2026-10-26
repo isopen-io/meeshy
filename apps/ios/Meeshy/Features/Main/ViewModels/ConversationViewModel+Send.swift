@@ -470,7 +470,6 @@ extension ConversationViewModel {
             guard let self else { return }
             let persistence = messagePersistence
             await bestEffort("send.removeFailed", category: .messages) {
-                // Une bulle jamais partie, retirée par CE geste : son clair quitte aussi le coffre (#13060).
                 try await persistence.markDeleted(localId: messageId, deletedAt: Date(), origin: .authenticated)
             }
         }

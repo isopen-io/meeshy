@@ -89,7 +89,7 @@ struct E2EEPaddingTests {
     /// remplissage tient encore, et tous ceux qui frôlent le plafond ont la même taille.
     @Test func aPlaintextIsNeverPushedPastTheEnvelopeBudget() {
         let twoDevices = E2EEPadding.ceiling(recipients: 2)
-        #expect(twoDevices == 64 * 1024 - E2EEPadding.cipherOverhead)
+        #expect(twoDevices == 63_488, "même borne que e2eePaddingCeiling(2) de @meeshy/shared (marge PreKey de 2 048 octets)")
         #expect(E2EEPadding.padded(Data(count: 50000), recipients: 2).count == twoDevices)
         #expect(E2EEPadding.padded(Data(count: 60000), recipients: 2).count == twoDevices)
         let thirtyTwoDevices = E2EEPadding.ceiling(recipients: 32)

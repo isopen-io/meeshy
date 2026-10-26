@@ -48,15 +48,11 @@ extension MessagePersistenceActor {
     /// écriture qui fait passer la bulle à `(1) · Déjà ouvert`, et qui survit au
     /// redémarrage et à toute revalidation REST (`upsertFromAPIMessages`
     /// respecte la colonne).
-    ///
-    /// Sans origine, l'ouverture est ANNONCÉE par la passerelle (`consumedByMe`,
-    /// écho d'un autre appareil) : la bulle se scelle, le clair E2EE reste au coffre
-    /// (#13060). Le geste de CE lecteur, ou le signal d'un de SES appareils, passe
-    /// `origin: .authenticated`.
     public func markViewOnceOpened(localId: String, at date: Date = Date()) throws {
         try markViewOnceOpened(localId: localId, at: date, origin: .announced)
     }
 
+    /// `.announced` (`consumedByMe`, écho d'un autre appareil) garde le clair E2EE au coffre (#13060).
     public func markViewOnceOpened(localId: String, at date: Date = Date(), origin: PlaintextErasureOrigin) throws {
         var affectedConversationId: String?
         try dbWriter.write { db in

@@ -403,7 +403,7 @@
     "Meeshy::View": 1673,
     "MeeshySDK::AuthManager": 1893,
     "MeeshySDK::ConversationSyncEngine": 2885,
-    "MeeshySDK::MessagePersistenceActor": 2307,
+    "MeeshySDK::MessagePersistenceActor": 2298,
     "MeeshySDK::MessageSocketManager": 1957,
     "MeeshySDK::OfflineQueue": 2985,
     "MeeshyUI::AudioPlayerView": 1542,

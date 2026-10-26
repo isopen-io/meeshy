@@ -20,7 +20,11 @@ nonisolated protocol EndToEndSignalPersisting: Sendable {
     func conversationIds(of messageIds: [String]) async throws -> [String: String]
 }
 
-extension MessagePersistenceActor: EndToEndSignalPersisting {}
+extension MessagePersistenceActor: EndToEndSignalPersisting {
+    func conversationIds(of messageIds: [String]) async throws -> [String: String] {
+        try await reader.read { db in try MessageRecord.conversationIds(of: messageIds, in: db) }
+    }
+}
 
 /// Une frappe reçue d'un pair, à afficher (ou à retirer) dans le fil et la liste.
 nonisolated struct EndToEndTypingSignal: Equatable, Sendable {

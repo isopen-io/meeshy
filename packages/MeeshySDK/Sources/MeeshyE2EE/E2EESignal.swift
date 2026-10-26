@@ -232,9 +232,10 @@ public enum E2EEPadding {
     public static let maxEnvelopeBytes = 64 * 1024
     /// Le total des enveloppes d'un envoi (`E2EE_ENVELOPE_BOUNDS.maxTotalBase64Chars`, en octets).
     public static let maxTotalBytes = 512 * 1024
-    /// Ce que libsignal ajoute au clair (en-tête, clés d'un PreKey, MAC, bourrage
-    /// AES) : quelques centaines d'octets, majorés.
-    public static let cipherOverhead = 1024
+    /// Ce que libsignal ajoute au clair, majoré (`E2EE_PADDING_CIPHER_OVERHEAD`) :
+    /// un premier message (PreKey, PQXDH avec Kyber1024) ajoute 1 761 à 1 763
+    /// octets (mesuré, libsignal 0.105), un message ordinaire 107.
+    public static let cipherOverhead = 2048
 
     /// Le plus grand clair que `recipients` enveloppes portent sous les deux plafonds.
     public static func ceiling(recipients: Int) -> Int {
