@@ -108,11 +108,9 @@ class ConversationListViewModel: ObservableObject {
     /// synchronisation son `@pseudo`. Une divergence entre les deux se lirait
     /// comme deux personnes en train d'écrire.
     @Published var typingUsers: [String: String] = [:]
-    /// #12968 — le clair local du dernier message scellé, en mémoire seulement.
-    lazy var endToEndTexts = ConversationListEndToEndTextStore(
-        rows: $conversations.eraseToAnyPublisher(), viewerId: { [weak self] in self?.authManager.currentUser?.id },
-        willChange: { [weak self] in self?.objectWillChange.send() }
-    )
+    /// #12968 — le clair local du dernier message scellé, en mémoire seulement, lu dès l'`init` (#13002).
+    lazy var endToEndTexts = ConversationListEndToEndTextStore(rows: $conversations.eraseToAnyPublisher(),
+        viewerId: { [weak self] in self?.authManager.currentUser?.id }, willChange: { [weak self] in self?.objectWillChange.send() })
     /// Qui écrit où (état par membre, échéances 15 s, abonnements) : voir
     /// `ConversationListTypingTracker`, qui réaligne `typingUsernames` et
     /// `typingUsers` par `applyTypingSelection`.
@@ -508,6 +506,7 @@ class ConversationListViewModel: ObservableObject {
         subscribeToSocketEvents()
         subscribeToPushNotifications()
         subscribeToDrafts()
+        _ = endToEndTexts
         syncBadgeOnUnreadChange()
         setupBackgroundProcessing()
         observeMarkAsRead()

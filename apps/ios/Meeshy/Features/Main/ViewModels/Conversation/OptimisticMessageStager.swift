@@ -7,6 +7,11 @@ import os
 struct OptimisticAuthor {
     let senderId: String
     let sender: MeeshyUser?
+    /// La conversation est chiffrée de bout en bout (#12999) : le clair a été
+    /// rangé dans le coffre libsignal AVANT l'appel ; ni la ligne, ni le cache
+    /// du fil, ni l'aperçu de liste ne le portent, et une légende de pièce ne
+    /// s'écrit pas.
+    var writesEndToEnd = false
 }
 
 /// Tout ce qu'une bulle optimiste de média porte avant que l'upload TUS ne
@@ -58,6 +63,7 @@ protocol OptimisticMessageStagerProviding {
 ///
 /// `listSink` n'est PAS le moteur injecté dans le modèle de vue : l'aperçu de
 /// liste a toujours eu pour récepteur `ConversationSyncEngine.shared`.
+
 struct OptimisticMessageStager: OptimisticMessageStagerProviding {
     let persistence: any OptimisticMessagePersisting & Sendable
     var listSink: any ConversationSyncEngineProviding = ConversationSyncEngine.shared
@@ -92,7 +98,7 @@ struct OptimisticMessageStager: OptimisticMessageStagerProviding {
             }
         }
 
-        let offlineFacet = LastMessageFacet(message: offlineMessage, preview: outgoing.text)
+        let offlineFacet = LastMessageFacet(message: offlineMessage, preview: outgoing.text).sealedForEndToEnd(author.writesEndToEnd)
         let listSink = listSink
         Task {
             await listSink.updateConversationAfterSend(offlineFacet, conversationId: conversationId)
@@ -111,7 +117,7 @@ struct OptimisticMessageStager: OptimisticMessageStagerProviding {
     ) async -> Message {
         let localId = clientMessageId.rawValue
         let relation = outgoing.relation
-        let offlineMessage = Message(
+        var offlineMessage = Message(
             id: localId,
             conversationId: conversationId,
             senderId: author.senderId,
@@ -127,6 +133,11 @@ struct OptimisticMessageStager: OptimisticMessageStagerProviding {
             location: outgoing.location,
             sticker: outgoing.sticker
         )
+        if author.writesEndToEnd {
+            offlineMessage.content = E2EEWire.contentPlaceholder
+            offlineMessage.isEncrypted = true
+            offlineMessage.encryptionMode = E2EEWire.mode
+        }
         let offlineRecord = OptimisticTextRecordBuilder.record(
             localId: localId,
             conversationId: conversationId,
@@ -145,7 +156,8 @@ struct OptimisticMessageStager: OptimisticMessageStagerProviding {
             locationJson: OptimisticRecordColumns.locationJson(outgoing.location, id: localId),
             stickerJson: OptimisticRecordColumns.stickerJson(outgoing.sticker, id: localId),
             now: Date(),
-            ephemeralDuration: intent.ephemeralDurationSeconds
+            ephemeralDuration: intent.ephemeralDurationSeconds,
+            sealedEndToEnd: author.writesEndToEnd
         )
         do {
             try await persistence.insertOptimistic(offlineRecord)
@@ -191,7 +203,8 @@ struct OptimisticMessageStager: OptimisticMessageStagerProviding {
             locationJson: OptimisticRecordColumns.locationJson(outgoing.location, id: tempId),
             stickerJson: OptimisticRecordColumns.stickerJson(outgoing.sticker, id: tempId),
             now: Date(),
-            ephemeralDuration: resolvedEphemeralDuration
+            ephemeralDuration: resolvedEphemeralDuration,
+            sealedEndToEnd: author.writesEndToEnd
         )
         Logger.messages.info("SendFlow insertOptimistic START tempId=\(tempId, privacy: .public) convId=\(conversationId, privacy: .public)")
         do {
@@ -208,7 +221,7 @@ struct OptimisticMessageStager: OptimisticMessageStagerProviding {
                     ephemeralDuration: resolvedEphemeralDuration,
                     originalLanguage: optimisticRecord.originalLanguage,
                     location: outgoing.location
-                ),
+                ).sealedForEndToEnd(author.writesEndToEnd),
                 conversationId: conversationId
             )
         } catch {
@@ -244,6 +257,7 @@ struct OptimisticMessageStager: OptimisticMessageStagerProviding {
             attachmentsJson: attachmentsJson,
             stickerJson: OptimisticRecordColumns.stickerJson(draft.sticker, id: tempId),
             protection: draft.protection,
+            sealedEndToEnd: author.writesEndToEnd,
             now: now
         )
         let persistence = persistence
@@ -254,7 +268,7 @@ struct OptimisticMessageStager: OptimisticMessageStagerProviding {
         // the MainActor before the detached insert).
         let listFacet = LastMessageFacet.sent(
             id: tempId,
-            text: draft.content,
+            text: author.writesEndToEnd ? "" : draft.content,
             at: now,
             attachments: draft.attachments,
             ephemeralDuration: draft.protection.ephemeralDurationSeconds,

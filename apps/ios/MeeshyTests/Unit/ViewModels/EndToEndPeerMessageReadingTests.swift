@@ -24,6 +24,7 @@ final class EndToEndPeerMessageReadingTests: XCTestCase {
 
     private func installation(_ userId: String, on gateway: LibsignalTestGateway) async throws -> EndToEndMessagingRuntime {
         let runtime = EndToEndMessagingRuntime(provisioning: try LibsignalDeviceProvisioning.inMemory(on: gateway, userId: userId))
+        await runtime.open(session: userId)
         _ = try await runtime.ready(for: userId)
         return runtime
     }

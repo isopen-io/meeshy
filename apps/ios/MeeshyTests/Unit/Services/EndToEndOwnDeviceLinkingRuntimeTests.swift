@@ -16,6 +16,7 @@ final class EndToEndOwnDeviceLinkingRuntimeTests: XCTestCase {
 
     private func installation(_ userId: String, on gateway: LibsignalTestGateway) async throws -> EndToEndMessagingRuntime {
         let runtime = EndToEndMessagingRuntime(provisioning: try LibsignalDeviceProvisioning.inMemory(on: gateway, userId: userId))
+        await runtime.open(session: userId)
         _ = try await runtime.ready(for: userId)
         return runtime
     }
@@ -32,7 +33,7 @@ final class EndToEndOwnDeviceLinkingRuntimeTests: XCTestCase {
     }
 
     private func readableText(_ messageId: String, on runtime: EndToEndMessagingRuntime) async -> String? {
-        guard case .readable(let content, _) = await runtime.plaintexts(for: [messageId])[messageId] else { return nil }
+        guard case .readable(let content, _) = await runtime.plaintexts(for: [messageId], as: alice)[messageId] else { return nil }
         return content.text
     }
 

@@ -97,7 +97,7 @@ extension MessagePersistenceActor {
             else { return nil }
             try db.execute(
                 sql: """
-                    UPDATE messages SET content = ?, isEdited = (isEdited OR ?), editedAt = ?,
+                    UPDATE messages SET \(EndToEndContentSeal.sealedContentAssignment), isEdited = (isEdited OR ?), editedAt = ?,
                     joinNoticeJson = COALESCE(?, joinNoticeJson),
                     editedById = CASE WHEN ? THEN ? ELSE editedById END,
                     updatedAt = ?, changeVersion = changeVersion + 1
@@ -131,11 +131,26 @@ extension MessagePersistenceActor {
     /// - Parameter expired: `true` quand la mort est une EXPIRATION
     ///   (`message:expired`) : les citations se scellent alors « expirées »
     ///   et se lisent « Message éphémère expiré », pas « supprimé » (#8631).
+    /// - Parameter awaitingConfirmation: la suppression vient de cet appareil et
+    ///   le serveur ne l'a pas encore acceptée : le clair E2EE reste au coffre
+    ///   jusqu'à `confirmDeletion` (#13001). Toute autre suppression (écho
+    ///   `message:deleted`, socket, rejeu) est annoncée par le serveur, donc confirmée.
     public func markDeleted(localId: String, deletedAt: Date, sparingOpenedViewOnce: Bool = false, expired: Bool = false) throws {
+        try markDeleted(localId: localId, deletedAt: deletedAt, sparingOpenedViewOnce: sparingOpenedViewOnce, expired: expired, awaitingConfirmation: false)
+    }
+
+    func markDeleted(
+        localId: String, deletedAt: Date, sparingOpenedViewOnce: Bool, expired: Bool, awaitingConfirmation: Bool
+    ) throws {
         guard try rowExists(localId) else {
+            try dbWriter.write { db in
+                try MessagePlaintextErasures.record(localId, cause: .deleted, in: db)
+                try MessagePlaintextErasures.settle(localId, awaitingConfirmation: awaitingConfirmation, in: db)
+            }
             rememberPendingRowEvent(localId) { events in
                 events.tombstone = PendingTombstone(
-                    deletedAt: deletedAt, sparingOpenedViewOnce: sparingOpenedViewOnce, expired: expired)
+                    deletedAt: deletedAt, sparingOpenedViewOnce: sparingOpenedViewOnce, expired: expired,
+                    awaitingConfirmation: awaitingConfirmation)
             }
             return
         }
@@ -158,6 +173,7 @@ extension MessagePersistenceActor {
                     """,
                 arguments: [deletedAt, Date(), localId, localId]
             )
+            try MessagePlaintextErasures.settle(localId, awaitingConfirmation: awaitingConfirmation, in: db)
             try Self.followQuotes(of: record, in: db) { quote in
                 quote.isQuotedMessageDeleted || quote.isStoryReply ? nil : quote.tombstoned(at: deletedAt, expired: expired)
             }
@@ -207,7 +223,8 @@ extension MessagePersistenceActor {
                 }
                 if let tombstone = events.tombstone {
                     try markDeleted(localId: id, deletedAt: tombstone.deletedAt,
-                                    sparingOpenedViewOnce: tombstone.sparingOpenedViewOnce, expired: tombstone.expired)
+                                    sparingOpenedViewOnce: tombstone.sparingOpenedViewOnce, expired: tombstone.expired,
+                                    awaitingConfirmation: tombstone.awaitingConfirmation)
                 }
             } catch {
                 Logger.messages.error("replayPendingRowEvents failed for \(id, privacy: .public): \(error.localizedDescription, privacy: .public)")

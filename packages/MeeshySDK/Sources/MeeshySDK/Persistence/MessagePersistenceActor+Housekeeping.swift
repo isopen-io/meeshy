@@ -14,27 +14,7 @@ extension MessagePersistenceActor {
                 arguments: [conversationId]
             )
             if !ids.isEmpty {
-                let placeholders = ids.map { _ in "?" }.joined(separator: ",")
-                try db.execute(
-                    sql: "DELETE FROM message_translations WHERE messageLocalId IN (\(placeholders))",
-                    arguments: StatementArguments(ids)
-                )
-                try db.execute(
-                    sql: "DELETE FROM message_transcriptions WHERE messageLocalId IN (\(placeholders))",
-                    arguments: StatementArguments(ids)
-                )
-                try db.execute(
-                    sql: "DELETE FROM message_audio_translations WHERE messageLocalId IN (\(placeholders))",
-                    arguments: StatementArguments(ids)
-                )
-                try db.execute(
-                    sql: "DELETE FROM pending_ids WHERE localId IN (\(placeholders))",
-                    arguments: StatementArguments(ids)
-                )
-                try db.execute(
-                    sql: "DELETE FROM send_attempts WHERE localId IN (\(placeholders))",
-                    arguments: StatementArguments(ids)
-                )
+                try MessageChildRows.delete(ofLocalIds: ids, in: db)
             }
             _ = try MessageRecord
                 .filter(Column("conversationId") == conversationId)
@@ -63,6 +43,9 @@ extension MessagePersistenceActor {
                 .filter(Column("expiresAt") <= before)
                 .fetchAll(db)
             let ids = Set(expired.map { $0.conversationId })
+            try MessagePlaintextErasures.record(
+                rowsMatching: "expiresAt IS NOT NULL AND expiresAt <= ?", arguments: [before], cause: .expired, in: db
+            )
             try MessageRecord
                 .filter(Column("expiresAt") != nil)
                 .filter(Column("expiresAt") <= before)

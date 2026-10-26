@@ -70,7 +70,7 @@ final class ConversationViewModelRetryFidelityTests: XCTestCase {
             locationJson: OptimisticRecordColumns.locationJson(location, id: localId),
             stickerJson: nil,
             now: Date(),
-            ephemeralDuration: nil
+            ephemeralDuration: nil, sealedEndToEnd: false
         )
         record.state = .failed
         try await fx.sut.messagePersistence.insertOptimistic(record)

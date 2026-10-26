@@ -78,6 +78,7 @@ final class EndToEndThreadDisplayTests: XCTestCase {
 
     private func installation(_ userId: String, on gateway: LibsignalTestGateway) async throws -> EndToEndMessagingRuntime {
         let runtime = EndToEndMessagingRuntime(provisioning: try LibsignalDeviceProvisioning.inMemory(on: gateway, userId: userId))
+        await runtime.open(session: userId)
         _ = try await runtime.ready(for: userId)
         return runtime
     }
@@ -231,6 +232,59 @@ final class EndToEndThreadDisplayTests: XCTestCase {
             }
             return !mine.isEmpty && mine.allSatisfy { $0.content == secret }
         }
+    }
+
+    // MARK: - Le clair d'un envoi ne s'écrit que dans le coffre (#12999)
+
+    /// Ce que le cache disque garde, relu depuis le disque (mémoire évincée).
+    private func diskJSON(of conversationId: String) async throws -> String {
+        let caches = CacheCoordinator.shared
+        await caches.messages.flushDirtyKeys()
+        await caches.conversations.flushDirtyKeys()
+        await caches.messages.evictL1()
+        await caches.conversations.evictL1()
+        let thread = await caches.messages.loadIgnoringExpiry(for: conversationId)?.items ?? []
+        let list = await caches.conversations.loadIgnoringExpiry(for: "list")?.items ?? []
+        let encoder = JSONEncoder()
+        return String(decoding: try encoder.encode(thread), as: UTF8.self) + String(decoding: try encoder.encode(list), as: UTF8.self)
+    }
+
+    private func assertNoPlaintextOnDisk(_ text: String, thread: Thread, file: StaticString = #filePath, line: UInt = #line) async throws {
+        try assertNoPlaintextStored(text, in: thread.pool, file: file, line: line)
+        let replies = try await thread.pool.read { db in try MessageRecord.fetchAll(db) }.compactMap(\.replyToJson)
+        XCTAssertFalse(replies.contains { String(decoding: $0, as: UTF8.self).contains(text) }, "ni dans une citation", file: file, line: line)
+        let cached = try await diskJSON(of: conversationId)
+        XCTAssertFalse(cached.contains(text), "le clair ne s'écrit pas dans le cache des conversations ni des messages", file: file, line: line)
+    }
+
+    func test_unEnvoiChiffre_naSonClairNiDansLaBaseNiDansLesCaches_avantEtApresLEcho() async throws {
+        let gateway = LibsignalTestGateway()
+        let aliceDevice = try await installation(alice, on: gateway)
+        _ = try await installation(bob, on: gateway)
+        let thread = try await openThread(as: alice, with: bob, endToEnd: aliceDevice)
+        let row = Conversation(id: conversationId, identifier: conversationId, type: .direct, title: "Bob",
+                               lastMessageAt: Date(timeIntervalSince1970: 1), encryptionMode: E2EEWire.mode)
+        try await CacheCoordinator.shared.conversations.save([row], for: "list")
+        thread.messageService.sendResult = .success(JSONStub.decode("""
+        {"id":"\(serverId)","conversationId":"\(conversationId)","senderId":"\(alice)","content":"\(E2EEWire.contentPlaceholder)","isEncrypted":true,"encryptionMode":"\(E2EEWire.mode)","messageType":"text","createdAt":"2026-10-25T12:00:00.000Z"}
+        """))
+        let secret = sentinel()
+
+        let result = await thread.viewModel.send(outgoingMessage(content: secret, conversationId: conversationId))
+        XCTAssertTrue(result.isAccepted, "\(result)")
+        try await assertNoPlaintextOnDisk(secret, thread: thread)
+
+        let cid = try XCTUnwrap(thread.messageService.lastSendRequest?.clientMessageId)
+        thread.socket.messageReceived.send(served(from: alice, clientMessageId: cid))
+        let echoed = served(from: alice).toMessage(currentUserId: alice, currentUsername: "u11", preferredLanguages: ["fr"])
+        await thread.persistence.bufferIncoming(CachedThreadSurfacing.rows([echoed], present: []))
+        await eventually("ma bulle rend son clair, lu dans le coffre") {
+            self.rendered(self.serverId, in: thread)?.content == secret
+        }
+        await thread.viewModel.persistMessagesUsingServerIds()
+
+        try await assertNoPlaintextOnDisk(secret, thread: thread)
+        await CacheCoordinator.shared.conversations.invalidate(for: "list")
     }
 
     // MARK: - Audit adversarial (#12916) — serveur compromis

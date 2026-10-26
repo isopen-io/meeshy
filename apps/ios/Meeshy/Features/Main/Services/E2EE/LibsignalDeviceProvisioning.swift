@@ -44,8 +44,8 @@ nonisolated final class LibsignalDeviceProvisioning: EndToEndDeviceProvisioning,
         }
     }
 
-    func plaintexts() throws -> any E2EEPlaintextStoring {
-        E2EEPlaintextVault(vault: try storage().vault)
+    func plaintexts(owner: String) throws -> any E2EEPlaintextStoring {
+        E2EEPlaintextVault(vault: try storage().vault, owner: owner)
     }
 
     func registrar() throws -> any E2EEDeviceRegistering {
@@ -67,7 +67,7 @@ nonisolated final class LibsignalDeviceProvisioning: EndToEndDeviceProvisioning,
             device: enrolled.device,
             sealer: E2EEMessageSealer(local: enrolled.device, cipher: cipher, directory: directory, approvals: approvals),
             opener: E2EEEnvelopeOpener(
-                local: enrolled.device, cipher: cipher, plaintexts: E2EEPlaintextVault(vault: vault),
+                local: enrolled.device, cipher: cipher, plaintexts: E2EEPlaintextVault(vault: vault, owner: enrolled.device.userId),
                 directory: directory, approvals: approvals
             ),
             linking: E2EEOwnDeviceLinking(local: enrolled, cipher: cipher, directory: directory, approvals: approvals),

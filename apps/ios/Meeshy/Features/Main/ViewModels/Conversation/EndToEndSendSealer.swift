@@ -87,6 +87,33 @@ struct EndToEndSendSealer {
         )
     }
 
+    /// Range le clair de MON envoi dans le coffre AVANT que sa ligne optimiste
+    /// ne naisse (#12999) : la ligne, le cache du fil et l'aperçu de liste ne
+    /// portent que le littéral, et la bulle, la ligne de liste et le renvoi
+    /// d'un échec relisent le clair ici, sous l'identifiant client. `false` :
+    /// le coffre ne l'a pas pris (session fermée, autre compte) et rien ne part,
+    /// faute de quoi le message partirait sans clair que cet appareil relise.
+    func keep(_ outgoing: OutgoingMessage, context: SendAttemptContext) async -> Bool {
+        await endToEnd.remember(content(of: outgoing, context: context), from: senderUserId, as: [context.clientMessageId.rawValue])
+    }
+
+    /// Avant la ligne optimiste d'une conversation chiffrée : le clair au coffre,
+    /// ou l'échec lisible s'il n'a pas pu y être rangé (rien ne part, aucune bulle).
+    func keepBeforeStaging(
+        _ outgoing: OutgoingMessage, context: SendAttemptContext, coordinator: any ConversationSendCoordinatorProviding
+    ) async -> SendFailure? {
+        guard requiresSeal, !(await keep(outgoing, context: context)) else { return nil }
+        return await refuse(.sessionUnavailable, localId: context.clientMessageId.rawValue, coordinator: coordinator)
+    }
+
+    /// Un envoi chiffré se renvoie depuis le clair du coffre (#12999), jamais
+    /// depuis le littéral d'une ligne dont le clair manque : `true` s'il est refusé.
+    func refusesReplay(of failed: Message, coordinator: any ConversationSendCoordinatorProviding) async -> Bool {
+        guard requiresSeal, !failed.isContentDecryptedOnDevice else { return false }
+        _ = await refuse(.sessionUnavailable, localId: failed.id, coordinator: coordinator)
+        return true
+    }
+
     /// Scelle pour chaque appareil, remet par `emit`, et range le clair de MON
     /// message sur cet appareil — sous son identifiant client d'abord (l'écho
     /// du serveur peut précéder la réponse), sous son identifiant serveur ensuite.
@@ -123,7 +150,9 @@ struct EndToEndSendSealer {
     ) async -> EndToEndDelivery {
         guard let peerUserId else { return .refused(.recipientUnsealable) }
         let content = content(of: outgoing, context: context)
-        await endToEnd.remember(content, from: senderUserId, as: [context.clientMessageId.rawValue])
+        guard await endToEnd.remember(content, from: senderUserId, as: [context.clientMessageId.rawValue]) else {
+            return .refused(.sessionUnavailable)
+        }
         do {
             let receipt = try await endToEnd.deliver(content, from: senderUserId, to: peerUserId) { sealed in
                 let request = outgoing.libsignalWireRequest(

@@ -19,12 +19,15 @@ enum OptimisticMediaRecordBuilder {
         attachmentsJson: Data?,
         stickerJson: String?,
         protection: MessageProtectionIntent,
+        sealedEndToEnd: Bool,
         now: Date
     ) -> MessageRecord {
         MessageRecord(
             localId: tempId, serverId: nil,
             conversationId: conversationId, senderId: senderId,
-            content: content.isEmpty ? nil : content,
+            // #12999 — une pièce ne part pas d'une conversation chiffrée de bout
+            // en bout : sa légende n'est pas scellée, elle ne s'écrit pas.
+            content: content.isEmpty || sealedEndToEnd ? nil : content,
             originalLanguage: originalLanguage,
             messageType: messageType.rawValue, messageSource: "user", contentType: messageType.rawValue,
             state: .sending, retryCount: 0, lastError: nil,
@@ -90,16 +93,20 @@ enum OptimisticTextRecordBuilder {
         locationJson: String?,
         stickerJson: String?,
         now: Date,
-        ephemeralDuration: Int?
+        ephemeralDuration: Int?,
+        sealedEndToEnd: Bool
     ) -> MessageRecord {
         MessageRecord(
             localId: localId, serverId: nil,
             conversationId: conversationId, senderId: senderId,
-            content: text.isEmpty ? nil : text,
+            // #12999 — le clair d'un envoi chiffré de bout en bout vit dans le
+            // coffre libsignal (rangé AVANT cette ligne) ; la ligne ne porte que
+            // le littéral, comme celle que le serveur servira.
+            content: sealedEndToEnd ? E2EEWire.contentPlaceholder : (text.isEmpty ? nil : text),
             originalLanguage: originalLanguage,
             messageType: messageType, messageSource: "user", contentType: "text",
             state: .sending, retryCount: 0, lastError: nil,
-            isEncrypted: false, encryptionMode: nil, encryptedPayload: nil,
+            isEncrypted: sealedEndToEnd, encryptionMode: sealedEndToEnd ? E2EEWire.mode : nil, encryptedPayload: nil,
             replyToId: replyToId, storyReplyToId: storyReplyToId,
             forwardedFromId: forwardedFromId,
             forwardedFromConversationId: forwardedFromConversationId,
