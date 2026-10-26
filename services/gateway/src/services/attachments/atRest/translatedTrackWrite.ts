@@ -1,16 +1,19 @@
 /**
  * #13100 — une piste TTS d'une pièce `server` / `hybrid` dont l'original est
  * scellé ne passe jamais en clair sous son adresse (`translated/<id>_<langue>.<ext>`).
- * Elle s'écrit sous un nom caché du dossier des temporaires (`.at-rest-tmp/`),
- * puis, sous le verrou de l'original, le chiffré prend l'adresse ; sinon le
- * clair la prend d'un `rename`, comme avant, et le rattrapage scellera la
- * pièce entière.
+ * Elle s'écrit sous un nom caché du dossier des temporaires (`.at-rest-tmp/`).
+ * Pour une pièce au repos, le verrou de l'original est pris D'ABORD, et l'état
+ * scellé de l'original se lit SOUS lui : scellé, le chiffré prend l'adresse ;
+ * encore en clair, le clair la prend et le rattrapage scellera la pièce
+ * entière. Aucun scellement ne peut s'intercaler entre la lecture et
+ * l'écriture. Une pièce d'une conversation en clair ne touche pas au verrou.
  */
 import { promises as fs } from 'fs';
 import path from 'path';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { atRestFileSealingEnabled, atRestTemporaryPath, processAtRestFileAccess, sealStoredFile, storageKeyOfPath, type AtRestFileAccess } from './atRestFiles';
 import { atRestConversationFor, SERVER_AT_REST_SEAL_LOCK_UNAVAILABLE } from './sealAttachmentFiles';
+import { SealLockUnavailableError } from './sealLock';
 import { enhancedLogger } from '../../../utils/logger-enhanced';
 
 const logger = enhancedLogger.child({ module: 'translatedTrackWrite' });
@@ -19,27 +22,24 @@ const SEAL_LOCK_TRIES = 40;
 const SEAL_LOCK_WAIT_MS = 250;
 
 /**
- * Le verrou du fichier d'origine de la pièce, celui que tient son scellement :
- * une piste ne s'écrit jamais PENDANT qu'il la scelle (il la rescellerait par-
- * dessus son propre chiffré). Occupé : attendu ; injoignable : la piste
- * s'écrit quand même (scellée), le défaut est journalisé.
+ * Le verrou du fichier d'origine de la pièce, celui que tient son scellement.
+ * Occupé : attendu (10 s au plus), puis l'écriture échoue — jamais sans lui.
+ * Injoignable : l'écriture échoue tout de suite (fail-closed), journalisée.
  */
 async function holdSealLock(access: AtRestFileAccess, filePath: string): Promise<{ readonly release: () => Promise<void> } | null> {
   if (!access.lock) return null;
   for (let attempt = 0; attempt < SEAL_LOCK_TRIES; attempt += 1) {
-    // Injoignable : on n'attend pas — personne ne peut le tenir non plus.
     const held = await access.lock(filePath).catch((error: unknown) => {
-      logger.error('verrou de scellement injoignable : piste écrite sans lui', undefined, {
+      logger.error('verrou de scellement injoignable : piste non écrite', undefined, {
         code: SERVER_AT_REST_SEAL_LOCK_UNAVAILABLE,
         reason: error instanceof Error ? error.name : 'unknown',
       });
-      return null;
+      throw error instanceof SealLockUnavailableError ? error : new SealLockUnavailableError(error);
     });
     if (held !== 'busy') return held;
     await new Promise((resolve) => setTimeout(resolve, SEAL_LOCK_WAIT_MS));
   }
-  logger.warn('verrou de scellement occupé trop longtemps : piste écrite sans lui');
-  return null;
+  throw new SealLockUnavailableError(new Error('seal lock busy for too long'));
 }
 
 export async function writeTranslatedTrack(
@@ -63,13 +63,19 @@ export async function writeTranslatedTrack(
     const targetKey = storageKeyOfPath(track.absolutePath, uploadRoot);
     const sourceKey = storageKeyOfPath(temporary, uploadRoot);
     const head = await prisma.messageAttachment.findUnique({ where: { id: track.attachmentId }, select: { filePath: true } });
-    // Le verrou ne se prend que pour une pièce dont l'original est scellé : une
-    // piste d'une conversation en clair ne l'attend jamais.
-    const originalSealed = access && head && atRestFileSealingEnabled() ? (await access.store.find(head.filePath)) !== null : false;
-    const held = access && head && originalSealed ? await holdSealLock(access, head.filePath) : null;
+    // Le RÉGIME (conversation au repos, ou original déjà scellé) ne dépend pas
+    // d'un scellement en cours : il décide seul s'il faut le verrou.
+    const conversationId = access && head && atRestFileSealingEnabled() ? await atRestConversationFor({ prisma, access }, track.attachmentId) : null;
+    if (!conversationId || !access || !head || !targetKey || !sourceKey) {
+      await writePlain(temporary, track.absolutePath, targetKey, access);
+      return;
+    }
+    const held = await holdSealLock(access, head.filePath);
     try {
-      const conversationId = access && head && targetKey && sourceKey ? await sealingConversation(prisma, access, track.attachmentId, head.filePath) : null;
-      if (!conversationId || !access || !targetKey || !sourceKey) {
+      // Sous le verrou : l'original a pu être scellé (et repointé) pendant l'attente.
+      const current = await prisma.messageAttachment.findUnique({ where: { id: track.attachmentId }, select: { filePath: true } });
+      const originalSealed = current !== null && (await access.store.find(current.filePath)) !== null;
+      if (!originalSealed) {
         await writePlain(temporary, track.absolutePath, targetKey, access);
         return;
       }
@@ -86,24 +92,6 @@ export async function writeTranslatedTrack(
   } finally {
     await fs.unlink(temporary).catch(() => undefined);
   }
-}
-
-/**
- * La conversation sous laquelle sceller la piste — seulement si son ORIGINAL
- * est déjà scellé : les adresses d'une pièce ne se signent pour le lecteur
- * que quand son original l'est, et une piste scellée sous une adresse nue ne
- * se lirait plus. Original encore en clair : la piste l'est aussi, le
- * rattrapage scellera la pièce entière.
- */
-async function sealingConversation(
-  prisma: Pick<PrismaClient, 'messageAttachment' | 'message'>,
-  access: AtRestFileAccess,
-  attachmentId: string,
-  originalKey: string
-): Promise<string | null> {
-  if (!atRestFileSealingEnabled()) return null;
-  if ((await access.store.find(originalKey)) === null) return null;
-  return atRestConversationFor({ prisma, access }, attachmentId);
 }
 
 /**

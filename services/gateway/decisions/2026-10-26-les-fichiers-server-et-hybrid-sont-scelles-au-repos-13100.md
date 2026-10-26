@@ -82,8 +82,10 @@ ligne. La ligne part quand le fichier est effacé (`AttachmentService`).
   qui se reconnecte sans jamais abandonner (celui du cache cesse après trois
   tentatives) : le scellement reprend sans redémarrage. Le rattrapage remonte
   alors jusqu'au début de la panne, même au-delà de 48 h (jamais avant
-  l'activation). Une piste n'attend pas un verrou injoignable, et ne prend le
-  verrou que derrière un original scellé. Le verrou du processus ne sert que
+  l'activation). Une piste d'une pièce au repos prend le verrou de l'original
+  AVANT de lire s'il est scellé ; verrou injoignable, elle échoue tout de suite
+  (la piste manque, une retraduction la refait) ; une piste d'une conversation
+  en clair n'y touche jamais. Le verrou du processus ne sert que
   sans `REDIS_URL` du tout (un seul processus). Une piste TTS s'écrit sous le même
   verrou (attendu jusqu'à 10 s) : jamais rescellée par-dessus son chiffré.
 - **Le clair remplacé ne s'efface que quand plus aucune ligne ne le désigne.**
@@ -107,8 +109,9 @@ ligne. La ligne part quand le fichier est effacé (`AttachmentService`).
   le scellement efface ce qu'il vient de remplacer quand plus aucune ligne ne
   désigne ni l'ancien ni le nouvel original, et `deleteAttachment` efface les
   clairs encore en attente (lignes de scellement relues avant les effacements).
-- **Une piste TTS ne se scelle que derrière son original scellé**, sous le
-  verrou de cet original : les adresses d'une pièce ne se signent qu'avec son
+- **Une piste TTS ne se scelle que derrière son original scellé**, lu SOUS le
+  verrou de cet original (aucun scellement ne s'intercale entre la lecture et
+  l'écriture) : les adresses d'une pièce ne se signent qu'avec son
   original, et une piste scellée sous une adresse nue ne se lirait plus. Une
   piste réécrite en clair retire la ligne de sa version scellée.
 - **Une copie retardataire reste lisible** par la route par identifiant et
