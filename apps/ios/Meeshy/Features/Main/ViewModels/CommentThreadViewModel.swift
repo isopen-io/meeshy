@@ -1,0 +1,174 @@
+import Foundation
+import MeeshySDK
+
+/// What a comment thread hangs on. Posts, stories and reels are all posts on
+/// the gateway (same `/posts/:id/comments` routes); they differ only in how a
+/// reply thread loads.
+enum CommentThreadEntity: Equatable, Sendable {
+    case post(String)
+    case story(String)
+    case reel(String)
+
+    var id: String {
+        switch self {
+        case .post(let id), .story(let id), .reel(let id): id
+        }
+    }
+
+    /// A story is live while it is read: its replies are refetched at every
+    /// expand, a failed load keeps the thread open for the next try, and
+    /// nothing is persisted. A post's and a reel's replies load once, persist
+    /// under `replies-<id>`, and a failed load folds the thread.
+    var isLive: Bool {
+        if case .story = self { return true }
+        return false
+    }
+}
+
+/// **One comment thread** — roots, loaded replies, expansion and reply
+/// pagination — for the post sheet, the post detail and the story viewer
+/// (#13133). The thread rules themselves (edit, remove, translation, refused
+/// send) are `FeedCommentThread`'s; this model owns the state and the loads.
+@MainActor
+final class CommentThreadViewModel: ObservableObject {
+    nonisolated deinit {}
+
+    @Published var roots: [FeedComment] = []
+    @Published var replies: [String: [FeedComment]] = [:]
+    @Published var expandedThreads: Set<String> = []
+    @Published private(set) var loadingReplies: Set<String> = []
+    @Published var repliesHasMore: [String: Bool] = [:]
+    @Published var repliesNextCursor: [String: String] = [:]
+
+    private(set) var entity: CommentThreadEntity
+    private let postService: PostServiceProviding
+    private let preferredLanguages: @MainActor () -> [String]
+    private let persistReplies: @MainActor (String, [FeedComment]) async -> Void
+    /// Replies that just arrived from the network (liked-state seeding).
+    var onRepliesLoaded: @MainActor ([FeedComment]) -> Void = { _ in }
+
+    init(
+        entity: CommentThreadEntity,
+        postService: PostServiceProviding = PostService.shared,
+        preferredLanguages: @escaping @MainActor () -> [String] = {
+            ReaderPrism.resolve(for: AuthManager.shared.currentUser)
+        },
+        persistReplies: @escaping @MainActor (String, [FeedComment]) async -> Void = { key, replies in
+            await bestEffort("commentThread.saveReplies", category: .cache) {
+                try await CacheCoordinator.shared.comments.save(replies, for: key)
+            }
+        }
+    ) {
+        self.entity = entity
+        self.postService = postService
+        self.preferredLanguages = preferredLanguages
+        self.persistReplies = persistReplies
+    }
+
+    var thread: FeedCommentThread {
+        get { FeedCommentThread(roots: roots, replies: replies) }
+        set {
+            roots = newValue.roots
+            replies = newValue.replies
+        }
+    }
+
+    func repliesFor(_ commentId: String) -> [FeedComment] { replies[commentId] ?? [] }
+
+    /// Another entity takes the surface (the story viewer moved on): the
+    /// thread starts empty.
+    func reset(to entity: CommentThreadEntity) {
+        self.entity = entity
+        roots = []
+        replies = [:]
+        expandedThreads = []
+        loadingReplies = []
+        repliesHasMore = [:]
+        repliesNextCursor = [:]
+    }
+
+    func toggleThread(_ commentId: String) async {
+        guard !expandedThreads.contains(commentId) else {
+            expandedThreads.remove(commentId)
+            return
+        }
+        expandedThreads.insert(commentId)
+        guard entity.isLive || replies[commentId] == nil else { return }
+        await loadReplies(commentId: commentId)
+    }
+
+    /// First page of a thread. A live entity always refetches (and replaces);
+    /// otherwise an already-loaded thread is kept.
+    func loadReplies(commentId: String) async {
+        guard !loadingReplies.contains(commentId), entity.isLive || replies[commentId] == nil else { return }
+        loadingReplies.insert(commentId)
+        defer { loadingReplies.remove(commentId) }
+        do {
+            let response = try await postService.getCommentReplies(
+                postId: entity.id, commentId: commentId, cursor: nil, limit: 20)
+            let page = await mapped(response.data, parentId: commentId)
+            replies[commentId] = page
+            record(response.pagination, for: commentId)
+            onRepliesLoaded(page)
+            await persist(commentId)
+        } catch {
+            if !entity.isLive { expandedThreads.remove(commentId) }
+        }
+    }
+
+    /// Next page (cursor `gt`, ASC → APPEND). Never replaces: replies posted
+    /// optimistically or by the socket stay (dedup by id). An unknown
+    /// pagination (`nil`) means "page 1"; only `false` stops.
+    func loadMoreReplies(commentId: String) async {
+        guard !loadingReplies.contains(commentId), repliesHasMore[commentId] != false else { return }
+        loadingReplies.insert(commentId)
+        defer { loadingReplies.remove(commentId) }
+        do {
+            let response = try await postService.getCommentReplies(
+                postId: entity.id, commentId: commentId, cursor: repliesNextCursor[commentId], limit: 20)
+            let fetched = await mapped(response.data, parentId: commentId)
+            let existing = replies[commentId] ?? []
+            let existingIds = Set(existing.map(\.id))
+            let unique = fetched.filter { !existingIds.contains($0.id) }
+            replies[commentId] = existing + unique
+            record(response.pagination, for: commentId)
+            onRepliesLoaded(unique)
+            await persist(commentId)
+        } catch {
+            repliesHasMore[commentId] = false
+        }
+    }
+
+    /// A notified reply beyond the first page: expands its thread when it is
+    /// not loaded yet, then follows the cursor until the reply is there
+    /// (bounded — `CommentTargetHunter`).
+    @discardableResult
+    func loadRepliesUntilPresent(_ replyId: String, in commentId: String) async -> Bool {
+        if replies[commentId] == nil { await loadReplies(commentId: commentId) }
+        return await CommentTargetHunter.hunt(
+            isPresent: { [weak self] in self?.replies[commentId]?.contains { $0.id == replyId } ?? true },
+            hasMore: { [weak self] in
+                guard let self else { return false }
+                return self.repliesHasMore[commentId] != false
+            },
+            loadNextPage: { [weak self] in await self?.loadMoreReplies(commentId: commentId) }
+        )
+    }
+
+    private func record(_ pagination: CursorPagination?, for commentId: String) {
+        repliesNextCursor[commentId] = pagination?.nextCursor
+        repliesHasMore[commentId] = pagination?.hasMore ?? false
+    }
+
+    private func persist(_ commentId: String) async {
+        guard !entity.isLive, let loaded = replies[commentId] else { return }
+        await persistReplies("replies-\(commentId)", loaded)
+    }
+
+    private func mapped(_ payload: [APIPostComment], parentId: String) async -> [FeedComment] {
+        let langs = preferredLanguages()
+        return await Task.detached(priority: .userInitiated) {
+            payload.map { FeedComment(api: $0, preferredLanguages: langs, parentId: parentId) }
+        }.value
+    }
+}
