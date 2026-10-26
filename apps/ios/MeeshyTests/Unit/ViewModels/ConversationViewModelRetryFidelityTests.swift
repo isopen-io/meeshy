@@ -69,8 +69,8 @@ final class ConversationViewModelRetryFidelityTests: XCTestCase {
             maxViewOnceCount: nil,
             locationJson: OptimisticRecordColumns.locationJson(location, id: localId),
             stickerJson: nil,
-            now: Date(),
-            ephemeralDuration: nil, sealedEndToEnd: false
+            sealedEndToEnd: false, now: Date(),
+            ephemeralDuration: nil
         )
         record.state = .failed
         try await fx.sut.messagePersistence.insertOptimistic(record)
