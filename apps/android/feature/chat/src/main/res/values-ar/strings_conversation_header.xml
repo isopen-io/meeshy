@@ -25,11 +25,11 @@
         <item quantity="other">رجوع، %1$d رسائل غير مقروءة</item>
     </plurals>
     <plurals name="chat_unread_separator_count">
-        <item quantity="zero">%d رسائل غير مقروءة</item>
-        <item quantity="one">%d رسالة غير مقروءة</item>
-        <item quantity="two">%d رسالة غير مقروءة</item>
-        <item quantity="few">%d رسائل غير مقروءة</item>
-        <item quantity="many">%d رسائل غير مقروءة</item>
-        <item quantity="other">%d رسائل غير مقروءة</item>
+        <item quantity="zero">%1$d رسائل غير مقروءة</item>
+        <item quantity="one">%1$d رسالة غير مقروءة</item>
+        <item quantity="two">%1$d رسالة غير مقروءة</item>
+        <item quantity="few">%1$d رسائل غير مقروءة</item>
+        <item quantity="many">%1$d رسائل غير مقروءة</item>
+        <item quantity="other">%1$d رسائل غير مقروءة</item>
     </plurals>
 </resources>

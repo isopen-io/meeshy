@@ -191,3 +191,19 @@ public extension CallSummaryMetadata {
         return String(format: "%.1f", rounded)
     }
 }
+
+extension CallSummaryMetadata {
+    /// `true` when `incoming` decodes as a LIVE call summary (`kind:
+    /// 'call-live'`) for the SAME call whose stored summary is already
+    /// TERMINAL — i.e. a REST snapshot serialized while the call was still
+    /// ongoing that landed AFTER the terminal edit. Applying it would regress
+    /// the bubble to "en cours" forever. Any other combination returns `false`.
+    static func isStaleLiveSnapshot(existing: Data?, incoming: Data?) -> Bool {
+        guard
+            let existing, let incoming,
+            let stored = JSONDecoder().decodeOrLog(CallSummaryMetadata.self, from: existing, field: "callSummaryJson(stored)"),
+            let candidate = JSONDecoder().decodeOrLog(CallSummaryMetadata.self, from: incoming, field: "callSummaryJson(incoming)")
+        else { return false }
+        return candidate.isLive && !stored.isLive && candidate.callId == stored.callId
+    }
+}

@@ -93,6 +93,10 @@
           "status": "android-only"
         },
         {
+          "androidName": "encrypted_devices_retire_session_not_closed",
+          "status": "android-only"
+        },
+        {
           "androidName": "encrypted_devices_ok",
           "status": "android-only"
         },

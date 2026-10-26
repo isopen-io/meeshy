@@ -15,27 +15,8 @@ public struct StarredMessageSource: Sendable, Equatable {
     public let contentPreview: String
     public let attachmentKind: String?
     public let sentAt: Date
-}
 
-extension MessagePersistenceActor {
-
-    /// `nil` quand le message n'est pas en cache, ou qu'il n'a plus le droit
-    /// d'être servi en favori : supprimé, ou à vue unique (la passerelle refuse
-    /// d'étoiler une vue unique — `MESSAGE_NOT_STARRABLE`).
-    public nonisolated func starredSource(messageId: String, preferredLanguages: [String]) throws -> StarredMessageSource? {
-        try reader.read { db in
-            let record = try MessageRecord
-                .filter(Column("serverId") == messageId || Column("localId") == messageId)
-                .fetchOne(db)
-            guard let record else { return nil }
-            let translations = try TranslationRecord
-                .filter(Column("messageLocalId") == record.localId)
-                .fetchAll(db)
-            return Self.starredSource(record: record, translations: translations, preferredLanguages: preferredLanguages)
-        }
-    }
-
-    nonisolated static func starredSource(
+    static func served(
         record: MessageRecord, translations: [TranslationRecord], preferredLanguages: [String]
     ) -> StarredMessageSource? {
         guard record.deletedAt == nil,
@@ -58,5 +39,24 @@ extension MessagePersistenceActor {
             attachmentKind: attachmentKind,
             sentAt: record.createdAt
         )
+    }
+}
+
+extension MessagePersistenceActor {
+
+    /// `nil` quand le message n'est pas en cache, ou qu'il n'a plus le droit
+    /// d'être servi en favori : supprimé, ou à vue unique (la passerelle refuse
+    /// d'étoiler une vue unique — `MESSAGE_NOT_STARRABLE`).
+    public nonisolated func starredSource(messageId: String, preferredLanguages: [String]) throws -> StarredMessageSource? {
+        try reader.read { db in
+            let record = try MessageRecord
+                .filter(Column("serverId") == messageId || Column("localId") == messageId)
+                .fetchOne(db)
+            guard let record else { return nil }
+            let translations = try TranslationRecord
+                .filter(Column("messageLocalId") == record.localId)
+                .fetchAll(db)
+            return StarredMessageSource.served(record: record, translations: translations, preferredLanguages: preferredLanguages)
+        }
     }
 }

@@ -12,6 +12,7 @@
 import Foundation
 
 public enum E2EeEndpoint: MeeshyEndpoint, Sendable {
+    case conversationsByConversationIdSignals(conversationId: String)
     case devices
     case devicesByDeviceId(deviceId: String)
     case devicesByDeviceIdKeys(deviceId: String)
@@ -23,6 +24,7 @@ public enum E2EeEndpoint: MeeshyEndpoint, Sendable {
 
     public var path: String {
         switch self {
+        case .conversationsByConversationIdSignals(let conversationId): return "/api/v1/e2ee/conversations/\(conversationId)/signals"
         case .devices: return "/api/v1/e2ee/devices"
         case .devicesByDeviceId(let deviceId): return "/api/v1/e2ee/devices/\(deviceId)"
         case .devicesByDeviceIdKeys(let deviceId): return "/api/v1/e2ee/devices/\(deviceId)/keys"

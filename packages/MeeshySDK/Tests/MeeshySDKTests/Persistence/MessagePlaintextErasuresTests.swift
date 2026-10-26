@@ -32,11 +32,16 @@ final class MessagePlaintextErasuresTests: XCTestCase {
         Set(try await actor.plaintextErasures.pending())
     }
 
+    /// Tout ce qui est inscrit, authentifié ou non (#13060).
+    private func recorded(_ queue: DatabaseQueue) throws -> Set<String> {
+        Set(try queue.read { db in try String.fetchAll(db, sql: "SELECT messageKey FROM e2ee_plaintext_erasures") })
+    }
+
     func test_aMessageDeletedForEveryone_recordsItsLocalAndServerIds() async throws {
         let (actor, queue) = try makeActor()
         try insert(sealedRow(localId: "cid_1", serverId: "srv_1"), into: queue)
 
-        try await actor.markDeleted(localId: "srv_1", deletedAt: Date())
+        try await actor.markDeleted(localId: "srv_1", deletedAt: Date(), origin: .authenticated)
 
         let recorded = try await pending(actor)
         XCTAssertEqual(recorded, ["cid_1", "srv_1"])
@@ -52,15 +57,16 @@ final class MessagePlaintextErasuresTests: XCTestCase {
             try record.update(db)
         }
 
-        let recorded = try await pending(actor)
-        XCTAssertEqual(recorded, ["srv_2"])
+        let queued = try await pending(actor)
+        XCTAssertEqual(queued, [], "une ligne réécrite supprimée par la passerelle se masque, le coffre garde le clair (#13060)")
+        XCTAssertEqual(try recorded(queue), ["srv_2"])
     }
 
     func test_anOpenedViewOnce_isRecorded() async throws {
         let (actor, queue) = try makeActor()
         try insert(sealedRow(localId: "srv_3", serverId: "srv_3", maxViewOnce: 1), into: queue)
 
-        try await actor.markViewOnceOpened(localId: "srv_3")
+        try await actor.markViewOnceOpened(localId: "srv_3", origin: .authenticated)
 
         let recorded = try await pending(actor)
         XCTAssertEqual(recorded, ["srv_3"])
@@ -76,15 +82,16 @@ final class MessagePlaintextErasuresTests: XCTestCase {
 
         try await actor.deleteExpiredEphemeral(before: Date())
 
-        let recorded = try await pending(actor)
-        XCTAssertEqual(recorded, ["srv_4"])
+        let queued = try await pending(actor)
+        XCTAssertEqual(queued, [], "l'échéance vient du serveur : la ligne part, le clair reste au coffre (#13060, #13103)")
+        XCTAssertEqual(try recorded(queue), ["srv_4"])
     }
 
     func test_aMessageRemovedForMe_isRecorded() async throws {
         let (actor, queue) = try makeActor()
         try insert(sealedRow(localId: "cid_6", serverId: "srv_6"), into: queue)
 
-        try await actor.purgeMessages(ids: ["srv_6"])
+        try await actor.purgeMessages(ids: ["srv_6"], origin: .authenticated)
 
         let recorded = try await pending(actor)
         XCTAssertEqual(recorded, ["cid_6", "srv_6"])
@@ -106,7 +113,7 @@ final class MessagePlaintextErasuresTests: XCTestCase {
     func test_aCancelledDeletion_withdrawsItsRecord() async throws {
         let (actor, queue) = try makeActor()
         try insert(sealedRow(localId: "cid_9", serverId: "srv_9"), into: queue)
-        try await actor.markDeleted(localId: "srv_9", deletedAt: Date())
+        try await actor.markDeleted(localId: "srv_9", deletedAt: Date(), origin: .authenticated)
 
         try await actor.markUndeleted(localId: "srv_9")
 
@@ -161,7 +168,7 @@ final class MessagePlaintextErasuresTests: XCTestCase {
     func test_theMigration_recordsTheTombstonesAlreadyStored() throws {
         let queue = try DatabaseQueue()
         var migrator = DatabaseMigrator()
-        migrator.register(Array(MessageDatabaseMigrations.all.dropLast()))
+        migrator.register(Array(MessageDatabaseMigrations.all.dropLast(2)))
         try migrator.migrate(queue)
         var tombstone = sealedRow(localId: "srv_19", serverId: "srv_19")
         tombstone.deletedAt = Date()
@@ -180,8 +187,9 @@ final class MessagePlaintextErasuresTests: XCTestCase {
 
         try insert(tombstone, into: queue)
 
-        let recorded = try await pending(actor)
-        XCTAssertEqual(recorded, ["srv_11"], "une synchro tardive apporte un message déjà supprimé")
+        let queued = try await pending(actor)
+        XCTAssertEqual(queued, [], "une synchro tardive apporte un message déjà supprimé : masqué, son clair reste au coffre (#13060)")
+        XCTAssertEqual(try recorded(queue), ["srv_11"])
     }
 
     func test_aRowInsertedAlreadyOpened_isRecorded() async throws {
@@ -191,15 +199,16 @@ final class MessagePlaintextErasuresTests: XCTestCase {
 
         try insert(opened, into: queue)
 
-        let recorded = try await pending(actor)
-        XCTAssertEqual(recorded, ["cid_12", "srv_12"])
+        let queued = try await pending(actor)
+        XCTAssertEqual(queued, [], "une vue unique servie déjà consommée se scelle, son clair reste au coffre (#13060)")
+        XCTAssertEqual(try recorded(queue), ["cid_12", "srv_12"])
     }
 
     func test_aDeletionOrAnOpening_withoutLocalRow_isRecordedByItsId() async throws {
         let (actor, _) = try makeActor()
 
-        try await actor.markDeleted(localId: "srv_13", deletedAt: Date())
-        try await actor.markViewOnceOpened(localId: "srv_14")
+        try await actor.markDeleted(localId: "srv_13", deletedAt: Date(), origin: .authenticated)
+        try await actor.markViewOnceOpened(localId: "srv_14", origin: .authenticated)
 
         let recorded = try await pending(actor)
         XCTAssertEqual(recorded, ["srv_13", "srv_14"], "le coffre peut tenir le clair d'un message que la base n'a pas")
@@ -208,7 +217,7 @@ final class MessagePlaintextErasuresTests: XCTestCase {
     func test_restoringAConsumedViewOnce_keepsItsErasure() async throws {
         let (actor, queue) = try makeActor()
         try insert(sealedRow(localId: "srv_15", serverId: "srv_15", maxViewOnce: 1), into: queue)
-        try await actor.markViewOnceOpened(localId: "srv_15")
+        try await actor.markViewOnceOpened(localId: "srv_15", origin: .authenticated)
         try await actor.markDeleted(localId: "srv_15", deletedAt: Date())
 
         try await actor.markUndeleted(localId: "srv_15")
@@ -220,12 +229,11 @@ final class MessagePlaintextErasuresTests: XCTestCase {
     func test_restoringAnExpiredEphemeral_keepsItsErasure() async throws {
         let (actor, queue) = try makeActor()
         try insert(sealedRow(localId: "srv_16", serverId: "srv_16", expiresAt: Date().addingTimeInterval(-5)), into: queue)
-        try await actor.markDeleted(localId: "srv_16", deletedAt: Date())
+        try await actor.markDeleted(localId: "srv_16", deletedAt: Date(), expired: true)
 
         try await actor.markUndeleted(localId: "srv_16")
 
-        let recorded = try await pending(actor)
-        XCTAssertEqual(recorded, ["srv_16"])
+        XCTAssertEqual(try recorded(queue), ["srv_16"], "annuler ne retire pas l'inscription d'un éphémère échu")
     }
 
     /// Audit (M-1) — une modification reçue avant sa ligne n'est pas une suppression.
@@ -254,7 +262,7 @@ final class MessagePlaintextErasuresTests: XCTestCase {
     func test_anAcknowledgedErasure_staysKnown_untilItsRetentionEnds() async throws {
         let (actor, queue) = try makeActor()
         try insert(sealedRow(localId: "srv_22", serverId: "srv_22"), into: queue)
-        try await actor.markDeleted(localId: "srv_22", deletedAt: Date())
+        try await actor.markDeleted(localId: "srv_22", deletedAt: Date(), origin: .authenticated)
         let now = Date()
 
         try await actor.plaintextErasures.acknowledge(["srv_22"], now: now)

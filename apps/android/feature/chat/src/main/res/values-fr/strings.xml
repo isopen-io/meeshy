@@ -287,7 +287,8 @@
     <string name="participant_profile_denied_can_send_links">Ne peut pas envoyer de liens</string>
     <string name="participant_profile_denied_can_send_locations">Ne peut pas partager sa position</string>
     <plurals name="chat_unread_separator_count">
-        <item quantity="one">%d message non lu</item>
-        <item quantity="other">%d messages non lus</item>
+        <item quantity="one">%1$d message non lu</item>
+        <item quantity="many">%1$d messages non lus</item>
+        <item quantity="other">%1$d messages non lus</item>
     </plurals>
 </resources>

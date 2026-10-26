@@ -128,6 +128,11 @@ public data class BubbleContent(
      * where it reads — never the gateway's `[Encrypted]` literal, never a piece.
      */
     val isEndToEndSealed: Boolean = false,
+    /**
+     * Shown, this message holds the send of its thread (#13099): end-to-end encrypted, or
+     * encrypted with no mode or an unknown one — `EndToEndRegimeMemory.messageHoldsSend`.
+     */
+    val holdsEndToEndSend: Boolean = false,
 )
 
 /**

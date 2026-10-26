@@ -18,6 +18,7 @@
     <string name="chat_header_encryption_server">Cifrado en el servidor</string>
     <plurals name="chat_header_back_unread">
         <item quantity="one">Atrás, %1$d mensaje sin leer</item>
+        <item quantity="many">Atrás, %1$d mensajes sin leer</item>
         <item quantity="other">Atrás, %1$d mensajes sin leer</item>
     </plurals>
 </resources>

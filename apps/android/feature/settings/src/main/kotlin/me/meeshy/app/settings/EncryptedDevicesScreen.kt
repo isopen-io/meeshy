@@ -296,6 +296,7 @@ private fun EncryptedDeviceDialogs(
                             EncryptedDevicesFailure.OFFLINE -> R.string.encrypted_devices_retire_offline
                             EncryptedDevicesFailure.CHANGED -> R.string.encrypted_devices_retire_changed
                             EncryptedDevicesFailure.UNAVAILABLE -> R.string.encrypted_devices_retire_failed
+                            EncryptedDevicesFailure.SESSION_NOT_CLOSED -> R.string.encrypted_devices_retire_session_not_closed
                         },
                     ),
                 )

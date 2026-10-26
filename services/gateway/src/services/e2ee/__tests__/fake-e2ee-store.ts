@@ -212,6 +212,7 @@ export function createFakeE2EEStore() {
     E2EEBindingProof: new FakeCollection([], () => ({})),
     Participant: new FakeCollection([], () => ({ isActive: true, type: 'user' })),
     UserSession: new FakeCollection([], () => ({ isValid: true, invalidatedAt: null, expiresAt: new Date(Date.now() + 86_400_000) })),
+    Conversation: new FakeCollection([], () => ({ encryptionMode: null, type: 'direct' })),
   };
 
   const findAndModify = (command: FindAndModify) => {
@@ -248,6 +249,7 @@ export function createFakeE2EEStore() {
     e2EEBindingProof: collections.E2EEBindingProof.delegate(),
     participant: collections.Participant.delegate(),
     userSession: collections.UserSession.delegate(),
+    conversation: collections.Conversation.delegate(),
     $runCommandRaw: async (command: unknown) => {
       await tick();
       const typed = command as FindAndModify;

@@ -25,6 +25,7 @@ import { enhancedLogger } from '../utils/logger-enhanced.js';
 import type { EngagementAxisKey } from '@meeshy/shared/types/engagement';
 import { EngagementService, type EngagementActivityOptions } from './engagement/EngagementService.js';
 import { recordConversationActivity } from './conversations/conversationActivity.js';
+import { conversationRefusesPlainSignal, E2eeSignalChannelRequiredError } from './e2ee/e2ee-signal-channel';
 
 const logger = enhancedLogger.child({ module: 'ReactionService' });
 
@@ -170,6 +171,14 @@ export class ReactionService {
     const isParticipant = message.conversation.participants.some(p => p.id === participantId);
     if (!isParticipant) {
       throw new Error('User is not a participant of this conversation');
+    }
+
+    // #13142 — dans une conversation chiffrée de bout en bout, la réaction part en
+    // signal chiffré : la passerelle ne range jamais son emoji en clair. Les quatre
+    // transports convergent ici, le refus aussi (409, code et phrase lisibles),
+    // APRÈS le contrôle du membre : un étranger n'apprend pas le régime.
+    if (conversationRefusesPlainSignal(message.conversation)) {
+      throw new E2eeSignalChannelRequiredError();
     }
 
     const existingReaction = await this.prisma.reaction.findFirst({

@@ -498,7 +498,12 @@ export const callersIn = (contents, nsNames) => {
 // appelant web — `apps/web/src/lib/api/notifications.ts`, qui éteint « moments à immortaliser » quand le carnet
 // s'ouvre à froid, sans liste de notifications en cache. Valeur MESURÉE le 2026-10-25 en CI (Gardes du dépôt, run
 // 40172020147, « AMÉLIORATION NON ENREGISTRÉE ») et en local.
-const BASELINE_DEAD_ENTRIES = 276;
+// 276 -> 277 (#13142, 2026-10-26) : `e2Ee.conversationsByConversationIdSignals` (`POST
+// /api/v1/e2ee/conversations/:conversationId/signals`, la route unique des signaux chiffrés d'une
+// conversation e2ee). La passerelle la sert, iOS l'appelle ; le web l'appellera quand il parlera
+// libsignal (#13201, décision #12975). Entrée PRÉMATURÉE, pas un faux mort (#5427). Valeur MESURÉE
+// le 2026-10-26 en CI (Gardes du dépôt, PR #13207) : une seule entrée nouvelle.
+const BASELINE_DEAD_ENTRIES = 277;
 
 export const readWorld = (root) => {
   const groupFiles = readdirSync(join(root, GROUPS_DIR)).filter((name) => name.endsWith('.ts')).sort();

@@ -22,6 +22,7 @@
     <string name="encrypted_devices_cancel">إلغاء</string>
     <string name="encrypted_devices_retire_offline">أنت غير متصل: لا يمكن إزالة جهاز إلا بعد الاتصال.</string>
     <string name="encrypted_devices_retire_failed">تعذّرت إزالة الجهاز. حاول مرة أخرى.</string>
+    <string name="encrypted_devices_retire_session_not_closed">تعذّر إغلاق جلسة هذا الجهاز، لذا لم تتم إزالة أي شيء. حاول مرة أخرى.</string>
     <string name="encrypted_devices_ok">حسنًا</string>
     <string name="encrypted_devices_unnamed">جهاز %1$s رقم %2$d</string>
     <string name="encrypted_devices_platform_ios">iOS</string>

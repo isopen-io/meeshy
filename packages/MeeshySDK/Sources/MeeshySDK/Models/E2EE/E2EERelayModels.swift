@@ -36,6 +36,12 @@ public enum E2EEErrorCode {
     public static let directAlreadyEndToEnd = "E2EE_DIRECT_ALREADY_END_TO_END"
     /// Le tête-à-tête n'a pas exactement deux membres inscrits (#12966).
     public static let directNotAPair = "E2EE_DIRECT_NOT_A_PAIR"
+    /// Seul un membre actif de la conversation y envoie un signal chiffré (#13142).
+    public static let signalForbidden = "E2EE_SIGNAL_FORBIDDEN"
+    /// Une route de signal en clair (réaction, frappe, accusé, modification,
+    /// suppression, vue unique, épinglage) refusée dans une conversation e2ee :
+    /// le signal part chiffré par la route unique (#13142).
+    public static let signalChannelRequired = "E2EE_SIGNAL_CHANNEL_REQUIRED"
     public static let identityRevoked = "E2EE_IDENTITY_REVOKED"
     public static let prekeyStockFull = "E2EE_PREKEY_STOCK_FULL"
     /// La place a changé d'occupant depuis la liste lue (409, #13033) : rien

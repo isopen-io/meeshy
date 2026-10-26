@@ -24,6 +24,9 @@ public enum E2EERecordKind: String, CaseIterable, Sendable {
     case approvedOwnDevice
     /// L'enrôlement de cette installation auprès de l'annuaire (compte, numéro).
     case localEnrollment
+    /// Un SIGNAL reçu (#13142), par identifiant de signal : rangé avec le
+    /// déchiffrement, appliqué puis réglé par l'app (`E2EESignalInbox`).
+    case signal
 }
 
 /// Une transaction sur les enregistrements : c'est elle que libsignal reçoit

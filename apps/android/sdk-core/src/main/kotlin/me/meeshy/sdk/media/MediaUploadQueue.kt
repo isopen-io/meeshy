@@ -48,8 +48,12 @@ class MediaUploadQueue @Inject constructor(
      * offline fallback) must pass its [TusUploadContext] so the retry produces a
      * `PostMedia` row too — the same wire-format correctness [TusUploadRepository]
      * gives the eager path, extended to the durable one.
+     *
+     * [conversationId] names the chat conversation a message attachment is destined for, so
+     * the outbox's end-to-end guard withholds the bytes even before the message row exists
+     * (#12956).
      */
-    suspend fun enqueue(item: MediaUploadItem, context: TusUploadContext? = null): String {
+    suspend fun enqueue(item: MediaUploadItem, context: TusUploadContext? = null, conversationId: String? = null): String {
         val cmid = OutboxIds.cmid()
         blobStore.put(cmid, item)
         outboxRepository.enqueue(
@@ -57,7 +61,11 @@ class MediaUploadQueue @Inject constructor(
                 kind = OutboxKind.UPLOAD_MEDIA,
                 lane = OutboxLanes.MEDIA,
                 targetId = cmid,
-                payload = if (context == null) "" else MeeshyApi.json.encodeToString(MediaUploadPayload(context.wire)),
+                payload = if (context == null && conversationId == null) {
+                    ""
+                } else {
+                    MeeshyApi.json.encodeToString(MediaUploadPayload(context?.wire, conversationId))
+                },
                 cmid = cmid,
             ),
         )
