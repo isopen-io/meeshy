@@ -55,7 +55,7 @@ internal class ChatMessageRowActions(
 )
 
 /**
- * One message of the chat list: the swipe-to-reply wrapper around the bubble, its link preview,
+ * One message of the chat list: the two-way swipe wrapper (reply / forward) around the bubble, its link preview,
  * the reply-thread pill and the failed-send retry line. This is the single extension point for
  * everything that hangs off a message — later slices add their section here and nowhere else.
  *
@@ -125,6 +125,21 @@ internal fun ChatMessageRow(
             null
         }
     }
+    // Le côté opposé à la réponse transfère, comme sur iOS (#4021) : tant que la sélection
+    // multiple n'existe pas sur Android, le glissé ouvre directement la feuille de transfert.
+    val onSwipeForward: (() -> Unit)? = remember(messageId, actions, offer.canForward) {
+        if (offer.canForward) {
+            { actions.onForward(messageId) }
+        } else {
+            null
+        }
+    }
+    // Une bulle audio/vidéo résiste : le glissé ne doit pas gêner la barre de lecture.
+    val swipeResistance = if (bubble.audios.isNotEmpty() || bubble.videoCount > 0) {
+        SwipeResistance.Resistant
+    } else {
+        SwipeResistance.Normal
+    }
     val linkUrl = remember(bubble.text) {
         LinkPreviewParser.firstUrl(bubble.text)
     }
@@ -155,10 +170,12 @@ internal fun ChatMessageRow(
             )
         }
     }
-    SwipeToReplyContainer(
+    SwipeRowContainer(
         isOutgoing = bubble.isOutgoing,
-        accentColor = accentColor,
+        createdAtIso = bubble.createdAtIso,
+        resistance = swipeResistance,
         onReply = onSwipeReply,
+        onForward = onSwipeForward,
         modifier = Modifier.onGloballyPositioned {
             actions.onBubbleFramed(messageId, it.boundsInWindow())
         },
