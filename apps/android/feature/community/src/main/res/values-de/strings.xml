@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="community_role_member">Mitglied</string>
+    <string name="community_member_options_a11y">Optionen für %1$s</string>
+    <string name="community_action_failed">Aktion fehlgeschlagen. Versuche es erneut.</string>
+</resources>

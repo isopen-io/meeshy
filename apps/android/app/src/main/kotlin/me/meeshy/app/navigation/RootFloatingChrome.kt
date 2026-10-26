@@ -24,6 +24,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import kotlinx.coroutines.launch
 import me.meeshy.app.R
+import me.meeshy.app.navigation.graph.CommunityRoutes
 import me.meeshy.sdk.chrome.FloatingButtonPositionStore
 import me.meeshy.sdk.model.chrome.FloatingMenuLadder
 import me.meeshy.ui.component.auth.AnimatedBrandLogo
@@ -182,8 +183,7 @@ private fun NavController.openLadderEntry(entry: RootMenuLadderEntry) {
         RootMenuLadderEntry.NOTIFICATIONS -> navigateToTopLevel(Routes.NOTIFICATIONS)
         RootMenuLadderEntry.CALLS -> navigateToTopLevel(Routes.CALLS)
         RootMenuLadderEntry.DISCOVER -> navigate(Routes.CONTACTS_DISCOVER)
-        // Aucune destination tant que COMMUNITIES_AVAILABLE est faux (le barreau n'est pas monte).
-        RootMenuLadderEntry.COMMUNITIES -> Unit
+        RootMenuLadderEntry.COMMUNITIES -> navigate(CommunityRoutes.LIST)
         RootMenuLadderEntry.CONTACTS -> navigate(Routes.CONTACTS)
         RootMenuLadderEntry.SETTINGS -> navigateToTopLevel(Routes.SETTINGS)
     }

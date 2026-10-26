@@ -1,5 +1,6 @@
 package me.meeshy.sdk.community
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.builtins.ListSerializer
@@ -32,25 +33,29 @@ class CommunityCacheRepository(
     constructor(repository: CommunityRepository, dao: KeyedJsonCacheDao) :
         this(repository, KeyedJsonCache(dao), SystemCacheClock)
 
-    fun list(): Flow<CacheResult<List<ApiCommunity>>> =
-        source(LIST_NAMESPACE, FIRST_PAGE, ListSerializer(ApiCommunity.serializer())) {
-            repository.list(offset = 0, limit = PAGE_SIZE).orThrow()
-        }.results(CachePolicy.Communities, clock)
+    fun list(onError: (Throwable) -> Unit = {}): Flow<CacheResult<List<ApiCommunity>>> =
+        listSource().results(CachePolicy.Communities, clock, onError)
 
-    fun detail(communityId: String): Flow<CacheResult<ApiCommunity>> =
-        source(DETAIL_NAMESPACE, communityId, ApiCommunity.serializer()) {
-            repository.get(communityId).orThrow()
-        }.results(CachePolicy.Communities, clock)
+    fun detail(communityId: String, onError: (Throwable) -> Unit = {}): Flow<CacheResult<ApiCommunity>> =
+        detailSource(communityId).results(CachePolicy.Communities, clock, onError)
 
-    fun members(communityId: String): Flow<CacheResult<List<ApiCommunityMember>>> =
-        source(MEMBERS_NAMESPACE, communityId, ListSerializer(ApiCommunityMember.serializer())) {
-            repository.getMembers(communityId, offset = 0, limit = PAGE_SIZE).orThrow()
-        }.results(CachePolicy.Participants, clock)
+    fun members(communityId: String, onError: (Throwable) -> Unit = {}): Flow<CacheResult<List<ApiCommunityMember>>> =
+        membersSource(communityId).results(CachePolicy.Participants, clock, onError)
 
-    fun channels(communityId: String): Flow<CacheResult<List<ApiConversation>>> =
-        source(CHANNELS_NAMESPACE, communityId, ListSerializer(ApiConversation.serializer())) {
-            repository.getConversations(communityId).orThrow()
-        }.results(CachePolicy.Communities, clock)
+    fun channels(communityId: String, onError: (Throwable) -> Unit = {}): Flow<CacheResult<List<ApiConversation>>> =
+        channelsSource(communityId).results(CachePolicy.Communities, clock, onError)
+
+    /**
+     * Relit le réseau et réécrit le disque — le flux correspondant se ré-émet. Vrai si la relecture a
+     * abouti ; un échec garde le cache tel quel (tirer pour rafraîchir, ou réconcilier après une mutation).
+     */
+    suspend fun refreshList(): Boolean = revalidating(listSource())
+
+    suspend fun refreshDetail(communityId: String): Boolean = revalidating(detailSource(communityId))
+
+    suspend fun refreshMembers(communityId: String): Boolean = revalidating(membersSource(communityId))
+
+    suspend fun refreshChannels(communityId: String): Boolean = revalidating(channelsSource(communityId))
 
     /** Efface la fiche, les membres et les channels d'une communauté (retrait, sortie, suppression). */
     suspend fun forget(communityId: String) {
@@ -63,6 +68,36 @@ class CommunityCacheRepository(
     suspend fun clearAll() {
         listOf(LIST_NAMESPACE, DETAIL_NAMESPACE, MEMBERS_NAMESPACE, CHANNELS_NAMESPACE).forEach { cache.clearNamespace(it) }
     }
+
+    private fun listSource() =
+        source(LIST_NAMESPACE, FIRST_PAGE, ListSerializer(ApiCommunity.serializer())) {
+            repository.list(offset = 0, limit = PAGE_SIZE).orThrow()
+        }
+
+    private fun detailSource(communityId: String) =
+        source(DETAIL_NAMESPACE, communityId, ApiCommunity.serializer()) {
+            repository.get(communityId).orThrow()
+        }
+
+    private fun membersSource(communityId: String) =
+        source(MEMBERS_NAMESPACE, communityId, ListSerializer(ApiCommunityMember.serializer())) {
+            repository.getMembers(communityId, offset = 0, limit = MEMBERS_PAGE_SIZE).orThrow()
+        }
+
+    private fun channelsSource(communityId: String) =
+        source(CHANNELS_NAMESPACE, communityId, ListSerializer(ApiConversation.serializer())) {
+            repository.getConversations(communityId).orThrow()
+        }
+
+    private suspend fun revalidating(source: KeyedJsonCacheSource<*>): Boolean =
+        try {
+            source.revalidate()
+            true
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            false
+        }
 
     private fun <T> source(
         namespace: String,
@@ -85,5 +120,6 @@ class CommunityCacheRepository(
         const val CHANNELS_NAMESPACE = "community:channels"
         const val FIRST_PAGE = "page0"
         const val PAGE_SIZE = 20
+        const val MEMBERS_PAGE_SIZE = 30
     }
 }

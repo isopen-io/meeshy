@@ -1,0 +1,688 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:community": {
+      "resDir": "feature/community/src/main/res",
+      "entries": [
+        {
+          "androidName": "community_action_failed",
+          "status": "android-only"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.addChannel.conversation.fallbackName",
+          "androidName": "community_add_channel_conversation_fallback_name",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.addChannel.empty.hint",
+          "androidName": "community_add_channel_empty_hint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.addChannel.empty.noConversations",
+          "androidName": "community_add_channel_empty_no_conversations",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.addChannel.empty.noResults",
+          "androidName": "community_add_channel_empty_no_results",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.addChannel.move.button",
+          "androidName": "community_add_channel_move_button",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.addChannel.move.confirm.message",
+          "androidName": "community_add_channel_move_confirm_message",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.addChannel.move.confirm.title",
+          "androidName": "community_add_channel_move_confirm_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.addChannel.otherCommunity",
+          "androidName": "community_add_channel_other_community",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.addChannel.search.prompt",
+          "androidName": "community_add_channel_search_prompt",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.addChannel.title",
+          "androidName": "community_add_channel_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "a11y.back",
+          "androidName": "community_back",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "common.cancel",
+          "androidName": "community_common_cancel",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "common.close",
+          "androidName": "community_common_close",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "common.done",
+          "androidName": "community_common_done",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "common.error",
+          "androidName": "community_common_error",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "common.ok",
+          "androidName": "community_common_ok",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "common.retry",
+          "androidName": "community_common_retry",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "common.save",
+          "androidName": "community_common_save",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.create.button",
+          "androidName": "community_create_button",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.create.error.default",
+          "androidName": "community_create_error_default",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.create.error.title",
+          "androidName": "community_create_error_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.create.field.description",
+          "androidName": "community_create_field_description",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.create.field.description.placeholder",
+          "androidName": "community_create_field_description_placeholder",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.create.field.emoji",
+          "androidName": "community_create_field_emoji",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.create.field.identifier",
+          "androidName": "community_create_field_identifier",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.create.field.identifier.placeholder",
+          "androidName": "community_create_field_identifier_placeholder",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.create.field.name",
+          "androidName": "community_create_field_name",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.create.field.name.placeholder",
+          "androidName": "community_create_field_name_placeholder",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.create.members.search.placeholder",
+          "androidName": "community_create_members_search_placeholder",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.create.members.title",
+          "androidName": "community_create_members_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.create.preview.placeholder",
+          "androidName": "community_create_preview_placeholder",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.create.privacy.private.description",
+          "androidName": "community_create_privacy_private_description",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.create.privacy.public.description",
+          "androidName": "community_create_privacy_public_description",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.create.privacy.title",
+          "androidName": "community_create_privacy_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.create.title",
+          "androidName": "community_create_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.detail.action.channel",
+          "androidName": "community_detail_action_channel",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.detail.action.invite",
+          "androidName": "community_detail_action_invite",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.detail.action.join",
+          "androidName": "community_detail_action_join",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.detail.action.members",
+          "androidName": "community_detail_action_members",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.detail.action.settings",
+          "androidName": "community_detail_action_settings",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.detail.channel.fallbackName",
+          "androidName": "community_detail_channel_fallback_name",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.detail.channels.empty.action",
+          "androidName": "community_detail_channels_empty_action",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.detail.channels.empty.subtitle",
+          "androidName": "community_detail_channels_empty_subtitle",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.detail.channels.empty.title",
+          "androidName": "community_detail_channels_empty_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.detail.leave.button",
+          "androidName": "community_detail_leave_button",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.detail.leave.confirm.message",
+          "androidName": "community_detail_leave_confirm_message",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.detail.leave.confirm.title",
+          "androidName": "community_detail_leave_confirm_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.detail.leave.label",
+          "androidName": "community_detail_leave_label",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.detail.menu.leave",
+          "androidName": "community_detail_menu_leave",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.detail.menu.settings",
+          "androidName": "community_detail_menu_settings",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.detail.posts.empty.action",
+          "androidName": "community_detail_posts_empty_action",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.detail.posts.empty.subtitle",
+          "androidName": "community_detail_posts_empty_subtitle",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.detail.posts.empty.title",
+          "androidName": "community_detail_posts_empty_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.detail.stats.channels",
+          "androidName": "community_detail_stats_channels",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.detail.stats.members",
+          "androidName": "community_detail_stats_members",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.detail.tab.channels",
+          "androidName": "community_detail_tab_channels",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.detail.tab.feed",
+          "androidName": "community_detail_tab_feed",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.invite.button",
+          "androidName": "community_invite_button",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.invite.empty.subtitle",
+          "androidName": "community_invite_empty_subtitle",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.invite.empty.title",
+          "androidName": "community_invite_empty_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.invite.recentlyInvited",
+          "androidName": "community_invite_recently_invited",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.invite.search.placeholder",
+          "androidName": "community_invite_search_placeholder",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.invite.title",
+          "androidName": "community_invite_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.list.create.accessibilityLabel",
+          "androidName": "community_list_create_accessibility_label",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.list.empty.createButton",
+          "androidName": "community_list_empty_create_button",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.list.empty.subtitle",
+          "androidName": "community_list_empty_subtitle",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.list.empty.title",
+          "androidName": "community_list_empty_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.list.search.placeholder",
+          "androidName": "community_list_search_placeholder",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.list.title",
+          "androidName": "community_list_title",
+          "status": "adopted"
+        },
+        {
+          "androidName": "community_member_options_a11y",
+          "status": "android-only"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.members.empty.action",
+          "androidName": "community_members_empty_action",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.members.empty.subtitle",
+          "androidName": "community_members_empty_subtitle",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.members.empty.title",
+          "androidName": "community_members_empty_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.members.remove",
+          "androidName": "community_members_remove",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.members.section.admin",
+          "androidName": "community_members_section_admin",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.members.section.creator",
+          "androidName": "community_members_section_creator",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.members.section.member",
+          "androidName": "community_members_section_member",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.members.section.moderator",
+          "androidName": "community_members_section_moderator",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.members.title",
+          "androidName": "community_members_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.members.unknownUser",
+          "androidName": "community_members_unknown_user",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.privacy.private",
+          "androidName": "community_privacy_private",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.privacy.public",
+          "androidName": "community_privacy_public",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "member-management.role.admin",
+          "androidName": "community_role_admin",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "member-management.role.creator",
+          "androidName": "community_role_creator",
+          "status": "adopted"
+        },
+        {
+          "androidName": "community_role_member",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "member-management.role.moderator",
+          "androidName": "community_role_moderator",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.settings.banner.edit",
+          "androidName": "community_settings_banner_edit",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.settings.color.swatch.a11y",
+          "androidName": "community_settings_color_swatch_a11y",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.settings.delete.button",
+          "androidName": "community_settings_delete_button",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.settings.delete.confirm.message",
+          "androidName": "community_settings_delete_confirm_message",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.settings.delete.confirm.title",
+          "androidName": "community_settings_delete_confirm_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.settings.delete.label",
+          "androidName": "community_settings_delete_label",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.settings.error.default",
+          "androidName": "community_settings_error_default",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.settings.error.title",
+          "androidName": "community_settings_error_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.settings.field.description",
+          "androidName": "community_settings_field_description",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.settings.field.name",
+          "androidName": "community_settings_field_name",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.settings.field.name.placeholder",
+          "androidName": "community_settings_field_name_placeholder",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.settings.leave.button",
+          "androidName": "community_settings_leave_button",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.settings.leave.confirm.message",
+          "androidName": "community_settings_leave_confirm_message",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.settings.leave.confirm.title",
+          "androidName": "community_settings_leave_confirm_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.settings.leave.label",
+          "androidName": "community_settings_leave_label",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.settings.privacy.byInvitation",
+          "androidName": "community_settings_privacy_by_invitation",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.settings.privacy.openToAll",
+          "androidName": "community_settings_privacy_open_to_all",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.settings.privacy.title",
+          "androidName": "community_settings_privacy_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.settings.section.danger",
+          "androidName": "community_settings_section_danger",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.settings.section.info",
+          "androidName": "community_settings_section_info",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.settings.section.privacy",
+          "androidName": "community_settings_section_privacy",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.settings.title",
+          "androidName": "community_settings_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.settings.toast.avatarFailed",
+          "androidName": "community_settings_toast_avatar_failed",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.settings.toast.avatarUploaded",
+          "androidName": "community_settings_toast_avatar_uploaded",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.settings.toast.bannerFailed",
+          "androidName": "community_settings_toast_banner_failed",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.settings.toast.bannerUploaded",
+          "androidName": "community_settings_toast_banner_uploaded",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.settings.toast.updated",
+          "androidName": "community_settings_toast_updated",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

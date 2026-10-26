@@ -20,9 +20,8 @@ internal enum class RootMenuBadge { UNREAD_NOTIFICATIONS, PENDING_FRIEND_REQUEST
  * pastille), miroir de `RootMenuLadderEntry.swift`, donc testable sans Compose.
  *
  * Le profil n'a PAS de barreau : il s'ouvre par le second tap (ou l'appui long) sur l'avatar.
- * Le DERNIER barreau est la roue dentee. [CONTACTS] tient la place de [COMMUNITIES] tant
- * qu'Android n'a pas de destination Communautes (decision produit (c)) : c'est aussi le SEUL
- * acces a un geste a l'onglet Contacts depuis que l'icone People a quitte l'en-tete.
+ * Le DERNIER barreau est la roue dentee. [CONTACTS] ne tient la place de [COMMUNITIES] que si
+ * la destination Communautes n'est pas montee (`communitiesAvailable = false`).
  */
 internal enum class RootMenuLadderEntry(val labelKey: String, val colorHex: String, val badge: RootMenuBadge?) {
     LINKS("menu_my_links", "#F8B500", null),
@@ -56,8 +55,11 @@ internal fun RootMenuLadderEntry.icon(): ImageVector = when (this) {
 /** La pile blanche du disque Flux (`square.stack.fill` iOS). */
 internal val FeedButtonIcon: ImageVector get() = Icons.Filled.AutoAwesomeMotion
 
-/** Android n'a pas encore d'ecran Communautes : le barreau Contacts garde sa place. */
-internal const val COMMUNITIES_AVAILABLE: Boolean = false
+/**
+ * Android a son ecran Communautes (`:feature:community`) : le barreau Communautes prend la place de
+ * Contacts, comme sur iOS. Contacts reste a un geste par Decouvrir, dont l'ecran porte ses onglets.
+ */
+internal const val COMMUNITIES_AVAILABLE: Boolean = true
 
 /** L'ordre de l'echelle : Mes liens, Notifications, Appels, Decouvrir, Communautes (ou Contacts), Reglages. */
 internal fun rootMenuLadderEntries(communitiesAvailable: Boolean = COMMUNITIES_AVAILABLE): List<RootMenuLadderEntry> =
