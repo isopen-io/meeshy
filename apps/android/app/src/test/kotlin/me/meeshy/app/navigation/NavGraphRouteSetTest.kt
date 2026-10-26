@@ -17,7 +17,7 @@ class NavGraphRouteSetTest {
     private val registered: List<String> = graphDir.listFiles { file -> file.name.endsWith("NavGraph.kt") }
         .orEmpty()
         .flatMap { file ->
-            Regex("""composable\(\s*(?:route = )?(?:"\$\{)?Routes\.([A-Z_]+)""").findAll(file.readText()).map { it.groupValues[1] }.toList()
+            Regex("""[cC]omposable\(\s*(?:route = )?(?:"\$\{)?Routes\.([A-Z_]+)""").findAll(file.readText()).map { it.groupValues[1] }.toList()
         }
 
     @Test
@@ -27,7 +27,7 @@ class NavGraphRouteSetTest {
             "CONVERSATIONS", "SHARE_LINK_PICKER", "GLOBAL_SEARCH", "DASHBOARD", "CREATE_SHARE_LINK",
             "MY_SHARE_LINKS", "SHARE_LINK_DETAIL", "NEW_CONVERSATION", "CHAT", "STARRED",
             "FEED", "SAVED_POSTS", "NEARBY_DISCOVERY", "POST_DETAIL", "REELS", "STORY_VIEWER", "STORY_COMPOSER_ROUTE",
-            "SETTINGS", "CHANGE_PASSWORD", "TWO_FACTOR", "ACCOUNT_CONTACT", "DELETE_ACCOUNT", "MEDIA_DOWNLOAD",
+            "SETTINGS", "NOTIFICATION_SETTINGS", "CHANGE_PASSWORD", "TWO_FACTOR", "ACCOUNT_CONTACT", "DELETE_ACCOUNT", "MEDIA_DOWNLOAD",
             "MEDIA_CACHE", "DATA_EXPORT", "DIAGNOSTICS", "ABOUT", "SUPPORT", "LICENSES", "LEGAL", "PRIVACY",
             "ACTIVE_SESSIONS", "SECURITY", "ENCRYPTED_DEVICES",
             "CONTACTS", "CONTACTS_DISCOVER", "BLOCKED_USERS", "NOTIFICATIONS", "PROFILE_USER", "USER_POSTS", "REPORT_USER",
