@@ -68,8 +68,8 @@ def audio_cache_with_settings():
     """Create AudioCacheService with custom settings"""
     RedisService._instance = None
     redis_service = RedisService()
-    redis_service.permanently_disabled = True
-    redis_service.is_redis_available = False
+    from durable_redis_double import make_durable
+    make_durable(redis_service)
 
     # Create mock settings
     settings = MagicMock()
@@ -567,9 +567,9 @@ class TestAudioCacheServiceWithSettings:
         transcription = {"text": "Hello", "language": "en"}
         await cache.set_transcription("att123", transcription)
 
-        # Check the key in memory cache - uses default pattern
+        # #13102 — la clé est dans Redis, jamais dans le repli mémoire
         expected_key = "audio:transcription:att123"
-        assert expected_key in cache.redis.memory_cache
+        assert expected_key in cache.redis.redis.data
 
     @pytest.mark.asyncio
     async def test_translated_audio_uses_default_key(self, audio_cache_with_settings):
@@ -581,7 +581,7 @@ class TestAudioCacheServiceWithSettings:
 
         # Uses default pattern
         expected_key = "audio:translation:att456:fr"
-        assert expected_key in cache.redis.memory_cache
+        assert expected_key in cache.redis.redis.data
 
     @pytest.mark.asyncio
     async def test_voice_profile_uses_default_key(self, audio_cache_with_settings):
@@ -593,7 +593,7 @@ class TestAudioCacheServiceWithSettings:
 
         # Uses default pattern
         expected_key = "voice:profile:user123"
-        assert expected_key in cache.redis.memory_cache
+        assert expected_key in cache.redis.redis.data
 
 
 # ===================================================================
@@ -838,7 +838,8 @@ class TestIntegrationScenarios:
         """Test full lifecycle of audio cache operations"""
         RedisService._instance = None
         redis_service = RedisService()
-        redis_service.permanently_disabled = True
+        from durable_redis_double import make_durable
+        make_durable(redis_service)
 
         cache = AudioCacheService(redis_service)
 

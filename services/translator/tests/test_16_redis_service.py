@@ -50,8 +50,17 @@ def memory_only_redis_service():
 
 @pytest.fixture
 def audio_cache_service(memory_only_redis_service):
-    """Create an AudioCacheService with memory-only Redis"""
-    return AudioCacheService(memory_only_redis_service)
+    """An AudioCacheService over a REACHABLE in-memory Redis (#13102: content never goes to the memory fallback)"""
+    from durable_redis_double import make_durable
+    return AudioCacheService(make_durable(memory_only_redis_service))
+
+
+@pytest.mark.asyncio
+async def test_without_redis_no_transcription_is_kept_in_the_memory_fallback(memory_only_redis_service):
+    cache = AudioCacheService(memory_only_redis_service)
+    assert await cache.set_transcription_by_hash("h" * 32, {"text": "secret"}) is False
+    assert await cache.get_transcription_by_hash("h" * 32) is None
+    assert len(memory_only_redis_service.memory_cache) == 0
 
 
 # ═══════════════════════════════════════════════════════════════

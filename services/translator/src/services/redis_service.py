@@ -266,8 +266,32 @@ class RedisService:
         except Exception as error:
             raise ErasureNotConfirmedError(type(error).__name__) from error
 
+    async def setex_durable(self, key: str, seconds: int, value: str) -> bool:
+        """
+        #13102 — écrit dans REDIS seulement, jamais dans le cache mémoire de
+        repli : un contenu indexé pour l'effacement ne doit vivre que là où
+        l'effacement le retrouve et le confirme. Redis indisponible ⇒ rien
+        n'est rangé (`False`) — le cache n'est qu'une accélération.
+        """
+        if self.permanently_disabled or not self.is_redis_available or not self.redis:
+            return False
+        try:
+            await self.redis.setex(key, seconds, value)
+            return True
+        except Exception as e:
+            logger.warning(f"[REDIS] Écriture non rangée ({type(e).__name__}) — aucun repli mémoire")
+            self._handle_redis_error()
+            return False
+
     async def scan_keys_confirmed(self, pattern: str) -> List[str]:
-        """Les clés de ce motif, par SCAN (jamais KEYS, qui bloque Redis), dans Redis seulement."""
+        """
+        Les clés de ce motif, par SCAN (jamais KEYS, qui bloque Redis), dans
+        Redis. Les clés du cache mémoire qui y répondent partent d'abord, quoi
+        qu'il advienne de Redis : un repli d'avant ce lot n'y survit pas.
+        """
+        regex = re.compile("^" + re.escape(pattern).replace("\\*", ".*") + "$")
+        for key in [k for k in self.memory_cache.keys() if regex.match(k)]:
+            self.memory_cache.pop(key, None)
         self._require_redis()
         try:
             return [key async for key in self.redis.scan_iter(match=pattern, count=500)]
@@ -496,13 +520,13 @@ class TranslationCacheService:
         }
 
         # Stocker par hash (réutilisation cross-message/segment)
-        success = await self.redis.setex(key, ttl, json.dumps(cache_data))
+        success = await self.redis.setex_durable(key, ttl, json.dumps(cache_data))
 
         # #13102 — indexée sous le message qui l'a fait naître (explicite, sinon
         # celui de la tâche) : oubliable par son identifiant.
         message_id = message_id or current_message_id()
         if success and message_id:
-            await self.redis.setex(self.message_index_pattern.format(message_id=message_id, hash=cache_hash), ttl, "1")
+            await self.redis.setex_durable(self.message_index_pattern.format(message_id=message_id, hash=cache_hash), ttl, "1")
 
         if success:
             logger.debug(f"[CACHE] 💾 Traduction mise en cache: {source_lang}→{target_lang} (hash={cache_hash[:8]})")
@@ -633,7 +657,7 @@ class AudioCacheService:
         audio_hash = self.compute_audio_hash(audio_path)
 
         # Stocker le mapping
-        await self.redis.setex(mapping_key, self.ttl_hash_mapping, audio_hash)
+        await self.redis.setex_durable(mapping_key, self.ttl_hash_mapping, audio_hash)
 
         return audio_hash
 
@@ -658,7 +682,7 @@ class AudioCacheService:
             return False
         key = self.key_transcription_by_hash.format(audio_hash=audio_hash)
         ttl = ttl or self.ttl_transcription
-        success = await self.redis.setex(key, ttl, json.dumps(transcription))
+        success = await self.redis.setex_durable(key, ttl, json.dumps(transcription))
         if success:
             logger.debug(f"[CACHE] 💾 Transcription mise en cache (hash={audio_hash[:8]})")
         return success
@@ -698,7 +722,7 @@ class AudioCacheService:
 
         # Stocker aussi par attachment_id (legacy compatibility)
         key = self.key_transcription.format(attachment_id=attachment_id)
-        return await self.redis.setex(key, ttl, json.dumps(transcription))
+        return await self.redis.setex_durable(key, ttl, json.dumps(transcription))
 
     # ─────────────────────────────────────────────────────────────────────────
     # AUDIO TRADUIT - BASÉ SUR HASH AUDIO
@@ -721,7 +745,7 @@ class AudioCacheService:
             return False
         key = self.key_translated_audio_by_hash.format(audio_hash=audio_hash, lang=lang)
         ttl = ttl or self.ttl_translated_audio
-        success = await self.redis.setex(key, ttl, json.dumps(audio_data))
+        success = await self.redis.setex_durable(key, ttl, json.dumps(audio_data))
         if success:
             logger.debug(f"[CACHE] 💾 Audio traduit {lang} mis en cache (hash={audio_hash[:8]})")
         return success
@@ -771,7 +795,7 @@ class AudioCacheService:
 
         # Stocker aussi par attachment_id (legacy compatibility)
         key = self.key_translated_audio.format(attachment_id=attachment_id, lang=lang)
-        return await self.redis.setex(key, ttl, json.dumps(audio_data))
+        return await self.redis.setex_durable(key, ttl, json.dumps(audio_data))
 
     async def forget_attachment(self, attachment_id: str) -> int:
         """

@@ -35,6 +35,10 @@ class _FakeRedis:
         self.store[key] = value
         return True
 
+    async def setex_durable(self, key, ttl, value):
+        self.store[key] = value
+        return True
+
 
 def _key_written_before_9723(text, source, target, model):
     digest = hashlib.sha256(f"{text}|{source}|{target}|{model}".encode()).hexdigest()[:32]

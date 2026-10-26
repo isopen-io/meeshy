@@ -44,6 +44,12 @@ class FakeRedis:
         self.store[key] = value
         return True
 
+    async def setex_durable(self, key, ttl, value):
+        if not self.available:
+            return False
+        self.store[key] = value
+        return True
+
     async def delete(self, key):
         self.store.pop(key, None)
         return True
@@ -413,3 +419,56 @@ async def test_a_bare_thread_without_the_task_context_writes_nothing():
         thread.start()
         thread.join()
     assert redis.store == {}
+
+
+@pytest.mark.unit
+async def test_a_write_while_redis_is_down_leaves_no_trace_after_forget(tmp_path):
+    from collections import OrderedDict
+    from services.redis_service import RedisService
+
+    class Client:
+        def __init__(self):
+            self.data = {}
+
+        async def setex(self, key, ttl, value):
+            self.data[key] = value
+
+        async def get(self, key):
+            return self.data.get(key)
+
+        async def scan_iter(self, match, count):
+            for key in list(self.data):
+                if fnmatch.fnmatchcase(key, match):
+                    yield key
+
+        async def delete(self, *keys):
+            removed = [k for k in keys if k in self.data]
+            for k in removed:
+                del self.data[k]
+            return len(removed)
+
+    service = object.__new__(RedisService)
+    service.permanently_disabled = False
+    service.is_redis_available = False
+    service.redis = Client()
+    service.memory_cache = OrderedDict()
+    service.connection_attempts = 0
+    service.max_connection_attempts = 3
+    audio = AudioCacheService(service)
+    text = TranslationCacheService(service)
+    audio_file = tmp_path / "voice.m4a"
+    audio_file.write_bytes(b"voix secrete")
+
+    with task_scope(False, MESSAGE):
+        audio_hash = await audio.get_or_compute_audio_hash(ATTACHMENT, str(audio_file))
+        await audio.set_transcription_by_hash(audio_hash, {"text": SECRET})
+        await audio.set_translated_audio(ATTACHMENT, "en", {"translated_text": "EN"})
+        await text.set_translation(SECRET, "fr", "en", "EN", "premium")
+    assert service.memory_cache == OrderedDict()
+    assert service.redis.data == {}
+
+    service.is_redis_available = True
+    deleted = await forget_cached_content(audio, text, parse_forget_request({"requestId": "r", "attachmentIds": [ATTACHMENT], "messageIds": [MESSAGE]}))
+    assert deleted == 0
+    assert service.memory_cache == OrderedDict()
+    assert service.redis.data == {}
