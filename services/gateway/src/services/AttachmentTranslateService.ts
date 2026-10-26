@@ -8,8 +8,8 @@
  * - application/pdf, text/* → DocumentTranslateService (stub)
  */
 
+import { readStoredFileBytes } from './attachments/atRest/atRestFiles';
 import { PrismaClient, type Prisma } from '@meeshy/shared/prisma/client';
-import { promises as fs } from 'fs';
 import path from 'path';
 import { AudioTranslateService } from './AudioTranslateService';
 import { ZmqTranslationClient } from './zmq-translation';
@@ -266,9 +266,10 @@ export class AttachmentTranslateService {
     return false;
   }
 
+  /** #13100 — le clair, que le fichier soit scellé au repos ou non. */
   private async readAttachmentFile(filePath: string): Promise<Buffer> {
     const fullPath = path.join(this.uploadBasePath, filePath);
-    return fs.readFile(fullPath);
+    return readStoredFileBytes(fullPath, { uploadRoot: this.uploadBasePath });
   }
 
   // ═══════════════════════════════════════════════════════════════════════════

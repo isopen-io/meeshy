@@ -219,6 +219,38 @@ final class ConversationViewModelEncryptionToggleTests: XCTestCase {
         }
     }
 
+    /// Ma ligne scellée que le serveur n'a pas acquittée (en cours, en échec)
+    /// porte le régime que CET envoi a choisi, pas celui du serveur : elle
+    /// scelle l'envoi suivant, mais ne s'apprend pas. Sans quoi un message
+    /// chiffré sans mode, qui ne s'apprend jamais, s'apprendrait par la
+    /// ligne qu'il a fait sceller (#12985 revue de sécurité, #12999).
+    func test_ledger_maLigneScelleeNonAcquittee_scelleSansSApprendre() {
+        let statuses: [Message.DeliveryStatus] = [.sending, .invisible, .clock, .slow, .failed]
+        statuses.forEach { status in
+            let ledger = EndToEndRegimeLedger()
+            var mine = endToEndMessage(at: 100)
+            mine.senderId = userId
+            mine.isMe = true
+            mine.deliveryStatus = status
+
+            XCTAssertTrue(ledger.seals(for: conversationId, opening: nil, cached: nil, trail: [mine], isDirect: true), "\(status)")
+            XCTAssertFalse(ledger.remembersEndToEnd(conversationId), "\(status) ne s'apprend pas")
+        }
+    }
+
+    /// Ma ligne scellée ACQUITTÉE est servie par le serveur comme chiffrée de
+    /// bout en bout : dans un tête-à-tête, elle s'apprend comme celle du pair.
+    func test_ledger_maLigneScelleeAcquittee_sApprendDansUnTeteATete() {
+        let ledger = EndToEndRegimeLedger()
+        var mine = endToEndMessage(at: 100)
+        mine.senderId = userId
+        mine.isMe = true
+        mine.deliveryStatus = .delivered
+
+        XCTAssertTrue(ledger.seals(for: conversationId, opening: nil, cached: nil, trail: [mine], isDirect: true))
+        XCTAssertTrue(ledger.remembersEndToEnd(conversationId))
+    }
+
     func test_avisDuFil_unMessageChiffreDeBoutEnBout_estUneTraceDuRegime_laPremiere() {
         var serverAtRest = endToEndMessage(at: 10)
         serverAtRest.encryptionMode = "server"

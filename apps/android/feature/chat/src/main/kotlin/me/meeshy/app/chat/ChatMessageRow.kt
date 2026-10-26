@@ -23,8 +23,9 @@ import me.meeshy.sdk.link.LinkPreviewParser
 import me.meeshy.ui.component.bubble.BubbleAccessibilityAction
 import me.meeshy.ui.component.bubble.BubbleCallbacks
 import me.meeshy.ui.component.bubble.BubbleContent
-import me.meeshy.ui.component.bubble.DeliveryStatus
+import me.meeshy.ui.component.bubble.FocalFlatRow
 import me.meeshy.ui.component.bubble.MessageBubble
+import me.meeshy.ui.theme.MeeshyPalette
 
 /**
  * The callbacks one message row can raise, all keyed by the message id so a single instance
@@ -46,12 +47,16 @@ internal class ChatMessageRowActions(
     val onReplyCountTap: (messageId: String) -> Unit = {},
     val onReplyCountLongPress: (messageId: String) -> Unit = {},
     val onRetry: (messageId: String) -> Unit = {},
+    /** Tap sur le smiley d'ajout de réaction du dernier message reçu. */
+    val onAddReaction: (messageId: String) -> Unit = {},
+    /** Tap sur l'avatar de l'auteur (pied d'identité d'une suite reçue en groupe) : sa fiche profil. */
+    val onSenderTap: (bubble: BubbleContent) -> Unit = {},
     /** Window-space frame of the bubble, captured during layout for the long-press hero. */
     val onBubbleFramed: (messageId: String, frame: Rect) -> Unit = { _, _ -> },
 )
 
 /**
- * One message of the chat list: the swipe-to-reply wrapper around the bubble, its link preview,
+ * One message of the chat list: the two-way swipe wrapper (reply / forward) around the bubble, its link preview,
  * the reply-thread pill and the failed-send retry line. This is the single extension point for
  * everything that hangs off a message — later slices add their section here and nowhere else.
  *
@@ -75,6 +80,11 @@ internal fun ChatMessageRow(
     actions: ChatMessageRowActions,
     audioPlayer: ChatAudioPlayer? = null,
     canWrite: Boolean = true,
+    showReplyCountPill: Boolean = false,
+    /** Script / Focal : la rangée plate (iOS `FocalRow`) au lieu de la bulle. */
+    flat: Boolean = false,
+    /** Opacité de l'heure et des coches de la rangée plate, lue au dessin. */
+    metaAlpha: () -> Float = { 0f },
 ) {
     val uriHandler = LocalUriHandler.current
     val audioPlayback by remember(bubble.audios, audioPlayer) {
@@ -85,7 +95,7 @@ internal fun ChatMessageRow(
     val offer = remember(bubble, canWrite) { MessageRowOffer.of(bubble, canWrite) }
     val replyLabel = stringResource(R.string.chat_action_reply)
     val forwardLabel = stringResource(R.string.chat_action_forward)
-    val callbacks = remember(messageId, actions, audioPlayer, uriHandler, offer, replyLabel, forwardLabel) {
+    val callbacks = remember(bubble, actions, audioPlayer, uriHandler, offer, replyLabel, forwardLabel) {
         BubbleCallbacks(
             onLongPress = { actions.onLongPress(messageId) },
             onReactionClick = { emoji -> actions.onReactionClick(messageId, emoji) },
@@ -98,6 +108,13 @@ internal fun ChatMessageRow(
             onFileClick = { file -> actions.onFileClick(messageId, file.attachmentId) },
             onReplyPreviewClick = { actions.onReplyPreviewClick(messageId) },
             onFlagTap = { code -> actions.onFlagTap(messageId, code) },
+            onRetry = { actions.onRetry(messageId) },
+            onAddReaction = { actions.onAddReaction(messageId) },
+            onSenderTap = if (bubble.senderProfile != null) {
+                { actions.onSenderTap(bubble) }
+            } else {
+                null
+            },
             accessibilityActions = offer.accessibilityActions.map { action ->
                 when (action) {
                     MessageRowAction.Reply -> BubbleAccessibilityAction(replyLabel) { actions.onReply(messageId) }
@@ -113,22 +130,20 @@ internal fun ChatMessageRow(
             null
         }
     }
-    SwipeToReplyContainer(
-        isOutgoing = bubble.isOutgoing,
-        accentColor = accentColor,
-        onReply = onSwipeReply,
-        modifier = Modifier.onGloballyPositioned {
-            actions.onBubbleFramed(messageId, it.boundsInWindow())
-        },
-    ) {
-        MessageBubble(
-            content = bubble,
-            outgoingColor = accentColor,
-            mentionDisplayNames = mentionDisplayNames,
-            highlightTerm = highlightTerm,
-            callbacks = callbacks,
-            audioPlayback = audioPlayback,
-        )
+    // Le côté opposé à la réponse transfère, comme sur iOS (#4021) : tant que la sélection
+    // multiple n'existe pas sur Android, le glissé ouvre directement la feuille de transfert.
+    val onSwipeForward: (() -> Unit)? = remember(messageId, actions, offer.canForward) {
+        if (offer.canForward) {
+            { actions.onForward(messageId) }
+        } else {
+            null
+        }
+    }
+    // Une bulle audio/vidéo résiste : le glissé ne doit pas gêner la barre de lecture.
+    val swipeResistance = if (bubble.audios.isNotEmpty() || bubble.videoCount > 0) {
+        SwipeResistance.Resistant
+    } else {
+        SwipeResistance.Normal
     }
     val linkUrl = remember(bubble.text) {
         LinkPreviewParser.firstUrl(bubble.text)
@@ -136,23 +151,69 @@ internal fun ChatMessageRow(
     if (linkUrl != null) {
         LaunchedEffect(linkUrl) { linkPreviewStore.request(linkUrl) }
     }
-    LinkPreviewCard(
-        state = LinkPreview.stateFor(
-            bubble.text,
-            linkUrl?.let {
-                linkPreviewCache.outcomeFor(
-                    LinkPreviewParser.canonicalize(it),
-                    System.currentTimeMillis(),
-                )
-            } ?: LinkPreviewOutcome.Empty,
-        ),
-        isOutgoing = bubble.isOutgoing,
-        accentColor = accentColor,
-        onOpenUrl = { url ->
-            openChatLink(linkContext, url, accentColor.toArgb())
-        },
+    val linkState = LinkPreview.stateFor(
+        bubble.text,
+        linkUrl?.let {
+            linkPreviewCache.outcomeFor(
+                LinkPreviewParser.canonicalize(it),
+                System.currentTimeMillis(),
+            )
+        } ?: LinkPreviewOutcome.Empty,
     )
-    if (replyCount != null) {
+    // iOS rend l'aperçu de lien DANS la bulle, sous le texte (`BubbleLinkEmbed`).
+    val linkAccessory: (@Composable (Color) -> Unit)? = if (linkUrl == null) {
+        null
+    } else {
+        { ink ->
+            // La rangée plate n'a pas de fond : son aperçu prend l'accent, comme une bulle reçue.
+            val onTint = bubble.isOutgoing && !flat
+            LinkPreviewCard(
+                state = linkState,
+                isOutgoing = false,
+                accentColor = if (onTint) ink else accentColor,
+                ink = if (onTint) ink else null,
+                inBubble = true,
+                onOpenUrl = { url -> openChatLink(linkContext, url, accentColor.toArgb()) },
+            )
+        }
+    }
+    SwipeRowContainer(
+        isOutgoing = bubble.isOutgoing,
+        createdAtIso = bubble.createdAtIso,
+        resistance = swipeResistance,
+        onReply = onSwipeReply,
+        onForward = onSwipeForward,
+        modifier = Modifier.onGloballyPositioned {
+            actions.onBubbleFramed(messageId, it.boundsInWindow())
+        },
+    ) {
+        if (flat) {
+            FocalFlatRow(
+                content = bubble,
+                accentColor = accentColor,
+                callbacks = callbacks,
+                audioPlayback = audioPlayback,
+                mentionDisplayNames = mentionDisplayNames,
+                highlightTerm = highlightTerm,
+                metaAlpha = metaAlpha,
+                bodyAccessory = linkAccessory,
+            )
+        } else MessageBubble(
+            content = bubble,
+            // iOS : la bulle envoyée porte l'indigo de marque (BubbleSkin.brand), pas l'accent
+            // de la conversation — l'accent reste aux liens, citations et réactions.
+            outgoingColor = MeeshyPalette.Indigo500,
+            accentColor = accentColor,
+            mentionDisplayNames = mentionDisplayNames,
+            highlightTerm = highlightTerm,
+            callbacks = callbacks,
+            audioPlayback = audioPlayback,
+            bodyAccessory = linkAccessory,
+        )
+    }
+    // iOS n'a plus de pastille « N réponses » sous la bulle (le fil s'ouvre par l'appui long →
+    // Plus → Fil) : elle n'apparaît que si [showReplyCountPill] le demande.
+    if (replyCount != null && showReplyCountPill) {
         ReplyCountPill(
             count = replyCount,
             isOutgoing = bubble.isOutgoing,
@@ -160,8 +221,5 @@ internal fun ChatMessageRow(
             onClick = { actions.onReplyCountTap(messageId) },
             onLongClick = { actions.onReplyCountLongPress(messageId) },
         )
-    }
-    if (bubble.deliveryStatus == DeliveryStatus.Failed) {
-        FailedSendRetryLine(onClick = { actions.onRetry(messageId) })
     }
 }

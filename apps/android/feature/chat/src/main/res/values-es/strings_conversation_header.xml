@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- En-tête de conversation (parité iOS ConversationView+Header) -->
+    <string name="chat_header_call">Llamar</string>
+    <string name="chat_header_call_group">Llamar al grupo</string>
+    <string name="chat_header_call_hint">Elegir una llamada de voz o de vídeo</string>
+    <string name="chat_header_call_voice">Llamada de voz</string>
+    <string name="chat_header_call_video">Videollamada</string>
+    <string name="chat_header_search">Buscar en la conversación</string>
+    <string name="chat_header_view_profile_of">Ver el perfil de %1$s</string>
+    <string name="chat_header_view_conversation">Ver la conversación %1$s</string>
+    <string name="chat_header_menu_profile">Ver perfil</string>
+    <string name="chat_header_menu_conversation">Conversación</string>
+    <string name="chat_header_expand">Desplegar el encabezado</string>
+    <string name="chat_header_collapse">Plegar el encabezado</string>
+    <string name="chat_conversation_info_title">Conversación</string>
+    <string name="chat_header_encryption_e2ee">Cifrado de extremo a extremo</string>
+    <string name="chat_header_encryption_server">Cifrado en el servidor</string>
+    <plurals name="chat_header_back_unread">
+        <item quantity="one">Atrás, %1$d mensaje sin leer</item>
+        <item quantity="other">Atrás, %1$d mensajes sin leer</item>
+    </plurals>
+</resources>
