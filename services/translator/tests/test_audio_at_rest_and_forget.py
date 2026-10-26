@@ -109,12 +109,12 @@ async def _fill(audio, text, audio_path, attachment_id=ATTACHMENT):
 
 async def _fill_declared(audio, text, audio_path, attachment_id):
     audio_hash = await audio.get_or_compute_audio_hash(attachment_id, audio_path)
-    await audio.set_transcription_by_hash(audio_hash, {"text": SECRET})
-    await audio.set_translated_audio_by_hash(audio_hash, "en", {"translated_text": "The safe code"})
-    await audio.set_translated_audio_by_hash(audio_hash, "es", {"translated_text": "El código"})
+    await audio.set_transcription_by_hash(audio_hash, {"text": SECRET}, attachment_id=attachment_id)
+    await audio.set_translated_audio_by_hash(audio_hash, "en", {"translated_text": "The safe code"}, attachment_id=attachment_id)
+    await audio.set_translated_audio_by_hash(audio_hash, "es", {"translated_text": "El código"}, attachment_id=attachment_id)
     await audio.set_transcription(attachment_id, {"text": SECRET})
     await audio.set_translated_audio(attachment_id, "en", {"translated_text": "The safe code"})
-    await text.set_translation(SECRET, "fr", "en", "EN", "premium")
+    await text.set_translation(SECRET, "fr", "en", "EN", "premium", message_id=MESSAGE)
     return audio_hash
 
 
@@ -564,3 +564,64 @@ async def test_without_its_attachment_mapping_nothing_is_cached_by_audio_hash(tm
         assert await audio.set_translated_audio_by_hash(audio_hash, "en", {"translated_text": "EN"}) is False
         assert await audio.set_transcription_by_hash("fallback_" + ATTACHMENT, {"text": SECRET}) is False
     assert service.redis.data == {}
+
+
+class _TtlClient(_TransactionalClient):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.ttls = {}
+
+    def pipeline(self, transaction=True):
+        client = self
+        base = super().pipeline(transaction)
+
+        class Pipe(type(base)):
+            def setex(self, key, ttl, value):
+                client.ttls[key] = ttl
+                super().setex(key, ttl, value)
+
+        return Pipe()
+
+
+@pytest.mark.unit
+async def test_nothing_is_cached_by_audio_hash_without_its_piece_or_under_a_synthetic_hash(tmp_path):
+    service = _service(_TtlClient())
+    audio = AudioCacheService(service)
+    real = "a" * 32
+    with at_rest_scope(False):
+        assert await audio.set_transcription_by_hash(real, {"text": SECRET}) is False
+        assert await audio.set_transcription_by_hash("fallback_" + ATTACHMENT, {"text": SECRET}, attachment_id=ATTACHMENT) is False
+        assert await audio.set_transcription_by_hash("synthetic:" + real, {"text": SECRET}, attachment_id=ATTACHMENT) is False
+        assert audio.compute_audio_hash(str(tmp_path / "absent.m4a")).startswith("synthetic:")
+    assert service.redis.data == {}
+
+
+@pytest.mark.unit
+async def test_a_hash_content_and_its_piece_mapping_land_together_with_a_mapping_ttl_never_shorter():
+    service = _service(_TtlClient())
+    audio = AudioCacheService(service)
+    real = "b" * 32
+    with at_rest_scope(False):
+        assert await audio.set_translated_audio_by_hash(real, "en", {"translated_text": "EN"}, ttl=90 * 24 * 3600, attachment_id=ATTACHMENT) is True
+    mapping = f"audio:hash:mapping:{ATTACHMENT}"
+    content = f"audio:translation:hash:{real}:en"
+    assert service.redis.data[mapping] == real
+    assert service.redis.ttls[mapping] >= service.redis.ttls[content]
+
+    broken = _service(_TtlClient(fail_transaction=True))
+    with at_rest_scope(False):
+        assert await AudioCacheService(broken).set_transcription_by_hash(real, {"text": SECRET}, attachment_id=ATTACHMENT) is False
+    assert broken.redis.data == {}
+
+
+@pytest.mark.unit
+async def test_a_translation_without_a_named_message_is_never_cached():
+    service = _service(_TtlClient())
+    with at_rest_scope(False):
+        assert await TranslationCacheService(service).set_translation(SECRET, "fr", "en", "EN", "premium") is False
+    assert service.redis.data == {}
+    with task_scope(False, MESSAGE):
+        assert await TranslationCacheService(service).set_translation(SECRET, "fr", "en", "EN", "premium", ttl=600) is True
+    content = [k for k in service.redis.data if k.startswith("translation:text:")][0]
+    index = [k for k in service.redis.data if k.startswith("translation:keys:message:")][0]
+    assert service.redis.ttls[index] == service.redis.ttls[content] == 600

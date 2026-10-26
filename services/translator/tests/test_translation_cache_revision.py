@@ -65,7 +65,7 @@ async def test_a_translation_cached_by_the_whole_message_pipeline_is_not_served(
 @pytest.mark.asyncio
 async def test_a_translation_cached_by_the_sentence_pipeline_is_served():
     cache = TranslationCacheService(_FakeRedis())
-    await cache.set_translation("Merci !", "fr", "en", "Thank you!", "medium")
+    await cache.set_translation("Merci !", "fr", "en", "Thank you!", "medium", message_id="bbbbbbbbbbbbbbbbbbbbbbb1")
 
     cached = await cache.get_translation("Merci !", "fr", "en", "medium")
 

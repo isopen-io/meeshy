@@ -673,7 +673,8 @@ class TranslationStage:
                 language=target_lang,
                 translated_text=translated_text,
                 tts_result=tts_result,
-                segments=fine_segments  # Sauvegarder les segments dans le cache
+                segments=fine_segments,  # Sauvegarder les segments dans le cache
+                attachment_id=attachment_id
             )
 
             # 5. Créer le résultat
@@ -817,7 +818,8 @@ class TranslationStage:
         language: str,
         translated_text: str,
         tts_result: TTSResult,
-        segments: Optional[List[Dict[str, Any]]] = None  # Segments traduits pour synchronisation
+        segments: Optional[List[Dict[str, Any]]] = None,  # Segments traduits pour synchronisation
+        attachment_id: Optional[str] = None
     ) -> bool:
         """Cache translated audio for reuse"""
         try:
@@ -837,7 +839,8 @@ class TranslationStage:
             await self.audio_cache.set_translated_audio_by_hash(
                 audio_hash,
                 language,
-                cache_data
+                cache_data,
+                attachment_id=attachment_id
             )
 
             logger.debug(
