@@ -49,8 +49,8 @@ export type SealAttachmentDeps = {
   readonly prisma: Pick<PrismaClient, 'messageAttachment' | 'message'>;
   readonly uploadRoot: string;
   readonly access: AtRestFileAccess;
-  /** Efface la copie du seau d'un fichier effacé du disque (`eraseMirroredCopy`). */
-  readonly eraseMirrored?: (absolutePath: string) => Promise<void>;
+  /** Efface la copie du seau d’un fichier effacé du disque (`eraseMirroredCopy`) ; `false` : elle reste. */
+  readonly eraseMirrored?: (absolutePath: string) => Promise<boolean | void>;
   /**
    * Le verrou d'un fichier d'origine, partagé par tous les processus (Redis) :
    * deux scellements d'une même pièce sous deux liaisons ne se croisent jamais.
@@ -422,11 +422,12 @@ async function eraseReplaced(
   const remaining = await deps.prisma.messageAttachment.findMany({ where: { filePath: oldOriginal }, select: { id: true } });
   if (remaining.length > 0) return { erased: 0, repointed: repointed.reduce((sum, { count }) => sum + count, 0) };
 
-  const present = await Promise.all([...moved.keys()].map(async (key) => ((await exists(path.join(deps.uploadRoot, key))) ? key : null)));
-  const toErase = present.filter((key): key is string => key !== null);
-  const erased = await Promise.all(toErase.map((key) => eraseAt(deps, key)));
+  // Chaque clair remplacé, même déjà absent du disque : sa copie du seau peut
+  // rester (échec ou délai d'un passage précédent), et se réessaie ici.
+  const present = await Promise.all([...moved.keys()].map((key) => exists(path.join(deps.uploadRoot, key))));
+  const erased = await Promise.all([...moved.keys()].map((key) => eraseAt(deps, key)));
   await markErasedWhen(deps, replacing[0].attachmentId, erased);
-  return { erased: toErase.length, repointed: repointed.reduce((sum, { count }) => sum + count, 0) };
+  return { erased: present.filter(Boolean).length, repointed: repointed.reduce((sum, { count }) => sum + count, 0) };
 }
 
 /** Tout est effacé : le balayage ne revient plus sur cette pièce (sans quoi les plus anciennes occuperaient chaque passage). */
@@ -434,16 +435,16 @@ async function markErasedWhen(deps: Pick<SealAttachmentDeps, 'access'>, attachme
   if (outcomes.every(Boolean)) await deps.access.store.markReplacedErased?.(attachmentId).catch(() => undefined);
 }
 
-/** `true` quand le fichier n'est plus sur le disque (effacé, ou déjà absent). */
+/** `true` quand le fichier n'est plus NULLE PART : ni sur le disque (effacé ou déjà absent), ni dans le seau. */
 async function eraseAt(deps: Pick<SealAttachmentDeps, 'uploadRoot' | 'eraseMirrored'>, key: string): Promise<boolean> {
   const absolute = path.join(deps.uploadRoot, key);
-  const erased = await fs.unlink(absolute).then(() => true, (error: unknown) => {
+  const local = await fs.unlink(absolute).then(() => true, (error: unknown) => {
     const code = (error as { code?: string }).code;
     if (code !== 'ENOENT') logger.warn('clair d’origine non effacé après scellement', { code });
     return code === 'ENOENT';
   });
-  await deps.eraseMirrored?.(absolute);
-  return erased;
+  const mirrored = deps.eraseMirrored ? (await deps.eraseMirrored(absolute).catch(() => false)) !== false : true;
+  return local && mirrored;
 }
 
 type RegimeRow = {

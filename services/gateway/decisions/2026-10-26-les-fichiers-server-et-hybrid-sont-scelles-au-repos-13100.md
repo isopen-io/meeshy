@@ -124,7 +124,7 @@ ligne. La ligne part quand le fichier est effacé (`AttachmentService`).
   après sauvegarde. Sans marqueur, sans clé de signature, ou scellement
   suspendu, il ne scelle rien. Les effacements en attente se traitent par lots
   de 10, au plus 500 par passage, les plus anciens NON TERMINÉS d'abord : une
-  pièce dont les clairs sont effacés est marquée (`replacedErasedAt`) et sort
+  pièce dont les clairs sont effacés — disque ET copie du seau confirmés — est marquée (`replacedErasedAt`) et sort
   de la file — `replacedKey` reste, pour une copie retardataire et une adresse
   signée d'avant.
 - **Retour arrière, en trois temps** : (1) redémarrer la passerelle avec
