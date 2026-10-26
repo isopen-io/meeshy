@@ -23,8 +23,7 @@ public struct EndToEndPlaintextRowSealer: Sendable {
     /// et le journal tronqué (au mieux : un lecteur actif le retarde).
     @discardableResult
     public func seal(messageKeys: [String]) async throws -> Outcome {
-        try await dbWriter.writeWithoutTransaction { db -> Outcome in
-            try db.execute(sql: "PRAGMA secure_delete = ON")
+        try await dbWriter.writeWithoutTransaction { db -> Outcome in try db.withSecureDelete {
             var rows = 0
             var conversations: Set<String> = []
             try db.inTransaction {
@@ -40,9 +39,8 @@ public struct EndToEndPlaintextRowSealer: Sendable {
             if try String.fetchOne(db, sql: "PRAGMA journal_mode") == "wal" {
                 _ = try? db.checkpoint(.truncate)
             }
-            try db.execute(sql: "PRAGMA secure_delete = OFF")
             return Outcome(rows: rows, conversationIds: conversations)
-        }
+        } }
     }
 
     private static func target(_ keys: [String]) -> (filter: String, arguments: StatementArguments) {

@@ -23,6 +23,7 @@ final class ConversationListDeviceTranslations {
     private var translated: [String: [String: String]] = [:]
     private var attempted: Set<String> = []
     private var pass: Task<Void, Never>?
+    private var generation = 0
 
     init(
         engine: any DeviceTranslationEngineProviding = DeviceTranslationEngineFactory.makeDefault(),
@@ -36,6 +37,7 @@ final class ConversationListDeviceTranslations {
 
     /// Une session qui change ne laisse rien du compte précédent.
     func forget() {
+        generation += 1
         pass?.cancel()
         translated = [:]
         attempted = []
@@ -55,17 +57,18 @@ final class ConversationListDeviceTranslations {
         guard !pending.isEmpty else { return }
         pending.forEach { attempted.insert(Self.key($0, readers)) }
         let previous = pass
+        let generation = generation
         pass = Task { [weak self] in
             await previous?.value
-            await self?.run(pending, readers: readers)
+            await self?.run(pending, readers: readers, generation: generation)
         }
     }
 
-    private func run(_ texts: [ConversationPreviewDeviceText], readers: [String]) async {
-        for text in texts {
+    private func run(_ texts: [ConversationPreviewDeviceText], readers: [String], generation: Int) async {
+        for text in texts where generation == self.generation {
             guard let pair = await target(of: text, readers: readers) else { continue }
             let results = await engine.translate([DeviceTranslationRequest(id: text.messageId, text: text.text)], pair: pair)
-            guard let result = results.first(where: { $0.id == text.messageId }),
+            guard generation == self.generation, let result = results.first(where: { $0.id == text.messageId }),
                   !result.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { continue }
             willChange()
             translated[text.messageId, default: [:]][pair.target] = result.text

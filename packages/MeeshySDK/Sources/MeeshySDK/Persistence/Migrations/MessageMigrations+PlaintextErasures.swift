@@ -54,7 +54,10 @@ struct MessagesPlaintextErasuresMigration: DatabaseMigration {
 
     func migrate(_ db: Database) throws {
         // Les octets d'un clair rescellé ici sont mis à zéro, dans la base et le journal.
-        try db.execute(sql: "PRAGMA secure_delete = ON")
+        try db.withSecureDelete { try migrateSecurely(db) }
+    }
+
+    private func migrateSecurely(_ db: Database) throws {
         for trigger in Self.provisionalTriggers {
             try db.execute(sql: "DROP TRIGGER IF EXISTS \(trigger)")
         }
@@ -75,7 +78,6 @@ struct MessagesPlaintextErasuresMigration: DatabaseMigration {
             )
         }
         try EndToEndContentSeal.install(in: db)
-        try db.execute(sql: "PRAGMA secure_delete = OFF")
     }
 }
 

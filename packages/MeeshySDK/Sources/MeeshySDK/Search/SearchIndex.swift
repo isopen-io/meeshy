@@ -66,9 +66,9 @@ public actor SearchIndex {
     public func compactConversations() async {
         do {
             try await pool.writeWithoutTransaction { db in
-                try db.execute(sql: "PRAGMA secure_delete = ON")
-                try db.execute(sql: "INSERT INTO conversations_fts(conversations_fts) VALUES('optimize')")
-                try db.execute(sql: "PRAGMA secure_delete = OFF")
+                try db.withSecureDelete {
+                    try db.execute(sql: "INSERT INTO conversations_fts(conversations_fts) VALUES('optimize')")
+                }
             }
         } catch {
             logger.error("compactConversations failed: \(error.localizedDescription, privacy: .public)")

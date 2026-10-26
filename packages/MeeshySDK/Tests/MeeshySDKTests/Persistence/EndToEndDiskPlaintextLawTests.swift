@@ -199,4 +199,16 @@ final class EndToEndDiskPlaintextLawTests: XCTestCase {
 
         XCTAssertEqual(outcome.conversationIds, ["conv_sealed"])
     }
+
+    /// Audit tour 4 — la migration rend à la connexion son mode d'effacement
+    /// (la SQLite d'Apple démarre en mode rapide) au lieu de le couper.
+    func test_theMigration_restoresTheConnectionsSecureDeleteMode() throws {
+        let queue = try DatabaseQueue()
+        let before = try queue.read { db in try Int.fetchOne(db, sql: "PRAGMA secure_delete") }
+
+        try MessageDatabaseMigrations.runAll(on: queue)
+
+        let after = try queue.read { db in try Int.fetchOne(db, sql: "PRAGMA secure_delete") }
+        XCTAssertEqual(after, before)
+    }
 }

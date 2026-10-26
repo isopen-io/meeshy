@@ -18,7 +18,8 @@ nonisolated protocol EndToEndPlaintextRowSealing: Sendable {
 /// conversation chiffrée sont vidés (ils se reconstruisent). Une fois par
 /// compte, à l'ouverture de sa session, quand le coffre est le sien.
 struct EndToEndDiskPlaintextMigration: Sendable {
-    static let doneKeyPrefix = "e2ee.diskPlaintextSealed.v1."
+    /// `v2` : la clé `v1` a été posée par une version provisoire du lot.
+    static let doneKeyPrefix = "e2ee.diskPlaintextSealed.v2."
 
     let endToEnd: any EndToEndMessagingProviding
     let rows: @MainActor @Sendable () -> any EndToEndPlaintextRowSealing

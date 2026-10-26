@@ -107,6 +107,8 @@ final class ConversationListEndToEndTextStore {
     let translations: ConversationListDeviceTranslations
     private var latestRows: [Conversation] = []
     private var reading: Task<Void, Never>?
+    /// Change à chaque session : une lecture commencée pour l'ancienne ne pose rien.
+    private var generation = 0
     private var cancellables = Set<AnyCancellable>()
 
     init(
@@ -152,7 +154,8 @@ final class ConversationListEndToEndTextStore {
     }
 
     private func forgetEverything() {
-        guard !texts.isEmpty || !misses.isEmpty else { return }
+        generation += 1
+        reading?.cancel()
         willChange()
         texts = [:]
         misses = []
@@ -170,12 +173,13 @@ final class ConversationListEndToEndTextStore {
         let misses = misses
         let viewer = viewerId()
         let endToEnd = endToEnd
+        let generation = generation
         reading?.cancel()
         reading = Task { [weak self] in
             let resolved = await ConversationListEndToEndTexts.resolve(
                 rows, known: known, misses: misses, viewerId: viewer, from: endToEnd
             )
-            guard !Task.isCancelled, let self else { return }
+            guard !Task.isCancelled, let self, self.generation == generation else { return }
             self.misses = resolved.misses
             self.retryMine(in: rows, unresolvedBy: resolved.texts)
             self.translations.translate(Array(resolved.texts.values))

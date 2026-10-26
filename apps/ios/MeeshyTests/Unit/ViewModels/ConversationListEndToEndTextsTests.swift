@@ -242,6 +242,21 @@ final class ConversationListEndToEndTextsTests: XCTestCase {
         XCTAssertEqual(store.text(for: conversationId)?.text, "Bien reçu")
     }
 
+    /// Audit tour 4 — à chaque session, la liste oublie les clairs de la précédente.
+    func test_store_aNewSession_forgetsThePreviousAccountsTexts() async {
+        let vault = MockEndToEndMessaging()
+        vault.store(.readable(content("On se voit à 18 h"), senderUserId: me), for: messageId)
+        let rows = CurrentValueSubject<[Conversation], Never>([sealedRow()])
+        let store = makeStore(rows: rows, vault: vault)
+        await waitUntil { store.text(for: self.conversationId) != nil }
+
+        vault.vaultAccount = "un-autre-compte"
+        vault.announceSession("un-autre-compte")
+        await waitUntil { store.text(for: self.conversationId) == nil }
+
+        XCTAssertNil(store.text(for: conversationId))
+    }
+
     /// Audit (M-8) — la liste n'ouvre jamais la feuille de téléchargement d'une langue.
     func test_store_pairNeedingADownload_isNotTranslatedFromTheList() async {
         let vault = MockEndToEndMessaging()
