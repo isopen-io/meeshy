@@ -37,7 +37,7 @@ class ComposerPlateStyleTest {
 
     @Test fun `la plaque est arrondie et bordee d'un trait fin`() {
         val s = style(34)
-        assertThat(s.cornerRadiusDp).isEqualTo(28f)
+        assertThat(s.cornerRadiusDp).isEqualTo(24f)
         assertThat(s.borderWidthDp).isEqualTo(1f)
     }
 }

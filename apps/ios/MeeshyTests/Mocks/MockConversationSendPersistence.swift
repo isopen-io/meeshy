@@ -95,8 +95,8 @@ enum SendingRowFixture {
             maxViewOnceCount: nil,
             locationJson: nil,
             stickerJson: nil,
-            now: Date(),
-            ephemeralDuration: nil, sealedEndToEnd: false
+            sealedEndToEnd: false, now: Date(),
+            ephemeralDuration: nil
         )
     }
 }

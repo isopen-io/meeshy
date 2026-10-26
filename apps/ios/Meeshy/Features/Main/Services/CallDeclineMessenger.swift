@@ -21,6 +21,10 @@ final class CallDeclineMessenger: CallDeclineMessengerProviding {
     private let injectedPrepareReplyQueue: (@MainActor () async -> Void)?
     /// La loi du fil appliquée à la conversation de l'appel (#12641, #12985).
     private let destinationGuard: EndToEndDestinationGuard
+    /// Le coffre libsignal, seul lieu du clair d'un message chiffré (#13067).
+    private let endToEnd: any EndToEndMessagingProviding
+    /// Le refus vers une conversation chiffrée se dit dans l'app (#13067).
+    private let notifyRefusal: @MainActor (EndToEndSendRefusal) -> Void
 
     private var messagePersistence: OptimisticMessagePersisting {
         injectedPersistence ?? DependencyContainer.shared.messagePersistence
@@ -38,9 +42,15 @@ final class CallDeclineMessenger: CallDeclineMessengerProviding {
         messagePersistence: OptimisticMessagePersisting? = nil,
         currentUserId: @escaping @MainActor () -> String? = { AuthManager.shared.currentUser?.id },
         prepareReplyQueue: (@MainActor () async -> Void)? = nil,
-        destinationGuard: EndToEndDestinationGuard = EndToEndDestinationGuard()
+        destinationGuard: EndToEndDestinationGuard = EndToEndDestinationGuard(),
+        endToEnd: any EndToEndMessagingProviding = EndToEndMessagingRuntime.shared,
+        notifyRefusal: @escaping @MainActor (EndToEndSendRefusal) -> Void = {
+            FeedbackToastManager.shared.showError($0.userMessage)
+        }
     ) {
         self.destinationGuard = destinationGuard
+        self.endToEnd = endToEnd
+        self.notifyRefusal = notifyRefusal
         self.messageService = messageService
         self.replyQueue = replyQueue
         self.injectedPersistence = messagePersistence
@@ -60,20 +70,24 @@ final class CallDeclineMessenger: CallDeclineMessengerProviding {
             replyToId: nil
         )
 
+        // #12641, #13067 — le refus d'appel ne sait pas sceller : vers une
+        // conversation chiffrée de bout en bout, rien ne part ni n'entre dans la
+        // file, et la garde se lit AVANT toute ligne. Le clair va au coffre sous
+        // une bulle scellée en échec ; faute de coffre, rien ne s'écrit.
+        if await destinationGuard.seals(plan.conversationId) {
+            logger.warning("decline reply refused before transport: end-to-end conversation")
+            let refusal = await EndToEndOffThreadReply(endToEnd: endToEnd, persistence: messagePersistence)
+                .keep(item, senderId: userId)
+            notifyRefusal(refusal)
+            return
+        }
+
         do {
             try await messagePersistence.insertOptimistic(
                 MessageRecord.optimisticText(item: item, senderId: userId, replyToId: nil)
             )
         } catch {
             logger.error("decline reply optimistic insert failed: \(error.localizedDescription, privacy: .public)")
-        }
-
-        // #12641 — le refus d'appel ne sait pas sceller : vers une conversation
-        // chiffrée de bout en bout, rien ne part ni n'entre dans la file.
-        if await destinationGuard.seals(plan.conversationId) {
-            logger.warning("decline reply refused before transport: end-to-end conversation")
-            await markFailed(localId: item.clientMessageId, reason: EndToEndSendRefusal.sealedOnlyInConversation.userMessage)
-            return
         }
 
         await prepareReplyQueue()

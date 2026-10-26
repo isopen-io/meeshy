@@ -113,8 +113,11 @@ final class NotificationActionHandler: NotificationActionHandling {
     private let presentNewContact: @MainActor (NotificationContactCard) -> Void
     /// La loi du fil appliquée à la conversation de la réponse (#12641, #12985).
     private let destinationGuard: EndToEndDestinationGuard
-    /// Le refus d'une réponse vers une conversation chiffrée se DIT (audit M4).
-    private let notifyRefusedEndToEndReply: @MainActor () -> Void
+    /// Le refus d'une réponse vers une conversation chiffrée se DIT (audit M4),
+    /// et sa bannière ouvre la conversation.
+    private let notifyRefusedEndToEndReply: @MainActor (String, EndToEndSendRefusal) -> Void
+    /// Le coffre libsignal, seul lieu du clair d'une réponse chiffrée (#13067).
+    private let endToEnd: any EndToEndMessagingProviding
     private var revocationSubscription: AnyCancellable?
     /// #7453 — l'abonnement au retour au premier plan, qui rejoue le balayage
     /// des bannières éphémères échues. Un nouvel appel REMPLACE l'abonnement :
@@ -212,10 +215,14 @@ final class NotificationActionHandler: NotificationActionHandling {
             NotificationReplyFailure.postRefusedUnderConversationPin(conversationId: $0)
         },
         destinationGuard: EndToEndDestinationGuard = EndToEndDestinationGuard(),
-        notifyRefusedEndToEndReply: @escaping @MainActor () -> Void = { NotificationReplyFailure.postEndToEndReplyRefused() }
+        notifyRefusedEndToEndReply: @escaping @MainActor (String, EndToEndSendRefusal) -> Void = {
+            NotificationReplyFailure.postEndToEndReplyRefused(conversationId: $0, refusal: $1)
+        },
+        endToEnd: any EndToEndMessagingProviding = EndToEndMessagingRuntime.shared
     ) {
         self.destinationGuard = destinationGuard
         self.notifyRefusedEndToEndReply = notifyRefusedEndToEndReply
+        self.endToEnd = endToEnd
         self.messageService = messageService
         self.conversationService = conversationService
         self.postService = postService
@@ -528,8 +535,8 @@ final class NotificationActionHandler: NotificationActionHandling {
             replyToId: payload.messageId
         )
 
+        if await refusesEndToEndReply(item, senderId: userId, in: conversationId) { return }
         await insertReplyBubble(item, senderId: userId, replyToId: payload.messageId)
-        if await refusesEndToEndReply(item, in: conversationId) { return }
 
         await prepareReplyQueue()
         var outboxRowLanded = false
@@ -582,17 +589,18 @@ final class NotificationActionHandler: NotificationActionHandling {
         }
     }
 
-    /// #12641 — la réponse ne sait pas sceller : vers une conversation chiffrée
-    /// de bout en bout (loi du fil, #12985), rien ne part ni n'entre dans la
-    /// file. La bulle reste en échec dans le fil, d'où le renvoi se scelle.
-    private func refusesEndToEndReply(_ item: OfflineQueueItem, in conversationId: String) async -> Bool {
+    /// #12641, #13067 — la réponse ne sait pas sceller : vers une conversation
+    /// chiffrée de bout en bout (loi du fil, #12985), rien ne part ni n'entre
+    /// dans la file, et la garde se lit AVANT toute ligne. Le clair va au
+    /// coffre sous une bulle scellée en échec, d'où le fil le renvoie chiffré ;
+    /// faute de coffre, rien ne s'écrit. Les deux se disent.
+    private func refusesEndToEndReply(_ item: OfflineQueueItem, senderId: String, in conversationId: String) async -> Bool {
         guard await destinationGuard.seals(conversationId) else { return false }
         logger.warning("notification reply refused before transport: end-to-end conversation")
-        try? await messagePersistence.markOptimisticFailed(
-            localId: item.clientMessageId, reason: EndToEndSendRefusal.sealedOnlyInConversation.userMessage
-        )
+        let refusal = await EndToEndOffThreadReply(endToEnd: endToEnd, persistence: messagePersistence)
+            .keep(item, senderId: senderId)
         removeDeliveredForConversation(conversationId)
-        notifyRefusedEndToEndReply()
+        notifyRefusedEndToEndReply(conversationId, refusal)
         return true
     }
 

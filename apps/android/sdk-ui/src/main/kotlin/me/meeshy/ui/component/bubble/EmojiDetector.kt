@@ -2,15 +2,15 @@ package me.meeshy.ui.component.bubble
 
 /**
  * Port of the iOS `EmojiDetector` (MeeshyUI/Utilities/EmojiDetector.swift):
- * a message whose trimmed content is 1–3 emoji grapheme clusters renders as
+ * a message whose trimmed content is 1–4 emoji grapheme clusters renders as
  * oversized free-floating emoji. Clusters are counted with a small state
  * machine over code points (ZWJ sequences, skin tones, variation selectors
  * and regional-indicator flag pairs collapse into one cluster each).
  */
 public object EmojiDetector {
-    public const val MAX_CLUSTERS: Int = 3
+    public const val MAX_CLUSTERS: Int = 4
 
-    /** 1–3 when the text is emoji-only, 0 otherwise. */
+    /** 1–4 when the text is emoji-only, 0 otherwise. */
     public fun emojiOnlyCount(text: String): Int {
         val trimmed = text.trim()
         if (trimmed.isEmpty()) return 0
@@ -48,11 +48,14 @@ public object EmojiDetector {
         return clusters
     }
 
-    /** The iOS oversized-emoji scale: 1 → 90, 2 → 60, 3 → 45. */
+    /**
+     * L'échelle iOS (#9054) : multiples de la taille d'un emoji en ligne (17) — ×4 jusqu'à deux
+     * emojis (68), ×3 à trois (51), ×2 à quatre (34) ; au-delà, texte normal.
+     */
     public fun fontSizeSp(count: Int): Int? = when (count) {
-        1 -> 90
-        2 -> 60
-        3 -> 45
+        1, 2 -> 68
+        3 -> 51
+        4 -> 34
         else -> null
     }
 
