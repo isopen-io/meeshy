@@ -8,7 +8,7 @@ import type {
 import type { ListConversation, ListLastMessage } from '@/lib/api/list-preview';
 import type { Attachment, Conversation } from '@/lib/api/types';
 
-import { endToEndRegimeOf, isForgedPlaintext, SEALED_CONTENT, type EndToEndRegimeView } from './end-to-end-sealed';
+import { endToEndRegimeOf, isForgedPlaintext, isVerifiedPlaintext, SEALED_CONTENT, type EndToEndRegimeView } from './end-to-end-sealed';
 
 /**
  * CE QUE LA LIGNE SAIT EN PLUS DE LA CONVERSATION — le lecteur, ses langues,
@@ -97,8 +97,19 @@ function sealedPreviewOf(message: ConversationPreviewMessage): ConversationPrevi
 function messageOf(conversation: Conversation, context: PreviewContext, regime: EndToEndRegimeView): ConversationPreviewMessage | null {
   const message = conversation.lastMessage as (ListLastMessage & Hoisted) | undefined | null;
   if (message === undefined || message === null) return null;
+  if (isForgedPlaintext(message, regime)) return sealedPreviewOf(projectedMessageOf(conversation, message, context));
   const projected = projectedMessageOf(conversation, message, context);
-  return isForgedPlaintext(message, regime) ? sealedPreviewOf(projected) : projected;
+  return isVerifiedPlaintext(message, regime) ? verifiedPreviewOf(projected, message) : projected;
+}
+
+/**
+ * #12992 (revue) — un clair d'avant l'activation reconnu par son empreinte ne
+ * se dit qu'avec ce que l'empreinte couvre : ni les traductions servies À CÔTÉ
+ * du message (`lastMessageTranslations`), ni le résumé de pièces servi par la
+ * liste — le résumé se déduit des pièces vérifiées.
+ */
+function verifiedPreviewOf(projected: ConversationPreviewMessage, message: ListLastMessage & Hoisted): ConversationPreviewMessage {
+  return { ...projected, translations: null, attachmentSummary: summaryOf((message.attachments ?? []) as readonly ProtectedAttachment[]) };
 }
 
 type LastReaction = NonNullable<ConversationPreviewInput['lastReaction']>;

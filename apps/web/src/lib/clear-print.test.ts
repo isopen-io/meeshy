@@ -33,3 +33,31 @@ describe('clearPrintOf', () => {
     expect(clearPrintOf({ content: 'x' })).toBeNull();
   });
 });
+
+describe('clearPrintOf couvre tout ce qui se rend (revue de sécurité)', () => {
+  const known = {
+    id: 'm-1',
+    content: 'Bonjour',
+    translations: [],
+    attachments: [{ id: 'a-1', fileUrl: 'https://cdn.meeshy.me/a-1.jpg', fileName: 'photo.jpg', mimeType: 'image/jpeg' }],
+    location: { latitude: 48.85, longitude: 2.35, name: 'Gare' },
+    metadata: { sticker: { emoji: '🙂' } },
+  };
+
+  test('même identifiant, même texte : une url de pièce, un nom, un lieu ou une métadonnée changés défont l’empreinte', () => {
+    const print = clearPrintOf(known);
+    const attachment = known.attachments[0]!;
+    expect(clearPrintOf({ ...known, attachments: [{ ...attachment, fileUrl: 'https://evil.example/a-1.jpg' }] })).not.toBe(print);
+    expect(clearPrintOf({ ...known, attachments: [{ ...attachment, fileName: 'facture.pdf' }] })).not.toBe(print);
+    expect(clearPrintOf({ ...known, location: { ...known.location, name: 'Rejoins-moi ici' } })).not.toBe(print);
+    expect(clearPrintOf({ ...known, metadata: { sticker: { emoji: '💀' } } })).not.toBe(print);
+    expect(clearPrintOf({ ...known, postReplyTo: { id: 'p-1', previewText: 'piège' } })).not.toBe(print);
+  });
+
+  test('l’ordre des clés et une date en objet ou en texte ISO ne la changent pas', () => {
+    const at = new Date('2026-09-01T00:00:00.000Z');
+    const reordered = { metadata: known.metadata, location: { name: 'Gare', longitude: 2.35, latitude: 48.85 }, attachments: known.attachments, translations: [], content: 'Bonjour', id: 'm-1' };
+    expect(clearPrintOf(reordered)).toBe(clearPrintOf(known));
+    expect(clearPrintOf({ ...known, attachments: [{ ...known.attachments[0]!, createdAt: at }] })).toBe(clearPrintOf({ ...known, attachments: [{ ...known.attachments[0]!, createdAt: at.toISOString() }] }));
+  });
+});

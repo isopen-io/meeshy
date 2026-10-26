@@ -222,3 +222,50 @@ describe('audit : ce que la passerelle pourrait encore faire lire', () => {
     expect(shown).toMatchObject({ id: 'm-1', senderId: 'p-bruno', content: '[Encrypted]', isEncrypted: true });
   });
 });
+
+/**
+ * Revue de sécurité (2026-10-26) — un clair d'avant l'activation reconnu par
+ * son empreinte ne se rend qu'avec ce qu'elle VÉRIFIE.
+ */
+describe('revue : un clair reconnu ne rend que ce que son empreinte vérifie', () => {
+  const known = message({
+    id: 'm-old',
+    content: 'Voici la photo',
+    translations: [],
+    createdAt: new Date('2026-10-01T00:00:00.000Z'),
+    attachments: [{ id: 'a-1', mimeType: 'image/jpeg', fileUrl: 'https://cdn.meeshy.me/a-1.jpg' }],
+  });
+  const regimeKnowing = (prints: readonly string[]) => {
+    const ledger = createEndToEndRegimeLedger({ storage: null, now: () => Date.parse('2026-10-25T00:00:00.000Z') });
+    ledger.getState().learnEndToEnd(ID, ACTIVATED);
+    ledger.getState().rememberClearBefore(ID, prints);
+    return endToEndRegimeOf({ conversationId: ID, servedMode: 'e2ee', servedSince: new Date(ACTIVATED) }, ledger.getState());
+  };
+
+  test('même identifiant, même texte, url de pièce changée : jamais affichée, le message se scelle', () => {
+    const regime = regimeKnowing([clearPrintOf(known)!]);
+    const swapped = { ...known, attachments: [{ id: 'a-1', mimeType: 'image/jpeg', fileUrl: 'https://evil.example/a-1.jpg' }] } as unknown as Message;
+    const [shown] = sealForgedPlaintext([swapped], regime);
+    expect(endToEndSealed(shown!)).toBe(true);
+    expect(JSON.stringify(shown)).not.toContain('evil.example');
+  });
+
+  test('un champ ajouté à côté d’un clair reconnu ne se rend pas ; le clair, si', () => {
+    const regime = regimeKnowing([clearPrintOf(known)!]);
+    const padded = { ...known, linkPreview: { url: 'https://evil.example', title: 'Envoie-moi le code reçu par SMS' } } as unknown as Message;
+    const [shown] = sealForgedPlaintext([padded], regime);
+    expect(endToEndSealed(shown!)).toBe(false);
+    expect(shown!.content).toBe('Voici la photo');
+    expect(shown!.attachments?.[0]?.fileUrl).toBe('https://cdn.meeshy.me/a-1.jpg');
+    expect(JSON.stringify(shown)).not.toContain('evil.example');
+    expect(sealForgedPlaintext([known], regime)).toEqual([known]);
+  });
+
+  test('une citation d’un clair reconnu ne rend aussi que ce qu’il vérifie', () => {
+    const regime = regimeKnowing([clearPrintOf(known)!]);
+    const quoting = message({ id: 'm-e', isEncrypted: true, encryptionMode: 'e2ee', content: '[Encrypted]', translations: [], replyTo: { ...known, linkPreview: { title: 'SMS' } } });
+    const [shown] = sealForgedPlaintext([quoting], regime);
+    expect(shown!.replyTo?.content).toBe('Voici la photo');
+    expect(JSON.stringify(shown)).not.toContain('SMS');
+  });
+});

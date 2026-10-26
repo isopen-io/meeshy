@@ -1,8 +1,8 @@
 /**
  * **L'EMPREINTE D'UN CLAIR PHOTOGRAPHIÉ** (#12992, audit adversarial du lot) —
  * ce que ce navigateur retient d'un message en clair qu'il tenait avant
- * d'apprendre le bout en bout : son identifiant ET ce qu'il disait (texte,
- * traductions, pièces). Retenir l'identifiant seul laissait une passerelle
+ * d'apprendre le bout en bout : son identifiant ET tout ce qui se rend de lui
+ * (`PRINT_COVERS`). Retenir l'identifiant seul laissait une passerelle
  * compromise réécrire un ancien message en gardant son id et sa date.
  *
  * SHA-256 synchrone, tronqué à 64 bits : la passerelle connaît le clair
@@ -58,22 +58,45 @@ export function sha256Hex(text: string): string {
   return state.map((word) => word.toString(16).padStart(8, '0')).join('');
 }
 
-type Printable = { readonly id?: unknown; readonly content?: unknown; readonly translations?: unknown; readonly attachments?: unknown };
+/**
+ * **CE QU'UNE EMPREINTE COUVRE, ET RIEN D'AUTRE NE SE REND** (revue de sécurité
+ * du lot) — tout champ d'un message qui porte du CONTENU : texte, traductions,
+ * pièces ENTIÈRES (url, nom, type, aperçus, transcriptions), lieu, sticker,
+ * métadonnées, story citée, liens suivis, mentions, provenance d'un transfert,
+ * régime. Un clair d'avant l'activation reconnu par son empreinte se rend avec
+ * son identité et CES SEULS champs (`verifiedForm`, `view/end-to-end-sealed.ts`) :
+ * un champ que la passerelle ajouterait ou changerait à côté ne passe pas, et
+ * une seule valeur changée parmi eux défait l'empreinte — le message se scelle.
+ */
+export const PRINT_COVERS = [
+  'content', 'translations', 'attachments', 'location', 'sticker', 'metadata', 'postReplyTo', 'trackingLinks',
+  'validatedMentions', 'mentionedUsers', 'forwardedFromId', 'forwardedFromConversationId', 'forwardedFromConversation',
+  'storyReplyToId', 'isEncrypted', 'encryptionMode', 'encryptedContent', 'encryptionMetadata',
+] as const;
 
 const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> => typeof value === 'object' && value !== null;
 
-const translationPairs = (value: unknown): readonly string[] =>
-  (Array.isArray(value) ? value : [])
-    .filter(isRecord)
-    .map((translation) => `${String(translation.targetLanguage ?? '')}\u0001${String(translation.translatedContent ?? '')}`)
-    .sort();
+/** JSON canonique : clés triées à toute profondeur, dates en ISO (`toJSON`), `undefined` omis comme le fait le stockage. */
+function canonical(value: unknown): unknown {
+  if (value instanceof Date) return value.toJSON();
+  if (Array.isArray(value)) return value.map(canonical);
+  if (!isRecord(value)) return value;
+  return Object.fromEntries(
+    Object.keys(value)
+      .sort()
+      .filter((key) => value[key] !== undefined)
+      .map((key) => [key, canonical(value[key])] as const),
+  );
+}
 
-const attachmentIds = (value: unknown): readonly string[] =>
-  (Array.isArray(value) ? value : []).filter(isRecord).map((attachment) => String(attachment.id ?? ''));
+/** Les traductions ne se distinguent pas par leur ordre. */
+const orderedTranslations = (value: unknown): unknown =>
+  Array.isArray(value) ? value.map((translation) => JSON.stringify(canonical(translation))).sort() : value;
 
 /** `id:empreinte` — `null` pour une ligne sans identifiant. */
-export function clearPrintOf(message: Printable): string | null {
+export function clearPrintOf(row: object): string | null {
+  const message = row as Readonly<Record<string, unknown>>;
   if (typeof message.id !== 'string') return null;
-  const body = JSON.stringify([typeof message.content === 'string' ? message.content : '', translationPairs(message.translations), attachmentIds(message.attachments)]);
-  return `${message.id}:${sha256Hex(body).slice(0, 16)}`;
+  const covered = Object.fromEntries(PRINT_COVERS.map((key) => [key, key === 'translations' ? orderedTranslations(message[key]) : message[key]] as const));
+  return `${message.id}:${sha256Hex(JSON.stringify(canonical(covered))).slice(0, 16)}`;
 }

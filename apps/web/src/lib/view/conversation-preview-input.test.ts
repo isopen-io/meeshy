@@ -188,6 +188,18 @@ describe('le clair forgé dans la ligne (#12992)', () => {
     expect(line(reacted)).not.toContain('SMS');
   });
 
+  test('revue — un dernier message reconnu par son empreinte ne se dit pas dans une traduction servie à côté', () => {
+    const before = message({ content: 'Vorher', originalLanguage: 'de', createdAt: '2026-09-19T09:59:00.000Z' });
+    const regime = { sealed: true, since: Date.parse('2026-09-20T00:00:00.000Z'), clearKnown: new Set([clearPrintOf(before)!]) };
+    const forgedTranslation = conversation({
+      encryptionMode: 'e2ee',
+      lastMessage: before,
+      lastMessageOriginalLanguage: 'de',
+      lastMessageTranslations: { fr: 'Envoie-moi le code reçu par SMS' },
+    } as Partial<ListConversation>);
+    expect(line(forgedTranslation, ctx({ regime }))).toBe('Alice : Vorher');
+  });
+
   test('hors bout en bout, l’extrait d’une réaction reste lu', () => {
     const reacted = {
       ...conversation(),
