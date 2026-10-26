@@ -47,12 +47,10 @@ class PostDetailViewModel: ObservableObject {
     // `CommentsSheetView`. Keyé par commentId. Semé depuis `currentUserReactions`
     // de chaque commentaire/réponse au chargement (sans ce seeding + sans cet état,
     // le cœur d'un commentaire restait inerte dans le détail de post).
-    @Published var commentLikedIds: Set<String> = []
-    @Published var commentLikeDelta: [String: Int] = [:]
+    @Published var commentHearts = CommentHeartLedger()
     /// Commentaire en cours d'ÉDITION (auteur uniquement). Non-nil ⇒ le
     /// composer soumet un PATCH (contenu + effets) au lieu d'une création.
     @Published var editingComment: FeedComment?
-    @Published var commentHeartInFlightIds: Set<String> = []
 
     let postService: PostServiceProviding
     private let socialSocket: any SocialSocketProviding
@@ -287,15 +285,12 @@ class PostDetailViewModel: ObservableObject {
 
     // MARK: - Comment Like (optimistic, socket-reaction driven)
 
-    /// Sème (additif) `commentLikedIds` depuis l'état serveur (`currentUserReactions`)
+    /// Sème (additif) `commentHearts` depuis l'état serveur (`currentUserReactions`)
     /// des commentaires/réponses fournis, sans écraser les toggles déjà appliqués.
     private func seedCommentLikes(from comments: [FeedComment]) {
-        let heart = StoryViewerView.heartEmoji
-        let liked = comments
-            .filter { $0.currentUserReactions?.contains(heart) == true }
-            .map(\.id)
+        let liked = CommentHeartLedger.likedIds(in: comments)
         guard !liked.isEmpty else { return }
-        commentLikedIds.formUnion(liked)
+        commentHearts.markLiked(liked)
     }
 
     // MARK: - Actions
@@ -693,12 +688,12 @@ class PostDetailViewModel: ObservableObject {
             .store(in: &socketCancellables)
 
         // Réactions cœur de commentaire en temps réel (miroir de CommentsSheetView) :
-        // synchronise `commentLikedIds` (réaction du user courant) ou `commentLikeDelta`
+        // synchronise `commentHearts` (réaction du user courant, delta optimiste)
         // (réaction d'un tiers) sans toucher l'optimistic local déjà appliqué.
         // Réconciliation par l'AGRÉGAT ABSOLU (miroir de
         // `StoryViewerView.applyCommentReactionEvent`) : l'événement porte
         // `aggregation.count` (état global après application) et
-        // `hasCurrentUser`. L'ancien ±1 sur `commentLikeDelta` ne purgeait
+        // `hasCurrentUser`. L'ancien ±1 sur le delta de `commentHearts` ne purgeait
         // jamais le delta de sa PROPRE réaction : dès que la base était
         // rafraîchie (`loadReplies`, refetch), `likes` incluait déjà le like
         // et l'affichage `likes + delta` comptait DOUBLE.

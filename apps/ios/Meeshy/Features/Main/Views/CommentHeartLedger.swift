@@ -39,7 +39,11 @@ nonisolated struct CommentHeartLedger: Equatable, Sendable {
     /// Additive seeding from the server state of rows that just arrived —
     /// never undoes a heart already toggled here.
     mutating func seed(from comments: [FeedComment]) {
-        likedIds.formUnion(Self.likedIds(in: comments))
+        markLiked(Self.likedIds(in: comments))
+    }
+
+    mutating func markLiked(_ commentIds: Set<String>) {
+        likedIds.formUnion(commentIds)
     }
 
     /// Applies the absolute aggregate of a heart event and returns the count

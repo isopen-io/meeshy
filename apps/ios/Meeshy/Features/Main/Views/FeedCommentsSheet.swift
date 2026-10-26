@@ -83,12 +83,8 @@ struct CommentsSheetView: View {
     var loadingReplies: Set<String> { thread.loadingReplies }
     var repliesHasMore: [String: Bool] { thread.repliesHasMore }
 
-    /// Hoisted like state — keyed by commentId, seeded from API `currentUserReactions`.
-    @State private var likedIds: Set<String> = []
-    /// Local like-count delta keyed by commentId (optimistic, applied on top of server count).
-    @State private var likeDelta: [String: Int] = [:]
-    /// In-flight heart taps: prevents rapid-tap desync.
-    @State private var heartInFlightIds: Set<String> = []
+    /// Comment hearts — seeded from API `currentUserReactions`, optimistic on tap.
+    @State private var hearts = CommentHeartLedger()
 
     /// Tracks current composer text so `MentionSuggestionPanel` can pass it
     /// back to `insertMention(_:into:)` without needing to own the text field.
@@ -174,11 +170,11 @@ struct CommentsSheetView: View {
 
     /// Le même semis, sans retenir la feuille : le fil de réponses le garde.
     var likedIdsSeeder: @MainActor ([FeedComment]) -> Void {
-        let storage: State<Set<String>> = _likedIds
+        let storage: State<CommentHeartLedger> = _hearts
         return { comments in
             let seeded = Self.computeLikedIds(from: comments)
             guard !seeded.isEmpty else { return }
-            storage.wrappedValue = storage.wrappedValue.union(seeded)
+            storage.wrappedValue.markLiked(seeded)
         }
     }
 
@@ -254,9 +250,7 @@ struct CommentsSheetView: View {
                                     isExpanded: expandedThreads.contains(comment.id),
                                     isLoadingReplies: loadingReplies.contains(comment.id),
                                     accentColor: accentColor, post: post,
-                                    likedIds: likedIds,
-                                    likeDelta: likeDelta,
-                                    heartInFlightIds: heartInFlightIds,
+                                    hearts: hearts,
                                     onReply: { target in
                                         beginReply(to: target)
                                     },
@@ -401,8 +395,7 @@ struct CommentsSheetView: View {
             liveCommentCount: $thread.liveCount,
             repliesMap: $thread.replies,
             expandedThreads: $thread.expandedThreads,
-            likedIds: $likedIds,
-            likeDelta: $likeDelta,
+            hearts: $hearts,
             applyEdit: { applyCommentEdit($0) }
         ))
         .sheet(item: $selectedProfileUser) { user in
@@ -492,34 +485,12 @@ struct CommentsSheetView: View {
     // MARK: - Comment Like Toggle
 
     private func toggleCommentLike(commentId: String) async {
-        guard !heartInFlightIds.contains(commentId) else { return }
-        heartInFlightIds.insert(commentId)
-        defer { heartInFlightIds.remove(commentId) }
-
-        let wasLiked = likedIds.contains(commentId)
-        if wasLiked {
-            likedIds.remove(commentId)
-            likeDelta[commentId] = (likeDelta[commentId] ?? 0) - 1
-        } else {
-            likedIds.insert(commentId)
-            likeDelta[commentId] = (likeDelta[commentId] ?? 0) + 1
-        }
-        // Unification du like de commentaire : la réaction socket ❤️ (repli REST,
-        // `CommentHeartTransport`) est la SOURCE UNIQUE (le gateway synchronise
-        // `likeCount = count(CommentReaction)` — CS1). On NE déclenche PLUS le
-        // callback REST `onLikeComment` (double-écriture qui incrémentait
-        // `likeCount` + `reactionSummary` une 2e fois, et n'envoyait jamais
-        // d'unlike : toujours `liked:true`). Aligne le chemin feed sur reels/détail.
-
+        guard let wasLiked = hearts.begin(commentId) else { return }
+        // La réaction socket ❤️ (repli REST, `CommentHeartTransport`) est la
+        // SOURCE UNIQUE du like de commentaire (le gateway synchronise
+        // `likeCount = count(CommentReaction)` — CS1) : aucun second appel REST.
         let delivered = await CommentHeartTransport.deliver(wasLiked: wasLiked, commentId: commentId, postId: post.id)
-        guard !delivered else { return }
-        if wasLiked {
-            likedIds.insert(commentId)
-            likeDelta[commentId] = (likeDelta[commentId] ?? 0) + 1
-        } else {
-            likedIds.remove(commentId)
-            likeDelta[commentId] = (likeDelta[commentId] ?? 0) - 1
-        }
+        hearts.settle(commentId, wasLiked: wasLiked, delivered: delivered)
     }
 
     // MARK: - Comment Reply Banner

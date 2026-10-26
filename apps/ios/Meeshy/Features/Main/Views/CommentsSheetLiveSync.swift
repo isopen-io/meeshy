@@ -13,8 +13,7 @@ struct CommentsSheetLiveSync: ViewModifier {
     @Binding var liveCommentCount: Int?
     @Binding var repliesMap: [String: [FeedComment]]
     @Binding var expandedThreads: Set<String>
-    @Binding var likedIds: Set<String>
-    @Binding var likeDelta: [String: Int]
+    @Binding var hearts: CommentHeartLedger
     let applyEdit: (FeedComment) -> Void
 
     func body(content: Content) -> some View {
@@ -197,22 +196,8 @@ struct CommentsSheetLiveSync: ViewModifier {
     /// dérive « mon cœur » de la liste des réacteurs. Miroir de
     /// `PostDetailViewModel.applyCommentReactionAggregate`.
     private func applyCommentReactionAggregate(commentId: String, count: Int, reactorUserIds: [String], actorUserId: String) {
-        var resolvedCount = count
-        if let myId = AuthManager.shared.currentUser?.id {
-            if reactorUserIds.contains(myId) {
-                likedIds.insert(commentId)
-            } else if actorUserId == myId {
-                // L'événement décrit MA propre action (cet appareil ou un
-                // autre) : l'agrégat est autoritatif pour mon cœur.
-                likedIds.remove(commentId)
-            } else if likedIds.contains(commentId) {
-                // Événement d'un TIERS pendant que MON like est encore en vol :
-                // son agrégat ne me connaît pas — préserver le cœur et compter
-                // le mien par-dessus (l'écho de mon propre like reconfirmera).
-                resolvedCount = count + 1
-            }
-        }
-        likeDelta[commentId] = nil
+        let resolvedCount = hearts.reconcile(commentId: commentId, count: count, reactorUserIds: reactorUserIds,
+                                             actorUserId: actorUserId, myUserId: AuthManager.shared.currentUser?.id)
         var current = liveComments ?? post.comments
         if let idx = current.firstIndex(where: { $0.id == commentId }) {
             current[idx].likes = resolvedCount

@@ -29,9 +29,7 @@ struct PostDetailCommentThread: View {
             // ViewModel (miroir de `CommentsSheetView`). L'état est semé depuis
             // `currentUserReactions` au chargement, donc les commentaires déjà
             // likés s'affichent cœur plein et le tap donne un retour instantané.
-            likedIds: viewModel.commentLikedIds,
-            likeDelta: viewModel.commentLikeDelta,
-            heartInFlightIds: viewModel.commentHeartInFlightIds,
+            hearts: viewModel.commentHearts,
             onReply: { target in
                 onReply(target)
             },

@@ -17,9 +17,7 @@ struct ThreadedCommentSection: View {
     let accentColor: String
     /// Le post commenté — « Imager » un commentaire le met en tête (#9686).
     var post: FeedPost? = nil
-    let likedIds: Set<String>
-    let likeDelta: [String: Int]
-    let heartInFlightIds: Set<String>
+    let hearts: CommentHeartLedger
     let onReply: (FeedComment) -> Void
     let onToggleThread: () -> Void
     let onLikeComment: (String) -> Void
@@ -84,9 +82,9 @@ struct ThreadedCommentSection: View {
             comment: reply,
             accentColor: accentColor,
             isReply: true,
-            isLiked: likedIds.contains(reply.id),
-            likeCount: max(0, reply.likes + (likeDelta[reply.id] ?? 0)),
-            isInFlight: heartInFlightIds.contains(reply.id),
+            isLiked: hearts.isLiked(reply.id),
+            likeCount: hearts.displayedLikes(of: reply),
+            isInFlight: hearts.isInFlight(reply.id),
             onReply: { onReply(reply) },
             onLikeComment: { onLikeComment(reply.id) },
             onDeleteComment: deleteHandler(for: reply),
@@ -126,9 +124,9 @@ struct ThreadedCommentSection: View {
             CommentRowView(
                 comment: comment,
                 accentColor: accentColor,
-                isLiked: likedIds.contains(comment.id),
-                likeCount: max(0, comment.likes + (likeDelta[comment.id] ?? 0)),
-                isInFlight: heartInFlightIds.contains(comment.id),
+                isLiked: hearts.isLiked(comment.id),
+                likeCount: hearts.displayedLikes(of: comment),
+                isInFlight: hearts.isInFlight(comment.id),
                 onReply: { onReply(comment) },
                 onLikeComment: { onLikeComment(comment.id) },
                 onDeleteComment: deleteHandler(for: comment),

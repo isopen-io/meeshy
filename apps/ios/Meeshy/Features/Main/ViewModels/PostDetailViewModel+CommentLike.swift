@@ -15,21 +15,8 @@ extension PostDetailViewModel {
     /// d'un broadcast). L'affichage `likes + delta` converge vers la vérité
     /// serveur sans jamais compter double.
     func applyCommentReactionAggregate(commentId: String, count: Int, reactorUserIds: [String], actorUserId: String) {
-        var resolvedCount = count
-        if let myId = AuthManager.shared.currentUser?.id {
-            if reactorUserIds.contains(myId) {
-                commentLikedIds.insert(commentId)
-            } else if actorUserId == myId {
-                // L'événement décrit MA propre action : agrégat autoritatif.
-                commentLikedIds.remove(commentId)
-            } else if commentLikedIds.contains(commentId) {
-                // Agrégat d'un TIERS pendant que MON like est encore en vol :
-                // il ne me connaît pas — préserver le cœur, compter le mien
-                // par-dessus (l'écho de mon propre like reconfirmera).
-                resolvedCount = count + 1
-            }
-        }
-        commentLikeDelta[commentId] = nil
+        let resolvedCount = commentHearts.reconcile(commentId: commentId, count: count, reactorUserIds: reactorUserIds,
+                                                    actorUserId: actorUserId, myUserId: AuthManager.shared.currentUser?.id)
         if let idx = comments.firstIndex(where: { $0.id == commentId }) {
             comments[idx].likes = resolvedCount
             return
@@ -47,18 +34,7 @@ extension PostDetailViewModel {
     /// Miroir exact de `CommentsSheetView.toggleCommentLike` pour que le like de
     /// commentaire dans le détail de post se comporte comme dans la sheet.
     func toggleCommentLike(_ commentId: String, postId: String) async {
-        guard !commentHeartInFlightIds.contains(commentId) else { return }
-        commentHeartInFlightIds.insert(commentId)
-        defer { commentHeartInFlightIds.remove(commentId) }
-
-        let wasLiked = commentLikedIds.contains(commentId)
-        if wasLiked {
-            commentLikedIds.remove(commentId)
-            commentLikeDelta[commentId, default: 0] -= 1
-        } else {
-            commentLikedIds.insert(commentId)
-            commentLikeDelta[commentId, default: 0] += 1
-        }
+        guard let wasLiked = commentHearts.begin(commentId) else { return }
 
         do {
             try await withTaskTimeout(seconds: TaskTimeoutDefaults.socialReaction) {
@@ -87,15 +63,9 @@ extension PostDetailViewModel {
             } catch {
                 restOK = false
             }
-            if !restOK {
-                if wasLiked {
-                    commentLikedIds.insert(commentId)
-                    commentLikeDelta[commentId, default: 0] += 1
-                } else {
-                    commentLikedIds.remove(commentId)
-                    commentLikeDelta[commentId, default: 0] -= 1
-                }
-            }
+            commentHearts.settle(commentId, wasLiked: wasLiked, delivered: restOK)
+            return
         }
+        commentHearts.settle(commentId, wasLiked: wasLiked, delivered: true)
     }
 }
