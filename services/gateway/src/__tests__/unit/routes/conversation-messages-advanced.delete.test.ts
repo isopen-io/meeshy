@@ -393,6 +393,17 @@ describe('registerMessagesAdvancedRoutes', () => {
         expect(mockSendError).not.toHaveBeenCalledWith(reply, 409, expect.anything(), expect.anything());
       });
 
+      it("supprime en clair une ligne scellée d'une conversation qui n'est plus en bout en bout : aucun signal ne la supprimerait", async () => {
+        prisma.conversation.findUnique.mockResolvedValue({ type: 'direct', title: null, encryptionMode: 'server' });
+        prisma.message.findFirst.mockResolvedValue({ ...makeExistingMessage(), ...sealedRow });
+        prisma.message.update.mockResolvedValue({});
+        const reply = makeReply();
+
+        await getDeleteMsgHandler(fastify)(makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } }), reply);
+
+        expect(mockSendSuccess).toHaveBeenCalled();
+      });
+
       it("rend 403 et non 409 à qui n'a pas le droit de supprimer : le refus ne dit pas le régime", async () => {
         prisma.message.findFirst.mockResolvedValue({ ...makeExistingMessage(), ...sealedRow, sender: { id: PART_ID, userId: OTHER_USER_ID } });
         prisma.participant.findFirst.mockResolvedValue(null);

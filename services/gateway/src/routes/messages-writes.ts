@@ -546,7 +546,7 @@ export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: Mess
       }
       // #13142 — un message scellé au serveur se supprime pour tous par signal
       // chiffré signé de l'auteur ; un message d'avant l'activation, en clair, ici.
-      if (messageRefusesPlainErasure(message)) {
+      if (await messageRefusesPlainErasure(prisma, message)) {
         return sendError(reply, 409, SIGNAL_CHANNEL_REFUSAL.error, { code: SIGNAL_CHANNEL_REFUSAL.code });
       }
       const moderationReason = byModeration ? moderationReasonOf(request.body) : null;

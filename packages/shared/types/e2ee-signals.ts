@@ -39,7 +39,27 @@ export const E2EE_SIGNAL_ROUTE = '/e2ee/conversations/:conversationId/signals' a
  */
 export const E2EE_PADDING_TIERS = [256, 1024, 4096, 16384] as const;
 export const E2EE_PADDING_STEP = 16384;
-export const E2EE_PADDING_CIPHER_OVERHEAD = 1024;
+/**
+ * Ce que libsignal ajoute au clair, majoré : un premier message (PreKey, PQXDH
+ * avec Kyber1024) ajoute 1 761 à 1 763 octets (mesuré, libsignal 0.105), un
+ * message ordinaire 107.
+ */
+export const E2EE_PADDING_CIPHER_OVERHEAD = 2048;
+
+const PADDING_ENVELOPE_BYTES = 64 * 1024;
+const PADDING_TOTAL_BYTES = 512 * 1024;
+
+/** Le plus grand clair que `recipients` enveloppes portent sous les deux plafonds. */
+export const e2eePaddingCeiling = (recipients: number): number =>
+  Math.min(PADDING_ENVELOPE_BYTES, Math.floor(PADDING_TOTAL_BYTES / Math.max(recipients, 1))) - E2EE_PADDING_CIPHER_OVERHEAD;
+
+/** La taille d'un clair une fois rempli pour `recipients` enveloppes. Miroir : `E2EEPadding.paddedLength`. */
+export const e2eePaddedLength = (length: number, recipients: number): number => {
+  const ceiling = e2eePaddingCeiling(recipients);
+  if (length > ceiling) return length;
+  const bucket = E2EE_PADDING_TIERS.find((tier) => tier >= length) ?? Math.ceil(length / E2EE_PADDING_STEP) * E2EE_PADDING_STEP;
+  return Math.min(bucket, ceiling);
+};
 
 /**
  * Un envoi de signal : les enveloppes libsignal, l'appareil émetteur, ceux de

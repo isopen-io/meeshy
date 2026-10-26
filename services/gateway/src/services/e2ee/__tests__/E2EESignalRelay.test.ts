@@ -132,6 +132,17 @@ describe('le relais des signaux chiffrés', () => {
     expect(store.collections.MessageEnvelope.rows).toHaveLength(0);
   });
 
+  it("rend le même refus à un non-membre, que la conversation soit chiffrée ou non : le relais ne dit pas le régime", async () => {
+    const { relay } = seeded();
+    const attempt = (conversationId: string) =>
+      refusalOf(relay.relay({ conversationId, senderUserId: MALLORY, sessionId: MALLORY_SESSION, request: request() }));
+
+    const [sealed, clear] = await Promise.all([attempt(CONVERSATION), attempt(CLEAR_CONVERSATION)]);
+
+    expect([sealed.status, sealed.code]).toEqual([clear.status, clear.code]);
+    expect([sealed.status, sealed.code]).toEqual([403, E2EE_ERROR_CODES.SIGNAL_FORBIDDEN]);
+  });
+
   it("refuse 403 E2EE_DEVICE_NOT_BOUND un appareil émetteur qui n'est pas celui de la session", async () => {
     const { relay } = seeded();
 

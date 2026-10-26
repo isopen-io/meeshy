@@ -106,7 +106,7 @@ export function registerMessageViewOnceRoutes(
 
       // #13142, #13060 — l'ouverture d'une vue unique scellée au serveur part en
       // signal chiffré vers MES appareils : la passerelle n'en consigne rien.
-      if (messageRefusesPlainErasure(message)) {
+      if (await messageRefusesPlainErasure(prisma, message)) {
         return sendError(reply, 409, SIGNAL_CHANNEL_REFUSAL.error, { code: SIGNAL_CHANNEL_REFUSAL.code });
       }
 

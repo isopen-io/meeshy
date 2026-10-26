@@ -144,7 +144,7 @@ export function registerDeleteMessageRoute(
       }
       // #13142 — un message scellé au serveur se supprime pour tous par signal
       // chiffré signé de l'auteur ; un message d'avant l'activation, en clair, ici.
-      if (messageRefusesPlainErasure(existingMessage)) {
+      if (await messageRefusesPlainErasure(prisma, existingMessage)) {
         return sendError(reply, 409, SIGNAL_CHANNEL_REFUSAL.error, { code: SIGNAL_CHANNEL_REFUSAL.code });
       }
       const moderationReason = byModeration ? moderationReasonOf(request.body) : null;

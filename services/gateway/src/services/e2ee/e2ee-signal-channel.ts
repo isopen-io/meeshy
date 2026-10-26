@@ -44,12 +44,22 @@ export const conversationRefusesPlainSignal = (conversation: { readonly encrypti
 /**
  * Supprimer pour tous ou consommer une vue unique : refusé en clair pour un
  * message dont la ligne est scellée au serveur (bout en bout, ou mode inconnu
- * d'une ligne chiffrée — fail-closed) ; admis pour un message lu par le serveur.
+ * d'une ligne chiffrée — fail-closed) DANS une conversation chiffrée de bout en
+ * bout, seule à porter le canal des signaux. Un message lu par le serveur passe
+ * sans lecture de plus ; une ligne scellée d'une conversation qui n'est pas (ou
+ * plus, avant #12949) en bout en bout passe aussi : aucun signal ne la
+ * supprimerait. Une conversation introuvable ou illisible refuse.
  */
-export const messageRefusesPlainErasure = (row: {
-  readonly isEncrypted?: boolean | null;
-  readonly encryptionMode?: string | null;
-}): boolean => messageRowSealedFromServer({ isEncrypted: row.isEncrypted, encryptionMode: row.encryptionMode });
+export async function messageRefusesPlainErasure(
+  prisma: Pick<PrismaClient, 'conversation'>,
+  row: { readonly conversationId: string; readonly isEncrypted?: boolean | null; readonly encryptionMode?: string | null },
+): Promise<boolean> {
+  if (!messageRowSealedFromServer({ isEncrypted: row.isEncrypted, encryptionMode: row.encryptionMode })) return false;
+  const conversation = await prisma.conversation
+    .findUnique({ where: { id: row.conversationId }, select: { encryptionMode: true } })
+    .catch(() => null);
+  return conversation === null || conversationRefusesPlainSignal(conversation);
+}
 
 /**
  * Le régime d'une conversation pour un geste FRÉQUENT (la frappe), lu au plus une

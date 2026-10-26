@@ -1076,7 +1076,7 @@ export class MessageHandler {
       }
       // #13142 — un message scellé au serveur se supprime pour tous par signal
       // chiffré signé de l'auteur ; un message d'avant l'activation, en clair, ici.
-      if (messageRefusesPlainErasure(message)) {
+      if (await messageRefusesPlainErasure(this.prisma, message)) {
         callback?.({ success: false, ...SIGNAL_CHANNEL_REFUSAL });
         return;
       }

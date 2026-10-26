@@ -42,11 +42,24 @@ describe('la garde des signaux en clair', () => {
     expect(conversationRefusesPlainSignal({ encryptionMode: null })).toBe(false);
   });
 
-  it("juge l'effacement sur la LIGNE : un message scellé est refusé, un message d'avant l'activation passe", () => {
-    expect(messageRefusesPlainErasure({ isEncrypted: true, encryptionMode: 'e2ee' })).toBe(true);
-    expect(messageRefusesPlainErasure({ isEncrypted: true, encryptionMode: null })).toBe(true);
-    expect(messageRefusesPlainErasure({ isEncrypted: false, encryptionMode: null })).toBe(false);
-    expect(messageRefusesPlainErasure({ isEncrypted: true, encryptionMode: 'server' })).toBe(false);
+  it("juge l'effacement sur la LIGNE dans une conversation chiffrée : un message scellé est refusé, un message d'avant l'activation passe sans lecture", async () => {
+    const row = (isEncrypted: boolean, encryptionMode: string | null) => ({ conversationId: CONVERSATION_ID, isEncrypted, encryptionMode });
+    const sealedConversation = () => conversationReader('e2ee');
+
+    expect(await messageRefusesPlainErasure(sealedConversation() as never, row(true, 'e2ee'))).toBe(true);
+    expect(await messageRefusesPlainErasure(sealedConversation() as never, row(true, null))).toBe(true);
+    const untouched = sealedConversation();
+    expect(await messageRefusesPlainErasure(untouched as never, row(false, null))).toBe(false);
+    expect(await messageRefusesPlainErasure(untouched as never, row(true, 'server'))).toBe(false);
+    expect(untouched.conversation.findUnique).not.toHaveBeenCalled();
+  });
+
+  it("admet l'effacement d'une ligne scellée d'une conversation qui n'est pas en bout en bout, et refuse sur une conversation introuvable ou illisible", async () => {
+    const sealedRow = { conversationId: CONVERSATION_ID, isEncrypted: true, encryptionMode: 'e2ee' };
+
+    expect(await messageRefusesPlainErasure(conversationReader('server') as never, sealedRow)).toBe(false);
+    expect(await messageRefusesPlainErasure({ conversation: { findUnique: jest.fn<any>().mockResolvedValue(null) } } as never, sealedRow)).toBe(true);
+    expect(await messageRefusesPlainErasure(conversationReader(new Error('base illisible')) as never, sealedRow)).toBe(true);
   });
 
   it('refuse en 409 avec un code stable et une phrase lisible', () => {

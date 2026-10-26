@@ -38,8 +38,8 @@ jest.mock('../../../services/CacheStore', () => {
 
 import { randomBytes } from 'crypto';
 import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
-import { LIBSIGNAL_PROTOCOL, type E2EEDeviceBundle } from '@meeshy/shared/types/e2ee-directory';
-import { E2EE_PADDING_TIERS } from '@meeshy/shared/types/e2ee-signals';
+import { E2EE_SEND_SHAPE, LIBSIGNAL_PROTOCOL, e2eeEnvelopeSchema, type E2EEDeviceBundle } from '@meeshy/shared/types/e2ee-directory';
+import { E2EE_PADDING_TIERS, e2eePaddedLength, e2eePaddingCeiling } from '@meeshy/shared/types/e2ee-signals';
 import { registerE2EERoutes } from '../../../routes/e2ee';
 import { registerE2EESignalRoutes } from '../../../routes/e2ee-signals';
 import { createE2EEDirectory } from '../../../services/e2ee/E2EEDirectory';
@@ -184,5 +184,29 @@ describe('signaux chiffrés de bout en bout à deux appareils, libsignal réel (
     expect(JSON.stringify(surfaces)).not.toMatch(/"kind"|reaction|"edit"/);
     expect(store.collections.MessageEnvelope.rows).toHaveLength(0);
     await app.close();
+  });
+  it('un clair rempli au plafond tient encore dans les bornes des enveloppes, même en premier message (PreKey, Kyber)', async () => {
+    const aliceKeys = await devices.request<Record<string, unknown>>('create', { name: 'alice-plafond', userId: ALICE, oneTime: 2 });
+    const bobKeys = await devices.request<Record<string, unknown>>('create', { name: 'bob-plafond', userId: BOB, oneTime: 2 });
+    const bundle = {
+      registrationId: bobKeys.registrationId, deviceId: 1, identityKey: bobKeys.identityKey,
+      signedPreKey: bobKeys.signedPreKey, kyberPreKey: (bobKeys.kyberPreKeys as unknown[])[0],
+      preKey: (bobKeys.oneTimePreKeys as unknown[])[0],
+    };
+    expect(aliceKeys).toBeDefined();
+    const results: { recipients: number; type: number; fits: boolean }[] = [];
+    for (const [index, recipients] of [1, 2, 8, 16, 31].entries()) {
+      const size = e2eePaddedLength(e2eePaddingCeiling(recipients) - 1, recipients);
+      const ciphertext = await devices.request<{ type: 2 | 3; body: string }>('encrypt', {
+        from: 'alice-plafond', fromAddress: { name: ALICE, deviceId: 1 }, toAddress: { name: BOB, deviceId: 1 },
+        bundle: index === 0 ? bundle : undefined, plaintext: ' '.repeat(size),
+      });
+      const envelope = { userId: BOB, deviceId: 1, registrationId: 1, type: ciphertext.type, body: ciphertext.body };
+      const fits = e2eeEnvelopeSchema.safeParse(envelope).success
+        && E2EE_SEND_SHAPE.envelopes.safeParse(Array.from({ length: recipients }, () => envelope)).success;
+      results.push({ recipients, type: ciphertext.type, fits });
+    }
+    expect(results.every((result) => result.type === 3)).toBe(true);
+    expect(results.filter((result) => !result.fits)).toEqual([]);
   });
 });

@@ -92,12 +92,13 @@ export class E2EESignalRelay {
    * Un signal est une ÉCRITURE comme un message : il ne passe ni dans une
    * conversation fermée, ni dans un tête-à-tête bloqué (`messages-send.ts`
    * pose les mêmes refus à l'envoi). Sans eux, un correspondant bloqué
-   * inonderait d'enveloppes et de réveils celui qui l'a bloqué.
+   * inonderait d'enveloppes et de réveils celui qui l'a bloqué. Le membre se
+   * contrôle AVANT le régime : un étranger n'apprend pas si la conversation est chiffrée.
    */
   async relay(input: SignalRelayInput): Promise<E2EESignalRelayResponse> {
     const { conversationId, senderUserId, request } = input;
-    const conversation = await this.assertEndToEnd(conversationId);
     await this.assertMember(conversationId, senderUserId);
+    const conversation = await this.assertEndToEnd(conversationId);
     if (isConversationClosed(conversation)) throw closedConversation();
     await this.assertNotBlocked(conversationId, senderUserId, conversation);
     const envelopes = createE2EEEnvelopeRelay({ prisma: this.prisma });
