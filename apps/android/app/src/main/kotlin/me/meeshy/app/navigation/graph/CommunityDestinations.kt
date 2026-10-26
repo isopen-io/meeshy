@@ -11,18 +11,25 @@ import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import dagger.multibindings.IntoSet
 import javax.inject.Inject
+import me.meeshy.app.community.CommunityAddChannelSheet
+import me.meeshy.app.community.CommunityCreateScreen
 import me.meeshy.app.community.CommunityDetailNavigation
 import me.meeshy.app.community.CommunityDetailScreen
 import me.meeshy.app.community.CommunityDetailViewModel
 import me.meeshy.app.community.CommunityListScreen
+import me.meeshy.app.community.CommunitySettingsScreen
 import me.meeshy.app.navigation.Routes
 
 /** Les routes de l'espace Communautés — une liste, un détail par identifiant, et leurs écrans fils. */
 object CommunityRoutes {
     const val LIST = "communities"
+    const val CREATE = "communities/new"
     const val DETAIL = "community/{${CommunityDetailViewModel.COMMUNITY_ID_ARG}}"
+    const val SETTINGS = "community/{${CommunityDetailViewModel.COMMUNITY_ID_ARG}}/settings"
 
     fun detail(communityId: String): String = "community/$communityId"
+
+    fun settings(communityId: String): String = "community/$communityId/settings"
 }
 
 /**
@@ -35,7 +42,25 @@ class CommunityDestinations @Inject constructor() : NavGraphContributor {
             CommunityListScreen(
                 onBack = { navController.popBackStack() },
                 onOpenCommunity = { navController.navigate(CommunityRoutes.detail(it)) },
-                onCreateCommunity = { },
+                onCreateCommunity = { navController.navigate(CommunityRoutes.CREATE) },
+            )
+        }
+        builder.composable(CommunityRoutes.CREATE) {
+            CommunityCreateScreen(
+                onBack = { navController.popBackStack() },
+                onCreated = { id ->
+                    navController.navigate(CommunityRoutes.detail(id)) { popUpTo(CommunityRoutes.CREATE) { inclusive = true } }
+                },
+            )
+        }
+        builder.composable(
+            route = CommunityRoutes.SETTINGS,
+            arguments = listOf(navArgument(CommunityDetailViewModel.COMMUNITY_ID_ARG) { type = NavType.StringType }),
+        ) {
+            CommunitySettingsScreen(
+                onCancel = { navController.popBackStack() },
+                onSaved = { navController.popBackStack() },
+                onDeleted = { navController.popBackStack(CommunityRoutes.LIST, inclusive = false) },
             )
         }
         builder.composable(
@@ -46,6 +71,8 @@ class CommunityDestinations @Inject constructor() : NavGraphContributor {
                 navigation = CommunityDetailNavigation(
                     onBack = { navController.popBackStack() },
                     onOpenChannel = { navController.navigate(Routes.chat(it)) },
+                    onOpenSettings = { navController.navigate(CommunityRoutes.settings(it)) },
+                    addChannelSheet = { id, onAdded, onDismiss -> CommunityAddChannelSheet(id, onAdded, onDismiss) },
                 ),
             )
         }

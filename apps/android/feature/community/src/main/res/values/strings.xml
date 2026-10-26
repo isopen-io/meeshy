@@ -3,4 +3,6 @@
     <string name="community_role_member">Member</string>
     <string name="community_member_options_a11y">Options for %1$s</string>
     <string name="community_action_failed">Action failed. Try again.</string>
+    <string name="community_settings_color">Color</string>
+    <string name="community_settings_emoji">Emoji</string>
 </resources>
