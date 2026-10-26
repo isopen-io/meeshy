@@ -7,7 +7,6 @@ import Intents
 // No AppIntents.framework dependency found. ». L'import le fait passer en scan
 // bénin (« no relevant symbols »). Cette NSE ne définit aucun App Intent.
 import AppIntents
-import GRDB
 import MeeshySDK
 
 /// Rich-push service extension.

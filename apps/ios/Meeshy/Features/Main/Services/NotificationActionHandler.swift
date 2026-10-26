@@ -141,7 +141,7 @@ final class NotificationActionHandler: NotificationActionHandling {
     /// `messagePersistence` so tests never touch `DependencyContainer.shared`.
     private var prepareReplyQueue: @MainActor () async -> Void {
         injectedPrepareReplyQueue ?? {
-            await OfflineQueue.shared.configure(pool: DependencyContainer.shared.dbPool)
+            await OfflineQueue.shared.configure(pool: DependencyContainer.shared.database.pool)
         }
     }
 

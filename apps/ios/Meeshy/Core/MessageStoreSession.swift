@@ -1,12 +1,8 @@
 // apps/ios/Meeshy/Core/MessageStoreSession.swift
 
 import Foundation
-import GRDB
 @_spi(AccountStore) import MeeshySDK
-import os
 import MeeshySDK
-
-private nonisolated let storeSessionLogger = MeeshyLog.logger(.messageStoreSession)
 
 /// La base locale d'UN compte, ouverte (#8656).
 ///
@@ -22,24 +18,19 @@ private nonisolated let storeSessionLogger = MeeshyLog.logger(.messageStoreSessi
 nonisolated final class MessageStoreSession: Sendable {
     let key: MessageStoreAccountKey?
     let path: String
-    let dbPool: DatabasePool
+    let database: MessageStoreDatabase
     let messagePersistence: MessagePersistenceActor
     let feedPersistence: FeedPersistenceActor
-    let diagnostics: DatabaseInitDiagnostics
 
-    init(
-        key: MessageStoreAccountKey?,
-        path: String,
-        dbPool: DatabasePool,
-        diagnostics: DatabaseInitDiagnostics
-    ) {
+    init(key: MessageStoreAccountKey?, database: MessageStoreDatabase) {
         self.key = key
-        self.path = path
-        self.dbPool = dbPool
-        self.messagePersistence = MessagePersistenceActor(dbWriter: dbPool, currentUserId: key?.userId)
-        self.feedPersistence = FeedPersistenceActor(dbWriter: dbPool)
-        self.diagnostics = diagnostics
+        self.path = database.path
+        self.database = database
+        self.messagePersistence = MessagePersistenceActor(dbWriter: database.pool, currentUserId: key?.userId)
+        self.feedPersistence = FeedPersistenceActor(dbWriter: database.pool)
     }
+
+    var diagnostics: DatabaseInitDiagnostics { database.diagnostics }
 
     var fileName: String { (path as NSString).lastPathComponent }
 
@@ -59,34 +50,20 @@ nonisolated final class MessageStoreSession: Sendable {
         let path = base.appendingPathComponent(fileName).path
         let fallbackPath = key == nil ? nil : fallbackDirectory.map { $0.appendingPathComponent(fileName).path }
 
-        var diagnostics = DatabaseInitDiagnostics()
-        let pool = DependencyContainer.openWithRecovery(
-            dbPath: path,
-            fallbackPath: fallbackPath,
-            config: DependencyContainer.dbConfig(),
-            fileManager: fileManager,
-            diagnostics: &diagnostics
-        )
-        do {
-            try MessageDatabaseMigrations.runAll(on: pool)
-            try FeedDatabaseMigrations.runAll(on: pool)
-        } catch {
-            storeSessionLogger.fault("Message store migrations failed: \(error.localizedDescription, privacy: .public)")
-            diagnostics.firstAttemptError = (diagnostics.firstAttemptError ?? "") + " | migrations: \(error.localizedDescription)"
-        }
+        let database = MessageStoreDatabase.open(path: path, fallbackPath: fallbackPath, fileManager: fileManager)
         if key != nil {
             DependencyContainer.applyMessageStoreFileProtection(
                 directoryPath: base.path,
-                databasePath: pool.path
+                databasePath: database.path
             )
         }
         // #9743 — le compte de ce fichier, inscrit à l'ouverture : c'est la
         // preuve que la file lit pour écrire ou montrer un commentaire.
         // Pas une base de secours éphémère : seul le fichier du compte s'inscrit.
-        if let key, AccountStoreRegistry.admits(databasePath: pool.path, for: key) {
-            AccountStoreRegistry.register(databasePath: pool.path, key: key)
+        if let key, AccountStoreRegistry.admits(databasePath: database.path, for: key) {
+            AccountStoreRegistry.register(databasePath: database.path, key: key)
         }
-        let session = MessageStoreSession(key: key, path: pool.path, dbPool: pool, diagnostics: diagnostics)
+        let session = MessageStoreSession(key: key, database: database)
         let persistence = session.messagePersistence
         Task { await persistence.start() }
         return session

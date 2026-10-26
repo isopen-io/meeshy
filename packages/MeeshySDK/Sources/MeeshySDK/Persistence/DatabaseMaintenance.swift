@@ -24,7 +24,7 @@ public enum DatabaseMaintenance {
     /// `mmap` ni les ~32 Mo de cache de pages.
     ///
     /// À poser dans `Configuration.prepareDatabase`, qui court sur CHAQUE
-    /// connexion ouverte par le pool — le geste que `DependencyContainer.dbConfig()`
+    /// connexion ouverte par le pool — le geste que `MessageStoreDatabase.configuration()`
     /// faisait déjà pour trois AUTRES pragmas, et où ces trois-ci n'avaient
     /// simplement pas été portés.
     ///

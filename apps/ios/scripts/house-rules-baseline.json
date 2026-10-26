@@ -1,7 +1,7 @@
 {
   "rules": {
     "anyview": 96,
-    "app-grdb-import": 2,
+    "app-grdb-import": 0,
     "async-after": 76,
     "autocapitalization": 0,
     "available-floor": 0,

@@ -122,7 +122,7 @@ final class BackgroundTransitionCoordinator: BackgroundTransitioning {
         // App Group partagé avec la NSE — un verrou encore tenu à la
         // suspension est le motif documenté du kill 0xdead10cc.
         await withBudget("db.maintenance") {
-            let pool = DependencyContainer.shared.dbPool
+            let pool = DependencyContainer.shared.database.pool
             do {
                 try DatabaseMaintenance.runIncrementalVacuum(on: pool)
                 try DatabaseMaintenance.runOptimize(on: pool)
@@ -261,7 +261,7 @@ final class BackgroundTransitionCoordinator: BackgroundTransitioning {
             }
         }
         await resumeStep(epoch, "outbox.flush") {
-            let pool = DependencyContainer.shared.dbPool
+            let pool = DependencyContainer.shared.database.pool
             let flusher = OutboxFlusher(
                 pool: pool,
                 dispatcher: EndToEndOutboxGate(),

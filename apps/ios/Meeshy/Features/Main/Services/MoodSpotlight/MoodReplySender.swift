@@ -33,7 +33,7 @@ final class MoodReplySender: MoodReplySending {
 
     private var prepareReplyQueue: @MainActor () async -> Void {
         injectedPrepareReplyQueue ?? {
-            await OfflineQueue.shared.configure(pool: DependencyContainer.shared.dbPool)
+            await OfflineQueue.shared.configure(pool: DependencyContainer.shared.database.pool)
         }
     }
 

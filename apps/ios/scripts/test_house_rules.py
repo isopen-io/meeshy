@@ -475,11 +475,22 @@ class AppGRDBImportRule(unittest.TestCase):
             with self.subTest(src=src):
                 self.assertEqual(count("app-grdb-import", src), 0)
 
-    def test_sdk_and_extensions_are_out_of_the_app_measure(self):
+    def test_extensions_open_the_store_through_the_sdk_too(self):
+        for rel in (
+            "apps/ios/MeeshyNotificationExtension/X.swift",
+            "apps/ios/MeeshyNotificationContentExtension/X.swift",
+            "apps/ios/MeeshyShareExtension/X.swift",
+            "apps/ios/MeeshyBroadcastExtension/X.swift",
+            "apps/ios/MeeshyWidgets/X.swift",
+        ):
+            with self.subTest(rel=rel):
+                self.assertEqual(count("app-grdb-import", "import GRDB\n", rel), 1)
+
+    def test_sdk_and_tests_are_out_of_the_app_measure(self):
         for rel in (
             "packages/MeeshySDK/Sources/MeeshySDK/Persistence/X.swift",
-            "apps/ios/MeeshyNotificationExtension/X.swift",
-            "apps/ios/MeeshyShareExtension/X.swift",
+            "apps/ios/MeeshyTests/Unit/X.swift",
+            "apps/ios/MeeshyUIDeviceTests/X.swift",
         ):
             with self.subTest(rel=rel):
                 self.assertEqual(count("app-grdb-import", "import GRDB\n", rel), 0)

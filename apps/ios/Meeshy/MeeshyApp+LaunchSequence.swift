@@ -61,7 +61,7 @@ extension MeeshyApp {
 
     func bootOutbox(session bootSession: MessageStoreSession) async {
         launchSplash.reach(.outbox)
-        await OfflineQueue.shared.configure(pool: bootSession.dbPool)
+        await OfflineQueue.shared.configure(pool: bootSession.database.pool)
         Task { await SharePendingSendConsumer.shared.consumeAll() }
         Task { await ShareComposeHandoffConsumer.shared.consumeNext() }
         ShareRelayConsumer.shared.consumeNext()
@@ -140,7 +140,7 @@ extension MeeshyApp {
                 Logger.messages.error("Boot recovery (outbox flusher path) failed: \(error.localizedDescription, privacy: .public) — retried on next foreground")
             }
             let flusher = OutboxFlusher(
-                pool: bootSession.dbPool,
+                pool: bootSession.database.pool,
                 dispatcher: EndToEndOutboxGate(),
                 onOutcome: { @Sendable outcome in
                     Task { await OfflineQueue.shared.publishOutcome(outcome) }
