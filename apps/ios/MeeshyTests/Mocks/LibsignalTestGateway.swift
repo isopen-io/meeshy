@@ -237,4 +237,16 @@ extension LibsignalDeviceProvisioning {
             storage: { _ in (vault, lock) }
         )
     }
+
+    /// Un SEUL appareil (une base scellée, un trousseau) sur lequel plusieurs
+    /// comptes se connectent tour à tour : une installation par compte, qui
+    /// partagent leur stockage comme dans l'app (#13000).
+    static func sharedDevice(on gateway: LibsignalTestGateway, userIds: [String]) throws -> [String: LibsignalDeviceProvisioning] {
+        let vault = try E2EEGRDBRecordVault(writer: try DatabaseQueue(), sealingKey: SymmetricKey(size: .bits256))
+        let lock = E2EEProcessLock(path: NSTemporaryDirectory() + "e2ee-\(UUID().uuidString).lock")
+        let secrets = E2EEInMemorySecretStore()
+        return Dictionary(uniqueKeysWithValues: userIds.map { userId in
+            (userId, LibsignalDeviceProvisioning(directory: gateway.directory(userId: userId), secrets: secrets, storage: { _ in (vault, lock) }))
+        })
+    }
 }

@@ -309,7 +309,7 @@ extension ConversationSyncEngine {
     ) async {
         await cache.conversations.update(for: "list") { conversations in
             var updated = ConversationListLastMessage.applying(
-                facet, conversationId: conversationId, aliases: aliases, to: conversations
+                facet.sealedForEndToEnd(in: conversations, conversationId: conversationId), conversationId: conversationId, aliases: aliases, to: conversations
             ) ?? conversations
             if let idx = updated.firstIndex(where: { $0.id == conversationId }) {
                 updated[idx].userState.unreadCount = 0

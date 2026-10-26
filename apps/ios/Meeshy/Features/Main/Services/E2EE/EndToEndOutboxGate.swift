@@ -34,7 +34,9 @@ struct EndToEndOutboxGate: OutboxDispatching {
         if record.kind == .sendMessage {
             let localId = record.messageLocalId ?? record.clientMessageId
             let store = await inner.persistence()
-            _ = try? await store.applyEvent(localId: localId, event: .sendFailed(refusal))
+            await bestEffort("outbox.sendFailed", category: .messages) {
+                try await store.applyEvent(localId: localId, event: .sendFailed(refusal))
+            }
         }
         throw refusal
     }

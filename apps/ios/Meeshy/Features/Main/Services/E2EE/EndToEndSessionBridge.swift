@@ -25,6 +25,9 @@ final class EndToEndSessionBridge: EndToEndSessionBridging {
     private let connections: AnyPublisher<Bool, Never>
     private let regimeChanges: AnyPublisher<ConversationEncryptionChangedEvent, Never>
     private let regimeLedger: EndToEndRegimeLedger
+    private let janitor: EndToEndPlaintextJanitor
+    private let diskMigration: EndToEndDiskPlaintextMigration
+    private let storeChanges: AnyPublisher<Void, Never>
     private var subscriptions: Set<AnyCancellable> = []
     /// Les ouvertures et fermetures de session, dans l'ordre où elles sont
     /// demandées : deux tâches libres pouvaient rattraper le nouveau compte
@@ -36,13 +39,22 @@ final class EndToEndSessionBridge: EndToEndSessionBridging {
         envelopes: AnyPublisher<E2EEServedEnvelope, Never> = E2EEEnvelopeChannel.shared.received.eraseToAnyPublisher(),
         connections: AnyPublisher<Bool, Never> = MessageSocketManager.shared.$isConnected.eraseToAnyPublisher(),
         regimeChanges: AnyPublisher<ConversationEncryptionChangedEvent, Never> = ConversationEncryptionChannel.shared.changed.eraseToAnyPublisher(),
-        regimeLedger: EndToEndRegimeLedger = .shared
+        regimeLedger: EndToEndRegimeLedger = .shared,
+        janitor: EndToEndPlaintextJanitor = .shared,
+        diskMigration: EndToEndDiskPlaintextMigration = EndToEndDiskPlaintextMigration(
+            endToEnd: EndToEndMessagingRuntime.shared, rows: { DependencyContainer.shared.messagePersistence.endToEndRowSealer }
+        ),
+        storeChanges: AnyPublisher<Void, Never> = NotificationCenter.default
+            .publisher(for: .messageStoreShouldRefresh).map { _ in () }.eraseToAnyPublisher()
     ) {
         self.runtime = runtime
         self.envelopes = envelopes
         self.connections = connections
         self.regimeChanges = regimeChanges
         self.regimeLedger = regimeLedger
+        self.janitor = janitor
+        self.diskMigration = diskMigration
+        self.storeChanges = storeChanges
     }
 
     func start(userId: String) {
@@ -64,6 +76,24 @@ final class EndToEndSessionBridge: EndToEndSessionBridging {
         // #12522 — chaque bascule du régime est apprise, conversation ouverte ou non.
         regimeLedger.listen(to: regimeChanges).store(in: &subscriptions)
         enqueue { await runtime.catchUp(as: userId) }
+        // #12999 — le clair qu'une version antérieure a écrit hors du coffre s'en va.
+        let diskMigration = diskMigration
+        enqueue { await diskMigration.run(for: userId) }
+        // #13001 — un effacement écrit dans la base des messages vide le coffre.
+        let janitor = janitor
+        enqueue { await janitor.drain() }
+        runtime.opened
+            .receive(on: DispatchQueue.main)
+            .compactMap { outcome -> String? in
+                guard case .opened(let message) = outcome else { return nil }
+                return message.messageId
+            }
+            .sink { [weak self] messageId in Task { @MainActor in self?.enqueue { await janitor.reconsider(messageId) } } }
+            .store(in: &subscriptions)
+        storeChanges
+            .debounce(for: .seconds(1), scheduler: DispatchQueue.main)
+            .sink { [weak self] in Task { @MainActor in self?.enqueue { await janitor.drain() } } }
+            .store(in: &subscriptions)
     }
 
     func stop() {

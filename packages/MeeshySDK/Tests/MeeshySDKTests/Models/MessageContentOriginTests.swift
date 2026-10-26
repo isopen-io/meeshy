@@ -10,8 +10,8 @@ import XCTest
 /// pour un texte que le serveur forge dans une conversation chiffrée, et tout
 /// était scellé après un démarrage à froid (registre en mémoire). Le message
 /// porte désormais `contentOrigin`, que SEUL le déchiffrement sur l'appareil
-/// pose, lié par empreinte au texte qu'il a produit — et qui voyage dans le
-/// cache.
+/// pose, lié par empreinte au texte qu'il a produit. Le clair, lui, ne voyage
+/// pas dans le cache (#12999) : le fil le relit dans le coffre libsignal.
 final class MessageContentOriginTests: XCTestCase {
 
     private func message(content: String = "Q2lwaGVydGV4dGU=", isEncrypted: Bool = true) -> MeeshyMessage {
@@ -204,7 +204,10 @@ final class MessageContentOriginTests: XCTestCase {
     /// Une ligne dont l'empreinte ne couvre plus le texte (écrite par une
     /// version antérieure, ou abîmée) se relit `.wire`.
     func test_cachedOriginThatNoLongerCoversTheContent_decodesAsWire() throws {
-        var object = try blob(decrypted("oui"))
+        var object = try blob(message())
+        object["contentOrigin"] = try JSONSerialization.jsonObject(
+            with: JSONEncoder().encode(MessageContentOrigin.decrypted("oui", messageId: "m1"))
+        )
         object["content"] = ""
 
         XCTAssertEqual(try decode(object).contentOrigin, .wire)
@@ -212,11 +215,14 @@ final class MessageContentOriginTests: XCTestCase {
 
     // MARK: - Le cache (rétrocompatible)
 
-    func test_cacheRoundTrip_keepsTheProvenance() throws {
+    /// #12999 — le cache n'est pas le coffre : un clair déchiffré s'y écrit en
+    /// littéral, sans empreinte, et le fil le relit dans le coffre libsignal.
+    func test_cacheRoundTrip_keepsNoClear_theThreadReadsItFromTheVault() throws {
         let restored = try roundTrip(decrypted("Rendez-vous à midi"))
 
-        XCTAssertEqual(restored.content, "Rendez-vous à midi")
-        XCTAssertTrue(restored.isContentDecryptedOnDevice, "un démarrage à froid ne scelle plus ce que l'appareil a déchiffré")
+        XCTAssertEqual(restored.content, E2EEWire.contentPlaceholder)
+        XCTAssertEqual(restored.contentOrigin, .wire)
+        XCTAssertNil(try blob(decrypted("Rendez-vous à midi"))["contentOrigin"])
     }
 
     /// Une ligne écrite avant ce champ se relit `.wire` : rien n'est déclaré
@@ -280,7 +286,8 @@ final class MessageContentOriginTests: XCTestCase {
 
     func test_aCachedOriginSealedWithAnotherKey_decodesAsWire() throws {
         let foreign = try XCTUnwrap(digest(of: MessageContentOrigin.decrypted("oui", messageId: "m1", key: anotherDeviceKey())))
-        var object = try blob(decrypted("oui"))
+        var object = try blob(message())
+        object["content"] = "oui"
         object["contentOrigin"] = ["kind": "decryptedOnDevice.v2", "digest": foreign]
 
         let restored = try decode(object)
@@ -293,7 +300,8 @@ final class MessageContentOriginTests: XCTestCase {
     /// l'id, que n'importe qui recalcule) n'est plus vérifiable — elle se relit
     /// sans provenance, et le texte reste affiché.
     func test_aLegacyIdKeyedOrigin_inTheCache_decodesAsWire_withoutBreakingTheThread() throws {
-        var object = try blob(decrypted("Rendez-vous à midi"))
+        var object = try blob(message())
+        object["content"] = "Rendez-vous à midi"
         object["contentOrigin"] = ["kind": "decryptedOnDevice", "digest": idKeyedDigest(of: "Rendez-vous à midi", messageId: "m1")]
 
         let restored = try decode(object)
@@ -313,7 +321,8 @@ final class MessageContentOriginTests: XCTestCase {
     }
 
     func test_aVouchedOrigin_isEncodedUnderItsVersionedKind() throws {
-        let origin = try XCTUnwrap(try blob(decrypted("oui"))["contentOrigin"] as? [String: Any])
+        let encoded = try JSONEncoder().encode(MessageContentOrigin.decrypted("oui", messageId: "m1"))
+        let origin = try XCTUnwrap(try JSONSerialization.jsonObject(with: encoded) as? [String: Any])
 
         XCTAssertEqual(origin["kind"] as? String, "decryptedOnDevice.v2")
     }

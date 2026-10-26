@@ -24,8 +24,8 @@ final class EndToEndThreadClear {
     nonisolated deinit {}
 
     /// Lit puis pose le clair de tout message scellé du lot, et le retient.
-    func resolve(_ messages: inout [MeeshyMessage], from endToEnd: any EndToEndMessagingProviding, conversationId: String) async {
-        let found = await EndToEndThreadPlaintexts.resolve(&messages, from: endToEnd, conversationId: conversationId)
+    func resolve(_ messages: inout [MeeshyMessage], from endToEnd: any EndToEndMessagingProviding, conversationId: String, account: String) async {
+        let found = await EndToEndThreadPlaintexts.resolve(&messages, from: endToEnd, conversationId: conversationId, account: account)
         guard found.contains(where: { adopted[$0.key] != $0.value }) else { return }
         adopted.merge(found) { _, fresh in fresh }
     }

@@ -69,4 +69,15 @@ final class StarredSnapshotFactoryTests: XCTestCase {
     func test_senderName_fallsBackOnTheUsername() {
         XCTAssertEqual(snapshot(of: makeMessage(content: "x", senderName: nil)).senderName, "alice")
     }
+
+    func test_snapshot_ofAnEndToEndMessageReadOnTheDevice_keepsOnlyTheSealedLabel() {
+        var message = makeMessage(content: "[Encrypted]")
+        message.isEncrypted = true
+        message.encryptionMode = E2EEWire.mode
+        message.adoptDecryptedContent("le secret déchiffré")
+
+        let result = snapshot(of: message, translatedPreview: "the decrypted secret")
+
+        XCTAssertEqual(result.contentPreview, StarredSnapshotFactory.sealedPreview)
+    }
 }

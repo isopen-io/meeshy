@@ -221,6 +221,7 @@ final class ConversationCommandHandler: ConversationCommandProviding {
         }
         do {
             try await messageService.delete(conversationId: conversationId, messageId: serverId)
+            await bestEffort("delete.confirm", category: .messages) { try await persistence.confirmDeletion(localId: messageId) }
             return nil
         } catch {
             try? await persistence.markUndeleted(localId: messageId)
@@ -234,6 +235,7 @@ final class ConversationCommandHandler: ConversationCommandProviding {
         await eraseLocally(messageId: messageId, serverId: serverId, deletedAt: now())
         do {
             try await messageService.delete(conversationId: conversationId, messageId: serverId, reason: reason)
+            await bestEffort("delete.confirm", category: .messages) { try await persistence.confirmDeletion(localId: messageId) }
             return nil
         } catch {
             try? await persistence.markUndeleted(localId: messageId)
@@ -258,6 +260,7 @@ final class ConversationCommandHandler: ConversationCommandProviding {
                 try await messageService.delete(
                     conversationId: conversationId, messageId: target.serverId, reason: target.isMine ? nil : reason
                 )
+                await bestEffort("delete.confirm", category: .messages) { try await persistence.confirmDeletion(localId: target.messageId) }
             } catch {
                 try? await persistence.markUndeleted(localId: target.messageId)
                 refusal = ConversationCommandFailure(error)
@@ -275,7 +278,7 @@ final class ConversationCommandHandler: ConversationCommandProviding {
     }
 
     private func eraseLocally(messageId: String, serverId: String, deletedAt: Date) async {
-        try? await persistence.markDeleted(localId: messageId, deletedAt: deletedAt, sparingOpenedViewOnce: false, expired: false)
+        await bestEffort("delete.local", category: .messages) { try await persistence.markDeletedAwaitingConfirmation(localId: messageId, deletedAt: deletedAt) }
         StarredMessagesStore.shared.remove(messageId: serverId)
     }
 

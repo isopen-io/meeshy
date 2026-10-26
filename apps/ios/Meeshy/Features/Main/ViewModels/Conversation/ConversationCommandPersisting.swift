@@ -4,6 +4,11 @@ import MeeshySDK
 nonisolated protocol ConversationCommandPersisting: Sendable {
     func markDeleted(localId: String, deletedAt: Date, sparingOpenedViewOnce: Bool, expired: Bool) async throws
     func markUndeleted(localId: String) async throws
+    /// Une suppression lancée ici, posée avant la réponse du serveur : son
+    /// clair E2EE reste au coffre tant qu'elle n'est pas confirmée (#13001).
+    func markDeletedAwaitingConfirmation(localId: String, deletedAt: Date) async throws
+    /// Le serveur a accepté la suppression : le clair peut quitter le coffre.
+    func confirmDeletion(localId: String) async throws
     func updatePinned(localId: String, pinnedAt: Date?, pinnedBy: String?) async throws
     func markEditedLocally(localId: String, newContent: String, now: Date) async throws -> Date?
     func markEdited(

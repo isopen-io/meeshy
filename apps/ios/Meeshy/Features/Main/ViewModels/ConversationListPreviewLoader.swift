@@ -386,7 +386,7 @@ final class ConversationListPreviewLoader: ObservableObject {
             provenance[conversationId] = Self.isFresh(cached) ? .freshCache : .staleCache
             // Cache-first : le cache est DÉJÀ servi ; le clair que l'appareil a
             // ouvert remplace ensuite ses placeholders scellés, sans spinner.
-            if let opened = await openedOnDevice(plaintextSources, for: request) {
+            if let opened = await openedOnDevice(plaintextSources, for: request, account: currentUserId()) {
                 publish(opened, translations: translations, for: conversationId)
                 plaintextSources = opened
             }
@@ -407,10 +407,10 @@ final class ConversationListPreviewLoader: ObservableObject {
     /// « après lecture » reçue n'est même pas demandée : la liste ne la livre
     /// pas. `nil` : rien de neuf, tout reste scellé (fail-closed). Le clair ne
     /// quitte pas ce chargeur : ni cache, ni réseau, ni journal.
-    private func openedOnDevice(_ messages: [Message], for request: Request) async -> [Message]? {
+    private func openedOnDevice(_ messages: [Message], for request: Request, account: String) async -> [Message]? {
         let keys = EndToEndThreadPlaintexts.lookupKeys(of: messages.filter { !Self.holdsBurnOnRead($0) })
-        guard !keys.isEmpty, mayWrite(request) else { return nil }
-        let entries = await endToEnd.plaintexts(for: keys)
+        guard !keys.isEmpty, !account.isEmpty, mayWrite(request) else { return nil }
+        let entries = await endToEnd.plaintexts(for: keys, as: account)
         guard mayWrite(request) else { return nil }
         return Self.adopting(entries, into: messages, conversationId: request.conversationId)
     }
@@ -622,7 +622,7 @@ final class ConversationListPreviewLoader: ObservableObject {
             // Le clair connu recouvre le cryptogramme AVEC sa provenance : la
             // revalidation suivante le reconnaît encore.
             let carried = Self.carrying(onDevice, onto: decoded)
-            let opened = await openedOnDevice(carried, for: request)
+            let opened = await openedOnDevice(carried, for: request, account: userId)
             guard mayWrite(request) else { return }
             let messages = opened ?? carried
             let translations = ordered.reduce(into: [String: [MessageTranslation]]()) { map, api in

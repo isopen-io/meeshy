@@ -28,6 +28,10 @@ nonisolated final class MockEndToEndMessaging: EndToEndMessagingProviding, @unch
 
     var opened: AnyPublisher<E2EEOpenOutcome, Never> { outcomes.eraseToAnyPublisher() }
 
+    private let sessionSubject = PassthroughSubject<String?, Never>()
+    var sessions: AnyPublisher<String?, Never> { sessionSubject.eraseToAnyPublisher() }
+    func announceSession(_ account: String?) { sessionSubject.send(account) }
+
     func publish(_ outcome: E2EEOpenOutcome) { outcomes.send(outcome) }
 
     func store(_ entry: E2EEPlaintextEntry, for messageId: String) {
@@ -57,18 +61,54 @@ nonisolated final class MockEndToEndMessaging: EndToEndMessagingProviding, @unch
         throw E2EESealError.devicesMismatchUnresolved
     }
 
-    func remember(_ content: E2EEContent, from senderUserId: String, as messageIds: [String]) async {
-        lock.withLock { messageIds.forEach { stored[$0] = .readable(content, senderUserId: senderUserId) } }
+    /// Le compte dont le coffre est enrôlé ; `nil` : tout compte affirmé est servi.
+    var vaultAccount: String?
+    /// `false` : le rangement du clair échoue (session fermée, autre compte).
+    var rememberAccepted = true
+    private(set) var readAccounts: [String] = []
+
+    @discardableResult
+    func remember(_ content: E2EEContent, from senderUserId: String, as messageIds: [String]) async -> Bool {
+        lock.withLock {
+            guard rememberAccepted, serves(senderUserId) else { return false }
+            messageIds.forEach { stored[$0] = .readable(content, senderUserId: senderUserId) }
+            return true
+        }
     }
 
-    func plaintexts(for messageIds: [String]) async -> [String: E2EEPlaintextEntry] {
+    func plaintexts(for messageIds: [String], as account: String) async -> [String: E2EEPlaintextEntry] {
         let hook = lock.withLock { () -> (@MainActor @Sendable () async -> Void)? in
             plaintextsCallCount += 1
             requestedPlaintextKeys.append(contentsOf: messageIds)
+            readAccounts.append(account)
             return onPlaintexts
         }
         if let hook { await hook() }
-        return lock.withLock { stored.filter { messageIds.contains($0.key) } }
+        return lock.withLock { serves(account) ? stored.filter { messageIds.contains($0.key) } : [:] }
+    }
+
+    /// `false` : le coffre refuse (session fermée, autre compte) et l'effacement attend.
+    var erasureAccepted = true
+    private(set) var erasedIds: [[String]] = []
+
+    func erase(_ messageIds: [String], as account: String) async -> Bool {
+        lock.withLock {
+            erasedIds.append(messageIds)
+            guard erasureAccepted, serves(account) else { return false }
+            messageIds.forEach { stored[$0] = nil }
+            return true
+        }
+    }
+
+    func storedMessageIds(as account: String) async -> [String]? {
+        lock.withLock { serves(account) ? stored.keys.sorted() : nil }
+    }
+
+    /// Les identifiants rangés, vus de l'extérieur du coffre (témoins).
+    var storedIds: [String] { lock.withLock { stored.keys.sorted() } }
+
+    private func serves(_ account: String) -> Bool {
+        vaultAccount.map { $0 == account } ?? true
     }
 
     /// Combien de fois le clair a été LU, et sous quelles clés.
