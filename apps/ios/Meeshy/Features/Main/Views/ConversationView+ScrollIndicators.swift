@@ -220,7 +220,7 @@ extension ConversationView {
     func clearUnreadPreviewAtItsDeadline() async {
         guard let messageId = viewModel.lastUnreadMessage?.id, let deadline = unreadPreview.expiresAt else { return }
         while let delay = UnreadPillLaw.wait(until: deadline, now: Date()) {
-            do { try await Task.sleep(nanoseconds: delay) } catch { return }
+            do { try await Task.sleep(for: .nanoseconds(delay)) } catch { return }
         }
         guard viewModel.lastUnreadMessage?.id == messageId, unreadPreview.text == nil else { return }
         viewModel.lastUnreadMessage = nil
