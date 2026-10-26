@@ -331,11 +331,32 @@ enum EncryptionSwitchNoticeTrail {
             .min()
     }
 
+    /// Le premier message chiffré de bout en bout affiché que le SERVEUR a
+    /// servi ou acquitté. Ma ligne scellée en cours ou en échec porte le
+    /// régime que cet envoi a choisi, pas une preuve : elle scelle, elle ne
+    /// s'apprend pas — sans quoi une trace qui ne s'apprend jamais (chiffré
+    /// sans mode) s'apprendrait par la ligne qu'elle a fait sceller (#12999).
+    /// Le filtre lit l'état d'envoi, pas l'auteur : seule une ligne optimiste
+    /// n'est pas acquittée, et l'auteur dépend d'un compte qui peut manquer.
+    static func acknowledgedEndToEndMessageShownAt(in messages: [Message]) -> Date? {
+        endToEndMessageShownAt(in: messages.filter(\.deliveryStatus.isAcknowledgedByServer))
+    }
+
     static func activationShownAt(in messages: [Message]) -> Date? {
         messages
             .filter { $0.messageSource == .system && $0.encryptionSwitchNotice?.enablesEndToEnd == true }
             .map(\.createdAt)
             .min()
+    }
+}
+
+private extension Message.DeliveryStatus {
+    /// Le serveur a pris le message : acquitté, remis ou lu.
+    var isAcknowledgedByServer: Bool {
+        switch self {
+        case .sent, .delivered, .read: true
+        case .sending, .invisible, .clock, .slow, .failed: false
+        }
     }
 }
 
@@ -356,7 +377,8 @@ extension EndToEndRegimeLedger {
     func seals(for conversationId: String, opening: String?, cached: String?, trail: [Message], isDirect: Bool) -> Bool {
         let activation = EncryptionSwitchNoticeTrail.activationShownAt(in: trail)
         let sealedMessage = EncryptionSwitchNoticeTrail.endToEndMessageShownAt(in: trail)
-        let learned = isDirect ? [activation, sealedMessage].compactMap { $0 }.min() : activation
+        let provenMessage = EncryptionSwitchNoticeTrail.acknowledgedEndToEndMessageShownAt(in: trail)
+        let learned = isDirect ? [activation, provenMessage].compactMap { $0 }.min() : activation
         let seals = self.seals(for: conversationId, opening: opening, cached: cached, activationShownAt: learned)
         return seals || sealedMessage != nil || EncryptionSwitchNoticeTrail.ambiguousEncryptedMessageShown(in: trail)
     }
@@ -423,6 +445,9 @@ nonisolated extension EndToEndSendRefusal {
         case .sealedOnlyInConversation:
             String(localized: "conversation.send.e2ee.sealedOnlyInConversation",
                    defaultValue: "Conversation chiffrée : le message n’est pas parti. Ouvrez la conversation et touchez-le pour l’envoyer chiffré.", bundle: .main)
+        case .unkeptOutsideConversation:
+            String(localized: "conversation.send.e2ee.unkeptOutsideConversation",
+                   defaultValue: "Conversation chiffrée : le message n’est pas parti et n’a pas pu être gardé sur cet appareil. Ouvrez la conversation pour l’écrire à nouveau.", bundle: .main)
         }
     }
 }

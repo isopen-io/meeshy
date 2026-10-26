@@ -7,8 +7,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import me.meeshy.sdk.model.composer.ComposerToolbarLaw
 
-/** Bottom bar layer: the pending attachments and the @mention suggestions strips stacked over the composer. */
+/** Bottom bar layer: the @mention suggestions strip over the composer, whose glass plate carries the pending attachments. */
 @Composable
 internal fun ChatBottomBarHost(host: ChatHostContext) {
     val state = host.state
@@ -28,11 +29,6 @@ internal fun ChatBottomBarHost(host: ChatHostContext) {
     }
     val editPending = rememberPendingRetouch(actions)
     Column {
-        ComposerPendingStrip(
-            pending.items,
-            onRemove = actions.removePendingAttachment,
-            onEdit = editPending,
-        )
         MentionSuggestionStrip(
             mention = state.mention,
             accentColor = accentColor,
@@ -53,15 +49,33 @@ internal fun ChatBottomBarHost(host: ChatHostContext) {
             onStageVoiceFile = { file -> actions.stageFile(file, "audio/mp4") },
             onStageCapturedUris = actions.stageCapturedUris,
             selfAuthor = actions.selfAuthor(),
-            hasEffects = state.hasPendingEffects,
+            effects = state.pendingEffects,
+            onToggleEffect = actions.toggleEffect,
+            onSelectEphemeralDuration = actions.selectEphemeralDuration,
+            quickEmojis = ComposerToolbarLaw.quickEmojis(state.quickReactions),
+            onQuickEmoji = { emoji ->
+                actions.onDraftChange(emoji)
+                actions.send()
+            },
+            pendingSlot = if (pending.items.isEmpty()) null else {
+                {
+                    ComposerPendingStrip(
+                        pending.items,
+                        onRemove = actions.removePendingAttachment,
+                        onEdit = editPending,
+                    )
+                }
+            },
+            canMinimize = false,
+            foldable = true,
+            pendingAttachmentCount = pending.items.size,
             clipboardContent = state.clipboardContent,
-            sentiment = composerText.sentiment,
             languageCode = state.composerLanguageCode,
             accentColor = accentColor,
             onDraftChange = actions.onDraftChange,
             onPickLanguage = actions.onComposerLanguagePicked,
             onSend = actions.send,
-            onOpenEffects = actions.openEffectsPicker,
+            onClearEffects = actions.clearEffects,
             onCancelEdit = actions.cancelEdit,
             onCancelReply = actions.cancelReply,
             onRemoveClipboard = actions.removeClipboardContent,
