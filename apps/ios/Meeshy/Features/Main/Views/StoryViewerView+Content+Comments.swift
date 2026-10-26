@@ -22,12 +22,12 @@ extension StoryViewerView {
         // au-dessus de sa rangée de saisie. Spec user 2026-05-28 :
         // « une seule zone de saisie de commentaire ».
         StoryCommentsOverlayView(
-            storyComments: storyComments,
+            storyComments: storyCommentThread.roots,
             storyCommentCount: storyCommentCount,
-            storyCommentRepliesMap: storyCommentRepliesMap,
-            storyCommentExpandedThreads: storyCommentExpandedThreads,
-            storyCommentLoadingReplies: storyCommentLoadingReplies,
-            storyCommentRepliesHasMore: storyCommentRepliesHasMore,
+            storyCommentRepliesMap: storyCommentThread.replies,
+            storyCommentExpandedThreads: storyCommentThread.expandedThreads,
+            storyCommentLoadingReplies: storyCommentThread.loadingReplies,
+            storyCommentRepliesHasMore: storyCommentThread.repliesHasMore,
             isLoadingComments: isLoadingComments,
             readerLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser),
             isStoryExpired: currentStory?.isExpired() ?? false,
@@ -48,92 +48,33 @@ extension StoryViewerView {
 
     // MARK: - Story Comment Thread Management
 
+    /// A story's thread is live: every expand refetches its first page, a
+    /// failed load keeps it open (`CommentThreadEntity.isLive`).
     func toggleStoryCommentThread(_ commentId: String) async {
-        if storyCommentExpandedThreads.contains(commentId) {
-            storyCommentExpandedThreads.remove(commentId)
-        } else {
-            storyCommentExpandedThreads.insert(commentId)
-            // Always refetch to get latest replies
-            await loadStoryCommentReplies(commentId: commentId)
-        }
+        await currentStoryThread()?.toggleThread(commentId)
     }
 
     func loadStoryCommentReplies(commentId: String) async {
-        guard let story = currentStory,
-              !storyCommentLoadingReplies.contains(commentId) else { return }
-        storyCommentLoadingReplies.insert(commentId)
-        defer { storyCommentLoadingReplies.remove(commentId) }
-        do {
-            let response = try await PostService.shared.getCommentReplies(
-                postId: story.id, commentId: commentId
-            )
-            // Refetch-on-expand = première page → REPLACE + réinitialisation
-            // du curseur ; les pages suivantes (loadMoreStoryCommentReplies)
-            // s'append-ent dessus.
-            storyCommentRepliesMap[commentId] = mapStoryReplies(response.data, parentId: commentId)
-            storyCommentRepliesNextCursor[commentId] = response.pagination?.nextCursor
-            storyCommentRepliesHasMore[commentId] = response.pagination?.hasMore ?? false
-        } catch {
-            // Échec réseau transitoire : on garde le thread OUVERT (le
-            // refermer punissait l'utilisateur qui venait de l'ouvrir) —
-            // il affiche son état vide/spinner et le prochain toggle ou
-            // refetch opportuniste réessaiera.
-            Logger.messages.error("[StoryViewer] loadStoryCommentReplies failed for \(commentId, privacy: .public): \(error.localizedDescription, privacy: .public)")
-        }
+        await currentStoryThread()?.loadReplies(commentId: commentId)
     }
 
-    /// Page suivante (curseur `gt`, tri ASC → APPEND) des réponses d'un fil de
-    /// commentaire de story. Jamais de remplacement : les réponses posées
-    /// optimistiquement / par socket restent en place (dédup par id).
-    /// NOTE : `storyCommentRepliesHasMore[id] == nil` (pagination jamais
-    /// enregistrée — premier fetch échoué) n'est PAS bloquant : `cursor: nil`
-    /// signifie « page 1 » et récupère un vrai curseur. Seul `false` stoppe.
     func loadMoreStoryCommentReplies(commentId: String) async {
-        guard let story = currentStory,
-              storyCommentRepliesHasMore[commentId] != false,
-              !storyCommentLoadingReplies.contains(commentId) else { return }
-        storyCommentLoadingReplies.insert(commentId)
-        defer { storyCommentLoadingReplies.remove(commentId) }
-        do {
-            let response = try await PostService.shared.getCommentReplies(
-                postId: story.id, commentId: commentId,
-                cursor: storyCommentRepliesNextCursor[commentId], limit: 20
-            )
-            let fetched = mapStoryReplies(response.data, parentId: commentId)
-            let existing = storyCommentRepliesMap[commentId] ?? []
-            let existingIds = Set(existing.map(\.id))
-            storyCommentRepliesMap[commentId] = existing + fetched.filter { !existingIds.contains($0.id) }
-            storyCommentRepliesNextCursor[commentId] = response.pagination?.nextCursor
-            storyCommentRepliesHasMore[commentId] = response.pagination?.hasMore ?? false
-        } catch {
-            // Échec réseau : stopper proprement la pagination (et toute chasse
-            // en cours) — le fil garde les pages déjà chargées.
-            storyCommentRepliesHasMore[commentId] = false
-        }
+        await currentStoryThread()?.loadMoreReplies(commentId: commentId)
     }
 
-    /// Ciblage d'une RÉPONSE notifiée : déplie le fil du parent (refetch page 1,
-    /// curseur réinitialisé) puis chasse les pages de réponses jusqu'à la cible
-    /// (borné — cf. `CommentTargetHunter`). Retourne `true` si la réponse est
-    /// chargée à l'issue de la chasse.
+    /// Ciblage d'une RÉPONSE notifiée : déplie le fil du parent (refetch page 1)
+    /// puis chasse les pages de réponses jusqu'à la cible (borné —
+    /// `CommentTargetHunter`). Retourne `true` si la réponse est chargée.
     func revealTargetStoryReply(parentId: String, replyId: String) async -> Bool {
-        if !storyCommentExpandedThreads.contains(parentId) {
-            await toggleStoryCommentThread(parentId)
-        } else if storyCommentRepliesMap[parentId] == nil {
-            await loadStoryCommentReplies(commentId: parentId)
-        }
-        return await CommentTargetHunter.hunt(
-            isPresent: { storyCommentRepliesMap[parentId]?.contains(where: { $0.id == replyId }) ?? false },
-            // `nil` = pagination inconnue (premier fetch échoué) → retenter la
-            // page 1 ; seul `false` (fin de fil connue) arrête la chasse.
-            hasMore: { storyCommentRepliesHasMore[parentId] != false },
-            loadNextPage: { await loadMoreStoryCommentReplies(commentId: parentId) }
-        )
+        guard let thread = currentStoryThread() else { return false }
+        if !thread.expandedThreads.contains(parentId) { await thread.toggleThread(parentId) }
+        return await thread.loadRepliesUntilPresent(replyId, in: parentId)
     }
 
-    private func mapStoryReplies(_ data: [APIPostComment], parentId: String) -> [FeedComment] {
-        let langs = ReaderPrism.resolve(for: AuthManager.shared.currentUser)
-        return data.map { FeedComment(api: $0, preferredLanguages: langs, parentId: parentId) }
+    private func currentStoryThread() -> CommentThreadViewModel? {
+        guard let story = currentStory else { return nil }
+        storyCommentThread.entity = .story(story.id)
+        return storyCommentThread
     }
 
     // MARK: - Story Comment Reactions
@@ -155,7 +96,7 @@ extension StoryViewerView {
     ///
     /// La solution : faire confiance à `event.aggregation` qui porte le state
     /// global (count total + flag `hasCurrentUser`) après application de
-    /// l'événement. On met à jour `storyComments[i].likes` à ce count, on
+    /// l'événement. On met à jour `storyCommentThread.roots[i].likes` à ce count, on
     /// réinitialise le delta à 0, et on synchronise `storyCommentLikedIds`
     /// depuis `hasCurrentUser`. Le résultat affiché — `comment.likes + delta`
     /// — converge vers la vérité serveur sans flicker.
@@ -164,7 +105,7 @@ extension StoryViewerView {
     /// viewed story used to only move the sidebar's denormalized count (via
     /// `StoryViewModel`'s `storyGroups` mutation → the `.adaptiveOnChange(of:
     /// currentStory?.commentCount)` mirror) — the comments overlay's own
-    /// `storyComments`/`storyCommentRepliesMap` never received the new row, so
+    /// `storyCommentThread.roots`/`storyCommentThread.replies` never received the new row, so
     /// a viewer with the overlay open needed to close and reopen it to see a
     /// comment someone else just posted.
     func applyStoryCommentAdded(_ data: SocketCommentAddedData) {
@@ -175,12 +116,12 @@ extension StoryViewerView {
         let result = Self.applyingStoryCommentAdded(
             comment: comment,
             clientMutationId: data.clientMutationId,
-            expandedThreads: storyCommentExpandedThreads,
-            comments: storyComments,
-            repliesMap: storyCommentRepliesMap
+            expandedThreads: storyCommentThread.expandedThreads,
+            comments: storyCommentThread.roots,
+            repliesMap: storyCommentThread.replies
         )
-        storyComments = result.comments
-        storyCommentRepliesMap = result.repliesMap
+        storyCommentThread.roots = result.comments
+        storyCommentThread.replies = result.repliesMap
         storyCommentCount = data.commentCount
     }
 
@@ -190,9 +131,7 @@ extension StoryViewerView {
     func applyStoryCommentUpdated(_ data: SocketCommentUpdatedData) {
         guard data.postId == currentStory?.id else { return }
         let updated = FeedComment(api: data.comment, preferredLanguages: resolvedViewerLanguageChain)
-        let applied = FeedCommentThread(roots: storyComments, replies: storyCommentRepliesMap).replacing(updated)
-        storyComments = applied.roots
-        storyCommentRepliesMap = applied.replies
+        storyCommentThread.thread = storyCommentThread.thread.replacing(updated)
     }
 
     /// Traduction de commentaire arrivée pendant la lecture : elle rejoint la
@@ -200,12 +139,10 @@ extension StoryViewerView {
     /// la descente du Prisme — la règle unique du fil (`FeedCommentThread`).
     func applyStoryCommentTranslationUpdated(_ data: SocketCommentTranslationUpdatedData) {
         guard data.postId == currentStory?.id else { return }
-        let applied = FeedCommentThread(roots: storyComments, replies: storyCommentRepliesMap).mergingTranslation(
+        storyCommentThread.thread = storyCommentThread.thread.mergingTranslation(
             data.translation.text, commentId: data.commentId, language: data.language,
             preferredLanguages: resolvedViewerLanguageChain
         )
-        storyComments = applied.roots
-        storyCommentRepliesMap = applied.replies
     }
 
     /// Pure routing/dedup decision for a `comment:added` broadcast — extracted
@@ -267,7 +204,7 @@ extension StoryViewerView {
     func applyCommentReactionEvent(_ event: SocketCommentReactionUpdateEvent) {
         // 2026-05-29 : on ne gate plus sur `showCommentsOverlay` — l'état doit
         // rester aligné sur le serveur même quand l'overlay est fermé.
-        // Si `storyComments` est vide (overlay jamais ouvert), `firstIndex(where:)`
+        // Si `storyCommentThread.roots` est vide (overlay jamais ouvert), `firstIndex(where:)`
         // plus bas retourne nil et on skip silencieusement ; on se ré-aligne
         // au prochain load via `computeLikedIds(fromCachedComments:)` (Task 3).
         guard event.postId == currentStory?.id else { return }
@@ -299,13 +236,13 @@ extension StoryViewerView {
         // Reset du delta et propagation du count serveur dans la liste pour
         // que la prochaine reaction parte d'une baseline propre.
         storyCommentLikeDelta[commentId] = 0
-        if let idx = storyComments.firstIndex(where: { $0.id == commentId }) {
-            storyComments[idx].likes = resolvedCount
-        } else if let parentId = storyComments.first(where: { storyCommentRepliesMap[$0.id]?.contains(where: { $0.id == commentId }) == true })?.id,
-                  var replies = storyCommentRepliesMap[parentId],
+        if let idx = storyCommentThread.roots.firstIndex(where: { $0.id == commentId }) {
+            storyCommentThread.roots[idx].likes = resolvedCount
+        } else if let parentId = storyCommentThread.roots.first(where: { storyCommentThread.replies[$0.id]?.contains(where: { $0.id == commentId }) == true })?.id,
+                  var replies = storyCommentThread.replies[parentId],
                   let replyIdx = replies.firstIndex(where: { $0.id == commentId }) {
             replies[replyIdx].likes = resolvedCount
-            storyCommentRepliesMap[parentId] = replies
+            storyCommentThread.replies[parentId] = replies
         }
     }
 
@@ -384,13 +321,13 @@ extension StoryViewerView {
         if let now = currentStory?.id, now != story.id { return }
         switch cached {
         case .fresh(let comments, _):
-            storyComments = comments
+            storyCommentThread.roots = comments
             storyCommentLikedIds = Self.computeLikedIds(fromCachedComments: comments)
             let topAll = comments.filter { $0.parentId == nil }
             storyCommentCount = topAll.count + topAll.reduce(0) { $0 + $1.replies }
             return
         case .stale(let comments, _):
-            storyComments = comments
+            storyCommentThread.roots = comments
             storyCommentLikedIds = Self.computeLikedIds(fromCachedComments: comments)
             let topAll = comments.filter { $0.parentId == nil }
             storyCommentCount = topAll.count + topAll.reduce(0) { $0 + $1.replies }
@@ -423,7 +360,7 @@ extension StoryViewerView {
             // different known story (tolerate transient nil reads).
             if let now = currentStory?.id, now != story.id { return }
             let comments = response.data.map { Self.storyComment(from: $0, preferredLanguages: langs) }
-            storyComments = comments
+            storyCommentThread.roots = comments
             storyCommentsNextCursor = response.pagination?.nextCursor
             storyCommentsHasMore = response.pagination?.hasMore ?? false
             storyCommentLikedIds = Self.computeLikedIds(from: response.data)
@@ -458,8 +395,8 @@ extension StoryViewerView {
             )
             if let now = currentStory?.id, now != story.id { return }
             let fetched = response.data.map { FeedComment(api: $0, preferredLanguages: langs) }
-            let existing = Set(storyComments.map(\.id))
-            storyComments.append(contentsOf: fetched.filter { !existing.contains($0.id) })
+            let existing = Set(storyCommentThread.roots.map(\.id))
+            storyCommentThread.roots.append(contentsOf: fetched.filter { !existing.contains($0.id) })
             storyCommentsNextCursor = response.pagination?.nextCursor
             storyCommentsHasMore = response.pagination?.hasMore ?? false
         } catch {
@@ -473,7 +410,7 @@ extension StoryViewerView {
         let anchors = [targetCommentId, targetParentCommentId].compactMap { $0 }
         guard !anchors.isEmpty else { return }
         _ = await CommentTargetHunter.hunt(
-            isPresent: { storyComments.contains { anchors.contains($0.id) } },
+            isPresent: { storyCommentThread.roots.contains { anchors.contains($0.id) } },
             hasMore: { storyCommentsHasMore },
             loadNextPage: { await loadNextStoryCommentsPage() }
         )
@@ -501,7 +438,7 @@ extension StoryViewerView {
     func loadStoryCommentCount() {
         guard let story = currentStory else {
             storyCommentCount = 0
-            storyComments = []
+            storyCommentThread.roots = []
             return
         }
 

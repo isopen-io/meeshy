@@ -206,14 +206,11 @@ extension StoryViewerView {
         // stuck true and shouldPauseTimer would freeze the story forever.
         isScrubbingRail = false
         replyingToStoryComment = nil
-        storyCommentRepliesMap = [:]
-        storyCommentExpandedThreads = []
-        storyCommentLoadingReplies = []
+        storyCommentThread.reset(to: .story(currentStory?.id ?? ""))
         // Slide changed → drop previous slide's comment list, like overrides, and
         // any in-flight heart taps. Without this, `isStoryCommentsEmpty` stays
         // false in the sidebar tap path (Sidebar:277) and the overlay re-opens
         // with the prior slide's comments without ever refetching.
-        storyComments = []
         storyCommentLikedIds = []
         storyCommentLikeDelta = [:]
         heartInFlightIds = []
@@ -328,7 +325,7 @@ extension StoryViewerView {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                     showCommentsOverlay = true
                 }
-                if storyComments.isEmpty {
+                if storyCommentThread.roots.isEmpty {
                     loadStoryComments()
                 }
             case .showViewersSheet:
@@ -385,18 +382,18 @@ extension StoryViewerView {
 
         if let parentId {
             // Reply — insert into repliesMap so it appears in the thread
-            var existing = storyCommentRepliesMap[parentId] ?? []
+            var existing = storyCommentThread.replies[parentId] ?? []
             existing.append(optimisticComment)
-            storyCommentRepliesMap[parentId] = existing
+            storyCommentThread.replies[parentId] = existing
             // Also increment the reply count on the parent comment
-            if let idx = storyComments.firstIndex(where: { $0.id == parentId }) {
-                storyComments[idx].replies += 1
+            if let idx = storyCommentThread.roots.firstIndex(where: { $0.id == parentId }) {
+                storyCommentThread.roots[idx].replies += 1
             }
             // Counter now sums top-level + replies, so it must also bump here.
             storyCommentCount += 1
         } else {
             // Top-level comment
-            storyComments.append(optimisticComment)
+            storyCommentThread.roots.append(optimisticComment)
             storyCommentCount += 1
         }
 
@@ -485,10 +482,10 @@ extension StoryViewerView {
     private func rollbackOptimisticComment(id: String, parentId: String?) {
         let result = Self.rollingBackOptimisticComment(
             id: id, parentId: parentId,
-            comments: storyComments, repliesMap: storyCommentRepliesMap, commentCount: storyCommentCount
+            comments: storyCommentThread.roots, repliesMap: storyCommentThread.replies, commentCount: storyCommentCount
         )
-        storyComments = result.comments
-        storyCommentRepliesMap = result.repliesMap
+        storyCommentThread.roots = result.comments
+        storyCommentThread.replies = result.repliesMap
         storyCommentCount = result.commentCount
     }
 

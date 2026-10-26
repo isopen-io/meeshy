@@ -119,12 +119,12 @@ extension StoryViewerView {
 
     var storyCommentsRenderInputs: StoryCommentsRenderInputs {
         StoryCommentsRenderInputs(
-            comments: storyComments,
+            comments: storyCommentThread.roots,
             commentCount: storyCommentCount,
-            replies: storyCommentRepliesMap,
-            expandedThreads: storyCommentExpandedThreads,
-            loadingReplies: storyCommentLoadingReplies,
-            repliesHasMore: storyCommentRepliesHasMore,
+            replies: storyCommentThread.replies,
+            expandedThreads: storyCommentThread.expandedThreads,
+            loadingReplies: storyCommentThread.loadingReplies,
+            repliesHasMore: storyCommentThread.repliesHasMore,
             isLoading: isLoadingComments,
             readerLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser),
             isStoryExpired: currentStory?.isExpired() ?? false,

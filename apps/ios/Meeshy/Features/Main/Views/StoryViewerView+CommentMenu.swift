@@ -120,8 +120,8 @@ extension StoryViewerView {
                 HapticFeedback.light()
                 Task { await toggleStoryCommentLike(comment) }
             },
-            root: comment.parentId.flatMap { parentId in storyComments.first { $0.id == parentId } },
-            loadedReplies: comment.parentId == nil ? (storyCommentRepliesMap[comment.id] ?? []) : [],
+            root: comment.parentId.flatMap { parentId in storyCommentThread.roots.first { $0.id == parentId } },
+            loadedReplies: comment.parentId == nil ? (storyCommentThread.replies[comment.id] ?? []) : [],
             story: commentCardStory,
             onCommitEdit: { text in
                 Task { await storyCommentWriter?.edit(comment, content: text) }
@@ -134,7 +134,7 @@ extension StoryViewerView {
 
     var storyCommentWriter: StoryCommentThreadWriter? {
         currentStory.map {
-            StoryCommentThreadWriter(postId: $0.id, comments: $storyComments, replies: $storyCommentRepliesMap, count: $storyCommentCount)
+            StoryCommentThreadWriter(postId: $0.id, comments: $storyCommentThread.roots, replies: $storyCommentThread.replies, count: $storyCommentCount)
         }
     }
 
