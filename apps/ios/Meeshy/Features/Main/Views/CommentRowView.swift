@@ -123,17 +123,11 @@ struct CommentRowView: View, Equatable {
     @State private var translationRequested = false
 
     private var avatarContext: AvatarContext { .postComment }
+    private var readerLanguages: [String] { ReaderPrism.resolve(for: AuthManager.shared.currentUser) }
     private var contentFont: CGFloat { isReply ? 14 : 15 }
     private var authorFont: CGFloat { isReply ? 13 : 14 }
 
-    private var hasTranslation: Bool {
-        comment.translatedContent != nil && comment.originalLanguage != nil
-    }
-
-    private var effectiveCommentContent: String {
-        if showOriginal { return comment.content }
-        return comment.displayContent
-    }
+    private var effectiveCommentContent: String { comment.shownText(showOriginal: showOriginal) }
 
     var body: some View {
         HStack(alignment: .top, spacing: isReply ? 10 : 12) {
@@ -168,28 +162,12 @@ struct CommentRowView: View, Equatable {
                         .accessibilityLabel(String(format: String(localized: "a11y.comment.author_profile", defaultValue: "Profil de %@", bundle: .main), comment.author))
                         .accessibilityHint(String(localized: "a11y.comment.author_profile.hint", defaultValue: "Ouvre le profil de l'auteur", bundle: .main))
 
-                    if hasTranslation {
+                    if comment.hasServedTranslation {
                         MetaSeparator().font(MeeshyFont.relative(MeeshyFont.smallSize)).foregroundColor(theme.textMuted)
 
-                        LanguageFlagChip(code: comment.originalLanguage ?? "", isActive: showOriginal) {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                showOriginal = true
-                            }
-                        }
-
-                        let userLangs = ReaderPrism.resolve(for: AuthManager.shared.currentUser)
-                        let targetLang = comment.servedLanguage(preferredLanguages: userLangs)?.lowercased() ?? userLangs.first?.lowercased() ?? "fr"
-                        LanguageFlagChip(code: targetLang, isActive: !showOriginal) {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                showOriginal = false
-                            }
-                        }
-
-                        TranslationsBadge()
+                        CommentTranslationToggle(comment: comment, readerLanguages: readerLanguages, showOriginal: $showOriginal)
                     } else if let onRequestTranslation,
-                              comment.originalLanguage != nil,
-                              comment.originalLanguage?.lowercased()
-                                != (ReaderPrism.resolve(for: AuthManager.shared.currentUser).first?.lowercased() ?? "fr") {
+                              comment.offersTranslationRequest(readerLanguages: readerLanguages) {
                         // Pas encore de traduction vers la langue préférée :
                         // « Traduire » à la demande (langues hors des 5
                         // pré-générées comprises) — le résultat remplit la

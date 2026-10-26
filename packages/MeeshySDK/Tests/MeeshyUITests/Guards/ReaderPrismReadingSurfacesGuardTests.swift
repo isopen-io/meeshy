@@ -51,10 +51,11 @@ final class ReaderPrismReadingSurfacesGuardTests: XCTestCase {
         "Services/LanguageProviding.swift",
     ]
 
-    /// Les lignes de commentaire nomment la langue SERVIE (#11875).
-    private static let commentChips = [
-        "Views/StoryCommentRowView.swift", "Views/CommentRowView.swift", "Views/FeedPostCard+CommentsPreview.swift",
-    ]
+    /// Les lignes de commentaire nomment la langue SERVIE (#11875) — l'aperçu
+    /// du fil directement, les lignes de post et de story par la bascule
+    /// partagée (#13133), dont `FeedCommentTranslationDisplayTests` prouve la règle.
+    private static let commentChips = ["Views/FeedPostCard+CommentsPreview.swift"]
+    private static let sharedToggleRows = ["Views/StoryCommentRowView.swift", "Views/CommentRowView.swift"]
 
     private static var repoRoot: URL {
         URL(fileURLWithPath: #filePath)
@@ -110,6 +111,12 @@ final class ReaderPrismReadingSurfacesGuardTests: XCTestCase {
             XCTAssertFalse(code.contains("let userLang: String"),
                            "\(path) : une seule langue ne descend pas le Prisme")
         }
+        for path in Self.sharedToggleRows {
+            XCTAssertTrue(try source(path).contains("CommentTranslationToggle("),
+                          "\(path) : la puce passe par la bascule partagée")
+        }
+        XCTAssertTrue(try source("Components/LanguageFlagChip.swift").contains("translatedChipLanguage(readerLanguages:"),
+                      "la bascule partagée nomme la langue servie")
     }
 
     /// Aucun site de l'app, hors composition déclarée, ne lit les défauts de

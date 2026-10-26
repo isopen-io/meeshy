@@ -130,7 +130,7 @@
     "apps/ios/Meeshy/Features/Main/Views/CallView.swift::CallView.callBackground": 83,
     "apps/ios/Meeshy/Features/Main/Views/CallView.swift::CallView.callSurface": 166,
     "apps/ios/Meeshy/Features/Main/Views/CallWaitingBannerView.swift::CallWaitingBannerView.body": 88,
-    "apps/ios/Meeshy/Features/Main/Views/CommentRowView.swift::CommentRowView.body": 297,
+    "apps/ios/Meeshy/Features/Main/Views/CommentRowView.swift::CommentRowView.body": 281,
     "apps/ios/Meeshy/Features/Main/Views/CommentsSheetLiveSync.swift::CommentsSheetLiveSync.body": 102,
     "apps/ios/Meeshy/Features/Main/Views/ConversationAnimatedBackground.swift::ConversationAnimatedBackground.intimateAnimation": 123,
     "apps/ios/Meeshy/Features/Main/Views/ConversationListHeaderActions.swift::ConversationListHeaderOverlay.headerActions": 83,

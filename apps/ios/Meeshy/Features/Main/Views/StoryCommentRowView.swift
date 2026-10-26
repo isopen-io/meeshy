@@ -69,14 +69,7 @@ struct StoryCommentRowView: View, Equatable {
     @Environment(\.colorScheme) private var colorScheme
     @State private var showOriginal: Bool = false
 
-    private var hasTranslation: Bool {
-        comment.translatedContent != nil && comment.originalLanguage != nil
-    }
-
-    private var displayContent: String {
-        if showOriginal { return comment.content }
-        return comment.translatedContent ?? comment.content
-    }
+    private var displayContent: String { comment.shownText(showOriginal: showOriginal) }
 
     private var bubbleColor: Color { Color(hex: comment.authorColor) }
 
@@ -178,7 +171,7 @@ struct StoryCommentRowView: View, Equatable {
                 .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
                 .foregroundColor(Self.legibleAuthorColor(hex: comment.authorColor))
 
-            if hasTranslation {
+            if comment.hasServedTranslation {
                 MetaSeparator().font(MeeshyFont.relative(MeeshyFont.captionSize)).foregroundColor(overlayColor.opacity(MeeshyOpacity.strong))
                 languageSwitcher
             }
@@ -196,21 +189,8 @@ struct StoryCommentRowView: View, Equatable {
 
     private var languageSwitcher: some View {
         HStack(spacing: MeeshySpacing.xs) {
-            LanguageFlagChip(code: comment.originalLanguage ?? "",
-                             isActive: showOriginal,
-                             metrics: .overlay) {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    showOriginal = true
-                }
-            }
-
-            LanguageFlagChip(code: comment.servedLanguage(preferredLanguages: readerLanguages) ?? readerLanguages.first ?? "fr", isActive: !showOriginal, metrics: .overlay) {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    showOriginal = false
-                }
-            }
-
-            TranslationsBadge(metrics: .overlay)
+            CommentTranslationToggle(comment: comment, readerLanguages: readerLanguages,
+                                     showOriginal: $showOriginal, metrics: .overlay)
         }
     }
 
