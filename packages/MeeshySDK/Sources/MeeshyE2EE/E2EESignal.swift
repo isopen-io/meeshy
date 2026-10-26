@@ -226,15 +226,13 @@ public enum E2EEPayloadKind: Equatable, Sendable {
 public enum E2EEPadding {
     /// Les paliers, en octets (`E2EE_PADDING_TIERS` de `@meeshy/shared`).
     public static let tiers = [256, 1024, 4096, 16384]
-    /// Au-delà du dernier palier, le multiple suivant de celui-ci.
-    public static let step = 16384
-    /// Jamais au-delà : l'enveloppe chiffrée doit tenir sous 64 Kio (`E2EE_ENVELOPE_BOUNDS`).
-    public static let maxPaddedLength = 61440
 
+    /// Le premier palier qui contient le clair ; au-delà du dernier, le clair
+    /// tel quel. Remplir un long message au multiple suivant le poussait, pour
+    /// seize appareils, au-delà du plafond total des enveloppes (512 Kio) : un
+    /// message qui partait avant le remplissage ne partait plus.
     public static func paddedLength(for length: Int) -> Int {
-        if let tier = tiers.first(where: { $0 >= length }) { return tier }
-        guard length <= maxPaddedLength else { return length }
-        return min(((length + step - 1) / step) * step, maxPaddedLength)
+        tiers.first(where: { $0 >= length }) ?? length
     }
 
     public static func padded(_ plaintext: Data) -> Data {

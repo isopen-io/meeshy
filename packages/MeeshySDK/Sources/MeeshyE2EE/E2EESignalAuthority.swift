@@ -104,11 +104,14 @@ public enum E2EESignalAuthority {
 
     /// Le message visé est connu ici, et dans la conversation du signal. Une cible
     /// illisible ne porte pas de conversation chiffrée : seule sa ligne locale la
-    /// situe, et sans ligne elle n'est nulle part.
+    /// situe, et sans ligne elle n'est nulle part. Une cible absente du coffre
+    /// mais présente en base — un message écrit en clair avant l'activation —
+    /// est située par sa ligne ; sans ligne, le signal attend son message.
     private static func known(_ target: Located, in received: E2EEReceivedSignal) -> E2EESignalVerdict {
         switch target.entry {
         case nil:
-            return .awaitTarget
+            guard let row = target.rowConversation else { return .awaitTarget }
+            return row == received.conversationId ? .apply : .reject(.targetElsewhere)
         case .undecryptable:
             return target.rowConversation == received.conversationId ? .apply : .reject(.targetElsewhere)
         case .readable(let content, _):

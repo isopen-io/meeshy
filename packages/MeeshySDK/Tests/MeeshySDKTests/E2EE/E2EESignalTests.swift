@@ -75,11 +75,14 @@ struct E2EEPaddingTests {
         #expect(E2EEPadding.padded(Data(count: 257)).count == 1024)
         #expect(E2EEPadding.padded(Data(count: 3000)).count == 4096)
         #expect(E2EEPadding.padded(Data(count: 5000)).count == 16384)
-        #expect(E2EEPadding.padded(Data(count: 20000)).count == 32768)
     }
 
-    @Test func aPlaintextNearTheEnvelopeBoundIsNotPushedPastIt() {
-        #expect(E2EEPadding.padded(Data(count: 50000)).count == E2EEPadding.maxPaddedLength)
+    /// Au-delà du dernier palier, rien ne s'ajoute : un long message qui tenait
+    /// sous le plafond total des enveloppes (512 Kio pour seize appareils) n'est
+    /// pas poussé au-delà par son remplissage.
+    @Test func aPlaintextBeyondTheLastTierIsLeftAsIs() {
+        #expect(E2EEPadding.padded(Data(count: 16385)).count == 16385)
+        #expect(E2EEPadding.padded(Data(count: 20000)).count == 20000)
         #expect(E2EEPadding.padded(Data(count: 70000)).count == 70000)
     }
 

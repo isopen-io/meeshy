@@ -51,7 +51,17 @@ struct E2EESignalAuthorityTests {
 
     @Test func aSignalAheadOfItsMessage_waitsForIt() {
         #expect(verdict(.deleteForEveryone(target: "m1"), from: bob, target: nil) == .awaitTarget)
-        #expect(verdict(.reaction(target: "m1", emoji: "👍", removed: false), from: bob, target: nil) == .awaitTarget)
+        #expect(verdict(.reaction(target: "z1", emoji: "👍", removed: false), from: bob, target: nil) == .awaitTarget)
+    }
+
+    /// Un message écrit en clair AVANT l'activation n'est pas au coffre : sa ligne
+    /// locale le situe. Il reçoit réactions et épingles ; personne ne le supprime
+    /// pour tous par signal (sa route en clair le fait, le serveur le lit déjà).
+    @Test func aMessageWrittenBeforeActivation_isLocatedByItsRow() {
+        #expect(verdict(.reaction(target: "m1", emoji: "👍", removed: false), from: bob, target: nil) == .apply)
+        #expect(verdict(.pin(target: "m1", pinned: true), from: bob, target: nil) == .apply)
+        #expect(verdict(.reaction(target: "x1", emoji: "👍", removed: false), from: bob, target: nil) == .reject(.targetElsewhere))
+        #expect(verdict(.deleteForEveryone(target: "m1"), from: bob, target: nil) == .awaitTarget)
     }
 
     @Test func onlyTheAuthorEdits_andAnEmptyOrOversizedEditIsRefused() {

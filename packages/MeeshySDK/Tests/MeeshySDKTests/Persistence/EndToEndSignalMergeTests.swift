@@ -81,9 +81,10 @@ final class SignalTargetConversationTests: XCTestCase {
         let actor = MessagePersistenceActor(dbWriter: queue, currentUserId: "u-me")
         var mine = MessageRecordFactory.make(localId: "cid_1", conversationId: "conv-a", senderId: "u-me", content: "[Encrypted]", state: .sent)
         mine.serverId = "srv_1"
+        let sent = mine
         let other = MessageRecordFactory.make(localId: "srv_2", conversationId: "conv-b", senderId: "u-peer", content: "[Encrypted]", state: .sent)
         try await queue.write { db in
-            try mine.insert(db)
+            try sent.insert(db)
             try other.insert(db)
         }
 
