@@ -14,6 +14,8 @@
     <string name="chat_header_expand">Déplier l’en-tête</string>
     <string name="chat_header_collapse">Replier l’en-tête</string>
     <string name="chat_conversation_info_title">Conversation</string>
+    <string name="chat_header_encryption_e2ee">Chiffré de bout en bout</string>
+    <string name="chat_header_encryption_server">Chiffré sur le serveur</string>
     <plurals name="chat_header_back_unread">
         <item quantity="one">Retour, %1$d message non lu</item>
         <item quantity="other">Retour, %1$d messages non lus</item>

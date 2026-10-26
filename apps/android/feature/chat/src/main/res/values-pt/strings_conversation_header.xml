@@ -14,6 +14,8 @@
     <string name="chat_header_expand">Expandir o cabeçalho</string>
     <string name="chat_header_collapse">Recolher o cabeçalho</string>
     <string name="chat_conversation_info_title">Conversa</string>
+    <string name="chat_header_encryption_e2ee">Criptografado de ponta a ponta</string>
+    <string name="chat_header_encryption_server">Criptografado no servidor</string>
     <plurals name="chat_header_back_unread">
         <item quantity="one">Voltar, %1$d mensagem não lida</item>
         <item quantity="other">Voltar, %1$d mensagens não lidas</item>

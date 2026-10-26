@@ -14,6 +14,8 @@
     <string name="chat_header_expand">Desplegar el encabezado</string>
     <string name="chat_header_collapse">Plegar el encabezado</string>
     <string name="chat_conversation_info_title">Conversación</string>
+    <string name="chat_header_encryption_e2ee">Cifrado de extremo a extremo</string>
+    <string name="chat_header_encryption_server">Cifrado en el servidor</string>
     <plurals name="chat_header_back_unread">
         <item quantity="one">Atrás, %1$d mensaje sin leer</item>
         <item quantity="other">Atrás, %1$d mensajes sin leer</item>

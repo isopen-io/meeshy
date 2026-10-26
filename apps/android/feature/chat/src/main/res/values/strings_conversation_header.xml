@@ -14,6 +14,8 @@
     <string name="chat_header_expand">Expand header</string>
     <string name="chat_header_collapse">Collapse header</string>
     <string name="chat_conversation_info_title">Conversation</string>
+    <string name="chat_header_encryption_e2ee">End-to-end encrypted</string>
+    <string name="chat_header_encryption_server">Encrypted on the server</string>
     <plurals name="chat_header_back_unread">
         <item quantity="one">Back, %1$d unread message</item>
         <item quantity="other">Back, %1$d unread messages</item>

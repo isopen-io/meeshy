@@ -14,6 +14,8 @@
     <string name="chat_header_expand">توسيع الترويسة</string>
     <string name="chat_header_collapse">طي الترويسة</string>
     <string name="chat_conversation_info_title">المحادثة</string>
+    <string name="chat_header_encryption_e2ee">مشفّرة من طرف إلى طرف</string>
+    <string name="chat_header_encryption_server">مشفّرة على الخادم</string>
     <plurals name="chat_header_back_unread">
         <item quantity="zero">رجوع، %1$d رسائل غير مقروءة</item>
         <item quantity="one">رجوع، %1$d رسالة غير مقروءة</item>

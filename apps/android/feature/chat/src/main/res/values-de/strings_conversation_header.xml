@@ -14,6 +14,8 @@
     <string name="chat_header_expand">Kopfzeile ausklappen</string>
     <string name="chat_header_collapse">Kopfzeile einklappen</string>
     <string name="chat_conversation_info_title">Unterhaltung</string>
+    <string name="chat_header_encryption_e2ee">Ende-zu-Ende-verschlüsselt</string>
+    <string name="chat_header_encryption_server">Auf dem Server verschlüsselt</string>
     <plurals name="chat_header_back_unread">
         <item quantity="one">Zurück, %1$d ungelesene Nachricht</item>
         <item quantity="other">Zurück, %1$d ungelesene Nachrichten</item>

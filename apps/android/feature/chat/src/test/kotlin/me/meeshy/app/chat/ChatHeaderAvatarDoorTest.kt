@@ -63,3 +63,15 @@ class ChatHeaderAvatarDoorTest {
         assertThat(state.otherConversationsUnread).isEqualTo(4)
     }
 }
+
+class ChatHeaderEncryptionBadgeTest {
+
+    @Test
+    fun `le regime se lit sans casse ni blancs et un mode inconnu ne s'annonce pas`() {
+        assertThat(ChatHeaderEncryptionBadge.of(" E2EE ")).isEqualTo(ChatHeaderEncryptionBadge.END_TO_END)
+        assertThat(ChatHeaderEncryptionBadge.of("server")).isEqualTo(ChatHeaderEncryptionBadge.SERVER)
+        assertThat(ChatHeaderEncryptionBadge.of("hybrid")).isEqualTo(ChatHeaderEncryptionBadge.SERVER)
+        assertThat(ChatHeaderEncryptionBadge.of("plain")).isNull()
+        assertThat(ChatHeaderEncryptionBadge.of(null)).isNull()
+    }
+}

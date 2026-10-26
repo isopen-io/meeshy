@@ -14,6 +14,8 @@
     <string name="chat_header_expand">Espandi l’intestazione</string>
     <string name="chat_header_collapse">Comprimi l’intestazione</string>
     <string name="chat_conversation_info_title">Conversazione</string>
+    <string name="chat_header_encryption_e2ee">Crittografato end-to-end</string>
+    <string name="chat_header_encryption_server">Crittografato sul server</string>
     <plurals name="chat_header_back_unread">
         <item quantity="one">Indietro, %1$d messaggio non letto</item>
         <item quantity="other">Indietro, %1$d messaggi non letti</item>

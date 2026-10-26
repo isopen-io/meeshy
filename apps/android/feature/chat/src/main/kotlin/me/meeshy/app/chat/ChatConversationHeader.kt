@@ -12,6 +12,9 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
@@ -53,7 +56,11 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import me.meeshy.ui.theme.MeeshyFontSize
+import me.meeshy.ui.theme.NunitoFontFamily
 import me.meeshy.feature.chat.R
 import me.meeshy.sdk.model.avatar.AvatarContext
 import me.meeshy.ui.component.MeeshyAvatar
@@ -397,4 +404,100 @@ internal fun GradientIcon(icon: ImageVector, brush: Brush, modifier: Modifier = 
                 }
             },
     )
+}
+
+/**
+ * La bande DÉPLIÉE de l'en-tête iOS (`ConversationExpandedHeaderBand`) : un bloc de verre de
+ * rayon 22 au contour dégradé, avec le retour compact, le NOM de la conversation (13, gras
+ * arrondi, deux lignes), la rangée des puces (chiffrement, frappe ou effectif) et l'avatar
+ * identité à droite. Aucune action : appel et recherche n'existent que replié (arbitrage iOS
+ * du 2026-08-18). Toucher le nom ouvre la fiche Conversation ; la zone libre replie.
+ */
+@Composable
+internal fun ChatConversationExpandedBand(
+    title: String,
+    accentColor: Color,
+    otherUnread: Int,
+    encryption: ChatHeaderEncryptionBadge?,
+    onBack: () -> Unit,
+    onToggle: () -> Unit,
+    onTitleTap: () -> Unit,
+    subtitle: @Composable () -> Unit,
+    avatar: @Composable () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val shape = RoundedCornerShape(22.dp)
+    MeeshyGlassSurface(
+        shape = shape,
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(top = MeeshySpacing.sm, start = MeeshySpacing.sm, end = MeeshySpacing.sm)
+            .shadow(8.dp, shape, clip = false, ambientColor = accentColor.copy(alpha = 0.15f), spotColor = accentColor.copy(alpha = 0.15f))
+            .border(
+                width = 1.dp,
+                brush = Brush.linearGradient(listOf(accentColor.copy(alpha = 0.4f), MeeshyPalette.Indigo300.copy(alpha = 0.15f))),
+                shape = shape,
+            )
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onToggle),
+    ) {
+        Row(
+            modifier = Modifier.padding(start = MeeshySpacing.smPlus, end = MeeshySpacing.smPlus, top = MeeshySpacing.xsPlus, bottom = MeeshySpacing.xsPlus),
+            horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            ChatHeaderBackButton(unread = otherUnread, accentColor = accentColor, onClick = onBack, compact = true)
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(3.dp),
+            ) {
+                Text(
+                    text = title,
+                    fontFamily = NunitoFontFamily,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = MeeshyFontSize.subhead,
+                    color = if (MeeshyTheme.isDark) Color.White else MeeshyPalette.Indigo950,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        role = Role.Button,
+                        onClick = onTitleTap,
+                    ),
+                )
+                Row(
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (encryption != null) {
+                        ChatHeaderEncryptionChip(encryption, accentColor)
+                    }
+                    subtitle()
+                }
+            }
+            avatar()
+        }
+    }
+}
+
+/** La puce de chiffrement : verte de bout en bout, à l'accent sur le serveur (9, semi-gras). */
+@Composable
+private fun ChatHeaderEncryptionChip(badge: ChatHeaderEncryptionBadge, accentColor: Color) {
+    val color = if (badge == ChatHeaderEncryptionBadge.END_TO_END) MeeshyTheme.tokens.success else accentColor
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xxs),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(MeeshyIcons.LockFilled, contentDescription = null, tint = color, modifier = Modifier.size(10.dp))
+        Text(
+            text = stringResource(
+                if (badge == ChatHeaderEncryptionBadge.END_TO_END) R.string.chat_header_encryption_e2ee else R.string.chat_header_encryption_server,
+            ),
+            color = color,
+            fontSize = MeeshyFontSize.micro,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+        )
+    }
 }
