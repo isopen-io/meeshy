@@ -8,7 +8,9 @@ extension Database {
     func withSecureDelete<T>(_ body: () throws -> T) throws -> T {
         let previous = try Int.fetchOne(self, sql: "PRAGMA secure_delete") ?? 2
         try execute(sql: "PRAGMA secure_delete = ON")
-        defer { try? execute(sql: "PRAGMA secure_delete = \(previous)") }
+        // Le pragma lit `FAST` pour le mode 2, un entier y vaudrait `ON`.
+        let restored = [0: "OFF", 1: "ON"][previous] ?? "FAST"
+        defer { try? execute(sql: "PRAGMA secure_delete = \(restored)") }
         return try body()
     }
 }
