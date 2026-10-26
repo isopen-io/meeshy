@@ -50,6 +50,13 @@ class FakeRedis:
         self.store[key] = value
         return True
 
+    async def setex_durable_atomic(self, entries):
+        if not self.available:
+            return False
+        for key, ttl, value in entries:
+            self.store[key] = value
+        return True
+
     async def delete(self, key):
         self.store.pop(key, None)
         return True
@@ -471,4 +478,89 @@ async def test_a_write_while_redis_is_down_leaves_no_trace_after_forget(tmp_path
     deleted = await forget_cached_content(audio, text, parse_forget_request({"requestId": "r", "attachmentIds": [ATTACHMENT], "messageIds": [MESSAGE]}))
     assert deleted == 0
     assert service.memory_cache == OrderedDict()
+    assert service.redis.data == {}
+
+
+class _TransactionalClient:
+    """Un client Redis dont on peut faire échouer la transaction ou une écriture simple."""
+
+    def __init__(self, fail_transaction=False, fail_setex=False):
+        self.data = {}
+        self.fail_transaction = fail_transaction
+        self.fail_setex = fail_setex
+
+    async def get(self, key):
+        return self.data.get(key)
+
+    async def setex(self, key, ttl, value):
+        if self.fail_setex:
+            raise ConnectionError("écriture refusée")
+        self.data[key] = value
+
+    def pipeline(self, transaction=True):
+        client = self
+
+        class Pipe:
+            def __init__(self):
+                self.queued = []
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *exc):
+                return False
+
+            def setex(self, key, ttl, value):
+                self.queued.append((key, value))
+
+            async def execute(self):
+                if client.fail_transaction:
+                    raise ConnectionError("EXEC refusé")
+                for key, value in self.queued:
+                    client.data[key] = value
+                return [True] * len(self.queued)
+
+        return Pipe()
+
+
+def _service(client):
+    from collections import OrderedDict
+    from services.redis_service import RedisService
+
+    service = object.__new__(RedisService)
+    service.permanently_disabled = False
+    service.is_redis_available = True
+    service.redis = client
+    service.memory_cache = OrderedDict()
+    service.connection_attempts = 0
+    service.max_connection_attempts = 3
+    return service
+
+
+@pytest.mark.unit
+async def test_a_translation_and_its_index_are_written_together_or_not_at_all():
+    ok = _service(_TransactionalClient())
+    with task_scope(False, MESSAGE):
+        assert await TranslationCacheService(ok).set_translation(SECRET, "fr", "en", "EN", "premium") is True
+    assert sorted(k.split(":")[1] for k in ok.redis.data) == ["keys", "text"]
+
+    broken = _service(_TransactionalClient(fail_transaction=True))
+    with task_scope(False, MESSAGE):
+        assert await TranslationCacheService(broken).set_translation(SECRET, "fr", "en", "EN", "premium") is False
+    assert broken.redis.data == {}
+    assert len(broken.memory_cache) == 0
+
+
+@pytest.mark.unit
+async def test_without_its_attachment_mapping_nothing_is_cached_by_audio_hash(tmp_path):
+    service = _service(_TransactionalClient(fail_setex=True))
+    audio = AudioCacheService(service)
+    audio_file = tmp_path / "voice.m4a"
+    audio_file.write_bytes(b"voix secrete")
+    with task_scope(False, MESSAGE):
+        audio_hash = await audio.get_or_compute_audio_hash(ATTACHMENT, str(audio_file))
+        service.redis.fail_setex = False
+        assert await audio.set_transcription_by_hash(audio_hash, {"text": SECRET}) is False
+        assert await audio.set_translated_audio_by_hash(audio_hash, "en", {"translated_text": "EN"}) is False
+        assert await audio.set_transcription_by_hash("fallback_" + ATTACHMENT, {"text": SECRET}) is False
     assert service.redis.data == {}

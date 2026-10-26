@@ -39,6 +39,30 @@ class DictRedis:
     async def ttl(self, key):
         return self.ttls.get(key, -1)
 
+    def pipeline(self, transaction=True):
+        client = self
+
+        class Pipe:
+            def __init__(self):
+                self.queued = []
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *exc):
+                return False
+
+            def setex(self, key, ttl, value):
+                self.queued.append((key, ttl, value))
+
+            async def execute(self):
+                for key, ttl, value in self.queued:
+                    client.data[key] = value
+                    client.ttls[key] = ttl
+                return [True] * len(self.queued)
+
+        return Pipe()
+
     async def scan_iter(self, match, count=None):
         for key in list(self.data):
             if fnmatch.fnmatchcase(key, match):

@@ -40,6 +40,16 @@ except ImportError:
     logger.warning("⚠️ [REDIS] redis-py non disponible - cache mémoire uniquement")
 
 
+# #13102 — une empreinte dont la correspondance `pièce → empreinte` n'a pas pu
+# être rangée (ou celle de repli du pipeline) : aucune écriture ne s'indexe par
+# elle, puisque l'oubli d'une pièce passe par cette correspondance.
+UNINDEXED_HASH_PREFIX = "unindexed:"
+
+
+def hash_is_indexed(audio_hash: Optional[str]) -> bool:
+    return bool(audio_hash) and not audio_hash.startswith((UNINDEXED_HASH_PREFIX, "fallback_"))
+
+
 class ErasureNotConfirmedError(RuntimeError):
     """#13102 — Redis n'a pas confirmé un effacement : rien ne s'acquitte."""
 
@@ -283,6 +293,25 @@ class RedisService:
             self._handle_redis_error()
             return False
 
+    async def setex_durable_atomic(self, entries: List[tuple]) -> bool:
+        """
+        #13102 — plusieurs clés (un contenu ET son index d'effacement) écrites
+        dans UNE transaction Redis (`MULTI`/`EXEC`) : toutes ou aucune. Un
+        contenu ne reste jamais rangé sans l'index qui permet de l'oublier.
+        """
+        if self.permanently_disabled or not self.is_redis_available or not self.redis:
+            return False
+        try:
+            async with self.redis.pipeline(transaction=True) as pipe:
+                for key, seconds, value in entries:
+                    pipe.setex(key, seconds, value)
+                results = await pipe.execute()
+            return all(bool(result) for result in results)
+        except Exception as e:
+            logger.warning(f"[REDIS] Écriture transactionnelle non rangée ({type(e).__name__})")
+            self._handle_redis_error()
+            return False
+
     async def scan_keys_confirmed(self, pattern: str) -> List[str]:
         """
         Les clés de ce motif, par SCAN (jamais KEYS, qui bloque Redis), dans
@@ -519,14 +548,14 @@ class TranslationCacheService:
             "text_hash": cache_hash
         }
 
-        # Stocker par hash (réutilisation cross-message/segment)
-        success = await self.redis.setex_durable(key, ttl, json.dumps(cache_data))
-
-        # #13102 — indexée sous le message qui l'a fait naître (explicite, sinon
-        # celui de la tâche) : oubliable par son identifiant.
+        # Stocker par hash (réutilisation cross-message/segment). #13102 — avec
+        # l'index du message qui l'a fait naître (explicite, sinon celui de la
+        # tâche), dans la MÊME transaction : jamais un contenu sans son index.
         message_id = message_id or current_message_id()
-        if success and message_id:
-            await self.redis.setex_durable(self.message_index_pattern.format(message_id=message_id, hash=cache_hash), ttl, "1")
+        entries = [(key, ttl, json.dumps(cache_data))]
+        if message_id:
+            entries.append((self.message_index_pattern.format(message_id=message_id, hash=cache_hash), ttl, "1"))
+        success = await self.redis.setex_durable_atomic(entries)
 
         if success:
             logger.debug(f"[CACHE] 💾 Traduction mise en cache: {source_lang}→{target_lang} (hash={cache_hash[:8]})")
@@ -656,8 +685,10 @@ class AudioCacheService:
         # Calculer le hash
         audio_hash = self.compute_audio_hash(audio_path)
 
-        # Stocker le mapping
-        await self.redis.setex_durable(mapping_key, self.ttl_hash_mapping, audio_hash)
+        # Stocker le mapping. #13102 — sans lui, rien ne se range par cette
+        # empreinte : un oubli par pièce ne pourrait jamais l'atteindre.
+        if not await self.redis.setex_durable(mapping_key, self.ttl_hash_mapping, audio_hash):
+            return f"{UNINDEXED_HASH_PREFIX}{audio_hash}"
 
         return audio_hash
 
@@ -678,7 +709,7 @@ class AudioCacheService:
 
     async def set_transcription_by_hash(self, audio_hash: str, transcription: Dict[str, Any], ttl: int = None) -> bool:
         """Sauvegarde une transcription par hash audio"""
-        if not cache_allowed():
+        if not cache_allowed() or not hash_is_indexed(audio_hash):
             return False
         key = self.key_transcription_by_hash.format(audio_hash=audio_hash)
         ttl = ttl or self.ttl_transcription
@@ -741,7 +772,7 @@ class AudioCacheService:
 
     async def set_translated_audio_by_hash(self, audio_hash: str, lang: str, audio_data: Dict[str, Any], ttl: int = None) -> bool:
         """Sauvegarde un audio traduit par hash"""
-        if not cache_allowed():
+        if not cache_allowed() or not hash_is_indexed(audio_hash):
             return False
         key = self.key_translated_audio_by_hash.format(audio_hash=audio_hash, lang=lang)
         ttl = ttl or self.ttl_translated_audio
