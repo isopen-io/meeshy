@@ -2,7 +2,7 @@
 python-dotenv==1.2.4
 
 # Framework web
-fastapi==0.143.2
+fastapi==0.161.1
 uvicorn[standard]==0.54.0
 pydantic-settings==2.15.0
 pydantic==2.13.5
@@ -39,7 +39,7 @@ pydantic==2.13.5
 # and be validated with
 # `uv pip compile --python-version 3.11 services/translator/requirements.txt -o <tmp>`
 # (exit 0) before merge — uv only ever reports the FIRST unsatisfiable pin.
-grpcio==1.84.0
+grpcio==1.84.1
 grpcio-tools==1.76.0
 grpcio-reflection==1.76.0
 protobuf==6.33.6
@@ -124,7 +124,7 @@ dnspython==2.8.0
 
 # Détection de langue et analyse de texte
 langdetect==1.0.9
-nltk==3.10.3
+nltk==3.10.4
 textstat==0.7.13
 
 # Utilitaires système

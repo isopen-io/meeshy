@@ -73,6 +73,9 @@ au déploiement de ce lot. Production : attend le feu vert du porteur (#13102).
 - Une tâche au repos ou éphémère efface ses pistes de `generated/audios/`
   une fois publiées à la passerelle (`_forget_translated_audio_files`), et
   celles déjà publiées au fil de l'eau quand elle échoue ensuite.
+- Le nettoyage de fin de tâche efface le fichier reçu ET sa conversion WAV
+  (`/tmp/meeshy_audio/<…>.converted.wav`), que la recette staging du
+  2026-10-26 a trouvée restée sur le disque (`AudioFetcherService.cleanup_temp_file`).
 - La traduction d'un TEXTE à vue unique, à flamme ou éphémère part protégée
   comme sa tâche audio (`translationRequestRegime`) : rien n'en est rangé.
 

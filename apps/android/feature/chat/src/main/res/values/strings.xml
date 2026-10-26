@@ -6,7 +6,7 @@
     <string name="chat_call_audio">Audio call</string>
     <string name="chat_call_video">Video call</string>
     <string name="chat_call_rejoin">Rejoin</string>
-    <string name="chat_message_placeholder">Message</string>
+    <string name="chat_message_placeholder">Message…</string>
     <string name="chat_composer_sentiment">Message tone</string>
     <string name="chat_composer_language">Message language</string>
     <string name="chat_send">Send</string>
@@ -286,4 +286,8 @@
     <string name="participant_profile_denied_can_send_audios">Cannot send audio</string>
     <string name="participant_profile_denied_can_send_links">Cannot send links</string>
     <string name="participant_profile_denied_can_send_locations">Cannot share their location</string>
+    <plurals name="chat_unread_separator_count">
+        <item quantity="one">%d unread message</item>
+        <item quantity="other">%d unread messages</item>
+    </plurals>
 </resources>
