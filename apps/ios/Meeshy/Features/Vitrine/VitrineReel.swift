@@ -183,9 +183,7 @@ nonisolated enum VitrinePostServi {
     }
 
     private static func horodatage(_ date: Date) -> String {
-        let format = ISO8601DateFormatter()
-        format.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return format.string(from: date)
+        WireDate.string(from: date)
     }
 
     /// Un ObjectId plausible : 24 caractères hexadécimaux.

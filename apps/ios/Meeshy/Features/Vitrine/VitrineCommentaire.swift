@@ -138,7 +138,7 @@ final class VitrineCommentaireServeur {
             "parentId": NSNull(),
             "likeCount": 0,
             "replyCount": 0,
-            "createdAt": Self.horodatage.string(from: creeLe),
+            "createdAt": WireDate.string(from: creeLe),
             "author": [
                 "id": lecteur.id,
                 "username": lecteur.username,
@@ -148,12 +148,6 @@ final class VitrineCommentaireServeur {
             "media": [media],
         ]
     }
-
-    private static let horodatage: ISO8601DateFormatter = {
-        let format = ISO8601DateFormatter()
-        format.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return format
-    }()
 
     private static func json(_ valeur: some Encodable) -> Any? {
         guard let data = try? JSONEncoder().encode(valeur) else { return nil }

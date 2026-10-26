@@ -264,7 +264,7 @@ enum GameWave2Optimistic {
         } ?? GameMint.preview(score: passage.scoreAfter, mintedLifetime: mintedLifetime, debitablePoints: 0,
                               levelCap: levelCap, steps: steps)
         let trophies = game.trophies.map { block -> GameTrophiesBlock in
-            let stamp = ISO8601DateFormatter().string(from: now)
+            let stamp = WireDate.string(from: now)
             return GameTrophiesBlock(
                 items: block.items + [GameTrophyItem(key: passage.trophyKey, awardedAt: stamp)],
                 order: [passage.trophyKey] + block.order

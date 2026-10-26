@@ -1,4 +1,5 @@
 import Foundation
+import MeeshySDK
 
 /// La Rivière — géométrie des couloirs et navigation à deux axes.
 ///
@@ -305,34 +306,10 @@ nonisolated public enum RiverLaneResolver {
         let rank: Int
     }
 
-    /// Miroir des deux formats de rejeu ISO 8601 croisés par les fixtures
-    /// (`…T09:00:00.000Z` avec millisecondes ; sans, défensivement).
-    // `nonisolated(unsafe)` : `ISO8601DateFormatter` n'est pas `Sendable` aux
-    // yeux du compilateur mais est documenté thread-safe (contrairement à
-    // `DateFormatter` d'avant iOS 7) — sans l'annotation, la stored static
-    // d'un type non isolé ne compile pas sous Swift 6.
-    private nonisolated(unsafe) static let iso8601WithFractionalSeconds: ISO8601DateFormatter = {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return formatter
-    }()
-
-    private nonisolated(unsafe) static let iso8601WithoutFractionalSeconds: ISO8601DateFormatter = {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime]
-        return formatter
-    }()
-
     /// `nil` = chaîne illisible — miroir de `new Date(value).getTime()`
     /// produisant `NaN` sur une chaîne invalide côté TS.
     private static func parseIso8601(_ string: String) -> Double? {
-        if let date = iso8601WithFractionalSeconds.date(from: string) {
-            return date.timeIntervalSince1970 * 1000
-        }
-        if let date = iso8601WithoutFractionalSeconds.date(from: string) {
-            return date.timeIntervalSince1970 * 1000
-        }
-        return nil
+        WireDate.date(from: string).map { $0.timeIntervalSince1970 * 1000 }
     }
 
     /// Miroir de `toEpochMs` — `nil`/chaîne illisible devient `NaN`, filtré
