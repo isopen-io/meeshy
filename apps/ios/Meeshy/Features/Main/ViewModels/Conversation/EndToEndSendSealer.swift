@@ -423,6 +423,9 @@ nonisolated extension EndToEndSendRefusal {
         case .sealedOnlyInConversation:
             String(localized: "conversation.send.e2ee.sealedOnlyInConversation",
                    defaultValue: "Conversation chiffrée : le message n’est pas parti. Ouvrez la conversation et touchez-le pour l’envoyer chiffré.", bundle: .main)
+        case .unkeptOutsideConversation:
+            String(localized: "conversation.send.e2ee.unkeptOutsideConversation",
+                   defaultValue: "Conversation chiffrée : le message n’est pas parti et n’a pas pu être gardé sur cet appareil. Ouvrez la conversation pour l’écrire à nouveau.", bundle: .main)
         }
     }
 }
