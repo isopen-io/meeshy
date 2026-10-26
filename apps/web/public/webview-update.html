@@ -55,15 +55,16 @@
         var asked = (navigator.languages && navigator.languages[0]) || navigator.language || 'fr';
         var lang = String(asked).toLowerCase().split('-')[0];
         var copy = COPY[lang] || COPY.fr;
-        var android = /\bAndroid\b/.test(navigator.userAgent);
-        var lines = android ? copy.update : copy.failed;
+        var chrome = /\bChrome\/(\d+)\./.exec(navigator.userAgent);
+        var outdated = /\bAndroid\b/.test(navigator.userAgent) && chrome !== null && Number(chrome[1]) < 111;
+        var lines = outdated ? copy.update : copy.failed;
         var root = document.documentElement;
         root.lang = COPY[lang] ? lang : 'fr';
         root.dir = lang === 'ar' ? 'rtl' : 'ltr';
         document.getElementById('title').textContent = lines[0];
         document.getElementById('body').textContent = lines[1];
         var action = document.getElementById('action');
-        if (android) {
+        if (outdated) {
           action.textContent = lines[2];
         } else {
           action.hidden = true;
