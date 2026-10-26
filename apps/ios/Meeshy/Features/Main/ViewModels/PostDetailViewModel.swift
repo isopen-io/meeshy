@@ -601,24 +601,14 @@ class PostDetailViewModel: ObservableObject {
         let snapshotExpanded = expandedThreads
         let snapshotCount = post.commentCount
 
-        if let parentId = comment.parentId {
-            if var existing = repliesMap[parentId] {
-                existing.removeAll { $0.id == comment.id }
-                repliesMap[parentId] = existing
-                // Met à jour l'aperçu en cache pour ne pas réafficher la réponse
-                // supprimée à la ré-ouverture du post.
-                await bestEffort("postDetailViewModel.comments.pruneDeletedReply", category: .cache) { try await CacheCoordinator.shared.comments.savePreservingFreshness(existing, for: "replies-\(parentId)") }
-            }
-            if let idx = comments.firstIndex(where: { $0.id == parentId }), comments[idx].replies > 0 {
-                comments[idx].replies -= 1
-            }
-            self.post?.commentCount = max(0, snapshotCount - 1)
-        } else {
-            comments.removeAll { $0.id == comment.id }
-            repliesMap[comment.id] = nil
-            expandedThreads.remove(comment.id)
-            // Suppression d'un commentaire racine → cascade serveur de ses réponses.
-            self.post?.commentCount = max(0, snapshotCount - 1 - comment.replies)
+        let removal = commentThread.removing(comment)
+        commentThread = removal.thread
+        self.post?.commentCount = max(0, snapshotCount - removal.removedCount)
+        if comment.parentId == nil { expandedThreads.remove(comment.id) }
+        if let parentId = comment.parentId, let remaining = repliesMap[parentId] {
+            // Met à jour l'aperçu en cache pour ne pas réafficher la réponse
+            // supprimée à la ré-ouverture du post.
+            await bestEffort("postDetailViewModel.comments.pruneDeletedReply", category: .cache) { try await CacheCoordinator.shared.comments.savePreservingFreshness(remaining, for: "replies-\(parentId)") }
         }
 
         do {

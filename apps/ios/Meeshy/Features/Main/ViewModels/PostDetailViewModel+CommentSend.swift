@@ -177,25 +177,12 @@ extension PostDetailViewModel {
     }
 
     /// Pose une traduction de commentaire fraîchement arrivée (racine ou
-    /// réponse) — uniquement si la langue est préférée, qu'aucune traduction
-    /// n'est déjà affichée, ET que la langue d'origine du commentaire n'occupe
-    /// pas déjà un rang au moins aussi prioritaire dans le Prisme (#6531,
-    /// jumelle de `FeedViewModel.applyCommentTranslation` — même garde).
+    /// réponse) — la règle unique du fil (`FeedCommentThread`) : elle rejoint
+    /// la carte du commentaire, l'affichage se re-résout par le Prisme (#6531).
     func applyCommentTranslationUpdate(commentId: String, language: String, text: String) {
-        // Même règle que `FeedViewModel.applyCommentTranslation` : la
-        // traduction rejoint le dictionnaire, l'affichage se re-résout.
-        let langs = preferredLanguages
-        if let idx = comments.firstIndex(where: { $0.id == commentId }) {
-            comments[idx] = comments[idx].mergingTranslation(text, language: language, preferredLanguages: langs)
-            return
-        }
-        for (key, var replies) in repliesMap {
-            if let idx = replies.firstIndex(where: { $0.id == commentId }) {
-                replies[idx] = replies[idx].mergingTranslation(text, language: language, preferredLanguages: langs)
-                repliesMap[key] = replies
-                return
-            }
-        }
+        commentThread = commentThread.mergingTranslation(
+            text, commentId: commentId, language: language, preferredLanguages: preferredLanguages
+        )
     }
 
     /// Envoi d'un commentaire (top-level OU réponse) portant ses médias

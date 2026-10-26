@@ -190,42 +190,22 @@ extension StoryViewerView {
     func applyStoryCommentUpdated(_ data: SocketCommentUpdatedData) {
         guard data.postId == currentStory?.id else { return }
         let updated = FeedComment(api: data.comment, preferredLanguages: resolvedViewerLanguageChain)
-        let applied = StoryCommentEditing.replacing(updated, comments: storyComments, replies: storyCommentRepliesMap)
-        storyComments = applied.comments
+        let applied = FeedCommentThread(roots: storyComments, replies: storyCommentRepliesMap).replacing(updated)
+        storyComments = applied.roots
         storyCommentRepliesMap = applied.replies
     }
 
-    /// Traduction de commentaire arrivée pendant la lecture : pose
-    /// `translatedContent` (racine ou réponse) si la langue est préférée,
-    /// qu'aucune traduction n'est déjà affichée, ET que la langue d'origine
-    /// du commentaire n'occupe pas déjà un rang au moins aussi prioritaire
-    /// dans le Prisme (#6531, règle unique —
-    /// `FeedViewModel.applyCommentTranslation`).
+    /// Traduction de commentaire arrivée pendant la lecture : elle rejoint la
+    /// carte du commentaire (racine ou réponse) et le texte se re-résout par
+    /// la descente du Prisme — la règle unique du fil (`FeedCommentThread`).
     func applyStoryCommentTranslationUpdated(_ data: SocketCommentTranslationUpdatedData) {
         guard data.postId == currentStory?.id else { return }
-        let langs = resolvedViewerLanguageChain.filter { !$0.isEmpty }.map { $0.lowercased() }
-        guard let incomingRank = langs.firstIndex(where: { $0 == data.language.lowercased() }) else { return }
-        func shouldApply(_ comment: FeedComment) -> Bool {
-            guard comment.translatedContent == nil else { return false }
-            let originalRank = comment.originalLanguage
-                .map { $0.lowercased() }
-                .flatMap { orig in langs.firstIndex(where: { $0 == orig }) }
-            if let originalRank, originalRank <= incomingRank { return false }
-            return true
-        }
-        let text = data.translation.text
-        if let idx = storyComments.firstIndex(where: { $0.id == data.commentId }),
-           shouldApply(storyComments[idx]) {
-            storyComments[idx].translatedContent = text
-            return
-        }
-        for (key, var replies) in storyCommentRepliesMap {
-            if let idx = replies.firstIndex(where: { $0.id == data.commentId }), shouldApply(replies[idx]) {
-                replies[idx].translatedContent = text
-                storyCommentRepliesMap[key] = replies
-                return
-            }
-        }
+        let applied = FeedCommentThread(roots: storyComments, replies: storyCommentRepliesMap).mergingTranslation(
+            data.translation.text, commentId: data.commentId, language: data.language,
+            preferredLanguages: resolvedViewerLanguageChain
+        )
+        storyComments = applied.roots
+        storyCommentRepliesMap = applied.replies
     }
 
     /// Pure routing/dedup decision for a `comment:added` broadcast — extracted

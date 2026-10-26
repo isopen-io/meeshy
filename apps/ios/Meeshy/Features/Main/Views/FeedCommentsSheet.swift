@@ -888,29 +888,17 @@ struct CommentsSheetView: View {
         let previousExpanded = expandedThreads
         let previousCount = liveCommentCount
 
-        if let parentId = comment.parentId {
-            if var existing = repliesMap[parentId] {
-                existing.removeAll { $0.id == comment.id }
-                repliesMap[parentId] = existing
-                // Met à jour le cache d'aperçu pour ne pas réafficher la réponse
-                // supprimée à la ré-ouverture du post.
-                await bestEffort("feedCommentsSheet.comments.pruneDeletedReply", category: .cache) { try await CacheCoordinator.shared.comments.save(existing, for: "replies-\(parentId)") }
-            }
-            var current = liveComments ?? post.comments
-            if let idx = current.firstIndex(where: { $0.id == parentId }), current[idx].replies > 0 {
-                current[idx].replies -= 1
-                liveComments = current
-            }
-            liveCommentCount = max(0, (liveCommentCount ?? post.commentCount) - 1)
-        } else {
-            var current = liveComments ?? post.comments
-            current.removeAll { $0.id == comment.id }
-            liveComments = current
-            repliesMap[comment.id] = nil
-            expandedThreads.remove(comment.id)
-            // La suppression d'un commentaire racine cascade ses réponses côté
-            // serveur → on retire 1 + le nombre de réponses (compteur serveur).
-            liveCommentCount = max(0, (liveCommentCount ?? post.commentCount) - 1 - comment.replies)
+        let current = liveComments ?? post.comments
+        let removal = FeedCommentThread(roots: current, replies: repliesMap).removing(comment)
+        repliesMap = removal.thread.replies
+        let parentDecremented = current.contains { $0.id == comment.parentId && $0.replies > 0 }
+        if comment.parentId == nil || parentDecremented { liveComments = removal.thread.roots }
+        if comment.parentId == nil { expandedThreads.remove(comment.id) }
+        liveCommentCount = max(0, (liveCommentCount ?? post.commentCount) - removal.removedCount)
+        if let parentId = comment.parentId, let remaining = removal.thread.replies[parentId] {
+            // Met à jour le cache d'aperçu pour ne pas réafficher la réponse
+            // supprimée à la ré-ouverture du post.
+            await bestEffort("feedCommentsSheet.comments.pruneDeletedReply", category: .cache) { try await CacheCoordinator.shared.comments.save(remaining, for: "replies-\(parentId)") }
         }
 
         do {
