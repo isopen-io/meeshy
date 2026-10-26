@@ -2,7 +2,7 @@ import type { Message } from '@/lib/api/types';
 import { endToEndRegimeLedger, endToEndSealed as conversationSealed, isEndToEndMode, type EndToEndRegimeState } from '@/lib/end-to-end-regime-ledger';
 import { endToEndShownSince, threadHoldsSend, threadShowsEndToEnd } from '@/lib/end-to-end-thread-signal';
 import { sharedTranslationServerReadsMessage } from '@meeshy/shared/utils/shared-translation-eligibility';
-import { clearPrintOf, PRINT_COVERS } from '@/lib/clear-print';
+import { authoredOf, clearPrintOf } from '@/lib/clear-print';
 
 /**
  * UN MESSAGE QUE LE SERVEUR NE LIT PAS EST SCELLÉ POUR LE WEB (#12983).
@@ -87,50 +87,52 @@ export function endToEndRegimeOf(
  * `hybrid`) — dans une conversation chiffrée de bout en bout, où la passerelle
  * refuse tout message qu'elle lirait (#11216, #12562) : il ne peut venir que
  * d'elle. Seul un message SYSTÈME (rendu à part, jamais sous le nom d'un
- * participant) et un supprimé en sortent ; tout autre `messageSource` (agent,
- * annonce, application) se rend comme une bulle et suit la loi (audit). Une
- * date illisible ne le sauve pas. Daté d'avant l'ère, il ne se lit que si ce
- * navigateur le tenait déjà, MOT POUR MOT, quand il a appris le bout en bout
- * (`clearPrintOf` : l'identifiant et ce qu'il disait) — la date vient du
- * serveur, qui peut antidater, et l'identifiant aussi.
+ * participant) et un supprimé en sortent — jamais une CITATION, qui se rend
+ * sous le nom de l'interlocuteur (revue). Tout autre `messageSource` (agent,
+ * annonce, application) se rend comme une bulle et suit la loi. Une date
+ * illisible ne le sauve pas. Daté d'avant l'ère, il ne se lit que si ce
+ * navigateur tenait déjà, quand il a appris le bout en bout, ce que son auteur
+ * avait posé (`clearPrintOf`) — la date vient du serveur, qui peut antidater,
+ * et l'identifiant aussi.
+ *
+ * `readable` : hors de la loi. `sealed` : se montre scellé — un clair forgé, ou
+ * un message qui se dit chiffré (on n'en garde que l'identité : ni lieu ni
+ * story citée à côté d'un contenu illisible). `verified` : un clair d'avant
+ * l'ère reconnu, rendu avec ce que l'empreinte vérifie (`verifiedForm`).
  */
-type Verdict = 'readable' | 'forged' | 'verified';
+type Verdict = 'readable' | 'sealed' | 'verified';
 
-/**
- * `readable` : hors de la loi (conversation non scellée, message scellé par
- * lui-même, supprimé, système). `forged` : se scelle. `verified` : un clair
- * d'avant l'ère dont ce navigateur tient l'empreinte — il se rend, mais avec
- * les seuls champs que l'empreinte couvre (`verifiedForm`).
- */
-function verdictOf(message: Message, regime: EndToEndRegimeView): Verdict {
-  if (!regime.sealed || endToEndSealed(message)) return 'readable';
-  if (message.deletedAt !== undefined && message.deletedAt !== null) return 'readable';
-  if (message.messageSource === 'system' || message.messageType === 'system') return 'readable';
+function verdictOf(message: Message, regime: EndToEndRegimeView, quoted = false): Verdict {
+  if (!regime.sealed) return 'readable';
+  if (endToEndSealed(message)) return 'sealed';
+  if (!quoted && message.deletedAt !== undefined && message.deletedAt !== null) return 'readable';
+  if (!quoted && (message.messageSource === 'system' || message.messageType === 'system')) return 'readable';
   const at = instantOf(message.createdAt);
-  if (at === null || at >= regime.since || regime.clearKnown === null) return 'forged';
+  if (at === null || at >= regime.since || regime.clearKnown === null) return 'sealed';
   const print = clearPrintOf(message);
-  return print !== null && regime.clearKnown.has(print) ? 'verified' : 'forged';
+  return print !== null && regime.clearKnown.has(print) ? 'verified' : 'sealed';
 }
 
-export const isForgedPlaintext = (message: Message, regime: EndToEndRegimeView): boolean => verdictOf(message, regime) === 'forged';
+/** Le message (ou la ligne de liste) se montre-t-il scellé dans ce régime ? */
+export const isForgedPlaintext = (message: Message, regime: EndToEndRegimeView): boolean => verdictOf(message, regime) === 'sealed';
 
-/** Un clair d'avant l'ère reconnu par son empreinte (#12992, revue) : la ligne de liste n'en rend que ce que l'empreinte couvre. */
+/** Un clair d'avant l'ère reconnu par son empreinte (#12992, revue) : il ne se rend qu'avec ce qu'elle vérifie. */
 export const isVerifiedPlaintext = (message: Message, regime: EndToEndRegimeView): boolean => verdictOf(message, regime) === 'verified';
 
 /** Le littéral que la passerelle sert pour un message qu'elle ne lit pas. */
 export const SEALED_CONTENT = '[Encrypted]';
 
 /**
- * Ce qu'un message scellé GARDE : son identité, sa place et ses compteurs —
- * une LISTE BLANCHE (audit) : un champ que la passerelle ajouterait à la
- * racine (lieu, story citée, liens suivis, mentions, provenance d'un
- * transfert) ne survit pas au scellement.
+ * Ce qu'un message montré scellé ou vérifié GARDE hors de ce que l'auteur a
+ * posé : sa place, son état et ses compteurs, sans contenu — une LISTE
+ * BLANCHE (revues) : un champ que la passerelle ajouterait (lieu, story citée,
+ * liens suivis, mentions, provenance) ne passe pas.
  */
-const SEALED_KEEPS = [
-  'id', 'conversationId', 'senderId', 'sender', 'anonymousSender', 'originalLanguage', 'messageType', 'messageSource',
-  'isEdited', 'editedAt', 'editedById', 'editedByRole', 'deletedAt', 'replyToId', 'replyTo',
+const STATE_KEEPS = [
+  'id', 'conversationId', 'senderId', 'anonymousSender', 'messageType', 'messageSource', 'originalLanguage', 'replyToId',
+  'isEdited', 'editedAt', 'editedById', 'editedByRole', 'deletedAt',
   'effectFlags', 'expiresAt', 'ephemeralDuration', 'isViewOnce', 'maxViewOnceCount', 'viewOnceCount', 'consumedByMe', 'isFullyConsumed', 'isBlurred', 'viewOnceConsumed',
-  'pinnedAt', 'pinnedBy', 'deliveredToAllAt', 'readByAllAt', 'deliveredCount', 'readCount', 'recipientCount', 'reactionSummary', 'reactionCount',
+  'pinnedAt', 'pinnedBy', 'deliveredToAllAt', 'readByAllAt', 'deliveredCount', 'readCount', 'recipientCount', 'reactionCount',
   'createdAt', 'updatedAt', 'timestamp',
 ] as const satisfies readonly (keyof Message)[];
 
@@ -139,27 +141,43 @@ const pick = (message: Message, keys: readonly string[]): Record<string, unknown
   return Object.fromEntries(keys.filter((key) => key in source).map((key) => [key, source[key]]));
 };
 
-function sealedForm(message: Message): Message {
-  /* Tous les champs requis de `Message` sont dans la liste blanche ou posés ici. */
-  return { ...pick(message, SEALED_KEEPS), content: SEALED_CONTENT, isEncrypted: true, translations: [] } as unknown as Message;
-}
+/** Une clé de résumé de réactions est un emoji, jamais un texte que le lecteur d'écran prononcerait. */
+const EMOJI_KEY = /^(?:\p{Extended_Pictographic}|\p{Regional_Indicator}|\p{Emoji_Modifier}|[\u200d\ufe0f\u20e3#*0-9])+$/u;
 
-const VERIFIED_KEEPS: readonly string[] = [...SEALED_KEEPS, ...PRINT_COVERS];
+const reactionsOf = (message: Message): Record<string, unknown> => {
+  const summary = message.reactionSummary;
+  if (summary === undefined || summary === null) return {};
+  return { reactionSummary: Object.fromEntries(Object.entries(summary).filter(([key]) => key.length <= 32 && EMOJI_KEY.test(key))) };
+};
+
+/** L'expéditeur joint ne se garde que s'il EST l'auteur que l'identifiant nomme. */
+const senderOf = (message: Message): Record<string, unknown> =>
+  message.sender !== undefined && message.sender !== null && message.sender.id === message.senderId ? { sender: message.sender } : {};
+
+/** La forme commune : état sans contenu, expéditeur vérifié, réactions réduites aux emoji. */
+const stateOf = (message: Message): Record<string, unknown> => ({ ...pick(message, STATE_KEEPS), ...senderOf(message), ...reactionsOf(message) });
+
+function sealedForm(message: Message): Message {
+  const mode = endToEndSealed(message) && typeof message.encryptionMode === 'string' ? { encryptionMode: message.encryptionMode } : {};
+  /* Tous les champs requis de `Message` sont dans l'état gardé ou posés ici. */
+  return { ...stateOf(message), ...mode, content: SEALED_CONTENT, isEncrypted: true, translations: [] } as unknown as Message;
+}
 
 /**
- * Un clair reconnu par son empreinte se rend avec son identité et ce que
- * l'empreinte VÉRIFIE, rien d'autre. Rien à retirer ⇒ le MÊME objet.
+ * Un clair reconnu par son empreinte se rend avec son état et ce que l'auteur
+ * avait posé, tel que l'empreinte le VÉRIFIE (`authoredOf`) : ni traduction,
+ * ni transcription, ni champ ajouté à côté. Il se lit dans sa langue d'origine.
  */
 function verifiedForm(message: Message): Message {
-  if (Object.keys(message).every((key) => VERIFIED_KEEPS.includes(key))) return message;
-  return pick(message, VERIFIED_KEEPS) as unknown as Message;
+  return { ...stateOf(message), ...authoredOf(message), isEncrypted: message.isEncrypted, translations: [] } as unknown as Message;
 }
 
-const shownForm = (message: Message, regime: EndToEndRegimeView): Message => {
-  const verdict = verdictOf(message, regime);
-  if (verdict === 'forged') return sealedForm(message);
+/** Ce qu'une ligne montre de ce message : lui-même, sa forme vérifiée ou sa forme scellée. */
+export function shownForm(message: Message, regime: EndToEndRegimeView, quoted = false): Message {
+  const verdict = verdictOf(message, regime, quoted);
+  if (verdict === 'sealed') return sealedForm(message);
   return verdict === 'verified' ? verifiedForm(message) : message;
-};
+}
 
 /**
  * **LA LOI UNIQUE DU CLAIR FORGÉ** (#12992) — appliquée au fil (`useThreadData`),
@@ -171,9 +189,10 @@ const shownForm = (message: Message, regime: EndToEndRegimeView): Message => {
  */
 function sealedRow(message: Message, regime: EndToEndRegimeView): Message {
   const own = shownForm(message, regime);
-  if (own.replyTo === undefined) return own;
-  const quoted = shownForm(own.replyTo, regime);
-  return quoted === own.replyTo ? own : { ...own, replyTo: quoted };
+  const quote = message.replyTo;
+  if (quote === undefined || quote === null) return own;
+  const quoted = shownForm(quote, regime, true);
+  return own === message && quoted === quote ? message : { ...own, replyTo: quoted };
 }
 
 export function sealForgedPlaintext(messages: readonly Message[], regime: EndToEndRegimeView): readonly Message[] {

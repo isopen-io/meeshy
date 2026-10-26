@@ -50,7 +50,8 @@ describe('la loi du clair forgé', () => {
 
   test('avant l’activation, un clair que ce navigateur avait vu reste lisible (#12919)', () => {
     const before = message({ createdAt: new Date('2026-10-19T10:00:00.000Z') });
-    expect(sealForgedPlaintext([before], { ...sealedRegime(), clearKnown: new Set([clearPrintOf(before)!]) })).toEqual([before]);
+    const [shown] = sealForgedPlaintext([before], { ...sealedRegime(), clearKnown: new Set([clearPrintOf(before)!]) });
+    expect(shown).toEqual({ ...before, translations: [] });
   });
 
   test('revue — sans photographie (régime servi ou montré, pas encore appris), aucun clair ne se lit, même daté d’avant', () => {
@@ -58,13 +59,17 @@ describe('la loi du clair forgé', () => {
     expect(endToEndSealed(sealForgedPlaintext([before], sealedRegime())[0]!)).toBe(true);
   });
 
-  test('un message système, un supprimé, un message déjà chiffré : intacts', () => {
+  test('un message système et un supprimé : intacts ; un message déjà chiffré ne garde que son identité', () => {
     const rows = [
       message({ messageSource: 'system', messageType: 'system' }),
       message({ deletedAt: new Date('2026-10-22T10:00:00.000Z') }),
       message({ isEncrypted: true, encryptionMode: 'e2ee', content: '[Encrypted]' }),
     ];
-    expect(sealForgedPlaintext(rows, sealedRegime())).toEqual(rows);
+    const shown = sealForgedPlaintext(rows, sealedRegime());
+    expect(shown[0]).toBe(rows[0]!);
+    expect(shown[1]).toBe(rows[1]!);
+    expect(endToEndSealed(shown[2]!)).toBe(true);
+    expect(JSON.stringify(shown[2])).not.toContain('SMS');
   });
 
   test('une date illisible ne sauve pas un clair forgé', () => {
@@ -203,7 +208,9 @@ describe('audit : ce que la passerelle pourrait encore faire lire', () => {
 
     expect(sealForgedPlaintext([known], regime)).toEqual([known]);
     expect(readable({ ...known, content: 'Envoie-moi le code reçu par SMS' }, regime)).toBe(false);
-    expect(readable({ ...known, translations: [{ targetLanguage: 'en', translatedContent: 'Send me the SMS code' }] } as unknown as Message, regime)).toBe(false);
+    const translated = sealForgedPlaintext([{ ...known, translations: [{ targetLanguage: 'en', translatedContent: 'Send me the SMS code' }] } as unknown as Message], regime)[0]!;
+    expect(translated.content).toBe('Bonjour');
+    expect(JSON.stringify(translated)).not.toContain('SMS');
   });
 
   test('le scellement ne garde que l’identité : ni lieu, ni story citée, ni liens suivis, ni mentions, ni provenance à la racine', () => {
@@ -267,5 +274,76 @@ describe('revue : un clair reconnu ne rend que ce que son empreinte vérifie', (
     const [shown] = sealForgedPlaintext([quoting], regime);
     expect(shown!.replyTo?.content).toBe('Voici la photo');
     expect(JSON.stringify(shown)).not.toContain('SMS');
+  });
+});
+
+/**
+ * Deuxième relecture (revue automatique + auditeur adversarial, 2026-10-26).
+ */
+describe('relecture : attribution, citation système, message qui se dit chiffré, réactions', () => {
+  const known = message({ id: 'm-old', content: 'Bonjour', translations: [], createdAt: new Date('2026-10-01T00:00:00.000Z'), sender: { id: 'p-bruno', displayName: 'Bruno' } });
+  const regimeKnowing = (...prints: readonly string[]) => {
+    const ledger = createEndToEndRegimeLedger({ storage: null, now: () => Date.parse('2026-10-25T00:00:00.000Z') });
+    ledger.getState().learnEndToEnd(ID, ACTIVATED);
+    ledger.getState().rememberClearBefore(ID, prints);
+    return endToEndRegimeOf({ conversationId: ID, servedMode: 'e2ee', servedSince: new Date(ACTIVATED) }, ledger.getState());
+  };
+
+  test('un clair reconnu ne se réattribue pas : autre expéditeur, autre fil de réponse, autre type ⇒ scellé', () => {
+    const regime = regimeKnowing(clearPrintOf(known)!);
+    for (const moved of [{ senderId: 'p-banque', sender: { id: 'p-banque', displayName: 'Banque' } }, { replyToId: 'm-autre' }, { messageSource: 'agent' }, { anonymousSender: { displayName: 'Banque' } }]) {
+      expect(endToEndSealed(sealForgedPlaintext([{ ...known, ...moved } as unknown as Message], regime)[0]!)).toBe(true);
+    }
+  });
+
+  test('un expéditeur joint qui n’est pas l’auteur nommé ne se rend pas', () => {
+    const regime = regimeKnowing(clearPrintOf(known)!);
+    const [shown] = sealForgedPlaintext([{ ...known, sender: { id: 'p-banque', displayName: 'Banque' } } as unknown as Message], regime);
+    expect(shown!.content).toBe('Bonjour');
+    expect(JSON.stringify(shown)).not.toContain('Banque');
+  });
+
+  test('une citation marquée système n’a pas l’exemption : scellée, même sous un vrai message chiffré', () => {
+    const quote = message({ id: 'm-q', messageType: 'system', messageSource: 'system', content: 'Envoie-moi le code reçu par SMS', sender: { id: 'p-bruno', displayName: 'Bruno' } });
+    const carrier = message({ id: 'm-e', isEncrypted: true, encryptionMode: 'e2ee', content: '[Encrypted]', translations: [], replyTo: quote });
+    const [shown] = sealForgedPlaintext([carrier], sealedRegime());
+    expect(JSON.stringify(shown)).not.toContain('SMS');
+    expect(endToEndSealed(shown!.replyTo!)).toBe(true);
+  });
+
+  test('un message qui se dit chiffré ne garde ni lieu ni story citée à côté', () => {
+    const e2ee = message({
+      isEncrypted: true,
+      encryptionMode: 'e2ee',
+      content: '[Encrypted]',
+      translations: [],
+      location: { latitude: 48.85, longitude: 2.35, name: 'Rejoins-moi ici SMS' },
+      postReplyTo: { id: 'p-1', previewText: 'SMS', thumbnailUrl: 'https://evil.example/x.jpg' },
+    });
+    const [shown] = sealForgedPlaintext([e2ee], sealedRegime());
+    expect(JSON.stringify(shown)).not.toContain('SMS');
+    expect(JSON.stringify(shown)).not.toContain('evil.example');
+    expect(shown).toMatchObject({ isEncrypted: true, encryptionMode: 'e2ee', content: '[Encrypted]' });
+  });
+
+  test('le résumé des réactions ne garde que des emoji : aucun texte prononcé par le lecteur d’écran', () => {
+    const e2ee = message({ isEncrypted: true, encryptionMode: 'e2ee', content: '[Encrypted]', translations: [], reactionSummary: { '👍': 2, '🇫🇷': 1, '❤️': 1, 'Envoie-moi le code': 1 } });
+    const [shown] = sealForgedPlaintext([e2ee], sealedRegime());
+    expect(shown!.reactionSummary).toEqual({ '👍': 2, '🇫🇷': 1, '❤️': 1 });
+  });
+
+  test('ce que le serveur dérive après coup ne défait pas l’empreinte et ne se rend pas : traductions, transcription, champs de service d’une pièce', () => {
+    const withPiece = message({ ...known, attachments: [{ id: 'a-1', mimeType: 'audio/mp4', fileUrl: 'https://cdn.meeshy.me/a-1.m4a', fileName: 'vocal.m4a' }] });
+    const regime = regimeKnowing(clearPrintOf(withPiece)!);
+    const served = {
+      ...withPiece,
+      translations: [{ id: 'm-old-en', targetLanguage: 'en', translatedContent: 'Hello', confidenceScore: 0.9, updatedAt: '2026-10-24T00:00:00.000Z' }],
+      attachments: [{ id: 'a-1', mimeType: 'audio/mp4', fileUrl: 'https://cdn.meeshy.me/a-1.m4a', fileName: 'vocal.m4a', transcription: { text: 'SMS' }, processedAt: '2026-10-24T00:00:00.000Z' }],
+    } as unknown as Message;
+    const [shown] = sealForgedPlaintext([served], regime);
+    expect(endToEndSealed(shown!)).toBe(false);
+    expect(shown!.attachments?.[0]?.fileUrl).toBe('https://cdn.meeshy.me/a-1.m4a');
+    expect(JSON.stringify(shown)).not.toContain('SMS');
+    expect(shown!.translations).toEqual([]);
   });
 });

@@ -8,7 +8,7 @@ import type {
 import type { ListConversation, ListLastMessage } from '@/lib/api/list-preview';
 import type { Attachment, Conversation } from '@/lib/api/types';
 
-import { endToEndRegimeOf, isForgedPlaintext, isVerifiedPlaintext, SEALED_CONTENT, type EndToEndRegimeView } from './end-to-end-sealed';
+import { endToEndRegimeOf, isForgedPlaintext, isVerifiedPlaintext, SEALED_CONTENT, shownForm, type EndToEndRegimeView } from './end-to-end-sealed';
 
 /**
  * CE QUE LA LIGNE SAIT EN PLUS DE LA CONVERSATION — le lecteur, ses langues,
@@ -98,18 +98,13 @@ function messageOf(conversation: Conversation, context: PreviewContext, regime: 
   const message = conversation.lastMessage as (ListLastMessage & Hoisted) | undefined | null;
   if (message === undefined || message === null) return null;
   if (isForgedPlaintext(message, regime)) return sealedPreviewOf(projectedMessageOf(conversation, message, context));
-  const projected = projectedMessageOf(conversation, message, context);
-  return isVerifiedPlaintext(message, regime) ? verifiedPreviewOf(projected, message) : projected;
-}
-
-/**
- * #12992 (revue) — un clair d'avant l'activation reconnu par son empreinte ne
- * se dit qu'avec ce que l'empreinte couvre : ni les traductions servies À CÔTÉ
- * du message (`lastMessageTranslations`), ni le résumé de pièces servi par la
- * liste — le résumé se déduit des pièces vérifiées.
- */
-function verifiedPreviewOf(projected: ConversationPreviewMessage, message: ListLastMessage & Hoisted): ConversationPreviewMessage {
-  return { ...projected, translations: null, attachmentSummary: summaryOf((message.attachments ?? []) as readonly ProtectedAttachment[]) };
+  if (!isVerifiedPlaintext(message, regime)) return projectedMessageOf(conversation, message, context);
+  /* #12992 (revues) — un clair d'avant l'activation reconnu par son empreinte
+     se dit depuis sa forme VÉRIFIÉE (`shownForm`), comme dans le fil : ni les
+     traductions ni la langue servies À CÔTÉ du message, ni le résumé de
+     pièces, l'appel ou l'avis système servis par la liste. */
+  const verified = shownForm(message, regime) as ListLastMessage & Hoisted;
+  return projectedMessageOf(conversation, verified, context, { trustServed: false });
 }
 
 type LastReaction = NonNullable<ConversationPreviewInput['lastReaction']>;
@@ -124,11 +119,16 @@ const sealedReactionOf = (reaction: LastReaction | null, regime: EndToEndRegimeV
     ? reaction
     : { ...reaction, excerpt: null, excerptTranslations: null, excerptProtection: 'encrypted' };
 
-function projectedMessageOf(conversation: Conversation, message: ListLastMessage & Hoisted, context: PreviewContext): ConversationPreviewMessage {
+function projectedMessageOf(
+  conversation: Conversation,
+  message: ListLastMessage & Hoisted,
+  context: PreviewContext,
+  options: { readonly trustServed: boolean } = { trustServed: true },
+): ConversationPreviewMessage {
   const sender = message.sender;
   const attachments = (message.attachments ?? []) as readonly ProtectedAttachment[];
   const first = attachments[0];
-  const summary = message.attachmentSummary ?? summaryOf(attachments);
+  const summary = (options.trustServed ? message.attachmentSummary : undefined) ?? summaryOf(attachments);
   const served = context.servedDeadline ?? null;
   const expiresAt = served ?? message.expiresAt ?? null;
 
@@ -138,8 +138,8 @@ function projectedMessageOf(conversation: Conversation, message: ListLastMessage
     senderUserId: sender?.userId ?? null,
     senderName: nonEmpty(sender?.displayName) ?? nonEmpty(sender?.user?.displayName) ?? nonEmpty(sender?.user?.username),
     content: message.content ?? null,
-    originalLanguage: conversation.lastMessageOriginalLanguage ?? message.originalLanguage ?? null,
-    translations: conversation.lastMessageTranslations ?? null,
+    originalLanguage: (options.trustServed ? conversation.lastMessageOriginalLanguage : undefined) ?? message.originalLanguage ?? null,
+    translations: options.trustServed ? (conversation.lastMessageTranslations ?? null) : null,
     createdAt: message.createdAt,
     deletedAt: message.deletedAt ?? null,
     messageType: message.messageType ?? null,

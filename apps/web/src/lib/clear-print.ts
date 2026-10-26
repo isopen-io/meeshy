@@ -1,11 +1,11 @@
 /**
  * **L'EMPREINTE D'UN CLAIR PHOTOGRAPHIÉ** (#12992, audit adversarial du lot) —
  * ce que ce navigateur retient d'un message en clair qu'il tenait avant
- * d'apprendre le bout en bout : son identifiant ET tout ce qui se rend de lui
- * (`PRINT_COVERS`). Retenir l'identifiant seul laissait une passerelle
+ * d'apprendre le bout en bout : son identifiant ET ce que son auteur a posé
+ * (`AUTHORED_FIELDS`). Retenir l'identifiant seul laissait une passerelle
  * compromise réécrire un ancien message en gardant son id et sa date.
  *
- * SHA-256 synchrone, tronqué à 64 bits : la passerelle connaît le clair
+ * SHA-256 synchrone, tronqué à 128 bits : la passerelle connaît le clair
  * d'origine (elle l'a servi), une empreinte non cryptographique se
  * contournerait par seconde préimage. Synchrone parce que le fil, la ligne de
  * liste et l'aperçu tranchent au rendu.
@@ -59,24 +59,53 @@ export function sha256Hex(text: string): string {
 }
 
 /**
- * **CE QU'UNE EMPREINTE COUVRE, ET RIEN D'AUTRE NE SE REND** (revue de sécurité
- * du lot) — tout champ d'un message qui porte du CONTENU : texte, traductions,
- * pièces ENTIÈRES (url, nom, type, aperçus, transcriptions), lieu, sticker,
- * métadonnées, story citée, liens suivis, mentions, provenance d'un transfert,
- * régime. Un clair d'avant l'activation reconnu par son empreinte se rend avec
- * son identité et CES SEULS champs (`verifiedForm`, `view/end-to-end-sealed.ts`) :
- * un champ que la passerelle ajouterait ou changerait à côté ne passe pas, et
- * une seule valeur changée parmi eux défait l'empreinte — le message se scelle.
+ * **CE QUE L'AUTEUR A POSÉ — LA SEULE MATIÈRE DE L'EMPREINTE** (revues de
+ * sécurité du lot) — et, avec l'identité et les compteurs sans contenu, la
+ * seule qu'un clair d'avant l'activation reconnu RENDE (`verifiedForm`,
+ * `view/end-to-end-sealed.ts`). L'attribution (expéditeur, fil de réponse,
+ * type, source) y entre : un clair reconnu ne se réattribue pas. Ce que le
+ * serveur DÉRIVE après coup (traductions, transcriptions, résumés, champs de
+ * service d'une pièce) n'y entre pas — sa forme varie entre le temps réel et
+ * le REST — et ne se rend donc pas : un clair reconnu se lit dans sa langue
+ * d'origine. Une valeur changée parmi ces champs défait l'empreinte : le
+ * message se scelle, il ne s'affiche jamais modifié.
  */
-export const PRINT_COVERS = [
-  'content', 'translations', 'attachments', 'location', 'sticker', 'metadata', 'postReplyTo', 'trackingLinks',
-  'validatedMentions', 'mentionedUsers', 'forwardedFromId', 'forwardedFromConversationId', 'forwardedFromConversation',
-  'storyReplyToId', 'isEncrypted', 'encryptionMode', 'encryptedContent', 'encryptionMetadata',
+export const AUTHORED_FIELDS = [
+  'senderId', 'anonymousSender', 'messageType', 'messageSource', 'replyToId', 'storyReplyToId', 'forwardedFromId', 'forwardedFromConversationId',
+  'content', 'originalLanguage', 'attachments', 'location', 'sticker', 'metadata', 'postReplyTo', 'isEncrypted', 'encryptionMode',
 ] as const;
+
+/** D'une pièce : ce que le téléversement a fixé, rien de ce que le serveur y ajoute ensuite. */
+const AUTHORED_ATTACHMENT_FIELDS = ['id', 'fileName', 'originalName', 'mimeType', 'fileSize', 'fileUrl', 'thumbnailUrl', 'width', 'height', 'duration'] as const;
+
+/** Des métadonnées : le sticker et le lieu posés par l'auteur. */
+const AUTHORED_METADATA_FIELDS = ['sticker', 'location'] as const;
 
 const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> => typeof value === 'object' && value !== null;
 
-/** JSON canonique : clés triées à toute profondeur, dates en ISO (`toJSON`), `undefined` omis comme le fait le stockage. */
+const present = (value: unknown): boolean => value !== undefined && value !== null;
+
+const picked = (value: Readonly<Record<string, unknown>>, keys: readonly string[]): Record<string, unknown> =>
+  Object.fromEntries(keys.filter((key) => present(value[key])).map((key) => [key, value[key]] as const));
+
+/**
+ * La projection AUTEUR d'un message : ses seuls champs posés par l'auteur,
+ * pièces et métadonnées réduites ; `null` et absent se confondent.
+ */
+export function authoredOf(row: object): Record<string, unknown> {
+  const message = row as Readonly<Record<string, unknown>>;
+  const base = picked(message, AUTHORED_FIELDS);
+  const attachments = Array.isArray(message.attachments) ? message.attachments.filter(isRecord).map((attachment) => picked(attachment, AUTHORED_ATTACHMENT_FIELDS)) : undefined;
+  const metadata = isRecord(message.metadata) ? picked(message.metadata, AUTHORED_METADATA_FIELDS) : undefined;
+  const { attachments: _attachments, metadata: _metadata, ...rest } = base;
+  return {
+    ...rest,
+    ...(attachments === undefined || attachments.length === 0 ? {} : { attachments }),
+    ...(metadata === undefined || Object.keys(metadata).length === 0 ? {} : { metadata }),
+  };
+}
+
+/** JSON canonique : clés triées à toute profondeur, dates en ISO, `null` et `undefined` omis. */
 function canonical(value: unknown): unknown {
   if (value instanceof Date) return value.toJSON();
   if (Array.isArray(value)) return value.map(canonical);
@@ -84,19 +113,14 @@ function canonical(value: unknown): unknown {
   return Object.fromEntries(
     Object.keys(value)
       .sort()
-      .filter((key) => value[key] !== undefined)
+      .filter((key) => present(value[key]))
       .map((key) => [key, canonical(value[key])] as const),
   );
 }
 
-/** Les traductions ne se distinguent pas par leur ordre. */
-const orderedTranslations = (value: unknown): unknown =>
-  Array.isArray(value) ? value.map((translation) => JSON.stringify(canonical(translation))).sort() : value;
-
-/** `id:empreinte` — `null` pour une ligne sans identifiant. */
+/** `id:empreinte` (128 bits) — `null` pour une ligne sans identifiant. */
 export function clearPrintOf(row: object): string | null {
-  const message = row as Readonly<Record<string, unknown>>;
-  if (typeof message.id !== 'string') return null;
-  const covered = Object.fromEntries(PRINT_COVERS.map((key) => [key, key === 'translations' ? orderedTranslations(message[key]) : message[key]] as const));
-  return `${message.id}:${sha256Hex(JSON.stringify(canonical(covered))).slice(0, 16)}`;
+  const id = (row as Readonly<Record<string, unknown>>).id;
+  if (typeof id !== 'string') return null;
+  return `${id}:${sha256Hex(JSON.stringify(canonical(authoredOf(row)))).slice(0, 32)}`;
 }

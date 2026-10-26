@@ -18,18 +18,17 @@ describe('sha256Hex', () => {
 describe('clearPrintOf', () => {
   const known = { id: 'm-1', content: 'Bonjour', translations: [{ targetLanguage: 'en', translatedContent: 'Hello' }], attachments: [{ id: 'a-1' }] };
 
-  test('porte l’identifiant, et change avec le texte, une traduction ou une pièce', () => {
+  test('porte l’identifiant, et change avec le texte ou une pièce ; une traduction, dérivée par le serveur, n’y entre pas', () => {
     const print = clearPrintOf(known);
     expect(print?.startsWith('m-1:')).toBe(true);
     expect(clearPrintOf({ ...known, content: 'Bonsoir' })).not.toBe(print);
-    expect(clearPrintOf({ ...known, translations: [{ targetLanguage: 'en', translatedContent: 'Send me the code' }] })).not.toBe(print);
+    expect(clearPrintOf({ ...known, translations: [{ targetLanguage: 'en', translatedContent: 'Send me the code' }] })).toBe(print);
     expect(clearPrintOf({ ...known, attachments: [{ id: 'a-forge' }] })).not.toBe(print);
     expect(clearPrintOf({ ...known, id: 'm-2' })).not.toBe(print);
   });
 
-  test('l’ordre des traductions ne compte pas ; une ligne sans identifiant n’a pas d’empreinte', () => {
-    const two = [{ targetLanguage: 'en', translatedContent: 'Hello' }, { targetLanguage: 'es', translatedContent: 'Hola' }];
-    expect(clearPrintOf({ ...known, translations: two })).toBe(clearPrintOf({ ...known, translations: [...two].reverse() }));
+  test('null et absent se confondent ; une ligne sans identifiant n’a pas d’empreinte', () => {
+    expect(clearPrintOf({ ...known, location: null, sticker: undefined })).toBe(clearPrintOf(known));
     expect(clearPrintOf({ content: 'x' })).toBeNull();
   });
 });

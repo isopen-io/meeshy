@@ -212,3 +212,18 @@ describe('le clair forgé dans la ligne (#12992)', () => {
     expect(line(sealedConversation(message({ content: 'Antidaté', createdAt: '2026-09-19T09:59:00.000Z' })))).not.toContain('Antidaté');
   });
 });
+
+describe('relecture : la ligne d’un clair reconnu se dit depuis sa forme vérifiée', () => {
+  test('ni l’appel, ni l’avis système, ni le résumé de pièces servis à côté', () => {
+    const before = message({ content: 'Vorher', originalLanguage: 'de', createdAt: '2026-09-19T09:59:00.000Z' });
+    const regime = { sealed: true, since: Date.parse('2026-09-20T00:00:00.000Z'), clearKnown: new Set([clearPrintOf(before)!]) };
+    const padded = {
+      ...before,
+      callSummary: { kind: 'missed', durationSec: 0 },
+      systemEvent: { key: 'system.member-joined', params: { name: 'SMS' } },
+      attachmentSummary: { count: 1, kinds: ['image'], firstKind: 'image' },
+    };
+    const input = previewInputOf(conversation({ encryptionMode: 'e2ee', lastMessage: padded as unknown as Message } as Partial<ListConversation>), ctx({ regime }));
+    expect(input.lastMessage).toMatchObject({ content: 'Vorher', callSummary: null, systemEvent: null, attachmentSummary: null, translations: null });
+  });
+});
