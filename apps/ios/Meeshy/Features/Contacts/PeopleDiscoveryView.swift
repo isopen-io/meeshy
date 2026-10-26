@@ -22,7 +22,7 @@ struct PeopleDiscoveryView: View {
     @StateObject private var requestsVM = RequestsViewModel()
     @StateObject private var discoverVM = DiscoverViewModel()
     @StateObject private var blockedVM = BlockedViewModel()
-    @ObservedObject private var friendship = FriendshipCache.shared
+    @ObservedObject private var friendship: FriendshipCache
 
     /// Offset de défilement relayé au header SANS invalider ce body :
     /// `@State` retient la référence sans s'y abonner, et seul le
@@ -33,8 +33,9 @@ struct PeopleDiscoveryView: View {
     @State private var scrollRelay = ScrollOffsetRelay()
     @State private var subTab: DiscoveryTab
 
-    init(initialTab: DiscoveryTab = .discover) {
+    init(initialTab: DiscoveryTab = .discover, friendship: FriendshipCache = .shared) {
         _subTab = State(initialValue: initialTab)
+        self.friendship = friendship
     }
 
     var body: some View {

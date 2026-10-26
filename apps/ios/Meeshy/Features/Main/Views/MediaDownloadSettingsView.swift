@@ -13,7 +13,7 @@ struct MediaDownloadSettingsView: View {
     @Environment(\.dismiss) private var dismiss
     private var theme: ThemeManager { ThemeManager.shared }
 
-    @ObservedObject private var store = MediaDownloadPreferencesStore.shared
+    @ObservedObject private var store: MediaDownloadPreferencesStore
     /// #8307 — les images et vidéos reçues rejoignent l'album Meeshy. Actif par défaut.
     @AppStorage(ReceivedMediaAutoSaveUserSetting.key) private var autoSaveToAlbum = true
     /// #9684 — à la prise de vue : l'original (défaut : non) et la version avec effets et cadre.
@@ -21,7 +21,11 @@ struct MediaDownloadSettingsView: View {
     @AppStorage(CaptureSavePolicy.renderedModeKey) private var captureRenderedMode = CaptureSavePolicy.standard.renderedMode
     /// #9885 — à l'envoi : le lieu des photos (retiré par défaut, #11247) et la compression.
     @AppStorage(OutgoingImageLocationSetting.key) private var keepsPhotoLocation = OutgoingImageLocationSetting.standard
-    @ObservedObject private var preferences = UserPreferencesManager.shared
+    @ObservedObject private var preferences: UserPreferencesManager
+    init(store: MediaDownloadPreferencesStore = .shared, preferences: UserPreferencesManager = .shared) {
+        self.store = store
+        self.preferences = preferences
+    }
 
     private let accentColor = MeeshyColors.brandPrimaryHex
     private static let fieldIconSide: CGFloat = 28

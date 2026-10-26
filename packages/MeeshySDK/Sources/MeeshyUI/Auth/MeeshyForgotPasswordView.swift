@@ -21,7 +21,7 @@ import MeeshySDK
 /// connexion qui ouvre cette feuille.
 public struct MeeshyForgotPasswordView: View {
     @Environment(\.dismiss) private var dismiss
-    @StateObject private var authManager = AuthManager.shared
+    private let authManager: AuthManager
     @Environment(\.colorScheme) private var colorScheme
     private var theme: ThemePalette { ThemePalette(colorScheme: colorScheme) }
 
@@ -76,8 +76,9 @@ public struct MeeshyForgotPasswordView: View {
     /// - Parameter prefilledEmail: l'adresse déjà tapée par l'hôte (#8216) —
     ///   l'inscription d'une adresse déjà utilisée, ou la connexion. La
     ///   retaper est un geste de trop.
-    public init(prefilledEmail: String = "") {
+    public init(prefilledEmail: String = "", authManager: AuthManager = .shared) {
         _email = State(initialValue: prefilledEmail)
+        self.authManager = authManager
     }
 
     public var body: some View {

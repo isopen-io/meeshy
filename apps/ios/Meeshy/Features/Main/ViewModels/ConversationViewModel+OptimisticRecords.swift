@@ -1,5 +1,4 @@
 import Foundation
-import GRDB
 import MeeshySDK
 
 /// La ligne GRDB optimiste d'un message média, composée de ses seules entrées.

@@ -8,7 +8,7 @@ struct SettingsView: View {
     @Environment(\.routerCommands) private var router
     private var theme: ThemeManager { ThemeManager.shared }
     @EnvironmentObject private var authManager: AuthManager
-    @ObservedObject private var prefs = UserPreferencesManager.shared
+    @ObservedObject private var prefs: UserPreferencesManager
     @Environment(\.colorScheme) private var colorScheme
 
     @State private var showLogoutConfirm = false
@@ -43,7 +43,11 @@ struct SettingsView: View {
     @State private var showPacks = false
     @State private var packsInitialDomain: PackDomain?
     @State private var packsFocusedPack: String?
-    @ObservedObject private var packShopLauncher = PackShopLauncher.shared
+    @ObservedObject private var packShopLauncher: PackShopLauncher
+    init(prefs: UserPreferencesManager = .shared, packShopLauncher: PackShopLauncher = .shared) {
+        self.prefs = prefs
+        self.packShopLauncher = packShopLauncher
+    }
     @State private var scrollRelay = ScrollOffsetRelay()
     /// Miroirs des trois interrupteurs d'interface (#6482), lus UNE fois au
     /// montage comme `interfaceLanguageChoice` : chaque bascule écrit le miroir

@@ -1,7 +1,7 @@
 {
   "rules": {
     "anyview": 96,
-    "app-grdb-import": 21,
+    "app-grdb-import": 8,
     "async-after": 76,
     "autocapitalization": 0,
     "available-floor": 0,
@@ -17,7 +17,7 @@
     "nonisolated-unsafe": 107,
     "nslock": 34,
     "nslog": 0,
-    "observed-singleton": 55,
+    "observed-singleton": 44,
     "observed-theme-singleton": 0,
     "onchange-single": 0,
     "plural-s": 0,
