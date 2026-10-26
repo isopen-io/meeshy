@@ -104,6 +104,9 @@ class OwnEncryptedDevicesRepository @Inject constructor(
         /** La place a changé d'occupant depuis la liste lue (passerelle, 409). */
         const val DEVICE_CHANGED: String = "E2EE_DEVICE_CHANGED"
 
+        /** La session de l'appareil à retirer n'a pas pu être fermée : rien n'est retiré (passerelle, 503, #13013). */
+        const val DEVICE_SESSION_NOT_CLOSED: String = "E2EE_DEVICE_SESSION_NOT_CLOSED"
+
         /** L'appareil n'est pas dans la liste de ce compte (liste vidée, ou jamais lue). */
         const val UNKNOWN_DEVICE_CODE: String = "E2EE_DEVICE_NOT_LISTED"
 

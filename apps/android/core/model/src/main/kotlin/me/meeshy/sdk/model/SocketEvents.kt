@@ -192,6 +192,18 @@ data class AttachmentUpdatedEvent(
  * réaction, appel) sont tri-état ([PreviewFieldUpdate]) ; chaque sous-champ du contrat est tolérant,
  * pour qu'une forme inattendue d'UN champ neuf ne jette jamais l'événement qui porte aussi le rang.
  */
+/**
+ * `conversation:encryption-changed` (#12522) — la bascule du régime d'une conversation. Aucun
+ * contenu n'y voyage. L'Android natif n'en retient que l'ACTIVATION du bout en bout (#12956) : une
+ * rétrogradation annoncée est ignorée (#12949).
+ */
+@Serializable
+data class ConversationEncryptionChangedSocketEvent(
+    val conversationId: String,
+    val mode: String? = null,
+    val epoch: Int? = null,
+)
+
 @Serializable
 data class ConversationUpdatedSocketEvent(
     val conversationId: String,

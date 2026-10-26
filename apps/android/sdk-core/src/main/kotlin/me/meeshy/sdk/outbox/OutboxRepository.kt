@@ -281,6 +281,11 @@ class OutboxRepository @Inject constructor(
      *
      * @return how many dependents were actually rewritten.
      */
+    /** The still-queued rows that wait on [prerequisiteCmid] (an upload's message, #12956). */
+    suspend fun dependentsOf(prerequisiteCmid: String): List<OutboxEntity> =
+        outboxDao.findDependents(OutboxDependencyKey.likePattern(prerequisiteCmid))
+            .filter { it.stateEnum != OutboxState.EXHAUSTED }
+
     suspend fun rewriteDependents(prerequisiteCmid: String, rewrite: (String) -> String?): Int {
         val dependents = outboxDao.findDependents(OutboxDependencyKey.likePattern(prerequisiteCmid))
             .filter { it.stateEnum == OutboxState.PENDING }

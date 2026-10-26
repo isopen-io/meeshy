@@ -157,11 +157,15 @@ data class ChatUiState(
      * d'envoi du composeur lit [composerAffordances] fermé, AVANT tout octet émis
      * (texte, pièce, vocal, édition) —, et le composeur dit où elle s'écrit. Le
      * transfert, le partage et les stories l'excluent par `mayCurrentUserWrite`.
-     * Hors de ce lot : un régime qui change pendant que le fil est ouvert
-     * (`conversation:encryption-changed`) et la mémoire du régime vu (#12956).
+     *
+     * #12956 — le mode vient de la ligne Room, que `ConversationCacheSource` ne rétrograde
+     * jamais pour une conversation vue e2ee et que `conversation:encryption-changed` ferme à
+     * l'instant (`EndToEndRegimeKeeper`). Et un fil qui MONTRE un message scellé (e2ee, chiffré
+     * sans mode, pièce chiffrée) retient l'envoi tant qu'il le montre, même servi sans mode
+     * (#13099) : `EndToEndRegimeController` n'en apprend que ce qui prouve le régime.
      */
     val isEndToEnd: Boolean
-        get() = EndToEndRegime.isEndToEnd(encryptionMode)
+        get() = EndToEndRegime.isEndToEnd(encryptionMode) || messages.any { it.isEndToEndSealed }
 
     /** Whether the reader may write here — what the message law reads before offering « Répondre ». */
     val viewerMayWrite: Boolean
