@@ -246,3 +246,83 @@ final class EncryptedDevicesViewModelTests: XCTestCase {
         XCTAssertTrue(second.accessibilityLabel.contains("3"), "VoiceOver lit aussi le numéro")
     }
 }
+
+/// #13036 — une place se réattribue : le retrait nomme la génération AFFICHÉE,
+/// et une place reprise depuis n'est pas retirée.
+@MainActor
+final class EncryptedDeviceRetirementGenerationTests: XCTestCase {
+    private func device(_ id: UInt32, registrationId: UInt32) -> EndToEndOwnDevice {
+        EndToEndOwnDevice(deviceId: id, registrationId: registrationId, platform: .ios, label: nil, enrolledAt: nil, lastSeenAt: nil, trust: .pending)
+    }
+
+    func test_retire_namesTheGenerationTheRowShows() async {
+        let linking = MockEndToEndOwnDeviceLinking()
+        let model = EncryptedDevicesViewModel(linking: linking, cache: EncryptedDevicesCache(), networkMonitor: FakeNetworkMonitor(isOnline: true), userId: { "me" })
+
+        await model.retire(device(3, registrationId: 4242))
+
+        XCTAssertEqual(linking.retired, [3])
+        XCTAssertEqual(linking.retiredGenerations, [4242])
+    }
+
+    func test_aSlotTakenOverSinceTheListing_saysSo_andReloadsTheList() async {
+        let linking = MockEndToEndOwnDeviceLinking()
+        linking.retireError = E2EEDeviceRetirementError.deviceChanged
+        let model = EncryptedDevicesViewModel(linking: linking, cache: EncryptedDevicesCache(), networkMonitor: FakeNetworkMonitor(isOnline: true), userId: { "me" })
+
+        await model.retire(device(3, registrationId: 4242))
+
+        XCTAssertEqual(model.notice, .deviceChanged)
+        XCTAssertEqual(linking.listCallCount, 1, "la liste se relit avant tout nouveau retrait")
+        XCTAssertFalse(EncryptedDeviceNoticeText.message(.deviceChanged).isEmpty)
+    }
+}
+
+/// #13036 — la feuille « Trop d'appareils chiffrés » retire la génération lue.
+@MainActor
+final class EndToEndDeviceLimitRetirementGenerationTests: XCTestCase {
+    private final class Devices: EndToEndDeviceManaging, @unchecked Sendable {
+        var listed: [E2EEDeviceListing] = []
+        var retireError: (any Error)?
+        private(set) var retired: [(UInt32, UInt32)] = []
+        private(set) var enrolled = 0
+        private(set) var listCalls = 0
+
+        func ownDevices(of userId: String) async throws -> [E2EEDeviceListing] {
+            listCalls += 1
+            return listed
+        }
+        func retire(deviceId: UInt32, registrationId: UInt32) async throws {
+            if let retireError { throw retireError }
+            retired.append((deviceId, registrationId))
+        }
+        func enroll(_ userId: String) async throws { enrolled += 1 }
+    }
+
+    private func listing(_ id: UInt32, _ registrationId: UInt32) -> E2EEDeviceListing {
+        JSONStub.decode(#"{"deviceId":\#(id),"registrationId":\#(registrationId)}"#)
+    }
+
+    func test_retire_namesTheListedGeneration() async {
+        let devices = Devices()
+        let model = EndToEndDeviceLimitViewModel(devices: devices, userId: { "me" })
+
+        await model.retire(listing(2, 77))
+
+        XCTAssertEqual(devices.retired.map(\.0), [2])
+        XCTAssertEqual(devices.retired.map(\.1), [77])
+    }
+
+    func test_aSlotTakenOverSinceTheListing_reloadsWithoutEnrolling() async {
+        let devices = Devices()
+        devices.retireError = E2EEDeviceRetirementError.deviceChanged
+        devices.listed = [listing(2, 88)]
+        let model = EndToEndDeviceLimitViewModel(devices: devices, userId: { "me" })
+
+        await model.retire(listing(2, 77))
+
+        XCTAssertEqual(devices.enrolled, 0)
+        XCTAssertEqual(model.state, .loaded([listing(2, 88)]))
+        XCTAssertTrue(model.listChangedSinceReading, "le refus se dit à l'écran")
+    }
+}

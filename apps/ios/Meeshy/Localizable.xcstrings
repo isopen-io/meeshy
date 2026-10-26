@@ -313334,6 +313334,100 @@
         }
       }
     },
+    "e2ee.devices.notice.deviceChanged.message": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أخذ جهاز آخر هذا المكان منذ عرض القائمة. لم تتم إزالة أي شيء. تحقق من القائمة المحدّثة قبل إزالة أي جهاز."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seit dem Anzeigen der Liste hat ein anderes Gerät diesen Platz eingenommen. Es wurde nichts entfernt. Prüfe die aktualisierte Liste, bevor du ein Gerät entfernst."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Another device took this place since the list was shown. Nothing was removed. Check the updated list before removing a device."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Otro dispositivo ocupó este lugar desde que se mostró la lista. No se eliminó nada. Revisa la lista actualizada antes de eliminar un dispositivo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un autre appareil a pris cette place depuis l’affichage de la liste. Rien n’a été retiré. Vérifiez la liste à jour avant de retirer un appareil."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un altro dispositivo ha preso questo posto da quando è stato mostrato l’elenco. Non è stato rimosso nulla. Controlla l’elenco aggiornato prima di rimuovere un dispositivo."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Outro dispositivo ocupou este lugar desde que a lista foi exibida. Nada foi removido. Verifique a lista atualizada antes de remover um dispositivo."
+          }
+        }
+      }
+    },
+    "e2ee.devices.notice.deviceChanged.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تغيّرت القائمة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Liste hat sich geändert"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The list has changed"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La lista ha cambiado"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La liste a changé"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "L’elenco è cambiato"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A lista mudou"
+          }
+        }
+      }
+    },
     "e2ee.devices.notice.failed.message": {
       "extractionState": "manual",
       "localizations": {
