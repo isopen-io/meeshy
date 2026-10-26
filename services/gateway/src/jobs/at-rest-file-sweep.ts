@@ -49,8 +49,11 @@ export const AT_REST_ACTIVATED_AT_KEY = 'at-rest:files:activated-at';
 type MarkerClient = {
   set(key: string, value: string, nx: 'NX'): Promise<unknown>;
   get(key: string): Promise<string | null>;
-  del?(key: string): Promise<unknown>;
+  eval?(script: string, keys: number, key: string, upTo: string): Promise<unknown>;
 };
+
+/** Compare-et-supprime : seul un report antérieur ou égal à `upTo` s'efface. */
+const FORGET_DEFERRAL = "local v = tonumber(redis.call('GET', KEYS[1])) if v and v <= tonumber(ARGV[1]) then return redis.call('DEL', KEYS[1]) end return 0";
 
 export const AT_REST_DEFERRED_SINCE_KEY = 'at-rest:files:deferred-since';
 
@@ -72,10 +75,14 @@ export async function rememberedDeferral(client: MarkerClient | null, inMemory: 
   }
 }
 
-/** Le rattrapage est fait : la panne s'oublie, en mémoire et dans Redis. */
+/**
+ * Le rattrapage est fait jusqu'à `upTo` : la panne s'oublie, en mémoire et
+ * dans Redis — atomiquement, et seulement si le report inscrit n'est pas plus
+ * récent (une autre instance a pu en poser un pendant le balayage).
+ */
 export async function forgetDeferral(client: MarkerClient | null, upTo: Date): Promise<void> {
   clearSealingDeferred(upTo);
-  await client?.del?.(AT_REST_DEFERRED_SINCE_KEY).catch(() => undefined);
+  await client?.eval?.(FORGET_DEFERRAL, 1, AT_REST_DEFERRED_SINCE_KEY, String(upTo.getTime())).catch(() => undefined);
 }
 
 /** Pose une fois, puis relit, l'instant d'activation du scellement sur l'instance. */

@@ -139,7 +139,10 @@ describe('le balayage', () => {
     const client = {
       set: async (key: string, value: string) => { if (!data.has(key)) data.set(key, value); return 'OK'; },
       get: async (key: string) => data.get(key) ?? null,
-      del: async (key: string) => data.delete(key),
+      eval: async (_script: string, _keys: number, key: string, upTo: string) => {
+        const value = data.get(key);
+        return value !== undefined && Number(value) <= Number(upTo) ? Number(data.delete(key)) : 0;
+      },
     };
     const outage = new Date(now.getTime() - 72 * HOUR);
     expect(await rememberedDeferral(client, outage)).toEqual(outage);
@@ -150,6 +153,21 @@ describe('le balayage', () => {
     expect(data.has(AT_REST_DEFERRED_SINCE_KEY)).toBe(false);
     expect(await rememberedDeferral(client, null)).toBeNull();
     expect(await rememberedDeferral({ set: async () => { throw new Error('down'); }, get: async () => null }, outage)).toEqual(outage);
+  });
+
+  it('un report plus récent posé par une autre instance pendant le balayage survit à l’oubli', async () => {
+    const data = new Map<string, string>([[AT_REST_DEFERRED_SINCE_KEY, String(now.getTime() + HOUR)]]);
+    const client = {
+      set: async () => 'OK',
+      get: async (key: string) => data.get(key) ?? null,
+      del: async (key: string) => data.delete(key),
+      eval: async (_script: string, _keys: number, key: string, upTo: string) => {
+        const value = data.get(key);
+        return value !== undefined && Number(value) <= Number(upTo) ? Number(data.delete(key)) : 0;
+      },
+    };
+    await forgetDeferral(client, now);
+    expect(data.get(AT_REST_DEFERRED_SINCE_KEY)).toBe(String(now.getTime() + HOUR));
   });
 
   it('sans marqueur, sans clé de signature ou scellement suspendu, il ne rattrape rien', () => {
