@@ -11,7 +11,6 @@
       h1 { font-size: 20px; line-height: 1.3; margin: 0 0 12px; }
       p { font-size: 16px; line-height: 1.5; margin: 0 0 24px; max-width: 360px; color: #d4d4d8; }
       a { display: inline-block; min-height: 44px; line-height: 44px; padding: 0 24px; border-radius: 22px; background: #6366f1; color: #ffffff; font-weight: 600; text-decoration: none; }
-      a[hidden] { display: none; }
     </style>
   </head>
   <body>
@@ -25,49 +24,47 @@
         var COPY = {
           fr: {
             update: ['Mettez à jour Android System WebView', 'Meeshy s’affiche grâce à Android System WebView, et celle de cet appareil est trop ancienne. Mettez-la à jour depuis le Play Store, puis rouvrez Meeshy.', 'Ouvrir le Play Store'],
-            failed: ['Meeshy n’a pas pu s’ouvrir', 'Fermez l’application, puis rouvrez-la.']
+            failed: ['Meeshy n’a pas pu s’ouvrir', 'Vérifiez votre connexion, puis réessayez.', 'Réessayer']
           },
           en: {
             update: ['Update Android System WebView', 'Meeshy is displayed by Android System WebView, and the one on this device is too old. Update it from the Play Store, then reopen Meeshy.', 'Open the Play Store'],
-            failed: ['Meeshy could not open', 'Close the app, then open it again.']
+            failed: ['Meeshy could not open', 'Check your connection, then try again.', 'Try again']
           },
           es: {
             update: ['Actualiza Android System WebView', 'Meeshy se muestra gracias a Android System WebView, y la de este dispositivo es demasiado antigua. Actualízala desde Play Store y vuelve a abrir Meeshy.', 'Abrir Play Store'],
-            failed: ['Meeshy no se pudo abrir', 'Cierra la aplicación y vuelve a abrirla.']
+            failed: ['Meeshy no se pudo abrir', 'Comprueba tu conexión y vuelve a intentarlo.', 'Reintentar']
           },
           pt: {
             update: ['Atualize o Android System WebView', 'O Meeshy é exibido pelo Android System WebView, e o deste aparelho está desatualizado. Atualize-o na Play Store e abra o Meeshy de novo.', 'Abrir a Play Store'],
-            failed: ['Não foi possível abrir o Meeshy', 'Feche o aplicativo e abra-o de novo.']
+            failed: ['Não foi possível abrir o Meeshy', 'Verifique sua conexão e tente de novo.', 'Tentar de novo']
           },
           it: {
             update: ['Aggiorna Android System WebView', 'Meeshy viene mostrato da Android System WebView, e quella di questo dispositivo è troppo vecchia. Aggiornala dal Play Store, poi riapri Meeshy.', 'Apri il Play Store'],
-            failed: ['Impossibile aprire Meeshy', 'Chiudi l’app, poi riaprila.']
+            failed: ['Impossibile aprire Meeshy', 'Controlla la connessione, poi riprova.', 'Riprova']
           },
           de: {
             update: ['Android System WebView aktualisieren', 'Meeshy wird von Android System WebView angezeigt, und die Version auf diesem Gerät ist zu alt. Aktualisiere sie im Play Store und öffne Meeshy dann erneut.', 'Play Store öffnen'],
-            failed: ['Meeshy konnte nicht geöffnet werden', 'Schließe die App und öffne sie erneut.']
+            failed: ['Meeshy konnte nicht geöffnet werden', 'Prüfe deine Verbindung und versuche es erneut.', 'Erneut versuchen']
           },
           ar: {
             update: ['حدّث Android System WebView', 'يُعرض Meeshy بواسطة Android System WebView، والإصدار المثبت على هذا الجهاز قديم جدًا. حدّثه من متجر Play ثم أعد فتح Meeshy.', 'فتح متجر Play'],
-            failed: ['تعذّر فتح Meeshy', 'أغلق التطبيق ثم افتحه من جديد.']
+            failed: ['تعذّر فتح Meeshy', 'تحقّق من اتصالك ثم أعد المحاولة.', 'إعادة المحاولة']
           }
         };
         var asked = (navigator.languages && navigator.languages[0]) || navigator.language || 'fr';
         var lang = String(asked).toLowerCase().split('-')[0];
         var copy = COPY[lang] || COPY.fr;
-        var android = /\bAndroid\b/.test(navigator.userAgent);
-        var lines = android ? copy.update : copy.failed;
+        var chrome = /\bChrome\/(\d+)\./.exec(navigator.userAgent);
+        var outdated = /\bAndroid\b/.test(navigator.userAgent) && chrome !== null && Number(chrome[1]) < 111;
+        var lines = outdated ? copy.update : copy.failed;
         var root = document.documentElement;
         root.lang = COPY[lang] ? lang : 'fr';
         root.dir = lang === 'ar' ? 'rtl' : 'ltr';
         document.getElementById('title').textContent = lines[0];
         document.getElementById('body').textContent = lines[1];
         var action = document.getElementById('action');
-        if (android) {
-          action.textContent = lines[2];
-        } else {
-          action.hidden = true;
-        }
+        action.textContent = lines[2];
+        if (!outdated) action.href = '/';
         document.title = lines[0];
       })();
     </script>
