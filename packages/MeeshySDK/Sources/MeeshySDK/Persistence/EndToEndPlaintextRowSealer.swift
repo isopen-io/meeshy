@@ -85,7 +85,10 @@ extension EndToEndPlaintextRowSealer {
         public let createdAt: Date
     }
 
-    /// Mes messages jamais acquittés dont la ligne porte un texte en clair.
+    /// Mes messages jamais acquittés, en échec, dont la ligne porte un texte en
+    /// clair. Un envoi encore en vol ou en file n'en est pas : il peut être
+    /// parti en clair avant l'activation, et le sceller afficherait chiffré un
+    /// message qui ne l'est pas.
     public func unsentPlaintexts(authoredBy userId: String) async throws -> [UnsentPlaintext] {
         guard !userId.isEmpty else { return [] }
         return try await dbWriter.read { db in
@@ -93,7 +96,7 @@ extension EndToEndPlaintextRowSealer {
                 db,
                 sql: """
                     SELECT localId, conversationId, content, originalLanguage, replyToId, createdAt FROM messages
-                    WHERE senderId = ? AND serverId IS NULL AND isEncrypted = 0 AND messageSource = 'user'
+                    WHERE senderId = ? AND serverId IS NULL AND isEncrypted = 0 AND messageSource = 'user' AND state = 'failed'
                       AND deletedAt IS NULL AND content IS NOT NULL AND content != ''
                     """,
                 arguments: [userId]

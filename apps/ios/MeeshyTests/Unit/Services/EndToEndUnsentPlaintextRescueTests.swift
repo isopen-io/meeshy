@@ -117,6 +117,21 @@ final class EndToEndUnsentPlaintextRescueTests: XCTestCase {
 
     /// Seuls MES envois jamais acquittés sont concernés : un message reçu ou
     /// acquitté a sa propre loi (#12999).
+    /// Un envoi encore en vol a pu partir en clair avant l'activation : le
+    /// sceller afficherait chiffré un message qui ne l'est pas.
+    func test_run_leavesASendInFlight_asItIs() async throws {
+        let fixture = try makeFixture()
+        var inFlight = legacyReply("en vol", localId: "cid_flight", in: sealed)
+        inFlight.state = .sending
+        try await insert([inFlight], into: fixture)
+
+        await fixture.rescue.run(for: me)
+
+        let row = try await fixture.row("cid_flight")
+        XCTAssertEqual(row?.content, "en vol")
+        XCTAssertTrue(fixture.vault.storedIds.isEmpty)
+    }
+
     func test_run_touchesNeitherAPeersRow_norAnAcknowledgedOne() async throws {
         let fixture = try makeFixture()
         var acknowledged = legacyReply("acquitté", localId: "cid_ack", in: sealed)

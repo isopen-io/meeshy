@@ -355,4 +355,29 @@ final class EndToEndOffThreadReplyDiskTests: XCTestCase {
             XCTAssertEqual(content.threadIdentifier, "conversation:\(sealed)")
         }
     }
+
+    // MARK: - L'attente de l'ouverture est bornée
+
+    /// Une ouverture coincée derrière un rattrapage réseau ne retient pas le
+    /// geste au-delà de l'échéance : le budget d'arrière-plan laisse le temps
+    /// de dire le refus.
+    func test_boundedWait_aStuckOpening_returnsAtTheDeadline() async {
+        let stuck = Task<Void, Never> { try? await Task.sleep(for: .seconds(30)) }
+        defer { stuck.cancel() }
+        let started = ContinuousClock.now
+
+        await BoundedWait.first(of: stuck, orAfter: .milliseconds(100))
+
+        XCTAssertLessThan(ContinuousClock.now - started, .seconds(5))
+    }
+
+    func test_boundedWait_aFinishedOpening_returnsAtOnce() async {
+        let done = Task<Void, Never> {}
+        await done.value
+        let started = ContinuousClock.now
+
+        await BoundedWait.first(of: done, orAfter: .seconds(30))
+
+        XCTAssertLessThan(ContinuousClock.now - started, .seconds(5))
+    }
 }

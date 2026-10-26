@@ -11,11 +11,11 @@ import os
 /// message posaient, même vers une conversation chiffrée de bout en bout, une
 /// ligne `isEncrypted: false` qui portait le clair, puis la passaient en échec.
 /// La migration de #12999 ne la voit pas : le coffre n'en a aucune trace. À
-/// chaque ouverture de session, mes messages jamais acquittés dont la ligne
-/// garde un texte sont relus ; pour ceux d'une conversation que la loi du fil
+/// chaque ouverture de session, mes messages jamais acquittés, en échec, dont
+/// la ligne garde un texte sont relus ; pour ceux d'une conversation que la loi du fil
 /// dit chiffrée (`EndToEndDestinationGuard`), le clair est rangé au coffre sous
 /// l'identifiant client, puis la ligne est rescellée sous `secure_delete` et
-/// passe en échec : le fil la renvoie chiffrée d'un toucher. Un clair que le
+/// prend la raison du refus : le fil la renvoie chiffrée d'un toucher. Un clair que le
 /// coffre ne prend pas reste où il est, jusqu'à la session suivante : effacer
 /// sans garder perdrait le seul exemplaire du texte.
 ///
@@ -31,7 +31,7 @@ struct EndToEndUnsentPlaintextRescue: Sendable {
     func run(for account: String) async {
         guard !account.isEmpty else { return }
         do {
-            let store = await persistence()
+            let store = persistence()
             let unsent = try await store.endToEndRowSealer.unsentPlaintexts(authoredBy: account)
             let sealedConversations = await conversationsThatSeal(Set(unsent.map(\.conversationId)))
             let rescued = await kept(unsent.filter { sealedConversations.contains($0.conversationId) }, by: account)
@@ -39,7 +39,7 @@ struct EndToEndUnsentPlaintextRescue: Sendable {
             try await store.endToEndRowSealer.seal(messageKeys: rescued.map(\.localId))
             let reason = EndToEndSendRefusal.sealedOnlyInConversation.userMessage
             for row in rescued {
-                try await store.markOptimisticFailed(localId: row.localId, reason: reason)
+                try? await store.markOptimisticFailed(localId: row.localId, reason: reason)
             }
             for conversationId in Set(rescued.map(\.conversationId)) {
                 await caches.messages.invalidate(for: conversationId)

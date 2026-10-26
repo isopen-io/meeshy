@@ -106,9 +106,12 @@ final class EndToEndSessionBridge: EndToEndSessionBridging {
             .store(in: &subscriptions)
     }
 
-    /// Rend la main quand la session demandée est ouverte, aussitôt s'il n'y en a aucune.
-    func awaitOpening() async {
-        await opening?.value
+    /// Rend la main quand la session demandée est ouverte, aussitôt s'il n'y en
+    /// a aucune, et au plus tard après `limit` : la file qui précède l'ouverture
+    /// peut porter un rattrapage réseau, et un geste en arrière-plan a un budget.
+    func awaitOpening(limit: Duration = .seconds(5)) async {
+        guard let opening else { return }
+        await BoundedWait.first(of: opening, orAfter: limit)
     }
 
     func stop() {
@@ -124,6 +127,35 @@ final class EndToEndSessionBridge: EndToEndSessionBridging {
         lifecycle = Task {
             await previous?.value
             await step()
+        }
+    }
+}
+
+/// L'attente d'une tâche, bornée : rend la main à sa fin ou à l'échéance, la
+/// première des deux, sans annuler la tâche attendue.
+enum BoundedWait {
+    static func first(of task: Task<Void, Never>, orAfter limit: Duration) async {
+        let gate = ResumeOnce()
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            gate.arm(continuation)
+            Task { await task.value; gate.resume() }
+            Task { try? await Task.sleep(for: limit); gate.resume() }
+        }
+    }
+
+    private final class ResumeOnce: @unchecked Sendable {
+        private let lock = NSLock()
+        private var continuation: CheckedContinuation<Void, Never>?
+
+        func arm(_ continuation: CheckedContinuation<Void, Never>) {
+            lock.withLock { self.continuation = continuation }
+        }
+
+        func resume() {
+            lock.withLock { () -> CheckedContinuation<Void, Never>? in
+                defer { continuation = nil }
+                return continuation
+            }?.resume()
         }
     }
 }
