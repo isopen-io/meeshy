@@ -353,102 +353,43 @@ extension StoryViewerView {
         guard (!text.isEmpty || pendingMedia != nil), let story = currentStory else { return }
         EngagementTracker.shared.recordAction(.commented, surface: .storyViewer)
 
-        // Optimistic local insert. Reply nesting is currently flat in the UI
-        // (Threads-style max-1-niveau pour MVP) — the parentId is forwarded
-        // to the backend so the comment graph stays correct, but rendering
-        // does not yet visually indent replies. See SOTA audit Pilier 19.
-        let currentUser = AuthManager.shared.currentUser
-        let authorName: String = currentUser?.displayName ?? currentUser?.username ?? String(localized: "story.tray.me", defaultValue: "Moi", bundle: .main)
-        let authorId: String = currentUser?.id ?? ""
         // La ligne optimiste est keyée par le cmid : envoyé au REST ET réutilisé
         // par le repli outbox, il fait dédoublonner le serveur (MutationLog) et
-        // revient dans l'écho `comment:added` pour une réconciliation par id
-        // exacte (le twin-match par contenu ne tenait pas quand le serveur
-        // normalise le texte).
-        let optimisticComment = FeedComment(
-            id: ClientMutationId.generate(),
-            author: authorName,
-            authorId: authorId,
-            authorUsername: currentUser?.username,
-            authorAvatarURL: currentUser?.avatar,
-            content: text,
-            parentId: parentId,
-            effectFlags: effectFlags ?? 0,
-            originalLanguage: composerLanguage,
-            media: pendingMedia.map { [$0.optimistic] } ?? [],
-            location: location
-        )
-
-        if let parentId {
-            // Reply — insert into repliesMap so it appears in the thread
-            var existing = storyCommentThread.replies[parentId] ?? []
-            existing.append(optimisticComment)
-            storyCommentThread.replies[parentId] = existing
-            // Also increment the reply count on the parent comment
-            if let idx = storyCommentThread.roots.firstIndex(where: { $0.id == parentId }) {
-                storyCommentThread.roots[idx].replies += 1
-            }
-            // Counter now sums top-level + replies, so it must also bump here.
-            storyCommentCount += 1
-        } else {
-            // Top-level comment
-            storyCommentThread.roots.append(optimisticComment)
-            storyCommentCount += 1
-        }
-
-        // Send to API. Un média éventuel est uploadé (uploadContext=comment → PostMedia)
-        // puis transmis via `attachmentIds` ; la ligne serveur réconcilie via le socket
-        // `comment:added` (qui porte désormais le média). Le commentaire optimiste
-        // affiche déjà le média local.
-        //
-        // Both the media upload and the comment POST now THROW instead of being
-        // silently swallowed by `try?` — a media upload failure used to publish
-        // the comment WITHOUT its media (silent data loss); a POST failure left
-        // the optimistic `temp_` comment/reply on screen forever even offline
-        // (no rollback). Either failure now rolls back the exact optimistic
-        // insert via the pure `rollingBackOptimisticComment` — same snapshot/
-        // rollback discipline as `sendReaction`.
+        // revient dans l'écho `comment:added` pour une réconciliation par id.
+        let currentUser = AuthManager.shared.currentUser
+        let tempCommentId = ClientMutationId.generate()
         let language = composerLanguage
-        let tempCommentId = optimisticComment.id
+        let medias = [pendingMedia].compactMap { $0 }
+        storyCommentThread.insertOptimistic(.optimistic(
+            id: tempCommentId, by: currentUser, content: text, parentId: parentId,
+            effectFlags: effectFlags, originalLanguage: language, media: medias.map(\.optimistic),
+            location: location,
+            fallbackName: String(localized: "story.tray.me", defaultValue: "Moi", bundle: .main)), at: .last)
+        storyCommentCount += 1
+
+        // La charge est bâtie UNE fois, avec son auteur relevé avant toute
+        // attente : l'envoi direct et la file portent la même (#9743).
+        let payload = CreateCommentPayload(
+            clientMutationId: tempCommentId, postId: story.id,
+            parentCommentId: parentId, content: text,
+            originalLanguage: language, authorId: currentUser?.id ?? "",
+            location: location, effectFlags: effectFlags,
+            mobileTranscription: pendingMedia?.mobileTranscription
+        )
         Task {
-            let medias = [pendingMedia].compactMap { $0 }
-            // La charge est bâtie UNE fois, avec son auteur relevé avant toute
-            // attente : l'envoi direct et la file portent la même (#9743).
-            let payload = CreateCommentPayload(
-                clientMutationId: tempCommentId, postId: story.id,
-                parentCommentId: parentId, content: text,
-                originalLanguage: language, authorId: authorId,
-                location: location, effectFlags: effectFlags,
-                mobileTranscription: pendingMedia?.mobileTranscription
-            )
             StoryInteractionService().noteComment(storyId: story.id)
-            do {
-                try await CommentPublisher.live.publish(payload, pieces: CommentPublisher.pieces(medias))
-                CommentMediaUploader.discardLocalFiles(medias)
-            } catch {
-                // Le POST direct a échoué — le plus souvent parce qu'on est
-                // hors-ligne. Perdre un commentaire que l'utilisateur vient de
-                // taper est la pire issue possible : on le confie à l'outbox,
-                // qui le rejouera au retour du réseau. Même chemin que le feed
-                // (`FeedCommentsSheet`), même kind `.createComment` : la ligne
-                // optimiste `temp_` est réconciliée par le handler socket
-                // `comment:added` déjà câblé quand le rejeu aboutit.
-                // #9743 — le MÉDIA part avec lui : la file garde son fichier.
-                do {
-                    // MÊME cmid que la tentative REST : un POST abouti dont la
-                    // réponse s'est perdue est dédoublonné au rejeu (MutationLog).
-                    let cmid = tempCommentId
-                    try await CommentMediaDelivery.entrust(payload, medias: medias,
-                                                           acquired: CommentMediaDelivery.acquired(from: error))
-                    observeStoryCommentOutcome(cmid: cmid,
-                                               tempId: tempCommentId,
-                                               parentId: parentId)
-                } catch {
-                    // L'outbox elle-même a refusé la ligne : là, il n'y a plus
-                    // de recours, on annule l'insert optimiste.
-                    rollbackOptimisticComment(id: tempCommentId, parentId: parentId)
-                    returnRefusedStoryComment(storyId: story.id, text: text, medias: medias)
-                }
+            switch await storyCommentThread.deliver(payload, media: medias, for: .story(story.id)) {
+            case .delivered:
+                break
+            case .entrusted:
+                observeStoryCommentOutcome(cmid: tempCommentId, tempId: tempCommentId, parentId: parentId)
+            case .refused(let cause):
+                if currentStory?.id == story.id { storyCommentCount = max(0, storyCommentCount - 1) }
+                _ = DailyGestureLimitNotice.surface(cause)
+                returnRefusedStoryComment(storyId: story.id, text: text, medias: medias)
+            case .unqueued:
+                if currentStory?.id == story.id { storyCommentCount = max(0, storyCommentCount - 1) }
+                returnRefusedStoryComment(storyId: story.id, text: text, medias: medias)
             }
         }
 

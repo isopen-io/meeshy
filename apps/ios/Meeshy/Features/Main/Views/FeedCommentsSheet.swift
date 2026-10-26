@@ -216,10 +216,8 @@ struct CommentsSheetView: View {
     /// enqueue-refusal `catch` and the async `.exhausted` outbox observer,
     /// both of which restore the identical pre-send snapshot.
     func rollbackOptimisticComment(tempId: String, parentId: String?) {
-        CommentSheetRules.rollbackOptimistic(
-            tempId: tempId, parentId: parentId, embeddedComments: post.comments,
-            liveComments: &liveComments, repliesMap: &repliesMap, liveCommentCount: &liveCommentCount
-        )
+        thread.withdrawOptimistic(tempId, parentId: parentId)
+        liveCommentCount = max((liveCommentCount ?? post.commentCount) - 1, 0)
     }
 
     var body: some View {
@@ -762,32 +760,9 @@ struct CommentsSheetView: View {
         let tempId = ClientMutationId.generate()
         let lang = composerLanguage
         let me = AuthManager.shared.currentUser
-        let optimistic = FeedComment(
-            id: tempId,
-            author: me?.displayName ?? me?.username ?? "",
-            authorId: me?.id ?? "",
-            authorUsername: me?.username,
-            authorAvatarURL: me?.avatar,
-            content: trimmed, timestamp: Date(),
-            likes: 0, replies: 0, parentId: parentId,
-            effectFlags: effectFlags ?? 0,
-            originalLanguage: lang, media: media.map(\.optimistic)
-        )
-        if let parentId {
-            var existing = repliesMap[parentId] ?? []
-            existing.insert(optimistic, at: 0)
-            repliesMap[parentId] = existing
-            expandedThreads.insert(parentId)
-            var current = liveComments ?? post.comments
-            if let idx = current.firstIndex(where: { $0.id == parentId }) {
-                current[idx].replies += 1
-                liveComments = current
-            }
-        } else {
-            var current = liveComments ?? post.comments
-            current.insert(optimistic, at: 0)
-            liveComments = current
-        }
+        thread.insertOptimistic(.optimistic(
+            id: tempId, by: me, content: trimmed, parentId: parentId,
+            effectFlags: effectFlags, originalLanguage: lang, media: media.map(\.optimistic)))
         liveCommentCount = (liveCommentCount ?? post.commentCount) + 1
 
         // La charge est bâtie UNE fois, avec son auteur relevé ICI, avant toute
@@ -800,85 +775,25 @@ struct CommentsSheetView: View {
             mobileTranscription: media.first?.mobileTranscription
         )
         Task {
-            do {
-                guard let apiComment = try await CommentPublisher.live.publish(payload, pieces: CommentPublisher.pieces(media)) else {
-                    CommentSendTrace.log("direct : confirmé sans description (rejeu dédoublonné)")
-                    CommentMediaUploader.discardLocalFiles(media)
-                    onCommentSent?(post.id)
-                    return
-                }
-                CommentSendTrace.log("direct : créé")
-                CommentMediaUploader.discardLocalFiles(media)
-                let feedComment = FeedComment(
-                    id: apiComment.id, author: apiComment.author.name, authorId: apiComment.author.id,
-                    authorAvatarURL: apiComment.author.avatar,
-                    content: apiComment.content, timestamp: apiComment.createdAt,
-                    likes: 0, replies: 0,
-                    parentId: parentId,
-                    effectFlags: apiComment.effectFlags ?? effectFlags ?? 0,
-                    originalLanguage: apiComment.originalLanguage, media: (apiComment.media ?? []).map { $0.toFeedMedia() }
-                )
-                // Swap the optimistic temp for the server row (no count
-                // change). Idempotent if the socket event already did it.
-                if let parentId {
-                    var existing = repliesMap[parentId] ?? []
-                    if let idx = existing.firstIndex(where: { $0.id == tempId }) {
-                        existing[idx] = feedComment
-                    } else if !existing.contains(where: { $0.id == feedComment.id }) {
-                        existing.insert(feedComment, at: 0)
-                    }
-                    repliesMap[parentId] = existing
-                } else {
-                    var current = liveComments ?? post.comments
-                    if let idx = current.firstIndex(where: { $0.id == tempId }) {
-                        current[idx] = feedComment
-                    } else if !current.contains(where: { $0.id == feedComment.id }) {
-                        current.insert(feedComment, at: 0)
-                    }
-                    liveComments = current
-                }
+            switch await thread.deliver(payload, media: media) {
+            case .delivered, .entrusted:
                 onCommentSent?(post.id)
-            } catch {
-                CommentSendTrace.log("direct : échec — \(String(describing: error))")
-                // Un refus permanent ou la limite du jour : la file ne ferait
-                // que le répéter — il revient au composeur, avec sa raison.
-                guard !CommentMediaDelivery.isPermanentRefusal(error) else {
-                    rollbackOptimisticComment(tempId: tempId, parentId: parentId)
-                    if !DailyGestureLimitNotice.surface(CommentMediaDelivery.cause(of: error)) {
-                        FeedbackToastManager.shared.showError(String(localized: "feed.comments.send_error", defaultValue: "Erreur lors de l'envoi du commentaire", bundle: .main))
-                    }
-                    CommentSendTrace.log("direct : refus permanent — rendu au composeur, non enfilé")
-                    restoreRefusedComment(text: trimmed, attachments: staged, place: place)
-                    return
-                }
-                // REST failed — most commonly because the device is offline.
-                // Durably enqueue via the existing `.createComment` outbox
-                // kind (same one `FeedViewModel`/`PostDetailViewModel.sendComment`
-                // already use) instead of unconditionally losing the comment.
-                // The optimistic `tempId` row is reconciled by the already-wired
-                // `comment:added` socket handler once the outbox replay lands.
-                // #9743 — les PIÈCES partent avec lui : la file garde leurs
-                // fichiers et les rejoue, sans re-monter ce qui l'est déjà.
-                do {
-                    // MÊME charge, donc MÊME cmid que la tentative directe : un
-                    // envoi abouti dont la réponse s'est perdue est dédoublonné
-                    // au rejeu par le MutationLog.
-                    try await CommentMediaDelivery.entrust(payload, medias: media,
-                                                           acquired: CommentMediaDelivery.acquired(from: error))
-                    onCommentSent?(post.id)
-                    // Si la file renonce, la ligne RESTE, marquée « non
-                    // envoyé » et relançable (`CommentUnsentBadge`, #9743).
-                } catch {
-                    // Roll back the optimistic row + counts — the outbox
-                    // itself refused the row.
-                    rollbackOptimisticComment(tempId: tempId, parentId: parentId)
-                    FeedbackToastManager.shared.showError(String(localized: "feed.comments.send_error", defaultValue: "Erreur lors de l'envoi du commentaire", bundle: .main))
-                    // Ni envoyé ni confié à la file : il revient au composeur (#9743).
-                    CommentSendTrace.log("composeur : restitution du texte et de \(staged.count) pièce(s)")
-                    restoreRefusedComment(text: trimmed, attachments: staged, place: place)
-                }
+            case .refused(let cause):
+                liveCommentCount = max((liveCommentCount ?? post.commentCount) - 1, 0)
+                if !DailyGestureLimitNotice.surface(cause) { showSendError() }
+                CommentSendTrace.log("direct : refus permanent — rendu au composeur, non enfilé")
+                restoreRefusedComment(text: trimmed, attachments: staged, place: place)
+            case .unqueued:
+                liveCommentCount = max((liveCommentCount ?? post.commentCount) - 1, 0)
+                showSendError()
+                CommentSendTrace.log("composeur : restitution du texte et de \(staged.count) pièce(s)")
+                restoreRefusedComment(text: trimmed, attachments: staged, place: place)
             }
         }
+    }
+
+    private func showSendError() {
+        FeedbackToastManager.shared.showError(String(localized: "feed.comments.send_error", defaultValue: "Erreur lors de l'envoi du commentaire", bundle: .main))
     }
 
     // MARK: - Comment Deletion

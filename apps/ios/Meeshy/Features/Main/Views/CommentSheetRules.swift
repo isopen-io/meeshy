@@ -83,26 +83,4 @@ enum CommentSheetRules {
         guard let current = liveComments else { return threads }
         return threads + [CacheWrite(key: "post-\(postId)", comments: persistableComments(current))]
     }
-
-    /// Retire la ligne optimiste `tempId` (et décrémente le compteur de réponses
-    /// de son parent / le total de la feuille) — partagé par le refus
-    /// synchrone de la file et l'observateur `.exhausted`, qui restaurent le
-    /// même instantané d'avant l'envoi.
-    static func rollbackOptimistic(
-        tempId: String,
-        parentId: String?,
-        embeddedComments: [FeedComment],
-        liveComments: inout [FeedComment]?,
-        repliesMap: inout [String: [FeedComment]],
-        liveCommentCount: inout Int?
-    ) {
-        let current = liveComments ?? embeddedComments
-        let withdrawal = FeedCommentThread(roots: current, replies: repliesMap)
-            .withdrawingOptimistic(tempId, parentId: parentId)
-        repliesMap = withdrawal.thread.replies
-        if parentId == nil || current.contains(where: { $0.id == parentId && $0.replies > 0 }) {
-            liveComments = withdrawal.thread.roots
-        }
-        liveCommentCount = max((liveCommentCount ?? embeddedComments.count) - 1, 0)
-    }
 }

@@ -41,6 +41,7 @@ extension CommentThreadViewModel {
             return .cache
         case .stale(let comments, _):
             absorb(comments)
+            return await fetchRootsPage(cursor: nil, for: target, dropping: Set(comments.map(\.id)))
         case .expired, .empty:
             break
         }
@@ -102,19 +103,25 @@ extension CommentThreadViewModel {
         }
     }
 
-    private func absorb(_ comments: [FeedComment]) {
-        roots = CommentSheetRules.mergeFetchedComments(current: roots, fetched: comments)
+    /// Merges a page over the shown rows, keeping what only this device knows
+    /// (an optimistic send, a socket echo). `dropping`: stale cached rows the
+    /// first page no longer serves (deleted meanwhile) do not survive it.
+    private func absorb(_ comments: [FeedComment], dropping stale: Set<String> = []) {
+        let kept = stale.isEmpty ? roots : roots.filter { !stale.contains($0.id) }
+        roots = CommentSheetRules.mergeFetchedComments(current: kept, fetched: comments)
         onRootsLoaded(comments)
     }
 
     @discardableResult
-    private func fetchRootsPage(cursor: String?, for target: CommentThreadEntity) async -> CommentRootsOutcome {
+    private func fetchRootsPage(
+        cursor: String?, for target: CommentThreadEntity, dropping stale: Set<String> = []
+    ) async -> CommentRootsOutcome {
         do {
             let response = try await postService.getComments(
                 postId: target.id, cursor: cursor, limit: target.rootsPageSize)
             let page = await mapped(response.data, parentId: nil)
             guard entity == target else { return .skipped }
-            absorb(page)
+            absorb(page, dropping: stale)
             rootsNextCursor = response.pagination?.nextCursor
             rootsHasMore = response.pagination?.hasMore ?? false
             onRootsFetched(response.data)

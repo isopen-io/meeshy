@@ -88,6 +88,17 @@ final class CommentThreadViewModelRootsTests: XCTestCase {
         XCTAssertFalse(sut.isLoadingRoots)
     }
 
+    func test_loadRoots_aStaleRowTheFirstPageNoLongerServes_doesNotSurviveIt() async {
+        let (sut, mock, store) = makeSUT(.story("s1"))
+        store.cached["post-s1"] = .stale([Self.comment("c1"), Self.comment("gone")], age: 99)
+        mock.getCommentsResult = Self.page(["c1", "c2"])
+
+        await sut.loadRoots()
+
+        XCTAssertEqual(sut.roots.map(\.id), ["c1", "c2"])
+        XCTAssertEqual(store.saved["post-s1"]?.map(\.id), ["c1", "c2"])
+    }
+
     func test_loadRoots_pageSize_isFiftyForAStory_andTwentyForAPostOrAReel() async {
         for (entity, size) in [(CommentThreadEntity.story("s1"), 50), (.post("p1"), 20), (.reel("r1"), 20)] {
             let (sut, mock, _) = makeSUT(entity)

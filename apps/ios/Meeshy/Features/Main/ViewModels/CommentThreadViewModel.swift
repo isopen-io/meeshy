@@ -84,6 +84,7 @@ final class CommentThreadViewModel: ObservableObject {
     let postService: PostServiceProviding
     let preferredLanguages: @MainActor () -> [String]
     let store: CommentThreadStore
+    let transport: CommentSendTransport
     /// Replies that just arrived (liked-state seeding).
     var onRepliesLoaded: @MainActor ([FeedComment]) -> Void = { _ in }
     /// Roots that just arrived from the cache or the network (liked-state seeding).
@@ -98,13 +99,15 @@ final class CommentThreadViewModel: ObservableObject {
         preferredLanguages: @escaping @MainActor () -> [String] = {
             ReaderPrism.resolve(for: AuthManager.shared.currentUser)
         },
-        store: CommentThreadStore = .cache
+        store: CommentThreadStore = .cache,
+        transport: CommentSendTransport = .live
     ) {
         self.entity = entity
         self.embedded = embedded
         self.postService = postService
         self.preferredLanguages = preferredLanguages
         self.store = store
+        self.transport = transport
         self.roots = embedded
         self.rootsTouched = false
     }
