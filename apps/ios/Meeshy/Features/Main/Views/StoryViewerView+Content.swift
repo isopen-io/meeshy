@@ -214,7 +214,6 @@ extension StoryViewerView {
         storyCommentLikedIds = []
         storyCommentLikeDelta = [:]
         heartInFlightIds = []
-        isLoadingComments = false
         loadStoryCommentCount()
         storyReactionCount = currentStory?.reactionCount ?? 0
         storyCurrentUserReactions = currentStory?.currentUserReactions ?? []

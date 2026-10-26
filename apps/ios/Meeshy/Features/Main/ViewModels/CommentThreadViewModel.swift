@@ -23,6 +23,28 @@ enum CommentThreadEntity: Equatable, Sendable {
         if case .story = self { return true }
         return false
     }
+
+    /// A story asks for its root comments by 50, a post or a reel by 20.
+    var rootsPageSize: Int { isLive ? 50 : 20 }
+
+    var rootsCacheKey: String { "post-\(id)" }
+}
+
+/// Where a comment thread keeps its pages between openings: roots under
+/// `post-<id>`, replies under `replies-<commentId>`.
+struct CommentThreadStore {
+    var load: @MainActor (String) async -> CacheResult<[FeedComment]>
+    var save: @MainActor (String, [FeedComment]) async -> Void
+
+    static var cache: CommentThreadStore {
+        CommentThreadStore(
+            load: { await CacheCoordinator.shared.comments.load(for: $0) },
+            save: { key, comments in
+                await bestEffort("commentThread.save", category: .cache) {
+                    try await CacheCoordinator.shared.comments.save(comments, for: key)
+                }
+            })
+    }
 }
 
 /// **One comment thread** — roots, loaded replies, expansion and reply
@@ -34,40 +56,68 @@ final class CommentThreadViewModel: ObservableObject {
     nonisolated deinit {}
 
     @Published var roots: [FeedComment] = [] {
-        didSet { topLevelRoots = roots.filter { $0.parentId == nil } }
+        didSet {
+            topLevelRoots = roots.filter { $0.parentId == nil }
+            rootsTouched = true
+        }
     }
     @Published var replies: [String: [FeedComment]] = [:]
     @Published var expandedThreads: Set<String> = []
     @Published private(set) var loadingReplies: Set<String> = []
     @Published var repliesHasMore: [String: Bool] = [:]
     @Published var repliesNextCursor: [String: String] = [:]
+    /// `nil` = not asked yet, never "no more": a fresh cache leaves it unknown
+    /// and the next page then recovers page 1 (#4868).
+    @Published var rootsHasMore: Bool?
+    @Published var liveCount: Int?
+    @Published var rootsInFlight: CommentThreadEntity?
+    var rootsNextCursor: String?
+    var rootsTouched = false
 
     /// Derived from `roots`, written only by its `didSet`: `roots`' own
     /// `willSet` already published the change.
     private(set) var topLevelRoots: [FeedComment] = []
     var entity: CommentThreadEntity
-    private let postService: PostServiceProviding
-    private let preferredLanguages: @MainActor () -> [String]
-    private let persistReplies: @MainActor (String, [FeedComment]) async -> Void
-    /// Replies that just arrived from the network (liked-state seeding).
+    /// The rows the surface already holds before any load (the feed embeds
+    /// the top 3 comments of a post).
+    let embedded: [FeedComment]
+    let postService: PostServiceProviding
+    let preferredLanguages: @MainActor () -> [String]
+    let store: CommentThreadStore
+    /// Replies that just arrived (liked-state seeding).
     var onRepliesLoaded: @MainActor ([FeedComment]) -> Void = { _ in }
+    /// Roots that just arrived from the cache or the network (liked-state seeding).
+    var onRootsLoaded: @MainActor ([FeedComment]) -> Void = { _ in }
+    /// A root page as the gateway served it (the detail's GRDB copy).
+    var onRootsFetched: @MainActor ([APIPostComment]) -> Void = { _ in }
 
     init(
         entity: CommentThreadEntity,
+        embedded: [FeedComment] = [],
         postService: PostServiceProviding = PostService.shared,
         preferredLanguages: @escaping @MainActor () -> [String] = {
             ReaderPrism.resolve(for: AuthManager.shared.currentUser)
         },
-        persistReplies: @escaping @MainActor (String, [FeedComment]) async -> Void = { key, replies in
-            await bestEffort("commentThread.saveReplies", category: .cache) {
-                try await CacheCoordinator.shared.comments.save(replies, for: key)
-            }
-        }
+        store: CommentThreadStore = .cache
     ) {
         self.entity = entity
+        self.embedded = embedded
         self.postService = postService
         self.preferredLanguages = preferredLanguages
-        self.persistReplies = persistReplies
+        self.store = store
+        self.roots = embedded
+        self.rootsTouched = false
+    }
+
+    /// The roots once anything wrote them, `nil` while only the embedded rows
+    /// are shown — the sheet persists `post-<id>` only then. Writing `nil`
+    /// goes back to the embedded rows.
+    var liveRoots: [FeedComment]? {
+        get { rootsTouched ? roots : nil }
+        set {
+            roots = newValue ?? embedded
+            rootsTouched = newValue != nil
+        }
     }
 
     var thread: FeedCommentThread {
@@ -90,6 +140,11 @@ final class CommentThreadViewModel: ObservableObject {
         loadingReplies = []
         repliesHasMore = [:]
         repliesNextCursor = [:]
+        rootsHasMore = nil
+        rootsNextCursor = nil
+        rootsInFlight = nil
+        liveCount = nil
+        rootsTouched = false
     }
 
     func toggleThread(_ commentId: String) async {
@@ -167,10 +222,10 @@ final class CommentThreadViewModel: ObservableObject {
 
     private func persist(_ commentId: String) async {
         guard !entity.isLive, let loaded = replies[commentId] else { return }
-        await persistReplies("replies-\(commentId)", loaded)
+        await store.save("replies-\(commentId)", loaded)
     }
 
-    private func mapped(_ payload: [APIPostComment], parentId: String) async -> [FeedComment] {
+    func mapped(_ payload: [APIPostComment], parentId: String?) async -> [FeedComment] {
         let langs = preferredLanguages()
         return await Task.detached(priority: .userInitiated) {
             payload.map { FeedComment(api: $0, preferredLanguages: langs, parentId: parentId) }

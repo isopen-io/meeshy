@@ -306,114 +306,52 @@ extension StoryViewerView {
     }
 
     func loadStoryComments() {
-        guard let story = currentStory, !isLoadingComments else { return }
-        Task { await loadStoryCommentsAsync(story: story) }
+        guard currentStory != nil else { return }
+        Task { await loadStoryCommentsAsync() }
     }
 
-    private func loadStoryCommentsAsync(story: StoryItem) async {
-        let cacheKey = "post-\(story.id)"
-
-        let cached = await CacheCoordinator.shared.comments.load(for: cacheKey)
-        // Stale-write guard: drop the result ONLY if the viewer has CLEARLY
-        // swiped to a different known story. A transient `currentStory == nil`
-        // (group/index race during socket updates) must NOT drop the response
-        // — otherwise the overlay stays empty for a story that has comments.
-        if let now = currentStory?.id, now != story.id { return }
-        switch cached {
-        case .fresh(let comments, _):
-            storyCommentThread.roots = comments
-            storyCommentLikedIds = Self.computeLikedIds(fromCachedComments: comments)
-            let topAll = comments.filter { $0.parentId == nil }
-            storyCommentCount = topAll.count + topAll.reduce(0) { $0 + $1.replies }
-            return
-        case .stale(let comments, _):
-            storyCommentThread.roots = comments
-            storyCommentLikedIds = Self.computeLikedIds(fromCachedComments: comments)
-            let topAll = comments.filter { $0.parentId == nil }
-            storyCommentCount = topAll.count + topAll.reduce(0) { $0 + $1.replies }
-        case .expired, .empty:
-            isLoadingComments = true
+    /// The roots load through the shared thread (cache first, pages of 50,
+    /// dropped once the viewer moved to another slide); the viewer keeps its
+    /// count, its liked hearts and the reply previews of a fresh network page.
+    private func loadStoryCommentsAsync() async {
+        guard let thread = currentStoryThread() else { return }
+        thread.onRootsLoaded = storyLikedIdsSeeder
+        switch await thread.loadRoots() {
+        case .cache:
+            storyCommentCount = thread.knownTotal
+        case .network:
+            storyCommentCount = thread.knownTotal
+            Task { await thread.preloadReplyPreviews() }
+        case .failed:
+            if !thread.roots.isEmpty { storyCommentCount = thread.knownTotal }
+            Logger.messages.error("[StoryViewer] fetchStoryComments failed")
+        case .skipped:
+            break
         }
-
-        await fetchStoryCommentsFromNetwork(story: story, cacheKey: cacheKey)
-        isLoadingComments = false
     }
 
-    /// Ligne de l'overlay bâtie depuis la PREMIÈRE charge réseau — le chemin
-    /// principal, celui de chaque ouverture sur cache froid. Sa langue passe par
-    /// le résolveur canonique du Prisme, comme les trois autres chemins de ce
-    /// fichier (réponses, temps réel, pagination) : la fermeture locale qui
-    /// vivait ici ignorait `originalLanguage`, si bien qu'un commentaire déjà
-    /// écrit dans la langue n°1 du lecteur s'affichait traduit dans sa langue
-    /// n°2 dès que le serveur avait produit cette traduction pour d'autres.
-    /// Extrait en `static` pour que le témoin de RANG lise ce chemin-ci, pas
-    /// seulement le résolveur.
+    /// Additive liked-heart seeding from the rows that just arrived.
+    private var storyLikedIdsSeeder: @MainActor ([FeedComment]) -> Void {
+        let liked = $storyCommentLikedIds
+        return { comments in
+            liked.wrappedValue.formUnion(Self.computeLikedIds(fromCachedComments: comments))
+        }
+    }
+
+    /// Ligne de l'overlay bâtie depuis un commentaire reçu tel quel (galerie,
+    /// temps réel). Sa langue passe par le résolveur canonique du Prisme
+    /// (`FeedComment(api:)`), comme les pages du fil partagé.
     static func storyComment(from c: APIPostComment, preferredLanguages langs: [String]) -> FeedComment {
         FeedComment(api: c, preferredLanguages: langs)
-    }
-
-    private func fetchStoryCommentsFromNetwork(story: StoryItem, cacheKey: String) async {
-        let langs = ReaderPrism.resolve(for: AuthManager.shared.currentUser)
-        do {
-            let response = try await PostService.shared.getComments(postId: story.id, cursor: nil, limit: 50)
-            // Stale-write guard: drop ONLY if user has clearly swiped to a
-            // different known story (tolerate transient nil reads).
-            if let now = currentStory?.id, now != story.id { return }
-            let comments = response.data.map { Self.storyComment(from: $0, preferredLanguages: langs) }
-            storyCommentThread.roots = comments
-            storyCommentsNextCursor = response.pagination?.nextCursor
-            storyCommentsHasMore = response.pagination?.hasMore ?? false
-            storyCommentLikedIds = Self.computeLikedIds(from: response.data)
-            let topAll = comments.filter { $0.parentId == nil }
-            storyCommentCount = topAll.count + topAll.reduce(0) { $0 + $1.replies }
-            await bestEffort("storyViewerViewContentComments.comments.save", category: .cache) { try await CacheCoordinator.shared.comments.save(comments, for: cacheKey) }
-
-            let topLevel = topAll.filter { $0.replies > 0 }
-            Task {
-                for comment in topLevel.prefix(5) {
-                    await loadStoryCommentReplies(commentId: comment.id)
-                }
-            }
-        } catch {
-            // Cache-first : l'overlay garde les commentaires cachés déjà
-            // affichés ; on logue l'échec du refresh réseau au lieu de
-            // l'avaler (diagnostic des overlays vides signalés).
-            Logger.messages.error("[StoryViewer] fetchStoryComments failed: \(error.localizedDescription, privacy: .public)")
-        }
-    }
-
-    /// Page suivante (plus ancienne) des commentaires top-level de la story —
-    /// utilisée par la chasse paginée d'un commentaire notifié hors de la
-    /// première page. Append + dédup (jamais de remplacement : le fetch plein
-    /// reste le seul à réinitialiser la liste).
-    func loadNextStoryCommentsPage() async {
-        guard storyCommentsHasMore, let story = currentStory else { return }
-        let langs = ReaderPrism.resolve(for: AuthManager.shared.currentUser)
-        do {
-            let response = try await PostService.shared.getComments(
-                postId: story.id, cursor: storyCommentsNextCursor, limit: 50
-            )
-            if let now = currentStory?.id, now != story.id { return }
-            let fetched = response.data.map { FeedComment(api: $0, preferredLanguages: langs) }
-            let existing = Set(storyCommentThread.roots.map(\.id))
-            storyCommentThread.roots.append(contentsOf: fetched.filter { !existing.contains($0.id) })
-            storyCommentsNextCursor = response.pagination?.nextCursor
-            storyCommentsHasMore = response.pagination?.hasMore ?? false
-        } catch {
-            storyCommentsHasMore = false
-        }
     }
 
     /// Chasse bornée du commentaire ciblé par la notification (racine ou
     /// parent de thread) — cf. `CommentTargetHunter`.
     func huntTargetStoryComment() async {
-        let anchors = [targetCommentId, targetParentCommentId].compactMap { $0 }
-        guard !anchors.isEmpty else { return }
-        _ = await CommentTargetHunter.hunt(
-            isPresent: { storyCommentThread.roots.contains { anchors.contains($0.id) } },
-            hasMore: { storyCommentsHasMore },
-            loadNextPage: { await loadNextStoryCommentsPage() }
-        )
+        let anchors = Set([targetCommentId, targetParentCommentId].compactMap { $0 })
+        guard !anchors.isEmpty, let thread = currentStoryThread() else { return }
+        thread.onRootsLoaded = storyLikedIdsSeeder
+        await thread.loadRootsUntilPresent(anchors)
     }
 
     /// Seeds `storyCommentCount` for the slide that just became visible.

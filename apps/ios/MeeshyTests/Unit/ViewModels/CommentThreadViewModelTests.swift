@@ -18,7 +18,7 @@ final class CommentThreadViewModelTests: XCTestCase {
         let saved = Saved()
         let sut = CommentThreadViewModel(
             entity: entity, postService: mock, preferredLanguages: { ["fr"] },
-            persistReplies: { key, _ in saved.keys.append(key) })
+            store: CommentThreadStore(load: { _ in .empty }, save: { key, _ in saved.keys.append(key) }))
         return (sut, mock, saved)
     }
 

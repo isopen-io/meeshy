@@ -11,8 +11,6 @@ class PostDetailViewModel: ObservableObject {
     nonisolated deinit {}
     @Published var post: FeedPost?
     @Published var isLoading = false
-    @Published var isLoadingComments = false
-    @Published var hasMoreComments: Bool?  // nil = pas encore chargé ≠ « il y en a plus » (#4868)
     @Published var loadFailure: ContentFetchFailure?
     @Published var replyingTo: FeedComment? = nil
 
@@ -41,6 +39,9 @@ class PostDetailViewModel: ObservableObject {
         set { commentThreadModel.repliesNextCursor = newValue }
     }
     var topLevelComments: [FeedComment] { commentThreadModel.topLevelRoots }
+    var isLoadingComments: Bool { commentThreadModel.isLoadingRoots }
+    /// `nil` = pas encore chargé ≠ « il y en a plus » (#4868).
+    var hasMoreComments: Bool? { commentThreadModel.rootsHasMore }
 
     // Comment-like optimistic state — socket-reaction driven, miroir exact de
     // `CommentsSheetView`. Keyé par commentId. Semé depuis `currentUserReactions`
@@ -53,7 +54,6 @@ class PostDetailViewModel: ObservableObject {
     @Published var editingComment: FeedComment?
     @Published var commentHeartInFlightIds: Set<String> = []
 
-    private var commentCursor: String?
     let postService: PostServiceProviding
     private let socialSocket: any SocialSocketProviding
     private let languageProvider: LanguageProviding
@@ -87,6 +87,8 @@ class PostDetailViewModel: ObservableObject {
             .sink { [weak self] _ in self?.objectWillChange.send() }
             .store(in: &cancellables)
         commentThreadModel.onRepliesLoaded = { [weak self] in self?.seedCommentLikes(from: $0) }
+        commentThreadModel.onRootsLoaded = { [weak self] in self?.seedCommentLikes(from: $0) }
+        commentThreadModel.onRootsFetched = { [weak self] in self?.persistFetchedComments($0) }
         observePreferredLanguageChanges()
     }
 
@@ -212,27 +214,10 @@ class PostDetailViewModel: ObservableObject {
     }
 
     func loadComments(_ postId: String) async {
-        guard !isLoadingComments else { return }
-
-        let cacheKey = "post-\(postId)"
-        let cacheResult = await CacheCoordinator.shared.comments.load(for: cacheKey)
-
-        switch cacheResult {
-        case .fresh(let cached, _):
-            if comments.isEmpty { comments = cached }
-            seedCommentLikes(from: cached)
-            schedulePreloadReplyPreviews(postId: postId)
-            return
-        case .stale(let cached, _):
-            if comments.isEmpty { comments = cached }
-            seedCommentLikes(from: cached)
-            await fetchCommentsFromNetwork(postId, cacheKey: cacheKey)
-            schedulePreloadReplyPreviews(postId: postId)
-        case .expired, .empty:
-            isLoadingComments = comments.isEmpty
-            await fetchCommentsFromNetwork(postId, cacheKey: cacheKey)
-            schedulePreloadReplyPreviews(postId: postId)
-        }
+        let outcome = await onThread(postId).loadRoots()
+        guard outcome != .skipped else { return }
+        if outcome == .failed { warnIfNoComments() }
+        schedulePreloadReplyPreviews(postId: postId)
     }
 
     /// Lance le préchargement des aperçus de réponses SANS bloquer `loadComments`
@@ -242,68 +227,30 @@ class PostDetailViewModel: ObservableObject {
     }
 
     /// Notification → commentaire hors de la première page : suit le curseur
-    /// existant jusqu'à ce que le commentaire top-level ciblé soit chargé
-    /// (borné — cf. `CommentTargetHunter`). Retourne `true` si la cible est
-    /// présente à l'issue de la chasse.
+    /// jusqu'à ce que le commentaire top-level ciblé soit chargé (borné).
     @discardableResult
     func loadCommentsUntilPresent(_ commentId: String, postId: String) async -> Bool {
-        await CommentTargetHunter.hunt(
-            isPresent: { [weak self] in
-                self?.topLevelComments.contains(where: { $0.id == commentId }) ?? true
-            },
-            hasMore: { [weak self] in self.map { $0.hasMoreComments != false } ?? false },
-            loadNextPage: { [weak self] in await self?.loadMoreComments(postId) }
-        )
+        await onThread(postId).loadRootsUntilPresent([commentId])
     }
 
     func loadMoreComments(_ postId: String) async {
-        // NOTE: no `commentCursor != nil` guard on purpose — see
-        // `FeedViewModel.loadMoreIfNeeded`'s identical fix. `loadComments`'s
-        // `.fresh` cache branch never touches the network, so `commentCursor`
-        // stays `nil` while `hasMoreComments` stays at its initial `true`,
-        // permanently stalling pagination for the whole session. `hasMoreComments`
-        // alone is a safe gate — it's always set together with `commentCursor`
-        // by `fetchCommentsFromNetwork`, and `cursor: nil` there already means
-        // "fetch page 1", exactly what's needed to recover a real cursor.
-        guard !isLoadingComments, hasMoreComments != false else { return }
-        await fetchCommentsFromNetwork(postId, cacheKey: "post-\(postId)")
+        if await onThread(postId).loadMoreRoots() == .failed { warnIfNoComments() }
     }
 
-    private func fetchCommentsFromNetwork(_ postId: String, cacheKey: String) async {
-        isLoadingComments = true
-        defer { isLoadingComments = false }
-        do {
-            let response = try await postService.getComments(postId: postId, cursor: commentCursor, limit: 20)
-            let langs = preferredLanguages
-            let payload = response.data
-            // Map off the main actor — for a popular post's comment page this
-            // decode + Prisme resolution would otherwise hitch the sheet.
-            let newComments = await Task.detached(priority: .userInitiated) {
-                payload.map { FeedComment(api: $0, preferredLanguages: langs) }
-            }.value
-            let existingIds = Set(comments.map(\.id))
-            let unique = newComments.filter { !existingIds.contains($0.id) }
-            comments.append(contentsOf: unique)
-            seedCommentLikes(from: unique)
-            commentCursor = response.pagination?.nextCursor
-            hasMoreComments = response.pagination?.hasMore ?? false
-            await bestEffort("postDetailViewModel.comments.saveThread", category: .cache) { try await CacheCoordinator.shared.comments.save(comments, for: cacheKey) }
+    private func warnIfNoComments() {
+        guard comments.isEmpty else { return }
+        FeedbackToastManager.shared.showError(String(localized: "feed.comment.loadError", defaultValue: "Impossible de charger les commentaires", bundle: .main))
+    }
 
-            // Persist fetched comments to GRDB
-            if let persistence = feedPersistence {
-                let apiComments = response.data
-                let pid = postId
-                Task.detached(priority: .utility) {
-                    for c in apiComments {
-                        if let record = CommentRecord(from: c, postId: pid) {
-                            try? await persistence.insertComment(record)
-                        }
-                    }
+    /// GRDB copy of a fetched root page.
+    private func persistFetchedComments(_ apiComments: [APIPostComment]) {
+        guard let persistence = feedPersistence else { return }
+        let pid = commentThreadModel.entity.id
+        Task.detached(priority: .utility) {
+            for c in apiComments {
+                if let record = CommentRecord(from: c, postId: pid) {
+                    try? await persistence.insertComment(record)
                 }
-            }
-        } catch {
-            if comments.isEmpty {
-                FeedbackToastManager.shared.showError(String(localized: "feed.comment.loadError", defaultValue: "Impossible de charger les commentaires", bundle: .main))
             }
         }
     }
@@ -333,25 +280,9 @@ class PostDetailViewModel: ObservableObject {
     }
 
     /// Précharge l'aperçu des réponses (les 2 premières s'affichent sans tap)
-    /// des premiers commentaires racine qui en ont — cache-first puis réseau,
-    /// en miroir de `FeedCommentsSheet`. Sans ça, les sous-commentaires
-    /// restaient masqués dans le détail de post jusqu'au tap « Voir ».
+    /// des premiers commentaires racine qui en ont — cache-first puis réseau.
     func preloadReplyPreviews(postId: String) async {
-        let withReplies = topLevelComments.filter { $0.replies > 0 }.prefix(5)
-        for comment in withReplies {
-            guard repliesMap[comment.id] == nil else { continue }
-            let cached = await CacheCoordinator.shared.comments.load(for: "replies-\(comment.id)")
-            if case .fresh(let replies, _) = cached {
-                repliesMap[comment.id] = replies
-                seedCommentLikes(from: replies)
-                continue
-            } else if case .stale(let replies, _) = cached {
-                repliesMap[comment.id] = replies
-                seedCommentLikes(from: replies)
-                continue
-            }
-            await loadReplies(postId: postId, commentId: comment.id)
-        }
+        await onThread(postId).preloadReplyPreviews()
     }
 
     // MARK: - Comment Like (optimistic, socket-reaction driven)
@@ -582,8 +513,7 @@ class PostDetailViewModel: ObservableObject {
                 guard let self else { return }
                 Task {
                     await self.refreshPost(postId)
-                    self.commentCursor = nil
-                    await self.fetchCommentsFromNetwork(postId, cacheKey: "post-\(postId)")
+                    await self.onThread(postId).refreshFirstRootsPage()
                 }
             }
             .store(in: &socketCancellables)

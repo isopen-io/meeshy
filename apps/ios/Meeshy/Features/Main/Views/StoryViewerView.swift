@@ -300,11 +300,8 @@ struct StoryViewerView: View {
     /// Le fil de commentaires de la slide — racines, réponses, dépliage et
     /// pagination — le view model partagé avec le post et le reel (#13133).
     @StateObject var storyCommentThread = CommentThreadViewModel(entity: .story(""))
-    /// Pagination des commentaires top-level de la story — suivie pour la
-    /// chasse paginée d'un commentaire notifié hors de la première page (50).
-    @State var storyCommentsNextCursor: String?
-    @State var storyCommentsHasMore = false
-    @State var isLoadingComments = false
+    /// A spinner only over an empty overlay: a cached list never waits.
+    var isLoadingComments: Bool { storyCommentThread.isLoadingRoots && storyCommentThread.roots.isEmpty }
     @State var storyCommentCount: Int = 0
     /// Impulsion (mirroir `heartBouncePulse`) incrémentée UNIQUEMENT par la
     /// réconciliation d'ouverture de `loadStoryCommentCount()` (+Content.swift :

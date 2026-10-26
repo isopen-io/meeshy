@@ -37,16 +37,10 @@ struct CommentsSheetView: View {
     /// suivie pour pouvoir la retirer proprement si on change de cible.
     @State private var prefilledMention: String? = nil
     @State private var selectedProfileUser: ProfileSheetUser?
-    @State var liveComments: [FeedComment]?
-    @State private var liveCommentCount: Int?
     /// Section de commentaire surlignée (cible d'une notification).
     @State private var highlightedCommentId: String? = nil
     /// Garde-fou : ne défile vers la cible qu'une seule fois.
     @State private var didScrollToTargetComment: Bool = false
-    /// Curseur de pagination du GET commentaires — suivi pour la chasse
-    /// paginée d'un commentaire notifié hors de la première page.
-    @State var commentsNextCursor: String?
-    @State var commentsHasMore: Bool = false
     @State private var isHuntingTargetComment: Bool = false
     @State var composerLanguage: String = DefaultComposerLanguage.resolve()
     @State var commentBlurEnabled: Bool = false
@@ -65,9 +59,19 @@ struct CommentsSheetView: View {
     /// fermeture — l'ordre onDismiss/onDisappear devient indifférent.
     @State private var claimedActivePost: Bool = false
     @State private var didConsumeInitialReplyTarget = false
-    /// Les fils de réponses — dépliage et pagination — tenus par le view model
-    /// partagé avec le détail et la story (#13133).
+    /// Le fil — racines, réponses, dépliage, pagination et compteur — tenu
+    /// par le view model partagé avec le détail et la story (#13133).
     @StateObject var thread: CommentThreadViewModel
+    /// `nil` tant que seuls les commentaires embarqués par le feed sont
+    /// montrés : `post-<id>` ne se réécrit qu'une fois le fil vivant.
+    var liveComments: [FeedComment]? {
+        get { thread.liveRoots }
+        nonmutating set { thread.liveRoots = newValue }
+    }
+    var liveCommentCount: Int? {
+        get { thread.liveCount }
+        nonmutating set { thread.liveCount = newValue }
+    }
     var repliesMap: [String: [FeedComment]] {
         get { thread.replies }
         nonmutating set { thread.replies = newValue }
@@ -141,10 +145,10 @@ struct CommentsSheetView: View {
         _mentionController = StateObject(wrappedValue: MentionComposerController(
             context: .post(id: post.id)
         ))
-        _thread = StateObject(wrappedValue: CommentThreadViewModel(entity: entity ?? .post(post.id)))
+        _thread = StateObject(wrappedValue: CommentThreadViewModel(entity: entity ?? .post(post.id), embedded: post.comments))
     }
 
-    private var comments: [FeedComment] { liveComments ?? post.comments }
+    private var comments: [FeedComment] { thread.roots }
     private var commentCount: Int { liveCommentCount ?? post.commentCount }
 
     /// Second arrêt du dégradé servi au composer de commentaire. Dérivé de
@@ -156,9 +160,7 @@ struct CommentsSheetView: View {
         DynamicColorGenerator.hueShiftedHex(accentColor, degrees: 30)
     }
 
-    private var topLevelComments: [FeedComment] {
-        comments.filter { $0.parentId == nil }
-    }
+    private var topLevelComments: [FeedComment] { thread.topLevelRoots }
 
     static func computeLikedIds(from comments: [FeedComment]) -> Set<String> {
         CommentSheetRules.computeLikedIds(from: comments)
@@ -397,8 +399,8 @@ struct CommentsSheetView: View {
         }
         .modifier(CommentsSheetLiveSync(
             post: post,
-            liveComments: $liveComments,
-            liveCommentCount: $liveCommentCount,
+            liveComments: $thread.liveRoots,
+            liveCommentCount: $thread.liveCount,
             repliesMap: $thread.replies,
             expandedThreads: $thread.expandedThreads,
             likedIds: $likedIds,
@@ -424,7 +426,7 @@ struct CommentsSheetView: View {
         .task {
             // Hydrate repliesMap from cache before hitting the network so
             // auto-preview rows are visible instantly on re-present.
-            await prefetchReplyPreviews(of: topLevelComments)
+            await seedingThread().preloadReplyPreviews()
         }
         .task {
             await loadFullCommentsIfNeeded()
@@ -450,11 +452,7 @@ struct CommentsSheetView: View {
             if !isHuntingTargetComment {
                 isHuntingTargetComment = true
                 Task {
-                    let found = await CommentTargetHunter.hunt(
-                        isPresent: { topLevelComments.contains { $0.id == sectionId } },
-                        hasMore: { commentsHasMore },
-                        loadNextPage: { await loadNextCommentsPage() }
-                    )
+                    let found = await seedingThread().loadRootsUntilPresent([sectionId])
                     if !found { didScrollToTargetComment = true }
                 }
             }
