@@ -22,6 +22,7 @@ final class MediaFormatSourceGuardTests: XCTestCase {
     private static let forbiddenDurationForms = [
         "\"%d:%02d",
         "\"%02d:%02d",
+        " / 60):",
         "DateComponentsFormatter",
         ".time(pattern:",
         ".units(allowed:",
