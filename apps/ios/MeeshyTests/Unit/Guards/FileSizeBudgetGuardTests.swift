@@ -724,7 +724,7 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     /// main et n'est pas mesuré.
     private static let splitThreshold = 1000
 
-    func test_aucunFichierEcritALaMainNeDepasseLeSeuilDeDecoupe() throws {
+    func test_noHandWrittenFileExceedsTheSplitThreshold() throws {
         let offenders = try handWrittenSources()
             .map { ($0.lastPathComponent, lineCount(of: $0) - 1) }
             .filter { $0.1 > Self.splitThreshold }
@@ -738,7 +738,7 @@ final class FileSizeBudgetGuardTests: XCTestCase {
         )
     }
 
-    func test_leSeuilDeDecoupeVoitLAppEtLeSDKMaisPasLeGenere() throws {
+    func test_splitThresholdSeesAppAndSDKButNotGenerated() throws {
         let names = Set(try handWrittenSources().map(\.lastPathComponent))
         XCTAssertTrue(names.contains("CallManager.swift"))
         XCTAssertTrue(names.contains("MeeshyColors.swift"))
