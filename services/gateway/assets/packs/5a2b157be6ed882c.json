@@ -1,0 +1,1030 @@
+{
+ "mood": "hors-norme",
+ "motifs": [
+  {
+   "id": "hors-norme.pop-art",
+   "mood": "hors-norme",
+   "name": "Pop Art",
+   "surfaces": [
+    "capture",
+    "live"
+   ],
+   "base": {
+    "layout": {
+     "arrangement": "grid",
+     "margin": 0.06,
+     "gap": 0.03,
+     "top": 0.16,
+     "bottom": 0.1
+    },
+    "slot": {
+     "shape": "rect",
+     "stroke": {
+      "color": "#111111",
+      "width": 0.014
+     },
+     "shadow": true,
+     "tilt": "gentle",
+     "tone": "duotone",
+     "duotone": [
+      "#2B1BD1",
+      "#FF8AD8"
+     ]
+    },
+    "background": {
+     "kind": "solid",
+     "color": "#FFE600"
+    },
+    "pattern": {
+     "kind": "halftone",
+     "color": "#FF2E63",
+     "opacity": 0.55
+    },
+    "border": {
+     "kind": "double",
+     "color": "#111111",
+     "width": 0.012,
+     "inset": 0.025
+    },
+    "ornaments": [
+     {
+      "kind": "rays",
+      "color": "#FFFFFF",
+      "density": "mid",
+      "layer": "back",
+      "motion": "loop"
+     },
+     {
+      "kind": "lightning",
+      "color": "#FF2E63",
+      "density": "mid",
+      "layer": "front",
+      "motion": "loop"
+     },
+     {
+      "kind": "stars",
+      "color": "#111111",
+      "density": "low",
+      "layer": "front",
+      "motion": "loop"
+     }
+    ],
+    "brand": {
+     "mark": "wordmark",
+     "place": "bottom-right",
+     "color": "#111111",
+     "size": "m",
+     "font": "poster"
+    },
+    "names": {
+     "show": "name",
+     "style": "bubble",
+     "font": "cartoon",
+     "color": "#111111",
+     "fill": "#FFFFFF"
+    },
+    "title": {
+     "source": "group",
+     "font": "poster",
+     "color": "#FFFFFF",
+     "place": "top",
+     "size": "l",
+     "effect": "outline",
+     "case": "upper"
+    }
+   },
+   "variants": {
+    "duo": {
+     "layout": {
+      "arrangement": "diagonal",
+      "margin": 0.07,
+      "gap": 0.03,
+      "top": 0.15,
+      "bottom": 0.1
+     },
+     "title": {
+      "source": "names",
+      "font": "poster",
+      "color": "#FFFFFF",
+      "place": "top",
+      "size": "l",
+      "effect": "outline",
+      "case": "upper"
+     }
+    },
+    "comite": {
+     "layout": {
+      "arrangement": "cascade",
+      "margin": 0.07,
+      "gap": 0.03,
+      "top": 0.16,
+      "bottom": 0.1
+     },
+     "slot": {
+      "shape": "rect",
+      "stroke": {
+       "color": "#111111",
+       "width": 0.014
+      },
+      "shadow": true,
+      "tilt": "gentle",
+      "tone": "duotone",
+      "duotone": [
+       "#1B1BD1",
+       "#7CF7FF"
+      ]
+     },
+     "background": {
+      "kind": "solid",
+      "color": "#FF2E63"
+     },
+     "pattern": {
+      "kind": "halftone",
+      "color": "#FFE600",
+      "opacity": 0.6
+     },
+     "ornaments": [
+      {
+       "kind": "rays",
+       "color": "#FFFFFF",
+       "density": "mid",
+       "layer": "back",
+       "motion": "loop"
+      },
+      {
+       "kind": "lightning",
+       "color": "#FFE600",
+       "density": "mid",
+       "layer": "front",
+       "motion": "loop"
+      },
+      {
+       "kind": "stars",
+       "color": "#111111",
+       "density": "low",
+       "layer": "front",
+       "motion": "loop"
+      }
+     ]
+    },
+    "groupe": {
+     "layout": {
+      "arrangement": "mosaic",
+      "margin": 0.06,
+      "gap": 0.025,
+      "top": 0.15,
+      "bottom": 0.1
+     },
+     "slot": {
+      "shape": "rect",
+      "stroke": {
+       "color": "#111111",
+       "width": 0.012
+      },
+      "tilt": "none",
+      "tone": "duotone",
+      "duotone": [
+       "#E4007C",
+       "#FFF27A"
+      ]
+     },
+     "background": {
+      "kind": "solid",
+      "color": "#00C2FF"
+     },
+     "pattern": {
+      "kind": "halftone",
+      "color": "#FF2E63",
+      "opacity": 0.5
+     },
+     "ornaments": [
+      {
+       "kind": "rays",
+       "color": "#FFFFFF",
+       "density": "mid",
+       "layer": "back",
+       "motion": "loop"
+      },
+      {
+       "kind": "lightning",
+       "color": "#FFE600",
+       "density": "low",
+       "layer": "front",
+       "motion": "loop"
+      },
+      {
+       "kind": "stars",
+       "color": "#111111",
+       "density": "low",
+       "layer": "front",
+       "motion": "loop"
+      }
+     ],
+     "brand": {
+      "mark": "wordmark",
+      "place": "bottom-right",
+      "color": "#111111",
+      "size": "m",
+      "font": "poster"
+     },
+     "names": {
+      "show": "handle",
+      "style": "bubble",
+      "font": "cartoon",
+      "color": "#111111",
+      "fill": "#FFFFFF"
+     },
+     "title": {
+      "source": "group",
+      "font": "poster",
+      "color": "#FFE600",
+      "place": "top",
+      "size": "l",
+      "effect": "outline",
+      "case": "upper"
+     }
+    },
+    "tablee": {
+     "layout": {
+      "arrangement": "grid",
+      "margin": 0.05,
+      "gap": 0.02,
+      "top": 0.14,
+      "bottom": 0.1
+     },
+     "slot": {
+      "shape": "rect",
+      "stroke": {
+       "color": "#111111",
+       "width": 0.01
+      },
+      "tilt": "none",
+      "tone": "duotone",
+      "duotone": [
+       "#2B1BD1",
+       "#FF8AD8"
+      ]
+     },
+     "names": {
+      "show": "name",
+      "style": "plate",
+      "font": "cartoon",
+      "color": "#111111",
+      "fill": "#FFE600"
+     }
+    }
+   },
+   "styles": [
+    {
+     "id": "relief",
+     "name": "Relief",
+     "look": {
+      "slot": {
+       "shape": "rect",
+       "stroke": {
+        "color": "#111111",
+        "width": 0.014
+       },
+       "shadow": true,
+       "tilt": "gentle",
+       "tone": "duotone",
+       "duotone": [
+        "#2B1BD1",
+        "#FF8AD8"
+       ]
+      },
+      "ornaments": [
+       {
+        "kind": "lightning",
+        "color": "#111111",
+        "density": "low",
+        "layer": "front",
+        "motion": "loop"
+       },
+       {
+        "kind": "stars",
+        "color": "#2A8CFF",
+        "density": "low",
+        "layer": "front",
+        "motion": "loop"
+       }
+      ],
+      "title": {
+       "source": "group",
+       "font": "poster",
+       "color": "#FFFFFF",
+       "place": "top",
+       "size": "l",
+       "effect": "outline",
+       "case": "upper"
+      },
+      "scene": [
+       {
+        "id": "matiere",
+        "kind": "image",
+        "depth": "back",
+        "src": "assets/call-frames/hors-norme_pop-art_back.webp"
+       },
+       {
+        "id": "moulure",
+        "kind": "image",
+        "depth": "front",
+        "src": "assets/call-frames/hors-norme_pop-art_front.webp",
+        "slice": 0.18
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "hors-norme.collage",
+   "mood": "hors-norme",
+   "name": "Collage",
+   "surfaces": [
+    "capture",
+    "live"
+   ],
+   "base": {
+    "layout": {
+     "arrangement": "scatter",
+     "margin": 0.07,
+     "gap": 0.03,
+     "top": 0.16,
+     "bottom": 0.1
+    },
+    "slot": {
+     "shape": "torn",
+     "shadow": true,
+     "tilt": "wild",
+     "tone": "noir"
+    },
+    "background": {
+     "kind": "solid",
+     "color": "#F3EFE6"
+    },
+    "pattern": {
+     "kind": "grid",
+     "color": "#2E5BFF",
+     "opacity": 0.18
+    },
+    "border": {
+     "kind": "torn",
+     "color": "#1A1A1A",
+     "width": 0.012,
+     "inset": 0
+    },
+    "ornaments": [
+     {
+      "kind": "tape",
+      "color": "#FF3EA5",
+      "density": "low",
+      "layer": "front"
+     },
+     {
+      "kind": "grain",
+      "color": "#2B2B2B",
+      "density": "mid",
+      "layer": "back"
+     },
+     {
+      "kind": "stars",
+      "color": "#FF3EA5",
+      "density": "low",
+      "layer": "front",
+      "motion": "loop"
+     },
+     {
+      "kind": "lightning",
+      "color": "#2E5BFF",
+      "density": "low",
+      "layer": "back",
+      "motion": "loop"
+     }
+    ],
+    "brand": {
+     "mark": "both",
+     "place": "bottom",
+     "color": "#111111",
+     "size": "m",
+     "font": "tag"
+    },
+    "names": {
+     "show": "handle",
+     "style": "tag",
+     "font": "tag",
+     "color": "#111111",
+     "fill": "#C6FF00"
+    },
+    "title": {
+     "source": "group",
+     "font": "tag",
+     "color": "#111111",
+     "place": "top",
+     "size": "l",
+     "effect": "none"
+    }
+   },
+   "variants": {
+    "duo": {
+     "layout": {
+      "arrangement": "diagonal",
+      "margin": 0.07,
+      "gap": 0.03,
+      "top": 0.16,
+      "bottom": 0.1
+     },
+     "title": {
+      "source": "names",
+      "font": "tag",
+      "color": "#111111",
+      "place": "top",
+      "size": "l",
+      "effect": "none"
+     },
+     "names": {
+      "show": "handle",
+      "style": "tag",
+      "font": "tag",
+      "color": "#111111",
+      "fill": "#C6FF00"
+     }
+    },
+    "comite": {
+     "layout": {
+      "arrangement": "cascade",
+      "margin": 0.07,
+      "gap": 0.03,
+      "top": 0.16,
+      "bottom": 0.1
+     },
+     "slot": {
+      "shape": "torn",
+      "shadow": true,
+      "tilt": "wild",
+      "tone": "noir"
+     },
+     "ornaments": [
+      {
+       "kind": "tape",
+       "color": "#FF3EA5",
+       "density": "low",
+       "layer": "front"
+      },
+      {
+       "kind": "grain",
+       "color": "#2B2B2B",
+       "density": "mid",
+       "layer": "back"
+      },
+      {
+       "kind": "stars",
+       "color": "#FF3EA5",
+       "density": "low",
+       "layer": "front",
+       "motion": "loop"
+      },
+      {
+       "kind": "lightning",
+       "color": "#2E5BFF",
+       "density": "low",
+       "layer": "back",
+       "motion": "loop"
+      }
+     ]
+    },
+    "groupe": {
+     "layout": {
+      "arrangement": "scatter",
+      "margin": 0.06,
+      "gap": 0.025,
+      "top": 0.15,
+      "bottom": 0.1
+     },
+     "slot": {
+      "shape": "torn",
+      "shadow": true,
+      "tilt": "wild",
+      "tone": "noir"
+     },
+     "names": {
+      "show": "handle",
+      "style": "badge",
+      "font": "tag",
+      "color": "#111111",
+      "fill": "#C6FF00"
+     }
+    },
+    "tablee": {
+     "layout": {
+      "arrangement": "grid",
+      "margin": 0.05,
+      "gap": 0.02,
+      "top": 0.14,
+      "bottom": 0.12
+     },
+     "slot": {
+      "shape": "torn",
+      "tilt": "gentle",
+      "tone": "noir"
+     },
+     "names": {
+      "show": "handle",
+      "style": "list",
+      "font": "tag",
+      "color": "#111111"
+     }
+    }
+   },
+   "styles": [
+    {
+     "id": "relief",
+     "name": "Relief",
+     "look": {
+      "background": {
+       "kind": "solid",
+       "color": "#C8A26E"
+      },
+      "slot": {
+       "shape": "torn",
+       "shadow": true,
+       "tilt": "wild",
+       "tone": "noir"
+      },
+      "ornaments": [
+       {
+        "kind": "tape",
+        "color": "#BFF54A",
+        "density": "low",
+        "layer": "front"
+       },
+       {
+        "kind": "stars",
+        "color": "#111111",
+        "density": "low",
+        "layer": "front",
+        "motion": "loop"
+       }
+      ],
+      "title": {
+       "source": "group",
+       "font": "tag",
+       "color": "#111111",
+       "place": "top",
+       "size": "l"
+      },
+      "scene": [
+       {
+        "id": "matiere",
+        "kind": "image",
+        "depth": "back",
+        "src": "assets/call-frames/hors-norme_collage_back.webp"
+       },
+       {
+        "id": "moulure",
+        "kind": "image",
+        "depth": "front",
+        "src": "assets/call-frames/hors-norme_collage_front.webp",
+        "slice": 0.2
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "hors-norme.vitrail",
+   "mood": "hors-norme",
+   "name": "Vitrail",
+   "surfaces": [
+    "capture",
+    "live"
+   ],
+   "base": {
+    "layout": {
+     "arrangement": "column",
+     "margin": 0.08,
+     "gap": 0.035,
+     "top": 0.18,
+     "bottom": 0.12
+    },
+    "slot": {
+     "shape": "arch",
+     "stroke": {
+      "color": "#16110C",
+      "width": 0.018
+     },
+     "double": true,
+     "glow": "#B3122E",
+     "tilt": "none",
+     "tone": "warm"
+    },
+    "background": {
+     "kind": "radial",
+     "colors": [
+      "#3A1B5E",
+      "#120A22",
+      "#07040E"
+     ]
+    },
+    "pattern": {
+     "kind": "grid",
+     "color": "#000000",
+     "opacity": 0.35
+    },
+    "border": {
+     "kind": "double",
+     "color": "#E0A93B",
+     "width": 0.008,
+     "inset": 0.03
+    },
+    "ornaments": [
+     {
+      "kind": "rays",
+      "color": "#E0A93B26",
+      "density": "mid",
+      "layer": "back"
+     },
+     {
+      "kind": "lightleak",
+      "color": "#1D4ED833",
+      "density": "low",
+      "layer": "back"
+     }
+    ],
+    "brand": {
+     "mark": "logo",
+     "place": "bottom",
+     "color": "#E0A93B",
+     "size": "m"
+    },
+    "names": {
+     "show": "name",
+     "style": "plate",
+     "font": "poster",
+     "color": "#F5E6C4",
+     "fill": "#0E0B1AD9"
+    },
+    "title": {
+     "source": "group",
+     "font": "calligraphy",
+     "color": "#F5E6C4",
+     "place": "top",
+     "size": "l",
+     "effect": "glow"
+    },
+    "subtitle": {
+     "source": "date",
+     "font": "poster",
+     "color": "#E0A93B",
+     "place": "top",
+     "size": "s",
+     "effect": "none",
+     "case": "upper"
+    }
+   },
+   "variants": {
+    "duo": {
+     "title": {
+      "source": "names",
+      "font": "calligraphy",
+      "color": "#F5E6C4",
+      "place": "top",
+      "size": "l",
+      "effect": "glow"
+     }
+    },
+    "comite": {
+     "layout": {
+      "arrangement": "orbit",
+      "margin": 0.07,
+      "gap": 0.03,
+      "top": 0.17,
+      "bottom": 0.12
+     },
+     "slot": {
+      "shape": "diamond",
+      "stroke": {
+       "color": "#16110C",
+       "width": 0.018
+      },
+      "double": true,
+      "glow": "#1D4ED8",
+      "tilt": "none",
+      "tone": "warm"
+     },
+     "background": {
+      "kind": "radial",
+      "colors": [
+       "#12306B",
+       "#0A1330",
+       "#05070F"
+      ]
+     },
+     "ornaments": [
+      {
+       "kind": "rays",
+       "color": "#E0A93B26",
+       "density": "high",
+       "layer": "back"
+      },
+      {
+       "kind": "sparkles",
+       "color": "#E0A93B",
+       "density": "low",
+       "layer": "front"
+      }
+     ]
+    },
+    "groupe": {
+     "layout": {
+      "arrangement": "honeycomb",
+      "margin": 0.06,
+      "gap": 0.02,
+      "top": 0.16,
+      "bottom": 0.1
+     },
+     "slot": {
+      "shape": "hex",
+      "stroke": {
+       "color": "#16110C",
+       "width": 0.018
+      },
+      "double": true,
+      "glow": "#0F8A5F",
+      "tilt": "none",
+      "tone": "warm"
+     },
+     "background": {
+      "kind": "radial",
+      "colors": [
+       "#0D4A3A",
+       "#082620",
+       "#030C0A"
+      ]
+     },
+     "names": {
+      "show": "name",
+      "style": "badge",
+      "font": "poster",
+      "color": "#F5E6C4",
+      "fill": "#0E0B1AD9"
+     }
+    },
+    "tablee": {
+     "layout": {
+      "arrangement": "honeycomb",
+      "margin": 0.05,
+      "gap": 0.015,
+      "top": 0.15,
+      "bottom": 0.09
+     },
+     "slot": {
+      "shape": "hex",
+      "stroke": {
+       "color": "#16110C",
+       "width": 0.018
+      },
+      "double": true,
+      "glow": "#E0A93B",
+      "tilt": "none",
+      "tone": "warm"
+     },
+     "background": {
+      "kind": "radial",
+      "colors": [
+       "#5A1020",
+       "#2A0710",
+       "#0C0206"
+      ]
+     },
+     "names": {
+      "show": "none",
+      "style": "badge",
+      "font": "poster",
+      "color": "#F5E6C4"
+     }
+    }
+   }
+  },
+  {
+   "id": "hors-norme.tete-d-affiche",
+   "mood": "hors-norme",
+   "name": "Tête d’affiche",
+   "surfaces": [
+    "capture"
+   ],
+   "base": {
+    "layout": {
+     "arrangement": "arch",
+     "margin": 0.06,
+     "gap": 0.03,
+     "top": 0.17,
+     "bottom": 0.11
+    },
+    "slot": {
+     "shape": "star",
+     "stroke": {
+      "color": "#FFD166",
+      "width": 0.01
+     },
+     "glow": "#FFD166AA",
+     "tilt": "none",
+     "tone": "color"
+    },
+    "background": {
+     "kind": "radial",
+     "colors": [
+      "#C2185B",
+      "#5B0E5E",
+      "#1A0326"
+     ]
+    },
+    "pattern": {
+     "kind": "sunburst",
+     "color": "#FFD166",
+     "opacity": 0.12
+    },
+    "border": {
+     "kind": "bulbs",
+     "color": "#FFD166",
+     "width": 0.006,
+     "inset": 0.03
+    },
+    "ornaments": [
+     {
+      "kind": "crown",
+      "color": "#FFD166",
+      "density": "low",
+      "layer": "front"
+     },
+     {
+      "kind": "sparkles",
+      "color": "#FFE8A3",
+      "density": "mid",
+      "layer": "front",
+      "motion": "loop"
+     },
+     {
+      "kind": "bokeh",
+      "color": "#FF7AC6",
+      "density": "mid",
+      "layer": "back",
+      "motion": "loop"
+     }
+    ],
+    "brand": {
+     "mark": "both",
+     "place": "bottom",
+     "color": "#FFD166",
+     "size": "m",
+     "font": "poster"
+    },
+    "names": {
+     "show": "name",
+     "style": "badge",
+     "font": "poster",
+     "color": "#1A0326",
+     "fill": "#FFD166"
+    },
+    "title": {
+     "source": "group",
+     "font": "poster",
+     "color": "#FFD166",
+     "place": "top",
+     "size": "l",
+     "effect": "glow",
+     "case": "upper"
+    }
+   },
+   "variants": {
+    "comite": {
+     "layout": {
+      "arrangement": "hero",
+      "margin": 0.07,
+      "gap": 0.03,
+      "top": 0.17,
+      "bottom": 0.11
+     },
+     "slot": {
+      "shape": "round",
+      "radius": 0.12,
+      "stroke": {
+       "color": "#FFD166",
+       "width": 0.01
+      },
+      "glow": "#FFD166AA",
+      "tilt": "none",
+      "tone": "color"
+     }
+    },
+    "groupe": {
+     "layout": {
+      "arrangement": "hero",
+      "margin": 0.07,
+      "gap": 0.025,
+      "top": 0.16,
+      "bottom": 0.11
+     },
+     "slot": {
+      "shape": "round",
+      "radius": 0.12,
+      "stroke": {
+       "color": "#FFD166",
+       "width": 0.008
+      },
+      "glow": "#FFD166AA",
+      "tilt": "none",
+      "tone": "color"
+     }
+    },
+    "tablee": {
+     "layout": {
+      "arrangement": "tiers",
+      "margin": 0.06,
+      "gap": 0.02,
+      "top": 0.15,
+      "bottom": 0.12
+     },
+     "slot": {
+      "shape": "circle",
+      "stroke": {
+       "color": "#FFD166",
+       "width": 0.006
+      },
+      "glow": "#FFD16688",
+      "tilt": "none",
+      "tone": "color"
+     },
+     "names": {
+      "show": "name",
+      "style": "list",
+      "font": "poster",
+      "color": "#FFD166"
+     }
+    }
+   },
+   "styles": [
+    {
+     "id": "relief",
+     "name": "Relief",
+     "look": {
+      "background": {
+       "kind": "radial",
+       "colors": [
+        "#A3141E",
+        "#5A0A10"
+       ]
+      },
+      "ornaments": [
+       {
+        "kind": "crown",
+        "color": "#FFE08A",
+        "density": "low",
+        "layer": "front"
+       },
+       {
+        "kind": "sparkles",
+        "color": "#FFF4D0",
+        "density": "low",
+        "layer": "front",
+        "motion": "loop"
+       },
+       {
+        "kind": "bokeh",
+        "color": "#FFC65A",
+        "density": "low",
+        "layer": "back",
+        "motion": "loop"
+       }
+      ],
+      "title": {
+       "source": "group",
+       "font": "poster",
+       "color": "#FFE08A",
+       "place": "top",
+       "size": "l",
+       "effect": "glow",
+       "case": "upper"
+      },
+      "scene": [
+       {
+        "id": "matiere",
+        "kind": "image",
+        "depth": "back",
+        "src": "assets/call-frames/hors-norme_tete-d-affiche_back.webp"
+       },
+       {
+        "id": "moulure",
+        "kind": "image",
+        "depth": "front",
+        "src": "assets/call-frames/hors-norme_tete-d-affiche_front.webp",
+        "slice": 0.2
+       }
+      ]
+     }
+    }
+   ]
+  }
+ ]
+}

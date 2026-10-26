@@ -2,7 +2,8 @@
 // exportées, plus ce que l'app peindra (photo factice dans la fenêtre, blason, oiseaux et texte rendus à leurs
 // positions cuites), puis comparé au rendu de référence — dont le sha256 est d'abord vérifié contre
 // reference/sha256.json : la référence ne se recalcule pas, elle se retrouve. Un cadre dont Mee et Meo ont bougé (L2)
-// se retrouve dans `amendments` (lib/reference.mjs --amend), décor prouvé identique.
+// se retrouve dans `amendments` (lib/reference.mjs --amend), décor prouvé identique ; un amendement dont le rendu reste
+// à refaire (`png: null`, ancre corrigée après coup) rougit en le disant, jamais contre le rendu L0 d'un autre dessin.
 // Hors boîtes de texte et de blason : ≥ 99,5 % des pixels à |Δ| ≤ 6 par canal, aucun bloc 16×16 à Δ moyen > 12.
 // Usage : node lib/recompose.mjs [export] [--only a,b] [--jobs 3] [--sheet cadre1,cadre2,cadre3 --sheet-dir dossier]
 import crypto from 'node:crypto';
@@ -90,7 +91,7 @@ async function judge(handle, { collection, frame }) {
   await showSvg(handle, svg, { fonts: 'design' });
   const refPng = await shoot(handle);
   const amended = Object.values(reference.amendments ?? {}).map((a) => a.frames?.[frame.frame]).filter(Boolean).at(-1);
-  const expected = amended?.png ?? reference.frames[frame.frame]?.png;
+  const expected = amended ? amended.png : reference.frames[frame.frame]?.png;
   const { page } = handle;
   await page.evaluate(classify);
   const render = async (kinds) => {
@@ -137,7 +138,7 @@ async function judge(handle, { collection, frame }) {
     await sharp({ create: { width: pad + tiles.length * (tw + pad), height: th + 2 * pad, channels: 4, background: '#2a2733' } })
       .composite(composites).jpeg({ quality: 82 }).toFile(path.join(SHEET_DIR, frame.frame + '.jpg'));
   }
-  return { frame: frame.frame, referenceSha: sha256(refPng) === expected, ...score, pass: score.share >= TOLERANCE.share && score.worstBlock <= TOLERANCE.blockMean };
+  return { frame: frame.frame, referenceSha: expected !== null && sha256(refPng) === expected, pendingRender: expected === null, ...score, pass: score.share >= TOLERANCE.share && score.worstBlock <= TOLERANCE.blockMean };
 }
 
 const index = JSON.parse(fs.readFileSync(path.join(EXPORT, 'index.json'), 'utf8'));
@@ -161,5 +162,5 @@ fs.writeFileSync(path.join(EXPORT, 'fidelity.json'), JSON.stringify({ tolerance:
 const shares = rows.map((r) => r.share).sort((a, b) => a - b);
 const psnrs = rows.map((r) => r.psnr).sort((a, b) => a - b);
 console.log(`recomposition : ${rows.length - failing.length}/${rows.length} cadres dans la tolérance ; part minimale ${shares[0]}, médiane ${shares[Math.floor(shares.length / 2)]} ; PSNR minimal ${psnrs[0]} dB, médian ${psnrs[Math.floor(psnrs.length / 2)]} dB ; référence retrouvée à l'octet : ${rows.filter((r) => r.referenceSha).length}/${rows.length}`);
-for (const r of failing) console.log(`  ${r.frame} : part ${r.share}, pire bloc ${r.worstBlock}${r.referenceSha ? '' : ', RÉFÉRENCE ≠ sha256.json'}`);
+for (const r of failing) console.log(`  ${r.frame} : part ${r.share}, pire bloc ${r.worstBlock}${r.pendingRender ? ', amendement à rendre (node lib/reference.mjs out ../reference --amend l2 --design <out CADRES_ANCHORS=off> --only ' + r.frame + ')' : r.referenceSha ? '' : ', RÉFÉRENCE ≠ sha256.json'}`);
 process.exit(failing.length ? 1 : 0);

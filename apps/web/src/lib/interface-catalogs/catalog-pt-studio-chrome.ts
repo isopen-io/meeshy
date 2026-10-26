@@ -80,6 +80,8 @@ const ptStudioChrome = {
   'story.studio.background.cameraHold': 'Manter pressionado: abrir a câmera',
   'story.studio.camera.close': 'Voltar à cena',
   'story.studio.camera.flip': 'Trocar de câmera',
+  'story.studio.camera.frames': 'Molduras',
+  'story.studio.camera.frames.none': 'Sem moldura',
   'story.studio.camera.flash': 'Flash',
   'story.studio.camera.shutter.photo': 'Tirar uma foto',
   'story.studio.camera.shutter.start': 'Iniciar a gravação',

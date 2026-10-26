@@ -47,6 +47,7 @@ internal fun ChatBottomBarHost(host: ChatHostContext) {
             isEditing = state.isEditing,
             affordances = state.composerAffordances,
             slowMode = rememberComposerSlowMode(state),
+            isEndToEnd = state.isEndToEnd,
             replyBanner = replyBanner,
             editingOriginalText = editingOriginalText,
             onStageVoiceFile = { file -> actions.stageFile(file, "audio/mp4") },

@@ -18,4 +18,5 @@ internal fun widgetPreviewLabels(context: Context): LastMessagePreviewLabels =
         you = context.getString(ConversationsR.string.conversations_preview_you),
         senderFormat = context.getString(ConversationsR.string.conversations_preview_sender_format),
         draftPrefix = context.getString(ConversationsR.string.conversations_preview_draft_prefix),
+        encrypted = context.getString(ConversationsR.string.conversations_preview_end_to_end),
     ).withMediaKinds(ResourceMediaKindStrings(context))

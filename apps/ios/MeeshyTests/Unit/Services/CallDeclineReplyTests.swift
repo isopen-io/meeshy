@@ -62,7 +62,8 @@ final class CallDeclineReplyTests: XCTestCase {
             replyQueue: queue,
             messagePersistence: persistence,
             currentUserId: { userId },
-            prepareReplyQueue: {}
+            prepareReplyQueue: {},
+            destinationGuard: .isolated()
         )
         return SUTContext(sut: sut, messageService: messageService, queue: queue, persistence: persistence)
     }

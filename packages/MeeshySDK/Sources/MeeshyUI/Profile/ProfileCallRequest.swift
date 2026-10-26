@@ -16,9 +16,16 @@ public struct ProfileCallRequest: Equatable, Sendable {
 
     public init?(userId: String?, displayName: String, isVideo: Bool, sharedConversations: [MeeshyConversation]) {
         guard let userId = userId?.trimmingCharacters(in: .whitespacesAndNewlines), !userId.isEmpty else { return nil }
-        let direct = sharedConversations.first { conversation in
-            conversation.type == .direct && (conversation.participantUserId == nil || conversation.participantUserId == userId)
-        }
+        // Deux tête-à-tête avec ce contact (#12966) : l'appel part du chiffré de
+        // bout en bout, comme la passerelle le rend (#13006).
+        let directs = sharedConversations
+            .filter { $0.type == .direct && ($0.participantUserId == nil || $0.participantUserId == userId) }
+            .map { conversation -> MeeshyConversation in
+                var adopted = conversation
+                adopted.participantUserId = userId
+                return adopted
+            }
+        let direct = DirectPairChoice.preferred(among: directs, with: userId)
         self.init(userId: userId, displayName: displayName, isVideo: isVideo, conversationId: direct?.id)
     }
 }

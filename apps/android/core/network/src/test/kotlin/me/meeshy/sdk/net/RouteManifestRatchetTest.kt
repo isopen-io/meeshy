@@ -40,8 +40,11 @@ class RouteManifestRatchetTest {
          * régime de chiffrement), servie par la passerelle et sans interface Retrofit encore côté Android.
          * 262 : moins `DELETE /e2ee/devices/:deviceId`, que porte `E2eeDeviceApi` (#13014, « Mes appareils
          * chiffrés ») ; `GET /e2ee/devices`, servie dans le même lot, y naît déjà implémentée.
+         * 266 : plus quatre routes de l'étagère des ambiances de capture (#10169 : catalogue, détail,
+         * installation et retrait), servies par la passerelle ; Android les portera avec ses ambiances
+         * (#13093). `GET /packs/capture-frame/installed` naît implémentée par `packs/{domain}/installed`.
          */
-        const val TO_PORT_CEILING = 262
+        const val TO_PORT_CEILING = 266
         val VERB_STATUSES = setOf("hors-perimetre-mobile", "ops-only", "a-porter", "implementee-par-url-serveur")
     }
 

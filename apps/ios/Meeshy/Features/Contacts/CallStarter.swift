@@ -56,7 +56,7 @@ enum CallStarter {
 
         Task { @MainActor in
             do {
-                if let conversation = try await ConversationService.shared.findDirectWith(userId: userId) {
+                if let conversation = try await DirectConversationResolver.existing(with: userId) {
                     await CallManager.shared.requestPermissionsThenStartCall(
                         conversationId: conversation.id,
                         userId: userId,

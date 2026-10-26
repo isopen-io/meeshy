@@ -434,6 +434,8 @@ targets:
       - path: Meeshy/Features/Main/Share/ShareContentZone.swift
       - path: Meeshy/Features/Main/Share/ShareDirectorySnapshot.swift
       - path: Meeshy/Features/Main/Share/ShareDurationRow.swift
+      # #12985 — le reflet de la mémoire du bout en bout que l'app dépose.
+      - path: Meeshy/Features/Main/Share/EndToEndShareMemory.swift
       - path: Meeshy/Features/Main/Share/ShareIncomingStrip.swift
       - path: Meeshy/Features/Main/Share/ShareRecipient.swift
       - path: Meeshy/Features/Main/Share/ShareRecipientRow.swift

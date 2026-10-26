@@ -144,6 +144,7 @@ import { meStarredMessagesRoutes } from './me/starred-messages';
 import { meStickersRoutes } from './me/stickers';
 import { stickerPacksRoutes } from './sticker-packs';
 import { gloryFramePacksRoutes } from './packs-glory-frame';
+import { captureFramePacksRoutes } from './packs-capture-frame';
 import { lensPacksRoutes } from './packs-lens';
 import { packAssetsRoutes } from './pack-assets';
 import { avatarRingPacksRoutes, bannerFramePacksRoutes, bannerPacksRoutes, wallpaperPacksRoutes } from './packs-appearance';
@@ -362,6 +363,10 @@ export const ROUTE_TABLE_BEFORE_ATTACHMENTS: readonly RouteRegistrationEntry[] =
   // stickers, sur la spec `glory-frame` : un montage PAR DOMAINE, jamais un
   // `:domain`. Registre VIDE jusqu'au L3 (boutique `[]`, installation 404).
   { name: 'packs-glory-frame', prefix: `${API_PREFIX}/packs/glory-frame`, module: gloryFramePacksRoutes },
+  // Les packs de cadres de CAPTURE (#10169, LC) — les douze ambiances de l'appel
+  // et du viseur, intégrées, installées d'office et retirables, sur le MÊME
+  // moteur. Installer ne télécharge rien (#10187) ; aucune proposition de tiers.
+  { name: 'packs-capture-frame', prefix: `${API_PREFIX}/packs/capture-frame`, module: captureFramePacksRoutes },
   // La boutique UNIFIÉE (#10632) — trois domaines de plus sur le MÊME moteur
   // (fonds de conversation, contours d'avatar, bannières de profil), chacun
   // avec son achat en Meeshes, et la vitrine qui les agrège. Un montage par

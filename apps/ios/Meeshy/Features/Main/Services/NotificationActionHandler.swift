@@ -111,6 +111,10 @@ final class NotificationActionHandler: NotificationActionHandling {
     private let openExternalURL: @MainActor (URL) -> Void
     private let openDeepLink: @MainActor (URL) -> Void
     private let presentNewContact: @MainActor (NotificationContactCard) -> Void
+    /// La loi du fil appliquée à la conversation de la réponse (#12641, #12985).
+    private let destinationGuard: EndToEndDestinationGuard
+    /// Le refus d'une réponse vers une conversation chiffrée se DIT (audit M4).
+    private let notifyRefusedEndToEndReply: @MainActor () -> Void
     private var revocationSubscription: AnyCancellable?
     /// #7453 — l'abonnement au retour au premier plan, qui rejoue le balayage
     /// des bannières éphémères échues. Un nouvel appel REMPLACE l'abonnement :
@@ -206,8 +210,12 @@ final class NotificationActionHandler: NotificationActionHandling {
         conversationLocks: any ConversationLockProbing = ConversationLockManager.shared,
         notifyRefusedReply: @escaping @MainActor (String?) -> Void = {
             NotificationReplyFailure.postRefusedUnderConversationPin(conversationId: $0)
-        }
+        },
+        destinationGuard: EndToEndDestinationGuard = EndToEndDestinationGuard(),
+        notifyRefusedEndToEndReply: @escaping @MainActor () -> Void = { NotificationReplyFailure.postEndToEndReplyRefused() }
     ) {
+        self.destinationGuard = destinationGuard
+        self.notifyRefusedEndToEndReply = notifyRefusedEndToEndReply
         self.messageService = messageService
         self.conversationService = conversationService
         self.postService = postService
@@ -520,17 +528,8 @@ final class NotificationActionHandler: NotificationActionHandling {
             replyToId: payload.messageId
         )
 
-        do {
-            try await messagePersistence.insertOptimistic(
-                MessageRecord.optimisticText(
-                    item: item,
-                    senderId: userId,
-                    replyToId: payload.messageId
-                )
-            )
-        } catch {
-            logger.error("reply optimistic insert failed: \(error.localizedDescription, privacy: .public)")
-        }
+        await insertReplyBubble(item, senderId: userId, replyToId: payload.messageId)
+        if await refusesEndToEndReply(item, in: conversationId) { return }
 
         await prepareReplyQueue()
         var outboxRowLanded = false
@@ -571,6 +570,30 @@ final class NotificationActionHandler: NotificationActionHandling {
             logger.error("post-reply markRead failed: \(error.localizedDescription, privacy: .public)")
         }
         removeDeliveredForConversation(conversationId)
+    }
+
+    private func insertReplyBubble(_ item: OfflineQueueItem, senderId: String, replyToId: String?) async {
+        do {
+            try await messagePersistence.insertOptimistic(
+                MessageRecord.optimisticText(item: item, senderId: senderId, replyToId: replyToId)
+            )
+        } catch {
+            logger.error("reply optimistic insert failed: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    /// #12641 — la réponse ne sait pas sceller : vers une conversation chiffrée
+    /// de bout en bout (loi du fil, #12985), rien ne part ni n'entre dans la
+    /// file. La bulle reste en échec dans le fil, d'où le renvoi se scelle.
+    private func refusesEndToEndReply(_ item: OfflineQueueItem, in conversationId: String) async -> Bool {
+        guard await destinationGuard.seals(conversationId) else { return false }
+        logger.warning("notification reply refused before transport: end-to-end conversation")
+        try? await messagePersistence.markOptimisticFailed(
+            localId: item.clientMessageId, reason: EndToEndSendRefusal.sealedOnlyInConversation.userMessage
+        )
+        removeDeliveredForConversation(conversationId)
+        notifyRefusedEndToEndReply()
+        return true
     }
 
     // MARK: - Inline comment on social pushes (R3/R4)

@@ -150,6 +150,7 @@ final class NotificationActionHandlerTests: XCTestCase {
         /// Ce que le SEUL chemin réseau d'un commentaire a créé (#9743).
         let comments: CommentPublisherSpy
         let unsentNotices: () -> Int
+        let refusedReplyNotices: () -> Int
         let friendService: MockFriendService
         let queue: MockReplyQueue
         let persistence: MockOptimisticPersistence
@@ -170,7 +171,8 @@ final class NotificationActionHandlerTests: XCTestCase {
         authToken: String? = nil,
         currentUserId: String? = "user1",
         preferredLanguage: String? = "fr",
-        isRegisteredUser: Bool = true
+        isRegisteredUser: Bool = true,
+        rememberedEndToEnd: [String] = []
     ) -> SUTContext {
         let messageService = MockMessageService()
         let conversationService = MockConversationService()
@@ -180,6 +182,7 @@ final class NotificationActionHandlerTests: XCTestCase {
         let sessionToken = authToken ?? currentUserId.map { TestSessionToken.make(userId: $0) }
         let comments = CommentPublisherSpy(token: currentUserId.map { TestSessionToken.make(userId: $0) })
         var unsentNotices = 0
+        var refusedReplyNotices = 0
         let friendService = MockFriendService()
         let queue = MockReplyQueue()
         let persistence = MockOptimisticPersistence()
@@ -216,7 +219,9 @@ final class NotificationActionHandlerTests: XCTestCase {
             removeDeliveredForPost: { removedPostBanners.append($0) },
             removeDeliveredForNotificationIds: { revokedIds.append($0) },
             prepareReplyQueue: { preparedReplyQueueCount += 1 },
-            conversationLocks: DeclaredConversationLocks()
+            conversationLocks: DeclaredConversationLocks(),
+            destinationGuard: Self.destinationGuard(remembering: rememberedEndToEnd),
+            notifyRefusedEndToEndReply: { refusedReplyNotices += 1 }
         )
 
         return SUTContext(
@@ -226,6 +231,7 @@ final class NotificationActionHandlerTests: XCTestCase {
             postService: postService,
             comments: comments,
             unsentNotices: { unsentNotices },
+            refusedReplyNotices: { refusedReplyNotices },
             friendService: friendService,
             queue: queue,
             persistence: persistence,
@@ -251,6 +257,28 @@ final class NotificationActionHandlerTests: XCTestCase {
             "messageId": messageId,
             "senderId": "sender1"
         ]
+    }
+
+    private static func destinationGuard(remembering ids: [String]) -> EndToEndDestinationGuard {
+        .isolated(remembering: ids)
+    }
+
+    /// #12641 — une réponse depuis la bannière d'une conversation vue chiffrée
+    /// de bout en bout ne part pas en clair et n'entre pas dans la file : la
+    /// bulle reste en échec dans le fil, avec sa raison.
+    func test_handle_reply_inARememberedEndToEndConversation_sendsNothing_queuesNothing() async {
+        let ctx = makeSUT(rememberedEndToEnd: ["conv1"])
+
+        await ctx.sut.handle(
+            actionIdentifier: MeeshyNotificationAction.reply.rawValue,
+            userInfo: replyUserInfo(),
+            replyText: "Le code du coffre est 4512"
+        )
+
+        XCTAssertEqual(ctx.messageService.sendCallCount, 0)
+        XCTAssertTrue(ctx.queue.enqueuedItems.isEmpty)
+        XCTAssertEqual(ctx.persistence.markFailedCalls.map { $0.reason }, [EndToEndSendRefusal.sealedOnlyInConversation.userMessage])
+        XCTAssertEqual(ctx.refusedReplyNotices(), 1, "audit M4 — le refus se dit, la bannière ne disparaît pas en silence")
     }
 
     // MARK: - (a) Work completes inside handle(), wrapped in a background task
@@ -351,7 +379,8 @@ final class NotificationActionHandlerTests: XCTestCase {
             localMarkRead: { _ in },
             removeDeliveredForConversation: { _ in },
             removeDeliveredForPost: { _ in },
-            prepareReplyQueue: { }
+            prepareReplyQueue: { },
+            destinationGuard: .isolated()
         )
 
         await sut.handle(

@@ -41,6 +41,10 @@ private val WRITE_HIERARCHY_FREE_TYPES: Set<String> = setOf("global", "direct")
  * matching [MemberRole.from]'s own default.
  */
 fun ApiConversation.mayCurrentUserWrite(currentUserId: String? = null): Boolean {
+    // #13110 — the native Android app neither seals nor opens libsignal yet (#13015):
+    // an end-to-end conversation is never a target of a forward, a share or a story
+    // reply, whose text and pieces would reach the gateway in clear.
+    if (EndToEndRegime.isEndToEnd(encryptionMode)) return false
     if (isActive == false) return false
     if (resolvedPreferences?.deletedForUserAt != null) return false
     if (type in WRITE_HIERARCHY_FREE_TYPES) return true

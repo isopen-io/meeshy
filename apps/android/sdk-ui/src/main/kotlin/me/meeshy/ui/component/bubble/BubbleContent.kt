@@ -102,6 +102,11 @@ public data class BubbleContent(
     val isSlowSend: Boolean = false,
     /** What this message lets out of Meeshy (forward, copy, save, share…) — read by every exit instead of a raw flag. */
     val exitOffer: MessageExitOffer = MessageExitOffer.Unrestricted,
+    /**
+     * End-to-end encrypted, and this device cannot open it (#13110): the bubble says
+     * where it reads — never the gateway's `[Encrypted]` literal, never a piece.
+     */
+    val isEndToEndSealed: Boolean = false,
 )
 
 /**

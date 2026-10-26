@@ -51,6 +51,7 @@ fun previewLines(
                 isBlurred = message.isBlurred == true,
                 isViewOnce = message.isViewOnce == true,
                 expiresAt = message.expiresAt,
+                isEncrypted = message.isEndToEndSealed.takeIf { it },
             ),
             currentUserId = currentUserId,
             showSender = showSender,

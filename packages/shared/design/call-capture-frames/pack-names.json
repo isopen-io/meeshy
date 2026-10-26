@@ -1,0 +1,352 @@
+{
+  "fr": {
+    "signature": {
+      "name": "Signature",
+      "description": "Les cadres de l'ambiance « Signature », pour l'appel vidéo et la capture photo et vidéo. Inclus avec Meeshy, rien à télécharger."
+    },
+    "distingue": {
+      "name": "Distingué",
+      "description": "Les cadres de l'ambiance « Distingué », pour l'appel vidéo et la capture photo et vidéo. Inclus avec Meeshy, rien à télécharger."
+    },
+    "elegant": {
+      "name": "Élégant",
+      "description": "Les cadres de l'ambiance « Élégant », pour l'appel vidéo et la capture photo et vidéo. Inclus avec Meeshy, rien à télécharger."
+    },
+    "jovial": {
+      "name": "Jovial",
+      "description": "Les cadres de l'ambiance « Jovial », pour l'appel vidéo et la capture photo et vidéo. Inclus avec Meeshy, rien à télécharger."
+    },
+    "deconnecte": {
+      "name": "Déconnecté",
+      "description": "Les cadres de l'ambiance « Déconnecté », pour l'appel vidéo et la capture photo et vidéo. Inclus avec Meeshy, rien à télécharger."
+    },
+    "corporate": {
+      "name": "Corporate",
+      "description": "Les cadres de l'ambiance « Corporate », pour l'appel vidéo et la capture photo et vidéo. Inclus avec Meeshy, rien à télécharger."
+    },
+    "fantastique": {
+      "name": "Fantastique",
+      "description": "Les cadres de l'ambiance « Fantastique », pour l'appel vidéo et la capture photo et vidéo. Inclus avec Meeshy, rien à télécharger."
+    },
+    "futuriste": {
+      "name": "Futuriste",
+      "description": "Les cadres de l'ambiance « Futuriste », pour l'appel vidéo et la capture photo et vidéo. Inclus avec Meeshy, rien à télécharger."
+    },
+    "glauque": {
+      "name": "Glauque",
+      "description": "Les cadres de l'ambiance « Glauque », pour l'appel vidéo et la capture photo et vidéo. Inclus avec Meeshy, rien à télécharger."
+    },
+    "hors-norme": {
+      "name": "Hors norme",
+      "description": "Les cadres de l'ambiance « Hors norme », pour l'appel vidéo et la capture photo et vidéo. Inclus avec Meeshy, rien à télécharger."
+    },
+    "morbide": {
+      "name": "Morbide",
+      "description": "Les cadres de l'ambiance « Morbide », pour l'appel vidéo et la capture photo et vidéo. Inclus avec Meeshy, rien à télécharger."
+    },
+    "feerique": {
+      "name": "Féerique",
+      "description": "Les cadres de l'ambiance « Féerique », pour l'appel vidéo et la capture photo et vidéo. Inclus avec Meeshy, rien à télécharger."
+    }
+  },
+  "en": {
+    "signature": {
+      "name": "Signature",
+      "description": "The “Signature” frames, for video calls and photo and video capture. Included with Meeshy, nothing to download."
+    },
+    "distingue": {
+      "name": "Distinguished",
+      "description": "The “Distinguished” frames, for video calls and photo and video capture. Included with Meeshy, nothing to download."
+    },
+    "elegant": {
+      "name": "Elegant",
+      "description": "The “Elegant” frames, for video calls and photo and video capture. Included with Meeshy, nothing to download."
+    },
+    "jovial": {
+      "name": "Cheerful",
+      "description": "The “Cheerful” frames, for video calls and photo and video capture. Included with Meeshy, nothing to download."
+    },
+    "deconnecte": {
+      "name": "Unplugged",
+      "description": "The “Unplugged” frames, for video calls and photo and video capture. Included with Meeshy, nothing to download."
+    },
+    "corporate": {
+      "name": "Corporate",
+      "description": "The “Corporate” frames, for video calls and photo and video capture. Included with Meeshy, nothing to download."
+    },
+    "fantastique": {
+      "name": "Fantasy",
+      "description": "The “Fantasy” frames, for video calls and photo and video capture. Included with Meeshy, nothing to download."
+    },
+    "futuriste": {
+      "name": "Futuristic",
+      "description": "The “Futuristic” frames, for video calls and photo and video capture. Included with Meeshy, nothing to download."
+    },
+    "glauque": {
+      "name": "Eerie",
+      "description": "The “Eerie” frames, for video calls and photo and video capture. Included with Meeshy, nothing to download."
+    },
+    "hors-norme": {
+      "name": "Offbeat",
+      "description": "The “Offbeat” frames, for video calls and photo and video capture. Included with Meeshy, nothing to download."
+    },
+    "morbide": {
+      "name": "Macabre",
+      "description": "The “Macabre” frames, for video calls and photo and video capture. Included with Meeshy, nothing to download."
+    },
+    "feerique": {
+      "name": "Enchanted",
+      "description": "The “Enchanted” frames, for video calls and photo and video capture. Included with Meeshy, nothing to download."
+    }
+  },
+  "es": {
+    "signature": {
+      "name": "Firma",
+      "description": "Los marcos del ambiente «Firma», para la videollamada y la captura de fotos y vídeos. Incluidos en Meeshy, nada que descargar."
+    },
+    "distingue": {
+      "name": "Distinguido",
+      "description": "Los marcos del ambiente «Distinguido», para la videollamada y la captura de fotos y vídeos. Incluidos en Meeshy, nada que descargar."
+    },
+    "elegant": {
+      "name": "Elegante",
+      "description": "Los marcos del ambiente «Elegante», para la videollamada y la captura de fotos y vídeos. Incluidos en Meeshy, nada que descargar."
+    },
+    "jovial": {
+      "name": "Alegre",
+      "description": "Los marcos del ambiente «Alegre», para la videollamada y la captura de fotos y vídeos. Incluidos en Meeshy, nada que descargar."
+    },
+    "deconnecte": {
+      "name": "Desconectado",
+      "description": "Los marcos del ambiente «Desconectado», para la videollamada y la captura de fotos y vídeos. Incluidos en Meeshy, nada que descargar."
+    },
+    "corporate": {
+      "name": "Corporativo",
+      "description": "Los marcos del ambiente «Corporativo», para la videollamada y la captura de fotos y vídeos. Incluidos en Meeshy, nada que descargar."
+    },
+    "fantastique": {
+      "name": "Fantástico",
+      "description": "Los marcos del ambiente «Fantástico», para la videollamada y la captura de fotos y vídeos. Incluidos en Meeshy, nada que descargar."
+    },
+    "futuriste": {
+      "name": "Futurista",
+      "description": "Los marcos del ambiente «Futurista», para la videollamada y la captura de fotos y vídeos. Incluidos en Meeshy, nada que descargar."
+    },
+    "glauque": {
+      "name": "Siniestro",
+      "description": "Los marcos del ambiente «Siniestro», para la videollamada y la captura de fotos y vídeos. Incluidos en Meeshy, nada que descargar."
+    },
+    "hors-norme": {
+      "name": "Fuera de lo común",
+      "description": "Los marcos del ambiente «Fuera de lo común», para la videollamada y la captura de fotos y vídeos. Incluidos en Meeshy, nada que descargar."
+    },
+    "morbide": {
+      "name": "Macabro",
+      "description": "Los marcos del ambiente «Macabro», para la videollamada y la captura de fotos y vídeos. Incluidos en Meeshy, nada que descargar."
+    },
+    "feerique": {
+      "name": "Mágico",
+      "description": "Los marcos del ambiente «Mágico», para la videollamada y la captura de fotos y vídeos. Incluidos en Meeshy, nada que descargar."
+    }
+  },
+  "pt": {
+    "signature": {
+      "name": "Assinatura",
+      "description": "As molduras do ambiente «Assinatura», para a chamada de vídeo e a captura de fotos e vídeos. Incluídas no Meeshy, nada para descarregar."
+    },
+    "distingue": {
+      "name": "Distinto",
+      "description": "As molduras do ambiente «Distinto», para a chamada de vídeo e a captura de fotos e vídeos. Incluídas no Meeshy, nada para descarregar."
+    },
+    "elegant": {
+      "name": "Elegante",
+      "description": "As molduras do ambiente «Elegante», para a chamada de vídeo e a captura de fotos e vídeos. Incluídas no Meeshy, nada para descarregar."
+    },
+    "jovial": {
+      "name": "Alegre",
+      "description": "As molduras do ambiente «Alegre», para a chamada de vídeo e a captura de fotos e vídeos. Incluídas no Meeshy, nada para descarregar."
+    },
+    "deconnecte": {
+      "name": "Desconectado",
+      "description": "As molduras do ambiente «Desconectado», para a chamada de vídeo e a captura de fotos e vídeos. Incluídas no Meeshy, nada para descarregar."
+    },
+    "corporate": {
+      "name": "Corporativo",
+      "description": "As molduras do ambiente «Corporativo», para a chamada de vídeo e a captura de fotos e vídeos. Incluídas no Meeshy, nada para descarregar."
+    },
+    "fantastique": {
+      "name": "Fantástico",
+      "description": "As molduras do ambiente «Fantástico», para a chamada de vídeo e a captura de fotos e vídeos. Incluídas no Meeshy, nada para descarregar."
+    },
+    "futuriste": {
+      "name": "Futurista",
+      "description": "As molduras do ambiente «Futurista», para a chamada de vídeo e a captura de fotos e vídeos. Incluídas no Meeshy, nada para descarregar."
+    },
+    "glauque": {
+      "name": "Sombrio",
+      "description": "As molduras do ambiente «Sombrio», para a chamada de vídeo e a captura de fotos e vídeos. Incluídas no Meeshy, nada para descarregar."
+    },
+    "hors-norme": {
+      "name": "Fora do comum",
+      "description": "As molduras do ambiente «Fora do comum», para a chamada de vídeo e a captura de fotos e vídeos. Incluídas no Meeshy, nada para descarregar."
+    },
+    "morbide": {
+      "name": "Macabro",
+      "description": "As molduras do ambiente «Macabro», para a chamada de vídeo e a captura de fotos e vídeos. Incluídas no Meeshy, nada para descarregar."
+    },
+    "feerique": {
+      "name": "Encantado",
+      "description": "As molduras do ambiente «Encantado», para a chamada de vídeo e a captura de fotos e vídeos. Incluídas no Meeshy, nada para descarregar."
+    }
+  },
+  "de": {
+    "signature": {
+      "name": "Signatur",
+      "description": "Die Rahmen der Stimmung „Signatur“ für Videoanrufe sowie Foto- und Videoaufnahmen. In Meeshy enthalten, kein Download nötig."
+    },
+    "distingue": {
+      "name": "Vornehm",
+      "description": "Die Rahmen der Stimmung „Vornehm“ für Videoanrufe sowie Foto- und Videoaufnahmen. In Meeshy enthalten, kein Download nötig."
+    },
+    "elegant": {
+      "name": "Elegant",
+      "description": "Die Rahmen der Stimmung „Elegant“ für Videoanrufe sowie Foto- und Videoaufnahmen. In Meeshy enthalten, kein Download nötig."
+    },
+    "jovial": {
+      "name": "Fröhlich",
+      "description": "Die Rahmen der Stimmung „Fröhlich“ für Videoanrufe sowie Foto- und Videoaufnahmen. In Meeshy enthalten, kein Download nötig."
+    },
+    "deconnecte": {
+      "name": "Abgeschaltet",
+      "description": "Die Rahmen der Stimmung „Abgeschaltet“ für Videoanrufe sowie Foto- und Videoaufnahmen. In Meeshy enthalten, kein Download nötig."
+    },
+    "corporate": {
+      "name": "Business",
+      "description": "Die Rahmen der Stimmung „Business“ für Videoanrufe sowie Foto- und Videoaufnahmen. In Meeshy enthalten, kein Download nötig."
+    },
+    "fantastique": {
+      "name": "Fantastisch",
+      "description": "Die Rahmen der Stimmung „Fantastisch“ für Videoanrufe sowie Foto- und Videoaufnahmen. In Meeshy enthalten, kein Download nötig."
+    },
+    "futuriste": {
+      "name": "Futuristisch",
+      "description": "Die Rahmen der Stimmung „Futuristisch“ für Videoanrufe sowie Foto- und Videoaufnahmen. In Meeshy enthalten, kein Download nötig."
+    },
+    "glauque": {
+      "name": "Düster",
+      "description": "Die Rahmen der Stimmung „Düster“ für Videoanrufe sowie Foto- und Videoaufnahmen. In Meeshy enthalten, kein Download nötig."
+    },
+    "hors-norme": {
+      "name": "Außergewöhnlich",
+      "description": "Die Rahmen der Stimmung „Außergewöhnlich“ für Videoanrufe sowie Foto- und Videoaufnahmen. In Meeshy enthalten, kein Download nötig."
+    },
+    "morbide": {
+      "name": "Makaber",
+      "description": "Die Rahmen der Stimmung „Makaber“ für Videoanrufe sowie Foto- und Videoaufnahmen. In Meeshy enthalten, kein Download nötig."
+    },
+    "feerique": {
+      "name": "Märchenhaft",
+      "description": "Die Rahmen der Stimmung „Märchenhaft“ für Videoanrufe sowie Foto- und Videoaufnahmen. In Meeshy enthalten, kein Download nötig."
+    }
+  },
+  "it": {
+    "signature": {
+      "name": "Firma",
+      "description": "Le cornici dell'atmosfera «Firma», per la videochiamata e lo scatto di foto e video. Incluse in Meeshy, niente da scaricare."
+    },
+    "distingue": {
+      "name": "Distinto",
+      "description": "Le cornici dell'atmosfera «Distinto», per la videochiamata e lo scatto di foto e video. Incluse in Meeshy, niente da scaricare."
+    },
+    "elegant": {
+      "name": "Elegante",
+      "description": "Le cornici dell'atmosfera «Elegante», per la videochiamata e lo scatto di foto e video. Incluse in Meeshy, niente da scaricare."
+    },
+    "jovial": {
+      "name": "Allegro",
+      "description": "Le cornici dell'atmosfera «Allegro», per la videochiamata e lo scatto di foto e video. Incluse in Meeshy, niente da scaricare."
+    },
+    "deconnecte": {
+      "name": "Disconnesso",
+      "description": "Le cornici dell'atmosfera «Disconnesso», per la videochiamata e lo scatto di foto e video. Incluse in Meeshy, niente da scaricare."
+    },
+    "corporate": {
+      "name": "Aziendale",
+      "description": "Le cornici dell'atmosfera «Aziendale», per la videochiamata e lo scatto di foto e video. Incluse in Meeshy, niente da scaricare."
+    },
+    "fantastique": {
+      "name": "Fantastico",
+      "description": "Le cornici dell'atmosfera «Fantastico», per la videochiamata e lo scatto di foto e video. Incluse in Meeshy, niente da scaricare."
+    },
+    "futuriste": {
+      "name": "Futuristico",
+      "description": "Le cornici dell'atmosfera «Futuristico», per la videochiamata e lo scatto di foto e video. Incluse in Meeshy, niente da scaricare."
+    },
+    "glauque": {
+      "name": "Cupo",
+      "description": "Le cornici dell'atmosfera «Cupo», per la videochiamata e lo scatto di foto e video. Incluse in Meeshy, niente da scaricare."
+    },
+    "hors-norme": {
+      "name": "Fuori dal comune",
+      "description": "Le cornici dell'atmosfera «Fuori dal comune», per la videochiamata e lo scatto di foto e video. Incluse in Meeshy, niente da scaricare."
+    },
+    "morbide": {
+      "name": "Macabro",
+      "description": "Le cornici dell'atmosfera «Macabro», per la videochiamata e lo scatto di foto e video. Incluse in Meeshy, niente da scaricare."
+    },
+    "feerique": {
+      "name": "Fiabesco",
+      "description": "Le cornici dell'atmosfera «Fiabesco», per la videochiamata e lo scatto di foto e video. Incluse in Meeshy, niente da scaricare."
+    }
+  },
+  "ar": {
+    "signature": {
+      "name": "توقيع",
+      "description": "إطارات أجواء «توقيع» لمكالمات الفيديو والتقاط الصور والفيديو. مضمّنة في Meeshy، لا شيء للتنزيل."
+    },
+    "distingue": {
+      "name": "راقٍ",
+      "description": "إطارات أجواء «راقٍ» لمكالمات الفيديو والتقاط الصور والفيديو. مضمّنة في Meeshy، لا شيء للتنزيل."
+    },
+    "elegant": {
+      "name": "أنيق",
+      "description": "إطارات أجواء «أنيق» لمكالمات الفيديو والتقاط الصور والفيديو. مضمّنة في Meeshy، لا شيء للتنزيل."
+    },
+    "jovial": {
+      "name": "مرح",
+      "description": "إطارات أجواء «مرح» لمكالمات الفيديو والتقاط الصور والفيديو. مضمّنة في Meeshy، لا شيء للتنزيل."
+    },
+    "deconnecte": {
+      "name": "بلا اتصال",
+      "description": "إطارات أجواء «بلا اتصال» لمكالمات الفيديو والتقاط الصور والفيديو. مضمّنة في Meeshy، لا شيء للتنزيل."
+    },
+    "corporate": {
+      "name": "مهني",
+      "description": "إطارات أجواء «مهني» لمكالمات الفيديو والتقاط الصور والفيديو. مضمّنة في Meeshy، لا شيء للتنزيل."
+    },
+    "fantastique": {
+      "name": "خيالي",
+      "description": "إطارات أجواء «خيالي» لمكالمات الفيديو والتقاط الصور والفيديو. مضمّنة في Meeshy، لا شيء للتنزيل."
+    },
+    "futuriste": {
+      "name": "مستقبلي",
+      "description": "إطارات أجواء «مستقبلي» لمكالمات الفيديو والتقاط الصور والفيديو. مضمّنة في Meeshy، لا شيء للتنزيل."
+    },
+    "glauque": {
+      "name": "قاتم",
+      "description": "إطارات أجواء «قاتم» لمكالمات الفيديو والتقاط الصور والفيديو. مضمّنة في Meeshy، لا شيء للتنزيل."
+    },
+    "hors-norme": {
+      "name": "خارج المألوف",
+      "description": "إطارات أجواء «خارج المألوف» لمكالمات الفيديو والتقاط الصور والفيديو. مضمّنة في Meeshy، لا شيء للتنزيل."
+    },
+    "morbide": {
+      "name": "مروّع",
+      "description": "إطارات أجواء «مروّع» لمكالمات الفيديو والتقاط الصور والفيديو. مضمّنة في Meeshy، لا شيء للتنزيل."
+    },
+    "feerique": {
+      "name": "ساحر",
+      "description": "إطارات أجواء «ساحر» لمكالمات الفيديو والتقاط الصور والفيديو. مضمّنة في Meeshy، لا شيء للتنزيل."
+    }
+  }
+}

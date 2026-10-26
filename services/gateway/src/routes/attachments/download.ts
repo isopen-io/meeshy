@@ -15,6 +15,7 @@ import {
 } from '../../services/attachments/fileRouteVerdict';
 import { admitUnsignedFile, resolveSignedFileAccess } from '../../services/attachments/readerFileGate';
 import { readSigningKeys, readerFileSignatureEnforced, SIGNED_FILE_ROUTE } from '../../services/attachments/readerFileSignature';
+import { STICKER_PACK_LEGACY_FILE_EVENT, stickerPackLegacyFileFacts } from '../../services/packs/stickerPackLegacyPath';
 import type { Readable } from 'stream';
 import { relative as pathRelative, resolve as pathResolve, sep as pathSep } from 'path';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
@@ -348,18 +349,19 @@ export function registerFileStreamRoute(fastify: FastifyInstance, prisma: FileRo
 
         // #9600 — l'adresse NUE d'un fichier dont tous les porteurs vivants
         // disparaissent : comptée pendant la transition, refusée après.
-        const unsigned = admitUnsignedFile({
-          verdict,
-          enforced: readerFileSignatureEnforced(),
-          storageKey,
-          request: {
-            route: request.routeOptions?.url,
-            platformHeader: headerOf(request, 'x-meeshy-platform') ?? headerOf(request, 'x-app-platform'),
-            versionHeader: headerOf(request, 'x-meeshy-version') ?? headerOf(request, 'x-app-version'),
-            userAgent: headerOf(request, 'user-agent'),
-          },
-        });
+        const requestFacts = {
+          route: request.routeOptions?.url,
+          platformHeader: headerOf(request, 'x-meeshy-platform') ?? headerOf(request, 'x-app-platform'),
+          versionHeader: headerOf(request, 'x-meeshy-version') ?? headerOf(request, 'x-app-version'),
+          userAgent: headerOf(request, 'user-agent'),
+        };
+        const unsigned = admitUnsignedFile({ verdict, enforced: readerFileSignatureEnforced(), storageKey, request: requestFacts });
         if (unsigned === 'refuse') return sendNotFound(reply, 'File not found');
+
+        // #10188 — l'ancien chemin des fichiers de packs de stickers : servi
+        // aux clients publiés, compté jusqu'à son retrait (#9223).
+        const legacyPackFile = stickerPackLegacyFileFacts(storageKey, requestFacts);
+        if (legacyPackFile !== null) log.info(STICKER_PACK_LEGACY_FILE_EVENT, legacyPackFile);
 
         // Stable-path files (legacy `avatars/user/<userId>.jpg`) keep the SAME
         // URL when their content changes — a year-long max-age freezes the old
