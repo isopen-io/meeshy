@@ -552,4 +552,67 @@ class NotificationsViewModelTest {
 
         assertThat(vm.events.first()).isEqualTo(NotificationsEvent.OpenConversation("c9"))
     }
+
+    private fun categoryVm(repo: NotificationRepository, vararg served: ApiNotification): NotificationsViewModel {
+        coEvery { repo.list(any(), any(), any(), any(), any(), any()) } returns NetworkResult.Success(served.toList())
+        return NotificationsViewModel(repo, socketManager(), SyncSeqTracker(), performer())
+    }
+
+    @Test
+    fun `a message row served only by its category leaves the list the moment it is read`() = runTest {
+        val repo = repository()
+        val answer = CompletableDeferred<NetworkResult<ApiNotification>>()
+        coEvery { repo.markAsRead("old") } coAnswers { answer.await() }
+        val vm = categoryVm(repo, typed("old", "new_message"))
+        vm.selectCategory(NotificationFilterCategory.MESSAGES)
+
+        vm.markAsRead("old")
+
+        assertThat(vm.state.value.filteredNotifications).isEmpty()
+        answer.complete(NetworkResult.Success(typed("old", "new_message", isRead = true)))
+        assertThat(vm.state.value.filteredNotifications).isEmpty()
+    }
+
+    @Test
+    fun `a failed markAsRead brings a category-only row back unread`() = runTest {
+        val repo = repository()
+        coEvery { repo.markAsRead("old") } returns NetworkResult.Failure(me.meeshy.sdk.net.ApiError(message = "x"))
+        val vm = categoryVm(repo, typed("old", "friend_request"))
+        vm.selectCategory(NotificationFilterCategory.UNREAD)
+
+        vm.markAsRead("old")
+
+        assertThat(vm.state.value.filteredNotifications.map { it.id }).containsExactly("old")
+        assertThat(vm.state.value.filteredNotifications.single().state.isRead).isFalse()
+    }
+
+    @Test
+    fun `markAllRead reads the category rows at once and restores them when it fails`() = runTest {
+        val repo = repository()
+        val answer = CompletableDeferred<NetworkResult<Int>>()
+        coEvery { repo.markAllAsRead() } coAnswers { answer.await() }
+        val vm = categoryVm(repo, typed("a", "friend_request"), typed("b", "friend_request"))
+        vm.selectCategory(NotificationFilterCategory.UNREAD)
+
+        vm.markAllRead()
+        assertThat(vm.state.value.filteredNotifications).isEmpty()
+
+        answer.complete(NetworkResult.Failure(me.meeshy.sdk.net.ApiError(message = "x")))
+        assertThat(vm.state.value.filteredNotifications.map { it.id }).containsExactly("a", "b")
+    }
+
+    @Test
+    fun `a failed delete puts a category-only row back where it was`() = runTest {
+        val repo = repository()
+        val answer = CompletableDeferred<NetworkResult<Unit>>()
+        coEvery { repo.delete("b") } coAnswers { answer.await() }
+        val vm = categoryVm(repo, typed("a", "friend_request"), typed("b", "friend_request"), typed("c", "friend_request"))
+        vm.selectCategory(NotificationFilterCategory.CONTACTS)
+
+        vm.deleteNotification("b")
+        assertThat(vm.state.value.filteredNotifications.map { it.id }).containsExactly("a", "c").inOrder()
+
+        answer.complete(NetworkResult.Failure(me.meeshy.sdk.net.ApiError(message = "x")))
+        assertThat(vm.state.value.filteredNotifications.map { it.id }).containsExactly("a", "b", "c").inOrder()
+    }
 }

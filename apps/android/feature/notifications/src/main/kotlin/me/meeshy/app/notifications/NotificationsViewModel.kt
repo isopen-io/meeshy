@@ -277,27 +277,42 @@ class NotificationsViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Optimiste, comme iOS : le cache partagé est basculé par le dépôt, et la page servie d'une
+     * catégorie l'est ici — une ligne plus ancienne que la première page n'existe que là. Sous une
+     * famille consommable ou la puce « Non lues », la ligne lue quitte la liste ; l'échec la rend.
+     */
     fun markAsRead(notificationId: String) {
+        val wasUnread = _state.value.categoryRows.any { it.id == notificationId && !it.state.isRead }
+        if (wasUnread) _state.update { it.copy(categoryRows = it.categoryRows.withRead(setOf(notificationId), isRead = true)) }
         viewModelScope.launch {
             if (notificationRepository.markAsRead(notificationId) is NetworkResult.Failure) {
+                if (wasUnread) _state.update { it.copy(categoryRows = it.categoryRows.withRead(setOf(notificationId), isRead = false)) }
                 _events.trySend(NotificationsEvent.ActionFailed(R.string.notifications_mark_read_failed))
             }
         }
     }
 
     fun markAllRead() {
+        val unreadIds = _state.value.categoryRows.filterNot { it.state.isRead }.mapTo(HashSet()) { it.id }
+        if (unreadIds.isNotEmpty()) _state.update { it.copy(categoryRows = it.categoryRows.withRead(unreadIds, isRead = true)) }
         viewModelScope.launch {
             if (notificationRepository.markAllAsRead() is NetworkResult.Failure) {
+                if (unreadIds.isNotEmpty()) _state.update { it.copy(categoryRows = it.categoryRows.withRead(unreadIds, isRead = false)) }
                 _events.trySend(NotificationsEvent.ActionFailed(R.string.notifications_mark_all_read_failed))
             }
         }
     }
 
-    /** Swipe-to-delete — port of iOS `NotificationListViewModel.deleteNotification`. */
+    /** Swipe-to-delete — port of iOS `NotificationListViewModel.deleteNotification` : retirée tout de suite, remise à sa place si la suppression échoue. */
     fun deleteNotification(notificationId: String) {
-        _state.update { it.copy(categoryRows = it.categoryRows.filterNot { row -> row.id == notificationId }) }
+        val rows = _state.value.categoryRows
+        val index = rows.indexOfFirst { it.id == notificationId }
+        val removed = rows.getOrNull(index)
+        if (removed != null) _state.update { it.copy(categoryRows = it.categoryRows.filterNot { row -> row.id == notificationId }) }
         viewModelScope.launch {
             if (notificationRepository.delete(notificationId) is NetworkResult.Failure) {
+                if (removed != null) _state.update { it.copy(categoryRows = it.categoryRows.reinserted(removed, index)) }
                 _events.trySend(NotificationsEvent.ActionFailed(R.string.notifications_delete_failed))
             }
         }
@@ -353,3 +368,9 @@ private fun NotificationsUiState.withCache(value: List<ApiNotification>, isSynci
         loadDidFail = false,
         categoryRows = NotificationCategoryFeed.withoutRemoved(categoryRows, notifications, value),
     )
+
+private fun List<ApiNotification>.withRead(ids: Set<String>, isRead: Boolean): List<ApiNotification> =
+    map { if (it.id in ids && it.state.isRead != isRead) it.copy(state = it.state.copy(isRead = isRead)) else it }
+
+private fun List<ApiNotification>.reinserted(row: ApiNotification, index: Int): List<ApiNotification> =
+    if (any { it.id == row.id }) this else toMutableList().apply { add(index.coerceIn(0, size), row) }
