@@ -83,6 +83,7 @@ internal fun ChatComposer(
     quickEmojis: List<String> = ComposerToolbarLaw.QUICK_EMOJI_DEFAULTS,
     onQuickEmoji: ((String) -> Unit)? = null,
     pendingSlot: (@Composable () -> Unit)? = null,
+    pendingAttachmentCount: Int = 0,
 ) {
     val context = LocalContext.current
     val ioScope = rememberCoroutineScope()
@@ -101,6 +102,20 @@ internal fun ChatComposer(
     var minimized by rememberSaveable { mutableStateOf(false) }
     var attachmentTrayOpen by remember { mutableStateOf(false) }
     var ephemeralRailOpen by remember { mutableStateOf(false) }
+    // La flèche de la pilule d'enregistrement envoie TOUT DE SUITE (iOS) : la prise rejoint le
+    // plateau, puis part dès que sa préparation est finie ; le stop, lui, la laisse au plateau.
+    var sendVoiceWhenStaged by remember { mutableStateOf(false) }
+    var pendingCountAtVoiceSend by remember { mutableStateOf(0) }
+    LaunchedEffect(sendVoiceWhenStaged, pendingAttachmentCount, canSend) {
+        if (!sendVoiceWhenStaged) return@LaunchedEffect
+        if (pendingAttachmentCount > pendingCountAtVoiceSend && canSend) {
+            sendVoiceWhenStaged = false
+            onSend()
+        } else {
+            kotlinx.coroutines.delay(VOICE_SEND_TIMEOUT_MS)
+            sendVoiceWhenStaged = false
+        }
+    }
     var cameraChooserOpen by remember { mutableStateOf(false) }
     var emojiPickerOpen by remember { mutableStateOf(false) }
     // Camera and Emoji joined the ladder in #3738; Location stays off until the gateway's shared-place
@@ -305,7 +320,11 @@ internal fun ChatComposer(
                         accentColor = accentColor,
                         onCancel = voice.cancel,
                         onStop = voice.finish,
-                        onSend = voice.finish,
+                        onSend = {
+                            pendingCountAtVoiceSend = pendingAttachmentCount
+                            voice.finish()
+                            sendVoiceWhenStaged = true
+                        },
                         modifier = Modifier.padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.smPlus),
                     )
                     isEndToEnd -> ComposerEndToEndNotice(
@@ -423,3 +442,6 @@ internal fun ChatComposer(
         ComposerEmojiSheet(accentColor, onSelect = ::insertEmoji, onDismiss = { emojiPickerOpen = false })
     }
 }
+
+/** Au-delà, une prise vocale qui n'a pas rejoint le plateau n'est plus envoyée d'office. */
+private const val VOICE_SEND_TIMEOUT_MS = 15_000L
