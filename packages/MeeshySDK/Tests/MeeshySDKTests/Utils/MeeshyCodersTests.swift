@@ -60,15 +60,40 @@ final class MeeshyCodersTests: XCTestCase {
     func test_persistenceEncoders_writeTheSameBytesAsTheFoundationIso8601Strategy() throws {
         let foundation = JSONEncoder()
         foundation.dateEncodingStrategy = .iso8601
-        let value = [Stamp(id: "a", at: Self.millisecond), Stamp(id: "b", at: Date(timeIntervalSince1970: 0))]
-        XCTAssertEqual(try MeeshyCoders.encoder(.persistence).encode(value), try foundation.encode(value))
         foundation.outputFormatting = [.sortedKeys]
+        let value = [Stamp(id: "a", at: Self.millisecond), Stamp(id: "b", at: Date(timeIntervalSince1970: 0))]
+        let persistence = MeeshyCoders.encoder(.persistence)
+        persistence.outputFormatting = [.sortedKeys]
+        XCTAssertEqual(try persistence.encode(value), try foundation.encode(value))
         XCTAssertEqual(try MeeshyCoders.encoder(.outbox).encode(value), try foundation.encode(value))
     }
 
     func test_outboxEncoder_sortsKeysForDeterministicBytes() throws {
         let text = String(decoding: try MeeshyCoders.encoder(.outbox).encode(["z": 1, "a": 2, "m": 3]), as: UTF8.self)
         XCTAssertEqual(text, #"{"a":2,"m":3,"z":1}"#)
+    }
+
+    func test_everyPreset_decodesDatesAtTheCostOfTheFoundationIso8601Strategy() throws {
+        let foundationEncoder = JSONEncoder()
+        foundationEncoder.dateEncodingStrategy = .iso8601
+        let dates = (0..<10_000).map { Date(timeIntervalSince1970: 1_757_928_863 + Double($0)) }
+        let stored = try foundationEncoder.encode(dates)
+        let foundation = JSONDecoder()
+        foundation.dateDecodingStrategy = .iso8601
+        let baseline = try Self.fastest { _ = try foundation.decode([Date].self, from: stored) }
+        for preset in MeeshyCoders.Preset.allCases {
+            let decoder = MeeshyCoders.decoder(preset)
+            let elapsed = try Self.fastest { _ = try decoder.decode([Date].self, from: stored) }
+            XCTAssertLessThan(elapsed, max(baseline * 20, 0.1), "\(preset): \(elapsed)s vs Foundation \(baseline)s")
+        }
+    }
+
+    private static func fastest(_ work: () throws -> Void) rethrows -> TimeInterval {
+        try (0..<3).map { _ in
+            let start = Date()
+            try work()
+            return Date().timeIntervalSince(start)
+        }.min() ?? 0
     }
 
     func test_persistenceDecoder_readsFilesWrittenByTheFoundationIso8601Strategy() throws {
