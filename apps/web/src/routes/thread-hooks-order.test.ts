@@ -68,6 +68,7 @@ const HOOK_NAMES = [
   'useSend',
   'useHeaderMemory',
   'useThreadData',
+  'useSealedThread',
   'useVirtualizer',
   'useThreadScene',
   'useThreadInsets',

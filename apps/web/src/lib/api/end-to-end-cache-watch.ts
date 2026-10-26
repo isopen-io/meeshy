@@ -2,7 +2,9 @@ import type { QueryClient } from '@tanstack/react-query';
 import type { StoreApi } from 'zustand/vanilla';
 
 import { isEndToEndMode, type EndToEndRegimeState } from '@/lib/end-to-end-regime-ledger';
-import { threadShowsEndToEnd } from '@/lib/end-to-end-thread-signal';
+import { clearPrintOf } from '@/lib/clear-print';
+import { endToEndShownSince, threadHoldsSend, threadShowsEndToEnd, type ThreadShape } from '@/lib/end-to-end-thread-signal';
+import { sharedTranslationServerReadsMessage } from '@meeshy/shared/utils/shared-translation-eligibility';
 
 
 /**
@@ -16,52 +18,164 @@ import { threadShowsEndToEnd } from '@/lib/end-to-end-thread-signal';
  * (`threadShowsEndToEnd`) l'y inscrit aussi : la conversation est celle de la
  * clé, même servie sans mode.
  *
+ * #13099 — un fil en cache qui montre un message chiffré sans mode, d'un mode
+ * inconnu, ou un message e2ee dans un groupe RETIENT l'envoi tant qu'il le
+ * montre (`threadHoldsSend`), sans rien inscrire au registre. La forme
+ * (tête-à-tête ou groupe) est lue dans le cache de la conversation ; inconnue,
+ * elle se lit « groupe » : retenir sans apprendre.
+ *
+ * #12992 — chaque inscription porte la plus ancienne preuve datée : la date
+ * d'activation servie (`encryptionEnabledAt`), l'avis d'activation ou le
+ * premier message e2ee du fil.
+ *
  * Seules trois formes sont lues : la page de liste (`pages[].conversations[]`,
  * clé `['conversations']`), le détail (`['conversations', id]`, une
  * conversation dont l'`id` est la clé) et les pages d'un fil
  * (`['conversations', id, 'messages', …]`, `pages[].messages[]`). Toute autre
  * donnée rangée sous ce préfixe est ignorée.
  */
-type Row = { readonly id?: unknown; readonly encryptionMode?: unknown };
+type Row = { readonly id?: unknown; readonly type?: unknown; readonly encryptionMode?: unknown; readonly encryptionEnabledAt?: unknown };
 
 /** `CONVERSATIONS_QUERY_KEY[0]` (`conversations.ts`), écrit ici pour que le client de requêtes qui pose cette surveillance n'en tire pas les décodeurs ; un témoin les tient égaux. */
 export const CONVERSATIONS_KEY_ROOT = 'conversations';
 
 const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> => typeof value === 'object' && value !== null;
 
-const endToEndIds = (rows: readonly unknown[]): readonly string[] =>
+type Learned = { readonly id: string; readonly since: number | undefined };
+
+const instantOf = (value: unknown): number | undefined => {
+  if (!(value instanceof Date) && typeof value !== 'string') return undefined;
+  const at = new Date(value).getTime();
+  return Number.isFinite(at) ? at : undefined;
+};
+
+const endToEndRows = (rows: readonly unknown[]): readonly Learned[] =>
   rows.flatMap((row) => {
     const candidate = row as Row;
-    return isRecord(row) && typeof candidate.id === 'string' && isEndToEndMode(typeof candidate.encryptionMode === 'string' ? candidate.encryptionMode : null) ? [candidate.id] : [];
+    return isRecord(row) && typeof candidate.id === 'string' && isEndToEndMode(typeof candidate.encryptionMode === 'string' ? candidate.encryptionMode : null)
+      ? [{ id: candidate.id, since: instantOf(candidate.encryptionEnabledAt) }]
+      : [];
   });
 
-const threadRows = (data: Readonly<Record<string, unknown>>): readonly Readonly<Record<string, unknown>>[] =>
-  Array.isArray(data.pages)
+const listRows = (data: unknown): readonly unknown[] =>
+  isRecord(data) && Array.isArray(data.pages)
+    ? data.pages.flatMap((page: unknown) => (isRecord(page) && Array.isArray(page.conversations) ? page.conversations : []))
+    : [];
+
+const threadRows = (data: unknown): readonly Readonly<Record<string, unknown>>[] =>
+  isRecord(data) && Array.isArray(data.pages)
     ? data.pages.flatMap((page: unknown) => (isRecord(page) && Array.isArray(page.messages) ? page.messages.filter(isRecord) : []))
     : [];
 
-function servedEndToEnd(queryKey: readonly unknown[], data: unknown): readonly string[] {
+const isThreadKey = (queryKey: readonly unknown[]): queryKey is readonly [string, string, 'messages', ...unknown[]] =>
+  queryKey[0] === CONVERSATIONS_KEY_ROOT && queryKey.length >= 3 && typeof queryKey[1] === 'string' && queryKey[2] === 'messages';
+
+function servedEndToEnd(queryKey: readonly unknown[], data: unknown): readonly Learned[] {
   if (queryKey[0] !== CONVERSATIONS_KEY_ROOT || !isRecord(data)) return [];
-  if (queryKey.length >= 3 && typeof queryKey[1] === 'string' && queryKey[2] === 'messages') {
-    return threadShowsEndToEnd(threadRows(data)) ? [queryKey[1]] : [];
-  }
-  if (queryKey.length === 1 && Array.isArray(data.pages)) {
-    return endToEndIds(data.pages.flatMap((page: unknown) => (isRecord(page) && Array.isArray(page.conversations) ? page.conversations : [])));
-  }
-  if (queryKey.length === 2 && typeof queryKey[1] === 'string' && data.id === queryKey[1]) return endToEndIds([data]);
+  if (queryKey.length === 1 && Array.isArray(data.pages)) return endToEndRows(listRows(data));
+  if (queryKey.length === 2 && typeof queryKey[1] === 'string' && data.id === queryKey[1]) return endToEndRows([data]);
   return [];
 }
 
-export function watchEndToEndConversations(queryClient: QueryClient, ledger: StoreApi<EndToEndRegimeState>): () => void {
-  const cache = queryClient.getQueryCache();
-  const learn = (queryKey: readonly unknown[], data: unknown): void => {
-    const known = ledger.getState().sealed;
-    if (queryKey.length >= 3 && typeof queryKey[1] === 'string' && known[queryKey[1]] === true) return;
-    servedEndToEnd(queryKey, data).forEach((id) => ledger.getState().learnEndToEnd(id));
-  };
-  cache.getAll().forEach((query) => learn(query.queryKey, query.state.data));
-  return cache.subscribe((event) => {
-    if (event.type === 'added' || (event.type === 'updated' && event.action.type === 'success')) learn(event.query.queryKey, event.query.state.data);
-  });
+/** La forme de la conversation, lue dans son détail puis dans la liste ; inconnue ⇒ groupe. */
+function shapeOf(queryClient: QueryClient, conversationId: string): ThreadShape {
+  const detail = queryClient.getQueryData([CONVERSATIONS_KEY_ROOT, conversationId]);
+  const fromDetail = isRecord(detail) && detail.id === conversationId ? detail.type : undefined;
+  const listed = listRows(queryClient.getQueryData([CONVERSATIONS_KEY_ROOT])).find((row) => isRecord(row) && row.id === conversationId);
+  const type = fromDetail ?? (isRecord(listed) ? listed.type : undefined);
+  return { isDirect: type === 'direct' };
 }
 
+type SeenClear = ReadonlyMap<string, number>;
+
+/** Le serveur lit-il ce message (clair, `server`, `hybrid`) ? Ce sont ceux que la loi du clair forgé juge. */
+const readByServer = (row: Readonly<Record<string, unknown>>): boolean =>
+  row.isEncrypted !== true ||
+  sharedTranslationServerReadsMessage({
+    conversationEncryptionMode: null,
+    messageIsEncrypted: true,
+    messageEncryptionMode: typeof row.encryptionMode === 'string' ? row.encryptionMode : null,
+  });
+
+/** Les clairs d'utilisateur datés d'un fil : empreinte (`clearPrintOf`) → instant. */
+const clearRowsOf = (rows: readonly Readonly<Record<string, unknown>>[]): ReadonlyArray<readonly [string, number]> =>
+  rows.flatMap((row) => {
+    const at = instantOf(row.createdAt);
+    const print = clearPrintOf(row);
+    const plain = readByServer(row) && row.messageType !== 'system' && row.messageSource !== 'system';
+    return print !== null && plain && at !== undefined ? [[print, at] as const] : [];
+  });
+
+export function watchEndToEndConversations(queryClient: QueryClient, ledger: StoreApi<EndToEndRegimeState>): () => void {
+  const cache = queryClient.getQueryCache();
+  /**
+   * #12992 (revues) — LES CLAIRS QUE CE NAVIGATEUR A VUS, conversation par
+   * conversation, AVANT l'écriture de cache en cours. À l'instant où une
+   * conversation est apprise e2ee OU retenue (#13099), ce registre est
+   * photographié (`rememberClearBefore`) : ce sont les seuls clairs « d'avant
+   * l'activation » qu'il croira. La charge qui RÉVÈLE le bout en bout est
+   * celle d'un attaquant possible : ses lignes n'entrent jamais dans la
+   * photographie — le registre ne les apprend qu'après.
+   */
+  const seen = new Map<string, SeenClear>();
+  const record = (conversationId: string): void => {
+    const rows = cache.findAll({ queryKey: [CONVERSATIONS_KEY_ROOT, conversationId, 'messages'] }).flatMap((query) => threadRows(query.state.data));
+    seen.set(conversationId, new Map([...(seen.get(conversationId) ?? new Map<string, number>()), ...clearRowsOf(rows)]));
+  };
+  /* L'ère la plus ancienne que le cache PROUVE (avis d'activation, message
+     e2ee) : un registre d'avant #12992 n'a pas d'ère et en prend une à sa
+     première lecture — la preuve du cache la ramène à sa vraie date. */
+  const provenSince = (conversationId: string): number => {
+    const instants = cache
+      .findAll({ queryKey: [CONVERSATIONS_KEY_ROOT, conversationId, 'messages'] })
+      .map((query) => endToEndShownSince(threadRows(query.state.data)))
+      .filter((at): at is number => at !== null);
+    return Math.min(Number.POSITIVE_INFINITY, ...instants);
+  };
+  const photograph = (state: EndToEndRegimeState): void => {
+    Object.keys({ ...state.sealed, ...state.held })
+      .filter((id) => state.clearKnown[id] === undefined)
+      .forEach((id) => {
+        const since = Math.min(state.since[id] ?? Number.POSITIVE_INFINITY, provenSince(id));
+        const known = [...(seen.get(id) ?? new Map<string, number>())]
+          .filter(([, at]) => at < since)
+          .sort(([, a], [, b]) => a - b)
+          .map(([print]) => print);
+        ledger.getState().rememberClearBefore(id, known);
+      });
+  };
+  const watchThread = (conversationId: string): void => {
+    const shape = shapeOf(queryClient, conversationId);
+    const threads = cache.findAll({ queryKey: [CONVERSATIONS_KEY_ROOT, conversationId, 'messages'] }).map((query) => threadRows(query.state.data));
+    const shown = threads.filter((rows) => threadShowsEndToEnd(rows, shape));
+    if (shown.length > 0) {
+      const instants = shown.map((rows) => endToEndShownSince(rows)).filter((at): at is number => at !== null);
+      ledger.getState().learnEndToEnd(conversationId, instants.length === 0 ? undefined : Math.min(...instants));
+    }
+    ledger.getState().holdSend(conversationId, threads.some((rows) => threadHoldsSend(rows, shape)));
+  };
+  const learn = (queryKey: readonly unknown[], data: unknown): void => {
+    if (isThreadKey(queryKey)) {
+      watchThread(queryKey[1]);
+      record(queryKey[1]);
+      return;
+    }
+    servedEndToEnd(queryKey, data).forEach(({ id, since }) => ledger.getState().learnEndToEnd(id, since));
+  };
+  /* Au démarrage, le cache restauré a été vu par la session précédente : il
+     précède toute écriture de celle-ci. */
+  cache.getAll().forEach((query) => {
+    if (isThreadKey(query.queryKey)) record(query.queryKey[1]);
+  });
+  const unsubscribeLedger = ledger.subscribe(photograph);
+  photograph(ledger.getState());
+  cache.getAll().forEach((query) => learn(query.queryKey, query.state.data));
+  const unsubscribeCache = cache.subscribe((event) => {
+    if (event.type === 'added' || (event.type === 'updated' && event.action.type === 'success')) learn(event.query.queryKey, event.query.state.data);
+    if (event.type === 'removed' && isThreadKey(event.query.queryKey)) watchThread(event.query.queryKey[1]);
+  });
+  return () => {
+    unsubscribeCache();
+    unsubscribeLedger();
+  };
+}
