@@ -155,9 +155,9 @@ enum BoundedWait {
         }
 
         func resume() {
-            state.withLock { () -> CheckedContinuation<Void, Never>? in
-                defer { $0 = nil }
-                return $0
+            state.withLock { slot -> CheckedContinuation<Void, Never>? in
+                defer { slot = nil }
+                return slot
             }?.resume()
         }
     }
