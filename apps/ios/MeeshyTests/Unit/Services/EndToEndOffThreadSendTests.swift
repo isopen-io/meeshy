@@ -141,19 +141,38 @@ final class EndToEndOffThreadSendTests: XCTestCase {
         XCTAssertTrue(unknown, "sans compte connu, la garde ne sait rien : elle ferme")
     }
 
-    /// Audit B2 — seul un message chiffré DE BOUT EN BOUT compte : un message
-    /// chiffré au repos par le serveur, ou chiffré sans mode, ne verrouille
-    /// jamais une conversation pour toujours.
-    func test_guard_aServerAtRestOrModelessEncryptedMessage_neverLocksTheConversation() async {
+    /// Audit B2 — un message chiffré AU REPOS par le serveur (`server`,
+    /// `hybrid`) ne scelle rien et ne s'apprend pas.
+    func test_guard_aServerAtRestEncryptedMessage_neitherSealsNorLocks() async {
         let atRest = Message(conversationId: readable, senderId: "peer", content: "x", messageSource: .user,
                              isEncrypted: true, encryptionMode: "server", createdAt: Date())
-        let modeless = Message(conversationId: readable, senderId: "peer", content: "x", messageSource: .user,
-                               isEncrypted: true, encryptionMode: nil, createdAt: Date())
-        let sut = guardOf(thread: [atRest, modeless])
+        let hybrid = Message(conversationId: readable, senderId: "peer", content: "x", messageSource: .user,
+                             isEncrypted: true, encryptionMode: "hybrid", createdAt: Date())
+        let sut = guardOf(thread: [atRest, hybrid])
 
         let seals = await sut.seals(readable, served: [nil])
 
         XCTAssertFalse(seals)
+        XCTAssertFalse(sut.ledger.remembersEndToEnd(readable))
+    }
+
+    /// Revue de sécurité — un message chiffré SANS mode (ou d'un mode inconnu)
+    /// reste fail-closed : il scelle l'envoi en cours, mais ne s'écrit pas
+    /// dans la mémoire du compte, pour qu'une vieille ligne ne scelle pas la
+    /// conversation à vie.
+    func test_guard_aModelessEncryptedMessage_sealsTheSend_withoutBeingRemembered() async {
+        let modeless = Message(conversationId: readable, senderId: "peer", content: "x", messageSource: .user,
+                               isEncrypted: true, encryptionMode: nil, createdAt: Date())
+        let unknown = Message(conversationId: readable, senderId: "peer", content: "x", messageSource: .user,
+                              isEncrypted: true, encryptionMode: "mls", createdAt: Date())
+        let direct = MeeshyConversation(id: readable, identifier: readable, type: .direct)
+
+        let modelessSeals = await guardOf(list: [direct], thread: [modeless]).seals(readable, served: [nil])
+        let sut = guardOf(list: [direct], thread: [unknown])
+        let unknownSeals = await sut.seals(readable, served: [nil])
+
+        XCTAssertTrue(modelessSeals)
+        XCTAssertTrue(unknownSeals)
         XCTAssertFalse(sut.ledger.remembersEndToEnd(readable))
     }
 
@@ -400,6 +419,47 @@ final class EndToEndOffThreadSendTests: XCTestCase {
         XCTAssertEqual(conversationId, sealed)
         XCTAssertEqual(e2ee.deliverCallCount, 1)
         XCTAssertNotEqual(messages.lastSendRequest?.content, secret)
+    }
+
+    /// Revue de sécurité — `existing(with:)` se lie au compte actif avant de
+    /// lire la mémoire : au réveil à froid, le chiffré vu par ce compte gagne.
+    func test_directResolver_coldLaunch_bindsTheAccount_beforeReadingTheMemory() async throws {
+        let suite = "test.e2ee.resolver.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let warm = EndToEndRegimeMemory(defaults: defaults)
+        warm.bind(account: "gate.meeshy.me/me-1")
+        _ = warm.resolve(conversationId: sealed, served: EndToEndRegime(encryptionMode: "e2ee", enabledAt: nil))
+        let conversations = MockConversationService()
+        conversations.findDirectsWithResult = .success([
+            JSONStub.decode(#"{"id":"\#(readable)","type":"direct","createdAt":"2026-01-01T00:00:00.000Z"}"#),
+            JSONStub.decode(#"{"id":"\#(sealed)","type":"direct","createdAt":"2026-01-01T00:00:00.000Z"}"#),
+        ])
+
+        let chosen = try await DirectConversationResolver.existing(
+            with: "author-1", conversations: conversations,
+            ledger: EndToEndRegimeLedger(memory: EndToEndRegimeMemory(defaults: defaults)),
+            account: { "gate.meeshy.me/me-1" }
+        )
+
+        XCTAssertEqual(chosen?.id, sealed)
+    }
+
+    /// Sans compte connu, rien ne prouve qu'un tête-à-tête servi sans mode est
+    /// lisible : la résolution refuse de choisir (fail-closed).
+    func test_directResolver_withoutAnyAccount_refusesToChoose() async throws {
+        let conversations = MockConversationService()
+        conversations.findDirectsWithResult = .success([
+            JSONStub.decode(#"{"id":"\#(readable)","type":"direct","createdAt":"2026-01-01T00:00:00.000Z"}"#),
+        ])
+
+        let resolution = try? await DirectConversationResolver.existing(
+            with: "author-1", conversations: conversations,
+            ledger: EndToEndRegimeLedger(memory: EndToEndRegimeMemory(defaults: nil)),
+            account: { nil }
+        )
+
+        XCTAssertNil(resolution ?? nil)
     }
 
     // MARK: - L'extension de partage (#12985)

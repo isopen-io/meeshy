@@ -29,7 +29,13 @@ struct EndToEndDestinationGuard {
     var cache: any ConversationCacheReaderProviding = ConversationCacheReader()
     /// Le compte actif, pour lier la mémoire quand l'envoi précède la liaison
     /// de `DependencyContainer` (réveil à froid en arrière-plan).
-    var account: @MainActor () -> String? = { DependencyContainer.activeAccountStoreKey().map(EndToEndRegimeMemory.account(of:)) }
+    var account: @MainActor () -> String? = Self.activeAccount
+
+    /// Le compte actif de l'appareil, lu sans attendre la liaison de
+    /// `DependencyContainer` (réveil à froid en arrière-plan).
+    static func activeAccount() -> String? {
+        DependencyContainer.activeAccountStoreKey().map(EndToEndRegimeMemory.account(of:))
+    }
 
     /// La garde de l'app, pour un appel hors de toute injection (file héritée).
     static func live(_ conversationId: String) async -> Bool {

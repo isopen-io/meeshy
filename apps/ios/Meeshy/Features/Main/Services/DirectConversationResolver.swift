@@ -25,12 +25,18 @@ enum DirectConversationResolver {
 extension DirectConversationResolver {
     /// Le tête-à-tête EXISTANT avec `userId`, rendu par la passerelle : le
     /// chiffré d'abord — servi tel, ou vu tel par ce compte même servi sans
-    /// mode (#12949, audit #12985 M5) —, sinon le plus récent.
+    /// mode (#12949, audit #12985 M5) —, sinon le plus récent. La mémoire se
+    /// lie d'abord au compte actif ; sans compte, rien ne prouve qu'un
+    /// tête-à-tête servi sans mode est lisible : la résolution refuse de
+    /// choisir, et `resolve` demande le tête-à-tête à la passerelle, qui rend
+    /// le chiffré d'abord (#12966).
     static func existing(
         with userId: String,
         conversations: ConversationServiceProviding = ConversationService.shared,
-        ledger: EndToEndRegimeLedger = .shared
+        ledger: EndToEndRegimeLedger = .shared,
+        account: @MainActor () -> String? = EndToEndDestinationGuard.activeAccount
     ) async throws -> APIConversation? {
+        guard ledger.ensureBound(to: account) else { return nil }
         let candidates = try await conversations.findDirectsWith(userId: userId)
         return DirectPairChoice.preferred(among: candidates) { ledger.remembersEndToEnd($0) }
     }
@@ -42,8 +48,10 @@ extension DirectConversationResolver {
     static func loaded(
         with userId: String,
         in conversations: [MeeshyConversation],
-        ledger: EndToEndRegimeLedger = .shared
+        ledger: EndToEndRegimeLedger = .shared,
+        account: @MainActor () -> String? = EndToEndDestinationGuard.activeAccount
     ) -> MeeshyConversation? {
-        DirectPairChoice.preferred(among: conversations, with: userId) { ledger.remembersEndToEnd($0) }
+        guard ledger.ensureBound(to: account) else { return nil }
+        return DirectPairChoice.preferred(among: conversations, with: userId) { ledger.remembersEndToEnd($0) }
     }
 }

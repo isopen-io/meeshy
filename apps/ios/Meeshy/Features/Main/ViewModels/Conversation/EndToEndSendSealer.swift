@@ -246,11 +246,11 @@ extension EndToEndSendSealer {
             senderUserId: viewModel.currentUserId,
             endToEnd: viewModel.endToEnd,
             regimeEpoch: ledger.epoch(for: viewModel.conversationId),
-            servedWithoutEndToEnd: seals && ledger.servesWithoutEndToEnd(viewModel.conversationId),
+            servedWithoutEndToEnd: seals && ledger.servedInClear(viewModel.conversationId),
             onRegimeStale: { [refresher = viewModel.collaborators.regimeRefresher, id = viewModel.conversationId] in
                 refresher.refresh(conversationId: id)
                 await refresher.settle()
-                return ledger.servesWithoutEndToEnd(id)
+                return ledger.servedInClear(id)
             }
         )
     }
@@ -279,6 +279,22 @@ enum EncryptionSwitchNoticeTrail {
     /// mémoire ne recule pas, et une trace ambiguë verrouillerait la
     /// conversation pour toujours (audit #12985, B2 ; mesuré le 2026-10-25 :
     /// aucune en staging ni en production).
+    /// Un message chiffré dont le mode ne PROUVE rien — chiffré sans mode, ou
+    /// d'un mode inconnu — est affiché. Fail-closed : il scelle l'envoi en
+    /// cours, sans jamais s'écrire dans la mémoire du compte (revue de
+    /// sécurité #12985) : une vieille ligne ne scelle pas la conversation à
+    /// vie. Seuls `server` et `hybrid`, lisibles par le serveur, en sortent.
+    static func ambiguousEncryptedMessageShown(in messages: [Message]) -> Bool {
+        messages.contains { message in
+            message.messageSource != .system
+                && !message.isContentDecryptedOnDevice
+                && !EndToEndWireMode.isEndToEnd(message.encryptionMode)
+                && !DeviceTranslationEligibility.serverReadsMessage(
+                    conversationEncryptionMode: nil, isEncrypted: message.isEncrypted, encryptionMode: message.encryptionMode
+                )
+        }
+    }
+
     static func endToEndMessageShownAt(in messages: [Message]) -> Date? {
         messages
             .filter { $0.messageSource != .system && ($0.isContentDecryptedOnDevice || EndToEndWireMode.isEndToEnd($0.encryptionMode)) }
@@ -313,7 +329,7 @@ extension EndToEndRegimeLedger {
         let sealedMessage = EncryptionSwitchNoticeTrail.endToEndMessageShownAt(in: trail)
         let learned = isDirect ? [activation, sealedMessage].compactMap { $0 }.min() : activation
         let seals = self.seals(for: conversationId, opening: opening, cached: cached, activationShownAt: learned)
-        return seals || sealedMessage != nil
+        return seals || sealedMessage != nil || EncryptionSwitchNoticeTrail.ambiguousEncryptedMessageShown(in: trail)
     }
 }
 

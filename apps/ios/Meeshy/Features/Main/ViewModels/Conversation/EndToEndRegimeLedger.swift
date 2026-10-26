@@ -73,10 +73,19 @@ final class EndToEndRegimeLedger {
         learnEndToEnd(for: event.conversationId, enabledAt: event.changedAtDate, epoch: event.epoch)
     }
 
-    /// Une conversation jamais vue chiffrée, servie en clair, n'est pas un écart.
+    /// Le dernier statut servi dit le clair. Ce n'est un ÉCART que pour une
+    /// conversation que l'envoi scelle (mémoire, trace du fil) : c'est
+    /// l'appelant qui le sait (`servedInClear`, `servesWithoutEndToEnd`).
     private func noteServedWithoutEndToEnd(_ conversationId: String) {
-        guard remembersEndToEnd(conversationId) else { return }
         servedWithoutEndToEnd.insert(conversationId)
+    }
+
+    /// Le dernier statut ou bascule que la passerelle a servi pour cette
+    /// conversation, pendant cette session, dit le clair (#12987). Un envoi
+    /// que le fil scelle — par la mémoire OU par une trace affichée — et que
+    /// le serveur sert en clair s'arrête avant le réseau, lisiblement.
+    func servedInClear(_ conversationId: String) -> Bool {
+        servedWithoutEndToEnd.contains(conversationId)
     }
 
     /// La session se ferme : l'époque apprise ne vaut pas pour le compte

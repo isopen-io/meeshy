@@ -192,6 +192,33 @@ final class ConversationViewModelEncryptionToggleTests: XCTestCase {
         XCTAssertTrue(ledger.remembersEndToEnd(conversationId), "ce qui est vu est retenu")
     }
 
+    /// Revue de sécurité — un tête-à-tête qui affiche un message chiffré SANS
+    /// mode, servi en clair : l'envoi part scellé (jamais en clair), la mémoire
+    /// n'apprend rien, et le refus de la passerelle finit dans l'état lisible
+    /// de #12987, sans second envoi.
+    func test_send_unMessageChiffreSansMode_scelleLEnvoi_sansSApprendre_etFinitLisible() async throws {
+        let encryption = MockConversationEncryptionService()
+        encryption.statusResult = .success(status(nil, epoch: nil))
+        let ledger = EndToEndRegimeLedger()
+        let sut = try await makeSUT(encryptionMode: nil, ledger: ledger, encryption: encryption)
+        var modeless = endToEndMessage(at: 100)
+        modeless.encryptionMode = nil
+        sut.viewModel.messages = [modeless]
+        sut.messageService.sendResult = .failure(MeeshyError.rejected(APIRejection(statusCode: 409, code: E2EEErrorCode.regimeChanged, message: "plus chiffrée")))
+
+        let first = await sut.viewModel.send(outgoingMessage(content: secret, conversationId: conversationId))
+        let second = await sut.viewModel.send(outgoingMessage(content: secret, conversationId: conversationId))
+
+        XCTAssertEqual(sut.messageService.sendCallCount, 1)
+        XCTAssertEqual(sut.messageService.lastSendRequest?.isEncrypted, true)
+        XCTAssertNotEqual(sut.messageService.lastSendRequest?.content, secret)
+        XCTAssertFalse(ledger.remembersEndToEnd(conversationId), "une vieille ligne ne scelle pas la conversation à vie")
+        guard case .failure(.endToEndUnsealed(.servedWithoutEndToEnd)) = first,
+              case .failure(.endToEndUnsealed(.servedWithoutEndToEnd)) = second else {
+            return XCTFail("état final lisible attendu, reçu \(first) puis \(second)")
+        }
+    }
+
     func test_avisDuFil_unMessageChiffreDeBoutEnBout_estUneTraceDuRegime_laPremiere() {
         var serverAtRest = endToEndMessage(at: 10)
         serverAtRest.encryptionMode = "server"
