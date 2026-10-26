@@ -89,6 +89,20 @@ class StoryRepository @Inject constructor(
     }
 
     /**
+     * Folds a realtime `story:created` into the tray cache: an unknown story joins at once,
+     * a story already held is left untouched — append-dedup, iOS
+     * `insertOrMergeStoryGroups(replacingExisting: false)`. Re-writing a held row with the
+     * broadcast payload would wipe the reader's monotone seen state (the payload carries no
+     * `isViewedByMe`) and, for our own echoed publish, the copy already adopted. Returns
+     * whether the cache changed.
+     */
+    suspend fun adoptAnnounced(story: ApiPost): Boolean {
+        if (cacheSource.findLocal(story.id) != null) return false
+        cacheSource.upsertLocal(story)
+        return true
+    }
+
+    /**
      * Folds a realtime `story:deleted` into the authoritative Room cache so the tray
      * stream repaints without the removed story. Idempotent and inert for an unknown id
      * (over-broadcast delivery). Mirrors the viewer's `StoryPlayback.removingSlide`, but

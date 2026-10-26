@@ -257,6 +257,31 @@ class StoryRepositoryTest {
         repo.storiesStream().first().let { (it as CacheResult.Fresh).value.single { post -> post.id == id } }
 
     @Test
+    fun `an announced story unknown to the tray joins the cache`() = runTest {
+        stubList(storyPost("s1"))
+        val repo = repository()
+        repo.refresh()
+
+        val changed = repo.adoptAnnounced(storyPost("s2", authorId = "bob"))
+
+        assertThat(changed).isTrue()
+        assertThat(db.storyDao().observeAll().first().map { it.id }).containsExactly("s1", "s2")
+    }
+
+    @Test
+    fun `an announced story already held keeps the reader's seen state`() = runTest {
+        stubList(storyPost("s1", isViewedByMe = true))
+        val repo = repository()
+        repo.refresh()
+
+        val changed = repo.adoptAnnounced(storyPost("s1", content = "echo", isViewedByMe = null))
+
+        assertThat(changed).isFalse()
+        assertThat(cachedStory(repo, "s1").isViewedByMe).isTrue()
+        assertThat(cachedStory(repo, "s1").content).isEqualTo("Bonjour")
+    }
+
+    @Test
     fun `applyStoryUpdate folds an edit into the cache so the stream repaints`() = runTest {
         stubList(storyPost("s1", content = "Bonjour"))
         val repo = repository()

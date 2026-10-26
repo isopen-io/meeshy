@@ -400,7 +400,7 @@ class StoriesViewModelTest {
         storyCreatedFlow.emit(SocketStoryCreatedData(story = fresh))
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { repo.adoptPublished(fresh) }
+        coVerify(exactly = 1) { repo.adoptAnnounced(fresh) }
     }
 
     @Test

@@ -121,14 +121,13 @@ class StoriesViewModel @Inject constructor(
 
     /**
      * Folds a realtime `story:created` — a friend just posted — into the authoritative Room
-     * cache, so their ring appears (unseen, first) without waiting for a revalidation. The
-     * upsert is idempotent: our own publish echoed back, or a story the next revalidation
-     * also brings, merges onto the same row. Mirrors iOS `StoryViewModel.storyCreated`.
+     * cache, so their ring appears (unseen, first) without waiting for a revalidation. A story
+     * already held (our own publish echoed back, a re-broadcast) is left as is. Mirrors iOS `StoryViewModel.storyCreated`.
      */
     private fun observeStoryCreations() {
         viewModelScope.launch {
             socialSocket.storyCreated.collectEachSafely { payload ->
-                storyRepository.adoptPublished(payload.story)
+                storyRepository.adoptAnnounced(payload.story)
             }
         }
     }
