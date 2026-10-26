@@ -242,6 +242,29 @@ class ProfileActionsViewModelTest {
     }
 
     @Test
+    fun `a call while offline says it did not ring instead of staying silent`() = runTest {
+        val vm = viewModel(direct = DirectConversationResolution.Queued("u2"))
+        val seen = events(vm)
+        vm.bind("u2", isAnonymous = false, callsAvailable = true)
+
+        vm.call(isVideo = false, displayName = "Ada")
+
+        assertThat(seen).containsExactly(ProfileActionEvent.Toast(ProfileActionFeedback.CallNotPlaced))
+        assertThat(vm.state.value.isOpeningConversation).isFalse()
+    }
+
+    @Test
+    fun `a message while offline stays queued without a toast`() = runTest {
+        val vm = viewModel(direct = DirectConversationResolution.Queued("u2"))
+        val seen = events(vm)
+        vm.bind("u2", isAnonymous = false)
+
+        vm.sendMessage()
+
+        assertThat(seen).isEmpty()
+    }
+
+    @Test
     fun `my own id offers no relation action`() = runTest {
         val vm = viewModel()
 

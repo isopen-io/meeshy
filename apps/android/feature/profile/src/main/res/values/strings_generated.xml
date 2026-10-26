@@ -20,6 +20,7 @@
     <string name="profile_bio_placeholder">Tell us about yourself...</string>
     <string name="profile_blocked_by_me">You have blocked this user</string>
     <string name="profile_blocked_unblock">Unblock</string>
+    <string name="profile_call_not_placed">No connection: the call didn\'t go through</string>
     <string name="profile_close_hint">Closes the profile</string>
     <string name="profile_connection_context_received">%s wants to connect with you. Accept to exchange messages.</string>
     <string name="profile_connection_context_sent">You sent a connection request to %s. Waiting for their reply.</string>

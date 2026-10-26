@@ -292,6 +292,7 @@ private fun ProfileActionFeedback.toToastRequest(): FeedbackToastRequest = Feedb
         ProfileActionFeedback.UserUnblocked -> R.string.profile_toast_user_unblocked
         ProfileActionFeedback.UnblockFailed -> R.string.profile_toast_unblock_failed
         ProfileActionFeedback.OpenConversationFailed -> R.string.profile_open_conversation_error
+        ProfileActionFeedback.CallNotPlaced -> R.string.profile_call_not_placed
     },
     kind = if (isError) FeedbackKind.Error else FeedbackKind.Success,
 )

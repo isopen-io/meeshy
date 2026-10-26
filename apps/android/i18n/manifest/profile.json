@@ -121,6 +121,12 @@
           "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "call.dial.notConnected",
+          "androidName": "profile_call_not_placed",
+          "status": "adopted"
+        },
+        {
           "androidName": "profile_change_avatar",
           "status": "android-only"
         },

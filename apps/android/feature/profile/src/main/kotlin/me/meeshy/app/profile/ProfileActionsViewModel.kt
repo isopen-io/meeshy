@@ -45,6 +45,7 @@ enum class ProfileActionFeedback(val isError: Boolean) {
     UserUnblocked(false),
     UnblockFailed(true),
     OpenConversationFailed(true),
+    CallNotPlaced(true),
 }
 
 sealed interface ProfileActionEvent {
@@ -120,13 +121,17 @@ class ProfileActionsViewModel @Inject constructor(
     fun block() = setBlocked(blocked = true)
     fun unblock() = setBlocked(blocked = false)
 
-    fun sendMessage() = openDirect { _, conversationId -> ProfileActionEvent.OpenConversation(conversationId) }
+    fun sendMessage() = openDirect(whenQueued = null) { _, conversationId -> ProfileActionEvent.OpenConversation(conversationId) }
 
-    fun call(isVideo: Boolean, displayName: String) = openDirect { id, conversationId ->
+    /** Hors ligne, la création du direct part en file mais l'appel, lui, ne sonnera pas : on le dit (miroir de `call.dial.notConnected`). */
+    fun call(isVideo: Boolean, displayName: String) = openDirect(whenQueued = ProfileActionFeedback.CallNotPlaced) { id, conversationId ->
         ProfileActionEvent.Call(ProfileCallRequest(id, displayName, isVideo, conversationId))
     }
 
-    private fun openDirect(onOpened: (userId: String, conversationId: String) -> ProfileActionEvent) = withTarget { id ->
+    private fun openDirect(
+        whenQueued: ProfileActionFeedback?,
+        onOpened: (userId: String, conversationId: String) -> ProfileActionEvent,
+    ) = withTarget { id ->
         if (_state.value.isOpeningConversation) return@withTarget
         _state.update { it.copy(isOpeningConversation = true) }
         viewModelScope.launch {
@@ -140,7 +145,7 @@ class ProfileActionsViewModel @Inject constructor(
             _state.update { it.copy(isOpeningConversation = false) }
             when (result) {
                 is DirectOpenResult.Opened -> _events.emit(onOpened(id, result.conversationId))
-                DirectOpenResult.Queued -> Unit
+                DirectOpenResult.Queued -> whenQueued?.let { _events.emit(ProfileActionEvent.Toast(it)) }
                 DirectOpenResult.Failed -> _events.emit(ProfileActionEvent.Toast(ProfileActionFeedback.OpenConversationFailed))
             }
         }

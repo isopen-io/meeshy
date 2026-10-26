@@ -20,6 +20,7 @@
     <string name="profile_bio_placeholder">Parlez de vous...</string>
     <string name="profile_blocked_by_me">Vous avez bloqué cet utilisateur</string>
     <string name="profile_blocked_unblock">Débloquer</string>
+    <string name="profile_call_not_placed">Pas de connexion : l\'appel n\'est pas parti</string>
     <string name="profile_close_hint">Ferme le profil</string>
     <string name="profile_connection_context_received">%s souhaite entrer en contact avec vous. Acceptez pour échanger des messages.</string>
     <string name="profile_connection_context_sent">Vous avez envoyé une demande de connexion à %s. En attente de sa réponse.</string>

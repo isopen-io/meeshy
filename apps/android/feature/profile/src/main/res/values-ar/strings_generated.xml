@@ -20,6 +20,7 @@
     <string name="profile_bio_placeholder">عرّفنا بنفسك...</string>
     <string name="profile_blocked_by_me">لقد حظرت هذا المستخدم</string>
     <string name="profile_blocked_unblock">إلغاء الحظر</string>
+    <string name="profile_call_not_placed">لا يوجد اتصال: لم تنطلق المكالمة</string>
     <string name="profile_close_hint">يغلق الملف الشخصي</string>
     <string name="profile_connection_context_received">يرغب %s في التواصل معك. اقبل لتبادل الرسائل.</string>
     <string name="profile_connection_context_sent">أرسلت طلب اتصال إلى %s. في انتظار ردّه.</string>
