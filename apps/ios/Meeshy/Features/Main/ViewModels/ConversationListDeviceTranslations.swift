@@ -34,6 +34,13 @@ final class ConversationListDeviceTranslations {
         self.willChange = willChange
     }
 
+    /// Une session qui change ne laisse rien du compte précédent.
+    func forget() {
+        pass?.cancel()
+        translated = [:]
+        attempted = []
+    }
+
     /// Le clair, avec ce que l'appareil en a traduit.
     func dressing(_ text: ConversationPreviewDeviceText) -> ConversationPreviewDeviceText {
         guard let known = translated[text.messageId], !known.isEmpty else { return text }

@@ -146,5 +146,57 @@ final class EndToEndDiskPlaintextLawTests: XCTestCase {
             return source.range(of: #"(SET|,)\s+content\s*=\s*\?"#, options: .regularExpression) != nil
         }.map(\.lastPathComponent)
         XCTAssertEqual(offenders, [], "écrire `\\(EndToEndContentSeal.sealedContentAssignment)`")
+        let misplaced = try files.filter { url in
+            let source = try String(contentsOf: url, encoding: .utf8)
+            let uses = source.components(separatedBy: "EndToEndContentSeal.sealedContentAssignment").count - 1
+            let leading = source.components(separatedBy: .newlines).filter {
+                $0.range(of: #"SET\s+\\\(EndToEndContentSeal\.sealedContentAssignment\)"#, options: .regularExpression) != nil
+            }.count
+            return url.lastPathComponent != "MessageMigrations+PlaintextErasures.swift" && uses != leading
+        }.map(\.lastPathComponent)
+        XCTAssertEqual(misplaced, [], "l'affectation scellée vient en tête du SET : `?1` y est le texte")
+    }
+
+    /// Audit tour 3 (A, B) — une base de `dev`, ou d'une version provisoire, qui
+    /// tient le clair d'une ligne marquée : la migration la rescelle, retire les
+    /// déclencheurs provisoires et reconstruit l'index depuis l'expression scellée.
+    func test_upgradingADevDatabase_sealsTheRow_dropsProvisionalTriggers_andLeavesAConsistentIndex() throws {
+        let queue = try DatabaseQueue()
+        var migrator = DatabaseMigrator()
+        migrator.register(Array(MessageDatabaseMigrations.all.dropLast(3)))
+        try migrator.migrate(queue)
+        var legacy = MessageRecordFactory.make(localId: "srv_30", content: secret)
+        legacy.isEncrypted = true
+        legacy.encryptionMode = E2EEWire.mode
+        let rows = [legacy], secret = secret
+        try queue.write { db in
+            try rows.forEach { try $0.insert(db) }
+            try db.execute(sql: "UPDATE messages SET content = ? WHERE localId = 'srv_30'", arguments: [secret])
+            try db.execute(sql: "CREATE TRIGGER e2ee_content_sealed_on_update AFTER UPDATE ON messages BEGIN SELECT 1; END")
+        }
+
+        try MessageDatabaseMigrations.runAll(on: queue)
+
+        XCTAssertEqual(try storedContents(in: queue), [E2EEWire.contentPlaceholder])
+        try queue.write { db in
+            try db.execute(sql: "INSERT INTO messages_fts(messages_fts, rank) VALUES('integrity-check', 1)")
+            XCTAssertEqual(try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM messages_fts WHERE messages_fts MATCH 'coffre'"), 0)
+            XCTAssertEqual(try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM sqlite_master WHERE name = 'e2ee_content_sealed_on_update'"), 0)
+        }
+    }
+
+    /// Audit tour 3 (C) — le rescelleur nomme toute conversation chiffrée,
+    /// même déjà rescellée par la migration : son cache du fil se vide.
+    func test_theResealer_namesConversationsWhoseRowsTheMigrationAlreadySealed() async throws {
+        let (actor, queue) = try makeActor()
+        var row = MessageRecordFactory.make(localId: "srv_31", conversationId: "conv_sealed", content: E2EEWire.contentPlaceholder)
+        row.isEncrypted = true
+        row.encryptionMode = E2EEWire.mode
+        let inserted = row
+        try await queue.write { db in try inserted.insert(db) }
+
+        let outcome = try await actor.endToEndRowSealer.seal(messageKeys: [])
+
+        XCTAssertEqual(outcome.conversationIds, ["conv_sealed"])
     }
 }

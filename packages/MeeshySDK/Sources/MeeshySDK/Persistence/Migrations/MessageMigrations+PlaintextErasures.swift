@@ -33,13 +33,29 @@ import GRDB
 ///
 /// À la migration, les pierres tombales et les vues uniques déjà ouvertes en
 /// base s'inscrivent : leurs clairs, effacés avant ce lot, quittent le coffre.
-/// Le même identifiant, sans `_v2`, a porté un schéma provisoire sur une
-/// branche jamais fusionnée : ses objets sont retirés avant d'être recréés.
+/// Les identifiants sans `_v3` ont porté des schémas provisoires sur une
+/// branche jamais fusionnée (appareils de recette) : ils restent inscrits, à
+/// vide, pour que la base qui les a appliqués se reconnaisse à jour, et leurs
+/// objets sont retirés avant d'être recréés.
+struct MessagesPlaintextErasuresProvisionalMigration: DatabaseMigration {
+    let identifier: String
+    func migrate(_ db: Database) throws {}
+}
+
 struct MessagesPlaintextErasuresMigration: DatabaseMigration {
-    let identifier = "messages_e2ee_plaintext_erasures_v2"
+    let identifier = "messages_e2ee_plaintext_erasures_v3"
+
+    static let provisionalTriggers = [
+        "e2ee_erasure_on_delete", "e2ee_erasure_on_view_once_opened",
+        "e2ee_erasure_on_update_deleted", "e2ee_erasure_on_insert_deleted",
+        "e2ee_erasure_on_update_viewOnceOpened", "e2ee_erasure_on_insert_viewOnceOpened",
+        "e2ee_content_sealed_on_insert", "e2ee_content_sealed_on_update",
+    ]
 
     func migrate(_ db: Database) throws {
-        for trigger in ["e2ee_erasure_on_delete", "e2ee_erasure_on_view_once_opened"] {
+        // Les octets d'un clair rescellé ici sont mis à zéro, dans la base et le journal.
+        try db.execute(sql: "PRAGMA secure_delete = ON")
+        for trigger in Self.provisionalTriggers {
             try db.execute(sql: "DROP TRIGGER IF EXISTS \(trigger)")
         }
         try db.execute(sql: "DROP TABLE IF EXISTS \(MessagePlaintextErasures.table)")
@@ -59,6 +75,7 @@ struct MessagesPlaintextErasuresMigration: DatabaseMigration {
             )
         }
         try EndToEndContentSeal.install(in: db)
+        try db.execute(sql: "PRAGMA secure_delete = OFF")
     }
 }
 
@@ -99,6 +116,11 @@ enum EndToEndContentSeal {
         for trigger in ["msg_fts_ai", "msg_fts_ad", "msg_fts_au"] {
             try db.execute(sql: "DROP TRIGGER IF EXISTS \(trigger)")
         }
+        // L'index se reconstruit depuis l'expression scellée, jamais depuis le
+        // contenu brut (`rebuild` l'indexerait) : un terme qu'une version
+        // provisoire y aurait laissé disparaît.
+        try db.execute(sql: "INSERT INTO messages_fts(messages_fts) VALUES('delete-all')")
+        try db.execute(sql: "INSERT INTO messages_fts(rowid, content) SELECT rowid, \(indexed("messages")) FROM messages")
         try db.execute(sql: """
             CREATE TRIGGER msg_fts_ai AFTER INSERT ON messages BEGIN
                 INSERT INTO messages_fts(rowid, content) VALUES (new.rowid, \(indexed("new")));
@@ -141,7 +163,7 @@ enum MessagePlaintextErasures {
         let column = cause.column ?? ""
         return """
         CREATE TRIGGER e2ee_erasure_on_update_\(cause.rawValue) AFTER UPDATE OF \(column) ON messages
-        WHEN old.\(column) IS NULL AND new.\(column) IS NOT NULL AND (new.isEncrypted = 1 OR old.isEncrypted = 1)
+        WHEN old.\(column) IS NULL AND new.\(column) IS NOT NULL AND (new.isEncrypted = 1 OR old.isEncrypted = 1 OR old.content = '\(E2EEWire.contentPlaceholder)')
         BEGIN
         \(insertions(of: cause))
         END
@@ -152,7 +174,7 @@ enum MessagePlaintextErasures {
         let column = cause.column ?? ""
         return """
         CREATE TRIGGER e2ee_erasure_on_insert_\(cause.rawValue) AFTER INSERT ON messages
-        WHEN new.\(column) IS NOT NULL AND new.isEncrypted = 1
+        WHEN new.\(column) IS NOT NULL AND (new.isEncrypted = 1 OR new.content = '\(E2EEWire.contentPlaceholder)')
         BEGIN
         \(insertions(of: cause))
         END
@@ -239,11 +261,11 @@ enum MessagePlaintextErasures {
     /// retirées, dans la transaction qui les retire.
     static func record(rowsMatching filter: String, arguments: StatementArguments, cause: Cause, in db: Database) throws {
         try db.execute(
-            sql: "INSERT OR IGNORE INTO \(table)(messageKey, cause) SELECT localId, '\(cause.rawValue)' FROM messages WHERE isEncrypted = 1 AND (\(filter))",
+            sql: "INSERT OR IGNORE INTO \(table)(messageKey, cause) SELECT localId, '\(cause.rawValue)' FROM messages WHERE (isEncrypted = 1 OR content = '\(E2EEWire.contentPlaceholder)') AND (\(filter))",
             arguments: arguments
         )
         try db.execute(
-            sql: "INSERT OR IGNORE INTO \(table)(messageKey, cause) SELECT serverId, '\(cause.rawValue)' FROM messages WHERE serverId IS NOT NULL AND isEncrypted = 1 AND (\(filter))",
+            sql: "INSERT OR IGNORE INTO \(table)(messageKey, cause) SELECT serverId, '\(cause.rawValue)' FROM messages WHERE serverId IS NOT NULL AND (isEncrypted = 1 OR content = '\(E2EEWire.contentPlaceholder)') AND (\(filter))",
             arguments: arguments
         )
     }

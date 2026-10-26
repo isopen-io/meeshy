@@ -53,12 +53,12 @@ public struct EndToEndPlaintextRowSealer: Sendable {
                 StatementArguments(keys) + StatementArguments(keys))
     }
 
+    /// Toute conversation qui tient une ligne chiffrée de bout en bout, déjà
+    /// rescellée ou non : la migration de la base a pu rendre le littéral à la
+    /// ligne, son cache du fil garde peut-être encore le clair d'avant.
     private static func conversations(sealing keys: [String], in db: Database) throws -> Set<String> {
         let (filter, arguments) = target(keys)
-        return try String.fetchSet(db, sql: """
-            SELECT DISTINCT conversationId FROM messages
-            WHERE \(filter) AND content IS NOT NULL AND content != ?
-            """, arguments: arguments + [E2EEWire.contentPlaceholder])
+        return try String.fetchSet(db, sql: "SELECT DISTINCT conversationId FROM messages WHERE \(filter)", arguments: arguments)
     }
 
     private static func sealRows(_ keys: [String], in db: Database) throws {

@@ -27,7 +27,9 @@ public struct MessagePlaintextErasureQueue: Sendable {
     /// Combien de temps une inscription retirée du coffre reste connue : une
     /// enveloppe du même message encore en file sur la passerelle peut s'ouvrir
     /// APRÈS l'effacement (appareil hors ligne), et son clair doit repartir.
-    public static let retention: TimeInterval = 30 * 86_400
+    /// La rétention des enveloppes de la passerelle (`E2EE_ENVELOPE_RETENTION_DAYS`,
+    /// 30 jours, balayées toutes les 6 h) plus une semaine de marge d'horloge.
+    public static let retention: TimeInterval = 37 * 86_400
 
     /// Le coffre a retiré ces clairs : leurs identifiants sortent de la file,
     /// mais restent connus pendant `retention` (`isErased`).

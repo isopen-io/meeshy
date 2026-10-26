@@ -135,6 +135,11 @@ final class ConversationListEndToEndTextStore {
             .store(in: &cancellables)
         // #13000 — une lecture faite avant l'ouverture de la session n'a rien
         // rendu : elle n'est pas un manque, la session ouverte relit tout.
+        // Un autre compte ne trouve rien du précédent en mémoire.
+        endToEnd.sessions
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.forgetEverything() }
+            .store(in: &cancellables)
         endToEnd.opened.map { _ in () }
             .merge(with: endToEnd.sessions.map { _ in () })
             .debounce(for: .milliseconds(50), scheduler: DispatchQueue.main)
@@ -144,6 +149,15 @@ final class ConversationListEndToEndTextStore {
                 self.refresh(self.latestRows)
             }
             .store(in: &cancellables)
+    }
+
+    private func forgetEverything() {
+        guard !texts.isEmpty || !misses.isEmpty else { return }
+        willChange()
+        texts = [:]
+        misses = []
+        retriedMine = []
+        translations.forget()
     }
 
     func text(for conversationId: String) -> ConversationPreviewDeviceText? {
