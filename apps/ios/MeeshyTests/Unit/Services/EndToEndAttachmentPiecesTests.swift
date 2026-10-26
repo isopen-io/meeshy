@@ -307,6 +307,40 @@ final class EndToEndAttachmentPiecesTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: receiver.paths.file(for: pointer).path))
         XCTAssertFalse(FileManager.default.fileExists(atPath: try XCTUnwrap(receiver.paths.thumbnail(of: pointer)).path))
     }
+
+    /// Audit 2026-10-25 (6) — une pièce effacée ne revient pas par un autre fil.
+    func test_discard_unePieceEffacee_neSeRematerialisePas() async throws {
+        let dir = try temporaryDirectory()
+        let gateway = InMemoryBlobGateway()
+        let pointer = try await sealedOnServer(Data("vue unique".utf8), by: gateway, in: dir)
+        let receiver = vault(gateway, in: dir.appendingPathComponent("receiver"))
+
+        await receiver.discard([pointer])
+        let present = await receiver.materialize([pointer])
+
+        XCTAssertEqual(present, 0)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: receiver.paths.file(for: pointer).path))
+    }
+
+    /// Audit 2026-10-25 (2) — une taille démesurée ou négative rend la pièce illisible, sans planter.
+    func test_audit_uneTailleHorsDuPlafond_nEstPasLisible_etNePlantePas() async throws {
+        func pointer(size: Int, posterSize: Int = 3) -> E2EEAttachmentPointer {
+            E2EEAttachmentPointer(
+                id: "6add0000000000000000b10e", key: Data(repeating: 1, count: 64), digest: Data(repeating: 2, count: 32),
+                size: size, contentType: "image/jpeg", fileName: nil, kind: .image,
+                thumbnail: .init(id: "6add0000000000000000b10f", key: Data(repeating: 3, count: 64), digest: Data(repeating: 4, count: 32), size: posterSize, contentType: "image/jpeg")
+            )
+        }
+        XCTAssertFalse(pointer(size: Int.max).isReadable)
+        XCTAssertFalse(pointer(size: -1).isReadable)
+        XCTAssertFalse(pointer(size: E2EEAttachmentPointer.maxSize + 1).isReadable)
+        XCTAssertFalse(pointer(size: 5, posterSize: Int.max).isReadable)
+        XCTAssertTrue(pointer(size: E2EEAttachmentPointer.maxSize).isReadable)
+
+        let dir = try temporaryDirectory()
+        let present = await vault(InMemoryBlobGateway(), in: dir).materialize([pointer(size: Int.max)])
+        XCTAssertEqual(present, 0)
+    }
 }
 
 /// Ce que le fil demande au coffre : rien d'autre n'est observé.
@@ -442,6 +476,34 @@ final class EndToEndThreadClearPiecesTests: XCTestCase {
         XCTAssertTrue(media.discarded.isEmpty, "rien ne s'efface avant l'échéance")
 
         await eventually("l'échéance vide le coffre", timeout: 3) { !media.discarded.isEmpty }
+    }
+
+    /// Audit 2026-10-25 (3) — l'éphémère « après lecture » : l'échéance n'arrive
+    /// sur la ligne qu'après le téléchargement, et le coffre se vide à elle.
+    func test_unEphemereApresLecture_seVideALEcheanceNeeALaLecture() async {
+        let media = RecordingMaterializer()
+        let clear = EndToEndThreadClear(media: media)
+        var messages = [row()]
+        await clear.resolve(&messages, from: endToEnd([pointer()]), conversationId: conversationId)
+        await eventually("la pièce se télécharge") { !media.materialized.isEmpty }
+
+        var read = row(expiresAt: Date().addingTimeInterval(0.4))
+        clear.apply(to: &read, conversationId: conversationId)
+
+        await eventually("l'échéance née à la lecture vide le coffre", timeout: 3) { !media.discarded.isEmpty }
+    }
+
+    /// Audit 2026-10-25 (1) — une échéance lointaine servie par le serveur ne fait pas planter le fil.
+    func test_uneEcheanceLointaine_nePlantePas_etNEffaceRien() async {
+        let media = RecordingMaterializer()
+        let clear = EndToEndThreadClear(media: media)
+        var messages = [row(expiresAt: Date(timeIntervalSince1970: 3e10))]
+
+        await clear.resolve(&messages, from: endToEnd([pointer()]), conversationId: conversationId)
+        await eventually("la pièce se télécharge") { !media.materialized.isEmpty }
+        await settle()
+
+        XCTAssertTrue(media.discarded.isEmpty)
     }
 }
 

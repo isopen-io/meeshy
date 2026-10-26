@@ -79,6 +79,9 @@ actor EndToEndAttachmentVault: EndToEndAttachmentMaterializing {
     nonisolated let paths: EndToEndMediaPaths
     private let fetcher: any EndToEndBlobFetching
     private var inFlight: [URL: Task<Bool, Never>] = [:]
+    /// Les clairs effacés pendant la vie du processus : un `materialize` venu
+    /// d'un autre fil (iPad, fil rouvert) ne les réécrit pas après l'effacement.
+    private var tombstones: Set<URL> = []
     private var sweptLeftovers = false
     private let logger = Logger(subsystem: "me.meeshy.app", category: "e2ee-media")
 
@@ -105,6 +108,7 @@ actor EndToEndAttachmentVault: EndToEndAttachmentMaterializing {
     }
 
     private func materialize(_ blobId: String, to target: URL, with secret: E2EEAttachmentSecret) async -> Bool {
+        guard !tombstones.contains(target) else { return false }
         if FileManager.default.fileExists(atPath: target.path) { return true }
         if let running = inFlight[target] { return await running.value }
         let task = Task { [fetcher, paths, logger] in
@@ -112,7 +116,11 @@ actor EndToEndAttachmentVault: EndToEndAttachmentMaterializing {
         }
         inFlight[target] = task
         let done = await task.value
-        inFlight[target] = nil
+        if inFlight[target] == task { inFlight[target] = nil }
+        if tombstones.contains(target) {
+            try? FileManager.default.removeItem(at: target)
+            return false
+        }
         return done
     }
 
@@ -162,6 +170,7 @@ actor EndToEndAttachmentVault: EndToEndAttachmentMaterializing {
 
     func discard(_ pointers: [E2EEAttachmentPointer]) async {
         let targets = pointers.flatMap { [paths.file(for: $0)] + (paths.thumbnail(of: $0).map { [$0] } ?? []) }
+        tombstones.formUnion(targets)
         for target in targets {
             if let running = inFlight.removeValue(forKey: target) {
                 running.cancel()

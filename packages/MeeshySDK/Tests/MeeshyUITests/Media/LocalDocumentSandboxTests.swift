@@ -65,9 +65,14 @@ final class LocalDocumentSandboxTests: XCTestCase {
         addTeardownBlock { try? FileManager.default.removeItem(at: dir) }
         let base = "http://127.0.0.1:\(port)"
         let html = """
-        <html><head><link rel="stylesheet" href="\(base)/style.css"></head>
+        <html><head><link rel="stylesheet" href="\(base)/style.css">
+        <link rel="preconnect" href="\(base)"><link rel="dns-prefetch" href="\(base)">
+        <link rel="prefetch" href="\(base)/prefetch"><meta http-equiv="refresh" content="0;url=\(base)/refresh">
+        <style>@import url("\(base)/import.css"); body { background: url("\(base)/bg.png") }</style></head>
         <body><img src="\(base)/beacon.png"><iframe src="\(base)/frame"></iframe>
         <video src="\(base)/video.mp4" autoplay></video>
+        <object data="\(base)/object"></object><embed src="\(base)/embed">
+        <p id="lu">MEESHY-DOCUMENT-LISIBLE</p>
         <svg xmlns="http://www.w3.org/2000/svg"><image href="\(base)/svg.png"/></svg>
         </body></html>
         """
@@ -106,10 +111,11 @@ final class LocalDocumentSandboxTests: XCTestCase {
     // MARK: - La cage
 
     func test_unDocumentLocalBalise_seLitEnTexteBrut() {
-        for ext in ["html", "htm", "xhtml", "svg", "xml", "webarchive", "bin", "unknownext"] {
+        for ext in ["html", "htm", "xhtml", "svg", "xml", "webarchive", "bin", "unknownext",
+                    "txt", "csv", "md", "js", "php", "py", "m3u", "m3u8", "ods", "odp", "xlsm", "ppsx"] {
             XCTAssertEqual(LocalDocumentRendering(fileURL: URL(fileURLWithPath: "/v/a.\(ext)")), .plainText, ext)
         }
-        for ext in ["pdf", "docx", "xlsx", "pptx", "txt", "rtf", "png", "jpeg"] {
+        for ext in ["pdf", "docx", "xlsx", "pptx", "rtf", "png", "jpeg"] {
             XCTAssertEqual(LocalDocumentRendering(fileURL: URL(fileURLWithPath: "/v/a.\(ext)")), .page, ext)
         }
     }
@@ -119,6 +125,11 @@ final class LocalDocumentSandboxTests: XCTestCase {
 
         XCTAssertFalse(webView.configuration.websiteDataStore.isPersistent)
         XCTAssertFalse(webView.configuration.defaultWebpagePreferences.allowsContentJavaScript)
+        XCTAssertFalse(DocumentWebView.makeLocalWebView(mayLeave: true).allowsLinkPreview, "même quand le contenu peut sortir")
+    }
+
+    private func shownText(_ webView: WKWebView) async -> String {
+        (try? await webView.evaluateJavaScript("document.body ? document.body.innerText : ''") as? String) ?? ""
     }
 
     func test_leGardienDeNavigation_neLaisseOuvrirQueLeDocument() {
@@ -144,6 +155,8 @@ final class LocalDocumentSandboxTests: XCTestCase {
 
         XCTAssertTrue(loaded)
         XCTAssertEqual(listener.connections, 0, "aucune ressource distante n'est demandée")
+        let shown = await shownText(webView)
+        XCTAssertTrue(shown.contains("MEESHY-DOCUMENT-LISIBLE"), "le document s'affiche : \(shown.prefix(80))")
         withExtendedLifetime(navigationGuard) {}
     }
 
@@ -151,6 +164,29 @@ final class LocalDocumentSandboxTests: XCTestCase {
     func test_unHTMLDePair_seLitSansAppelerSaBalise() async throws {
         let listener = try await beacon()
         let file = try hostileDocument(calling: listener.port)
+        let webView = DocumentWebView.makeLocalWebView(mayLeave: false)
+        let navigationGuard = LocalDocumentNavigationGuard(document: file)
+        webView.navigationDelegate = navigationGuard
+
+        let loaded = await DocumentWebView.loadLocal(file, into: webView)
+        await settle(webView)
+
+        XCTAssertTrue(loaded)
+        XCTAssertEqual(listener.connections, 0)
+        let shown = await shownText(webView)
+        XCTAssertTrue(shown.contains("<img src="), "le balisage se lit tel quel, en texte : \(shown.prefix(80))")
+        withExtendedLifetime(navigationGuard) {}
+    }
+
+    /// Une liste de lecture HLS d'un pair ne devient jamais un lecteur média qui va chercher ses segments.
+    func test_uneListeDeLectureDePair_seLitSansAppelerSaBalise() async throws {
+        let listener = try await beacon()
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("e2ee-m3u-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: dir) }
+        let file = dir.appendingPathComponent("liste.m3u8")
+        let base = "http://127.0.0.1:\(listener.port)"
+        try Data("#EXTM3U\n#EXT-X-TARGETDURATION:10\n#EXTINF:10,\n\(base)/segment0.ts\n#EXT-X-ENDLIST\n".utf8).write(to: file)
         let webView = DocumentWebView.makeLocalWebView(mayLeave: false)
         let navigationGuard = LocalDocumentNavigationGuard(document: file)
         webView.navigationDelegate = navigationGuard

@@ -22,7 +22,7 @@ final class EndToEndThreadClear {
     private var requested: Set<String> = []
     private var discarded: Set<String> = []
     private var loads: [String: Task<Void, Never>] = [:]
-    private var deadlines: [String: Task<Void, Never>] = [:]
+    private var deadlines: [String: (at: Date, task: Task<Void, Never>)] = [:]
     private let media: any EndToEndAttachmentMaterializing
 
     init(media: any EndToEndAttachmentMaterializing = EndToEndAttachmentVault.shared) {
@@ -53,10 +53,12 @@ final class EndToEndThreadClear {
     /// autorise (`EndToEndAttachmentOverlay.materializable`) ; un échec se
     /// retente à la suivante. Une vue unique consommée ou un éphémère échu ne
     /// télécharge rien et vide le coffre de ses pièces ; un éphémère encore en
-    /// vie le videra à son échéance (#12957).
+    /// vie le videra à son échéance, y compris celle qui ne naît qu'à la
+    /// lecture (#12957). Rejugé à chaque relecture et à chaque rendu de la ligne.
     private func settlePieces(of entry: E2EEPlaintextEntry, on row: MeeshyMessage, now: Date = Date()) {
         guard case .readable(let content, _) = entry, let pointers = content.attachments, !pointers.isEmpty else { return }
         guard !EndToEndAttachmentOverlay.isSpent(row, now: now) else { return discardPieces(pointers, of: row.id) }
+        if let expiresAt = row.expiresAt { armDeadline(expiresAt, for: pointers, of: row.id) }
         guard !requested.contains(row.id) else { return }
         let wanted = EndToEndAttachmentOverlay.materializable(pointers, for: row, now: now)
         guard !wanted.isEmpty else { return }
@@ -67,30 +69,34 @@ final class EndToEndThreadClear {
             guard let self, !self.discarded.contains(messageId) else { return }
             self.materialized[messageId] = present
         }
-        if let expiresAt = row.expiresAt { discardPieces(pointers, of: messageId, at: expiresAt) }
     }
 
-    private func discardPieces(_ pointers: [E2EEAttachmentPointer], of messageId: String, at deadline: Date) {
-        deadlines[messageId]?.cancel()
-        deadlines[messageId] = Task { [weak self, media] in
-            let delay = deadline.timeIntervalSinceNow
-            if delay > 0 { try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000)) }
-            guard !Task.isCancelled else { return }
+    /// L'échéance se compte sur l'horloge CONTINUE (la veille de l'appareil
+    /// compte), par paliers d'un jour au plus : une échéance lointaine servie par
+    /// le serveur ne déborde pas la conversion en nanosecondes.
+    private func armDeadline(_ deadline: Date, for pointers: [E2EEAttachmentPointer], of messageId: String) {
+        guard !discarded.contains(messageId), deadlines[messageId]?.at != deadline else { return }
+        deadlines[messageId]?.task.cancel()
+        let task = Task { [weak self, media] in
+            var remaining = deadline.timeIntervalSinceNow
+            while remaining > 0 {
+                try? await Task.sleep(for: .seconds(min(remaining, 86_400)), clock: .continuous)
+                guard !Task.isCancelled else { return }
+                remaining = deadline.timeIntervalSinceNow
+            }
             guard let self else { return await media.discard(pointers) }
             self.discardPieces(pointers, of: messageId)
         }
+        deadlines[messageId] = (deadline, task)
     }
 
     private func discardPieces(_ pointers: [E2EEAttachmentPointer], of messageId: String) {
         guard !discarded.contains(messageId) else { return }
         discarded.insert(messageId)
-        deadlines.removeValue(forKey: messageId)?.cancel()
-        let load = loads.removeValue(forKey: messageId)
+        deadlines.removeValue(forKey: messageId)?.task.cancel()
+        loads.removeValue(forKey: messageId)?.cancel()
         if materialized[messageId] != nil { materialized.removeValue(forKey: messageId) }
-        Task { [media] in
-            _ = await load?.value
-            await media.discard(pointers)
-        }
+        Task { [media] in await media.discard(pointers) }
     }
 
     /// Repose sur une ligne du magasin le clair adopté pour elle, rejugé à SA
@@ -99,9 +105,7 @@ final class EndToEndThreadClear {
     /// écrit (audit #12916) ; rien ne change pour un message en clair.
     func apply(to message: inout MeeshyMessage, conversationId: String) {
         guard EndToEndThreadPlaintexts.awaitsPlaintext(message) else { return }
-        if let entry = adopted[message.id], EndToEndAttachmentOverlay.isSpent(message) {
-            settlePieces(of: entry, on: message)
-        }
+        if let entry = adopted[message.id] { settlePieces(of: entry, on: message) }
         guard let entry = adopted[message.id],
               let readable = EndToEndThreadPlaintexts.adoption(of: entry, by: message, conversationId: conversationId, media: media.paths) else {
             message.content = E2EEWire.contentPlaceholder

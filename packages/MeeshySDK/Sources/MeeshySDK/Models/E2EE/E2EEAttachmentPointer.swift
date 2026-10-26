@@ -49,6 +49,11 @@ public struct E2EEAttachmentPointer: Codable, Equatable, Sendable {
 
     public static let clientV1 = "client-v1"
 
+    /// Le plafond de téléversement du produit (`UPLOAD_LIMITS`, 4 Gio) : une
+    /// taille annoncée au-delà, ou négative, rend la pièce illisible — elle
+    /// bornerait le téléchargement à rien, ou ferait déborder le calcul du blob.
+    public static let maxSize = 4 * 1024 * 1024 * 1024
+
     /// L'identifiant serveur du blob (`MessageAttachment.id`).
     public let id: String
     public let scheme: String
@@ -98,12 +103,18 @@ public struct E2EEAttachmentPointer: Codable, Equatable, Sendable {
         self.thumbnail = thumbnail
     }
 
-    /// Cet appareil sait-il rouvrir ce blob ? Un `scheme` connu, et des
-    /// identifiants qui ont la forme d'un identifiant serveur (24 hexadécimaux) :
+    /// Cet appareil sait-il rouvrir ce blob ? Un `scheme` connu, une taille dans
+    /// le plafond du produit, et des identifiants qui ont la forme d'un
+    /// identifiant serveur (24 hexadécimaux) :
     /// un `id` venu d'un pair ne compose jamais autre chose qu'un segment
     /// d'adresse `GET /attachments/:id` (audit du 2026-10-25).
     public var isReadable: Bool {
-        scheme == Self.clientV1 && Self.isServerId(id) && (thumbnail.map { Self.isServerId($0.id) } ?? true)
+        scheme == Self.clientV1 && Self.isServerId(id) && Self.isPlausible(size)
+            && (thumbnail.map { Self.isServerId($0.id) && Self.isPlausible($0.size) } ?? true)
+    }
+
+    static func isPlausible(_ size: Int) -> Bool {
+        (0...maxSize).contains(size)
     }
 
     static func isServerId(_ id: String) -> Bool {
