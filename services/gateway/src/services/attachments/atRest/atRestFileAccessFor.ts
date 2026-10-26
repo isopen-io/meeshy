@@ -7,7 +7,15 @@
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { getEncryptionService } from '../../EncryptionService';
-import { prismaAtRestFileStore, type AtRestFileAccess, type AtRestFileKeyring } from './atRestFiles';
+import { getCacheStore } from '../../CacheStore';
+import { prismaAtRestFileStore, type AtRestFileAccess, type AtRestFileKeyring, type FileSealLock } from './atRestFiles';
+import { redisSealLock } from './sealLock';
+
+/** Le verrou partagé, sur le Redis de la passerelle ; sans Redis, un seul processus scelle. */
+const gatewaySealLock: FileSealLock = async (filePath) => {
+  const redis = getCacheStore().getNativeClient();
+  return redis ? redisSealLock(redis as never)(filePath) : { release: async () => undefined };
+};
 
 export function lazyFileKeyring(factory: () => Promise<AtRestFileKeyring>): AtRestFileKeyring {
   const state: { pending: Promise<AtRestFileKeyring> | null } = { pending: null };
@@ -22,5 +30,5 @@ export function lazyFileKeyring(factory: () => Promise<AtRestFileKeyring>): AtRe
 }
 
 export function atRestFileAccessFor(prisma: PrismaClient): AtRestFileAccess {
-  return { store: prismaAtRestFileStore(prisma), keyring: lazyFileKeyring(() => getEncryptionService(prisma)) };
+  return { store: prismaAtRestFileStore(prisma), keyring: lazyFileKeyring(() => getEncryptionService(prisma)), lock: gatewaySealLock };
 }

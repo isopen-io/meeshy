@@ -16,6 +16,7 @@ export const AT_REST_INDEXES = [
   { key: { storageKey: 1 }, options: { name: 'AttachmentFileAtRest_storageKey_key', unique: true } },
   { key: { attachmentId: 1 }, options: { name: 'AttachmentFileAtRest_attachmentId_idx' } },
   { key: { createdAt: 1 }, options: { name: 'AttachmentFileAtRest_createdAt_idx' } },
+  { key: { replacedKey: 1 }, options: { name: 'AttachmentFileAtRest_replacedKey_idx' } },
 ] as const;
 
 type Hexable = string | { toHexString(): string };
@@ -53,7 +54,7 @@ export function mongoPrisma(db: Db): AtRestBackfillDeps['prisma'] {
 
 export function mongoAtRestStore(db: Db): AtRestFileStore {
   const records = db.collection(AT_REST);
-  return {
+  const store: AtRestFileStore = {
     find: async (storageKey) => {
       const doc = await records.findOne({ storageKey });
       if (!doc) return null;
@@ -81,6 +82,10 @@ export function mongoAtRestStore(db: Db): AtRestFileStore {
         segmentSize: Number(doc.segmentSize),
         replacedKey: typeof doc.replacedKey === 'string' ? doc.replacedKey : null,
       })),
+    byReplacedKey: async (replacedKey) => {
+      const doc = await records.findOne({ replacedKey, role: 'original' }, { projection: { storageKey: 1 } });
+      return doc && typeof doc.storageKey === 'string' ? store.find(doc.storageKey) : null;
+    },
     replacingSince: async (since) =>
       [...new Set((await records.find({ createdAt: { $gte: since }, role: 'original', replacedKey: { $type: 'string' } }).toArray()).map((doc) => hex(doc.attachmentId as Hexable)))],
     save: async (record) => {
@@ -94,6 +99,7 @@ export function mongoAtRestStore(db: Db): AtRestFileStore {
       await records.deleteMany({ storageKey });
     },
   };
+  return store;
 }
 
 /**

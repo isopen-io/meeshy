@@ -71,20 +71,41 @@ ligne. La ligne part quand le fichier est effacé (`AttachmentService`).
   10 min) est pris par l'envoi, le balayage et la migration. Deux scellements
   d'une même pièce sous deux liaisons (la source et sa copie transférée dans une
   autre conversation `server`) ne se croisent jamais : le second cède, le
-  balayage reprend. Verrou injoignable = occupé.
+  balayage reprend. Verrou injoignable = occupé, journalisé en ERREUR
+  (`SERVER_AT_REST_SEAL_LOCK_UNAVAILABLE`). Une piste TTS s'écrit sous le même
+  verrou (attendu jusqu'à 10 s) : jamais rescellée par-dessus son chiffré.
 - **Le clair remplacé ne s'efface que quand plus aucune ligne ne le désigne.**
   Chaque fichier déplacé garde `replacedKey` ; `finishPendingErasures` repointe
   toute ligne qui désigne encore l'ancien original (copie créée pendant le
-  scellement, repointage interrompu), même apparue après l'effacement. Rien ne
-  se perd.
+  scellement, repointage interrompu), même apparue après l'effacement : son
+  propre scellement la retrouve par `replacedKey` (index dédié), y compris
+  dans une conversation qui n'est pas au repos. Rien ne se perd. Une pièce
+  effacée PENDANT son scellement (vue unique brûlée) ne laisse ni fichier
+  scellé ni ligne.
+- **Un scellement interrompu se reprend** : une ligne qui pèse sur un fichier
+  de la taille exacte du clair (jamais celle d'un chiffré) est rescellée ; le
+  temporaire d'une ligne qui n'a pu s'écrire est effacé.
+- **Seules les clés datées (`AAAA/MM/<auteur>/<nom>`) et les pistes
+  (`translated/<nom>`) se scellent** — la même règle que la lecture
+  (`isSealableStorageKey`) : une clé hors de cette forme reste en clair,
+  comptée `unsealable-key` par la migration.
 - **Un balayage toutes les dix minutes** (`jobs/at-rest-file-sweep.ts`) scelle
   les pièces des conversations au repos des dernières 48 h restées en clair
   (échec à l'envoi, fin de rendu différé perdue), termine les effacements en
-  attente sous le même verrou, et retire les pistes temporaires orphelines.
-- **Retour arrière** : la migration `2026-10-26-server-at-rest-attachment-files-unseal`
-  rouvre chaque fichier en place avant tout redéploiement d'une passerelle plus
-  ancienne (qui servirait le chiffré). Elle remet du clair : en production,
-  feu vert du porteur.
+  attente sous le même verrou, et retire les pistes temporaires orphelines. Il
+  ne remonte JAMAIS avant l'activation de ce code sur l'instance (marqueur
+  Redis `at-rest:files:activated-at`, posé une fois) : le déploiement seul ne
+  scelle rien d'ancien — c'est l'affaire de la migration, sur feu vert et
+  après sauvegarde. Sans marqueur, sans clé de signature, ou scellement
+  suspendu, il ne scelle rien.
+- **Retour arrière, en trois temps** : (1) redémarrer la passerelle avec
+  `AT_REST_FILE_SEALING=off` — plus rien ne se scelle (envoi, rendu, piste,
+  balayage, migration), l'envoi n'exige plus de clé, les fichiers scellés se
+  lisent encore ; (2) la migration `2026-10-26-server-at-rest-attachment-files-unseal`
+  rouvre chaque fichier en place — elle REFUSE `--apply` tant que
+  l'interrupteur n'est pas coupé, et reprend un fichier rouvert dont la ligne
+  n'avait pu partir ; (3) seulement alors, l'ancienne passerelle. Elle remet du
+  clair : en production, feu vert du porteur.
 - **Index préalables** : `2026-10-26-attachment-file-at-rest-indexes`, à jouer
   avant le déploiement du code.
 - **Sans clé de signature des adresses**, l'envoi de fichiers dans une
@@ -139,9 +160,8 @@ savent déjà lire une adresse signée (vue unique, #9600).
   un dépôt abandonné reste en clair jusqu'à son balayage. Entre l'envoi et un
   scellement échoué, le clair reste jusqu'au balayage suivant (10 min).
 - Une passerelle sans Redis scelle sans verrou partagé (une seule instance).
-- Un processus tué entre l'écriture de la ligne de scellement et le `rename`
-  d'un scellement EN PLACE (piste TTS) laisse une ligne sur un clair : non
-  rattrapé automatiquement.
+- Une clé de stockage hors de la forme datée reste en clair (aucune n'existe
+  à ce jour pour une pièce de message ; la migration les compte).
 - Les octets effacés par `unlink` restent lisibles sur le support physique
   jusqu'à leur réécriture (pas d'effacement sécurisé).
 - La taille, le type, les dimensions et la durée restent en clair en base.

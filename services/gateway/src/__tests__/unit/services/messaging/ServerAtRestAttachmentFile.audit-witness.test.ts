@@ -131,6 +131,7 @@ function harness(mode: 'server' | 'hybrid', relPath: string, thumbPath: string) 
       upsert: jest.fn<any>().mockImplementation(async ({ create }: any) => { sealings.set(create.storageKey, create); return create; }),
       deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
       findMany: jest.fn<any>().mockImplementation(async ({ where }: any) => [...sealings.values()].filter((r) => r.attachmentId === where.attachmentId)),
+      findFirst: jest.fn<any>().mockImplementation(async ({ where }: any) => [...sealings.values()].find((r) => r.replacedKey === where.replacedKey && r.role === where.role) ?? null),
     },
   };
   const processor = new MessageProcessor(prisma as unknown as PrismaClient, undefined, { processAudioAttachment: jest.fn<any>().mockResolvedValue(undefined) } as never);

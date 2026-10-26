@@ -14,7 +14,11 @@
  * cache du translator a expiré de lui-même (30 jours au plus).
  *
  * Tout échec est journalisé, jamais levé : un effacement côté passerelle ne
- * dépend jamais de la disponibilité du translator.
+ * dépend jamais de la disponibilité du translator, ni n'ATTEND sa réponse —
+ * l'inscription est bornée dans le temps, l'envoi part sans être attendu. Le
+ * rejeu ne se chevauche jamais, traite au plus `FORGET_REPLAY_BATCH`
+ * demandes par passage et espace les renvois d'une même demande (1, 2, 4…
+ * minutes, au plus une heure).
  */
 import { randomUUID } from 'crypto';
 import { enhancedLogger } from '../utils/logger-enhanced';
@@ -25,10 +29,24 @@ const logger = enhancedLogger.child({ module: 'translatorForget' });
 export const FORGET_QUEUE_KEY = 'translator:cache-forget';
 export const FORGET_RESEND_AFTER_MS = 60_000;
 export const FORGET_GIVE_UP_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
+export const FORGET_MAX_BACKOFF_MS = 60 * 60 * 1000;
+export const FORGET_REPLAY_BATCH = 100;
+export const FORGET_STORE_TIMEOUT_MS = 2_000;
 
 const OBJECT_ID = /^[0-9a-f]{24}$/;
 
-type Pending = CacheForgetRequest & { readonly createdAt: number; readonly sentAt: number };
+type Pending = CacheForgetRequest & { readonly createdAt: number; readonly sentAt: number; readonly attempts: number };
+
+const resendDelay = (attempts: number): number =>
+  Math.min(FORGET_RESEND_AFTER_MS * 2 ** Math.max(0, attempts - 1), FORGET_MAX_BACKOFF_MS);
+
+function bounded<T>(work: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('délai dépassé')), ms);
+    timer.unref?.();
+    work.then((value) => { clearTimeout(timer); resolve(value); }, (error: unknown) => { clearTimeout(timer); reject(error); });
+  });
+}
 
 /** Le magasin des demandes en attente d'acquittement (un hachage Redis). */
 export type ForgetQueueStore = {
@@ -69,7 +87,8 @@ function parsePending(raw: string): Pending | null {
   try {
     const value = JSON.parse(raw) as Partial<Pending>;
     if (typeof value.requestId !== 'string' || typeof value.createdAt !== 'number' || typeof value.sentAt !== 'number') return null;
-    return { requestId: value.requestId, attachmentIds: idsOf(value.attachmentIds), messageIds: idsOf(value.messageIds), createdAt: value.createdAt, sentAt: value.sentAt };
+    const attempts = typeof value.attempts === 'number' && value.attempts > 0 ? value.attempts : 1;
+    return { requestId: value.requestId, attachmentIds: idsOf(value.attachmentIds), messageIds: idsOf(value.messageIds), createdAt: value.createdAt, sentAt: value.sentAt, attempts };
   } catch {
     return null;
   }
@@ -77,16 +96,22 @@ function parsePending(raw: string): Pending | null {
 
 export function translatorForget(deps: ForgetDeps): TranslatorForget {
   const now = deps.now ?? Date.now;
+  const replaying: { running: boolean } = { running: false };
+  const dispatch = (pending: Pending): void => {
+    deps.send({ requestId: pending.requestId, attachmentIds: pending.attachmentIds, messageIds: pending.messageIds }).catch((error: unknown) =>
+      logger.warn('oubli au translator non parti : il sera rejoué', { reason: error instanceof Error ? error.message : 'inconnu' })
+    );
+  };
   const send = async (pending: Pending): Promise<void> => {
-    await deps.store?.put(pending.requestId, JSON.stringify({ ...pending, sentAt: now() }));
-    await deps.send({ requestId: pending.requestId, attachmentIds: pending.attachmentIds, messageIds: pending.messageIds });
+    if (deps.store) await bounded(deps.store.put(pending.requestId, JSON.stringify({ ...pending, sentAt: now() })), FORGET_STORE_TIMEOUT_MS);
+    dispatch(pending);
   };
   return {
     forget: async (ids) => {
       const attachmentIds = idsOf(ids.attachmentIds);
       const messageIds = idsOf(ids.messageIds);
       if (attachmentIds.length === 0 && messageIds.length === 0) return;
-      const pending: Pending = { requestId: randomUUID(), attachmentIds, messageIds, createdAt: now(), sentAt: now() };
+      const pending: Pending = { requestId: randomUUID(), attachmentIds, messageIds, createdAt: now(), sentAt: now(), attempts: 1 };
       await send(pending).catch((error: unknown) =>
         logger.warn('oubli au translator différé : il sera rejoué', { pieces: attachmentIds.length, messages: messageIds.length, reason: error instanceof Error ? error.message : 'inconnu' })
       );
@@ -95,13 +120,22 @@ export function translatorForget(deps: ForgetDeps): TranslatorForget {
       await deps.store?.remove(requestId).catch(() => undefined);
     },
     replay: async () => {
-      if (!deps.store) return 0;
-      const entries = Object.values(await deps.store.all()).map(parsePending).filter((entry): entry is Pending => entry !== null);
-      const expired = entries.filter((entry) => now() - entry.createdAt > FORGET_GIVE_UP_AFTER_MS);
-      await Promise.all(expired.map((entry) => deps.store!.remove(entry.requestId)));
-      const due = entries.filter((entry) => !expired.includes(entry) && now() - entry.sentAt >= FORGET_RESEND_AFTER_MS);
-      await Promise.all(due.map((entry) => send(entry).catch(() => undefined)));
-      return due.length;
+      const store = deps.store;
+      if (!store || replaying.running) return 0;
+      replaying.running = true;
+      try {
+        const entries = Object.values(await store.all()).map(parsePending).filter((entry): entry is Pending => entry !== null);
+        const expired = entries.filter((entry) => now() - entry.createdAt > FORGET_GIVE_UP_AFTER_MS);
+        await Promise.all(expired.map((entry) => store.remove(entry.requestId).catch(() => undefined)));
+        const due = entries
+          .filter((entry) => !expired.includes(entry) && now() - entry.sentAt >= resendDelay(entry.attempts))
+          .sort((a, b) => a.sentAt - b.sentAt)
+          .slice(0, FORGET_REPLAY_BATCH);
+        await Promise.all(due.map((entry) => send({ ...entry, attempts: entry.attempts + 1 }).catch(() => undefined)));
+        return due.length;
+      } finally {
+        replaying.running = false;
+      }
     },
   };
 }

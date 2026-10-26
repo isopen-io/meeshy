@@ -10,14 +10,22 @@
  * 3. les pistes TTS temporaires (`translated/.track-*`, du clair) laissées
  *    par un processus tué sont effacées après une heure.
  *
- * Sans accès aux fichiers scellés configuré, rien ne tourne.
+ * Sans accès aux fichiers scellés configuré, rien ne tourne. Le point 1 ne
+ * remonte JAMAIS avant l'activation de ce code sur l'instance (marqueur Redis
+ * `at-rest:files:activated-at`, posé une fois) : les pièces d'avant relèvent
+ * de la migration de rattrapage, jouée sur feu vert après sauvegarde — le
+ * déploiement seul ne scelle rien d'ancien. Sans marqueur lisible, sans clé de
+ * signature des adresses, ou scellement suspendu (`AT_REST_FILE_SEALING=off`),
+ * le point 1 ne tourne pas.
  */
 import { promises as fs } from 'fs';
 import path from 'path';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 import { guardedInterval } from '../utils/guarded-timer.js';
-import { processAtRestFileAccess } from '../services/attachments/atRest/atRestFiles';
+import { atRestFileSealingEnabled, processAtRestFileAccess } from '../services/attachments/atRest/atRestFiles';
+import { readerFileUrlSignerFromEnv } from '../services/attachments/readerFileSignature';
+import { getCacheStore } from '../services/CacheStore';
 import { backfillAtRestAttachments } from '../services/attachments/atRest/atRestBackfill';
 import { finishPendingErasures } from '../services/attachments/atRest/sealAttachmentFiles';
 import { gatewaySealDeps } from '../services/messaging/sealMessageAttachments';
@@ -28,6 +36,37 @@ export const AT_REST_SWEEP_EVERY_MS = 10 * 60 * 1000;
 const RECENT_PIECES_MS = 48 * 60 * 60 * 1000;
 const PENDING_ERASURE_MS = 7 * 24 * 60 * 60 * 1000;
 const STALE_TRACK_MS = 60 * 60 * 1000;
+
+export const AT_REST_ACTIVATED_AT_KEY = 'at-rest:files:activated-at';
+
+type MarkerClient = {
+  set(key: string, value: string, nx: 'NX'): Promise<unknown>;
+  get(key: string): Promise<string | null>;
+};
+
+/** Pose une fois, puis relit, l'instant d'activation du scellement sur l'instance. */
+export async function atRestActivation(client: MarkerClient | null, now: Date): Promise<Date | null> {
+  if (!client) return null;
+  try {
+    await client.set(AT_REST_ACTIVATED_AT_KEY, String(now.getTime()), 'NX');
+    const raw = await client.get(AT_REST_ACTIVATED_AT_KEY);
+    const at = raw === null ? Number.NaN : Number(raw);
+    return Number.isFinite(at) ? new Date(at) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Depuis quand le balayage rattrape les pièces restées en clair — ou `null` : il ne rattrape rien. */
+export function sweepSealingSince(input: {
+  readonly activatedAt: Date | null;
+  readonly now: Date;
+  readonly signerReady: boolean;
+  readonly sealingEnabled: boolean;
+}): Date | null {
+  if (!input.activatedAt || !input.signerReady || !input.sealingEnabled) return null;
+  return new Date(Math.max(input.activatedAt.getTime(), input.now.getTime() - RECENT_PIECES_MS));
+}
 
 export async function sweepStaleTrackTemporaries(uploadRoot: string, now: number): Promise<number> {
   const directory = path.join(uploadRoot, 'translated');
@@ -44,11 +83,19 @@ export async function sweepStaleTrackTemporaries(uploadRoot: string, now: number
   return doomed.length;
 }
 
-export async function runAtRestFileSweep(prisma: PrismaClient, now: Date = new Date()): Promise<void> {
+const NO_BACKFILL = { sealed: 0, failed: 0 } as const;
+
+export async function runAtRestFileSweep(prisma: PrismaClient, now: Date = new Date(), activatedAt: Date | null = null): Promise<void> {
   const access = processAtRestFileAccess();
   if (!access) return;
   const deps = { ...gatewaySealDeps(prisma, access), prisma };
-  const report = await backfillAtRestAttachments(deps, { dryRun: false, log: () => undefined, since: new Date(now.getTime() - RECENT_PIECES_MS) });
+  const since = sweepSealingSince({
+    activatedAt,
+    now,
+    signerReady: readerFileUrlSignerFromEnv(now) !== null,
+    sealingEnabled: atRestFileSealingEnabled(),
+  });
+  const report = since ? await backfillAtRestAttachments(deps, { dryRun: false, log: () => undefined, since }) : NO_BACKFILL;
   const replacing = await access.store.replacingSince(new Date(now.getTime() - PENDING_ERASURE_MS));
   const finished = await Promise.all(replacing.map((attachmentId) => finishPendingErasures(deps, attachmentId).catch(() => ({ erased: 0, repointed: 0 }))));
   const tracks = await sweepStaleTrackTemporaries(deps.uploadRoot, now.getTime());
@@ -60,7 +107,22 @@ export async function runAtRestFileSweep(prisma: PrismaClient, now: Date = new D
 }
 
 export function startAtRestFileSweep(prisma: PrismaClient): { stop(): void } {
-  const timer = guardedInterval({ name: 'at-rest-file-sweep', everyMs: AT_REST_SWEEP_EVERY_MS, logger, run: () => runAtRestFileSweep(prisma) });
+  // Relu tant qu'il manque (Redis absent au démarrage) : posé plus tard, il
+  // n'en est que plus prudent.
+  const activation: { at: Date | null } = { at: null };
+  const marker = () => getCacheStore().getNativeClient() as MarkerClient | null;
+  void atRestActivation(marker(), new Date())
+    .then((at) => { activation.at = activation.at ?? at; })
+    .catch(() => undefined);
+  const timer = guardedInterval({
+    name: 'at-rest-file-sweep',
+    everyMs: AT_REST_SWEEP_EVERY_MS,
+    logger,
+    run: async () => {
+      activation.at = activation.at ?? (await atRestActivation(marker(), new Date()));
+      await runAtRestFileSweep(prisma, new Date(), activation.at);
+    },
+  });
   timer.unref?.();
   return { stop: () => clearInterval(timer) };
 }

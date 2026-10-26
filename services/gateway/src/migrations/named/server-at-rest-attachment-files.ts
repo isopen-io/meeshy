@@ -1,5 +1,7 @@
 import Redis from 'ioredis';
 import { backfillAtRestAttachments } from '../../services/attachments/atRest/atRestBackfill';
+import { atRestFileSealingEnabled } from '../../services/attachments/atRest/atRestFiles';
+import { readerFileUrlSignerFromEnv } from '../../services/attachments/readerFileSignature';
 import { redisSealLock } from '../../services/attachments/atRest/sealLock';
 import { eraseMirroredCopy } from '../../services/storage/objects/mirroredErasure';
 import { designatedKeyring, ensureAtRestIndexes, mongoAtRestStore, mongoPrisma } from './atRestMongo';
@@ -32,6 +34,10 @@ export const serverAtRestAttachmentFiles: NamedMigration = {
   issue: '#13100',
   summary: 'scelle au repos les fichiers des pièces jointes server/hybrid encore en clair (original, vignette, variantes, rendus, pistes TTS)',
   async run({ db, dryRun, env, log }) {
+    // Scellé sans clé de signature des adresses, un fichier ne se lirait plus ;
+    // scellement suspendu, c'est un retour arrière en cours.
+    if (readerFileUrlSignerFromEnv(new Date(), env) === null) throw new Error('ATTACHMENT_URL_SIGNING_KEY absente : aucun fichier scellé ne serait lisible');
+    if (!atRestFileSealingEnabled(env)) throw new Error('AT_REST_FILE_SEALING=off : le scellement est suspendu');
     const uploadRoot = env.UPLOAD_PATH || '/app/uploads';
     await ensureAtRestIndexes(db, dryRun, log);
     const redis = !dryRun && env.REDIS_URL ? new Redis(env.REDIS_URL, { lazyConnect: true, maxRetriesPerRequest: 1 }) : null;

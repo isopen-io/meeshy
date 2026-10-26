@@ -3497,6 +3497,7 @@ model AttachmentFileAtRest {
 
   @@index([attachmentId])
   @@index([createdAt])
+  @@index([replacedKey])
 }
 
 model ServerEncryptionKey {

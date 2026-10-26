@@ -14,7 +14,7 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { sealAttachmentFiles, type SealAttachmentDeps } from '../attachments/atRest/sealAttachmentFiles';
-import type { AtRestFileAccess } from '../attachments/atRest/atRestFiles';
+import { atRestFileSealingEnabled, type AtRestFileAccess } from '../attachments/atRest/atRestFiles';
 import { eraseMirroredCopy } from '../storage/objects/mirroredErasure';
 import { MESSAGE_ATTACHMENT_ORDER } from '../attachments/attachmentIncludes';
 import { readerFileUrlSignerFromEnv } from '../attachments/readerFileSignature';
@@ -39,7 +39,7 @@ export function gatewaySealDeps(prisma: Pick<PrismaClient, 'messageAttachment' |
     uploadRoot,
     access,
     eraseMirrored: (absolute) => eraseMirroredCopy(absolute, uploadRoot),
-    ...(redis ? { lock: redisSealLock(redis as never) } : {}),
+    ...(access.lock ? { lock: access.lock } : redis ? { lock: redisSealLock(redis as never) } : {}),
   };
 }
 
@@ -55,13 +55,15 @@ export const sendCarriesFiles = (request: {
  * pourraient pas être scellés — aucune clé de conversation — ou, scellés, ne
  * pourraient être lus par personne : sans clé de signature des adresses
  * (`ATTACHMENT_URL_SIGNING_KEY`), aucune adresse signée ne les servirait, et
- * l'adresse nue d'un fichier scellé est refusée.
+ * l'adresse nue d'un fichier scellé est refusée. Le scellement suspendu
+ * (`AT_REST_FILE_SEALING=off`, retour arrière) n'exige rien : rien ne se scelle.
  */
 export async function requireFileSealingKey(
   access: AtRestFileAccess,
   conversationId: string,
   signer: () => unknown = () => readerFileUrlSignerFromEnv(new Date())
 ): Promise<void> {
+  if (!atRestFileSealingEnabled()) return;
   if (signer() === null) throw new ServerAtRestUnavailableError('reader-signing-unavailable');
   await access.keyring.fileSealingKey(conversationId);
 }
@@ -73,7 +75,10 @@ export async function sealMessageAttachmentsAtRest(
   const pieces = await deps.prisma.messageAttachment.findMany({ where: { messageId: input.messageId }, select: { id: true }, orderBy: MESSAGE_ATTACHMENT_ORDER });
   for (const piece of pieces) {
     try {
-      await sealAttachmentFiles(deps, { attachmentId: piece.id, conversationId: input.conversationId });
+      const outcome = await sealAttachmentFiles(deps, { attachmentId: piece.id, conversationId: input.conversationId });
+      if (outcome.status === 'skipped' && outcome.reason === 'busy') {
+        logger.warn('pièce jointe non scellée à l’envoi (verrou occupé) : le balayage la reprendra', { code: SERVER_AT_REST_FILE_SEAL_FAILED, attachmentId: piece.id, messageId: input.messageId });
+      }
     } catch (error) {
       logger.error('pièce jointe non scellée au repos : la migration de rattrapage la reprendra', undefined, {
         code: SERVER_AT_REST_FILE_SEAL_FAILED,

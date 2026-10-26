@@ -5,7 +5,7 @@
  * (processus tué) expire seul ; le balayage reprend alors la pièce.
  */
 import { createHash, randomUUID } from 'crypto';
-import type { SealLock } from './sealAttachmentFiles';
+import type { FileSealLock as SealLock } from './atRestFiles';
 
 export const SEAL_LOCK_TTL_MS = 10 * 60 * 1000;
 

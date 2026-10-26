@@ -6,6 +6,7 @@ import { storedFileETag } from '../../utils/etag';
 import { storageKeyUnder, type ByteRange, type MediaObjectStore } from '../../services/storage/objects/MediaObjectStore';
 import { processMediaObjectStores } from '../../services/storage/objects/mediaObjectStoreFactory';
 import {
+  isSealableStorageKey,
   isSealedStorageKey,
   openSealedStoredBytes,
   processAtRestFileAccess,
@@ -79,9 +80,8 @@ function atRestOf(source: StoredBytesSource): AtRestFileAccess | null {
  * à la forme scellée sans accès configuré est tenu pour scellé : il ne
  * sortira jamais tel quel.
  */
-/** Seuls les médias datés et les pistes traduites se scellent : un avatar n'interroge pas la base. */
-const SEALABLE_KEY = /^(?:\d{4}\/\d{2}\/[^/]+\/[^/]+|translated\/[^/]+)$/;
-const mayBeSealed = (key: string): boolean => SEALABLE_KEY.test(key);
+/** Seuls les médias datés et les pistes traduites se scellent (`isSealableStorageKey`, la même règle que le scellement) : un avatar n'interroge pas la base. */
+const mayBeSealed = (key: string): boolean => isSealableStorageKey(key);
 
 export type AtRestSealing = { readonly kind: 'sealed'; readonly record: AtRestFileRecord | null } | { readonly kind: 'plain' };
 

@@ -31,12 +31,16 @@ import { enhancedLogger } from '../../../utils/logger-enhanced';
 import { storageKeyFromMediaUrl } from '../mediaStorageKey';
 import { sealsAtRest } from '../../messaging/atRestWrite';
 import {
+  atRestFileSealingEnabled,
+  isSealableStorageKey,
   isSealedStorageKey,
   opaqueBaseFor,
   sealStoredFile,
   type AtRestFileAccess,
   type AtRestFileRecord,
+  type FileSealLock,
 } from './atRestFiles';
+import { ciphertextSizeFor } from './sealedFileFormat';
 
 const logger = enhancedLogger.child({ module: 'sealAttachmentFiles' });
 
@@ -55,12 +59,33 @@ export type SealAttachmentDeps = {
   readonly lock?: SealLock;
 };
 
-export type SealLock = (filePath: string) => Promise<{ readonly release: () => Promise<void> } | 'busy'>;
+export type SealLock = FileSealLock;
+
+export const SERVER_AT_REST_SEAL_LOCK_UNAVAILABLE = 'SERVER_AT_REST_SEAL_LOCK_UNAVAILABLE';
+
+/**
+ * Le verrou d'un fichier d'origine. Injoignable (Redis en panne) vaut
+ * « occupé » — sans lui, deux scellements pourraient se croiser — et se dit
+ * en ERREUR : la pièce reste en clair jusqu'au prochain balayage.
+ */
+export async function acquireSealLock(
+  lock: SealLock | undefined,
+  filePath: string
+): Promise<{ readonly release: () => Promise<void> } | 'busy' | null> {
+  if (!lock) return null;
+  return lock(filePath).catch((error: unknown) => {
+    logger.error('verrou de scellement injoignable : la pièce reste en clair jusqu’au balayage', undefined, {
+      code: SERVER_AT_REST_SEAL_LOCK_UNAVAILABLE,
+      reason: error instanceof Error ? error.name : 'unknown',
+    });
+    return 'busy' as const;
+  });
+}
 
 export type SealOutcome =
   | { readonly status: 'sealed'; readonly files: number; readonly rows: number }
   | { readonly status: 'already-sealed' }
-  | { readonly status: 'skipped'; readonly reason: 'not-found' | 'end-to-end' | 'pending' | 'not-at-rest' | 'busy' };
+  | { readonly status: 'skipped'; readonly reason: 'not-found' | 'end-to-end' | 'pending' | 'not-at-rest' | 'busy' | 'suspended' | 'unsealable-key' };
 
 const ROW_SELECT = {
   id: true,
@@ -112,6 +137,10 @@ function arraySlots(value: unknown, prefix: string, labelOf: (entry: Readonly<Re
 
 /** Les fichiers d'UNE ligne, chacun avec son rôle (données associées). */
 function slotsOf(row: SealRow): readonly Slot[] {
+  return allSlotsOf(row).filter((slot) => isSealableStorageKey(slot.key));
+}
+
+function allSlotsOf(row: SealRow): readonly Slot[] {
   const tracks = isRecord(row.translations)
     ? Object.entries(row.translations).flatMap(([language, track]) => {
         const key = isRecord(track) ? keyOf(track.url) : null;
@@ -179,6 +208,20 @@ async function exists(absolute: string): Promise<boolean> {
   return fs.stat(absolute).then(() => true, () => false);
 }
 
+/**
+ * L'état d'un fichier : absent, en clair, scellé — ou `stale` : une ligne de
+ * scellement pèse sur un fichier qui a EXACTEMENT la taille du clair inscrit,
+ * jamais celle d'un chiffré (processus tué entre la ligne et le `rename`). Il
+ * est rescellé.
+ */
+async function slotState(absolute: string, record: AtRestFileRecord | null): Promise<'absent' | 'plain' | 'sealed' | 'stale'> {
+  const stats = await fs.stat(absolute).catch(() => null);
+  if (!stats) return 'absent';
+  if (!record) return 'plain';
+  const plainSized = stats.size === record.plaintextSize && stats.size !== ciphertextSizeFor(record.plaintextSize, record.segmentSize);
+  return plainSized ? 'stale' : 'sealed';
+}
+
 /** Ce qu'un scellement ferait, sans rien écrire : la migration à blanc le compte. */
 export type SealingPlan =
   | { readonly kind: 'skip'; readonly outcome: SealOutcome }
@@ -193,6 +236,7 @@ export async function planAttachmentSealing(
   if (!seed) return { kind: 'skip', outcome: { status: 'skipped', reason: 'not-found' } };
   if (isEndToEnd(seed)) return { kind: 'skip', outcome: { status: 'skipped', reason: 'end-to-end' } };
   if (seed.processingState === 'pending') return { kind: 'skip', outcome: { status: 'skipped', reason: 'pending' } };
+  if (!isSealableStorageKey(seed.filePath)) return { kind: 'skip', outcome: { status: 'skipped', reason: 'unsealable-key' } };
 
   const rows: readonly SealRow[] = await deps.prisma.messageAttachment.findMany({ where: { filePath: seed.filePath }, select: ROW_SELECT });
   if (rows.some(isEndToEnd)) return { kind: 'skip', outcome: { status: 'skipped', reason: 'end-to-end' } };
@@ -201,9 +245,9 @@ export async function planAttachmentSealing(
   rows.flatMap(slotsOf).forEach((slot) => { if (!unique.has(slot.key)) unique.set(slot.key, slot); });
   const found = await Promise.all([...unique.values()].map(async (slot) => ({ slot, record: await deps.access.store.find(slot.key) })));
   const present = await Promise.all(
-    found.filter(({ record }) => record === null).map(async ({ slot }) => ({ slot, present: await exists(path.join(deps.uploadRoot, slot.key)) }))
+    found.map(async ({ slot, record }) => ({ slot, state: await slotState(path.join(deps.uploadRoot, slot.key), record) }))
   );
-  const toSeal = present.filter(({ present: onDisk }) => onDisk).map(({ slot }) => slot);
+  const toSeal = present.filter(({ state }) => state === 'plain' || state === 'stale').map(({ slot }) => slot);
   return toSeal.length === 0 ? { kind: 'skip', outcome: { status: 'already-sealed' } } : { kind: 'seal', seed, rows, toSeal };
 }
 
@@ -217,11 +261,10 @@ export async function sealAttachmentFiles(
   deps: SealAttachmentDeps,
   input: { readonly attachmentId: string; readonly conversationId: string }
 ): Promise<SealOutcome> {
+  if (!atRestFileSealingEnabled()) return { status: 'skipped', reason: 'suspended' };
   const head = await deps.prisma.messageAttachment.findUnique({ where: { id: input.attachmentId }, select: { filePath: true } });
   if (!head) return { status: 'skipped', reason: 'not-found' };
-  // Un verrou injoignable (Redis en panne) vaut « occupé » : sans lui, deux
-  // scellements pourraient se croiser ; le balayage reprendra la pièce.
-  const held = deps.lock ? await deps.lock(head.filePath).catch(() => 'busy' as const) : null;
+  const held = await acquireSealLock(deps.lock ?? deps.access.lock, head.filePath);
   if (held === 'busy') return { status: 'skipped', reason: 'busy' };
   try {
     return await sealUnderLock(deps, input);
@@ -234,6 +277,14 @@ async function sealUnderLock(
   deps: SealAttachmentDeps,
   input: { readonly attachmentId: string; readonly conversationId: string }
 ): Promise<SealOutcome> {
+  // Une copie faite avant le repointage d'un scellement désigne encore l'ancien
+  // original : elle se repointe sur ce qui l'a remplacé (M3).
+  const head = await deps.prisma.messageAttachment.findUnique({ where: { id: input.attachmentId }, select: { filePath: true } });
+  // Une réparation : son échec ne retient jamais le scellement lui-même.
+  const replacement = head && deps.access.store.byReplacedKey ? await deps.access.store.byReplacedKey(head.filePath).catch(() => null) : null;
+  if (replacement && replacement.attachmentId !== input.attachmentId) {
+    await erasePendingUnderHeldLock(deps, replacement.attachmentId);
+  }
   const plan = await planAttachmentSealing(deps, input.attachmentId);
   if (plan.kind === 'skip') {
     if (plan.outcome.status === 'already-sealed') await erasePendingUnderHeldLock(deps, input.attachmentId);
@@ -247,6 +298,10 @@ async function sealUnderLock(
 
   const sealed: Array<{ readonly slot: Slot; readonly record: AtRestFileRecord }> = [];
   for (const slot of toSeal) {
+    // Relu juste avant : une piste écrite et scellée entre le plan et ici
+    // (T5) ne se rescelle pas par-dessus son propre chiffré.
+    const current = await deps.access.store.find(slot.key);
+    if ((await slotState(path.join(deps.uploadRoot, slot.key), current)) === 'sealed') continue;
     const targetKey = slot.inPlace || isSealedStorageKey(slot.key) ? slot.key : opaqueKeyFor(slot, originalBase, opaqueBase);
     const record = await sealStoredFile({
       uploadRoot: deps.uploadRoot,
@@ -264,6 +319,19 @@ async function sealUnderLock(
     await Promise.all(
       rows.map((row) => deps.prisma.messageAttachment.updateMany({ where: { id: row.id, filePath: row.filePath }, data: rowWrites(row, moved) }))
     );
+  }
+  // T8 — la pièce a été effacée PENDANT le scellement (vue unique brûlée) :
+  // plus aucune ligne ne désigne ses octets, ce qui vient d'être écrit part.
+  const carriers = await deps.prisma.messageAttachment.findMany({ where: { filePath: moved.get(seed.filePath) ?? seed.filePath }, select: { id: true } });
+  const stragglers = moved.has(seed.filePath) ? await deps.prisma.messageAttachment.findMany({ where: { filePath: seed.filePath }, select: { id: true } }) : [];
+  if (carriers.length === 0 && stragglers.length === 0) {
+    await Promise.all(sealed.map(async ({ slot, record }) => {
+      await eraseAt(deps, record.storageKey);
+      await deps.access.store.remove(record.storageKey).catch(() => undefined);
+      if (record.storageKey !== slot.key) await eraseAt(deps, slot.key);
+    }));
+    logger.info('pièce effacée pendant son scellement : ce qui venait d’être scellé est effacé', { attachmentId: seed.id });
+    return { status: 'skipped', reason: 'not-found' };
   }
   await Promise.all(sealed.filter(({ slot }) => !moved.has(slot.key)).map(({ slot }) => deps.eraseMirrored?.(path.join(deps.uploadRoot, slot.key)) ?? Promise.resolve()));
   await erasePendingUnderHeldLock(deps, seed.id);
@@ -294,7 +362,7 @@ export async function finishPendingErasures(
   const replacing = (await deps.access.store.ofAttachment(attachmentId)).filter((record) => record.replacedKey !== null);
   const oldOriginal = replacing.find((record) => record.role === 'original')?.replacedKey;
   if (!oldOriginal) return { erased: 0, repointed: 0 };
-  const held = deps.lock ? await deps.lock(oldOriginal).catch(() => 'busy' as const) : null;
+  const held = await acquireSealLock(deps.lock ?? deps.access.lock, oldOriginal);
   if (held === 'busy') return { erased: 0, repointed: 0, busy: true };
   try {
     return await erasePendingUnderHeldLock(deps, attachmentId);
@@ -366,7 +434,10 @@ export async function atRestConversationFor(
   });
   if (!row || isEndToEnd(row)) return null;
   if (row.message !== null && sealsAtRest(row.message.conversation)) return row.message.conversationId;
-  return (await deps.access.store.find(row.filePath))?.conversationId ?? null;
+  const sealedOriginal = await deps.access.store.find(row.filePath);
+  if (sealedOriginal) return sealedOriginal.conversationId;
+  // Une copie qui désigne encore le clair qu'un scellement a remplacé (M3).
+  return (await deps.access.store.byReplacedKey?.(row.filePath).catch(() => null))?.conversationId ?? null;
 }
 
 /** Scelle la pièce si elle doit l'être (`atRestConversationFor`). */

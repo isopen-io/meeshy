@@ -18,7 +18,20 @@ import { createWriteStream, createReadStream, promises as fs } from 'fs';
 import path from 'path';
 import { randomBytes } from 'crypto';
 import { pipeline } from 'stream/promises';
-import { openSealedStoredBytes, type AtRestFileAccess, type AtRestFileRecord } from './atRestFiles';
+import { atRestFileSealingEnabled, openSealedStoredBytes, type AtRestFileAccess, type AtRestFileRecord } from './atRestFiles';
+import { ciphertextSizeFor } from './sealedFileFormat';
+
+/** Le retour arrière exige le scellement SUSPENDU : sinon la passerelle vivante rescellerait ce qu'il rouvre. */
+export class SealingStillEnabledError extends Error {
+  constructor() {
+    super('AT_REST_FILE_SEALING=off requis (passerelle redémarrée avec) avant de rouvrir les fichiers scellés');
+    this.name = 'SealingStillEnabledError';
+  }
+}
+
+export function requireSealingSuspended(env: Readonly<Record<string, string | undefined>> = process.env): void {
+  if (atRestFileSealingEnabled(env)) throw new SealingStillEnabledError();
+}
 
 export type UnsealDeps = {
   readonly uploadRoot: string;
@@ -32,6 +45,12 @@ export async function unsealStoredFile(deps: Omit<UnsealDeps, 'records'>, record
   const absolute = path.join(deps.uploadRoot, record.storageKey);
   const temporary = path.join(path.dirname(absolute), `.unsealing-${randomBytes(8).toString('hex')}`);
   const size = (await fs.stat(absolute)).size;
+  // Rouvert puis tué avant le retrait de sa ligne : le fichier a la taille du
+  // clair, jamais celle d'un chiffré. Il n'y a plus qu'à retirer la ligne.
+  if (size === record.plaintextSize && size !== ciphertextSizeFor(record.plaintextSize, record.segmentSize)) {
+    await deps.access.store.remove(record.storageKey);
+    return;
+  }
   const cipher = {
     size,
     etag: '',
@@ -51,7 +70,11 @@ export async function unsealStoredFile(deps: Omit<UnsealDeps, 'records'>, record
   await deps.access.store.remove(record.storageKey);
 }
 
-export async function unsealAllAtRestFiles(deps: UnsealDeps, options: { readonly dryRun: boolean; readonly log: (line: string) => void }): Promise<UnsealReport> {
+export async function unsealAllAtRestFiles(
+  deps: UnsealDeps,
+  options: { readonly dryRun: boolean; readonly log: (line: string) => void; readonly env?: Readonly<Record<string, string | undefined>> }
+): Promise<UnsealReport> {
+  if (!options.dryRun) requireSealingSuspended(options.env);
   const records = await deps.records();
   const report = { sealed: records.length, missing: 0, unsealed: 0, failed: 0 };
   for (const record of records) {

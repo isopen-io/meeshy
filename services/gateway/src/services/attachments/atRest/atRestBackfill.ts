@@ -74,6 +74,7 @@ export async function backfillAtRestAttachments(
       try {
         const outcome = await sealAttachmentFiles(deps, { attachmentId, conversationId });
         if (outcome.status === 'sealed') report.sealed += 1;
+        if (outcome.status === 'skipped') skipped[outcome.reason] = (skipped[outcome.reason] ?? 0) + 1;
       } catch (error) {
         report.failed += 1;
         options.log(`  échec : pièce ${attachmentId} (${error instanceof Error ? error.name : 'inconnu'})`);

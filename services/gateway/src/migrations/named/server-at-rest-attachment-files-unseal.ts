@@ -1,6 +1,6 @@
 import { promises as fs } from 'fs';
 import path from 'path';
-import { unsealAllAtRestFiles } from '../../services/attachments/atRest/atRestUnseal';
+import { requireSealingSuspended, unsealAllAtRestFiles } from '../../services/attachments/atRest/atRestUnseal';
 import { AT_REST, allAtRestRecords, designatedKeyring, mongoAtRestStore } from './atRestMongo';
 import type { NamedMigration } from './types';
 
@@ -11,12 +11,17 @@ import type { NamedMigration } from './types';
  * scellement dont le fichier n'existe plus sont retirées. À blanc par défaut ;
  * en production, feu vert du porteur et sauvegarde vérifiée avant --apply —
  * rouvrir remet du clair sur le disque.
+ *
+ * Ordre : passerelle redémarrée avec `AT_REST_FILE_SEALING=off` (plus rien ne
+ * se scelle, les scellés se lisent encore), PUIS --apply — elle le refuse
+ * sinon —, PUIS seulement l'ancienne passerelle.
  */
 export const serverAtRestAttachmentFilesUnseal: NamedMigration = {
   name: '2026-10-26-server-at-rest-attachment-files-unseal',
   issue: '#13100',
   summary: 'RETOUR ARRIÈRE : rouvre en place les fichiers scellés au repos, avant de redéployer une passerelle antérieure',
   async run({ db, dryRun, env, log }) {
+    if (!dryRun) requireSealingSuspended(env);
     const uploadRoot = env.UPLOAD_PATH || '/app/uploads';
     const records = await allAtRestRecords(db);
     const orphans = (await db.collection(AT_REST).find({}, { projection: { storageKey: 1 } }).toArray())
@@ -29,6 +34,6 @@ export const serverAtRestAttachmentFilesUnseal: NamedMigration = {
       await Promise.all(absentKeys.map((storageKey) => db.collection(AT_REST).deleteOne({ storageKey })));
       await Promise.all(orphans.map((doc) => db.collection(AT_REST).deleteOne({ _id: doc._id })));
     }
-    await unsealAllAtRestFiles({ uploadRoot, access, records: async () => records.filter((record) => !absentKeys.includes(record.storageKey)) }, { dryRun, log });
+    await unsealAllAtRestFiles({ uploadRoot, access, records: async () => records.filter((record) => !absentKeys.includes(record.storageKey)) }, { dryRun, log, env });
   },
 };

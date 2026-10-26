@@ -63,6 +63,8 @@ export type AtRestFileKeyring = {
 
 export type AtRestFileStore = {
   find(storageKey: string): Promise<AtRestFileRecord | null>;
+  /** Le fichier scellé de rôle `original` qui a remplacé cette clé claire (copie retardataire). */
+  byReplacedKey?(replacedKey: string): Promise<AtRestFileRecord | null>;
   save(record: AtRestFileRecord): Promise<void>;
   remove(storageKey: string): Promise<void>;
   /** Les fichiers scellés d'une pièce. */
@@ -71,10 +73,32 @@ export type AtRestFileStore = {
   replacingSince(since: Date): Promise<readonly string[]>;
 };
 
+/** Le verrou d'un fichier d'origine (`sealLock.ts`) : `busy` quand un autre le tient. */
+export type FileSealLock = (filePath: string) => Promise<{ readonly release: () => Promise<void> } | 'busy'>;
+
 export type AtRestFileAccess = {
   readonly store: AtRestFileStore;
   readonly keyring: AtRestFileKeyring;
+  /** Le verrou partagé des scellements (Redis) ; absent : un seul processus scelle. */
+  readonly lock?: FileSealLock;
 };
+
+/**
+ * #13100 — l'interrupteur du scellement : `AT_REST_FILE_SEALING=off` arrête
+ * tout NOUVEAU scellement (envoi, rendu, piste, balayage) ; les fichiers déjà
+ * scellés se lisent toujours. C'est la première étape d'un retour arrière : la
+ * migration inverse refuse de s'appliquer tant qu'il est allumé.
+ */
+export const atRestFileSealingEnabled = (env: Readonly<Record<string, string | undefined>> = process.env): boolean =>
+  (env.AT_REST_FILE_SEALING ?? '').trim().toLowerCase() !== 'off';
+
+/**
+ * Les SEULES clés qui se scellent, et les seules que la lecture interroge : la
+ * forme datée des dépôts (`AAAA/MM/<auteur>/<nom>`) et les pistes traduites.
+ * Une clé hors de cette forme reste en clair des deux côtés.
+ */
+export const SEALABLE_STORAGE_KEY = /^(?:\d{4}\/\d{2}\/[^/]+\/[^/]+|translated\/[^/]+)$/;
+export const isSealableStorageKey = (key: string): boolean => SEALABLE_STORAGE_KEY.test(key);
 
 export class AtRestFileUnreadableError extends Error {
   constructor(readonly reason: 'unknown-format' | 'no-access') {
@@ -110,6 +134,10 @@ export function prismaAtRestFileStore(prisma: Pick<PrismaClient, 'attachmentFile
     ofAttachment: async (attachmentId) => {
       const rows: readonly AtRestFileRow[] = await prisma.attachmentFileAtRest.findMany({ where: { attachmentId }, select: RECORD_SELECT });
       return rows.map((row) => ({ ...row, replacedKey: row.replacedKey ?? null }));
+    },
+    byReplacedKey: async (replacedKey) => {
+      const row: AtRestFileRow | null = await prisma.attachmentFileAtRest.findFirst({ where: { replacedKey, role: 'original' }, select: RECORD_SELECT });
+      return row ? { ...row, replacedKey: row.replacedKey ?? null } : null;
     },
     replacingSince: async (since) => {
       const rows = await prisma.attachmentFileAtRest.findMany({
@@ -209,7 +237,12 @@ export async function sealStoredFile(params: {
     ...binding, keyId, plaintextSize, format: SEALED_FILE_FORMAT, segmentSize,
     replacedKey: params.replacedKey && params.replacedKey !== params.targetKey ? params.replacedKey : null,
   };
-  await params.access.store.save(record);
+  try {
+    await params.access.store.save(record);
+  } catch (error) {
+    await fs.unlink(temporary).catch(() => undefined);
+    throw error;
+  }
   try {
     await fs.rename(temporary, target);
   } catch (error) {

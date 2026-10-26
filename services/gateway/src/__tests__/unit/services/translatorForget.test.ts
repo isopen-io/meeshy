@@ -12,6 +12,7 @@ jest.mock('../../../utils/logger-enhanced', () => ({
 
 import {
   FORGET_GIVE_UP_AFTER_MS,
+  FORGET_REPLAY_BATCH,
   FORGET_RESEND_AFTER_MS,
   translatorForget,
   type ForgetQueueStore,
@@ -88,5 +89,44 @@ describe('l’oubli au translator', () => {
     clock.now += FORGET_GIVE_UP_AFTER_MS + 1;
     expect(await forget.replay()).toBe(0);
     expect(store.rows.size).toBe(0);
+  });
+
+  it('ne rend jamais la main en retard : ni un envoi pendu ni une inscription pendue ne la bloquent', async () => {
+    const hung = translatorForget({
+      store: { put: () => new Promise<void>(() => undefined), remove: async () => undefined, all: async () => ({}) },
+      send: () => new Promise<void>(() => undefined),
+    });
+    const outcome = await Promise.race([
+      hung.forget({ attachmentIds: [PIECE] }).then(() => 'returned'),
+      new Promise((resolve) => setTimeout(() => resolve('hung'), 3_000)),
+    ]);
+    expect(outcome).toBe('returned');
+  });
+
+  it('espace les renvois d’une même demande : 1, puis 2 minutes', async () => {
+    const { forget, sent, clock } = harness();
+    await forget.forget({ attachmentIds: [PIECE] });
+    clock.now += FORGET_RESEND_AFTER_MS;
+    expect(await forget.replay()).toBe(1);
+    clock.now += FORGET_RESEND_AFTER_MS;
+    expect(await forget.replay()).toBe(0);
+    clock.now += FORGET_RESEND_AFTER_MS;
+    expect(await forget.replay()).toBe(1);
+    expect(sent).toHaveLength(3);
+  });
+
+  it('un passage traite au plus un lot, et deux passages ne se chevauchent jamais', async () => {
+    const store = memoryStore();
+    const clock = { now: 1_000_000 };
+    const gate: { open: () => void } = { open: () => undefined };
+    const opened = new Promise<void>((resolve) => { gate.open = resolve; });
+    const forget = translatorForget({ store: { ...store, all: async () => { await opened; return store.all(); } }, now: () => clock.now, send: async () => undefined });
+    Array.from({ length: FORGET_REPLAY_BATCH + 20 }, (_, index) => index).forEach((index) => {
+      store.rows.set(`r${index}`, JSON.stringify({ requestId: `r${index}`, attachmentIds: [PIECE], messageIds: [], createdAt: clock.now, sentAt: clock.now - FORGET_RESEND_AFTER_MS, attempts: 1 }));
+    });
+    const first = forget.replay();
+    expect(await forget.replay()).toBe(0);
+    gate.open();
+    expect(await first).toBe(FORGET_REPLAY_BATCH);
   });
 });
