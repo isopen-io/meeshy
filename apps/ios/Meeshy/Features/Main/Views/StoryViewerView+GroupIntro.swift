@@ -8,7 +8,7 @@ extension StoryViewerView {
     /// skip, tap gauche = retour au groupe précédent).
     @ViewBuilder
     var groupIntroLayer: some View {
-        if showGroupIntro, let intro = groupIntroData {
+        if showGroupIntro, let intro = groupIntro.intro {
             StoryGroupIntroOverlay(
                 intro: intro,
                 avatarURL: currentGroup?.avatarURL,
@@ -60,8 +60,7 @@ extension StoryViewerView {
         // le voile de l'auteur précédent restait posé sur la story du nouvel
         // auteur, puis son `dismissGroupIntro()` marquait comme vue une story
         // qui n'est pas la sienne.
-        groupIntroTask?.cancel()
-        groupIntroTask = nil
+        groupIntro.cancelPending()
         guard let group = currentGroup,
               StoryGroupIntroPolicy.shouldPresent(
                   isPreviewMode: isPreviewMode,
@@ -80,35 +79,16 @@ extension StoryViewerView {
         // Identité COMPLÈTE dès la première frame quand le groupe a été
         // pré-résolu (`prefetchNeighborGroupIntros`) ; sinon placeholder
         // immédiat (username/avatar du payload) enrichi pendant l'affichage.
-        groupIntroData = groupIntroCache[group.id]
-            ?? StoryViewModel.StoryGroupIntro(userId: group.id, username: group.username)
         // Présentation INSTANTANÉE (pas de fade-in) : l'interstitiel OPAQUE
         // prend l'écran dans la MÊME transaction que le swap de groupe — le
         // slide du nouveau groupe n'est JAMAIS visible sous/derrière l'intro
-        // (directive user 2026-07-10, IMG_0976 « Windie Nh ne devait pas
-        // avoir son switcher s'afficher en overlay de ce slide »). Seule la
-        // sortie est animée : c'est elle qui révèle le slide.
-        showGroupIntro = true
-        let userId = group.id
-        groupIntroTask = Task { @MainActor in
-            let enrich = Task { @MainActor in
-                let intro = await viewModel.resolveGroupIntro(for: group)
-                groupIntroCache[userId] = intro
-                guard !Task.isCancelled, showGroupIntro, groupIntroData?.userId == userId else { return }
-                groupIntroData = intro
-            }
-            // UN SEUL sommeil, écourté du recouvrement : le retrait du voile ET
-            // l'apparition du slide partent ensemble à 300 ms. Surtout PAS deux
-            // sommeils enchaînés (« armer, dormir 200 ms, animer ») — une
-            // annulation entre les deux laisserait `contentOpacity` à 0, soit un
-            // slide noir définitif.
-            try? await Task.sleep(for: .seconds(
-                StoryGroupIntroPolicy.holdDuration(total: Self.groupIntroDuration)
-            ))
-            enrich.cancel()
-            guard !Task.isCancelled else { return }
-            dismissGroupIntro()
-        }
+        // (directive user 2026-07-10, IMG_0976). Seule la sortie est animée :
+        // c'est elle qui révèle le slide, et elle vit dans `dismissGroupIntro`.
+        groupIntro.present(
+            StoryViewModel.StoryGroupIntro(userId: group.id, username: group.username),
+            hold: StoryGroupIntroPolicy.holdDuration(total: Self.groupIntroDuration),
+            resolve: { await viewModel.resolveGroupIntro(for: group) },
+            elapsed: { dismissGroupIntro() })
         prefetchNeighborGroupIntros()
     }
 
@@ -119,21 +99,15 @@ extension StoryViewerView {
     func prefetchNeighborGroupIntros() {
         guard !isPreviewMode else { return }
         let myId = AuthManager.shared.currentUser?.id
-        for offset in [-1, 1] {
-            let index = currentGroupIndex + offset
-            guard index >= 0, index < groups.count else { continue }
-            let neighbor = groups[index]
-            guard neighbor.id != myId, groupIntroCache[neighbor.id] == nil else { continue }
-            Task { @MainActor in
-                let intro = await viewModel.resolveGroupIntro(for: neighbor)
-                groupIntroCache[neighbor.id] = intro
-            }
-        }
+        let neighbors = [-1, 1].map { currentGroupIndex + $0 }
+            .filter { groups.indices.contains($0) }
+            .map { groups[$0] }
+            .filter { $0.id != myId }
+        groupIntro.prefetch(neighbors) { await viewModel.resolveGroupIntro(for: $0) }
     }
 
     func skipGroupIntro() {
-        groupIntroTask?.cancel()
-        groupIntroTask = nil
+        groupIntro.cancelPending()
         dismissGroupIntro()
     }
 
@@ -146,8 +120,7 @@ extension StoryViewerView {
     /// le nouveau groupe" (contrairement à `goToPrevious()`, sensible à
     /// `currentStoryIndex`). Sans groupe précédent, dismiss simplement.
     func goBackToPreviousGroupFromIntro() {
-        groupIntroTask?.cancel()
-        groupIntroTask = nil
+        groupIntro.cancelPending()
         dismissGroupIntro(revealing: false)
         guard currentGroupIndex > 0 else { return }
         groupTransition(forward: false) { landOnPreviousGroup() }
@@ -185,7 +158,7 @@ extension StoryViewerView {
             isRevealActive = entrance.isRevealActive
         }
         withAnimation(StoryGroupIntroPolicy.dismissAnimation(for: opening)) {
-            showGroupIntro = false
+            groupIntro.isShown = false
             if revealing {
                 contentOpacity = 1
                 openingScale = 1.0

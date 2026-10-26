@@ -54,14 +54,10 @@ struct StoryViewerView: View {
     /// Interstitiel d'identité inter-groupes (directive user 2026-07-03) :
     /// au passage au groupe d'une AUTRE personne, bannière en fond + pseudo,
     /// nom, présence, mood pendant `groupIntroDuration` avant le slide.
-    @State var showGroupIntro = false
-    @State var groupIntroData: StoryViewModel.StoryGroupIntro?
-    @State var groupIntroTask: Task<Void, Never>?
-    /// Identités PRÉ-RÉSOLUES par groupe (directive 2026-07-10) : les groupes
-    /// voisins sont résolus PENDANT la lecture du groupe courant, si bien que
-    /// l'interstitiel du switch s'affiche COMPLET (nom, bannière, mood) dès la
-    /// première frame — plus d'enrichissement visible en second temps.
-    @State var groupIntroCache: [String: StoryViewModel.StoryGroupIntro] = [:]
+    /// Its visibility, identity, hold and the neighbours' pre-resolved
+    /// identities (`StoryGroupIntroPresenter`, #13135).
+    @StateObject var groupIntro = StoryGroupIntroPresenter()
+    var showGroupIntro: Bool { groupIntro.isShown }
     /// 500 ms (directive user 2026-08-20, resserré depuis 2,2 s) : l'interlude
     /// est un battement d'identité entre deux groupes, plus une pause.
     ///
@@ -397,7 +393,7 @@ struct StoryViewerView: View {
             // placeholder « username seul » ici — une carte d'identité sans
             // bannière ni nom réel serait un flash vide pendant le geste ;
             // la face du cube se dégrade alors sur son backdrop flouté.
-            neighborIntro: neighborCubeGroup.flatMap { groupIntroCache[$0.id] },
+            neighborIntro: neighborCubeGroup.flatMap { groupIntro.resolvedIntro(for: $0.id) },
             // Même résolution que l'interstitiel : realtime PresenceManager
             // d'abord (le plus frais), sinon le snapshot serveur embarqué par
             // le payload stories. Lookups O(1) synchrones descendus en

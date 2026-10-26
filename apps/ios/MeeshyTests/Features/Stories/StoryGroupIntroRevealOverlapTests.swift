@@ -173,12 +173,20 @@ final class StoryGroupIntroRevealOverlapTests: XCTestCase {
             "sans ça, le passage d'un groupe à l'autre repose la story d'un bloc."
         )
 
-        guard let taskStart = source.range(of: "groupIntroTask = Task { @MainActor in"),
-              let taskEnd = source.range(of: "prefetchNeighborGroupIntros()",
-                                         range: taskStart.upperBound..<source.endIndex) else {
+        // La Task du timer vit dans `StoryGroupIntroPresenter` (#13135).
+        let presenter = try String(
+            contentsOf: URL(fileURLWithPath: #filePath)
+                .deletingLastPathComponent().deletingLastPathComponent()
+                .deletingLastPathComponent().deletingLastPathComponent()
+                .appendingPathComponent("Meeshy/Features/Main/Views/StoryGroupIntroPresenter.swift"),
+            encoding: .utf8
+        )
+        guard let taskStart = presenter.range(of: "pending = Task { @MainActor"),
+              let taskEnd = presenter.range(of: "func cancelPending()",
+                                            range: taskStart.upperBound..<presenter.endIndex) else {
             return XCTFail("Task de présentation de l'interlude introuvable")
         }
-        let taskCode = String(source[taskStart.upperBound..<taskEnd.lowerBound])
+        let taskCode = String(presenter[taskStart.upperBound..<taskEnd.lowerBound])
             .split(separator: "\n", omittingEmptySubsequences: false)
             .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
             .joined(separator: "\n")
