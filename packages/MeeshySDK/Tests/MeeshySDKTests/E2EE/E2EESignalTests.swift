@@ -77,13 +77,25 @@ struct E2EEPaddingTests {
         #expect(E2EEPadding.padded(Data(count: 5000)).count == 16384)
     }
 
-    /// Au-delà du dernier palier, rien ne s'ajoute : un long message qui tenait
-    /// sous le plafond total des enveloppes (512 Kio pour seize appareils) n'est
-    /// pas poussé au-delà par son remplissage.
-    @Test func aPlaintextBeyondTheLastTierIsLeftAsIs() {
-        #expect(E2EEPadding.padded(Data(count: 16385)).count == 16385)
-        #expect(E2EEPadding.padded(Data(count: 20000)).count == 20000)
-        #expect(E2EEPadding.padded(Data(count: 70000)).count == 70000)
+    /// Au-delà du dernier palier, le clair se remplit au multiple suivant de 16 Kio :
+    /// sa taille exacte ne se lit jamais sur le fil.
+    @Test func aLongPlaintextStillGrowsToACoarseStep() {
+        #expect(E2EEPadding.padded(Data(count: 16385), recipients: 2).count == 32768)
+        #expect(E2EEPadding.padded(Data(count: 20000), recipients: 2).count == 32768)
+        #expect(E2EEPadding.padded(Data(count: 33000), recipients: 2).count == 49152)
+    }
+
+    /// Le palier est borné par le budget des enveloppes : un clair qui tenait sans
+    /// remplissage tient encore, et tous ceux qui frôlent le plafond ont la même taille.
+    @Test func aPlaintextIsNeverPushedPastTheEnvelopeBudget() {
+        let twoDevices = E2EEPadding.ceiling(recipients: 2)
+        #expect(twoDevices == 64 * 1024 - E2EEPadding.cipherOverhead)
+        #expect(E2EEPadding.padded(Data(count: 50000), recipients: 2).count == twoDevices)
+        #expect(E2EEPadding.padded(Data(count: 60000), recipients: 2).count == twoDevices)
+        let thirtyTwoDevices = E2EEPadding.ceiling(recipients: 32)
+        #expect(thirtyTwoDevices == 16 * 1024 - E2EEPadding.cipherOverhead)
+        #expect(E2EEPadding.padded(Data(count: 5000), recipients: 32).count == thirtyTwoDevices)
+        #expect(E2EEPadding.padded(Data(count: 70000), recipients: 2).count == 70000, "au-delà du plafond, il ne part pas : rien ne s'ajoute")
     }
 
     @Test func aPaddedMessageStillDecodes_includingByAnOlderClient() throws {

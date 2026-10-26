@@ -226,17 +226,39 @@ public enum E2EEPayloadKind: Equatable, Sendable {
 public enum E2EEPadding {
     /// Les paliers, en octets (`E2EE_PADDING_TIERS` de `@meeshy/shared`).
     public static let tiers = [256, 1024, 4096, 16384]
+    /// Au-delà du dernier palier, le multiple suivant de celui-ci (`E2EE_PADDING_STEP`).
+    public static let step = 16384
+    /// Le corps chiffré d'UNE enveloppe (`E2EE_ENVELOPE_BOUNDS.maxBodyBase64Chars`, en octets).
+    public static let maxEnvelopeBytes = 64 * 1024
+    /// Le total des enveloppes d'un envoi (`E2EE_ENVELOPE_BOUNDS.maxTotalBase64Chars`, en octets).
+    public static let maxTotalBytes = 512 * 1024
+    /// Ce que libsignal ajoute au clair (en-tête, clés d'un PreKey, MAC, bourrage
+    /// AES) : quelques centaines d'octets, majorés.
+    public static let cipherOverhead = 1024
 
-    /// Le premier palier qui contient le clair ; au-delà du dernier, le clair
-    /// tel quel. Remplir un long message au multiple suivant le poussait, pour
-    /// seize appareils, au-delà du plafond total des enveloppes (512 Kio) : un
-    /// message qui partait avant le remplissage ne partait plus.
-    public static func paddedLength(for length: Int) -> Int {
-        tiers.first(where: { $0 >= length }) ?? length
+    /// Le plus grand clair que `recipients` enveloppes portent sous les deux plafonds.
+    public static func ceiling(recipients: Int) -> Int {
+        min(maxEnvelopeBytes, maxTotalBytes / max(recipients, 1)) - cipherOverhead
     }
 
-    public static func padded(_ plaintext: Data) -> Data {
-        let target = paddedLength(for: plaintext.count)
+    /// La taille d'un clair une fois rempli, pour `recipients` enveloppes.
+    ///
+    /// Le premier palier qui le contient, puis, au-delà du dernier, le multiple
+    /// suivant de `step` : la taille servie ne dit jamais la taille exacte. Le
+    /// palier est borné par `ceiling(recipients)` — un clair qui y tient se remplit
+    /// jusqu'au plafond, au lieu d'être poussé au-delà du budget des enveloppes
+    /// (un message qui partait sans remplissage part encore). Le nombre
+    /// d'enveloppes est déjà visible de la passerelle : la borne ne lui apprend
+    /// rien. Un clair au-delà du plafond ne part de toute façon pas ; il reste tel quel.
+    public static func paddedLength(for length: Int, recipients: Int = 1) -> Int {
+        let ceiling = ceiling(recipients: recipients)
+        guard length <= ceiling else { return length }
+        let bucket = tiers.first(where: { $0 >= length }) ?? ((length + step - 1) / step) * step
+        return min(bucket, ceiling)
+    }
+
+    public static func padded(_ plaintext: Data, recipients: Int = 1) -> Data {
+        let target = paddedLength(for: plaintext.count, recipients: recipients)
         guard target > plaintext.count else { return plaintext }
         return plaintext + Data(repeating: 0x20, count: target - plaintext.count)
     }

@@ -85,11 +85,12 @@ public final class E2EEMessageSealer: E2EEMessageSealing, E2EESignalSealing {
     /// directe et de mes appareils approuvés : un message et un signal partent
     /// par le même chemin, à la même taille.
     func seal(plaintext unpadded: Data, to peerUserId: String) async throws -> E2EESealedMessage {
-        let plaintext = E2EEPadding.padded(unpadded)
         let peerTargets = try await targets(of: peerUserId)
         guard !peerTargets.isEmpty else { throw E2EESealError.recipientHasNoDevice(userId: peerUserId) }
         let own = try await ownTargets()
-        let envelopes = try (peerTargets + own.approved).map { target in
+        let recipients = peerTargets + own.approved
+        let plaintext = E2EEPadding.padded(unpadded, recipients: recipients.count)
+        let envelopes = try recipients.map { target in
             let ciphertext = try cipher.encrypt(plaintext, for: target.address)
             return E2EEOutgoingEnvelope(
                 userId: target.address.userId, deviceId: target.address.deviceId,
