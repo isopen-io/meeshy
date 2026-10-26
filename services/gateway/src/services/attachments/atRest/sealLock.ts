@@ -6,6 +6,9 @@
  */
 import { createHash, randomUUID } from 'crypto';
 import Redis from 'ioredis';
+import { enhancedLogger } from '../../../utils/logger-enhanced';
+
+const logger = enhancedLogger.child({ module: 'sealLock' });
 import type { FileSealLock as SealLock } from './atRestFiles';
 
 /** Redis configuré mais injoignable : ni « libre » ni « occupé » — l'appelant décide (fail-closed). */
@@ -31,7 +34,20 @@ export function reconnectingLockClient(url: string): Redis {
     enableOfflineQueue: false,
     lazyConnect: false,
   });
-  client.on('error', () => undefined);
+  // Une ligne par panne, pas par tentative : le passage en erreur, puis le retour.
+  const state = { down: false };
+  client.on('error', (error: Error) => {
+    if (state.down) return;
+    state.down = true;
+    logger.error('client Redis du verrou de scellement injoignable : scellements différés au balayage', undefined, {
+      code: 'SERVER_AT_REST_SEAL_LOCK_UNAVAILABLE',
+      reason: error.name,
+    });
+  });
+  client.on('ready', () => {
+    if (state.down) logger.info('client Redis du verrou de scellement revenu');
+    state.down = false;
+  });
   return client;
 }
 

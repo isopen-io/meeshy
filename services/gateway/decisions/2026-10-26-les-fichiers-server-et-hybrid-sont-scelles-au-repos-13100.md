@@ -81,7 +81,7 @@ ligne. La ligne part quand le fichier est effacé (`AttachmentService`).
   qu'une autre instance ne verrait pas. Le verrou a son PROPRE client Redis,
   qui se reconnecte sans jamais abandonner (celui du cache cesse après trois
   tentatives) : le scellement reprend sans redémarrage. Le rattrapage remonte
-  alors jusqu'au début de la panne, même au-delà de 48 h (jamais avant
+  alors jusqu’au début de la panne, même au-delà de 48 h et après un redémarrage (`at-rest:files:deferred-since` dans Redis ; jamais avant
   l'activation). Une piste d'une pièce au repos prend le verrou de l'original
   AVANT de lire s'il est scellé ; verrou injoignable, elle échoue tout de suite
   (la piste manque, une retraduction la refait) ; une piste d'une conversation
