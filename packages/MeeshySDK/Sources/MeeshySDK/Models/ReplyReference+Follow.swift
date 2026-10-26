@@ -116,7 +116,7 @@ public extension ReplyReference {
         if let quotedMessage, quotedMessage.id == messageId {
             return quotedMessage.contentExitLaw.exportable
                 && !quotedMessage.isBlurred
-                && !quotedMessage.attachments.contains { $0.isBlurred }
+                && !quotedMessage.attachments.contains { $0.declaresBlur }
         }
         return quotedExitNature == .ordinary
     }

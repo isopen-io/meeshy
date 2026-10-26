@@ -260,7 +260,7 @@ final class EndToEndDeviceLimitViewModelTests: XCTestCase {
             if let listError { throw listError }
             return devices
         }
-        func retire(deviceId: UInt32) async throws { retired.append(deviceId) }
+        func retire(deviceId: UInt32, registrationId: UInt32) async throws { retired.append(deviceId) }
         func enroll(_ userId: String) async throws { enrolled += 1 }
     }
 
@@ -292,7 +292,7 @@ final class EndToEndDeviceLimitViewModelTests: XCTestCase {
         let stub = StubDevices()
         let model = EndToEndDeviceLimitViewModel(devices: stub, userId: { "me" })
 
-        await model.retire(3)
+        await model.retire(listing(3))
 
         XCTAssertEqual(stub.retired, [3])
         XCTAssertEqual(stub.enrolled, 1)

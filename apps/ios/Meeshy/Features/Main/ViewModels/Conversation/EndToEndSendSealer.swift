@@ -306,8 +306,8 @@ enum EncryptionSwitchNoticeTrail {
     /// appareil, ou annoncé `e2ee`. Ni un message chiffré au repos par le
     /// serveur (`server`, `hybrid`), ni un message chiffré sans mode : la
     /// mémoire ne recule pas, et une trace ambiguë verrouillerait la
-    /// conversation pour toujours (audit #12985, B2 ; mesuré le 2026-10-25 :
-    /// aucune en staging ni en production).
+    /// conversation pour toujours (audit #12985, B2 ; mesuré en staging et
+    /// en production : aucune occurrence).
     /// Un message chiffré dont le mode ne PROUVE rien — chiffré sans mode, ou
     /// d'un mode inconnu — est affiché. Fail-closed : il scelle l'envoi en
     /// cours, sans jamais s'écrire dans la mémoire du compte (revue de

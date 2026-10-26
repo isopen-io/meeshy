@@ -199,7 +199,7 @@ nonisolated final class LibsignalTestDirectory: E2EEDirectoryClientProviding, @u
         try gateway.stock(userId: userId, sessionId: sessionId)
     }
 
-    func retireDevice(deviceId: UInt32) async throws -> E2EERetirement {
+    func retireDevice(deviceId: UInt32, registrationId: UInt32) async throws -> E2EERetirement {
         throw CocoaError(.featureUnsupported)
     }
 

@@ -154,3 +154,29 @@ final class APIMessageStickerTests: XCTestCase {
                        "un `sticker` nil ne doit PAS apparaître dans le corps — ni en valeur, ni en null")
     }
 }
+
+/// #13109 — une durée d'éphémère absurde servie par la passerelle ne fabrique
+/// pas une échéance dans des siècles : elle est ramenée au plafond, et reste
+/// éphémère (plus court protège davantage) ; une durée nulle ou négative ne
+/// déclare rien.
+final class APIMessageEphemeralDurationBoundTests: XCTestCase {
+    private func decode(_ duration: String) throws -> APIMessage {
+        try APIClient.makeAPIPayloadDecoder().decode(APIMessage.self, from: Data("""
+        {"id":"m1","conversationId":"c1","senderId":"u1","content":"x","createdAt":"2026-09-02T10:00:00.000Z","ephemeralDuration":\(duration)}
+        """.utf8))
+    }
+
+    func test_anAbsurdDuration_isBroughtDownToTheCeiling() throws {
+        XCTAssertEqual(try decode("9223372036854775807").ephemeralDuration, APIMessage.maximumEphemeralDuration)
+    }
+
+    func test_aReasonableDuration_isKept() throws {
+        XCTAssertEqual(try decode("3600").ephemeralDuration, 3600)
+    }
+
+    func test_aNonPositiveDuration_declaresNothing() throws {
+        XCTAssertNil(try decode("0").ephemeralDuration)
+        XCTAssertNil(try decode("-5").ephemeralDuration)
+    }
+}
+
