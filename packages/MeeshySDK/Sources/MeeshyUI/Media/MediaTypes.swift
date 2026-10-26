@@ -600,9 +600,3 @@ public enum MediaPreviewContext: Equatable {
     }
 }
 
-// MARK: - Format Helpers
-
-public func formatMediaDuration(_ seconds: TimeInterval) -> String {
-    DurationFormat.clock(seconds)
-}
-

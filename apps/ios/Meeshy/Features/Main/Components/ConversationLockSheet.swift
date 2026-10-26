@@ -306,7 +306,7 @@ struct ConversationLockSheet: View {
         guard let wait = outcome.retryDelay, wait > 0 else { return incorrect }
         return String(
             format: String(localized: "conversation.lock.error.throttled", defaultValue: "Trop d'essais. Réessayez dans %@", bundle: .main),
-            LocalizedNumber.spokenDuration(seconds: wait)
+            MediaFormat.duration(wait, style: .spoken)
         )
     }
 

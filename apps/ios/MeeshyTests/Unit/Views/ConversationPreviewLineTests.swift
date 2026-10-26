@@ -124,8 +124,8 @@ final class ConversationPreviewLineTests: XCTestCase {
 
         XCTAssertEqual(
             spoken,
-            "Voice message, \(LocalizedNumber.spokenDuration(seconds: 12, locale: locale)), "
-                + LocalizedNumber.spokenDuration(seconds: 3725, locale: locale)
+            "Voice message, \(MediaFormat.duration(12, style: .spoken, locale: locale)), "
+                + MediaFormat.duration(3725, style: .spoken, locale: locale)
         )
         XCTAssertFalse(spoken.contains("0:12"))
     }

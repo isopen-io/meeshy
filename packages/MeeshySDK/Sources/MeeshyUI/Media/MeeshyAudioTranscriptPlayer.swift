@@ -210,7 +210,7 @@ public struct MeeshyAudioTranscriptPlayer: View {
     private var zoneEdition: some View {
         let contenu = HStack(spacing: MeeshySpacing.smPlus) {
             bande
-            Text(Self.horloge(player.playhead) + " / " + Self.horloge(dureeEffective))
+            Text(MediaFormat.duration(player.playhead) + " / " + MediaFormat.duration(dureeEffective))
                 .font(.caption2.monospacedDigit())
                 .foregroundStyle(MeeshyColors.textSecondary(isDark: isDark))
             if onEdit != nil {
@@ -220,7 +220,7 @@ public struct MeeshyAudioTranscriptPlayer: View {
             }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityValue(MeeshyAudioTrimmer.spokenDuration(dureeEffective))
+        .accessibilityValue(MediaFormat.duration(dureeEffective, style: .spelledOut, rounding: .toNearestOrAwayFromZero))
 
         if let onEdit {
             contenu
@@ -273,15 +273,5 @@ public struct MeeshyAudioTranscriptPlayer: View {
         lignes = AudioTranscriptCue.phrases(from: cues)
         samples = (try? await WaveformCache.shared.samples(from: url, count: Self.resolution)) ?? []
         chargee = player.load(url: url)
-    }
-
-    /// L'horloge MONTRÉE. `Duration.formatted` porte les chiffres de la locale —
-    /// un `String(format:)` graverait les chiffres latins, illisibles pour un
-    /// lecteur arabe. Ce que VoiceOver DIT est une autre chaîne
-    /// (`spokenDuration`), et c'est volontaire : « 0:12 » s'entend « zéro
-    /// deux-points douze ».
-    nonisolated static func horloge(_ seconds: TimeInterval) -> String {
-        let entier = seconds.isFinite && seconds > 0 ? Int(seconds.rounded(.towardZero)) : 0
-        return Duration.seconds(entier).formatted(.time(pattern: .minuteSecond))
     }
 }

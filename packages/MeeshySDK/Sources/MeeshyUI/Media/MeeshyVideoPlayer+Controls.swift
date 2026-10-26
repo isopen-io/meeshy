@@ -290,11 +290,11 @@ internal struct _InlineOverlayControls: View {
             }
             if controls.contains(.duration) {
                 HStack {
-                    Text(formatMediaDuration(isSeeking ? seekValue * manager.duration : manager.currentTime))
+                    Text(MediaFormat.duration(isSeeking ? seekValue * manager.duration : manager.currentTime))
                         .font(.system(size: MeeshyFont.microSize, weight: .semibold, design: .monospaced))
                         .foregroundColor(.white.opacity(0.8))
                     Spacer()
-                    Text(formatMediaDuration(manager.duration))
+                    Text(MediaFormat.duration(manager.duration))
                         .font(.system(size: MeeshyFont.microSize, weight: .semibold, design: .monospaced))
                         .foregroundColor(.white.opacity(0.8))
                 }

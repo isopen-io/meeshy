@@ -395,7 +395,7 @@ struct MagicLinkView: View {
     // MARK: - Actions
 
     private var formattedCountdown: String {
-        LocalizedNumber.duration(seconds: countdownRemaining)
+        MediaFormat.duration(countdownRemaining)
     }
 
     /// « Le lien expire dans **4 minutes 32 secondes** ».
@@ -404,7 +404,7 @@ struct MagicLinkView: View {
     /// 32 » — l'annonce se trompait d'un facteur soixante sur la seule
     /// information que ce compte à rebours porte.
     private var spokenCountdown: String {
-        LocalizedNumber.spokenDuration(seconds: countdownRemaining)
+        MediaFormat.duration(countdownRemaining, style: .spoken)
     }
 
     private func handOff(_ entry: EmailVerificationViewModel) {

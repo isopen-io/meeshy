@@ -273,6 +273,6 @@ struct StoryAudioCell: View {
     }
 
     private func formatDuration(_ seconds: TimeInterval) -> String {
-        DurationFormat.clock(seconds, rounding: .toNearestOrAwayFromZero)
+        MediaFormat.duration(seconds, rounding: .toNearestOrAwayFromZero)
     }
 }

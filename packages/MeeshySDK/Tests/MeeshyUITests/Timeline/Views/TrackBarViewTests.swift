@@ -87,4 +87,10 @@ final class TrackBarViewTests: XCTestCase {
         XCTAssertEqual(TrackBarView<Color>.formatTrackDuration(64), "1:04")
         XCTAssertEqual(TrackBarView<Color>.formatTrackDuration(125), "2:05")
     }
+
+    func test_clocks_roundTheWholeDuration_neverMinutesAndSecondsApart() {
+        XCTAssertEqual(TrackBarView<Color>.formatTrackDuration(119.6), "2:00")
+        XCTAssertEqual(TransportBar.formatTimeCompact(seconds: 119.6), "2:00")
+        XCTAssertEqual(TransportBar.formatTimeCompact(seconds: 65.4), "1:05")
+    }
 }

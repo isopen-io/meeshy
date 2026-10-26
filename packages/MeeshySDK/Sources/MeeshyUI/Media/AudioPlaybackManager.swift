@@ -596,7 +596,7 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     // collapse the Combine downstream into ~5 Hz of distinct values.
     private static let progressTickInterval: TimeInterval = 0.1
     /// `currentTime` is exposed in seconds with 100ms display granularity
-    /// (`formatMediaDuration` truncates below that). Any smaller delta is
+    /// (`MediaFormat.duration` truncates below that). Any smaller delta is
     /// invisible to the user and only generates wasted re-renders.
     private static let currentTimeWriteThresholdSeconds: TimeInterval = 0.05
     /// `progress` drives a 200-ish-pixel waveform; sub-half-pixel deltas

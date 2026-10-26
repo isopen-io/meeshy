@@ -402,7 +402,7 @@ nonisolated enum ComposerSoundCredit {
     /// lit comme une piste vide.
     static func label(for sound: StoryAudioPlayerObject,
                       locale: Locale = .current) -> String {
-        compose(sound, locale: locale) { LocalizedNumber.duration(seconds: $0, locale: $1) }
+        compose(sound, locale: locale) { MediaFormat.duration($0, locale: $1) }
     }
 
     /// **La pastille est LUE à voix haute, et « 0:12 » ne se dit pas.**
@@ -410,7 +410,7 @@ nonisolated enum ComposerSoundCredit {
     /// L'hôte posait `.accessibilityLabel(Text(label(for:)))` — la chaîne
     /// MONTRÉE, resservie telle quelle. VoiceOver y lit une horloge : « zéro
     /// heure douze » pour un extrait de douze secondes. La doctrine du dépôt
-    /// sépare les deux depuis 247i — `LocalizedNumber.duration` pour ce qu'on
+    /// sépare les deux depuis 247i — `MediaFormat.duration` pour ce qu'on
     /// VOIT, `spokenDuration` pour ce qu'on ENTEND — et cette pastille était
     /// le site où les deux étaient confondus.
     ///
@@ -423,7 +423,7 @@ nonisolated enum ComposerSoundCredit {
     /// fonctions écrites côte à côte auraient divergé au premier champ ajouté.
     static func spokenLabel(for sound: StoryAudioPlayerObject,
                             locale: Locale = .current) -> String {
-        compose(sound, locale: locale) { LocalizedNumber.spokenDuration(seconds: $0, locale: $1) }
+        compose(sound, locale: locale) { MediaFormat.duration($0, style: .spoken, locale: $1) }
     }
 
     /// **Un son sans titre n'en reçoit pas un d'emprunt.**
@@ -438,7 +438,7 @@ nonisolated enum ComposerSoundCredit {
     static func durationLabel(for sound: StoryAudioPlayerObject,
                               locale: Locale = .current) -> String? {
         guard let secondes = sound.duration, secondes > 0 else { return nil }
-        return LocalizedNumber.duration(seconds: Int(secondes.rounded()), locale: locale)
+        return MediaFormat.duration(Int(secondes.rounded()), locale: locale)
     }
 
     /// **La composition reste UNIQUE** : elle APPELLE les deux moitiés plutôt

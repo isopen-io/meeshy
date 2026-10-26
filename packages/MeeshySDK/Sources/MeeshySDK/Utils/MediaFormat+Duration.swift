@@ -103,16 +103,19 @@ extension MediaFormat {
     /// recomputed at every playhead frame. `NSCache` is thread-safe, and a
     /// formatter nobody mutates any more is too.
     private nonisolated static func componentsFormatter(_ style: DurationStyle, locale: Locale) -> DateComponentsFormatter {
-        let key = "\(style)|\(locale.identifier)" as NSString
+        let unitsStyle: DateComponentsFormatter.UnitsStyle = switch style {
+        case .spelledOut: .spellOut
+        case .approximate: .full
+        default: .abbreviated
+        }
+        let key = "\(unitsStyle.rawValue)|\(locale.identifier)" as NSString
         if let cached = componentsFormatters.object(forKey: key) { return cached }
         let formatter = DateComponentsFormatter()
-        switch style {
-        case .spelledOut:
+        formatter.unitsStyle = unitsStyle
+        if unitsStyle == .spellOut {
             formatter.allowedUnits = [.minute, .second]
-            formatter.unitsStyle = .spellOut
-        default:
+        } else {
             formatter.allowedUnits = [.hour, .minute, .second]
-            formatter.unitsStyle = style == .approximate ? .full : .abbreviated
             formatter.maximumUnitCount = 1
         }
         var calendar = Calendar(identifier: .gregorian)

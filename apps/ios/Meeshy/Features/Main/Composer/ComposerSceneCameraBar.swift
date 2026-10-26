@@ -313,7 +313,7 @@ struct ComposerSceneCameraBar: View {
                            : .default,
                            value: recordingBlink)
                 .onAppear { if !reduceMotion { recordingBlink = 0.25 } }
-            Text(LocalizedNumber.duration(seconds: elapsed))
+            Text(MediaFormat.duration(elapsed))
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold, design: .monospaced))
                 .foregroundStyle(.white)
             Text(ComposerCaptureTopRow.segmentBadge(compte))
@@ -330,7 +330,7 @@ struct ComposerSceneCameraBar: View {
         // la minuterie EN MOTS — il lirait « 0:12 » comme une heure.
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(ComposerSceneCameraCopy.segmentCount(compte))
-        .accessibilityValue(LocalizedNumber.spokenDuration(seconds: elapsed))
+        .accessibilityValue(MediaFormat.duration(elapsed, style: .spoken))
         .accessibilityAddTraits(.updatesFrequently)
     }
 }

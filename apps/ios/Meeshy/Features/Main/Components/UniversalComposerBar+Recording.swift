@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshySDK
 import MeeshyUI
 import AVFoundation
 import CoreLocation
@@ -228,7 +229,7 @@ extension UniversalComposerBar {
             .frame(width: 54, alignment: .trailing)
             .accessibilityElement(children: .combine)
             .accessibilityLabel(String(localized: "composer.recording.inProgress", defaultValue: "Enregistrement en cours", bundle: .main))
-            .accessibilityValue(LocalizedNumber.spokenDuration(seconds: effectiveDuration))
+            .accessibilityValue(MediaFormat.duration(effectiveDuration, style: .spoken))
             .accessibilityAddTraits(.updatesFrequently)
 
             // Stop → attachments button — stops recording and drops the audio
@@ -418,6 +419,6 @@ extension UniversalComposerBar {
     // MARK: - Helpers
 
     func formatDuration(_ seconds: TimeInterval) -> String {
-        LocalizedNumber.duration(seconds: seconds)
+        MediaFormat.duration(seconds)
     }
 }

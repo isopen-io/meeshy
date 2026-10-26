@@ -152,7 +152,7 @@ nonisolated enum QuotedReplyPresentation {
             segments.append("\(dimension(width, locale: locale))\u{00D7}\(dimension(height, locale: locale))")
         }
         if let durationMs, durationMs > 0 {
-            segments.append(LocalizedNumber.duration(seconds: durationMs / 1000, locale: locale))
+            segments.append(MediaFormat.duration(durationMs / 1000, locale: locale))
         }
         if let pageCount, pageCount > 1 {
             segments.append(pagesLabel(pageCount, locale: locale))

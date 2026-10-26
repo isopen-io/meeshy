@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import MeeshySDK
 
 nonisolated enum CallModeCarouselRule {
     static let selectedScale: CGFloat = 1
@@ -184,6 +185,6 @@ enum CallModeGestureRule {
     }
 
     static func clock(_ elapsed: TimeInterval, locale: Locale = .current) -> String {
-        LocalizedNumber.duration(seconds: elapsed, locale: locale)
+        MediaFormat.duration(elapsed, locale: locale)
     }
 }

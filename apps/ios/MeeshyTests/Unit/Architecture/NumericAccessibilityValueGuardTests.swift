@@ -215,8 +215,8 @@ final class NumericAccessibilityValueGuardTests: XCTestCase {
             offenders.isEmpty,
             "Ces sites composent une horloge à la main. `String(format:)` sans locale "
             + "grave les chiffres latins : une durée MONTRÉE passe par "
-            + "`LocalizedNumber.duration`, une durée DITE par "
-            + "`LocalizedNumber.spokenDuration` :\n"
+            + "`MediaFormat.duration`, une durée DITE par "
+            + "`MediaFormat.duration(_:style: .spoken)` :\n"
             + offenders.sorted().joined(separator: "\n")
         )
     }
@@ -261,9 +261,8 @@ final class NumericAccessibilityValueGuardTests: XCTestCase {
             let url = appRoot.appendingPathComponent(host)
             let text = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
             XCTAssertTrue(
-                text.contains("LocalizedNumber.duration")
-                || text.contains("LocalizedNumber.spokenDuration")
-                || text.contains("LocalizedNumber.wholeSeconds"),
+                text.contains("MediaFormat.duration")
+                || text.contains("MediaFormat.wholeSeconds"),
                 "\(host) ne nomme plus la source des durées — soit la minuterie a disparu "
                 + "(mettre la liste à jour), soit la règle a été réécrite sur place."
             )
@@ -291,7 +290,8 @@ final class NumericAccessibilityValueGuardTests: XCTestCase {
                 (try? String(contentsOf: url, encoding: .utf8)) ?? ""
             )
             XCTAssertTrue(
-                text.contains("spokenDuration") || text.contains("spokenCountdown"),
+                text.contains("spokenDuration") || text.contains("spokenCountdown")
+                || text.contains("style: .spoken"),
                 "\(host) rend une minuterie sans jamais nommer sa forme parlée : "
                 + "sa valeur d'accessibilité annonce donc une heure."
             )
@@ -316,8 +316,8 @@ final class NumericAccessibilityValueGuardTests: XCTestCase {
     /// dépôt, sans quoi il enverrait corriger ce qui ne l'est pas (leçon 238i).
     func test_theClockExtractorSparesEverythingElse() {
         let innocent = #"""
-        LocalizedNumber.duration(seconds: total)
-        LocalizedNumber.spokenDuration(seconds: total)
+        MediaFormat.duration(total)
+        MediaFormat.duration(total, style: .spoken)
         String(format: String(localized: "a11y.transcription.confidence"), pct)
         String(format: "%.1f MB", megabytes)
         """#

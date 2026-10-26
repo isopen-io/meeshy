@@ -358,6 +358,6 @@ public struct UniversalAudioRecorderView<Recorder: AudioRecordingProviding>: Vie
     // MARK: - Helpers
 
     private func formatDuration(_ seconds: TimeInterval) -> String {
-        DurationFormat.clock(seconds)
+        MediaFormat.duration(seconds)
     }
 }
