@@ -3461,6 +3461,38 @@ model ConversationPublicKey {
 /// Server Encryption Key - Stores encrypted data keys for server/hybrid mode attachments
 /// Keys are encrypted with a master key (envelope encryption) before storage
 /// Used for audio translation in hybrid mode where server needs to decrypt
+/// #13100 — un FICHIER de pièce jointe scellé au repos (modes `server` et
+/// `hybrid`) : l'original, la vignette, une variante, un rendu, une piste TTS.
+/// Une ligne par CLÉ DE STOCKAGE : les copies transférées partagent les octets,
+/// donc la ligne. Elle ne porte aucun secret — la clé de données reste dans
+/// `ServerEncryptionKey`, enveloppée par `ENCRYPTION_MASTER_KEY` — mais tout ce
+/// qui LIE le chiffré : sa conversation, la pièce qui l'a fait sceller, son
+/// rôle et sa clé de stockage forment les données associées (Tink AES-GCM-HKDF
+/// Streaming, `services/attachments/atRest/sealedFileFormat.ts`). Sa présence
+/// est la SEULE source de vérité « ce fichier est scellé » : un nom ou un
+/// en-tête de fichier ne se croit jamais.
+model AttachmentFileAtRest {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  /// La clé de stockage sous `UPLOAD_PATH` (`2026/10/<auteur>/<opaque>.jpg`, `translated/<id>_<langue>.m4a`).
+  storageKey     String   @unique
+  /// La conversation dont la clé de données scelle le fichier.
+  conversationId String   @db.ObjectId
+  /// La pièce qui a fait sceller le fichier (les copies gardent celle-ci).
+  attachmentId   String   @db.ObjectId
+  /// `ServerEncryptionKey.id` — rattachée à la conversation ou désignée par elle.
+  keyId          String
+  /// `original`, `thumbnail`, `webp-640`, `avif-640`, `rendition-h264`, `rendition-heic`, `track-en`…
+  role           String
+  /// La taille du CLAIR ; celle du chiffré s'en déduit (et se vérifie).
+  plaintextSize  Int
+  /// Le format et sa taille de segment chiffré.
+  format         String
+  segmentSize    Int
+  createdAt      DateTime @default(now())
+
+  @@index([attachmentId])
+}
+
 model ServerEncryptionKey {
   id String @id @map("_id")
 

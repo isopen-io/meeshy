@@ -3,6 +3,7 @@
  * Délègue à UploadProcessor et MetadataManager
  */
 
+import { forgetSealing } from './atRest/atRestFiles';
 import { PrismaClient, Prisma } from '@meeshy/shared/prisma/client';
 import { promises as fs } from 'fs';
 import path from 'path';
@@ -508,6 +509,7 @@ export class AttachmentService {
       logger.error('Erreur suppression fichiers', error as Error);
     }
     await eraseMirroredCopy(fullPath, this.uploadBasePath);
+    await forgetSealing(fullPath, this.uploadBasePath);
   }
 
   /**

@@ -23,7 +23,7 @@ import { enhancedLogger } from '../../utils/logger-enhanced';
 import { ifNoneMatchMatches } from '../../utils/etag';
 import { sendError, sendNotFound, sendForbidden, sendInternalError } from '../../utils/response.js';
 import type { AttachmentParams } from './types';
-import { diskBytes, hasBucket, isBucketUnavailable, locateBucketBytes, locateStoredBytes, uploadRootOf, type StoredBytes, type StoredBytesSource } from './storedBytes';
+import { atRestSealingOf, diskBytes, hasBucket, isBucketUnavailable, locateBucketBytes, locateStoredBytes, uploadRootOf, type StoredBytes, type StoredBytesSource } from './storedBytes';
 
 const log = enhancedLogger.child({ module: 'AttachmentDownload' });
 
@@ -321,6 +321,11 @@ export function registerFileStreamRoute(fastify: FastifyInstance, prisma: FileRo
           return sendForbidden(reply, 'Forbidden');
         }
         if (located.kind === 'hidden') return sendNotFound(reply, 'File not found');
+
+        // #13100 — un fichier scellé au repos ne sort JAMAIS par l'adresse nue :
+        // elle n'a pas de lecteur. Il se lit par l'adresse signée de son
+        // lecteur ou par identifiant, qui le déchiffrent après l'avoir jugé.
+        if ((await atRestSealingOf(located.filePath, bytesSource)).kind === 'sealed') return sendNotFound(reply, 'File not found');
 
         // Un fichier absent du disque n'interroge la base que si un seau peut l'avoir.
         const onDisk = await diskBytes(located.filePath);

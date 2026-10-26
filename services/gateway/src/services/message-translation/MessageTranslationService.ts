@@ -6,6 +6,7 @@
  * to prevent plaintext exposure in the database.
  */
 
+import { writeTranslatedTrack } from '../attachments/atRest/translatedTrackWrite';
 import { EventEmitter } from 'events';
 import * as path from 'path';
 import { promises as fs } from 'fs';
@@ -1195,7 +1196,7 @@ export class MessageTranslationService extends EventEmitter {
 
             // Sauvegarder directement le buffer (multipart) ou décoder base64 (legacy)
             const audioBuffer = audioBinary || Buffer.from(audioBase64!, 'base64');
-            await fs.writeFile(localAudioPath, audioBuffer);
+            await writeTranslatedTrack(this.prisma, { absolutePath: localAudioPath, bytes: audioBuffer, attachmentId: data.attachmentId, language: translatedAudio.targetLanguage });
 
             const source = audioBinary ? 'multipart' : 'base64';
             logger.info(`   📁 Audio sauvegardé (${source}): ${expectedFilename} (${(audioBuffer.length / 1024).toFixed(1)}KB)`);
@@ -1763,7 +1764,7 @@ export class MessageTranslationService extends EventEmitter {
 
           // Sauvegarder le buffer
           const audioBuffer = audioBinary || Buffer.from(audioBase64!, 'base64');
-          await fs.writeFile(localAudioPath, audioBuffer);
+          await writeTranslatedTrack(this.prisma, { absolutePath: localAudioPath, bytes: audioBuffer, attachmentId: data.attachmentId, language: data.language });
 
           const source = audioBinary ? 'multipart' : 'base64';
           logger.info(`   📁 Audio sauvegardé (${source}): ${expectedFilename} (${(audioBuffer.length / 1024).toFixed(1)}KB)`);
@@ -2106,7 +2107,7 @@ export class MessageTranslationService extends EventEmitter {
 
               // Sauvegarder directement le buffer (multipart) ou décoder base64 (legacy)
               const audioBuffer = audioBinary || Buffer.from(audioBase64!, 'base64');
-              await fs.writeFile(localAudioPath, audioBuffer);
+              await writeTranslatedTrack(this.prisma, { absolutePath: localAudioPath, bytes: audioBuffer, attachmentId: jobMetadata.attachmentId, language: translation.targetLanguage });
 
               const source = audioBinary ? 'multipart' : 'base64';
               logger.info(`📁 Audio sauvegardé (${source}): ${filename} (${(audioBuffer.length / 1024).toFixed(1)}KB)`);

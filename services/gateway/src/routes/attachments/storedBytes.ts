@@ -5,6 +5,14 @@ import { enhancedLogger } from '../../utils/logger-enhanced';
 import { storedFileETag } from '../../utils/etag';
 import { storageKeyUnder, type ByteRange, type MediaObjectStore } from '../../services/storage/objects/MediaObjectStore';
 import { processMediaObjectStores } from '../../services/storage/objects/mediaObjectStoreFactory';
+import {
+  isSealedStorageKey,
+  openSealedStoredBytes,
+  processAtRestFileAccess,
+  storageKeyOfPath,
+  type AtRestFileAccess,
+  type AtRestFileRecord,
+} from '../../services/attachments/atRest/atRestFiles';
 
 const log = enhancedLogger.child({ module: 'storedBytes' });
 
@@ -24,6 +32,8 @@ export type StoredBytes = {
 export type StoredBytesSource = {
   readonly uploadRoot?: string;
   readonly mirror?: MediaObjectStore | null;
+  /** #13100 — l'accès aux fichiers scellés au repos ; absent ⇒ celui du processus. */
+  readonly atRest?: AtRestFileAccess | null;
 };
 
 export function uploadRootOf(source: StoredBytesSource): string {
@@ -55,7 +65,54 @@ export function isBucketUnavailable(lookup: StoredBytesLookup): lookup is Bucket
 }
 
 export async function locateStoredBytes(filePath: string, source: StoredBytesSource): Promise<StoredBytesLookup> {
-  return (await diskBytes(filePath)) ?? locateBucketBytes(filePath, source);
+  const located = (await diskBytes(filePath)) ?? (await locateBucketBytes(filePath, source));
+  if (located === null || isBucketUnavailable(located)) return located;
+  return openedAtRest(located, filePath, source);
+}
+
+function atRestOf(source: StoredBytesSource): AtRestFileAccess | null {
+  return source.atRest !== undefined ? source.atRest : processAtRestFileAccess();
+}
+
+/**
+ * #13100 — le scellement d'un fichier, ou `null` s'il ne l'est pas. Un fichier
+ * à la forme scellée sans accès configuré est tenu pour scellé : il ne
+ * sortira jamais tel quel.
+ */
+/** Seuls les médias datés et les pistes traduites se scellent : un avatar n'interroge pas la base. */
+const SEALABLE_KEY = /^(?:\d{4}\/\d{2}\/[^/]+\/[^/]+|translated\/[^/]+)$/;
+const mayBeSealed = (key: string): boolean => SEALABLE_KEY.test(key);
+
+export type AtRestSealing = { readonly kind: 'sealed'; readonly record: AtRestFileRecord | null } | { readonly kind: 'plain' };
+
+export async function atRestSealingOf(filePath: string, source: StoredBytesSource): Promise<AtRestSealing> {
+  const key = storageKeyOfPath(filePath, uploadRootOf(source));
+  if (key === null || !mayBeSealed(key)) return { kind: 'plain' };
+  const access = atRestOf(source);
+  const record = access ? await access.store.find(key) : null;
+  if (record) return { kind: 'sealed', record };
+  return isSealedStorageKey(key) ? { kind: 'sealed', record: null } : { kind: 'plain' };
+}
+
+/**
+ * Les octets CLAIRS d'un fichier scellé, pour une route qui a déjà jugé son
+ * lecteur ; un fichier ordinaire passe tel quel. Un scellement qui ne s'ouvre
+ * pas (accès absent, format inconnu) rend `null` : le fichier n'est pas servi.
+ */
+async function openedAtRest(located: StoredBytes, filePath: string, source: StoredBytesSource): Promise<StoredBytes | null> {
+  const sealing = await atRestSealingOf(filePath, source);
+  if (sealing.kind === 'plain') return located;
+  const access = atRestOf(source);
+  if (!sealing.record || !access) {
+    log.warn('sealed file without its sealing record or key access: not served');
+    return null;
+  }
+  try {
+    return { ...openSealedStoredBytes(located, sealing.record, access.keyring), origin: located.origin };
+  } catch (error: unknown) {
+    log.warn('sealed file in an unknown format: not served', { error: error instanceof Error ? error.message : String(error) });
+    return null;
+  }
 }
 
 /** Le seau seul, pour l'appelant qui a déjà cherché sur le disque et jugé que la clé peut s'y chercher. */

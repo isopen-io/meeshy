@@ -20,6 +20,8 @@ import multipart from '@fastify/multipart';
 import { MAX_DIRECT_UPLOAD_FILES } from '@meeshy/shared/types/attachment';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
+import { configureAtRestFileAccess } from './services/attachments/atRest/atRestFiles';
+import { atRestFileAccessFor } from './services/attachments/atRest/atRestFileAccessFor';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 // Extrait dans `./gateway-logger` pour que `route-registration.ts` puisse
 // logger sans importer `server.ts` (effets de bord au chargement du module —
@@ -235,6 +237,7 @@ class MeeshyServer {
     }) as unknown as PrismaClient;
 
     registerEmailRecipientLookup(prismaRecipientAddressLookup(this.prisma)); // #8238 — garde centrale des e-mails
+    configureAtRestFileAccess(atRestFileAccessFor(this.prisma)); // #13100 — les fichiers scellés au repos s'ouvrent par ce processus
     this.statusService = new StatusService(this.prisma); // requis par AuthMiddleware
 
     // Initialiser le cache multi-niveau partagé pour les mappings de jobs (avant MessageTranslationService)

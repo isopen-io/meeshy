@@ -72,9 +72,11 @@ describe('un fichier scellé par Tink s’ouvre', () => {
     const ciphertext = Buffer.from(vector.ciphertext, 'hex');
     const plain = plaintextOf(1000);
     const ranges = [[0, 0], [0, 199], [199, 200], [200, 439], [439, 441], [5, 998], [999, 999], [0, 999]];
-    for (const [start, end] of ranges) {
-      const opened = await open(ciphertext, 1000, {}, { start, end });
-      expect(opened.equals(plain.subarray(start, end + 1))).toBe(true);
+    for (const segmentsPerRead of [1, 2, 16]) {
+      for (const [start, end] of ranges) {
+        const opened = await collect(openSealedRange({ ...paramsFor(), plaintextSize: 1000, readCiphertext: readerOf(ciphertext), range: { start, end }, segmentsPerRead }));
+        expect(opened.equals(plain.subarray(start, end + 1))).toBe(true);
+      }
     }
   });
 });
@@ -117,10 +119,11 @@ describe('un fichier scellé altéré ne rend aucun octet', () => {
     await expect(open(tampered, 1000)).rejects.toThrow();
   });
 
-  it('un fichier tronqué d’un segment entier', async () => {
+  it('un fichier tronqué à une frontière de segment, taille inscrite comprise', async () => {
     const { sealed } = await sealedOf(1000);
     const truncated = sealed.subarray(0, 2 * vectors.ciphertextSegmentSize);
-    await expect(open(truncated, 1000 - 240 - 80)).rejects.toThrow();
+    await expect(open(truncated, 200 + 240)).rejects.toThrow();
+    await expect(open(truncated, 1000)).rejects.toThrow();
   });
 
   it('deux segments permutés', async () => {
