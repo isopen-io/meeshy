@@ -13,6 +13,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import me.meeshy.ui.theme.MeeshyRadius
+import me.meeshy.ui.theme.MeeshyTheme
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -59,7 +64,7 @@ internal fun ChatComposer(
     onDraftChange: (String) -> Unit,
     onPickLanguage: (String) -> Unit,
     onSend: () -> Unit,
-    onOpenEffects: () -> Unit,
+    onClearEffects: () -> Unit = {},
     onCancelEdit: () -> Unit,
     onCancelReply: () -> Unit,
     onRemoveClipboard: () -> Unit,
@@ -102,6 +107,7 @@ internal fun ChatComposer(
     var minimized by rememberSaveable { mutableStateOf(false) }
     var attachmentTrayOpen by remember { mutableStateOf(false) }
     var ephemeralRailOpen by remember { mutableStateOf(false) }
+    var effectsPanelOpen by remember { mutableStateOf(false) }
     // La flèche de la pilule d'enregistrement envoie TOUT DE SUITE (iOS) : la prise rejoint le
     // plateau, puis part dès que sa préparation est finie ; le stop, lui, la laisse au plateau.
     var sendVoiceWhenStaged by remember { mutableStateOf(false) }
@@ -275,6 +281,21 @@ internal fun ChatComposer(
                         },
                     )
                 }
+                if (inputAvailable && !isEditing && effectsPanelOpen) {
+                    EffectsPickerSheet(
+                        effects = effects,
+                        accentColor = accentColor,
+                        onToggle = onToggleEffect,
+                        onSelectDuration = onSelectEphemeralDuration,
+                        onClear = onClearEffects,
+                        onDone = { effectsPanelOpen = false },
+                        inline = true,
+                        modifier = Modifier
+                            .padding(start = MeeshySpacing.sm, end = MeeshySpacing.sm, top = MeeshySpacing.sm)
+                            .clip(RoundedCornerShape(MeeshyRadius.lg))
+                            .background(if (MeeshyTheme.isDark) Color.Black.copy(alpha = 0.3f) else Color.White.copy(alpha = 0.9f)),
+                    )
+                }
                 if (inputAvailable && !isEditing) {
                     ComposerToolbar(
                         effects = effects,
@@ -287,6 +308,7 @@ internal fun ChatComposer(
                                 onToggleEffect(MessageEffectFlags.EPHEMERAL)
                                 ephemeralRailOpen = false
                             } else {
+                                effectsPanelOpen = false
                                 ephemeralRailOpen = !ephemeralRailOpen
                             }
                         },
@@ -298,7 +320,7 @@ internal fun ChatComposer(
                         onEffects = {
                             interact()
                             ephemeralRailOpen = false
-                            onOpenEffects()
+                            effectsPanelOpen = !effectsPanelOpen
                         },
                         onPickLanguage = onPickLanguage,
                         onLibrary = if (affordances.canSendImages || affordances.canSendVideos) {

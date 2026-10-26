@@ -48,7 +48,7 @@ class ChatComposerParityTest {
                 draft = draft, draftRevision = 0, canSend = draft.isNotBlank(), isEditing = false,
                 affordances = affordances, slowMode = slowMode, replyBanner = null,
                 clipboardContent = null, languageCode = "fr", accentColor = Color.Blue,
-                onDraftChange = {}, onPickLanguage = {}, onSend = onSend, onOpenEffects = {}, onCancelEdit = {},
+                onDraftChange = {}, onPickLanguage = {}, onSend = onSend, onCancelEdit = {},
                 onCancelReply = {}, onRemoveClipboard = {}, onPickFile = { _, _, _ -> }, canMinimize = canMinimize,
             )
         }

@@ -74,16 +74,19 @@ internal fun EffectsPickerSheet(
     onClear: () -> Unit,
     onDone: () -> Unit,
     modifier: Modifier = Modifier,
+    inline: Boolean = false,
 ) {
     val presentation = MessageEffectsPickerPresenter.build(effects)
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .heightIn(max = 520.dp)
+            .heightIn(max = if (inline) 260.dp else 520.dp)
             .verticalScroll(rememberScrollState())
-            .padding(bottom = MeeshySpacing.xl),
+            .padding(bottom = if (inline) MeeshySpacing.sm else MeeshySpacing.xl),
     ) {
-        Row(
+        // En panneau DANS la plaque (iOS), le titre et les protections vivent déjà dans la barre
+        // d'outils : seuls les effets d'entrée et permanents s'y montrent.
+        if (!inline) Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.sm),
@@ -104,7 +107,7 @@ internal fun EffectsPickerSheet(
             )
         }
 
-        presentation.sections.forEach { section ->
+        presentation.sections.filter { !inline || it.section != MessageEffectSection.BEHAVIOR }.forEach { section ->
             Text(
                 text = stringResource(effectSectionLabel(section.section)),
                 style = MaterialTheme.typography.labelMedium,
@@ -136,7 +139,7 @@ internal fun EffectsPickerSheet(
             }
         }
 
-        if (presentation.showEphemeralDuration) {
+        if (presentation.showEphemeralDuration && !inline) {
             Text(
                 text = stringResource(R.string.chat_effects_ephemeral_duration),
                 style = MaterialTheme.typography.labelMedium,

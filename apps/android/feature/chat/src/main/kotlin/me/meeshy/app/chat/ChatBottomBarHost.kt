@@ -74,7 +74,7 @@ internal fun ChatBottomBarHost(host: ChatHostContext) {
             onDraftChange = actions.onDraftChange,
             onPickLanguage = actions.onComposerLanguagePicked,
             onSend = actions.send,
-            onOpenEffects = actions.openEffectsPicker,
+            onClearEffects = actions.clearEffects,
             onCancelEdit = actions.cancelEdit,
             onCancelReply = actions.cancelReply,
             onRemoveClipboard = actions.removeClipboardContent,
