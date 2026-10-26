@@ -574,7 +574,7 @@ public actor OutboxFlusher {
             current.updatedAt = Date()
 
             // A permanent 4xx will never succeed — dead-letter now rather than
-            // spin the full backoff schedule. Otherwise cap at `maxAttempts`.
+            // spin the full backoff schedule. Otherwise stop once `retryPolicy` is exhausted.
             if Self.isPermanentServerRejection(error) || retryPolicy.isExhausted(afterFailures: current.attempts) {
                 current.status = .exhausted
             } else {
