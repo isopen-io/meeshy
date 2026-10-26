@@ -19,7 +19,7 @@ jest.mock('../../../utils/logger-enhanced', () => ({
 
 import { sealStoredFile, type AtRestFileAccess, type AtRestFileRecord } from '../atRest/atRestFiles';
 import { unsealAllAtRestFiles } from '../atRest/atRestUnseal';
-import { AT_REST_ACTIVATED_AT_KEY, AT_REST_DEFERRED_SINCE_KEY, atRestActivation, forgetDeferral, inBatches, rememberedDeferral, sweepSealingSince, sweepStaleTrackTemporaries } from '../../../jobs/at-rest-file-sweep';
+import { AT_REST_ACTIVATED_AT_KEY, atRestActivation, inBatches, sweepSealingSince, sweepStaleTrackTemporaries } from '../../../jobs/at-rest-file-sweep';
 import { contentDisappears, requireFileSealingKey } from '../../messaging/sealMessageAttachments';
 import { serverAtRestAttachmentFiles } from '../../../migrations/named/server-at-rest-attachment-files';
 import { eraseSharedTranslations } from '../../messaging/sharedTranslationErasure';
@@ -132,42 +132,6 @@ describe('le balayage', () => {
     expect(sweepSealingSince({ activatedAt, now, signerReady: true, sealingEnabled: true, deferredSince })).toEqual(deferredSince);
     const recent = new Date(now.getTime() - 60 * HOUR);
     expect(sweepSealingSince({ activatedAt: recent, now, signerReady: true, sealingEnabled: true, deferredSince })).toEqual(recent);
-  });
-
-  it('le début d’une panne du verrou survit à un redémarrage, et s’oublie une fois rattrapé', async () => {
-    const data = new Map<string, string>();
-    const client = {
-      set: async (key: string, value: string) => { if (!data.has(key)) data.set(key, value); return 'OK'; },
-      get: async (key: string) => data.get(key) ?? null,
-      eval: async (_script: string, _keys: number, key: string, upTo: string) => {
-        const value = data.get(key);
-        return value !== undefined && Number(value) <= Number(upTo) ? Number(data.delete(key)) : 0;
-      },
-    };
-    const outage = new Date(now.getTime() - 72 * HOUR);
-    expect(await rememberedDeferral(client, outage)).toEqual(outage);
-    // Redémarrage : la mémoire est vide, Redis s'en souvient.
-    expect(await rememberedDeferral(client, null)).toEqual(outage);
-    expect(await rememberedDeferral(client, new Date(now.getTime() - HOUR))).toEqual(outage);
-    await forgetDeferral(client, now);
-    expect(data.has(AT_REST_DEFERRED_SINCE_KEY)).toBe(false);
-    expect(await rememberedDeferral(client, null)).toBeNull();
-    expect(await rememberedDeferral({ set: async () => { throw new Error('down'); }, get: async () => null }, outage)).toEqual(outage);
-  });
-
-  it('un report plus récent posé par une autre instance pendant le balayage survit à l’oubli', async () => {
-    const data = new Map<string, string>([[AT_REST_DEFERRED_SINCE_KEY, String(now.getTime() + HOUR)]]);
-    const client = {
-      set: async () => 'OK',
-      get: async (key: string) => data.get(key) ?? null,
-      del: async (key: string) => data.delete(key),
-      eval: async (_script: string, _keys: number, key: string, upTo: string) => {
-        const value = data.get(key);
-        return value !== undefined && Number(value) <= Number(upTo) ? Number(data.delete(key)) : 0;
-      },
-    };
-    await forgetDeferral(client, now);
-    expect(data.get(AT_REST_DEFERRED_SINCE_KEY)).toBe(String(now.getTime() + HOUR));
   });
 
   it('sans marqueur, sans clé de signature ou scellement suspendu, il ne rattrape rien', () => {

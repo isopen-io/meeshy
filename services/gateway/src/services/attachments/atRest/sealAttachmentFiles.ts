@@ -42,7 +42,7 @@ import {
   sealedFileIsInPlace,
 } from './atRestFiles';
 import { ciphertextSizeFor } from './sealedFileFormat';
-import { noteSealingDeferred } from './sealLock';
+import { noteSealingDeferred } from './sealingDeferral';
 
 const logger = enhancedLogger.child({ module: 'sealAttachmentFiles' });
 

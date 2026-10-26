@@ -30,7 +30,7 @@ import { guardedInterval } from '../utils/guarded-timer.js';
 import { AT_REST_TEMPORARY_DIR, atRestFileSealingEnabled, processAtRestFileAccess } from '../services/attachments/atRest/atRestFiles';
 import { readerFileUrlSignerFromEnv } from '../services/attachments/readerFileSignature';
 import { sealLockRedis } from '../services/attachments/atRest/atRestFileAccessFor';
-import { clearSealingDeferred, sealingDeferredSince } from '../services/attachments/atRest/sealLock';
+import { forgetDeferral, rememberedDeferral } from '../services/attachments/atRest/sealingDeferral';
 import { backfillAtRestAttachments } from '../services/attachments/atRest/atRestBackfill';
 import { finishPendingErasures, type PendingErasureOutcome } from '../services/attachments/atRest/sealAttachmentFiles';
 import { gatewaySealDeps } from '../services/messaging/sealMessageAttachments';
@@ -49,41 +49,7 @@ export const AT_REST_ACTIVATED_AT_KEY = 'at-rest:files:activated-at';
 type MarkerClient = {
   set(key: string, value: string, nx: 'NX'): Promise<unknown>;
   get(key: string): Promise<string | null>;
-  eval?(script: string, keys: number, key: string, upTo: string): Promise<unknown>;
 };
-
-/** Compare-et-supprime : seul un report antérieur ou égal à `upTo` s'efface. */
-const FORGET_DEFERRAL = "local v = tonumber(redis.call('GET', KEYS[1])) if v and v <= tonumber(ARGV[1]) then return redis.call('DEL', KEYS[1]) end return 0";
-
-export const AT_REST_DEFERRED_SINCE_KEY = 'at-rest:files:deferred-since';
-
-/**
- * Le début d'une panne du verrou, survivant à un redémarrage : l'instant tenu
- * en mémoire se pose dans Redis dès qu'il répond (le plus ancien gagne, `NX`),
- * et l'instant rendu est le plus ancien des deux. Redis absent : la mémoire.
- */
-export async function rememberedDeferral(client: MarkerClient | null, inMemory: Date | null): Promise<Date | null> {
-  if (!client) return inMemory;
-  try {
-    if (inMemory) await client.set(AT_REST_DEFERRED_SINCE_KEY, String(inMemory.getTime()), 'NX');
-    const raw = await client.get(AT_REST_DEFERRED_SINCE_KEY);
-    const stored = raw === null ? null : new Date(Number(raw));
-    const candidates = [inMemory, stored && Number.isFinite(stored.getTime()) ? stored : null].filter((d): d is Date => d !== null);
-    return candidates.length === 0 ? null : new Date(Math.min(...candidates.map((d) => d.getTime())));
-  } catch {
-    return inMemory;
-  }
-}
-
-/**
- * Le rattrapage est fait jusqu'à `upTo` : la panne s'oublie, en mémoire et
- * dans Redis — atomiquement, et seulement si le report inscrit n'est pas plus
- * récent (une autre instance a pu en poser un pendant le balayage).
- */
-export async function forgetDeferral(client: MarkerClient | null, upTo: Date): Promise<void> {
-  clearSealingDeferred(upTo);
-  await client?.eval?.(FORGET_DEFERRAL, 1, AT_REST_DEFERRED_SINCE_KEY, String(upTo.getTime())).catch(() => undefined);
-}
 
 /** Pose une fois, puis relit, l'instant d'activation du scellement sur l'instance. */
 export async function atRestActivation(client: MarkerClient | null, now: Date): Promise<Date | null> {
@@ -160,12 +126,7 @@ export async function finishPendingErasuresPass(
   );
 }
 
-export async function runAtRestFileSweep(
-  prisma: PrismaClient,
-  now: Date = new Date(),
-  activatedAt: Date | null = null,
-  marker: MarkerClient | null = null
-): Promise<void> {
+export async function runAtRestFileSweep(prisma: PrismaClient, now: Date = new Date(), activatedAt: Date | null = null): Promise<void> {
   const access = processAtRestFileAccess();
   if (!access) return;
   const deps = { ...gatewaySealDeps(prisma, access), prisma };
@@ -174,13 +135,13 @@ export async function runAtRestFileSweep(
     now,
     signerReady: readerFileUrlSignerFromEnv(now) !== null,
     sealingEnabled: atRestFileSealingEnabled(),
-    deferredSince: await rememberedDeferral(marker, sealingDeferredSince()),
+    deferredSince: await rememberedDeferral(),
   });
   const report = since ? await backfillAtRestAttachments(deps, { dryRun: false, log: () => undefined, since }) : NO_BACKFILL;
   // Rattrapé sans pièce occupée : ce qui avait été différé est scellé. Une
   // pièce en échec permanent est journalisée et ne retient pas la fenêtre.
   const caughtUp = since !== null && 'skipped' in report && (report.skipped.busy ?? 0) === 0;
-  if (caughtUp) await forgetDeferral(marker, now);
+  if (caughtUp) await forgetDeferral(now);
   const finished = await finishPendingErasuresPass(deps, new Date(now.getTime() - PENDING_ERASURE_MS));
   const tracks = await sweepStaleTrackTemporaries(deps.uploadRoot, now.getTime());
   const erased = finished.reduce((sum, outcome) => sum + outcome.erased, 0);
@@ -204,7 +165,7 @@ export function startAtRestFileSweep(prisma: PrismaClient): { stop(): void } {
     logger,
     run: async () => {
       activation.at = activation.at ?? (await atRestActivation(marker(), new Date()));
-      await runAtRestFileSweep(prisma, new Date(), activation.at, marker());
+      await runAtRestFileSweep(prisma, new Date(), activation.at);
     },
   });
   timer.unref?.();

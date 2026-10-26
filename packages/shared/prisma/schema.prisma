@@ -3497,6 +3497,16 @@ model AttachmentFileAtRest {
   @@index([replacedKey])
 }
 
+/// #13100 — le début d'une panne du verrou de scellement (Redis injoignable) :
+/// les pièces de cette période attendent le rattrapage du balayage, qui remonte
+/// au plus ancien début inscrit. Gardé dans Mongo, joignable quand Redis ne
+/// l'est pas, pour survivre à un redémarrage pendant la panne.
+model AtRestSealingDeferral {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  since     DateTime
+  createdAt DateTime @default(now())
+}
+
 /// =====================================================
 /// SERVER ENCRYPTION KEYS - ATTACHMENT ENCRYPTION
 /// =====================================================

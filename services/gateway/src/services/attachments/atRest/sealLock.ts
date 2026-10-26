@@ -101,18 +101,6 @@ export function gatewaySealLockOf(deps: {
   };
 }
 
-const deferral: { since: Date | null } = { since: null };
-
-/** Depuis quand un verrou injoignable a laissé des pièces au balayage (le plus ancien instant), ou `null`. */
-export const sealingDeferredSince = (): Date | null => deferral.since;
-export function noteSealingDeferred(now: Date = new Date()): void {
-  deferral.since = deferral.since ?? now;
-}
-/** Le balayage a rattrapé tout ce qui avait été différé jusqu'à `upTo`. */
-export function clearSealingDeferred(upTo: Date): void {
-  if (deferral.since && deferral.since <= upTo) deferral.since = null;
-}
-
 export function redisSealLock(client: LockClient, ttlMs: number = SEAL_LOCK_TTL_MS): SealLock {
   return async (filePath) => {
     const key = sealLockKey(filePath);

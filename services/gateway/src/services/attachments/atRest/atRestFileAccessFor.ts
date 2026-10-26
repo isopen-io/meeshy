@@ -8,7 +8,8 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { getEncryptionService } from '../../EncryptionService';
 import { prismaAtRestFileStore, type AtRestFileAccess, type AtRestFileKeyring, type FileSealLock } from './atRestFiles';
-import { gatewaySealLockOf, noteSealingDeferred, reconnectingLockClient } from './sealLock';
+import { gatewaySealLockOf, reconnectingLockClient } from './sealLock';
+import { configureSealingDeferralStore, noteSealingDeferred, prismaDeferralStore } from './sealingDeferral';
 
 const lockClient: { client: ReturnType<typeof reconnectingLockClient> | null } = { client: null };
 /** Le client Redis du verrou et du marqueur d'activation ; `null` sans `REDIS_URL`. */
@@ -41,5 +42,6 @@ export function lazyFileKeyring(factory: () => Promise<AtRestFileKeyring>): AtRe
 export function atRestFileAccessFor(prisma: PrismaClient): AtRestFileAccess {
   // Ouvert dès le démarrage : le premier envoi trouve le verrou déjà connecté.
   sealLockRedis();
+  configureSealingDeferralStore(prismaDeferralStore(prisma));
   return { store: prismaAtRestFileStore(prisma), keyring: lazyFileKeyring(() => getEncryptionService(prisma)), lock: gatewaySealLock };
 }

@@ -81,10 +81,12 @@ ligne. La ligne part quand le fichier est effacé (`AttachmentService`).
   qu'une autre instance ne verrait pas. Le verrou a son PROPRE client Redis,
   qui se reconnecte sans jamais abandonner (celui du cache cesse après trois
   tentatives) : le scellement reprend sans redémarrage. Le rattrapage remonte
-  alors jusqu’au début de la panne, même au-delà de 48 h et après un redémarrage (`at-rest:files:deferred-since` dans Redis ; jamais avant
+  alors jusqu’au début de la panne, même au-delà de 48 h et après un redémarrage pendant la panne (le début de la panne s'inscrit dans MONGO, `AtRestSealingDeferral`, joignable quand Redis ne l'est pas ; seuls les débuts antérieurs au rattrapage s'effacent ; jamais avant
   l'activation). Une piste d'une pièce au repos prend le verrou de l'original
   AVANT de lire s'il est scellé ; verrou injoignable, elle échoue tout de suite
-  (la piste manque, une retraduction la refait) ; une piste d'une conversation
+  (la piste manque, une retraduction la refait — son adresse n'est alors
+  annoncée nulle part, ni en base ni en temps réel : la traduction garde son
+  seul texte, `translatedTrackSave.ts`) ; une piste d'une conversation
   en clair n'y touche jamais. Le verrou du processus ne sert que
   sans `REDIS_URL` du tout (un seul processus). Une piste TTS s'écrit sous le même
   verrou (attendu jusqu'à 10 s) : jamais rescellée par-dessus son chiffré.
