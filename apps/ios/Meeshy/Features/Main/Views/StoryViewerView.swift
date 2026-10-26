@@ -316,13 +316,7 @@ struct StoryViewerView: View {
     /// était périmé » de « quelqu'un vient de commenter pendant que je lis ».
     @State var storyCommentCountReconciledPulse: Int = 0
     @State var replyingToStoryComment: FeedComment? = nil
-    /// Optimistic local tracking of liked comments (id ∈ set => current user reacted).
-    @State var storyCommentLikedIds: Set<String> = []
-    /// Local like-count delta keyed by comment id, applied on top of the server `comment.likes`
-    /// to avoid waiting for refetch after a tap.
-    @State var storyCommentLikeDelta: [String: Int] = [:]
-    /// In-flight heart taps: commentIds with a pending network call. Prevents rapid-tap desync.
-    @State var heartInFlightIds: Set<String> = []
+    @State var commentHearts = CommentHeartLedger()
     /// Latched once the `initialAction` (Phase F notification entry point) has
     /// been honoured. Guards against re-firing on every `.onAppear` cycle —
     /// scene phase transitions and parent re-renders both republish onAppear,

@@ -38,9 +38,7 @@ nonisolated struct StoryCommentsRenderInputs: Equatable {
     var safeBottom: CGFloat
     var replyingToId: String?
     /// Ce que `makeStoryCommentRow` lit hors des commentaires eux-mêmes.
-    var likedIds: Set<String>
-    var likeDelta: [String: Int]
-    var inFlightIds: Set<String>
+    var hearts: CommentHeartLedger
     /// Où la liste se pose : la carte la place sur le composeur (#9893).
     var zone: StoryCommentsZone.Frame = .unplaced
 
@@ -59,10 +57,7 @@ nonisolated struct StoryCommentsRenderInputs: Equatable {
             && lhs.safeBottom == rhs.safeBottom
             && lhs.replyingToId == rhs.replyingToId
             && lhs.zone == rhs.zone
-        let sameRows = lhs.likedIds == rhs.likedIds
-            && lhs.likeDelta == rhs.likeDelta
-            && lhs.inFlightIds == rhs.inFlightIds
-        return sameComments && sameThreads && sameFrame && sameRows
+        return sameComments && sameThreads && sameFrame && lhs.hearts == rhs.hearts
     }
 }
 
@@ -132,9 +127,7 @@ extension StoryViewerView {
             targetParentCommentId: targetParentCommentId,
             safeBottom: windowBottomInset,
             replyingToId: replyingToStoryComment?.id,
-            likedIds: storyCommentLikedIds,
-            likeDelta: storyCommentLikeDelta,
-            inFlightIds: heartInFlightIds
+            hearts: commentHearts
         )
     }
 

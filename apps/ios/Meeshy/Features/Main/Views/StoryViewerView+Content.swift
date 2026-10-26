@@ -211,9 +211,7 @@ extension StoryViewerView {
         // any in-flight heart taps. Without this, `isStoryCommentsEmpty` stays
         // false in the sidebar tap path (Sidebar:277) and the overlay re-opens
         // with the prior slide's comments without ever refetching.
-        storyCommentLikedIds = []
-        storyCommentLikeDelta = [:]
-        heartInFlightIds = []
+        commentHearts.reset()
         loadStoryCommentCount()
         storyReactionCount = currentStory?.reactionCount ?? 0
         storyCurrentUserReactions = currentStory?.currentUserReactions ?? []

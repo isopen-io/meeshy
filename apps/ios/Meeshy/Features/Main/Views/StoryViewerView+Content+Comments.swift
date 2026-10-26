@@ -75,27 +75,6 @@ extension StoryViewerView {
 
     // MARK: - Story Comment Reactions
 
-    /// Applique un événement socket `comment:reaction-added` ou
-    /// `comment:reaction-removed` en utilisant l'agrégation server-authoritative
-    /// (`event.aggregation.count` + `event.aggregation.hasCurrentUser`).
-    ///
-    /// Avant 2026-05-28, le code maintenait deux états locaux séparés —
-    /// `storyCommentLikedIds` (set d'ids likés par l'utilisateur) et
-    /// `storyCommentLikeDelta` (offset depuis le count serveur) — et appliquait
-    /// l'événement socket en patchant le delta selon `event.userId ==
-    /// currentUserId`. Ce design dérivait facilement :
-    ///   - Si `currentUserId` était nil ou mal formaté, l'événement propre était
-    ///     traité comme « autre utilisateur » → delta double-comptait.
-    ///   - Si le serveur émettait un `comment:reaction-removed` parasite (ex :
-    ///     idempotence côté gateway), le delta repassait à 0 et le count
-    ///     « disparaissait » à l'écran (bug user 2026-05-28).
-    ///
-    /// La solution : faire confiance à `event.aggregation` qui porte le state
-    /// global (count total + flag `hasCurrentUser`) après application de
-    /// l'événement. On met à jour `storyCommentThread.roots[i].likes` à ce count, on
-    /// réinitialise le delta à 0, et on synchronise `storyCommentLikedIds`
-    /// depuis `hasCurrentUser`. Le résultat affiché — `comment.likes + delta`
-    /// — converge vers la vérité serveur sans flicker.
     /// Realtime asymmetry fix (mirrors `PostDetailViewModel.subscribeToSocket`'s
     /// `commentAdded` sink): a `comment:added` broadcast for the currently
     /// viewed story used to only move the sidebar's denormalized count (via
@@ -133,41 +112,23 @@ extension StoryViewerView {
         )
     }
 
+    /// A heart event's absolute aggregate is authoritative: the row takes its
+    /// count and the ledger its heart (`CommentHeartLedger.reconcile`).
     func applyCommentReactionEvent(_ event: SocketCommentReactionUpdateEvent) {
         // 2026-05-29 : on ne gate plus sur `showCommentsOverlay` — l'état doit
         // rester aligné sur le serveur même quand l'overlay est fermé.
         // Si `storyCommentThread.roots` est vide (overlay jamais ouvert), `firstIndex(where:)`
         // plus bas retourne nil et on skip silencieusement ; on se ré-aligne
-        // au prochain load via `computeLikedIds(fromCachedComments:)` (Task 3).
+        // au prochain load via `CommentHeartLedger.seed(from:)`.
         guard event.postId == currentStory?.id else { return }
         guard event.emoji == Self.heartEmoji else { return }
 
         let commentId = event.commentId
-        let serverCount = event.aggregation.count
-
-        // Mise à jour de likedIds depuis l'agrégat (source de vérité) — « mon
-        // cœur » dérive de `userIds` (la liste des User.id ayant réagi), PAS de
-        // `hasCurrentUser` : ce flag est calculé côté gateway relativement à
-        // l'ACTEUR de l'événement, donc il vaut true pour le like d'un TIERS et
-        // allumait le cœur de tous les destinataires du broadcast.
-        var resolvedCount = serverCount
-        if let myId = AuthManager.shared.currentUser?.id {
-            if event.aggregation.userIds.contains(myId) {
-                storyCommentLikedIds.insert(commentId)
-            } else if event.userId == myId {
-                // L'événement décrit MA propre action : agrégat autoritatif.
-                storyCommentLikedIds.remove(commentId)
-            } else if storyCommentLikedIds.contains(commentId) {
-                // Agrégat d'un TIERS pendant que MON like est encore en vol :
-                // il ne me connaît pas — préserver le cœur, compter le mien
-                // par-dessus (l'écho de mon propre like reconfirmera).
-                resolvedCount = serverCount + 1
-            }
-        }
-
-        // Reset du delta et propagation du count serveur dans la liste pour
-        // que la prochaine reaction parte d'une baseline propre.
-        storyCommentLikeDelta[commentId] = 0
+        let resolvedCount = commentHearts.reconcile(
+            commentId: commentId, count: event.aggregation.count,
+            reactorUserIds: event.aggregation.userIds, actorUserId: event.userId,
+            myUserId: AuthManager.shared.currentUser?.id
+        )
         if let idx = storyCommentThread.roots.firstIndex(where: { $0.id == commentId }) {
             storyCommentThread.roots[idx].likes = resolvedCount
         } else if let parentId = storyCommentThread.roots.first(where: { storyCommentThread.replies[$0.id]?.contains(where: { $0.id == commentId }) == true })?.id,
@@ -178,64 +139,18 @@ extension StoryViewerView {
         }
     }
 
+    /// Optimistic heart through the shared transport (socket, REST fallback);
+    /// rolled back only when neither path delivered.
     func toggleStoryCommentLike(_ comment: FeedComment) async {
         let id = comment.id
-        guard !heartInFlightIds.contains(id) else { return }
-        heartInFlightIds.insert(id)
-        defer { heartInFlightIds.remove(id) }
-
-        let wasLiked = storyCommentLikedIds.contains(id)
-        let postId = currentStory?.id ?? ""
-
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
-            if wasLiked {
-                storyCommentLikedIds.remove(id)
-                storyCommentLikeDelta[id] = (storyCommentLikeDelta[id] ?? 0) - 1
-            } else {
-                storyCommentLikedIds.insert(id)
-                storyCommentLikeDelta[id] = (storyCommentLikeDelta[id] ?? 0) + 1
-            }
-        }
-
-        do {
-            if wasLiked {
-                _ = try await SocialSocketManager.shared.removeCommentReaction(commentId: id, postId: postId, emoji: StoryViewerView.heartEmoji)
-            } else {
-                _ = try await SocialSocketManager.shared.addCommentReaction(commentId: id, postId: postId, emoji: StoryViewerView.heartEmoji)
-            }
-        } catch {
-            withAnimation {
-                if wasLiked {
-                    storyCommentLikedIds.insert(id)
-                    storyCommentLikeDelta[id] = (storyCommentLikeDelta[id] ?? 0) + 1
-                } else {
-                    storyCommentLikedIds.remove(id)
-                    storyCommentLikeDelta[id] = (storyCommentLikeDelta[id] ?? 0) - 1
-                }
-            }
-        }
+        var wasLiked: Bool?
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) { wasLiked = commentHearts.begin(id) }
+        guard let wasLiked else { return }
+        let delivered = await CommentHeartTransport.deliver(wasLiked: wasLiked, commentId: id, postId: currentStory?.id ?? "")
+        withAnimation { commentHearts.settle(id, wasLiked: wasLiked, delivered: delivered) }
     }
 
     // MARK: - Load Comments
-
-    static func computeLikedIds(from comments: [APIPostComment]) -> Set<String> {
-        return Set(
-            comments
-                .filter { $0.currentUserReactions?.contains(StoryViewerView.heartEmoji) == true }
-                .map { $0.id }
-        )
-    }
-
-    /// Overload pour le chemin cache : `FeedComment` (déjà mappé) porte maintenant
-    /// `currentUserReactions` (cf. `FeedModels.swift`). Permet de restaurer
-    /// `storyCommentLikedIds` au cold start sans round-trip réseau.
-    static func computeLikedIds(fromCachedComments comments: [FeedComment]) -> Set<String> {
-        return Set(
-            comments
-                .filter { $0.currentUserReactions?.contains(StoryViewerView.heartEmoji) == true }
-                .map { $0.id }
-        )
-    }
 
     func loadStoryComments() {
         guard currentStory != nil else { return }
@@ -264,10 +179,8 @@ extension StoryViewerView {
 
     /// Additive liked-heart seeding from the rows that just arrived.
     private var storyLikedIdsSeeder: @MainActor ([FeedComment]) -> Void {
-        let liked = $storyCommentLikedIds
-        return { comments in
-            liked.wrappedValue.formUnion(Self.computeLikedIds(fromCachedComments: comments))
-        }
+        let hearts = $commentHearts
+        return { comments in hearts.wrappedValue.seed(from: comments) }
     }
 
     /// Ligne de l'overlay bâtie depuis un commentaire reçu tel quel (galerie,

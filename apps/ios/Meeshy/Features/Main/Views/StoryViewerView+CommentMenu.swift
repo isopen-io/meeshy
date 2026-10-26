@@ -92,9 +92,9 @@ extension StoryViewerView {
         StoryCommentRowView(
             comment: comment,
             readerLanguages: readerLanguages,
-            isLiked: storyCommentLikedIds.contains(comment.id),
-            likeCount: max(0, comment.likes + (storyCommentLikeDelta[comment.id] ?? 0)),
-            isInFlight: heartInFlightIds.contains(comment.id),
+            isLiked: commentHearts.isLiked(comment.id),
+            likeCount: commentHearts.displayedLikes(of: comment),
+            isInFlight: commentHearts.isInFlight(comment.id),
             onReply: {
                 withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
                     replyingToStoryComment = comment

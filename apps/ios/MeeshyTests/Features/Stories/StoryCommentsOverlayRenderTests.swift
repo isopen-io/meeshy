@@ -1,5 +1,6 @@
 import XCTest
 import MeeshySDK
+import MeeshyUI
 @testable import Meeshy
 
 // **#9859 — la barre de progression n'invalide plus les commentaires.**
@@ -19,12 +20,16 @@ final class StoryCommentsOverlayRenderTests: XCTestCase {
         replies: [String: [FeedComment]] = [:],
         likedIds: Set<String> = []
     ) -> StoryCommentsRenderInputs {
-        StoryCommentsRenderInputs(
+        var hearts = CommentHeartLedger()
+        hearts.seed(from: comments.filter { likedIds.contains($0.id) }.map {
+            FeedComment(id: $0.id, author: $0.author, content: $0.content, currentUserReactions: [MeeshyQuickReactions.heart])
+        })
+        return StoryCommentsRenderInputs(
             comments: comments, commentCount: comments.count, replies: replies,
             expandedThreads: [], loadingReplies: [], repliesHasMore: [:],
             isLoading: false, readerLanguages: ["fr"], isStoryExpired: false,
             targetCommentId: nil, targetParentCommentId: nil, safeBottom: 34,
-            replyingToId: nil, likedIds: likedIds, likeDelta: [:], inFlightIds: []
+            replyingToId: nil, hearts: hearts
         )
     }
 

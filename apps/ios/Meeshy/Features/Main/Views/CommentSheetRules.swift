@@ -23,7 +23,7 @@ enum CommentSheetRules {
     /// `currentUserReactions` (cf. `toFeedPost` / `loadReplies`). Sans ce seeding,
     /// tout commentaire déjà liké s'affichait cœur vide à l'ouverture.
     static func computeLikedIds(from comments: [FeedComment]) -> Set<String> {
-        StoryViewerView.computeLikedIds(fromCachedComments: comments)
+        CommentHeartLedger.likedIds(in: comments)
     }
 
     /// Layers a freshly-fetched comment page over the current in-memory list
