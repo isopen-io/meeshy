@@ -54,19 +54,27 @@ nonisolated struct EndToEndReadyDevice: Sendable {
     /// Les métadonnées de mes appareils (`GET /e2ee/devices`) : elles nomment,
     /// elles n'approuvent jamais.
     let ownDeviceDetails: @concurrent @Sendable () async throws -> [E2EEOwnDeviceDetails]
+    /// Le scellement des SIGNAUX (#13142) : mêmes appareils et même remplissage qu'un message.
+    let signalSealer: (any E2EESignalSealing)?
+    /// La boîte des signaux reçus, rangés avec leur déchiffrement (#13142).
+    let signalInbox: (any E2EESignalInboxProviding)?
 
     init(
         device: E2EELocalDevice,
         sealer: any E2EEMessageSealing,
         opener: any E2EEEnvelopeOpening,
         linking: any E2EEOwnDeviceLinkingProviding = UnavailableOwnDeviceLinking(),
-        ownDeviceDetails: @escaping @concurrent @Sendable () async throws -> [E2EEOwnDeviceDetails] = { [] }
+        ownDeviceDetails: @escaping @concurrent @Sendable () async throws -> [E2EEOwnDeviceDetails] = { [] },
+        signalSealer: (any E2EESignalSealing)? = nil,
+        signalInbox: (any E2EESignalInboxProviding)? = nil
     ) {
         self.device = device
         self.sealer = sealer
         self.opener = opener
         self.linking = linking
         self.ownDeviceDetails = ownDeviceDetails
+        self.signalSealer = signalSealer
+        self.signalInbox = signalInbox
     }
 }
 
@@ -135,9 +143,16 @@ actor EndToEndMessagingRuntime: EndToEndMessagingProviding, EndToEndDeviceManagi
         let task: Task<EndToEndReadyDevice, any Error>
     }
 
-    init(provisioning: any EndToEndDeviceProvisioning) {
+    /// La route unique des signaux chiffrés (#13142).
+    let signalTransport: any E2EESignalTransporting
+
+    init(provisioning: any EndToEndDeviceProvisioning, signalTransport: any E2EESignalTransporting = E2EESignalClient()) {
         self.provisioning = provisioning
+        self.signalTransport = signalTransport
     }
+
+    /// Le compte de la session ouverte ; aucun avant la première ouverture ni après la fermeture.
+    var openAccount: String? { session.account }
 
     nonisolated var opened: AnyPublisher<E2EEOpenOutcome, Never> { relay.publisher }
     nonisolated var sessions: AnyPublisher<String?, Never> { relay.sessions }
@@ -316,6 +331,8 @@ actor EndToEndMessagingRuntime: EndToEndMessagingProviding, EndToEndDeviceManagi
             Logger.e2ee.info("e2ee envelope for another device id=\(envelopeId, privacy: .public)")
         case .deferred(let envelopeId):
             Logger.e2ee.warning("e2ee envelope deferred id=\(envelopeId, privacy: .public)")
+        case .signal(let received):
+            Logger.e2ee.info("e2ee signal received id=\(received.signalId, privacy: .public)")
         }
         relay.send(outcome)
     }

@@ -12,6 +12,7 @@
 package me.meeshy.sdk.net.routes
 
 public object ApiRoutesE2Ee {
+    public const val CONVERSATIONS_BY_CONVERSATION_ID_SIGNALS: String = "e2ee/conversations/{conversationId}/signals"
     public const val DEVICES: String = "e2ee/devices"
     public const val DEVICES_BY_DEVICE_ID: String = "e2ee/devices/{deviceId}"
     public const val DEVICES_BY_DEVICE_ID_KEYS: String = "e2ee/devices/{deviceId}/keys"

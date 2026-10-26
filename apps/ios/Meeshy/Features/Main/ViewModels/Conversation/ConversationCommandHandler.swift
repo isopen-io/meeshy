@@ -191,7 +191,7 @@ final class ConversationCommandHandler: ConversationCommandProviding {
             await projection.reveal(localIds)
             return ConversationCommandFailure(error)
         }
-        try? await persistence.purgeMessages(ids: localIds)
+        try? await persistence.purgeMessages(ids: localIds, origin: .authenticated)
         targets.forEach { StarredMessagesStore.shared.remove(messageId: $0.serverId) }
         return nil
     }

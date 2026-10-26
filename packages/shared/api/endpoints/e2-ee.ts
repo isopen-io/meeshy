@@ -12,6 +12,9 @@
  * Les paramètres sont encodés ICI (encodeURIComponent) : passer la valeur brute.
  */
 
+/** POST /api/v1/e2ee/conversations/:conversationId/signals */
+export const conversationsByConversationIdSignals = (conversationId: string): string => `/api/v1/e2ee/conversations/${encodeURIComponent(conversationId)}/signals`;
+
 /** GET · POST /api/v1/e2ee/devices */
 export const devices = '/api/v1/e2ee/devices';
 

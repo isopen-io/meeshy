@@ -470,7 +470,7 @@ extension ConversationViewModel {
             guard let self else { return }
             let persistence = messagePersistence
             await bestEffort("send.removeFailed", category: .messages) {
-                try await persistence.markDeleted(localId: messageId, deletedAt: Date())
+                try await persistence.markDeleted(localId: messageId, deletedAt: Date(), origin: .authenticated)
             }
         }
     }

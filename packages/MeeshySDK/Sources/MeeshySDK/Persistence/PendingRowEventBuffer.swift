@@ -6,6 +6,8 @@ struct PendingTombstone: Sendable {
     let expired: Bool
     /// Lancée sur cet appareil, pas encore acceptée par le serveur (#13001).
     var awaitingConfirmation = false
+    /// Annoncée par la passerelle seule, ou authentifiée (#13060).
+    var origin: PlaintextErasureOrigin = .announced
 }
 
 struct PendingEdit: Sendable {

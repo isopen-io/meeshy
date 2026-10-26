@@ -257,7 +257,11 @@ describe('ROUTE_TABLE (#4278)', () => {
     // (un montage par domaine). Aucun alias, aucune route retirée ni renommée ;
     // le manifeste gagne exactement les cinq routes de la fabrique (GET /,
     // GET /installed, GET /:slug, PUT et DELETE /:slug/install).
-    expect(ROUTE_TABLE.length).toBe(93);
+    // 94 : #13142 ajoute `e2ee-signals` — la route unique des signaux chiffrés
+    // d'une conversation e2ee (`POST /api/v1/e2ee/conversations/:id/signals`).
+    // Aucun alias, aucune route retirée ni renommée ; le manifeste gagne
+    // exactement cette route.
+    expect(ROUTE_TABLE.length).toBe(94);
   });
 });
 
