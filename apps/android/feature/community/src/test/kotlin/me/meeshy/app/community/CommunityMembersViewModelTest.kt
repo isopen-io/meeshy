@@ -128,6 +128,29 @@ class CommunityMembersViewModelTest {
     }
 
     @Test
+    fun `a confirmed role change holds even when the members reload fails`() = runTest {
+        coEvery { repository.updateMemberRole("c1", "m-u1", "moderator") } returns NetworkResult.Success(member("u1", "moderator"))
+        coEvery { cache.refreshMembers("c1") } returns false
+        val vm = viewModel()
+
+        vm.changeRole(vm.state.value.sections.flatMap { it.rows }.first { it.member.userId == "u1" }.member, MemberRole.MODERATOR)
+
+        assertThat(vm.state.value.sections.first { it.role == MemberRole.MODERATOR }.rows.map { it.member.userId }).contains("u1")
+        assertThat(vm.state.value.sections.firstOrNull { it.role == MemberRole.MEMBER }?.rows?.map { it.member.userId }.orEmpty()).doesNotContain("u1")
+    }
+
+    @Test
+    fun `a confirmed removal stays removed even when the members reload fails`() = runTest {
+        coEvery { repository.removeMember("c1", "u1") } returns NetworkResult.Success(Unit)
+        coEvery { cache.refreshMembers("c1") } returns false
+        val vm = viewModel()
+
+        vm.remove(vm.state.value.sections.flatMap { it.rows }.first { it.member.userId == "u1" }.member)
+
+        assertThat(vm.state.value.sections.flatMap { it.rows }.map { it.member.userId }).doesNotContain("u1")
+    }
+
+    @Test
     fun `a full first page offers more and the next page appends`() = runTest {
         val page = (1..30).map { member("p$it", "member") } + member("me", "admin")
         val vm = viewModel(members = page)

@@ -73,6 +73,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.community.R
+import me.meeshy.sdk.model.CommunityCreateDraft
 import me.meeshy.sdk.model.PresenceState
 import me.meeshy.sdk.net.api.UserSearchResult
 import me.meeshy.sdk.theme.DynamicColorGenerator
@@ -197,7 +198,7 @@ private fun Fields(state: CommunityCreateUiState, viewModel: CommunityCreateView
         }
         FieldGroup(stringResource(R.string.community_create_field_identifier), required = false) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("mshy_", fontFamily = FontFamily.Monospace, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = MeeshyTheme.tokens.textMuted)
+                Text(CommunityCreateDraft.IDENTIFIER_PREFIX, fontFamily = FontFamily.Monospace, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = MeeshyTheme.tokens.textMuted)
                 Spacer(Modifier.width(4.dp))
                 PlainField(state.draft.identifier, viewModel::onIdentifier, stringResource(R.string.community_create_field_identifier_placeholder), ImeAction.Next)
             }

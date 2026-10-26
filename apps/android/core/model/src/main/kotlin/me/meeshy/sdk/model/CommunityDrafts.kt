@@ -36,6 +36,9 @@ data class CommunityCreateDraft(
     companion object {
         const val MAX_NAME_LENGTH = 100
 
+        /** Le préfixe que la passerelle pose devant tout identifiant (`routes/communities/types.ts`). */
+        const val IDENTIFIER_PREFIX = "mshy_"
+
         fun isIdentifierChar(c: Char): Boolean = c in 'a'..'z' || c in 'A'..'Z' || c in '0'..'9' || c == '-' || c == '_' || c == '@'
     }
 }

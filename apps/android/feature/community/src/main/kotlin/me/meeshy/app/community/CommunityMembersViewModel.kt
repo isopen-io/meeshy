@@ -140,7 +140,10 @@ class CommunityMembersViewModel @Inject constructor(
         publish()
         viewModelScope.launch {
             val ok = repository.updateMemberRole(communityId, member.id, role.wireValue) is NetworkResult.Success
-            if (ok) cache.refreshMembers(communityId)
+            if (ok) {
+                settle { rows -> rows.map { if (it.id == member.id) it.copy(role = role.wireValue) else it } }
+                cache.refreshMembers(communityId)
+            }
             roleOverrides = roleOverrides - member.id
             publish()
             if (!ok) _effects.send(CommunityMembersEffect.ActionFailed)
@@ -153,6 +156,7 @@ class CommunityMembersViewModel @Inject constructor(
         viewModelScope.launch {
             val ok = repository.removeMember(communityId, member.userId) is NetworkResult.Success
             if (ok) {
+                settle { rows -> rows.filterNot { it.userId == member.userId } }
                 cache.refreshMembers(communityId)
                 cache.refreshDetail(communityId)
                 cache.refreshList()
@@ -161,6 +165,12 @@ class CommunityMembersViewModel @Inject constructor(
             publish()
             if (!ok) _effects.send(CommunityMembersEffect.ActionFailed)
         }
+    }
+
+    /** Ce que la passerelle a confirmé tient, même si la relecture qui suit échoue. */
+    private fun settle(transform: (List<ApiCommunityMember>) -> List<ApiCommunityMember>) {
+        firstPage = transform(firstPage)
+        extra = transform(extra)
     }
 
     private fun publish(failed: Boolean? = null) {
