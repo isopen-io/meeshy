@@ -7,7 +7,9 @@
 **Decision.** The conversation timeline is the ONE UIKit screen core, for scroll performance:
 - `UICollectionView` with a compositional layout (`MessageListLayout`) and a diffable data source (`MessageListSection`, `MessageListItem`);
 - cell reuse, inverted list and stable content offset while older pages are inserted;
-- prefetching.
+- a display link for the slow continuous scroll of in-conversation search.
+
+Older pages are loaded ahead by the ViewModel (anticipatory pagination); the collection view sets no `prefetchDataSource`.
 
 The rest stays SwiftUI:
 - the list is hosted by `MessageListView` (`UIViewControllerRepresentable`) inside the SwiftUI conversation screen;
