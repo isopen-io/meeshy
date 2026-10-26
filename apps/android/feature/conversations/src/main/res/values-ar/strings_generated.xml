@@ -343,4 +343,5 @@
     <string name="share_links_copy_a11y">نسخ الرابط</string>
     <string name="sharelinks_detail_language_selected">محدد</string>
     <string name="sharelinks_list_retry">إعادة المحاولة</string>
+    <string name="swipe_unlock">إلغاء القفل</string>
 </resources>

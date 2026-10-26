@@ -18,6 +18,8 @@ import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiConversationPreferences
+import me.meeshy.sdk.net.ApiError
+import me.meeshy.sdk.net.NetworkResult
 import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -167,5 +169,51 @@ class ConversationListRowActionsTest {
         runCurrent()
 
         coVerify { h.repo.setArchivedOptimistic("c1", true) }
+    }
+
+    @Test
+    fun `hiding a conversation drops its row at once, before the server answers`() = runTest(StandardTestDispatcher()) {
+        val h = harness(ApiConversation(id = "c1"), ApiConversation(id = "c2"))
+
+        h.actions.deleteConversationForMe("c1")
+
+        assertThat(h.state.value.conversations.map { it.id }).containsExactly("c2")
+    }
+
+    @Test
+    fun `a refused hide brings the row back and says why`() = runTest(StandardTestDispatcher()) {
+        val h = harness(ApiConversation(id = "c1"), ApiConversation(id = "c2"))
+        coEvery { h.repo.deleteForMe("c1") } returns NetworkResult.Failure(ApiError(message = "Not a participant"))
+
+        h.actions.deleteConversationForMe("c1")
+        runCurrent()
+
+        assertThat(h.state.value.conversations.map { it.id }).containsExactly("c1", "c2")
+        assertThat(h.state.value.errorMessage).isEqualTo("Not a participant")
+    }
+
+    @Test
+    fun `an accepted hide keeps the row away while the cache still carries it`() = runTest(StandardTestDispatcher()) {
+        val h = harness(ApiConversation(id = "c1"), ApiConversation(id = "c2"))
+        coEvery { h.repo.deleteForMe("c1") } returns NetworkResult.Success(Unit)
+
+        h.actions.deleteConversationForMe("c1")
+        runCurrent()
+        val reEmitted = h.state.value.withVisible(listOf(ApiConversation(id = "c1"), ApiConversation(id = "c2")))
+
+        assertThat(reEmitted.conversations.map { it.id }).containsExactly("c2")
+    }
+
+    @Test
+    fun `a hidden conversation that comes back after the purge shows again`() = runTest(StandardTestDispatcher()) {
+        val h = harness(ApiConversation(id = "c1"), ApiConversation(id = "c2"))
+        coEvery { h.repo.deleteForMe("c1") } returns NetworkResult.Success(Unit)
+
+        h.actions.deleteConversationForMe("c1")
+        runCurrent()
+        val purged = h.state.value.withVisible(listOf(ApiConversation(id = "c2")))
+        val revived = purged.withVisible(listOf(ApiConversation(id = "c1"), ApiConversation(id = "c2")))
+
+        assertThat(revived.conversations.map { it.id }).containsExactly("c1", "c2")
     }
 }

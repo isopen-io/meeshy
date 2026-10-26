@@ -45,55 +45,38 @@ internal fun ConversationRow(
         removal = capabilities.removal,
     )
 
-    val pin = stringResource(if (isPinned) R.string.conversations_action_unpin else R.string.conversations_action_pin)
-    val mute = stringResource(if (isMuted) R.string.conversations_action_unmute else R.string.conversations_action_mute)
-    val lock = stringResource(if (model.isLocked) R.string.conversations_action_unlock else R.string.conversations_action_lock)
-    val archive = stringResource(
-        if (isArchived) R.string.conversations_action_unarchive else R.string.conversations_action_archive,
-    )
-    val markRead = stringResource(R.string.conversations_action_mark_read)
-    val markUnread = stringResource(R.string.conversations_action_mark_unread)
-    val remove = capabilities.removal?.let { stringResource(it.swipeLabelRes()) }.orEmpty()
+    val isLocked = model.isLocked
+    val pin = stringResource(if (isPinned) R.string.swipe_unpin else R.string.swipe_pin)
+    val mute = stringResource(if (isMuted) R.string.swipe_unmute else R.string.swipe_mute)
+    val lock = stringResource(if (isLocked) R.string.swipe_unlock else R.string.conversations_action_lock)
+    val archive = stringResource(if (isArchived) R.string.swipe_unarchive else R.string.swipe_archive)
+    val markRead = stringResource(R.string.swipe_mark_read)
+    val markUnread = stringResource(R.string.swipe_mark_unread)
+    val hide = stringResource(R.string.swipe_hide)
 
-    val leadingActions = remember(plan, pin, mute, lock, model.isLocked, isPinned, isMuted, actions) {
-        plan.leading.map { kind ->
-            when (kind) {
-                SwipeKind.PIN -> SwipeAction(Icons.Filled.PushPin, pin, MeeshyPalette.PinnedBlue, actions.onTogglePin)
-                SwipeKind.MUTE -> SwipeAction(
-                    if (isMuted) Icons.Filled.Notifications else Icons.Filled.NotificationsOff,
-                    mute, MeeshyPalette.Neutral500, actions.onToggleMute,
-                )
-                else -> SwipeAction(
-                    if (model.isLocked) Icons.Filled.LockOpen else Icons.Filled.Lock,
-                    lock, MeeshyPalette.Warning, actions.onLockToggle,
-                )
-            }
+    val swipeActions = remember(plan, isPinned, isMuted, isLocked, isArchived, pin, mute, lock, archive, markRead, markUnread, hide, actions) {
+        fun action(kind: SwipeKind): SwipeAction = when (kind) {
+            SwipeKind.PIN -> SwipeAction(Icons.Filled.PushPin, pin, MeeshyPalette.PinnedBlue, actions.onTogglePin)
+            SwipeKind.MUTE -> SwipeAction(
+                if (isMuted) Icons.Filled.Notifications else Icons.Filled.NotificationsOff,
+                mute, MeeshyPalette.Neutral500, actions.onToggleMute,
+            )
+            SwipeKind.LOCK -> SwipeAction(
+                if (isLocked) Icons.Filled.LockOpen else Icons.Filled.Lock,
+                lock, MeeshyPalette.Warning, actions.onLockToggle,
+            )
+            SwipeKind.ARCHIVE -> SwipeAction(
+                if (isArchived) Icons.Filled.Unarchive else Icons.Filled.Archive,
+                archive, MeeshyPalette.Warning, actions.onToggleArchive,
+            )
+            SwipeKind.MARK_READ -> SwipeAction(Icons.Filled.MarkChatRead, markRead, MeeshyPalette.Indigo400, actions.onMarkRead)
+            SwipeKind.MARK_UNREAD -> SwipeAction(Icons.Filled.MarkChatUnread, markUnread, MeeshyPalette.Indigo400, actions.onMarkUnread)
+            SwipeKind.REMOVE -> SwipeAction(Icons.Filled.VisibilityOff, hide, MeeshyPalette.Error, actions.onRemove)
         }
-    }
-    val trailingActions = remember(plan, archive, markRead, markUnread, remove, isArchived, actions) {
-        plan.trailing.map { kind ->
-            when (kind) {
-                SwipeKind.ARCHIVE -> SwipeAction(
-                    if (isArchived) Icons.Filled.Unarchive else Icons.Filled.Archive,
-                    archive, MeeshyPalette.Warning, actions.onToggleArchive,
-                )
-                SwipeKind.MARK_READ -> SwipeAction(
-                    Icons.Filled.MarkChatRead, markRead, MeeshyPalette.Indigo400, actions.onMarkRead,
-                )
-                SwipeKind.MARK_UNREAD -> SwipeAction(
-                    Icons.Filled.MarkChatUnread, markUnread, MeeshyPalette.Indigo400, actions.onMarkUnread,
-                )
-                else -> SwipeAction(Icons.Filled.VisibilityOff, remove, MeeshyPalette.Error, actions.onRemove)
-            }
-        }
+        plan.leading.map(::action) to plan.trailing.map(::action)
     }
 
-    SwipeableRow(leadingActions = leadingActions, trailingActions = trailingActions) {
+    SwipeableRow(leadingActions = swipeActions.first, trailingActions = swipeActions.second) {
         ConversationRowContainer(model = model, actions = actions)
     }
-}
-
-private fun ConversationRowMenuCapabilities.Removal.swipeLabelRes(): Int = when (this) {
-    ConversationRowMenuCapabilities.Removal.DELETE -> R.string.dialogs_removal_delete
-    ConversationRowMenuCapabilities.Removal.HIDE -> R.string.dialogs_removal_hide
 }

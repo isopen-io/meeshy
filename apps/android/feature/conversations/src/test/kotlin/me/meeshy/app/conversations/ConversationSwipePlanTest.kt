@@ -53,4 +53,9 @@ class ConversationSwipePlanTest {
         assertThat(full.leading.size).isAtMost(3)
         assertThat(full.trailing.size).isAtMost(3)
     }
+
+    @Test
+    fun `a direct the viewer deletes still offers the remove swipe last`() {
+        assertThat(plan(removal = Removal.DELETE).trailing.last()).isEqualTo(SwipeKind.REMOVE)
+    }
 }

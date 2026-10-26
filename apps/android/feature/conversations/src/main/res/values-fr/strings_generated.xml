@@ -331,4 +331,5 @@
     <string name="share_links_copy_a11y">Copier le lien</string>
     <string name="sharelinks_detail_language_selected">sélectionné</string>
     <string name="sharelinks_list_retry">Réessayer</string>
+    <string name="swipe_unlock">Déverrouiller</string>
 </resources>

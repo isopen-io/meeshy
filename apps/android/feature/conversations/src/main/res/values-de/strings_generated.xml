@@ -327,4 +327,5 @@
     <string name="share_links_copy_a11y">Link kopieren</string>
     <string name="sharelinks_detail_language_selected">ausgewählt</string>
     <string name="sharelinks_list_retry">Erneut versuchen</string>
+    <string name="swipe_unlock">Entsperren</string>
 </resources>

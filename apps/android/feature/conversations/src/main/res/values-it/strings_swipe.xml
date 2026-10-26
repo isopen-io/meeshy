@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Libellés courts des glissements de rangée, repris des clés iOS swipe.* (marquées « stale » dans le catalogue, donc ignorées par le générateur). -->
+<resources>
+    <string name="swipe_pin">Fissa</string>
+    <string name="swipe_unpin">Rimuovi</string>
+    <string name="swipe_mute">Silenzia</string>
+    <string name="swipe_unmute">Audio</string>
+    <string name="swipe_archive">Archivia</string>
+    <string name="swipe_unarchive">Dearchivia</string>
+    <string name="swipe_mark_read">Letto</string>
+    <string name="swipe_mark_unread">Non letto</string>
+    <string name="swipe_hide">Nascondi</string>
+</resources>
