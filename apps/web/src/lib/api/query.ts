@@ -330,6 +330,9 @@ function isRefusal(error: unknown): boolean {
  * depuis la Lentille) ne change pas de clé : `conversation.data.id === id`,
  * aucune requête de plus.
  */
+/** #12992 — le fil montré scelle les clairs forgés après l'activation du bout en bout (`lib/view/use-sealed-thread.ts`). */
+export { useSealedThread } from '@/lib/view/use-sealed-thread';
+
 export function useThreadData(id: string) {
   const conversation = useConversation(id);
   const conversationId = conversation.data?.id ?? id;

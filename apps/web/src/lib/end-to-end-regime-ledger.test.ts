@@ -136,7 +136,8 @@ describe('une conversation vue e2ee reste fermée au clair', () => {
 
   test('aucun geste ne la rouvre : le registre n’a ni confirmation ni oubli par conversation', () => {
     const state = createEndToEndRegimeLedger().getState() as unknown as Record<string, unknown>;
-    expect(Object.keys(state).sort()).toEqual(['bind', 'identity', 'learnEndToEnd', 'reset', 'sealed']);
+    /* `holdSend` relâche une RETENUE en mémoire (#13099), jamais une conversation apprise (`end-to-end-regime-hold.test.ts`). */
+    expect(Object.keys(state).sort()).toEqual(['bind', 'clearKnown', 'held', 'holdSend', 'identity', 'learnEndToEnd', 'rememberClearBefore', 'reset', 'sealed', 'since']);
   });
 
   test('la garde partagée de l’envoi lit le registre', () => {
@@ -183,7 +184,7 @@ describe('le registre appartient à une identité et survit au rechargement', ()
 
     expect(ledger.getState().sealed).toEqual({});
     ledger.getState().learnEndToEnd('c-sans-compte');
-    expect([...storage.data.keys()]).toEqual(['meeshy.e2ee-sealed.u:a']);
+    expect([...storage.data.keys()].filter((key) => !key.startsWith('meeshy.e2ee-clear.')).sort()).toEqual(['meeshy.e2ee-sealed.u:a', 'meeshy.e2ee-since.u:a']);
   });
 
   test('un stockage illisible, plein ou corrompu ne rouvre rien de ce qui est en mémoire', () => {

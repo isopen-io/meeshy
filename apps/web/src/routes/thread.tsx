@@ -20,7 +20,7 @@ import { ThreadWriteLock } from '@/components/thread-write-lock';
 import { ThreadComposerChrome } from '@/components/thread-composer-chrome';
 import { ThreadError, ThreadRefused, ThreadSkeleton } from '@/components/thread-states';
 import { apiDeps } from '@/lib/api/deps';
-import { useConversationsSnapshot, useThreadData } from '@/lib/api/query';
+import { useConversationsSnapshot, useSealedThread, useThreadData } from '@/lib/api/query';
 import { markCaughtUp } from '@/lib/api/receipts';
 import { clearConversationBanners } from '@/lib/notifications/conversation-banners';
 import { consumeViewOnceOptimistic } from '@/lib/api/view-once';
@@ -139,7 +139,7 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
    * peut être `undefined` (chargement, refus) — plus AUCUN repli sur une
    * autre conversation (F8, `thread.test.tsx` § id inconnu).
    */
-  const threadData = useThreadData(id);
+  const threadData = useSealedThread(useThreadData(id));
   const conversation = threadData.conversation;
 
   /** LA PHOTO D'UN FRAPPEUR (#6985) — `useTypistAvatar` la résout depuis les participants déjà en cache. */

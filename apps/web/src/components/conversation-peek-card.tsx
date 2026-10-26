@@ -4,7 +4,6 @@ import { QueryClientProvider, type QueryClient } from '@tanstack/react-query';
 import type { ConversationReadingMode } from '@meeshy/shared/types/reading-modes';
 import { conversationPreviewString } from '@meeshy/shared/utils/conversation-preview-strings';
 import { conversationIsEndToEnd } from '@meeshy/shared/utils/message-action-policy';
-import { sharedTranslationServerReadsMessage } from '@meeshy/shared/utils/shared-translation-eligibility';
 
 import { accentOf, personalBubbleVars, withAccent } from '@/lib/accent';
 import { apiDeps } from '@/lib/api/deps';
@@ -24,6 +23,7 @@ import { readingModeStore, type ReadingModeStore } from '@/lib/reading-mode/stor
 import { servedRingOf, useRingDesign } from '@/lib/profile-decor/author-ring';
 import { avatarOf, initialsOf, isGroup, peerOf, titleOf, unreadOf } from '@/lib/view/conversation';
 import { resolveEphemeralDeadline } from '@/lib/view/ephemeral-reception';
+import { endToEndRegimeOf, endToEndSealed, sealForgedPlaintext } from '@/lib/view/end-to-end-sealed';
 import { isMineOf } from '@/lib/view/message';
 import { usePresence } from '@/lib/view/use-presence';
 
@@ -98,14 +98,24 @@ export function peekReadingMode(input: {
   return decision.mode === 'summary' ? 'focal' : decision.mode;
 }
 
-/** Un message que le serveur ne lit pas (`sharedTranslationServerReadsMessage`) n'a pas de clair à montrer. */
-const isSealed = (message: Message): boolean =>
-  message.isEncrypted === true &&
-  !sharedTranslationServerReadsMessage({ conversationEncryptionMode: null, messageIsEncrypted: true, messageEncryptionMode: message.encryptionMode ?? null });
-
-function cachedMessages(client: QueryClient, conversationId: string): readonly Message[] | null {
-  const data = client.getQueryData<MessagesInfiniteData>(messagesQueryKey(conversationId));
-  return data === undefined ? null : flattenMessagePages(data).slice(-PEEK_MESSAGE_COUNT);
+/**
+ * Les derniers messages du cache, sous la loi unique du fil (#12992) : un clair
+ * forgé après l'activation du bout en bout s'y montre scellé, comme dans le fil
+ * (`useSealedThread`) et la ligne de liste (`previewInputOf`). Un message que
+ * le serveur ne lit pas se dit « chiffré » (`endToEndSealed`).
+ */
+function cachedMessages(client: QueryClient, conversation: Conversation): readonly Message[] | null {
+  const data = client.getQueryData<MessagesInfiniteData>(messagesQueryKey(conversation.id));
+  if (data === undefined) return null;
+  const trail = flattenMessagePages(data);
+  const regime = endToEndRegimeOf({
+    conversationId: conversation.id,
+    servedMode: conversation.encryptionMode,
+    servedSince: conversation.encryptionEnabledAt,
+    trail,
+    isDirect: conversation.type === 'direct',
+  });
+  return sealForgedPlaintext(trail, regime).slice(-PEEK_MESSAGE_COUNT);
 }
 
 const NOOP = (): void => undefined;
@@ -158,7 +168,7 @@ export function ConversationPeekCard({
   const [openedAt] = useState(now);
   const [revision, setRevision] = useState(0);
   const [failed, setFailed] = useState(false);
-  const messages = useMemo(() => cachedMessages(client, conversation.id), [client, conversation.id, revision]);
+  const messages = useMemo(() => cachedMessages(client, conversation), [client, conversation, revision]);
   const bodyRef = useRef<HTMLDivElement | null>(null);
   const [overflowing, setOverflowing] = useState(false);
 
@@ -283,7 +293,7 @@ function PeekRow({
   readonly now: () => number;
 }) {
   const { message } = entry;
-  if (isSealed(message)) {
+  if (endToEndSealed(message)) {
     return (
       <span data-peek-encrypted data-peek-row className="conversation-peek-placeholder text-title">
         <Glyph name="lock" size={12} />

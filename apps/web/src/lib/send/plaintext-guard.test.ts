@@ -84,8 +84,27 @@ describe('un fil chargé qui porte un message chiffré de bout en bout scelle to
   });
 });
 
+describe('un fil servi sans mode qui affiche un chiffré sans mode retient l’envoi sans rien apprendre (#13099)', () => {
+  test('sendMessage refuse SANS toucher au réseau, et le registre du compte reste vide', async () => {
+    const client = new QueryClient();
+    const unwatch = watchEndToEndConversations(client, endToEndRegimeLedger);
+    client.setQueryData(messagesQueryKey(ID), {
+      pages: [{ messages: [{ id: 'n1', conversationId: ID, messageType: 'text', messageSource: 'user', content: '[Encrypted]', isEncrypted: true }], hasOlder: false, nextCursor: null }],
+      pageParams: [undefined],
+    });
+    const { urls, transport } = recordingFetch();
+
+    const result = await sendMessage({ source: 'gateway', transport, conversationId: ID, body: { content: 'clair', originalLanguage: 'fr', clientMessageId: 'cid_h' } });
+
+    expect(result).toMatchObject({ ok: false, code: E2EE_PLAINTEXT_WITHHELD });
+    expect(urls).toEqual([]);
+    expect(endToEndRegimeLedger.getState().sealed).toEqual({});
+    unwatch();
+  });
+});
+
 describe('le composeur ne téléverse rien vers une conversation vue e2ee', () => {
-  test('photo jointe : aucun téléversement, aucun message, l’envoi est marqué retenu', async () => {
+  test('photo jointe : aucun téléversement, aucun message, et le clair ne naît ni dans l’outbox ni dans la ligne de liste (#13171)', async () => {
     endToEndRegimeLedger.getState().learnEndToEnd(ID);
     const { urls, transport } = recordingFetch();
     const outbox = createOutboxStore();
@@ -99,7 +118,8 @@ describe('le composeur ne téléverse rien vers une conversation vue e2ee', () =
     });
 
     expect(urls).toEqual([]);
-    expect(entriesOf(outbox.getState(), ID)[0]?.lastError?.code).toBe(E2EE_PLAINTEXT_WITHHELD);
+    expect(entriesOf(outbox.getState(), ID)).toEqual([]);
+    expect(JSON.stringify(deps.queryClient.getQueryCache().getAll().map((query) => query.state.data))).not.toContain('regarde');
   });
 });
 
