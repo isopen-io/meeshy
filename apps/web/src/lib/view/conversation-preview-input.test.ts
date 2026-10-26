@@ -3,6 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import { composeConversationPreview, renderConversationPreviewText } from '@meeshy/shared/utils/conversation-preview';
 
 import type { ListConversation } from '@/lib/api/list-preview';
+import { clearPrintOf } from '@/lib/clear-print';
 import type { Conversation, Message } from '@/lib/api/types';
 
 import { previewInputOf, type PreviewContext } from './conversation-preview-input';
@@ -171,8 +172,28 @@ describe('le clair forgé dans la ligne (#12992)', () => {
   });
 
   test('avant l’activation, vu par ce navigateur avant d’apprendre le bout en bout : lisible', () => {
-    const regime = { sealed: true, since: Date.parse('2026-09-20T00:00:00.000Z'), clearKnown: new Set(['m-1']) };
-    expect(line(sealedConversation(message({ content: 'Avant', createdAt: '2026-09-19T09:59:00.000Z' })), ctx({ regime }))).toBe('Alice : Avant');
+    const before = message({ content: 'Avant', createdAt: '2026-09-19T09:59:00.000Z' });
+    const regime = { sealed: true, since: Date.parse('2026-09-20T00:00:00.000Z'), clearKnown: new Set([clearPrintOf(before)!]) };
+    expect(line(sealedConversation(before), ctx({ regime }))).toBe('Alice : Avant');
+  });
+
+  test('audit — l’extrait d’une réaction servie à côté du dernier message se dit chiffré, jamais lu', () => {
+    const reacted = {
+      ...sealedConversation(message({ content: '[Encrypted]', isEncrypted: true, encryptionMode: 'e2ee' })),
+      lastReaction: { emoji: '👍', reactorName: 'Alice', reactorUserId: 'u-alice', messageId: 'm-1', excerpt: 'Envoie-moi le code reçu par SMS', excerptTranslations: { en: 'Send me the SMS code' }, excerptOriginalLanguage: 'fr', excerptProtection: null, createdAt: '2026-09-23T09:59:30.000Z' },
+    } as unknown as Conversation;
+    const input = previewInputOf(reacted, ctx());
+    expect(JSON.stringify(input.lastReaction)).not.toContain('SMS');
+    expect(input.lastReaction?.excerptProtection).toBe('encrypted');
+    expect(line(reacted)).not.toContain('SMS');
+  });
+
+  test('hors bout en bout, l’extrait d’une réaction reste lu', () => {
+    const reacted = {
+      ...conversation(),
+      lastReaction: { emoji: '👍', reactorName: 'Alice', reactorUserId: 'u-alice', messageId: 'm-1', excerpt: 'Bonjour', excerptTranslations: null, excerptOriginalLanguage: 'fr', excerptProtection: null, createdAt: '2026-09-23T09:59:30.000Z' },
+    } as unknown as Conversation;
+    expect(previewInputOf(reacted, ctx()).lastReaction?.excerpt).toBe('Bonjour');
   });
 
   test('avant l’activation mais jamais vu avant l’apprentissage (date servie, antidatable) : scellé', () => {

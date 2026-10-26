@@ -58,18 +58,21 @@ export type EndToEndRegimeState = {
    * quand il a appris la conversation e2ee : les seuls clairs « d'avant
    * l'activation » qu'il croit. La date d'un message vient du serveur, qui peut
    * antidater un clair forgé ; un clair vu pour la première fois après
-   * l'apprentissage reste scellé. Absent : la photographie n'est pas encore prise.
+   * l'apprentissage reste scellé. Chaque clair est retenu par son EMPREINTE
+   * (`clearPrintOf`, `lib/clear-print.ts` : l'identifiant et ce qu'il disait),
+   * jamais par son seul identifiant, que le serveur pourrait réutiliser.
+   * Absent : la photographie n'est pas encore prise.
    */
   readonly clearKnown: Readonly<Record<string, readonly string[]>>;
   bind(identity: string | null): void;
   learnEndToEnd(conversationId: string, since?: number): void;
   holdSend(conversationId: string, held: boolean): void;
   /** Photographie unique : une seconde ne remplace jamais la première. */
-  rememberClearBefore(conversationId: string, messageIds: readonly string[]): void;
+  rememberClearBefore(conversationId: string, prints: readonly string[]): void;
   reset(): void;
 };
 
-/** Au plus autant de clairs retenus par conversation : les plus récents du cache. */
+/** Au plus autant de clairs retenus par conversation : les derniers offerts (la surveillance les offre du plus ancien au plus récent). */
 export const CLEAR_KNOWN_LIMIT = 1000;
 
 export const SEALED_STORAGE_PREFIX = 'meeshy.e2ee-sealed.';
@@ -189,10 +192,10 @@ export function createEndToEndRegimeLedger(
       const { [conversationId]: _released, ...rest } = current;
       set({ held: held ? { ...current, [conversationId]: true } : rest });
     },
-    rememberClearBefore: (conversationId, messageIds) => {
+    rememberClearBefore: (conversationId, prints) => {
       const { identity, clearKnown } = get();
       if (clearKnown[conversationId] !== undefined) return;
-      const kept = [...new Set(messageIds)].slice(-CLEAR_KNOWN_LIMIT);
+      const kept = [...new Set(prints)].slice(-CLEAR_KNOWN_LIMIT);
       const next = { ...clearKnown, [conversationId]: kept };
       set({ clearKnown: next });
       if (identity !== null) writeClear(storage, identity, { ...readClear(storage, identity), [conversationId]: kept });

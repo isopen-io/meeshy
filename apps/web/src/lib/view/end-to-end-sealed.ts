@@ -2,6 +2,7 @@ import type { Message } from '@/lib/api/types';
 import { endToEndRegimeLedger, endToEndSealed as conversationSealed, isEndToEndMode, type EndToEndRegimeState } from '@/lib/end-to-end-regime-ledger';
 import { endToEndShownSince, threadHoldsSend, threadShowsEndToEnd } from '@/lib/end-to-end-thread-signal';
 import { sharedTranslationServerReadsMessage } from '@meeshy/shared/utils/shared-translation-eligibility';
+import { clearPrintOf } from '@/lib/clear-print';
 
 /**
  * UN MESSAGE QUE LE SERVEUR NE LIT PAS EST SCELLÉ POUR LE WEB (#12983).
@@ -39,8 +40,9 @@ export type EndToEndRegimeView = {
   readonly sealed: boolean;
   readonly since: number;
   /**
-   * Les clairs que ce navigateur avait vus avant d'apprendre le bout en bout
-   * (revues #12992) : seuls eux se lisent « d'avant l'activation ». `null` :
+   * Les empreintes des clairs que ce navigateur avait vus avant d'apprendre le
+   * bout en bout (revues #12992, `clearPrintOf`) : seuls eux se lisent « d'avant
+   * l'activation », mot pour mot. `null` :
    * aucune photographie (régime servi ou montré par le seul fil, pas encore
    * appris) — fermé, aucun clair ne se lit.
    */
@@ -81,28 +83,48 @@ export function endToEndRegimeOf(
 }
 
 /**
- * Le message se DIT en clair, d'un utilisateur, après l'ère : dans une
- * conversation chiffrée de bout en bout, la passerelle refuse ce clair (#11216)
- * — il ne peut venir que d'elle. Une date illisible ne le sauve pas. Daté
- * d'avant l'ère, il ne se lit que si ce navigateur l'avait déjà vu quand il a
- * appris le bout en bout (sans photographie : jamais) — la date vient du
- * serveur, qui peut antidater.
+ * Le message se LIT par le serveur — en clair, ou chiffré par lui (`server`,
+ * `hybrid`) — dans une conversation chiffrée de bout en bout, où la passerelle
+ * refuse tout message qu'elle lirait (#11216, #12562) : il ne peut venir que
+ * d'elle. Seul un message SYSTÈME (rendu à part, jamais sous le nom d'un
+ * participant) et un supprimé en sortent ; tout autre `messageSource` (agent,
+ * annonce, application) se rend comme une bulle et suit la loi (audit). Une
+ * date illisible ne le sauve pas. Daté d'avant l'ère, il ne se lit que si ce
+ * navigateur le tenait déjà, MOT POUR MOT, quand il a appris le bout en bout
+ * (`clearPrintOf` : l'identifiant et ce qu'il disait) — la date vient du
+ * serveur, qui peut antidater, et l'identifiant aussi.
  */
 export function isForgedPlaintext(message: Message, regime: EndToEndRegimeView): boolean {
-  if (!regime.sealed || message.isEncrypted === true) return false;
+  if (!regime.sealed || endToEndSealed(message)) return false;
   if (message.deletedAt !== undefined && message.deletedAt !== null) return false;
-  if ((message.messageSource ?? 'user') !== 'user' || message.messageType === 'system') return false;
+  if (message.messageSource === 'system' || message.messageType === 'system') return false;
   const at = instantOf(message.createdAt);
   if (at === null || at >= regime.since) return true;
-  return regime.clearKnown === null || !regime.clearKnown.has(message.id);
+  const print = clearPrintOf(message);
+  return regime.clearKnown === null || print === null || !regime.clearKnown.has(print);
 }
 
 /** Le littéral que la passerelle sert pour un message qu'elle ne lit pas. */
 export const SEALED_CONTENT = '[Encrypted]';
 
+/**
+ * Ce qu'un message scellé GARDE : son identité, sa place et ses compteurs —
+ * une LISTE BLANCHE (audit) : un champ que la passerelle ajouterait à la
+ * racine (lieu, story citée, liens suivis, mentions, provenance d'un
+ * transfert) ne survit pas au scellement.
+ */
+const SEALED_KEEPS = [
+  'id', 'conversationId', 'senderId', 'sender', 'anonymousSender', 'originalLanguage', 'messageType', 'messageSource',
+  'isEdited', 'editedAt', 'editedById', 'editedByRole', 'deletedAt', 'replyToId', 'replyTo',
+  'effectFlags', 'expiresAt', 'ephemeralDuration', 'isViewOnce', 'maxViewOnceCount', 'viewOnceCount', 'consumedByMe', 'isFullyConsumed', 'isBlurred', 'viewOnceConsumed',
+  'pinnedAt', 'pinnedBy', 'deliveredToAllAt', 'readByAllAt', 'deliveredCount', 'readCount', 'recipientCount', 'reactionSummary', 'reactionCount',
+  'createdAt', 'updatedAt', 'timestamp',
+] as const satisfies readonly (keyof Message)[];
+
 function sealedForm(message: Message): Message {
-  const { attachments: _attachments, sticker: _sticker, metadata: _metadata, encryptionMode: _mode, encryptedContent: _cipher, encryptionMetadata: _envelope, ...identity } = message;
-  return { ...identity, content: SEALED_CONTENT, isEncrypted: true, translations: [] };
+  const kept = Object.fromEntries(SEALED_KEEPS.filter((key) => key in message).map((key) => [key, message[key]]));
+  /* Tous les champs requis de `Message` sont dans la liste blanche ou posés ici. */
+  return { ...kept, content: SEALED_CONTENT, isEncrypted: true, translations: [] } as unknown as Message;
 }
 
 /**

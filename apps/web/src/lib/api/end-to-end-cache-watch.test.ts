@@ -3,6 +3,8 @@ import { describe, expect, test } from 'bun:test';
 
 import { canSendPlaintext, createEndToEndRegimeLedger } from '@/lib/end-to-end-regime-ledger';
 
+import { clearPrintOf } from '@/lib/clear-print';
+
 import { CONVERSATIONS_QUERY_KEY, conversationQueryKey } from './conversations';
 import { CONVERSATIONS_KEY_ROOT, watchEndToEndConversations } from './end-to-end-cache-watch';
 
@@ -151,6 +153,9 @@ describe('la retenue de l’envoi depuis le cache des fils (#13099)', () => {
  * Revue #12992 — À L'INSTANT où la conversation est apprise e2ee, les clairs du
  * cache sont photographiés : un clair servi ensuite, même antidaté, n'y entre pas.
  */
+/** La photographie retient des empreintes `id:…` (`clearPrintOf`) : les témoins lisent leurs identifiants. */
+const idsOf = (prints: readonly string[] | undefined): readonly string[] | undefined => prints?.map((print) => print.split(':')[0]!);
+
 describe('la photographie des clairs d’avant l’apprentissage', () => {
   const dated = (id: string, createdAt: string) => ({ ...plainRow('c-p'), id, createdAt });
 
@@ -163,7 +168,7 @@ describe('la photographie des clairs d’avant l’apprentissage', () => {
     client.setQueryData(conversationQueryKey('c-p'), { ...row('c-p', 'e2ee'), encryptionEnabledAt: '2026-10-01T00:00:00.000Z' });
     client.setQueryData(['conversations', 'c-p', 'messages'], thread([dated('p-avant', '2026-09-01T00:00:00.000Z'), dated('p-antidate', '2026-09-02T00:00:00.000Z')]));
 
-    expect(ledger.getState().clearKnown['c-p']).toEqual(['p-avant']);
+    expect(idsOf(ledger.getState().clearKnown['c-p'])).toEqual(['p-avant']);
     unwatch();
   });
 
@@ -179,7 +184,7 @@ describe('la photographie des clairs d’avant l’apprentissage', () => {
       { ...plainRow('c-s'), id: 'forge', createdAt: '2026-09-02T00:00:00.000Z' },
     ]));
 
-    expect(ledger.getState().clearKnown['c-s']).toEqual(['p-c-s']);
+    expect(idsOf(ledger.getState().clearKnown['c-s'])).toEqual(['p-c-s']);
     unwatch();
   });
 
@@ -191,7 +196,7 @@ describe('la photographie des clairs d’avant l’apprentissage', () => {
 
     ledger.getState().learnEndToEnd('c-r');
 
-    expect(ledger.getState().clearKnown['c-r']).toEqual(['p-c-r']);
+    expect(idsOf(ledger.getState().clearKnown['c-r'])).toEqual(['p-c-r']);
     unwatch();
   });
 });
@@ -205,7 +210,7 @@ describe('la photographie, deuxième revue', () => {
     client.setQueryData(['conversations', 'c-h', 'messages'], thread([{ ...plainRow('c-h'), createdAt: '2026-09-01T00:00:00.000Z' }]));
     client.setQueryData(['conversations', 'c-h', 'messages'], thread([{ ...plainRow('c-h'), createdAt: '2026-09-01T00:00:00.000Z' }, noModeRow('c-h')]));
 
-    expect(ledger.getState().clearKnown['c-h']).toEqual(['p-c-h']);
+    expect(idsOf(ledger.getState().clearKnown['c-h'])).toEqual(['p-c-h']);
     unwatch();
   });
 
@@ -223,7 +228,66 @@ describe('la photographie, deuxième revue', () => {
     ]));
 
     expect(ledger.getState().sealed['c-t']).toBe(true);
-    expect(ledger.getState().clearKnown['c-t']).toEqual(['vu-avant']);
+    expect(idsOf(ledger.getState().clearKnown['c-t'])).toEqual(['vu-avant']);
+    unwatch();
+  });
+});
+
+/** Audit adversarial du lot — la photographie, troisième passe. */
+describe('la photographie, audit', () => {
+  test('elle retient des empreintes : un clair réécrit sous le même identifiant n’y est pas', () => {
+    const client = new QueryClient();
+    const ledger = createEndToEndRegimeLedger({ storage: null });
+    const unwatch = watchEndToEndConversations(client, ledger);
+    const known = { ...plainRow('c-f'), createdAt: '2026-09-01T00:00:00.000Z' };
+    client.setQueryData(['conversations', 'c-f', 'messages'], thread([known]));
+    ledger.getState().learnEndToEnd('c-f', Date.parse('2026-10-01T00:00:00.000Z'));
+
+    expect(ledger.getState().clearKnown['c-f']).toEqual([clearPrintOf(known)!]);
+    expect(ledger.getState().clearKnown['c-f']).not.toContain(clearPrintOf({ ...known, content: 'réécrit' }));
+    unwatch();
+  });
+
+  test('un message que le serveur lisait (server, hybrid) avant l’activation y entre aussi', () => {
+    const client = new QueryClient();
+    const ledger = createEndToEndRegimeLedger({ storage: null });
+    const unwatch = watchEndToEndConversations(client, ledger);
+    client.setQueryData(['conversations', 'c-sv', 'messages'], thread([
+      { ...plainRow('c-sv'), id: 'srv', isEncrypted: true, encryptionMode: 'server', createdAt: '2026-09-01T00:00:00.000Z' },
+      { ...plainRow('c-sv'), id: 'hyb', isEncrypted: true, encryptionMode: 'hybrid', createdAt: '2026-09-02T00:00:00.000Z' },
+    ]));
+    ledger.getState().learnEndToEnd('c-sv', Date.parse('2026-10-01T00:00:00.000Z'));
+
+    expect(idsOf(ledger.getState().clearKnown['c-sv'])).toEqual(['srv', 'hyb']);
+    unwatch();
+  });
+
+  test('un registre d’avant l’ère : la preuve du cache ramène l’ère, un clair d’après la vraie activation n’entre pas', () => {
+    const ledger = createEndToEndRegimeLedger({ storage: null, now: () => Date.parse('2026-10-26T00:00:00.000Z') });
+    ledger.getState().learnEndToEnd('c-l');
+    const client = new QueryClient();
+    client.setQueryData(['conversations', 'c-l', 'messages'], thread([
+      { ...plainRow('c-l'), id: 'sept', createdAt: '2026-09-15T00:00:00.000Z' },
+      { ...sealedRow('c-l'), createdAt: '2026-10-01T00:00:00.000Z' },
+      { ...plainRow('c-l'), id: 'forge-oct', createdAt: '2026-10-20T00:00:00.000Z' },
+    ]));
+    const unwatch = watchEndToEndConversations(client, ledger);
+
+    expect(idsOf(ledger.getState().clearKnown['c-l'])).toEqual(['sept']);
+    unwatch();
+  });
+
+  test('offerts du plus ancien au plus récent : au-delà de la limite, ce sont les plus anciens qui sortent', () => {
+    const client = new QueryClient();
+    const ledger = createEndToEndRegimeLedger({ storage: null });
+    const unwatch = watchEndToEndConversations(client, ledger);
+    client.setQueryData(['conversations', 'c-o', 'messages'], thread([
+      { ...plainRow('c-o'), id: 'recent', createdAt: '2026-09-20T00:00:00.000Z' },
+      { ...plainRow('c-o'), id: 'ancien', createdAt: '2026-09-01T00:00:00.000Z' },
+    ]));
+    ledger.getState().learnEndToEnd('c-o', Date.parse('2026-10-01T00:00:00.000Z'));
+
+    expect(idsOf(ledger.getState().clearKnown['c-o'])).toEqual(['ancien', 'recent']);
     unwatch();
   });
 });

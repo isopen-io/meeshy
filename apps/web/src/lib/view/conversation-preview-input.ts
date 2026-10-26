@@ -94,14 +94,24 @@ function sealedPreviewOf(message: ConversationPreviewMessage): ConversationPrevi
   return { ...message, content: SEALED_CONTENT, isEncrypted: true, translations: null, location: null, sticker: null, attachment: null, attachmentSummary: null };
 }
 
-function messageOf(conversation: Conversation, context: PreviewContext): ConversationPreviewMessage | null {
+function messageOf(conversation: Conversation, context: PreviewContext, regime: EndToEndRegimeView): ConversationPreviewMessage | null {
   const message = conversation.lastMessage as (ListLastMessage & Hoisted) | undefined | null;
   if (message === undefined || message === null) return null;
-  const regime =
-    context.regime ?? endToEndRegimeOf({ conversationId: conversation.id, servedMode: conversation.encryptionMode, servedSince: conversation.encryptionEnabledAt });
   const projected = projectedMessageOf(conversation, message, context);
   return isForgedPlaintext(message, regime) ? sealedPreviewOf(projected) : projected;
 }
+
+type LastReaction = NonNullable<ConversationPreviewInput['lastReaction']>;
+
+/**
+ * #12992 (audit) — l'extrait du message réagi est un texte que la passerelle
+ * sert à côté du dernier message : dans une conversation scellée, il se dit
+ * chiffré, jamais lu (ni dans la ligne, ni dans le widget de la coque).
+ */
+const sealedReactionOf = (reaction: LastReaction | null, regime: EndToEndRegimeView): LastReaction | null =>
+  reaction === null || !regime.sealed || (reaction.excerptProtection !== null && reaction.excerptProtection !== 'ephemeral')
+    ? reaction
+    : { ...reaction, excerpt: null, excerptTranslations: null, excerptProtection: 'encrypted' };
 
 function projectedMessageOf(conversation: Conversation, message: ListLastMessage & Hoisted, context: PreviewContext): ConversationPreviewMessage {
   const sender = message.sender;
@@ -152,6 +162,8 @@ function projectedMessageOf(conversation: Conversation, message: ListLastMessage
  */
 export function previewInputOf(conversation: Conversation, context: PreviewContext): ConversationPreviewInput {
   const row = conversation as ListConversation;
+  const regime =
+    context.regime ?? endToEndRegimeOf({ conversationId: conversation.id, servedMode: conversation.encryptionMode, servedSince: conversation.encryptionEnabledAt });
   return {
     viewerId: context.viewerId,
     language: context.language,
@@ -161,8 +173,8 @@ export function previewInputOf(conversation: Conversation, context: PreviewConte
     activeCall: row.activeCall ?? null,
     typing: context.typing ?? null,
     draft: context.draft ?? null,
-    lastReaction: row.lastReaction ?? null,
-    lastMessage: messageOf(conversation, context),
+    lastReaction: sealedReactionOf(row.lastReaction ?? null, regime),
+    lastMessage: messageOf(conversation, context, regime),
     isDirect: conversation.type === 'direct',
   };
 }

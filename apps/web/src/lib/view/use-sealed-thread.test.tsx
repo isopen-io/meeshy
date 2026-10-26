@@ -3,6 +3,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
 import type { Conversation, Message } from '@/lib/api/types';
+import { clearPrintOf } from '@/lib/clear-print';
 import { endToEndRegimeLedger } from '@/lib/end-to-end-regime-ledger';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
@@ -77,9 +78,10 @@ describe('le fil ouvert lit la retenue et la photographie du registre (#12992 ×
 
   test('apprise, un clair photographié avant l’apprentissage reste lisible ; un clair antidaté jamais vu, scellé', () => {
     /* La photographie d'abord : la surveillance du cache de l'application, abonnée au registre, en prendrait une vide à l'apprentissage. */
-    endToEndRegimeLedger.getState().rememberClearBefore('c-hook', ['m-avant']);
+    const before = plain('m-avant', '2026-10-01T00:00:00.000Z');
+    endToEndRegimeLedger.getState().rememberClearBefore('c-hook', [clearPrintOf(before)!]);
     endToEndRegimeLedger.getState().learnEndToEnd('c-hook', Date.parse('2026-10-20T00:00:00.000Z'));
-    const [kept, forged] = shown([plain('m-avant', '2026-10-01T00:00:00.000Z'), plain('m-antidate', '2026-10-02T00:00:00.000Z')]);
+    const [kept, forged] = shown([before, plain('m-antidate', '2026-10-02T00:00:00.000Z')]);
     expect(kept!.content).toBe('texte-m-avant');
     expect(endToEndSealed(forged!)).toBe(true);
   });

@@ -2,13 +2,14 @@ import type { QueryClient } from '@tanstack/react-query';
 import type { StoreApi } from 'zustand/vanilla';
 
 import { uploadAttachments, uploadShortfall } from '@/lib/api/attachments';
-import { canSendPlaintext, E2EE_PLAINTEXT_WITHHELD } from '@/lib/end-to-end-regime-ledger';
+import { E2EE_PLAINTEXT_WITHHELD } from '@/lib/end-to-end-regime-ledger';
 import { browserImagePreparer, type ImagePreparer } from '@/lib/media/prepare-image-upload';
 import { newClientMessageId } from '@/lib/api/client-message-id';
 import type { ConversationsDeps } from '@/lib/api/conversations';
 import { offerLastMessage } from '@/lib/api/list-preview';
 import { findCachedThreadMessage, messagesQueryKey, sendMessage, upsertThreadMessage, type SendMessageBody } from '@/lib/api/messages';
 import { attachmentReplyOf } from './attachment-reply';
+import { plaintextWithheld } from './served-regime';
 import type { Message, Participant } from '@/lib/api/types';
 
 import { messageTypeOfPending, type PendingAttachment } from './attachments';
@@ -265,7 +266,7 @@ async function attempt(params: {
 
   /* #12949 — la garde AVANT le téléversement : retenir le seul message
      laisserait le fichier déjà parti en clair au serveur. */
-  if (!canSendPlaintext({ conversationId })) {
+  if (plaintextWithheld(conversationId, deps.queryClient)) {
     deps.outbox.getState().markFailed(conversationId, message.clientMessageId, {
       ok: false,
       status: 0,
@@ -336,9 +337,6 @@ async function attempt(params: {
  * clic sur « Envoyer » est tenu par le composeur, qui vide son brouillon à
  * l'instant de l'envoi (`composer.tsx`, `draftNow`).
  */
-/** L'envoi d'un clair vers cette conversation est-il retenu (#12949, #13171) ? */
-export const plaintextWithheld = (conversationId: string): boolean => !canSendPlaintext({ conversationId });
-
 export async function performSend(params: {
   readonly conversationId: string;
   readonly draft: Draft;
@@ -352,7 +350,7 @@ export async function performSend(params: {
      cache RANGE sur le disque), ni requête. L'appelant dit le refus
      (`plaintextWithheld`) ; un envoi déjà en file avant l'apprentissage reste
      retenu par `attempt`. */
-  if (plaintextWithheld(conversationId)) return;
+  if (plaintextWithheld(conversationId, deps.queryClient)) return;
   const now = deps.now ?? Date.now;
   const nowMs = now();
 

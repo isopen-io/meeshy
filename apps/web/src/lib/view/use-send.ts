@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useStore } from 'zustand/react';
 
 import { isPermanentFailure } from '@/lib/api/outcome';
+import { appQueryClient } from '@/lib/api/query-client';
 import { discardSendAction, retrySendAction, sendAction } from '@/lib/api/query';
 import type { Message, Participant } from '@/lib/api/types';
 import { translate } from '@/lib/i18n-catalog';
@@ -14,7 +15,7 @@ import type { SharedPlace } from '@/lib/send/shared-place';
 import type { MessageSticker } from '@meeshy/shared/types/message-sticker';
 import { confirmedCountOf, entriesOf, outboxStore } from '@/lib/send/outbox-store';
 import { sendFailureReason } from '@/lib/send/failure-reason';
-import { plaintextWithheld } from '@/lib/send/perform-send';
+import { plaintextWithheld } from '@/lib/send/served-regime';
 import { E2EE_PLAINTEXT_WITHHELD } from '@/lib/end-to-end-regime-ledger';
 
 import type { LocalDelivery } from './message';
@@ -147,7 +148,7 @@ export function useSend(params: {
       sticker: MessageSticker | null = null,
     ) => {
       /* #13171 — vue chiffrée de bout en bout : rien ne naît, l'annonce dit où écrire. */
-      if (plaintextWithheld(conversationId)) {
+      if (plaintextWithheld(conversationId, appQueryClient)) {
         const language = currentInterfaceLanguage();
         const reason = sendFailureReason({ ok: false, status: 0, error: '', code: E2EE_PLAINTEXT_WITHHELD }, language);
         announce(reason === undefined ? translate(language, 'announce.messageNotSent') : translate(language, 'announce.messageNotSent.reason', { reason }));

@@ -2,7 +2,9 @@ import type { QueryClient } from '@tanstack/react-query';
 import type { StoreApi } from 'zustand/vanilla';
 
 import { isEndToEndMode, type EndToEndRegimeState } from '@/lib/end-to-end-regime-ledger';
+import { clearPrintOf } from '@/lib/clear-print';
 import { endToEndShownSince, threadHoldsSend, threadShowsEndToEnd, type ThreadShape } from '@/lib/end-to-end-thread-signal';
+import { sharedTranslationServerReadsMessage } from '@meeshy/shared/utils/shared-translation-eligibility';
 
 
 /**
@@ -86,12 +88,22 @@ function shapeOf(queryClient: QueryClient, conversationId: string): ThreadShape 
 
 type SeenClear = ReadonlyMap<string, number>;
 
-/** Les clairs d'utilisateur datés d'un fil : identifiant → instant. */
+/** Le serveur lit-il ce message (clair, `server`, `hybrid`) ? Ce sont ceux que la loi du clair forgé juge. */
+const readByServer = (row: Readonly<Record<string, unknown>>): boolean =>
+  row.isEncrypted !== true ||
+  sharedTranslationServerReadsMessage({
+    conversationEncryptionMode: null,
+    messageIsEncrypted: true,
+    messageEncryptionMode: typeof row.encryptionMode === 'string' ? row.encryptionMode : null,
+  });
+
+/** Les clairs d'utilisateur datés d'un fil : empreinte (`clearPrintOf`) → instant. */
 const clearRowsOf = (rows: readonly Readonly<Record<string, unknown>>[]): ReadonlyArray<readonly [string, number]> =>
   rows.flatMap((row) => {
     const at = instantOf(row.createdAt);
-    const plain = row.isEncrypted !== true && row.messageType !== 'system' && row.messageSource !== 'system';
-    return typeof row.id === 'string' && plain && at !== undefined ? [[row.id, at] as const] : [];
+    const print = clearPrintOf(row);
+    const plain = readByServer(row) && row.messageType !== 'system' && row.messageSource !== 'system';
+    return print !== null && plain && at !== undefined ? [[print, at] as const] : [];
   });
 
 export function watchEndToEndConversations(queryClient: QueryClient, ledger: StoreApi<EndToEndRegimeState>): () => void {
@@ -110,12 +122,25 @@ export function watchEndToEndConversations(queryClient: QueryClient, ledger: Sto
     const rows = cache.findAll({ queryKey: [CONVERSATIONS_KEY_ROOT, conversationId, 'messages'] }).flatMap((query) => threadRows(query.state.data));
     seen.set(conversationId, new Map([...(seen.get(conversationId) ?? new Map<string, number>()), ...clearRowsOf(rows)]));
   };
+  /* L'ère la plus ancienne que le cache PROUVE (avis d'activation, message
+     e2ee) : un registre d'avant #12992 n'a pas d'ère et en prend une à sa
+     première lecture — la preuve du cache la ramène à sa vraie date. */
+  const provenSince = (conversationId: string): number => {
+    const instants = cache
+      .findAll({ queryKey: [CONVERSATIONS_KEY_ROOT, conversationId, 'messages'] })
+      .map((query) => endToEndShownSince(threadRows(query.state.data)))
+      .filter((at): at is number => at !== null);
+    return Math.min(Number.POSITIVE_INFINITY, ...instants);
+  };
   const photograph = (state: EndToEndRegimeState): void => {
     Object.keys({ ...state.sealed, ...state.held })
       .filter((id) => state.clearKnown[id] === undefined)
       .forEach((id) => {
-        const since = state.since[id] ?? Number.POSITIVE_INFINITY;
-        const known = [...(seen.get(id) ?? new Map<string, number>())].filter(([, at]) => at < since).map(([messageId]) => messageId);
+        const since = Math.min(state.since[id] ?? Number.POSITIVE_INFINITY, provenSince(id));
+        const known = [...(seen.get(id) ?? new Map<string, number>())]
+          .filter(([, at]) => at < since)
+          .sort(([, a], [, b]) => a - b)
+          .map(([print]) => print);
         ledger.getState().rememberClearBefore(id, known);
       });
   };
