@@ -101,7 +101,7 @@ class ProfileSettingsSendersTest {
     @Test
     fun `update settings syncs the notification block and maps the outcome`() = runTest {
         val body = NotificationPreferenceSyncBody.from(UserNotificationPreferences(pushEnabled = false))
-        val handler = UpdateSettingsHandler(preferencesApi, senderJson)
+        val handler = UpdateSettingsHandler(preferencesApi, senderJson) { mockk(relaxed = true) }
         val row = outboxRow(OutboxKind.UPDATE_SETTINGS, payload = encodedPayload(body))
 
         coEvery { preferencesApi.updateNotification(body) } returns accepted(Unit)
@@ -113,7 +113,7 @@ class ProfileSettingsSendersTest {
 
     @Test
     fun `update settings with an undecodable payload fails permanently`() = runTest {
-        val handler = UpdateSettingsHandler(preferencesApi, senderJson)
+        val handler = UpdateSettingsHandler(preferencesApi, senderJson) { mockk(relaxed = true) }
 
         val result = handler.send(outboxRow(OutboxKind.UPDATE_SETTINGS, payload = "{}"))
 
@@ -123,7 +123,7 @@ class ProfileSettingsSendersTest {
     @Test
     fun `update privacy syncs the privacy block and maps the outcome`() = runTest {
         val body = PrivacyPreferenceSyncBody.from(PrivacyPreferences(showOnlineStatus = false))
-        val handler = UpdatePrivacySettingsHandler(preferencesApi, senderJson)
+        val handler = UpdatePrivacySettingsHandler(preferencesApi, senderJson) { mockk(relaxed = true) }
         val row = outboxRow(OutboxKind.UPDATE_PRIVACY_SETTINGS, payload = encodedPayload(body))
 
         coEvery { preferencesApi.updatePrivacy(body) } returns accepted(Unit)
@@ -135,7 +135,7 @@ class ProfileSettingsSendersTest {
 
     @Test
     fun `update privacy with an undecodable payload fails permanently`() = runTest {
-        val handler = UpdatePrivacySettingsHandler(preferencesApi, senderJson)
+        val handler = UpdatePrivacySettingsHandler(preferencesApi, senderJson) { mockk(relaxed = true) }
 
         val result = handler.send(outboxRow(OutboxKind.UPDATE_PRIVACY_SETTINGS, payload = "{}"))
 
