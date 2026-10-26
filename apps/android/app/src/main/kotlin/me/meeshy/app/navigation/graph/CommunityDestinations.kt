@@ -16,7 +16,9 @@ import me.meeshy.app.community.CommunityCreateScreen
 import me.meeshy.app.community.CommunityDetailNavigation
 import me.meeshy.app.community.CommunityDetailScreen
 import me.meeshy.app.community.CommunityDetailViewModel
+import me.meeshy.app.community.CommunityInviteScreen
 import me.meeshy.app.community.CommunityListScreen
+import me.meeshy.app.community.CommunityMembersScreen
 import me.meeshy.app.community.CommunitySettingsScreen
 import me.meeshy.app.navigation.Routes
 
@@ -25,9 +27,15 @@ object CommunityRoutes {
     const val LIST = "communities"
     const val CREATE = "communities/new"
     const val DETAIL = "community/{${CommunityDetailViewModel.COMMUNITY_ID_ARG}}"
+    const val MEMBERS = "community/{${CommunityDetailViewModel.COMMUNITY_ID_ARG}}/members"
+    const val INVITE = "community/{${CommunityDetailViewModel.COMMUNITY_ID_ARG}}/invite"
     const val SETTINGS = "community/{${CommunityDetailViewModel.COMMUNITY_ID_ARG}}/settings"
 
     fun detail(communityId: String): String = "community/$communityId"
+
+    fun members(communityId: String): String = "community/$communityId/members"
+
+    fun invite(communityId: String): String = "community/$communityId/invite"
 
     fun settings(communityId: String): String = "community/$communityId/settings"
 }
@@ -64,6 +72,22 @@ class CommunityDestinations @Inject constructor() : NavGraphContributor {
             )
         }
         builder.composable(
+            route = CommunityRoutes.MEMBERS,
+            arguments = listOf(navArgument(CommunityDetailViewModel.COMMUNITY_ID_ARG) { type = NavType.StringType }),
+        ) { entry ->
+            val id = entry.arguments?.getString(CommunityDetailViewModel.COMMUNITY_ID_ARG).orEmpty()
+            CommunityMembersScreen(
+                onBack = { navController.popBackStack() },
+                onInvite = { navController.navigate(CommunityRoutes.invite(id)) },
+            )
+        }
+        builder.composable(
+            route = CommunityRoutes.INVITE,
+            arguments = listOf(navArgument(CommunityDetailViewModel.COMMUNITY_ID_ARG) { type = NavType.StringType }),
+        ) {
+            CommunityInviteScreen(onDone = { navController.popBackStack() })
+        }
+        builder.composable(
             route = CommunityRoutes.DETAIL,
             arguments = listOf(navArgument(CommunityDetailViewModel.COMMUNITY_ID_ARG) { type = NavType.StringType }),
         ) {
@@ -71,6 +95,8 @@ class CommunityDestinations @Inject constructor() : NavGraphContributor {
                 navigation = CommunityDetailNavigation(
                     onBack = { navController.popBackStack() },
                     onOpenChannel = { navController.navigate(Routes.chat(it)) },
+                    onOpenMembers = { navController.navigate(CommunityRoutes.members(it)) },
+                    onInvite = { navController.navigate(CommunityRoutes.invite(it)) },
                     onOpenSettings = { navController.navigate(CommunityRoutes.settings(it)) },
                     addChannelSheet = { id, onAdded, onDismiss -> CommunityAddChannelSheet(id, onAdded, onDismiss) },
                 ),
