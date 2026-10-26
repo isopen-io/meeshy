@@ -53,14 +53,14 @@ nonisolated struct EndToEndReadyDevice: Sendable {
     let linking: any E2EEOwnDeviceLinkingProviding
     /// Les métadonnées de mes appareils (`GET /e2ee/devices`) : elles nomment,
     /// elles n'approuvent jamais.
-    let ownDeviceDetails: @Sendable () async throws -> [E2EEOwnDeviceDetails]
+    let ownDeviceDetails: @concurrent @Sendable () async throws -> [E2EEOwnDeviceDetails]
 
     init(
         device: E2EELocalDevice,
         sealer: any E2EEMessageSealing,
         opener: any E2EEEnvelopeOpening,
         linking: any E2EEOwnDeviceLinkingProviding = UnavailableOwnDeviceLinking(),
-        ownDeviceDetails: @escaping @Sendable () async throws -> [E2EEOwnDeviceDetails] = { [] }
+        ownDeviceDetails: @escaping @concurrent @Sendable () async throws -> [E2EEOwnDeviceDetails] = { [] }
     ) {
         self.device = device
         self.sealer = sealer

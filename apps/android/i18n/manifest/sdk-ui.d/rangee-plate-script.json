@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        {"catalog": "app", "iosKey": "focal.row.you", "androidName": "focal_row_you", "status": "adopted"},
+        {"catalog": "app", "iosKey": "message.long.readMore", "androidName": "message_long_read_more", "status": "adopted"},
+        {"catalog": "app", "iosKey": "message.long.collapse", "androidName": "message_long_collapse", "status": "adopted"}
+      ]
+    }
+  }
+}

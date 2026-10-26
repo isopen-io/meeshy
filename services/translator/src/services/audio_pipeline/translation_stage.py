@@ -46,6 +46,7 @@ from ..redis_service import (
     get_audio_cache_service,
     get_translation_cache_service
 )
+from services.task_privacy import run_in_thread_with_context
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -421,8 +422,12 @@ class TranslationStage:
             results = {}
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 # Submit all tasks
+                # #13102 — chaque thread reçoit le régime et le message de
+                # la tâche : sans recopie, il retomberait sur le régime non
+                # déclaré (aucun cache, fail-closed) au lieu du sien.
                 futures = {
-                    executor.submit(
+                    run_in_thread_with_context(
+                        executor.submit,
                         self._process_single_language_sync,
                         lang,
                         source_text,
@@ -458,9 +463,9 @@ class TranslationStage:
 
             return results
 
-        # Execute in thread pool
+        # Execute in thread pool — avec le contexte de la tâche (#13102)
         loop = asyncio.get_event_loop()
-        results = await loop.run_in_executor(None, run_tasks)
+        results = await run_in_thread_with_context(lambda fn, *args: loop.run_in_executor(None, fn, *args), run_tasks)
         return results
 
     def _process_single_language_sync(
@@ -548,7 +553,8 @@ class TranslationStage:
                 text=source_text,
                 source_language=source_language,
                 target_language=target_lang,
-                model_type=model_type
+                model_type=model_type,
+                message_id=message_id
             )
 
             # 2. Generate TTS audio
@@ -667,7 +673,8 @@ class TranslationStage:
                 language=target_lang,
                 translated_text=translated_text,
                 tts_result=tts_result,
-                segments=fine_segments  # Sauvegarder les segments dans le cache
+                segments=fine_segments,  # Sauvegarder les segments dans le cache
+                attachment_id=attachment_id
             )
 
             # 5. Créer le résultat
@@ -733,7 +740,8 @@ class TranslationStage:
         text: str,
         source_language: str,
         target_language: str,
-        model_type: str
+        model_type: str,
+        message_id: Optional[str] = None
     ) -> str:
         """Translate text with cache lookup"""
         # Check cache
@@ -756,16 +764,18 @@ class TranslationStage:
             text,
             source_language,
             target_language,
-            model_type
+            model_type,
+            message_id=message_id
         )
 
-        # Cache result
+        # Cache result — indexé sous son message (#13102)
         await self.translation_cache.set_translation(
             text=text,
             source_lang=source_language,
             target_lang=target_language,
             translated_text=translated,
-            model_type=model_type
+            model_type=model_type,
+            message_id=message_id
         )
 
         return translated
@@ -776,7 +786,8 @@ class TranslationStage:
         text: str,
         source_language: str,
         target_language: str,
-        model_type: str
+        model_type: str,
+        message_id: Optional[str] = None
     ) -> str:
         """Translate text via ML service"""
         if not self.translation_service:
@@ -792,7 +803,8 @@ class TranslationStage:
                 source_language=source_language,
                 target_language=target_language,
                 model_type=model_type,
-                source_channel="audio_pipeline"
+                source_channel="audio_pipeline",
+                message_id=message_id
             )
             return result.get('translated_text', text)
 
@@ -806,7 +818,8 @@ class TranslationStage:
         language: str,
         translated_text: str,
         tts_result: TTSResult,
-        segments: Optional[List[Dict[str, Any]]] = None  # Segments traduits pour synchronisation
+        segments: Optional[List[Dict[str, Any]]] = None,  # Segments traduits pour synchronisation
+        attachment_id: Optional[str] = None
     ) -> bool:
         """Cache translated audio for reuse"""
         try:
@@ -826,7 +839,8 @@ class TranslationStage:
             await self.audio_cache.set_translated_audio_by_hash(
                 audio_hash,
                 language,
-                cache_data
+                cache_data,
+                attachment_id=attachment_id
             )
 
             logger.debug(
