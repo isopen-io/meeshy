@@ -46,8 +46,8 @@ class ChatComposerParityTest {
         MeeshyTheme(darkTheme = false) {
             ChatComposer(
                 draft = draft, draftRevision = 0, canSend = draft.isNotBlank(), isEditing = false,
-                affordances = affordances, slowMode = slowMode, replyBanner = null, hasEffects = false,
-                clipboardContent = null, sentiment = null, languageCode = "fr", accentColor = Color.Blue,
+                affordances = affordances, slowMode = slowMode, replyBanner = null,
+                clipboardContent = null, languageCode = "fr", accentColor = Color.Blue,
                 onDraftChange = {}, onPickLanguage = {}, onSend = onSend, onOpenEffects = {}, onCancelEdit = {},
                 onCancelReply = {}, onRemoveClipboard = {}, onPickFile = { _, _, _ -> }, canMinimize = canMinimize,
             )

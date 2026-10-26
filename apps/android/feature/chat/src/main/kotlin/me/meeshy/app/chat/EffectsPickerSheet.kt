@@ -279,7 +279,7 @@ private fun effectIcon(option: MessageEffectOption): ImageVector = when (option)
     MessageEffectOption.SPARKLE -> Icons.Filled.Bolt
 }
 
-private fun ephemeralDurationLabel(duration: EphemeralDuration): Int = when (duration) {
+internal fun ephemeralDurationLabel(duration: EphemeralDuration): Int = when (duration) {
     EphemeralDuration.THIRTY_SECONDS -> R.string.chat_effect_duration_30s
     EphemeralDuration.ONE_MINUTE -> R.string.chat_effect_duration_1m
     EphemeralDuration.FIVE_MINUTES -> R.string.chat_effect_duration_5m

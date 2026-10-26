@@ -25,7 +25,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import me.meeshy.sdk.composer.ComposerAffordances
 import me.meeshy.sdk.composer.SlowModeState
-import me.meeshy.sdk.model.SentimentLevel
+import me.meeshy.sdk.model.EphemeralDuration
+import me.meeshy.sdk.model.MessageEffectFlags
+import me.meeshy.sdk.model.MessageEffects
+import me.meeshy.sdk.model.composer.ComposerToolbarLaw
 import me.meeshy.sdk.model.composer.ComposerMinimizeOutcome
 import me.meeshy.ui.component.recording.VoiceRecordingPill
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
@@ -50,9 +53,7 @@ internal fun ChatComposer(
     slowMode: SlowModeState,
     isEndToEnd: Boolean = false,
     replyBanner: ComposerReplyBanner?,
-    hasEffects: Boolean,
     clipboardContent: ClipboardContent?,
-    sentiment: SentimentLevel?,
     languageCode: String,
     accentColor: Color,
     onDraftChange: (String) -> Unit,
@@ -75,7 +76,13 @@ internal fun ChatComposer(
     emojiInjection: ComposerEmojiInjection? = null,
     externalAttachments: ComposerExternalAttachments? = null,
     foldSlot: (@Composable () -> Unit)? = null,
-    canMinimize: Boolean = true,
+    canMinimize: Boolean = false,
+    effects: MessageEffects = MessageEffects(),
+    onToggleEffect: (Long) -> Unit = {},
+    onSelectEphemeralDuration: (EphemeralDuration) -> Unit = {},
+    quickEmojis: List<String> = ComposerToolbarLaw.QUICK_EMOJI_DEFAULTS,
+    onQuickEmoji: ((String) -> Unit)? = null,
+    pendingSlot: (@Composable () -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val ioScope = rememberCoroutineScope()
@@ -93,6 +100,7 @@ internal fun ChatComposer(
     val voice = rememberComposerVoice(onStageVoiceFile, onPickFile)
     var minimized by rememberSaveable { mutableStateOf(false) }
     var attachmentTrayOpen by remember { mutableStateOf(false) }
+    var ephemeralRailOpen by remember { mutableStateOf(false) }
     var cameraChooserOpen by remember { mutableStateOf(false) }
     var emojiPickerOpen by remember { mutableStateOf(false) }
     // Camera and Emoji joined the ladder in #3738; Location stays off until the gateway's shared-place
@@ -214,7 +222,163 @@ internal fun ChatComposer(
             )
         },
         expandedContent = {
-            ComposerGlassPlate(foldSlot = foldSlot) {
+            val protection = ComposerToolbarLaw.dominant(effects.flags)
+            val protectionTint = protection?.let { composerProtectionColor(it) }
+            val iconTint = composerIconTint(effects.flags)
+            ComposerGlassPlate(foldSlot = foldSlot, protectionTint = protectionTint) {
+                if (cameraChooserOpen) {
+                    ComposerCameraChooser(
+                        canSendImages = affordances.canSendImages,
+                        canSendVideos = affordances.canSendVideos,
+                        onPickPhoto = chatCameraCapture::launchPhoto,
+                        onPickVideo = chatCameraCapture::launchVideo,
+                        onDismiss = { cameraChooserOpen = false },
+                    )
+                }
+                if (replyBanner != null) ComposerReplyRow(replyBanner, accentColor, onCancelReply)
+                if (isEditing) ComposerEditRow(editingOriginalText, onCancelEdit)
+                pendingSlot?.invoke()
+                if (clipboardContent != null) {
+                    ClipboardContentPreview(
+                        clip = clipboardContent,
+                        accentColor = accentColor,
+                        onRemove = onRemoveClipboard,
+                        modifier = Modifier.padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.xs),
+                    )
+                }
+                val inputAvailable = !voice.isRecording && !isEndToEnd && !affordances.isReadOnly
+                if (inputAvailable && !isEditing && ephemeralRailOpen) {
+                    ComposerEphemeralRail(
+                        selected = EphemeralDuration.fromSeconds(effects.ephemeralDuration)
+                            ?.takeIf { MessageEffectFlags.has(effects.flags, MessageEffectFlags.EPHEMERAL) },
+                        onPick = { duration ->
+                            if (!MessageEffectFlags.has(effects.flags, MessageEffectFlags.EPHEMERAL)) {
+                                onToggleEffect(MessageEffectFlags.EPHEMERAL)
+                            }
+                            onSelectEphemeralDuration(duration)
+                            ephemeralRailOpen = false
+                        },
+                    )
+                }
+                if (inputAvailable && !isEditing) {
+                    ComposerToolbar(
+                        effects = effects,
+                        languageCode = languageCode,
+                        showEphemeralRail = ephemeralRailOpen,
+                        onEphemeral = {
+                            interact()
+                            haptics.light()
+                            if (MessageEffectFlags.has(effects.flags, MessageEffectFlags.EPHEMERAL)) {
+                                onToggleEffect(MessageEffectFlags.EPHEMERAL)
+                                ephemeralRailOpen = false
+                            } else {
+                                ephemeralRailOpen = !ephemeralRailOpen
+                            }
+                        },
+                        onVeil = { veil ->
+                            interact()
+                            haptics.light()
+                            ComposerToolbarLaw.veilToggles(effects.flags, veil).forEach(onToggleEffect)
+                        },
+                        onEffects = {
+                            interact()
+                            ephemeralRailOpen = false
+                            onOpenEffects()
+                        },
+                        onPickLanguage = onPickLanguage,
+                        onLibrary = if (affordances.canSendImages || affordances.canSendVideos) {
+                            { interact(); filePicker.launch("image/*") }
+                        } else {
+                            null
+                        },
+                        onCamera = if (affordances.canSendImages || affordances.canSendVideos) {
+                            { interact(); cameraChooserOpen = true }
+                        } else {
+                            null
+                        },
+                        accentColor = accentColor,
+                    )
+                }
+                when {
+                    voice.isRecording -> VoiceRecordingPill(
+                        session = voice.session,
+                        accentColor = accentColor,
+                        onCancel = voice.cancel,
+                        onStop = voice.finish,
+                        onSend = voice.finish,
+                        modifier = Modifier.padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.smPlus),
+                    )
+                    isEndToEnd -> ComposerEndToEndNotice(
+                        modifier = Modifier.padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.md),
+                    )
+                    affordances.isReadOnly -> ComposerReadOnlyNotice(
+                        modifier = Modifier.padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.md),
+                    )
+                    else -> {
+                        if (!isEditing && slowMode.isActive && !slowMode.canSend) {
+                            ComposerSlowModeNotice(
+                                remainingSeconds = slowMode.remainingSeconds,
+                                modifier = Modifier.padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.xs),
+                            )
+                        }
+                        ComposerInputRow(
+                            isEditing = isEditing,
+                            hasAttachmentTiles = ladderTiles.isNotEmpty(),
+                            attachmentTrayOpen = attachmentTrayOpen,
+                            fieldValue = fieldValue,
+                            showMic = showMic,
+                            hasSomethingToSend = hasContent || isEditing,
+                            sendEnabled = canSend && (isEditing || slowMode.canSend),
+                            accentColor = accentColor,
+                            secondaryColor = secondaryColor,
+                            iconTint = iconTint,
+                            protectionTint = protectionTint,
+                            quickEmojis = quickEmojis,
+                            onQuickEmoji = onQuickEmoji?.let { send ->
+                                { emoji: String ->
+                                    interact()
+                                    haptics.light()
+                                    send(emoji)
+                                }
+                            },
+                            onQuickEmojiLongPress = {
+                                interact()
+                                emojiPickerOpen = true
+                            },
+                            focusRequester = focusRequester,
+                            onFocusChange = { focused ->
+                                if (focused) {
+                                    interact()
+                                    attachmentTrayOpen = false
+                                }
+                            },
+                            onToggleTray = {
+                                interact()
+                                if (attachmentTrayOpen) {
+                                    attachmentTrayOpen = false
+                                    runCatching { focusRequester.requestFocus() }
+                                } else {
+                                    focusManager.clearFocus()
+                                    attachmentTrayOpen = true
+                                }
+                            },
+                            onFieldChange = { newValue ->
+                                if (newValue.text != fieldValue.text) attachmentTrayOpen = false
+                                fieldValue = newValue
+                                onDraftChange(newValue.text)
+                            },
+                            onRequestVoice = {
+                                interact()
+                                voice.request()
+                            },
+                            onSend = {
+                                interact()
+                                haptics.light()
+                                onSend()
+                            },
+                        )
+                    }
+                }
                 if (attachmentTrayOpen && ladderTiles.isNotEmpty() && !voice.isRecording && !affordances.isReadOnly) {
                     ComposerAttachmentTray(
                         tiles = ladderTiles,
@@ -251,83 +415,6 @@ internal fun ChatComposer(
                             }
                         },
                     )
-                }
-                if (cameraChooserOpen) {
-                    ComposerCameraChooser(
-                        canSendImages = affordances.canSendImages,
-                        canSendVideos = affordances.canSendVideos,
-                        onPickPhoto = chatCameraCapture::launchPhoto,
-                        onPickVideo = chatCameraCapture::launchVideo,
-                        onDismiss = { cameraChooserOpen = false },
-                    )
-                }
-                if (replyBanner != null) ComposerReplyRow(replyBanner, accentColor, onCancelReply)
-                if (isEditing) ComposerEditRow(editingOriginalText, onCancelEdit)
-                if (clipboardContent != null) {
-                    ClipboardContentPreview(
-                        clip = clipboardContent,
-                        accentColor = accentColor,
-                        onRemove = onRemoveClipboard,
-                        modifier = Modifier.padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.xs),
-                    )
-                }
-                when {
-                    voice.isRecording -> VoiceRecordingPill(
-                        session = voice.session,
-                        accentColor = accentColor,
-                        onCancel = voice.cancel,
-                        onStop = voice.finish,
-                        onSend = voice.finish,
-                        modifier = Modifier.padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.sm),
-                    )
-                    isEndToEnd -> ComposerEndToEndNotice(
-                        modifier = Modifier.padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.md),
-                    )
-                    affordances.isReadOnly -> ComposerReadOnlyNotice(
-                        modifier = Modifier.padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.md),
-                    )
-                    else -> {
-                        if (!isEditing && slowMode.isActive && !slowMode.canSend) {
-                            ComposerSlowModeNotice(
-                                remainingSeconds = slowMode.remainingSeconds,
-                                modifier = Modifier.padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.xs),
-                            )
-                        }
-                        ComposerInputRow(
-                            isEditing = isEditing,
-                            hasAttachmentTiles = ladderTiles.isNotEmpty(),
-                            attachmentTrayOpen = attachmentTrayOpen,
-                            hasEffects = hasEffects,
-                            languageCode = languageCode,
-                            fieldValue = fieldValue,
-                            sentiment = sentiment,
-                            showMic = showMic,
-                            sendEnabled = canSend && (isEditing || slowMode.canSend),
-                            accentColor = accentColor,
-                            secondaryColor = secondaryColor,
-                            focusRequester = focusRequester,
-                            onFocusChange = { if (it) interact() },
-                            onToggleTray = {
-                                interact()
-                                attachmentTrayOpen = !attachmentTrayOpen
-                            },
-                            onOpenEffects = onOpenEffects,
-                            onPickLanguage = onPickLanguage,
-                            onFieldChange = { newValue ->
-                                fieldValue = newValue
-                                onDraftChange(newValue.text)
-                            },
-                            onRequestVoice = {
-                                interact()
-                                voice.request()
-                            },
-                            onSend = {
-                                interact()
-                                haptics.light()
-                                onSend()
-                            },
-                        )
-                    }
                 }
             }
         },

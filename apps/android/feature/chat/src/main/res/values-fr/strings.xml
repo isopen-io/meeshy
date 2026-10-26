@@ -6,7 +6,7 @@
     <string name="chat_call_audio">Appel audio</string>
     <string name="chat_call_video">Appel vidéo</string>
     <string name="chat_call_rejoin">Rejoindre</string>
-    <string name="chat_message_placeholder">Message</string>
+    <string name="chat_message_placeholder">Message…</string>
     <string name="chat_composer_sentiment">Tonalité du message</string>
     <string name="chat_composer_language">Langue du message</string>
     <string name="chat_send">Envoyer</string>
