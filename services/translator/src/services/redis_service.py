@@ -295,6 +295,41 @@ class RedisService:
             self._handle_redis_error()
             return False
 
+    async def write_atomic(self, operations: List[tuple]) -> bool:
+        """
+        #13102 — une transaction Redis (`MULTI`/`EXEC`) : `("setex", clé, ttl,
+        valeur)` et `("sadd", ensemble, membre, ttl)` (le membre ET l'échéance de
+        l'ensemble). Tout ou rien ; jamais de repli mémoire.
+        """
+        if self.permanently_disabled or not self.is_redis_available or not self.redis:
+            return False
+        try:
+            async with self.redis.pipeline(transaction=True) as pipe:
+                for operation in operations:
+                    if operation[0] == "setex":
+                        _, key, seconds, value = operation
+                        pipe.setex(key, seconds, value)
+                    elif operation[0] == "sadd":
+                        _, key, member, seconds = operation
+                        pipe.sadd(key, member)
+                        pipe.expire(key, seconds)
+                    else:
+                        raise ValueError(f"opération inconnue: {operation[0]}")
+                await pipe.execute()
+            return True
+        except Exception as e:
+            logger.warning(f"[REDIS] Écriture transactionnelle non rangée ({type(e).__name__})")
+            self._handle_redis_error()
+            return False
+
+    async def smembers_confirmed(self, key: str) -> List[str]:
+        """Les membres d'un ensemble d'index, dans Redis seulement (jamais KEYS ni SCAN)."""
+        self._require_redis()
+        try:
+            return sorted(await self.redis.smembers(key))
+        except Exception as error:
+            raise ErasureNotConfirmedError(type(error).__name__) from error
+
     async def setex_durable_atomic(self, entries: List[tuple]) -> bool:
         """
         #13102 — plusieurs clés (un contenu ET son index d'effacement) écrites
@@ -313,21 +348,6 @@ class RedisService:
             logger.warning(f"[REDIS] Écriture transactionnelle non rangée ({type(e).__name__})")
             self._handle_redis_error()
             return False
-
-    async def scan_keys_confirmed(self, pattern: str) -> List[str]:
-        """
-        Les clés de ce motif, par SCAN (jamais KEYS, qui bloque Redis), dans
-        Redis. Les clés du cache mémoire qui y répondent partent d'abord, quoi
-        qu'il advienne de Redis : un repli d'avant ce lot n'y survit pas.
-        """
-        regex = re.compile("^" + re.escape(pattern).replace("\\*", ".*") + "$")
-        for key in [k for k in self.memory_cache.keys() if regex.match(k)]:
-            self.memory_cache.pop(key, None)
-        self._require_redis()
-        try:
-            return [key async for key in self.redis.scan_iter(match=pattern, count=500)]
-        except Exception as error:
-            raise ErasureNotConfirmedError(type(error).__name__) from error
 
     async def delete_confirmed(self, keys: List[str]) -> int:
         """
@@ -450,9 +470,10 @@ class TranslationCacheService:
         # `v2` = traduction phrase par phrase (#9723). Les entrées `translation:text:`
         # écrites d'un seul tenant (phrases perdues) ne sont plus jamais resservies
         # et expirent d'elles-mêmes (TTL 30 jours).
-        self.key_pattern = "translation:text:v2:{hash}"
-        # #13102 — l'index des traductions d'un message : `…:<messageId>:<empreinte>` → "1".
-        self.message_index_pattern = "translation:keys:message:{message_id}:{hash}"
+        # v3 (#13102) : les entrées v2, rangées sans index d'effacement, ne sont plus jamais servies.
+        self.key_pattern = "translation:text:v3:{hash}"
+        # #13102 — l'index des traductions d'un message : un ENSEMBLE d'empreintes.
+        self.message_index_pattern = "translation:v3:message:{message_id}"
 
         # TTL = 1 mois (30 jours = 2592000 secondes)
         # Le texte lui-même sert d'indicateur de modification
@@ -557,9 +578,9 @@ class TranslationCacheService:
         message_id = message_id or current_message_id()
         if not message_id:
             return False
-        success = await self.redis.setex_durable_atomic([
-            (key, ttl, json.dumps(cache_data)),
-            (self.message_index_pattern.format(message_id=message_id, hash=cache_hash), ttl, "1"),
+        success = await self.redis.write_atomic([
+            ("setex", key, ttl, json.dumps(cache_data)),
+            ("sadd", self.message_index_pattern.format(message_id=message_id), cache_hash, ttl),
         ])
 
         if success:
@@ -592,11 +613,10 @@ class TranslationCacheService:
         segments), par l'index posé à leur écriture : aucun texte n'a besoin de
         voyager pour être oublié. Idempotent.
         """
-        prefix = self.message_index_pattern.format(message_id=message_id, hash="")
-        index_keys = await self.redis.scan_keys_confirmed(f"{prefix}*")
-        cache_keys = [self.key_pattern.format(hash=key[len(prefix):]) for key in index_keys]
-        deleted = await self.redis.delete_confirmed(cache_keys)
-        await self.redis.delete_confirmed(index_keys)
+        index_key = self.message_index_pattern.format(message_id=message_id)
+        hashes = await self.redis.smembers_confirmed(index_key)
+        deleted = await self.redis.delete_confirmed([self.key_pattern.format(hash=h) for h in hashes])
+        await self.redis.delete_confirmed([index_key])
         return deleted
 
     async def invalidate_translation(self, text: str, source_lang: str, target_lang: str, model_type: str = "premium") -> bool:
@@ -634,9 +654,13 @@ class AudioCacheService:
         self.settings = settings
 
         # Patterns de clés - basés sur HASH audio (pas attachmentId)
-        self.key_transcription_by_hash = "audio:transcription:hash:{audio_hash}"
-        self.key_translated_audio_by_hash = "audio:translation:hash:{audio_hash}:{lang}"
-        self.key_audio_hash_mapping = "audio:hash:mapping:{attachment_id}"  # attachment_id -> audio_hash
+        # v3 (#13102) : les entrées d'avant, rangées sans correspondance garantie, ne sont plus servies.
+        self.key_transcription_by_hash = "audio:v3:transcription:hash:{audio_hash}"
+        self.key_translated_audio_by_hash = "audio:v3:translation:hash:{audio_hash}:{lang}"
+        self.key_audio_hash_mapping = "audio:v3:hash:mapping:{attachment_id}"  # attachment_id -> audio_hash
+        # #13102 — les langues rangées, en ENSEMBLES : l'oubli les lit sans balayer Redis.
+        self.key_hash_langs = "audio:v3:hash:langs:{audio_hash}"
+        self.key_attachment_langs = "audio:v3:attachment:langs:{attachment_id}"
         self.key_voice_profile = "voice:profile:{user_id}"
 
         # Patterns legacy (pour compatibilité)
@@ -692,7 +716,7 @@ class AudioCacheService:
         # (`_set_by_hash_with_mapping`), avec un TTL au moins égal.
         return self.compute_audio_hash(audio_path)
 
-    async def _set_by_hash_with_mapping(self, attachment_id: Optional[str], audio_hash: str, key: str, ttl: int, value: str) -> bool:
+    async def _set_by_hash_with_mapping(self, attachment_id: Optional[str], audio_hash: str, key: str, ttl: int, value: str, lang: Optional[str] = None) -> bool:
         """
         #13102 — un contenu rangé par empreinte audio et la correspondance
         `pièce → empreinte` qui permet de l'oublier, dans UNE transaction, la
@@ -703,9 +727,11 @@ class AudioCacheService:
         if not cache_allowed() or not attachment_id or not is_real_audio_hash(audio_hash):
             return False
         mapping_key = self.key_audio_hash_mapping.format(attachment_id=attachment_id)
-        return await self.redis.setex_durable_atomic([
-            (key, ttl, value),
-            (mapping_key, max(ttl, self.ttl_hash_mapping), audio_hash),
+        index_ttl = max(ttl, self.ttl_hash_mapping)
+        return await self.redis.write_atomic([
+            ("setex", key, ttl, value),
+            ("setex", mapping_key, index_ttl, audio_hash),
+            *([("sadd", self.key_hash_langs.format(audio_hash=audio_hash), lang, index_ttl)] if lang else []),
         ])
 
     # ─────────────────────────────────────────────────────────────────────────
@@ -788,7 +814,7 @@ class AudioCacheService:
         """Sauvegarde un audio traduit par hash, avec la correspondance de SA pièce (#13102)"""
         key = self.key_translated_audio_by_hash.format(audio_hash=audio_hash, lang=lang)
         ttl = ttl or self.ttl_translated_audio
-        success = await self._set_by_hash_with_mapping(attachment_id, audio_hash, key, ttl, json.dumps(audio_data))
+        success = await self._set_by_hash_with_mapping(attachment_id, audio_hash, key, ttl, json.dumps(audio_data), lang=lang)
         if success:
             logger.debug(f"[CACHE] 💾 Audio traduit {lang} mis en cache (hash={audio_hash[:8]})")
         return success
@@ -838,7 +864,10 @@ class AudioCacheService:
 
         # Stocker aussi par attachment_id (legacy compatibility)
         key = self.key_translated_audio.format(attachment_id=attachment_id, lang=lang)
-        return await self.redis.setex_durable(key, ttl, json.dumps(audio_data))
+        return await self.redis.write_atomic([
+            ("setex", key, ttl, json.dumps(audio_data)),
+            ("sadd", self.key_attachment_langs.format(attachment_id=attachment_id), lang, ttl),
+        ])
 
     async def forget_attachment(self, attachment_id: str) -> int:
         """
@@ -848,16 +877,20 @@ class AudioCacheService:
         une pièce déjà oubliée, ou jamais vue, ne fait rien.
         """
         mapping_key = self.key_audio_hash_mapping.format(attachment_id=attachment_id)
+        attachment_langs_key = self.key_attachment_langs.format(attachment_id=attachment_id)
         audio_hash = await self.redis.get_confirmed(mapping_key)
         keys = [
             self.key_transcription.format(attachment_id=attachment_id),
-            *(await self.redis.scan_keys_confirmed(self.key_translated_audio.format(attachment_id=attachment_id, lang="*"))),
+            *(self.key_translated_audio.format(attachment_id=attachment_id, lang=lang) for lang in await self.redis.smembers_confirmed(attachment_langs_key)),
         ]
+        indexes = [mapping_key, attachment_langs_key]
         if audio_hash:
+            hash_langs_key = self.key_hash_langs.format(audio_hash=audio_hash)
             keys.append(self.key_transcription_by_hash.format(audio_hash=audio_hash))
-            keys.extend(await self.redis.scan_keys_confirmed(self.key_translated_audio_by_hash.format(audio_hash=audio_hash, lang="*")))
+            keys.extend(self.key_translated_audio_by_hash.format(audio_hash=audio_hash, lang=lang) for lang in await self.redis.smembers_confirmed(hash_langs_key))
+            indexes.append(hash_langs_key)
         deleted = await self.redis.delete_confirmed(list(dict.fromkeys(keys)))
-        await self.redis.delete_confirmed([mapping_key])
+        await self.redis.delete_confirmed(indexes)
         return deleted
 
     # ─────────────────────────────────────────────────────────────────────────

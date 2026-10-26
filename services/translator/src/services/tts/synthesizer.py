@@ -394,7 +394,7 @@ class Synthesizer:
             )
 
         logger.info(
-            f"[Synthesizer] 🎤 Synthèse: '{text_str[:50]}...' → {target_language} "
+            f"[Synthesizer] 🎤 Synthèse: '{shown(text_str, 50)}...' → {target_language} "
             f"(model={model.value}, len={len(text_str)} chars)"
         )
 

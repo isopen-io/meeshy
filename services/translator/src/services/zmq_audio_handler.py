@@ -622,7 +622,7 @@ class AudioHandler:
             logger.info(f"📜 [TRANSLATOR] TRANSCRIPTION FINALE: {result.message_id}")
             logger.info(f"   🌍 Langue: {result.original.language} | Confiance: {result.original.confidence:.2f}")
             logger.info(f"   🎭 Speakers: {result.original.speaker_count or 1} | Primary: {result.original.primary_speaker_id or 'N/A'}")
-            logger.info(f"   📝 Texte complet: \"{result.original.transcription}\"")
+            logger.info(f"   📝 Texte complet: \"{shown(result.original.transcription)}\"")
 
             # Log par speaker si diarisation disponible
             if result.original.segments and result.original.speaker_count and result.original.speaker_count > 1:
@@ -633,7 +633,7 @@ class AudioHandler:
                     txt = seg.text if hasattr(seg, 'text') else seg.get('text', '')
                     by_speaker[spk or '?'].append(txt)
                 for spk_id, texts in sorted(by_speaker.items()):
-                    logger.info(f"   [{spk_id}]: \"{' '.join(texts)}\"")
+                    logger.info(f"   [{spk_id}]: \"{shown(' '.join(texts))}\"")
             logger.info("─" * 70)
 
             metadata = {

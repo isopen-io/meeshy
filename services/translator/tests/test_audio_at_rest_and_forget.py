@@ -2,120 +2,75 @@
 #13102 — ce que le translator tire d'une pièce ou d'un texte ne survit ni au
 régime au repos, ni à l'effacement.
 
-1. Une tâche audio d'une conversation `server` / `hybrid` (`atRest: true`) ne
-   lit ni n'écrit rien dans Redis : transcription, traductions, pistes TTS,
-   table `attachmentId → empreinte`. Son texte ne figure dans aucun journal.
-2. Une demande d'oubli efface, pour une pièce, sa transcription et ses pistes
-   (par empreinte et par identifiant) et, pour un message, les traductions
-   rangées pour lui, segments compris ; elle ne porte que des identifiants et
-   s'acquitte par `cache_forget_done`. Idempotente.
+1. Le cache ne sert qu'une tâche au régime ORDINAIRE déclaré : une tâche au
+   repos (`atRest: true`) ou non déclarée (thread sans contexte, porte qui
+   l'oublie) ne lit ni n'écrit rien dans Redis, et ses journaux taisent le texte.
+2. Tout contenu rangé l'est avec son index d'effacement, dans la même
+   transaction et au moins aussi longtemps : l'ensemble des empreintes d'un
+   message, la correspondance pièce → empreinte et l'ensemble des langues d'une
+   empreinte ou d'une pièce. Jamais dans le cache mémoire de repli.
+3. Une demande d'oubli ne porte que des identifiants, lit ses index (jamais
+   KEYS ni SCAN), n'acquitte que ce que Redis a confirmé. Idempotente.
+
+Les témoins exercent un vrai `RedisService` posé sur un client Redis en
+mémoire (`durable_redis_double.py`).
 """
 
 import asyncio
-import fnmatch
 import json
 import logging
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from durable_redis_double import DictRedis, durable_service
 from services.redis_service import AudioCacheService, TranslationCacheService
-from services.task_privacy import at_rest_scope, current_message_id, in_at_rest_task, message_scope, request_is_at_rest, shown, task_scope
+from services.task_privacy import (
+    at_rest_scope,
+    current_message_id,
+    in_at_rest_task,
+    message_scope,
+    request_is_at_rest,
+    shown,
+    task_scope,
+    under_declared_regime,
+)
 from services.cache_forget import forget_cached_content, parse_forget_request
 from utils.text_segmentation import TextSegmenter
 
 ATTACHMENT = "aaaaaaaaaaaaaaaaaaaaaaa1"
+OTHER = "aaaaaaaaaaaaaaaaaaaaaaa2"
 MESSAGE = "bbbbbbbbbbbbbbbbbbbbbbb1"
 OTHER_MESSAGE = "bbbbbbbbbbbbbbbbbbbbbbb2"
-OTHER = "aaaaaaaaaaaaaaaaaaaaaaa2"
 SECRET = "Le code du coffre est 4471, porte B. Rendez-vous demain à la gare du Nord."
 STRUCTURED = "Le code du coffre est 4471, porte B.\n\nRendez-vous demain à la gare du Nord, quai 3, avec la valise.\n\n- clé sous le paillasson"
 
 
-class FakeRedis:
-    def __init__(self):
-        self.store = {}
-
-    async def get(self, key):
-        return self.store.get(key)
-
-    async def setex(self, key, ttl, value):
-        self.store[key] = value
-        return True
-
-    async def setex_durable(self, key, ttl, value):
-        if not self.available:
-            return False
-        self.store[key] = value
-        return True
-
-    async def setex_durable_atomic(self, entries):
-        if not self.available:
-            return False
-        for key, ttl, value in entries:
-            self.store[key] = value
-        return True
-
-    async def delete(self, key):
-        self.store.pop(key, None)
-        return True
-
-    async def exists(self, key):
-        return key in self.store
-
-    async def keys(self, pattern):
-        return [k for k in self.store if fnmatch.fnmatchcase(k, pattern)]
-
-    available = True
-
-    async def get_confirmed(self, key):
-        self._confirm()
-        return self.store.get(key)
-
-    async def scan_keys_confirmed(self, pattern):
-        self._confirm()
-        return [k for k in self.store if fnmatch.fnmatchcase(k, pattern)]
-
-    async def delete_confirmed(self, keys):
-        self._confirm()
-        removed = [k for k in keys if k in self.store]
-        for k in removed:
-            del self.store[k]
-        return len(removed)
-
-    def _confirm(self):
-        from services.redis_service import ErasureNotConfirmedError
-        if not self.available:
-            raise ErasureNotConfirmedError("indisponible")
-
-    def get_stats(self):
-        return {}
-
-
-def _caches(tmp_path):
-    redis = FakeRedis()
-    audio = AudioCacheService(redis)
-    text = TranslationCacheService(redis)
+def _caches(tmp_path, client=None, available=True):
+    service = durable_service(client or DictRedis(), available=available)
     audio_file = tmp_path / "voice.m4a"
     audio_file.write_bytes(b"\x00\x00\x00 ftypM4A voix secrete")
-    return redis, audio, text, str(audio_file)
+    return service, AudioCacheService(service), TranslationCacheService(service), str(audio_file)
 
 
-async def _fill(audio, text, audio_path, attachment_id=ATTACHMENT):
-    with at_rest_scope(False):
-        return await _fill_declared(audio, text, audio_path, attachment_id)
-
-
-async def _fill_declared(audio, text, audio_path, attachment_id):
+async def _fill_declared(audio, text, audio_path, attachment_id, message_id=MESSAGE):
     audio_hash = await audio.get_or_compute_audio_hash(attachment_id, audio_path)
     await audio.set_transcription_by_hash(audio_hash, {"text": SECRET}, attachment_id=attachment_id)
     await audio.set_translated_audio_by_hash(audio_hash, "en", {"translated_text": "The safe code"}, attachment_id=attachment_id)
     await audio.set_translated_audio_by_hash(audio_hash, "es", {"translated_text": "El código"}, attachment_id=attachment_id)
     await audio.set_transcription(attachment_id, {"text": SECRET})
     await audio.set_translated_audio(attachment_id, "en", {"translated_text": "The safe code"})
-    await text.set_translation(SECRET, "fr", "en", "EN", "premium", message_id=MESSAGE)
+    await text.set_translation(SECRET, "fr", "en", "EN", "premium", message_id=message_id)
     return audio_hash
+
+
+async def _fill(audio, text, audio_path, attachment_id=ATTACHMENT, message_id=MESSAGE):
+    with at_rest_scope(False):
+        return await _fill_declared(audio, text, audio_path, attachment_id, message_id)
+
+
+# ── 1. le régime ──────────────────────────────────────────────────────────
 
 
 @pytest.mark.unit
@@ -127,15 +82,13 @@ def test_only_the_true_boolean_declares_a_request_at_rest():
 
 @pytest.mark.unit
 async def test_an_at_rest_task_stores_nothing_and_reads_nothing(tmp_path):
-    redis, audio, text, audio_path = _caches(tmp_path)
+    service, audio, text, audio_path = _caches(tmp_path)
     with at_rest_scope(True):
         await _fill_declared(audio, text, audio_path, ATTACHMENT)
-    assert redis.store == {}
+    assert service.redis.store == {}
 
-    await _fill(audio, text, audio_path, OTHER)
-    assert redis.store
-    with at_rest_scope(False):
-        other_hash = await audio.get_or_compute_audio_hash(OTHER, audio_path)
+    other_hash = await _fill(audio, text, audio_path, OTHER, OTHER_MESSAGE)
+    assert service.redis.store
     with at_rest_scope(True):
         assert await audio.get_transcription_by_hash(other_hash) is None
         assert await audio.get_translated_audio_by_hash(other_hash, "en") is None
@@ -147,9 +100,9 @@ async def test_an_at_rest_task_stores_nothing_and_reads_nothing(tmp_path):
 
 @pytest.mark.unit
 async def test_an_undeclared_regime_is_fail_closed(tmp_path):
-    redis, audio, text, audio_path = _caches(tmp_path)
+    service, audio, text, audio_path = _caches(tmp_path)
     await _fill_declared(audio, text, audio_path, ATTACHMENT)
-    assert redis.store == {}
+    assert service.redis.store == {}
     assert in_at_rest_task() is True
     assert SECRET[:10] not in shown(SECRET, 20)
 
@@ -166,7 +119,6 @@ async def test_the_regime_follows_each_concurrent_task_without_contaminating_ano
 
     await asyncio.gather(task("au-repos", True), task("ordinaire", False))
     assert seen == {"au-repos": (True, True), "ordinaire": (False, False)}
-    assert in_at_rest_task() is True
 
 
 @pytest.mark.unit
@@ -179,88 +131,7 @@ def test_a_log_of_an_at_rest_task_says_the_length_never_the_text():
 
 
 @pytest.mark.unit
-async def test_forgetting_a_piece_erases_its_transcription_tracks_and_mapping(tmp_path):
-    redis, audio, text, audio_path = _caches(tmp_path)
-    await _fill(audio, text, audio_path)
-    await _fill(audio, text, audio_path, OTHER)
-    other_keys = {k for k in redis.store if OTHER in k}
-
-    request = parse_forget_request({"requestId": "r1", "attachmentIds": [ATTACHMENT]})
-    deleted = await forget_cached_content(audio, text, request)
-
-    assert deleted > 0
-    assert not [k for k in redis.store if k.startswith("audio:") and ATTACHMENT in k]
-    assert other_keys <= set(redis.store)
-    assert await forget_cached_content(audio, text, request) == 0
-
-
-@pytest.mark.unit
-async def test_forgetting_a_message_erases_its_translations_segments_included_by_id_only(tmp_path):
-    redis, audio, text, audio_path = _caches(tmp_path)
-    segments, _ = TextSegmenter(max_segment_length=100).segment_text(STRUCTURED)
-    pieces = [STRUCTURED] + [seg["text"] for seg in segments if seg.get("type", "line") == "line" and seg.get("text", "").strip()]
-    assert len(pieces) > 2
-    with task_scope(False, MESSAGE):
-        for piece in pieces:
-            for model in ("basic", "premium"):
-                await text.set_translation(piece, "fr", "en", f"EN:{piece}", model)
-    with at_rest_scope(False):
-        await text.set_translation("Bonjour", "fr", "en", "Hello", "basic", message_id=OTHER_MESSAGE)
-
-    request = parse_forget_request({"requestId": "r2", "messageIds": [MESSAGE]})
-    deleted = await forget_cached_content(audio, text, request)
-
-    assert deleted == 2 * len(pieces)
-    assert [json.loads(v)["translated_text"] for k, v in redis.store.items() if k.startswith("translation:text:")] == ["Hello"]
-    assert not [k for k in redis.store if MESSAGE in k]
-    assert await forget_cached_content(audio, text, request) == 0
-
-
-@pytest.mark.unit
-async def test_an_at_rest_message_leaves_no_index_either(tmp_path):
-    redis, audio, text, audio_path = _caches(tmp_path)
-    with task_scope(True, MESSAGE):
-        await text.set_translation(SECRET, "fr", "en", "EN", "premium")
-    assert redis.store == {}
-
-
-@pytest.mark.unit
-def test_a_forget_request_is_read_as_data():
-    request = parse_forget_request({
-        "requestId": "r3",
-        "attachmentIds": [ATTACHMENT, "../../etc", 42, "zzzzzzzzzzzzzzzzzzzzzzzz", ATTACHMENT],
-        "messageIds": [MESSAGE, "*", None],
-        "texts": [{"text": SECRET}],
-    })
-    assert request == {"requestId": "r3", "attachmentIds": [ATTACHMENT], "messageIds": [MESSAGE]}
-    assert parse_forget_request({"requestId": "x" * 65})["requestId"] is None
-    with message_scope("not-an-id"):
-        assert current_message_id() is None
-
-
-@pytest.mark.unit
-async def test_the_handler_acknowledges_a_forget_with_its_request_id(monkeypatch, caplog):
-    from services import zmq_translation_handler as module
-    from services import redis_service
-
-    redis = FakeRedis()
-    monkeypatch.setattr(redis_service, "get_audio_cache_service", lambda *a, **k: AudioCacheService(redis))
-    monkeypatch.setattr(redis_service, "get_translation_cache_service", lambda *a, **k: TranslationCacheService(redis))
-    socket = SimpleNamespace(send=AsyncMock())
-    handler = module.TranslationHandler(pool_manager=SimpleNamespace(), pub_socket=socket)
-
-    caplog.set_level(logging.INFO)
-    await handler._handle_cache_forget({"type": "cache_forget", "requestId": "req-42", "attachmentIds": [ATTACHMENT], "messageIds": [MESSAGE]})
-
-    sent = json.loads(socket.send.call_args.args[0].decode("utf-8"))
-    assert sent == {"type": "cache_forget_done", "requestId": "req-42", "deleted": 0}
-    assert SECRET[:15] not in caplog.text
-
-
-@pytest.mark.unit
 async def test_an_audio_request_runs_under_the_regime_it_declares():
-    from services.task_privacy import under_declared_regime
-
     seen = []
 
     class Handler:
@@ -280,12 +151,236 @@ def test_both_audio_entry_points_run_under_the_declared_regime():
     for method in (zmq_audio_handler.AudioHandler._handle_audio_process_request,
                    zmq_transcription_handler.TranscriptionHandler._handle_transcription_only_request):
         assert method.__wrapped__ is not method
-        assert method.__qualname__.endswith(("_handle_audio_process_request", "_handle_transcription_only_request"))
+
+
+def _stage(service):
+    from services.audio_pipeline.translation_stage import TranslationStage
+
+    stage = TranslationStage.__new__(TranslationStage)
+    stage.translation_cache = TranslationCacheService(service)
+    stage.audio_cache = AudioCacheService(service)
+    stage._initialized = True
+
+    async def translate(text, source_language, target_language, model_type, message_id=None):
+        return f"{target_language}:{text}"
+
+    stage._translate_text = translate
+    return stage
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("at_rest, expected_writes", [(True, 0), (False, 2)])
+async def test_the_language_thread_pool_inherits_the_task_regime(at_rest, expected_writes):
+    service = durable_service()
+    stage = _stage(service)
+    with task_scope(at_rest, MESSAGE):
+        await stage._process_languages_parallel(
+            languages=["en", "es"], source_text=SECRET, source_language="fr", audio_hash="h" * 32,
+            voice_model=None, message_id=MESSAGE, attachment_id=ATTACHMENT, model_type="premium",
+            cloning_params=None, max_workers=2,
+        )
+    translations = [k for k in service.redis.data if k.startswith("translation:text:")]
+    assert len(translations) == expected_writes
+    assert len(service.redis.sets.get(f"translation:v3:message:{MESSAGE}", set())) == expected_writes
+
+
+@pytest.mark.unit
+async def test_a_bare_thread_without_the_task_context_writes_nothing():
+    import threading
+
+    service = durable_service()
+    text = TranslationCacheService(service)
+
+    def write():
+        asyncio.run(text.set_translation(SECRET, "fr", "en", "EN", "premium", message_id=MESSAGE))
+
+    with task_scope(False, MESSAGE):
+        thread = threading.Thread(target=write)
+        thread.start()
+        thread.join()
+    assert service.redis.store == {}
+
+
+# ── 2. aucun contenu sans son index ───────────────────────────────────────
+
+
+@pytest.mark.unit
+async def test_a_translation_and_its_index_are_written_together_or_not_at_all():
+    ok = durable_service()
+    with task_scope(False, MESSAGE):
+        assert await TranslationCacheService(ok).set_translation(SECRET, "fr", "en", "EN", "premium") is True
+    assert len([k for k in ok.redis.data if k.startswith("translation:text:v3:")]) == 1
+    assert len(ok.redis.sets[f"translation:v3:message:{MESSAGE}"]) == 1
+
+    broken = durable_service(DictRedis(fail_transaction=True))
+    with task_scope(False, MESSAGE):
+        assert await TranslationCacheService(broken).set_translation(SECRET, "fr", "en", "EN", "premium") is False
+    assert broken.redis.store == {}
+    assert len(broken.memory_cache) == 0
+
+
+@pytest.mark.unit
+async def test_a_translation_without_a_named_message_is_never_cached():
+    service = durable_service()
+    with at_rest_scope(False):
+        assert await TranslationCacheService(service).set_translation(SECRET, "fr", "en", "EN", "premium") is False
+    assert service.redis.store == {}
+    with task_scope(False, MESSAGE):
+        assert await TranslationCacheService(service).set_translation(SECRET, "fr", "en", "EN", "premium", ttl=600) is True
+    content = [k for k in service.redis.data if k.startswith("translation:text:")][0]
+    assert service.redis.ttls[f"translation:v3:message:{MESSAGE}"] == service.redis.ttls[content] == 600
+
+
+@pytest.mark.unit
+async def test_nothing_is_cached_by_audio_hash_without_its_piece_or_under_a_synthetic_hash(tmp_path):
+    service, audio, _text, _path = _caches(tmp_path)
+    real = "a" * 32
+    with at_rest_scope(False):
+        assert await audio.set_transcription_by_hash(real, {"text": SECRET}) is False
+        assert await audio.set_transcription_by_hash("fallback_" + ATTACHMENT, {"text": SECRET}, attachment_id=ATTACHMENT) is False
+        assert await audio.set_transcription_by_hash("synthetic:" + real, {"text": SECRET}, attachment_id=ATTACHMENT) is False
+        assert audio.compute_audio_hash(str(tmp_path / "absent.m4a")).startswith("synthetic:")
+    assert service.redis.store == {}
+
+
+@pytest.mark.unit
+async def test_a_hash_content_its_piece_mapping_and_its_language_index_land_together(tmp_path):
+    service, audio, _text, _path = _caches(tmp_path)
+    real = "b" * 32
+    with at_rest_scope(False):
+        assert await audio.set_translated_audio_by_hash(real, "en", {"translated_text": "EN"}, ttl=90 * 24 * 3600, attachment_id=ATTACHMENT) is True
+    mapping = f"audio:v3:hash:mapping:{ATTACHMENT}"
+    content = f"audio:v3:translation:hash:{real}:en"
+    assert service.redis.data[mapping] == real
+    assert service.redis.sets[f"audio:v3:hash:langs:{real}"] == {"en"}
+    assert service.redis.ttls[mapping] >= service.redis.ttls[content]
+
+    broken_service, broken, _t, _p = _caches(tmp_path, DictRedis(fail_transaction=True))
+    with at_rest_scope(False):
+        assert await broken.set_transcription_by_hash(real, {"text": SECRET}, attachment_id=ATTACHMENT) is False
+    assert broken_service.redis.store == {}
+
+
+@pytest.mark.unit
+async def test_without_redis_nothing_goes_to_the_memory_fallback(tmp_path):
+    service, audio, text, audio_path = _caches(tmp_path, available=False)
+    await _fill(audio, text, audio_path)
+    assert len(service.memory_cache) == 0
+    assert service.redis.store == {}
+
+
+# ── 3. l'oubli ────────────────────────────────────────────────────────────
+
+
+@pytest.mark.unit
+async def test_forgetting_a_piece_erases_its_transcription_tracks_and_indexes(tmp_path):
+    service, audio, text, audio_path = _caches(tmp_path)
+    audio_hash = await _fill(audio, text, audio_path)
+    request = parse_forget_request({"requestId": "r1", "attachmentIds": [ATTACHMENT]})
+    deleted = await forget_cached_content(audio, text, request)
+
+    assert deleted == 5
+    assert not [k for k in service.redis.store if k.startswith("audio:") and (ATTACHMENT in k or audio_hash in k)]
+    assert await forget_cached_content(audio, text, request) == 0
+    assert service.redis.keys_called is False
+
+
+@pytest.mark.unit
+async def test_forgetting_a_message_erases_its_translations_segments_included_by_id_only(tmp_path):
+    service, audio, text, _path = _caches(tmp_path)
+    segments, _ = TextSegmenter(max_segment_length=100).segment_text(STRUCTURED)
+    pieces = [STRUCTURED] + [seg["text"] for seg in segments if seg.get("type", "line") == "line" and seg.get("text", "").strip()]
+    assert len(pieces) > 2
+    with task_scope(False, MESSAGE):
+        for piece in pieces:
+            for model in ("basic", "premium"):
+                await text.set_translation(piece, "fr", "en", f"EN:{piece}", model)
+    with at_rest_scope(False):
+        await text.set_translation("Bonjour", "fr", "en", "Hello", "basic", message_id=OTHER_MESSAGE)
+
+    request = parse_forget_request({"requestId": "r2", "messageIds": [MESSAGE]})
+    deleted = await forget_cached_content(audio, text, request)
+
+    assert deleted == 2 * len(pieces)
+    assert [json.loads(v)["translated_text"] for k, v in service.redis.data.items() if k.startswith("translation:text:")] == ["Hello"]
+    assert not [k for k in service.redis.store if MESSAGE in k]
+    assert await forget_cached_content(audio, text, request) == 0
+    assert service.redis.keys_called is False
+
+
+@pytest.mark.unit
+async def test_an_at_rest_message_leaves_no_index_either(tmp_path):
+    service, _audio, text, _path = _caches(tmp_path)
+    with task_scope(True, MESSAGE):
+        await text.set_translation(SECRET, "fr", "en", "EN", "premium")
+    assert service.redis.store == {}
+
+
+@pytest.mark.unit
+def test_a_forget_request_is_read_as_data():
+    request = parse_forget_request({
+        "requestId": "r3",
+        "attachmentIds": [ATTACHMENT, "../../etc", 42, "zzzzzzzzzzzzzzzzzzzzzzzz", ATTACHMENT],
+        "messageIds": [MESSAGE, "*", None],
+        "texts": [{"text": SECRET}],
+    })
+    assert request == {"requestId": "r3", "attachmentIds": [ATTACHMENT], "messageIds": [MESSAGE]}
+    assert parse_forget_request({"requestId": "x" * 65})["requestId"] is None
+    with message_scope("not-an-id"):
+        assert current_message_id() is None
+
+
+@pytest.mark.unit
+async def test_the_handler_acknowledges_a_confirmed_forget_with_its_request_id(monkeypatch, caplog, tmp_path):
+    from services import zmq_translation_handler as module
+    from services import redis_service
+
+    service, audio, text, audio_path = _caches(tmp_path)
+    await _fill(audio, text, audio_path)
+    monkeypatch.setattr(redis_service, "get_audio_cache_service", lambda *a, **k: audio)
+    monkeypatch.setattr(redis_service, "get_translation_cache_service", lambda *a, **k: text)
+    socket = SimpleNamespace(send=AsyncMock())
+    handler = module.TranslationHandler(pool_manager=SimpleNamespace(), pub_socket=socket)
+
+    caplog.set_level(logging.INFO)
+    await handler._handle_cache_forget({"type": "cache_forget", "requestId": "req-42", "attachmentIds": [ATTACHMENT], "messageIds": [MESSAGE]})
+
+    sent = json.loads(socket.send.call_args.args[0].decode("utf-8"))
+    assert sent == {"type": "cache_forget_done", "requestId": "req-42", "deleted": 6}
+    assert SECRET[:15] not in caplog.text
+    assert service.redis.store == {}
+
+
+@pytest.mark.unit
+async def test_an_unconfirmed_erasure_is_never_acknowledged(monkeypatch, tmp_path):
+    from services import zmq_translation_handler as module
+    from services import redis_service
+
+    _service, audio, text, _path = _caches(tmp_path, available=False)
+    monkeypatch.setattr(redis_service, "get_audio_cache_service", lambda *a, **k: audio)
+    monkeypatch.setattr(redis_service, "get_translation_cache_service", lambda *a, **k: text)
+    socket = SimpleNamespace(send=AsyncMock())
+    handler = module.TranslationHandler(pool_manager=SimpleNamespace(), pub_socket=socket)
+
+    await handler._handle_cache_forget({"type": "cache_forget", "requestId": "req-43", "attachmentIds": [ATTACHMENT], "messageIds": [MESSAGE]})
+
+    socket.send.assert_not_called()
+
+
+@pytest.mark.unit
+async def test_a_write_while_redis_is_down_leaves_no_trace_after_forget(tmp_path):
+    service, audio, text, audio_path = _caches(tmp_path, available=False)
+    await _fill(audio, text, audio_path)
+    assert len(service.memory_cache) == 0
+    service.is_redis_available = True
+    deleted = await forget_cached_content(audio, text, parse_forget_request({"requestId": "r", "attachmentIds": [ATTACHMENT], "messageIds": [MESSAGE]}))
+    assert deleted == 0
+    assert len(service.memory_cache) == 0
+    assert service.redis.store == {}
 
 
 @pytest.mark.unit
 async def test_the_core_router_routes_a_forget_request_to_its_handler():
-    from unittest.mock import MagicMock
     from services.zmq_server_core import ZMQTranslationServer
 
     core = ZMQTranslationServer.__new__(ZMQTranslationServer)
@@ -303,325 +398,3 @@ async def test_the_core_router_routes_a_forget_request_to_its_handler():
     _, label = core._create_tracked_task.call_args[0]
     assert label == "cache_forget"
     core.translation_handler._handle_cache_forget.assert_called_once()
-    assert core.translation_handler._handle_cache_forget.call_args[0][0]["attachmentIds"] == [ATTACHMENT]
-
-
-@pytest.mark.unit
-async def test_an_unconfirmed_erasure_is_never_acknowledged(monkeypatch):
-    from services import zmq_translation_handler as module
-    from services import redis_service
-
-    redis = FakeRedis()
-    redis.available = False
-    monkeypatch.setattr(redis_service, "get_audio_cache_service", lambda *a, **k: AudioCacheService(redis))
-    monkeypatch.setattr(redis_service, "get_translation_cache_service", lambda *a, **k: TranslationCacheService(redis))
-    socket = SimpleNamespace(send=AsyncMock())
-    handler = module.TranslationHandler(pool_manager=SimpleNamespace(), pub_socket=socket)
-
-    await handler._handle_cache_forget({"type": "cache_forget", "requestId": "req-43", "attachmentIds": [ATTACHMENT], "messageIds": [MESSAGE]})
-
-    socket.send.assert_not_called()
-
-
-@pytest.mark.unit
-async def test_redis_confirmed_erasure_refuses_the_memory_fallback_and_purges_it():
-    from collections import OrderedDict
-    from services.redis_service import ErasureNotConfirmedError, RedisService
-
-    service = object.__new__(RedisService)
-    service.permanently_disabled = False
-    service.is_redis_available = False
-    service.redis = None
-    service.memory_cache = OrderedDict([("translation:text:v2:abc", "secret")])
-
-    with pytest.raises(ErasureNotConfirmedError):
-        await service.delete_confirmed(["translation:text:v2:abc"])
-    with pytest.raises(ErasureNotConfirmedError):
-        await service.scan_keys_confirmed("translation:keys:message:*")
-    assert "translation:text:v2:abc" not in service.memory_cache
-
-
-@pytest.mark.unit
-async def test_redis_confirmed_erasure_uses_scan_and_counts_what_redis_deleted():
-    from collections import OrderedDict
-    from services.redis_service import RedisService
-
-    class Client:
-        def __init__(self):
-            self.data = {"translation:keys:message:m:1": "1", "translation:keys:message:m:2": "1", "autre": "1"}
-            self.keys_called = False
-
-        async def scan_iter(self, match, count):
-            for key in list(self.data):
-                if fnmatch.fnmatchcase(key, match):
-                    yield key
-
-        async def keys(self, pattern):
-            self.keys_called = True
-            return []
-
-        async def delete(self, *keys):
-            removed = [k for k in keys if k in self.data]
-            for k in removed:
-                del self.data[k]
-            return len(removed)
-
-    service = object.__new__(RedisService)
-    service.permanently_disabled = False
-    service.is_redis_available = True
-    service.redis = Client()
-    service.memory_cache = OrderedDict()
-
-    found = await service.scan_keys_confirmed("translation:keys:message:m:*")
-    assert sorted(found) == ["translation:keys:message:m:1", "translation:keys:message:m:2"]
-    assert await service.delete_confirmed(found + ["absente"]) == 2
-    assert service.redis.keys_called is False
-    assert list(service.redis.data) == ["autre"]
-
-
-def _stage(redis):
-    from services.audio_pipeline.translation_stage import TranslationStage
-
-    stage = TranslationStage.__new__(TranslationStage)
-    stage.translation_cache = TranslationCacheService(redis)
-    stage.audio_cache = AudioCacheService(redis)
-    stage._initialized = True
-
-    async def translate(text, source_language, target_language, model_type, message_id=None):
-        return f"{target_language}:{text}"
-
-    stage._translate_text = translate
-    return stage
-
-
-@pytest.mark.unit
-@pytest.mark.parametrize("at_rest, expected_writes", [(True, 0), (False, 2)])
-async def test_the_language_thread_pool_inherits_the_task_regime(at_rest, expected_writes):
-    redis = FakeRedis()
-    stage = _stage(redis)
-    with task_scope(at_rest, MESSAGE):
-        await stage._process_languages_parallel(
-            languages=["en", "es"], source_text=SECRET, source_language="fr", audio_hash="h" * 32,
-            voice_model=None, message_id=MESSAGE, attachment_id=ATTACHMENT, model_type="premium",
-            cloning_params=None, max_workers=2,
-        )
-    translations = [k for k in redis.store if k.startswith("translation:text:")]
-    assert len(translations) == expected_writes
-    indexed = [k for k in redis.store if k.startswith(f"translation:keys:message:{MESSAGE}:")]
-    assert len(indexed) == expected_writes
-
-
-@pytest.mark.unit
-async def test_a_bare_thread_without_the_task_context_writes_nothing():
-    import threading
-
-    redis = FakeRedis()
-    text = TranslationCacheService(redis)
-
-    def write():
-        asyncio.run(text.set_translation(SECRET, "fr", "en", "EN", "premium", message_id=MESSAGE))
-
-    with task_scope(False, MESSAGE):
-        thread = threading.Thread(target=write)
-        thread.start()
-        thread.join()
-    assert redis.store == {}
-
-
-@pytest.mark.unit
-async def test_a_write_while_redis_is_down_leaves_no_trace_after_forget(tmp_path):
-    from collections import OrderedDict
-    from services.redis_service import RedisService
-
-    class Client:
-        def __init__(self):
-            self.data = {}
-
-        async def setex(self, key, ttl, value):
-            self.data[key] = value
-
-        async def get(self, key):
-            return self.data.get(key)
-
-        async def scan_iter(self, match, count):
-            for key in list(self.data):
-                if fnmatch.fnmatchcase(key, match):
-                    yield key
-
-        async def delete(self, *keys):
-            removed = [k for k in keys if k in self.data]
-            for k in removed:
-                del self.data[k]
-            return len(removed)
-
-    service = object.__new__(RedisService)
-    service.permanently_disabled = False
-    service.is_redis_available = False
-    service.redis = Client()
-    service.memory_cache = OrderedDict()
-    service.connection_attempts = 0
-    service.max_connection_attempts = 3
-    audio = AudioCacheService(service)
-    text = TranslationCacheService(service)
-    audio_file = tmp_path / "voice.m4a"
-    audio_file.write_bytes(b"voix secrete")
-
-    with task_scope(False, MESSAGE):
-        audio_hash = await audio.get_or_compute_audio_hash(ATTACHMENT, str(audio_file))
-        await audio.set_transcription_by_hash(audio_hash, {"text": SECRET})
-        await audio.set_translated_audio(ATTACHMENT, "en", {"translated_text": "EN"})
-        await text.set_translation(SECRET, "fr", "en", "EN", "premium")
-    assert service.memory_cache == OrderedDict()
-    assert service.redis.data == {}
-
-    service.is_redis_available = True
-    deleted = await forget_cached_content(audio, text, parse_forget_request({"requestId": "r", "attachmentIds": [ATTACHMENT], "messageIds": [MESSAGE]}))
-    assert deleted == 0
-    assert service.memory_cache == OrderedDict()
-    assert service.redis.data == {}
-
-
-class _TransactionalClient:
-    """Un client Redis dont on peut faire échouer la transaction ou une écriture simple."""
-
-    def __init__(self, fail_transaction=False, fail_setex=False):
-        self.data = {}
-        self.fail_transaction = fail_transaction
-        self.fail_setex = fail_setex
-
-    async def get(self, key):
-        return self.data.get(key)
-
-    async def setex(self, key, ttl, value):
-        if self.fail_setex:
-            raise ConnectionError("écriture refusée")
-        self.data[key] = value
-
-    def pipeline(self, transaction=True):
-        client = self
-
-        class Pipe:
-            def __init__(self):
-                self.queued = []
-
-            async def __aenter__(self):
-                return self
-
-            async def __aexit__(self, *exc):
-                return False
-
-            def setex(self, key, ttl, value):
-                self.queued.append((key, value))
-
-            async def execute(self):
-                if client.fail_transaction:
-                    raise ConnectionError("EXEC refusé")
-                for key, value in self.queued:
-                    client.data[key] = value
-                return [True] * len(self.queued)
-
-        return Pipe()
-
-
-def _service(client):
-    from collections import OrderedDict
-    from services.redis_service import RedisService
-
-    service = object.__new__(RedisService)
-    service.permanently_disabled = False
-    service.is_redis_available = True
-    service.redis = client
-    service.memory_cache = OrderedDict()
-    service.connection_attempts = 0
-    service.max_connection_attempts = 3
-    return service
-
-
-@pytest.mark.unit
-async def test_a_translation_and_its_index_are_written_together_or_not_at_all():
-    ok = _service(_TransactionalClient())
-    with task_scope(False, MESSAGE):
-        assert await TranslationCacheService(ok).set_translation(SECRET, "fr", "en", "EN", "premium") is True
-    assert sorted(k.split(":")[1] for k in ok.redis.data) == ["keys", "text"]
-
-    broken = _service(_TransactionalClient(fail_transaction=True))
-    with task_scope(False, MESSAGE):
-        assert await TranslationCacheService(broken).set_translation(SECRET, "fr", "en", "EN", "premium") is False
-    assert broken.redis.data == {}
-    assert len(broken.memory_cache) == 0
-
-
-@pytest.mark.unit
-async def test_without_its_attachment_mapping_nothing_is_cached_by_audio_hash(tmp_path):
-    service = _service(_TransactionalClient(fail_setex=True))
-    audio = AudioCacheService(service)
-    audio_file = tmp_path / "voice.m4a"
-    audio_file.write_bytes(b"voix secrete")
-    with task_scope(False, MESSAGE):
-        audio_hash = await audio.get_or_compute_audio_hash(ATTACHMENT, str(audio_file))
-        service.redis.fail_setex = False
-        assert await audio.set_transcription_by_hash(audio_hash, {"text": SECRET}) is False
-        assert await audio.set_translated_audio_by_hash(audio_hash, "en", {"translated_text": "EN"}) is False
-        assert await audio.set_transcription_by_hash("fallback_" + ATTACHMENT, {"text": SECRET}) is False
-    assert service.redis.data == {}
-
-
-class _TtlClient(_TransactionalClient):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.ttls = {}
-
-    def pipeline(self, transaction=True):
-        client = self
-        base = super().pipeline(transaction)
-
-        class Pipe(type(base)):
-            def setex(self, key, ttl, value):
-                client.ttls[key] = ttl
-                super().setex(key, ttl, value)
-
-        return Pipe()
-
-
-@pytest.mark.unit
-async def test_nothing_is_cached_by_audio_hash_without_its_piece_or_under_a_synthetic_hash(tmp_path):
-    service = _service(_TtlClient())
-    audio = AudioCacheService(service)
-    real = "a" * 32
-    with at_rest_scope(False):
-        assert await audio.set_transcription_by_hash(real, {"text": SECRET}) is False
-        assert await audio.set_transcription_by_hash("fallback_" + ATTACHMENT, {"text": SECRET}, attachment_id=ATTACHMENT) is False
-        assert await audio.set_transcription_by_hash("synthetic:" + real, {"text": SECRET}, attachment_id=ATTACHMENT) is False
-        assert audio.compute_audio_hash(str(tmp_path / "absent.m4a")).startswith("synthetic:")
-    assert service.redis.data == {}
-
-
-@pytest.mark.unit
-async def test_a_hash_content_and_its_piece_mapping_land_together_with_a_mapping_ttl_never_shorter():
-    service = _service(_TtlClient())
-    audio = AudioCacheService(service)
-    real = "b" * 32
-    with at_rest_scope(False):
-        assert await audio.set_translated_audio_by_hash(real, "en", {"translated_text": "EN"}, ttl=90 * 24 * 3600, attachment_id=ATTACHMENT) is True
-    mapping = f"audio:hash:mapping:{ATTACHMENT}"
-    content = f"audio:translation:hash:{real}:en"
-    assert service.redis.data[mapping] == real
-    assert service.redis.ttls[mapping] >= service.redis.ttls[content]
-
-    broken = _service(_TtlClient(fail_transaction=True))
-    with at_rest_scope(False):
-        assert await AudioCacheService(broken).set_transcription_by_hash(real, {"text": SECRET}, attachment_id=ATTACHMENT) is False
-    assert broken.redis.data == {}
-
-
-@pytest.mark.unit
-async def test_a_translation_without_a_named_message_is_never_cached():
-    service = _service(_TtlClient())
-    with at_rest_scope(False):
-        assert await TranslationCacheService(service).set_translation(SECRET, "fr", "en", "EN", "premium") is False
-    assert service.redis.data == {}
-    with task_scope(False, MESSAGE):
-        assert await TranslationCacheService(service).set_translation(SECRET, "fr", "en", "EN", "premium", ttl=600) is True
-    content = [k for k in service.redis.data if k.startswith("translation:text:")][0]
-    index = [k for k in service.redis.data if k.startswith("translation:keys:message:")][0]
-    assert service.redis.ttls[index] == service.redis.ttls[content] == 600

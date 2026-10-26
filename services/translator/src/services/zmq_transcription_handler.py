@@ -202,7 +202,7 @@ class TranscriptionHandler:
                     "source": mobile_trans.get('source', 'mobile'),
                     "segments": mobile_trans.get('segments')
                 }
-                logger.info(f"🔍 [TRANSLATOR-TRACE] ✅ Transcription mobile fournie: {mobile_trans.get('text')[:50]}...")
+                logger.info(f"🔍 [TRANSLATOR-TRACE] ✅ Transcription mobile fournie: {shown(mobile_trans.get('text'), 50)}...")
             else:
                 logger.info(f"🔍 [TRANSLATOR-TRACE] Pas de transcription mobile")
 

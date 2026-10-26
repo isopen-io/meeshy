@@ -44,6 +44,12 @@ class _FakeRedis:
             self.store[key] = value
         return True
 
+    async def write_atomic(self, operations):
+        for op in operations:
+            if op[0] == "setex":
+                self.store[op[1]] = op[3]
+        return True
+
 
 def _key_written_before_9723(text, source, target, model):
     digest = hashlib.sha256(f"{text}|{source}|{target}|{model}".encode()).hexdigest()[:32]
