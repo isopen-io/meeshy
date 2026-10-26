@@ -65,13 +65,19 @@ struct CommentsSheetView: View {
     /// fermeture — l'ordre onDismiss/onDisappear devient indifférent.
     @State private var claimedActivePost: Bool = false
     @State private var didConsumeInitialReplyTarget = false
-    @State var repliesMap: [String: [FeedComment]] = [:]
-    @State var expandedThreads: Set<String> = []
-    @State var loadingReplies: Set<String> = []
-    /// Pagination des réponses par commentaire racine (endpoint replies paginé
-    /// ASC 20/page) — miroir de `PostDetailViewModel.repliesHasMore/NextCursor`.
-    @State var repliesHasMore: [String: Bool] = [:]
-    @State var repliesNextCursor: [String: String] = [:]
+    /// Les fils de réponses — dépliage et pagination — tenus par le view model
+    /// partagé avec le détail et la story (#13133).
+    @StateObject var thread: CommentThreadViewModel
+    var repliesMap: [String: [FeedComment]] {
+        get { thread.replies }
+        nonmutating set { thread.replies = newValue }
+    }
+    var expandedThreads: Set<String> {
+        get { thread.expandedThreads }
+        nonmutating set { thread.expandedThreads = newValue }
+    }
+    var loadingReplies: Set<String> { thread.loadingReplies }
+    var repliesHasMore: [String: Bool] { thread.repliesHasMore }
 
     /// Hoisted like state — keyed by commentId, seeded from API `currentUserReactions`.
     @State private var likedIds: Set<String> = []
@@ -123,7 +129,8 @@ struct CommentsSheetView: View {
         targetCommentId: String? = nil,
         targetParentCommentId: String? = nil,
         onCommentSent: ((_ postId: String) -> Void)? = nil,
-        initialReplyTarget: FeedComment? = nil
+        initialReplyTarget: FeedComment? = nil,
+        entity: CommentThreadEntity? = nil
     ) {
         self.post = post
         self.accentColor = accentColor
@@ -134,6 +141,7 @@ struct CommentsSheetView: View {
         _mentionController = StateObject(wrappedValue: MentionComposerController(
             context: .post(id: post.id)
         ))
+        _thread = StateObject(wrappedValue: CommentThreadViewModel(entity: entity ?? .post(post.id)))
     }
 
     private var comments: [FeedComment] { liveComments ?? post.comments }
@@ -159,9 +167,17 @@ struct CommentsSheetView: View {
     /// Sème (additif) `likedIds` depuis l'état serveur des commentaires fournis,
     /// sans écraser les toggles optimistic/socket déjà appliqués.
     func seedLikedIds(from comments: [FeedComment]) {
-        let seeded = Self.computeLikedIds(from: comments)
-        guard !seeded.isEmpty else { return }
-        likedIds.formUnion(seeded)
+        likedIdsSeeder(comments)
+    }
+
+    /// Le même semis, sans retenir la feuille : le fil de réponses le garde.
+    var likedIdsSeeder: @MainActor ([FeedComment]) -> Void {
+        let storage: State<Set<String>> = _likedIds
+        return { comments in
+            let seeded = Self.computeLikedIds(from: comments)
+            guard !seeded.isEmpty else { return }
+            storage.wrappedValue = storage.wrappedValue.union(seeded)
+        }
     }
 
     static func mergeFetchedComments(current: [FeedComment], fetched: [FeedComment]) -> [FeedComment] {
@@ -383,8 +399,8 @@ struct CommentsSheetView: View {
             post: post,
             liveComments: $liveComments,
             liveCommentCount: $liveCommentCount,
-            repliesMap: $repliesMap,
-            expandedThreads: $expandedThreads,
+            repliesMap: $thread.replies,
+            expandedThreads: $thread.expandedThreads,
             likedIds: $likedIds,
             likeDelta: $likeDelta,
             applyEdit: { applyCommentEdit($0) }

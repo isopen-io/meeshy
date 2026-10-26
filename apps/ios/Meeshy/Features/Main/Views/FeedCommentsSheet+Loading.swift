@@ -114,91 +114,26 @@ extension CommentsSheetView {
     // MARK: - Thread Management
 
     func toggleThread(_ commentId: String) async {
-        if expandedThreads.contains(commentId) {
-            expandedThreads.remove(commentId)
-        } else {
-            expandedThreads.insert(commentId)
-            if repliesMap[commentId] == nil {
-                await loadReplies(commentId: commentId)
-            }
-        }
+        await seedingThread().toggleThread(commentId)
     }
 
     private func loadReplies(commentId: String) async {
-        guard !loadingReplies.contains(commentId), repliesMap[commentId] == nil else { return }
-        loadingReplies.insert(commentId)
-        defer { loadingReplies.remove(commentId) }
-        do {
-            let response = try await PostService.shared.getCommentReplies(
-                postId: post.id, commentId: commentId
-            )
-            let replies = mapFetchedReplies(response.data, parentId: commentId)
-            repliesMap[commentId] = replies
-            repliesNextCursor[commentId] = response.pagination?.nextCursor
-            repliesHasMore[commentId] = response.pagination?.hasMore ?? false
-            // Sème l'état "liké par moi" des réponses chargées (elles portent
-            // `currentUserReactions` depuis `loadReplies`/`getCommentReplies`).
-            seedLikedIds(from: replies)
-            // Persist replies under "replies-{commentId}" so re-presenting the sheet
-            // hydrates the auto-preview rows instantly without a round-trip.
-            await bestEffort("feedCommentsSheet.comments.saveRepliesPreview", category: .cache) { try await CacheCoordinator.shared.comments.save(replies, for: "replies-\(commentId)") }
-        } catch {
-            expandedThreads.remove(commentId)
-        }
+        await seedingThread().loadReplies(commentId: commentId)
     }
 
-    /// Page suivante des réponses d'un fil (curseur `gt`, tri ASC → APPEND).
-    /// Jamais de remplacement : les réponses arrivées par le socket
-    /// (`comment:added`) pendant la pagination sont préservées (dédup par id).
-    /// NOTE : `repliesHasMore[id] == nil` (fil hydraté du cache par le `.task`,
-    /// pagination jamais enregistrée) n'est PAS bloquant — `cursor: nil`
-    /// signifie « page 1 », ce qu'il faut pour récupérer un vrai curseur
-    /// (même fix documenté que `loadMoreComments` côté VM). Seul `false`
-    /// (fin de fil connue) stoppe.
     func loadMoreReplies(commentId: String) async {
-        guard !loadingReplies.contains(commentId), repliesHasMore[commentId] != false else { return }
-        loadingReplies.insert(commentId)
-        defer { loadingReplies.remove(commentId) }
-        do {
-            let response = try await PostService.shared.getCommentReplies(
-                postId: post.id, commentId: commentId,
-                cursor: repliesNextCursor[commentId], limit: 20
-            )
-            let fetched = mapFetchedReplies(response.data, parentId: commentId)
-            let existing = repliesMap[commentId] ?? []
-            let existingIds = Set(existing.map(\.id))
-            let unique = fetched.filter { !existingIds.contains($0.id) }
-            repliesMap[commentId] = existing + unique
-            repliesNextCursor[commentId] = response.pagination?.nextCursor
-            repliesHasMore[commentId] = response.pagination?.hasMore ?? false
-            seedLikedIds(from: unique)
-            await bestEffort("feedCommentsSheet.comments.saveRepliesPage", category: .cache) { try await CacheCoordinator.shared.comments.save(
-                repliesMap[commentId] ?? [], for: "replies-\(commentId)"
-            ) }
-        } catch {
-            // Échec réseau : stopper proprement la pagination (et toute chasse
-            // en cours) — le fil garde les pages déjà chargées.
-            repliesHasMore[commentId] = false
-        }
+        await seedingThread().loadMoreReplies(commentId: commentId)
     }
 
     /// Chasse paginée bornée d'une RÉPONSE notifiée hors de la première page
-    /// de son fil (miroir de `PostDetailViewModel.loadRepliesUntilPresent`).
+    /// de son fil.
     func loadRepliesUntilPresent(_ replyId: String, in commentId: String) async -> Bool {
-        if repliesMap[commentId] == nil {
-            await loadReplies(commentId: commentId)
-        }
-        return await CommentTargetHunter.hunt(
-            isPresent: { repliesMap[commentId]?.contains(where: { $0.id == replyId }) ?? false },
-            // `nil` = pagination inconnue (fil hydraté du cache) → tenter la
-            // page 1 pour récupérer un curseur ; seul `false` arrête la chasse.
-            hasMore: { repliesHasMore[commentId] != false },
-            loadNextPage: { await loadMoreReplies(commentId: commentId) }
-        )
+        await seedingThread().loadRepliesUntilPresent(replyId, in: commentId)
     }
 
-    private func mapFetchedReplies(_ data: [APIPostComment], parentId: String) -> [FeedComment] {
-        let langs = ReaderPrism.resolve(for: AuthManager.shared.currentUser)
-        return data.map { FeedComment(api: $0, preferredLanguages: langs, parentId: parentId) }
+    /// Le fil, avec le semis des cœurs des réponses qui arrivent du réseau.
+    private func seedingThread() -> CommentThreadViewModel {
+        thread.onRepliesLoaded = likedIdsSeeder
+        return thread
     }
 }
