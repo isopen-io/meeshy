@@ -20,6 +20,8 @@ final class EndToEndSessionBridge: EndToEndSessionBridging {
     nonisolated deinit {}
 
     static let shared = EndToEndSessionBridge()
+    /// Le type du push de réveil (`E2EE_WAKE_PUSH_TYPE` de la passerelle).
+    nonisolated static let wakePushType = "e2ee_wake"
 
     private let runtime: EndToEndMessagingRuntime
     private let envelopes: AnyPublisher<E2EEServedEnvelope, Never>
@@ -39,6 +41,8 @@ final class EndToEndSessionBridge: EndToEndSessionBridging {
     /// L'ouverture de la dernière session demandée, que les gestes hors du fil
     /// attendent avant de ranger un clair au coffre (#13067).
     private var opening: Task<Void, Never>?
+    /// Le compte de la session ouverte, que relit un push de réveil (#13142).
+    private var account: String?
 
     init(
         runtime: EndToEndMessagingRuntime = .shared,
@@ -71,6 +75,7 @@ final class EndToEndSessionBridge: EndToEndSessionBridging {
         stop()
         guard !userId.isEmpty else { return }
         let runtime = runtime
+        account = userId
         enqueue { await runtime.open(session: userId) }
         opening = lifecycle
         // Réceptions et rattrapages passent par la même file que l'ouverture :
@@ -127,8 +132,24 @@ final class EndToEndSessionBridge: EndToEndSessionBridging {
         await BoundedWait.first(of: opening, orAfter: limit)
     }
 
+    /// **Un push de réveil e2ee** (`e2ee_wake`, #13142) : le serveur ne dit ni le
+    /// signal, ni la conversation, ni l'expéditeur. L'appareil relit ses
+    /// enveloppes en attente puis applique les signaux reçus, dans la file de la
+    /// session ; il rend la main à la fin, au plus tard après `limit` (le budget
+    /// d'un réveil en arrière-plan). Sans session ouverte, rien.
+    func wake(limit: Duration = .seconds(20)) async {
+        guard let userId = account else { return }
+        let runtime = runtime
+        let signals = signals
+        enqueue { await runtime.catchUp(as: userId) }
+        enqueue { await signals.drain(as: userId) }
+        guard let lifecycle else { return }
+        await BoundedWait.first(of: lifecycle, orAfter: limit)
+    }
+
     func stop() {
         opening = nil
+        account = nil
         subscriptions.removeAll()
         regimeLedger.reset()
         let runtime = runtime

@@ -17,6 +17,15 @@ extension ConversationViewModel {
         )
     }
 
+    /// Les signaux d'un geste qui EFFACE (suppression pour tous, vue unique) :
+    /// `nil` pour un message écrit en clair avant l'activation, qui garde sa route.
+    func erasureSignals(for messageId: String) -> EndToEndSignalCommands? {
+        guard let signals = endToEndSignals else { return nil }
+        let message = messageIndex(for: messageId).map { messages[$0] }
+        let regime = startupDependencies.encryptedEra.regime(of: self)
+        return EndToEndSignalCommands.erasureTravelsAsSignal(message, regime: regime) ? signals : nil
+    }
+
     /// La frappe du fil, relayée chiffrée quand la conversation l'est : `true` si
     /// elle est partie par le relais (le fil n'émet alors rien en clair).
     func relayTypingEndToEnd(_ active: Bool) -> Bool {

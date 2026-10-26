@@ -186,6 +186,18 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             return
         }
 
+        // #13142 — le réveil d'un signal chiffré de bout en bout : un push opaque,
+        // le même pour tout signal, qui ne nomme ni le signal ni la conversation.
+        // L'appareil relit ses enveloppes et applique les signaux reçus.
+        if (userInfo["type"] as? String) == EndToEndSessionBridge.wakePushType {
+            Task { @MainActor in
+                Self.primeAPITokenFromSession()
+                await EndToEndSessionBridge.shared.wake()
+                completionHandler(.newData)
+            }
+            return
+        }
+
         // Multi-device : un autre appareil du compte a décroché — pendant
         // socketless de `call:already-answered` (voir sendCallCancellationPushes
         // côté gateway pour le rationale réseau). Le device qui a décroché

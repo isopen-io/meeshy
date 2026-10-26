@@ -221,7 +221,7 @@ extension ConversationViewModel {
         case .local:
             report(await ConversationForMeRemoval(viewModel: self).run(messageId))
         case .everyone:
-            if let signals = endToEndSignals {
+            if let signals = erasureSignals(for: messageId) {
                 report(await signals.deleteForEveryone(messageId: messageId, serverId: serverId(for: messageId)))
                 return
             }
@@ -284,7 +284,7 @@ extension ConversationViewModel {
     /// ici, que le serveur réponde ou non.
     func consumeViewOnce(messageId: String) async -> Bool {
         await markViewOnceOpenedLocally(messageId: messageId)
-        if let signals = endToEndSignals { return await signals.viewOnceOpened(serverId: serverId(for: messageId)) }
+        if let signals = erasureSignals(for: messageId) { return await signals.viewOnceOpened(serverId: serverId(for: messageId)) }
         return await commands.consumeViewOnce(messageId: messageId, serverId: serverId(for: messageId))
     }
 
