@@ -42,6 +42,7 @@ from ..redis_service import (
     get_audio_cache_service
 )
 from ..segment_serialization import _segment_to_dict
+from services.task_privacy import shown
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -197,7 +198,7 @@ class TranscriptionStage:
             if cached_result:
                 logger.info(
                     f"[TRANSCRIPTION_STAGE] ⚡ Cache hit: "
-                    f"'{cached_result.text[:50]}...' "
+                    f"'{shown(cached_result.text, 50)}...' "
                     f"(lang={cached_result.language})"
                 )
 
@@ -295,7 +296,7 @@ class TranscriptionStage:
 
         logger.info(
             f"[TRANSCRIPTION_STAGE] ✅ Transcribed: "
-            f"'{result.text[:50]}...' "
+            f"'{shown(result.text, 50)}...' "
             f"(lang={result.language}, source={result.source})"
         )
 

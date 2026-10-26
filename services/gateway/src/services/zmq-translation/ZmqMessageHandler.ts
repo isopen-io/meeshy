@@ -214,6 +214,10 @@ export class ZmqMessageHandler extends EventEmitter {
         this.handleStoryTextObjectTranslationCompleted(event as unknown as StoryTextObjectTranslationCompletedEvent);
         break;
 
+      case 'cache_forget_done':
+        this.emit('cacheForgetDone', { requestId: (event as CacheForgetDoneEvent).requestId });
+        break;
+
       case 'pong':
         // Gestion des réponses ping/pong (silencieux en production)
         break;

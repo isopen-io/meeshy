@@ -23,6 +23,8 @@ from typing import Optional, Dict, Any, List
 from dataclasses import dataclass
 from datetime import datetime
 
+from services.task_privacy import current_message_id, in_at_rest_task
+
 logger = logging.getLogger(__name__)
 
 MAX_MEMORY_CACHE_SIZE = 500
@@ -350,6 +352,8 @@ class TranslationCacheService:
         # écrites d'un seul tenant (phrases perdues) ne sont plus jamais resservies
         # et expirent d'elles-mêmes (TTL 30 jours).
         self.key_pattern = "translation:text:v2:{hash}"
+        # #13102 — l'index des traductions d'un message : `…:<messageId>:<empreinte>` → "1".
+        self.message_index_pattern = "translation:keys:message:{message_id}:{hash}"
 
         # TTL = 1 mois (30 jours = 2592000 secondes)
         # Le texte lui-même sert d'indicateur de modification
@@ -385,6 +389,10 @@ class TranslationCacheService:
         Returns:
             Dict avec 'translated_text', 'model_type', 'cached_at' ou None
         """
+        # #13102 — une tâche au repos ne lit rien du cache.
+        if in_at_rest_task():
+            return None
+
         # Vérifier par hash du texte
         cache_hash = self._compute_hash(text, source_lang, target_lang, model_type)
         key = self.key_pattern.format(hash=cache_hash)
@@ -425,6 +433,10 @@ class TranslationCacheService:
             model_type: Type de modèle
             ttl: Durée de vie en secondes (défaut: 1 mois)
         """
+        # #13102 — ni le texte ni sa traduction d'une tâche au repos ne se rangent.
+        if in_at_rest_task():
+            return False
+
         cache_hash = self._compute_hash(text, source_lang, target_lang, model_type)
         key = self.key_pattern.format(hash=cache_hash)
         ttl = ttl or self.ttl_translation
@@ -440,6 +452,11 @@ class TranslationCacheService:
 
         # Stocker par hash (réutilisation cross-message/segment)
         success = await self.redis.setex(key, ttl, json.dumps(cache_data))
+
+        # #13102 — indexée sous le message qui l'a fait naître : oubliable par son identifiant.
+        message_id = current_message_id()
+        if success and message_id:
+            await self.redis.setex(self.message_index_pattern.format(message_id=message_id, hash=cache_hash), ttl, "1")
 
         if success:
             logger.debug(f"[CACHE] 💾 Traduction mise en cache: {source_lang}→{target_lang} (hash={cache_hash[:8]})")
@@ -464,6 +481,22 @@ class TranslationCacheService:
             cached = await self.get_translation(text, source_lang, target_lang, model_type)
             results[text] = cached
         return results
+
+    async def forget_message(self, message_id: str) -> int:
+        """
+        #13102 — oublie les traductions rangées pour ce message (texte entier et
+        segments), par l'index posé à leur écriture : aucun texte n'a besoin de
+        voyager pour être oublié. Idempotent.
+        """
+        prefix = self.message_index_pattern.format(message_id=message_id, hash="")
+        deleted = 0
+        for index_key in await self.redis.keys(f"{prefix}*"):
+            cache_key = self.key_pattern.format(hash=index_key[len(prefix):])
+            if await self.redis.exists(cache_key):
+                await self.redis.delete(cache_key)
+                deleted += 1
+            await self.redis.delete(index_key)
+        return deleted
 
     async def invalidate_translation(self, text: str, source_lang: str, target_lang: str, model_type: str = "premium") -> bool:
         """Invalide une traduction du cache"""
@@ -543,6 +576,10 @@ class AudioCacheService:
         Récupère le hash audio depuis le cache ou le calcule.
         Stocke le mapping attachment_id -> audio_hash pour référence rapide.
         """
+        # #13102 — une tâche au repos calcule l'empreinte sans rien ranger.
+        if in_at_rest_task():
+            return self.compute_audio_hash(audio_path)
+
         # Vérifier si le mapping existe
         mapping_key = self.key_audio_hash_mapping.format(attachment_id=attachment_id)
         cached_hash = await self.redis.get(mapping_key)
@@ -563,6 +600,8 @@ class AudioCacheService:
 
     async def get_transcription_by_hash(self, audio_hash: str) -> Optional[Dict[str, Any]]:
         """Récupère une transcription par hash audio (cross-conversation)"""
+        if in_at_rest_task():
+            return None
         key = self.key_transcription_by_hash.format(audio_hash=audio_hash)
         data = await self.redis.get(key)
         if data:
@@ -572,6 +611,8 @@ class AudioCacheService:
 
     async def set_transcription_by_hash(self, audio_hash: str, transcription: Dict[str, Any], ttl: int = None) -> bool:
         """Sauvegarde une transcription par hash audio"""
+        if in_at_rest_task():
+            return False
         key = self.key_transcription_by_hash.format(audio_hash=audio_hash)
         ttl = ttl or self.ttl_transcription
         success = await self.redis.setex(key, ttl, json.dumps(transcription))
@@ -591,6 +632,9 @@ class AudioCacheService:
             if cached:
                 return cached
 
+        if in_at_rest_task():
+            return None
+
         # Fallback sur attachment_id (legacy)
         key = self.key_transcription.format(attachment_id=attachment_id)
         data = await self.redis.get(key)
@@ -600,6 +644,8 @@ class AudioCacheService:
 
     async def set_transcription(self, attachment_id: str, transcription: Dict[str, Any], audio_path: str = None, ttl: int = None) -> bool:
         """Sauvegarde une transcription - utilise hash si audio_path fourni"""
+        if in_at_rest_task():
+            return False
         ttl = ttl or self.ttl_transcription
 
         # Stocker par hash si audio_path fourni
@@ -617,6 +663,8 @@ class AudioCacheService:
 
     async def get_translated_audio_by_hash(self, audio_hash: str, lang: str) -> Optional[Dict[str, Any]]:
         """Récupère un audio traduit par hash (cross-conversation)"""
+        if in_at_rest_task():
+            return None
         key = self.key_translated_audio_by_hash.format(audio_hash=audio_hash, lang=lang)
         data = await self.redis.get(key)
         if data:
@@ -626,6 +674,8 @@ class AudioCacheService:
 
     async def set_translated_audio_by_hash(self, audio_hash: str, lang: str, audio_data: Dict[str, Any], ttl: int = None) -> bool:
         """Sauvegarde un audio traduit par hash"""
+        if in_at_rest_task():
+            return False
         key = self.key_translated_audio_by_hash.format(audio_hash=audio_hash, lang=lang)
         ttl = ttl or self.ttl_translated_audio
         success = await self.redis.setex(key, ttl, json.dumps(audio_data))
@@ -655,6 +705,9 @@ class AudioCacheService:
             if cached:
                 return cached
 
+        if in_at_rest_task():
+            return None
+
         # Fallback sur attachment_id (legacy)
         key = self.key_translated_audio.format(attachment_id=attachment_id, lang=lang)
         data = await self.redis.get(key)
@@ -664,6 +717,8 @@ class AudioCacheService:
 
     async def set_translated_audio(self, attachment_id: str, lang: str, audio_data: Dict[str, Any], audio_path: str = None, ttl: int = None) -> bool:
         """Sauvegarde un audio traduit - utilise hash si audio_path fourni"""
+        if in_at_rest_task():
+            return False
         ttl = ttl or self.ttl_translated_audio
 
         # Stocker par hash si audio_path fourni
@@ -674,6 +729,30 @@ class AudioCacheService:
         # Stocker aussi par attachment_id (legacy compatibility)
         key = self.key_translated_audio.format(attachment_id=attachment_id, lang=lang)
         return await self.redis.setex(key, ttl, json.dumps(audio_data))
+
+    async def forget_attachment(self, attachment_id: str) -> int:
+        """
+        #13102 — oublie tout ce que le translator a tiré d'une pièce effacée :
+        la transcription et les pistes traduites (par empreinte audio et par
+        identifiant, forme héritée) et la table de correspondance. Idempotent :
+        une pièce déjà oubliée, ou jamais vue, ne fait rien.
+        """
+        mapping_key = self.key_audio_hash_mapping.format(attachment_id=attachment_id)
+        audio_hash = await self.redis.get(mapping_key)
+        keys = [
+            mapping_key,
+            self.key_transcription.format(attachment_id=attachment_id),
+            *(await self.redis.keys(self.key_translated_audio.format(attachment_id=attachment_id, lang="*"))),
+        ]
+        if audio_hash:
+            keys.append(self.key_transcription_by_hash.format(audio_hash=audio_hash))
+            keys.extend(await self.redis.keys(self.key_translated_audio_by_hash.format(audio_hash=audio_hash, lang="*")))
+        deleted = 0
+        for key in dict.fromkeys(keys):
+            if await self.redis.exists(key):
+                await self.redis.delete(key)
+                deleted += 1
+        return deleted
 
     # ─────────────────────────────────────────────────────────────────────────
     # PROFIL VOCAL

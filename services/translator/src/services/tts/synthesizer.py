@@ -22,6 +22,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from utils.audio_format import export_options, mime_type_for
+from services.task_privacy import shown
 
 logger = logging.getLogger(__name__)
 
@@ -389,7 +390,7 @@ class Synthesizer:
 
             logger.warning(
                 f"[Synthesizer] ⚠️ Texte court ({len(original_text)} chars): "
-                f"'{original_text}' → '{text_str.strip()}' + {len(text_str) - len(text_str.strip())} espaces"
+                f"'{shown(original_text)}' → '{shown(text_str.strip())}' + {len(text_str) - len(text_str.strip())} espaces"
             )
 
         logger.info(
@@ -425,7 +426,7 @@ class Synthesizer:
 
                     logger.debug(
                         f"[Synthesizer] 🔄 Segment {i+1}/{len(segments)}: "
-                        f"'{segment_text[:40]}...' ({len(segment_text)} chars)"
+                        f"'{shown(segment_text, 40)}...' ({len(segment_text)} chars)"
                     )
 
                     try:

@@ -556,7 +556,28 @@ export interface StoryTextObjectTranslationCompletedEvent {
 export type StoryEvent = StoryTextObjectTranslationCompletedEvent;
 
 // ═══════════════════════════════════════════════════════════════
+// CACHE FORGET (#13102)
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * L'oubli : la passerelle demande au translator d'effacer ce qu'il a rangé
+ * pour des pièces ou des messages effacés. Des IDENTIFIANTS seulement.
+ */
+export interface CacheForgetRequest {
+  readonly requestId: string;
+  readonly attachmentIds: readonly string[];
+  readonly messageIds: readonly string[];
+}
+
+/** L'acquittement d'un oubli, même `requestId`. */
+export interface CacheForgetDoneEvent {
+  type: 'cache_forget_done';
+  requestId: string;
+  deleted: number;
+}
+
+// ═══════════════════════════════════════════════════════════════
 // COMBINED EVENT TYPE
 // ═══════════════════════════════════════════════════════════════
 
-export type ZMQEvent = TranslationEvent | AudioEvent | VoiceEvent | TranscriptionEvent | StoryEvent;
+export type ZMQEvent = TranslationEvent | AudioEvent | VoiceEvent | TranscriptionEvent | StoryEvent | CacheForgetDoneEvent;

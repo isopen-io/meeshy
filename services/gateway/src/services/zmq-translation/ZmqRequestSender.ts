@@ -399,6 +399,16 @@ export class ZmqRequestSender {
     return request.request_id;
   }
 
+  /** #13102 — l'oubli de pièces ou de messages effacés : identifiants seuls. */
+  async sendCacheForgetRequest(request: CacheForgetRequest): Promise<void> {
+    await this.connectionManager.send({
+      type: 'cache_forget',
+      requestId: request.requestId,
+      attachmentIds: [...request.attachmentIds],
+      messageIds: [...request.messageIds],
+    });
+  }
+
   /**
    * Envoie une requête de traduction pour un textObject de story.
    * Utilisé par le pipeline story_text_object_translation (Task 14/15).

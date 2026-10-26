@@ -279,6 +279,11 @@ class TranslationHandler:
                 await self._handle_transcription_only_request(request_data)
                 return
 
+            # === OUBLI (#13102) ===
+            elif message_type == 'cache_forget':
+                await self._handle_cache_forget(request_data)
+                return
+
             # === STORY TEXT OBJECT TRANSLATION ===
             # Le gateway envoie ce type quand un textObject d'une story doit etre
             # traduit en plusieurs langues. On gathered toutes les traductions et
@@ -700,6 +705,23 @@ class TranslationHandler:
         logger.warning(f"   Type: {request_data.get('type')}")
         logger.warning(f"   MessageID: {request_data.get('messageId')}")
         logger.warning(f"   → Les requêtes audio doivent être gérées par ZmqAudioHandler")
+
+    async def _handle_cache_forget(self, request_data: dict):
+        """
+        #13102 — efface du cache ce que le translator avait tiré d'une pièce ou
+        d'un texte que la passerelle vient d'effacer, puis l'acquitte
+        (`cache_forget_done`, même `requestId`) : la passerelle rejoue la
+        demande tant qu'elle n'a pas son acquittement.
+        """
+        from services.cache_forget import forget_cached_content, parse_forget_request
+        from services.redis_service import get_audio_cache_service, get_translation_cache_service
+
+        request = parse_forget_request(request_data)
+        deleted = await forget_cached_content(get_audio_cache_service(), get_translation_cache_service(), request)
+        logger.info(f"[TRANSLATOR] Oubli : {len(request['attachmentIds'])} pièce(s), {len(request['messageIds'])} message(s), {deleted} clé(s) effacée(s)")
+        if self.pub_socket and request['requestId']:
+            done = {'type': 'cache_forget_done', 'requestId': request['requestId'], 'deleted': deleted}
+            await self.pub_socket.send(json.dumps(done).encode('utf-8'))
 
     async def _handle_transcription_only_request(self, request_data: dict):
         """

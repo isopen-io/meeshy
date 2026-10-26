@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 from .segment_serialization import _get_voice_similarity_score, _segment_to_dict
 from utils.audio_format import read_audio_bytes
 from config.message_limits import validate_audio_duration
+from services.task_privacy import shown, under_declared_regime
 
 # Import du pipeline audio.
 #
@@ -102,6 +103,7 @@ class AudioHandler:
             self.audio_pipeline = get_audio_pipeline()
         else:
             self.audio_pipeline = None
+    @under_declared_regime
     async def _handle_audio_process_request(self, request_data: dict):
         """
         Traite une requête de processing audio.
@@ -309,7 +311,7 @@ class AudioHandler:
                     logger.info(f"   🌍 Langue détectée: {transcription.language} (confiance: {transcription.confidence:.2f})")
                     logger.info(f"   🎭 Locuteurs: {transcription.speaker_count or 1}")
                     logger.info(f"   ⏱️ Durée: {transcription.duration_ms}ms")
-                    logger.info(f"   📝 TEXTE: \"{transcription.text}\"")
+                    logger.info(f"   📝 TEXTE: \"{shown(transcription.text)}\"")
                     logger.info("=" * 70)
                 await self._publish_transcription_result(task_id, transcription_data)
 
@@ -355,7 +357,7 @@ class AudioHandler:
             logger.info("═" * 70)
             logger.info(f"📊 [TRANSLATOR] RÉSULTAT TRAITEMENT AUDIO")
             logger.info(f"   ├─ Message ID: {result.message_id}")
-            logger.info(f"   ├─ Texte: \"{orig_text[:100]}{'...' if len(orig_text) > 100 else ''}\"")
+            logger.info(f"   ├─ Texte: \"{shown(orig_text, 100)}{'...' if len(orig_text) > 100 else ''}\"")
             logger.info(f"   ├─ Langue: {original.language} (confiance: {original.confidence:.2f})")
             logger.info(f"   ├─ Durée: {original.duration_ms}ms")
 
@@ -369,7 +371,7 @@ class AudioHandler:
             logger.info(f"   ├─ Traductions: {len(result.translations)} langue(s)")
             for lang, trans in result.translations.items():
                 trans_text = trans.translated_text if hasattr(trans, 'translated_text') else trans.get('translated_text', '')
-                logger.info(f"   │   └─ {lang}: \"{trans_text[:50]}{'...' if len(trans_text) > 50 else ''}\"")
+                logger.info(f"   │   └─ {lang}: \"{shown(trans_text, 50)}{'...' if len(trans_text) > 50 else ''}\"")
 
             # Info clonage vocal
             logger.info(f"   ├─ Voice quality: {result.voice_model_quality:.2f}")
@@ -727,7 +729,7 @@ class AudioHandler:
                 payload_str = json.dumps(metadata)
                 logger.info(f"[DEBUG] Transcription payload size: {len(payload_str)} bytes")
                 logger.info(f"[DEBUG] Transcription payload type: {metadata['type']}")
-                logger.info(f"[DEBUG] Transcription text preview: {transcription.text[:50]}...")
+                logger.info(f"[DEBUG] Transcription text preview: {shown(transcription.text, 50)}...")
 
                 # Envoyer en simple frame (pas de binaire pour la transcription)
                 await self.pub_socket.send_json(metadata)

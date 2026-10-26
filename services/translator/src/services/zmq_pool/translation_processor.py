@@ -15,6 +15,7 @@ from typing import List, Callable, Optional, Any
 
 # Import local
 from ..zmq_models import TranslationTask
+from services.task_privacy import task_scope
 
 logger = logging.getLogger(__name__)
 
@@ -86,13 +87,14 @@ async def process_single_translation(
         # multi-langues expirait alors toutes ses langues d'un coup.
         for target_language in task.target_languages:
             try:
-                result = await _translate_single_language(
-                    task=task,
-                    target_language=target_language,
-                    worker_name=worker_name,
-                    translation_service=translation_service,
-                    translation_cache=translation_cache
-                )
+                with task_scope(_is_at_rest(task), task.message_id):
+                    result = await _translate_single_language(
+                        task=task,
+                        target_language=target_language,
+                        worker_name=worker_name,
+                        translation_service=translation_service,
+                        translation_cache=translation_cache
+                    )
 
                 # Ajouter métadonnées
                 result['poolType'] = 'any' if task.conversation_id == 'any' else 'normal'
@@ -185,17 +187,18 @@ async def process_batch_translation(
                     for task, text in zip(tasks, texts):
                         single_budget = inference_timeout_for(len(text))
                         try:
-                            result = await asyncio.wait_for(
-                                translation_service.translate_with_structure(
-                                    text=text,
-                                    source_language=source_lang,
-                                    target_language=target_lang,
-                                    model_type=model_type,
-                                    source_channel='zmq_batch',
-                                    **_structure_kwargs(task)
-                                ),
-                                timeout=single_budget
-                            )
+                            with task_scope(_is_at_rest(task), task.message_id):
+                                result = await asyncio.wait_for(
+                                    translation_service.translate_with_structure(
+                                        text=text,
+                                        source_language=source_lang,
+                                        target_language=target_lang,
+                                        model_type=model_type,
+                                        source_channel='zmq_batch',
+                                        **_structure_kwargs(task)
+                                    ),
+                                    timeout=single_budget
+                                )
                         except asyncio.TimeoutError:
                             logger.error(f"⏱️ [BATCH] Single inference timeout ({single_budget:.0f}s, {len(text)} chars) {source_lang}→{target_lang}")
                             raise
