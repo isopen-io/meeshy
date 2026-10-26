@@ -53,6 +53,9 @@ internal fun ChatListRow(
     audioPlayer: ChatAudioPlayer? = null,
     isGroup: Boolean = true,
     canWrite: Boolean = true,
+    /** Script / Focal : la rangée plate au lieu de la bulle. */
+    flat: Boolean = false,
+    metaAlpha: () -> Float = { 0f },
 ) {
     when (item) {
         is ChatListItem.DayHeader -> DaySeparator(item.dayMillis)
@@ -69,6 +72,8 @@ internal fun ChatListRow(
             actions = actions,
             audioPlayer = audioPlayer,
             canWrite = canWrite,
+            flat = flat,
+            metaAlpha = metaAlpha,
         )
     }
 }

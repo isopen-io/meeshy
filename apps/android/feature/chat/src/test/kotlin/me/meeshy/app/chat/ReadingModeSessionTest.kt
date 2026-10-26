@@ -49,12 +49,26 @@ class ReadingModeSessionTest {
     ) = ReadingModeSession.open("c1", scope, type, members, unread, store, store, { now }, delivered)
 
     @Test
-    fun `Android opens in Bubbles with the AUTO notch while only Bubbles is rendered`() {
+    fun `Android opens in Script with the AUTO notch, as iOS, once Script is rendered`() {
         val state = open(MemoryStore()).state.value
-        assertThat(state.decision).isEqualTo(OrchestratorDecision(BUBBLES, OrchestratorDecisionReason.DEFAULT))
+        assertThat(state.decision).isEqualTo(OrchestratorDecision(SCRIPT, OrchestratorDecisionReason.DEFAULT))
         assertThat(state.isAuto).isTrue()
         assertThat(state.showsChip).isTrue()
+        assertThat(state.nextInCycle).isEqualTo(BUBBLES)
+    }
+
+    @Test
+    fun `while only Bubbles is rendered every decision falls back to Bubbles`() {
+        val state = open(MemoryStore(), delivered = setOf(BUBBLES)).state.value
+        assertThat(state.decision).isEqualTo(OrchestratorDecision(BUBBLES, OrchestratorDecisionReason.DEFAULT))
         assertThat(state.nextInCycle).isNull()
+    }
+
+    @Test
+    fun `too many unread messages still open in Script while Summary is not rendered`() {
+        val state = open(MemoryStore(), unread = 40).state.value
+        assertThat(state.decision).isEqualTo(OrchestratorDecision(SCRIPT, OrchestratorDecisionReason.UNREAD_OVER_CAP))
+        assertThat(state.rows.single { it.mode == SUMMARY }.unavailableReason).isEqualTo(LensUnavailableReason.NotYetRendered)
     }
 
     @Test

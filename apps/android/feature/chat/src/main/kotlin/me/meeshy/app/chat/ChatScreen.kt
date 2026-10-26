@@ -4,7 +4,11 @@ import android.content.ContentResolver
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.graphics.graphicsLayer
+import me.meeshy.sdk.model.reading.focal.FocalMetrics
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Alignment
 import me.meeshy.ui.theme.MeeshySpacing
@@ -109,13 +113,30 @@ fun ChatScreen(
                     topInset = headerHeight,
                     bottomInset = composerHeight + MeeshySpacing.sm,
                 )
-                Box(Modifier.onSizeChanged { headerHeightPx = it.height }) {
+                // Rangée plate (Script) : pendant un défilement du doigt, l'en-tête ET le composeur
+                // s'effacent par opacité — aucun inset ne bouge — et reviennent à l'arrêt ; sauf
+                // recherche ouverte ou suggestions de mention (iOS `FocalChromeReturn`).
+                val chromeHidden = host.readingMode?.state?.mode?.usesFlatRow == true &&
+                    host.chrome.isUserScrolling &&
+                    !state.search.isActive &&
+                    !state.mention.isActive
+                val chromeAlpha by animateFloatAsState(
+                    targetValue = if (chromeHidden) 0f else 1f,
+                    animationSpec = tween((FocalMetrics.HiddenChrome.EASE_OUT_SECONDS * 1000).toInt()),
+                    label = "flat-chrome",
+                )
+                Box(
+                    Modifier
+                        .onSizeChanged { headerHeightPx = it.height }
+                        .graphicsLayer { alpha = chromeAlpha },
+                ) {
                     ChatHeaderHost(host)
                 }
                 Box(
                     Modifier
                         .align(Alignment.BottomCenter)
-                        .onSizeChanged { composerHeightPx = it.height },
+                        .onSizeChanged { composerHeightPx = it.height }
+                        .graphicsLayer { alpha = chromeAlpha },
                 ) {
                     ChatBottomBarHost(host)
                 }

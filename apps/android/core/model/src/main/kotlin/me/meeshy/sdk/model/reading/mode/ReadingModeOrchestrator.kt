@@ -12,6 +12,12 @@ public enum class ConversationReadingMode(public val wire: String) {
     RIVER("river"),
     BUBBLES("bubbles");
 
+    /**
+     * Script et Focal dessinent la MÊME rangée plate (iOS `usesFlatRow`) — Script sans aucune
+     * transformation, Focal avec sa scène au défilement. Les autres modes ont leur propre rendu.
+     */
+    public val usesFlatRow: Boolean get() = this == FOCAL || this == SCRIPT
+
     public companion object {
         public fun fromWire(raw: String?): ConversationReadingMode? = entries.firstOrNull { it.wire == raw }
     }

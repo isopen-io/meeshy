@@ -452,7 +452,7 @@ private fun BubbleBodyFooterLayout(
 
 /** "Forwarded" / "Forwarded from <conversation>" italic badge at the top of the bubble. */
 @Composable
-private fun BubbleForwardedBadge(forwardedFromName: String?, onColor: Color) {
+internal fun BubbleForwardedBadge(forwardedFromName: String?, onColor: Color) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.padding(bottom = MeeshySpacing.xs),

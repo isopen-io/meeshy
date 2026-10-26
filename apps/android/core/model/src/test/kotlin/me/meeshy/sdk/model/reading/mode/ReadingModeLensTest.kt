@@ -28,6 +28,35 @@ class ReadingModeLensTest {
         river: Boolean = true,
     ) = ReadingModeOrchestrator.resolveCapabilities(isAnonymous, flag, river, type, count)
 
+    // --- Rangée plate ---
+
+    @Test
+    fun `script and focal share the flat row, the other modes do not`() {
+        assertThat(ConversationReadingMode.entries.filter { it.usesFlatRow }).containsExactly(FOCAL, SCRIPT)
+    }
+
+    @Test
+    fun `with script delivered, auto opens in script as on iOS and summary falls back to script`() {
+        val delivered = setOf(BUBBLES, SCRIPT)
+        val auto = ReadingModeOpening.decide(
+            stickyMode = null, unreadCount = 0, lastOpenedAtMs = now, nowMs = now,
+            capabilities = caps(), isFlagEnabled = true, delivered = delivered,
+        )
+        assertThat(auto.mode).isEqualTo(SCRIPT)
+        assertThat(auto.reason).isEqualTo(DEFAULT)
+        val overCap = ReadingModeOpening.decide(
+            stickyMode = null, unreadCount = 40, lastOpenedAtMs = now, nowMs = now,
+            capabilities = caps(), isFlagEnabled = true, delivered = delivered,
+        )
+        assertThat(overCap.mode).isEqualTo(SCRIPT)
+        val stickyBubbles = ReadingModeOpening.decide(
+            stickyMode = BUBBLES, unreadCount = 0, lastOpenedAtMs = now, nowMs = now,
+            capabilities = caps(), isFlagEnabled = true, delivered = delivered,
+        )
+        assertThat(stickyBubbles.mode).isEqualTo(BUBBLES)
+        assertThat(stickyBubbles.reason).isEqualTo(STICKY)
+    }
+
     // --- Cycle ---
 
     @Test

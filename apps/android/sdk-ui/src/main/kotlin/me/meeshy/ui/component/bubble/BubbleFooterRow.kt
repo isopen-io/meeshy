@@ -227,7 +227,7 @@ private fun BubbleMetaLeading(
  * configurée encore sans traduction se lit atténuée.
  */
 @Composable
-private fun CompactFlagChip(
+internal fun CompactFlagChip(
     chip: LanguageChip,
     onColor: Color,
     onFlagTap: ((String) -> Unit)?,
@@ -314,7 +314,7 @@ internal fun BubbleMetaTrailing(
  * (clair) / 400 (sombre), échec en rouge.
  */
 @Composable
-private fun DeliveryStatusIcon(
+internal fun DeliveryStatusIcon(
     status: DeliveryStatus,
     metaColor: Color,
     isSlow: Boolean,

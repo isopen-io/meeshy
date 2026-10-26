@@ -1,5 +1,8 @@
 package me.meeshy.app.chat
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.foundation.layout.Box
 import androidx.compose.ui.Alignment
 import androidx.compose.foundation.layout.Column
@@ -25,9 +28,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.time.ZoneId
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import me.meeshy.feature.chat.R
+import me.meeshy.sdk.model.reading.focal.FocalMetrics
+import me.meeshy.sdk.model.reading.focal.ScrollTimePillLaw
 import me.meeshy.ui.profile.LocalProfileSheetOpener
 import me.meeshy.ui.component.location.LiveLocationBadge
 import me.meeshy.ui.theme.MeeshySpacing
@@ -55,8 +62,40 @@ internal fun ChatListHost(
     LaunchedEffect(listState) {
         snapshotFlow { listState.isScrollInProgress }
             .distinctUntilChanged()
-            .collect { host.chrome.isScrolling = it }
+            .collect {
+                host.chrome.isScrolling = it
+                if (!it) host.chrome.isUserScrolling = false
+            }
     }
+    // Seul un glissé du doigt arme le défilement « utilisateur » ; il retombe à l'arrêt de l'élan.
+    LaunchedEffect(listState) {
+        listState.interactionSource.interactions.collect { interaction ->
+            if (interaction is DragInteraction.Start) host.chrome.isUserScrolling = true
+        }
+    }
+    // Script / Focal : la rangée plate d'iOS (`FocalRow`) ; Bulles, Résumé, Rivière : la bulle.
+    val flatRows = host.readingMode?.state?.mode?.usesFlatRow == true
+    // L'heure et les coches de la rangée plate : visibles pendant le défilement du doigt puis
+    // 900 ms (ScrollTimePillLaw), fondu de 280 ms — lues au dessin, sans recomposer les rangées.
+    var metaRevealed by remember { mutableStateOf(false) }
+    LaunchedEffect(flatRows) {
+        if (!flatRows) return@LaunchedEffect
+        snapshotFlow { host.chrome.isUserScrolling }
+            .collectLatest { scrolling ->
+                if (scrolling) {
+                    metaRevealed = true
+                } else if (metaRevealed) {
+                    delay(ScrollTimePillLaw.LINGER_MS.toLong())
+                    metaRevealed = false
+                }
+            }
+    }
+    val metaAlphaState = animateFloatAsState(
+        targetValue = if (metaRevealed) 1f else 0f,
+        animationSpec = tween(FocalMetrics.Pill.FADE_DURATION_MS.toInt()),
+        label = "flat-meta",
+    )
+    val metaAlpha = remember(metaAlphaState) { { metaAlphaState.value } }
     val scope = rememberCoroutineScope()
     // Async OpenGraph link previews: one screen-scoped store dedupes fetches across bubbles and
     // dies with the screen (its cache is discarded on logout/leave — nothing leaks to the next
@@ -161,9 +200,11 @@ internal fun ChatListHost(
     // Avec un bandeau, le fil démarre SOUS l'en-tête et ses bandeaux : la pastille aussi.
     val listTopInset = if (hasBanners) 0.dp else topInset
     val readingLinePx = with(density) { (MeeshySpacing.sm + listTopInset).toPx() }
-    val pinnedDayMillis by remember(renderedItems, readingLinePx) {
+    val pinnedDayMillis by remember(renderedItems, readingLinePx, flatRows) {
         derivedStateOf {
             if (host.chrome.isHeaderExpanded) return@derivedStateOf null
+            // Rangée plate : la pastille de jour se retire pendant le défilement (iOS).
+            if (flatRows && host.chrome.isUserScrolling) return@derivedStateOf null
             val info = listState.layoutInfo
             val height = info.viewportSize.height.toFloat()
             val before = info.beforeContentPadding.toFloat()
@@ -301,6 +342,8 @@ internal fun ChatListHost(
                         audioPlayer = audioPlayer,
                         isGroup = state.isGroup,
                         canWrite = state.viewerMayWrite,
+                        flat = flatRows,
+                        metaAlpha = metaAlpha,
                     )
                 }
             }

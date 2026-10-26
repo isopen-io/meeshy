@@ -57,6 +57,12 @@ internal class ChatSheetVisibility {
 @Stable
 internal class ChatChromeState {
     var isScrolling by mutableStateOf(false)
+    /**
+     * Un défilement parti du DOIGT est en cours (glissé puis son élan) — jamais un saut
+     * programmé (nouveau message, recherche). En rangée plate il efface l'en-tête et le
+     * composeur par opacité (iOS `FocalChromeReturn`).
+     */
+    var isUserScrolling by mutableStateOf(false)
     /** L'en-tête est déplié : la pastille de jour flottante se retire (iOS `isHeaderExpanded`). */
     var isHeaderExpanded by mutableStateOf(false)
 }

@@ -23,6 +23,7 @@ import me.meeshy.sdk.link.LinkPreviewParser
 import me.meeshy.ui.component.bubble.BubbleAccessibilityAction
 import me.meeshy.ui.component.bubble.BubbleCallbacks
 import me.meeshy.ui.component.bubble.BubbleContent
+import me.meeshy.ui.component.bubble.FocalFlatRow
 import me.meeshy.ui.component.bubble.MessageBubble
 import me.meeshy.ui.theme.MeeshyPalette
 
@@ -80,6 +81,10 @@ internal fun ChatMessageRow(
     audioPlayer: ChatAudioPlayer? = null,
     canWrite: Boolean = true,
     showReplyCountPill: Boolean = false,
+    /** Script / Focal : la rangée plate (iOS `FocalRow`) au lieu de la bulle. */
+    flat: Boolean = false,
+    /** Opacité de l'heure et des coches de la rangée plate, lue au dessin. */
+    metaAlpha: () -> Float = { 0f },
 ) {
     val uriHandler = LocalUriHandler.current
     val audioPlayback by remember(bubble.audios, audioPlayer) {
@@ -160,11 +165,13 @@ internal fun ChatMessageRow(
         null
     } else {
         { ink ->
+            // La rangée plate n'a pas de fond : son aperçu prend l'accent, comme une bulle reçue.
+            val onTint = bubble.isOutgoing && !flat
             LinkPreviewCard(
                 state = linkState,
                 isOutgoing = false,
-                accentColor = if (bubble.isOutgoing) ink else accentColor,
-                ink = if (bubble.isOutgoing) ink else null,
+                accentColor = if (onTint) ink else accentColor,
+                ink = if (onTint) ink else null,
                 inBubble = true,
                 onOpenUrl = { url -> openChatLink(linkContext, url, accentColor.toArgb()) },
             )
@@ -180,7 +187,18 @@ internal fun ChatMessageRow(
             actions.onBubbleFramed(messageId, it.boundsInWindow())
         },
     ) {
-        MessageBubble(
+        if (flat) {
+            FocalFlatRow(
+                content = bubble,
+                accentColor = accentColor,
+                callbacks = callbacks,
+                audioPlayback = audioPlayback,
+                mentionDisplayNames = mentionDisplayNames,
+                highlightTerm = highlightTerm,
+                metaAlpha = metaAlpha,
+                bodyAccessory = linkAccessory,
+            )
+        } else MessageBubble(
             content = bubble,
             // iOS : la bulle envoyée porte l'indigo de marque (BubbleSkin.brand), pas l'accent
             // de la conversation — l'accent reste aux liens, citations et réactions.
