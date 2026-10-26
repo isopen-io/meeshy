@@ -595,32 +595,32 @@ final class PermissionGateSourceGuardTests: XCTestCase {
         let src = try source("Meeshy/Features/Main/Views/FeedCommentsSheet.swift")
 
         let optimistic = try body(from: "let tempId = ClientMutationId.generate()",
-                                  to: "if let parentId {", in: src)
+                                  to: "thread.deliver(", in: src)
         XCTAssertTrue(optimistic.contains("originalLanguage: lang"),
                       "La ligne optimiste doit porter la langue de la pastille : son auteur la LIT.")
-
-        let served = try body(from: "CommentPublisher.live.publish(payload",
-                              to: "// Swap the optimistic temp", in: src)
-        XCTAssertTrue(served.contains("originalLanguage: apiComment.originalLanguage"),
-                      "La ligne serveur qui remplace l'optimiste doit garder la langue, sinon la pastille clignote.")
     }
 
-    /// Même paire pour la porte MÉDIA du détail de post — celle dont l'insert
-    /// optimiste n'est pas observable (`CommentMediaUploader.upload` précède la
-    /// première frontière testable, et son échec annule l'insert).
+    /// Même exigence pour la porte MÉDIA du détail de post — celle dont l'insert
+    /// optimiste n'est pas observable (la publication précède la première
+    /// frontière testable, et son échec annule l'insert).
     func test_postDetailViewModel_mediaDoor_carriesTheAuthoredLanguage() throws {
-        // #6578 — la porte média a quitté `PostDetailViewModel.swift` pour l'extension d'envoi.
         let src = try source("Meeshy/Features/Main/ViewModels/PostDetailViewModel+CommentSend.swift")
 
         let optimistic = try body(from: "func submitCommentWithMedia(",
-                                  to: "let snapshotComments = comments", in: src)
+                                  to: "commentThreadModel.deliver(", in: src)
         XCTAssertTrue(optimistic.contains("originalLanguage: originalLanguage"),
                       "La ligne optimiste d'un commentaire AVEC MÉDIA doit porter la langue déclarée.")
+    }
 
-        let served = try body(from: "let server = FeedComment(",
-                              to: "if let parentId {", in: src)
-        XCTAssertTrue(served.contains("originalLanguage: apiComment.originalLanguage"),
-                      "La ligne serveur qui la remplace doit garder la langue.")
+    /// La ligne servie qui remplace l'optimiste — un seul site depuis #13133,
+    /// pour la feuille, le détail et la story — garde la langue, sinon la
+    /// pastille clignote.
+    func test_theServedRow_keepsTheAuthoredLanguage() throws {
+        let src = try source("Meeshy/Features/Main/ViewModels/CommentThreadViewModel+Send.swift")
+
+        let served = try body(from: "init(sent api: APIPostComment", to: "quotedMedia: api.quotedCitation", in: src)
+        XCTAssertTrue(served.contains("originalLanguage: api.originalLanguage"),
+                      "La ligne serveur qui remplace l'optimiste doit garder la langue.")
     }
 
     /// Le corollaire d'asymétrie du champ REQUIS : `FeedView` portait une

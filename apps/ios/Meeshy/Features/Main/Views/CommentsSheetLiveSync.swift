@@ -122,95 +122,50 @@ struct CommentsSheetLiveSync: ViewModifier {
 
     private func handleCommentAdded(_ data: SocketCommentAddedData) {
         let parentId = data.comment.parentId
-        // Parité effets + Prisme avec le mapping REST (`mapFetchedComments`) :
-        // sans effectFlags, un commentaire stylé (lueur/pulse) arrivant en
-        // temps réel rendait SANS ses effets dans cette feuille.
+        // Parité effets + Prisme avec le mapping REST : sans effectFlags, un
+        // commentaire stylé arrivant en temps réel rendait SANS ses effets.
         let langs = ReaderPrism.resolve(for: AuthManager.shared.currentUser)
         let feedComment = FeedComment(api: data.comment, preferredLanguages: langs)
-        // The echoed event for OUR own just-sent comment: replace the optimistic
-        // placeholder in place instead of duplicating it. Primary key: the
-        // cmid echoed by the gateway matches the optimistic row id exactly.
-        // Fallback: legacy tmp_ rows matched by author + content + parent.
-        func isTwin(_ c: FeedComment) -> Bool {
-            if let cmid = data.clientMutationId, c.id == cmid { return true }
-            return c.id.hasPrefix("tmp_")
-                && c.authorId == feedComment.authorId
-                && c.content == feedComment.content
-                && c.parentId == parentId
-        }
-        if let parentId {
-            var existing = repliesMap[parentId] ?? []
-            if let idx = existing.firstIndex(where: isTwin) {
-                existing[idx] = feedComment                 // reconcile our temp
-                repliesMap[parentId] = existing
-                // Réécriture du cache avec la ligne RÉCONCILIÉE : un cache
-                // persisté pendant que la ligne optimiste (cmid) était
-                // encore là garderait le fantôme pour toujours. Scope
-                // STRICT à la réconciliation — persister sur l'insertion
-                // d'un TIERS écraserait un fil de réponses caché plus
-                // complet quand le fil n'a pas (encore) été chargé ici.
-                let replies = existing
-                Task {
-                    await bestEffort("commentsSheetLiveSync.comments.savePreservingFreshness", category: .cache) { try await CacheCoordinator.shared.comments.savePreservingFreshness(CommentSheetRules.persistableComments(replies), for: "replies-\(parentId)") }
-                }
-            } else if !existing.contains(where: { $0.id == feedComment.id }) {
-                existing.insert(feedComment, at: 0)
-                repliesMap[parentId] = existing
-                var current = liveComments ?? post.comments
-                if let idx = current.firstIndex(where: { $0.id == parentId }) {
-                    current[idx].replies += 1
-                    liveComments = current
-                }
-            }
-        } else {
-            var current = liveComments ?? post.comments
-            if let idx = current.firstIndex(where: isTwin) {
-                current[idx] = feedComment                  // reconcile our temp
-                // Même réécriture réconciliée pour le fil top-level (clé
-                // partagée avec le détail de post et l'overlay story) —
-                // même scope strict que côté réponses.
-                let snapshot = current
-                let postId = post.id
-                Task {
-                    await bestEffort("commentsSheetLiveSync.comments.savePreservingFreshness.2", category: .cache) { try await CacheCoordinator.shared.comments.savePreservingFreshness(CommentSheetRules.persistableComments(snapshot), for: "post-\(postId)") }
-                }
-            } else if !current.contains(where: { $0.id == feedComment.id }) {
-                current.insert(feedComment, at: 0)
-            }
-            liveComments = current
-        }
+        let current = liveComments ?? post.comments
+        // L'écho de NOTRE envoi remplace la ligne optimiste EN PLACE (cmid) ;
+        // une réponse nouvelle compte sur son parent — la règle unique du fil.
+        let echo = FeedCommentThread(roots: current, replies: repliesMap)
+            .applyingEcho(feedComment, clientMutationId: data.clientMutationId,
+                          expandedThreads: expandedThreads, at: .first)
         liveCommentCount = data.commentCount
+        guard echo.effect != .known else { return }
+        repliesMap = echo.thread.replies
+        if parentId == nil || (echo.effect == .inserted && current.contains { $0.id == parentId }) {
+            liveComments = echo.thread.roots
+        }
+        guard echo.effect == .reconciled else { return }
+        // Réécriture du cache avec la ligne RÉCONCILIÉE : un cache persisté
+        // pendant que la ligne optimiste (cmid) était encore là garderait le
+        // fantôme pour toujours. Scope STRICT à la réconciliation — persister
+        // sur l'insertion d'un TIERS écraserait un fil caché plus complet.
+        let key = parentId.map { "replies-\($0)" } ?? "post-\(post.id)"
+        let rows = parentId.map { echo.thread.replies[$0] ?? [] } ?? echo.thread.roots
+        Task {
+            await bestEffort("commentsSheetLiveSync.comments.savePreservingFreshness", category: .cache) { try await CacheCoordinator.shared.comments.savePreservingFreshness(CommentSheetRules.persistableComments(rows), for: key) }
+        }
     }
 
+    /// A translation that arrived joins the comment's map and re-resolves
+    /// through the Prism — the thread's one rule (`mergingTranslation`).
     private func handleCommentTranslation(_ data: SocketCommentTranslationUpdatedData) {
-        let langs = ReaderPrism.resolve(for: AuthManager.shared.currentUser)
-            .filter { !$0.isEmpty }.map { $0.lowercased() }
-        guard let incomingRank = langs.firstIndex(where: { $0 == data.language.lowercased() }) else { return }
-        func shouldApply(_ comment: FeedComment) -> Bool {
-            guard comment.translatedContent == nil else { return false }
-            let originalRank = comment.originalLanguage
-                .map { $0.lowercased() }
-                .flatMap { orig in langs.firstIndex(where: { $0 == orig }) }
-            if let originalRank, originalRank <= incomingRank { return false }
-            return true
-        }
-        let text = data.translation.text
         let topLevelWasLoaded = liveComments != nil
-        var current = liveComments ?? post.comments
-        if let idx = current.firstIndex(where: { $0.id == data.commentId }), shouldApply(current[idx]) {
-            current[idx].translatedContent = text
-            liveComments = current
+        let current = liveComments ?? post.comments
+        let merged = FeedCommentThread(roots: current, replies: repliesMap).mergingTranslation(
+            data.translation.text, commentId: data.commentId, language: data.language,
+            preferredLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser))
+        if current.contains(where: { $0.id == data.commentId }) {
+            liveComments = merged.roots
             persistCommentCache(touchedThreadIds: [], topLevelWasLoaded: topLevelWasLoaded)
             return
         }
-        for (key, var replies) in repliesMap {
-            if let idx = replies.firstIndex(where: { $0.id == data.commentId }), shouldApply(replies[idx]) {
-                replies[idx].translatedContent = text
-                repliesMap[key] = replies
-                persistCommentCache(touchedThreadIds: [key], topLevelWasLoaded: topLevelWasLoaded)
-                return
-            }
-        }
+        guard let key = repliesMap.first(where: { $0.value.contains { $0.id == data.commentId } })?.key else { return }
+        repliesMap = merged.replies
+        persistCommentCache(touchedThreadIds: [key], topLevelWasLoaded: topLevelWasLoaded)
     }
 
     /// Réécrit le cache après une mutation reçue À DISTANCE — ce que le

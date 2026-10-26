@@ -160,4 +160,63 @@ final class CommentThreadViewModelSendTests: XCTestCase {
 
         XCTAssertTrue(sut.roots.isEmpty)
     }
+
+    // MARK: - The socket echo
+
+    private static func echo(_ id: String, parentId: String? = nil, content: String = "hi") -> FeedComment {
+        FeedComment(id: id, author: "me", authorId: "me", content: content, parentId: parentId)
+    }
+
+    func test_applyEcho_ourOwnRow_isReplacedInPlace_byItsCmid() {
+        let (sut, _) = makeSUT()
+        sut.roots = [Self.root("c1")]
+        sut.insertOptimistic(Self.row("cmid_1"))
+
+        let effect = sut.applyEcho(Self.echo("srv1", content: "normalized"), clientMutationId: "cmid_1")
+
+        XCTAssertEqual(effect, .reconciled)
+        XCTAssertEqual(sut.roots.map(\.id), ["srv1", "c1"])
+    }
+
+    func test_applyEcho_ourOwnReply_doesNotCountTheParentTwice() {
+        let (sut, _) = makeSUT()
+        sut.roots = [Self.root("c1")]
+        sut.insertOptimistic(Self.row("cmid_1", parentId: "c1"))
+
+        sut.applyEcho(Self.echo("srv1", parentId: "c1"), clientMutationId: "cmid_1")
+
+        XCTAssertEqual(sut.repliesFor("c1").map(\.id), ["srv1"])
+        XCTAssertEqual(sut.roots.first?.replies, 1)
+    }
+
+    func test_applyEcho_aNewRoot_goesAtThePlacement_once() {
+        let (sut, _) = makeSUT(.story("s1"))
+        sut.roots = [Self.root("c1")]
+
+        XCTAssertEqual(sut.applyEcho(Self.echo("n1"), clientMutationId: nil, at: .last), .inserted)
+        XCTAssertEqual(sut.applyEcho(Self.echo("n1"), clientMutationId: nil, at: .last), .known)
+
+        XCTAssertEqual(sut.roots.map(\.id), ["c1", "n1"])
+    }
+
+    func test_applyEcho_aNewReply_toACollapsedUnloadedThread_onlyCountsIt() {
+        let (sut, _) = makeSUT()
+        sut.roots = [Self.root("c1")]
+
+        sut.applyEcho(Self.echo("n1", parentId: "c1"), clientMutationId: nil)
+
+        XCTAssertNil(sut.replies["c1"], "an unloaded thread is not seeded by one echo — its first expand loads it")
+        XCTAssertEqual(sut.roots.first?.replies, 1)
+    }
+
+    func test_applyEcho_aNewReply_toALoadedThread_isShown() {
+        let (sut, _) = makeSUT()
+        sut.roots = [Self.root("c1", replies: 1)]
+        sut.replies["c1"] = [FeedComment(id: "r0", author: "a", content: "r", parentId: "c1")]
+
+        sut.applyEcho(Self.echo("n1", parentId: "c1"), clientMutationId: nil)
+
+        XCTAssertEqual(sut.repliesFor("c1").map(\.id), ["n1", "r0"])
+        XCTAssertEqual(sut.roots.first?.replies, 2)
+    }
 }

@@ -54,10 +54,6 @@ extension StoryViewerView {
         await currentStoryThread()?.toggleThread(commentId)
     }
 
-    func loadStoryCommentReplies(commentId: String) async {
-        await currentStoryThread()?.loadReplies(commentId: commentId)
-    }
-
     func loadMoreStoryCommentReplies(commentId: String) async {
         await currentStoryThread()?.loadMoreReplies(commentId: commentId)
     }
@@ -113,15 +109,7 @@ extension StoryViewerView {
 
         let comment = FeedComment(api: data.comment, preferredLanguages: resolvedViewerLanguageChain)
 
-        let result = Self.applyingStoryCommentAdded(
-            comment: comment,
-            clientMutationId: data.clientMutationId,
-            expandedThreads: storyCommentThread.expandedThreads,
-            comments: storyCommentThread.roots,
-            repliesMap: storyCommentThread.replies
-        )
-        storyCommentThread.roots = result.comments
-        storyCommentThread.replies = result.repliesMap
+        storyCommentThread.applyEcho(comment, clientMutationId: data.clientMutationId, at: .last)
         storyCommentCount = data.commentCount
     }
 
@@ -143,62 +131,6 @@ extension StoryViewerView {
             data.translation.text, commentId: data.commentId, language: data.language,
             preferredLanguages: resolvedViewerLanguageChain
         )
-    }
-
-    /// Pure routing/dedup decision for a `comment:added` broadcast — extracted
-    /// so it's directly unit-testable (`StoryViewerCommentRealtimeTests`)
-    /// without constructing a live view (mirrors `rollingBackOptimisticComment`
-    /// just above). The echoed broadcast for OUR OWN just-sent comment/reply:
-    /// `sendComment` already inserted an optimistic `temp_` placeholder and
-    /// bumped the counters synchronously — it never reconciles that
-    /// placeholder on POST success. Without the `isTwin` check the server's
-    /// real row lands ALONGSIDE the temp_ one (visible duplicate) and, for a
-    /// reply, the parent's `replies` count gets incremented a second time.
-    /// Mirrors `FeedCommentsSheet`'s `isTwin` reconciliation for the
-    /// equivalent case.
-    nonisolated static func applyingStoryCommentAdded(
-        comment: FeedComment,
-        clientMutationId: String? = nil,
-        expandedThreads: Set<String>,
-        comments: [FeedComment],
-        repliesMap: [String: [FeedComment]]
-    ) -> (comments: [FeedComment], repliesMap: [String: [FeedComment]]) {
-        var comments = comments
-        var repliesMap = repliesMap
-
-        // Clé primaire : le cmid ré-émis par le gateway matche exactement l'id
-        // de la ligne optimiste. Repli : les lignes `temp_` héritées, matchées
-        // par auteur + contenu + parent (fragile quand le serveur normalise le
-        // texte — d'où le cmid).
-        func isTwin(_ c: FeedComment) -> Bool {
-            if let clientMutationId, c.id == clientMutationId { return true }
-            return c.id.hasPrefix("temp_")
-                && c.authorId == comment.authorId
-                && c.content == comment.content
-                && c.parentId == comment.parentId
-        }
-
-        if let parentId = comment.parentId {
-            var existing = repliesMap[parentId] ?? []
-            if let idx = existing.firstIndex(where: isTwin) {
-                existing[idx] = comment
-                repliesMap[parentId] = existing
-            } else {
-                if expandedThreads.contains(parentId), !existing.contains(where: { $0.id == comment.id }) {
-                    existing.append(comment)
-                    repliesMap[parentId] = existing
-                }
-                if let idx = comments.firstIndex(where: { $0.id == parentId }) {
-                    comments[idx].replies += 1
-                }
-            }
-        } else if let idx = comments.firstIndex(where: isTwin) {
-            comments[idx] = comment
-        } else if !comments.contains(where: { $0.id == comment.id }) {
-            comments.append(comment)
-        }
-
-        return (comments, repliesMap)
     }
 
     func applyCommentReactionEvent(_ event: SocketCommentReactionUpdateEvent) {

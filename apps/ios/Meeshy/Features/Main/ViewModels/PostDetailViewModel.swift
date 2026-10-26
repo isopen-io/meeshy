@@ -553,43 +553,10 @@ class PostDetailViewModel: ObservableObject {
                 // and always in its original language (resolveCommentTranslation
                 // never consulted).
                 let comment = FeedComment(api: data.comment, preferredLanguages: self.preferredLanguages)
-                // Écho de NOTRE propre envoi : la ligne optimiste est keyée par
-                // le cmid (sendComment/sendReply/submitCommentWithMedia) — la
-                // remplacer EN PLACE. Sans cette réconciliation, l'écho (id
-                // serveur ≠ cmid) passait la dédup par id et insérait un
-                // doublon visible jusqu'au prochain rechargement.
-                if let parentId {
-                    var reconciledOwnOptimistic = false
-                    if let cmid = data.clientMutationId, var existing = self.repliesMap[parentId],
-                       let optimisticIdx = existing.firstIndex(where: { $0.id == cmid }) {
-                        existing[optimisticIdx] = comment
-                        self.repliesMap[parentId] = existing
-                        reconciledOwnOptimistic = true
-                    }
-                    if !reconciledOwnOptimistic, self.expandedThreads.contains(parentId) {
-                        var existing = self.repliesMap[parentId] ?? []
-                        if existing.contains(where: { $0.id == comment.id }) {
-                            reconciledOwnOptimistic = true
-                        } else {
-                            existing.insert(comment, at: 0)
-                            self.repliesMap[parentId] = existing
-                        }
-                    }
-                    // Le +1 du parent n'est dû que pour une réponse VRAIMENT
-                    // nouvelle : la nôtre a déjà incrémenté à l'insertion
-                    // optimiste (sendReply), la re-livraison d'un même id non plus.
-                    if !reconciledOwnOptimistic,
-                       let idx = self.comments.firstIndex(where: { $0.id == parentId }) {
-                        self.comments[idx].replies += 1
-                    }
-                } else {
-                    if let cmid = data.clientMutationId,
-                       let optimisticIdx = self.comments.firstIndex(where: { $0.id == cmid }) {
-                        self.comments[optimisticIdx] = comment
-                    } else if !self.comments.contains(where: { $0.id == comment.id }) {
-                        self.comments.insert(comment, at: 0)
-                    }
-                }
+                // Écho de NOTRE propre envoi : la ligne optimiste (keyée par le
+                // cmid) est remplacée EN PLACE ; une réponse nouvelle compte sur
+                // son parent — la règle unique du fil (`applyingEcho`).
+                self.commentThreadModel.applyEcho(comment, clientMutationId: data.clientMutationId)
                 self.post?.commentCount = data.commentCount
                 // Re-persiste les listes réconciliées : la ligne optimiste
                 // (id = cmid) avait été sauvée par sendComment/sendReply — sans

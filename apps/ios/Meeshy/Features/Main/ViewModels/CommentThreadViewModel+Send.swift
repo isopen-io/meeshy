@@ -42,6 +42,61 @@ enum OptimisticPlacement {
     case last
 }
 
+/// What a `comment:added` echo did to the thread.
+enum CommentEchoEffect: Equatable {
+    /// Our own optimistic row, replaced in place.
+    case reconciled
+    case inserted
+    /// Already there (a replayed event).
+    case known
+}
+
+extension FeedCommentThread {
+
+    /// A `comment:added` echo. Our own optimistic row — keyed by the echoed
+    /// cmid, or a legacy `tmp_`/`temp_` row by the same author with the same
+    /// text and parent — is replaced in place. A new reply counts on its
+    /// parent and shows only in a thread already loaded or expanded (an
+    /// unloaded thread is loaded by its first expand); a new root goes at
+    /// `placement`. A replayed event changes nothing.
+    nonisolated func applyingEcho(
+        _ comment: FeedComment, clientMutationId: String?, expandedThreads: Set<String>,
+        at placement: OptimisticPlacement
+    ) -> (thread: FeedCommentThread, effect: CommentEchoEffect) {
+        func isTwin(_ row: FeedComment) -> Bool {
+            if let clientMutationId, row.id == clientMutationId { return true }
+            return (row.id.hasPrefix("tmp_") || row.id.hasPrefix("temp_"))
+                && row.authorId == comment.authorId && row.content == comment.content
+                && row.parentId == comment.parentId
+        }
+        func placed(_ rows: [FeedComment]) -> [FeedComment] {
+            switch placement {
+            case .first: [comment] + rows
+            case .last: rows + [comment]
+            }
+        }
+        var next = self
+        guard let parentId = comment.parentId else {
+            if let index = roots.firstIndex(where: isTwin) {
+                next.roots[index] = comment
+                return (next, .reconciled)
+            }
+            if roots.contains(where: { $0.id == comment.id }) { return (next, .known) }
+            next.roots = placed(roots)
+            return (next, .inserted)
+        }
+        let rows = replies[parentId] ?? []
+        if let index = rows.firstIndex(where: isTwin) {
+            next.replies[parentId]?[index] = comment
+            return (next, .reconciled)
+        }
+        if rows.contains(where: { $0.id == comment.id }) { return (next, .known) }
+        if replies[parentId] != nil || expandedThreads.contains(parentId) { next.replies[parentId] = placed(rows) }
+        if let index = roots.firstIndex(where: { $0.id == parentId }) { next.roots[index].replies += 1 }
+        return (next, .inserted)
+    }
+}
+
 extension FeedComment {
 
     /// The row a comment shows while it travels, keyed by its client
@@ -149,6 +204,15 @@ extension CommentThreadViewModel {
                 return .unqueued
             }
         }
+    }
+
+    /// The socket echo of a comment (`FeedCommentThread.applyingEcho`).
+    @discardableResult
+    func applyEcho(_ comment: FeedComment, clientMutationId: String?, at placement: OptimisticPlacement = .first) -> CommentEchoEffect {
+        let result = thread.applyingEcho(comment, clientMutationId: clientMutationId,
+                                         expandedThreads: expandedThreads, at: placement)
+        if result.effect != .known { thread = result.thread }
+        return result.effect
     }
 
     private func placed(_ row: FeedComment, in rows: [FeedComment], _ placement: OptimisticPlacement) -> [FeedComment] {
