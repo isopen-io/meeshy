@@ -47,30 +47,34 @@
       }
     ],
     "atmosphere": "afrique",
-    "version": 1,
+    "version": 4,
     "cover": {
       "src": "016694c090dcae9f.webp",
       "bytes": 16410,
       "sha256": "016694c090dcae9f552ebd3e0704bdc21aaf9b2c20bc947e90c7ab9feec1b002"
     },
-    "preview": null,
+    "preview": {
+      "src": "0cdd58dabc781105.webp",
+      "bytes": 132526,
+      "sha256": "0cdd58dabc781105df9a7ec71a82253708cd598bcbd343979ad232bde071041a"
+    },
     "contract": {
-      "src": "d08c6dbc691dbb07.json",
-      "bytes": 139227,
-      "sha256": "d08c6dbc691dbb0736b644ad8a42c2e85dfaedf9e3734dd60754b305c5b0572e"
+      "src": "845589dcfc12a8c3.json",
+      "bytes": 278408,
+      "sha256": "845589dcfc12a8c3d8f0c33cbd394d32d443dfd56f51eba913f34a978665c298"
     },
     "strings": {
       "fr": {
-        "src": "1e236b4b4909b309.json",
-        "bytes": 17354,
-        "sha256": "1e236b4b4909b309688ec62ff4462304448563d0c813785028f065a0b691a97f"
+        "src": "cccb8b55988bffce.json",
+        "bytes": 17634,
+        "sha256": "cccb8b55988bffcecd51a5807b68eeb459761e2defa303813712de6381c606f6"
       }
     },
     "downloadBytes": {
-      "story": 7921975,
+      "story": 8061436,
       "square": null
     },
-    "fingerprint": "3d197f6b853d885d1ce08a7d8f02b4f380e44d09ae4183bc8502ede7149f6572"
+    "fingerprint": "a9671cdde629eec0079b8212baf93348de58909278c1897096687da669cdefbe"
   },
   {
     "slug": "egypte",
@@ -117,30 +121,34 @@
       }
     ],
     "atmosphere": "egypte",
-    "version": 1,
+    "version": 4,
     "cover": {
       "src": "aa665278a4cd57bb.webp",
       "bytes": 17254,
       "sha256": "aa665278a4cd57bb7cfe3f171c9105e767f6badfc9575ed3f60f01ba2f9c4e67"
     },
-    "preview": null,
+    "preview": {
+      "src": "17141d539d52c54a.webp",
+      "bytes": 72408,
+      "sha256": "17141d539d52c54a0f921b29db96a8f3ad536f1171a8f199cc532c92cd291c37"
+    },
     "contract": {
-      "src": "da88519415e5ff0b.json",
-      "bytes": 68694,
-      "sha256": "da88519415e5ff0be8d9358f8db908da1f59f1ecbb6cd5ec48b986e6760790e4"
+      "src": "ac12aecb8a0c3c83.json",
+      "bytes": 133184,
+      "sha256": "ac12aecb8a0c3c83f79dfee33a15a03f6ac0762628522e7af453b6bae495254e"
     },
     "strings": {
       "fr": {
-        "src": "e77261d3489db30e.json",
-        "bytes": 9711,
-        "sha256": "e77261d3489db30ec46fe2fac57bdd48eae9f0c9e7aef4b6dee0e1323d2f530e"
+        "src": "8103c2830f64db4c.json",
+        "bytes": 9820,
+        "sha256": "8103c2830f64db4ca5bfe7f9a39f6b35143d851796745ff13b1f63705173cb74"
       }
     },
     "downloadBytes": {
-      "story": 4896049,
+      "story": 4960648,
       "square": null
     },
-    "fingerprint": "da85aba4150b95de44d79e61eff67cc818cb72af10ad30664dbb7534d8554ffe"
+    "fingerprint": "b2c6b4b50f724dd6f9ea334d8bda80a2bd774abf6f744b1d4c48f235c5ed93c4"
   },
   {
     "slug": "olympe",
@@ -187,17 +195,21 @@
       }
     ],
     "atmosphere": "olympe",
-    "version": 1,
+    "version": 4,
     "cover": {
       "src": "2e187f928a1da8ce.webp",
       "bytes": 15602,
       "sha256": "2e187f928a1da8ceb49c8aa6bb86594af244504a6643b986d181ef7cc07f2d31"
     },
-    "preview": null,
+    "preview": {
+      "src": "099f8fafc845791e.webp",
+      "bytes": 71894,
+      "sha256": "099f8fafc845791e7469790d697a14b44a81376e27f75f805fb30129e3fcd728"
+    },
     "contract": {
-      "src": "70daa3873cbe232e.json",
-      "bytes": 66618,
-      "sha256": "70daa3873cbe232ef0722e527c1a454780b1d7bdefe9e54e710ae9abca13d378"
+      "src": "bfbedb41c8367399.json",
+      "bytes": 147781,
+      "sha256": "bfbedb41c836739956626a37573bf0c369565f1e111feb8699d58c0cbda02265"
     },
     "strings": {
       "fr": {
@@ -207,10 +219,10 @@
       }
     },
     "downloadBytes": {
-      "story": 3697286,
+      "story": 3778449,
       "square": null
     },
-    "fingerprint": "2b7e6e616b707a7aba9a42ec280060869ea5791da4abd15101ebac43817f57b2"
+    "fingerprint": "766a29c1bd700486043ea574c16e6730fbbefd424f9523a17dff053579b85be3"
   },
   {
     "slug": "celeste",
@@ -257,30 +269,34 @@
       }
     ],
     "atmosphere": "celeste",
-    "version": 1,
+    "version": 4,
     "cover": {
       "src": "ddf815deaa09774f.webp",
       "bytes": 17238,
       "sha256": "ddf815deaa09774fd9d0d36e7542ac9b4a02b0768f79f8f001abebec69192d50"
     },
-    "preview": null,
+    "preview": {
+      "src": "6ef2be70ceb703b3.webp",
+      "bytes": 65780,
+      "sha256": "6ef2be70ceb703b3c91d2a77ce75d58db2f9b46de7340b334ac7287506992f2b"
+    },
     "contract": {
-      "src": "6e1a5e07314405a4.json",
-      "bytes": 76710,
-      "sha256": "6e1a5e07314405a4b71b5145b32adba7c8bc315ffb8f76496180ec9817a0b1e8"
+      "src": "f99fb2ecbcd338fa.json",
+      "bytes": 167298,
+      "sha256": "f99fb2ecbcd338fa1cc09441e0137ab6fffe037689406a5058255a8c9b668d73"
     },
     "strings": {
       "fr": {
-        "src": "214e7706d1e78e57.json",
-        "bytes": 9136,
-        "sha256": "214e7706d1e78e5702b02494d0e3d4c86b7a4d59451bbdf388acf542b5f43243"
+        "src": "722a446cbd7f8c10.json",
+        "bytes": 9810,
+        "sha256": "722a446cbd7f8c102514c654b6e14e87cc7ef5060f6acd7fef0ff6b3a3821439"
       }
     },
     "downloadBytes": {
-      "story": 3441498,
+      "story": 3532760,
       "square": null
     },
-    "fingerprint": "553c86f9cf072e9ec0d98c372bb6885bd1a13d9553cb2ae32152ed25fb3041d7"
+    "fingerprint": "96bef5e25ea57a5d14d2d5887d88d4a250ea202af7f2408abc416bfe9f032fe9"
   },
   {
     "slug": "nord",
@@ -327,17 +343,21 @@
       }
     ],
     "atmosphere": "nord",
-    "version": 1,
+    "version": 4,
     "cover": {
       "src": "def2a7c4003689d2.webp",
       "bytes": 20838,
       "sha256": "def2a7c4003689d237c2c94228c261b9f22747bd3b70007e2cea2f50f3e5c446"
     },
-    "preview": null,
+    "preview": {
+      "src": "52c8b1142588f10b.webp",
+      "bytes": 72896,
+      "sha256": "52c8b1142588f10bc5784ba97565bf0b8d4233e777663c8d366db47997b09ece"
+    },
     "contract": {
-      "src": "729b17a4d9bb047f.json",
-      "bytes": 68972,
-      "sha256": "729b17a4d9bb047f76bce03b1b30353403c93bd50017294641268879bf20e074"
+      "src": "390a6bd0a8663932.json",
+      "bytes": 140497,
+      "sha256": "390a6bd0a866393265ddc1b26d796cbdd526ab519195443622843cf3d525f7d2"
     },
     "strings": {
       "fr": {
@@ -347,10 +367,10 @@
       }
     },
     "downloadBytes": {
-      "story": 5107697,
+      "story": 5179222,
       "square": null
     },
-    "fingerprint": "d8e4387f74f210186b70c7200572f4ed5b8e215a71d30de3b1eedce97338e23f"
+    "fingerprint": "3843980763af39669934250b2a4ac856d1f346081ae3f42e3d281b6ca82b4736"
   },
   {
     "slug": "abysses",
@@ -397,17 +417,21 @@
       }
     ],
     "atmosphere": "abysses",
-    "version": 1,
+    "version": 4,
     "cover": {
       "src": "c142164470cf9a81.webp",
       "bytes": 17014,
       "sha256": "c142164470cf9a8194d28202103d24415357ad4affc0c14898d91541bd062674"
     },
-    "preview": null,
+    "preview": {
+      "src": "2e2d5f6532302344.webp",
+      "bytes": 72752,
+      "sha256": "2e2d5f653230234416f98ed9a6e26fdc859bc8fb88d0c4a920a30a58e9b30211"
+    },
     "contract": {
-      "src": "11917e8eec3c4529.json",
-      "bytes": 72446,
-      "sha256": "11917e8eec3c45290a8015f067aaad5a1ac57a3d75717a05a83022318088392b"
+      "src": "066276a6bb0122c0.json",
+      "bytes": 119950,
+      "sha256": "066276a6bb0122c08f47ec79b0c9999635f5a110e8f2e8f1d03218c6c77dc381"
     },
     "strings": {
       "fr": {
@@ -417,10 +441,10 @@
       }
     },
     "downloadBytes": {
-      "story": 5465081,
+      "story": 5512585,
       "square": null
     },
-    "fingerprint": "ba479f41675bdfc923368b5f7ac6e5f4c7806632c4737e1de0320a65e1a6ace8"
+    "fingerprint": "8a1e76392da89d81cc659dc101b7bd828bf4cc1cbc668952cedd301a5ebafb4c"
   },
   {
     "slug": "neon",
@@ -467,30 +491,34 @@
       }
     ],
     "atmosphere": "neon",
-    "version": 1,
+    "version": 4,
     "cover": {
       "src": "7a11ab49f74f8d9e.webp",
       "bytes": 12348,
       "sha256": "7a11ab49f74f8d9e9ee84ccc504ac073ed9ccbeba8b0c6c61de6a4cb0ee63312"
     },
-    "preview": null,
+    "preview": {
+      "src": "44fe4cefb0c528e9.webp",
+      "bytes": 68608,
+      "sha256": "44fe4cefb0c528e91470c9f65402caae8c9aa91ef55a0bf8360d6aa6c688ae7b"
+    },
     "contract": {
-      "src": "f4cdaca00aa2e5ee.json",
-      "bytes": 100100,
-      "sha256": "f4cdaca00aa2e5eec058efb5f934e9d67a77e3bf6c27fd984b890ef4cf00b1ba"
+      "src": "7a5f376228690a5b.json",
+      "bytes": 152691,
+      "sha256": "7a5f376228690a5bf33b4e70564922ff982cd0a7de08a053c36f5ec6747041e6"
     },
     "strings": {
       "fr": {
-        "src": "4748a5cac87b15f6.json",
-        "bytes": 8495,
-        "sha256": "4748a5cac87b15f687137f550ba48158b80d0e806f1ce3a78d2ad1f96184538e"
+        "src": "71e2904a9d04f3c8.json",
+        "bytes": 9771,
+        "sha256": "71e2904a9d04f3c83b938efddcca42539caa5b7d30355b66395f098d90d1bf7a"
       }
     },
     "downloadBytes": {
-      "story": 3905681,
+      "story": 3959548,
       "square": null
     },
-    "fingerprint": "9a0863e82cad430b5088b881b1e520efcb81a10081e5a1f465926e9e48aa00a3"
+    "fingerprint": "eaec25cd57fb5457eca045ea8a4f71ab495765ece82c6f4073392caef33465c4"
   },
   {
     "slug": "moments",
@@ -536,30 +564,34 @@
         "slug": "moments"
       }
     ],
-    "version": 1,
+    "version": 4,
     "cover": {
       "src": "ac9e19b1eb404909.webp",
       "bytes": 13250,
       "sha256": "ac9e19b1eb4049090b7a3574f27d671704a7e0d2b54af7ad8697fbddf6d7ef3f"
     },
-    "preview": null,
+    "preview": {
+      "src": "167d9eadec1a2590.webp",
+      "bytes": 53740,
+      "sha256": "167d9eadec1a25904f4899a691158ddcf4d038b7780d72bd7ceaa80dbe35ff36"
+    },
     "contract": {
-      "src": "12a81cccb7852635.json",
-      "bytes": 92670,
-      "sha256": "12a81cccb7852635bb6489bb9c6e9ecc449f5d3fdee728efccc24f98f928c472"
+      "src": "dc945005e095dbce.json",
+      "bytes": 134799,
+      "sha256": "dc945005e095dbcec24f72d713e33c74b10df287920a47c642c9a682295790e6"
     },
     "strings": {
       "fr": {
-        "src": "dd46e0b1a1fc5020.json",
-        "bytes": 5887,
-        "sha256": "dd46e0b1a1fc502016a09c24f71b59abcc892adc1ef5056cbdc198c4c0ef802f"
+        "src": "d7ffbcc69cc910b4.json",
+        "bytes": 6831,
+        "sha256": "d7ffbcc69cc910b4fad7cccc25378235352bc015a45ace749cc5af6d7a7e239a"
       }
     },
     "downloadBytes": {
-      "story": 4431677,
+      "story": 4474750,
       "square": null
     },
-    "fingerprint": "20e9418e82db009a83e67afc5d806364ae9f0a25d0e421ab81e9599c26c47985"
+    "fingerprint": "044b6569e0e7f5179855ba09a53a9b78e99fb634ac3942c681bc146c5a31110e"
   },
   {
     "slug": "tresor",
@@ -609,30 +641,34 @@
       "kind": "moment",
       "family": "treasury"
     },
-    "version": 1,
+    "version": 4,
     "cover": {
       "src": "0e558ffde0751e0c.webp",
       "bytes": 17176,
       "sha256": "0e558ffde0751e0c8ccf17b1e1d0d2661e770fb91528e7984adf649eccaa50f3"
     },
-    "preview": null,
+    "preview": {
+      "src": "312cf64c661395bf.webp",
+      "bytes": 54948,
+      "sha256": "312cf64c661395bf346c455e9d3fcd78b5abecb55c630b8a622d8f8255d7a0e9"
+    },
     "contract": {
-      "src": "a6c8696dc2d067c3.json",
-      "bytes": 72666,
-      "sha256": "a6c8696dc2d067c385eb1e84c85638acfef57edda4006840212a98e9bc57f6f0"
+      "src": "83bab60ea011fdaf.json",
+      "bytes": 156239,
+      "sha256": "83bab60ea011fdaf19c68c5d79e570c3fb2efc265e00088df1b8e08cf1914f6d"
     },
     "strings": {
       "fr": {
-        "src": "b67bf84399ba2bfa.json",
-        "bytes": 5505,
-        "sha256": "b67bf84399ba2bfa0c7759bab84822c53c1b1eb52fcedfdadfb7ef137648eff0"
+        "src": "1cfe632e638a61dd.json",
+        "bytes": 5775,
+        "sha256": "1cfe632e638a61ddecb8dc9cf5d2c983fa88c3b189b8e916bee50d733b48941c"
       }
     },
     "downloadBytes": {
-      "story": 3850801,
+      "story": 3934644,
       "square": null
     },
-    "fingerprint": "92d0c297ca7185131de775fda17766234a4aee8ff4ec439363afb34fa14e5a3d"
+    "fingerprint": "71eb1b4f330c9ddf0b9c23f8aeeaf29c52c2e8deea99eccbc070b0498a406db4"
   },
   {
     "slug": "succes",
@@ -678,17 +714,21 @@
         "slug": "succes"
       }
     ],
-    "version": 1,
+    "version": 4,
     "cover": {
       "src": "8d804ea74f058bf8.webp",
       "bytes": 9892,
       "sha256": "8d804ea74f058bf8f8391aaa05af5b3511b40a8097c7831ef2db8d650b1dc857"
     },
-    "preview": null,
+    "preview": {
+      "src": "fe3036fcc9d8a883.webp",
+      "bytes": 14868,
+      "sha256": "fe3036fcc9d8a8834feb5a81ef9448888c57e5b62c0502d4619d7bc3722aeb52"
+    },
     "contract": {
-      "src": "f48b623dcdbf431a.json",
-      "bytes": 21298,
-      "sha256": "f48b623dcdbf431a1da6f05552ab0e24c56cf8c86b7d808dbad6d8f0d64c54c2"
+      "src": "174055302160daa4.json",
+      "bytes": 35478,
+      "sha256": "174055302160daa497149cb00fef7e9f2d703624e7f1fe7624d3b5d149277fe1"
     },
     "strings": {
       "fr": {
@@ -698,9 +738,9 @@
       }
     },
     "downloadBytes": {
-      "story": 1331259,
+      "story": 1345439,
       "square": null
     },
-    "fingerprint": "8215e1d6b83b97ebbbc3fa6a708e8e4da1261ca29fdd9939c15514215a301c8b"
+    "fingerprint": "bd66b5804cfe9966d3c9ed7d62a3e75271bbcab3d5dd3cbba2118552c71f7fa3"
   }
 ]

@@ -20,48 +20,74 @@ import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync,
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-export const FRAME_MOODS = ['signature', 'distingue', 'elegant', 'jovial', 'deconnecte', 'corporate', 'fantastique', 'futuriste', 'glauque', 'hors-norme', 'morbide', 'feerique'] as const;
-export const FRAME_BUCKETS = ['duo', 'comite', 'groupe', 'tablee'] as const;
-export const FRAME_ARRANGEMENTS = ['split', 'diagonal', 'hero', 'grid', 'row', 'column', 'arch', 'orbit', 'scatter', 'tiers', 'mosaic', 'honeycomb', 'cascade'] as const;
-export const SLOT_SHAPES = ['rect', 'round', 'circle', 'oval', 'arch', 'hex', 'diamond', 'heart', 'star', 'ticket', 'stamp', 'blob', 'torn', 'polaroid', 'frame-oval'] as const;
-export const SLOT_TONES = ['color', 'mono', 'sepia', 'noir', 'warm', 'cool', 'faded', 'duotone', 'luminosity'] as const;
-export const SLOT_TILTS = ['none', 'gentle', 'wild'] as const;
-export const FRAME_PATTERNS = ['dots', 'stripes', 'grid', 'checker', 'halftone', 'scanlines', 'grain', 'stars', 'confetti', 'sunburst', 'waves', 'circuit', 'damask', 'hearts'] as const;
-export const FRAME_BORDERS = ['hairline', 'double', 'deco', 'baroque', 'filmstrip', 'ticket', 'perforated', 'neon', 'brackets', 'torn', 'mourning', 'vines', 'bulbs', 'polaroid'] as const;
-export const FRAME_ORNAMENTS = [
-  'sparkles', 'bokeh', 'confetti', 'balloons', 'stars', 'hearts', 'fireflies', 'petals', 'leaves', 'bubbles', 'snow', 'rays',
-  'glitch', 'scanlines', 'grain', 'vignette', 'lightleak', 'crown', 'ribbon', 'tape', 'rec', 'crosshair', 'orbits', 'runes',
-  'cobwebs', 'drips', 'lightning', 'notes', 'candles', 'moon', 'clouds', 'bats', 'skulls', 'roses',
-] as const;
-export const FRAME_FONTS = ['bold', 'neon', 'typewriter', 'handwriting', 'classic', 'calligraphy', 'cartoon', 'futuristic', 'fantasy', 'curve', 'tag', 'italic', 'retro', 'elegant', 'poster', 'bubble', 'note', 'brush'] as const;
-export const BRAND_MARKS = ['logo', 'wordmark', 'both'] as const;
-export const BRAND_PLACES = ['top', 'bottom', 'top-left', 'top-right', 'bottom-left', 'bottom-right', 'watermark'] as const;
-export const TEXT_SIZES = ['s', 'm', 'l'] as const;
-export const NAME_SHOWS = ['none', 'name', 'handle', 'both'] as const;
-export const NAME_STYLES = ['caption', 'plate', 'ribbon', 'badge', 'bubble', 'tag', 'list'] as const;
-export const TITLE_SOURCES = ['group', 'names', 'brand', 'date', 'none', 'time', 'datetime', 'place', 'landmark', 'emotion'] as const;
-export const TEXT_EFFECTS = ['none', 'shadow', 'glow', 'outline'] as const;
-/* L'extension du format (#9197, doc 06 § 3) — les mêmes listes que `frame-spec.ts`, dans le même ordre. */
-export const SLOT_LOOKS = ['instant-film', 'film-grain', 'oil-paint', 'scratch-film', 'halftone', 'vignette', 'bloom'] as const;
-export const ORNAMENT_MOTIONS = ['still', 'loop', 'onAppear'] as const;
-export const TEXT_FORMS = [
-  'digital', 'digital-seconds', 'analog', 'words', 'moment',
-  'short', 'long', 'day-month', 'calendar-tile', 'roman',
-  'inline', 'stacked', 'stamp',
-  'city', 'city-country', 'neighborhood', 'street', 'address', 'country-flag', 'coordinates', 'pin', 'map-silhouette',
-  'name', 'line-art', 'badge', 'skyline',
-  'emoji', 'word', 'color-aura', 'particles', 'sticker',
-] as const;
-export const ELEMENT_PLACES = ['top', 'bottom', 'top-left', 'top-right', 'bottom-left', 'bottom-right', 'center-left', 'center-right'] as const;
-export const WATERMARK_CONTENTS = ['brand', 'brand-handle'] as const;
-export const WATERMARK_ORIENTATIONS = ['diagonal-up', 'diagonal-down', 'horizontal', 'vertical', 'cross'] as const;
-export const FRAME_SURFACES = ['capture', 'live'] as const;
-export const FRAME_COSTS = ['light', 'standard', 'rich'] as const;
-export const SCENE_LAYER_KINDS = ['image', 'lottie', 'sprite', 'video-loop', 'particles', 'light'] as const;
-export const SCENE_DEPTHS = ['back', 'front', 'effects'] as const;
-export const BEHAVIOR_TRIGGERS = ['onTap', 'onShake', 'onTilt', 'onSmile', 'onEmotion', 'onTime', 'onSpeaking', 'onCallEvent'] as const;
-export const BEHAVIOR_ACTIONS = ['burst', 'calm', 'tint', 'play', 'stop', 'show', 'hide', 'shake'] as const;
-export const BEHAVIOR_CONDITIONS = ['joy', 'love', 'pride', 'calm', 'surprise', 'nostalgia', 'party', 'gratitude', 'morning', 'day', 'evening', 'night', 'start', 'end'] as const;
+/*
+ * Les vocabulaires sont ceux du schéma partagé (`types/capture-frames.ts`, #10169) : le générateur
+ * les IMPORTE, il n'en garde plus de copie. Réexportés pour le témoin et les scripts qui les lisent ici.
+ */
+export {
+  FRAME_MOODS,
+  FRAME_BUCKETS,
+  FRAME_ARRANGEMENTS,
+  SLOT_SHAPES,
+  SLOT_TONES,
+  SLOT_TILTS,
+  FRAME_PATTERNS,
+  FRAME_BORDERS,
+  FRAME_ORNAMENTS,
+  FRAME_FONTS,
+  BRAND_MARKS,
+  BRAND_PLACES,
+  TEXT_SIZES,
+  NAME_SHOWS,
+  NAME_STYLES,
+  TITLE_SOURCES,
+  TEXT_EFFECTS,
+  SLOT_LOOKS,
+  ORNAMENT_MOTIONS,
+  TEXT_FORMS,
+  ELEMENT_PLACES,
+  WATERMARK_CONTENTS,
+  WATERMARK_ORIENTATIONS,
+  FRAME_SURFACES,
+  FRAME_COSTS,
+  SCENE_LAYER_KINDS,
+  SCENE_DEPTHS,
+  BEHAVIOR_TRIGGERS,
+  BEHAVIOR_ACTIONS,
+  BEHAVIOR_CONDITIONS
+} from '../types/capture-frames.js';
+import {
+  FRAME_MOODS,
+  FRAME_BUCKETS,
+  FRAME_ARRANGEMENTS,
+  SLOT_SHAPES,
+  SLOT_TONES,
+  SLOT_TILTS,
+  FRAME_PATTERNS,
+  FRAME_BORDERS,
+  FRAME_ORNAMENTS,
+  FRAME_FONTS,
+  BRAND_MARKS,
+  BRAND_PLACES,
+  TEXT_SIZES,
+  NAME_SHOWS,
+  NAME_STYLES,
+  TITLE_SOURCES,
+  TEXT_EFFECTS,
+  SLOT_LOOKS,
+  ORNAMENT_MOTIONS,
+  TEXT_FORMS,
+  ELEMENT_PLACES,
+  WATERMARK_CONTENTS,
+  WATERMARK_ORIENTATIONS,
+  FRAME_SURFACES,
+  FRAME_COSTS,
+  SCENE_LAYER_KINDS,
+  SCENE_DEPTHS,
+  BEHAVIOR_TRIGGERS,
+  BEHAVIOR_ACTIONS,
+  BEHAVIOR_CONDITIONS
+} from '../types/capture-frames.js';
 
 /** Les formes admises par source (spec 01 § 2) : une forme hors de SA source fait échouer la génération, comme le schéma zod. */
 const FORMS_BY_SOURCE: Readonly<Record<string, readonly string[]>> = {

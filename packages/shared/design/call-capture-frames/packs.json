@@ -1,0 +1,782 @@
+[
+  {
+    "slug": "signature",
+    "domain": "capture-frame",
+    "origin": "builtin",
+    "version": 1,
+    "order": 0,
+    "installedByDefault": true,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 1,
+    "cover": {
+      "src": "21e08d253559a8a7.webp",
+      "bytes": 312,
+      "sha256": "21e08d253559a8a7a66da1607a3a69b4ad138e15cc57f688e3e97e4862b975c0"
+    },
+    "preview": null,
+    "contract": {
+      "src": "6664d5aef91b9ae9.json",
+      "bytes": 14316,
+      "sha256": "6664d5aef91b9ae9ac26e0833b905ae6b9fd0977fb2b3ece9382736a21977414"
+    },
+    "strings": {},
+    "downloadBytes": {
+      "story": 0,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Signature",
+        "description": "Les cadres de l'ambiance « Signature », pour l'appel vidéo et la capture photo et vidéo. Inclus avec Meeshy, rien à télécharger."
+      },
+      "en": {
+        "name": "Signature",
+        "description": "The “Signature” frames, for video calls and photo and video capture. Included with Meeshy, nothing to download."
+      },
+      "es": {
+        "name": "Firma",
+        "description": "Los marcos del ambiente «Firma», para la videollamada y la captura de fotos y vídeos. Incluidos en Meeshy, nada que descargar."
+      },
+      "pt": {
+        "name": "Assinatura",
+        "description": "As molduras do ambiente «Assinatura», para a chamada de vídeo e a captura de fotos e vídeos. Incluídas no Meeshy, nada para descarregar."
+      },
+      "de": {
+        "name": "Signatur",
+        "description": "Die Rahmen der Stimmung „Signatur“ für Videoanrufe sowie Foto- und Videoaufnahmen. In Meeshy enthalten, kein Download nötig."
+      },
+      "it": {
+        "name": "Firma",
+        "description": "Le cornici dell'atmosfera «Firma», per la videochiamata e lo scatto di foto e video. Incluse in Meeshy, niente da scaricare."
+      },
+      "ar": {
+        "name": "توقيع",
+        "description": "إطارات أجواء «توقيع» لمكالمات الفيديو والتقاط الصور والفيديو. مضمّنة في Meeshy، لا شيء للتنزيل."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "call",
+        "photo",
+        "video"
+      ]
+    }
+  },
+  {
+    "slug": "distingue",
+    "domain": "capture-frame",
+    "origin": "builtin",
+    "version": 1,
+    "order": 1,
+    "installedByDefault": true,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 1,
+    "cover": {
+      "src": "d2d35dd2f588a984.webp",
+      "bytes": 618,
+      "sha256": "d2d35dd2f588a98470608721fcc787860693a7665ae5baedc509b42f7bef2a09"
+    },
+    "preview": null,
+    "contract": {
+      "src": "20d430ceb7934c51.json",
+      "bytes": 8437,
+      "sha256": "20d430ceb7934c516067d299192468983d3d48f6d102ac2e0c9c1506271c8b2d"
+    },
+    "strings": {},
+    "downloadBytes": {
+      "story": 0,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Distingué",
+        "description": "Les cadres de l'ambiance « Distingué », pour l'appel vidéo et la capture photo et vidéo. Inclus avec Meeshy, rien à télécharger."
+      },
+      "en": {
+        "name": "Distinguished",
+        "description": "The “Distinguished” frames, for video calls and photo and video capture. Included with Meeshy, nothing to download."
+      },
+      "es": {
+        "name": "Distinguido",
+        "description": "Los marcos del ambiente «Distinguido», para la videollamada y la captura de fotos y vídeos. Incluidos en Meeshy, nada que descargar."
+      },
+      "pt": {
+        "name": "Distinto",
+        "description": "As molduras do ambiente «Distinto», para a chamada de vídeo e a captura de fotos e vídeos. Incluídas no Meeshy, nada para descarregar."
+      },
+      "de": {
+        "name": "Vornehm",
+        "description": "Die Rahmen der Stimmung „Vornehm“ für Videoanrufe sowie Foto- und Videoaufnahmen. In Meeshy enthalten, kein Download nötig."
+      },
+      "it": {
+        "name": "Distinto",
+        "description": "Le cornici dell'atmosfera «Distinto», per la videochiamata e lo scatto di foto e video. Incluse in Meeshy, niente da scaricare."
+      },
+      "ar": {
+        "name": "راقٍ",
+        "description": "إطارات أجواء «راقٍ» لمكالمات الفيديو والتقاط الصور والفيديو. مضمّنة في Meeshy، لا شيء للتنزيل."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "call",
+        "photo",
+        "video"
+      ]
+    }
+  },
+  {
+    "slug": "elegant",
+    "domain": "capture-frame",
+    "origin": "builtin",
+    "version": 1,
+    "order": 2,
+    "installedByDefault": true,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 1,
+    "cover": {
+      "src": "bfcaeca737816811.webp",
+      "bytes": 1048,
+      "sha256": "bfcaeca7378168116e56c357c3ce3bc90b73bc673b82922c9cc0056ce7f620ce"
+    },
+    "preview": null,
+    "contract": {
+      "src": "34955ddc81a75705.json",
+      "bytes": 9716,
+      "sha256": "34955ddc81a757051508b0dd095df98fb84dc7438a203941230a982a7065ff21"
+    },
+    "strings": {},
+    "downloadBytes": {
+      "story": 0,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Élégant",
+        "description": "Les cadres de l'ambiance « Élégant », pour l'appel vidéo et la capture photo et vidéo. Inclus avec Meeshy, rien à télécharger."
+      },
+      "en": {
+        "name": "Elegant",
+        "description": "The “Elegant” frames, for video calls and photo and video capture. Included with Meeshy, nothing to download."
+      },
+      "es": {
+        "name": "Elegante",
+        "description": "Los marcos del ambiente «Elegante», para la videollamada y la captura de fotos y vídeos. Incluidos en Meeshy, nada que descargar."
+      },
+      "pt": {
+        "name": "Elegante",
+        "description": "As molduras do ambiente «Elegante», para a chamada de vídeo e a captura de fotos e vídeos. Incluídas no Meeshy, nada para descarregar."
+      },
+      "de": {
+        "name": "Elegant",
+        "description": "Die Rahmen der Stimmung „Elegant“ für Videoanrufe sowie Foto- und Videoaufnahmen. In Meeshy enthalten, kein Download nötig."
+      },
+      "it": {
+        "name": "Elegante",
+        "description": "Le cornici dell'atmosfera «Elegante», per la videochiamata e lo scatto di foto e video. Incluse in Meeshy, niente da scaricare."
+      },
+      "ar": {
+        "name": "أنيق",
+        "description": "إطارات أجواء «أنيق» لمكالمات الفيديو والتقاط الصور والفيديو. مضمّنة في Meeshy، لا شيء للتنزيل."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "call",
+        "photo",
+        "video"
+      ]
+    }
+  },
+  {
+    "slug": "jovial",
+    "domain": "capture-frame",
+    "origin": "builtin",
+    "version": 1,
+    "order": 3,
+    "installedByDefault": true,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 1,
+    "cover": {
+      "src": "b53599287777876e.webp",
+      "bytes": 1754,
+      "sha256": "b53599287777876e251174b03db003d7a984a598688b7327c35ab773b0cf8786"
+    },
+    "preview": null,
+    "contract": {
+      "src": "220c1b111eb812f5.json",
+      "bytes": 16236,
+      "sha256": "220c1b111eb812f5a0d9ac10bfcaf8e00edeb2337ce82e33683d4e74a153cd79"
+    },
+    "strings": {},
+    "downloadBytes": {
+      "story": 0,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Jovial",
+        "description": "Les cadres de l'ambiance « Jovial », pour l'appel vidéo et la capture photo et vidéo. Inclus avec Meeshy, rien à télécharger."
+      },
+      "en": {
+        "name": "Cheerful",
+        "description": "The “Cheerful” frames, for video calls and photo and video capture. Included with Meeshy, nothing to download."
+      },
+      "es": {
+        "name": "Alegre",
+        "description": "Los marcos del ambiente «Alegre», para la videollamada y la captura de fotos y vídeos. Incluidos en Meeshy, nada que descargar."
+      },
+      "pt": {
+        "name": "Alegre",
+        "description": "As molduras do ambiente «Alegre», para a chamada de vídeo e a captura de fotos e vídeos. Incluídas no Meeshy, nada para descarregar."
+      },
+      "de": {
+        "name": "Fröhlich",
+        "description": "Die Rahmen der Stimmung „Fröhlich“ für Videoanrufe sowie Foto- und Videoaufnahmen. In Meeshy enthalten, kein Download nötig."
+      },
+      "it": {
+        "name": "Allegro",
+        "description": "Le cornici dell'atmosfera «Allegro», per la videochiamata e lo scatto di foto e video. Incluse in Meeshy, niente da scaricare."
+      },
+      "ar": {
+        "name": "مرح",
+        "description": "إطارات أجواء «مرح» لمكالمات الفيديو والتقاط الصور والفيديو. مضمّنة في Meeshy، لا شيء للتنزيل."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "call",
+        "photo",
+        "video"
+      ]
+    }
+  },
+  {
+    "slug": "deconnecte",
+    "domain": "capture-frame",
+    "origin": "builtin",
+    "version": 1,
+    "order": 4,
+    "installedByDefault": true,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 1,
+    "cover": {
+      "src": "74df8729599e6ab5.webp",
+      "bytes": 768,
+      "sha256": "74df8729599e6ab53c78abbbb784489351ffaff61a670db2af6ab101a9c10a2c"
+    },
+    "preview": null,
+    "contract": {
+      "src": "c02643fc5a35843e.json",
+      "bytes": 10135,
+      "sha256": "c02643fc5a35843efebba7d9c1f3c9785a0a5c454b8a64d5a11650d58b65fc43"
+    },
+    "strings": {},
+    "downloadBytes": {
+      "story": 0,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Déconnecté",
+        "description": "Les cadres de l'ambiance « Déconnecté », pour l'appel vidéo et la capture photo et vidéo. Inclus avec Meeshy, rien à télécharger."
+      },
+      "en": {
+        "name": "Unplugged",
+        "description": "The “Unplugged” frames, for video calls and photo and video capture. Included with Meeshy, nothing to download."
+      },
+      "es": {
+        "name": "Desconectado",
+        "description": "Los marcos del ambiente «Desconectado», para la videollamada y la captura de fotos y vídeos. Incluidos en Meeshy, nada que descargar."
+      },
+      "pt": {
+        "name": "Desconectado",
+        "description": "As molduras do ambiente «Desconectado», para a chamada de vídeo e a captura de fotos e vídeos. Incluídas no Meeshy, nada para descarregar."
+      },
+      "de": {
+        "name": "Abgeschaltet",
+        "description": "Die Rahmen der Stimmung „Abgeschaltet“ für Videoanrufe sowie Foto- und Videoaufnahmen. In Meeshy enthalten, kein Download nötig."
+      },
+      "it": {
+        "name": "Disconnesso",
+        "description": "Le cornici dell'atmosfera «Disconnesso», per la videochiamata e lo scatto di foto e video. Incluse in Meeshy, niente da scaricare."
+      },
+      "ar": {
+        "name": "بلا اتصال",
+        "description": "إطارات أجواء «بلا اتصال» لمكالمات الفيديو والتقاط الصور والفيديو. مضمّنة في Meeshy، لا شيء للتنزيل."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "call",
+        "photo",
+        "video"
+      ]
+    }
+  },
+  {
+    "slug": "corporate",
+    "domain": "capture-frame",
+    "origin": "builtin",
+    "version": 1,
+    "order": 5,
+    "installedByDefault": true,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 1,
+    "cover": {
+      "src": "735bcee6f148e5e4.webp",
+      "bytes": 568,
+      "sha256": "735bcee6f148e5e4a7b4767e319e9a4254866ecab43ed34d90614a1a07209061"
+    },
+    "preview": null,
+    "contract": {
+      "src": "36d5d25895194cdf.json",
+      "bytes": 8384,
+      "sha256": "36d5d25895194cdfaa5095b67e5ed3a22c5e1776d18f6c90fa5e5d219b4f8a0c"
+    },
+    "strings": {},
+    "downloadBytes": {
+      "story": 0,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Corporate",
+        "description": "Les cadres de l'ambiance « Corporate », pour l'appel vidéo et la capture photo et vidéo. Inclus avec Meeshy, rien à télécharger."
+      },
+      "en": {
+        "name": "Corporate",
+        "description": "The “Corporate” frames, for video calls and photo and video capture. Included with Meeshy, nothing to download."
+      },
+      "es": {
+        "name": "Corporativo",
+        "description": "Los marcos del ambiente «Corporativo», para la videollamada y la captura de fotos y vídeos. Incluidos en Meeshy, nada que descargar."
+      },
+      "pt": {
+        "name": "Corporativo",
+        "description": "As molduras do ambiente «Corporativo», para a chamada de vídeo e a captura de fotos e vídeos. Incluídas no Meeshy, nada para descarregar."
+      },
+      "de": {
+        "name": "Business",
+        "description": "Die Rahmen der Stimmung „Business“ für Videoanrufe sowie Foto- und Videoaufnahmen. In Meeshy enthalten, kein Download nötig."
+      },
+      "it": {
+        "name": "Aziendale",
+        "description": "Le cornici dell'atmosfera «Aziendale», per la videochiamata e lo scatto di foto e video. Incluse in Meeshy, niente da scaricare."
+      },
+      "ar": {
+        "name": "مهني",
+        "description": "إطارات أجواء «مهني» لمكالمات الفيديو والتقاط الصور والفيديو. مضمّنة في Meeshy، لا شيء للتنزيل."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "call",
+        "photo",
+        "video"
+      ]
+    }
+  },
+  {
+    "slug": "fantastique",
+    "domain": "capture-frame",
+    "origin": "builtin",
+    "version": 1,
+    "order": 6,
+    "installedByDefault": true,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 1,
+    "cover": {
+      "src": "de76336d6e5a1530.webp",
+      "bytes": 872,
+      "sha256": "de76336d6e5a1530ff2c424e16291bd57ff91b1933c3258c9e9b686ea07e55f4"
+    },
+    "preview": null,
+    "contract": {
+      "src": "70ddbab1561bcb98.json",
+      "bytes": 10991,
+      "sha256": "70ddbab1561bcb98c9c10aec55d58e2f4bdc8bbb74215ee2854aaa642acca0f7"
+    },
+    "strings": {},
+    "downloadBytes": {
+      "story": 0,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Fantastique",
+        "description": "Les cadres de l'ambiance « Fantastique », pour l'appel vidéo et la capture photo et vidéo. Inclus avec Meeshy, rien à télécharger."
+      },
+      "en": {
+        "name": "Fantasy",
+        "description": "The “Fantasy” frames, for video calls and photo and video capture. Included with Meeshy, nothing to download."
+      },
+      "es": {
+        "name": "Fantástico",
+        "description": "Los marcos del ambiente «Fantástico», para la videollamada y la captura de fotos y vídeos. Incluidos en Meeshy, nada que descargar."
+      },
+      "pt": {
+        "name": "Fantástico",
+        "description": "As molduras do ambiente «Fantástico», para a chamada de vídeo e a captura de fotos e vídeos. Incluídas no Meeshy, nada para descarregar."
+      },
+      "de": {
+        "name": "Fantastisch",
+        "description": "Die Rahmen der Stimmung „Fantastisch“ für Videoanrufe sowie Foto- und Videoaufnahmen. In Meeshy enthalten, kein Download nötig."
+      },
+      "it": {
+        "name": "Fantastico",
+        "description": "Le cornici dell'atmosfera «Fantastico», per la videochiamata e lo scatto di foto e video. Incluse in Meeshy, niente da scaricare."
+      },
+      "ar": {
+        "name": "خيالي",
+        "description": "إطارات أجواء «خيالي» لمكالمات الفيديو والتقاط الصور والفيديو. مضمّنة في Meeshy، لا شيء للتنزيل."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "call",
+        "photo",
+        "video"
+      ]
+    }
+  },
+  {
+    "slug": "futuriste",
+    "domain": "capture-frame",
+    "origin": "builtin",
+    "version": 1,
+    "order": 7,
+    "installedByDefault": true,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 1,
+    "cover": {
+      "src": "e88bb2a009ab71ea.webp",
+      "bytes": 768,
+      "sha256": "e88bb2a009ab71eadf83b40b445ef9fdc82acd9586bfe528ea1ffaead60627a1"
+    },
+    "preview": null,
+    "contract": {
+      "src": "8c44f109127c00ad.json",
+      "bytes": 14784,
+      "sha256": "8c44f109127c00ad04e7a4f4e8363191acb02df0abf3492c949422f97146ace7"
+    },
+    "strings": {},
+    "downloadBytes": {
+      "story": 0,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Futuriste",
+        "description": "Les cadres de l'ambiance « Futuriste », pour l'appel vidéo et la capture photo et vidéo. Inclus avec Meeshy, rien à télécharger."
+      },
+      "en": {
+        "name": "Futuristic",
+        "description": "The “Futuristic” frames, for video calls and photo and video capture. Included with Meeshy, nothing to download."
+      },
+      "es": {
+        "name": "Futurista",
+        "description": "Los marcos del ambiente «Futurista», para la videollamada y la captura de fotos y vídeos. Incluidos en Meeshy, nada que descargar."
+      },
+      "pt": {
+        "name": "Futurista",
+        "description": "As molduras do ambiente «Futurista», para a chamada de vídeo e a captura de fotos e vídeos. Incluídas no Meeshy, nada para descarregar."
+      },
+      "de": {
+        "name": "Futuristisch",
+        "description": "Die Rahmen der Stimmung „Futuristisch“ für Videoanrufe sowie Foto- und Videoaufnahmen. In Meeshy enthalten, kein Download nötig."
+      },
+      "it": {
+        "name": "Futuristico",
+        "description": "Le cornici dell'atmosfera «Futuristico», per la videochiamata e lo scatto di foto e video. Incluse in Meeshy, niente da scaricare."
+      },
+      "ar": {
+        "name": "مستقبلي",
+        "description": "إطارات أجواء «مستقبلي» لمكالمات الفيديو والتقاط الصور والفيديو. مضمّنة في Meeshy، لا شيء للتنزيل."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "call",
+        "photo",
+        "video"
+      ]
+    }
+  },
+  {
+    "slug": "glauque",
+    "domain": "capture-frame",
+    "origin": "builtin",
+    "version": 1,
+    "order": 8,
+    "installedByDefault": true,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 1,
+    "cover": {
+      "src": "bbfa07327c26d1f6.webp",
+      "bytes": 296,
+      "sha256": "bbfa07327c26d1f698b71da1407ee289c2b2b80836f55720de9e182af1f0b23b"
+    },
+    "preview": null,
+    "contract": {
+      "src": "b976c6d12d48d158.json",
+      "bytes": 16405,
+      "sha256": "b976c6d12d48d158267b718cd7d85960aaa472b730bcee14a444c86fa2898c09"
+    },
+    "strings": {},
+    "downloadBytes": {
+      "story": 0,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Glauque",
+        "description": "Les cadres de l'ambiance « Glauque », pour l'appel vidéo et la capture photo et vidéo. Inclus avec Meeshy, rien à télécharger."
+      },
+      "en": {
+        "name": "Eerie",
+        "description": "The “Eerie” frames, for video calls and photo and video capture. Included with Meeshy, nothing to download."
+      },
+      "es": {
+        "name": "Siniestro",
+        "description": "Los marcos del ambiente «Siniestro», para la videollamada y la captura de fotos y vídeos. Incluidos en Meeshy, nada que descargar."
+      },
+      "pt": {
+        "name": "Sombrio",
+        "description": "As molduras do ambiente «Sombrio», para a chamada de vídeo e a captura de fotos e vídeos. Incluídas no Meeshy, nada para descarregar."
+      },
+      "de": {
+        "name": "Düster",
+        "description": "Die Rahmen der Stimmung „Düster“ für Videoanrufe sowie Foto- und Videoaufnahmen. In Meeshy enthalten, kein Download nötig."
+      },
+      "it": {
+        "name": "Cupo",
+        "description": "Le cornici dell'atmosfera «Cupo», per la videochiamata e lo scatto di foto e video. Incluse in Meeshy, niente da scaricare."
+      },
+      "ar": {
+        "name": "قاتم",
+        "description": "إطارات أجواء «قاتم» لمكالمات الفيديو والتقاط الصور والفيديو. مضمّنة في Meeshy، لا شيء للتنزيل."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "call",
+        "photo",
+        "video"
+      ]
+    }
+  },
+  {
+    "slug": "hors-norme",
+    "domain": "capture-frame",
+    "origin": "builtin",
+    "version": 1,
+    "order": 9,
+    "installedByDefault": true,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 1,
+    "cover": {
+      "src": "81a4874361411f13.webp",
+      "bytes": 842,
+      "sha256": "81a4874361411f131015399fd46bd69a4f214aac67cb2bb65fe2b65be74d9ac3"
+    },
+    "preview": null,
+    "contract": {
+      "src": "5a2b157be6ed882c.json",
+      "bytes": 19264,
+      "sha256": "5a2b157be6ed882c65fd5815146f0f98b89f2a9f83578e8ac759dae32cd6beb9"
+    },
+    "strings": {},
+    "downloadBytes": {
+      "story": 0,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Hors norme",
+        "description": "Les cadres de l'ambiance « Hors norme », pour l'appel vidéo et la capture photo et vidéo. Inclus avec Meeshy, rien à télécharger."
+      },
+      "en": {
+        "name": "Offbeat",
+        "description": "The “Offbeat” frames, for video calls and photo and video capture. Included with Meeshy, nothing to download."
+      },
+      "es": {
+        "name": "Fuera de lo común",
+        "description": "Los marcos del ambiente «Fuera de lo común», para la videollamada y la captura de fotos y vídeos. Incluidos en Meeshy, nada que descargar."
+      },
+      "pt": {
+        "name": "Fora do comum",
+        "description": "As molduras do ambiente «Fora do comum», para a chamada de vídeo e a captura de fotos e vídeos. Incluídas no Meeshy, nada para descarregar."
+      },
+      "de": {
+        "name": "Außergewöhnlich",
+        "description": "Die Rahmen der Stimmung „Außergewöhnlich“ für Videoanrufe sowie Foto- und Videoaufnahmen. In Meeshy enthalten, kein Download nötig."
+      },
+      "it": {
+        "name": "Fuori dal comune",
+        "description": "Le cornici dell'atmosfera «Fuori dal comune», per la videochiamata e lo scatto di foto e video. Incluse in Meeshy, niente da scaricare."
+      },
+      "ar": {
+        "name": "خارج المألوف",
+        "description": "إطارات أجواء «خارج المألوف» لمكالمات الفيديو والتقاط الصور والفيديو. مضمّنة في Meeshy، لا شيء للتنزيل."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "call",
+        "photo",
+        "video"
+      ]
+    }
+  },
+  {
+    "slug": "morbide",
+    "domain": "capture-frame",
+    "origin": "builtin",
+    "version": 1,
+    "order": 10,
+    "installedByDefault": true,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 1,
+    "cover": {
+      "src": "bbed4920adfbec33.webp",
+      "bytes": 532,
+      "sha256": "bbed4920adfbec33104a7d3ee28fd95f331a796403e5a0fafb35b44782274c5c"
+    },
+    "preview": null,
+    "contract": {
+      "src": "0cef634d62c81b1a.json",
+      "bytes": 20853,
+      "sha256": "0cef634d62c81b1a70d9f612651d6ed1d890da4a9cbd8f3b46566e48327446c1"
+    },
+    "strings": {},
+    "downloadBytes": {
+      "story": 0,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Morbide",
+        "description": "Les cadres de l'ambiance « Morbide », pour l'appel vidéo et la capture photo et vidéo. Inclus avec Meeshy, rien à télécharger."
+      },
+      "en": {
+        "name": "Macabre",
+        "description": "The “Macabre” frames, for video calls and photo and video capture. Included with Meeshy, nothing to download."
+      },
+      "es": {
+        "name": "Macabro",
+        "description": "Los marcos del ambiente «Macabro», para la videollamada y la captura de fotos y vídeos. Incluidos en Meeshy, nada que descargar."
+      },
+      "pt": {
+        "name": "Macabro",
+        "description": "As molduras do ambiente «Macabro», para a chamada de vídeo e a captura de fotos e vídeos. Incluídas no Meeshy, nada para descarregar."
+      },
+      "de": {
+        "name": "Makaber",
+        "description": "Die Rahmen der Stimmung „Makaber“ für Videoanrufe sowie Foto- und Videoaufnahmen. In Meeshy enthalten, kein Download nötig."
+      },
+      "it": {
+        "name": "Macabro",
+        "description": "Le cornici dell'atmosfera «Macabro», per la videochiamata e lo scatto di foto e video. Incluse in Meeshy, niente da scaricare."
+      },
+      "ar": {
+        "name": "مروّع",
+        "description": "إطارات أجواء «مروّع» لمكالمات الفيديو والتقاط الصور والفيديو. مضمّنة في Meeshy، لا شيء للتنزيل."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "call",
+        "photo",
+        "video"
+      ]
+    }
+  },
+  {
+    "slug": "feerique",
+    "domain": "capture-frame",
+    "origin": "builtin",
+    "version": 1,
+    "order": 11,
+    "installedByDefault": true,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 1,
+    "cover": {
+      "src": "8bf5a1b5fa0abe55.webp",
+      "bytes": 910,
+      "sha256": "8bf5a1b5fa0abe5516e7c1c977d7157b692ca3c4678067bfd0eeedd9d5d38a68"
+    },
+    "preview": null,
+    "contract": {
+      "src": "98412b5122d72947.json",
+      "bytes": 15143,
+      "sha256": "98412b5122d72947ac56484ed9faa55f675d251fb5b89bfb394d06bb8010247d"
+    },
+    "strings": {},
+    "downloadBytes": {
+      "story": 0,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Féerique",
+        "description": "Les cadres de l'ambiance « Féerique », pour l'appel vidéo et la capture photo et vidéo. Inclus avec Meeshy, rien à télécharger."
+      },
+      "en": {
+        "name": "Enchanted",
+        "description": "The “Enchanted” frames, for video calls and photo and video capture. Included with Meeshy, nothing to download."
+      },
+      "es": {
+        "name": "Mágico",
+        "description": "Los marcos del ambiente «Mágico», para la videollamada y la captura de fotos y vídeos. Incluidos en Meeshy, nada que descargar."
+      },
+      "pt": {
+        "name": "Encantado",
+        "description": "As molduras do ambiente «Encantado», para a chamada de vídeo e a captura de fotos e vídeos. Incluídas no Meeshy, nada para descarregar."
+      },
+      "de": {
+        "name": "Märchenhaft",
+        "description": "Die Rahmen der Stimmung „Märchenhaft“ für Videoanrufe sowie Foto- und Videoaufnahmen. In Meeshy enthalten, kein Download nötig."
+      },
+      "it": {
+        "name": "Fiabesco",
+        "description": "Le cornici dell'atmosfera «Fiabesco», per la videochiamata e lo scatto di foto e video. Incluse in Meeshy, niente da scaricare."
+      },
+      "ar": {
+        "name": "ساحر",
+        "description": "إطارات أجواء «ساحر» لمكالمات الفيديو والتقاط الصور والفيديو. مضمّنة في Meeshy، لا شيء للتنزيل."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "call",
+        "photo",
+        "video"
+      ]
+    }
+  }
+]

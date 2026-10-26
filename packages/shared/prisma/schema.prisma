@@ -6252,6 +6252,11 @@ model StickerPackItem {
   kind      String
   mimeType  String
   filePath  String
+  /// SHA-256 (hex) des octets gardés sous `filePath` — leur adresse dans le magasin
+  /// `GET /api/v1/pack-assets/<sha16>.<ext>` (#10188). Absent sur un fichier proposé
+  /// avant ce lot, jusqu'au rattrapage `scripts/2026-10-25-backfill-sticker-pack-hashes.ts`
+  /// (passerelle) : il reste servi par `fileUrl` seul.
+  sha256    String?
   width     Int
   height    Int
   sizeBytes Int
@@ -6262,6 +6267,7 @@ model StickerPackItem {
   pack StickerPack @relation(fields: [packId], references: [id], onDelete: Cascade)
 
   @@unique([packId, key])
+  @@index([sha256])
 }
 
 /// Un pack d'APPARENCE proposé par un vendeur tiers (#10709) : fonds, contours ou bannières.

@@ -76,6 +76,11 @@ const summaryProperties = {
   removable: { type: 'boolean' },
   names: byLanguage({ type: 'object', additionalProperties: false, properties: { name: { type: 'string' }, description: { type: 'string' } } }),
   preview: { ...assetRefJsonSchema, nullable: true },
+  previewUrl: {
+    type: 'string',
+    nullable: true,
+    description: 'L’atlas des vignettes du pack (#10275), servi par GET /api/v1/pack-assets/<sha16>.webp, immuable : le pack se montre sans s’installer. null sans atlas, ou au-delà de 256 Kio',
+  },
   usage: frameUsageJsonSchema,
 } as const;
 

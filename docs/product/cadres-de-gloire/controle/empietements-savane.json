@@ -10,7 +10,7 @@
    441,
    731
   ],
-  "windowPx": 157984,
+  "windowPx": 157985,
   "layout": "ruban",
   "verdict": "ok"
  },
@@ -20,7 +20,7 @@
   "face": 0,
   "depth": 0,
   "bbox": null,
-  "windowPx": 170778,
+  "windowPx": 170844,
   "layout": "perchés",
   "verdict": "ok"
  },
@@ -30,7 +30,7 @@
   "face": 0,
   "depth": 0,
   "bbox": null,
-  "windowPx": 126439,
+  "windowPx": 126603,
   "layout": "perchés",
   "verdict": "ok"
  },
@@ -40,7 +40,7 @@
   "face": 0,
   "depth": 0,
   "bbox": null,
-  "windowPx": 145068,
+  "windowPx": 145174,
   "layout": "perchés",
   "verdict": "ok"
  },
@@ -50,22 +50,22 @@
   "face": 0,
   "depth": 0,
   "bbox": null,
-  "windowPx": 182205,
+  "windowPx": 182291,
   "layout": "perchés",
   "verdict": "ok"
  },
  {
   "file": "savane-legende-1",
-  "overlap": 7179,
+  "overlap": 7184,
   "face": 0,
   "depth": 74,
   "bbox": [
    311,
    602,
    462,
-   698
+   699
   ],
-  "windowPx": 166416,
+  "windowPx": 166500,
   "layout": "selfie",
   "verdict": "ok"
  },
@@ -75,22 +75,22 @@
   "face": 0,
   "depth": 0,
   "bbox": null,
-  "windowPx": 166019,
+  "windowPx": 166082,
   "layout": "ruban",
   "verdict": "ok"
  },
  {
   "file": "savane-legende-3",
-  "overlap": 86,
+  "overlap": 91,
   "face": 0,
   "depth": 4,
   "bbox": [
    99,
    357,
-   466,
-   514
+   467,
+   515
   ],
-  "windowPx": 146784,
+  "windowPx": 146887,
   "layout": "côtés",
   "verdict": "ok"
  },
@@ -105,7 +105,7 @@
    417,
    700
   ],
-  "windowPx": 162048,
+  "windowPx": 162167,
   "layout": "pied",
   "verdict": "ok"
  },
@@ -115,13 +115,13 @@
   "face": 0,
   "depth": 0,
   "bbox": null,
-  "windowPx": 165679,
+  "windowPx": 165855,
   "layout": "duo",
   "verdict": "ok"
  },
  {
   "file": "savane-mythe-a",
-  "overlap": 6,
+  "overlap": 7,
   "face": 0,
   "depth": 2,
   "bbox": [
@@ -130,22 +130,22 @@
    101,
    705
   ],
-  "windowPx": 147413,
+  "windowPx": 147457,
   "layout": "ruban",
   "verdict": "ok"
  },
  {
   "file": "savane-mythe-b",
-  "overlap": 38,
+  "overlap": 41,
   "face": 0,
   "depth": 4,
   "bbox": [
-   92,
+   91,
    349,
    448,
    699
   ],
-  "windowPx": 144724,
+  "windowPx": 144782,
   "layout": "Mee",
   "verdict": "ok"
  },
@@ -160,13 +160,13 @@
    274,
    716
   ],
-  "windowPx": 130375,
+  "windowPx": 130454,
   "layout": "duo",
   "verdict": "ok"
  },
  {
   "file": "savane-oracle-a",
-  "overlap": 103,
+  "overlap": 113,
   "face": 0,
   "depth": 4,
   "bbox": [
@@ -175,22 +175,22 @@
    444,
    696
   ],
-  "windowPx": 172332,
+  "windowPx": 172432,
   "layout": "Mee",
   "verdict": "ok"
  },
  {
   "file": "savane-oracle-b",
-  "overlap": 28,
+  "overlap": 31,
   "face": 0,
   "depth": 4,
   "bbox": [
-   69,
+   68,
    564,
    72,
    574
   ],
-  "windowPx": 155416,
+  "windowPx": 155492,
   "layout": "de",
   "verdict": "ok"
  },
@@ -205,7 +205,7 @@
    138,
    732
   ],
-  "windowPx": 161328,
+  "windowPx": 161418,
   "layout": "duo",
   "verdict": "ok"
  },
@@ -215,7 +215,7 @@
   "face": 0,
   "depth": 0,
   "bbox": null,
-  "windowPx": 158714,
+  "windowPx": 158848,
   "layout": "perchés",
   "verdict": "ok"
  },
@@ -225,7 +225,7 @@
   "face": 0,
   "depth": 0,
   "bbox": null,
-  "windowPx": 162829,
+  "windowPx": 162879,
   "layout": "côtés",
   "verdict": "ok"
  },
@@ -240,7 +240,7 @@
    148,
    739
   ],
-  "windowPx": 163011,
+  "windowPx": 163115,
   "layout": "pied",
   "verdict": "ok"
  }

@@ -80,6 +80,8 @@ const deStudioChrome = {
   'story.studio.background.cameraHold': 'Gedrückt halten: Kamera öffnen',
   'story.studio.camera.close': 'Zurück zur Szene',
   'story.studio.camera.flip': 'Kamera wechseln',
+  'story.studio.camera.frames': 'Rahmen',
+  'story.studio.camera.frames.none': 'Kein Rahmen',
   'story.studio.camera.flash': 'Blitz',
   'story.studio.camera.shutter.photo': 'Foto aufnehmen',
   'story.studio.camera.shutter.start': 'Aufnahme starten',
