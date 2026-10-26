@@ -2,6 +2,9 @@
 <resources>
     <string name="bubble_message_deleted">Nachricht gelöscht</string>
     <string name="bubble_edited">bearbeitet</string>
+    <string name="bubble_view_profile">Profil ansehen</string>
+    <string name="bubble_add_reaction">Reaktion hinzufügen</string>
+    <string name="bubble_failed_retry">Nicht gesendet — tippen zum Wiederholen</string>
     <string name="bubble_forwarded">Weitergeleitet</string>
     <string name="bubble_forwarded_from">Weitergeleitet von %1$s</string>
     <string name="bubble_starred">Mit Stern markiert</string>

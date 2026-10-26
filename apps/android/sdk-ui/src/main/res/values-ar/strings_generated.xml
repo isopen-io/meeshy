@@ -22,6 +22,7 @@
     <string name="emoji_category_smileys">الوجوه</string>
     <string name="emoji_category_symbols">الرموز</string>
     <string name="emoji_category_travel">السفر</string>
+    <string name="focal_row_you">أنت</string>
     <string name="media_crop_a11y_handle_bottom">الحافة السفلية</string>
     <string name="media_crop_a11y_handle_bottomLeft">الزاوية السفلية اليسرى</string>
     <string name="media_crop_a11y_handle_bottomRight">الزاوية السفلية اليمنى</string>
@@ -40,6 +41,8 @@
     <string name="media_trim_loading">جارٍ تحميل المعاينة</string>
     <string name="media_trim_of_total">من %s</string>
     <string name="media_trim_window">الجزء المحتفظ به</string>
+    <string name="message_long_collapse">عرض أقل</string>
+    <string name="message_long_read_more">اقرأ المزيد</string>
     <string name="notification_date_ago">قبل %s</string>
     <string name="notification_date_hours">%d س</string>
     <string name="notification_date_minutes">%d د</string>

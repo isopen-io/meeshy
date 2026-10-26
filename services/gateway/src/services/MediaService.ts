@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import type { MediaStorage, MediaDuplicateResult, MediaDuplicatePlan } from './storage/MediaStorage';
 import { storageKeyFromMediaUrl } from './attachments/mediaStorageKey';
 import { eraseMirroredCopy } from './storage/objects/mirroredErasure';
+import { isSealedStorageKey, processAtRestFileAccess, readStoredFileBytes, storageKeyOfPath } from './attachments/atRest/atRestFiles';
 
 // Re-export for backwards compatibility with call sites that imported the
 // type from `MediaService` rather than from the new `storage/MediaStorage`
@@ -84,8 +85,7 @@ export class MediaService implements MediaStorage {
         // Note : `fsConstants.COPYFILE_FICLONE` is undefined on macOS in
         // Node — coalesce to 0 so we don't OR `undefined` with EXCL and
         // silently drop the EXCL guard.
-        const ficlone = (fsConstants.COPYFILE_FICLONE as number | undefined) ?? 0;
-        await fs.copyFile(srcPath, destPath, ficlone | fsConstants.COPYFILE_EXCL);
+        await this.copyStored(srcPath, destPath);
 
         const stat = await fs.stat(destPath);
         // #4324 — ce qui se PERSISTE est la clé de stockage, pas une adresse : ni
@@ -178,8 +178,7 @@ export class MediaService implements MediaStorage {
       // Note : `fsConstants.COPYFILE_FICLONE` is undefined on macOS in
       // Node — bitwise OR with undefined yields the EXCL flag alone, which
       // is acceptable (just no reflink optimization on dev).
-      const ficlone = (fsConstants.COPYFILE_FICLONE as number | undefined) ?? 0;
-      await fs.copyFile(srcPath, destPath, ficlone | fsConstants.COPYFILE_EXCL);
+      await this.copyStored(srcPath, destPath);
       const stat = await fs.stat(destPath);
       return {
         fileUrl: newFileUrl,
@@ -195,6 +194,25 @@ export class MediaService implements MediaStorage {
       plannedFilePath: newRelativePath,
       commit,
     };
+  }
+
+  /**
+   * #13100 — une pièce scellée au repos se recopie en CLAIR : la copie (un
+   * post, une story) n'est pas sous le régime de la conversation et se sert
+   * telle quelle. Une pièce scellée illisible fait échouer la copie, jamais
+   * une copie du chiffré.
+   */
+  private async copyStored(srcPath: string, destPath: string): Promise<void> {
+    const access = processAtRestFileAccess();
+    const key = storageKeyOfPath(srcPath, this.uploadBasePath);
+    const sealed = key !== null && ((access !== null && (await access.store.find(key)) !== null) || (access === null && isSealedStorageKey(key)));
+    if (sealed) {
+      const bytes = await readStoredFileBytes(srcPath, { uploadRoot: this.uploadBasePath, access });
+      await fs.writeFile(destPath, bytes, { flag: 'wx', mode: 0o644 });
+      return;
+    }
+    const ficlone = (fsConstants.COPYFILE_FICLONE as number | undefined) ?? 0;
+    await fs.copyFile(srcPath, destPath, ficlone | fsConstants.COPYFILE_EXCL);
   }
 
   private guessMimeType(ext: string): string {

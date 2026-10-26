@@ -23,7 +23,7 @@ import { enhancedLogger } from '../../utils/logger-enhanced';
 import { ifNoneMatchMatches } from '../../utils/etag';
 import { sendError, sendNotFound, sendForbidden, sendInternalError } from '../../utils/response.js';
 import type { AttachmentParams } from './types';
-import { diskBytes, hasBucket, isBucketUnavailable, locateBucketBytes, locateStoredBytes, uploadRootOf, type StoredBytes, type StoredBytesSource } from './storedBytes';
+import { atRestSealingOf, currentStorageKey, diskBytes, locateCurrentStoredBytes, hasBucket, isBucketUnavailable, locateBucketBytes, locateStoredBytes, uploadRootOf, type StoredBytes, type StoredBytesSource } from './storedBytes';
 
 const log = enhancedLogger.child({ module: 'AttachmentDownload' });
 
@@ -132,7 +132,7 @@ export async function registerDownloadRoutes(
           return sendNotFound(reply, 'File not found');
         }
 
-        const stored = await locateStoredBytes(filePath, bytesSource);
+        const stored = await locateCurrentStoredBytes(filePath, bytesSource);
         if (!stored) {
           return sendNotFound(reply, 'File not found on disk');
         }
@@ -214,7 +214,7 @@ export async function registerDownloadRoutes(
           return sendNotFound(reply, 'Thumbnail not found');
         }
 
-        const thumbnailStored = await locateStoredBytes(thumbnailPath, bytesSource);
+        const thumbnailStored = await locateCurrentStoredBytes(thumbnailPath, bytesSource);
         if (!thumbnailStored) {
           return sendNotFound(reply, 'Thumbnail not found on disk');
         }
@@ -321,6 +321,11 @@ export function registerFileStreamRoute(fastify: FastifyInstance, prisma: FileRo
           return sendForbidden(reply, 'Forbidden');
         }
         if (located.kind === 'hidden') return sendNotFound(reply, 'File not found');
+
+        // #13100 — un fichier scellé au repos ne sort JAMAIS par l'adresse nue :
+        // elle n'a pas de lecteur. Il se lit par l'adresse signée de son
+        // lecteur ou par identifiant, qui le déchiffrent après l'avoir jugé.
+        if ((await atRestSealingOf(located.filePath, bytesSource)).kind === 'sealed') return sendNotFound(reply, 'File not found');
 
         // Un fichier absent du disque n'interroge la base que si un seau peut l'avoir.
         const onDisk = await diskBytes(located.filePath);
@@ -432,13 +437,18 @@ function registerSignedFileRoute(fastify: FastifyInstance, prisma: PrismaClient,
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
         const params = request.params as { token: string; '*': string };
-        const decodedPath = decodeURIComponent(params['*']);
+        const requestedPath = decodeURIComponent(params['*']);
+        const requested = locateStoredFile(requestedPath, uploadRootOf(bytesSource));
+        if (requested.kind !== 'file') return sendNotFound(reply, 'File not found');
+        // #13100 — une adresse signée avant le scellement sert le scellé qui a remplacé son fichier.
+        const decodedPath = await currentStorageKey(requested.storageKey, bytesSource);
         const located = locateStoredFile(decodedPath, uploadRootOf(bytesSource));
         if (located.kind !== 'file') return sendNotFound(reply, 'File not found');
 
         const access = await resolveSignedFileAccess(prisma, {
           token: params.token,
-          storageKey: located.storageKey,
+          storageKey: requested.storageKey,
+          servedKey: located.storageKey,
           keys: readSigningKeys(),
           now: new Date(),
         });

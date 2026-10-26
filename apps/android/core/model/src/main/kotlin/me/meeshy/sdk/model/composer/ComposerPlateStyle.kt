@@ -16,7 +16,7 @@ public data class ComposerPlateStyle(
     public companion object {
         public const val FILL_ALPHA_DARK: Float = 0.60f
         public const val FILL_ALPHA_LIGHT: Float = 0.72f
-        public const val CORNER_RADIUS_DP: Float = 28f
+        public const val CORNER_RADIUS_DP: Float = 24f
         public const val BORDER_WIDTH_DP: Float = 1f
 
         public fun resolve(

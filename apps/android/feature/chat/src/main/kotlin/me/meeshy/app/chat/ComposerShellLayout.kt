@@ -35,7 +35,7 @@ import me.meeshy.ui.theme.MeeshyMotion
 /**
  * L'enveloppe de la barre : transparente (aucun fond propre), avec le dégagement bas calculé selon
  * le clavier, les barres système et le multi-fenêtre ([ComposerBottomClearance] : max, jamais une
- * somme), et le repli/dépli animé (échelle 0,6 + fondu, ressort 0,3/0,8 ; fondu seul en mouvement
+ * somme), et le repli/dépli animé (échelle 0,6 + fondu, ressort 0,32/0,82 ; fondu seul en mouvement
  * réduit). Un glissement vers le bas suit le doigt avec résistance 0,5 ([ComposerMinimizeLaw]).
  */
 @Composable
@@ -52,7 +52,7 @@ internal fun ComposerShellLayout(
     val safeBottomDp = with(density) { WindowInsets.navigationBars.getBottom(this).toDp().value }
     val clearance = if (imeShown) 0f else ComposerBottomClearance.required(safeBottomDp)
     var dragDp by remember { mutableFloatStateOf(0f) }
-    val move = spring<Float>(dampingRatio = 0.8f, stiffness = MeeshyMotion.stiffnessForResponse(0.3f))
+    val move = spring<Float>(dampingRatio = 0.82f, stiffness = MeeshyMotion.stiffnessForResponse(0.32f))
     val enter = if (reduceMotion) fadeIn() else scaleIn(initialScale = 0.6f, animationSpec = move) + fadeIn()
     val exit = if (reduceMotion) fadeOut() else scaleOut(targetScale = 0.6f, animationSpec = move) + fadeOut()
     val dragState = rememberDraggableState { deltaPx ->

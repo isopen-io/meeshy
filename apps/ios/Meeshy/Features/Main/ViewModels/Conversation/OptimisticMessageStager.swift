@@ -155,9 +155,9 @@ struct OptimisticMessageStager: OptimisticMessageStagerProviding {
             maxViewOnceCount: intent.maxViewOnceCount,
             locationJson: OptimisticRecordColumns.locationJson(outgoing.location, id: localId),
             stickerJson: OptimisticRecordColumns.stickerJson(outgoing.sticker, id: localId),
+            sealedEndToEnd: author.writesEndToEnd,
             now: Date(),
-            ephemeralDuration: intent.ephemeralDurationSeconds,
-            sealedEndToEnd: author.writesEndToEnd
+            ephemeralDuration: intent.ephemeralDurationSeconds
         )
         do {
             try await persistence.insertOptimistic(offlineRecord)
@@ -202,9 +202,9 @@ struct OptimisticMessageStager: OptimisticMessageStagerProviding {
             maxViewOnceCount: intent.maxViewOnceCount,
             locationJson: OptimisticRecordColumns.locationJson(outgoing.location, id: tempId),
             stickerJson: OptimisticRecordColumns.stickerJson(outgoing.sticker, id: tempId),
+            sealedEndToEnd: author.writesEndToEnd,
             now: Date(),
-            ephemeralDuration: resolvedEphemeralDuration,
-            sealedEndToEnd: author.writesEndToEnd
+            ephemeralDuration: resolvedEphemeralDuration
         )
         Logger.messages.info("SendFlow insertOptimistic START tempId=\(tempId, privacy: .public) convId=\(conversationId, privacy: .public)")
         do {

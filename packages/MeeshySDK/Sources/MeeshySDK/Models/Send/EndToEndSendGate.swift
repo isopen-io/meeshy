@@ -44,6 +44,11 @@ public enum EndToEndSendRefusal: String, Error, Equatable, Sendable, CaseIterabl
     /// message) vers une conversation chiffrée : seul le fil sait le sceller
     /// (#12641). La bulle reste en échec dans le fil, d'où le renvoi se scelle.
     case sealedOnlyInConversation
+    /// Un envoi hors du fil vers une conversation chiffrée que le coffre
+    /// libsignal n'a pas pu garder (session fermée au réveil en arrière-plan,
+    /// trousseau verrouillé) : rien n'est écrit, ni ligne ni file (#13067). Le
+    /// texte n'existe plus nulle part ; il se réécrit depuis le fil.
+    case unkeptOutsideConversation
 }
 
 /// La loi PURE de l'envoi sous chiffrement de bout en bout (#11379, directives
