@@ -132,7 +132,7 @@
         "@signalapp/libsignal-client": "0.105.0",
         "@socket.io/redis-adapter": "^8.3.0",
         "@tus/file-store": "^2.1.1",
-        "@tus/server": "^2.4.5",
+        "@tus/server": "^2.4.6",
         "axios": "^1.19.0",
         "bcrypt": "^6.0.0",
         "bcryptjs": "^3.0.3",
@@ -1176,7 +1176,7 @@
 
     "@tus/file-store": ["@tus/file-store@2.1.1", "", { "dependencies": { "@tus/utils": "^0.7.1", "debug": "^4.3.4" }, "optionalDependencies": { "@redis/client": "^5.0.0" } }, "sha512-/uXV3Ibb4Upirrsj7lSrX+o08H7IKYEkPHV8TKAPPK6CYUcOMTilluOkwPrb9JZydLSYlIBQkhZZVS9sPEfDwQ=="],
 
-    "@tus/server": ["@tus/server@2.4.5", "", { "dependencies": { "@tus/utils": "^0.7.1", "debug": "^4.3.4", "lodash.throttle": "^4.1.1", "set-cookie-parser": "^2.7.1", "srvx": "~0.11.15" }, "optionalDependencies": { "@redis/client": "^5.0.0", "ioredis": "^5.4.1" } }, "sha512-DaQY5F1/JC1E+eDNY+Q5L08wgQ8NHFDNW/E6NclSx10BOHJk85BT4mSId49Ep890Utsk+6hEEuhNFb/LH+Og0w=="],
+    "@tus/server": ["@tus/server@2.4.6", "", { "dependencies": { "@tus/utils": "^0.7.1", "debug": "^4.3.4", "lodash.throttle": "^4.1.1", "set-cookie-parser": "^2.7.1", "srvx": "~0.11.15" }, "optionalDependencies": { "@redis/client": "^5.0.0", "ioredis": "^5.4.1" } }, "sha512-QdsNQzatF1r/Tls51vdLTh+Srx/hCdzNBA68bGxruC6N++k8NML+3y0XBV2t3f2KSABeXEE3uhwFOGURuuce2w=="],
 
     "@tus/utils": ["@tus/utils@0.7.1", "", {}, "sha512-KXKK6mhsRto7cApRtJFoIovd6rAXJBUd1qR6S1ynVXApdd+jT1eBHprKP0D9oZtJwwD/B8+n3DLAm68DYPqfuQ=="],
 
