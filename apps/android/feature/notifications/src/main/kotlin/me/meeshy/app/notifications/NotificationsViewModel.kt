@@ -1,17 +1,26 @@
 package me.meeshy.app.notifications
 
+import androidx.annotation.StringRes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import me.meeshy.feature.notifications.R
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.model.ApiNotification
+import me.meeshy.sdk.model.NotificationCategoryFeed
 import me.meeshy.sdk.model.NotificationFilterCategory
+import me.meeshy.sdk.model.NotificationQuickAction
+import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.notification.NotificationRepository
 import me.meeshy.sdk.notification.observeNotificationSync
 import me.meeshy.sdk.socket.MessageSocketManager
@@ -27,15 +36,32 @@ data class NotificationsUiState(
     val isLoadingMore: Boolean = false,
     val hasMore: Boolean = false,
     val errorMessage: String? = null,
+    /** La panne AVANT le vide : un chargement échoué sur une liste vide ne se lit pas « Aucune notification ». */
+    val loadDidFail: Boolean = false,
+    /** Les lignes que la passerelle a rendues pour la catégorie choisie (hors [NotificationFilterCategory.ALL]). */
+    val categoryRows: List<ApiNotification> = emptyList(),
+    val categoryHasMore: Boolean = false,
+    val isCategoryLoading: Boolean = false,
+    /** Les personnes à qui « Se connecter » est parti depuis cet écran — posé AVANT l'aller-retour. */
+    val connectRequestedIds: Set<String> = emptySet(),
+    val friendIds: Set<String> = emptySet(),
 ) {
     /**
-     * The rows the list actually renders for the selected chip — port of iOS
-     * `NotificationListViewModel.filteredNotifications`. The full [notifications] list stays the
-     * single source (the badge count, pagination and socket prepend all work off it); the chip is a
-     * pure client-side projection over it, so switching chips never refetches.
+     * Les lignes que la liste rend pour la catégorie choisie — miroir de
+     * `NotificationListViewModel.filteredNotifications` : la loi de la passerelle ([NotificationFilterCategory.accepts])
+     * rejouée sur le cache partagé, plus les lignes que le serveur a rendues pour cette catégorie.
      */
     val filteredNotifications: List<ApiNotification>
-        get() = selectedCategory.filter(notifications)
+        get() = NotificationCategoryFeed.visible(selectedCategory, notifications, categoryRows)
+
+    val canLoadMore: Boolean
+        get() = if (selectedCategory == NotificationFilterCategory.ALL) hasMore else categoryHasMore
+}
+
+/** Ce que l'écran doit faire UNE fois : un retour d'échec, ou ouvrir la conversation d'un « Écrire ». */
+sealed interface NotificationsEvent {
+    data class ActionFailed(@StringRes val message: Int) : NotificationsEvent
+    data class OpenConversation(val conversationId: String) : NotificationsEvent
 }
 
 /**
@@ -51,10 +77,14 @@ class NotificationsViewModel @Inject constructor(
     private val notificationRepository: NotificationRepository,
     private val messageSocketManager: MessageSocketManager,
     private val syncSeqTracker: SyncSeqTracker,
+    private val quickActionPerformer: NotificationQuickActionPerformer,
 ) : ViewModel() {
 
-    private val _state = MutableStateFlow(NotificationsUiState())
+    private val _state = MutableStateFlow(NotificationsUiState(friendIds = quickActionPerformer.friendIds()))
     val state: StateFlow<NotificationsUiState> = _state.asStateFlow()
+
+    private val _events = Channel<NotificationsEvent>(Channel.BUFFERED)
+    val events: Flow<NotificationsEvent> = _events.receiveAsFlow()
 
     init {
         observeNotifications()
@@ -67,18 +97,14 @@ class NotificationsViewModel @Inject constructor(
     private fun observeNotifications() {
         viewModelScope.launch {
             notificationRepository.notificationsStream(
-                onSyncError = { error -> _state.update { it.copy(isSyncing = false, errorMessage = error.message) } },
+                onSyncError = { error -> _state.update { it.failed(error.message) } },
             ).collect { result ->
                 _state.update {
                     when (result) {
-                        is CacheResult.Empty -> it.copy(isLoading = true, isSyncing = true)
-                        is CacheResult.Fresh -> it.copy(notifications = result.value, isLoading = false, isSyncing = false)
-                        is CacheResult.Stale -> it.copy(notifications = result.value, isLoading = false, isSyncing = true)
-                        is CacheResult.Syncing -> it.copy(
-                            notifications = result.value ?: it.notifications,
-                            isLoading = false,
-                            isSyncing = true,
-                        )
+                        is CacheResult.Empty -> it.copy(isLoading = true, isSyncing = true, loadDidFail = false)
+                        is CacheResult.Fresh -> it.withCache(result.value, isSyncing = false)
+                        is CacheResult.Stale -> it.withCache(result.value, isSyncing = true)
+                        is CacheResult.Syncing -> it.withCache(result.value ?: it.notifications, isSyncing = true)
                     }
                 }
             }
@@ -141,37 +167,41 @@ class NotificationsViewModel @Inject constructor(
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
-                    _state.update { it.copy(isSyncing = false, errorMessage = e.message) }
+                    _state.update { it.failed(e.message) }
                 }
             }
         }
     }
 
-    /** Forces a revalidation regardless of freshness — the pull-to-refresh entry point. */
+    /** Forces a revalidation regardless of freshness — the pull-to-refresh and « Réessayer » entry point. */
     fun load() {
+        _state.update { it.copy(loadDidFail = false, isLoading = it.notifications.isEmpty()) }
         viewModelScope.launch {
             try {
                 notificationRepository.refresh()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _state.update { it.copy(isSyncing = false, errorMessage = e.message) }
+                _state.update { it.failed(e.message) }
             }
         }
+        val category = _state.value.selectedCategory
+        if (category != NotificationFilterCategory.ALL) fetchCategory(category, append = false)
     }
 
     /**
-     * Infinite scroll: fetch the page after the currently loaded notifications. Re-entrancy
-     * guarded so a fast double-scroll never fires two overlapping fetches, and inert once the
-     * repository reports no further page — mirror of iOS `NotificationListViewModel.loadMore`.
-     * A failed page is silent (the repository leaves its cache/`hasMoreStream` untouched, so the
-     * next scroll simply retries).
+     * Infinite scroll, under EVERY chip (iOS paginates the selected category's own server list):
+     * [NotificationFilterCategory.ALL] extends the shared cache, a category extends its own page.
+     * Re-entrancy guarded so a fast double-scroll never fires two overlapping fetches; a failed
+     * page is silent and the next scroll retries.
      */
     fun loadMore() {
-        // iOS paginates only under the ALL chip; a category chip filters an already-loaded list
-        // client-side, so fetching further pages while it hides them would be wasted work.
-        if (_state.value.selectedCategory != NotificationFilterCategory.ALL) return
-        if (_state.value.isLoadingMore || !_state.value.hasMore) return
+        val current = _state.value
+        if (current.isLoadingMore || !current.canLoadMore) return
+        if (current.selectedCategory != NotificationFilterCategory.ALL) {
+            fetchCategory(current.selectedCategory, append = true)
+            return
+        }
         _state.update { it.copy(isLoadingMore = true) }
         viewModelScope.launch {
             try {
@@ -187,24 +217,139 @@ class NotificationsViewModel @Inject constructor(
     }
 
     /**
-     * Selects a filter chip — a pure, network-free state change (the list is already loaded).
-     * Re-selecting the active chip is inert. Mirror of iOS setting `selectedCategory`/`unreadOnly`.
+     * Selects a chip. The chip lights and the list redraws AT ONCE from what is already loaded
+     * (the cache projection), then the category's own server page arrives without a spinner —
+     * a category whose rows are older than the shared first page is no longer shown empty (#8958).
      */
     fun selectCategory(category: NotificationFilterCategory) {
         if (_state.value.selectedCategory == category) return
-        _state.update { it.copy(selectedCategory = category) }
+        categoryJob?.cancel()
+        _state.update {
+            it.copy(
+                selectedCategory = category,
+                categoryRows = emptyList(),
+                categoryHasMore = false,
+                isCategoryLoading = false,
+                isLoadingMore = false,
+                loadDidFail = false,
+            )
+        }
+        if (category != NotificationFilterCategory.ALL) fetchCategory(category, append = false)
+    }
+
+    private var categoryJob: Job? = null
+
+    private fun fetchCategory(category: NotificationFilterCategory, append: Boolean) {
+        categoryJob?.cancel()
+        val query = category.serverQuery
+        val offset = if (append) _state.value.categoryRows.size else 0
+        _state.update { it.copy(isCategoryLoading = !append && it.filteredNotifications.isEmpty(), isLoadingMore = append) }
+        categoryJob = viewModelScope.launch {
+            val result = try {
+                notificationRepository.list(
+                    offset = offset,
+                    limit = CATEGORY_PAGE_SIZE,
+                    unreadOnly = query.unreadOnly,
+                    types = query.types,
+                    hideReadTypes = query.hideReadTypes,
+                )
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                null
+            }
+            _state.update { current ->
+                if (current.selectedCategory != category) return@update current
+                val settled = current.copy(isCategoryLoading = false, isLoadingMore = false)
+                when (result) {
+                    is NetworkResult.Success -> {
+                        val known = if (append) settled.categoryRows else emptyList()
+                        val knownIds = known.mapTo(HashSet()) { it.id }
+                        settled.copy(
+                            categoryRows = known + result.data.filter { it.id !in knownIds },
+                            categoryHasMore = result.data.size >= CATEGORY_PAGE_SIZE,
+                            loadDidFail = false,
+                        )
+                    }
+                    else -> if (append) settled else settled.copy(loadDidFail = settled.filteredNotifications.isEmpty())
+                }
+            }
+        }
     }
 
     fun markAsRead(notificationId: String) {
-        viewModelScope.launch { notificationRepository.markAsRead(notificationId) }
+        viewModelScope.launch {
+            if (notificationRepository.markAsRead(notificationId) is NetworkResult.Failure) {
+                _events.trySend(NotificationsEvent.ActionFailed(R.string.notifications_mark_read_failed))
+            }
+        }
     }
 
     fun markAllRead() {
-        viewModelScope.launch { notificationRepository.markAllAsRead() }
+        viewModelScope.launch {
+            if (notificationRepository.markAllAsRead() is NetworkResult.Failure) {
+                _events.trySend(NotificationsEvent.ActionFailed(R.string.notifications_mark_all_read_failed))
+            }
+        }
     }
 
     /** Swipe-to-delete — port of iOS `NotificationListViewModel.deleteNotification`. */
     fun deleteNotification(notificationId: String) {
-        viewModelScope.launch { notificationRepository.delete(notificationId) }
+        _state.update { it.copy(categoryRows = it.categoryRows.filterNot { row -> row.id == notificationId }) }
+        viewModelScope.launch {
+            if (notificationRepository.delete(notificationId) is NetworkResult.Failure) {
+                _events.trySend(NotificationsEvent.ActionFailed(R.string.notifications_delete_failed))
+            }
+        }
+    }
+
+    /**
+     * Un geste de rangée. « Écrire » ouvre ailleurs ; « Se connecter » s'affiche envoyé TOUT DE
+     * SUITE et se défait s'il échoue (miroir de `runQuickAction`, iOS). La notification est lue
+     * dans les deux cas : on y a répondu.
+     */
+    fun performQuickAction(notification: ApiNotification, action: NotificationQuickAction) {
+        markAsRead(notification.id)
+        if (action is NotificationQuickAction.Connect) {
+            _state.update { it.copy(connectRequestedIds = it.connectRequestedIds + action.userId) }
+        }
+        viewModelScope.launch {
+            when (val outcome = quickActionPerformer.perform(action)) {
+                is QuickActionOutcome.OpenConversation -> _events.trySend(NotificationsEvent.OpenConversation(outcome.conversationId))
+                is QuickActionOutcome.Connected -> Unit
+                is QuickActionOutcome.Failed -> {
+                    if (action is NotificationQuickAction.Connect) {
+                        _state.update { it.copy(connectRequestedIds = it.connectRequestedIds - action.userId) }
+                    }
+                    _events.trySend(NotificationsEvent.ActionFailed(failureMessage(action)))
+                }
+            }
+        }
+    }
+
+    @StringRes
+    private fun failureMessage(action: NotificationQuickAction): Int = when (action) {
+        is NotificationQuickAction.Connect -> R.string.notifications_quick_connect_failed
+        is NotificationQuickAction.Write -> R.string.notifications_quick_write_failed
+    }
+
+    private companion object {
+        const val CATEGORY_PAGE_SIZE = 30
     }
 }
+
+private fun NotificationsUiState.failed(message: String?): NotificationsUiState =
+    copy(isSyncing = false, isLoading = false, errorMessage = message, loadDidFail = notifications.isEmpty())
+
+/**
+ * Le cache a changé : la liste servie d'une catégorie perd les lignes qui en sont parties
+ * (suppression ailleurs, socket) — elle ne les ressuscite pas.
+ */
+private fun NotificationsUiState.withCache(value: List<ApiNotification>, isSyncing: Boolean): NotificationsUiState =
+    copy(
+        notifications = value,
+        isLoading = false,
+        isSyncing = isSyncing,
+        loadDidFail = false,
+        categoryRows = NotificationCategoryFeed.withoutRemoved(categoryRows, notifications, value),
+    )
