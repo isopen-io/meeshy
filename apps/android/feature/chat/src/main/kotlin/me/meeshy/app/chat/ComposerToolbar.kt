@@ -1,5 +1,10 @@
 package me.meeshy.app.chat
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -18,6 +23,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -27,13 +34,16 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import me.meeshy.feature.chat.R
@@ -43,7 +53,9 @@ import me.meeshy.sdk.model.MessageEffects
 import me.meeshy.sdk.model.MessageEffectsEditor
 import me.meeshy.sdk.model.composer.ComposerIconTint
 import me.meeshy.sdk.model.composer.ComposerProtection
+import me.meeshy.sdk.model.composer.ComposerToolbarDoors
 import me.meeshy.sdk.model.composer.ComposerToolbarLaw
+import me.meeshy.sdk.model.composer.ComposerTrailingDoor
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyGradients
 import me.meeshy.ui.theme.MeeshyMessageStateColors
@@ -86,7 +98,7 @@ internal fun Modifier.composerInnerGlass(shape: Shape, tint: Color? = null): Mod
 /**
  * La barre d'outils du haut de la plaque (iOS `ComposerToolbarStrip`) : à gauche les bascules
  * qui défilent (éphémère, flou, vue unique, effets), puis la pastille de langue épinglée, puis
- * à droite les portes photothèque et caméra qui ne défilent jamais.
+ * à droite les portes photothèque et caméra puis le chevron de repli ⌄, qui ne défilent jamais.
  */
 @Composable
 internal fun ComposerToolbar(
@@ -100,6 +112,7 @@ internal fun ComposerToolbar(
     onLibrary: (() -> Unit)?,
     onCamera: (() -> Unit)?,
     accentColor: Color,
+    onFold: (() -> Unit)? = null,
 ) {
     val iconTint = composerIconTint(effects.flags)
     val flags = effects.flags
@@ -184,11 +197,64 @@ internal fun ComposerToolbar(
             accentColor = accentColor,
             onPick = onPickLanguage,
         )
-        if (onLibrary != null) {
-            ComposerGlassDoor(MeeshyIcons.PhotoLibrary, stringResource(R.string.composer_attach_photo), iconTint, onLibrary)
+        val doors = ComposerToolbarDoors.trailing(
+            offersLibrary = onLibrary != null,
+            offersCamera = onCamera != null,
+            offersFold = onFold != null,
+        )
+        doors.forEach { door ->
+            when (door) {
+                ComposerTrailingDoor.LIBRARY -> onLibrary?.let {
+                    ComposerGlassDoor(MeeshyIcons.PhotoLibrary, stringResource(R.string.composer_attach_photo), iconTint, it)
+                }
+                ComposerTrailingDoor.CAMERA -> onCamera?.let {
+                    ComposerGlassDoor(MeeshyIcons.Camera, stringResource(R.string.composer_attach_camera), iconTint, it)
+                }
+                ComposerTrailingDoor.FOLD -> Unit
+            }
         }
-        if (onCamera != null) {
-            ComposerGlassDoor(MeeshyIcons.Camera, stringResource(R.string.composer_attach_camera), iconTint, onCamera)
+        // Le ⌄ ferme la rangée, tout à l'angle droit (iOS `foldButton`, #8642) : il apparaît et
+        // s'efface (clavier levé, prise vocale) en fondu + échelle 0,8 ancrée en haut à droite.
+        AnimatedVisibility(
+            visible = ComposerTrailingDoor.FOLD in doors,
+            enter = fadeIn() + scaleIn(initialScale = 0.8f, transformOrigin = TransformOrigin(1f, 0f)),
+            exit = fadeOut() + scaleOut(targetScale = 0.8f, transformOrigin = TransformOrigin(1f, 0f)),
+        ) {
+            val fold = remember { mutableStateOf(onFold) }
+            if (onFold != null) fold.value = onFold
+            ComposerFoldDoor(tint = iconTint, onClick = { fold.value?.invoke() })
+        }
+    }
+}
+
+/**
+ * Le chevron de repli : glyphe gras dans un cercle de verre de 30, cible de 44 dont le débord
+ * vertical (-7) ne grossit pas la rangée (iOS `foldButton`).
+ */
+@Composable
+private fun ComposerFoldDoor(tint: Color, onClick: () -> Unit) {
+    val label = stringResource(R.string.composer_fold)
+    Box(
+        modifier = Modifier
+            .layout { measurable, constraints ->
+                val placeable = measurable.measure(constraints.copy(minHeight = 0, maxHeight = Constraints.Infinity))
+                val trim = 7.dp.roundToPx()
+                val height = (placeable.height - 2 * trim).coerceAtLeast(0)
+                layout(placeable.width, height) { placeable.place(0, -trim) }
+            }
+            .size(44.dp)
+            .clip(CircleShape)
+            .clickable(role = Role.Button, onClick = onClick)
+            .semantics { contentDescription = label },
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(30.dp)
+                .composerInnerGlass(CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(imageVector = MeeshyIcons.ChevronDown, contentDescription = null, tint = tint, modifier = Modifier.size(20.dp))
         }
     }
 }

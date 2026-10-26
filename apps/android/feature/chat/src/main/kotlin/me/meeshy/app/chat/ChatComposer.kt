@@ -12,6 +12,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -20,7 +21,10 @@ import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshyTheme
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
@@ -35,6 +39,7 @@ import me.meeshy.sdk.model.MessageEffectFlags
 import me.meeshy.sdk.model.MessageEffects
 import me.meeshy.sdk.model.composer.ComposerToolbarLaw
 import me.meeshy.sdk.model.composer.ComposerMinimizeOutcome
+import me.meeshy.sdk.model.composer.ConversationComposerFold
 import me.meeshy.ui.component.recording.VoiceRecordingPill
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.theme.MeeshyPalette
@@ -45,7 +50,8 @@ import me.meeshy.ui.theme.MeeshySpacing
  * qui porte bandeaux, plateau, rails et rangée de saisie, et d'un état minimisé en bouton flottant.
  * L'hôte (le chat, ou une autre surface) la pilote par ses rappels : [hostCallbacks] (interaction,
  * contenu présent), [focusTrigger] (focus à la demande), [emojiInjection] et [externalAttachments]
- * (injections externes), [foldSlot] (chevron de repli). Le texte externe (édition, brouillon) passe
+ * (injections externes), [foldSlot] (chevron de repli en surimpression), [foldable] (le ⌄ de la
+ * conversation tout à droite de la rangée d'outils, iOS #9955). Le texte externe (édition, brouillon) passe
  * par [draft] + [draftRevision].
  */
 @Composable
@@ -82,6 +88,7 @@ internal fun ChatComposer(
     externalAttachments: ComposerExternalAttachments? = null,
     foldSlot: (@Composable () -> Unit)? = null,
     canMinimize: Boolean = false,
+    foldable: Boolean = false,
     effects: MessageEffects = MessageEffects(),
     onToggleEffect: (Long) -> Unit = {},
     onSelectEphemeralDuration: (EphemeralDuration) -> Unit = {},
@@ -105,6 +112,17 @@ internal fun ChatComposer(
     }
     val voice = rememberComposerVoice(onStageVoiceFile, onPickFile)
     var minimized by rememberSaveable { mutableStateOf(false) }
+    var fieldFocused by remember { mutableStateOf(false) }
+    val isComposing = ConversationComposerFold.isComposing(isFocused = fieldFocused, isRecording = voice.isRecording)
+    // Clavier baissé (retour système) = le champ rend la main, comme `resignFirstResponder` sur
+    // iOS : sans cela le champ resterait focalisé et le ⌄ ne reviendrait jamais.
+    val density = LocalDensity.current
+    val imeVisible = WindowInsets.ime.getBottom(density) > 0
+    var imeWasVisible by remember { mutableStateOf(false) }
+    LaunchedEffect(imeVisible) {
+        if (imeWasVisible && !imeVisible && fieldFocused) focusManager.clearFocus()
+        imeWasVisible = imeVisible
+    }
     var attachmentTrayOpen by remember { mutableStateOf(false) }
     var ephemeralRailOpen by remember { mutableStateOf(false) }
     var effectsPanelOpen by remember { mutableStateOf(false) }
@@ -141,8 +159,14 @@ internal fun ChatComposer(
     LaunchedEffect(hasContent) { hostCallbacks.onHasContentChange(hasContent) }
     LaunchedEffect(focusTrigger) {
         if (focusTrigger > 0) {
+            // Une saisie demandée (réponse, édition) rouvre une barre repliée (iOS `reopens`) ; le
+            // champ ne revient qu'à la frame suivante, d'où l'attente avant de lui donner le focus.
+            val wasFolded = minimized
             minimized = false
-            runCatching { focusRequester.requestFocus() }
+            repeat(if (wasFolded) FOCUS_RETRY_FRAMES else 1) {
+                if (runCatching { focusRequester.requestFocus() }.isSuccess) return@LaunchedEffect
+                withFrameNanos { }
+            }
         }
     }
     LaunchedEffect(emojiInjection?.nonce) { emojiInjection?.let { insertEmoji(it.emoji) } }
@@ -211,6 +235,20 @@ internal fun ChatComposer(
     }
     val showMic = !isEditing && draft.isBlank() && clipboardContent == null && !hasPendingAttachments && affordances.canSendAudios
     val interact = hostCallbacks.onAnyInteraction
+    // Le ⌄ (iOS `CommentComposerFoldModifier.fold`) : ferme le clavier et ce qui est ouvert dans le
+    // verre, haptique légère, puis replie. Brouillon, réponse et pièces jointes vivent au-dessus.
+    val fold: () -> Unit = {
+        interact()
+        focusManager.clearFocus()
+        haptics.light()
+        attachmentTrayOpen = false
+        ephemeralRailOpen = false
+        effectsPanelOpen = false
+        cameraChooserOpen = false
+        emojiPickerOpen = false
+        fieldFocused = false
+        minimized = true
+    }
 
     ComposerShellLayout(
         minimized = minimized,
@@ -230,16 +268,12 @@ internal fun ChatComposer(
             }
         },
         minimizedContent = {
-            ComposerMinimizedButton(
-                showMic = showMic,
-                accentColor = accentColor,
-                secondaryColor = secondaryColor,
+            ComposerUnfoldButton(
                 onTap = {
                     interact()
+                    haptics.light()
                     minimized = false
-                    if (showMic) voice.request()
                 },
-                modifier = Modifier.padding(horizontal = MeeshySpacing.md),
             )
         },
         expandedContent = {
@@ -334,6 +368,7 @@ internal fun ChatComposer(
                             null
                         },
                         accentColor = accentColor,
+                        onFold = if (foldable && ConversationComposerFold.offersFoldButton(minimized, isComposing)) fold else null,
                     )
                 }
                 when {
@@ -388,6 +423,7 @@ internal fun ChatComposer(
                             },
                             focusRequester = focusRequester,
                             onFocusChange = { focused ->
+                                fieldFocused = focused
                                 if (focused) {
                                     interact()
                                     attachmentTrayOpen = false
@@ -467,3 +503,6 @@ internal fun ChatComposer(
 
 /** Au-delà, une prise vocale qui n'a pas rejoint le plateau n'est plus envoyée d'office. */
 private const val VOICE_SEND_TIMEOUT_MS = 15_000L
+
+/** Les frames laissées au champ pour revenir d'une barre repliée avant de lui donner le focus. */
+private const val FOCUS_RETRY_FRAMES = 6

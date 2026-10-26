@@ -67,6 +67,7 @@ internal fun ChatBottomBarHost(host: ChatHostContext) {
                 }
             },
             canMinimize = false,
+            foldable = true,
             pendingAttachmentCount = pending.items.size,
             clipboardContent = state.clipboardContent,
             languageCode = state.composerLanguageCode,
