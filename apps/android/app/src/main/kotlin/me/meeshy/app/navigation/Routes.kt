@@ -94,6 +94,7 @@ object Routes {
     const val TWO_FACTOR = "settings/two-factor"
     const val ACCOUNT_CONTACT = "settings/account-contact"
     const val SECURITY = "settings/security"
+    const val NOTIFICATION_SETTINGS = "settings/notifications"
     const val MEDIA_DOWNLOAD = "settings/media-download"
     const val MEDIA_CACHE = "settings/media-cache"
     const val PRIVACY = "settings/privacy"

@@ -35,7 +35,6 @@
     <string name="settings_account_contact">E-mail e telefone</string>
     <string name="settings_clear_media_cache">Limpar cache de mídia</string>
     <string name="settings_storage_used">Armazenamento usado</string>
-    <string name="settings_version">Versão 1.0.0</string>
     <!-- Two-factor authentication (§L) -->
     <string name="twofactor_status_enabled">Ativada</string>
     <string name="twofactor_enable_button">Configurar a autenticação de dois fatores</string>
