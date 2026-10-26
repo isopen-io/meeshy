@@ -67,9 +67,14 @@ nonisolated final class MockEndToEndMessaging: EndToEndMessagingProviding, @unch
     var rememberAccepted = true
     private(set) var readAccounts: [String] = []
 
+    /// Ce qui arrive PENDANT le rangement du clair : la trace qui scellait
+    /// quitte le fil, un rechargement de fenêtre (#13181).
+    var onRemember: (@MainActor @Sendable () async -> Void)?
+
     @discardableResult
     func remember(_ content: E2EEContent, from senderUserId: String, as messageIds: [String]) async -> Bool {
-        lock.withLock {
+        if let hook = lock.withLock({ onRemember }) { await hook() }
+        return lock.withLock {
             guard rememberAccepted, serves(senderUserId) else { return false }
             messageIds.forEach { stored[$0] = .readable(content, senderUserId: senderUserId) }
             return true
