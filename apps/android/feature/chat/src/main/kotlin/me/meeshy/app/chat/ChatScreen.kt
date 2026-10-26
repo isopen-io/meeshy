@@ -6,7 +6,8 @@ import android.net.Uri
 import android.provider.OpenableColumns
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.Alignment
+import me.meeshy.ui.theme.MeeshySpacing
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -86,18 +87,27 @@ fun ChatScreen(
         // sa hauteur mesurée décale le haut du fil (`bandHeight`), et les bulles passent dessous.
         var headerHeightPx by remember { mutableIntStateOf(0) }
         val headerHeight = with(LocalDensity.current) { headerHeightPx.toDp() }
-        Scaffold(
-            containerColor = Color.Transparent,
-            bottomBar = { ChatBottomBarHost(host) },
-        ) { padding ->
+        // La barre de composition FLOTTE aussi (iOS : `ConversationComposerDock` superposé au fil) :
+        // sa hauteur mesurée, clavier compris, devient la réserve basse du fil, et les bulles
+        // défilent sous le verre.
+        var composerHeightPx by remember { mutableIntStateOf(0) }
+        val composerHeight = with(LocalDensity.current) { composerHeightPx.toDp() }
+        Scaffold(containerColor = Color.Transparent) { _ ->
             Box(Modifier.fillMaxSize()) {
                 ChatListHost(
                     host,
-                    Modifier.padding(bottom = padding.calculateBottomPadding()),
                     topInset = headerHeight,
+                    bottomInset = composerHeight + MeeshySpacing.sm,
                 )
                 Box(Modifier.onSizeChanged { headerHeightPx = it.height }) {
                     ChatHeaderHost(host)
+                }
+                Box(
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .onSizeChanged { composerHeightPx = it.height },
+                ) {
+                    ChatBottomBarHost(host)
                 }
             }
         }

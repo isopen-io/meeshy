@@ -35,6 +35,8 @@ internal fun ChatMessageList(
     modifier: Modifier = Modifier,
     /** La hauteur de l'en-tête flottant posé au-dessus du fil : les bulles passent dessous. */
     topInset: Dp = 0.dp,
+    /** La réserve basse sous laquelle flotte la barre de composition : les bulles passent dessous. */
+    bottomInset: Dp = 0.dp,
     itemContent: @Composable (ChatListItem) -> Unit,
 ) {
     Box(modifier = modifier) {
@@ -42,7 +44,7 @@ internal fun ChatMessageList(
             state = listState,
             reverseLayout = true,
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(top = MeeshySpacing.sm + topInset, bottom = MeeshySpacing.sm),
+            contentPadding = PaddingValues(top = MeeshySpacing.sm + topInset, bottom = MeeshySpacing.sm + bottomInset),
         ) {
             // Under `reverseLayout`, the HIGHEST Compose item index renders
             // at the visual TOP — so the "loading older history" spinner
@@ -73,7 +75,7 @@ internal fun ChatMessageList(
             onClick = onScrollToBottom,
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(MeeshySpacing.lg),
+                .padding(start = MeeshySpacing.lg, top = MeeshySpacing.lg, end = MeeshySpacing.lg, bottom = MeeshySpacing.lg + bottomInset),
         )
     }
 }

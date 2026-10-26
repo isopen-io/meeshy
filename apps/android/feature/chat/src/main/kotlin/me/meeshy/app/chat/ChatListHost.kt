@@ -1,6 +1,7 @@
 package me.meeshy.app.chat
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.Alignment
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -36,7 +37,12 @@ import me.meeshy.ui.theme.MeeshySpacing
  * and the skeleton / notice states. [modifier] carries the Scaffold content padding.
  */
 @Composable
-internal fun ChatListHost(host: ChatHostContext, modifier: Modifier = Modifier, topInset: Dp = 0.dp) {
+internal fun ChatListHost(
+    host: ChatHostContext,
+    modifier: Modifier = Modifier,
+    topInset: Dp = 0.dp,
+    bottomInset: Dp = 0.dp,
+) {
     val state = host.state
     val actions = host.actions
     val accentColor = host.accentColor
@@ -203,17 +209,19 @@ internal fun ChatListHost(host: ChatHostContext, modifier: Modifier = Modifier, 
 
     Box(modifier = modifier.fillMaxSize()) {
         when {
-            state.showSkeleton -> Box(Modifier.padding(top = topInset)) { ChatSkeleton() }
+            state.showSkeleton -> Box(Modifier.padding(top = topInset, bottom = bottomInset)) { ChatSkeleton() }
 
-            state.messages.isEmpty() && state.errorMessage != null -> Box(Modifier.padding(top = topInset)) {
+            state.messages.isEmpty() && state.errorMessage != null -> Box(Modifier.padding(top = topInset, bottom = bottomInset)) {
                 ChatNotice(state.errorMessage!!, onRetry = actions.refresh)
             }
 
-            state.messages.isEmpty() -> Box(Modifier.padding(top = topInset)) {
+            state.messages.isEmpty() -> Box(Modifier.padding(top = topInset, bottom = bottomInset)) {
                 ChatNotice(stringResource(R.string.chat_no_messages), onRetry = null)
             }
 
-            else -> Column(modifier = Modifier.fillMaxSize()) {
+            else -> Box(Modifier.fillMaxSize()) {
+            val typingReserve = if (state.typingParticipants.isEmpty()) 0.dp else TYPING_RESERVE
+            Column(modifier = Modifier.fillMaxSize()) {
                 // Les bandeaux (épinglé, positions en direct) se posent sous l'en-tête
                 // flottant ; sans bandeau, le fil remonte sous l'en-tête comme sur iOS.
                 val hasBanners = state.pinnedBanner != null || state.liveLocationBadges.isNotEmpty()
@@ -261,6 +269,7 @@ internal fun ChatListHost(host: ChatHostContext, modifier: Modifier = Modifier, 
                     },
                     modifier = Modifier.weight(1f),
                     topInset = if (hasBanners) 0.dp else topInset,
+                    bottomInset = bottomInset + typingReserve,
                 ) { item ->
                     ChatListRow(
                         item = item,
@@ -276,8 +285,15 @@ internal fun ChatListHost(host: ChatHostContext, modifier: Modifier = Modifier, 
                         canWrite = state.viewerMayWrite,
                     )
                 }
+            }
+            // La frappe se pose juste au-dessus de la barre flottante, dans la réserve du fil.
+            Box(Modifier.align(Alignment.BottomStart).padding(bottom = bottomInset)) {
                 TypingIndicator(participants = state.typingParticipants)
+            }
             }
         }
     }
 }
+
+/** La place réservée au bas du fil pour l'indicateur de frappe qui flotte au-dessus de la barre. */
+private val TYPING_RESERVE = 28.dp
