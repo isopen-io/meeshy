@@ -721,8 +721,11 @@ final class BubbleQuotedReplyZoneLawTests: XCTestCase {
             "Meeshy/Features/Main/Views/Bubble/QuotedMediaOpening.swift",
             "static func attachment(for reference: ReplyReference", floor: 400
         )
+        // #13109 — la protection d'une pièce se lit par son champ OU ses seuls
+        // `effectFlags` : `declaresViewOnce` / `declaresBlur`, jamais les deux
+        // champs nus, qui servaient en clair une pièce marquée par ses drapeaux.
         XCTAssertTrue(
-            rule.contains("attachment.isViewOnce || attachment.isBlurred") && rule.contains("!reference.quotedMediaIsProtected"),
+            rule.contains("attachment.declaresViewOnce || attachment.declaresBlur") && rule.contains("!reference.quotedMediaIsProtected"),
             "un média cité à VUE UNIQUE ou FLOUTÉ ne doit pas s'ouvrir depuis la citation : le tap retombe sur " +
             "le saut à l'original, où le média garde son propre geste de révélation. Miroir de " +
             "`BubbleGridCell.handleTap` (`guard !attachmentIsProtected || isRevealed`)."

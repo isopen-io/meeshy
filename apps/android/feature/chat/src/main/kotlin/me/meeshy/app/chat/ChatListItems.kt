@@ -17,8 +17,12 @@ sealed class ChatListItem {
         override val key: String get() = "day-$dayMillis"
     }
 
-    /** The "new messages" boundary, drawn directly above the first unread message. */
-    data object UnreadSeparator : ChatListItem() {
+    /**
+     * The "new messages" boundary, drawn directly above the first unread message. [count] is the
+     * number of messages received from that boundary on — iOS reads « N messages non lus »
+     * (`UnreadCountLabel.messages`); 0 falls back to the plain label.
+     */
+    data class UnreadSeparator(val count: Int = 0) : ChatListItem() {
         override val key: String get() = "unread-separator"
     }
 
@@ -57,6 +61,8 @@ fun buildChatListItems(
         items += ChatListItem.EncryptionNotice
     }
     var currentDay: LocalDate? = null
+    val unreadIndex = firstUnreadId?.let { id -> bubbles.indexOfFirst { it.messageId == id } } ?: -1
+    val unreadCount = if (unreadIndex < 0) 0 else bubbles.subList(unreadIndex, bubbles.size).count { !it.isOutgoing }
     bubbles.forEach { bubble ->
         val millis = isoToEpochMillis(bubble.createdAtIso)
         if (millis > 0L) {
@@ -67,7 +73,7 @@ fun buildChatListItems(
             }
         }
         if (firstUnreadId != null && bubble.messageId == firstUnreadId) {
-            items += ChatListItem.UnreadSeparator
+            items += ChatListItem.UnreadSeparator(unreadCount)
         }
         items += ChatListItem.Message(bubble)
     }

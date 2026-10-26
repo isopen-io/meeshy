@@ -27,6 +27,8 @@ public fun MessageBubble(
     content: BubbleContent,
     modifier: Modifier = Modifier,
     outgoingColor: Color = MeeshyPalette.Indigo500,
+    /** L'accent de la conversation (réactions) — distinct du fond de la bulle envoyée. */
+    accentColor: Color = MeeshyPalette.Indigo500,
     callbacks: BubbleCallbacks = BubbleCallbacks.None,
     audioPlayback: BubbleAudioPlayback? = null,
     mentionDisplayNames: Map<String, String>? = null,
@@ -43,6 +45,11 @@ public fun MessageBubble(
      * semantics untouched.
      */
     accessibilityLabel: String? = null,
+    /**
+     * Contenu posé DANS la bulle sous le texte, comme l'aperçu de lien d'iOS (`BubbleLinkEmbed`) ;
+     * il reçoit la couleur d'encre de la bulle. Null : rien.
+     */
+    bodyAccessory: (@Composable (onColor: Color) -> Unit)? = null,
 ) {
     // Combine the server deletion flag, the view-once consume count and the ephemeral
     // self-destruct countdown. A deleted message keeps its "Message deleted" tombstone
@@ -79,6 +86,8 @@ public fun MessageBubble(
                     effects = effects,
                     hasPlayedAppearance = hasPlayedAppearance,
                     accessibilityLabel = accessibilityLabel,
+                    accentColor = accentColor,
+                    bodyAccessory = bodyAccessory,
                     decor = BubbleTextDecor(
                         mentionDisplayNames = mentionDisplayNames,
                         highlightTerm = highlightTerm,
