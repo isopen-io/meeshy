@@ -276,7 +276,13 @@ data class StoryViewerUiState(
     val isMuted: Boolean = false,
     /** Avatar de l'auteur du groupe courant, résolu ; `null` ⇒ initiales. */
     val authorAvatarUrl: String? = null,
+    /** Nombre d'auteurs dans la session : le geste horizontal sait s'il a un voisin à ouvrir. */
+    val groupCount: Int = 1,
+    /** Identifiant de l'auteur du groupe courant : cible du tap sur son identité (profil). */
+    val authorUserId: String? = null,
 ) {
+    val hasNextGroup: Boolean get() = groupIndex < groupCount - 1
+    val hasPreviousGroup: Boolean get() = groupIndex > 0
     val current: StorySlideView? get() = slides.getOrNull(index)
     val hasNext: Boolean get() = index < slides.lastIndex
     val hasPrevious: Boolean get() = index > 0

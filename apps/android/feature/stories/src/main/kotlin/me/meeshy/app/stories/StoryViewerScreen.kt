@@ -4,6 +4,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -57,6 +58,7 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -66,6 +68,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
@@ -95,7 +98,9 @@ import coil.compose.AsyncImage
 import coil.imageLoader
 import coil.request.ImageRequest
 import kotlin.math.roundToInt
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import me.meeshy.feature.stories.R
 import me.meeshy.sdk.model.EmojiCatalog
 import me.meeshy.sdk.model.StorySlideDuration
@@ -126,6 +131,7 @@ private val SWIPE_VERTICAL_THRESHOLD = 120.dp
 fun StoryViewerScreen(
     onClose: () -> Unit,
     onRepost: (String) -> Unit = {},
+    onOpenProfile: (String) -> Unit = {},
     viewModel: StoryViewerViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -167,6 +173,11 @@ fun StoryViewerScreen(
     var flightSerial by remember { mutableIntStateOf(0) }
     var heartBouncePulse by remember { mutableIntStateOf(0) }
     var boxOriginInRoot by remember { mutableStateOf(Offset.Zero) }
+    val scope = rememberCoroutineScope()
+    // Le doigt déplace la carte en phase de DESSIN (graphicsLayer) : aucune recomposition
+    // pendant le geste, et la valeur anime la sortie / l'entrée du cube comme un ressort.
+    val dragX = remember { Animatable(0f) }
+    val dragY = remember { Animatable(0f) }
     val railOverlayActive = reactionBarVisible || languageBarVisible || scrubKind != null
     val cover = StoryViewerCover(
         sheet = showViewers || showComments || showSendTo,
@@ -369,8 +380,7 @@ fun StoryViewerScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(hexColor(accent))
-            .onGloballyPositioned { boxOriginInRoot = it.positionInRoot() }
+            .background(Color.Black)
             .pointerInput(state.groupIndex, state.index, state.slides.size) {
                 // Appui long ≥ 200 ms = pause qui tient au relâchement ; le tap suivant
                 // reprend sans naviguer (iOS `StoryGestureOverlayView`).
@@ -386,31 +396,85 @@ fun StoryViewerScreen(
                     }
                 }
             }
-            .pointerInput(state.groupIndex, state.index, state.slides.size) {
+            .pointerInput(state.groupIndex, state.index, state.slides.size, state.hasNextGroup, state.hasPreviousGroup) {
                 val horizontalThreshold = SWIPE_HORIZONTAL_THRESHOLD.toPx()
                 val verticalThreshold = SWIPE_VERTICAL_THRESHOLD.toPx()
-                var dragX = 0f
-                var dragY = 0f
+                var rawX = 0f
+                var rawY = 0f
                 detectDragGestures(
-                    onDragStart = { dragX = 0f; dragY = 0f },
+                    onDragStart = { rawX = 0f; rawY = 0f },
                     onDragEnd = {
-                        if (overlayActiveState.value) return@detectDragGestures
-                        viewModel.onSwipe(
+                        val action = if (overlayActiveState.value) {
+                            StorySwipeAction.None
+                        } else {
                             StorySwipeResolver.resolve(
-                                dragX = dragX,
-                                dragY = dragY,
+                                dragX = rawX,
+                                dragY = rawY,
                                 horizontalThreshold = horizontalThreshold,
                                 verticalThreshold = verticalThreshold,
-                            ),
-                        )
+                            )
+                        }
+                        val width = size.width.toFloat()
+                        val height = size.height.toFloat()
+                        scope.launch {
+                            when {
+                                action == StorySwipeAction.Dismiss -> {
+                                    dragY.animateTo(height, tween(160, easing = FastOutSlowInEasing))
+                                    viewModel.onSwipe(action)
+                                }
+                                action == StorySwipeAction.NextGroup && state.hasNextGroup ->
+                                    changeAuthor(action, exit = -width, dragX, viewModel, haptics)
+                                action == StorySwipeAction.PreviousGroup && state.hasPreviousGroup ->
+                                    changeAuthor(action, exit = width, dragX, viewModel, haptics)
+                                else -> {
+                                    launch { dragY.animateTo(0f, spring(dampingRatio = 0.75f, stiffness = 380f)) }
+                                    dragX.animateTo(0f, spring(dampingRatio = 0.75f, stiffness = 380f))
+                                }
+                            }
+                        }
+                    },
+                    onDragCancel = {
+                        scope.launch {
+                            launch { dragY.animateTo(0f, spring(dampingRatio = 0.75f, stiffness = 380f)) }
+                            dragX.animateTo(0f, spring(dampingRatio = 0.75f, stiffness = 380f))
+                        }
                     },
                     onDrag = { change, drag ->
                         change.consume()
-                        dragX += drag.x
-                        dragY += drag.y
+                        rawX += drag.x
+                        rawY += drag.y
+                        if (overlayActiveState.value) return@detectDragGestures
+                        val horizontal = StoryCubeTransform.isHorizontal(rawX, rawY)
+                        val nextX = if (horizontal) {
+                            StoryCubeTransform.resisted(rawX, state.hasNextGroup, state.hasPreviousGroup)
+                        } else {
+                            0f
+                        }
+                        val nextY = if (horizontal) 0f else rawY.coerceAtLeast(0f)
+                        scope.launch(start = CoroutineStart.UNDISPATCHED) {
+                            dragX.snapTo(nextX)
+                            dragY.snapTo(nextY)
+                        }
                     },
                 )
             },
+    ) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .graphicsLayer {
+                val fraction = StoryCubeTransform.fraction(dragX.value, size.width)
+                rotationY = StoryCubeTransform.rotationYDegrees(fraction)
+                transformOrigin = TransformOrigin(StoryCubeTransform.pivotFractionX(fraction), 0.5f)
+                cameraDistance = 14f * this.density
+                val scale = StoryCubeTransform.dismissScale(dragY.value, size.height)
+                scaleX = scale
+                scaleY = scale
+                translationY = dragY.value
+                alpha = StoryCubeTransform.dismissAlpha(dragY.value, size.height)
+            }
+            .background(hexColor(accent))
+            .onGloballyPositioned { boxOriginInRoot = it.positionInRoot() },
     ) {
         when {
             slide?.backgroundVideoUrl != null -> {
@@ -480,54 +544,13 @@ fun StoryViewerScreen(
             }
         }
 
-        val playheadSeconds = progress.value * slideDurationMs / 1000f
-
-        slide?.foregroundMedia?.forEach { foreground ->
-            if (foreground.isVisible(playheadSeconds)) {
-                key(foreground.url) {
-                    StoryForegroundLayer(
-                        media = foreground,
-                        playheadSeconds = playheadSeconds,
-                        playing = playing,
-                        muted = state.isMuted,
-                    )
-                }
-            }
-        }
-
-        slide?.textObjects?.forEach { textObject ->
-            if (textObject.isVisible(playheadSeconds)) {
-                key(textObject.id) {
-                    StoryTextObjectLayer(
-                        textObject = textObject,
-                        playheadSeconds = playheadSeconds,
-                    )
-                }
-            }
-        }
-
-        slide?.stickers?.forEach { sticker ->
-            if (sticker.isVisible(playheadSeconds)) {
-                key(sticker.id) { StoryStickerLayer(sticker = sticker, playheadSeconds = playheadSeconds) }
-            }
-        }
-        slide?.audioChips?.forEach { chip ->
-            if (chip.isVisible(playheadSeconds)) {
-                key(chip.id) { StoryAudioChipLayer(chip = chip) }
-            }
-        }
-
-        // The author's freehand drawing, read-only — a stroke-only slide is publishable
-        // (StorySlideDeck.publishableSlides) but carries no other overlay, so without this
-        // the reader (and the author, re-viewing their own story) would see a bare background.
-        if (slide != null && slide.strokes.isNotEmpty()) {
-            StoryDrawingLayer(
-                strokes = slide.strokes,
-                isCapturing = false,
-                activeColorHex = "#FFFFFF",
-                activeWidthDesign = 0.0,
-                onStrokeCaptured = {},
-                modifier = Modifier.fillMaxSize(),
+        if (slide != null) {
+            StorySceneOverlays(
+                slide = slide,
+                progress = progress,
+                slideDurationMs = slideDurationMs,
+                playing = playing,
+                muted = state.isMuted,
             )
         }
 
@@ -577,7 +600,7 @@ fun StoryViewerScreen(
             SegmentedProgress(
                 count = state.slides.size,
                 index = state.index,
-                currentProgress = progress.value,
+                currentProgress = { progress.value },
             )
             Row(
                 modifier = Modifier
@@ -586,6 +609,12 @@ fun StoryViewerScreen(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 StoryAuthorIdentity(
+                    onClick = state.authorUserId?.let { userId ->
+                        {
+                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            onOpenProfile(userId)
+                        }
+                    },
                     name = state.authorName,
                     avatarUrl = state.authorAvatarUrl,
                     accentHex = accent,
@@ -775,6 +804,7 @@ fun StoryViewerScreen(
             )
         }
     }
+    }
 
     if (showFullEmojiPicker) {
         androidx.compose.ui.window.Dialog(
@@ -830,17 +860,12 @@ fun StoryViewerScreen(
 }
 
 @Composable
-private fun SegmentedProgress(count: Int, index: Int, currentProgress: Float) {
+private fun SegmentedProgress(count: Int, index: Int, currentProgress: () -> Float) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         repeat(count) { i ->
-            val fill = when {
-                i < index -> 1f
-                i == index -> currentProgress
-                else -> 0f
-            }
             Box(
                 modifier = Modifier
                     .weight(1f)
@@ -848,10 +873,18 @@ private fun SegmentedProgress(count: Int, index: Int, currentProgress: Float) {
                     .clip(CircleShape)
                     .background(MeeshyPalette.White.copy(alpha = 0.3f)),
             ) {
+                // Lue en phase de dessin : l'avancement de la barre ne recompose rien.
                 Box(
                     modifier = Modifier
-                        .fillMaxHeight()
-                        .fillMaxWidth(fill)
+                        .fillMaxSize()
+                        .graphicsLayer {
+                            transformOrigin = TransformOrigin(0f, 0.5f)
+                            scaleX = when {
+                                i < index -> 1f
+                                i == index -> currentProgress().coerceIn(0f, 1f)
+                                else -> 0f
+                            }
+                        }
                         .clip(CircleShape)
                         .background(MeeshyPalette.White),
                 )
@@ -957,4 +990,23 @@ private fun ReactionFlightOverlay(
             }
             .wrapContentSize(Alignment.Center),
     )
+}
+
+/**
+ * Change d'auteur en cube (iOS `groupTransition`) : la face sortante finit sa rotation, le
+ * lecteur ouvre l'auteur voisin, puis la nouvelle face entre par le côté opposé et se pose.
+ * Le haptique léger marque l'engagement du geste, comme sur iPhone.
+ */
+private suspend fun changeAuthor(
+    action: StorySwipeAction,
+    exit: Float,
+    dragX: Animatable<Float, androidx.compose.animation.core.AnimationVector1D>,
+    viewModel: StoryViewerViewModel,
+    haptics: androidx.compose.ui.hapticfeedback.HapticFeedback,
+) {
+    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+    dragX.animateTo(exit, tween(durationMillis = 150, easing = FastOutSlowInEasing))
+    viewModel.onSwipe(action)
+    dragX.snapTo(-exit)
+    dragX.animateTo(0f, tween(durationMillis = 260, easing = FastOutSlowInEasing))
 }

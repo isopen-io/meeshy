@@ -24,6 +24,7 @@ import me.meeshy.sdk.model.ApiAuthor
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.net.MeeshyConfig
+import me.meeshy.sdk.model.SocketStoryCreatedData
 import me.meeshy.sdk.model.SocketStoryDeletedData
 import me.meeshy.sdk.model.SocketStoryUpdatedData
 import me.meeshy.sdk.session.SessionRepository
@@ -95,11 +96,13 @@ class StoriesViewModelTest {
 
     private val storyDeletedFlow = MutableSharedFlow<SocketStoryDeletedData>(extraBufferCapacity = 8)
     private val storyUpdatedFlow = MutableSharedFlow<SocketStoryUpdatedData>(extraBufferCapacity = 8)
+    private val storyCreatedFlow = MutableSharedFlow<SocketStoryCreatedData>(extraBufferCapacity = 8)
 
     private fun socialSocket(): SocialSocketManager =
         mockk<SocialSocketManager>(relaxed = true).also {
             every { it.storyDeleted } returns storyDeletedFlow
             every { it.storyUpdated } returns storyUpdatedFlow
+            every { it.storyCreated } returns storyCreatedFlow
         }
 
     private fun queueOf(
@@ -383,6 +386,21 @@ class StoriesViewModelTest {
         advanceUntilIdle()
 
         coVerify(exactly = 1) { repo.removeCachedStory("s1") }
+    }
+
+    @Test
+    fun `a realtime story created by a friend joins the tray cache at once`() = runTest(dispatcher) {
+        val repo = repositoryReturning(
+            flowOf(CacheResult.Fresh(listOf(story("s1", "u1", "alice")), ageMillis = 0)),
+        )
+        viewModel(repo, session = session(userId = "me"))
+        advanceUntilIdle()
+
+        val fresh = story("s2", "u2", "bob")
+        storyCreatedFlow.emit(SocketStoryCreatedData(story = fresh))
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { repo.adoptPublished(fresh) }
     }
 
     @Test

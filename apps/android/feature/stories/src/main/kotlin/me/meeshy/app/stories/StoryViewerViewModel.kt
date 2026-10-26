@@ -534,6 +534,8 @@ class StoryViewerViewModel @Inject constructor(
             isPaused = isHoldPaused,
             isMuted = isMuted,
             authorAvatarUrl = playback.currentGroup?.avatarUrl,
+            groupCount = playback.groups.size,
+            authorUserId = playback.currentGroup?.userId,
         )
     }
 

@@ -1,9 +1,11 @@
 package me.meeshy.app.stories
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
@@ -15,6 +17,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -42,6 +45,7 @@ private val HEADER_AVATAR_SIZE = 32.dp
  */
 @Composable
 internal fun StoryAuthorIdentity(
+    onClick: (() -> Unit)?,
     name: String,
     avatarUrl: String?,
     accentHex: String,
@@ -52,7 +56,10 @@ internal fun StoryAuthorIdentity(
     val profileLabel = stringResource(R.string.stories_viewer_profile_of, name)
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = modifier.semantics(mergeDescendants = true) { contentDescription = profileLabel },
+        modifier = modifier
+            .clip(RoundedCornerShape(MeeshySpacing.sm))
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+            .semantics(mergeDescendants = true) { contentDescription = profileLabel },
     ) {
         MeeshyAvatar(name = name, size = HEADER_AVATAR_SIZE, containerColor = hexColor(accentHex), imageUrl = avatarUrl)
         Column(modifier = Modifier.padding(start = MeeshySpacing.sm)) {
