@@ -4,6 +4,8 @@
     <string name="common_retry">Retry</string>
     <string name="profile_action_accept_connection">Accept connection</string>
     <string name="profile_action_block_user">Block this user</string>
+    <string name="profile_action_call_audio">Voice call</string>
+    <string name="profile_action_call_video">Video call</string>
     <string name="profile_action_cancel_request">Cancel request</string>
     <string name="profile_action_connection_request">Connection request</string>
     <string name="profile_action_decline_connection">Decline connection</string>

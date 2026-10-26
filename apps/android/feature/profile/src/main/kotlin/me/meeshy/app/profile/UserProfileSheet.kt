@@ -132,7 +132,13 @@ private fun ProfileSheetActionsBinding(
     val resolvedId = state.profile?.id?.takeIf { it.isNotBlank() }
     LaunchedEffect(resolvedId, state.isSelf) {
         val id = resolvedId ?: return@LaunchedEffect
-        if (!state.isSelf) actionsViewModel.bind(id, isAnonymous = state.user.isAnonymous || state.profile?.isAnonymous == true)
+        if (!state.isSelf) {
+            actionsViewModel.bind(
+                id,
+                isAnonymous = state.user.isAnonymous || state.profile?.isAnonymous == true,
+                callsAvailable = environment.onCall != null,
+            )
+        }
     }
     val latest by rememberUpdatedState(environment)
     LaunchedEffect(actionsViewModel) {
@@ -140,6 +146,7 @@ private fun ProfileSheetActionsBinding(
             when (event) {
                 is ProfileActionEvent.OpenConversation -> latest.onOpenConversation(event.conversationId)
                 is ProfileActionEvent.Toast -> toasts.tryEmit(event.feedback.toToastRequest())
+                is ProfileActionEvent.Call -> latest.onCall?.invoke(event.request)
             }
         }
     }
@@ -160,6 +167,9 @@ private fun ProfileActionsViewModel.callbacks(
     onReport = {
         val profile = state.profile
         if (profile != null) environment.onReport(profile.id, profile.username)
+    },
+    onCall = { isVideo ->
+        call(isVideo, state.profile?.let { it.displayName ?: it.username } ?: state.user.resolvedDisplayName)
     },
 )
 

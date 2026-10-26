@@ -26,6 +26,7 @@ import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.FriendRequest
 import me.meeshy.sdk.model.friend.ConnectionActionRender
 import me.meeshy.sdk.model.friend.ConnectionFeedback
+import me.meeshy.sdk.model.profile.ProfileCallRequest
 import me.meeshy.sdk.model.profile.ProfileConnectionAction
 import me.meeshy.sdk.model.profile.ProfileLayout
 import me.meeshy.sdk.net.ApiError
@@ -199,6 +200,43 @@ class ProfileActionsViewModelTest {
         vm.bind("u2", isAnonymous = false)
 
         vm.sendMessage()
+
+        assertThat(seen).containsExactly(ProfileActionEvent.Toast(ProfileActionFeedback.OpenConversationFailed))
+    }
+
+    @Test
+    fun `calls are offered only when the host can place them`() = runTest {
+        val withCalls = viewModel()
+        val withoutCalls = viewModel()
+
+        withCalls.bind("u2", isAnonymous = false, callsAvailable = true)
+        withoutCalls.bind("u2", isAnonymous = false)
+
+        assertThat(withCalls.state.value.plan!!.offersCall).isTrue()
+        assertThat(withoutCalls.state.value.plan!!.offersCall).isFalse()
+    }
+
+    @Test
+    fun `a call resolves the direct conversation and asks the host to ring`() = runTest {
+        val direct = ApiConversation(id = "c1", type = "direct")
+        val vm = viewModel(direct = DirectConversationResolution.Found(direct, fromCache = false))
+        val seen = events(vm)
+        vm.bind("u2", isAnonymous = false, callsAvailable = true)
+
+        vm.call(isVideo = true, displayName = "Ada")
+
+        assertThat(seen).containsExactly(
+            ProfileActionEvent.Call(ProfileCallRequest("u2", "Ada", isVideo = true, conversationId = "c1")),
+        )
+    }
+
+    @Test
+    fun `a call that finds no conversation toasts the failure`() = runTest {
+        val vm = viewModel(direct = DirectConversationResolution.Failed(ApiError("boom"), offline = false))
+        val seen = events(vm)
+        vm.bind("u2", isAnonymous = false, callsAvailable = true)
+
+        vm.call(isVideo = false, displayName = "Ada")
 
         assertThat(seen).containsExactly(ProfileActionEvent.Toast(ProfileActionFeedback.OpenConversationFailed))
     }

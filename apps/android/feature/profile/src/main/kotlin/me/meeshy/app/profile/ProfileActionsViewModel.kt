@@ -25,6 +25,7 @@ import me.meeshy.sdk.model.friend.ConnectionActionRender
 import me.meeshy.sdk.model.friend.ConnectionFeedback
 import me.meeshy.sdk.model.friend.FriendshipStatus
 import me.meeshy.sdk.model.profile.ProfileActionPlan
+import me.meeshy.sdk.model.profile.ProfileCallRequest
 import me.meeshy.sdk.model.profile.ProfileConnection
 import me.meeshy.sdk.outbox.OutboxFlushWorker
 import me.meeshy.sdk.session.SessionRepository
@@ -49,6 +50,7 @@ enum class ProfileActionFeedback(val isError: Boolean) {
 sealed interface ProfileActionEvent {
     data class OpenConversation(val conversationId: String) : ProfileActionEvent
     data class Toast(val feedback: ProfileActionFeedback) : ProfileActionEvent
+    data class Call(val request: ProfileCallRequest) : ProfileActionEvent
 }
 
 /**
@@ -94,9 +96,9 @@ class ProfileActionsViewModel @Inject constructor(
     }
 
     /** Points the actions at the resolved person; idempotent for the same id. */
-    fun bind(userId: String, isAnonymous: Boolean) {
+    fun bind(userId: String, isAnonymous: Boolean, callsAvailable: Boolean = false) {
         if (userId.isBlank()) return
-        val next = Target(userId, isAnonymous)
+        val next = Target(userId, isAnonymous, callsAvailable)
         if (target.value == next) return
         target.value = next
         rederive(next)
@@ -118,7 +120,13 @@ class ProfileActionsViewModel @Inject constructor(
     fun block() = setBlocked(blocked = true)
     fun unblock() = setBlocked(blocked = false)
 
-    fun sendMessage() = withTarget { id ->
+    fun sendMessage() = openDirect { _, conversationId -> ProfileActionEvent.OpenConversation(conversationId) }
+
+    fun call(isVideo: Boolean, displayName: String) = openDirect { id, conversationId ->
+        ProfileActionEvent.Call(ProfileCallRequest(id, displayName, isVideo, conversationId))
+    }
+
+    private fun openDirect(onOpened: (userId: String, conversationId: String) -> ProfileActionEvent) = withTarget { id ->
         if (_state.value.isOpeningConversation) return@withTarget
         _state.update { it.copy(isOpeningConversation = true) }
         viewModelScope.launch {
@@ -131,7 +139,7 @@ class ProfileActionsViewModel @Inject constructor(
             }
             _state.update { it.copy(isOpeningConversation = false) }
             when (result) {
-                is DirectOpenResult.Opened -> _events.emit(ProfileActionEvent.OpenConversation(result.conversationId))
+                is DirectOpenResult.Opened -> _events.emit(onOpened(id, result.conversationId))
                 DirectOpenResult.Queued -> Unit
                 DirectOpenResult.Failed -> _events.emit(ProfileActionEvent.Toast(ProfileActionFeedback.OpenConversationFailed))
             }
@@ -174,7 +182,7 @@ class ProfileActionsViewModel @Inject constructor(
             connection = friendshipCache.status(bound.userId).toProfileConnection(),
             isBlockedByMe = blockCache.isBlocked(bound.userId),
             isBlockedByTarget = false,
-            callsAvailable = false,
+            callsAvailable = bound.callsAvailable,
         )
         _state.update {
             it.copy(
@@ -189,7 +197,7 @@ class ProfileActionsViewModel @Inject constructor(
         target.value?.userId?.let(action)
     }
 
-    private data class Target(val userId: String, val isAnonymous: Boolean)
+    private data class Target(val userId: String, val isAnonymous: Boolean, val callsAvailable: Boolean)
 }
 
 private fun FriendshipStatus.toProfileConnection(): ProfileConnection = when (this) {

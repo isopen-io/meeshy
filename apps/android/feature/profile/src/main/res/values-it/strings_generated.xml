@@ -4,6 +4,8 @@
     <string name="common_retry">Riprova</string>
     <string name="profile_action_accept_connection">Accetta la connessione</string>
     <string name="profile_action_block_user">Blocca questo utente</string>
+    <string name="profile_action_call_audio">Chiamata vocale</string>
+    <string name="profile_action_call_video">Videochiamata</string>
     <string name="profile_action_cancel_request">Annulla la richiesta</string>
     <string name="profile_action_connection_request">Richiesta di connessione</string>
     <string name="profile_action_decline_connection">Rifiuta la connessione</string>

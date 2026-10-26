@@ -44,6 +44,18 @@
         },
         {
           "catalog": "ui",
+          "iosKey": "profile.action.call.audio",
+          "androidName": "profile_action_call_audio",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "profile.action.call.video",
+          "androidName": "profile_action_call_video",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
           "iosKey": "profile.action.report",
           "androidName": "profile_action_report",
           "status": "adopted"

@@ -4,6 +4,8 @@
     <string name="common_retry">إعادة المحاولة</string>
     <string name="profile_action_accept_connection">قبول الاتصال</string>
     <string name="profile_action_block_user">حظر هذا المستخدم</string>
+    <string name="profile_action_call_audio">مكالمة صوتية</string>
+    <string name="profile_action_call_video">مكالمة فيديو</string>
     <string name="profile_action_cancel_request">إلغاء الطلب</string>
     <string name="profile_action_connection_request">طلب اتصال</string>
     <string name="profile_action_decline_connection">رفض الاتصال</string>
