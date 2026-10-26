@@ -96,3 +96,53 @@ describe('les clés que la surveillance écrit à la main', () => {
     expect(CONVERSATIONS_KEY_ROOT).toBe(CONVERSATIONS_QUERY_KEY[0]);
   });
 });
+
+/**
+ * #13099 — UN FIL EN CACHE QUI MONTRE UN CHIFFRÉ SANS MODE RETIENT L'ENVOI EN
+ * COURS, sans rien inscrire au registre du compte ; dans un GROUPE, un message
+ * e2ee retient sans s'apprendre. Le fil relu sans lui relâche la retenue.
+ */
+const noModeRow = (conversationId: string) => ({ id: `n-${conversationId}`, conversationId, messageType: 'text', messageSource: 'user', content: '[Encrypted]', isEncrypted: true });
+
+describe('la retenue de l’envoi depuis le cache des fils (#13099)', () => {
+  test('un chiffré sans mode affiché : rien ne part, le registre n’apprend rien ; relu sans lui, le clair repart', () => {
+    const client = new QueryClient();
+    const ledger = createEndToEndRegimeLedger({ storage: null });
+    const unwatch = watchEndToEndConversations(client, ledger);
+    client.setQueryData(conversationQueryKey('c-1'), row('c-1', null));
+
+    client.setQueryData(['conversations', 'c-1', 'messages'], thread([plainRow('c-1'), noModeRow('c-1')]));
+    expect(canSendPlaintext({ conversationId: 'c-1' }, ledger.getState())).toBe(false);
+    expect(ledger.getState().sealed).toEqual({});
+
+    client.setQueryData(['conversations', 'c-1', 'messages'], thread([plainRow('c-1')]));
+    expect(canSendPlaintext({ conversationId: 'c-1' }, ledger.getState())).toBe(true);
+    unwatch();
+  });
+
+  test('dans un groupe, un message e2ee retient sans s’apprendre ; dans un tête-à-tête, il s’apprend avec son ère', () => {
+    const client = new QueryClient();
+    const ledger = createEndToEndRegimeLedger({ storage: null });
+    const unwatch = watchEndToEndConversations(client, ledger);
+    client.setQueryData(conversationQueryKey('g-1'), { ...row('g-1', null), type: 'group' });
+    client.setQueryData(conversationQueryKey('d-1'), row('d-1', null));
+
+    client.setQueryData(['conversations', 'g-1', 'messages'], thread([sealedRow('g-1')]));
+    client.setQueryData(['conversations', 'd-1', 'messages'], thread([{ ...sealedRow('d-1'), createdAt: '2026-10-20T08:00:00.000Z' }]));
+
+    expect(canSendPlaintext({ conversationId: 'g-1' }, ledger.getState())).toBe(false);
+    expect(ledger.getState().sealed).toEqual({ 'd-1': true });
+    expect(ledger.getState().since['d-1']).toBe(Date.parse('2026-10-20T08:00:00.000Z'));
+    unwatch();
+  });
+
+  test('une conversation servie e2ee s’inscrit avec la date d’activation servie', () => {
+    const client = new QueryClient();
+    const ledger = createEndToEndRegimeLedger({ storage: null });
+    const unwatch = watchEndToEndConversations(client, ledger);
+    client.setQueryData(conversationQueryKey('c-9'), { ...row('c-9', 'e2ee'), encryptionEnabledAt: '2026-10-01T00:00:00.000Z' });
+
+    expect(ledger.getState().since['c-9']).toBe(Date.parse('2026-10-01T00:00:00.000Z'));
+    unwatch();
+  });
+});

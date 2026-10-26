@@ -2,7 +2,7 @@ import type { QueryClient } from '@tanstack/react-query';
 import type { StoreApi } from 'zustand/vanilla';
 
 import { isEndToEndMode, type EndToEndRegimeState } from '@/lib/end-to-end-regime-ledger';
-import { threadShowsEndToEnd } from '@/lib/end-to-end-thread-signal';
+import { endToEndShownSince, threadHoldsSend, threadShowsEndToEnd, type ThreadShape } from '@/lib/end-to-end-thread-signal';
 
 
 /**
@@ -16,52 +16,96 @@ import { threadShowsEndToEnd } from '@/lib/end-to-end-thread-signal';
  * (`threadShowsEndToEnd`) l'y inscrit aussi : la conversation est celle de la
  * clé, même servie sans mode.
  *
+ * #13099 — un fil en cache qui montre un message chiffré sans mode, d'un mode
+ * inconnu, ou un message e2ee dans un groupe RETIENT l'envoi tant qu'il le
+ * montre (`threadHoldsSend`), sans rien inscrire au registre. La forme
+ * (tête-à-tête ou groupe) est lue dans le cache de la conversation ; inconnue,
+ * elle se lit « groupe » : retenir sans apprendre.
+ *
+ * #12992 — chaque inscription porte la plus ancienne preuve datée : la date
+ * d'activation servie (`encryptionEnabledAt`), l'avis d'activation ou le
+ * premier message e2ee du fil.
+ *
  * Seules trois formes sont lues : la page de liste (`pages[].conversations[]`,
  * clé `['conversations']`), le détail (`['conversations', id]`, une
  * conversation dont l'`id` est la clé) et les pages d'un fil
  * (`['conversations', id, 'messages', …]`, `pages[].messages[]`). Toute autre
  * donnée rangée sous ce préfixe est ignorée.
  */
-type Row = { readonly id?: unknown; readonly encryptionMode?: unknown };
+type Row = { readonly id?: unknown; readonly type?: unknown; readonly encryptionMode?: unknown; readonly encryptionEnabledAt?: unknown };
 
 /** `CONVERSATIONS_QUERY_KEY[0]` (`conversations.ts`), écrit ici pour que le client de requêtes qui pose cette surveillance n'en tire pas les décodeurs ; un témoin les tient égaux. */
 export const CONVERSATIONS_KEY_ROOT = 'conversations';
 
 const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> => typeof value === 'object' && value !== null;
 
-const endToEndIds = (rows: readonly unknown[]): readonly string[] =>
+type Learned = { readonly id: string; readonly since: number | undefined };
+
+const instantOf = (value: unknown): number | undefined => {
+  if (!(value instanceof Date) && typeof value !== 'string') return undefined;
+  const at = new Date(value).getTime();
+  return Number.isFinite(at) ? at : undefined;
+};
+
+const endToEndRows = (rows: readonly unknown[]): readonly Learned[] =>
   rows.flatMap((row) => {
     const candidate = row as Row;
-    return isRecord(row) && typeof candidate.id === 'string' && isEndToEndMode(typeof candidate.encryptionMode === 'string' ? candidate.encryptionMode : null) ? [candidate.id] : [];
+    return isRecord(row) && typeof candidate.id === 'string' && isEndToEndMode(typeof candidate.encryptionMode === 'string' ? candidate.encryptionMode : null)
+      ? [{ id: candidate.id, since: instantOf(candidate.encryptionEnabledAt) }]
+      : [];
   });
 
-const threadRows = (data: Readonly<Record<string, unknown>>): readonly Readonly<Record<string, unknown>>[] =>
-  Array.isArray(data.pages)
+const listRows = (data: unknown): readonly unknown[] =>
+  isRecord(data) && Array.isArray(data.pages)
+    ? data.pages.flatMap((page: unknown) => (isRecord(page) && Array.isArray(page.conversations) ? page.conversations : []))
+    : [];
+
+const threadRows = (data: unknown): readonly Readonly<Record<string, unknown>>[] =>
+  isRecord(data) && Array.isArray(data.pages)
     ? data.pages.flatMap((page: unknown) => (isRecord(page) && Array.isArray(page.messages) ? page.messages.filter(isRecord) : []))
     : [];
 
-function servedEndToEnd(queryKey: readonly unknown[], data: unknown): readonly string[] {
+const isThreadKey = (queryKey: readonly unknown[]): queryKey is readonly [string, string, 'messages', ...unknown[]] =>
+  queryKey[0] === CONVERSATIONS_KEY_ROOT && queryKey.length >= 3 && typeof queryKey[1] === 'string' && queryKey[2] === 'messages';
+
+function servedEndToEnd(queryKey: readonly unknown[], data: unknown): readonly Learned[] {
   if (queryKey[0] !== CONVERSATIONS_KEY_ROOT || !isRecord(data)) return [];
-  if (queryKey.length >= 3 && typeof queryKey[1] === 'string' && queryKey[2] === 'messages') {
-    return threadShowsEndToEnd(threadRows(data)) ? [queryKey[1]] : [];
-  }
-  if (queryKey.length === 1 && Array.isArray(data.pages)) {
-    return endToEndIds(data.pages.flatMap((page: unknown) => (isRecord(page) && Array.isArray(page.conversations) ? page.conversations : [])));
-  }
-  if (queryKey.length === 2 && typeof queryKey[1] === 'string' && data.id === queryKey[1]) return endToEndIds([data]);
+  if (queryKey.length === 1 && Array.isArray(data.pages)) return endToEndRows(listRows(data));
+  if (queryKey.length === 2 && typeof queryKey[1] === 'string' && data.id === queryKey[1]) return endToEndRows([data]);
   return [];
+}
+
+/** La forme de la conversation, lue dans son détail puis dans la liste ; inconnue ⇒ groupe. */
+function shapeOf(queryClient: QueryClient, conversationId: string): ThreadShape {
+  const detail = queryClient.getQueryData([CONVERSATIONS_KEY_ROOT, conversationId]);
+  const fromDetail = isRecord(detail) && detail.id === conversationId ? detail.type : undefined;
+  const listed = listRows(queryClient.getQueryData([CONVERSATIONS_KEY_ROOT])).find((row) => isRecord(row) && row.id === conversationId);
+  const type = fromDetail ?? (isRecord(listed) ? listed.type : undefined);
+  return { isDirect: type === 'direct' };
 }
 
 export function watchEndToEndConversations(queryClient: QueryClient, ledger: StoreApi<EndToEndRegimeState>): () => void {
   const cache = queryClient.getQueryCache();
+  const watchThread = (conversationId: string): void => {
+    const shape = shapeOf(queryClient, conversationId);
+    const threads = cache.findAll({ queryKey: [CONVERSATIONS_KEY_ROOT, conversationId, 'messages'] }).map((query) => threadRows(query.state.data));
+    const shown = threads.filter((rows) => threadShowsEndToEnd(rows, shape));
+    if (shown.length > 0) {
+      const instants = shown.map(endToEndShownSince).filter((at): at is number => at !== null);
+      ledger.getState().learnEndToEnd(conversationId, instants.length === 0 ? undefined : Math.min(...instants));
+    }
+    ledger.getState().holdSend(conversationId, threads.some((rows) => threadHoldsSend(rows, shape)));
+  };
   const learn = (queryKey: readonly unknown[], data: unknown): void => {
-    const known = ledger.getState().sealed;
-    if (queryKey.length >= 3 && typeof queryKey[1] === 'string' && known[queryKey[1]] === true) return;
-    servedEndToEnd(queryKey, data).forEach((id) => ledger.getState().learnEndToEnd(id));
+    if (isThreadKey(queryKey)) {
+      watchThread(queryKey[1]);
+      return;
+    }
+    servedEndToEnd(queryKey, data).forEach(({ id, since }) => ledger.getState().learnEndToEnd(id, since));
   };
   cache.getAll().forEach((query) => learn(query.queryKey, query.state.data));
   return cache.subscribe((event) => {
     if (event.type === 'added' || (event.type === 'updated' && event.action.type === 'success')) learn(event.query.queryKey, event.query.state.data);
+    if (event.type === 'removed' && isThreadKey(event.query.queryKey)) watchThread(event.query.queryKey[1]);
   });
 }
-

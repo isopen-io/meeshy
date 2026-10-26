@@ -39,14 +39,31 @@ export type SealedStorage = {
 export type EndToEndRegimeState = {
   readonly identity: string | null;
   readonly sealed: Readonly<Record<string, true>>;
+  /**
+   * #12992 — l'ÈRE du bout en bout de chaque conversation apprise : l'instant
+   * (ms) à partir duquel elle est chiffrée, la plus ancienne preuve reçue,
+   * bornée par l'horloge de ce navigateur au moment où il l'apprend (#12936).
+   * Un message qui se dit en clair après elle se montre scellé.
+   */
+  readonly since: Readonly<Record<string, number>>;
+  /**
+   * #13099 — les conversations dont le fil affiché retient l'envoi EN COURS
+   * sans rien apprendre : un message chiffré sans mode ou d'un mode inconnu,
+   * ou un message e2ee dans un groupe. En mémoire seulement : une vieille ligne
+   * ne scelle pas la conversation à vie (revue de sécurité #12985).
+   */
+  readonly held: Readonly<Record<string, true>>;
   bind(identity: string | null): void;
-  learnEndToEnd(conversationId: string): void;
+  learnEndToEnd(conversationId: string, since?: number): void;
+  holdSend(conversationId: string, held: boolean): void;
   reset(): void;
 };
 
 export const SEALED_STORAGE_PREFIX = 'meeshy.e2ee-sealed.';
+export const SINCE_STORAGE_PREFIX = 'meeshy.e2ee-since.';
 
 const storageKey = (identity: string): string => `${SEALED_STORAGE_PREFIX}${identity}`;
+const sinceKey = (identity: string): string => `${SINCE_STORAGE_PREFIX}${identity}`;
 
 const browserStorage = (): SealedStorage | null => {
   try {
@@ -75,33 +92,80 @@ function writeSealed(storage: SealedStorage | null, identity: string, sealed: Re
   }
 }
 
-export function createEndToEndRegimeLedger(options: { readonly storage?: SealedStorage | null } = {}): StoreApi<EndToEndRegimeState> {
+function readSince(storage: SealedStorage | null, identity: string): Record<string, number> {
+  try {
+    const raw = storage?.getItem(sinceKey(identity));
+    const parsed: unknown = raw ? JSON.parse(raw) : {};
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return {};
+    return Object.fromEntries(Object.entries(parsed).filter((entry): entry is [string, number] => typeof entry[1] === 'number' && Number.isFinite(entry[1])));
+  } catch {
+    return {};
+  }
+}
+
+function writeSince(storage: SealedStorage | null, identity: string, since: Readonly<Record<string, number>>): void {
+  try {
+    storage?.setItem(sinceKey(identity), JSON.stringify(since));
+  } catch {
+    return;
+  }
+}
+
+/** La plus ancienne des deux ères ; une ère absente cède toujours. */
+const earliest = (known: number | undefined, offered: number): number => (known === undefined ? offered : Math.min(known, offered));
+
+/** Chaque conversation scellée a une ère : celle qui n'en a pas (registre d'avant #12992) prend `at`. */
+const withEras = (sealed: Readonly<Record<string, true>>, since: Readonly<Record<string, number>>, at: number): Record<string, number> =>
+  Object.fromEntries(Object.keys(sealed).map((id) => [id, since[id] ?? at] as const));
+
+export function createEndToEndRegimeLedger(
+  options: { readonly storage?: SealedStorage | null; readonly now?: () => number } = {},
+): StoreApi<EndToEndRegimeState> {
   const storage = options.storage === undefined ? browserStorage() : options.storage;
+  const now = options.now ?? Date.now;
   return createStore<EndToEndRegimeState>((set, get) => ({
     identity: null,
     sealed: {},
+    since: {},
+    held: {},
     bind: (identity) => {
-      const { identity: previous, sealed } = get();
+      const { identity: previous, sealed, since } = get();
       if (identity === previous) return;
       if (identity === null) {
-        set({ identity, sealed: {} });
+        set({ identity, sealed: {}, since: {}, held: {} });
         return;
       }
       /* Appris AVANT toute liaison (le démarrage, avant que la session ne soit
          rattachée) : c'est ce compte qui l'a vu — rien ne se perd. */
       const inherited = previous === null ? sealed : {};
+      const inheritedSince = previous === null ? since : {};
       const next = { ...readSealed(storage, identity), ...inherited };
-      set({ identity, sealed: next });
+      const stored = readSince(storage, identity);
+      const merged = Object.fromEntries(Object.entries(inheritedSince).map(([id, at]) => [id, earliest(stored[id], at)] as const));
+      const nextSince = withEras(next, { ...stored, ...merged }, now());
+      set({ identity, sealed: next, since: nextSince, held: {} });
       if (Object.keys(inherited).length > 0) writeSealed(storage, identity, next);
+      if (Object.keys(nextSince).some((id) => stored[id] !== nextSince[id])) writeSince(storage, identity, nextSince);
     },
-    learnEndToEnd: (conversationId) => {
-      const { identity, sealed } = get();
-      if (sealed[conversationId] === true) return;
+    learnEndToEnd: (conversationId, offered) => {
+      const { identity, sealed, since } = get();
+      const at = Math.min(offered !== undefined && Number.isFinite(offered) ? offered : Number.POSITIVE_INFINITY, now());
+      const era = earliest(since[conversationId], at);
+      if (sealed[conversationId] === true && since[conversationId] === era) return;
       const next = { ...sealed, [conversationId]: true as const };
-      set({ sealed: next });
-      if (identity !== null) writeSealed(storage, identity, { ...readSealed(storage, identity), ...next });
+      const nextSince = { ...since, [conversationId]: era };
+      set({ sealed: next, since: nextSince });
+      if (identity === null) return;
+      writeSealed(storage, identity, { ...readSealed(storage, identity), ...next });
+      writeSince(storage, identity, { ...readSince(storage, identity), [conversationId]: era });
     },
-    reset: () => set({ identity: null, sealed: {} }),
+    holdSend: (conversationId, held) => {
+      const current = get().held;
+      if ((current[conversationId] === true) === held) return;
+      const { [conversationId]: _released, ...rest } = current;
+      set({ held: held ? { ...current, [conversationId]: true } : rest });
+    },
+    reset: () => set({ identity: null, sealed: {}, since: {}, held: {} }),
   }));
 }
 
@@ -119,8 +183,8 @@ type SealedInput = {
  * que le fil a montré (`threadShowsEndToEnd`, `lib/end-to-end-thread-signal.ts`)
  * y est inscrit par le fil ouvert et par la surveillance du cache.
  */
-export function endToEndSealed(state: Pick<EndToEndRegimeState, 'sealed'>, input: SealedInput): boolean {
-  return isEndToEndMode(input.servedMode) || state.sealed[input.conversationId] === true;
+export function endToEndSealed(state: Pick<EndToEndRegimeState, 'sealed'> & Partial<Pick<EndToEndRegimeState, 'held'>>, input: SealedInput): boolean {
+  return isEndToEndMode(input.servedMode) || state.sealed[input.conversationId] === true || state.held?.[input.conversationId] === true;
 }
 
 /** Le refus local d'un envoi en clair vers une conversation vue e2ee : rien ne part au réseau. */
@@ -136,6 +200,9 @@ export const E2EE_PLAINTEXT_WITHHELD = 'E2EE_PLAINTEXT_WITHHELD';
  * Les appels (sous-titres, enregistrement) et les réactions n'y passent pas
  * encore : #12963.
  */
-export function canSendPlaintext(input: SealedInput, state: Pick<EndToEndRegimeState, 'sealed'> = endToEndRegimeLedger.getState()): boolean {
+export function canSendPlaintext(
+  input: SealedInput,
+  state: Pick<EndToEndRegimeState, 'sealed'> & Partial<Pick<EndToEndRegimeState, 'held'>> = endToEndRegimeLedger.getState(),
+): boolean {
   return !endToEndSealed(state, input);
 }
