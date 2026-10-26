@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 // @ts-expect-error — module .mjs sans déclaration de types ; ce témoin
 // interroge son API publique exactement comme le pilote le fait.
-import { auditDeepLinkPage, auditShellDist } from './check-shell-dist.mjs';
+import { auditDeepLinkPage, auditFirstPaintChunks, auditShellDist } from './check-shell-dist.mjs';
 import { INSTITUTIONAL_ROUTES } from './lib/institutional-routes.mjs';
 
 /**
@@ -262,5 +262,28 @@ describe('auditDeepLinkPage — le lien profond monte LE FIL, pas une coquille (
     // serait une fuite (D-6) — l’audit doit la refuser.
     const violations = auditDeepLinkPage(INSTANTANE_FIL, { expect: 'refused' });
     expect(violations.length).toBe(1);
+  });
+});
+
+describe('auditFirstPaintChunks — le runtime Capacitor reste hors de la première peinture (#13115)', () => {
+  const html =
+    '<script type="module" crossorigin src="/assets/index-abc.js"></script>' +
+    '<link rel="modulepreload" crossorigin href="/assets/core-abc.js">';
+  const chunks = (core: string) => (chunk: string): string =>
+    ({ '/assets/index-abc.js': 'import "./core-abc.js";', '/assets/core-abc.js': core })[chunk] ?? '';
+
+  test('un socle sans runtime Capacitor ne rend aucune violation', () => {
+    expect(auditFirstPaintChunks(html, chunks('export const h=1;'))).toEqual([]);
+  });
+
+  test('un morceau préchargé qui enregistre les plugins Capacitor est refusé', () => {
+    const violations = auditFirstPaintChunks(html, chunks('o("CapacitorCookies");o("PushNotifications");'));
+    expect(violations.length).toBe(1);
+    expect(violations[0].startsWith('/assets/core-abc.js')).toBe(true);
+  });
+
+  test('un morceau chargé plus tard peut le porter : seuls ceux de index.html comptent', () => {
+    const read = (chunk: string): string => (chunk === '/assets/shell-push-runtime-abc.js' ? 'o("PushNotifications");' : '');
+    expect(auditFirstPaintChunks(html, read)).toEqual([]);
   });
 });
