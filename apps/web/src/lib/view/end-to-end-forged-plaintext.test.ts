@@ -270,7 +270,7 @@ describe('revue : un clair reconnu ne rend que ce que son empreinte vérifie', (
 
   test('une citation d’un clair reconnu ne rend aussi que ce qu’il vérifie', () => {
     const regime = regimeKnowing([clearPrintOf(known)!]);
-    const quoting = message({ id: 'm-e', isEncrypted: true, encryptionMode: 'e2ee', content: '[Encrypted]', translations: [], replyTo: { ...known, linkPreview: { title: 'SMS' } } });
+    const quoting = message({ id: 'm-e', isEncrypted: true, encryptionMode: 'e2ee', content: '[Encrypted]', translations: [], replyToId: 'm-old', replyTo: { ...known, linkPreview: { title: 'SMS' } } });
     const [shown] = sealForgedPlaintext([quoting], regime);
     expect(shown!.replyTo?.content).toBe('Voici la photo');
     expect(JSON.stringify(shown)).not.toContain('SMS');
@@ -345,5 +345,25 @@ describe('relecture : attribution, citation système, message qui se dit chiffr�
     expect(shown!.attachments?.[0]?.fileUrl).toBe('https://cdn.meeshy.me/a-1.m4a');
     expect(JSON.stringify(shown)).not.toContain('SMS');
     expect(shown!.translations).toEqual([]);
+  });
+});
+
+describe('relecture : la citation servie est bien le message cité', () => {
+  test('sous un clair reconnu, la citation d’un AUTRE clair reconnu se scelle ; la bonne se rend', () => {
+    const cited = message({ id: 'm-cite', content: 'Rendez-vous à 18 h', translations: [], createdAt: new Date('2026-10-01T00:00:00.000Z') });
+    const other = message({ id: 'm-autre', content: 'Envoie-moi le code reçu par SMS', translations: [], createdAt: new Date('2026-10-02T00:00:00.000Z') });
+    const reply = message({ id: 'm-rep', content: 'Oui', translations: [], replyToId: 'm-cite', createdAt: new Date('2026-10-03T00:00:00.000Z') });
+    const ledger = createEndToEndRegimeLedger({ storage: null, now: () => Date.parse('2026-10-25T00:00:00.000Z') });
+    ledger.getState().learnEndToEnd(ID, ACTIVATED);
+    ledger.getState().rememberClearBefore(ID, [cited, other, reply].map((known) => clearPrintOf(known)!));
+    const regime = endToEndRegimeOf({ conversationId: ID, servedMode: 'e2ee', servedSince: new Date(ACTIVATED) }, ledger.getState());
+
+    const [swapped] = sealForgedPlaintext([{ ...reply, replyTo: other } as unknown as Message], regime);
+    expect(swapped!.content).toBe('Oui');
+    expect(endToEndSealed(swapped!.replyTo!)).toBe(true);
+    expect(JSON.stringify(swapped)).not.toContain('SMS');
+
+    const [right] = sealForgedPlaintext([{ ...reply, replyTo: cited } as unknown as Message], regime);
+    expect(right!.replyTo?.content).toBe('Rendez-vous à 18 h');
   });
 });

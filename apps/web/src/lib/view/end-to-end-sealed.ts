@@ -191,7 +191,10 @@ function sealedRow(message: Message, regime: EndToEndRegimeView): Message {
   const own = shownForm(message, regime);
   const quote = message.replyTo;
   if (quote === undefined || quote === null) return own;
-  const quoted = shownForm(quote, regime, true);
+  /* Revue — la citation servie doit ÊTRE le message que celui-ci cite
+     (`replyToId`, couvert par l'empreinte d'un clair reconnu) : sinon un
+     serveur placerait sous lui la citation d'un AUTRE clair. Elle se scelle. */
+  const quoted = quote.id === message.replyToId ? shownForm(quote, regime, true) : sealedForm(quote);
   return own === message && quoted === quote ? message : { ...own, replyTo: quoted };
 }
 
