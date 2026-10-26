@@ -86,13 +86,13 @@ describe("l'accent des contrôles natifs de la coque Android = la marque (#13129
   test("le thème de l'activité déclare l'accent, que la WebView prête au calendrier et aux listes déroulantes", () => {
     const styles = read('android/app/src/main/res/values/styles.xml');
     const theme = styles.match(/<style name="AppTheme\.NoActionBar"[\s\S]*?<\/style>/)?.[0] ?? '';
-    expect(theme).toContain('<item name="colorAccent">@color/accent</item>');
+    expect(theme).toContain('<item name="colorAccent">@color/brand_accent</item>');
   });
 
   test("l'accent est l'indigo d'iOS, 500 en clair et 400 en sombre", () => {
     const light = read('android/app/src/main/res/values/colors.xml');
     const dark = read('android/app/src/main/res/values-night/colors.xml');
-    const accent = (xml: string) => xml.match(/<color name="accent">([^<]+)<\/color>/)?.[1]?.toLowerCase();
+    const accent = (xml: string) => xml.match(/<color name="brand_accent">([^<]+)<\/color>/)?.[1]?.toLowerCase();
     expect({ light: accent(light), dark: accent(dark) }).toEqual(brand());
   });
 });
