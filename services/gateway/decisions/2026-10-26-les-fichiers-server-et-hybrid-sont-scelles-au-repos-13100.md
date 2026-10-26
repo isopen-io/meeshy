@@ -74,10 +74,11 @@ ligne. La ligne part quand le fichier est effacé (`AttachmentService`).
   10 min) est pris par l'envoi, le balayage et la migration. Deux scellements
   d'une même pièce sous deux liaisons (la source et sa copie transférée dans une
   autre conversation `server`) ne se croisent jamais : le second cède, le
-  balayage reprend. Redis injoignable : la passerelle se replie sur le verrou
-  de son processus (journalisé en ERREUR, `SERVER_AT_REST_SEAL_LOCK_UNAVAILABLE`)
-  et continue de sceller — une seule instance de passerelle à ce jour ; la
-  migration, elle, n'a pas ce repli (verrou injoignable = occupé, compté). Une piste TTS s'écrit sous le même
+  balayage reprend. **Fail-closed** : Redis configuré mais injoignable vaut
+  « occupé » (journalisé en ERREUR, `SERVER_AT_REST_SEAL_LOCK_UNAVAILABLE`) —
+  la pièce reste en clair jusqu'au balayage qui suit le retour de Redis, jamais
+  scellée sous un verrou local qu'une autre instance ne verrait pas. Le verrou
+  du processus ne sert que sans `REDIS_URL` du tout (un seul processus). Une piste TTS s'écrit sous le même
   verrou (attendu jusqu'à 10 s) : jamais rescellée par-dessus son chiffré.
 - **Le clair remplacé ne s'efface que quand plus aucune ligne ne le désigne.**
   Chaque fichier déplacé garde `replacedKey` ; `finishPendingErasures` repointe
@@ -122,7 +123,10 @@ ligne. La ligne part quand le fichier est effacé (`AttachmentService`).
   scelle rien d'ancien — c'est l'affaire de la migration, sur feu vert et
   après sauvegarde. Sans marqueur, sans clé de signature, ou scellement
   suspendu, il ne scelle rien. Les effacements en attente se traitent par lots
-  de 10, au plus 500 par passage.
+  de 10, au plus 500 par passage, les plus anciens NON TERMINÉS d'abord : une
+  pièce dont les clairs sont effacés est marquée (`replacedErasedAt`) et sort
+  de la file — `replacedKey` reste, pour une copie retardataire et une adresse
+  signée d'avant.
 - **Retour arrière, en trois temps** : (1) redémarrer la passerelle avec
   `AT_REST_FILE_SEALING=off` — plus rien ne se scelle (envoi, rendu, piste,
   balayage, migration), l'envoi n'exige plus de clé, les fichiers scellés se

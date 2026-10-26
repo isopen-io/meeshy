@@ -21,7 +21,7 @@ export const sealLockKey = (filePath: string): string =>
 
 const held = new Set<string>();
 
-/** Le verrou d'un seul processus : le repli de la passerelle quand Redis ne répond pas. */
+/** Le verrou d'un seul processus : celui d'une passerelle SANS Redis configuré. */
 export const processSealLock: SealLock = async (filePath) => {
   if (held.has(filePath)) return 'busy';
   held.add(filePath);
@@ -29,20 +29,29 @@ export const processSealLock: SealLock = async (filePath) => {
 };
 
 /**
- * Le verrou de la passerelle : Redis, partagé avec la migration et les autres
- * instances ; Redis absent ou injoignable, le verrou du processus — le
- * scellement continue plutôt que de laisser des pièces en clair sans limite
- * de durée. La migration, elle, n'a pas ce repli (verrou injoignable = occupé).
+ * Le verrou de la passerelle, FAIL-CLOSED : Redis, partagé avec la migration
+ * et les autres instances. Redis configuré mais injoignable vaut « occupé » —
+ * signalé, la pièce reste en clair et le balayage la reprendra — jamais un
+ * verrou local qu'une autre instance ne verrait pas. Le verrou du processus
+ * ne sert que sans Redis configuré du tout : un seul processus scelle.
  */
-export function resilientSealLock(redis: () => LockClient | null, onUnavailable: (error: unknown) => void): SealLock {
+export function gatewaySealLockOf(deps: {
+  readonly redis: () => LockClient | null;
+  readonly configured: () => boolean;
+  readonly onUnavailable: (error: unknown) => void;
+}): SealLock {
   return async (filePath) => {
-    const client = redis();
-    if (!client) return processSealLock(filePath);
+    if (!deps.configured()) return processSealLock(filePath);
+    const client = deps.redis();
+    if (!client) {
+      deps.onUnavailable(new Error('redis-client-absent'));
+      return 'busy';
+    }
     try {
       return await redisSealLock(client)(filePath);
     } catch (error) {
-      onUnavailable(error);
-      return processSealLock(filePath);
+      deps.onUnavailable(error);
+      return 'busy';
     }
   };
 }

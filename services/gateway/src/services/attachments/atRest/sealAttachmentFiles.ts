@@ -404,7 +404,8 @@ async function eraseReplaced(
   if (onOld.length === 0 && onNew.length === 0) {
     // La pièce est partie (vue unique brûlée, suppression) : ses clairs aussi.
     const gone = [...new Set(replacing.map((record) => record.replacedKey as string))];
-    await Promise.all(gone.map((key) => eraseAt(deps, key)));
+    const erasedGone = await Promise.all(gone.map((key) => eraseAt(deps, key)));
+    await markErasedWhen(deps, replacing[0].attachmentId, erasedGone);
     return { erased: gone.length, repointed: 0 };
   }
   const inPlace = await Promise.all(replacing.map((record) => sealedFileIsInPlace(deps.uploadRoot, record)));
@@ -423,16 +424,26 @@ async function eraseReplaced(
 
   const present = await Promise.all([...moved.keys()].map(async (key) => ((await exists(path.join(deps.uploadRoot, key))) ? key : null)));
   const toErase = present.filter((key): key is string => key !== null);
-  await Promise.all(toErase.map((key) => eraseAt(deps, key)));
+  const erased = await Promise.all(toErase.map((key) => eraseAt(deps, key)));
+  await markErasedWhen(deps, replacing[0].attachmentId, erased);
   return { erased: toErase.length, repointed: repointed.reduce((sum, { count }) => sum + count, 0) };
 }
 
-async function eraseAt(deps: Pick<SealAttachmentDeps, 'uploadRoot' | 'eraseMirrored'>, key: string): Promise<void> {
+/** Tout est effacé : le balayage ne revient plus sur cette pièce (sans quoi les plus anciennes occuperaient chaque passage). */
+async function markErasedWhen(deps: Pick<SealAttachmentDeps, 'access'>, attachmentId: string, outcomes: readonly boolean[]): Promise<void> {
+  if (outcomes.every(Boolean)) await deps.access.store.markReplacedErased?.(attachmentId).catch(() => undefined);
+}
+
+/** `true` quand le fichier n'est plus sur le disque (effacé, ou déjà absent). */
+async function eraseAt(deps: Pick<SealAttachmentDeps, 'uploadRoot' | 'eraseMirrored'>, key: string): Promise<boolean> {
   const absolute = path.join(deps.uploadRoot, key);
-  await fs.unlink(absolute).catch((error: unknown) => {
-    if ((error as { code?: string }).code !== 'ENOENT') logger.warn('clair d’origine non effacé après scellement', { code: (error as { code?: string }).code });
+  const erased = await fs.unlink(absolute).then(() => true, (error: unknown) => {
+    const code = (error as { code?: string }).code;
+    if (code !== 'ENOENT') logger.warn('clair d’origine non effacé après scellement', { code });
+    return code === 'ENOENT';
   });
   await deps.eraseMirrored?.(absolute);
+  return erased;
 }
 
 type RegimeRow = {

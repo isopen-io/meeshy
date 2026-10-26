@@ -80,7 +80,10 @@ export type AtRestFileStore = {
   /** Les fichiers scellés d'une pièce. */
   ofAttachment(attachmentId: string): Promise<readonly AtRestFileRecord[]>;
   /** Les pièces dont un fichier a remplacé une clé claire depuis `since` (balayage). */
+  /** Les pièces dont un clair remplacé attend encore son effacement, de la plus ancienne à la plus récente. */
   replacingSince(since: Date): Promise<readonly string[]>;
+  /** L'effacement des clairs remplacés de cette pièce est terminé. */
+  markReplacedErased?(attachmentId: string): Promise<void>;
 };
 
 /** Le verrou d'un fichier d'origine (`sealLock.ts`) : `busy` quand un autre le tient. */
@@ -151,10 +154,19 @@ export function prismaAtRestFileStore(prisma: Pick<PrismaClient, 'attachmentFile
     },
     replacingSince: async (since) => {
       const rows = await prisma.attachmentFileAtRest.findMany({
-        where: { createdAt: { gte: since }, role: 'original', replacedKey: { not: null } },
+        where: {
+          createdAt: { gte: since },
+          role: 'original',
+          replacedKey: { not: null },
+          OR: [{ replacedErasedAt: null }, { replacedErasedAt: { isSet: false } }],
+        },
+        orderBy: { createdAt: 'asc' },
         select: { attachmentId: true },
       });
       return [...new Set(rows.map((row) => row.attachmentId))];
+    },
+    markReplacedErased: async (attachmentId) => {
+      await prisma.attachmentFileAtRest.updateMany({ where: { attachmentId, replacedKey: { not: null } }, data: { replacedErasedAt: new Date() } });
     },
     save: async (record) => {
       await prisma.attachmentFileAtRest.upsert({ where: { storageKey: record.storageKey }, create: record, update: record });

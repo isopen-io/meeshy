@@ -87,7 +87,10 @@ export function mongoAtRestStore(db: Db): AtRestFileStore {
       return doc && typeof doc.storageKey === 'string' ? store.find(doc.storageKey) : null;
     },
     replacingSince: async (since) =>
-      [...new Set((await records.find({ createdAt: { $gte: since }, role: 'original', replacedKey: { $type: 'string' } }).toArray()).map((doc) => hex(doc.attachmentId as Hexable)))],
+      [...new Set((await records.find({ createdAt: { $gte: since }, role: 'original', replacedKey: { $type: 'string' }, replacedErasedAt: null }).sort({ createdAt: 1 }).toArray()).map((doc) => hex(doc.attachmentId as Hexable)))],
+    markReplacedErased: async (attachmentId) => {
+      await records.updateMany({ attachmentId: oid(attachmentId), replacedKey: { $type: 'string' } }, { $set: { replacedErasedAt: new Date() } });
+    },
     save: async (record) => {
       await records.updateOne(
         { storageKey: record.storageKey },

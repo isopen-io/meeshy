@@ -31,7 +31,7 @@ import { AT_REST_TEMPORARY_DIR, atRestFileSealingEnabled, processAtRestFileAcces
 import { readerFileUrlSignerFromEnv } from '../services/attachments/readerFileSignature';
 import { getCacheStore } from '../services/CacheStore';
 import { backfillAtRestAttachments } from '../services/attachments/atRest/atRestBackfill';
-import { finishPendingErasures } from '../services/attachments/atRest/sealAttachmentFiles';
+import { finishPendingErasures, type PendingErasureOutcome } from '../services/attachments/atRest/sealAttachmentFiles';
 import { gatewaySealDeps } from '../services/messaging/sealMessageAttachments';
 
 const logger = enhancedLogger.child({ module: 'AtRestFileSweep' });
@@ -107,6 +107,21 @@ async function staleIn(directory: string, isTemporary: (name: string) => boolean
 
 const NO_BACKFILL = { sealed: 0, failed: 0 } as const;
 
+/**
+ * Un passage sur les effacements en attente : les plus anciens NON TERMINÉS
+ * d'abord (`replacingSince` écarte ceux dont l'effacement est marqué fait),
+ * au plus `PENDING_ERASURE_PER_PASS`, par lots bornés.
+ */
+export async function finishPendingErasuresPass(
+  deps: Parameters<typeof finishPendingErasures>[0],
+  since: Date
+): Promise<readonly PendingErasureOutcome[]> {
+  const replacing = await deps.access.store.replacingSince(since);
+  return inBatches(replacing.slice(0, PENDING_ERASURE_PER_PASS), PENDING_ERASURE_CONCURRENCY, (attachmentId) =>
+    finishPendingErasures(deps, attachmentId).catch((): PendingErasureOutcome => ({ erased: 0, repointed: 0 }))
+  );
+}
+
 export async function runAtRestFileSweep(prisma: PrismaClient, now: Date = new Date(), activatedAt: Date | null = null): Promise<void> {
   const access = processAtRestFileAccess();
   if (!access) return;
@@ -118,10 +133,7 @@ export async function runAtRestFileSweep(prisma: PrismaClient, now: Date = new D
     sealingEnabled: atRestFileSealingEnabled(),
   });
   const report = since ? await backfillAtRestAttachments(deps, { dryRun: false, log: () => undefined, since }) : NO_BACKFILL;
-  const replacing = await access.store.replacingSince(new Date(now.getTime() - PENDING_ERASURE_MS));
-  const finished = await inBatches(replacing.slice(0, PENDING_ERASURE_PER_PASS), PENDING_ERASURE_CONCURRENCY, (attachmentId) =>
-    finishPendingErasures(deps, attachmentId).catch(() => ({ erased: 0, repointed: 0 }))
-  );
+  const finished = await finishPendingErasuresPass(deps, new Date(now.getTime() - PENDING_ERASURE_MS));
   const tracks = await sweepStaleTrackTemporaries(deps.uploadRoot, now.getTime());
   const erased = finished.reduce((sum, outcome) => sum + outcome.erased, 0);
   const repointed = finished.reduce((sum, outcome) => sum + outcome.repointed, 0);

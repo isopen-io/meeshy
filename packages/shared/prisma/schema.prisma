@@ -3486,6 +3486,10 @@ model AttachmentFileAtRest {
   /// faite pendant le scellement) se repointe ici, et le clair ne s'efface que
   /// quand plus aucune ligne ne le désigne.
   replacedKey    String?
+  /// Quand le clair remplacé a été effacé (plus aucune ligne ne le désignait) :
+  /// le balayage ne revient plus sur cette pièce. `replacedKey` reste, pour
+  /// repointer une copie retardataire et servir une adresse signée d'avant.
+  replacedErasedAt DateTime?
   createdAt      DateTime @default(now())
 
   @@index([attachmentId])
