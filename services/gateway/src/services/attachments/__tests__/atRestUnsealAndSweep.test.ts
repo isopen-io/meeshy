@@ -19,7 +19,7 @@ jest.mock('../../../utils/logger-enhanced', () => ({
 
 import { sealStoredFile, type AtRestFileAccess, type AtRestFileRecord } from '../atRest/atRestFiles';
 import { unsealAllAtRestFiles } from '../atRest/atRestUnseal';
-import { AT_REST_ACTIVATED_AT_KEY, atRestActivation, sweepSealingSince, sweepStaleTrackTemporaries } from '../../../jobs/at-rest-file-sweep';
+import { AT_REST_ACTIVATED_AT_KEY, atRestActivation, inBatches, sweepSealingSince, sweepStaleTrackTemporaries } from '../../../jobs/at-rest-file-sweep';
 import { contentDisappears, requireFileSealingKey } from '../../messaging/sealMessageAttachments';
 import { serverAtRestAttachmentFiles } from '../../../migrations/named/server-at-rest-attachment-files';
 import { eraseSharedTranslations } from '../../messaging/sharedTranslationErasure';
@@ -91,6 +91,32 @@ describe('le retour arrière du scellement', () => {
 
 describe('le balayage', () => {
   const HOUR = 60 * 60 * 1000;
+
+  it('efface les temporaires du scellement de plus d’une heure (du clair d’une piste ou d’une réouverture), garde les récents', async () => {
+    const dir = path.join(root, '.at-rest-tmp');
+    await fs.mkdir(dir, { recursive: true });
+    await fs.writeFile(path.join(dir, '.unsealing-aaaa'), 'CLAIR');
+    await fs.writeFile(path.join(dir, '.sealing-bbbb'), 'x');
+    await fs.writeFile(path.join(dir, '.track-cccc'), 'x');
+    const old = new Date(Date.now() - 2 * HOUR);
+    await fs.utimes(path.join(dir, '.unsealing-aaaa'), old, old);
+    await fs.utimes(path.join(dir, '.sealing-bbbb'), old, old);
+    expect(await sweepStaleTrackTemporaries(root, Date.now())).toBe(2);
+    expect(await fs.readdir(dir)).toEqual(['.track-cccc']);
+  });
+
+  it('les effacements en attente se traitent par lots bornés', async () => {
+    const running = { now: 0, max: 0 };
+    const done = await inBatches(Array.from({ length: 25 }, (_, i) => i), 10, async (i) => {
+      running.now += 1;
+      running.max = Math.max(running.max, running.now);
+      await new Promise((resolve) => setTimeout(resolve, 1));
+      running.now -= 1;
+      return i;
+    });
+    expect(done).toHaveLength(25);
+    expect(running.max).toBe(10);
+  });
   const now = new Date('2026-10-26T12:00:00Z');
 
   it('ne remonte jamais avant l’activation du scellement sur l’instance : le déploiement seul ne scelle rien d’ancien', () => {

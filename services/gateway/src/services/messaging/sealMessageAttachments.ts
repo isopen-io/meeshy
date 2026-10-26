@@ -18,8 +18,7 @@ import { atRestFileSealingEnabled, type AtRestFileAccess } from '../attachments/
 import { eraseMirroredCopy } from '../storage/objects/mirroredErasure';
 import { MESSAGE_ATTACHMENT_ORDER } from '../attachments/attachmentIncludes';
 import { readerFileUrlSignerFromEnv } from '../attachments/readerFileSignature';
-import { redisSealLock } from '../attachments/atRest/sealLock';
-import { getCacheStore } from '../CacheStore';
+import { gatewaySealLock } from '../attachments/atRest/atRestFileAccessFor';
 import { ServerAtRestUnavailableError } from './serverAtRest';
 import { contentExitLawOfSource, type ContentExitProjection } from '@meeshy/shared/utils/content-exit-law';
 import { protectionOfFullMessageRow } from '../../socketio/readerSignedDelivery';
@@ -33,13 +32,12 @@ export const uploadRootFromEnv = (): string => process.env.UPLOAD_PATH || '/app/
 /** Les dépendances d'un scellement depuis la passerelle : la racine relue à l'appel, la copie du seau effacée. */
 export function gatewaySealDeps(prisma: Pick<PrismaClient, 'messageAttachment' | 'message'>, access: AtRestFileAccess): SealAttachmentDeps {
   const uploadRoot = uploadRootFromEnv();
-  const redis = getCacheStore().getNativeClient();
   return {
     prisma,
     uploadRoot,
     access,
     eraseMirrored: (absolute) => eraseMirroredCopy(absolute, uploadRoot),
-    ...(access.lock ? { lock: access.lock } : redis ? { lock: redisSealLock(redis as never) } : {}),
+    lock: access.lock ?? gatewaySealLock,
   };
 }
 

@@ -22,7 +22,7 @@ import { createReadStream, promises as fs } from 'fs';
 import { open as openFile } from 'fs/promises';
 import path from 'path';
 import { Readable } from 'stream';
-import { createHash, randomBytes } from 'crypto';
+import { createHash, hkdfSync, randomBytes } from 'crypto';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import {
   DEFAULT_CIPHERTEXT_SEGMENT_SIZE,
@@ -43,6 +43,16 @@ export type SealedFileBinding = {
 export const SEALED_FILE_DOMAIN = 'meeshy:attachment-file:v1';
 
 /** Un tableau JSON : aucun séparateur ne peut se confondre avec un champ. */
+/**
+ * La clé de données d'une conversation chiffre aussi ses TEXTES (AES-GCM,
+ * `EncryptionService`). Les fichiers n'en prennent jamais la valeur telle
+ * quelle : ils la dérivent sous leur propre étiquette (HKDF-SHA256, RFC 5869,
+ * sel vide), puis Tink Streaming dérive encore une clé par fichier.
+ */
+export const FILE_KEY_INFO = 'meeshy:at-rest-file-key:v1';
+export const fileMainKeyOf = (dataKey: Buffer): Buffer =>
+  Buffer.from(hkdfSync('sha256', dataKey, Buffer.alloc(0), FILE_KEY_INFO, 32));
+
 export const associatedDataOf = (binding: SealedFileBinding): Buffer =>
   Buffer.from(JSON.stringify([SEALED_FILE_DOMAIN, binding.conversationId, binding.attachmentId, binding.role, binding.storageKey]), 'utf8');
 
@@ -63,8 +73,8 @@ export type AtRestFileKeyring = {
 
 export type AtRestFileStore = {
   find(storageKey: string): Promise<AtRestFileRecord | null>;
-  /** Le fichier scellé de rôle `original` qui a remplacé cette clé claire (copie retardataire). */
-  byReplacedKey?(replacedKey: string): Promise<AtRestFileRecord | null>;
+  /** Le fichier scellé qui a remplacé cette clé claire — de ce rôle seulement, s'il est donné. */
+  byReplacedKey?(replacedKey: string, role?: string): Promise<AtRestFileRecord | null>;
   save(record: AtRestFileRecord): Promise<void>;
   remove(storageKey: string): Promise<void>;
   /** Les fichiers scellés d'une pièce. */
@@ -135,8 +145,8 @@ export function prismaAtRestFileStore(prisma: Pick<PrismaClient, 'attachmentFile
       const rows: readonly AtRestFileRow[] = await prisma.attachmentFileAtRest.findMany({ where: { attachmentId }, select: RECORD_SELECT });
       return rows.map((row) => ({ ...row, replacedKey: row.replacedKey ?? null }));
     },
-    byReplacedKey: async (replacedKey) => {
-      const row: AtRestFileRow | null = await prisma.attachmentFileAtRest.findFirst({ where: { replacedKey, role: 'original' }, select: RECORD_SELECT });
+    byReplacedKey: async (replacedKey, role) => {
+      const row: AtRestFileRow | null = await prisma.attachmentFileAtRest.findFirst({ where: { replacedKey, ...(role ? { role } : {}) }, select: RECORD_SELECT });
       return row ? { ...row, replacedKey: row.replacedKey ?? null } : null;
     },
     replacingSince: async (since) => {
@@ -209,15 +219,17 @@ export async function sealStoredFile(params: {
   const segmentSize = params.segmentSize ?? DEFAULT_CIPHERTEXT_SEGMENT_SIZE;
   const source = path.join(params.uploadRoot, params.sourceKey);
   const target = path.join(params.uploadRoot, params.targetKey);
-  const temporary = path.join(path.dirname(target), `.sealing-${randomBytes(8).toString('hex')}`);
+  const temporary = atRestTemporaryPath(params.uploadRoot, 'sealing');
+  const inPlace = params.sourceKey === params.targetKey;
   const binding: SealedFileBinding = { ...params.binding, storageKey: params.targetKey };
   const { keyId, key } = await params.access.keyring.fileSealingKey(binding.conversationId);
   const plaintextSize = (await fs.stat(source)).size;
 
   await fs.mkdir(path.dirname(target), { recursive: true });
+  await fs.mkdir(path.dirname(temporary), { recursive: true, mode: 0o700 });
   const handle = await openFile(temporary, 'wx', 0o600);
   try {
-    for await (const part of sealSegments(readChunks(source), { mainKey: key, associatedData: associatedDataOf(binding), ciphertextSegmentSize: segmentSize })) {
+    for await (const part of sealSegments(readChunks(source), { mainKey: fileMainKeyOf(key), associatedData: associatedDataOf(binding), ciphertextSegmentSize: segmentSize })) {
       await handle.write(part);
     }
     await handle.sync();
@@ -237,8 +249,27 @@ export async function sealStoredFile(params: {
     ...binding, keyId, plaintextSize, format: SEALED_FILE_FORMAT, segmentSize,
     replacedKey: params.replacedKey && params.replacedKey !== params.targetKey ? params.replacedKey : null,
   };
+  // Sous une clé NEUVE, le chiffré prend sa place AVANT que la ligne ne
+  // l'annonce : interrompu entre les deux, il reste un chiffré orphelin
+  // qu'aucune ligne ne désigne, jamais une ligne qui désigne un absent. En
+  // PLACE, la ligne précède : interrompu, elle pèse sur un clair de la taille
+  // inscrite, que le scellement suivant reconnaît et rescelle.
+  if (inPlace) await saveThenRename(params.access, record, temporary, target);
+  else await renameThenSave(params.access, record, temporary, target);
+  await fs.chmod(target, 0o644).catch(() => undefined);
+  return record;
+}
+
+/** Le dossier des temporaires du scellement, sous la racine (même volume, `rename` atomique), balayé après une heure. */
+export const AT_REST_TEMPORARY_DIR = '.at-rest-tmp';
+
+export function atRestTemporaryPath(uploadRoot: string, kind: 'sealing' | 'unsealing' | 'track'): string {
+  return path.join(uploadRoot, AT_REST_TEMPORARY_DIR, `.${kind}-${randomBytes(8).toString('hex')}`);
+}
+
+async function saveThenRename(access: AtRestFileAccess, record: AtRestFileRecord, temporary: string, target: string): Promise<void> {
   try {
-    await params.access.store.save(record);
+    await access.store.save(record);
   } catch (error) {
     await fs.unlink(temporary).catch(() => undefined);
     throw error;
@@ -246,14 +277,31 @@ export async function sealStoredFile(params: {
   try {
     await fs.rename(temporary, target);
   } catch (error) {
-    // Le chiffré n'a pas pris sa place : la ligne ne doit pas déclarer scellé
-    // ce qui est encore en clair (en place) ou absent (clé neuve).
-    await params.access.store.remove(params.targetKey).catch(() => undefined);
+    await access.store.remove(record.storageKey).catch(() => undefined);
     await fs.unlink(temporary).catch(() => undefined);
     throw error;
   }
-  await fs.chmod(target, 0o644).catch(() => undefined);
-  return record;
+}
+
+async function renameThenSave(access: AtRestFileAccess, record: AtRestFileRecord, temporary: string, target: string): Promise<void> {
+  try {
+    await fs.rename(temporary, target);
+  } catch (error) {
+    await fs.unlink(temporary).catch(() => undefined);
+    throw error;
+  }
+  try {
+    await access.store.save(record);
+  } catch (error) {
+    await fs.unlink(target).catch(() => undefined);
+    throw error;
+  }
+}
+
+/** Le fichier scellé de cette ligne est-il en place, à la taille exacte de son chiffré ? */
+export async function sealedFileIsInPlace(uploadRoot: string, record: AtRestFileRecord): Promise<boolean> {
+  const stats = await fs.stat(path.join(uploadRoot, record.storageKey)).catch(() => null);
+  return stats !== null && stats.size === ciphertextSizeFor(record.plaintextSize, record.segmentSize);
 }
 
 /** Les octets d'un fichier stocké tels qu'une route les décrit (`routes/attachments/storedBytes.ts`). */
@@ -287,7 +335,7 @@ export function openSealedStoredBytes(cipher: OpenableBytes, record: AtRestFileR
     size: record.plaintextSize,
     etag: cipher.etag,
     open: async (range) => {
-      const mainKey = await keyring.fileOpeningKey(record.keyId, record.conversationId);
+      const mainKey = fileMainKeyOf(await keyring.fileOpeningKey(record.keyId, record.conversationId));
       const opened = openSealedRange({
         mainKey,
         associatedData: associatedDataOf(record),

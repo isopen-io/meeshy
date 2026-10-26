@@ -39,6 +39,7 @@ import {
   type AtRestFileAccess,
   type AtRestFileRecord,
   type FileSealLock,
+  sealedFileIsInPlace,
 } from './atRestFiles';
 import { ciphertextSizeFor } from './sealedFileFormat';
 
@@ -281,7 +282,7 @@ async function sealUnderLock(
   // original : elle se repointe sur ce qui l'a remplacé (M3).
   const head = await deps.prisma.messageAttachment.findUnique({ where: { id: input.attachmentId }, select: { filePath: true } });
   // Une réparation : son échec ne retient jamais le scellement lui-même.
-  const replacement = head && deps.access.store.byReplacedKey ? await deps.access.store.byReplacedKey(head.filePath).catch(() => null) : null;
+  const replacement = head && deps.access.store.byReplacedKey ? await deps.access.store.byReplacedKey(head.filePath, 'original').catch(() => null) : null;
   if (replacement && replacement.attachmentId !== input.attachmentId) {
     await erasePendingUnderHeldLock(deps, replacement.attachmentId);
   }
@@ -334,7 +335,10 @@ async function sealUnderLock(
     return { status: 'skipped', reason: 'not-found' };
   }
   await Promise.all(sealed.filter(({ slot }) => !moved.has(slot.key)).map(({ slot }) => deps.eraseMirrored?.(path.join(deps.uploadRoot, slot.key)) ?? Promise.resolve()));
-  await erasePendingUnderHeldLock(deps, seed.id);
+  // Les lignes de scellement relues ET celles que ce passage vient d'écrire :
+  // une pièce effacée entre-temps a emporté les siennes, son clair doit partir quand même.
+  const known = await deps.access.store.ofAttachment(seed.id);
+  await eraseReplaced(deps, [...known, ...sealed.map(({ record }) => record).filter((record) => !known.some((k) => k.storageKey === record.storageKey))]);
   logger.info('pièce jointe scellée au repos', { attachmentId: seed.id, files: sealed.length, rows: rows.length });
   return { status: 'sealed', files: sealed.length, rows: rows.length };
 }
@@ -376,9 +380,38 @@ async function erasePendingUnderHeldLock(
   deps: Pick<SealAttachmentDeps, 'prisma' | 'uploadRoot' | 'access' | 'eraseMirrored'>,
   attachmentId: string
 ): Promise<PendingErasureOutcome> {
-  const replacing = (await deps.access.store.ofAttachment(attachmentId)).filter((record) => record.replacedKey !== null);
+  return eraseReplaced(deps, await deps.access.store.ofAttachment(attachmentId));
+}
+
+/**
+ * Repointe les retardataires puis efface les clairs remplacés — seulement si
+ * CHAQUE fichier scellé qui les remplace est en place, à la taille exacte de
+ * son chiffré : jamais une ligne repointée vers un absent, jamais le seul
+ * exemplaire effacé.
+ */
+async function eraseReplaced(
+  deps: Pick<SealAttachmentDeps, 'prisma' | 'uploadRoot' | 'access' | 'eraseMirrored'>,
+  records: readonly AtRestFileRecord[]
+): Promise<PendingErasureOutcome> {
+  const replacing = records.filter((record) => record.replacedKey !== null);
   const oldOriginal = replacing.find((record) => record.role === 'original')?.replacedKey;
   if (!oldOriginal) return { erased: 0, repointed: 0 };
+  const newOriginal = replacing.find((record) => record.role === 'original')?.storageKey ?? oldOriginal;
+  const [onOld, onNew] = await Promise.all([
+    deps.prisma.messageAttachment.findMany({ where: { filePath: oldOriginal }, select: { id: true } }),
+    deps.prisma.messageAttachment.findMany({ where: { filePath: newOriginal }, select: { id: true } }),
+  ]);
+  if (onOld.length === 0 && onNew.length === 0) {
+    // La pièce est partie (vue unique brûlée, suppression) : ses clairs aussi.
+    const gone = [...new Set(replacing.map((record) => record.replacedKey as string))];
+    await Promise.all(gone.map((key) => eraseAt(deps, key)));
+    return { erased: gone.length, repointed: 0 };
+  }
+  const inPlace = await Promise.all(replacing.map((record) => sealedFileIsInPlace(deps.uploadRoot, record)));
+  if (inPlace.some((present) => !present)) {
+    logger.warn('scellé absent ou incomplet : rien n’est repointé ni effacé', { attachmentId: replacing[0].attachmentId });
+    return { erased: 0, repointed: 0 };
+  }
   const moved = new Map(replacing.map((record) => [record.replacedKey as string, record.storageKey] as const));
 
   const stragglers: readonly SealRow[] = await deps.prisma.messageAttachment.findMany({ where: { filePath: oldOriginal }, select: ROW_SELECT });
@@ -437,7 +470,7 @@ export async function atRestConversationFor(
   const sealedOriginal = await deps.access.store.find(row.filePath);
   if (sealedOriginal) return sealedOriginal.conversationId;
   // Une copie qui désigne encore le clair qu'un scellement a remplacé (M3).
-  return (await deps.access.store.byReplacedKey?.(row.filePath).catch(() => null))?.conversationId ?? null;
+  return (await deps.access.store.byReplacedKey?.(row.filePath, 'original').catch(() => null))?.conversationId ?? null;
 }
 
 /** Scelle la pièce si elle doit l'être (`atRestConversationFor`). */

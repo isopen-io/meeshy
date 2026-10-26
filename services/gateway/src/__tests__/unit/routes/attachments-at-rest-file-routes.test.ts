@@ -108,6 +108,7 @@ function memoryAccess(): AtRestFileAccess {
       remove: async (key) => { records.delete(key); },
       ofAttachment: async (attachmentId) => [...records.values()].filter((record) => record.attachmentId === attachmentId),
       replacingSince: async () => [],
+      byReplacedKey: async (key) => [...records.values()].find((record) => record.replacedKey === key) ?? null,
     },
     keyring: {
       fileSealingKey: async () => ({ keyId: 'k1', key: DATA_KEY }),
@@ -131,7 +132,7 @@ beforeAll(async () => {
     await fs.mkdir(path.dirname(path.join(uploadRoot, key)), { recursive: true });
     await fs.writeFile(path.join(uploadRoot, key), PNG);
   }
-  await sealStoredFile({ uploadRoot, sourceKey: PLAIN_SOURCE, targetKey: SEALED_KEY, binding: { conversationId: CONVERSATION, attachmentId: PIECE, role: 'original' }, access });
+  await sealStoredFile({ uploadRoot, sourceKey: PLAIN_SOURCE, targetKey: SEALED_KEY, binding: { conversationId: CONVERSATION, attachmentId: PIECE, role: 'original' }, access, replacedKey: PLAIN_SOURCE });
   await fs.unlink(path.join(uploadRoot, PLAIN_SOURCE));
   configureAtRestFileAccess(access);
 
@@ -188,6 +189,12 @@ describe('l’adresse signée du lecteur déchiffre', () => {
     expect(response.headers['content-type']).toBe('image/png');
     expect(Number(response.headers['content-length'])).toBe(PNG.length);
     expect(response.rawPayload.equals(PNG)).toBe(true);
+  });
+
+  it('une adresse signée AVANT le scellement sert le scellé qui a remplacé son fichier', async () => {
+    const response = await app.inject({ method: 'GET', url: signed(PLAIN_SOURCE) });
+    expect(response.statusCode).toBe(200);
+    expect(Buffer.from(response.rawPayload).equals(PNG)).toBe(true);
   });
 
   it('une plage, au milieu d’un segment et à cheval sur deux', async () => {

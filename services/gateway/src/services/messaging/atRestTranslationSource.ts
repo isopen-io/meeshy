@@ -11,6 +11,7 @@
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { getEncryptionService } from '../EncryptionService';
+import { contentDisappears } from './sealMessageAttachments';
 import {
   AT_REST_MESSAGE_SELECT,
   isSealedAtRest,
@@ -55,6 +56,14 @@ export async function translatableTextOf(row: AtRestReadableRow, keyring: AtRest
  */
 export const atRestRequestFlag = (encryptionMode: string | null | undefined): { readonly atRest?: true } =>
   isServerAtRestMode(encryptionMode) ? { atRest: true } : {};
+
+/**
+ * #13102 — le régime d'une tâche de traduction d'un message : protégée aussi
+ * quand le message est destiné à disparaître (vue unique, flamme, éphémère),
+ * comme sa tâche audio (`contentDisappears`).
+ */
+export const translationRequestRegime = (message: { readonly encryptionMode?: string | null } & object): { readonly atRest?: true } =>
+  isServerAtRestMode(message.encryptionMode) || contentDisappears(message) ? { atRest: true } : {};
 
 /** Le message que `translation:request` retraduit, son texte ouvert ; `content` vide s'il reste scellé. */
 export async function loadTranslatableMessage(prisma: PrismaClient, messageId: string) {

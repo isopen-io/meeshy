@@ -23,7 +23,7 @@ import { enhancedLogger } from '../../utils/logger-enhanced';
 import { ifNoneMatchMatches } from '../../utils/etag';
 import { sendError, sendNotFound, sendForbidden, sendInternalError } from '../../utils/response.js';
 import type { AttachmentParams } from './types';
-import { atRestSealingOf, diskBytes, hasBucket, isBucketUnavailable, locateBucketBytes, locateStoredBytes, uploadRootOf, type StoredBytes, type StoredBytesSource } from './storedBytes';
+import { atRestSealingOf, currentStorageKey, diskBytes, hasBucket, isBucketUnavailable, locateBucketBytes, locateStoredBytes, uploadRootOf, type StoredBytes, type StoredBytesSource } from './storedBytes';
 
 const log = enhancedLogger.child({ module: 'AttachmentDownload' });
 
@@ -437,13 +437,18 @@ function registerSignedFileRoute(fastify: FastifyInstance, prisma: PrismaClient,
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
         const params = request.params as { token: string; '*': string };
-        const decodedPath = decodeURIComponent(params['*']);
+        const requestedPath = decodeURIComponent(params['*']);
+        const requested = locateStoredFile(requestedPath, uploadRootOf(bytesSource));
+        if (requested.kind !== 'file') return sendNotFound(reply, 'File not found');
+        // #13100 — une adresse signée avant le scellement sert le scellé qui a remplacé son fichier.
+        const decodedPath = await currentStorageKey(requested.storageKey, bytesSource);
         const located = locateStoredFile(decodedPath, uploadRootOf(bytesSource));
         if (located.kind !== 'file') return sendNotFound(reply, 'File not found');
 
         const access = await resolveSignedFileAccess(prisma, {
           token: params.token,
-          storageKey: located.storageKey,
+          storageKey: requested.storageKey,
+          servedKey: located.storageKey,
           keys: readSigningKeys(),
           now: new Date(),
         });

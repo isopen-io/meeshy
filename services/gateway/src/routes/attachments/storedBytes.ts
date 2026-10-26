@@ -1,5 +1,6 @@
 import { createReadStream } from 'fs';
 import { stat } from 'fs/promises';
+import path from 'path';
 import type { Readable } from 'stream';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { storedFileETag } from '../../utils/etag';
@@ -83,6 +84,20 @@ function atRestOf(source: StoredBytesSource): AtRestFileAccess | null {
 /** Seuls les médias datés et les pistes traduites se scellent (`isSealableStorageKey`, la même règle que le scellement) : un avatar n'interroge pas la base. */
 const mayBeSealed = (key: string): boolean => isSealableStorageKey(key);
 
+/**
+ * #13100 — la clé à SERVIR pour une clé demandée : elle-même tant que son
+ * fichier est là ; sinon celle du fichier scellé qui l'a remplacée. Une
+ * adresse signée livrée avant le scellement (cache client, synchro différée)
+ * reste donc lisible après l'effacement du clair, sans qu'aucun client n'ait à
+ * être prévenu. La signature, elle, reste vérifiée sur la clé DEMANDÉE.
+ */
+export async function currentStorageKey(storageKey: string, source: StoredBytesSource): Promise<string> {
+  const present = await stat(path.join(uploadRootOf(source), storageKey)).then(() => true, () => false);
+  if (present) return storageKey;
+  const replacement = await atRestOf(source)?.store.byReplacedKey?.(storageKey).catch(() => null);
+  return replacement?.storageKey ?? storageKey;
+}
+
 export type AtRestSealing = { readonly kind: 'sealed'; readonly record: AtRestFileRecord | null } | { readonly kind: 'plain' };
 
 export async function atRestSealingOf(filePath: string, source: StoredBytesSource): Promise<AtRestSealing> {
@@ -91,7 +106,9 @@ export async function atRestSealingOf(filePath: string, source: StoredBytesSourc
   const access = atRestOf(source);
   const record = access ? await access.store.find(key) : null;
   if (record) return { kind: 'sealed', record };
-  return isSealedStorageKey(key) ? { kind: 'sealed', record: null } : { kind: 'plain' };
+  // La FORME seule ne fait refuser que sans accès au magasin : avec lui,
+  // l'absence de ligne dit « en clair » (un fichier rouvert par le retour arrière).
+  return isSealedStorageKey(key) && !access ? { kind: 'sealed', record: null } : { kind: 'plain' };
 }
 
 /**

@@ -16,9 +16,8 @@
  */
 import { createWriteStream, createReadStream, promises as fs } from 'fs';
 import path from 'path';
-import { randomBytes } from 'crypto';
 import { pipeline } from 'stream/promises';
-import { atRestFileSealingEnabled, openSealedStoredBytes, type AtRestFileAccess, type AtRestFileRecord } from './atRestFiles';
+import { atRestFileSealingEnabled, atRestTemporaryPath, openSealedStoredBytes, type AtRestFileAccess, type AtRestFileRecord } from './atRestFiles';
 import { ciphertextSizeFor } from './sealedFileFormat';
 
 /** Le retour arrière exige le scellement SUSPENDU : sinon la passerelle vivante rescellerait ce qu'il rouvre. */
@@ -43,7 +42,8 @@ export type UnsealReport = { readonly sealed: number; readonly missing: number; 
 
 export async function unsealStoredFile(deps: Omit<UnsealDeps, 'records'>, record: AtRestFileRecord): Promise<void> {
   const absolute = path.join(deps.uploadRoot, record.storageKey);
-  const temporary = path.join(path.dirname(absolute), `.unsealing-${randomBytes(8).toString('hex')}`);
+  const temporary = atRestTemporaryPath(deps.uploadRoot, 'unsealing');
+  await fs.mkdir(path.dirname(temporary), { recursive: true, mode: 0o700 });
   const size = (await fs.stat(absolute)).size;
   // Rouvert puis tué avant le retrait de sa ligne : le fichier a la taille du
   // clair, jamais celle d'un chiffré. Il n'y a plus qu'à retirer la ligne.
@@ -59,10 +59,11 @@ export async function unsealStoredFile(deps: Omit<UnsealDeps, 'records'>, record
   };
   const plain = await openSealedStoredBytes(cipher, record, deps.access.keyring).open();
   try {
-    if (plain) await pipeline(plain, createWriteStream(temporary, { mode: 0o644, flags: 'wx' }));
-    else await fs.writeFile(temporary, Buffer.alloc(0), { mode: 0o644, flag: 'wx' });
+    if (plain) await pipeline(plain, createWriteStream(temporary, { mode: 0o600, flags: 'wx' }));
+    else await fs.writeFile(temporary, Buffer.alloc(0), { mode: 0o600, flag: 'wx' });
     if ((await fs.stat(temporary)).size !== record.plaintextSize) throw new Error('unsealed size mismatch');
     await fs.rename(temporary, absolute);
+    await fs.chmod(absolute, 0o644).catch(() => undefined);
   } catch (error) {
     await fs.unlink(temporary).catch(() => undefined);
     throw error;

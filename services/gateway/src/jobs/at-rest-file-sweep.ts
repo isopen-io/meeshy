@@ -7,8 +7,12 @@
  * 2. les clairs remplacés depuis sept jours sont effacés dès qu'aucune ligne
  *    ne les désigne plus, et toute ligne retardataire est repointée sur le
  *    scellé (`finishPendingErasures`) ;
- * 3. les pistes TTS temporaires (`translated/.track-*`, du clair) laissées
- *    par un processus tué sont effacées après une heure.
+ * 3. les temporaires du scellement (`.at-rest-tmp/`, et les anciennes
+ *    `translated/.track-*`) — du clair pour une piste ou une réouverture —
+ *    laissés par un processus tué sont effacés après une heure.
+ *
+ * Les effacements en attente se traitent par lots de
+ * `PENDING_ERASURE_CONCURRENCY`, au plus `PENDING_ERASURE_PER_PASS` par passage.
  *
  * Sans accès aux fichiers scellés configuré, rien ne tourne. Le point 1 ne
  * remonte JAMAIS avant l'activation de ce code sur l'instance (marqueur Redis
@@ -23,7 +27,7 @@ import path from 'path';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 import { guardedInterval } from '../utils/guarded-timer.js';
-import { atRestFileSealingEnabled, processAtRestFileAccess } from '../services/attachments/atRest/atRestFiles';
+import { AT_REST_TEMPORARY_DIR, atRestFileSealingEnabled, processAtRestFileAccess } from '../services/attachments/atRest/atRestFiles';
 import { readerFileUrlSignerFromEnv } from '../services/attachments/readerFileSignature';
 import { getCacheStore } from '../services/CacheStore';
 import { backfillAtRestAttachments } from '../services/attachments/atRest/atRestBackfill';
@@ -36,6 +40,8 @@ export const AT_REST_SWEEP_EVERY_MS = 10 * 60 * 1000;
 const RECENT_PIECES_MS = 48 * 60 * 60 * 1000;
 const PENDING_ERASURE_MS = 7 * 24 * 60 * 60 * 1000;
 const STALE_TRACK_MS = 60 * 60 * 1000;
+export const PENDING_ERASURE_CONCURRENCY = 10;
+export const PENDING_ERASURE_PER_PASS = 500;
 
 export const AT_REST_ACTIVATED_AT_KEY = 'at-rest:files:activated-at';
 
@@ -69,10 +75,26 @@ export function sweepSealingSince(input: {
 }
 
 export async function sweepStaleTrackTemporaries(uploadRoot: string, now: number): Promise<number> {
-  const directory = path.join(uploadRoot, 'translated');
+  const [legacy, current] = await Promise.all([
+    staleIn(path.join(uploadRoot, 'translated'), (name) => name.startsWith('.track-'), now),
+    staleIn(path.join(uploadRoot, AT_REST_TEMPORARY_DIR), (name) => name.startsWith('.'), now),
+  ]);
+  return legacy + current;
+}
+
+/** Traite les identifiants par lots bornés, jamais tous à la fois. */
+export async function inBatches<T, R>(items: readonly T[], size: number, work: (item: T) => Promise<R>): Promise<readonly R[]> {
+  const batches = Array.from({ length: Math.ceil(items.length / size) }, (_, index) => items.slice(index * size, (index + 1) * size));
+  return batches.reduce<Promise<readonly R[]>>(
+    async (done, batch) => [...(await done), ...(await Promise.all(batch.map(work)))],
+    Promise.resolve([])
+  );
+}
+
+async function staleIn(directory: string, isTemporary: (name: string) => boolean, now: number): Promise<number> {
   const names = await fs.readdir(directory).catch(() => [] as string[]);
   const stale = await Promise.all(
-    names.filter((name) => name.startsWith('.track-')).map(async (name) => {
+    names.filter(isTemporary).map(async (name) => {
       const absolute = path.join(directory, name);
       const stats = await fs.stat(absolute).catch(() => null);
       return stats && now - stats.mtimeMs > STALE_TRACK_MS ? absolute : null;
@@ -97,7 +119,9 @@ export async function runAtRestFileSweep(prisma: PrismaClient, now: Date = new D
   });
   const report = since ? await backfillAtRestAttachments(deps, { dryRun: false, log: () => undefined, since }) : NO_BACKFILL;
   const replacing = await access.store.replacingSince(new Date(now.getTime() - PENDING_ERASURE_MS));
-  const finished = await Promise.all(replacing.map((attachmentId) => finishPendingErasures(deps, attachmentId).catch(() => ({ erased: 0, repointed: 0 }))));
+  const finished = await inBatches(replacing.slice(0, PENDING_ERASURE_PER_PASS), PENDING_ERASURE_CONCURRENCY, (attachmentId) =>
+    finishPendingErasures(deps, attachmentId).catch(() => ({ erased: 0, repointed: 0 }))
+  );
   const tracks = await sweepStaleTrackTemporaries(deps.uploadRoot, now.getTime());
   const erased = finished.reduce((sum, outcome) => sum + outcome.erased, 0);
   const repointed = finished.reduce((sum, outcome) => sum + outcome.repointed, 0);

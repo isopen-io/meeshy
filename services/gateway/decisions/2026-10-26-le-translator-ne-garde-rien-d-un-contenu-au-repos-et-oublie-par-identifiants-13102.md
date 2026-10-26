@@ -66,6 +66,15 @@ par SCAN, à blanc par défaut, idempotent, ne journalise que des comptes :
 Le script vit dans l'image : rien n'est déposé sur le serveur. Staging : jouée
 au déploiement de ce lot. Production : attend le feu vert du porteur (#13102).
 
+### Ce qui part à côté : la synthèse, ses fichiers, le texte éphémère (audit du 2026-10-26)
+
+- Le cache de synthèse `tts:audio:*` ne se lit ni ne s'écrit hors d'une tâche
+  ordinaire déclarée (`cache_allowed()`).
+- Une tâche au repos ou éphémère efface ses pistes de `generated/audios/`
+  une fois publiées à la passerelle (`_forget_translated_audio_files`).
+- La traduction d'un TEXTE à vue unique, à flamme ou éphémère part protégée
+  comme sa tâche audio (`translationRequestRegime`) : rien n'en est rangé.
+
 ### Rétrocompatibilité
 
 Un translator ancien ignore `atRest` sur une tâche audio (il rangeait comme
@@ -78,6 +87,9 @@ les tâches ordinaires comme avant, sous index.
 
 - Le translator voit le clair en mémoire pendant la tâche (c'est le traitement
   serveur des modes `server`/`hybrid`) ; un translator compromis le lit.
+- Pour une conversation ORDINAIRE, `tts:audio:*` (empreinte du texte → chemin
+  de piste, 7 jours) et les pistes de `generated/audios/` ne s'oublient pas à
+  la suppression du message : comportement d’avant, suivi par #13143.
 - Tant que la purge n'a pas été jouée (production en attente du feu vert), les
   clés d'avant v3 restent en Redis, non servies, jusqu'à leur TTL de 30 jours.
 - Les fichiers temporaires du translator (`/tmp/meeshy_audio`) sont effacés en

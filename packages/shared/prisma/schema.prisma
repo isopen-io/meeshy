@@ -3454,13 +3454,6 @@ model ConversationPublicKey {
   @@index([userId])
 }
 
-/// =====================================================
-/// SERVER ENCRYPTION KEYS - ATTACHMENT ENCRYPTION
-/// =====================================================
-
-/// Server Encryption Key - Stores encrypted data keys for server/hybrid mode attachments
-/// Keys are encrypted with a master key (envelope encryption) before storage
-/// Used for audio translation in hybrid mode where server needs to decrypt
 /// #13100 — un FICHIER de pièce jointe scellé au repos (modes `server` et
 /// `hybrid`) : l'original, la vignette, une variante, un rendu, une piste TTS.
 /// Une ligne par CLÉ DE STOCKAGE : les copies transférées partagent les octets,
@@ -3500,6 +3493,13 @@ model AttachmentFileAtRest {
   @@index([replacedKey])
 }
 
+/// =====================================================
+/// SERVER ENCRYPTION KEYS - ATTACHMENT ENCRYPTION
+/// =====================================================
+
+/// Server Encryption Key - Stores encrypted data keys for server/hybrid mode attachments
+/// Keys are encrypted with a master key (envelope encryption) before storage
+/// Used for audio translation in hybrid mode where server needs to decrypt
 model ServerEncryptionKey {
   id String @id @map("_id")
 

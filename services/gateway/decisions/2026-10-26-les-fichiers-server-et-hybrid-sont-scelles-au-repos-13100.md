@@ -46,10 +46,13 @@ Pourquoi des segments et non un seul GCM : une vidéo se lit par plages
 avant que ses octets ne sortent ; troncature, permutation et recollage sont
 détectés.
 
-**La clé est celle de la conversation**, la même que son texte (désignée par
-`serverEncryptionKeyId`, enveloppée par `ENCRYPTION_MASTER_KEY`). Elle n'est
-utilisée ici que comme matériau d'entrée de HKDF (message d'HMAC-Extract), avec
-un sel aléatoire par fichier : chaque fichier a sa propre clé de segments.
+**La clé vient de celle de la conversation**, qui chiffre aussi son texte
+(désignée par `serverEncryptionKeyId`, enveloppée par `ENCRYPTION_MASTER_KEY`).
+Les fichiers n'en prennent jamais la valeur : ils la dérivent d'abord sous leur
+propre étiquette (`HKDF-SHA256(clé de données, sel vide, "meeshy:at-rest-file-key:v1")`,
+`fileMainKeyOf`), et c'est cette clé dérivée qui entre dans le HKDF de Tink,
+avec un sel aléatoire par fichier : deux usages, deux clés, et chaque fichier a
+sa propre clé de segments.
 
 **Les données associées** lient le chiffré à sa conversation, à la pièce qui
 l'a fait sceller, à son rôle et à sa clé de stockage
@@ -71,8 +74,10 @@ ligne. La ligne part quand le fichier est effacé (`AttachmentService`).
   10 min) est pris par l'envoi, le balayage et la migration. Deux scellements
   d'une même pièce sous deux liaisons (la source et sa copie transférée dans une
   autre conversation `server`) ne se croisent jamais : le second cède, le
-  balayage reprend. Verrou injoignable = occupé, journalisé en ERREUR
-  (`SERVER_AT_REST_SEAL_LOCK_UNAVAILABLE`). Une piste TTS s'écrit sous le même
+  balayage reprend. Redis injoignable : la passerelle se replie sur le verrou
+  de son processus (journalisé en ERREUR, `SERVER_AT_REST_SEAL_LOCK_UNAVAILABLE`)
+  et continue de sceller — une seule instance de passerelle à ce jour ; la
+  migration, elle, n'a pas ce repli (verrou injoignable = occupé, compté). Une piste TTS s'écrit sous le même
   verrou (attendu jusqu'à 10 s) : jamais rescellée par-dessus son chiffré.
 - **Le clair remplacé ne s'efface que quand plus aucune ligne ne le désigne.**
   Chaque fichier déplacé garde `replacedKey` ; `finishPendingErasures` repointe
@@ -82,9 +87,28 @@ ligne. La ligne part quand le fichier est effacé (`AttachmentService`).
   dans une conversation qui n'est pas au repos. Rien ne se perd. Une pièce
   effacée PENDANT son scellement (vue unique brûlée) ne laisse ni fichier
   scellé ni ligne.
-- **Un scellement interrompu se reprend** : une ligne qui pèse sur un fichier
-  de la taille exacte du clair (jamais celle d'un chiffré) est rescellée ; le
-  temporaire d'une ligne qui n'a pu s'écrire est effacé.
+- **Un scellement interrompu se reprend, et ne perd jamais une pièce.** Sous
+  une clé NEUVE, le chiffré prend sa place AVANT que la ligne ne l'annonce
+  (interrompu entre les deux : un chiffré orphelin, jamais une ligne vers un
+  absent) ; en PLACE, la ligne précède (interrompu : une ligne sur un clair de
+  la taille inscrite, rescellé au passage suivant). Aucune ligne n'est repointée
+  ni aucun clair effacé tant que CHAQUE scellé qui le remplace n'est pas sur le
+  disque, à la taille exacte de son chiffré. Les temporaires vivent sous
+  `.at-rest-tmp/` (même volume, segment caché refusé par toutes les routes),
+  balayés après une heure.
+- **Une pièce effacée pendant ou après son scellement emporte ses clairs** :
+  le scellement efface ce qu'il vient de remplacer quand plus aucune ligne ne
+  désigne ni l'ancien ni le nouvel original, et `deleteAttachment` efface les
+  clairs encore en attente (lignes de scellement relues avant les effacements).
+- **Une piste TTS ne se scelle que derrière son original scellé**, sous le
+  verrou de cet original : les adresses d'une pièce ne se signent qu'avec son
+  original, et une piste scellée sous une adresse nue ne se lirait plus. Une
+  piste réécrite en clair retire la ligne de sa version scellée.
+- **Une adresse signée livrée avant le scellement reste lisible** : la route
+  signée vérifie la signature sur la clé DEMANDÉE et, si son fichier a été
+  remplacé, sert le scellé qui l'a remplacé (`currentStorageKey`), après le
+  verdict de vie de la clé servie. Aucun client n'a à être prévenu du
+  repointage.
 - **Seules les clés datées (`AAAA/MM/<auteur>/<nom>`) et les pistes
   (`translated/<nom>`) se scellent** — la même règle que la lecture
   (`isSealableStorageKey`) : une clé hors de cette forme reste en clair,
@@ -97,14 +121,19 @@ ligne. La ligne part quand le fichier est effacé (`AttachmentService`).
   Redis `at-rest:files:activated-at`, posé une fois) : le déploiement seul ne
   scelle rien d'ancien — c'est l'affaire de la migration, sur feu vert et
   après sauvegarde. Sans marqueur, sans clé de signature, ou scellement
-  suspendu, il ne scelle rien.
+  suspendu, il ne scelle rien. Les effacements en attente se traitent par lots
+  de 10, au plus 500 par passage.
 - **Retour arrière, en trois temps** : (1) redémarrer la passerelle avec
   `AT_REST_FILE_SEALING=off` — plus rien ne se scelle (envoi, rendu, piste,
   balayage, migration), l'envoi n'exige plus de clé, les fichiers scellés se
   lisent encore ; (2) la migration `2026-10-26-server-at-rest-attachment-files-unseal`
   rouvre chaque fichier en place — elle REFUSE `--apply` tant que
   l'interrupteur n'est pas coupé, et reprend un fichier rouvert dont la ligne
-  n'avait pu partir ; (3) seulement alors, l'ancienne passerelle. Elle remet du
+  n'avait pu partir ; (3) seulement alors, l'ancienne passerelle. La migration
+  se joue par `docker exec` dans le conteneur passerelle, dont elle lit
+  l'environnement : celui de la passerelle vivante. Entre (2) et (3), la
+  passerelle nouvelle sert encore les fichiers rouverts (une clé de forme
+  opaque sans ligne de scellement se lit en clair dès que le magasin répond). Elle remet du
   clair : en production, feu vert du porteur.
 - **Index préalables** : `2026-10-26-attachment-file-at-rest-indexes`, à jouer
   avant le déploiement du code.

@@ -82,8 +82,8 @@ export function mongoAtRestStore(db: Db): AtRestFileStore {
         segmentSize: Number(doc.segmentSize),
         replacedKey: typeof doc.replacedKey === 'string' ? doc.replacedKey : null,
       })),
-    byReplacedKey: async (replacedKey) => {
-      const doc = await records.findOne({ replacedKey, role: 'original' }, { projection: { storageKey: 1 } });
+    byReplacedKey: async (replacedKey, role) => {
+      const doc = await records.findOne({ replacedKey, ...(role ? { role } : {}) }, { projection: { storageKey: 1 } });
       return doc && typeof doc.storageKey === 'string' ? store.find(doc.storageKey) : null;
     },
     replacingSince: async (since) =>

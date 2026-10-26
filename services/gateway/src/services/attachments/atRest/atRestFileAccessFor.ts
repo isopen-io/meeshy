@@ -9,13 +9,19 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { getEncryptionService } from '../../EncryptionService';
 import { getCacheStore } from '../../CacheStore';
 import { prismaAtRestFileStore, type AtRestFileAccess, type AtRestFileKeyring, type FileSealLock } from './atRestFiles';
-import { redisSealLock } from './sealLock';
+import { resilientSealLock } from './sealLock';
+import { enhancedLogger } from '../../../utils/logger-enhanced';
 
-/** Le verrou partagé, sur le Redis de la passerelle ; sans Redis, un seul processus scelle. */
-const gatewaySealLock: FileSealLock = async (filePath) => {
-  const redis = getCacheStore().getNativeClient();
-  return redis ? redisSealLock(redis as never)(filePath) : { release: async () => undefined };
-};
+const logger = enhancedLogger.child({ module: 'atRestFileAccess' });
+
+/** Le verrou de la passerelle : Redis partagé, repli sur le verrou du processus (`resilientSealLock`). */
+export const gatewaySealLock: FileSealLock = resilientSealLock(
+  () => getCacheStore().getNativeClient() as never,
+  (error) => logger.error('verrou de scellement Redis injoignable : repli sur le verrou du processus', undefined, {
+    code: 'SERVER_AT_REST_SEAL_LOCK_UNAVAILABLE',
+    reason: error instanceof Error ? error.name : 'unknown',
+  })
+);
 
 export function lazyFileKeyring(factory: () => Promise<AtRestFileKeyring>): AtRestFileKeyring {
   const state: { pending: Promise<AtRestFileKeyring> | null } = { pending: null };
