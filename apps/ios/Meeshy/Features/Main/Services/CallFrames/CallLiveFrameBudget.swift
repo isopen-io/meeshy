@@ -26,36 +26,36 @@ nonisolated enum CallLiveFrameBudget {
 
 /// Recueille le temps carte graphique de chaque image (rappel de fin du tampon de commandes,
 /// hors du fil principal) et journalise le p95 toutes les `windowSize` images.
-nonisolated final class CallLiveFrameBudgetMeter: @unchecked Sendable {
-    private let lock = NSLock()
-    private var samples: [Double] = []
-    private var limitMs: Double
+nonisolated final class CallLiveFrameBudgetMeter: Sendable {
+    private nonisolated struct Window: Sendable {
+        var samples: [Double] = []
+        var limitMs: Double
+    }
+
+    private let window: Locked<Window>
     private let logger = MeeshyLog.logger(.callLiveFrame)
 
     init(limitMs: Double = CallLiveFrameBudget.limitMs(for: nil)) {
-        self.limitMs = limitMs
+        window = Locked(Window(limitMs: limitMs))
     }
 
     func reset(limitMs: Double) {
-        lock.lock()
-        self.limitMs = limitMs
-        samples.removeAll(keepingCapacity: true)
-        lock.unlock()
+        window.mutate { state in
+            state.limitMs = limitMs
+            state.samples.removeAll(keepingCapacity: true)
+        }
     }
 
     func record(gpuMs: Double) {
         guard gpuMs.isFinite, gpuMs >= 0 else { return }
-        lock.lock()
-        samples.append(gpuMs)
-        guard samples.count >= CallLiveFrameBudget.windowSize else {
-            lock.unlock()
-            return
+        let full = window.mutate { state -> (samples: [Double], limit: Double)? in
+            state.samples.append(gpuMs)
+            guard state.samples.count >= CallLiveFrameBudget.windowSize else { return nil }
+            defer { state.samples.removeAll(keepingCapacity: true) }
+            return (state.samples, state.limitMs)
         }
-        let window = samples
-        let limit = limitMs
-        samples.removeAll(keepingCapacity: true)
-        lock.unlock()
-        guard let p95 = CallLiveFrameBudget.percentile95(window) else { return }
+        guard let full, let p95 = CallLiveFrameBudget.percentile95(full.samples) else { return }
+        let limit = full.limit
         if p95 > limit {
             logger.warning("call-live-frame: p95 GPU \(p95, format: .fixed(precision: 3), privacy: .public) ms > \(limit, format: .fixed(precision: 1), privacy: .public) ms")
         } else {

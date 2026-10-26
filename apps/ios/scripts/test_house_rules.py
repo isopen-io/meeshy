@@ -108,7 +108,12 @@ class UncheckedSendable(unittest.TestCase):
                 self.assertEqual(count("unchecked-sendable", self.BARE + "let l = " + lock + "\n"), 0)
 
     def test_locked_state_in_file_clears_it(self):
-        self.assertEqual(count("unchecked-sendable", self.BARE + "let s = Locked<Int>(0)\n"), 0)
+        for decl in ("Locked<Int>(0)", "Locked(State())"):
+            with self.subTest(decl=decl):
+                self.assertEqual(count("unchecked-sendable", self.BARE + "let s = " + decl + "\n"), 0)
+
+    def test_locked_lookalike_does_not_clear_it(self):
+        self.assertEqual(count("unchecked-sendable", self.BARE + "let s = isLocked(0)\n"), 1)
 
 
 class UncheckedSendableTotal(unittest.TestCase):

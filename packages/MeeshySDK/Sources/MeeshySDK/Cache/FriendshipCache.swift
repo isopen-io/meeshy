@@ -13,7 +13,6 @@ public final class FriendshipCache: ObservableObject, @unchecked Sendable {
     public static let shared = FriendshipCache()
 
     private let logger = MeeshyLog.logger(.friendshipCache, subsystem: .legacySDK)
-    private let lock = NSLock()
 
     /// Monotonic version bumped on every mutation. Use `@ObservedObject` on
     /// `FriendshipCache.shared` and observe `version` (or `$version` via
@@ -22,49 +21,75 @@ public final class FriendshipCache: ObservableObject, @unchecked Sendable {
     /// `objectWillChange` should subscribe to `$version` and re-emit.
     @Published public private(set) var version: Int = 0
 
-    private var _friendIds: Set<String> = []
-    private var _sentPending: [String: String] = [:]      // receiverId -> requestId
-    private var _receivedPending: [String: String] = [:]   // senderId -> requestId
-    private var _isHydrated = false
-    /// Currently running hydration task. Used to coalesce concurrent
-    /// `hydrate()` callers — without this, MeeshyApp dispatched two
-    /// hydrations on warm-start (one from `task { }` at launch and one
-    /// from the auth `onChange`) and the second `applyHydration`'s
-    /// `removeAll()` crashed in `swift_deallocClassInstance` on iOS 26
-    /// because the dictionary's storage was being released while the
-    /// first hydration's task graph still held strong references to
-    /// the same FriendRequest values. Coalescing makes hydrate()
-    /// idempotent: parallel callers share the same network roundtrip
-    /// and the same applyHydration call.
-    private var _hydrationTask: Task<Void, Never>?
-    /// Generation counter bumped every time the in-flight slot changes.
-    /// Lets the owner of a finishing task tell whether its slot is still
-    /// theirs (versus reset by `clear()` or replaced by a later hydrate)
-    /// before clearing it — avoids wiping a fresh task's pointer.
-    private var _hydrationGen: UInt64 = 0
+    private struct State {
+        var friendIds: Set<String> = []
+        var sentPending: [String: String] = [:]      // receiverId -> requestId
+        var receivedPending: [String: String] = [:]   // senderId -> requestId
+        var isHydrated = false
+        /// Currently running hydration task. Used to coalesce concurrent
+        /// `hydrate()` callers — without this, MeeshyApp dispatched two
+        /// hydrations on warm-start (one from `task { }` at launch and one
+        /// from the auth `onChange`) and the second `applyHydration`'s
+        /// `removeAll()` crashed in `swift_deallocClassInstance` on iOS 26
+        /// because the dictionary's storage was being released while the
+        /// first hydration's task graph still held strong references to
+        /// the same FriendRequest values. Coalescing makes hydrate()
+        /// idempotent: parallel callers share the same network roundtrip
+        /// and the same applyHydration call.
+        var hydrationTask: Task<Void, Never>?
+        /// Generation counter bumped every time the in-flight slot changes.
+        /// Lets the owner of a finishing task tell whether its slot is still
+        /// theirs (versus reset by `clear()` or replaced by a later hydrate)
+        /// before clearing it — avoids wiping a fresh task's pointer.
+        var hydrationGen: UInt64 = 0
+
+        func status(for userId: String) -> FriendshipStatus {
+            if friendIds.contains(userId) { return .friend }
+            if let requestId = sentPending[userId] { return .pendingSent(requestId: requestId) }
+            if let requestId = receivedPending[userId] { return .pendingReceived(requestId: requestId) }
+            return .none
+        }
+
+        mutating func record(sent: [FriendRequest], received: [FriendRequest]) {
+            for request in sent {
+                switch request.status {
+                case "accepted": friendIds.insert(request.receiverId)
+                case "pending": sentPending[request.receiverId] = request.id
+                default: break
+                }
+            }
+            for request in received {
+                switch request.status {
+                case "accepted": friendIds.insert(request.senderId)
+                case "pending": receivedPending[request.senderId] = request.id
+                default: break
+                }
+            }
+        }
+
+        mutating func reset() {
+            friendIds.removeAll()
+            sentPending.removeAll()
+            receivedPending.removeAll()
+        }
+    }
+
+    private let state = Locked(State())
 
     public var isHydrated: Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        return _isHydrated
+        state.read { $0.isHydrated }
     }
 
     public var friendIds: Set<String> {
-        lock.lock()
-        defer { lock.unlock() }
-        return _friendIds
+        state.read { $0.friendIds }
     }
 
     public var friendCount: Int {
-        lock.lock()
-        defer { lock.unlock() }
-        return _friendIds.count
+        state.read { $0.friendIds.count }
     }
 
     public var pendingReceivedCount: Int {
-        lock.lock()
-        defer { lock.unlock() }
-        return _receivedPending.count
+        state.read { $0.receivedPending.count }
     }
 
     private init() {}
@@ -72,18 +97,11 @@ public final class FriendshipCache: ObservableObject, @unchecked Sendable {
     // MARK: - Lookup
 
     public func status(for userId: String) -> FriendshipStatus {
-        lock.lock()
-        defer { lock.unlock() }
-        if _friendIds.contains(userId) { return .friend }
-        if let requestId = _sentPending[userId] { return .pendingSent(requestId: requestId) }
-        if let requestId = _receivedPending[userId] { return .pendingReceived(requestId: requestId) }
-        return .none
+        state.read { $0.status(for: userId) }
     }
 
     public func isFriend(_ userId: String) -> Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        return _friendIds.contains(userId)
+        state.read { $0.friendIds.contains(userId) }
     }
 
     // MARK: - Hydrate (call once after login)
@@ -116,7 +134,7 @@ public final class FriendshipCache: ObservableObject, @unchecked Sendable {
 
         // Coalesce concurrent callers onto a single in-flight task. The
         // claim/release dance lives in synchronous helpers because Swift 6
-        // forbids calling `NSLock.lock()/unlock()` directly from an async
+        // forbids taking a lock directly from an async
         // context (it would risk a thread-hop while the lock is held).
         let claim = claimOrJoinHydration(
             friendService: friendService,
@@ -136,19 +154,19 @@ public final class FriendshipCache: ObservableObject, @unchecked Sendable {
         friendService: FriendServiceProviding,
         seedSource: @escaping @Sendable () async -> FriendshipSeed?
     ) -> (task: Task<Void, Never>, ownerGen: UInt64?) {
-        lock.lock()
-        defer { lock.unlock() }
-        if let existing = _hydrationTask {
-            return (existing, nil)
+        state.mutateUnchecked { state in
+            if let existing = state.hydrationTask {
+                return (existing, nil)
+            }
+            state.hydrationGen &+= 1
+            let myGen = state.hydrationGen
+            let newTask: Task<Void, Never> = Task { [weak self] in
+                guard let self else { return }
+                await self.performHydration(friendService: friendService, seedSource: seedSource)
+            }
+            state.hydrationTask = newTask
+            return (newTask, myGen)
         }
-        _hydrationGen &+= 1
-        let myGen = _hydrationGen
-        let newTask: Task<Void, Never> = Task { [weak self] in
-            guard let self else { return }
-            await self.performHydration(friendService: friendService, seedSource: seedSource)
-        }
-        _hydrationTask = newTask
-        return (newTask, myGen)
     }
 
     /// Release the in-flight slot — but only if its generation is still
@@ -156,10 +174,10 @@ public final class FriendshipCache: ObservableObject, @unchecked Sendable {
     /// generation, so the cancelled task's owner harmlessly skips the
     /// release here and the freshly-started hydration keeps its slot.
     private func releaseHydrationOwnership(gen: UInt64) {
-        lock.lock()
-        defer { lock.unlock() }
-        if _hydrationGen == gen {
-            _hydrationTask = nil
+        state.mutate { state in
+            if state.hydrationGen == gen {
+                state.hydrationTask = nil
+            }
         }
     }
 
@@ -208,77 +226,33 @@ public final class FriendshipCache: ObservableObject, @unchecked Sendable {
         // verrou : cette tâche tourne hors du fil principal, et une demande
         // d'ami reçue ou une déconnexion mute ces collections au même instant
         // — `count` lu pendant qu'un `Set` se réalloue lit une mémoire libérée.
-        let (friendsCount, sentCount, receivedCount) = lock.withLock {
-            (_friendIds.count, _sentPending.count, _receivedPending.count)
+        let (friendsCount, sentCount, receivedCount) = state.read {
+            ($0.friendIds.count, $0.sentPending.count, $0.receivedPending.count)
         }
         logger.info("Friendship cache hydrated: \(friendsCount) friends, \(sentCount) sent pending, \(receivedCount) received pending")
     }
 
     /// cache-08 — seed hors-ligne : appliqué UNIQUEMENT sur un cache vide
     /// (jamais par-dessus un état réseau ou des mutations optimistes), ne
-    /// pose JAMAIS _isHydrated — le réseau reste tenté et écrase dès qu'il
+    /// pose JAMAIS isHydrated — le réseau reste tenté et écrase dès qu'il
     /// répond.
     private func applySeed(friends: [FriendRequestUser], received: [FriendRequest], sent: [FriendRequest]) {
-        lock.lock()
-        let shouldApply = _friendIds.isEmpty && _sentPending.isEmpty && _receivedPending.isEmpty
-        if shouldApply {
-            for friend in friends {
-                _friendIds.insert(friend.id)
-            }
-            for request in sent {
-                switch request.status {
-                case "accepted": _friendIds.insert(request.receiverId)
-                case "pending": _sentPending[request.receiverId] = request.id
-                default: break
-                }
-            }
-            for request in received {
-                switch request.status {
-                case "accepted": _friendIds.insert(request.senderId)
-                case "pending": _receivedPending[request.senderId] = request.id
-                default: break
-                }
-            }
+        let friendIds = friends.map(\.id)
+        let shouldApply = state.mutate { state -> Bool in
+            guard state.friendIds.isEmpty && state.sentPending.isEmpty && state.receivedPending.isEmpty else { return false }
+            state.friendIds.formUnion(friendIds)
+            state.record(sent: sent, received: received)
+            return true
         }
-        lock.unlock()
         if shouldApply { notifyChange() }
     }
 
     private func applyHydration(sent: [FriendRequest], received: [FriendRequest]) {
-        lock.lock()
-        // `defer` guarantees the lock is released even if a Swift runtime
-        // fatal error fires inside `removeAll()` or one of the `insert`
-        // calls — without this, a single bad mutation would deadlock every
-        // subsequent reader on the singleton lock.
-        defer { lock.unlock() }
-
-        _friendIds.removeAll()
-        _sentPending.removeAll()
-        _receivedPending.removeAll()
-
-        for request in sent {
-            switch request.status {
-            case "accepted":
-                _friendIds.insert(request.receiverId)
-            case "pending":
-                _sentPending[request.receiverId] = request.id
-            default:
-                break
-            }
+        state.mutate { state in
+            state.reset()
+            state.record(sent: sent, received: received)
+            state.isHydrated = true
         }
-
-        for request in received {
-            switch request.status {
-            case "accepted":
-                _friendIds.insert(request.senderId)
-            case "pending":
-                _receivedPending[request.senderId] = request.id
-            default:
-                break
-            }
-        }
-
-        _isHydrated = true
     }
 
     // MARK: - Pagination Helper
@@ -303,38 +277,30 @@ public final class FriendshipCache: ObservableObject, @unchecked Sendable {
     // MARK: - Mutations (optimistic updates)
 
     public func didSendRequest(to receiverId: String, requestId: String) {
-        lock.lock()
-        _sentPending[receiverId] = requestId
-        lock.unlock()
+        state.mutate { _ = $0.sentPending[receiverId] = requestId }
         notifyChange()
     }
 
     public func didCancelRequest(to receiverId: String) {
-        lock.lock()
-        _sentPending.removeValue(forKey: receiverId)
-        lock.unlock()
+        state.mutate { _ = $0.sentPending.removeValue(forKey: receiverId) }
         notifyChange()
     }
 
     public func didAcceptRequest(from senderId: String) {
-        lock.lock()
-        _receivedPending.removeValue(forKey: senderId)
-        _friendIds.insert(senderId)
-        lock.unlock()
+        state.mutate { state in
+            state.receivedPending.removeValue(forKey: senderId)
+            state.friendIds.insert(senderId)
+        }
         notifyChange()
     }
 
     public func didRejectRequest(from senderId: String) {
-        lock.lock()
-        _receivedPending.removeValue(forKey: senderId)
-        lock.unlock()
+        state.mutate { _ = $0.receivedPending.removeValue(forKey: senderId) }
         notifyChange()
     }
 
     public func didReceiveRequest(from senderId: String, requestId: String) {
-        lock.lock()
-        _receivedPending[senderId] = requestId
-        lock.unlock()
+        state.mutate { _ = $0.receivedPending[senderId] = requestId }
         notifyChange()
     }
 
@@ -342,33 +308,27 @@ public final class FriendshipCache: ObservableObject, @unchecked Sendable {
     /// "Remove friend" action) — drops the user from the accepted set so the
     /// resolver returns `.none` everywhere immediately.
     public func didRemoveFriend(_ userId: String) {
-        lock.lock()
-        _friendIds.remove(userId)
-        lock.unlock()
+        state.mutate { _ = $0.friendIds.remove(userId) }
         notifyChange()
     }
 
     // MARK: - Rollback
 
     public func rollbackSendRequest(to receiverId: String) {
-        lock.lock()
-        _sentPending.removeValue(forKey: receiverId)
-        lock.unlock()
+        state.mutate { _ = $0.sentPending.removeValue(forKey: receiverId) }
         notifyChange()
     }
 
     public func rollbackAccept(senderId: String, requestId: String) {
-        lock.lock()
-        _friendIds.remove(senderId)
-        _receivedPending[senderId] = requestId
-        lock.unlock()
+        state.mutate { state in
+            state.friendIds.remove(senderId)
+            state.receivedPending[senderId] = requestId
+        }
         notifyChange()
     }
 
     public func rollbackReject(senderId: String, requestId: String) {
-        lock.lock()
-        _receivedPending[senderId] = requestId
-        lock.unlock()
+        state.mutate { _ = $0.receivedPending[senderId] = requestId }
         notifyChange()
     }
 
@@ -429,21 +389,21 @@ public final class FriendshipCache: ObservableObject, @unchecked Sendable {
     // MARK: - Clear
 
     public func clear() {
-        lock.lock()
         // Cancel any in-flight hydration so an old user's response doesn't
         // overwrite the freshly-cleared state when its applyHydration() lands
         // after this clear() — a leak that would re-expose the previous
         // account's friend graph to the new session on logout/login. Bump the
         // generation so the cancelled task's owner-cleanup in hydrate()
         // recognises its slot is no longer current and skips the clear.
-        let inflight = _hydrationTask
-        _hydrationTask = nil
-        _hydrationGen &+= 1
-        _friendIds.removeAll()
-        _sentPending.removeAll()
-        _receivedPending.removeAll()
-        _isHydrated = false
-        lock.unlock()
+        let inflight = state.mutate { state -> Task<Void, Never>? in
+            defer {
+                state.hydrationTask = nil
+                state.hydrationGen &+= 1
+                state.reset()
+                state.isHydrated = false
+            }
+            return state.hydrationTask
+        }
         inflight?.cancel()
         notifyChange()
     }

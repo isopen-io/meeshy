@@ -105,7 +105,7 @@ FLOORS = (("apps/ios/MeeshyWidgets/", (17, 0)),)
 DEFAULT_FLOOR = (16, 0)
 JUSTIFICATION = "unchecked:"
 JUSTIFICATION_WINDOW = 3
-LOCK_PRIMITIVES = re.compile(r"OSAllocatedUnfairLock|NSLock|os_unfair_lock|Mutex<|Locked<")
+LOCK_PRIMITIVES = re.compile(r"OSAllocatedUnfairLock|NSLock|os_unfair_lock|Mutex<|\bLocked\s*[<(]")
 HEADER_LINES = 12
 
 
