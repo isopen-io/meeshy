@@ -24,4 +24,12 @@ class EngagementPopTest {
         assertThat(EngagementPop.shouldPop(wasActive = true, isActive = true)).isFalse()
         assertThat(EngagementPop.shouldPop(wasActive = false, isActive = false)).isFalse()
     }
+
+    // Le ressort reprend celui d'iOS : réponse 0,25 s ⇒ raideur (2π/0,25)² ≈ 632, bien sous le
+    // « StiffnessMedium » (1500) que le premier jet employait et qui sautait deux fois trop vite.
+    @Test
+    fun `spring stiffness mirrors the iOS response`() {
+        assertThat(EngagementPop.stiffnessFor(EngagementPop.SPRING_RESPONSE_SECONDS)).isWithin(1f).of(631.65f)
+        assertThat(EngagementPop.SPRING_DAMPING).isEqualTo(0.5f)
+    }
 }

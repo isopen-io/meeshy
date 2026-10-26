@@ -4,7 +4,6 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -27,6 +26,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -76,15 +76,28 @@ internal fun EngagementGlyph(
     LaunchedEffect(active) {
         val pop = EngagementPop.shouldPop(previous, active)
         previous = active
-        if (!pop) return@LaunchedEffect
-        scale.snapTo(EngagementPop.PEAK_SCALE)
-        if (tilt) rotation.snapTo(EngagementPop.HEART_TILT_DEGREES)
+        val settle = spring<Float>(
+            dampingRatio = EngagementPop.SPRING_DAMPING,
+            stiffness = EngagementPop.stiffnessFor(EngagementPop.SPRING_RESPONSE_SECONDS),
+        )
+        if (!pop) {
+            // Un retrait (ou un retour arrière optimiste) qui coupe un saut en cours ne doit pas
+            // laisser le glyphe figé au sommet.
+            ring.snapTo(0f)
+            coroutineScope {
+                launch { scale.animateTo(1f, settle) }
+                launch { rotation.animateTo(0f, settle) }
+            }
+            return@LaunchedEffect
+        }
         if (burst) ring.snapTo(0f)
-        val settle = spring<Float>(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)
         coroutineScope {
+            launch { scale.animateTo(EngagementPop.PEAK_SCALE, settle) }
+            if (tilt) launch { rotation.animateTo(EngagementPop.HEART_TILT_DEGREES, settle) }
+            if (burst) launch { ring.animateTo(1f, tween(EngagementPop.BURST_MILLIS, easing = FastOutSlowInEasing)) }
+            delay(EngagementPop.HOLD_MILLIS)
             launch { scale.animateTo(1f, settle) }
             if (tilt) launch { rotation.animateTo(0f, settle) }
-            if (burst) launch { ring.animateTo(1f, tween(EngagementPop.BURST_MILLIS, easing = FastOutSlowInEasing)) }
         }
     }
     Box(modifier = modifier.defaultMinSize(minWidth = size, minHeight = size), contentAlignment = Alignment.Center) {

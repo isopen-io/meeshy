@@ -14,6 +14,21 @@ internal object EngagementPop {
     /** Rotation du cœur au sommet du saut, en degrés (iOS `rotationEffect(-15)`). */
     const val HEART_TILT_DEGREES: Float = -15f
 
+    /** Amortissement du ressort (iOS `dampingFraction: 0.5`). */
+    const val SPRING_DAMPING: Float = 0.5f
+
+    /** Temps de réponse du ressort, en secondes (iOS `response: 0.25`). */
+    const val SPRING_RESPONSE_SECONDS: Float = 0.25f
+
+    /** Raideur Compose équivalente à une réponse SwiftUI : (2π / réponse)². */
+    fun stiffnessFor(responseSeconds: Float): Float {
+        val omega = (2.0 * Math.PI / responseSeconds).toFloat()
+        return omega * omega
+    }
+
+    /** Le glyphe tient son sommet avant de redescendre (iOS `asyncAfter(0.3)`). */
+    const val HOLD_MILLIS: Long = 300L
+
     /** Durée de l'anneau qui s'élargit derrière le cœur (iOS `easeOut(0.4)`). */
     const val BURST_MILLIS: Int = 400
 }
