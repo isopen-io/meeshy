@@ -235,7 +235,7 @@ class ChatViewModelTest {
         coEvery { activeCallRepo.activeCallFor(any()) } returns activeCall
         val reportRepo = mockk<ReportRepository>(relaxed = true)
         val mediaQueue = mockk<MediaUploadQueue>(relaxed = true)
-        coEvery { mediaQueue.enqueue(any()) } returns "upload-cmid"
+        coEvery { mediaQueue.enqueue(any(), any(), any()) } returns "upload-cmid"
         val anonymousStore = InMemoryAnonymousSessionStore(anonymousSession)
         val privacyStore = InMemoryPrivacyPreferencesStore(
             PrivacyPreferences(showReadReceipts = showReadReceipts),
@@ -1041,7 +1041,7 @@ class ChatViewModelTest {
 
         assertThat(vm.state.value.clipboardContent).isNull()
         val itemSlot = slot<MediaUploadItem>()
-        coVerify(exactly = 1) { h.mediaQueue.enqueue(capture(itemSlot)) }
+        coVerify(exactly = 1) { h.mediaQueue.enqueue(capture(itemSlot), any(), any()) }
         assertThat(String(itemSlot.captured.bytes, Charsets.UTF_8)).isEqualTo(pasted)
         assertThat(itemSlot.captured.mimeType).isEqualTo("text/plain")
         coVerify(exactly = 1) {
@@ -1097,7 +1097,7 @@ class ChatViewModelTest {
         advanceUntilIdle()
 
         val itemSlot = slot<MediaUploadItem>()
-        coVerify(exactly = 1) { h.mediaQueue.enqueue(capture(itemSlot)) }
+        coVerify(exactly = 1) { h.mediaQueue.enqueue(capture(itemSlot), any(), any()) }
         assertThat(itemSlot.captured.fileName).isEqualTo("report.pdf")
         assertThat(itemSlot.captured.mimeType).isEqualTo("application/pdf")
         val attachSlot = slot<List<ApiMessageAttachment>>()
@@ -1186,7 +1186,7 @@ class ChatViewModelTest {
         advanceUntilIdle()
 
         val itemSlot = slot<MediaUploadItem>()
-        coVerify(exactly = 1) { h.mediaQueue.enqueue(capture(itemSlot)) }
+        coVerify(exactly = 1) { h.mediaQueue.enqueue(capture(itemSlot), any(), any()) }
         assertThat(itemSlot.captured.mimeType).isEqualTo("video/mp4")
     }
 
@@ -1200,7 +1200,7 @@ class ChatViewModelTest {
         advanceUntilIdle()
 
         val itemSlot = slot<MediaUploadItem>()
-        coVerify(exactly = 1) { h.mediaQueue.enqueue(capture(itemSlot)) }
+        coVerify(exactly = 1) { h.mediaQueue.enqueue(capture(itemSlot), any(), any()) }
         assertThat(itemSlot.captured.fileName).isEqualTo("attachment")
     }
 
@@ -1213,7 +1213,7 @@ class ChatViewModelTest {
         h.vm.sendFileAttachment(ByteArray(0), "empty.pdf", declaredMimeType = "application/pdf")
         advanceUntilIdle()
 
-        coVerify(exactly = 0) { h.mediaQueue.enqueue(any()) }
+        coVerify(exactly = 0) { h.mediaQueue.enqueue(any(), any(), any()) }
         coVerify(exactly = 0) { h.repo.sendOptimistic(any(), any(), any(), any(), any()) }
     }
 
@@ -1236,7 +1236,7 @@ class ChatViewModelTest {
             h.vm.sendFileAttachment("PDF2".toByteArray(), "two.pdf", declaredMimeType = "application/pdf")
             advanceUntilIdle()
 
-            coVerify(exactly = 1) { h.mediaQueue.enqueue(any()) }
+            coVerify(exactly = 1) { h.mediaQueue.enqueue(any(), any(), any()) }
         }
 
     @Test
@@ -1254,7 +1254,7 @@ class ChatViewModelTest {
         h.vm.sendFileAttachment("PDF".toByteArray(), "report.pdf", declaredMimeType = "application/pdf")
         advanceUntilIdle()
 
-        coVerify(exactly = 0) { h.mediaQueue.enqueue(any()) }
+        coVerify(exactly = 0) { h.mediaQueue.enqueue(any(), any(), any()) }
     }
 
     @Test
@@ -1270,7 +1270,7 @@ class ChatViewModelTest {
         h.vm.sendFileAttachment("PDF".toByteArray(), "report.pdf", declaredMimeType = "application/pdf")
         advanceUntilIdle()
 
-        coVerify(exactly = 0) { h.mediaQueue.enqueue(any()) }
+        coVerify(exactly = 0) { h.mediaQueue.enqueue(any(), any(), any()) }
         assertThat(h.vm.state.value.lastSelfSentAtMillis).isNull()
     }
 
@@ -1287,7 +1287,7 @@ class ChatViewModelTest {
         h.vm.sendFileAttachment("PNG".toByteArray(), "avatar.png", declaredMimeType = "image/png")
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { h.mediaQueue.enqueue(any()) }
+        coVerify(exactly = 1) { h.mediaQueue.enqueue(any(), any(), any()) }
     }
 
     @Test
@@ -1326,7 +1326,7 @@ class ChatViewModelTest {
         h.vm.send()
         advanceUntilIdle()
 
-        coVerify(exactly = 0) { h.mediaQueue.enqueue(any()) }
+        coVerify(exactly = 0) { h.mediaQueue.enqueue(any(), any(), any()) }
         coVerify(exactly = 0) { h.repo.sendOptimistic(any(), any(), any(), any(), any()) }
     }
 

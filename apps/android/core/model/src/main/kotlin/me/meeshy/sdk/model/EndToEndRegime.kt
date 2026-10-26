@@ -12,3 +12,11 @@ object EndToEndRegime {
 
     fun isEndToEnd(encryptionMode: String?): Boolean = encryptionMode?.trim()?.lowercase() == MODE
 }
+
+/**
+ * #13106 — une pièce chiffrée sur l'appareil de l'expéditeur (#10789) : un blob opaque que
+ * l'Android natif ne sait pas ouvrir (#13015). Elle ne se rend ni en fichier, ni en image,
+ * ni en audio, et rien ne la télécharge.
+ */
+val ApiMessageAttachment.isEndToEndBlob: Boolean
+    get() = EndToEndRegime.isEndToEnd(encryptionMode)

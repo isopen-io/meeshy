@@ -14,7 +14,10 @@ import me.meeshy.core.database.entity.SyncMetaEntity
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.cache.CachePolicy
 import me.meeshy.sdk.cache.SwrCacheSource
+import me.meeshy.sdk.e2ee.EndToEndRegimeLedger
 import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.model.EndToEndRegime
+import me.meeshy.sdk.model.EndToEndRegimeMemory
 import me.meeshy.sdk.model.isDirect
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.sdk.model.keepingParticipantsOf
@@ -56,7 +59,12 @@ internal class ConversationCacheSource(
     private val ownership: SyncOwnership<Unit> = SyncOwnership(),
     /** Conversations created here moments ago: a full sweep that does not serve them yet keeps them. */
     private val protectedIds: () -> Set<String> = { emptySet() },
+    /** #12956 — the conversations this account has seen end-to-end encrypted: never served back in clear. */
+    private val endToEnd: EndToEndRegimeLedger = EndToEndRegimeLedger.None,
 ) : SwrCacheSource<List<ApiConversation>> {
+
+    /** The account whose cached e2ee rows were already folded into [endToEnd] (rows cached before #12956). */
+    private var seededAccount: String? = null
 
     override fun observe(): Flow<List<ApiConversation>?> =
         combine(
@@ -382,7 +390,8 @@ internal class ConversationCacheSource(
         }
         val watermarkToStore = receivedMax ?: currentWatermark
         database.withTransaction {
-            val carried = conversations.map { carryingKnownPeers(it) }
+            seedEndToEndFromCache()
+            val carried = conversations.map { keepingEndToEnd(carryingKnownPeers(it)) }
             val rows = carried.map { entityOf(it, now) }
             conversationDao.upsertAll(rows)
             carried.forEach(searchIndex::indexConversation)
@@ -399,7 +408,8 @@ internal class ConversationCacheSource(
     suspend fun remember(conversation: ApiConversation) {
         val now = clock.nowMillis()
         database.withTransaction {
-            val carried = carryingKnownPeers(conversation)
+            seedEndToEndFromCache()
+            val carried = keepingEndToEnd(carryingKnownPeers(conversation))
             conversationDao.upsertAll(listOf(entityOf(carried, now)))
             searchIndex.indexConversation(carried)
         }
@@ -418,6 +428,28 @@ internal class ConversationCacheSource(
         return served.keepingParticipantsOf(known)
     }
 
+    /**
+     * #12956 — a conversation served e2ee is learned; one this account has seen e2ee keeps its
+     * e2ee mode whatever the gateway serves next (#12949): a downgrade is ignored, never applied.
+     */
+    private fun keepingEndToEnd(served: ApiConversation): ApiConversation {
+        if (EndToEndRegime.isEndToEnd(served.encryptionMode)) endToEnd.learn(served.id)
+        return EndToEndRegimeMemory.kept(served, seenEndToEnd = endToEnd.isSealed(served.id))
+    }
+
+    /** Rows cached e2ee before the ledger existed are learned once per account. Must run inside the write transaction. */
+    private suspend fun seedEndToEndFromCache() {
+        val account = accountProvider.activeAccountId() ?: return
+        if (seededAccount == account) return
+        conversationDao.payloadsContaining(E2EE_PAYLOAD_NEEDLE)
+            .filter { row ->
+                runCatching { MeeshyApi.json.decodeFromString<ApiConversation>(row.payload) }.getOrNull()
+                    ?.let { EndToEndRegime.isEndToEnd(it.encryptionMode) } == true
+            }
+            .forEach { endToEnd.learn(it.id) }
+        seededAccount = account
+    }
+
     private fun entityOf(conversation: ApiConversation, cachedAtMillis: Long) = ConversationEntity(
         id = conversation.id,
         payload = MeeshyApi.json.encodeToString(conversation),
@@ -432,6 +464,9 @@ internal class ConversationCacheSource(
 
     internal companion object {
         const val RESOURCE_KEY: String = "conversations"
+
+        /** How a cached e2ee row reads in its serialized payload (`MeeshyApi.json`, compact). */
+        private const val E2EE_PAYLOAD_NEEDLE = "\"encryptionMode\":\"e2ee\""
 
         /**
          * Bound-variable budget per [ConversationDao.deleteByIds] call — under

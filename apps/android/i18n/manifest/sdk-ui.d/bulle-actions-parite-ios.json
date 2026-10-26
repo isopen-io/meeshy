@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        {
+          "androidName": "bubble_add_reaction",
+          "status": "android-only"
+        },
+        {
+          "androidName": "bubble_failed_retry",
+          "status": "android-only"
+        },
+        {
+          "androidName": "bubble_view_profile",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

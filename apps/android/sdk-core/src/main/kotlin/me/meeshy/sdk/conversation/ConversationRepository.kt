@@ -1,5 +1,6 @@
 package me.meeshy.sdk.conversation
 
+import me.meeshy.sdk.e2ee.EndToEndRegimeLedger
 import androidx.room.withTransaction
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -58,6 +59,7 @@ class ConversationRepository @Inject constructor(
     syncMetaDao: SyncMetaDao,
     private val outboxRepository: OutboxRepository,
     syncAccountProvider: SyncAccountProvider = SyncAccountProvider.None,
+    endToEndRegimeLedger: EndToEndRegimeLedger = EndToEndRegimeLedger.None,
 ) {
     /** conversationId → instant this client created it ([RecentlyCreatedMerge]); guarded by itself. */
     private val recentlyCreated = mutableMapOf<String, Long>()
@@ -71,6 +73,7 @@ class ConversationRepository @Inject constructor(
         searchIndex = LocalSearchIndex(SearchIndexDao(database)),
         accountProvider = syncAccountProvider,
         protectedIds = ::recentlyCreatedIds,
+        endToEnd = endToEndRegimeLedger,
     )
 
     /**

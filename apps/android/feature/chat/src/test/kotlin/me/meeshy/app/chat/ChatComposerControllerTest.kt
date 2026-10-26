@@ -75,7 +75,7 @@ class ChatComposerControllerTest {
         val workManager = mockk<WorkManager>(relaxed = true)
         val draftStore = InMemoryConversationDraftStore(drafts)
         val uploads = mockk<MediaUploadQueue>(relaxed = true)
-        coEvery { uploads.enqueue(any()) } returns "upload-cmid"
+        coEvery { uploads.enqueue(any(), any(), any()) } returns "upload-cmid"
         val clock = object : CacheClock {
             override fun nowMillis(): Long = NOW
         }
@@ -204,7 +204,7 @@ class ChatComposerControllerTest {
         r.controller.sendFileAttachment(byteArrayOf(1, 2, 3), " photo.png ", "image/png")
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { r.uploads.enqueue(match<MediaUploadItem> { it.fileName == "photo.png" && it.mimeType == "image/png" }) }
+        coVerify(exactly = 1) { r.uploads.enqueue(match<MediaUploadItem> { it.fileName == "photo.png" && it.mimeType == "image/png" }, any(), "c1") }
         coVerify(exactly = 1) {
             r.repo.sendOptimistic(
                 "c1", "look", any(), me, null, null, null, null, any(), "image", listOf("upload-cmid"), any(),
@@ -495,7 +495,7 @@ class ChatComposerControllerTest {
         r.controller.sendFileAttachment(byteArrayOf(1, 2, 3), "photo.png", "image/png")
         advanceUntilIdle()
 
-        coVerify(exactly = 0) { r.uploads.enqueue(any()) }
+        coVerify(exactly = 0) { r.uploads.enqueue(any(), any(), any()) }
         coVerify(exactly = 0) { r.repo.sendOptimistic(any(), any(), any(), any(), any()) }
     }
 

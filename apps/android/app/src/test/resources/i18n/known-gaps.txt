@@ -37,6 +37,8 @@ bare-specifier :sdk-ui en presence_lastSeen_days
 bare-specifier :sdk-ui en presence_lastSeen_hours
 bare-specifier :sdk-ui en presence_lastSeen_minutes
 bare-specifier :sdk-ui en story_sticker_a11y
+bare-specifier :feature:chat en reading_mode_chip_a11y_label
+bare-specifier :feature:chat en reading_mode_river_threshold_only
 bare-specifier :feature:auth en onboarding_friends_badge
 bare-specifier :feature:auth en signup_phone_too_short
 bare-specifier :feature:conversations en row_a11y_conversation_with

@@ -225,9 +225,14 @@ public data class ReactionPayload(val emoji: String)
  * crash. An empty/blank row payload (every row enqueued before this field
  * existed) also decodes as "no context" — see `OutboxFlushWorker`'s `UPLOAD_MEDIA`
  * sender.
+ *
+ * [conversationId] is the chat conversation the upload is destined for (#12956), read by
+ * `EndToEndOutboxAdmission` before the bytes leave: an upload drained before its message
+ * row exists is still withheld from an end-to-end encrypted conversation. `null` for a
+ * story/post/profile upload, and for every row enqueued before this field existed.
  */
 @kotlinx.serialization.Serializable
-public data class MediaUploadPayload(val uploadContext: String? = null)
+public data class MediaUploadPayload(val uploadContext: String? = null, val conversationId: String? = null)
 
 /**
  * Payload of a `PIN_MESSAGE` / `UNPIN_MESSAGE` outbox row. The row's `targetId`

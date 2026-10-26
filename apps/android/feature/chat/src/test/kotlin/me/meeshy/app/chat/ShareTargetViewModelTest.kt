@@ -66,7 +66,7 @@ class ShareTargetViewModelTest {
         every { session.currentUser } returns MutableStateFlow(currentUser)
         val workManager = mockk<WorkManager>(relaxed = true)
         val mediaQueue = mockk<MediaUploadQueue>(relaxed = true)
-        io.mockk.coEvery { mediaQueue.enqueue(any()) } returns "upload-cmid"
+        io.mockk.coEvery { mediaQueue.enqueue(any(), any(), any()) } returns "upload-cmid"
         val vm = ShareTargetViewModel(conversationRepo, messages, session, workManager, mediaQueue)
         return Harness(vm, messages, workManager, mediaQueue)
     }
@@ -179,7 +179,7 @@ class ShareTargetViewModelTest {
         h.vm.sendTo("c1")
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { h.mediaQueue.enqueue(any<MediaUploadItem>()) }
+        coVerify(exactly = 1) { h.mediaQueue.enqueue(any<MediaUploadItem>(), any(), any()) }
         coVerify(exactly = 1) {
             h.messages.sendOptimistic(
                 conversationId = "c1",
@@ -250,7 +250,7 @@ class ShareTargetViewModelTest {
         h.vm.sendTo("c1")
         advanceUntilIdle()
 
-        coVerify(exactly = 0) { h.mediaQueue.enqueue(any()) }
+        coVerify(exactly = 0) { h.mediaQueue.enqueue(any(), any(), any()) }
         coVerify(exactly = 0) { h.messages.sendOptimistic(any(), any(), any(), any()) }
     }
 }
