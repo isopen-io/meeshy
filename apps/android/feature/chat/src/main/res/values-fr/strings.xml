@@ -6,7 +6,7 @@
     <string name="chat_call_audio">Appel audio</string>
     <string name="chat_call_video">Appel vidéo</string>
     <string name="chat_call_rejoin">Rejoindre</string>
-    <string name="chat_message_placeholder">Message</string>
+    <string name="chat_message_placeholder">Message…</string>
     <string name="chat_composer_sentiment">Tonalité du message</string>
     <string name="chat_composer_language">Langue du message</string>
     <string name="chat_send">Envoyer</string>
@@ -286,4 +286,8 @@
     <string name="participant_profile_denied_can_send_audios">Ne peut pas envoyer d’audio</string>
     <string name="participant_profile_denied_can_send_links">Ne peut pas envoyer de liens</string>
     <string name="participant_profile_denied_can_send_locations">Ne peut pas partager sa position</string>
+    <plurals name="chat_unread_separator_count">
+        <item quantity="one">%d message non lu</item>
+        <item quantity="other">%d messages non lus</item>
+    </plurals>
 </resources>

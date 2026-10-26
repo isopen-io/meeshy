@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- En-tête de conversation (parité iOS ConversationView+Header) -->
+    <string name="chat_header_call">Anrufen</string>
+    <string name="chat_header_call_group">Gruppe anrufen</string>
+    <string name="chat_header_call_hint">Sprach- oder Videoanruf wählen</string>
+    <string name="chat_header_call_voice">Sprachanruf</string>
+    <string name="chat_header_call_video">Videoanruf</string>
+    <string name="chat_header_search">In der Unterhaltung suchen</string>
+    <string name="chat_header_view_profile_of">Profil von %1$s ansehen</string>
+    <string name="chat_header_view_conversation">Unterhaltung %1$s ansehen</string>
+    <string name="chat_header_menu_profile">Profil ansehen</string>
+    <string name="chat_header_menu_conversation">Unterhaltung</string>
+    <string name="chat_header_expand">Kopfzeile ausklappen</string>
+    <string name="chat_header_collapse">Kopfzeile einklappen</string>
+    <string name="chat_conversation_info_title">Unterhaltung</string>
+    <string name="chat_header_encryption_e2ee">Ende-zu-Ende-verschlüsselt</string>
+    <string name="chat_header_encryption_server">Auf dem Server verschlüsselt</string>
+    <plurals name="chat_header_back_unread">
+        <item quantity="one">Zurück, %1$d ungelesene Nachricht</item>
+        <item quantity="other">Zurück, %1$d ungelesene Nachrichten</item>
+    </plurals>
+    <plurals name="chat_unread_separator_count">
+        <item quantity="one">%d ungelesene Nachricht</item>
+        <item quantity="other">%d ungelesene Nachrichten</item>
+    </plurals>
+</resources>
