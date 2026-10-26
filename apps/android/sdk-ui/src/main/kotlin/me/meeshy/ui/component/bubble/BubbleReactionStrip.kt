@@ -13,8 +13,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.EmojiEmotions
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -31,6 +29,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import me.meeshy.ui.R
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyFontSize
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
@@ -172,7 +171,7 @@ private fun AddReactionChip(accent: Color, onClick: () -> Unit) {
             .semantics { contentDescription = label },
     ) {
         Icon(
-            imageVector = Icons.Outlined.EmojiEmotions,
+            imageVector = MeeshyIcons.Emoji,
             contentDescription = null,
             tint = accent.copy(alpha = if (isDark) 0.9f else 0.8f),
             modifier = Modifier.size(14.dp),

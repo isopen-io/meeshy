@@ -7,8 +7,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.width
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -293,7 +291,7 @@ private fun BubbleFailedRetryEdge(
                 .semantics { contentDescription = label },
         ) {
             Icon(
-                imageVector = Icons.Filled.Refresh,
+                imageVector = MeeshyIcons.Refresh,
                 contentDescription = null,
                 tint = MeeshyPalette.White,
                 modifier = Modifier.size(16.dp),
