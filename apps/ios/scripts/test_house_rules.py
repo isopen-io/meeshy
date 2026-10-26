@@ -432,6 +432,59 @@ class EnvironmentRouter(unittest.TestCase):
                 self.assertEqual(count("environment-router", src), 0)
 
 
+class ObservedSingletonRule(unittest.TestCase):
+    HITS = (
+        "@ObservedObject private var security = SecurityManager.shared\n",
+        "@StateObject var store = PrivacyStore.shared\n",
+        "@ObservedObject private var auth: AuthManager = .shared\n",
+        "@ObservedObject\n    private var theme = ThemeManager.shared\n",
+        "@ObservedObject private var player = Audio.Player.shared\n",
+    )
+    MISSES = (
+        "@ObservedObject var security: SecurityManager\n",
+        "init(security: SecurityManager = .shared) { self.security = security }\n",
+        "let m = SecurityManager.shared.isLocked\n",
+        "@State private var shared = false\n",
+        "@ObservedObject var vm = FooViewModel()\n",
+        "// @ObservedObject private var s = SecurityManager.shared\n",
+    )
+
+    def test_each_observing_form_counts_once(self):
+        for src in self.HITS:
+            with self.subTest(src=src):
+                self.assertEqual(count("observed-singleton", src), 1)
+
+    def test_injected_and_lookalike_forms_do_not_count(self):
+        for src in self.MISSES:
+            with self.subTest(src=src):
+                self.assertEqual(count("observed-singleton", src), 0)
+
+    def test_app_entry_point_is_exempt(self):
+        src = self.HITS[0]
+        self.assertEqual(count("observed-singleton", src, "apps/ios/Meeshy/MeeshyApp.swift"), 0)
+
+
+class AppGRDBImportRule(unittest.TestCase):
+    def test_counts_each_app_file_importing_grdb(self):
+        for src in ("import GRDB\n", "@preconcurrency import GRDB\n", "import Foundation\nimport GRDB\n"):
+            with self.subTest(src=src):
+                self.assertEqual(count("app-grdb-import", src), 1)
+
+    def test_lookalikes_do_not_count(self):
+        for src in ("import GRDBQuery\n", "// import GRDB\n", "let s = \"import GRDB\"\n", "import MeeshySDK\n"):
+            with self.subTest(src=src):
+                self.assertEqual(count("app-grdb-import", src), 0)
+
+    def test_sdk_and_extensions_are_out_of_the_app_measure(self):
+        for rel in (
+            "packages/MeeshySDK/Sources/MeeshySDK/Persistence/X.swift",
+            "apps/ios/MeeshyNotificationExtension/X.swift",
+            "apps/ios/MeeshyShareExtension/X.swift",
+        ):
+            with self.subTest(rel=rel):
+                self.assertEqual(count("app-grdb-import", "import GRDB\n", rel), 0)
+
+
 class CommittedBaseline(unittest.TestCase):
     def setUp(self):
         scanned = ENGINE.scan(ENGINE.collect(ENGINE.ROOT))

@@ -75,6 +75,12 @@ RULES = (
         ("apps/ios/Meeshy/MeeshyApp.swift",),
     ),
     _named("viewmodel-shared", r"\.shared\b", r"ViewModel[^/]*\.swift$"),
+    _pattern(
+        "observed-singleton",
+        r"@(?:ObservedObject|StateObject)\s+(?:\w+(?:\(set\))?\s+)*var\s+\w+\s*(?::\s*[\w.]+\s*)?=\s*(?:[\w.]+)?\.shared\b",
+        ("apps/ios/Meeshy/MeeshyApp.swift",),
+    ),
+    _named("app-grdb-import", r"(?m)^[ \t]*(?:@\w+[ \t]+)*import[ \t]+GRDB\b(?!\w)", r"^apps/ios/Meeshy/"),
     Rule("unchecked-sendable", re.compile(r"@unchecked\s+Sendable"), "unchecked"),
     _pattern("unchecked-sendable-total", r"@unchecked\s+Sendable"),
     Rule("available-floor", re.compile(r"#available\(\s*iOS\s+(\d+)(?:\.(\d+))?"), "floor"),
