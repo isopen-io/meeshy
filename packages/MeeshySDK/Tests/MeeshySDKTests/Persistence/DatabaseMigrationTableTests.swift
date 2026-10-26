@@ -47,6 +47,7 @@ final class DatabaseMigrationTableTests: XCTestCase {
         "messages_e2ee_plaintext_erasures",
         "messages_e2ee_plaintext_erasures_v2",
         "messages_e2ee_plaintext_erasures_v3",
+        "messages_e2ee_plaintext_erasures_authenticated_v1",
     ]
 
     static let feedIdentifiers = [
