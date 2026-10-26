@@ -55,7 +55,7 @@ final class ShareExtensionScreenGuardTests: XCTestCase {
             "ShareSheetView.swift", "ShareSheetView+Actions.swift", "ShareSheetViewModel.swift", "ShareContentZone.swift",
             "ShareIncomingStrip.swift", "ShareRecipient.swift", "ShareRecipientRow.swift", "ShareSendBar.swift",
             "ShareSheetCopy.swift", "ShareDurationRow.swift", "ShareSourcing.swift", "ShareStringsBundle.swift",
-            "ShareSubject.swift", "ShareDirectorySnapshot.swift", "ShareRelayHandoff.swift",
+            "ShareSubject.swift", "ShareDirectorySnapshot.swift", "ShareRelayHandoff.swift", "EndToEndShareMemory.swift",
         ] {
             XCTAssertTrue(paths.contains("Meeshy/Features/Main/Share/\(portable)"), "\(portable) doit être compilé dans l'extension.")
         }

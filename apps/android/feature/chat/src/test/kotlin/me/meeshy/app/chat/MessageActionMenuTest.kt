@@ -421,4 +421,12 @@ class MessageActionMenuTest {
         assertThat(actions).containsAtLeast(MessageAction.Views, MessageAction.Sentiment)
         assertThat(actions).doesNotContain(MessageAction.Report)
     }
+
+    @Test
+    fun `an end-to-end message this device cannot open is neither copied nor forwarded (#13110)`() {
+        val actions = MessageActionMenu.actions(ctx().copy(isEndToEndSealed = true))
+
+        assertThat(actions).doesNotContain(MessageAction.Copy)
+        assertThat(actions).doesNotContain(MessageAction.Forward)
+    }
 }

@@ -252,6 +252,13 @@ COPY --chown=gateway:nodejs services/gateway/package.json ./
 # Mode d'emploi : `node dist/src/migrations/named/cli.js list`.
 RUN node dist/src/migrations/named/cli.js verify-image
 
+# Témoin de la mesure de l'immortalisation (#10176) : la requête d'administration
+# en lecture seule se lance DEPUIS cette image (`dist/`, dépendances de
+# production). La construction échoue si son point d'entrée, la loi partagée de
+# la clé ou le client Prisma manquent.
+# Mode d'emploi : `node dist/src/services/game/photoMomentsMeasureCli.js --week AAAA-Www`.
+RUN node dist/src/services/game/photoMomentsMeasureCli.js verify-image
+
 USER gateway
 
 EXPOSE ${FASTIFY_PORT}

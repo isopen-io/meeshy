@@ -175,15 +175,80 @@ final class ConversationViewModelEncryptionToggleTests: XCTestCase {
         )
     }
 
-    /// Un message chiffré isolé, dans une conversation que rien d'autre ne dit
-    /// chiffrée, n'est pas un régime (même loi que le web, #12949).
-    func test_send_unMessageChiffreIsole_sansRegime_partEnClair() async throws {
-        let sut = try await makeSUT(encryptionMode: nil, ledger: EndToEndRegimeLedger())
+    /// Décision du porteur sur #12986 (option 2) : un message chiffré de bout en
+    /// bout affiché dans le fil scelle l'envoi, même servi sans mode et sans
+    /// aucune autre trace du régime. Il inverse le témoin de #12949 qui le
+    /// laissait partir en clair.
+    func test_send_unMessageChiffreAffiche_scelle_memeServieSansMode() async throws {
+        let ledger = EndToEndRegimeLedger()
+        let sut = try await makeSUT(encryptionMode: nil, ledger: ledger)
         sut.viewModel.messages = [endToEndMessage(at: 100)]
 
-        _ = await sut.viewModel.send(outgoingMessage(content: "Bonjour", conversationId: conversationId))
+        _ = await sut.viewModel.send(outgoingMessage(content: secret, conversationId: conversationId))
 
-        XCTAssertEqual(sut.messageService.lastSendRequest?.content, "Bonjour")
+        let request = try XCTUnwrap(sut.messageService.lastSendRequest)
+        XCTAssertEqual(request.isEncrypted, true)
+        XCTAssertNotEqual(request.content, secret)
+        XCTAssertTrue(ledger.remembersEndToEnd(conversationId), "ce qui est vu est retenu")
+    }
+
+    /// Revue de sécurité — un tête-à-tête qui affiche un message chiffré SANS
+    /// mode, servi en clair : l'envoi part scellé (jamais en clair), la mémoire
+    /// n'apprend rien, et le refus de la passerelle finit dans l'état lisible
+    /// de #12987, sans second envoi.
+    func test_send_unMessageChiffreSansMode_scelleLEnvoi_sansSApprendre_etFinitLisible() async throws {
+        let encryption = MockConversationEncryptionService()
+        encryption.statusResult = .success(status(nil, epoch: nil))
+        let ledger = EndToEndRegimeLedger()
+        let sut = try await makeSUT(encryptionMode: nil, ledger: ledger, encryption: encryption)
+        var modeless = endToEndMessage(at: 100)
+        modeless.encryptionMode = nil
+        sut.viewModel.messages = [modeless]
+        sut.messageService.sendResult = .failure(MeeshyError.rejected(APIRejection(statusCode: 409, code: E2EEErrorCode.regimeChanged, message: "plus chiffrée")))
+
+        let first = await sut.viewModel.send(outgoingMessage(content: secret, conversationId: conversationId))
+        let second = await sut.viewModel.send(outgoingMessage(content: secret, conversationId: conversationId))
+
+        XCTAssertEqual(sut.messageService.sendCallCount, 1)
+        XCTAssertEqual(sut.messageService.lastSendRequest?.isEncrypted, true)
+        XCTAssertNotEqual(sut.messageService.lastSendRequest?.content, secret)
+        XCTAssertFalse(ledger.remembersEndToEnd(conversationId), "une vieille ligne ne scelle pas la conversation à vie")
+        guard case .failure(.endToEndUnsealed(.servedWithoutEndToEnd)) = first,
+              case .failure(.endToEndUnsealed(.servedWithoutEndToEnd)) = second else {
+            return XCTFail("état final lisible attendu, reçu \(first) puis \(second)")
+        }
+    }
+
+    func test_avisDuFil_unMessageChiffreDeBoutEnBout_estUneTraceDuRegime_laPremiere() {
+        var serverAtRest = endToEndMessage(at: 10)
+        serverAtRest.encryptionMode = "server"
+
+        XCTAssertNil(EncryptionSwitchNoticeTrail.endToEndShownAt(in: [serverAtRest]))
+        XCTAssertEqual(
+            EncryptionSwitchNoticeTrail.endToEndShownAt(in: [activationNotice(at: 300), endToEndMessage(at: 150), endToEndMessage(at: 400)]),
+            Date(timeIntervalSince1970: 150)
+        )
+    }
+
+    /// #12986 + #12987 — un fil qui porte un message chiffré isolé, servi en
+    /// clair : la passerelle refuse le chiffré, l'appareil ne donne pas le clair.
+    /// L'état final est lisible, sans boucle ni second envoi.
+    func test_send_unMessageChiffreAffiche_dansUnFilServiEnClair_finitLisible_sansBoucle() async throws {
+        let encryption = MockConversationEncryptionService()
+        encryption.statusResult = .success(status(nil, epoch: nil))
+        let sut = try await makeSUT(encryptionMode: nil, ledger: EndToEndRegimeLedger(), encryption: encryption)
+        sut.viewModel.messages = [endToEndMessage(at: 100)]
+        sut.messageService.sendResult = .failure(MeeshyError.rejected(APIRejection(statusCode: 409, code: E2EEErrorCode.regimeChanged, message: "plus chiffrée")))
+
+        let first = await sut.viewModel.send(outgoingMessage(content: secret, conversationId: conversationId))
+        let second = await sut.viewModel.send(outgoingMessage(content: secret, conversationId: conversationId))
+
+        guard case .failure(.endToEndUnsealed(.servedWithoutEndToEnd)) = first,
+              case .failure(.endToEndUnsealed(.servedWithoutEndToEnd)) = second else {
+            return XCTFail("état final lisible attendu, reçu \(first) puis \(second)")
+        }
+        XCTAssertEqual(sut.messageService.sendCallCount, 1, "le second envoi s'arrête avant le réseau")
+        XCTAssertNotEqual(sut.messageService.lastSendRequest?.content, secret)
     }
 
     func test_send_unAvisDActivationDansLeFil_scelle_memeServieSansMode() async throws {
@@ -221,7 +286,9 @@ final class ConversationViewModelEncryptionToggleTests: XCTestCase {
     }
 
     /// Un avis de désactivation déjà en base (staging) s'affiche comme un
-    /// historique : il ne rouvre ni l'envoi en clair, ni la lecture.
+    /// historique : il ne rouvre ni l'envoi en clair, ni la lecture. Le statut
+    /// servi en clair d'une conversation vue chiffrée arrête l'envoi AVANT le
+    /// réseau, avec l'écart dit (#12987).
     func test_irreversible_aDisabledNoticeShownInTheThread_neverReopensPlaintext() async throws {
         let memory = rememberedEndToEnd()
         let ledger = EndToEndRegimeLedger(memory: memory)
@@ -229,11 +296,12 @@ final class ConversationViewModelEncryptionToggleTests: XCTestCase {
         ledger.learn(status(nil, epoch: 2), for: conversationId)
         sut.viewModel.messages = [downgradeNotice(epoch: 2, at: 200)]
 
-        _ = await sut.viewModel.send(outgoingMessage(content: secret, conversationId: conversationId))
+        let result = await sut.viewModel.send(outgoingMessage(content: secret, conversationId: conversationId))
 
-        let request = try XCTUnwrap(sut.messageService.lastSendRequest)
-        XCTAssertEqual(request.isEncrypted, true)
-        XCTAssertNotEqual(request.content, secret)
+        guard case .failure(.endToEndUnsealed(.servedWithoutEndToEnd)) = result else {
+            return XCTFail("écart lisible attendu, reçu \(result)")
+        }
+        XCTAssertEqual(sut.messageService.sendCallCount, 0)
         XCTAssertTrue(memory.resolve(conversationId: conversationId, served: .serverReadable).isEndToEnd)
     }
 
@@ -250,20 +318,64 @@ final class ConversationViewModelEncryptionToggleTests: XCTestCase {
     }
 
     /// Un 409 E2EE_REGIME_CHANGED suivi d'un statut « non chiffré » ne mène
-    /// jamais au clair : l'envoi suivant repart scellé.
-    func test_irreversible_aRegimeChangedRefusal_thenAServedDowngrade_staysSealed() async throws {
+    /// jamais au clair, ni à une boucle (#12987) : la bulle dit l'écart, et
+    /// l'envoi suivant s'arrête AVANT le réseau. Remplace le témoin de #12950
+    /// qui laissait repartir un chiffré voué au même refus.
+    func test_irreversible_aRegimeChangedRefusal_thenAServedDowngrade_endsReadable_withoutResending() async throws {
         let encryption = MockConversationEncryptionService()
         encryption.statusResult = .success(status(nil, epoch: 5))
         let sut = try await makeSUT(encryptionMode: "e2ee", ledger: EndToEndRegimeLedger(), encryption: encryption)
         sut.messageService.sendResult = .failure(MeeshyError.rejected(APIRejection(statusCode: 409, code: E2EEErrorCode.regimeChanged, message: "changé")))
-        _ = await sut.viewModel.send(outgoingMessage(content: secret, conversationId: conversationId))
-        await sut.viewModel.collaborators.regimeRefresher.settle()
+        let first = await sut.viewModel.send(outgoingMessage(content: secret, conversationId: conversationId))
 
-        _ = await sut.viewModel.send(outgoingMessage(content: "Bonjour", conversationId: conversationId))
+        let second = await sut.viewModel.send(outgoingMessage(content: "Bonjour", conversationId: conversationId))
 
-        XCTAssertEqual(sut.messageService.sendCallCount, 2)
-        XCTAssertEqual(sut.messageService.lastSendRequest?.isEncrypted, true)
+        guard case .failure(.endToEndUnsealed(.servedWithoutEndToEnd)) = first,
+              case .failure(.endToEndUnsealed(.servedWithoutEndToEnd)) = second else {
+            return XCTFail("refus lisible « servie autrement » attendu, reçu \(first) puis \(second)")
+        }
+        XCTAssertEqual(sut.messageService.sendCallCount, 1)
         XCTAssertNotEqual(sut.messageService.lastSendRequest?.content, "Bonjour")
+        XCTAssertEqual(
+            EndToEndSendRefusal.servedWithoutEndToEnd.userMessage,
+            String(localized: "conversation.send.e2ee.servedWithoutEndToEnd", bundle: .main)
+        )
+    }
+
+    /// Le statut servi redit le bout en bout (« Rétablir », socket) : l'envoi
+    /// scellé repart.
+    func test_servedGap_closesWhenTheServerServesEndToEndAgain() async throws {
+        let ledger = EndToEndRegimeLedger(memory: rememberedEndToEnd())
+        let sut = try await makeSUT(encryptionMode: nil, ledger: ledger)
+        ledger.learn(status(nil, epoch: 5), for: conversationId)
+        XCTAssertTrue(ledger.servesWithoutEndToEnd(conversationId))
+        let refused = await sut.viewModel.send(outgoingMessage(content: secret, conversationId: conversationId))
+        guard case .failure(.endToEndUnsealed(.servedWithoutEndToEnd)) = refused else { return XCTFail("écart attendu, reçu \(refused)") }
+
+        ledger.learn(status("e2ee", epoch: 6), for: conversationId)
+        _ = await sut.viewModel.send(outgoingMessage(content: secret, conversationId: conversationId))
+
+        XCTAssertFalse(ledger.servesWithoutEndToEnd(conversationId))
+        XCTAssertEqual(sut.messageService.sendCallCount, 1)
+        XCTAssertEqual(sut.messageService.lastSendRequest?.isEncrypted, true)
+        XCTAssertNotEqual(sut.messageService.lastSendRequest?.content, secret)
+    }
+
+    func test_ledger_unStatutEnClair_nEstUnEcartQuePourUneConversationVueChiffree() {
+        let ledger = EndToEndRegimeLedger()
+
+        ledger.learn(status(nil, epoch: nil), for: conversationId)
+        XCTAssertFalse(ledger.servesWithoutEndToEnd(conversationId))
+
+        ledger.learnEndToEnd(for: conversationId)
+        ledger.learn(ConversationEncryptionChangedEvent(
+            conversationId: conversationId, isEncrypted: false, mode: nil, epoch: 7,
+            changedByUserId: peerId, changedAt: "2026-10-25T10:00:00.000Z"
+        ))
+        XCTAssertTrue(ledger.servesWithoutEndToEnd(conversationId))
+
+        ledger.reset()
+        XCTAssertFalse(ledger.servesWithoutEndToEnd(conversationId), "la session suivante relit le serveur")
     }
 
     func test_send_e2ee_declareLEpoqueSousLaquelleIlEstScelle() async throws {

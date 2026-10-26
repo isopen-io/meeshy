@@ -289,6 +289,14 @@ data class ApiMessage(
     /** Le contenu est un cryptogramme : il ne se rend jamais en clair. */
     val isCiphertext: Boolean get() = isEncrypted == true
 
+    /**
+     * Un message chiffré de bout en bout que CET appareil ne sait pas lire (#13110) :
+     * l'Android natif n'a pas encore de pile libsignal (#13015), la passerelle ne sert
+     * que le littéral `[Encrypted]`. Il ne se rend ni en texte ni en pièce.
+     */
+    val isEndToEndSealed: Boolean
+        get() = isCiphertext && (EndToEndRegime.isEndToEnd(encryptionMode) || content == EndToEndRegime.CONTENT_PLACEHOLDER)
+
     /** `consumedByMe` nul est traité comme non ouvert. */
     val isViewOnceOpenedByMe: Boolean get() = consumedByMe == true
 

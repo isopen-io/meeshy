@@ -22,7 +22,7 @@
       "authenticated-only": "Authentifié (onRequest/preHandler référence fastify.authenticate) sans requirePermission/requireHierarchy/requireSovereign détecté, donc S2 ou S3. Les deux ne se distinguent pas mécaniquement : l'appartenance à la ressource (S3) peut être vérifiée à l'intérieur du corps du handler, invisible depuis le serveur assemblé."
     }
   },
-  "routeCount": 761,
+  "routeCount": 766,
   "routes": [
     {
       "method": "DELETE",
@@ -856,6 +856,20 @@
       "path": "/api/v1/packs/banner/:slug/install",
       "module": "appearancePacksRoutes~3",
       "mountPrefix": "/api/v1/packs/banner",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/packs/capture-frame/:slug/install",
+      "module": "captureFramePacksRoutes",
+      "mountPrefix": "/api/v1/packs/capture-frame",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
         "S2",
@@ -4621,6 +4635,48 @@
       "path": "/api/v1/packs/banner/submissions",
       "module": "appearancePacksRoutes~3",
       "mountPrefix": "/api/v1/packs/banner",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/packs/capture-frame",
+      "module": "captureFramePacksRoutes",
+      "mountPrefix": "/api/v1/packs/capture-frame",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/packs/capture-frame/:slug",
+      "module": "captureFramePacksRoutes",
+      "mountPrefix": "/api/v1/packs/capture-frame",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/packs/capture-frame/installed",
+      "module": "captureFramePacksRoutes",
+      "mountPrefix": "/api/v1/packs/capture-frame",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
         "S2",
@@ -10641,6 +10697,20 @@
       "path": "/api/v1/packs/banner/:slug/install",
       "module": "appearancePacksRoutes~3",
       "mountPrefix": "/api/v1/packs/banner",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/packs/capture-frame/:slug/install",
+      "module": "captureFramePacksRoutes",
+      "mountPrefix": "/api/v1/packs/capture-frame",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
         "S2",

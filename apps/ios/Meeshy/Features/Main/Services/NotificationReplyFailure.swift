@@ -37,6 +37,16 @@ enum NotificationReplyFailure {
     }
 
     /// Prévient, hors de l'app, qu'une réponse n'est pas partie.
+    /// La réponse depuis une bannière n'est pas partie : la conversation est
+    /// chiffrée de bout en bout, seul le fil sait la sceller (#12641).
+    static func postEndToEndReplyRefused() {
+        let content = UNMutableNotificationContent()
+        content.body = EndToEndSendRefusal.sealedOnlyInConversation.userMessage
+        content.sound = .default
+        let request = UNNotificationRequest(identifier: "e2ee-reply-unsent-\(UUID().uuidString)", content: content, trigger: nil)
+        UNUserNotificationCenter.current().add(request)
+    }
+
     static func post() {
         let content = UNMutableNotificationContent()
         content.body = String(localized: "feed.comments.send_error",

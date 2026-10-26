@@ -81,6 +81,18 @@ export const bannerPending = '/api/v1/packs/banner/pending';
 /** GET · POST /api/v1/packs/banner/submissions */
 export const bannerSubmissions = '/api/v1/packs/banner/submissions';
 
+/** GET /api/v1/packs/capture-frame */
+export const captureFrame = '/api/v1/packs/capture-frame';
+
+/** GET /api/v1/packs/capture-frame/:slug */
+export const captureFrameBySlug = (slug: string): string => `/api/v1/packs/capture-frame/${encodeURIComponent(slug)}`;
+
+/** PUT · DELETE /api/v1/packs/capture-frame/:slug/install */
+export const captureFrameBySlugInstall = (slug: string): string => `/api/v1/packs/capture-frame/${encodeURIComponent(slug)}/install`;
+
+/** GET /api/v1/packs/capture-frame/installed */
+export const captureFrameInstalled = '/api/v1/packs/capture-frame/installed';
+
 /** GET /api/v1/packs/glory-frame */
 export const gloryFrame = '/api/v1/packs/glory-frame';
 

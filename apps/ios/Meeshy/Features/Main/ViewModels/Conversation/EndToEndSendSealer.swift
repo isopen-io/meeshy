@@ -29,8 +29,12 @@ struct EndToEndSendSealer {
     let endToEnd: any EndToEndMessagingProviding
     /// L'époque du régime appris (#12522), déclarée par l'envoi scellé.
     var regimeEpoch: Int?
-    /// Le régime a changé côté serveur : le fil le relit.
-    var onRegimeStale: @MainActor () -> Void = {}
+    /// Le dernier statut servi ne dit pas le bout en bout d'une conversation
+    /// que cet appareil a vue chiffrée (#12987) : rien ne part.
+    var servedWithoutEndToEnd = false
+    /// Le régime a changé côté serveur : le fil le relit, et dit si le serveur
+    /// sert désormais sans bout en bout une conversation vue chiffrée.
+    var onRegimeStale: @MainActor () async -> Bool = { false }
     var toast: any FeedbackToastSurfacing = FeedbackToastManager.shared
 
     var requiresSeal: Bool {
@@ -43,9 +47,8 @@ struct EndToEndSendSealer {
     /// Un message envoyé chiffré reste chiffré à jamais (#12881, spec § 5.2) :
     /// son clair déchiffré sur l'appareil ne part pas en clair.
     func editRefusal(for message: Message?) -> EndToEndSendRefusal? {
-        if let refusal = editRefusal { return refusal }
-        guard let message, message.isEncrypted || message.isContentDecryptedOnDevice else { return nil }
-        return .sealedMessageUneditable
+        if let message, message.isEncrypted || message.isContentDecryptedOnDevice { return .sealedMessageUneditable }
+        return editRefusal
     }
 
     /// Une pièce se téléverse EN CLAIR avant même que le message parte : en
@@ -60,6 +63,7 @@ struct EndToEndSendSealer {
 
     /// Ce qui interdit de sceller cet envoi avant toute tentative.
     func sealRefusal(for outgoing: OutgoingMessage) -> EndToEndSendRefusal? {
+        if servedWithoutEndToEnd { return .servedWithoutEndToEnd }
         if let refusal = EndToEndSendGate.refusal(for: outgoing, isDirect: isDirect, peerUserId: peerUserId) { return refusal }
         return senderUserId.isEmpty ? .recipientUnsealable : nil
     }
@@ -205,14 +209,24 @@ struct EndToEndSendSealer {
         localId: String,
         coordinator: any ConversationSendCoordinatorProviding
     ) async -> SendFailure {
-        Logger.messages.warning("E2EE send refused reason=\(refusal.rawValue, privacy: .public) localId=\(localId, privacy: .public)")
-        await coordinator.markFailed(localId: localId, reason: refusal.userMessage)
-        toast.showError(refusal.userMessage)
-        if refusal == .deviceLimitReached {
+        let shown = await settled(refusal)
+        Logger.messages.warning("E2EE send refused reason=\(shown.rawValue, privacy: .public) localId=\(localId, privacy: .public)")
+        await coordinator.markFailed(localId: localId, reason: shown.userMessage)
+        toast.showError(shown.userMessage)
+        if shown == .deviceLimitReached {
             NotificationCenter.default.post(name: .endToEndDeviceLimitReached, object: nil)
         }
-        if refusal == .regimeChanged { onRegimeStale() }
-        return .endToEndUnsealed(refusal)
+        return .endToEndUnsealed(shown)
+    }
+
+    /// **Un refus « régime changé » ne promet un renvoi que s'il peut réussir**
+    /// (#12987, #12986). La passerelle refuse le chiffré d'une conversation
+    /// qu'elle sert en clair ; l'appareil, qui l'a vue chiffrée, ne lui donne
+    /// pas le clair. Le régime relu le dit : l'état final est l'écart, lisible,
+    /// jamais une boucle de renvois.
+    private func settled(_ refusal: EndToEndSendRefusal) async -> EndToEndSendRefusal {
+        guard refusal == .regimeChanged else { return refusal }
+        return await onRegimeStale() ? .servedWithoutEndToEnd : refusal
     }
 }
 
@@ -250,7 +264,8 @@ extension EndToEndSendSealer {
             for: viewModel.conversationId,
             opening: viewModel.encryptionModeAtOpening,
             cached: viewModel.currentConversation?.encryptionMode,
-            activationShownAt: EncryptionSwitchNoticeTrail.activationShownAt(in: viewModel.messages)
+            trail: viewModel.messages,
+            isDirect: viewModel.isDirect
         )
         self.init(
             conversationId: viewModel.conversationId,
@@ -260,8 +275,11 @@ extension EndToEndSendSealer {
             senderUserId: viewModel.currentUserId,
             endToEnd: viewModel.endToEnd,
             regimeEpoch: ledger.epoch(for: viewModel.conversationId),
+            servedWithoutEndToEnd: seals && ledger.servedInClear(viewModel.conversationId),
             onRegimeStale: { [refresher = viewModel.collaborators.regimeRefresher, id = viewModel.conversationId] in
                 refresher.refresh(conversationId: id)
+                await refresher.settle()
+                return ledger.servedInClear(id)
             }
         )
     }
@@ -269,15 +287,78 @@ extension EndToEndSendSealer {
 
 /// L'activation du bout en bout que le fil OUVERT affiche (#12846, #12949) :
 /// la ligne système d'activation, rendue depuis sa métadonnée. Un avis de
-/// désactivation déjà en base s'affiche comme un historique et ne rouvre rien ;
-/// un message chiffré isolé n'est pas un régime (des tête-à-tête sans régime en
-/// portent sur staging). Rend l'instant de la première activation affichée.
+/// désactivation déjà en base s'affiche comme un historique et ne rouvre rien.
+/// Rend l'instant de la première activation affichée.
+///
+/// **Un message chiffré de bout en bout affiché scelle aussi** (décision du
+/// porteur sur #12986, option 2) : un appareil qui n'a jamais vu la
+/// conversation chiffrée mais en affiche un message scellé ne croit pas un
+/// serveur qui la sert sans mode. Si le serveur la sert vraiment en clair, il
+/// refuse le chiffré et l'envoi s'arrête dans l'état lisible de #12987.
 enum EncryptionSwitchNoticeTrail {
+    /// La première trace du bout en bout dans le fil : un avis d'activation ou
+    /// un message chiffré de bout en bout.
+    static func endToEndShownAt(in messages: [Message]) -> Date? {
+        [activationShownAt(in: messages), endToEndMessageShownAt(in: messages)].compactMap { $0 }.min()
+    }
+
+    /// Le premier message chiffré DE BOUT EN BOUT affiché : déchiffré sur cet
+    /// appareil, ou annoncé `e2ee`. Ni un message chiffré au repos par le
+    /// serveur (`server`, `hybrid`), ni un message chiffré sans mode : la
+    /// mémoire ne recule pas, et une trace ambiguë verrouillerait la
+    /// conversation pour toujours (audit #12985, B2 ; mesuré le 2026-10-25 :
+    /// aucune en staging ni en production).
+    /// Un message chiffré dont le mode ne PROUVE rien — chiffré sans mode, ou
+    /// d'un mode inconnu — est affiché. Fail-closed : il scelle l'envoi en
+    /// cours, sans jamais s'écrire dans la mémoire du compte (revue de
+    /// sécurité #12985) : une vieille ligne ne scelle pas la conversation à
+    /// vie. Seuls `server` et `hybrid`, lisibles par le serveur, en sortent.
+    static func ambiguousEncryptedMessageShown(in messages: [Message]) -> Bool {
+        messages.contains { message in
+            message.messageSource != .system
+                && !message.isContentDecryptedOnDevice
+                && !EndToEndWireMode.isEndToEnd(message.encryptionMode)
+                && !DeviceTranslationEligibility.serverReadsMessage(
+                    conversationEncryptionMode: nil, isEncrypted: message.isEncrypted, encryptionMode: message.encryptionMode
+                )
+        }
+    }
+
+    static func endToEndMessageShownAt(in messages: [Message]) -> Date? {
+        messages
+            .filter { $0.messageSource != .system && ($0.isContentDecryptedOnDevice || EndToEndWireMode.isEndToEnd($0.encryptionMode)) }
+            .map(\.createdAt)
+            .min()
+    }
+
     static func activationShownAt(in messages: [Message]) -> Date? {
         messages
             .filter { $0.messageSource == .system && $0.encryptionSwitchNotice?.enablesEndToEnd == true }
             .map(\.createdAt)
             .min()
+    }
+}
+
+/// Le mode `e2ee` annoncé, sans blancs ni casse. Un mode inconnu n'est pas
+/// une PREUVE du bout en bout : il ne fait rien apprendre à la mémoire.
+enum EndToEndWireMode {
+    static func isEndToEnd(_ mode: String?) -> Bool {
+        (mode ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == E2EEWire.mode
+    }
+}
+
+extension EndToEndRegimeLedger {
+    /// Le régime vu par le FIL : ses sources servies, et ce qu'il affiche.
+    /// Un avis d'activation s'apprend partout ; un message chiffré affiché
+    /// s'apprend dans un tête-à-tête, et dans un groupe il scelle sans entrer
+    /// dans la mémoire, qui ne recule jamais (audit #12985, B2) : un groupe
+    /// ne se verrouille pas pour toujours sur une trace.
+    func seals(for conversationId: String, opening: String?, cached: String?, trail: [Message], isDirect: Bool) -> Bool {
+        let activation = EncryptionSwitchNoticeTrail.activationShownAt(in: trail)
+        let sealedMessage = EncryptionSwitchNoticeTrail.endToEndMessageShownAt(in: trail)
+        let learned = isDirect ? [activation, sealedMessage].compactMap { $0 }.min() : activation
+        let seals = self.seals(for: conversationId, opening: opening, cached: cached, activationShownAt: learned)
+        return seals || sealedMessage != nil || EncryptionSwitchNoticeTrail.ambiguousEncryptedMessageShown(in: trail)
     }
 }
 
@@ -299,7 +380,7 @@ enum EndToEndPieceGuard {
     }
 }
 
-extension EndToEndSendRefusal {
+nonisolated extension EndToEndSendRefusal {
     /// Ce que la bulle en échec et le message d'erreur disent, dans la langue de l'app.
     var userMessage: String {
         switch self {
@@ -336,6 +417,18 @@ extension EndToEndSendRefusal {
         case .deviceLimitReached:
             String(localized: "conversation.send.e2ee.deviceLimitReached",
                    defaultValue: "Votre compte a atteint le nombre maximal d’appareils chiffrés : retirez-en un pour écrire depuis celui-ci.", bundle: .main)
+        case .servedWithoutEndToEnd:
+            String(localized: "conversation.send.e2ee.servedWithoutEndToEnd",
+                   defaultValue: "Cette conversation est chiffrée de bout en bout, mais le serveur la présente sans chiffrement : le message n’est pas parti. Voir la fiche Chiffrement.", bundle: .main)
+        case .sealedOnlyInConversation:
+            String(localized: "conversation.send.e2ee.sealedOnlyInConversation",
+                   defaultValue: "Conversation chiffrée : le message n’est pas parti. Ouvrez la conversation et touchez-le pour l’envoyer chiffré.", bundle: .main)
         }
     }
+}
+
+/// Un refus E2EE porté par la file ou un chemin hors du fil se lit dans la
+/// bulle en échec avec sa phrase, jamais avec le libellé générique d'une erreur.
+nonisolated extension EndToEndSendRefusal: @retroactive LocalizedError {
+    public var errorDescription: String? { userMessage }
 }

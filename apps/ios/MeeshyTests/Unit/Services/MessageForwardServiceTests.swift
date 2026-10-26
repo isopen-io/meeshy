@@ -39,7 +39,8 @@ final class MessageForwardServiceTests: XCTestCase {
         let api = MockAPIClientForApp()
         let queue = FakeOfflineMessageQueue()
         let creator = MockConversationCreator()
-        let sut = MessageForwardService(api: api, queue: queue, isOnline: { online }, conversationCreator: creator)
+        let sut = MessageForwardService(api: api, queue: queue, isOnline: { online }, conversationCreator: creator,
+                                        destinationGuard: .isolated())
         return (sut, api, queue, creator)
     }
 
@@ -236,7 +237,7 @@ final class MessageForwardServiceTests: XCTestCase {
         var online = false
         let api = MockAPIClientForApp()
         let queue = FakeOfflineMessageQueue()
-        let sut = MessageForwardService(api: api, queue: queue, isOnline: { online })
+        let sut = MessageForwardService(api: api, queue: queue, isOnline: { online }, destinationGuard: .isolated())
         stubSendSuccess(api, target: target)
 
         _ = await sut.forward(message: makeMessage(content: "x"), sourceConversationId: nil, to: target)

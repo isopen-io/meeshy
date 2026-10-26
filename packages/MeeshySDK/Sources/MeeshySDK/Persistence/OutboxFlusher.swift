@@ -353,6 +353,9 @@ public actor OutboxFlusher {
         if DailyGestureLimit.from(error) != nil { return true }
         // #11379 — un clair refusé dans une conversation chiffrée ne se rejoue jamais.
         if EndToEndSendGate.isServerPlaintextRefusal(error) { return true }
+        // #12985 — un refus posé par l'appareil avant tout transport (cible
+        // chiffrée de bout en bout) ne se lèvera pas en rejouant.
+        if error is EndToEndSendRefusal { return true }
         if case let MeeshyError.server(statusCode, _) = error {
             return permanentRejectionStatusCodes.contains(statusCode)
         }

@@ -313,6 +313,8 @@ internal class ChatComposerController(
         val tray = pendingTray()
         val hasStaged = tray?.state?.value?.isEmpty == false
         if (text.isEmpty() && clipboard == null && !hasStaged) return
+        // #13110 — an edit is a send: in an end-to-end conversation nothing leaves the device.
+        if (state.value.isEndToEnd) return
         stopTypingEmission()
         val editingId = state.value.editingMessageId
         if (editingId != null) {

@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { findCachedConversation } from '@/lib/api/conversations';
 import { apiDeps } from '@/lib/api/deps';
+import { packQueryKeys } from '@/lib/api/pack-query-keys';
+import { loadCaptureFrameShelf, type CaptureFrameShelf } from '@/lib/api/packs-capture-frame';
 import { appQueryClient } from '@/lib/api/query-client';
 import { sessionStore } from '@/lib/api/session';
 import { resolveViewer } from '@/lib/api/viewer';
@@ -10,6 +12,7 @@ import { frameDate, montageCircle, type MontageCall, type MontageCircle } from '
 import type { Size } from '@/lib/calls/call-montage-shapes';
 import type { FrameChrome } from '@/lib/calls/frames/frame-chrome-reserve';
 import type { CaptureFrame } from '@/lib/calls/frames/frame-spec';
+import { shelvedStudio } from '@/lib/calls/frames/frame-shelf';
 import type { createFrameStudio, FrameStudio, FrameTier } from '@/lib/calls/frames/frame-studio';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 
@@ -30,6 +33,16 @@ export type FrameStudioLoader = () => Promise<FrameStudioModule>;
 
 export type CircleOf = (call: MontageCall, language: InterfaceLanguage) => MontageCircle;
 
+/** Les ambiances installées (#10169) ; `null` = inconnu, rien ne se cache. */
+export type ShelfLoader = (signal: AbortSignal) => Promise<CaptureFrameShelf>;
+
+export const browserShelf: ShelfLoader = (signal) => loadCaptureFrameShelf({ ...apiDeps, signal });
+
+const SHELF_KEY = packQueryKeys('capture-frame').installed;
+
+/** La dernière étagère connue, dans le cache des requêtes : servie à l'entrée du mode, avant la relecture. */
+const cachedShelf = (): CaptureFrameShelf => appQueryClient.getQueryData<readonly string[]>(SHELF_KEY) ?? null;
+
 /** Le cercle depuis la session (qui je suis) et la conversation en cache (pseudos, titre, accent) — aucune requête. */
 export const browserCircle: CircleOf = (call, language) =>
   montageCircle({
@@ -44,10 +57,38 @@ type Input = {
   readonly call: MontageCall | undefined;
   readonly circleOf: CircleOf;
   readonly language: InterfaceLanguage;
+  readonly loadShelf: ShelfLoader;
 };
 
-export function useMontageFrames({ loadFrames, call, circleOf, language }: Input): { readonly studio: FrameStudio | null; readonly circle: MontageCircle | null } {
+/**
+ * L'étagère des ambiances (#10169, LC) : la dernière connue tout de suite
+ * (cache d'abord), relue à chaque entrée du mode — une ambiance retirée sur un
+ * autre appareil l'est ici à la revalidation suivante. Elle ne restreint que
+ * l'OFFRE de l'atelier (`shelvedStudio`) : un cadre se résout toujours.
+ */
+function useCaptureFrameShelf(enabled: boolean, loadShelf: ShelfLoader): CaptureFrameShelf {
+  const [shelf, setShelf] = useState<CaptureFrameShelf>(cachedShelf);
+  useEffect(() => {
+    if (!enabled) return undefined;
+    const controller = new AbortController();
+    loadShelf(controller.signal).then(
+      (next) => {
+        if (controller.signal.aborted || next === null) return;
+        appQueryClient.setQueryData(SHELF_KEY, next);
+        setShelf(next);
+      },
+      () => undefined,
+    );
+    return () => controller.abort();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return shelf;
+}
+
+export function useMontageFrames({ loadFrames, call, circleOf, language, loadShelf }: Input): { readonly studio: FrameStudio | null; readonly circle: MontageCircle | null } {
   const [studio, setStudio] = useState<FrameStudio | null>(null);
+  const shelf = useCaptureFrameShelf(loadFrames !== undefined, loadShelf);
+  const shelved = useMemo(() => (studio === null ? null : shelvedStudio(studio, shelf)), [studio, shelf]);
   useEffect(() => {
     if (loadFrames === undefined) return undefined;
     const alive = { current: true };
@@ -61,7 +102,7 @@ export function useMontageFrames({ loadFrames, call, circleOf, language }: Input
       alive.current = false;
     };
   }, []);
-  return { studio, circle: call === undefined ? null : circleOf(call, language) };
+  return { studio: shelved, circle: call === undefined ? null : circleOf(call, language) };
 }
 
 /**

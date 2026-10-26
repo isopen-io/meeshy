@@ -35,6 +35,15 @@ public enum EndToEndSendRefusal: String, Error, Equatable, Sendable, CaseIterabl
     /// Mon compte a déjà le nombre maximal d'appareils chiffrés (#3707) : cet
     /// appareil ne peut pas s'enrôler tant qu'un autre n'est pas retiré.
     case deviceLimitReached
+    /// Cet appareil a vu la conversation chiffrée de bout en bout, la passerelle
+    /// la sert autrement (#12987) : elle refuserait le chiffré, l'appareil ne
+    /// lui donne pas le clair. Rien ne part tant qu'un régime chiffré n'est pas
+    /// de nouveau servi — ni boucle, ni renvoi automatique.
+    case servedWithoutEndToEnd
+    /// Un envoi hors du fil (réponse depuis une notification, refus d'appel par
+    /// message) vers une conversation chiffrée : seul le fil sait le sceller
+    /// (#12641). La bulle reste en échec dans le fil, d'où le renvoi se scelle.
+    case sealedOnlyInConversation
 }
 
 /// La loi PURE de l'envoi sous chiffrement de bout en bout (#11379, directives

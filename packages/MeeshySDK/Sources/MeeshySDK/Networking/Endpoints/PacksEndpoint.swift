@@ -35,6 +35,10 @@ public enum PacksEndpoint: MeeshyEndpoint, Sendable {
     case bannerInstalled
     case bannerPending
     case bannerSubmissions
+    case captureFrame
+    case captureFrameBySlug(slug: String)
+    case captureFrameBySlugInstall(slug: String)
+    case captureFrameInstalled
     case gloryFrame
     case gloryFrameBySlug(slug: String)
     case gloryFrameBySlugInstall(slug: String)
@@ -75,6 +79,10 @@ public enum PacksEndpoint: MeeshyEndpoint, Sendable {
         case .bannerInstalled: return "/api/v1/packs/banner/installed"
         case .bannerPending: return "/api/v1/packs/banner/pending"
         case .bannerSubmissions: return "/api/v1/packs/banner/submissions"
+        case .captureFrame: return "/api/v1/packs/capture-frame"
+        case .captureFrameBySlug(let slug): return "/api/v1/packs/capture-frame/\(slug)"
+        case .captureFrameBySlugInstall(let slug): return "/api/v1/packs/capture-frame/\(slug)/install"
+        case .captureFrameInstalled: return "/api/v1/packs/capture-frame/installed"
         case .gloryFrame: return "/api/v1/packs/glory-frame"
         case .gloryFrameBySlug(let slug): return "/api/v1/packs/glory-frame/\(slug)"
         case .gloryFrameBySlugInstall(let slug): return "/api/v1/packs/glory-frame/\(slug)/install"

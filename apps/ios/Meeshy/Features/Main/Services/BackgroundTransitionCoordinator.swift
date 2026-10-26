@@ -264,7 +264,7 @@ final class BackgroundTransitionCoordinator: BackgroundTransitioning {
             let pool = DependencyContainer.shared.dbPool
             let flusher = OutboxFlusher(
                 pool: pool,
-                dispatcher: OutboxDispatcher(),
+                dispatcher: EndToEndOutboxGate(),
                 onOutcome: { @Sendable outcome in
                     Task { await OfflineQueue.shared.publishOutcome(outcome) }
                 },

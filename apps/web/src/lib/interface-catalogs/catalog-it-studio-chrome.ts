@@ -80,6 +80,8 @@ const itStudioChrome = {
   'story.studio.background.cameraHold': 'Tieni premuto: apri la fotocamera',
   'story.studio.camera.close': 'Torna alla scena',
   'story.studio.camera.flip': 'Cambia fotocamera',
+  'story.studio.camera.frames': 'Cornici',
+  'story.studio.camera.frames.none': 'Nessuna cornice',
   'story.studio.camera.flash': 'Flash',
   'story.studio.camera.shutter.photo': 'Scatta una foto',
   'story.studio.camera.shutter.start': 'Avvia la registrazione',

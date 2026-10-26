@@ -44,14 +44,11 @@ import {
   swiftCase,
 } from '../scripts/generate-call-frames-swift';
 
+import * as sharedSpec from '../types/capture-frames';
+
 const WEB_SPEC = join(REPO_ROOT, 'apps/web/src/lib/calls/frames/frame-spec.ts');
 const SWIFT_SPECS = ['CallFrameSpec.swift', 'CallFrameFormatExtension.swift'].map((name) => join(REPO_ROOT, 'apps/ios/Meeshy/Features/Main/Models/CallFrames', name));
 
-const webList = (source: string, name: string): readonly string[] => {
-  const match = new RegExp(`export const ${name} = \\[([\\s\\S]*?)\\] as const`).exec(source);
-  if (match?.[1] === undefined) throw new Error(`${name} introuvable dans frame-spec.ts`);
-  return [...match[1].matchAll(/'([^']+)'/g)].map((found) => found[1] ?? '');
-};
 
 const swiftCases = (source: string, typeName: string): readonly string[] => {
   const match = new RegExp(`enum ${typeName}: String[^{]*\\{([\\s\\S]*?)\\n\\}`).exec(source);
@@ -136,15 +133,20 @@ describe('le catalogue Swift des cadres de capture', () => {
     expect(renderSwift(readMoodFiles())).toEqual(renderSwift(readMoodFiles()));
   });
 
-  it('les vocabulaires du générateur sont ceux de frame-spec.ts, dans le même ordre', () => {
-    const source = readFileSync(WEB_SPEC, 'utf8');
+  it('les vocabulaires du générateur sont ceux du schéma partagé (types/capture-frames.ts), dans le même ordre (#10169)', () => {
     const lists: Record<string, readonly string[]> = {
       FRAME_MOODS, FRAME_BUCKETS, FRAME_ARRANGEMENTS, SLOT_SHAPES, SLOT_TONES, SLOT_TILTS, FRAME_PATTERNS, FRAME_BORDERS, FRAME_ORNAMENTS,
       FRAME_FONTS, BRAND_MARKS, BRAND_PLACES, TEXT_SIZES, NAME_SHOWS, NAME_STYLES, TITLE_SOURCES, TEXT_EFFECTS,
       SLOT_LOOKS, ORNAMENT_MOTIONS, TEXT_FORMS, ELEMENT_PLACES, WATERMARK_CONTENTS, WATERMARK_ORIENTATIONS, FRAME_SURFACES, FRAME_COSTS,
       SCENE_LAYER_KINDS, SCENE_DEPTHS, BEHAVIOR_TRIGGERS, BEHAVIOR_ACTIONS, BEHAVIOR_CONDITIONS,
     };
-    Object.entries(lists).forEach(([name, list]) => expect(list, name).toEqual(webList(source, name)));
+    Object.entries(lists).forEach(([name, list]) => expect(list, name).toEqual((sharedSpec as Record<string, unknown>)[name]));
+  });
+
+  it('le web ne garde aucune copie du vocabulaire : frame-spec.ts réexporte le schéma partagé (#10169)', () => {
+    const source = readFileSync(WEB_SPEC, 'utf8');
+    expect(source).toContain("export * from '@meeshy/shared/types/capture-frames';");
+    expect(source).not.toMatch(/export const [A-Z_]+ = \[/);
   });
 
   it('les énumérations Swift des clés étendues portent les valeurs brutes du vocabulaire (#9197)', () => {

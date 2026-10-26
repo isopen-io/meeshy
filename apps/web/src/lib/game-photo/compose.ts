@@ -57,7 +57,8 @@ export type PaintContext = {
    * d'un emplacement tourné. Un vieux moteur sans l'un d'eux peint moins bien,
    * jamais faux : le peintre vérifie chaque membre avant de s'en servir.
    */
-  clip?(): void;
+  /** Sans argument : le tracé courant ; avec un `Path2D` : ce chemin (la fenêtre d'un cadre de gloire, #10254). */
+  clip?(path?: Path2D): void;
   rect?(x: number, y: number, w: number, h: number): void;
   rotate?(angle: number): void;
   transform?(a: number, b: number, c: number, d: number, e: number, f: number): void;

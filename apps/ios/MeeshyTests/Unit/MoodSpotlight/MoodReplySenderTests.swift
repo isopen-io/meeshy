@@ -58,7 +58,7 @@ final class MoodReplySenderTests: XCTestCase {
         let sut = MoodReplySender(conversations: conversations, messages: messages, endToEnd: endToEnd,
                                   replyQueue: queue, messagePersistence: persistence,
                                   currentUserId: { "me-1" }, prepareReplyQueue: {},
-                                  composingLanguages: { ["fr"] })
+                                  composingLanguages: { ["fr"] }, destinationGuard: .isolated())
         return (sut, conversations, messages)
     }
 

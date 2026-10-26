@@ -93,7 +93,7 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
         }
         MessageActionsSheet(
             bubble = actionTarget,
-            canEdit = MessageEditability.canEdit(
+            canEdit = !state.isEndToEnd && MessageEditability.canEdit(
                 isOwn = actionTarget.isOutgoing,
                 createdAtMillis = createdAtMillis,
                 nowMillis = nowMillis,

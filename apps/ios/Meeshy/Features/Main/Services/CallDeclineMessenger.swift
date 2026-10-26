@@ -19,6 +19,8 @@ final class CallDeclineMessenger: CallDeclineMessengerProviding {
     private let injectedPersistence: OptimisticMessagePersisting?
     private let currentUserId: @MainActor () -> String?
     private let injectedPrepareReplyQueue: (@MainActor () async -> Void)?
+    /// La loi du fil appliquée à la conversation de l'appel (#12641, #12985).
+    private let destinationGuard: EndToEndDestinationGuard
 
     private var messagePersistence: OptimisticMessagePersisting {
         injectedPersistence ?? DependencyContainer.shared.messagePersistence
@@ -35,8 +37,10 @@ final class CallDeclineMessenger: CallDeclineMessengerProviding {
         replyQueue: NotificationReplyQueueing = OfflineQueue.shared,
         messagePersistence: OptimisticMessagePersisting? = nil,
         currentUserId: @escaping @MainActor () -> String? = { AuthManager.shared.currentUser?.id },
-        prepareReplyQueue: (@MainActor () async -> Void)? = nil
+        prepareReplyQueue: (@MainActor () async -> Void)? = nil,
+        destinationGuard: EndToEndDestinationGuard = EndToEndDestinationGuard()
     ) {
+        self.destinationGuard = destinationGuard
         self.messageService = messageService
         self.replyQueue = replyQueue
         self.injectedPersistence = messagePersistence
@@ -62,6 +66,14 @@ final class CallDeclineMessenger: CallDeclineMessengerProviding {
             )
         } catch {
             logger.error("decline reply optimistic insert failed: \(error.localizedDescription, privacy: .public)")
+        }
+
+        // #12641 — le refus d'appel ne sait pas sceller : vers une conversation
+        // chiffrée de bout en bout, rien ne part ni n'entre dans la file.
+        if await destinationGuard.seals(plan.conversationId) {
+            logger.warning("decline reply refused before transport: end-to-end conversation")
+            await markFailed(localId: item.clientMessageId, reason: EndToEndSendRefusal.sealedOnlyInConversation.userMessage)
+            return
         }
 
         await prepareReplyQueue()
