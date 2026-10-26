@@ -13,14 +13,16 @@ public struct RetryPolicy: Sendable, Equatable {
         self.maxJitter = maxJitter
     }
 
-    public var deferral: TimeInterval { 0 }
+    public var deferral: TimeInterval { maxDelay }
 
     public func delay(afterFailure failures: Int, jitterSample: Double = .random(in: 0...1)) -> TimeInterval {
-        0
+        let exponent = Double(max(1, failures) - 1)
+        return min(maxDelay, firstDelay * pow(2.0, exponent)) + maxJitter * jitterSample
     }
 
     public func isExhausted(afterFailures failures: Int) -> Bool {
-        false
+        guard let maxAttempts else { return false }
+        return failures >= maxAttempts
     }
 }
 
