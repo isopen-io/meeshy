@@ -2,6 +2,7 @@
 <resources>
     <string name="bubble_message_deleted">تم حذف الرسالة</string>
     <string name="bubble_edited">معدّلة</string>
+    <string name="bubble_view_profile">عرض الملف الشخصي</string>
     <string name="bubble_forwarded">محوّلة</string>
     <string name="bubble_forwarded_from">محوّلة من %1$s</string>
     <string name="bubble_starred">مميّزة بنجمة</string>

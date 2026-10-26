@@ -25,6 +25,7 @@ import me.meeshy.ui.component.bubble.BubbleCallbacks
 import me.meeshy.ui.component.bubble.BubbleContent
 import me.meeshy.ui.component.bubble.DeliveryStatus
 import me.meeshy.ui.component.bubble.MessageBubble
+import me.meeshy.ui.theme.MeeshyPalette
 
 /**
  * The callbacks one message row can raise, all keyed by the message id so a single instance
@@ -46,6 +47,8 @@ internal class ChatMessageRowActions(
     val onReplyCountTap: (messageId: String) -> Unit = {},
     val onReplyCountLongPress: (messageId: String) -> Unit = {},
     val onRetry: (messageId: String) -> Unit = {},
+    /** Tap sur l'avatar de l'auteur (pied d'identité d'une suite reçue en groupe) : sa fiche profil. */
+    val onSenderTap: (bubble: BubbleContent) -> Unit = {},
     /** Window-space frame of the bubble, captured during layout for the long-press hero. */
     val onBubbleFramed: (messageId: String, frame: Rect) -> Unit = { _, _ -> },
 )
@@ -85,7 +88,7 @@ internal fun ChatMessageRow(
     val offer = remember(bubble, canWrite) { MessageRowOffer.of(bubble, canWrite) }
     val replyLabel = stringResource(R.string.chat_action_reply)
     val forwardLabel = stringResource(R.string.chat_action_forward)
-    val callbacks = remember(messageId, actions, audioPlayer, uriHandler, offer, replyLabel, forwardLabel) {
+    val callbacks = remember(bubble, actions, audioPlayer, uriHandler, offer, replyLabel, forwardLabel) {
         BubbleCallbacks(
             onLongPress = { actions.onLongPress(messageId) },
             onReactionClick = { emoji -> actions.onReactionClick(messageId, emoji) },
@@ -98,6 +101,11 @@ internal fun ChatMessageRow(
             onFileClick = { file -> actions.onFileClick(messageId, file.attachmentId) },
             onReplyPreviewClick = { actions.onReplyPreviewClick(messageId) },
             onFlagTap = { code -> actions.onFlagTap(messageId, code) },
+            onSenderTap = if (bubble.senderId != null) {
+                { actions.onSenderTap(bubble) }
+            } else {
+                null
+            },
             accessibilityActions = offer.accessibilityActions.map { action ->
                 when (action) {
                     MessageRowAction.Reply -> BubbleAccessibilityAction(replyLabel) { actions.onReply(messageId) }
@@ -123,7 +131,9 @@ internal fun ChatMessageRow(
     ) {
         MessageBubble(
             content = bubble,
-            outgoingColor = accentColor,
+            // iOS : la bulle envoyée porte l'indigo de marque (BubbleSkin.brand), pas l'accent
+            // de la conversation — l'accent reste aux liens, citations et réactions.
+            outgoingColor = MeeshyPalette.Indigo500,
             mentionDisplayNames = mentionDisplayNames,
             highlightTerm = highlightTerm,
             callbacks = callbacks,

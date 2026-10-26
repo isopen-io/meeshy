@@ -130,7 +130,8 @@ private fun List<LocalMessage>.toBubbles(
         bubbleMemo.build(
             local = local,
             currentUser = currentUser,
-            showSenderName = position.isFirstInGroup,
+            // iOS : l'identité de l'auteur ferme la suite (pied de la DERNIÈRE bulle).
+            showSenderName = position.isLastInGroup,
             ownReactions = ownReactions[local.message.id] ?: emptySet(),
             recipientCount = recipientCount,
             showOriginal = local.message.id in showingOriginal,

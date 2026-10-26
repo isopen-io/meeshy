@@ -56,7 +56,7 @@ internal fun ChatListRow(
 ) {
     when (item) {
         is ChatListItem.DayHeader -> DaySeparator(item.dayMillis)
-        is ChatListItem.UnreadSeparator -> UnreadSeparatorRow(accentColor)
+        is ChatListItem.UnreadSeparator -> UnreadSeparatorRow(item.count)
         is ChatListItem.EncryptionNotice -> EncryptionNoticeRow(accentColor)
         is ChatListItem.Message -> ChatMessageRow(
             bubble = item.bubble.inConversation(isGroup),

@@ -2,8 +2,10 @@ package me.meeshy.ui.component.bubble
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -14,10 +16,13 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
@@ -28,6 +33,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import me.meeshy.sdk.model.MessageEffects
 import me.meeshy.ui.R
 import me.meeshy.ui.icons.MeeshyIcons
@@ -38,6 +44,8 @@ import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
+import me.meeshy.ui.theme.hexColor
+import me.meeshy.sdk.theme.DynamicColorGenerator
 
 /**
  * Rendering options of a standard bubble that are not callbacks: the visual-effect override and
@@ -70,14 +78,12 @@ internal fun BubbleStandardLayout(
         modifier = Modifier
             .fillMaxWidth()
             .padding(
-                start = MeeshySpacing.lg,
-                end = MeeshySpacing.lg,
-                // Consecutive-sender runs stack tightly: only the first message of a
-                // run gets a top gap and only the last a bottom gap, so a run reads
-                // as one visual block while distinct messages keep their 4dp breathing
-                // room (isFirst && isLast).
-                top = if (content.isFirstInGroup) MeeshySpacing.xs else MeeshySpacing.none,
-                bottom = if (content.isLastInGroup) MeeshySpacing.xs else MeeshySpacing.none,
+                // iOS : la cellule a 8 de marge de chaque côté (MessageListView, MeeshySpacing.sm),
+                // aucune marge haute, 2 sous une bulle au sein d'une suite et 6 en fin de suite.
+                start = MeeshySpacing.sm,
+                end = MeeshySpacing.sm,
+                top = MeeshySpacing.none,
+                bottom = if (content.isLastInGroup) MeeshySpacing.xsPlus else MeeshySpacing.xxs,
             ),
         horizontalArrangement = if (content.isOutgoing) Arrangement.End else Arrangement.Start,
     ) {
@@ -88,18 +94,37 @@ internal fun BubbleStandardLayout(
             content.isOutgoing -> MeeshyPalette.White
             else -> MeeshyTheme.tokens.textPrimary
         }
+        val isDark = MeeshyTheme.isDark
+        val receivedTint = remember(content.senderColorHex, isDark) {
+            ReceivedBubbleTint.of(content.senderColorHex, isDark)
+        }
         val bubbleBackground = when {
             isFreeEmoji -> Color.Transparent
             content.isOutgoing -> outgoingColor
-            else -> MeeshyTheme.tokens.backgroundTertiary
+            else -> receivedTint.fill
         }
+        val bubbleBorder = if (isFreeEmoji || content.isOutgoing) null else receivedTint.stroke
         Column(horizontalAlignment = if (content.isOutgoing) Alignment.End else Alignment.Start) {
             if (content.pinnedAtIso != null && !content.isDeleted) BubblePinnedIndicator()
+            if (isFreeEmoji && content.blurReveal == null) {
+                // La story citée reste au-dessus de l'emoji, hors de tout fond (iOS
+                // `detachedStoryCitation`) ; l'emoji flotte dessous.
+                if (content.storyReply != null) {
+                    StoryReplyPreview(
+                        story = content.storyReply,
+                        accentColor = MeeshyTheme.tokens.textPrimary,
+                        modifier = Modifier.padding(bottom = MeeshySpacing.xs),
+                    )
+                }
+                FreeEmojiBody(content = content, onLongPress = callbacks.onLongPress)
+                return@Column
+            }
             BubbleBlurRevealBoundary(messageId = content.messageId, spec = content.blurReveal) {
                 BubbleBody(
                     content = content,
                     onColor = onColor,
                     bubbleBackground = bubbleBackground,
+                    bubbleBorder = bubbleBorder,
                     callbacks = callbacks,
                     audioPlayback = audioPlayback,
                     options = options,
@@ -116,10 +141,12 @@ private fun BubbleBody(
     content: BubbleContent,
     onColor: Color,
     bubbleBackground: Color,
+    bubbleBorder: Color?,
     callbacks: BubbleCallbacks,
     audioPlayback: BubbleAudioPlayback?,
     options: BubbleRenderOptions,
 ) {
+    val bubbleShape = RoundedCornerShape(MeeshyRadius.lgPlus)
     val accessibilityLabel = options.accessibilityLabel
     val onLongPress = callbacks.onLongPress
     val namedActions = callbacks.accessibilityActions
@@ -133,7 +160,7 @@ private fun BubbleBody(
             .bubbleWidthCap(
                 widthClass = widthClass,
                 windowWidthDp = windowWidthDp,
-                horizontalGutter = MeeshySpacing.lg * 2,
+                horizontalGutter = MeeshySpacing.sm * 2,
             )
             .let { base ->
                 if (accessibilityLabel == null) base
@@ -145,14 +172,15 @@ private fun BubbleBody(
                 // the `effects` param stays an optional override for previews/tests.
                 effects = options.effects ?: content.effects,
                 hasPlayedAppearance = options.hasPlayedAppearance,
-                shape = RoundedCornerShape(MeeshyRadius.xl),
+                shape = bubbleShape,
                 // Seed the one-shot appearance burst on a stable per-message value so a
                 // confetti/fireworks message renders the same reproducible burst across
                 // recompositions (a scroll off/on never re-rolls it — surpasses iOS).
                 appearanceSeed = content.messageId.hashCode().toLong(),
             )
-            .clip(RoundedCornerShape(MeeshyRadius.xl))
+            .clip(bubbleShape)
             .background(bubbleBackground)
+            .let { base -> if (bubbleBorder == null) base else base.border(1.dp, bubbleBorder, bubbleShape) }
             .let { base ->
                 if (onLongPress == null) base
                 else base.combinedClickable(onClick = {}, onLongClick = onLongPress)
@@ -164,45 +192,113 @@ private fun BubbleBody(
                         CustomAccessibilityAction(named.label) { named.onAction(); true }
                     }
                 }
-            }
-            .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.sm),
+            },
     ) {
-        if (content.isForwarded) BubbleForwardedBadge(content.forwardedFromName, onColor)
-        if (content.showSenderName && content.senderName != null) {
-            Text(
-                text = content.senderName,
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = onColor,
-            )
+        BubbleBodyFooterLayout(
+            body = {
+                // iOS : le corps est rembourré 14 × 10 (BubbleStandardLayout+TextBubble).
+                Column(
+                    modifier = Modifier.padding(horizontal = MeeshySpacing.mdPlus, vertical = MeeshySpacing.smPlus),
+                ) {
+                    if (content.isForwarded) BubbleForwardedBadge(content.forwardedFromName, onColor)
+                    BubbleReplySection(content, onColor, callbacks.onReplyPreviewClick)
+                    if (content.storyReply != null) {
+                        StoryReplyPreview(
+                            story = content.storyReply,
+                            accentColor = onColor,
+                            modifier = Modifier.padding(bottom = MeeshySpacing.xs),
+                        )
+                    }
+                    BubbleAttachmentSections(content, onColor, callbacks, audioPlayback)
+                    BubbleTextBody(content, onColor, options.decor)
+                    if (content.reactions.isNotEmpty()) {
+                        ReactionStrip(
+                            reactions = content.reactions,
+                            onReactionClick = callbacks.onReactionClick,
+                            onReactionLongPress = callbacks.onReactionLongPress,
+                            modifier = Modifier.padding(top = MeeshySpacing.xs),
+                        )
+                    }
+                }
+            },
+            footer = {
+                // iOS `BubbleFooter` : 14 de côté (10 avec l'identité), 0 en haut (8 avec), 8 en bas.
+                val hasIdentity = content.showSenderName && !content.isOutgoing && content.senderName != null
+                BubbleFooterRow(
+                    content = content,
+                    onColor = onColor,
+                    onFlagTap = callbacks.onFlagTap,
+                    onSenderTap = callbacks.onSenderTap,
+                    modifier = Modifier.padding(
+                        start = if (hasIdentity) MeeshySpacing.smPlus else MeeshySpacing.mdPlus,
+                        end = if (hasIdentity) MeeshySpacing.smPlus else MeeshySpacing.mdPlus,
+                        top = if (hasIdentity) MeeshySpacing.sm else MeeshySpacing.none,
+                        bottom = MeeshySpacing.sm,
+                    ),
+                )
+            },
+        )
+    }
+}
+
+/**
+ * Emoji seul, sans fond ni bulle (iOS `emojiOnlyContent`) : l'emoji agrandi et un pied compact —
+ * heure 12 sp + coche — posés sur la même ligne de base, en un bloc collé au bord de l'auteur.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun FreeEmojiBody(content: BubbleContent, onLongPress: (() -> Unit)?) {
+    val fontSize = EmojiDetector.fontSizeSp(content.emojiOnlyCount) ?: return
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xsPlus),
+        modifier = if (onLongPress == null) Modifier
+        else Modifier.combinedClickable(onClick = {}, onLongClick = onLongPress),
+    ) {
+        Text(
+            text = content.text.trim(),
+            fontSize = fontSize.sp,
+            lineHeight = (fontSize * 1.15f).sp,
+            modifier = Modifier.alignByBaseline(),
+        )
+        BubbleMetaTrailing(
+            content = content,
+            metaColor = MeeshyTheme.tokens.textMuted,
+            modifier = Modifier.alignByBaseline(),
+        )
+    }
+}
+
+/**
+ * Corps et pied empilés à 4 dp, port d'iOS `BubbleBodyFooterLayout` : la bulle épouse son contenu
+ * (jamais étirée à sa largeur maximale) et le pied prend exactement la largeur retenue — celle du
+ * corps, ou la sienne propre si elle est plus large — si bien que l'heure tombe au bord droit.
+ */
+@Composable
+private fun BubbleBodyFooterLayout(
+    body: @Composable () -> Unit,
+    footer: @Composable () -> Unit,
+) {
+    Layout(
+        content = {
+            Box { body() }
+            Box { footer() }
+        },
+    ) { measurables, constraints ->
+        val gap = MeeshySpacing.xs.roundToPx()
+        val loose = constraints.copy(minWidth = 0, minHeight = 0)
+        val bodyPlaceable = measurables[0].measure(loose)
+        val footerNatural = measurables[1].maxIntrinsicWidth(Constraints.Infinity)
+        val width = maxOf(bodyPlaceable.width, footerNatural, constraints.minWidth)
+            .coerceAtMost(constraints.maxWidth)
+        val footerPlaceable = measurables[1].measure(
+            Constraints(minWidth = width, maxWidth = width, minHeight = 0, maxHeight = constraints.maxHeight),
+        )
+        val bodyGap = if (bodyPlaceable.height > 0) gap else 0
+        val height = bodyPlaceable.height + bodyGap + footerPlaceable.height
+        layout(width, height) {
+            bodyPlaceable.place(0, 0)
+            footerPlaceable.place(0, bodyPlaceable.height + bodyGap)
         }
-        BubbleReplySection(content, onColor, callbacks.onReplyPreviewClick)
-        if (content.storyReply != null) {
-            StoryReplyPreview(
-                story = content.storyReply,
-                accentColor = onColor,
-                modifier = Modifier.padding(bottom = MeeshySpacing.xs),
-            )
-        }
-        BubbleAttachmentSections(content, onColor, callbacks, audioPlayback)
-        BubbleTextBody(content, onColor, options.decor)
-        if (!content.isDeleted && content.languageStrip.isNotEmpty()) {
-            LanguageStrip(
-                chips = content.languageStrip,
-                onColor = onColor,
-                onFlagTap = callbacks.onFlagTap,
-                modifier = Modifier.padding(top = MeeshySpacing.xs),
-            )
-        }
-        if (content.reactions.isNotEmpty()) {
-            ReactionStrip(
-                reactions = content.reactions,
-                onReactionClick = callbacks.onReactionClick,
-                onReactionLongPress = callbacks.onReactionLongPress,
-                modifier = Modifier.padding(top = MeeshySpacing.xs),
-            )
-        }
-        BubbleFooterRow(content = content, onColor = onColor)
     }
 }
 
@@ -249,7 +345,32 @@ private fun BubbleBlurRevealBoundary(
         BubbleBlurReveal(
             messageId = messageId,
             spec = spec,
-            shape = RoundedCornerShape(MeeshyRadius.xl),
+            shape = RoundedCornerShape(MeeshyRadius.lgPlus),
         ) { content() }
+    }
+}
+
+/**
+ * Teinte d'une bulle REÇUE, port d'iOS `BubbleBackground` : la couleur de l'auteur fondue à 30 %
+ * dans l'indigo de marque (`otherBubbleColor`), posée OPAQUE sur la surface à 16 % (clair) / 28 %
+ * (sombre), et cernée d'un trait de 1 dp de cette même couleur à 26 % / 34 %.
+ */
+internal class ReceivedBubbleTint(val fill: Color, val stroke: Color) {
+    companion object {
+        private const val BRAND_INDIGO = "6366F1"
+        private const val LIGHT_SURFACE = "FFFFFF"
+        private const val DARK_SURFACE = "09090B"
+
+        fun of(senderColorHex: String?, isDark: Boolean): ReceivedBubbleTint {
+            val other = DynamicColorGenerator.blendTwo(senderColorHex ?: BRAND_INDIGO, 0.30, BRAND_INDIGO, 0.70)
+            val weight = if (isDark) 0.28 else 0.16
+            val fill = DynamicColorGenerator.blendTwo(
+                other, weight, if (isDark) DARK_SURFACE else LIGHT_SURFACE, 1.0 - weight,
+            )
+            return ReceivedBubbleTint(
+                fill = hexColor(fill, MeeshyPalette.Indigo50),
+                stroke = hexColor(other, MeeshyPalette.Indigo500).copy(alpha = if (isDark) 0.34f else 0.26f),
+            )
+        }
     }
 }
