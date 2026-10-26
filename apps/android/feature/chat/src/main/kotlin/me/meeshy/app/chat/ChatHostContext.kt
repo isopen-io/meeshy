@@ -45,6 +45,9 @@ internal class ChatSheetVisibility {
     var members by mutableStateOf(false)
     var stats by mutableStateOf(false)
     var analysis by mutableStateOf(false)
+
+    /** La fiche Conversation, ouverte par l'avatar de l'en-tête (parité iOS `ConversationInfoSheet`). */
+    var info by mutableStateOf(false)
 }
 
 /**
@@ -64,6 +67,8 @@ internal class ChatHostContext(
     val navigation: ChatNavigationActions,
     val sheets: ChatSheetVisibility,
     val bubbleFrames: MutableMap<String, Rect>,
+    /** Ce que l'en-tête montre en plus de [state] : avatar, pair, non-lus des autres conversations. */
+    val header: ChatHeaderState = ChatHeaderState(),
 )
 
 @Composable
@@ -74,12 +79,13 @@ internal fun rememberChatHostContext(
     accentColor: Color,
     actions: ChatHostActions,
     navigation: ChatNavigationActions,
+    header: ChatHeaderState = ChatHeaderState(),
 ): ChatHostContext {
     val sheets = remember { ChatSheetVisibility() }
     // A plain map, not snapshot state: written from onGloballyPositioned without forcing
     // recomposition, read only when the overlay opens.
     val bubbleFrames = remember { mutableMapOf<String, Rect>() }
-    return ChatHostContext(state, composerText, pending, accentColor, actions, navigation, sheets, bubbleFrames)
+    return ChatHostContext(state, composerText, pending, accentColor, actions, navigation, sheets, bubbleFrames, header)
 }
 
 /** The ViewModel's user-intent entry points, as plain callbacks. */

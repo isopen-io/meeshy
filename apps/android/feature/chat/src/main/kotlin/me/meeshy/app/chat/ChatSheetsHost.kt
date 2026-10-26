@@ -21,6 +21,7 @@ import me.meeshy.sdk.model.MessagePinToggle
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.ui.component.EmojiFullPicker
 import me.meeshy.ui.component.viewer.MeeshyImageViewer
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.format.RelativeTimeFormat
 import me.meeshy.ui.format.rememberRelativeTimeStrings
 import me.meeshy.ui.theme.MeeshyTheme
@@ -142,6 +143,38 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
             else actions.onFileAttachmentShare(download.messageId, attachmentId)
         },
     )
+
+    if (sheets.info) {
+        // Chaque entrée referme la fiche puis ouvre sa feuille : une seule feuille à la fois.
+        fun openFrom(open: () -> Unit): () -> Unit = { sheets.info = false; open() }
+        val entries = buildList {
+            if (state.isGroup) {
+                add(ConversationInfoEntry(MeeshyIcons.Group, stringResource(R.string.conversation_members_open), openFrom { sheets.members = true }))
+            }
+            add(ConversationInfoEntry(MeeshyIcons.ChartBar, stringResource(R.string.conversation_stats_title), openFrom { sheets.stats = true }))
+            add(ConversationInfoEntry(MeeshyIcons.Sparkles, stringResource(R.string.conversation_analysis_title), openFrom { sheets.analysis = true }))
+            // Moderator+ viewers of a group get the admin surfaces: the share-link creator
+            // and the conversation-settings sheet (write-role / announcement / slow-mode).
+            if (state.slowModeExempt) {
+                if (state.isGroup) {
+                    add(ConversationInfoEntry(MeeshyIcons.AddLink, stringResource(R.string.chat_create_share_link), openFrom(host.navigation.onCreateShareLink)))
+                }
+                add(ConversationInfoEntry(MeeshyIcons.Tune, stringResource(R.string.conversation_settings_title), openFrom { sheets.settings = true }))
+            }
+        }
+        ConversationInfoSheet(
+            title = state.conversationTitle ?: stringResource(R.string.chat_conversation_info_title),
+            subtitle = if (state.isGroup && state.memberCount > 0) {
+                stringResource(R.string.chat_header_members, state.memberCount)
+            } else {
+                null
+            },
+            avatarUrl = host.header.avatarUrl,
+            accentColor = accentColor,
+            entries = entries,
+            onDismiss = { sheets.info = false },
+        )
+    }
 
     if (sheets.settings) {
         ConversationSettingsSheet(

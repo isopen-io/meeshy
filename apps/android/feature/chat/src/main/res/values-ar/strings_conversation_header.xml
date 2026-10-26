@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- En-tête de conversation (parité iOS ConversationView+Header) -->
+    <string name="chat_header_call">اتصال</string>
+    <string name="chat_header_call_group">الاتصال بالمجموعة</string>
+    <string name="chat_header_call_hint">اختر مكالمة صوتية أو مرئية</string>
+    <string name="chat_header_call_voice">مكالمة صوتية</string>
+    <string name="chat_header_call_video">مكالمة مرئية</string>
+    <string name="chat_header_search">البحث في المحادثة</string>
+    <string name="chat_header_view_profile_of">عرض ملف %1$s</string>
+    <string name="chat_header_view_conversation">عرض المحادثة %1$s</string>
+    <string name="chat_header_menu_profile">عرض الملف الشخصي</string>
+    <string name="chat_header_menu_conversation">المحادثة</string>
+    <string name="chat_header_expand">توسيع الترويسة</string>
+    <string name="chat_header_collapse">طي الترويسة</string>
+    <string name="chat_conversation_info_title">المحادثة</string>
+    <plurals name="chat_header_back_unread">
+        <item quantity="zero">رجوع، %1$d رسائل غير مقروءة</item>
+        <item quantity="one">رجوع، %1$d رسالة غير مقروءة</item>
+        <item quantity="two">رجوع، %1$d رسائل غير مقروءة</item>
+        <item quantity="few">رجوع، %1$d رسائل غير مقروءة</item>
+        <item quantity="many">رجوع، %1$d رسائل غير مقروءة</item>
+        <item quantity="other">رجوع، %1$d رسائل غير مقروءة</item>
+    </plurals>
+</resources>

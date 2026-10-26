@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- En-tête de conversation (parité iOS ConversationView+Header) -->
+    <string name="chat_header_call">Call</string>
+    <string name="chat_header_call_group">Call the group</string>
+    <string name="chat_header_call_hint">Choose a voice or video call</string>
+    <string name="chat_header_call_voice">Voice call</string>
+    <string name="chat_header_call_video">Video call</string>
+    <string name="chat_header_search">Search in conversation</string>
+    <string name="chat_header_view_profile_of">View %1$s\'s profile</string>
+    <string name="chat_header_view_conversation">View conversation %1$s</string>
+    <string name="chat_header_menu_profile">View profile</string>
+    <string name="chat_header_menu_conversation">Conversation</string>
+    <string name="chat_header_expand">Expand header</string>
+    <string name="chat_header_collapse">Collapse header</string>
+    <string name="chat_conversation_info_title">Conversation</string>
+    <plurals name="chat_header_back_unread">
+        <item quantity="one">Back, %1$d unread message</item>
+        <item quantity="other">Back, %1$d unread messages</item>
+    </plurals>
+</resources>

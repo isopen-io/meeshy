@@ -56,6 +56,8 @@ fun ChatScreen(
     val actions = remember(viewModel) { viewModel.hostActions() }
     val pendingTray = remember(viewModel) { viewModel.controllers.find<ComposerTrayController>() }
     val pending by (pendingTray?.state ?: NO_PENDING).collectAsStateWithLifecycle()
+    val headerController = remember(viewModel) { viewModel.controllers.find<ChatHeaderController>() }
+    val header by (headerController?.state ?: NO_HEADER).collectAsStateWithLifecycle()
     val host = rememberChatHostContext(
         state = state,
         composerText = viewModel.composerText,
@@ -70,6 +72,7 @@ fun ChatScreen(
             hasLocalLiveCall = hasLocalLiveCall,
             callEntry = callEntry,
         ),
+        header = header,
     )
 
     ChatBackgroundHost {
