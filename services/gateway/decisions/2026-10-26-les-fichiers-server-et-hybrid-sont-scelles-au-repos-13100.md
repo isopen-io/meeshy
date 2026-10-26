@@ -86,7 +86,10 @@ ligne. La ligne part quand le fichier est effacé (`AttachmentService`).
   AVANT de lire s'il est scellé ; verrou injoignable, elle échoue tout de suite
   (la piste manque, une retraduction la refait — son adresse n'est alors
   annoncée nulle part, ni en base ni en temps réel : la traduction garde son
-  seul texte, `translatedTrackSave.ts`) ; une piste d'une conversation
+  seul texte, et une piste PRÉCÉDENTE de la langue garde sa référence, pour
+  être effacée avec la pièce — `translatedTrackSave.ts`, journal
+  `TRANSLATED_TRACK_NOT_WRITTEN`, rejeu automatique suivi par #13154) ; une
+  piste d'une conversation
   en clair n'y touche jamais. Le verrou du processus ne sert que
   sans `REDIS_URL` du tout (un seul processus). Une piste TTS s'écrit sous le même
   verrou (attendu jusqu'à 10 s) : jamais rescellée par-dessus son chiffré.

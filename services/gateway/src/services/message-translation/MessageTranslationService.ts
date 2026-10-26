@@ -6,7 +6,7 @@
  * to prevent plaintext exposure in the database.
  */
 
-import { saveTranslatedTrack } from './translatedTrackSave';
+import { mergeTranslationEntries, saveTranslatedTrack } from './translatedTrackSave';
 import { EventEmitter } from 'events';
 import * as path from 'path';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
@@ -1209,10 +1209,7 @@ export class MessageTranslationService extends EventEmitter {
             where: { id: data.attachmentId },
             select: { translations: true }
           });
-          const merged: AttachmentTranslations = {
-            ...((fresh?.translations as unknown as AttachmentTranslations) || {}),
-            ...newTranslationEntries
-          };
+          const merged = mergeTranslationEntries((fresh?.translations as unknown as AttachmentTranslations) || {}, newTranslationEntries);
           await this.prisma.messageAttachment.update({
             where: { id: data.attachmentId },
             data: {
@@ -1738,21 +1735,21 @@ export class MessageTranslationService extends EventEmitter {
             where: { id: data.attachmentId },
             select: { translations: true }
           });
-          const existingTranslations = (fresh?.translations as unknown as AttachmentTranslations) || {};
-
-          existingTranslations[data.language] = {
-            type: 'audio',
-            transcription: data.translatedAudio.translatedText,
-            ...trackLocation,
-            durationMs: data.translatedAudio.durationMs,
-            format: data.translatedAudio.audioMimeType?.replace('audio/', '') || 'mp3',
-            cloned: data.translatedAudio.voiceCloned,
-            quality: data.translatedAudio.voiceQuality,
-            ttsModel: 'xtts',
-            segments: data.translatedAudio.segments as any,
-            createdAt: new Date(),
-            updatedAt: new Date()
-          };
+          const existingTranslations = mergeTranslationEntries((fresh?.translations as unknown as AttachmentTranslations) || {}, {
+            [data.language]: {
+              type: 'audio',
+              transcription: data.translatedAudio.translatedText,
+              ...trackLocation,
+              durationMs: data.translatedAudio.durationMs,
+              format: data.translatedAudio.audioMimeType?.replace('audio/', '') || 'mp3',
+              cloned: data.translatedAudio.voiceCloned,
+              quality: data.translatedAudio.voiceQuality,
+              ttsModel: 'xtts',
+              segments: data.translatedAudio.segments as any,
+              createdAt: new Date(),
+              updatedAt: new Date()
+            }
+          });
 
           await this.prisma.messageAttachment.update({
             where: { id: data.attachmentId },
@@ -2073,10 +2070,7 @@ export class MessageTranslationService extends EventEmitter {
               where: { id: attachmentIdForUpdate },
               select: { translations: true }
             });
-            const merged: AttachmentTranslations = {
-              ...((fresh?.translations as unknown as AttachmentTranslations) || {}),
-              ...newTranslationEntries
-            };
+            const merged = mergeTranslationEntries((fresh?.translations as unknown as AttachmentTranslations) || {}, newTranslationEntries);
             // N'écrire `transcription` QUE si présente : data.result.originalAudio
             // peut être absent (transcriptionData=null) et écraser une
             // transcription déjà stockée par un autre handler (data-loss).
