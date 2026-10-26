@@ -143,7 +143,7 @@ enum BoundedWait {
         }
     }
 
-    private final class ResumeOnce: @unchecked Sendable {
+    nonisolated private final class ResumeOnce: @unchecked Sendable {
         private let lock = NSLock()
         private var continuation: CheckedContinuation<Void, Never>?
 
