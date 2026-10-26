@@ -48,13 +48,23 @@ extension MessagePersistenceActor {
     /// écriture qui fait passer la bulle à `(1) · Déjà ouvert`, et qui survit au
     /// redémarrage et à toute revalidation REST (`upsertFromAPIMessages`
     /// respecte la colonne).
+    ///
+    /// Sans origine, l'ouverture est ANNONCÉE par la passerelle (`consumedByMe`,
+    /// écho d'un autre appareil) : la bulle se scelle, le clair E2EE reste au coffre
+    /// (#13060). Le geste de CE lecteur, ou le signal d'un de SES appareils, passe
+    /// `origin: .authenticated`.
     public func markViewOnceOpened(localId: String, at date: Date = Date()) throws {
+        try markViewOnceOpened(localId: localId, at: date, origin: .announced)
+    }
+
+    public func markViewOnceOpened(localId: String, at date: Date = Date(), origin: PlaintextErasureOrigin) throws {
         var affectedConversationId: String?
         try dbWriter.write { db in
             guard var record = try MessageRecord
                 .filter(Column("localId") == localId || Column("serverId") == localId)
                 .fetchOne(db) else {
                 try MessagePlaintextErasures.record(localId, cause: .viewOnceOpened, in: db)
+                try MessagePlaintextErasures.settle(localId, cause: .viewOnceOpened, origin: origin, in: db)
                 return
             }
             affectedConversationId = record.conversationId
@@ -66,6 +76,7 @@ extension MessagePersistenceActor {
                 .filter(Column("messageLocalId") == record.localId
                         || Column("messageServerId") == (record.serverId ?? record.localId))
                 .deleteAll(db)
+            try MessagePlaintextErasures.settle(localId, cause: .viewOnceOpened, origin: origin, in: db)
         }
         if let convId = affectedConversationId {
             postMessageStoreRefresh(conversationIds: [convId])

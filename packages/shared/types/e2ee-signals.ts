@@ -30,9 +30,13 @@ export const E2EE_SIGNAL_ROUTE = '/e2ee/conversations/:conversationId/signals' a
 /**
  * Les paliers de remplissage du clair d'une enveloppe (octets), communs aux
  * messages et aux signaux : une réaction ne se distingue pas d'un message court.
- * Au-delà du dernier palier, le clair se remplit au multiple suivant de celui-ci.
+ * Au-delà du dernier palier, le clair se remplit au multiple suivant de
+ * `E2EE_PADDING_STEP`, sans jamais dépasser `E2EE_PADDING_MAX` (l'enveloppe
+ * chiffrée doit tenir sous 64 Kio). Miroir : `E2EEPadding` (MeeshyE2EE).
  */
-export const E2EE_PADDING_TIERS = [256, 1024, 4096, 16384, 65536] as const;
+export const E2EE_PADDING_TIERS = [256, 1024, 4096, 16384] as const;
+export const E2EE_PADDING_STEP = 16384;
+export const E2EE_PADDING_MAX = 61440;
 
 /**
  * Un envoi de signal : les enveloppes libsignal, l'appareil émetteur, ceux de

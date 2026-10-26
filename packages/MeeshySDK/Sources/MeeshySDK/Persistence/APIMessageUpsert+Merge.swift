@@ -9,6 +9,11 @@ extension APIMessageUpsert {
         let pendingDelete: Bool
         let staleLiveCall: Bool
         let pendingReaction: Bool
+        /// #13142 — la ligne d'une conversation chiffrée de bout en bout : ses
+        /// réactions et sa suppression pour tous voyagent en signaux chiffrés,
+        /// la passerelle n'en sait rien. Une page servie peut au plus masquer
+        /// la ligne (`deletedAt`), jamais la démasquer ni effacer ses réactions.
+        let signalsAreLocal: Bool
     }
 
     static func mergeGuards(
@@ -33,7 +38,8 @@ extension APIMessageUpsert {
                 existing: existing.callSummaryJson,
                 incoming: columns.callSummaryJson
             ),
-            pendingReaction: pending.reactions.contains(api.id)
+            pendingReaction: pending.reactions.contains(api.id),
+            signalsAreLocal: existing.encryptionMode == E2EEWire.mode || api.encryptionMode == E2EEWire.mode
         )
     }
 
@@ -78,7 +84,7 @@ extension APIMessageUpsert {
             if api.editAuthorship.servesEditor { next.editedById = api.editAuthorship.servedEditorId }
         }
         if !guards.pendingDelete {
-            next.deletedAt = api.deletedAt
+            next.deletedAt = guards.signalsAreLocal ? (record.deletedAt ?? api.deletedAt) : api.deletedAt
         }
         if !guards.keepLocalPlaintext {
             next.isEncrypted = api.isEncrypted ?? next.isEncrypted
@@ -135,7 +141,7 @@ extension APIMessageUpsert {
     ) -> MessageRecord {
         var next = record
         next.attachmentsJson = columns.attachmentsJson ?? next.attachmentsJson
-        if !guards.pendingReaction {
+        if !guards.pendingReaction && !guards.signalsAreLocal {
             next.reactionsJson = columns.reactionsJson
             next.reactionCount = columns.reactionCount
         }

@@ -46,7 +46,18 @@ public protocol E2EEMessageSealing: Sendable {
     ) async throws -> T
 }
 
-public final class E2EEMessageSealer: E2EEMessageSealing {
+/// Le scellement d'un SIGNAL (#13142) : mêmes appareils, même remplissage,
+/// même résolution Sesame qu'un message ; seul le contenu chiffré diffère.
+public protocol E2EESignalSealing: Sendable {
+    func seal(_ signal: E2EESignal, to peerUserId: String) async throws -> E2EESealedMessage
+    func sealAndDeliver<T: Sendable>(
+        _ signal: E2EESignal,
+        to peerUserId: String,
+        deliver: @concurrent @Sendable (E2EESealedMessage) async throws -> T
+    ) async throws -> T
+}
+
+public final class E2EEMessageSealer: E2EEMessageSealing, E2EESignalSealing {
     public static let maxAttempts = 3
 
     private let local: E2EELocalDevice
@@ -67,7 +78,14 @@ public final class E2EEMessageSealer: E2EEMessageSealing {
     }
 
     public func seal(_ content: E2EEContent, to peerUserId: String) async throws -> E2EESealedMessage {
-        let plaintext = try content.authored(by: local.userId, deviceId: local.deviceId).encoded()
+        try await seal(plaintext: content.authored(by: local.userId, deviceId: local.deviceId).encoded(), to: peerUserId)
+    }
+
+    /// Le clair, rempli au palier (#13142), chiffré pour chaque appareil de la
+    /// directe et de mes appareils approuvés : un message et un signal partent
+    /// par le même chemin, à la même taille.
+    func seal(plaintext unpadded: Data, to peerUserId: String) async throws -> E2EESealedMessage {
+        let plaintext = E2EEPadding.padded(unpadded)
         let peerTargets = try await targets(of: peerUserId)
         guard !peerTargets.isEmpty else { throw E2EESealError.recipientHasNoDevice(userId: peerUserId) }
         let own = try await ownTargets()
@@ -86,8 +104,17 @@ public final class E2EEMessageSealer: E2EEMessageSealing {
         to peerUserId: String,
         deliver: @concurrent @Sendable (E2EESealedMessage) async throws -> T
     ) async throws -> T {
+        let plaintext = try content.authored(by: local.userId, deviceId: local.deviceId).encoded()
+        return try await sealAndDeliver(plaintext: plaintext, to: peerUserId, deliver: deliver)
+    }
+
+    func sealAndDeliver<T: Sendable>(
+        plaintext: Data,
+        to peerUserId: String,
+        deliver: @concurrent @Sendable (E2EESealedMessage) async throws -> T
+    ) async throws -> T {
         for _ in 1...Self.maxAttempts {
-            let sealed = try await seal(content, to: peerUserId)
+            let sealed = try await seal(plaintext: plaintext, to: peerUserId)
             do {
                 return try await deliver(sealed)
             } catch let mismatch as E2EEDevicesMismatch {
@@ -95,6 +122,19 @@ public final class E2EEMessageSealer: E2EEMessageSealing {
             }
         }
         throw E2EESealError.devicesMismatchUnresolved
+    }
+
+    /// Le même chemin qu'un message pour un SIGNAL (#13142), signé de cet appareil.
+    public func seal(_ signal: E2EESignal, to peerUserId: String) async throws -> E2EESealedMessage {
+        try await seal(plaintext: signal.authored(by: local.userId, deviceId: local.deviceId).encoded(), to: peerUserId)
+    }
+
+    public func sealAndDeliver<T: Sendable>(
+        _ signal: E2EESignal,
+        to peerUserId: String,
+        deliver: @concurrent @Sendable (E2EESealedMessage) async throws -> T
+    ) async throws -> T {
+        try await sealAndDeliver(plaintext: signal.authored(by: local.userId, deviceId: local.deviceId).encoded(), to: peerUserId, deliver: deliver)
     }
 
     /// Un appareil périmé ou en trop perd sa session : la prochaine passe la

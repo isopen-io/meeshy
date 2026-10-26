@@ -116,7 +116,15 @@ extension MessagePersistenceActor {
     /// Un rafraîchissement PAR conversation touchée, jamais un global : les
     /// observateurs de `MessageStore` filtrent par `conversationId`, et un lot
     /// peut traverser plusieurs fils.
+    ///
+    /// Sans origine, le retrait est ANNONCÉ par la passerelle (retrait pour moi
+    /// depuis un autre appareil, citation emportée) : la ligne part, le clair E2EE
+    /// reste au coffre (#13060). Un geste de CET appareil passe `origin: .authenticated`.
     public func purgeMessages(ids: [String]) async throws {
+        try await purgeMessages(ids: ids, origin: .announced)
+    }
+
+    public func purgeMessages(ids: [String], origin: PlaintextErasureOrigin) async throws {
         guard !ids.isEmpty else { return }
         let affectedConvIds: Set<String> = try await dbWriter.write { db -> Set<String> in
             let matching = MessageRecord.filter(
@@ -130,6 +138,7 @@ extension MessagePersistenceActor {
             let localIds = rows.map { $0.localId }
             try MessageChildRows.delete(ofLocalIds: localIds, in: db)
             try MessagePlaintextErasures.record(localIds, cause: .removedForMe, in: db)
+            if origin == .authenticated { try MessagePlaintextErasures.authenticate(localIds, cause: .removedForMe, in: db) }
             _ = try matching.deleteAll(db)
             return Set(rows.map { $0.conversationId })
         }

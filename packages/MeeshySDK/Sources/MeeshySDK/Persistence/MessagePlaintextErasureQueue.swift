@@ -9,14 +9,16 @@ public struct MessagePlaintextErasureQueue: Sendable {
     public let account: String?
 
     /// Les identifiants (local et serveur) des messages dont l'effacement est
-    /// CONFIRMÉ et dont le coffre n'a pas encore retiré le clair. Un
+    /// CONFIRMÉ et AUTHENTIFIÉ (#13060 : jamais une annonce du serveur seule)
+    /// et dont le coffre n'a pas encore retiré le clair. Un
     /// identifiant inscrit pour plusieurs causes ne sort qu'une fois.
     public func pending(limit: Int = 500) async throws -> [String] {
         try await dbWriter.read { db in
             try String.fetchAll(
                 db,
                 sql: """
-                    SELECT messageKey FROM \(MessagePlaintextErasures.table) WHERE confirmed = 1 AND acknowledgedAt IS NULL
+                    SELECT messageKey FROM \(MessagePlaintextErasures.table)
+                    WHERE confirmed = 1 AND authenticated = 1 AND acknowledgedAt IS NULL
                     GROUP BY messageKey ORDER BY MIN(rowid) LIMIT ?
                     """,
                 arguments: [limit]
@@ -55,7 +57,7 @@ public struct MessagePlaintextErasureQueue: Sendable {
     public func isErased(_ messageKey: String) async throws -> Bool {
         try await dbWriter.read { db in
             try Bool.fetchOne(db, sql: """
-                SELECT EXISTS (SELECT 1 FROM \(MessagePlaintextErasures.table) WHERE messageKey = ? AND confirmed = 1)
+                SELECT EXISTS (SELECT 1 FROM \(MessagePlaintextErasures.table) WHERE messageKey = ? AND confirmed = 1 AND authenticated = 1)
                 """, arguments: [messageKey]) ?? false
         }
     }
@@ -80,7 +82,10 @@ extension MessagePersistenceActor {
     /// La suppression que cet appareil a lancée, avant la réponse du serveur :
     /// le message quitte le fil, son clair reste au coffre (#13001).
     public func markDeletedAwaitingConfirmation(localId: String, deletedAt: Date) async throws {
-        try markDeleted(localId: localId, deletedAt: deletedAt, sparingOpenedViewOnce: false, expired: false, awaitingConfirmation: true)
+        try markDeleted(
+            localId: localId, deletedAt: deletedAt, sparingOpenedViewOnce: false, expired: false,
+            awaitingConfirmation: true, origin: .authenticated
+        )
     }
 
     public func confirmDeletion(localId: String) async throws {
