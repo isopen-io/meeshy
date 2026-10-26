@@ -43,8 +43,11 @@ class RouteManifestRatchetTest {
          * 266 : plus quatre routes de l'étagère des ambiances de capture (#10169 : catalogue, détail,
          * installation et retrait), servies par la passerelle ; Android les portera avec ses ambiances
          * (#13093). `GET /packs/capture-frame/installed` naît implémentée par `packs/{domain}/installed`.
+         * 267 : plus `POST /e2ee/conversations/:conversationId/signals` (#13142 : la route unique des
+         * signaux chiffrés d'une conversation e2ee), servie par la passerelle et appelée par iOS ;
+         * Android la portera avec ses signaux chiffrés (#13202).
          */
-        const val TO_PORT_CEILING = 266
+        const val TO_PORT_CEILING = 267
         val VERB_STATUSES = setOf("hors-perimetre-mobile", "ops-only", "a-porter", "implementee-par-url-serveur")
     }
 
