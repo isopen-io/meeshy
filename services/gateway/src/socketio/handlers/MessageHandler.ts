@@ -132,7 +132,7 @@ import { enhancedLogger, performanceLogger } from '../../utils/logger-enhanced';
 import type { RedisDeliveryQueue } from '../../services/RedisDeliveryQueue';
 import type { QueuedVariantFor } from '../queuedEventContract';
 import { discoverConversationIdsByMessageIds, withOrphanedSenderRepair } from '../../services/messaging/withOrphanedSenderRepair';
-import { isEndToEndConversation, SIGNAL_CHANNEL_REFUSAL } from '../../services/e2ee/e2ee-signal-channel';
+import { messageRefusesPlainErasure, SIGNAL_CHANNEL_REFUSAL } from '../../services/e2ee/e2ee-signal-channel';
 
 const handlerLogger = enhancedLogger.child({ module: 'MessageHandler' });
 
@@ -1047,6 +1047,8 @@ export class MessageHandler {
               content: true,
               metadata: true,
               messageType: true,
+              isEncrypted: true,
+              encryptionMode: true,
               attachments: { select: { id: true, mimeType: true } },
             },
           })
@@ -1054,13 +1056,6 @@ export class MessageHandler {
 
       if (!message) {
         this._sendGenericError(callback, 'Message not found', socket);
-        return;
-      }
-
-      // #13142 — dans une conversation chiffrée, la suppression pour tous part en
-      // signal chiffré signé de l'auteur : la route en clair est refusée.
-      if (await isEndToEndConversation(this.prisma, message.conversationId)) {
-        callback?.({ success: false, ...SIGNAL_CHANNEL_REFUSAL });
         return;
       }
 
@@ -1077,6 +1072,12 @@ export class MessageHandler {
 
       if (!admission.admitted) {
         this._sendGenericError(callback, 'You are not authorized to delete this message', socket);
+        return;
+      }
+      // #13142 — un message scellé au serveur se supprime pour tous par signal
+      // chiffré signé de l'auteur ; un message d'avant l'activation, en clair, ici.
+      if (messageRefusesPlainErasure(message)) {
+        callback?.({ success: false, ...SIGNAL_CHANNEL_REFUSAL });
         return;
       }
       const moderationReason = admission.byModeration ? moderationReasonOf(validated) : null;

@@ -21,7 +21,7 @@ function seeded() {
   store.collections.Conversation.insert({ id: CONVERSATION, encryptionMode: 'e2ee' });
   store.collections.Participant.insert({ conversationId: CONVERSATION, userId: ALICE });
   store.collections.Participant.insert({ conversationId: CONVERSATION, userId: BOB });
-  return { store, signals: createE2EESignalRelay({ prisma: store.prisma as never, deliver: () => undefined }) };
+  return { store, signals: createE2EESignalRelay({ prisma: store.prisma as never, deliver: () => undefined, blockedBetween: async () => false }) };
 }
 
 const socketOf = (sessionId: string | undefined) => {

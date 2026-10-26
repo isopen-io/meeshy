@@ -30,7 +30,7 @@ async function buildApp() {
       ? { isAuthenticated: true, isAnonymous: false, userId: USERS[who], sessionId: SESSIONS[who] }
       : { isAuthenticated: false, isAnonymous: true };
   };
-  registerE2EESignalRoutes(app, { auth, signals: createE2EESignalRelay({ prisma: store.prisma as never, deliver: () => undefined }) });
+  registerE2EESignalRoutes(app, { auth, signals: createE2EESignalRelay({ prisma: store.prisma as never, deliver: () => undefined, blockedBetween: async () => false }) });
   await app.ready();
   return { app, store };
 }

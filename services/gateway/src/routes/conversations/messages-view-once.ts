@@ -21,7 +21,7 @@ import { sendSuccess, sendBadRequest, sendError, sendForbidden, sendNotFound, se
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import type { UnifiedAuthRequest } from '../../middleware/auth';
 import { logger } from './messages-shared';
-import { isEndToEndConversation, SIGNAL_CHANNEL_REFUSAL } from '../../services/e2ee/e2ee-signal-channel';
+import { messageRefusesPlainErasure, SIGNAL_CHANNEL_REFUSAL } from '../../services/e2ee/e2ee-signal-channel';
 
 /**
  * Enregistre la route de consommation d'un message à vue unique.
@@ -104,9 +104,9 @@ export function registerMessageViewOnceRoutes(
         return sendBadRequest(reply, 'Message is not view-once');
       }
 
-      // #13142, #13060 — dans une conversation chiffrée, l'ouverture d'une vue unique
-      // part en signal chiffré vers MES appareils : la passerelle n'en consigne rien.
-      if (await isEndToEndConversation(prisma, conversationId)) {
+      // #13142, #13060 — l'ouverture d'une vue unique scellée au serveur part en
+      // signal chiffré vers MES appareils : la passerelle n'en consigne rien.
+      if (messageRefusesPlainErasure(message)) {
         return sendError(reply, 409, SIGNAL_CHANNEL_REFUSAL.error, { code: SIGNAL_CHANNEL_REFUSAL.code });
       }
 

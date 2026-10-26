@@ -115,7 +115,7 @@ describe('signaux chiffrés de bout en bout à deux appareils, libsignal réel (
       mayReadKeysOf: async () => true,
       closeSession: async () => true,
     });
-    registerE2EESignalRoutes(app, { auth, signals: createE2EESignalRelay({ prisma: store.prisma as never, wake: wakeE2EEDevices(store.prisma as never) }) });
+    registerE2EESignalRoutes(app, { auth, signals: createE2EESignalRelay({ prisma: store.prisma as never, wake: wakeE2EEDevices(store.prisma as never), blockedBetween: async () => false }) });
     await app.ready();
 
     const aliceKeys = await devices.request<Record<string, unknown>>('create', { name: 'alice', userId: ALICE, oneTime: 2 });

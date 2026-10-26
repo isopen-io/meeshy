@@ -25,7 +25,7 @@ import { getSocketRateLimiter, SOCKET_RATE_LIMITS } from '../../utils/socket-rat
 import { BoundedTtlCache } from '../../utils/bounded-cache.js';
 import { getBlockedUserIdsAmong } from '../../utils/blocking';
 import { guardedInterval } from '../../utils/guarded-timer.js';
-import { isEndToEndConversation } from '../../services/e2ee/e2ee-signal-channel';
+import { createEndToEndRegimeReader } from '../../services/e2ee/e2ee-signal-channel';
 
 const logger = enhancedLogger.child({ module: 'StatusHandler' });
 
@@ -73,6 +73,8 @@ export class StatusHandler {
   private static readonly TYPING_THROTTLE_CLEANUP_SIZE = 1_000;
   private typingThrottleCleanupTimer: ReturnType<typeof setInterval> | null = null;
   private rateLimiter = getSocketRateLimiter();
+  /** #13142 — le régime lu une fois par conversation : la frappe ne paie pas une lecture par événement. */
+  private readonly isEndToEnd: (conversationId: string) => Promise<boolean>;
 
   constructor(deps: StatusHandlerDependencies) {
     this.prisma = deps.prisma;
@@ -81,6 +83,7 @@ export class StatusHandler {
     this.connectedUsers = deps.connectedUsers;
     this.socketToUser = deps.socketToUser;
     this.userSockets = deps.userSockets ?? new Map();
+    this.isEndToEnd = createEndToEndRegimeReader(this.prisma);
     this.typingThrottleCleanupTimer = guardedInterval({ name: 'typing-throttle-eviction', everyMs: 30_000, logger, run: () => this._evictStale() });
     if (this.typingThrottleCleanupTimer.unref) this.typingThrottleCleanupTimer.unref();
   }
@@ -309,7 +312,7 @@ export class StatusHandler {
       // #13142 — dans une conversation chiffrée de bout en bout, la frappe voyage en
       // signal chiffré d'appareil à appareil : la passerelle n'en relaie ni n'en
       // retient aucune en clair. Rien n'est suivi, donc aucun `typing:stop` à rendre.
-      if (await isEndToEndConversation(this.prisma, normalizedId)) return;
+      if (await this.isEndToEnd(normalizedId)) return;
 
       // Mettre à jour l'activité
       this.statusService.updateLastSeen(userId, connectedUser.isAnonymous);

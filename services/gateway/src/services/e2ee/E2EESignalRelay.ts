@@ -24,11 +24,13 @@ import { createE2EEEnvelopeRelay, type EnvelopeDelivery, type RelayPrisma } from
 import { E2eeRelayRefusedError } from './e2ee-relay-errors';
 import { deliverEnvelopes } from './envelope-delivery';
 import { isEndToEndMode } from '../messaging/e2eePlaintextAdmission';
+import { isConversationClosed } from '../messaging/conversationWriteAdmission';
+import { isBlockedBetween } from '../../utils/blocking';
 
 /** Le type du push de réveil : le même pour tout signal, il ne nomme ni le signal ni la conversation. */
 export const E2EE_WAKE_PUSH_TYPE = 'e2ee_wake' as const;
 
-export type SignalRelayPrisma = RelayPrisma & Pick<PrismaClient, 'conversation'>;
+export type SignalRelayPrisma = RelayPrisma & Pick<PrismaClient, 'conversation' | 'user'>;
 
 export type E2EESignalRelayDeps = {
   readonly prisma: SignalRelayPrisma;
@@ -36,6 +38,8 @@ export type E2EESignalRelayDeps = {
   /** Réveille les appareils de ces comptes (push silencieux). Ne lève pas : un réveil perdu ne perd rien. */
   readonly wake?: (userIds: readonly string[]) => Promise<void>;
   readonly newSignalId?: () => string;
+  /** L'un des deux comptes a-t-il bloqué l'autre ? (`isBlockedBetween` en production.) */
+  readonly blockedBetween?: (userIdA: string, userIdB: string) => Promise<boolean>;
 };
 
 export type SignalRelayInput = {
@@ -54,23 +58,48 @@ const regimeChanged = () =>
 const notAMember = () =>
   new E2eeRelayRefusedError(E2EE_ERROR_CODES.SIGNAL_FORBIDDEN, 403, 'Seul un membre de la conversation y envoie un signal chiffré');
 
+const closedConversation = () =>
+  new E2eeRelayRefusedError(E2EE_ERROR_CODES.SIGNAL_FORBIDDEN, 403, 'Cette conversation est fermée : plus personne n’y écrit');
+
+const blockedPeer = () =>
+  new E2eeRelayRefusedError(E2EE_ERROR_CODES.SIGNAL_FORBIDDEN, 403, 'Ce tête-à-tête est bloqué : aucun signal n’y passe');
+
+const DIRECT_TYPES: ReadonlySet<string> = new Set(['direct', 'dm']);
+
+type SignalConversation = {
+  readonly encryptionMode: string | null;
+  readonly type: string | null;
+  readonly isActive: boolean | null;
+  readonly closedAt: Date | null;
+};
+
 export class E2EESignalRelay {
   private readonly prisma: SignalRelayPrisma;
   private readonly deliver: (deliveries: readonly EnvelopeDelivery[]) => void;
   private readonly wake: (userIds: readonly string[]) => Promise<void>;
   private readonly newSignalId: () => string;
+  private readonly blockedBetween: (userIdA: string, userIdB: string) => Promise<boolean>;
 
   constructor(deps: E2EESignalRelayDeps) {
     this.prisma = deps.prisma;
     this.deliver = deps.deliver ?? deliverEnvelopes;
     this.wake = deps.wake ?? (async () => undefined);
     this.newSignalId = deps.newSignalId ?? objectIdHex;
+    this.blockedBetween = deps.blockedBetween ?? ((a, b) => isBlockedBetween(deps.prisma as PrismaClient, a, b));
   }
 
+  /**
+   * Un signal est une ÉCRITURE comme un message : il ne passe ni dans une
+   * conversation fermée, ni dans un tête-à-tête bloqué (`messages-send.ts`
+   * pose les mêmes refus à l'envoi). Sans eux, un correspondant bloqué
+   * inonderait d'enveloppes et de réveils celui qui l'a bloqué.
+   */
   async relay(input: SignalRelayInput): Promise<E2EESignalRelayResponse> {
     const { conversationId, senderUserId, request } = input;
-    await this.assertEndToEnd(conversationId);
+    const conversation = await this.assertEndToEnd(conversationId);
     await this.assertMember(conversationId, senderUserId);
+    if (isConversationClosed(conversation)) throw closedConversation();
+    await this.assertNotBlocked(conversationId, senderUserId, conversation);
     const envelopes = createE2EEEnvelopeRelay({ prisma: this.prisma });
     const admitted = await envelopes.admit({
       conversationId,
@@ -90,9 +119,24 @@ export class E2EESignalRelay {
     return { signalId, envelopes: deliveries.length };
   }
 
-  private async assertEndToEnd(conversationId: string): Promise<void> {
-    const conversation = await this.prisma.conversation.findUnique({ where: { id: conversationId }, select: { encryptionMode: true } });
-    if (!isEndToEndMode(conversation?.encryptionMode)) throw regimeChanged();
+  private async assertEndToEnd(conversationId: string): Promise<SignalConversation> {
+    const conversation = await this.prisma.conversation.findUnique({
+      where: { id: conversationId },
+      select: { encryptionMode: true, type: true, isActive: true, closedAt: true },
+    });
+    if (!conversation || !isEndToEndMode(conversation.encryptionMode)) throw regimeChanged();
+    return conversation;
+  }
+
+  private async assertNotBlocked(conversationId: string, senderUserId: string, conversation: SignalConversation): Promise<void> {
+    if (!DIRECT_TYPES.has(conversation.type ?? '')) return;
+    const members = await this.prisma.participant.findMany({
+      where: { conversationId, isActive: true },
+      select: { userId: true },
+    });
+    const peers = members.map((member) => member.userId).filter((userId): userId is string => !!userId && userId !== senderUserId);
+    const verdicts = await Promise.all(peers.map((peer) => this.blockedBetween(senderUserId, peer)));
+    if (verdicts.some(Boolean)) throw blockedPeer();
   }
 
   private async assertMember(conversationId: string, userId: string): Promise<void> {

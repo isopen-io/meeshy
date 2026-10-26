@@ -57,7 +57,7 @@ import {
   PIN_CONVERSATION_SELECT,
   type MessagePinAdmission
 } from '../../services/messaging/messagePinAdmission';
-import { isEndToEndConversation, SIGNAL_CHANNEL_REFUSAL } from '../../services/e2ee/e2ee-signal-channel';
+import { conversationRefusesPlainSignal, SIGNAL_CHANNEL_REFUSAL } from '../../services/e2ee/e2ee-signal-channel';
 
 /**
  * #9927 — épingler ou dépingler dans Meeshy Global met un message en avant pour
@@ -182,11 +182,6 @@ export function registerMessagePinRoutes(
         return sendForbidden(reply, 'Access denied');
       }
 
-      // #13142 — dans une conversation chiffrée, l'épingle part en signal chiffré.
-      if (await isEndToEndConversation(prisma, conversationId)) {
-        return sendError(reply, 409, SIGNAL_CHANNEL_REFUSAL.error, { code: SIGNAL_CHANNEL_REFUSAL.code });
-      }
-
       // `deletedAt: null` — un message supprimé pour tout le monde n'est plus
       // un objet épinglable, et c'est ce que TOUTES les lectures de ce fichier
       // disent déjà : la liste des messages, la recherche, et la liste des
@@ -208,10 +203,14 @@ export function registerMessagePinRoutes(
       // `tool.pin` (#8959) — ré-épingler n'est pas un geste nouveau.
       const message = await prisma.message.findFirst({
         where: { id: messageId, conversationId, deletedAt: null },
-        select: { id: true, pinnedAt: true, messageType: true, metadata: true, conversation: { select: PIN_CONVERSATION_SELECT } }
+        select: { id: true, pinnedAt: true, messageType: true, metadata: true, conversation: { select: { ...PIN_CONVERSATION_SELECT, encryptionMode: true } } }
       });
       if (!message) {
         return sendNotFound(reply, 'Message not found');
+      }
+      // #13142 — dans une conversation chiffrée, l'épingle part en signal chiffré.
+      if (conversationRefusesPlainSignal(message.conversation)) {
+        return sendError(reply, 409, SIGNAL_CHANNEL_REFUSAL.error, { code: SIGNAL_CHANNEL_REFUSAL.code });
       }
       const admission = await admitPinGesture(prisma, authRequest, conversationId, message.conversation);
       if (isMessagePinRefused(admission)) {
@@ -320,11 +319,6 @@ export function registerMessagePinRoutes(
         return sendForbidden(reply, 'Access denied');
       }
 
-      // #13142 — dans une conversation chiffrée, l'épingle part en signal chiffré.
-      if (await isEndToEndConversation(prisma, conversationId)) {
-        return sendError(reply, 409, SIGNAL_CHANNEL_REFUSAL.error, { code: SIGNAL_CHANNEL_REFUSAL.code });
-      }
-
       // Localiser le message DANS la conversation, comme le fait déjà le jumeau
       // qui épingle — et comme le font `consume`, l'édition et la suppression.
       // Cette entrée était la seule du fichier à écrire par id seul : être
@@ -343,10 +337,14 @@ export function registerMessagePinRoutes(
       // `deletedAt: null`) et le tombstone lui-même part au balayage.
       const message = await prisma.message.findFirst({
         where: { id: messageId, conversationId, deletedAt: null },
-        select: { id: true, conversation: { select: PIN_CONVERSATION_SELECT } }
+        select: { id: true, conversation: { select: { ...PIN_CONVERSATION_SELECT, encryptionMode: true } } }
       });
       if (!message) {
         return sendNotFound(reply, 'Message not found');
+      }
+      // #13142 — dans une conversation chiffrée, l'épingle part en signal chiffré.
+      if (conversationRefusesPlainSignal(message.conversation)) {
+        return sendError(reply, 409, SIGNAL_CHANNEL_REFUSAL.error, { code: SIGNAL_CHANNEL_REFUSAL.code });
       }
       const admission = await admitPinGesture(prisma, authRequest, conversationId, message.conversation);
       if (isMessagePinRefused(admission)) {

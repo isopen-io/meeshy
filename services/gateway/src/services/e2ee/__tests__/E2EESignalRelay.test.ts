@@ -22,7 +22,7 @@ const CLEAR_CONVERSATION = 'f7'.repeat(12);
 const ALICE_SESSION = 'c3'.repeat(12);
 const MALLORY_SESSION = 'ee'.repeat(12);
 
-function seeded() {
+function seeded(options: { readonly blocked?: readonly (readonly [string, string])[] } = {}) {
   const store = createFakeE2EEStore();
   const device = (userId: string, deviceId: number, registrationId: number, sessionId: string) =>
     store.collections.E2EEDevice.insert({ userId, deviceId, registrationId, sessionId, identityKey: 'ik', platform: 'ios' });
@@ -44,6 +44,7 @@ function seeded() {
     wake: async (userIds) => {
       woken.push([...userIds]);
     },
+    blockedBetween: async (a, b) => (options.blocked ?? []).some(([x, y]) => (x === a && y === b) || (x === b && y === a)),
   });
   return { store, relay, delivered, woken };
 }
@@ -167,6 +168,42 @@ describe('le relais des signaux chiffrés', () => {
 
     expect(quiet.woken).toEqual([]);
     expect(loud.woken).toEqual([[ALICE, BOB]]);
+  });
+
+  it('refuse 403 E2EE_SIGNAL_FORBIDDEN un signal vers une conversation fermée, sans enveloppe ni réveil', async () => {
+    const { store, relay, delivered, woken } = seeded();
+    const conversation = store.collections.Conversation.rows.find((row) => row.id === CONVERSATION);
+    if (conversation) conversation.closedAt = new Date();
+
+    const error = await refusalOf(
+      relay.relay({ conversationId: CONVERSATION, senderUserId: ALICE, sessionId: ALICE_SESSION, request: request({ wake: true }) }),
+    );
+
+    expect([error.status, error.code]).toEqual([403, E2EE_ERROR_CODES.SIGNAL_FORBIDDEN]);
+    expect(store.collections.MessageEnvelope.rows).toHaveLength(0);
+    expect(delivered).toHaveLength(0);
+    expect(woken).toEqual([]);
+  });
+
+  it("refuse 403 E2EE_SIGNAL_FORBIDDEN le signal d'un tête-à-tête où l'un a bloqué l'autre, dans les deux sens", async () => {
+    const blockedByBob = seeded({ blocked: [[BOB, ALICE]] });
+    const error = await refusalOf(
+      blockedByBob.relay.relay({ conversationId: CONVERSATION, senderUserId: ALICE, sessionId: ALICE_SESSION, request: request({ wake: true }) }),
+    );
+
+    expect([error.status, error.code]).toEqual([403, E2EE_ERROR_CODES.SIGNAL_FORBIDDEN]);
+    expect(blockedByBob.store.collections.MessageEnvelope.rows).toHaveLength(0);
+    expect(blockedByBob.woken).toEqual([]);
+  });
+
+  it('ne consulte pas le blocage hors tête-à-tête : un groupe relaie comme avant', async () => {
+    const { store, relay } = seeded({ blocked: [[BOB, ALICE]] });
+    const conversation = store.collections.Conversation.rows.find((row) => row.id === CONVERSATION);
+    if (conversation) conversation.type = 'group';
+
+    const relayed = await relay.relay({ conversationId: CONVERSATION, senderUserId: ALICE, sessionId: ALICE_SESSION, request: request() });
+
+    expect(relayed.envelopes).toBe(2);
   });
 
   it("nomme le réveil d'un type opaque, le même pour tout signal", () => {

@@ -364,6 +364,47 @@ describe('registerMessagesAdvancedRoutes', () => {
       expect(prisma.message.update).not.toHaveBeenCalled();
     });
 
+    describe('#13142 — une conversation chiffrée de bout en bout', () => {
+      const sealedRow = { isEncrypted: true, encryptionMode: 'e2ee' };
+
+      beforeEach(() => {
+        prisma.conversation.findUnique.mockResolvedValue({ type: 'direct', title: null, encryptionMode: 'e2ee' });
+      });
+
+      it("refuse 409 E2EE_SIGNAL_CHANNEL_REQUIRED la suppression en clair d'un message scellé de l'auteur, sans rien écrire", async () => {
+        prisma.message.findFirst.mockResolvedValue({ ...makeExistingMessage(), ...sealedRow });
+        prisma.message.update.mockClear();
+        const reply = makeReply();
+
+        await getDeleteMsgHandler(fastify)(makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } }), reply);
+
+        expect(mockSendError).toHaveBeenCalledWith(reply, 409, expect.any(String), { code: 'E2EE_SIGNAL_CHANNEL_REQUIRED' });
+        expect(prisma.message.update).not.toHaveBeenCalled();
+      });
+
+      it("supprime en clair un message écrit AVANT l'activation : le serveur le lisait déjà", async () => {
+        prisma.message.findFirst.mockResolvedValue({ ...makeExistingMessage(), isEncrypted: false, encryptionMode: null });
+        prisma.message.update.mockResolvedValue({});
+        const reply = makeReply();
+
+        await getDeleteMsgHandler(fastify)(makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } }), reply);
+
+        expect(mockSendSuccess).toHaveBeenCalled();
+        expect(mockSendError).not.toHaveBeenCalledWith(reply, 409, expect.anything(), expect.anything());
+      });
+
+      it("rend 403 et non 409 à qui n'a pas le droit de supprimer : le refus ne dit pas le régime", async () => {
+        prisma.message.findFirst.mockResolvedValue({ ...makeExistingMessage(), ...sealedRow, sender: { id: PART_ID, userId: OTHER_USER_ID } });
+        prisma.participant.findFirst.mockResolvedValue(null);
+        const reply = makeReply();
+
+        await getDeleteMsgHandler(fastify)(makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } }), reply);
+
+        expect(mockSendForbidden).toHaveBeenCalled();
+        expect(mockSendError).not.toHaveBeenCalled();
+      });
+    });
+
     it('returns 404 when conversation not found', async () => {
       mockResolveConversationId.mockResolvedValue(null);
       const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID }, body: { reason: 'Propos hors charte' } });
