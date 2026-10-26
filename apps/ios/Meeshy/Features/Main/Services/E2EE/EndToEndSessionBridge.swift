@@ -2,6 +2,7 @@ import Combine
 import Foundation
 import MeeshyE2EE
 import MeeshySDK
+import os
 
 /// Ce que la session ouverte branche sur l'E2EE libsignal (#3707) : à
 /// l'ouverture, l'installation s'enrôle (une fois par compte et par identité)
@@ -139,22 +140,24 @@ enum BoundedWait {
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             gate.arm(continuation)
             Task { await task.value; gate.resume() }
-            Task { try? await Task.sleep(for: limit); gate.resume() }
+            Task {
+                do { try await Task.sleep(for: limit) } catch { return }
+                gate.resume()
+            }
         }
     }
 
     nonisolated private final class ResumeOnce: @unchecked Sendable {
-        private let lock = NSLock()
-        private var continuation: CheckedContinuation<Void, Never>?
+        private let state = OSAllocatedUnfairLock<CheckedContinuation<Void, Never>?>(initialState: nil)
 
         func arm(_ continuation: CheckedContinuation<Void, Never>) {
-            lock.withLock { self.continuation = continuation }
+            state.withLock { $0 = continuation }
         }
 
         func resume() {
-            lock.withLock { () -> CheckedContinuation<Void, Never>? in
-                defer { continuation = nil }
-                return continuation
+            state.withLock { () -> CheckedContinuation<Void, Never>? in
+                defer { $0 = nil }
+                return $0
             }?.resume()
         }
     }
