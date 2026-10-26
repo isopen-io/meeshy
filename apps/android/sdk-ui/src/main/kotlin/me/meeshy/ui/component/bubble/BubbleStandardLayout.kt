@@ -46,6 +46,7 @@ import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.layout.LocalMeeshyWindowInfo
 import me.meeshy.ui.layout.bubbleWidthCap
 import me.meeshy.ui.layout.currentWindowWidthClass
+import me.meeshy.ui.theme.MeeshyMediaChromeColors
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
@@ -120,8 +121,14 @@ internal fun BubbleStandardLayout(
         val bubbleBorder = if (isFreeEmoji || content.isOutgoing) null else receivedTint.stroke
         Column(horizontalAlignment = if (content.isOutgoing) Alignment.End else Alignment.Start) {
             if (content.pinnedAtIso != null && !content.isDeleted) BubblePinnedIndicator()
+            // iOS pose le badge « Transféré » au-dessus de la bulle, hors de son fond.
+            if (content.isForwarded && !content.isDeleted) {
+                BubbleForwardedBadge(content.forwardedFromName, MeeshyTheme.tokens.textMuted)
+            }
             BubbleReactionsAnchor(content = content, accent = options.accentColor, callbacks = callbacks) {
-                if (isFreeEmoji && content.blurReveal == null) {
+                if (isVisualMediaOnly(content)) {
+                    VisualMediaBody(content = content, callbacks = callbacks)
+                } else if (isFreeEmoji && content.blurReveal == null) {
                     // La story citée reste au-dessus de l'emoji, hors de tout fond (iOS
                     // `detachedStoryCitation`) ; l'emoji flotte dessous.
                     Column(horizontalAlignment = if (content.isOutgoing) Alignment.End else Alignment.Start) {
@@ -220,7 +227,6 @@ private fun BubbleBody(
                 Column(
                     modifier = Modifier.padding(horizontal = MeeshySpacing.mdPlus, vertical = MeeshySpacing.smPlus),
                 ) {
-                    if (content.isForwarded) BubbleForwardedBadge(content.forwardedFromName, onColor)
                     BubbleReplySection(content, onColor, callbacks.onReplyPreviewClick)
                     if (content.storyReply != null) {
                         StoryReplyPreview(
@@ -329,6 +335,43 @@ private fun BubbleReactionsAnchor(
             modifier = Modifier
                 .align(if (content.isOutgoing) Alignment.BottomStart else Alignment.BottomEnd)
                 .offset(x = if (content.isOutgoing) (-4).dp else 4.dp, y = ReactionsRestingOffset),
+        )
+    }
+}
+
+/**
+ * Un message fait seulement d'images (ni texte, ni citation, ni autre pièce) : iOS rend la grille
+ * visuelle sans bulle, rayon 16, l'heure dans une capsule sombre posée en bas à droite.
+ */
+private fun isVisualMediaOnly(content: BubbleContent): Boolean =
+    !content.isDeleted && content.images.isNotEmpty() && content.text.isBlank() &&
+        content.files.isEmpty() && content.locations.isEmpty() && content.audios.isEmpty() &&
+        content.contactCards.isEmpty() && content.replyToText == null && content.replyToId == null &&
+        content.storyReply == null && content.blurReveal == null &&
+        !(content.showSenderName && !content.isOutgoing && content.senderName != null)
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun VisualMediaBody(content: BubbleContent, callbacks: BubbleCallbacks) {
+    val onLongPress = callbacks.onLongPress
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(MeeshyRadius.lg))
+            .let { base ->
+                if (onLongPress == null) base else base.combinedClickable(onClick = {}, onLongClick = onLongPress)
+            },
+    ) {
+        BubbleImageGrid(images = content.images, onImageClick = callbacks.onImageClick)
+        BubbleMetaTrailing(
+            content = content,
+            metaColor = MeeshyMediaChromeColors.OnMedia,
+            readTint = MeeshyPalette.Indigo400,
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(MeeshySpacing.sm)
+                .clip(RoundedCornerShape(MeeshyRadius.pill))
+                .background(MeeshyMediaChromeColors.Scrim)
+                .padding(horizontal = MeeshySpacing.sm, vertical = MeeshySpacing.xxs),
         )
     }
 }

@@ -262,7 +262,12 @@ private fun CompactFlagChip(
 }
 
 @Composable
-internal fun BubbleMetaTrailing(content: BubbleContent, metaColor: Color, modifier: Modifier = Modifier) {
+internal fun BubbleMetaTrailing(
+    content: BubbleContent,
+    metaColor: Color,
+    modifier: Modifier = Modifier,
+    readTint: Color? = null,
+) {
     Row(
         modifier = modifier,
         verticalAlignment = Alignment.CenterVertically,
@@ -294,10 +299,10 @@ internal fun BubbleMetaTrailing(content: BubbleContent, metaColor: Color, modifi
             // settled tier render immediately.
             if (content.deliveryStatus == DeliveryStatus.Pending) {
                 if (rememberSendingGlyphRevealed(content.createdAtIso)) {
-                    DeliveryStatusIcon(status = content.deliveryStatus, metaColor = metaColor, isSlow = content.isSlowSend)
+                    DeliveryStatusIcon(status = content.deliveryStatus, metaColor = metaColor, isSlow = content.isSlowSend, readTintOverride = readTint)
                 }
             } else {
-                DeliveryStatusIcon(status = content.deliveryStatus, metaColor = metaColor, isSlow = content.isSlowSend)
+                DeliveryStatusIcon(status = content.deliveryStatus, metaColor = metaColor, isSlow = content.isSlowSend, readTintOverride = readTint)
             }
         }
     }
@@ -313,8 +318,9 @@ private fun DeliveryStatusIcon(
     status: DeliveryStatus,
     metaColor: Color,
     isSlow: Boolean,
+    readTintOverride: Color? = null,
 ) {
-    val readTint = if (MeeshyTheme.isDark) MeeshyPalette.Indigo400 else MeeshyPalette.Indigo600
+    val readTint = readTintOverride ?: if (MeeshyTheme.isDark) MeeshyPalette.Indigo400 else MeeshyPalette.Indigo600
     when (status) {
         DeliveryStatus.Pending -> Icon(
             imageVector = Icons.Filled.Schedule,
