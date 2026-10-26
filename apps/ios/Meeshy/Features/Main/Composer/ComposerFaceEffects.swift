@@ -140,7 +140,7 @@ nonisolated final class ComposerFaceEffects: @unchecked Sendable {
 
 /// La détection dans le rendu même : chaque trame due est cherchée avant la
 /// suivante — un export ne prend aucun retard sur le visage.
-nonisolated final class ComposerInlineVisionExecutor: CallVisionExecuting, @unchecked Sendable {
+nonisolated final class ComposerInlineVisionExecutor: CallVisionExecuting {
     func execute(_ work: @escaping @Sendable () -> Void) {
         work()
     }

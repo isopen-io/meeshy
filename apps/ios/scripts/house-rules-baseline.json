@@ -14,7 +14,7 @@
     "logger-subsystem": 0,
     "narrative-comment": 2469,
     "nonisolated-unsafe": 107,
-    "nslock": 35,
+    "nslock": 34,
     "nslog": 0,
     "observed-theme-singleton": 0,
     "onchange-single": 0,
@@ -24,7 +24,7 @@
     "try-sleep": 50,
     "uiscreen-main": 1,
     "unchecked-sendable": 122,
-    "unchecked-sendable-total": 214,
+    "unchecked-sendable-total": 211,
     "viewmodel-shared": 582
   },
   "version": 1

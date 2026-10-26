@@ -1,12 +1,13 @@
 import CoreVideo
 import Foundation
 import os
+import MeeshySDK
 
-protocol CallVisionExecuting: AnyObject {
+nonisolated protocol CallVisionExecuting: AnyObject, Sendable {
     nonisolated func execute(_ work: @escaping @Sendable () -> Void)
 }
 
-nonisolated final class CallVisionQueueExecutor: CallVisionExecuting, @unchecked Sendable {
+nonisolated final class CallVisionQueueExecutor: CallVisionExecuting {
     private let queue: DispatchQueue
 
     init(label: String) {
@@ -22,10 +23,9 @@ nonisolated final class CallVisionQueueExecutor: CallVisionExecuting, @unchecked
 /// file de capture : elle part sur sa propre file série, une seule à la fois.
 /// Une image soumise pendant qu'une analyse est en vol est abandonnée — rien ne
 /// s'empile, et la prochaine image due, plus récente, prend la place.
-nonisolated final class CallVisionWorker: @unchecked Sendable {
+nonisolated final class CallVisionWorker: Sendable {
     private let executor: any CallVisionExecuting
-    private let lock = NSLock()
-    private var isBusy = false
+    private let isBusy = Locked(false)
 
     init(executor: any CallVisionExecuting) {
         self.executor = executor
@@ -33,13 +33,12 @@ nonisolated final class CallVisionWorker: @unchecked Sendable {
 
     @discardableResult
     func trySubmit(_ work: @escaping @Sendable () -> Void) -> Bool {
-        lock.lock()
-        guard !isBusy else {
-            lock.unlock()
-            return false
+        let claimed = isBusy.mutate { busy -> Bool in
+            guard !busy else { return false }
+            busy = true
+            return true
         }
-        isBusy = true
-        lock.unlock()
+        guard claimed else { return false }
         executor.execute { [weak self] in
             work()
             self?.finish()
@@ -48,9 +47,7 @@ nonisolated final class CallVisionWorker: @unchecked Sendable {
     }
 
     private func finish() {
-        lock.lock()
-        isBusy = false
-        lock.unlock()
+        isBusy.mutate { $0 = false }
     }
 }
 
