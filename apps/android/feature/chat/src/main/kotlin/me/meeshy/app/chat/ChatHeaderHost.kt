@@ -160,6 +160,17 @@ internal fun ChatHeaderHost(host: ChatHostContext) {
                         }
                     },
                     avatar = { headerAvatar(AvatarContext.ConversationHeaderCollapsed) },
+                    readingModeSlot = {
+                        val readingMode = host.readingMode
+                        if (readingMode != null && readingMode.state.showsChip) {
+                            ChatReadingModeChip(
+                                state = readingMode.state,
+                                accentColor = accentColor,
+                                onSelect = readingMode.select,
+                                onAuto = readingMode.resetToAuto,
+                            )
+                        }
+                    },
                 )
             }
         }

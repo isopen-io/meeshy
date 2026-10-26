@@ -92,7 +92,7 @@ internal object ChatHeaderMetrics {
 
 /**
  * La bande REPLIÉE de l'en-tête iOS : retour (+ non-lus des autres conversations) | zone libre |
- * appel, recherche | avatar de 44 tout à droite. Pas de fond : le fil se voit autour.
+ * appel, recherche, chip de mode de lecture | avatar de 44 tout à droite. Pas de fond : le fil se voit autour.
  * [callSlot] porte le bouton d'appel (ou la pastille « Rejoindre »), absent pour un invité.
  */
 @Composable
@@ -106,6 +106,7 @@ internal fun ChatConversationHeaderBand(
     callSlot: @Composable () -> Unit,
     avatar: @Composable () -> Unit,
     modifier: Modifier = Modifier,
+    readingModeSlot: @Composable () -> Unit = {},
 ) {
     Row(
         modifier = modifier
@@ -136,6 +137,8 @@ internal fun ChatConversationHeaderBand(
                 accentColor = accentColor,
                 onClick = onSearch,
             )
+            // Le chip de mode de lecture : APRÈS la recherche, jamais avant l'appel (iOS).
+            readingModeSlot()
         }
         avatar()
     }

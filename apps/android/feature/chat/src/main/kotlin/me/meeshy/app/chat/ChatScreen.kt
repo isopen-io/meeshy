@@ -65,6 +65,15 @@ fun ChatScreen(
     val pending by (pendingTray?.state ?: NO_PENDING).collectAsStateWithLifecycle()
     val headerController = remember(viewModel) { viewModel.controllers.find<ChatHeaderController>() }
     val header by (headerController?.state ?: NO_HEADER).collectAsStateWithLifecycle()
+    val readingModeController = remember(viewModel) { viewModel.controllers.find<ReadingModeController>() }
+    val readingModeState by (readingModeController?.state ?: NO_READING_MODE).collectAsStateWithLifecycle()
+    val readingMode = readingModeState?.let { modeState ->
+        ChatReadingModeBinding(
+            state = modeState,
+            select = { readingModeController?.select(it) },
+            resetToAuto = { readingModeController?.resetToAuto() },
+        )
+    }
     val host = rememberChatHostContext(
         state = state,
         composerText = viewModel.composerText,
@@ -80,6 +89,7 @@ fun ChatScreen(
             callEntry = callEntry,
         ),
         header = header,
+        readingMode = readingMode,
     )
 
     ChatBackgroundHost {

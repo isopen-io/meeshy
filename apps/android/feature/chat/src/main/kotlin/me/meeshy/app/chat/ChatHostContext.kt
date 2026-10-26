@@ -81,6 +81,15 @@ internal class ChatHostContext(
     /** Ce que l'en-tête montre en plus de [state] : avatar, pair, non-lus des autres conversations. */
     val header: ChatHeaderState = ChatHeaderState(),
     val chrome: ChatChromeState = ChatChromeState(),
+    /** Le mode de lecture et ses deux gestes (chip de l'en-tête) ; `null` tant qu'il n'est pas résolu. */
+    val readingMode: ChatReadingModeBinding? = null,
+)
+
+/** Le mode de lecture résolu à l'ouverture et les écritures du chip. */
+internal class ChatReadingModeBinding(
+    val state: ReadingModeUiState,
+    val select: (me.meeshy.sdk.model.reading.mode.ConversationReadingMode) -> Unit,
+    val resetToAuto: () -> Unit,
 )
 
 @Composable
@@ -92,13 +101,14 @@ internal fun rememberChatHostContext(
     actions: ChatHostActions,
     navigation: ChatNavigationActions,
     header: ChatHeaderState = ChatHeaderState(),
+    readingMode: ChatReadingModeBinding? = null,
 ): ChatHostContext {
     val sheets = remember { ChatSheetVisibility() }
     // A plain map, not snapshot state: written from onGloballyPositioned without forcing
     // recomposition, read only when the overlay opens.
     val bubbleFrames = remember { mutableMapOf<String, Rect>() }
     val chrome = remember { ChatChromeState() }
-    return ChatHostContext(state, composerText, pending, accentColor, actions, navigation, sheets, bubbleFrames, header, chrome)
+    return ChatHostContext(state, composerText, pending, accentColor, actions, navigation, sheets, bubbleFrames, header, chrome, readingMode)
 }
 
 /** The ViewModel's user-intent entry points, as plain callbacks. */
