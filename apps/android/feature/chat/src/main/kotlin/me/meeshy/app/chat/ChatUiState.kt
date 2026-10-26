@@ -9,6 +9,7 @@ import me.meeshy.sdk.model.ActiveLiveLocation
 import me.meeshy.sdk.model.ComposerLanguage
 import me.meeshy.sdk.model.ComposerLanguageState
 import me.meeshy.sdk.model.EmojiCatalog
+import me.meeshy.sdk.model.EndToEndRegime
 import me.meeshy.sdk.model.LiveLocationEventFold
 import me.meeshy.sdk.model.LiveLocationSessions
 import me.meeshy.sdk.model.MessageEffects
@@ -148,11 +149,23 @@ data class ChatUiState(
      * member (null permissions) gets every affordance; a share-link guest is gated
      * to the capabilities the join hardened. */
     val composerAffordances: ComposerAffordances
-        get() = ComposerAttachmentPolicy.affordances(composerPermissions)
+        get() = if (isEndToEnd) ComposerAffordances.CLOSED else ComposerAttachmentPolicy.affordances(composerPermissions)
+
+    /**
+     * La conversation est servie chiffrée de bout en bout (#13110). L'Android natif ne
+     * sait ni chiffrer ni lire l'e2ee (#13015) : rien n'en part du fil — chaque porte
+     * d'envoi du composeur lit [composerAffordances] fermé, AVANT tout octet émis
+     * (texte, pièce, vocal, édition) —, et le composeur dit où elle s'écrit. Le
+     * transfert, le partage et les stories l'excluent par `mayCurrentUserWrite`.
+     * Hors de ce lot : un régime qui change pendant que le fil est ouvert
+     * (`conversation:encryption-changed`) et la mémoire du régime vu (#12956).
+     */
+    val isEndToEnd: Boolean
+        get() = EndToEndRegime.isEndToEnd(encryptionMode)
 
     /** Whether the reader may write here — what the message law reads before offering « Répondre ». */
     val viewerMayWrite: Boolean
-        get() = composerPermissions?.canSendMessages != false
+        get() = !isEndToEnd && composerPermissions?.canSendMessages != false
     val isEditing: Boolean get() = editingMessageId != null
 
     /** Whether the end-to-end-encryption notice sits at the top of the list — the

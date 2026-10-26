@@ -30,6 +30,18 @@ class ConversationWriteAdmissionTest {
     )
 
     @Test
+    fun an_end_to_end_conversation_is_never_a_write_target_on_android_13110() {
+        val conv = conversation(type = "direct").copy(encryptionMode = "e2ee")
+        assertThat(conv.mayCurrentUserWrite("u1")).isFalse()
+    }
+
+    @Test
+    fun a_server_encrypted_conversation_stays_writable() {
+        val conv = conversation().copy(encryptionMode = "server")
+        assertThat(conv.mayCurrentUserWrite("u1")).isTrue()
+    }
+
+    @Test
     fun a_conversation_with_no_write_restriction_is_writable_by_everyone() {
         assertThat(conversation().mayCurrentUserWrite("u1")).isTrue()
     }
