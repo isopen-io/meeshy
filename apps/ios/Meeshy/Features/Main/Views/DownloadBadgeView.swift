@@ -68,8 +68,8 @@ struct DownloadBadgeView: View {
     }
 
     private var totalSizeText: String {
-        if downloader.totalBytes > 0 { return AttachmentDownloader.fmt(downloader.totalBytes) }
-        if attachment.fileSize > 0 { return AttachmentDownloader.fmt(Int64(attachment.fileSize)) }
+        if downloader.totalBytes > 0 { return MediaFormat.bytes(downloader.totalBytes) }
+        if attachment.fileSize > 0 { return MediaFormat.bytes(Int64(attachment.fileSize)) }
         return ""
     }
 
@@ -179,7 +179,7 @@ struct DownloadBadgeView: View {
                 }
                 .frame(width: 24, height: 24)
 
-                Text("\(AttachmentDownloader.fmt(downloader.downloadedBytes))/\(totalSizeText)")
+                Text("\(MediaFormat.bytes(downloader.downloadedBytes))/\(totalSizeText)")
                     .font(MeeshyFont.relative(7, weight: .medium, design: .monospaced))
                     .foregroundStyle(Color.white)
                     .lineLimit(1)

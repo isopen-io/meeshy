@@ -170,7 +170,7 @@ enum ShareSheetCopy {
     /// « 5,37 Go ». Les chiffres viennent de `ShareLimits` : aucune copie des
     /// plafonds ne vit dans le catalogue (#12974).
     static func limitSize(_ bytes: Int, locale: Locale = .shareCatalog()) -> String {
-        Int64(max(0, bytes)).formatted(.byteCount(style: .memory).locale(locale))
+        MediaFormat.bytes(Int64(max(0, bytes)), countStyle: .memory, locale: locale)
     }
     static func trimLast(_ count: Int) -> String {
         String(format: String(localized: "share.sheet.limits.trim", defaultValue: "Retirez %d fichiers pour envoyer", bundle: .meeshyShare), count)

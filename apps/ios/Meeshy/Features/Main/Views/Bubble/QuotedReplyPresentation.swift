@@ -158,7 +158,7 @@ nonisolated enum QuotedReplyPresentation {
             segments.append(pagesLabel(pageCount, locale: locale))
         }
         if let fileSize, fileSize > 0 {
-            segments.append(Int64(fileSize).formatted(.byteCount(style: .file).locale(locale)))
+            segments.append(MediaFormat.bytes(Int64(fileSize), locale: locale))
         }
 
         guard !segments.isEmpty else { return nil }

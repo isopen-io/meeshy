@@ -235,7 +235,7 @@ public extension APICallRecord {
     var dataLabel: String? {
         let total = (bytesSent ?? 0) + (bytesReceived ?? 0)
         guard bytesSent != nil || bytesReceived != nil, total > 0 else { return nil }
-        return Int64(total).formatted(.byteCount(style: .file))
+        return MediaFormat.bytes(Int64(total))
     }
 }
 

@@ -199,7 +199,7 @@ public struct SelectiveCachePurgeView: View {
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold, design: .rounded))
                         .tracking(1.2)
                     Spacer()
-                    Text(Self.formatBytes(viewModel.report?.bytes(for: kind) ?? 0))
+                    Text(MediaFormat.bytes(Int64(viewModel.report?.bytes(for: kind) ?? 0)))
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
                 }
                 .foregroundColor(Color(hex: accentColor))
@@ -242,7 +242,7 @@ public struct SelectiveCachePurgeView: View {
 
                     Spacer()
 
-                    Text(Self.formatBytes(bytes))
+                    Text(MediaFormat.bytes(Int64(bytes)))
                         .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                         .foregroundColor(bytes > 0 ? theme.textPrimary : theme.textMuted)
                 }
@@ -325,7 +325,7 @@ public struct SelectiveCachePurgeView: View {
 
                         Spacer()
 
-                        Text(Self.formatBytes(bytes))
+                        Text(MediaFormat.bytes(Int64(bytes)))
                             .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                             .foregroundColor(theme.textPrimary)
                     }
@@ -396,7 +396,7 @@ public struct SelectiveCachePurgeView: View {
         }
         // « Jusqu'à » : un fichier partagé par deux domaines est compté dans
         // les deux cases, donc la somme est un majorant (cf. `selectedBytes`).
-        let size = Self.formatBytes(viewModel.selectedBytes)
+        let size = MediaFormat.bytes(Int64(viewModel.selectedBytes))
         return String(
             format: String(localized: "settings.cache.purge.action.withSize",
                            defaultValue: "Vider — jusqu'à %@", bundle: .module),
@@ -488,9 +488,5 @@ public struct SelectiveCachePurgeView: View {
         case .reactions: return "heart.fill"
         case .payloads: return "externaldrive.fill"
         }
-    }
-
-    static func formatBytes(_ bytes: Int) -> String {
-        AudioPlayerView.formatBytes(Int64(bytes))
     }
 }
