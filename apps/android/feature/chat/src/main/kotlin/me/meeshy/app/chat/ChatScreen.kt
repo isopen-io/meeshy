@@ -4,11 +4,17 @@ import android.content.ContentResolver
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -76,12 +82,24 @@ fun ChatScreen(
     )
 
     ChatBackgroundHost {
+        // L'en-tête est une bande FLOTTANTE posée au-dessus du fil (iOS : ZStack, zIndex 100) :
+        // sa hauteur mesurée décale le haut du fil (`bandHeight`), et les bulles passent dessous.
+        var headerHeightPx by remember { mutableIntStateOf(0) }
+        val headerHeight = with(LocalDensity.current) { headerHeightPx.toDp() }
         Scaffold(
             containerColor = Color.Transparent,
-            topBar = { ChatHeaderHost(host) },
             bottomBar = { ChatBottomBarHost(host) },
         ) { padding ->
-            ChatListHost(host, Modifier.padding(padding))
+            Box(Modifier.fillMaxSize()) {
+                ChatListHost(
+                    host,
+                    Modifier.padding(bottom = padding.calculateBottomPadding()),
+                    topInset = headerHeight,
+                )
+                Box(Modifier.onSizeChanged { headerHeightPx = it.height }) {
+                    ChatHeaderHost(host)
+                }
+            }
         }
         ChatSheetsHost(host)
     }

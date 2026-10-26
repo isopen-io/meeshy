@@ -132,6 +132,7 @@ internal fun ChatHeaderHost(host: ChatHostContext) {
             } else {
                 ChatConversationHeaderBand(
                     accentColor = accentColor,
+                    actionsHidden = host.chrome.isScrolling,
                     otherUnread = header.otherConversationsUnread,
                     onBack = navigation.onBack,
                     onSearch = actions.openSearch,

@@ -4,6 +4,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
@@ -16,6 +18,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.time.ZoneId
@@ -31,12 +35,18 @@ import me.meeshy.ui.theme.MeeshySpacing
  * and the skeleton / notice states. [modifier] carries the Scaffold content padding.
  */
 @Composable
-internal fun ChatListHost(host: ChatHostContext, modifier: Modifier = Modifier) {
+internal fun ChatListHost(host: ChatHostContext, modifier: Modifier = Modifier, topInset: Dp = 0.dp) {
     val state = host.state
     val actions = host.actions
     val accentColor = host.accentColor
     val bubbleFrames = host.bubbleFrames
     val listState = rememberLazyListState()
+    // L'en-tête efface sa grappe d'actions pendant le défilement (iOS `hiddenWhileScrolling`).
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.isScrollInProgress }
+            .distinctUntilChanged()
+            .collect { host.chrome.isScrolling = it }
+    }
     val scope = rememberCoroutineScope()
     // Async OpenGraph link previews: one screen-scoped store dedupes fetches across bubbles and
     // dies with the screen (its cache is discarded on logout/leave — nothing leaks to the next
@@ -188,15 +198,21 @@ internal fun ChatListHost(host: ChatHostContext, modifier: Modifier = Modifier) 
 
     Box(modifier = modifier.fillMaxSize()) {
         when {
-            state.showSkeleton -> ChatSkeleton()
+            state.showSkeleton -> Box(Modifier.padding(top = topInset)) { ChatSkeleton() }
 
-            state.messages.isEmpty() && state.errorMessage != null ->
+            state.messages.isEmpty() && state.errorMessage != null -> Box(Modifier.padding(top = topInset)) {
                 ChatNotice(state.errorMessage!!, onRetry = actions.refresh)
+            }
 
-            state.messages.isEmpty() ->
+            state.messages.isEmpty() -> Box(Modifier.padding(top = topInset)) {
                 ChatNotice(stringResource(R.string.chat_no_messages), onRetry = null)
+            }
 
             else -> Column(modifier = Modifier.fillMaxSize()) {
+                // Les bandeaux (épinglé, positions en direct) se posent sous l'en-tête
+                // flottant ; sans bandeau, le fil remonte sous l'en-tête comme sur iOS.
+                val hasBanners = state.pinnedBanner != null || state.liveLocationBadges.isNotEmpty()
+                if (hasBanners) Spacer(Modifier.height(topInset))
                 state.pinnedBanner?.let { banner ->
                     PinnedBannerStrip(
                         banner = banner,
@@ -239,6 +255,7 @@ internal fun ChatListHost(host: ChatHostContext, modifier: Modifier = Modifier) 
                         }
                     },
                     modifier = Modifier.weight(1f),
+                    topInset = if (hasBanners) 0.dp else topInset,
                 ) { item ->
                     ChatListRow(
                         item = item,

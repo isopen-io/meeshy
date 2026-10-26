@@ -98,6 +98,7 @@ internal object ChatHeaderMetrics {
 @Composable
 internal fun ChatConversationHeaderBand(
     accentColor: Color,
+    actionsHidden: Boolean,
     otherUnread: Int,
     onBack: () -> Unit,
     onSearch: () -> Unit,
@@ -122,7 +123,12 @@ internal fun ChatConversationHeaderBand(
                 .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onToggle)
                 .clearAndSetSemantics { },
         )
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        // La grappe s'efface pendant le défilement et revient à l'arrêt (iOS `hiddenWhileScrolling`).
+        val actionsAlpha by animateFloatAsState(if (actionsHidden) 0f else 1f, label = "headerActions")
+        Row(
+            modifier = Modifier.graphicsLayer { alpha = actionsAlpha },
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             callSlot()
             ChatHeaderGlassAction(
                 icon = MeeshyIcons.Search,

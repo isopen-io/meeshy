@@ -121,9 +121,10 @@ class ChatHostsSmokeTest {
     )
 
     @Test
-    fun `the header host shows the conversation title`() {
+    fun `the header host names the conversation on its avatar, as iOS's collapsed band`() {
         compose.setContent { MeeshyTheme(darkTheme = false) { ChatHeaderHost(host()) } }
-        compose.onNodeWithText("Équipe").assertExists()
+        // Replié (par défaut, comme iOS), l'en-tête ne montre pas le nom : l'avatar le porte.
+        compose.onNodeWithContentDescription("Équipe", substring = true).assertExists()
     }
 
     @Test

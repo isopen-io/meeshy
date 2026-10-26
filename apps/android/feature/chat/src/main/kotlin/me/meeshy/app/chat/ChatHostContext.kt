@@ -51,6 +51,15 @@ internal class ChatSheetVisibility {
 }
 
 /**
+ * L'état du chrome partagé entre la liste et l'en-tête : la liste dit qu'elle défile, l'en-tête
+ * efface alors sa grappe d'actions (iOS `hiddenWhileScrolling`).
+ */
+@Stable
+internal class ChatChromeState {
+    var isScrolling by mutableStateOf(false)
+}
+
+/**
  * Everything the five hosts of the chat screen share: the collected [state], the composer's
  * [pending] attachments tray, the conversation
  * [accentColor], the ViewModel entry points reduced to [actions] (hosts never read the
@@ -69,6 +78,7 @@ internal class ChatHostContext(
     val bubbleFrames: MutableMap<String, Rect>,
     /** Ce que l'en-tête montre en plus de [state] : avatar, pair, non-lus des autres conversations. */
     val header: ChatHeaderState = ChatHeaderState(),
+    val chrome: ChatChromeState = ChatChromeState(),
 )
 
 @Composable
@@ -85,7 +95,8 @@ internal fun rememberChatHostContext(
     // A plain map, not snapshot state: written from onGloballyPositioned without forcing
     // recomposition, read only when the overlay opens.
     val bubbleFrames = remember { mutableMapOf<String, Rect>() }
-    return ChatHostContext(state, composerText, pending, accentColor, actions, navigation, sheets, bubbleFrames, header)
+    val chrome = remember { ChatChromeState() }
+    return ChatHostContext(state, composerText, pending, accentColor, actions, navigation, sheets, bubbleFrames, header, chrome)
 }
 
 /** The ViewModel's user-intent entry points, as plain callbacks. */
