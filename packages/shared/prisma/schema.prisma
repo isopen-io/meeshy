@@ -3454,6 +3454,59 @@ model ConversationPublicKey {
   @@index([userId])
 }
 
+/// #13100 — un FICHIER de pièce jointe scellé au repos (modes `server` et
+/// `hybrid`) : l'original, la vignette, une variante, un rendu, une piste TTS.
+/// Une ligne par CLÉ DE STOCKAGE : les copies transférées partagent les octets,
+/// donc la ligne. Elle ne porte aucun secret — la clé de données reste dans
+/// `ServerEncryptionKey`, enveloppée par `ENCRYPTION_MASTER_KEY` — mais tout ce
+/// qui LIE le chiffré : sa conversation, la pièce qui l'a fait sceller, son
+/// rôle et sa clé de stockage forment les données associées (Tink AES-GCM-HKDF
+/// Streaming, `services/attachments/atRest/sealedFileFormat.ts`). Sa présence
+/// est la SEULE source de vérité « ce fichier est scellé » : un nom ou un
+/// en-tête de fichier ne se croit jamais.
+model AttachmentFileAtRest {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  /// La clé de stockage sous `UPLOAD_PATH` (`2026/10/<auteur>/<opaque>.jpg`, `translated/<id>_<langue>.m4a`).
+  storageKey     String   @unique
+  /// La conversation dont la clé de données scelle le fichier.
+  conversationId String   @db.ObjectId
+  /// La pièce qui a fait sceller le fichier (les copies gardent celle-ci).
+  attachmentId   String   @db.ObjectId
+  /// `ServerEncryptionKey.id` — rattachée à la conversation ou désignée par elle.
+  keyId          String
+  /// `original`, `thumbnail`, `webp-640`, `avif-640`, `rendition-h264`, `rendition-heic`, `track-en`…
+  role           String
+  /// La taille du CLAIR ; celle du chiffré s'en déduit (et se vérifie).
+  plaintextSize  Int
+  /// Le format et sa taille de segment chiffré.
+  format         String
+  segmentSize    Int
+  /// La clé CLAIRE que ce fichier scellé remplace (`null` pour un scellement en
+  /// place). Gardée : toute ligne qui pointerait encore l'ancienne clé (copie
+  /// faite pendant le scellement) se repointe ici, et le clair ne s'efface que
+  /// quand plus aucune ligne ne le désigne.
+  replacedKey    String?
+  /// Quand le clair remplacé a été effacé (plus aucune ligne ne le désignait) :
+  /// le balayage ne revient plus sur cette pièce. `replacedKey` reste, pour
+  /// repointer une copie retardataire et servir une adresse signée d'avant.
+  replacedErasedAt DateTime?
+  createdAt      DateTime @default(now())
+
+  @@index([attachmentId])
+  @@index([createdAt])
+  @@index([replacedKey])
+}
+
+/// #13100 — le début d'une panne du verrou de scellement (Redis injoignable) :
+/// les pièces de cette période attendent le rattrapage du balayage, qui remonte
+/// au plus ancien début inscrit. Gardé dans Mongo, joignable quand Redis ne
+/// l'est pas, pour survivre à un redémarrage pendant la panne.
+model AtRestSealingDeferral {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  since     DateTime
+  createdAt DateTime @default(now())
+}
+
 /// =====================================================
 /// SERVER ENCRYPTION KEYS - ATTACHMENT ENCRYPTION
 /// =====================================================

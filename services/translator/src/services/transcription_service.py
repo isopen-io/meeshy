@@ -66,6 +66,7 @@ except ImportError:
 from utils.audio_utils import get_audio_duration as _get_librosa_duration
 from utils.audio_pipeline_metrics import timed_audio_stage
 from .audio_pipeline.speaker_probe import ProbeDecision, diarization_mode, probe_multi_speaker, should_diarize
+from services.task_privacy import shown
 
 # La sonde n'a entendu qu'une voix : la transcription part sans diarization (#11268).
 DIARIZATION_SKIPPED = object()
@@ -824,7 +825,7 @@ class TranscriptionService:
                     marker = "⭐" if speaker.is_primary else " "
                     logger.info(
                         f"[{speaker.speaker_id}]{marker} ({speaker.speaking_ratio * 100:.0f}%): "
-                        f"\"{full_text}\""
+                        f"\"{shown(full_text)}\""
                     )
 
             unassigned = [s for s in sorted_segments if not s.speaker_id]

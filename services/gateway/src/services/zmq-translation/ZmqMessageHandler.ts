@@ -32,7 +32,8 @@ import type {
   TranscriptionErrorEvent,
   VoiceTranslationCompletedEvent,
   VoiceTranslationFailedEvent,
-  StoryTextObjectTranslationCompletedEvent
+  StoryTextObjectTranslationCompletedEvent,
+  CacheForgetDoneEvent
 } from './types';
 import { extractAudioBinaryFrames } from './utils/binary-frames';
 import { enhancedLogger } from '../../utils/logger-enhanced';
@@ -212,6 +213,10 @@ export class ZmqMessageHandler extends EventEmitter {
 
       case 'story_text_object_translation_completed':
         this.handleStoryTextObjectTranslationCompleted(event as unknown as StoryTextObjectTranslationCompletedEvent);
+        break;
+
+      case 'cache_forget_done':
+        this.emit('cacheForgetDone', { requestId: (event as CacheForgetDoneEvent).requestId });
         break;
 
       case 'pong':

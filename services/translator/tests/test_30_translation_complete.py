@@ -268,7 +268,7 @@ def mock_translation_cache_service():
         key = f"{text}:{source_lang}:{target_lang}:{model_type}"
         return mock._cache.get(key)
 
-    async def set_translation(text, source_lang, target_lang, translated_text, model_type="premium"):
+    async def set_translation(text, source_lang, target_lang, translated_text, model_type="premium", message_id=None):
         key = f"{text}:{source_lang}:{target_lang}:{model_type}"
         mock._cache[key] = {"translated_text": translated_text}
 
@@ -965,7 +965,7 @@ class TestTranslationCacheIntegration:
             key = hashlib.sha256(f"{text}:{source_lang}:{target_lang}:{model_type}".encode()).hexdigest()
             return cache._storage.get(key)
 
-        async def set_translation(text, source_lang, target_lang, translated_text, model_type="premium"):
+        async def set_translation(text, source_lang, target_lang, translated_text, model_type="premium", message_id=None):
             key = hashlib.sha256(f"{text}:{source_lang}:{target_lang}:{model_type}".encode()).hexdigest()
             cache._storage[key] = {
                 "translated_text": translated_text,

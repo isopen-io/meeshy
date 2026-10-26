@@ -22,6 +22,7 @@
     <string name="emoji_category_smileys">Smileys</string>
     <string name="emoji_category_symbols">Symbole</string>
     <string name="emoji_category_travel">Reisen</string>
+    <string name="focal_row_you">Du</string>
     <string name="media_crop_a11y_handle_bottom">Untere Kante</string>
     <string name="media_crop_a11y_handle_bottomLeft">Untere linke Ecke</string>
     <string name="media_crop_a11y_handle_bottomRight">Untere rechte Ecke</string>
@@ -40,6 +41,8 @@
     <string name="media_trim_loading">Vorschau wird geladen</string>
     <string name="media_trim_of_total">von %s</string>
     <string name="media_trim_window">Beibehaltener Ausschnitt</string>
+    <string name="message_long_collapse">Weniger anzeigen</string>
+    <string name="message_long_read_more">Weiterlesen</string>
     <string name="notification_date_ago">vor %s</string>
     <string name="notification_date_hours">%d Std.</string>
     <string name="notification_date_minutes">%d Min.</string>

@@ -259,7 +259,8 @@ class TranslationService:
         target_language: str = "en",
         model_type: str = "basic",
         source_channel: str = "unknown",
-        use_cache: bool = True
+        use_cache: bool = True,
+        message_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Traduction avec préservation de structure (paragraphes, emojis)
@@ -353,7 +354,7 @@ class TranslationService:
                     # Cacher les résultats en arrière-plan
                     if cache_items and use_cache:
                         await self.translation_cache.cache_batch_results(
-                            cache_items, detected_lang, target_language, model_type
+                            cache_items, detected_lang, target_language, model_type, message_id=message_id
                         )
 
                 except Exception as e:
