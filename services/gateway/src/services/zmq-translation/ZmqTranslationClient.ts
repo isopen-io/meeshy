@@ -24,7 +24,8 @@ import type {
   AudioProcessRequest,
   TranscriptionOnlyRequest,
   VoiceAPIRequest,
-  VoiceProfileRequest
+  VoiceProfileRequest,
+  CacheForgetRequest
 } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { guardedInterval, guardedTimeout } from '../../utils/guarded-timer';

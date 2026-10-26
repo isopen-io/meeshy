@@ -119,6 +119,8 @@ export interface AudioProcessRequest {
   targetLanguages: string[];
   generateVoiceClone: boolean;
   modelType: string;
+  /** #13102 — rien de cette tâche ne se range au translator (cache, journaux). */
+  atRest?: boolean;
   originalSenderId?: string;
   existingVoiceProfile?: {
     profileId: string;
@@ -223,6 +225,8 @@ export interface TranscriptionOnlyRequest {
   audioData?: string;
   audioFormat?: string;
   binaryFrames?: BinaryFrameInfo;
+  /** #13102 — rien de cette tâche ne se range au translator (cache, journaux). */
+  atRest?: boolean;
   mobileTranscription?: {
     text: string;
     language: string;

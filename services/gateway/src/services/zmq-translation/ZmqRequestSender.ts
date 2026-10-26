@@ -20,7 +20,8 @@ import type {
   TranscriptionOnlyRequest,
   VoiceAPIRequest,
   VoiceProfileRequest,
-  BinaryFrameInfo
+  BinaryFrameInfo,
+  CacheForgetRequest
 } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { withTimeout } from '../../utils/with-timeout';
@@ -225,6 +226,8 @@ export class ZmqRequestSender {
       // Champs post audio (présents uniquement pour les requêtes post media)
       postId: request.postId,
       postMediaId: request.postMediaId,
+      // #13102 — un fichier scellé au repos, ou une tâche que l'appelant protège.
+      ...(request.atRest === true || audioData.sealed === true ? { atRest: true } : {}),
     };
 
     // Envoyer via PUSH en multipart (TOUJOURS)
@@ -278,6 +281,7 @@ export class ZmqRequestSender {
     let audioBuffer: Buffer;
     let mimeType: string;
     let audioSize: number;
+    let sealed = false;
 
     if (request.audioPath) {
       // Mode fichier: charger depuis le disque
@@ -288,6 +292,7 @@ export class ZmqRequestSender {
       audioBuffer = audioData.buffer;
       mimeType = audioData.mimeType;
       audioSize = audioData.size;
+      sealed = audioData.sealed === true;
     } else {
       // Mode base64: décoder en Buffer (pas de fichier temporaire)
       audioBuffer = Buffer.from(request.audioData!, 'base64');
@@ -313,7 +318,9 @@ export class ZmqRequestSender {
       attachmentId: request.attachmentId,
       audioFormat: mimeType.replace('audio/', ''),
       mobileTranscription: request.mobileTranscription,
-      binaryFrames: binaryFrameInfo
+      binaryFrames: binaryFrameInfo,
+      // #13102 — un fichier scellé au repos, ou une tâche que l'appelant protège.
+      ...(request.atRest === true || sealed ? { atRest: true } : {}),
     };
 
     // Envoyer via PUSH en multipart

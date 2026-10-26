@@ -49,7 +49,7 @@ import { findExistingMessage, findContentWindowDuplicate } from './messageDedupP
 import { MESSAGE_AUTHOR_USER_SELECT } from './messageAuthorSelect';
 import type { SocketAttachmentRow } from '../../socketio/serializeAttachmentForSocket';
 import { prismaAtRestFileStore, type AtRestFileAccess } from '../attachments/atRest/atRestFiles';
-import { gatewaySealDeps, requireFileSealingKey, sealMessageAttachmentsAtRest, sendCarriesFiles } from './sealMessageAttachments';
+import { contentDisappears, gatewaySealDeps, requireFileSealingKey, sealMessageAttachmentsAtRest, sendCarriesFiles } from './sealMessageAttachments';
 
 // Logger dédié pour MessageProcessor
 const logger = enhancedLogger.child({ module: 'MessageProcessor' });
@@ -719,7 +719,7 @@ export class MessageProcessor {
 
         // Déclencher le traitement audio si nécessaire — jamais en e2ee (#12518).
         if (this.translationService && options.serverReads) {
-          this.processAudioAttachments(data.attachmentIds, message.id, data.conversationId, data.senderId)
+          this.processAudioAttachments(data.attachmentIds, message.id, data.conversationId, data.senderId, { atRest: options.sealsAtRest || contentDisappears(message) })
             .catch(err => logger.error('[MessageProcessor] Audio processing failed', err));
         }
       }
@@ -797,7 +797,8 @@ export class MessageProcessor {
     attachmentIds: readonly string[],
     messageId: string,
     conversationId: string,
-    senderId: string
+    senderId: string,
+    regime: { readonly atRest: boolean } = { atRest: false }
   ): Promise<void> {
     if (!this.translationService) return;
 
@@ -868,7 +869,8 @@ export class MessageProcessor {
               audioDurationMs: audioAtt.duration || 0,
               mobileTranscription: mobileTranscription,
               generateVoiceClone: true,
-              modelType: 'medium'
+              modelType: 'medium',
+              ...(regime.atRest ? { atRest: true } : {})
             });
             return true;
           } catch (error) {

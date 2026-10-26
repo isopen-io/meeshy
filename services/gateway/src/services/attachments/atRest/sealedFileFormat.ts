@@ -121,16 +121,19 @@ export async function* sealSegments(source: AsyncIterable<Buffer>, params: Seale
   let pending = Buffer.alloc(0);
   let index = 0;
   const sizeOf = (i: number) => (i === 0 ? firstPlaintextSegmentSize(cs) : plaintextSegmentSize(cs));
-  for await (const chunk of source) {
-    pending = pending.length === 0 ? Buffer.from(chunk) : Buffer.concat([pending, chunk]);
-    while (pending.length > sizeOf(index)) {
-      yield sealSegment(key, prefix, index, false, pending.subarray(0, sizeOf(index)));
-      pending = pending.subarray(sizeOf(index));
-      index += 1;
+  try {
+    for await (const chunk of source) {
+      pending = pending.length === 0 ? Buffer.from(chunk) : Buffer.concat([pending, chunk]);
+      while (pending.length > sizeOf(index)) {
+        yield sealSegment(key, prefix, index, false, pending.subarray(0, sizeOf(index)));
+        pending = pending.subarray(sizeOf(index));
+        index += 1;
+      }
     }
+    yield sealSegment(key, prefix, index, true, pending);
+  } finally {
+    key.fill(0);
   }
-  yield sealSegment(key, prefix, index, true, pending);
-  key.fill(0);
 }
 
 /** Les bornes (fin exclue) du segment `index` dans le chiffré. */

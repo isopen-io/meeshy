@@ -3488,9 +3488,15 @@ model AttachmentFileAtRest {
   /// Le format et sa taille de segment chiffré.
   format         String
   segmentSize    Int
+  /// La clé CLAIRE que ce fichier scellé remplace (`null` pour un scellement en
+  /// place). Gardée : toute ligne qui pointerait encore l'ancienne clé (copie
+  /// faite pendant le scellement) se repointe ici, et le clair ne s'efface que
+  /// quand plus aucune ligne ne le désigne.
+  replacedKey    String?
   createdAt      DateTime @default(now())
 
   @@index([attachmentId])
+  @@index([createdAt])
 }
 
 model ServerEncryptionKey {

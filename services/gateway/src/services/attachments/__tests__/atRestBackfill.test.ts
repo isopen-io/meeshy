@@ -65,6 +65,8 @@ function world(uploadRoot: string) {
       find: async (key) => records.get(key) ?? null,
       save: async (record) => { writes.push('AttachmentFileAtRest'); records.set(record.storageKey, record); },
       remove: async (key) => { records.delete(key); },
+      ofAttachment: async (attachmentId) => [...records.values()].filter((record) => record.attachmentId === attachmentId),
+      replacingSince: async () => [],
     },
     keyring: { fileSealingKey: async () => ({ keyId: 'k1', key: crypto.randomBytes(32) }), fileOpeningKey: async () => Buffer.alloc(32) },
   };

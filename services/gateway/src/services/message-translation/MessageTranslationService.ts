@@ -2287,6 +2287,8 @@ export class MessageTranslationService extends EventEmitter {
     generateVoiceClone?: boolean;
     modelType?: string;
     userLanguage?: string;
+    /** #13102 — un contenu au repos ou destiné à disparaître : rien ne se range au translator. */
+    atRest?: boolean;
   }): Promise<string | null> {
     try {
       if (!this.zmqClient) {
@@ -2571,7 +2573,7 @@ export class MessageTranslationService extends EventEmitter {
         existingVoiceProfile: shouldGenerateVoiceClone ? existingVoiceProfile : undefined,
         useOriginalVoice: shouldGenerateVoiceClone,
         userLanguage: userLanguage,  // Langue de l'utilisateur pour fallback sur messages courts
-        voiceCloneParams
+        voiceCloneParams, ...(params.atRest ? { atRest: true } : {})
       });
 
       logger.info(`🔍 [VOICE-PROFILE-TRACE] ✅ Requête envoyée avec succès`);

@@ -41,8 +41,8 @@ async function atRestConversations(prisma: AtRestBackfillDeps['prisma']): Promis
   return rows.filter((row) => isServerAtRestMode(row.encryptionMode) && sealsAtRest(row)).map((row) => row.id);
 }
 
-async function piecesOf(prisma: AtRestBackfillDeps['prisma'], conversationId: string): Promise<readonly string[]> {
-  const messages = await prisma.message.findMany({ where: { conversationId }, select: { id: true } });
+async function piecesOf(prisma: AtRestBackfillDeps['prisma'], conversationId: string, since?: Date): Promise<readonly string[]> {
+  const messages = await prisma.message.findMany({ where: { conversationId, ...(since ? { createdAt: { gte: since } } : {}) }, select: { id: true } });
   const batches = Array.from({ length: Math.ceil(messages.length / MESSAGE_BATCH) }, (_, index) =>
     messages.slice(index * MESSAGE_BATCH, (index + 1) * MESSAGE_BATCH).map((message) => message.id)
   );
@@ -54,13 +54,13 @@ async function piecesOf(prisma: AtRestBackfillDeps['prisma'], conversationId: st
 
 export async function backfillAtRestAttachments(
   deps: AtRestBackfillDeps,
-  options: { readonly dryRun: boolean; readonly log: (line: string) => void }
+  options: { readonly dryRun: boolean; readonly log: (line: string) => void; readonly since?: Date }
 ): Promise<AtRestBackfillReport> {
   const conversations = await atRestConversations(deps.prisma);
   const report = { conversations: conversations.length, pieces: 0, toSeal: 0, filesToSeal: 0, sealed: 0, alreadySealed: 0, failed: 0 };
   const skipped: Record<string, number> = {};
   for (const conversationId of conversations) {
-    for (const attachmentId of await piecesOf(deps.prisma, conversationId)) {
+    for (const attachmentId of await piecesOf(deps.prisma, conversationId, options.since)) {
       report.pieces += 1;
       const plan = await planAttachmentSealing(deps, attachmentId);
       if (plan.kind === 'skip') {

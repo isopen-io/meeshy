@@ -38,6 +38,10 @@ jest.mock('../../../../services/TrackingLinkService', () => ({
   })),
 }));
 
+jest.mock('../../../../services/CacheStore', () => ({
+  getCacheStore: () => ({ getNativeClient: () => null }),
+}));
+
 jest.mock('../../../../services/MentionService', () => ({
   MentionService: jest.fn().mockImplementation(() => ({
     extractMentions: jest.fn().mockReturnValue([]),
@@ -102,11 +106,16 @@ function harness(mode: 'server' | 'hybrid', relPath: string, thumbPath: string) 
       delete: jest.fn<any>().mockResolvedValue({}),
     },
     messageAttachment: {
-      findMany: jest.fn<any>().mockResolvedValue([piece]),
-      findUnique: jest.fn<any>().mockResolvedValue(piece),
+      findMany: jest.fn<any>().mockImplementation(async ({ where }: any) => (where?.filePath === undefined || where.filePath === piece.filePath ? [{ ...piece }] : [])),
+      findUnique: jest.fn<any>().mockImplementation(async () => ({ ...piece })),
       create: jest.fn<any>().mockResolvedValue({}),
       update: jest.fn<any>().mockImplementation(async (args: any) => { updates.push(args.data); return {}; }),
-      updateMany: jest.fn<any>().mockImplementation(async (args: any) => { updates.push(args.data); return { count: 1 }; }),
+      updateMany: jest.fn<any>().mockImplementation(async (args: any) => {
+        updates.push(args.data);
+        const hit = args.where?.filePath === undefined || args.where.filePath === piece.filePath;
+        if (hit && args.data?.filePath) Object.assign(piece, args.data);
+        return { count: hit ? 1 : 0 };
+      }),
     },
     participant: { findUnique: jest.fn<any>().mockResolvedValue({ userId: SENDER_USER_ID }), findFirst: jest.fn<any>().mockResolvedValue(null), findMany: jest.fn<any>().mockResolvedValue([]) },
     trackingLink: { updateMany: jest.fn<any>().mockResolvedValue({}) },
@@ -121,6 +130,7 @@ function harness(mode: 'server' | 'hybrid', relPath: string, thumbPath: string) 
       findUnique: jest.fn<any>().mockImplementation(async ({ where }: any) => sealings.get(where.storageKey) ?? null),
       upsert: jest.fn<any>().mockImplementation(async ({ create }: any) => { sealings.set(create.storageKey, create); return create; }),
       deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+      findMany: jest.fn<any>().mockImplementation(async ({ where }: any) => [...sealings.values()].filter((r) => r.attachmentId === where.attachmentId)),
     },
   };
   const processor = new MessageProcessor(prisma as unknown as PrismaClient, undefined, { processAudioAttachment: jest.fn<any>().mockResolvedValue(undefined) } as never);
@@ -152,12 +162,14 @@ describe.each(['server', 'hybrid'] as const)('AUDIT — une photo d’une conver
     uploadDir = await fs.mkdtemp(path.join(os.tmpdir(), 'audit-at-rest-'));
     process.env.UPLOAD_PATH = uploadDir;
     process.env.ENCRYPTION_MASTER_KEY = MASTER.toString('base64');
+    process.env.ATTACHMENT_URL_SIGNING_KEY = Buffer.alloc(32, 7).toString('base64');
     await fs.mkdir(path.dirname(path.join(uploadDir, relPath)), { recursive: true });
     await fs.writeFile(path.join(uploadDir, relPath), PLAIN);
     await fs.writeFile(path.join(uploadDir, thumbPath), THUMB);
   });
   afterEach(async () => {
     await fs.rm(uploadDir, { recursive: true, force: true });
+    delete process.env.ATTACHMENT_URL_SIGNING_KEY;
     if (savedMaster === undefined) delete process.env.ENCRYPTION_MASTER_KEY;
     else process.env.ENCRYPTION_MASTER_KEY = savedMaster;
   });
@@ -191,4 +203,23 @@ describe.each(['server', 'hybrid'] as const)('AUDIT — une photo d’une conver
     expect(updates.some((data) => data.filePath === original.storageKey && data.fileUrl === original.storageKey && data.thumbnailPath === thumbnail.storageKey)).toBe(true);
   });
 
+});
+
+
+describe('AUDIT — sans clé de signature des adresses, une pièce scellée ne serait lisible par personne', () => {
+  const relPath = '2026/10/u/photo_0f8fad5b-d9cb-469f-a165-70867728950e.jpg';
+  const savedMaster = process.env.ENCRYPTION_MASTER_KEY;
+  afterEach(() => {
+    if (savedMaster === undefined) delete process.env.ENCRYPTION_MASTER_KEY;
+    else process.env.ENCRYPTION_MASTER_KEY = savedMaster;
+  });
+
+  it('l’envoi est refusé avant d’écrire le message (SERVER_AT_REST_UNAVAILABLE)', async () => {
+    process.env.ENCRYPTION_MASTER_KEY = MASTER.toString('base64');
+    delete process.env.ATTACHMENT_URL_SIGNING_KEY;
+    const { processor } = harness('server', relPath, relPath.replace('.jpg', '_thumb.webp'));
+    await expect(
+      processor.saveMessage({ conversationId: CONV_ID, senderId: SENDER_ID, content: '', originalLanguage: 'fr', attachmentIds: ['photo'] } as never)
+    ).rejects.toMatchObject({ code: 'SERVER_AT_REST_UNAVAILABLE', reason: 'reader-signing-unavailable' });
+  });
 });

@@ -35,6 +35,8 @@ function memoryAccess(): AtRestFileAccess & { records: Map<string, AtRestFileRec
       find: async (key) => records.get(key) ?? null,
       save: async (record) => { records.set(record.storageKey, record); },
       remove: async (key) => { records.delete(key); },
+      ofAttachment: async (attachmentId) => [...records.values()].filter((record) => record.attachmentId === attachmentId),
+      replacingSince: async () => [],
     },
     keyring: {
       fileSealingKey: async () => ({ keyId: 'k1', key: DATA_KEY }),

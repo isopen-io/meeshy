@@ -16,6 +16,13 @@ import { enhancedLogger } from '../../utils/logger-enhanced';
 import { sealAttachmentFiles, type SealAttachmentDeps } from '../attachments/atRest/sealAttachmentFiles';
 import type { AtRestFileAccess } from '../attachments/atRest/atRestFiles';
 import { eraseMirroredCopy } from '../storage/objects/mirroredErasure';
+import { MESSAGE_ATTACHMENT_ORDER } from '../attachments/attachmentIncludes';
+import { readerFileUrlSignerFromEnv } from '../attachments/readerFileSignature';
+import { redisSealLock } from '../attachments/atRest/sealLock';
+import { getCacheStore } from '../CacheStore';
+import { ServerAtRestUnavailableError } from './serverAtRest';
+import { contentExitLawOfSource, type ContentExitProjection } from '@meeshy/shared/utils/content-exit-law';
+import { protectionOfFullMessageRow } from '../../socketio/readerSignedDelivery';
 
 const logger = enhancedLogger.child({ module: 'sealMessageAttachments' });
 
@@ -26,7 +33,14 @@ export const uploadRootFromEnv = (): string => process.env.UPLOAD_PATH || '/app/
 /** Les dépendances d'un scellement depuis la passerelle : la racine relue à l'appel, la copie du seau effacée. */
 export function gatewaySealDeps(prisma: Pick<PrismaClient, 'messageAttachment' | 'message'>, access: AtRestFileAccess): SealAttachmentDeps {
   const uploadRoot = uploadRootFromEnv();
-  return { prisma, uploadRoot, access, eraseMirrored: (absolute) => eraseMirroredCopy(absolute, uploadRoot) };
+  const redis = getCacheStore().getNativeClient();
+  return {
+    prisma,
+    uploadRoot,
+    access,
+    eraseMirrored: (absolute) => eraseMirroredCopy(absolute, uploadRoot),
+    ...(redis ? { lock: redisSealLock(redis as never) } : {}),
+  };
 }
 
 /** Un envoi qui porte des fichiers : pièces déposées, transfert, diffusion. */
@@ -36,8 +50,19 @@ export const sendCarriesFiles = (request: {
   readonly copyAttachmentsFromMessageId?: string;
 }): boolean => (request.attachmentIds?.length ?? 0) > 0 || Boolean(request.forwardedFromId) || Boolean(request.copyAttachmentsFromMessageId);
 
-/** Refuse l'envoi (`SERVER_AT_REST_UNAVAILABLE`) quand aucune clé ne scellerait ses fichiers. */
-export async function requireFileSealingKey(access: AtRestFileAccess, conversationId: string): Promise<void> {
+/**
+ * Refuse l'envoi (`SERVER_AT_REST_UNAVAILABLE`) quand ses fichiers ne
+ * pourraient pas être scellés — aucune clé de conversation — ou, scellés, ne
+ * pourraient être lus par personne : sans clé de signature des adresses
+ * (`ATTACHMENT_URL_SIGNING_KEY`), aucune adresse signée ne les servirait, et
+ * l'adresse nue d'un fichier scellé est refusée.
+ */
+export async function requireFileSealingKey(
+  access: AtRestFileAccess,
+  conversationId: string,
+  signer: () => unknown = () => readerFileUrlSignerFromEnv(new Date())
+): Promise<void> {
+  if (signer() === null) throw new ServerAtRestUnavailableError('reader-signing-unavailable');
   await access.keyring.fileSealingKey(conversationId);
 }
 
@@ -45,7 +70,7 @@ export async function sealMessageAttachmentsAtRest(
   deps: SealAttachmentDeps,
   input: { readonly messageId: string; readonly conversationId: string }
 ): Promise<void> {
-  const pieces = await deps.prisma.messageAttachment.findMany({ where: { messageId: input.messageId }, select: { id: true } });
+  const pieces = await deps.prisma.messageAttachment.findMany({ where: { messageId: input.messageId }, select: { id: true }, orderBy: MESSAGE_ATTACHMENT_ORDER });
   for (const piece of pieces) {
     try {
       await sealAttachmentFiles(deps, { attachmentId: piece.id, conversationId: input.conversationId });
@@ -59,3 +84,13 @@ export async function sealMessageAttachmentsAtRest(
     }
   }
 }
+
+/**
+ * #13102 — le contenu de ce message est-il destiné à disparaître (vue unique,
+ * flamme) ? Ses transcriptions et traductions ne se rangent alors nulle part
+ * au translator : rien à oublier quand il brûle.
+ */
+export function contentDisappears(message: object): boolean {
+  return contentExitLawOfSource({ ...protectionOfFullMessageRow(message), attachments: [] } as ContentExitProjection).nature !== 'ordinary';
+}
+

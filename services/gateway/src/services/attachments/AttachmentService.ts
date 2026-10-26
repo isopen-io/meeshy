@@ -3,6 +3,7 @@
  * Délègue à UploadProcessor et MetadataManager
  */
 
+import { forgetAtTranslator } from '../translatorForget';
 import { forgetSealing } from './atRest/atRestFiles';
 import { PrismaClient, Prisma } from '@meeshy/shared/prisma/client';
 import { promises as fs } from 'fs';
@@ -386,6 +387,8 @@ export class AttachmentService {
     await this.prisma.messageAttachment.delete({
       where: { id: attachmentId },
     });
+    // #13102 — la transcription et les pistes que le translator en avait tirées.
+    await forgetAtTranslator({ attachmentIds: [attachmentId] });
 
     await this.unlinkIfUnreferenced('filePath', attachment.filePath);
 

@@ -46,12 +46,21 @@ export type SealAttachmentDeps = {
   readonly access: AtRestFileAccess;
   /** Efface la copie du seau d'un fichier effacé du disque (`eraseMirroredCopy`). */
   readonly eraseMirrored?: (absolutePath: string) => Promise<void>;
+  /**
+   * Le verrou d'un fichier d'origine, partagé par tous les processus (Redis) :
+   * deux scellements d'une même pièce sous deux liaisons ne se croisent jamais.
+   * `busy` : un autre scelle, celui-ci cède (le balayage reprendra). Absent :
+   * un seul processus scelle (tests).
+   */
+  readonly lock?: SealLock;
 };
+
+export type SealLock = (filePath: string) => Promise<{ readonly release: () => Promise<void> } | 'busy'>;
 
 export type SealOutcome =
   | { readonly status: 'sealed'; readonly files: number; readonly rows: number }
   | { readonly status: 'already-sealed' }
-  | { readonly status: 'skipped'; readonly reason: 'not-found' | 'end-to-end' | 'pending' | 'not-at-rest' };
+  | { readonly status: 'skipped'; readonly reason: 'not-found' | 'end-to-end' | 'pending' | 'not-at-rest' | 'busy' };
 
 const ROW_SELECT = {
   id: true,
@@ -201,14 +210,35 @@ export async function planAttachmentSealing(
 /**
  * Scelle les fichiers de la pièce `attachmentId` et de ses copies sous la clé
  * de `conversationId`. L'appelant a jugé que la pièce DOIT l'être
- * (`sealAttachmentIfAtRest`).
+ * (`sealAttachmentIfAtRest`). Sous le verrou de son fichier d'origine, le plan
+ * est relu : ce qui a été scellé par un autre entre-temps ne l'est pas deux fois.
  */
 export async function sealAttachmentFiles(
   deps: SealAttachmentDeps,
   input: { readonly attachmentId: string; readonly conversationId: string }
 ): Promise<SealOutcome> {
+  const head = await deps.prisma.messageAttachment.findUnique({ where: { id: input.attachmentId }, select: { filePath: true } });
+  if (!head) return { status: 'skipped', reason: 'not-found' };
+  // Un verrou injoignable (Redis en panne) vaut « occupé » : sans lui, deux
+  // scellements pourraient se croiser ; le balayage reprendra la pièce.
+  const held = deps.lock ? await deps.lock(head.filePath).catch(() => 'busy' as const) : null;
+  if (held === 'busy') return { status: 'skipped', reason: 'busy' };
+  try {
+    return await sealUnderLock(deps, input);
+  } finally {
+    await held?.release().catch(() => undefined);
+  }
+}
+
+async function sealUnderLock(
+  deps: SealAttachmentDeps,
+  input: { readonly attachmentId: string; readonly conversationId: string }
+): Promise<SealOutcome> {
   const plan = await planAttachmentSealing(deps, input.attachmentId);
-  if (plan.kind === 'skip') return plan.outcome;
+  if (plan.kind === 'skip') {
+    if (plan.outcome.status === 'already-sealed') await finishPendingErasures(deps, input.attachmentId);
+    return plan.outcome;
+  }
   const { seed, rows, toSeal } = plan;
 
   const originalBase = seed.filePath.slice(0, seed.filePath.length - path.posix.extname(seed.filePath).length);
@@ -224,6 +254,7 @@ export async function sealAttachmentFiles(
       targetKey,
       binding: { ...binding, role: slot.role },
       access: deps.access,
+      replacedKey: targetKey === slot.key ? null : slot.key,
     });
     sealed.push({ slot, record });
   }
@@ -234,14 +265,43 @@ export async function sealAttachmentFiles(
       rows.map((row) => deps.prisma.messageAttachment.updateMany({ where: { id: row.id, filePath: row.filePath }, data: rowWrites(row, moved) }))
     );
   }
-
-  await Promise.all([...moved.keys()].map((oldKey) => eraseAt(deps, oldKey)));
   await Promise.all(sealed.filter(({ slot }) => !moved.has(slot.key)).map(({ slot }) => deps.eraseMirrored?.(path.join(deps.uploadRoot, slot.key)) ?? Promise.resolve()));
+  await finishPendingErasures(deps, seed.id);
   logger.info('pièce jointe scellée au repos', { attachmentId: seed.id, files: sealed.length, rows: rows.length });
   return { status: 'sealed', files: sealed.length, rows: rows.length };
 }
 
-async function eraseAt(deps: SealAttachmentDeps, key: string): Promise<void> {
+/**
+ * Le clair remplacé ne s'efface que quand PLUS AUCUNE ligne ne désigne
+ * l'ancien original : toute ligne qui le désigne encore — copie de transfert
+ * créée pendant le scellement, repointage interrompu — est d'abord repointée
+ * sur les fichiers scellés (la ligne de scellement garde `replacedKey`). Rejouable
+ * à volonté : le balayage la rejoue, et une ligne retardataire, même apparue
+ * APRÈS l'effacement, se repointe encore — rien ne se perd.
+ */
+export async function finishPendingErasures(
+  deps: Pick<SealAttachmentDeps, 'prisma' | 'uploadRoot' | 'access' | 'eraseMirrored'>,
+  attachmentId: string
+): Promise<{ readonly erased: number; readonly repointed: number }> {
+  const replacing = (await deps.access.store.ofAttachment(attachmentId)).filter((record) => record.replacedKey !== null);
+  const oldOriginal = replacing.find((record) => record.role === 'original')?.replacedKey;
+  if (!oldOriginal) return { erased: 0, repointed: 0 };
+  const moved = new Map(replacing.map((record) => [record.replacedKey as string, record.storageKey] as const));
+
+  const stragglers: readonly SealRow[] = await deps.prisma.messageAttachment.findMany({ where: { filePath: oldOriginal }, select: ROW_SELECT });
+  const repointed = await Promise.all(
+    stragglers.map((row) => deps.prisma.messageAttachment.updateMany({ where: { id: row.id, filePath: row.filePath }, data: rowWrites(row, moved) }))
+  );
+  const remaining = await deps.prisma.messageAttachment.findMany({ where: { filePath: oldOriginal }, select: { id: true } });
+  if (remaining.length > 0) return { erased: 0, repointed: repointed.reduce((sum, { count }) => sum + count, 0) };
+
+  const present = await Promise.all([...moved.keys()].map(async (key) => ((await exists(path.join(deps.uploadRoot, key))) ? key : null)));
+  const toErase = present.filter((key): key is string => key !== null);
+  await Promise.all(toErase.map((key) => eraseAt(deps, key)));
+  return { erased: toErase.length, repointed: repointed.reduce((sum, { count }) => sum + count, 0) };
+}
+
+async function eraseAt(deps: Pick<SealAttachmentDeps, 'uploadRoot' | 'eraseMirrored'>, key: string): Promise<void> {
   const absolute = path.join(deps.uploadRoot, key);
   await fs.unlink(absolute).catch((error: unknown) => {
     if ((error as { code?: string }).code !== 'ENOENT') logger.warn('clair d’origine non effacé après scellement', { code: (error as { code?: string }).code });

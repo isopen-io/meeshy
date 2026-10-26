@@ -32,7 +32,8 @@ import type {
   TranscriptionErrorEvent,
   VoiceTranslationCompletedEvent,
   VoiceTranslationFailedEvent,
-  StoryTextObjectTranslationCompletedEvent
+  StoryTextObjectTranslationCompletedEvent,
+  CacheForgetDoneEvent
 } from './types';
 import { extractAudioBinaryFrames } from './utils/binary-frames';
 import { enhancedLogger } from '../../utils/logger-enhanced';

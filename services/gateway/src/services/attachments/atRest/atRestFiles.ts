@@ -51,6 +51,8 @@ export type AtRestFileRecord = SealedFileBinding & {
   readonly plaintextSize: number;
   readonly format: string;
   readonly segmentSize: number;
+  /** La clé claire que ce fichier remplace ; `null` pour un scellement en place. */
+  readonly replacedKey: string | null;
 };
 
 /** La part du coffre de clés qu'un fichier demande (`EncryptionService`). */
@@ -63,6 +65,10 @@ export type AtRestFileStore = {
   find(storageKey: string): Promise<AtRestFileRecord | null>;
   save(record: AtRestFileRecord): Promise<void>;
   remove(storageKey: string): Promise<void>;
+  /** Les fichiers scellés d'une pièce. */
+  ofAttachment(attachmentId: string): Promise<readonly AtRestFileRecord[]>;
+  /** Les pièces dont un fichier a remplacé une clé claire depuis `since` (balayage). */
+  replacingSince(since: Date): Promise<readonly string[]>;
 };
 
 export type AtRestFileAccess = {
@@ -86,14 +92,31 @@ type AtRestFileRow = {
   readonly plaintextSize: number;
   readonly format: string;
   readonly segmentSize: number;
+  readonly replacedKey: string | null;
 };
+
+const RECORD_SELECT = {
+  storageKey: true, conversationId: true, attachmentId: true, keyId: true, role: true,
+  plaintextSize: true, format: true, segmentSize: true, replacedKey: true,
+} as const;
 
 /** Le magasin des scellements, par Prisma. */
 export function prismaAtRestFileStore(prisma: Pick<PrismaClient, 'attachmentFileAtRest'>): AtRestFileStore {
   return {
     find: async (storageKey) => {
-      const row: AtRestFileRow | null = await prisma.attachmentFileAtRest.findUnique({ where: { storageKey } });
-      return row;
+      const row: AtRestFileRow | null = await prisma.attachmentFileAtRest.findUnique({ where: { storageKey }, select: RECORD_SELECT });
+      return row ? { ...row, replacedKey: row.replacedKey ?? null } : null;
+    },
+    ofAttachment: async (attachmentId) => {
+      const rows: readonly AtRestFileRow[] = await prisma.attachmentFileAtRest.findMany({ where: { attachmentId }, select: RECORD_SELECT });
+      return rows.map((row) => ({ ...row, replacedKey: row.replacedKey ?? null }));
+    },
+    replacingSince: async (since) => {
+      const rows = await prisma.attachmentFileAtRest.findMany({
+        where: { createdAt: { gte: since }, role: 'original', replacedKey: { not: null } },
+        select: { attachmentId: true },
+      });
+      return [...new Set(rows.map((row) => row.attachmentId))];
     },
     save: async (record) => {
       await prisma.attachmentFileAtRest.upsert({ where: { storageKey: record.storageKey }, create: record, update: record });
@@ -152,6 +175,8 @@ export async function sealStoredFile(params: {
   readonly binding: Omit<SealedFileBinding, 'storageKey'>;
   readonly access: AtRestFileAccess;
   readonly segmentSize?: number;
+  /** La clé claire remplacée, quand le scellé prend une clé neuve. */
+  readonly replacedKey?: string | null;
 }): Promise<AtRestFileRecord> {
   const segmentSize = params.segmentSize ?? DEFAULT_CIPHERTEXT_SEGMENT_SIZE;
   const source = path.join(params.uploadRoot, params.sourceKey);
@@ -180,15 +205,21 @@ export async function sealStoredFile(params: {
     await fs.unlink(temporary).catch(() => undefined);
     throw new Error('sealed size mismatch: the source changed while it was sealed');
   }
-  const record: AtRestFileRecord = { ...binding, keyId, plaintextSize, format: SEALED_FILE_FORMAT, segmentSize };
+  const record: AtRestFileRecord = {
+    ...binding, keyId, plaintextSize, format: SEALED_FILE_FORMAT, segmentSize,
+    replacedKey: params.replacedKey && params.replacedKey !== params.targetKey ? params.replacedKey : null,
+  };
+  await params.access.store.save(record);
   try {
-    await params.access.store.save(record);
     await fs.rename(temporary, target);
-    await fs.chmod(target, 0o644).catch(() => undefined);
   } catch (error) {
+    // Le chiffré n'a pas pris sa place : la ligne ne doit pas déclarer scellé
+    // ce qui est encore en clair (en place) ou absent (clé neuve).
+    await params.access.store.remove(params.targetKey).catch(() => undefined);
     await fs.unlink(temporary).catch(() => undefined);
     throw error;
   }
+  await fs.chmod(target, 0o644).catch(() => undefined);
   return record;
 }
 
@@ -258,12 +289,20 @@ export async function readStoredFileBytes(absolutePath: string, options: {
   readonly uploadRoot: string;
   readonly access?: AtRestFileAccess | null;
 }): Promise<Buffer> {
+  return (await readStoredFile(absolutePath, options)).bytes;
+}
+
+/** Le clair, et s'il venait d'un fichier SCELLÉ : son contenu ne doit alors se ranger nulle part (#13102). */
+export async function readStoredFile(absolutePath: string, options: {
+  readonly uploadRoot: string;
+  readonly access?: AtRestFileAccess | null;
+}): Promise<{ readonly bytes: Buffer; readonly sealed: boolean }> {
   const access = options.access === undefined ? processAtRestFileAccess() : options.access;
   const storageKey = storageKeyOfPath(absolutePath, options.uploadRoot);
   const record = storageKey && access ? await access.store.find(storageKey) : null;
   if (!record) {
     if (storageKey && !access && isSealedStorageKey(storageKey)) throw new AtRestFileUnreadableError('no-access');
-    return fs.readFile(absolutePath);
+    return { bytes: await fs.readFile(absolutePath), sealed: false };
   }
   const stats = await fs.stat(absolutePath);
   const cipher: OpenableBytes = {
@@ -272,7 +311,7 @@ export async function readStoredFileBytes(absolutePath: string, options: {
     open: async (range) => (range ? createReadStream(absolutePath, { start: range.start, end: range.end }) : createReadStream(absolutePath)),
   };
   const stream = await openSealedStoredBytes(cipher, record, access!.keyring).open();
-  return stream ? collect(stream) : Buffer.alloc(0);
+  return { bytes: stream ? await collect(stream) : Buffer.alloc(0), sealed: true };
 }
 
 /**
