@@ -82,4 +82,15 @@ final class MessageStoreDatabaseTests: XCTestCase {
         }
         XCTAssertEqual(seconds, 5)
     }
+
+    func test_openForNotificationExtension_waitsOnTheAppWriterInsteadOfDroppingTheBubble() throws {
+        let path = try makeDirectory().appendingPathComponent("e.sqlite").path
+
+        let extensionStore = try MessageStoreDatabase.openForNotificationExtension(path: path)
+
+        guard case .timeout(let seconds) = extensionStore.pool.configuration.busyMode else {
+            return XCTFail("an SQLITE_BUSY in the extension silently loses the pre-persisted bubble")
+        }
+        XCTAssertEqual(seconds, 5)
+    }
 }
