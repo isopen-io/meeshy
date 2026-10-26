@@ -31,7 +31,7 @@ final class AttachmentReactionPersistenceTests: XCTestCase {
         actor = MessagePersistenceActor(dbWriter: dbQueue)
     }
 
-    /// Le décodeur est celui de la PRODUCTION (`APIClient.makeAPIPayloadDecoder`) :
+    /// Le décodeur est celui de la PRODUCTION (`MeeshyCoders.decoder(.api)`) :
     /// un `.iso8601` nu refuserait les fractions de seconde du gateway — un
     /// témoin qui fabrique son décodeur mesure le RUNTIME, pas la règle.
     private func makeAPIMessage(reactions: [String: Int]?, mine: [String]?) throws -> APIMessage {
@@ -56,7 +56,7 @@ final class AttachmentReactionPersistenceTests: XCTestCase {
             "attachments": [piece],
         ]
         let data = try JSONSerialization.data(withJSONObject: json)
-        return try APIClient.makeAPIPayloadDecoder().decode(APIMessage.self, from: data)
+        return try MeeshyCoders.decoder(.api).decode(APIMessage.self, from: data)
     }
 
     // MARK: - Le chemin du CACHE — celui que la liste des bulles relit

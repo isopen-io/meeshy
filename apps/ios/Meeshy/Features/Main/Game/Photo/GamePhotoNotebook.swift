@@ -1,5 +1,6 @@
 import Foundation
 import UIKit
+import MeeshySDK
 
 /// Comment la photo du moment a été faite.
 nonisolated enum PhotoMode: String, Codable, Sendable, Equatable {
@@ -323,15 +324,13 @@ final class GamePhotoNotebook: GamePhotoNotebooking {
     fileprivate nonisolated static func readIndex(in directory: URL) throws -> [NotebookEntry] {
         let url = indexURL(in: directory)
         guard FileManager.default.fileExists(atPath: url.path) else { return [] }
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
+        let decoder = MeeshyCoders.decoder(.persistence)
         return try decoder.decode([NotebookEntry].self, from: Data(contentsOf: url))
     }
 
     fileprivate nonisolated static func writeIndex(_ entries: [NotebookEntry], in directory: URL) throws {
         try ensureDirectory(directory)
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
+        let encoder = MeeshyCoders.encoder(.persistence)
         try encoder.encode(entries).write(to: indexURL(in: directory), options: [.atomic, .completeFileProtection])
     }
 

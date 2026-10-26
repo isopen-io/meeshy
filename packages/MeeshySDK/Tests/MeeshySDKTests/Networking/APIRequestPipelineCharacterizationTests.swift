@@ -109,6 +109,19 @@ final class APIRequestPipelineCharacterizationTests: XCTestCase {
         }
     }
 
+    func test_post_writesBodyDatesToTheMillisecond() async throws {
+        struct Body: Encodable { let at: Date }
+        let client = makeClient(token: Self.tokenOne)
+        PipelineStubProtocol.script = [.http(200, [:], #"{"success":true,"data":{"ok":true}}"#)]
+
+        let _: APIResponse<Pong> = try await client.post(
+            endpoint: "/stamps", body: Body(at: Date(timeIntervalSince1970: 1_757_928_863.563))
+        )
+
+        let body = try XCTUnwrap(PipelineStubProtocol.requests.first?.body)
+        XCTAssertEqual(String(decoding: body, as: UTF8.self), #"{"at":"2025-09-15T09:34:23.563Z"}"#)
+    }
+
     func test_request_callerHeadersOverrideAuthorizationAndContentType() async throws {
         let client = makeClient(token: Self.tokenOne)
         PipelineStubProtocol.script = [.http(200, [:], Self.okBody)]

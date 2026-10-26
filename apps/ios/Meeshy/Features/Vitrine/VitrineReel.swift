@@ -134,7 +134,7 @@ nonisolated enum VitrinePostServi {
             "shareCount": 0,
             "media": medias(retenus: corps.mediaIds ?? [], televerses: televerses),
         ]
-        let decodeur = APIClient.makeAPIPayloadDecoder()
+        let decodeur = MeeshyCoders.decoder(.api)
         if let effets = corps.storyEffects.flatMap({ try? JSONSerialization.jsonObject(with: JSONEncoder().encode($0)) }) {
             objet["storyEffects"] = adressesDeLaScene(effets, televerses: televerses)
             if let post = try? decodeur.decode(APIPost.self, from: JSONSerialization.data(withJSONObject: objet)) { return post }

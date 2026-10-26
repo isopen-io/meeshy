@@ -161,7 +161,7 @@ final class VitrineCommentaireServeur {
     }
 
     private static func decoder<T: Decodable>(_ type: T.Type, _ objet: [String: Any]) throws -> T {
-        try APIClient.makeAPIPayloadDecoder().decode(type, from: JSONSerialization.data(withJSONObject: objet))
+        try MeeshyCoders.decoder(.api).decode(type, from: JSONSerialization.data(withJSONObject: objet))
     }
 
     /// Un ObjectId plausible : 24 caractères hexadécimaux.

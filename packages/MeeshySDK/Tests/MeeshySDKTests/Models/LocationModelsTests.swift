@@ -66,7 +66,7 @@ final class LocationModelsTests: XCTestCase {
 
     // MARK: - APIMessage.location (lieu partage hisse par le gateway)
 
-    /// Le décodeur est celui de la PRODUCTION (`APIClient.makeAPIPayloadDecoder`).
+    /// Le décodeur est celui de la PRODUCTION (`MeeshyCoders.decoder(.api)`).
     /// Un `JSONDecoder` local en `.iso8601` refuse les fractions de seconde que
     /// le gateway émet (`…T10:00:00.000Z`) : le test échouait alors sur sa propre
     /// fixture, pas sur le code produit.
@@ -76,7 +76,7 @@ final class LocationModelsTests: XCTestCase {
          "createdAt":"2026-07-29T10:00:00.000Z",
          "location":{"latitude":48.8566,"longitude":2.3522,"name":"Tour Eiffel"}}
         """.utf8)
-        let message = try APIClient.makeAPIPayloadDecoder().decode(APIMessage.self, from: json)
+        let message = try MeeshyCoders.decoder(.api).decode(APIMessage.self, from: json)
         XCTAssertEqual(message.location?.name, "Tour Eiffel")
     }
 
@@ -85,7 +85,7 @@ final class LocationModelsTests: XCTestCase {
         {"id":"m1","conversationId":"c1","senderId":"u1","content":"ici",
          "createdAt":"2026-07-29T10:00:00.000Z"}
         """.utf8)
-        let message = try APIClient.makeAPIPayloadDecoder().decode(APIMessage.self, from: json)
+        let message = try MeeshyCoders.decoder(.api).decode(APIMessage.self, from: json)
         XCTAssertNil(message.location)
     }
 
@@ -94,7 +94,7 @@ final class LocationModelsTests: XCTestCase {
     func test_apiPayloadDecoder_acceptsFractionalSecondsFromTheGateway() throws {
         let json = Data(#"{"createdAt":"2026-07-29T10:00:00.000Z"}"#.utf8)
         struct Probe: Decodable { let createdAt: Date }
-        let probe = try APIClient.makeAPIPayloadDecoder().decode(Probe.self, from: json)
+        let probe = try MeeshyCoders.decoder(.api).decode(Probe.self, from: json)
         XCTAssertEqual(probe.createdAt.timeIntervalSince1970, 1785319200, accuracy: 1)
     }
 

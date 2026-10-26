@@ -77,6 +77,11 @@ RULES = (
     _named("viewmodel-shared", r"\.shared\b", r"ViewModel[^/]*\.swift$"),
     Rule("unchecked-sendable", re.compile(r"@unchecked\s+Sendable"), "unchecked"),
     Rule("available-floor", re.compile(r"#available\(\s*iOS\s+(\d+)(?:\.(\d+))?"), "floor"),
+    _pattern(
+        "coder-strategy",
+        r"\.(?:date|key)(?:En|De)codingStrategy\s*=(?!=)",
+        ("packages/MeeshySDK/Sources/MeeshySDK/Utils/MeeshyCoders.swift",),
+    ),
     _pattern("environment-router", r"@EnvironmentObject\s+(?:\w+(?:\(set\))?\s+)*var\s+\w+\s*:\s*Router\b"),
     Rule(
         "narrative-comment",

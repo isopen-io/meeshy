@@ -406,8 +406,7 @@ public actor ConversationStateOutbox {
     }
 
     private func encodeMutation(_ mutation: UserStateMutation) -> String? {
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
+        let encoder = MeeshyCoders.encoder(.persistence)
         do {
             let data = try encoder.encode(mutation)
             guard let str = String(data: data, encoding: .utf8) else {
@@ -436,8 +435,7 @@ public actor ConversationStateOutbox {
             return nil
         }
 
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
+        let decoder = MeeshyCoders.decoder(.persistence)
         guard let data = mutationJSON.data(using: .utf8),
               let mutation = decoder.decodeOrLog(UserStateMutation.self, from: data,
                                                  field: "conversation state mutation",

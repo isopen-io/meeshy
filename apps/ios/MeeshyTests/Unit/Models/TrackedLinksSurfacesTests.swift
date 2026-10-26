@@ -26,7 +26,7 @@ final class TrackedLinksSurfacesTests: XCTestCase {
     private static let carteJSON = "[{\"url\":\"\(notes)\",\"token\":\"tok42\"}]"
 
     private func decode<T: Decodable>(_ type: T.Type, _ json: String) throws -> T {
-        try APIClient.makeAPIPayloadDecoder().decode(T.self, from: Data(json.utf8))
+        try MeeshyCoders.decoder(.api).decode(T.self, from: Data(json.utf8))
     }
 
     private func commentaireJSON(extra: String) -> String {

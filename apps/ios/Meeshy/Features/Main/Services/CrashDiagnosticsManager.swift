@@ -1,6 +1,7 @@
 import Foundation
 import MetricKit
 import os
+import MeeshySDK
 
 /// Captures, persists and surfaces crash & hang reports through two layers:
 ///
@@ -314,8 +315,7 @@ final class CrashDiagnosticsManager: NSObject {
     }
 
     private nonisolated static func makeDecoder() -> JSONDecoder {
-        let dec = JSONDecoder()
-        dec.dateDecodingStrategy = .iso8601
+        let dec = MeeshyCoders.decoder(.persistence)
         return dec
     }
 
@@ -342,8 +342,7 @@ final class CrashDiagnosticsManager: NSObject {
 
     private nonisolated static func persist(_ diag: CrashDiagnostic) {
         guard let dir = directoryURL() else { return }
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
+        let encoder = MeeshyCoders.encoder(.persistence)
         encoder.outputFormatting = .prettyPrinted
         // Ce fichier EST le rapport de crash : s'il n'est pas écrit, le
         // diagnostic est définitivement perdu au prochain lancement.

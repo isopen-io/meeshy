@@ -129,8 +129,7 @@ nonisolated final class ComposerAutosaveStore: ComposerAutosaveProviding, @unche
         for (fichier, blob) in write.blobs {
             try? blob.write(to: media.appendingPathComponent(fichier), options: .atomic)
         }
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
+        let encoder = MeeshyCoders.encoder(.persistence)
         guard let json = try? encoder.encode(write.snapshot) else {
             logger.error("autosave: instantané non encodable")
             return
@@ -171,8 +170,7 @@ nonisolated final class ComposerAutosaveStore: ComposerAutosaveProviding, @unche
     // MARK: - Lecture
 
     private func restore(directory: URL) -> ComposerAutosaveRestored? {
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
+        let decoder = MeeshyCoders.decoder(.persistence)
         guard let data = try? Data(contentsOf: directory.appendingPathComponent("snapshot.json")),
               let snapshot = try? decoder.decode(ComposerAutosaveSnapshot.self, from: data) else { return nil }
         let media = directory.appendingPathComponent("media", isDirectory: true)

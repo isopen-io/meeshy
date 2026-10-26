@@ -42,8 +42,7 @@ extension StoryViewModel {
 
         let slides: [StorySlide]
         do {
-            let decoder = JSONDecoder()
-            decoder.dateDecodingStrategy = .iso8601
+            let decoder = MeeshyCoders.decoder(.persistence)
             slides = try decoder.decode([StorySlide].self, from: item.slidesPayload)
         } catch {
             throw StoryPublishUnrecoverableError("Invalid slidesPayload: \(error.localizedDescription)")
@@ -368,8 +367,7 @@ extension StoryViewModel {
             videoURLs: loadedVideoURLs
         )
         guard let queueId else { return enriched }
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
+        let encoder = MeeshyCoders.encoder(.persistence)
         // La mise à niveau du payload PERSISTÉ est best-effort : son échec ne
         // dit rien des thumbHashes en mémoire, qui restent parfaitement
         // valides. Retourner les slides brutes priverait la story de son
@@ -630,8 +628,7 @@ extension StoryViewModel {
         _ item: StoryPublishQueueItem,
         draftStore: StoryDraftStore = .shared
     ) async -> String? {
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
+        let decoder = MeeshyCoders.decoder(.persistence)
         guard let slides = try? decoder.decode([StorySlide].self, from: item.slidesPayload),
               !slides.isEmpty else {
             Logger.stories.error(

@@ -16,8 +16,7 @@ public protocol OutboxDispatching: Sendable {
 @inline(__always)
 internal func reactionContext(for record: OutboxRecord) -> OfflineRetrySuccess.ReactionContext? {
     guard record.kind == .sendReaction else { return nil }
-    let decoder = JSONDecoder()
-    decoder.dateDecodingStrategy = .iso8601
+    let decoder = MeeshyCoders.decoder(.persistence)
     guard let payload = decoder.decodeOrLog(
         ReactionOutboxPayload.self,
         from: record.payload,
@@ -50,8 +49,7 @@ internal func reactionContext(for record: OutboxRecord) -> OfflineRetrySuccess.R
 @inline(__always)
 internal func cleanupLocalFiles(for record: OutboxRecord) {
     guard record.kind == .sendMessage else { return }
-    let decoder = JSONDecoder()
-    decoder.dateDecodingStrategy = .iso8601
+    let decoder = MeeshyCoders.decoder(.persistence)
     guard let item = decoder.decodeOrLog(
         OfflineQueueItem.self,
         from: record.payload,

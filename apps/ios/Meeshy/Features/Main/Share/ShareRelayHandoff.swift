@@ -1,4 +1,5 @@
 import Foundation
+import MeeshySDK
 
 /// **Le relais de l'extension de partage vers l'écran de partage de l'app**
 /// (#10947, D7 et fragment 3).
@@ -108,8 +109,7 @@ nonisolated struct ShareRelayHandoff: Codable, Equatable, Sendable {
 
     func write(in directory: URL) throws {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
+        let encoder = MeeshyCoders.encoder(.persistence)
         try encoder.encode(self).write(to: directory.appendingPathComponent("\(shareId).json"), options: .atomic)
     }
 
@@ -124,8 +124,7 @@ nonisolated struct ShareRelayHandoff: Codable, Equatable, Sendable {
     /// jamais devinée ; une fiche périmée est effacée.
     static func next(id: String?, in directory: URL, servableTo userId: String, now: Date = Date()) -> ShareRelayHandoff? {
         guard let files = try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil) else { return nil }
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
+        let decoder = MeeshyCoders.decoder(.persistence)
         let fiches = files.filter { $0.pathExtension == "json" }.compactMap { url -> ShareRelayHandoff? in
             guard let data = try? Data(contentsOf: url), let fiche = try? decoder.decode(ShareRelayHandoff.self, from: data),
                   fiche.version <= currentVersion else { return nil }

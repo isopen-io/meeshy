@@ -79,12 +79,8 @@ public actor EngagementOutbox {
         }
     }
 
-    private static let encoder: JSONEncoder = {
-        let e = JSONEncoder(); e.outputFormatting = [.sortedKeys]; e.dateEncodingStrategy = .iso8601; return e
-    }()
-    private static let decoder: JSONDecoder = {
-        let d = JSONDecoder(); d.dateDecodingStrategy = .iso8601; return d
-    }()
+    private static let encoder = MeeshyCoders.encoder(.outbox)
+    private static let decoder = MeeshyCoders.decoder(.outbox)
 
     /// Encodes a session to its stored JSON text, logging instead of
     /// returning a bare `nil` — a dropped encode means the session never

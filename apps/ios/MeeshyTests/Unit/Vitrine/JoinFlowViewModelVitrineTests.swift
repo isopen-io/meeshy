@@ -58,7 +58,7 @@ final class JoinFlowViewModelVitrineTests: XCTestCase {
     private static func info(linkId: String) throws -> ShareLinkInfo {
         let json = #"{"id":"l1","linkId":"LINK","conversation":{"id":"c1","type":"group","createdAt":"2026-09-30T12:00:00.000Z"},"creator":{"id":"u1","username":"aiko.t"},"stats":{"totalParticipants":6,"memberCount":6,"anonymousCount":0,"languageCount":5,"spokenLanguages":["ja","pt","en","ko","es"]}}"#
             .replacingOccurrences(of: "LINK", with: linkId)
-        return try APIClient.makeAPIPayloadDecoder().decode(ShareLinkInfo.self, from: Data(json.utf8))
+        return try MeeshyCoders.decoder(.api).decode(ShareLinkInfo.self, from: Data(json.utf8))
     }
 }
 

@@ -11,7 +11,7 @@ struct TrackedLinkSurfacesModelTests {
     private static let carteJSON = "[{\"url\":\"https://meeshy.me/notes\",\"token\":\"tok42\"}]"
 
     private func decode<T: Decodable>(_ type: T.Type, _ json: String) throws -> T {
-        try APIClient.makeAPIPayloadDecoder().decode(T.self, from: Data(json.utf8))
+        try MeeshyCoders.decoder(.api).decode(T.self, from: Data(json.utf8))
     }
 
     private func commentaire(_ extra: String) -> String {

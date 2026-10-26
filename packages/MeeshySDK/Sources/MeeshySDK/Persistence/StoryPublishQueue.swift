@@ -353,14 +353,12 @@ public actor StoryPublishQueue {
     private let logger = MeeshyLog.logger(.storyPublishQueue, subsystem: .legacySDK)
 
     private let encoder: JSONEncoder = {
-        let e = JSONEncoder()
-        e.dateEncodingStrategy = .iso8601
+        let e = MeeshyCoders.encoder(.persistence)
         return e
     }()
 
     private let decoder: JSONDecoder = {
-        let d = JSONDecoder()
-        d.dateDecodingStrategy = .iso8601
+        let d = MeeshyCoders.decoder(.persistence)
         return d
     }()
 
@@ -844,8 +842,7 @@ public actor StoryPublishQueue {
 
         do {
             let data = try Data(contentsOf: url)
-            let decoder = JSONDecoder()
-            decoder.dateDecodingStrategy = .iso8601
+            let decoder = MeeshyCoders.decoder(.persistence)
             return try decoder.decode([StoryPublishQueueItem].self, from: data)
         } catch {
             return []

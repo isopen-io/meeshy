@@ -8,10 +8,9 @@ import XCTest
 /// `Sources/` : un formateur ISO 8601 construit à la main, une heure seule, un
 /// `.formatted(.iso8601)` tronqué à la seconde.
 ///
-/// Elle ne vise pas les `JSONEncoder`/`JSONDecoder` de persistance locale
-/// (`dateEncodingStrategy = .iso8601` du cache, de GRDB, des files d'attente) :
-/// ils ne parlent pas à la passerelle, et aucune des formes ci-dessous ne les
-/// désigne.
+/// Les stratégies des `JSONEncoder`/`JSONDecoder` passent toutes par les
+/// préréglages de `MeeshyCoders` (#13130, #6625) : une stratégie de date ou de
+/// clé posée à la main est une reformulation de plus.
 final class WireDateSourceGuardTests: XCTestCase {
 
     private static let formesInterdites = [
@@ -20,11 +19,13 @@ final class WireDateSourceGuardTests: XCTestCase {
         "ISO8601FormatStyle(",
         ".formatted(.iso8601)",
         "strategy: .iso8601",
+        "codingStrategy = ",
     ]
 
     /// Chemin relatif au paquet → raison. Une exemption se justifie ou n'existe pas.
     private static let exemptions: [String: String] = [
         "Sources/MeeshySDK/Utils/WireDate.swift": "la source unique des dates du fil",
+        "Sources/MeeshySDK/Utils/MeeshyCoders.swift": "la source unique des codeurs JSON configurés",
     ]
 
     private static var racineDuPaquet: URL {
@@ -92,6 +93,7 @@ final class WireDateSourceGuardTests: XCTestCase {
         let c = Date.ISO8601FormatStyle(includingFractionalSeconds: true)
         let d = now.formatted(.iso8601)
         let e = try? Date(s, strategy: .iso8601)
+        decoder.dateDecodingStrategy = .iso8601
         let f = WireDate.string(from: now)
         """
         XCTAssertEqual(Self.violations(in: source).count, Self.formesInterdites.count)

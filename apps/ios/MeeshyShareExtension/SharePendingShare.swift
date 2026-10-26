@@ -1,4 +1,5 @@
 import Foundation
+import MeeshySDK
 
 /// La fiche de reprise écrite par l'extension, relue par l'app.
 ///
@@ -112,8 +113,7 @@ nonisolated struct SharePendingShare: Codable, Equatable, Sendable {
     }
 
     static func encoder() -> JSONEncoder {
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
+        let encoder = MeeshyCoders.encoder(.persistence)
         return encoder
     }
 

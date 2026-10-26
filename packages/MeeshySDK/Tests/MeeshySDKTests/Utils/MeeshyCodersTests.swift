@@ -9,7 +9,7 @@ final class MeeshyCodersTests: XCTestCase {
     }
 
     private static let gatewayPayload = Data(#"""
-    {"id":"m1","at":"2026-09-15T09:34:23.563Z"}
+    {"id":"m1","at":"2025-09-15T09:34:23.563Z"}
     """#.utf8)
 
     private static let millisecond = Date(timeIntervalSince1970: 1_757_928_863.563)
@@ -22,9 +22,9 @@ final class MeeshyCodersTests: XCTestCase {
     }
 
     func test_everyPreset_decodesDatesWithAndWithoutFractionalSeconds() throws {
-        let withFraction = Data(#"{"id":"a","at":"2026-09-15T09:34:23.563Z"}"#.utf8)
-        let withoutFraction = Data(#"{"id":"a","at":"2026-09-15T09:34:23Z"}"#.utf8)
-        let withOffset = Data(#"{"id":"a","at":"2026-09-15T11:34:23+02:00"}"#.utf8)
+        let withFraction = Data(#"{"id":"a","at":"2025-09-15T09:34:23.563Z"}"#.utf8)
+        let withoutFraction = Data(#"{"id":"a","at":"2025-09-15T09:34:23Z"}"#.utf8)
+        let withOffset = Data(#"{"id":"a","at":"2025-09-15T11:34:23+02:00"}"#.utf8)
         for preset in MeeshyCoders.Preset.allCases {
             let decoder = MeeshyCoders.decoder(preset)
             let fractional = try decoder.decode(Stamp.self, from: withFraction)

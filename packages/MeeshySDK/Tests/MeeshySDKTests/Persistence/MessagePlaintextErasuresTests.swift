@@ -146,7 +146,7 @@ final class MessagePlaintextErasuresTests: XCTestCase {
         let (actor, queue) = try makeActor()
         try insert(sealedRow(localId: "srv_18", serverId: "srv_18"), into: queue)
         try await actor.markDeletedAwaitingConfirmation(localId: "srv_18", deletedAt: Date())
-        let api = try APIClient.makeAPIPayloadDecoder().decode(APIMessage.self, from: Data("""
+        let api = try MeeshyCoders.decoder(.api).decode(APIMessage.self, from: Data("""
         {"id":"srv_18","conversationId":"\(conversationId)","senderId":"u-peer","content":"","isEncrypted":true,
          "encryptionMode":"e2ee","messageType":"text","messageSource":"user",
          "createdAt":"2026-10-25T12:00:00.000Z","deletedAt":"2026-10-25T12:01:00.000Z"}

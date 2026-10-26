@@ -9,13 +9,13 @@ import XCTest
 /// et un sticker vide doit valoir ABSENT. À l'écriture : `SendMessageRequest`
 /// l'encode sous la clé `sticker`, absente quand il n'y en a pas.
 ///
-/// Le décodeur est celui de la PRODUCTION (`APIClient.makeAPIPayloadDecoder`),
+/// Le décodeur est celui de la PRODUCTION (`MeeshyCoders.decoder(.api)`),
 /// comme dans `LocationModelsTests` : un `.iso8601` nu refuserait les
 /// fractions de seconde du gateway et le test rougirait sur son outillage.
 final class APIMessageStickerTests: XCTestCase {
 
     private func decodeMessage(_ json: String) throws -> APIMessage {
-        try APIClient.makeAPIPayloadDecoder().decode(APIMessage.self, from: Data(json.utf8))
+        try MeeshyCoders.decoder(.api).decode(APIMessage.self, from: Data(json.utf8))
     }
 
     private static let head = """
@@ -161,7 +161,7 @@ final class APIMessageStickerTests: XCTestCase {
 /// déclare rien.
 final class APIMessageEphemeralDurationBoundTests: XCTestCase {
     private func decode(_ duration: String) throws -> APIMessage {
-        try APIClient.makeAPIPayloadDecoder().decode(APIMessage.self, from: Data("""
+        try MeeshyCoders.decoder(.api).decode(APIMessage.self, from: Data("""
         {"id":"m1","conversationId":"c1","senderId":"u1","content":"x","createdAt":"2026-09-02T10:00:00.000Z","ephemeralDuration":\(duration)}
         """.utf8))
     }

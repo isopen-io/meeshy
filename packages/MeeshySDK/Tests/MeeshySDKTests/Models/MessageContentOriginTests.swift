@@ -336,7 +336,7 @@ final class MessageContentOriginTests: XCTestCase {
          "createdAt":"2026-10-18T08:00:00.000Z","updatedAt":"2026-10-18T08:00:00.000Z",
          "contentOrigin":{"kind":"decryptedOnDevice","digest":"\(validDigest)"}}
         """
-        let api = try APIClient.makeAPIPayloadDecoder().decode(APIMessage.self, from: Data(json.utf8))
+        let api = try MeeshyCoders.decoder(.api).decode(APIMessage.self, from: Data(json.utf8))
 
         let message = api.toMessage(currentUserId: "me")
 
@@ -353,7 +353,7 @@ final class MessageContentOriginTests: XCTestCase {
          "createdAt":"2026-10-18T08:00:00.000Z","updatedAt":"2026-10-18T08:00:00.000Z",
          "contentOrigin":{"kind":"decryptedOnDevice.v2","digest":"\(deviceDigest)"}}
         """
-        let api = try APIClient.makeAPIPayloadDecoder().decode(APIMessage.self, from: Data(json.utf8))
+        let api = try MeeshyCoders.decoder(.api).decode(APIMessage.self, from: Data(json.utf8))
 
         XCTAssertFalse(api.toMessage(currentUserId: "me").isContentDecryptedOnDevice)
     }
