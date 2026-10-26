@@ -98,6 +98,7 @@ fun BlockedTab(
                             pending = user.id in state.pendingIds,
                             onUnblock = { confirmTarget = user },
                             onOpenProfile = { onOpenProfile(user.id) },
+                            modifier = Modifier.animateItem(),
                         )
                     }
                 }
@@ -135,10 +136,11 @@ private fun BlockedRow(
     pending: Boolean,
     onUnblock: () -> Unit,
     onOpenProfile: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val name = user.blockedDisplayName()
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clickable(enabled = user.id.isNotBlank(), onClick = onOpenProfile)
             .padding(horizontal = 16.dp, vertical = 8.dp),

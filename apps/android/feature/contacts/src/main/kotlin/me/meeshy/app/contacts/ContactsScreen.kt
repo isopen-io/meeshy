@@ -1,6 +1,11 @@
 package me.meeshy.app.contacts
 
 import androidx.annotation.StringRes
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.CircleShape
@@ -45,6 +50,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -117,11 +123,7 @@ fun ContactsScreen(
                         selected = index == selectedIndex,
                         onClick = { viewModel.selectTab(tab) },
                         text = {
-                            if (badge > 0) {
-                                BadgedBox(badge = { Badge { Text(badge.toString()) } }) {
-                                    Text(stringResource(tab.labelRes))
-                                }
-                            } else {
+                            BadgedBox(badge = { RequestsCountBadge(count = badge) }) {
                                 Text(stringResource(tab.labelRes))
                             }
                         },
@@ -144,6 +146,16 @@ fun ContactsScreen(
         }
     }
     ConnectionFeedbackHost(feedback = viewModel.feedback)
+    }
+}
+
+/** The pending-requests count pops in and out instead of snapping (a request received live, the last one answered). */
+@Composable
+private fun RequestsCountBadge(count: Int) {
+    val lastShown = remember { intArrayOf(count) }
+    if (count > 0) lastShown[0] = count
+    AnimatedVisibility(visible = count > 0, enter = scaleIn() + fadeIn(), exit = scaleOut() + fadeOut()) {
+        Badge { Text(lastShown[0].toString()) }
     }
 }
 
@@ -177,7 +189,9 @@ private fun RequestsTab(
         contentPadding = PaddingValues(vertical = 8.dp),
     ) {
         if (state.receivedRequests.isNotEmpty()) {
-            item { SectionHeader(stringResource(R.string.contacts_requests_received)) }
+            item(key = "received-header") {
+                SectionHeader(stringResource(R.string.contacts_requests_received), Modifier.animateItem())
+            }
             items(state.receivedRequests, key = { "received-${it.id}" }) { request ->
                 ReceivedRequestRow(
                     request = request,
@@ -185,17 +199,21 @@ private fun RequestsTab(
                     onAccept = { onAccept(request.id) },
                     onDecline = { onDecline(request.id) },
                     onOpenProfile = { onOpenProfile(request.senderId) },
+                    modifier = Modifier.animateItem(),
                 )
             }
         }
         if (state.sentRequests.isNotEmpty()) {
-            item { SectionHeader(stringResource(R.string.contacts_requests_sent)) }
+            item(key = "sent-header") {
+                SectionHeader(stringResource(R.string.contacts_requests_sent), Modifier.animateItem())
+            }
             items(state.sentRequests, key = { "sent-${it.id}" }) { request ->
                 SentRequestRow(
                     request = request,
                     pending = request.id in state.pendingActionIds,
                     onCancel = { onCancel(request.id) },
                     onOpenProfile = { onOpenProfile(request.receiverId) },
+                    modifier = Modifier.animateItem(),
                 )
             }
         }
@@ -210,6 +228,7 @@ private fun ReceivedRequestRow(
     onAccept: () -> Unit,
     onDecline: () -> Unit,
     onOpenProfile: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val name = request.sender.displayLabel()
     RequestRow(
@@ -217,6 +236,7 @@ private fun ReceivedRequestRow(
         userId = request.senderId,
         subtitle = request.personalMessage() ?: stringResource(R.string.contacts_requests_received_intent),
         onOpenProfile = onOpenProfile,
+        modifier = modifier,
     ) {
         RoundAction(
             icon = Icons.Filled.Close,
@@ -244,10 +264,17 @@ private fun SentRequestRow(
     pending: Boolean,
     onCancel: () -> Unit,
     onOpenProfile: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val name = request.receiver.displayLabel()
     val cancelDescription = stringResource(R.string.contacts_requests_cancel_a11y, name)
-    RequestRow(user = request.receiver, userId = request.receiverId, subtitle = null, onOpenProfile = onOpenProfile) {
+    RequestRow(
+        user = request.receiver,
+        userId = request.receiverId,
+        subtitle = null,
+        onOpenProfile = onOpenProfile,
+        modifier = modifier,
+    ) {
         Column(horizontalAlignment = Alignment.End) {
             Text(
                 text = stringResource(R.string.contacts_discover_pending),
@@ -296,11 +323,12 @@ private fun RequestRow(
     userId: String,
     subtitle: String?,
     onOpenProfile: () -> Unit,
+    modifier: Modifier = Modifier,
     actions: @Composable () -> Unit,
 ) {
     val name = user.displayLabel()
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clickable(enabled = userId.isNotBlank(), onClick = onOpenProfile)
             .padding(horizontal = 16.dp, vertical = 8.dp),
@@ -347,12 +375,12 @@ private fun RequestRow(
 }
 
 @Composable
-private fun SectionHeader(text: String) {
+private fun SectionHeader(text: String, modifier: Modifier = Modifier) {
     Text(
         text = text,
         style = MaterialTheme.typography.labelLarge,
         color = MeeshyPalette.Indigo500,
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+        modifier = modifier.padding(horizontal = 16.dp, vertical = 8.dp),
     )
 }
 

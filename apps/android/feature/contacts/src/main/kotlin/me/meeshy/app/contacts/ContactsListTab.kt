@@ -137,17 +137,27 @@ private fun FriendList(
         contentPadding = PaddingValues(vertical = 8.dp),
     ) {
         items(friends, key = { it.id }) { friend ->
-            FriendRow(friend, moodEmoji = moodEmojiFor(friend.id), onClick = { onOpenProfile(friend.id) })
+            FriendRow(
+                friend,
+                moodEmoji = moodEmojiFor(friend.id),
+                onClick = { onOpenProfile(friend.id) },
+                modifier = Modifier.animateItem(),
+            )
         }
     }
 }
 
 /** A contact row — iOS `ContactRow`: the whole row opens the profile, presence sits ON the avatar. */
 @Composable
-private fun FriendRow(friend: FriendRequestUser, moodEmoji: String?, onClick: () -> Unit) {
+private fun FriendRow(
+    friend: FriendRequestUser,
+    moodEmoji: String?,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val name = friend.resolvedName.ifBlank { friend.username.ifBlank { "?" } }
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clickable(enabled = friend.id.isNotBlank(), role = Role.Button, onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 8.dp),

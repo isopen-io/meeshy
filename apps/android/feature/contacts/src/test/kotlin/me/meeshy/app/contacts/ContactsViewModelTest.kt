@@ -98,6 +98,46 @@ class ContactsViewModelTest {
     }
 
     @Test
+    fun `a request received live while a fetch is in flight is fetched again rather than erased by that fetch`() = runTest {
+        val cache = FriendshipCache()
+        val vm = viewModel(cache = cache)
+        val stale = CompletableDeferred<NetworkResult<List<FriendRequest>>>()
+        coEvery { repository.receivedRequests(any(), any()) } coAnswers { stale.await() }
+        vm.refresh()
+
+        cache.didReceiveRequest("alice", "r9")
+        coEvery { repository.receivedRequests(any(), any()) } returns NetworkResult.Success(
+            listOf(FriendRequest(id = "r9", status = "pending", senderId = "alice")),
+        )
+        stale.complete(NetworkResult.Success(emptyList()))
+
+        assertThat(vm.state.value.receivedRequests.map { it.id }).containsExactly("r9")
+        assertThat(cache.currentReceivedPendingSenderIds).containsExactly("alice")
+    }
+
+    @Test
+    fun `a request received live while an answer is in flight appears once the answer settles`() = runTest {
+        val cache = FriendshipCache()
+        val vm = viewModel(
+            received = listOf(FriendRequest(id = "r1", status = "pending", senderId = "bob")),
+            cache = cache,
+        )
+        val answer = CompletableDeferred<NetworkResult<FriendRequest>>()
+        coEvery { repository.respond("r1", true) } coAnswers { answer.await() }
+        vm.acceptRequest("r1")
+
+        cache.didReceiveRequest("alice", "r9")
+        coEvery { repository.receivedRequests(any(), any()) } returns NetworkResult.Success(
+            listOf(FriendRequest(id = "r9", status = "pending", senderId = "alice")),
+        )
+        assertThat(vm.state.value.receivedRequests).isEmpty()
+
+        answer.complete(NetworkResult.Success(request("r1", "accepted")))
+
+        assertThat(vm.state.value.receivedRequests.map { it.id }).containsExactly("r9")
+    }
+
+    @Test
     fun `refresh asks the network again even when both lists are on screen`() = runTest {
         val vm = viewModel(received = listOf(request("r1")))
 
