@@ -23,7 +23,7 @@ from typing import Optional, Dict, Any, List
 from dataclasses import dataclass
 from datetime import datetime
 
-from services.task_privacy import current_message_id, in_at_rest_task
+from services.task_privacy import cache_allowed, current_message_id
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +38,10 @@ try:
     logger.info("✅ [REDIS] redis-py async disponible")
 except ImportError:
     logger.warning("⚠️ [REDIS] redis-py non disponible - cache mémoire uniquement")
+
+
+class ErasureNotConfirmedError(RuntimeError):
+    """#13102 — Redis n'a pas confirmé un effacement : rien ne s'acquitte."""
 
 
 @dataclass
@@ -246,6 +250,46 @@ class RedisService:
         regex = re.compile(regex_pattern)
         return [key for key in self.memory_cache.keys() if regex.match(key)]
 
+    # ─────────────────────────────────────────────────────────────────────────
+    # EFFACEMENT CONFIRMÉ (#13102) — jamais de repli silencieux
+    # ─────────────────────────────────────────────────────────────────────────
+
+    def _require_redis(self) -> None:
+        if self.permanently_disabled or not self.is_redis_available or not self.redis:
+            raise ErasureNotConfirmedError("Redis indisponible : l'effacement ne peut pas être confirmé")
+
+    async def get_confirmed(self, key: str) -> Optional[str]:
+        """Lit dans REDIS seulement : une lecture mémoire ne dirait rien de ce que Redis garde."""
+        self._require_redis()
+        try:
+            return await self.redis.get(key)
+        except Exception as error:
+            raise ErasureNotConfirmedError(type(error).__name__) from error
+
+    async def scan_keys_confirmed(self, pattern: str) -> List[str]:
+        """Les clés de ce motif, par SCAN (jamais KEYS, qui bloque Redis), dans Redis seulement."""
+        self._require_redis()
+        try:
+            return [key async for key in self.redis.scan_iter(match=pattern, count=500)]
+        except Exception as error:
+            raise ErasureNotConfirmedError(type(error).__name__) from error
+
+    async def delete_confirmed(self, keys: List[str]) -> int:
+        """
+        Efface ces clés de Redis ET du cache mémoire de repli, et rend combien
+        Redis en a effacé. Lève si Redis ne CONFIRME pas : l'appelant ne doit
+        jamais acquitter un effacement qui n'a pas eu lieu.
+        """
+        for key in keys:
+            self.memory_cache.pop(key, None)
+        if not keys:
+            return 0
+        self._require_redis()
+        try:
+            return int(await self.redis.delete(*keys))
+        except Exception as error:
+            raise ErasureNotConfirmedError(type(error).__name__) from error
+
     async def exists(self, key: str) -> bool:
         """Vérifie si une clé existe"""
         # Essayer Redis si disponible
@@ -390,7 +434,7 @@ class TranslationCacheService:
             Dict avec 'translated_text', 'model_type', 'cached_at' ou None
         """
         # #13102 — une tâche au repos ne lit rien du cache.
-        if in_at_rest_task():
+        if not cache_allowed():
             return None
 
         # Vérifier par hash du texte
@@ -420,7 +464,8 @@ class TranslationCacheService:
         target_lang: str,
         translated_text: str,
         model_type: str = "premium",
-        ttl: int = None
+        ttl: int = None,
+        message_id: Optional[str] = None
     ) -> bool:
         """
         Sauvegarde une traduction dans le cache.
@@ -434,7 +479,7 @@ class TranslationCacheService:
             ttl: Durée de vie en secondes (défaut: 1 mois)
         """
         # #13102 — ni le texte ni sa traduction d'une tâche au repos ne se rangent.
-        if in_at_rest_task():
+        if not cache_allowed():
             return False
 
         cache_hash = self._compute_hash(text, source_lang, target_lang, model_type)
@@ -453,8 +498,9 @@ class TranslationCacheService:
         # Stocker par hash (réutilisation cross-message/segment)
         success = await self.redis.setex(key, ttl, json.dumps(cache_data))
 
-        # #13102 — indexée sous le message qui l'a fait naître : oubliable par son identifiant.
-        message_id = current_message_id()
+        # #13102 — indexée sous le message qui l'a fait naître (explicite, sinon
+        # celui de la tâche) : oubliable par son identifiant.
+        message_id = message_id or current_message_id()
         if success and message_id:
             await self.redis.setex(self.message_index_pattern.format(message_id=message_id, hash=cache_hash), ttl, "1")
 
@@ -489,13 +535,10 @@ class TranslationCacheService:
         voyager pour être oublié. Idempotent.
         """
         prefix = self.message_index_pattern.format(message_id=message_id, hash="")
-        deleted = 0
-        for index_key in await self.redis.keys(f"{prefix}*"):
-            cache_key = self.key_pattern.format(hash=index_key[len(prefix):])
-            if await self.redis.exists(cache_key):
-                await self.redis.delete(cache_key)
-                deleted += 1
-            await self.redis.delete(index_key)
+        index_keys = await self.redis.scan_keys_confirmed(f"{prefix}*")
+        cache_keys = [self.key_pattern.format(hash=key[len(prefix):]) for key in index_keys]
+        deleted = await self.redis.delete_confirmed(cache_keys)
+        await self.redis.delete_confirmed(index_keys)
         return deleted
 
     async def invalidate_translation(self, text: str, source_lang: str, target_lang: str, model_type: str = "premium") -> bool:
@@ -577,7 +620,7 @@ class AudioCacheService:
         Stocke le mapping attachment_id -> audio_hash pour référence rapide.
         """
         # #13102 — une tâche au repos calcule l'empreinte sans rien ranger.
-        if in_at_rest_task():
+        if not cache_allowed():
             return self.compute_audio_hash(audio_path)
 
         # Vérifier si le mapping existe
@@ -600,7 +643,7 @@ class AudioCacheService:
 
     async def get_transcription_by_hash(self, audio_hash: str) -> Optional[Dict[str, Any]]:
         """Récupère une transcription par hash audio (cross-conversation)"""
-        if in_at_rest_task():
+        if not cache_allowed():
             return None
         key = self.key_transcription_by_hash.format(audio_hash=audio_hash)
         data = await self.redis.get(key)
@@ -611,7 +654,7 @@ class AudioCacheService:
 
     async def set_transcription_by_hash(self, audio_hash: str, transcription: Dict[str, Any], ttl: int = None) -> bool:
         """Sauvegarde une transcription par hash audio"""
-        if in_at_rest_task():
+        if not cache_allowed():
             return False
         key = self.key_transcription_by_hash.format(audio_hash=audio_hash)
         ttl = ttl or self.ttl_transcription
@@ -632,7 +675,7 @@ class AudioCacheService:
             if cached:
                 return cached
 
-        if in_at_rest_task():
+        if not cache_allowed():
             return None
 
         # Fallback sur attachment_id (legacy)
@@ -644,7 +687,7 @@ class AudioCacheService:
 
     async def set_transcription(self, attachment_id: str, transcription: Dict[str, Any], audio_path: str = None, ttl: int = None) -> bool:
         """Sauvegarde une transcription - utilise hash si audio_path fourni"""
-        if in_at_rest_task():
+        if not cache_allowed():
             return False
         ttl = ttl or self.ttl_transcription
 
@@ -663,7 +706,7 @@ class AudioCacheService:
 
     async def get_translated_audio_by_hash(self, audio_hash: str, lang: str) -> Optional[Dict[str, Any]]:
         """Récupère un audio traduit par hash (cross-conversation)"""
-        if in_at_rest_task():
+        if not cache_allowed():
             return None
         key = self.key_translated_audio_by_hash.format(audio_hash=audio_hash, lang=lang)
         data = await self.redis.get(key)
@@ -674,7 +717,7 @@ class AudioCacheService:
 
     async def set_translated_audio_by_hash(self, audio_hash: str, lang: str, audio_data: Dict[str, Any], ttl: int = None) -> bool:
         """Sauvegarde un audio traduit par hash"""
-        if in_at_rest_task():
+        if not cache_allowed():
             return False
         key = self.key_translated_audio_by_hash.format(audio_hash=audio_hash, lang=lang)
         ttl = ttl or self.ttl_translated_audio
@@ -705,7 +748,7 @@ class AudioCacheService:
             if cached:
                 return cached
 
-        if in_at_rest_task():
+        if not cache_allowed():
             return None
 
         # Fallback sur attachment_id (legacy)
@@ -717,7 +760,7 @@ class AudioCacheService:
 
     async def set_translated_audio(self, attachment_id: str, lang: str, audio_data: Dict[str, Any], audio_path: str = None, ttl: int = None) -> bool:
         """Sauvegarde un audio traduit - utilise hash si audio_path fourni"""
-        if in_at_rest_task():
+        if not cache_allowed():
             return False
         ttl = ttl or self.ttl_translated_audio
 
@@ -738,20 +781,16 @@ class AudioCacheService:
         une pièce déjà oubliée, ou jamais vue, ne fait rien.
         """
         mapping_key = self.key_audio_hash_mapping.format(attachment_id=attachment_id)
-        audio_hash = await self.redis.get(mapping_key)
+        audio_hash = await self.redis.get_confirmed(mapping_key)
         keys = [
-            mapping_key,
             self.key_transcription.format(attachment_id=attachment_id),
-            *(await self.redis.keys(self.key_translated_audio.format(attachment_id=attachment_id, lang="*"))),
+            *(await self.redis.scan_keys_confirmed(self.key_translated_audio.format(attachment_id=attachment_id, lang="*"))),
         ]
         if audio_hash:
             keys.append(self.key_transcription_by_hash.format(audio_hash=audio_hash))
-            keys.extend(await self.redis.keys(self.key_translated_audio_by_hash.format(audio_hash=audio_hash, lang="*")))
-        deleted = 0
-        for key in dict.fromkeys(keys):
-            if await self.redis.exists(key):
-                await self.redis.delete(key)
-                deleted += 1
+            keys.extend(await self.redis.scan_keys_confirmed(self.key_translated_audio_by_hash.format(audio_hash=audio_hash, lang="*")))
+        deleted = await self.redis.delete_confirmed(list(dict.fromkeys(keys)))
+        await self.redis.delete_confirmed([mapping_key])
         return deleted
 
     # ─────────────────────────────────────────────────────────────────────────

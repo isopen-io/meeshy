@@ -4,24 +4,27 @@
 
 La passerelle déclare le régime sur la requête (`atRest: true`, comme le
 texte depuis #12822). Le handler l'installe pour la DURÉE de la tâche
-(`at_rest_scope`) ; les services de cache (`AudioCacheService`,
-`TranslationCacheService`) le lisent eux-mêmes et ne lisent ni n'écrivent
-rien pendant une tâche au repos — transcription, traductions, pistes TTS,
-table de correspondance `attachmentId → empreinte`. Un seul point de garde,
-que chaque étage du pipeline traverse sans avoir à le transporter.
+(`task_scope`) ; les services de cache (`AudioCacheService`,
+`TranslationCacheService`) le lisent eux-mêmes. FAIL-CLOSED : le cache ne se
+lit ni ne s'écrit que sous un régime DÉCLARÉ ordinaire (`False`). Une tâche
+au repos (`True`) et une tâche dont personne n'a déclaré le régime (`None`,
+le défaut — un thread où le contexte n'aurait pas été recopié, une porte qui
+l'aurait oublié) ne rangent rien et ne journalisent pas leur texte.
 
 `contextvars` suit la tâche asyncio et les sous-tâches qu'elle crée
-(`asyncio.gather`, `create_task` copient le contexte) : deux tâches
-concurrentes de régimes différents ne se contaminent pas.
+(`asyncio.gather`, `create_task` copient le contexte) ; un thread ne le reçoit
+QUE par `contextvars.copy_context().run(...)` (`run_in_thread_with_context`).
+Deux tâches concurrentes de régimes différents ne se contaminent pas.
 """
 
+import contextvars
 import functools
 from contextlib import contextmanager
 from contextvars import ContextVar
 import re
 from typing import Iterator, Optional
 
-_AT_REST: ContextVar[bool] = ContextVar("meeshy_task_at_rest", default=False)
+_AT_REST: ContextVar[Optional[bool]] = ContextVar("meeshy_task_at_rest", default=None)
 _MESSAGE: ContextVar[Optional[str]] = ContextVar("meeshy_task_message_id", default=None)
 _OBJECT_ID = re.compile(r"^[0-9a-f]{24}$")
 
@@ -32,7 +35,13 @@ def request_is_at_rest(request_data: dict) -> bool:
 
 
 def in_at_rest_task() -> bool:
-    return _AT_REST.get()
+    """Le régime déclaré est « au repos » — ou n'est pas déclaré du tout : les deux se taisent."""
+    return _AT_REST.get() is not False
+
+
+def cache_allowed() -> bool:
+    """Le cache ne sert qu'une tâche dont le régime ORDINAIRE a été déclaré."""
+    return _AT_REST.get() is False
 
 
 @contextmanager
@@ -92,4 +101,13 @@ def under_declared_regime(handler):
         with task_scope(request_is_at_rest(request_data), message_id):
             return await handler(self, request_data, *args, **kwargs)
     return wrapper
+
+
+def run_in_thread_with_context(executor_submit, fn, *args):
+    """
+    Soumet `fn` à un pool de threads AVEC le contexte courant (régime et
+    message) : `run_in_executor` et `ThreadPoolExecutor.submit` ne le recopient
+    pas, et un thread sans contexte retomberait sur le régime non déclaré.
+    """
+    return executor_submit(contextvars.copy_context().run, fn, *args)
 

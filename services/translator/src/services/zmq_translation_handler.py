@@ -29,6 +29,7 @@ except ImportError:
 
 # Import de la configuration des limites
 from config.message_limits import can_translate_message
+from services.task_privacy import under_declared_regime
 
 # Import des constantes de disponibilité des pipelines
 try:
@@ -599,6 +600,7 @@ class TranslationHandler:
 
         return "Erreur de validation inconnue"
 
+    @under_declared_regime
     async def _handle_story_text_object_translation(self, request_data: dict):
         """
         Traduit un textObject de story en N langues et publie un event combine.
@@ -716,8 +718,15 @@ class TranslationHandler:
         from services.cache_forget import forget_cached_content, parse_forget_request
         from services.redis_service import get_audio_cache_service, get_translation_cache_service
 
+        from services.redis_service import ErasureNotConfirmedError
+
         request = parse_forget_request(request_data)
-        deleted = await forget_cached_content(get_audio_cache_service(), get_translation_cache_service(), request)
+        try:
+            deleted = await forget_cached_content(get_audio_cache_service(), get_translation_cache_service(), request)
+        except ErasureNotConfirmedError as error:
+            # Fail-closed : sans confirmation de Redis, aucun acquittement — la passerelle rejoue.
+            logger.warning(f"[TRANSLATOR] Oubli NON confirmé, non acquitté (rejeu attendu) : {error}")
+            return
         logger.info(f"[TRANSLATOR] Oubli : {len(request['attachmentIds'])} pièce(s), {len(request['messageIds'])} message(s), {deleted} clé(s) effacée(s)")
         if self.pub_socket and request['requestId']:
             done = {'type': 'cache_forget_done', 'requestId': request['requestId'], 'deleted': deleted}

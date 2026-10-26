@@ -102,7 +102,8 @@ class TranslationCache:
         target_lang: str,
         translated_text: str,
         model_type: str,
-        ttl: Optional[int] = None
+        ttl: Optional[int] = None,
+        message_id: Optional[str] = None
     ):
         """
         Enregistre une traduction dans le cache
@@ -125,7 +126,8 @@ class TranslationCache:
                 target_lang=target_lang,
                 translated_text=translated_text,
                 model_type=model_type,
-                ttl=ttl
+                ttl=ttl,
+                message_id=message_id
             )
         except Exception as e:
             logger.debug(f"Erreur mise en cache: {e}")
@@ -209,7 +211,8 @@ class TranslationCache:
         cache_items: List[Tuple[str, str]],
         source_lang: str,
         target_lang: str,
-        model_type: str
+        model_type: str,
+        message_id: Optional[str] = None
     ):
         """
         Met en cache plusieurs résultats en parallèle (fire-and-forget)
@@ -232,7 +235,8 @@ class TranslationCache:
                     source_lang=source_lang,
                     target_lang=target_lang,
                     translated_text=trans_text,
-                    model_type=model_type
+                    model_type=model_type,
+                    message_id=message_id
                 )
                 tasks.append(task)
 

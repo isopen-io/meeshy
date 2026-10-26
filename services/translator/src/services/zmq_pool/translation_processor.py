@@ -361,7 +361,8 @@ async def _translate_single_language(
                     source_lang=task.source_language,
                     target_lang=target_language,
                     translated_text=result['translated_text'],
-                    model_type=task.model_type
+                    model_type=task.model_type,
+                    message_id=task.message_id
                 )
 
             return {

@@ -14,6 +14,16 @@ import pytest
 from services.redis_service import TranslationCacheService
 
 
+@pytest.fixture(autouse=True)
+def _ordinary_regime():
+    """#13102 — le cache ne sert qu'une tâche au régime ordinaire DÉCLARÉ : ces témoins en sont une."""
+    from services.task_privacy import at_rest_scope
+
+    with at_rest_scope(False):
+        yield
+
+
+
 class _FakeRedis:
     def __init__(self):
         self.store = {}
