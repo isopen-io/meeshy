@@ -38,8 +38,10 @@ import me.meeshy.ui.theme.MeeshyTheme
 internal fun PostOptionsButton(
     isOwn: Boolean,
     isBookmarked: Boolean,
+    hasText: Boolean,
     onShare: () -> Unit,
     onCopyLink: () -> Unit,
+    onCopyText: () -> Unit,
     onRepost: () -> Unit,
     onQuote: () -> Unit,
     onBookmarkToggle: () -> Unit,
@@ -57,10 +59,11 @@ internal fun PostOptionsButton(
             )
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            PostActionMenu.actions(PostActionContext(isOwn = isOwn, isBookmarked = isBookmarked)).forEach { action ->
+            PostActionMenu.actions(PostActionContext(isOwn = isOwn, isBookmarked = isBookmarked, hasText = hasText)).forEach { action ->
                 val (label, handler) = when (action) {
                     PostAction.Share -> stringResource(R.string.feed_action_share) to onShare
                     PostAction.CopyLink -> stringResource(R.string.feed_action_copy_link) to onCopyLink
+                    PostAction.CopyText -> stringResource(R.string.feed_action_copy_text) to onCopyText
                     PostAction.Repost -> stringResource(R.string.feed_action_repost) to onRepost
                     PostAction.Quote -> stringResource(R.string.feed_action_quote) to onQuote
                     PostAction.Bookmark -> stringResource(R.string.feed_action_bookmark) to onBookmarkToggle

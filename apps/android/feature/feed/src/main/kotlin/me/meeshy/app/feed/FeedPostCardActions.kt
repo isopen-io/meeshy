@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bookmark
@@ -19,8 +18,6 @@ import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -38,6 +35,7 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.feed.R
+import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
@@ -63,6 +61,8 @@ internal fun PostStatsRow(
             count = post.likeCount,
             contentDescription = likeLabel,
             tint = if (post.isLiked) MeeshyPalette.Error else MeeshyTheme.tokens.textSecondary,
+            active = post.isLiked,
+            heart = true,
             onClick = onLike,
         )
         StatAction(
@@ -81,6 +81,7 @@ internal fun PostStatsRow(
             count = post.bookmarkCount,
             contentDescription = bookmarkLabel,
             tint = if (post.isBookmarked) MeeshyPalette.Indigo500 else MeeshyTheme.tokens.textSecondary,
+            active = post.isBookmarked,
             onClick = onBookmark,
         )
     }
@@ -93,7 +94,10 @@ private fun StatAction(
     contentDescription: String,
     tint: Color,
     onClick: (() -> Unit)?,
+    active: Boolean = false,
+    heart: Boolean = false,
 ) {
+    val haptics = rememberMeeshyHaptics()
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs, Alignment.CenterHorizontally),
@@ -102,24 +106,13 @@ private fun StatAction(
             .clip(RoundedCornerShape(MeeshyRadius.pill))
             .let { base ->
                 if (onClick == null) base
-                else base.clickable(onClick = onClick).semantics { role = Role.Button }
+                else base.clickable(onClick = { haptics.light(); onClick() }).semantics { role = Role.Button }
             }
             .padding(horizontal = MeeshySpacing.xs)
             .semantics { this.contentDescription = contentDescription },
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = tint,
-            modifier = Modifier.size(18.dp),
-        )
-        if (count > 0) {
-            Text(
-                text = count.toString(),
-                style = MaterialTheme.typography.labelMedium,
-                color = MeeshyTheme.tokens.textSecondary,
-            )
-        }
+        EngagementIcon(icon = icon, active = active, tint = tint, burst = heart, tilt = heart)
+        EngagementCount(count = count, color = MeeshyTheme.tokens.textSecondary)
     }
 }
 

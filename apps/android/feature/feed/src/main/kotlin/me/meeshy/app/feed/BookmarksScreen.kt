@@ -75,6 +75,7 @@ fun BookmarksScreen(
     onBack: () -> Unit = {},
     onPostClick: (String) -> Unit = {},
     onOpenPost: (String) -> Unit = {},
+    onOpenProfile: ((String) -> Unit)? = null,
     viewModel: BookmarksViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -140,6 +141,8 @@ fun BookmarksScreen(
                                 viewModel.loadMoreIfNeeded(post.id)
                             }
                             SavedPostCard(
+                                modifier = Modifier.animateItem(),
+                                onOpenProfile = onOpenProfile,
                                 post = post,
                                 onRemove = { viewModel.removeBookmark(post.id) },
                                 onClick = { if (post.isReel) onPostClick(post.id) else onOpenPost(post.id) },
@@ -171,6 +174,8 @@ fun BookmarksScreen(
 
 @Composable
 private fun SavedPostCard(
+    modifier: Modifier = Modifier,
+    onOpenProfile: ((String) -> Unit)? = null,
     post: FeedPostPresentation,
     onRemove: () -> Unit,
     onClick: () -> Unit,
@@ -179,13 +184,19 @@ private fun SavedPostCard(
     val unknownAuthor = stringResource(R.string.feed_unknown_author)
     MeeshyGlassSurface(
         shape = RoundedCornerShape(MeeshyRadius.xl),
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
     ) {
         Column(Modifier.padding(MeeshySpacing.lg)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                MeeshyAvatar(name = post.authorName ?: unknownAuthor, size = 40.dp, imageUrl = post.authorAvatarUrl)
+                val profileTap = Modifier.opensAuthorProfile(post.authorId, onOpenProfile)
+                MeeshyAvatar(
+                    name = post.authorName ?: unknownAuthor,
+                    size = 40.dp,
+                    imageUrl = post.authorAvatarUrl,
+                    modifier = profileTap,
+                )
                 Spacer(Modifier.width(MeeshySpacing.md))
                 Column(Modifier.weight(1f)) {
                     Text(
@@ -193,6 +204,7 @@ private fun SavedPostCard(
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.SemiBold,
                         color = MeeshyTheme.tokens.textPrimary,
+                        modifier = profileTap,
                     )
                 }
                 IconButton(onClick = onRemove) {

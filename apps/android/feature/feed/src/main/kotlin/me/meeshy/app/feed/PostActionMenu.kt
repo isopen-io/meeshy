@@ -7,6 +7,7 @@ package me.meeshy.app.feed
 enum class PostAction {
     Share,
     CopyLink,
+    CopyText,
     Repost,
     Quote,
     Bookmark,
@@ -20,6 +21,8 @@ enum class PostAction {
 data class PostActionContext(
     val isOwn: Boolean,
     val isBookmarked: Boolean,
+    /** Le post porte du texte : sans lui, « Copier le texte » n'a rien a copier. */
+    val hasText: Boolean = true,
 )
 
 /**
@@ -37,6 +40,7 @@ object PostActionMenu {
     fun actions(ctx: PostActionContext): List<PostAction> = buildList {
         add(PostAction.Share)
         add(PostAction.CopyLink)
+        if (ctx.hasText) add(PostAction.CopyText)
         add(PostAction.Repost)
         add(PostAction.Quote)
         add(if (ctx.isBookmarked) PostAction.Unbookmark else PostAction.Bookmark)

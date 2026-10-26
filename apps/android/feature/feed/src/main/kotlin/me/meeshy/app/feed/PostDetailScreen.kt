@@ -82,6 +82,7 @@ import me.meeshy.ui.component.chrome.MeeshyGlassSurface
 import me.meeshy.ui.format.RelativeTimeFormat
 import me.meeshy.ui.format.rememberRelativeTimeStrings
 import me.meeshy.ui.format.shortDateTimeLabel
+import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
@@ -102,6 +103,7 @@ import java.util.Locale
 fun PostDetailScreen(
     onBack: () -> Unit = {},
     onOpenPost: (String) -> Unit = {},
+    onOpenProfile: ((String) -> Unit)? = null,
     viewModel: PostDetailViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -171,6 +173,7 @@ fun PostDetailScreen(
                         isReposted = state.isReposted,
                         onFlagTap = viewModel::onFlagTap,
                         onOpenPost = onOpenPost,
+                        onOpenProfile = onOpenProfile,
                         onRepost = viewModel::repost,
                         onQuote = viewModel::beginQuote,
                         onLike = viewModel::toggleLike,
@@ -200,6 +203,7 @@ private fun PostDetailContent(
     isReposted: Boolean,
     onFlagTap: (String) -> Unit,
     onOpenPost: (String) -> Unit,
+    onOpenProfile: ((String) -> Unit)?,
     onRepost: () -> Unit,
     onQuote: () -> Unit,
     onLike: () -> Unit,
@@ -223,7 +227,13 @@ private fun PostDetailContent(
         ) {
             Column(Modifier.padding(MeeshySpacing.lg)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    MeeshyAvatar(name = post.authorName ?: unknownAuthor, size = 44.dp, imageUrl = post.authorAvatarUrl)
+                    val profileTap = Modifier.opensAuthorProfile(post.authorId, onOpenProfile)
+                    MeeshyAvatar(
+                        name = post.authorName ?: unknownAuthor,
+                        size = 44.dp,
+                        imageUrl = post.authorAvatarUrl,
+                        modifier = profileTap,
+                    )
                     Spacer(Modifier.width(MeeshySpacing.md))
                     Column(Modifier.weight(1f)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -232,6 +242,7 @@ private fun PostDetailContent(
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.SemiBold,
                                 color = MeeshyTheme.tokens.textPrimary,
+                                modifier = profileTap,
                             )
                             if (post.moodEmoji != null) {
                                 Text(
@@ -385,6 +396,7 @@ private fun DetailStatsRow(
             count = post.likeCount,
             active = post.isLiked,
             activeTint = MeeshyPalette.Error,
+            heart = true,
             onClick = onLike,
             triggerModifier = Modifier.reactionPaletteTrigger(onOpen = { palette = palette.opened() }),
         )
@@ -437,24 +449,22 @@ private fun DetailStat(
     activeTint: Color = MeeshyPalette.Indigo500,
     onClick: (() -> Unit)? = null,
     triggerModifier: Modifier = Modifier,
+    heart: Boolean = false,
 ) {
     val tint = if (active) activeTint else MeeshyTheme.tokens.textSecondary
+    val haptics = rememberMeeshyHaptics()
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = triggerModifier
             .defaultMinSize(minWidth = 44.dp, minHeight = 44.dp)
             .clip(RoundedCornerShape(MeeshyRadius.sm))
-            .let { base -> if (onClick == null) base else base.clickable(role = Role.Button, onClick = onClick) }
+            .let { base -> if (onClick == null) base else base.clickable(role = Role.Button, onClick = { haptics.light(); onClick() }) }
             .padding(horizontal = MeeshySpacing.xs),
     ) {
-        icon(tint)
+        EngagementGlyph(active = active, tint = tint, size = 20.dp, burst = heart, tilt = heart) { icon(tint) }
         if (count > 0) {
             Spacer(Modifier.width(MeeshySpacing.xs))
-            Text(
-                text = count.toString(),
-                style = MaterialTheme.typography.labelMedium,
-                color = MeeshyTheme.tokens.textSecondary,
-            )
+            EngagementCount(count = count, color = MeeshyTheme.tokens.textSecondary)
         }
     }
 }
@@ -475,22 +485,19 @@ private fun DetailRepostStat(
     var expanded by remember { mutableStateOf(false) }
     val tint = if (active) MeeshyPalette.Indigo500 else MeeshyTheme.tokens.textSecondary
     val a11y = stringResource(R.string.feed_reposts)
+    val haptics = rememberMeeshyHaptics()
     Box {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
                 .clip(RoundedCornerShape(MeeshyRadius.sm))
-                .clickable { expanded = true }
+                .clickable { haptics.light(); expanded = true }
                 .semantics { contentDescription = a11y },
         ) {
-            Icon(Icons.Filled.Repeat, contentDescription = null, tint = tint, modifier = Modifier.size(18.dp))
+            EngagementIcon(icon = Icons.Filled.Repeat, active = active, tint = tint)
             if (count > 0) {
                 Spacer(Modifier.width(MeeshySpacing.xs))
-                Text(
-                    text = count.toString(),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MeeshyTheme.tokens.textSecondary,
-                )
+                EngagementCount(count = count, color = MeeshyTheme.tokens.textSecondary)
             }
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {

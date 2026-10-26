@@ -13,6 +13,7 @@ class PostActionMenuTest {
         assertThat(actions).containsExactly(
             PostAction.Share,
             PostAction.CopyLink,
+            PostAction.CopyText,
             PostAction.Repost,
             PostAction.Quote,
             PostAction.Bookmark,
@@ -39,6 +40,7 @@ class PostActionMenuTest {
         assertThat(actions).containsExactly(
             PostAction.Share,
             PostAction.CopyLink,
+            PostAction.CopyText,
             PostAction.Repost,
             PostAction.Quote,
             PostAction.Bookmark,
@@ -62,5 +64,19 @@ class PostActionMenuTest {
     fun `someone else's post never offers pin`() {
         val actions = PostActionMenu.actions(PostActionContext(isOwn = false, isBookmarked = false))
         assertThat(actions).doesNotContain(PostAction.Pin)
+    }
+
+    // iOS « Copier le texte » (FeedPostCard+Header) : offert pour tout post qui PORTE du texte —
+    // copier du vide serait un controle inerte.
+    @Test
+    fun `copy text follows copy link when the post has text`() {
+        val actions = PostActionMenu.actions(PostActionContext(isOwn = false, isBookmarked = false, hasText = true))
+        assertThat(actions.indexOf(PostAction.CopyText)).isEqualTo(actions.indexOf(PostAction.CopyLink) + 1)
+    }
+
+    @Test
+    fun `a post without text never offers copy text`() {
+        val actions = PostActionMenu.actions(PostActionContext(isOwn = true, isBookmarked = false, hasText = false))
+        assertThat(actions).doesNotContain(PostAction.CopyText)
     }
 }

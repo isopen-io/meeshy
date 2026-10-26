@@ -139,6 +139,7 @@ fun UserPostsScreen(
                                 viewModel.loadMoreIfNeeded(post.id)
                             }
                             UserPostCard(
+                                modifier = Modifier.animateItem(),
                                 post = post,
                                 onClick = { if (post.isReel) onPostClick(post.id) else onOpenPost(post.id) },
                                 onOpenPost = onOpenPost,
@@ -169,6 +170,7 @@ fun UserPostsScreen(
 
 @Composable
 private fun UserPostCard(
+    modifier: Modifier = Modifier,
     post: FeedPostPresentation,
     onClick: () -> Unit,
     onOpenPost: (String) -> Unit,
@@ -176,7 +178,7 @@ private fun UserPostCard(
     val unknownAuthor = stringResource(R.string.feed_unknown_author)
     MeeshyGlassSurface(
         shape = RoundedCornerShape(MeeshyRadius.xl),
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
     ) {

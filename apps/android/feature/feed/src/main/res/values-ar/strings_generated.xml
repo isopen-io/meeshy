@@ -3,12 +3,14 @@
     <string name="bookmarks_back">رجوع</string>
     <string name="feed_action_bookmark">حفظ</string>
     <string name="feed_action_copy_link">نسخ الرابط</string>
+    <string name="feed_action_copy_text">نسخ النص</string>
     <string name="feed_action_delete">حذف</string>
     <string name="feed_action_pin">تثبيت</string>
     <string name="feed_action_quote">اقتباس</string>
     <string name="feed_action_report">إبلاغ</string>
     <string name="feed_action_repost">إعادة نشر</string>
     <string name="feed_action_share">مشاركة</string>
+    <string name="feed_action_view_profile">عرض الملف الشخصي</string>
     <string name="feed_comments">التعليقات</string>
     <string name="feed_composer_attach_file">إرفاق ملف</string>
     <string name="feed_composer_cancel">إلغاء</string>

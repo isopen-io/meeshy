@@ -27,6 +27,7 @@ internal fun NavGraphBuilder.feedNavGraph(
             onOpenPost = { postId -> navController.navigate(Routes.postDetail(postId)) },
             onOpenReels = { navController.navigate(Routes.reels()) },
             onOpenNearby = { navController.navigate(Routes.NEARBY_DISCOVERY) },
+            onOpenProfile = { userId -> navController.navigate(Routes.profile(userId)) },
         )
     }
     composable(Routes.SAVED_POSTS) {
@@ -34,6 +35,7 @@ internal fun NavGraphBuilder.feedNavGraph(
             onBack = { navController.popBackStack() },
             onPostClick = { postId -> navController.navigate(Routes.reels(seed = postId)) },
             onOpenPost = { postId -> navController.navigate(Routes.postDetail(postId)) },
+            onOpenProfile = { userId -> navController.navigate(Routes.profile(userId)) },
         )
     }
     composable(Routes.NEARBY_DISCOVERY) {
@@ -41,6 +43,7 @@ internal fun NavGraphBuilder.feedNavGraph(
             onBack = { navController.popBackStack() },
             onPostClick = { postId -> navController.navigate(Routes.reels(seed = postId)) },
             onOpenPost = { postId -> navController.navigate(Routes.postDetail(postId)) },
+            onOpenProfile = { userId -> navController.navigate(Routes.profile(userId)) },
         )
     }
     composable(
@@ -53,6 +56,7 @@ internal fun NavGraphBuilder.feedNavGraph(
         PostDetailScreen(
             onBack = { navController.popBackStack() },
             onOpenPost = { postId -> navController.navigate(Routes.postDetail(postId)) },
+            onOpenProfile = { userId -> navController.navigate(Routes.profile(userId)) },
         )
     }
     composable(

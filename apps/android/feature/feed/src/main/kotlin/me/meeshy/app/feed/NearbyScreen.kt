@@ -81,6 +81,7 @@ fun NearbyScreen(
     onBack: () -> Unit = {},
     onPostClick: (String) -> Unit = {},
     onOpenPost: (String) -> Unit = {},
+    onOpenProfile: ((String) -> Unit)? = null,
     viewModel: NearbyViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -197,6 +198,8 @@ fun NearbyScreen(
                                 viewModel.loadMoreIfNeeded(post.id)
                             }
                             NearbyPostCard(
+                                modifier = Modifier.animateItem(),
+                                onOpenProfile = onOpenProfile,
                                 post = post,
                                 onClick = { if (post.isReel) onPostClick(post.id) else onOpenPost(post.id) },
                             )
@@ -264,26 +267,34 @@ private fun NearbyStatusCard(
 
 @Composable
 private fun NearbyPostCard(
+    modifier: Modifier = Modifier,
+    onOpenProfile: ((String) -> Unit)? = null,
     post: FeedPostPresentation,
     onClick: () -> Unit,
 ) {
     val unknownAuthor = stringResource(R.string.feed_unknown_author)
     MeeshyGlassSurface(
         shape = RoundedCornerShape(MeeshyRadius.xl),
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
     ) {
         Column(Modifier.padding(MeeshySpacing.lg)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                MeeshyAvatar(name = post.authorName ?: unknownAuthor, size = 40.dp, imageUrl = post.authorAvatarUrl)
+                val profileTap = Modifier.opensAuthorProfile(post.authorId, onOpenProfile)
+                MeeshyAvatar(
+                    name = post.authorName ?: unknownAuthor,
+                    size = 40.dp,
+                    imageUrl = post.authorAvatarUrl,
+                    modifier = profileTap,
+                )
                 Spacer(Modifier.width(MeeshySpacing.md))
                 Text(
                     text = post.authorName ?: unknownAuthor,
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.SemiBold,
                     color = MeeshyTheme.tokens.textPrimary,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f).then(profileTap),
                 )
                 if (post.isReel) {
                     Icon(

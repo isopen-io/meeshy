@@ -3,12 +3,14 @@
     <string name="bookmarks_back">Zurück</string>
     <string name="feed_action_bookmark">Sichern</string>
     <string name="feed_action_copy_link">Link kopieren</string>
+    <string name="feed_action_copy_text">Text kopieren</string>
     <string name="feed_action_delete">Löschen</string>
     <string name="feed_action_pin">Anheften</string>
     <string name="feed_action_quote">Zitieren</string>
     <string name="feed_action_report">Melden</string>
     <string name="feed_action_repost">Erneut teilen</string>
     <string name="feed_action_share">Teilen</string>
+    <string name="feed_action_view_profile">Profil ansehen</string>
     <string name="feed_comments">Kommentare</string>
     <string name="feed_composer_attach_file">Datei anhängen</string>
     <string name="feed_composer_cancel">Abbrechen</string>

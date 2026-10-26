@@ -36,6 +36,18 @@
         },
         {
           "catalog": "app",
+          "iosKey": "feed.post.copy_text",
+          "androidName": "feed_action_copy_text",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "feed.post.view_profile",
+          "androidName": "feed_action_view_profile",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
           "iosKey": "comment.action.delete",
           "androidName": "feed_action_delete",
           "status": "adopted"
