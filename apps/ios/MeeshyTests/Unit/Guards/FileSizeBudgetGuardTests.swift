@@ -716,6 +716,59 @@ final class FileSizeBudgetGuardTests: XCTestCase {
         )
     }
 
+    // MARK: - Règle 4 — le seuil de découpe, app, extensions et SDK
+
+    /// #13132 — au-delà de 1 000 lignes (`wc -l`), un découpage se justifie sans se
+    /// discuter : aucun fichier écrit à la main, de l'app, de ses extensions ou du
+    /// SDK, n'y reste. Un fichier GÉNÉRÉ (`// GÉNÉRÉ` en tête) n'est pas écrit à la
+    /// main et n'est pas mesuré.
+    private static let splitThreshold = 1000
+
+    func test_aucunFichierEcritALaMainNeDepasseLeSeuilDeDecoupe() throws {
+        let offenders = try handWrittenSources()
+            .map { ($0.lastPathComponent, lineCount(of: $0) - 1) }
+            .filter { $0.1 > Self.splitThreshold }
+            .sorted { $0.1 > $1.1 }
+
+        XCTAssertTrue(
+            offenders.isEmpty,
+            "Fichier(s) au-delà du seuil de découpe de \(Self.splitThreshold) lignes — "
+            + "découper par responsabilité :\n"
+            + offenders.map { "  \($0.0) — \($0.1) lignes" }.joined(separator: "\n")
+        )
+    }
+
+    func test_leSeuilDeDecoupeVoitLAppEtLeSDKMaisPasLeGenere() throws {
+        let names = Set(try handWrittenSources().map(\.lastPathComponent))
+        XCTAssertTrue(names.contains("CallManager.swift"))
+        XCTAssertTrue(names.contains("MeeshyColors.swift"))
+        XCTAssertFalse(names.contains("AppearanceCatalogData.swift"))
+    }
+
+    private func handWrittenSources() throws -> [URL] {
+        let iosRoot = appRoot.deletingLastPathComponent()
+        let roots = [
+            "Meeshy", "MeeshyNotificationExtension", "MeeshyNotificationContentExtension",
+            "MeeshyShareExtension", "MeeshyBroadcastExtension", "MeeshyWidgets",
+        ].map { iosRoot.appendingPathComponent($0) }
+            + [iosRoot.deletingLastPathComponent().deletingLastPathComponent()
+                .appendingPathComponent("packages/MeeshySDK/Sources")]
+        return roots
+            .flatMap { swiftFiles(under: $0) }
+            .filter { !isGenerated($0) }
+    }
+
+    private func swiftFiles(under root: URL) -> [URL] {
+        guard let walker = FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil)
+        else { return [] }
+        return walker.compactMap { $0 as? URL }.filter { $0.pathExtension == "swift" }
+    }
+
+    private func isGenerated(_ url: URL) -> Bool {
+        let text = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
+        return text.hasPrefix("// GÉNÉRÉ")
+    }
+
     // MARK: - Bornes
 
     /// Sans elles, les trois règles passeraient au vert en ne regardant rien — le
