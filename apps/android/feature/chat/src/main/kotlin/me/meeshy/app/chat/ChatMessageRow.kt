@@ -23,7 +23,6 @@ import me.meeshy.sdk.link.LinkPreviewParser
 import me.meeshy.ui.component.bubble.BubbleAccessibilityAction
 import me.meeshy.ui.component.bubble.BubbleCallbacks
 import me.meeshy.ui.component.bubble.BubbleContent
-import me.meeshy.ui.component.bubble.DeliveryStatus
 import me.meeshy.ui.component.bubble.MessageBubble
 import me.meeshy.ui.theme.MeeshyPalette
 
@@ -47,6 +46,8 @@ internal class ChatMessageRowActions(
     val onReplyCountTap: (messageId: String) -> Unit = {},
     val onReplyCountLongPress: (messageId: String) -> Unit = {},
     val onRetry: (messageId: String) -> Unit = {},
+    /** Tap sur le smiley d'ajout de réaction du dernier message reçu. */
+    val onAddReaction: (messageId: String) -> Unit = {},
     /** Tap sur l'avatar de l'auteur (pied d'identité d'une suite reçue en groupe) : sa fiche profil. */
     val onSenderTap: (bubble: BubbleContent) -> Unit = {},
     /** Window-space frame of the bubble, captured during layout for the long-press hero. */
@@ -78,6 +79,7 @@ internal fun ChatMessageRow(
     actions: ChatMessageRowActions,
     audioPlayer: ChatAudioPlayer? = null,
     canWrite: Boolean = true,
+    showReplyCountPill: Boolean = false,
 ) {
     val uriHandler = LocalUriHandler.current
     val audioPlayback by remember(bubble.audios, audioPlayer) {
@@ -101,7 +103,9 @@ internal fun ChatMessageRow(
             onFileClick = { file -> actions.onFileClick(messageId, file.attachmentId) },
             onReplyPreviewClick = { actions.onReplyPreviewClick(messageId) },
             onFlagTap = { code -> actions.onFlagTap(messageId, code) },
-            onSenderTap = if (bubble.senderId != null) {
+            onRetry = { actions.onRetry(messageId) },
+            onAddReaction = { actions.onAddReaction(messageId) },
+            onSenderTap = if (bubble.senderProfile != null) {
                 { actions.onSenderTap(bubble) }
             } else {
                 null
@@ -121,6 +125,36 @@ internal fun ChatMessageRow(
             null
         }
     }
+    val linkUrl = remember(bubble.text) {
+        LinkPreviewParser.firstUrl(bubble.text)
+    }
+    if (linkUrl != null) {
+        LaunchedEffect(linkUrl) { linkPreviewStore.request(linkUrl) }
+    }
+    val linkState = LinkPreview.stateFor(
+        bubble.text,
+        linkUrl?.let {
+            linkPreviewCache.outcomeFor(
+                LinkPreviewParser.canonicalize(it),
+                System.currentTimeMillis(),
+            )
+        } ?: LinkPreviewOutcome.Empty,
+    )
+    // iOS rend l'aperçu de lien DANS la bulle, sous le texte (`BubbleLinkEmbed`).
+    val linkAccessory: (@Composable (Color) -> Unit)? = if (linkUrl == null) {
+        null
+    } else {
+        { ink ->
+            LinkPreviewCard(
+                state = linkState,
+                isOutgoing = false,
+                accentColor = if (bubble.isOutgoing) ink else accentColor,
+                ink = if (bubble.isOutgoing) ink else null,
+                inBubble = true,
+                onOpenUrl = { url -> openChatLink(linkContext, url, accentColor.toArgb()) },
+            )
+        }
+    }
     SwipeToReplyContainer(
         isOutgoing = bubble.isOutgoing,
         accentColor = accentColor,
@@ -134,35 +168,17 @@ internal fun ChatMessageRow(
             // iOS : la bulle envoyée porte l'indigo de marque (BubbleSkin.brand), pas l'accent
             // de la conversation — l'accent reste aux liens, citations et réactions.
             outgoingColor = MeeshyPalette.Indigo500,
+            accentColor = accentColor,
             mentionDisplayNames = mentionDisplayNames,
             highlightTerm = highlightTerm,
             callbacks = callbacks,
             audioPlayback = audioPlayback,
+            bodyAccessory = linkAccessory,
         )
     }
-    val linkUrl = remember(bubble.text) {
-        LinkPreviewParser.firstUrl(bubble.text)
-    }
-    if (linkUrl != null) {
-        LaunchedEffect(linkUrl) { linkPreviewStore.request(linkUrl) }
-    }
-    LinkPreviewCard(
-        state = LinkPreview.stateFor(
-            bubble.text,
-            linkUrl?.let {
-                linkPreviewCache.outcomeFor(
-                    LinkPreviewParser.canonicalize(it),
-                    System.currentTimeMillis(),
-                )
-            } ?: LinkPreviewOutcome.Empty,
-        ),
-        isOutgoing = bubble.isOutgoing,
-        accentColor = accentColor,
-        onOpenUrl = { url ->
-            openChatLink(linkContext, url, accentColor.toArgb())
-        },
-    )
-    if (replyCount != null) {
+    // iOS n'a plus de pastille « N réponses » sous la bulle (le fil s'ouvre par l'appui long →
+    // Plus → Fil) : elle n'apparaît que si [showReplyCountPill] le demande.
+    if (replyCount != null && showReplyCountPill) {
         ReplyCountPill(
             count = replyCount,
             isOutgoing = bubble.isOutgoing,
@@ -170,8 +186,5 @@ internal fun ChatMessageRow(
             onClick = { actions.onReplyCountTap(messageId) },
             onLongClick = { actions.onReplyCountLongPress(messageId) },
         )
-    }
-    if (bubble.deliveryStatus == DeliveryStatus.Failed) {
-        FailedSendRetryLine(onClick = { actions.onRetry(messageId) })
     }
 }

@@ -3,6 +3,8 @@
     <string name="bubble_message_deleted">Mensaje eliminado</string>
     <string name="bubble_edited">editado</string>
     <string name="bubble_view_profile">Ver perfil</string>
+    <string name="bubble_add_reaction">Añadir una reacción</string>
+    <string name="bubble_failed_retry">No enviado — toca para reintentar</string>
     <string name="bubble_forwarded">Reenviado</string>
     <string name="bubble_forwarded_from">Reenviado de %1$s</string>
     <string name="bubble_starred">Guardado</string>

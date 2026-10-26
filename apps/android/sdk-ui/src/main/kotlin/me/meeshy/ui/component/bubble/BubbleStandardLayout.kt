@@ -3,12 +3,18 @@ package me.meeshy.ui.component.bubble
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -57,6 +63,9 @@ internal class BubbleRenderOptions(
     val hasPlayedAppearance: Boolean,
     val accessibilityLabel: String?,
     val decor: BubbleTextDecor,
+    /** L'accent de la conversation : réactions, liens et citations (pas le fond envoyé). */
+    val accentColor: Color = MeeshyPalette.Indigo500,
+    val bodyAccessory: (@Composable (onColor: Color) -> Unit)? = null,
 )
 
 /**
@@ -83,7 +92,12 @@ internal fun BubbleStandardLayout(
                 start = MeeshySpacing.sm,
                 end = MeeshySpacing.sm,
                 top = MeeshySpacing.none,
-                bottom = if (content.isLastInGroup) MeeshySpacing.xsPlus else MeeshySpacing.xxs,
+                // Une bande de réactions déborde de 18 dp sous la bulle : la rangée lui fait place.
+                bottom = when {
+                    hasReactionsOverlay(content) -> if (content.isLastInGroup) MeeshySpacing.xxxl else 31.dp
+                    content.isLastInGroup -> MeeshySpacing.xsPlus
+                    else -> MeeshySpacing.xxs
+                },
             ),
         horizontalArrangement = if (content.isOutgoing) Arrangement.End else Arrangement.Start,
     ) {
@@ -106,29 +120,33 @@ internal fun BubbleStandardLayout(
         val bubbleBorder = if (isFreeEmoji || content.isOutgoing) null else receivedTint.stroke
         Column(horizontalAlignment = if (content.isOutgoing) Alignment.End else Alignment.Start) {
             if (content.pinnedAtIso != null && !content.isDeleted) BubblePinnedIndicator()
-            if (isFreeEmoji && content.blurReveal == null) {
-                // La story citée reste au-dessus de l'emoji, hors de tout fond (iOS
-                // `detachedStoryCitation`) ; l'emoji flotte dessous.
-                if (content.storyReply != null) {
-                    StoryReplyPreview(
-                        story = content.storyReply,
-                        accentColor = MeeshyTheme.tokens.textPrimary,
-                        modifier = Modifier.padding(bottom = MeeshySpacing.xs),
-                    )
+            BubbleReactionsAnchor(content = content, accent = options.accentColor, callbacks = callbacks) {
+                if (isFreeEmoji && content.blurReveal == null) {
+                    // La story citée reste au-dessus de l'emoji, hors de tout fond (iOS
+                    // `detachedStoryCitation`) ; l'emoji flotte dessous.
+                    Column(horizontalAlignment = if (content.isOutgoing) Alignment.End else Alignment.Start) {
+                        if (content.storyReply != null) {
+                            StoryReplyPreview(
+                                story = content.storyReply,
+                                accentColor = MeeshyTheme.tokens.textPrimary,
+                                modifier = Modifier.padding(bottom = MeeshySpacing.xs),
+                            )
+                        }
+                        FreeEmojiBody(content = content, onLongPress = callbacks.onLongPress)
+                    }
+                } else {
+                    BubbleBlurRevealBoundary(messageId = content.messageId, spec = content.blurReveal) {
+                        BubbleBody(
+                            content = content,
+                            onColor = onColor,
+                            bubbleBackground = bubbleBackground,
+                            bubbleBorder = bubbleBorder,
+                            callbacks = callbacks,
+                            audioPlayback = audioPlayback,
+                            options = options,
+                        )
+                    }
                 }
-                FreeEmojiBody(content = content, onLongPress = callbacks.onLongPress)
-                return@Column
-            }
-            BubbleBlurRevealBoundary(messageId = content.messageId, spec = content.blurReveal) {
-                BubbleBody(
-                    content = content,
-                    onColor = onColor,
-                    bubbleBackground = bubbleBackground,
-                    bubbleBorder = bubbleBorder,
-                    callbacks = callbacks,
-                    audioPlayback = audioPlayback,
-                    options = options,
-                )
             }
         }
     }
@@ -194,6 +212,8 @@ private fun BubbleBody(
                 }
             },
     ) {
+        val isFailed = content.isOutgoing && content.deliveryStatus == DeliveryStatus.Failed
+        BubbleFailedRetryEdge(isFailed = isFailed, onRetry = callbacks.onRetry) {
         BubbleBodyFooterLayout(
             body = {
                 // iOS : le corps est rembourré 14 × 10 (BubbleStandardLayout+TextBubble).
@@ -211,14 +231,7 @@ private fun BubbleBody(
                     }
                     BubbleAttachmentSections(content, onColor, callbacks, audioPlayback)
                     BubbleTextBody(content, onColor, options.decor)
-                    if (content.reactions.isNotEmpty()) {
-                        ReactionStrip(
-                            reactions = content.reactions,
-                            onReactionClick = callbacks.onReactionClick,
-                            onReactionLongPress = callbacks.onReactionLongPress,
-                            modifier = Modifier.padding(top = MeeshySpacing.xs),
-                        )
-                    }
+                    if (!content.isDeleted) options.bodyAccessory?.invoke(onColor)
                 }
             },
             footer = {
@@ -237,6 +250,85 @@ private fun BubbleBody(
                     ),
                 )
             },
+        )
+        }
+    }
+}
+
+/** Largeur de la bande de renvoi d'un envoi échoué (iOS `retryBandWidth`). */
+private val RetryBandWidth = 34.dp
+
+/**
+ * Envoi échoué, port d'iOS `BubbleFailedRetryBar` : une bande orange de 34 dp INTÉGRÉE au bord
+ * droit de la bulle (rognée par son coin arrondi), le contenu décalé d'autant pour que l'heure
+ * reste lisible ; un tap renvoie. Sans échec, le contenu passe tel quel.
+ */
+@Composable
+private fun BubbleFailedRetryEdge(
+    isFailed: Boolean,
+    onRetry: (() -> Unit)?,
+    content: @Composable () -> Unit,
+) {
+    if (!isFailed) {
+        content()
+        return
+    }
+    val label = stringResource(R.string.bubble_failed_retry)
+    Box {
+        Box(modifier = Modifier.padding(end = RetryBandWidth)) { content() }
+        Box(modifier = Modifier.matchParentSize(), contentAlignment = Alignment.CenterEnd) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .width(RetryBandWidth)
+                .fillMaxHeight()
+                .background(MeeshyPalette.Warning)
+                .let { base -> if (onRetry == null) base else base.clickable(onClickLabel = label, onClick = onRetry) }
+                .semantics { contentDescription = label },
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Refresh,
+                contentDescription = null,
+                tint = MeeshyPalette.White,
+                modifier = Modifier.size(16.dp),
+            )
+        }
+        }
+    }
+}
+
+/** La bande de réactions est montée : des réactions, ou le smiley d'ajout du dernier message reçu. */
+private fun hasReactionsOverlay(content: BubbleContent): Boolean =
+    !content.isDeleted && (content.reactions.isNotEmpty() || (!content.isOutgoing && content.isLastReceivedMessage))
+
+/**
+ * Pose la bande de réactions HORS de la bulle, à cheval sur son bord bas (iOS
+ * `BubbleReactionsOverlay`) : coin bas côté centre — à droite d'une bulle reçue, à gauche d'une
+ * bulle envoyée — décalée de 4 dp vers l'extérieur et de 18 dp vers le bas.
+ */
+@Composable
+private fun BubbleReactionsAnchor(
+    content: BubbleContent,
+    accent: Color,
+    callbacks: BubbleCallbacks,
+    bubble: @Composable () -> Unit,
+) {
+    if (!hasReactionsOverlay(content)) {
+        bubble()
+        return
+    }
+    Box {
+        bubble()
+        ReactionStrip(
+            reactions = content.reactions,
+            accent = accent,
+            showsAddButton = !content.isOutgoing && content.isLastReceivedMessage,
+            onReactionClick = callbacks.onReactionClick,
+            onReactionLongPress = callbacks.onReactionLongPress,
+            onAddReaction = callbacks.onAddReaction,
+            modifier = Modifier
+                .align(if (content.isOutgoing) Alignment.BottomStart else Alignment.BottomEnd)
+                .offset(x = if (content.isOutgoing) (-4).dp else 4.dp, y = ReactionsRestingOffset),
         )
     }
 }

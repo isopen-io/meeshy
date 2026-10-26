@@ -14,6 +14,8 @@ import me.meeshy.sdk.model.SendLifecycle
 import me.meeshy.sdk.model.SendLifecycleResolver
 import me.meeshy.sdk.model.exitOffer
 import me.meeshy.sdk.model.isProtected
+import me.meeshy.sdk.model.profile.ProfileSheetUser
+import me.meeshy.sdk.model.profile.from
 import me.meeshy.sdk.theme.DynamicColorGenerator
 
 public object BubbleContentBuilder {
@@ -128,6 +130,7 @@ public object BubbleContentBuilder {
             senderName = senderName,
             showSenderName = showSenderName && !isOutgoing,
             senderId = message.senderId,
+            senderProfile = if (isOutgoing || message.isSystemMessage) null else ProfileSheetUser.from(message),
             senderUsername = (message.sender?.username ?: message.sender?.user?.username)
                 ?.takeIf { it.isNotBlank() },
             senderAvatarUrl = message.sender?.resolvedAvatar,

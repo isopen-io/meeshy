@@ -153,17 +153,23 @@ private fun BubbleIdentityFooter(
             modifier = Modifier.weight(1f, fill = false),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = DisplayName.truncated(name),
-                    fontSize = MeeshyFontSize.subhead,
-                    fontWeight = FontWeight.SemiBold,
-                    color = onColor,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(end = MeeshySpacing.xs),
-                )
-                BubbleMetaLeading(content, onColor, metaColor, onFlagTap)
-                Spacer(Modifier.weight(1f).widthIn(min = MeeshySpacing.xs))
+                // Le nom cède sa place (ellipse) avant l'heure : l'heure ne se rogne jamais.
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text(
+                        text = DisplayName.truncated(name),
+                        fontSize = MeeshyFontSize.subhead,
+                        fontWeight = FontWeight.SemiBold,
+                        color = onColor,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false).padding(end = MeeshySpacing.xs),
+                    )
+                    BubbleMetaLeading(content, onColor, metaColor, onFlagTap)
+                }
+                Spacer(Modifier.width(MeeshySpacing.xs))
                 BubbleMetaTrailing(content, metaColor)
             }
             content.senderUsername?.let { username ->
@@ -280,7 +286,8 @@ internal fun BubbleMetaTrailing(content: BubbleContent, metaColor: Color, modifi
                 maxLines = 1,
             )
         }
-        if (content.isOutgoing) {
+        // Échec : la coche se tait, la bande orange de la bulle porte le renvoi (iOS).
+        if (content.isOutgoing && content.deliveryStatus != DeliveryStatus.Failed) {
             // The online in-flight clock is debounced: a send that
             // round-trips under 200ms never flashes it (parity iOS
             // `SendingClockGlyph`). The offline hourglass and every

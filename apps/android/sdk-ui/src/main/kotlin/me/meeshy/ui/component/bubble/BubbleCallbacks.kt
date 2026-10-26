@@ -31,6 +31,10 @@ public data class BubbleCallbacks(
     val onReplyPreviewClick: (() -> Unit)? = null,
     /** Tap on a language flag of the Prisme strip, with its language code. */
     val onFlagTap: ((String) -> Unit)? = null,
+    /** Tap sur le smiley d'ajout du dernier message reçu : le sélecteur d'emoji. */
+    val onAddReaction: (() -> Unit)? = null,
+    /** Tap sur la bande orange d'un envoi échoué (iOS `BubbleFailedRetryBar`) : renvoyer. */
+    val onRetry: (() -> Unit)? = null,
     /** Tap sur l'avatar de l'auteur dans le pied d'identité (et « Voir le profil » de son menu). */
     val onSenderTap: (() -> Unit)? = null,
     /**

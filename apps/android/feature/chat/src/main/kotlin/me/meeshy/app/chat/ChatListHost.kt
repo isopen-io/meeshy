@@ -26,7 +26,7 @@ import java.time.ZoneId
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import me.meeshy.feature.chat.R
-import me.meeshy.ui.component.bubble.BubbleContent
+import me.meeshy.ui.profile.LocalProfileSheetOpener
 import me.meeshy.ui.component.location.LiveLocationBadge
 import me.meeshy.ui.theme.MeeshySpacing
 
@@ -43,7 +43,7 @@ internal fun ChatListHost(host: ChatHostContext, modifier: Modifier = Modifier, 
     val bubbleFrames = host.bubbleFrames
     val listState = rememberLazyListState()
     // La fiche de l'auteur ouverte depuis l'avatar du pied d'identité (iOS `selectedProfileUser`).
-    var profileFor by remember { mutableStateOf<BubbleContent?>(null) }
+    val profileOpener = LocalProfileSheetOpener.current
     // L'en-tête efface sa grappe d'actions pendant le défilement (iOS `hiddenWhileScrolling`).
     LaunchedEffect(listState) {
         snapshotFlow { listState.isScrollInProgress }
@@ -157,7 +157,7 @@ internal fun ChatListHost(host: ChatHostContext, modifier: Modifier = Modifier, 
         }
     }
     var scrollAffordance by remember { mutableStateOf(ScrollAffordanceState()) }
-    val rowActions = remember(actions, bubbleFrames) {
+    val rowActions = remember(actions, bubbleFrames, profileOpener) {
         ChatMessageRowActions(
             onReply = { messageId -> actions.startReply(messageId) },
             onForward = { messageId -> actions.openForward(messageId) },
@@ -173,7 +173,8 @@ internal fun ChatListHost(host: ChatHostContext, modifier: Modifier = Modifier, 
             onReplyCountTap = { messageId -> actions.onReplyCountTap(messageId) },
             onReplyCountLongPress = { messageId -> actions.openReplyThread(messageId) },
             onRetry = { messageId -> actions.retryMessage(messageId) },
-            onSenderTap = { bubble -> profileFor = bubble },
+            onSenderTap = { bubble -> bubble.senderProfile?.let(profileOpener::open) },
+            onAddReaction = { messageId -> actions.openEmojiPicker(messageId) },
             onBubbleFramed = { messageId, frame -> bubbleFrames[messageId] = frame },
         )
     }
@@ -277,19 +278,6 @@ internal fun ChatListHost(host: ChatHostContext, modifier: Modifier = Modifier, 
                 }
                 TypingIndicator(participants = state.typingParticipants)
             }
-        }
-    }
-    profileFor?.let { sender ->
-        val participantId = sender.senderId
-        if (participantId != null) {
-            ParticipantProfileSheet(
-                conversationId = state.conversationId,
-                participantId = participantId,
-                displayName = sender.senderName.orEmpty(),
-                accentColor = accentColor,
-                onDismiss = { profileFor = null },
-                avatarUrl = sender.senderAvatarUrl,
-            )
         }
     }
 }

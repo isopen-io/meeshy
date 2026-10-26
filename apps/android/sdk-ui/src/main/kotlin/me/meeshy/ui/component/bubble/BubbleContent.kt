@@ -4,6 +4,7 @@ import androidx.compose.runtime.Immutable
 import me.meeshy.sdk.model.BlurRevealLifecycle
 import me.meeshy.sdk.model.MessageEffects
 import me.meeshy.sdk.model.MessageExitOffer
+import me.meeshy.sdk.model.profile.ProfileSheetUser
 
 @Immutable
 sealed class DeliveryStatus {
@@ -40,8 +41,10 @@ public data class BubbleContent(
      * !isDirect && isLastInGroup && !isMe`).
      */
     val showSenderName: Boolean,
-    /** Identifiant de participant de l'auteur (`senderId`) : la fiche profil ouverte depuis l'avatar. */
+    /** Identifiant de participant de l'auteur (`senderId`). */
     val senderId: String? = null,
+    /** La fiche de l'auteur ouverte depuis l'avatar du pied d'identité (iOS `ProfileSheetUser.from(message)`). */
+    val senderProfile: ProfileSheetUser? = null,
     /** Pseudo de l'auteur, lu « @pseudo » sous son nom dans le pied d'identité. */
     val senderUsername: String? = null,
     /** Photo de l'auteur, telle que servie (résolue par `MeeshyAvatar`). */
@@ -81,6 +84,8 @@ public data class BubbleContent(
      */
     val forwardedFromName: String? = null,
     val isStarred: Boolean = false,
+    /** Le DERNIER message reçu du fil : lui seul porte le smiley d'ajout de réaction (iOS). */
+    val isLastReceivedMessage: Boolean = false,
     val isFirstInGroup: Boolean = true,
     val isLastInGroup: Boolean = true,
     val blurReveal: BubbleBlurRevealSpec? = null,
