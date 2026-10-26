@@ -98,6 +98,21 @@ export async function currentStorageKey(storageKey: string, source: StoredBytesS
   return replacement?.storageKey ?? storageKey;
 }
 
+/**
+ * Pour une route qui a déjà jugé son lecteur PAR LA PIÈCE (par identifiant,
+ * vignette) : les octets de la clé que la ligne désigne, ou, si son fichier a
+ * été remplacé par un scellé (copie retardataire repointée trop tard), ceux
+ * du scellé.
+ */
+export async function locateCurrentStoredBytes(filePath: string, source: StoredBytesSource): Promise<StoredBytesLookup> {
+  const direct = await locateStoredBytes(filePath, source);
+  if (direct !== null) return direct;
+  const key = storageKeyOfPath(filePath, uploadRootOf(source));
+  if (key === null) return null;
+  const current = await currentStorageKey(key, source);
+  return current === key ? null : locateStoredBytes(path.join(uploadRootOf(source), current), source);
+}
+
 export type AtRestSealing = { readonly kind: 'sealed'; readonly record: AtRestFileRecord | null } | { readonly kind: 'plain' };
 
 export async function atRestSealingOf(filePath: string, source: StoredBytesSource): Promise<AtRestSealing> {

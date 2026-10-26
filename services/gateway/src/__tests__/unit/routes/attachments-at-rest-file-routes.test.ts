@@ -32,6 +32,7 @@ import {
 
 const PIECE = 'aaaaaaaaaaaaaaaaaaaaaaa1';
 const LEGACY_PIECE = 'aaaaaaaaaaaaaaaaaaaaaaa2';
+const STRAGGLER_PIECE = 'aaaaaaaaaaaaaaaaaaaaaaa3';
 const MESSAGE = 'bbbbbbbbbbbbbbbbbbbbbbb1';
 const CONVERSATION = 'dddddddddddddddddddddd01';
 const READER = 'cccccccccccccccccccccc01';
@@ -70,7 +71,7 @@ function makePrisma() {
     uploadedBy: READER_USER, isViewOnce: false, isBlurred: false, effectFlags: 0, fileUrl: key, fileName: path.basename(key), fileSize: 1,
     createdAt: new Date(), isAnonymous: false, isForwarded: false, viewOnceCount: 0, viewedCount: 0, downloadedCount: 0, consumedCount: 0, isEncrypted: false,
   });
-  const pieces = [piece(PIECE, SEALED_KEY), piece(LEGACY_PIECE, LEGACY_KEY)];
+  const pieces = [piece(PIECE, SEALED_KEY), piece(LEGACY_PIECE, LEGACY_KEY), piece(STRAGGLER_PIECE, PLAIN_SOURCE)];
   const carriers = [{ id: MESSAGE, conversationId: CONVERSATION, senderId: READER, createdAt: new Date(), deletedAt: null, expiresAt: null, viewOnceBurnAt: null, isViewOnce: false, isBlurred: false, effectFlags: 0, ephemeralDuration: null }];
   const participants = [{ id: READER, userId: READER_USER, conversationId: CONVERSATION, isActive: true }];
   return {
@@ -225,6 +226,12 @@ describe('l’adresse signée du lecteur déchiffre', () => {
 describe('la route par identifiant, authentifiée et jugée, déchiffre', () => {
   it('GET /attachments/:id', async () => {
     const response = await app.inject({ method: 'GET', url: `/api/v1/attachments/${PIECE}` });
+    expect(response.statusCode).toBe(200);
+    expect(response.rawPayload.equals(PNG)).toBe(true);
+  });
+
+  it('une copie retardataire qui désigne encore le clair effacé se sert par le scellé qui l’a remplacé', async () => {
+    const response = await app.inject({ method: 'GET', url: `/api/v1/attachments/${STRAGGLER_PIECE}` });
     expect(response.statusCode).toBe(200);
     expect(response.rawPayload.equals(PNG)).toBe(true);
   });

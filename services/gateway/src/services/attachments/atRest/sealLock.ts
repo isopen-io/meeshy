@@ -5,7 +5,35 @@
  * (processus tué) expire seul ; le balayage reprend alors la pièce.
  */
 import { createHash, randomUUID } from 'crypto';
+import Redis from 'ioredis';
 import type { FileSealLock as SealLock } from './atRestFiles';
+
+/** Redis configuré mais injoignable : ni « libre » ni « occupé » — l'appelant décide (fail-closed). */
+export class SealLockUnavailableError extends Error {
+  constructor(cause?: unknown) {
+    super('seal lock unavailable');
+    this.name = 'SealLockUnavailableError';
+    if (cause !== undefined) (this as { cause?: unknown }).cause = cause;
+  }
+}
+
+/**
+ * Le client Redis DU VERROU, distinct de celui de `CacheStore` (qui cesse de
+ * se reconnecter après 3 tentatives) : il se reconnecte sans jamais
+ * abandonner, à intervalle borné, pour que le scellement reprenne dès le
+ * retour de Redis, sans redémarrer la passerelle. Aucune commande n'attend
+ * une connexion absente (`enableOfflineQueue: false`).
+ */
+export function reconnectingLockClient(url: string): Redis {
+  const client = new Redis(url, {
+    retryStrategy: (times: number) => Math.min(times * 500, 5_000),
+    maxRetriesPerRequest: 1,
+    enableOfflineQueue: false,
+    lazyConnect: false,
+  });
+  client.on('error', () => undefined);
+  return client;
+}
 
 export const SEAL_LOCK_TTL_MS = 10 * 60 * 1000;
 
@@ -30,10 +58,11 @@ export const processSealLock: SealLock = async (filePath) => {
 
 /**
  * Le verrou de la passerelle, FAIL-CLOSED : Redis, partagé avec la migration
- * et les autres instances. Redis configuré mais injoignable vaut « occupé » —
- * signalé, la pièce reste en clair et le balayage la reprendra — jamais un
- * verrou local qu'une autre instance ne verrait pas. Le verrou du processus
- * ne sert que sans Redis configuré du tout : un seul processus scelle.
+ * et les autres instances. Redis configuré mais injoignable LÈVE
+ * `SealLockUnavailableError` — le scellement le tient pour occupé
+ * (`acquireSealLock` : la pièce reste au balayage), une piste ne l'attend pas —
+ * jamais un verrou local qu'une autre instance ne verrait pas. Le verrou du
+ * processus ne sert que sans Redis configuré du tout : un seul processus scelle.
  */
 export function gatewaySealLockOf(deps: {
   readonly redis: () => LockClient | null;
@@ -45,15 +74,27 @@ export function gatewaySealLockOf(deps: {
     const client = deps.redis();
     if (!client) {
       deps.onUnavailable(new Error('redis-client-absent'));
-      return 'busy';
+      throw new SealLockUnavailableError();
     }
     try {
       return await redisSealLock(client)(filePath);
     } catch (error) {
       deps.onUnavailable(error);
-      return 'busy';
+      throw new SealLockUnavailableError(error);
     }
   };
+}
+
+const deferral: { since: Date | null } = { since: null };
+
+/** Depuis quand un verrou injoignable a laissé des pièces au balayage (le plus ancien instant), ou `null`. */
+export const sealingDeferredSince = (): Date | null => deferral.since;
+export function noteSealingDeferred(now: Date = new Date()): void {
+  deferral.since = deferral.since ?? now;
+}
+/** Le balayage a rattrapé tout ce qui avait été différé jusqu'à `upTo`. */
+export function clearSealingDeferred(upTo: Date): void {
+  if (deferral.since && deferral.since <= upTo) deferral.since = null;
 }
 
 export function redisSealLock(client: LockClient, ttlMs: number = SEAL_LOCK_TTL_MS): SealLock {

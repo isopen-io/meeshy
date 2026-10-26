@@ -1,6 +1,7 @@
 /**
  * #13100 — le verrou de scellement de la passerelle est FAIL-CLOSED : Redis
- * configuré mais injoignable vaut « occupé » (le balayage reprendra la pièce),
+ * configuré mais injoignable LÈVE `SealLockUnavailableError`, que le
+ * scellement tient pour « occupé » (le balayage reprendra la pièce),
  * jamais un verrou local qu'une autre instance ne verrait pas. Le verrou du
  * processus ne sert que sans Redis configuré du tout (un seul processus).
  *
@@ -16,7 +17,7 @@ jest.mock('../../../utils/logger-enhanced', () => ({
   enhancedLogger: { child: () => ({ error: jest.fn(), warn: jest.fn(), info: jest.fn(), debug: jest.fn() }) },
 }));
 
-import { gatewaySealLockOf } from '../atRest/sealLock';
+import { gatewaySealLockOf, SealLockUnavailableError } from '../atRest/sealLock';
 import { sealAttachmentFiles } from '../atRest/sealAttachmentFiles';
 import type { AtRestFileAccess, AtRestFileRecord } from '../atRest/atRestFiles';
 
@@ -35,7 +36,7 @@ describe('le verrou de scellement de la passerelle', () => {
   it('Redis configuré mais injoignable : occupé, signalé — et aucun scellement ne démarre', async () => {
     const signalled: unknown[] = [];
     const lock = gatewaySealLockOf({ redis: () => down as never, configured: () => true, onUnavailable: (error) => signalled.push(error) });
-    expect(await lock(KEY)).toBe('busy');
+    await expect(lock(KEY)).rejects.toBeInstanceOf(SealLockUnavailableError);
     expect(signalled).toHaveLength(1);
 
     await fs.mkdir(path.join(root, '2026/10/u'), { recursive: true });
@@ -54,7 +55,7 @@ describe('le verrou de scellement de la passerelle', () => {
 
   it('Redis configuré mais sans client (connexion abandonnée) : occupé aussi', async () => {
     const lock = gatewaySealLockOf({ redis: () => null, configured: () => true, onUnavailable: () => undefined });
-    expect(await lock(KEY)).toBe('busy');
+    await expect(lock(KEY)).rejects.toBeInstanceOf(SealLockUnavailableError);
   });
 
   it('sans Redis configuré (un seul processus) : le verrou du processus, exclusif et relâchable', async () => {

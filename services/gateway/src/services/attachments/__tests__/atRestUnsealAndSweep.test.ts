@@ -126,6 +126,14 @@ describe('le balayage', () => {
     expect(sweepSealingSince({ activatedAt: long, now, signerReady: true, sealingEnabled: true })).toEqual(new Date(now.getTime() - 48 * HOUR));
   });
 
+  it('après une panne du verrou plus longue que 48 h, le rattrapage remonte jusqu’à son début — jamais avant l’activation', () => {
+    const activatedAt = new Date(now.getTime() - 30 * 24 * HOUR);
+    const deferredSince = new Date(now.getTime() - 72 * HOUR);
+    expect(sweepSealingSince({ activatedAt, now, signerReady: true, sealingEnabled: true, deferredSince })).toEqual(deferredSince);
+    const recent = new Date(now.getTime() - 60 * HOUR);
+    expect(sweepSealingSince({ activatedAt: recent, now, signerReady: true, sealingEnabled: true, deferredSince })).toEqual(recent);
+  });
+
   it('sans marqueur, sans clé de signature ou scellement suspendu, il ne rattrape rien', () => {
     const activatedAt = new Date(now.getTime() - HOUR);
     expect(sweepSealingSince({ activatedAt: null, now, signerReady: true, sealingEnabled: true })).toBeNull();

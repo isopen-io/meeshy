@@ -23,7 +23,7 @@ import { enhancedLogger } from '../../utils/logger-enhanced';
 import { ifNoneMatchMatches } from '../../utils/etag';
 import { sendError, sendNotFound, sendForbidden, sendInternalError } from '../../utils/response.js';
 import type { AttachmentParams } from './types';
-import { atRestSealingOf, currentStorageKey, diskBytes, hasBucket, isBucketUnavailable, locateBucketBytes, locateStoredBytes, uploadRootOf, type StoredBytes, type StoredBytesSource } from './storedBytes';
+import { atRestSealingOf, currentStorageKey, diskBytes, locateCurrentStoredBytes, hasBucket, isBucketUnavailable, locateBucketBytes, locateStoredBytes, uploadRootOf, type StoredBytes, type StoredBytesSource } from './storedBytes';
 
 const log = enhancedLogger.child({ module: 'AttachmentDownload' });
 
@@ -132,7 +132,7 @@ export async function registerDownloadRoutes(
           return sendNotFound(reply, 'File not found');
         }
 
-        const stored = await locateStoredBytes(filePath, bytesSource);
+        const stored = await locateCurrentStoredBytes(filePath, bytesSource);
         if (!stored) {
           return sendNotFound(reply, 'File not found on disk');
         }
@@ -214,7 +214,7 @@ export async function registerDownloadRoutes(
           return sendNotFound(reply, 'Thumbnail not found');
         }
 
-        const thumbnailStored = await locateStoredBytes(thumbnailPath, bytesSource);
+        const thumbnailStored = await locateCurrentStoredBytes(thumbnailPath, bytesSource);
         if (!thumbnailStored) {
           return sendNotFound(reply, 'Thumbnail not found on disk');
         }

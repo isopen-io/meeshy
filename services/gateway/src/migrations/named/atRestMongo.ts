@@ -94,7 +94,10 @@ export function mongoAtRestStore(db: Db): AtRestFileStore {
     save: async (record) => {
       await records.updateOne(
         { storageKey: record.storageKey },
-        { $set: { ...record, conversationId: oid(record.conversationId), attachmentId: oid(record.attachmentId) }, $setOnInsert: { createdAt: new Date() } },
+        {
+          $set: { ...record, conversationId: oid(record.conversationId), attachmentId: oid(record.attachmentId), ...(record.replacedKey !== null ? { replacedErasedAt: null } : {}) },
+          $setOnInsert: { createdAt: new Date() },
+        },
         { upsert: true }
       );
     },

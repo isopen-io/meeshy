@@ -42,6 +42,7 @@ import {
   sealedFileIsInPlace,
 } from './atRestFiles';
 import { ciphertextSizeFor } from './sealedFileFormat';
+import { noteSealingDeferred } from './sealLock';
 
 const logger = enhancedLogger.child({ module: 'sealAttachmentFiles' });
 
@@ -75,6 +76,7 @@ export async function acquireSealLock(
 ): Promise<{ readonly release: () => Promise<void> } | 'busy' | null> {
   if (!lock) return null;
   return lock(filePath).catch((error: unknown) => {
+    noteSealingDeferred();
     logger.error('verrou de scellement injoignable : la pièce reste en clair jusqu’au balayage', undefined, {
       code: SERVER_AT_REST_SEAL_LOCK_UNAVAILABLE,
       reason: error instanceof Error ? error.name : 'unknown',

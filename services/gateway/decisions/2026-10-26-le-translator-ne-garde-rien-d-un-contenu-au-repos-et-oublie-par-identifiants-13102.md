@@ -71,7 +71,8 @@ au déploiement de ce lot. Production : attend le feu vert du porteur (#13102).
 - Le cache de synthèse `tts:audio:*` ne se lit ni ne s'écrit hors d'une tâche
   ordinaire déclarée (`cache_allowed()`).
 - Une tâche au repos ou éphémère efface ses pistes de `generated/audios/`
-  une fois publiées à la passerelle (`_forget_translated_audio_files`).
+  une fois publiées à la passerelle (`_forget_translated_audio_files`), et
+  celles déjà publiées au fil de l'eau quand elle échoue ensuite.
 - La traduction d'un TEXTE à vue unique, à flamme ou éphémère part protégée
   comme sa tâche audio (`translationRequestRegime`) : rien n'en est rangé.
 
@@ -87,6 +88,9 @@ les tâches ordinaires comme avant, sous index.
 
 - Le translator voit le clair en mémoire pendant la tâche (c'est le traitement
   serveur des modes `server`/`hybrid`) ; un translator compromis le lit.
+- Les pistes portent un nom déterministe (message, pièce, langue) : deux
+  tâches concurrentes de la même pièce au repos peuvent s'effacer la piste
+  l'une de l'autre avant publication (la piste manque alors, rien ne fuit).
 - Pour une conversation ORDINAIRE, `tts:audio:*` (empreinte du texte → chemin
   de piste, 7 jours) et les pistes de `generated/audios/` ne s'oublient pas à
   la suppression du message : comportement d’avant, suivi par #13143.

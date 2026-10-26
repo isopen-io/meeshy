@@ -169,7 +169,9 @@ export function prismaAtRestFileStore(prisma: Pick<PrismaClient, 'attachmentFile
       await prisma.attachmentFileAtRest.updateMany({ where: { attachmentId, replacedKey: { not: null } }, data: { replacedErasedAt: new Date() } });
     },
     save: async (record) => {
-      await prisma.attachmentFileAtRest.upsert({ where: { storageKey: record.storageKey }, create: record, update: record });
+      // Un rescellement qui remplace un clair rouvre son effacement en attente.
+      const update = record.replacedKey !== null ? { ...record, replacedErasedAt: null } : record;
+      await prisma.attachmentFileAtRest.upsert({ where: { storageKey: record.storageKey }, create: record, update });
     },
     remove: async (storageKey) => {
       await prisma.attachmentFileAtRest.deleteMany({ where: { storageKey } });

@@ -27,6 +27,7 @@ const SEAL_LOCK_WAIT_MS = 250;
 async function holdSealLock(access: AtRestFileAccess, filePath: string): Promise<{ readonly release: () => Promise<void> } | null> {
   if (!access.lock) return null;
   for (let attempt = 0; attempt < SEAL_LOCK_TRIES; attempt += 1) {
+    // Injoignable : on n'attend pas — personne ne peut le tenir non plus.
     const held = await access.lock(filePath).catch((error: unknown) => {
       logger.error('verrou de scellement injoignable : piste écrite sans lui', undefined, {
         code: SERVER_AT_REST_SEAL_LOCK_UNAVAILABLE,
@@ -62,7 +63,10 @@ export async function writeTranslatedTrack(
     const targetKey = storageKeyOfPath(track.absolutePath, uploadRoot);
     const sourceKey = storageKeyOfPath(temporary, uploadRoot);
     const head = await prisma.messageAttachment.findUnique({ where: { id: track.attachmentId }, select: { filePath: true } });
-    const held = access && head ? await holdSealLock(access, head.filePath) : null;
+    // Le verrou ne se prend que pour une pièce dont l'original est scellé : une
+    // piste d'une conversation en clair ne l'attend jamais.
+    const originalSealed = access && head && atRestFileSealingEnabled() ? (await access.store.find(head.filePath)) !== null : false;
+    const held = access && head && originalSealed ? await holdSealLock(access, head.filePath) : null;
     try {
       const conversationId = access && head && targetKey && sourceKey ? await sealingConversation(prisma, access, track.attachmentId, head.filePath) : null;
       if (!conversationId || !access || !targetKey || !sourceKey) {
@@ -102,9 +106,13 @@ async function sealingConversation(
   return atRestConversationFor({ prisma, access }, attachmentId);
 }
 
-/** Une piste en clair prend l'adresse ; une ligne de scellement d'une version antérieure part avec elle. */
+/**
+ * Une piste en clair prend l'adresse ; la ligne de scellement d'une version
+ * antérieure part AVANT — un retrait qui échoue laisse l'ancienne piste
+ * lisible plutôt qu'une ligne périmée sur un clair illisible.
+ */
 async function writePlain(temporary: string, target: string, targetKey: string | null, access: AtRestFileAccess | null): Promise<void> {
+  if (access && targetKey && (await access.store.find(targetKey)) !== null) await access.store.remove(targetKey);
   await fs.rename(temporary, target);
   await fs.chmod(target, 0o644).catch(() => undefined);
-  if (access && targetKey) await access.store.remove(targetKey);
 }

@@ -29,7 +29,8 @@ import { enhancedLogger } from '../utils/logger-enhanced.js';
 import { guardedInterval } from '../utils/guarded-timer.js';
 import { AT_REST_TEMPORARY_DIR, atRestFileSealingEnabled, processAtRestFileAccess } from '../services/attachments/atRest/atRestFiles';
 import { readerFileUrlSignerFromEnv } from '../services/attachments/readerFileSignature';
-import { getCacheStore } from '../services/CacheStore';
+import { sealLockRedis } from '../services/attachments/atRest/atRestFileAccessFor';
+import { clearSealingDeferred, sealingDeferredSince } from '../services/attachments/atRest/sealLock';
 import { backfillAtRestAttachments } from '../services/attachments/atRest/atRestBackfill';
 import { finishPendingErasures, type PendingErasureOutcome } from '../services/attachments/atRest/sealAttachmentFiles';
 import { gatewaySealDeps } from '../services/messaging/sealMessageAttachments';
@@ -69,9 +70,12 @@ export function sweepSealingSince(input: {
   readonly now: Date;
   readonly signerReady: boolean;
   readonly sealingEnabled: boolean;
+  /** Depuis quand un verrou injoignable a laissé des pièces en clair : le rattrapage remonte jusque-là, même au-delà de 48 h. */
+  readonly deferredSince?: Date | null;
 }): Date | null {
   if (!input.activatedAt || !input.signerReady || !input.sealingEnabled) return null;
-  return new Date(Math.max(input.activatedAt.getTime(), input.now.getTime() - RECENT_PIECES_MS));
+  const window = Math.min(input.now.getTime() - RECENT_PIECES_MS, input.deferredSince?.getTime() ?? Number.POSITIVE_INFINITY);
+  return new Date(Math.max(input.activatedAt.getTime(), window));
 }
 
 export async function sweepStaleTrackTemporaries(uploadRoot: string, now: number): Promise<number> {
@@ -131,8 +135,12 @@ export async function runAtRestFileSweep(prisma: PrismaClient, now: Date = new D
     now,
     signerReady: readerFileUrlSignerFromEnv(now) !== null,
     sealingEnabled: atRestFileSealingEnabled(),
+    deferredSince: sealingDeferredSince(),
   });
   const report = since ? await backfillAtRestAttachments(deps, { dryRun: false, log: () => undefined, since }) : NO_BACKFILL;
+  // Rattrapé sans pièce occupée ni échec : ce qui avait été différé est scellé.
+  const caughtUp = since !== null && 'skipped' in report && (report.skipped.busy ?? 0) === 0 && report.failed === 0;
+  if (caughtUp) clearSealingDeferred(now);
   const finished = await finishPendingErasuresPass(deps, new Date(now.getTime() - PENDING_ERASURE_MS));
   const tracks = await sweepStaleTrackTemporaries(deps.uploadRoot, now.getTime());
   const erased = finished.reduce((sum, outcome) => sum + outcome.erased, 0);
@@ -146,7 +154,7 @@ export function startAtRestFileSweep(prisma: PrismaClient): { stop(): void } {
   // Relu tant qu'il manque (Redis absent au démarrage) : posé plus tard, il
   // n'en est que plus prudent.
   const activation: { at: Date | null } = { at: null };
-  const marker = () => getCacheStore().getNativeClient() as MarkerClient | null;
+  const marker = () => sealLockRedis() as MarkerClient | null;
   void atRestActivation(marker(), new Date())
     .then((at) => { activation.at = activation.at ?? at; })
     .catch(() => undefined);

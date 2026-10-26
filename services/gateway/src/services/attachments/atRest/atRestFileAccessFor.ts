@@ -7,21 +7,23 @@
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { getEncryptionService } from '../../EncryptionService';
-import { getCacheStore } from '../../CacheStore';
 import { prismaAtRestFileStore, type AtRestFileAccess, type AtRestFileKeyring, type FileSealLock } from './atRestFiles';
-import { gatewaySealLockOf } from './sealLock';
-import { enhancedLogger } from '../../../utils/logger-enhanced';
+import { gatewaySealLockOf, noteSealingDeferred, reconnectingLockClient } from './sealLock';
 
-const logger = enhancedLogger.child({ module: 'atRestFileAccess' });
+const lockClient: { client: ReturnType<typeof reconnectingLockClient> | null } = { client: null };
+/** Le client Redis du verrou et du marqueur d'activation ; `null` sans `REDIS_URL`. */
+export const sealLockRedis = () => {
+  const url = process.env.REDIS_URL;
+  if (!url) return null;
+  lockClient.client = lockClient.client ?? reconnectingLockClient(url);
+  return lockClient.client;
+};
 
-/** Le verrou de la passerelle : Redis partagé, fail-closed (`gatewaySealLockOf`). */
+/** Le verrou de la passerelle : Redis partagé, sur son propre client qui se reconnecte toujours, fail-closed (`gatewaySealLockOf`). */
 export const gatewaySealLock: FileSealLock = gatewaySealLockOf({
-  redis: () => getCacheStore().getNativeClient() as never,
+  redis: () => sealLockRedis() as never,
   configured: () => Boolean(process.env.REDIS_URL),
-  onUnavailable: (error) => logger.error('verrou de scellement Redis injoignable : pièce laissée au balayage', undefined, {
-    code: 'SERVER_AT_REST_SEAL_LOCK_UNAVAILABLE',
-    reason: error instanceof Error ? error.name : 'unknown',
-  }),
+  onUnavailable: () => noteSealingDeferred(),
 });
 
 export function lazyFileKeyring(factory: () => Promise<AtRestFileKeyring>): AtRestFileKeyring {
@@ -37,5 +39,7 @@ export function lazyFileKeyring(factory: () => Promise<AtRestFileKeyring>): AtRe
 }
 
 export function atRestFileAccessFor(prisma: PrismaClient): AtRestFileAccess {
+  // Ouvert dès le démarrage : le premier envoi trouve le verrou déjà connecté.
+  sealLockRedis();
   return { store: prismaAtRestFileStore(prisma), keyring: lazyFileKeyring(() => getEncryptionService(prisma)), lock: gatewaySealLock };
 }

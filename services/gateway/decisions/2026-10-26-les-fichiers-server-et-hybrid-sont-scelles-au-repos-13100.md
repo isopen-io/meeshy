@@ -75,10 +75,16 @@ ligne. La ligne part quand le fichier est effacé (`AttachmentService`).
   d'une même pièce sous deux liaisons (la source et sa copie transférée dans une
   autre conversation `server`) ne se croisent jamais : le second cède, le
   balayage reprend. **Fail-closed** : Redis configuré mais injoignable vaut
-  « occupé » (journalisé en ERREUR, `SERVER_AT_REST_SEAL_LOCK_UNAVAILABLE`) —
-  la pièce reste en clair jusqu'au balayage qui suit le retour de Redis, jamais
-  scellée sous un verrou local qu'une autre instance ne verrait pas. Le verrou
-  du processus ne sert que sans `REDIS_URL` du tout (un seul processus). Une piste TTS s'écrit sous le même
+  « occupé » pour un scellement (journalisé en ERREUR,
+  `SERVER_AT_REST_SEAL_LOCK_UNAVAILABLE`) — la pièce reste en clair jusqu'au
+  balayage qui suit le retour de Redis, jamais scellée sous un verrou local
+  qu'une autre instance ne verrait pas. Le verrou a son PROPRE client Redis,
+  qui se reconnecte sans jamais abandonner (celui du cache cesse après trois
+  tentatives) : le scellement reprend sans redémarrage. Le rattrapage remonte
+  alors jusqu'au début de la panne, même au-delà de 48 h (jamais avant
+  l'activation). Une piste n'attend pas un verrou injoignable, et ne prend le
+  verrou que derrière un original scellé. Le verrou du processus ne sert que
+  sans `REDIS_URL` du tout (un seul processus). Une piste TTS s'écrit sous le même
   verrou (attendu jusqu'à 10 s) : jamais rescellée par-dessus son chiffré.
 - **Le clair remplacé ne s'efface que quand plus aucune ligne ne le désigne.**
   Chaque fichier déplacé garde `replacedKey` ; `finishPendingErasures` repointe
@@ -105,6 +111,9 @@ ligne. La ligne part quand le fichier est effacé (`AttachmentService`).
   verrou de cet original : les adresses d'une pièce ne se signent qu'avec son
   original, et une piste scellée sous une adresse nue ne se lirait plus. Une
   piste réécrite en clair retire la ligne de sa version scellée.
+- **Une copie retardataire reste lisible** par la route par identifiant et
+  celle de la vignette (jugées par la pièce) : un fichier remplacé se sert par
+  son scellé (`locateCurrentStoredBytes`).
 - **Une adresse signée livrée avant le scellement reste lisible** : la route
   signée vérifie la signature sur la clé DEMANDÉE et, si son fichier a été
   remplacé, sert le scellé qui l'a remplacé (`currentStorageKey`), après le
