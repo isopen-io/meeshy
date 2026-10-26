@@ -286,4 +286,8 @@
     <string name="participant_profile_denied_can_send_audios">Não pode enviar áudio</string>
     <string name="participant_profile_denied_can_send_links">Não pode enviar ligações</string>
     <string name="participant_profile_denied_can_send_locations">Não pode partilhar a sua localização</string>
+    <plurals name="chat_unread_separator_count">
+        <item quantity="one">%d mensagem não lida</item>
+        <item quantity="other">%d mensagens não lidas</item>
+    </plurals>
 </resources>

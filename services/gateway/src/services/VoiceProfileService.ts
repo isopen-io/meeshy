@@ -12,11 +12,11 @@
  * Audio processing is delegated to Translator via ZMQ.
  */
 
+import { readStoredFileBytes } from './attachments/atRest/atRestFiles';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { Prisma } from '@meeshy/shared/prisma/client';
 import { randomUUID } from 'crypto';
 import { EventEmitter } from 'events';
-import { promises as fs } from 'fs';
 import path from 'path';
 import {
   ZmqTranslationClient,
@@ -251,7 +251,7 @@ export class VoiceProfileService extends EventEmitter {
 
       // Read audio file
       const fullPath = path.join(this.uploadBasePath, attachment.filePath);
-      const audioBuffer = await fs.readFile(fullPath);
+      const audioBuffer = await readStoredFileBytes(fullPath, { uploadRoot: this.uploadBasePath });
       const audioData = audioBuffer.toString('base64');
 
       // Determine format from mime type

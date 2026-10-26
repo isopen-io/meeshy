@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="composer_shell_minimized_write">Écrire un message</string>
-    <string name="composer_shell_minimized_mic">Enregistrer un message vocal</string>
+    <string name="composer_fold">Réduire la barre de message</string>
+    <string name="composer_unfold">Afficher la barre de message</string>
 </resources>
