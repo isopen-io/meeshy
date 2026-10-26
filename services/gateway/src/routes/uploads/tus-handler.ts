@@ -703,6 +703,7 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
 
         const attachment = await prisma.messageAttachment.create({
           data: {
+            messageId: null,
             originalName: filename,
             ...persistedRenditionFields(rendered),
             ...processingFields,

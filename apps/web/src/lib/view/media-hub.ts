@@ -1,3 +1,4 @@
+import { isEndToEndAttachment } from '@meeshy/shared/types/e2ee-attachment';
 import { segmentText, type TextSegment } from '@meeshy/shared/utils/text-segments';
 
 import type { Attachment, Message } from '@/lib/api/types';
@@ -101,8 +102,15 @@ function urlsOf(segments: readonly TextSegment[]): readonly string[] {
 /** Un STICKER n'est ni une photo ni un média à feuilleter : son image jointe ne sert qu'aux anciens clients. */
 const isHidden = (message: Message): boolean => message.isViewOnce === true || stickerOf(message) !== null;
 
+/**
+ * Un blob chiffré de bout en bout n'est d'aucun genre (#13104) : ce que le web
+ * en reçoit (`application/octet-stream`, nom technique) n'est pas le fichier, et
+ * l'index le présenterait comme un document téléchargeable. Écarté ici même si
+ * un ancien serveur le sert encore.
+ */
 function attachmentItems(message: Message, kind: AttachmentKind): readonly MediaHubItem[] {
   return (message.attachments ?? [])
+    .filter((attachment) => !isEndToEndAttachment(attachment))
     .filter((attachment) => attachment.isViewOnce !== true && attachmentKindOf(attachment.mimeType) === kind)
     .map((attachment) => ({ kind, key: `${message.id}:${attachment.id}`, messageId: message.id, message, attachment }));
 }

@@ -111,6 +111,7 @@ export async function storeEndToEndBlob(
 
   const attachment = await deps.prisma.messageAttachment.create({
     data: {
+      messageId: null,
       fileName: storedName,
       originalName: '',
       mimeType: E2EE_ATTACHMENT_MIME_TYPE,

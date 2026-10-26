@@ -30,6 +30,7 @@
 
 import type { Prisma } from '@meeshy/shared/prisma/client';
 import { prefixRange } from '../../utils/prefix-range';
+import { differsOrUnset } from '../../utils/prisma-unset';
 
 export const GENRES_DE_MEDIA = ['visual', 'audio', 'document', 'link', 'contact', 'conversation', 'location'] as const;
 
@@ -39,6 +40,13 @@ export type GenreDeMedia = (typeof GENRES_DE_MEDIA)[number];
 const GENRE_PAR_DEFAUT: readonly GenreDeMedia[] = ['visual'];
 
 const NON_VUE_UNIQUE = { NOT: { isViewOnce: true } } satisfies Prisma.MessageAttachmentWhereInput;
+
+/**
+ * Un blob chiffré de bout en bout n'est d'aucun genre (#13104) : le serveur ne
+ * sait ni son type ni son nom, et l'index le rangerait sous « Documents » comme
+ * un fichier téléchargeable. Champ absent des anciennes lignes ⇒ `differsOrUnset`.
+ */
+const NON_CHIFFREE_DE_BOUT_EN_BOUT = differsOrUnset('encryptionMode', 'e2ee') satisfies Prisma.MessageAttachmentWhereInput;
 
 const MIMES_VISUELS = ['image/', 'video/'] as const;
 const MIMES_AUDIO = ['audio/'] as const;
@@ -101,7 +109,7 @@ export function clauseDeTypeDuGenre(genre: GenreDePiece): Prisma.MessageAttachme
 
 const pieceDuGenre = (genre: GenreDePiece): Prisma.MessageWhereInput => ({
   attachments: {
-    some: { ...NON_VUE_UNIQUE, ...clauseDeTypeDuGenre(genre) },
+    some: { AND: [NON_VUE_UNIQUE, NON_CHIFFREE_DE_BOUT_EN_BOUT, clauseDeTypeDuGenre(genre)] },
   },
 });
 
@@ -109,13 +117,7 @@ const CLAUSES: Readonly<Record<GenreDeMedia, Prisma.MessageWhereInput>> = {
   visual: pieceDuGenre('visual'),
   audio: pieceDuGenre('audio'),
   contact: pieceDuGenre('contact'),
-  document: {
-    attachments: {
-      some: {
-        AND: [NON_VUE_UNIQUE, clauseDeTypeDuGenre('document')],
-      },
-    },
-  },
+  document: pieceDuGenre('document'),
   link: { OR: [contient('http://'), contient('https://')] },
   conversation: { OR: FORMES_DE_CONVERSATION.map(contient) },
   location: { messageType: 'location' },

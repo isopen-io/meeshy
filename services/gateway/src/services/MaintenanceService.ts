@@ -25,6 +25,7 @@ import {
   recipientLanguage,
 } from '../utils/recipient-language';
 import { guardedInterval } from '../utils/guarded-timer';
+import { unsetOrNull } from '../utils/prisma-unset';
 
 export class MaintenanceService {
   private prisma: PrismaClient;
@@ -468,11 +469,13 @@ export class MaintenanceService {
       orphanedThreshold.setHours(orphanedThreshold.getHours() - this.ORPHANED_ATTACHMENT_THRESHOLD_HOURS);
 
       // Trouver tous les attachments qui :
-      // 1. Ne sont pas liés à un message (messageId null)
+      // 1. Ne sont pas liés à un message — `messageId` nul OU ABSENT : sous
+      //    MongoDB un filtre `null` ne voit pas un champ jamais écrit, et la
+      //    porte TUS (blob e2ee compris) en créait sans lui (#13101)
       // 2. Ont été créés il y a plus de 24 heures
       const orphanedAttachments = await this.prisma.messageAttachment.findMany({
         where: {
-          messageId: null,
+          ...unsetOrNull('messageId'),
           createdAt: {
             lt: orphanedThreshold
           }
