@@ -10,10 +10,12 @@ import me.meeshy.sdk.model.IdentifierAvailability
 import me.meeshy.sdk.model.InviteMemberRequest
 import me.meeshy.sdk.model.UpdateCommunityRequest
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.net.PagedResult
 import me.meeshy.sdk.net.api.AddCommunityMemberRequest
 import me.meeshy.sdk.net.api.CommunityApi
 import me.meeshy.sdk.net.api.UpdateCommunityMemberRoleRequest
 import me.meeshy.sdk.net.apiCall
+import me.meeshy.sdk.net.pagedApiCall
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -34,6 +36,17 @@ class CommunityRepository @Inject constructor(
         limit: Int = 20,
     ): NetworkResult<List<ApiCommunity>> =
         apiCall { communityApi.list(offset, limit, search?.takeIf { it.isNotEmpty() }) }
+
+    /**
+     * [list] avec le bloc `pagination` de l'enveloppe : l'écran Communautés en tire `hasMore` pour
+     * charger la page suivante (iOS lit `response.pagination?.hasMore`).
+     */
+    suspend fun listPaged(
+        search: String? = null,
+        offset: Int = 0,
+        limit: Int = 20,
+    ): NetworkResult<PagedResult<List<ApiCommunity>>> =
+        pagedApiCall { communityApi.list(offset, limit, search?.takeIf { it.isNotEmpty() }) }
 
     suspend fun search(
         query: String,
@@ -80,6 +93,14 @@ class CommunityRepository @Inject constructor(
         limit: Int = 20,
     ): NetworkResult<List<ApiCommunityMember>> =
         apiCall { communityApi.getMembers(communityId, offset, limit) }
+
+    /** [getMembers] avec `pagination`, pour la page suivante de la liste des membres. */
+    suspend fun getMembersPaged(
+        communityId: String,
+        offset: Int = 0,
+        limit: Int = 20,
+    ): NetworkResult<PagedResult<List<ApiCommunityMember>>> =
+        pagedApiCall { communityApi.getMembers(communityId, offset, limit) }
 
     suspend fun addMember(
         communityId: String,
