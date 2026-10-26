@@ -522,7 +522,7 @@ fileprivate struct BubbleGridCell: View {
     private var blurOverlay: some View {
         if attachmentIsProtected && !isRevealed {
             AttachmentBlurOverlayView(
-                isViewOnce: attachment.isViewOnce,
+                isViewOnce: attachment.declaresViewOnce,
                 hint: ProtectedContentTap.resolve(cell: attachment).accessibilityHint,
                 onReveal: handleReveal
             )

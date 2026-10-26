@@ -31,7 +31,12 @@ extension ConversationView {
     /// `unreadPreview(of:liveRow:ledger:now:)` appliquée à la ligne VIVANTE du
     /// fil, jamais à la copie figée posée à la réception.
     var unreadPreview: UnreadPillPreview {
-        Self.unreadPreview(of: viewModel.lastUnreadMessage, liveRow: liveThreadRow, now: Date())
+        Self.unreadPreview(
+            of: viewModel.lastUnreadMessage,
+            liveRow: liveThreadRow,
+            regime: viewModel.startupDependencies.encryptedEra.regime(of: viewModel),
+            now: Date()
+        )
     }
 
     private func liveThreadRow(_ id: String) -> Message? {
@@ -69,16 +74,21 @@ extension ConversationView {
     /// du clair ne mettent à jour. Une ligne absente du fil ne montre rien.
     /// Un message chiffré dont l'appareil n'a pas posé le clair
     /// (`EndToEndThreadPlaintexts.awaitsPlaintext`) ne montre rien, quel que
-    /// soit le texte servi.
+    /// soit le texte servi. Un clair servi dans l'ère chiffrée
+    /// (`EndToEndPlaintextLaw.standing(...).isUnencrypted`, l'auteur n'est pas
+    /// vérifié) ne s'y montre pas non plus : la bulle le porte avec son
+    /// marqueur, la pastille n'en a pas.
     nonisolated static func unreadPreview(
         of lastUnread: Message?,
         liveRow: (String) -> Message?,
+        regime: EndToEndRegime = .serverReadable,
         ledger: EphemeralReceiptRecording = EphemeralReceiptLedger.shared,
         now: Date
     ) -> UnreadPillPreview {
         guard let id = lastUnread?.id, let message = liveRow(id) else { return .withheld }
         guard !message.isDeleted, !EndToEndThreadPlaintexts.awaitsPlaintext(message),
-              message.content != E2EEWire.contentPlaceholder else { return .withheld }
+              message.content != E2EEWire.contentPlaceholder,
+              !EndToEndPlaintextLaw.standing(of: message, in: regime).isUnencrypted else { return .withheld }
         let protection = message.protection(ledger: ledger, now: now)
         let veiledPiece = message.attachments.contains { $0.declaresBlur }
         guard !protection.isExpired, !protection.requiresVeil, !message.holdsViewOnce, !veiledPiece else { return .withheld }

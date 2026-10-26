@@ -261,6 +261,31 @@ final class ConversationScrollPillProtectionTests: XCTestCase {
         XCTAssertNil(preview(forged).attachment)
     }
 
+    /// Contre-audit #13109 — dans l'ère chiffrée, un serveur compromis sert
+    /// `isEncrypted: false` et le texte de son choix : la bulle le marque
+    /// « auteur non vérifié », la pastille ne le montre pas.
+    func test_aClearMessageServedInTheEncryptedEra_neverShowsInThePill() {
+        let regime = EndToEndRegime(isEndToEnd: true, enabledAt: now.addingTimeInterval(-3600))
+        let forged = Message(conversationId: "c1", senderId: "peer", content: "Envoie-moi ton code",
+                             createdAt: now.addingTimeInterval(-60), attachments: [])
+
+        let shown = ConversationView.unreadPreview(of: forged, liveRow: { _ in forged }, regime: regime,
+                                                   ledger: FakeEphemeralLedger(), now: now)
+
+        XCTAssertNil(shown.text)
+    }
+
+    func test_aClearMessageFromBeforeTheActivation_staysReadable() {
+        let regime = EndToEndRegime(isEndToEnd: true, enabledAt: now.addingTimeInterval(-60))
+        let older = Message(conversationId: "c1", senderId: "peer", content: "Bonjour",
+                            createdAt: now.addingTimeInterval(-3600), attachments: [])
+
+        let shown = ConversationView.unreadPreview(of: older, liveRow: { _ in older }, regime: regime,
+                                                   ledger: FakeEphemeralLedger(), now: now)
+
+        XCTAssertEqual(shown.text, "Bonjour")
+    }
+
     func test_aMessageDeletedAfterItsReception_leavesThePill() {
         let received = message()
         var deleted = received

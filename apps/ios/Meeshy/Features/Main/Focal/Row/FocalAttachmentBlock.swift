@@ -154,7 +154,7 @@ nonisolated enum FocalMediaProtection {
     static func state(for attachment: MessageAttachment, isRevealed: Bool, messageRevealed: Bool = false) -> FocalMediaProtectionState {
         guard !isRevealed, attachment.declaresBlur || attachment.declaresViewOnce else { return .none }
         guard !(messageRevealed && !attachment.declaresViewOnce) else { return .none }
-        return .blurred(isViewOnce: attachment.isViewOnce)
+        return .blurred(isViewOnce: attachment.declaresViewOnce)
     }
 
     /// **Ce que fait un toucher sur une case** (#8537, directive porteur
