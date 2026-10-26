@@ -2074,18 +2074,18 @@
         },
         "neon-mythe-a": {
           "collection": "neon",
-          "svg": "714c454bc475a6bd6c5a2dc1286f7f8129ad7dbe6fe2c9c6e04b8fa5c8c6c38c",
-          "png": "e7d992bf35cacf52870438d43693bf5843928c811811fb296e60a6c5ea75a980",
+          "svg": "4ddb1b95d1461c4d30ca2f12b86b816c7c4dd201856fc4bd04aa18d473838046",
+          "png": null,
           "designPng": true,
           "anchors": [
             {
               "bird": 0,
-              "dx": 0,
+              "dx": -16,
               "dy": 72,
-              "scale": 1
+              "scale": 0.94
             }
           ],
-          "decorDelta": 0
+          "decorDelta": null
         },
         "neon-mythe-b": {
           "collection": "neon",

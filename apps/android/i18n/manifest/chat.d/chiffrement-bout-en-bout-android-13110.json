@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:chat": {
+      "resDir": "feature/chat/src/main/res",
+      "entries": [
+        {
+          "androidName": "chat_composer_end_to_end",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

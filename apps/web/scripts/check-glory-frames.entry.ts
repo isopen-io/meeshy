@@ -8,7 +8,7 @@
  */
 import type { GloryFrameTextSlot } from '@meeshy/shared/types/glory-frame-format';
 
-import { fontRequestsOf, stickersOf } from '../src/lib/game-photo/glory/frame-assets';
+import { fontRequestsOf, gloryWindowPath, stickersOf } from '../src/lib/game-photo/glory/frame-assets';
 import { anchorsOf, birdLayoutOf, readGloryFrame, type GloryTexts } from '../src/lib/game-photo/glory/frame-spec';
 import { paintGloryFrame, type GloryBirdImages, type GloryLayerImages, type PaintSurface } from '../src/lib/game-photo/glory/paint-glory-frame';
 import { loadGloryFonts } from '../src/lib/game-photo/glory-fonts';
@@ -82,6 +82,7 @@ async function compose(input: ComposeInput): Promise<ComposeOutput> {
   ]);
   const layers: GloryLayerImages = {
     mask,
+    windowPath: gloryWindowPath(format),
     decor,
     windowFill,
     grade,

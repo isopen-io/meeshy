@@ -35,6 +35,19 @@ public data class ComposerAffordances(
      */
     public val isReadOnly: Boolean
         get() = !canSendText
+
+    public companion object {
+        /** Rien ne part : ni texte, ni pièce, ni lieu (conversation chiffrée de bout en bout, #13110). */
+        public val CLOSED: ComposerAffordances = ComposerAffordances(
+            canSendText = false,
+            canSendImages = false,
+            canSendFiles = false,
+            canSendVideos = false,
+            canSendAudios = false,
+            canSendLocations = false,
+            canSendLinks = false,
+        )
+    }
 }
 
 /**

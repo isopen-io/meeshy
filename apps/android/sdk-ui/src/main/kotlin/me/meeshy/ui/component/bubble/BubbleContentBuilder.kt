@@ -41,6 +41,7 @@ public object BubbleContentBuilder {
         isSlowSend: Boolean = false,
     ): BubbleContent {
         val isDeleted = message.deletedAt != null
+        val isEndToEndSealed = !isDeleted && message.isEndToEndSealed
         val isOutgoing = currentUserId != null && message.senderId == currentUserId
         val isTranslated = !isDeleted && message.isTranslated(preferences)
         // The active display language. A flag-tap `activeLanguageCode` override wins
@@ -82,7 +83,7 @@ public object BubbleContentBuilder {
             message.replyTo != null -> null
             else -> BubbleStoryReplyBuilder.build(message.postReplyTo, message.storyReplyToId, mediaBaseUrl)
         }
-        val visibleAttachments = if (isDeleted) emptyList() else message.attachments
+        val visibleAttachments = if (isDeleted || isEndToEndSealed) emptyList() else message.attachments
         val attachments = BubbleAttachmentBuilder.build(
             visibleAttachments = visibleAttachments,
             effects = message.effects,
@@ -92,7 +93,7 @@ public object BubbleContentBuilder {
         )
         val files = attachments.files
         val text = when {
-            isDeleted -> ""
+            isDeleted || isEndToEndSealed -> ""
             activeIsOriginal -> message.content
             else -> message.translations
                 .firstOrNull {
@@ -126,6 +127,7 @@ public object BubbleContentBuilder {
             showSenderName = showSenderName && !isOutgoing,
             isEdited = message.isEdited,
             isDeleted = isDeleted,
+            isEndToEndSealed = isEndToEndSealed,
             createdAtIso = message.createdAt,
             deliveryStatus = deliveryStatus,
             reactions = reactions,

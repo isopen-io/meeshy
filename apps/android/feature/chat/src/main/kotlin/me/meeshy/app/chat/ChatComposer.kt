@@ -48,6 +48,7 @@ internal fun ChatComposer(
     isEditing: Boolean,
     affordances: ComposerAffordances,
     slowMode: SlowModeState,
+    isEndToEnd: Boolean = false,
     replyBanner: ComposerReplyBanner?,
     hasEffects: Boolean,
     clipboardContent: ClipboardContent?,
@@ -278,6 +279,9 @@ internal fun ChatComposer(
                         onStop = voice.finish,
                         onSend = voice.finish,
                         modifier = Modifier.padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.sm),
+                    )
+                    isEndToEnd -> ComposerEndToEndNotice(
+                        modifier = Modifier.padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.md),
                     )
                     affordances.isReadOnly -> ComposerReadOnlyNotice(
                         modifier = Modifier.padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.md),

@@ -171,18 +171,13 @@ public struct E2EEOwnDeviceDetails: Decodable, Equatable, Sendable {
         registrationId = try container.decode(UInt32.self, forKey: .registrationId)
         platform = Self.text(container, .platform).flatMap(E2EEPlatform.init(rawValue:))
         label = Self.text(container, .label)
-        enrolledAt = Self.text(container, .enrolledAt).flatMap(Self.instant)
-        lastSeenAt = Self.text(container, .lastSeenAt).flatMap(Self.instant)
+        enrolledAt = Self.text(container, .enrolledAt).flatMap(WireDate.date(from:))
+        lastSeenAt = Self.text(container, .lastSeenAt).flatMap(WireDate.date(from:))
         current = (try? container.decodeIfPresent(Bool.self, forKey: .current)) ?? false
     }
 
     private static func text(_ container: KeyedDecodingContainer<CodingKeys>, _ key: CodingKeys) -> String? {
         (try? container.decodeIfPresent(String.self, forKey: key)) ?? nil
-    }
-
-    private static func instant(_ text: String) -> Date? {
-        (try? Date(text, strategy: Date.ISO8601FormatStyle(includingFractionalSeconds: true)))
-            ?? (try? Date(text, strategy: Date.ISO8601FormatStyle()))
     }
 }
 

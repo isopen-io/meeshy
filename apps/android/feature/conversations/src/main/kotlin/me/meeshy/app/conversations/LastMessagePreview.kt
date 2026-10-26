@@ -24,6 +24,8 @@ data class LastMessagePreviewLabels(
     val viewOnce: String = "",
     /** The bare « Draft » a text-less draft says (iOS `draft.label`); blank falls back to [draftPrefix]. */
     val draftLabel: String = "",
+    /** « Message chiffré » : a message this device cannot open (#13110); blank falls back to [none]. */
+    val encrypted: String = "",
 )
 
 /**
@@ -141,6 +143,10 @@ fun messageSummaryLine(
         )
         MessageSummaryKind.VIEW_ONCE -> SummaryLine(
             text = kindLabelWithSender(message, currentUserId, showSender, labels, labels.viewOnce),
+            kind = kind,
+        )
+        MessageSummaryKind.ENCRYPTED -> SummaryLine(
+            text = kindLabelWithSender(message, currentUserId, showSender, labels, labels.encrypted.ifBlank { labels.none }),
             kind = kind,
         )
     }
