@@ -53,17 +53,32 @@ export type EndToEndRegimeState = {
    * ne scelle pas la conversation à vie (revue de sécurité #12985).
    */
   readonly held: Readonly<Record<string, true>>;
+  /**
+   * #12992 (revue) — les messages EN CLAIR que ce navigateur avait déjà en cache
+   * quand il a appris la conversation e2ee : les seuls clairs « d'avant
+   * l'activation » qu'il croit. La date d'un message vient du serveur, qui peut
+   * antidater un clair forgé ; un clair vu pour la première fois après
+   * l'apprentissage reste scellé. Absent : la photographie n'est pas encore prise.
+   */
+  readonly clearKnown: Readonly<Record<string, readonly string[]>>;
   bind(identity: string | null): void;
   learnEndToEnd(conversationId: string, since?: number): void;
   holdSend(conversationId: string, held: boolean): void;
+  /** Photographie unique : une seconde ne remplace jamais la première. */
+  rememberClearBefore(conversationId: string, messageIds: readonly string[]): void;
   reset(): void;
 };
 
+/** Au plus autant de clairs retenus par conversation : les plus récents du cache. */
+export const CLEAR_KNOWN_LIMIT = 1000;
+
 export const SEALED_STORAGE_PREFIX = 'meeshy.e2ee-sealed.';
 export const SINCE_STORAGE_PREFIX = 'meeshy.e2ee-since.';
+export const CLEAR_STORAGE_PREFIX = 'meeshy.e2ee-clear.';
 
 const storageKey = (identity: string): string => `${SEALED_STORAGE_PREFIX}${identity}`;
 const sinceKey = (identity: string): string => `${SINCE_STORAGE_PREFIX}${identity}`;
+const clearKey = (identity: string): string => `${CLEAR_STORAGE_PREFIX}${identity}`;
 
 const browserStorage = (): SealedStorage | null => {
   try {
@@ -111,6 +126,27 @@ function writeSince(storage: SealedStorage | null, identity: string, since: Read
   }
 }
 
+function readClear(storage: SealedStorage | null, identity: string): Record<string, readonly string[]> {
+  try {
+    const raw = storage?.getItem(clearKey(identity));
+    const parsed: unknown = raw ? JSON.parse(raw) : {};
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return {};
+    return Object.fromEntries(
+      Object.entries(parsed).flatMap(([id, ids]) => (Array.isArray(ids) ? [[id, ids.filter((x): x is string => typeof x === 'string')] as const] : [])),
+    );
+  } catch {
+    return {};
+  }
+}
+
+function writeClear(storage: SealedStorage | null, identity: string, clear: Readonly<Record<string, readonly string[]>>): void {
+  try {
+    storage?.setItem(clearKey(identity), JSON.stringify(clear));
+  } catch {
+    return;
+  }
+}
+
 /** La plus ancienne des deux ères ; une ère absente cède toujours. */
 const earliest = (known: number | undefined, offered: number): number => (known === undefined ? offered : Math.min(known, offered));
 
@@ -128,11 +164,12 @@ export function createEndToEndRegimeLedger(
     sealed: {},
     since: {},
     held: {},
+    clearKnown: {},
     bind: (identity) => {
-      const { identity: previous, sealed, since } = get();
+      const { identity: previous, sealed, since, clearKnown } = get();
       if (identity === previous) return;
       if (identity === null) {
-        set({ identity, sealed: {}, since: {}, held: {} });
+        set({ identity, sealed: {}, since: {}, held: {}, clearKnown: {} });
         return;
       }
       /* Appris AVANT toute liaison (le démarrage, avant que la session ne soit
@@ -143,7 +180,11 @@ export function createEndToEndRegimeLedger(
       const stored = readSince(storage, identity);
       const merged = Object.fromEntries(Object.entries(inheritedSince).map(([id, at]) => [id, earliest(stored[id], at)] as const));
       const nextSince = withEras(next, { ...stored, ...merged }, now());
-      set({ identity, sealed: next, since: nextSince, held: {} });
+      const storedClear = readClear(storage, identity);
+      const inheritedClear = previous === null ? clearKnown : {};
+      const nextClear = { ...inheritedClear, ...storedClear };
+      set({ identity, sealed: next, since: nextSince, held: {}, clearKnown: nextClear });
+      if (Object.keys(inheritedClear).some((id) => storedClear[id] === undefined)) writeClear(storage, identity, nextClear);
       if (Object.keys(inherited).length > 0) writeSealed(storage, identity, next);
       if (Object.keys(nextSince).some((id) => stored[id] !== nextSince[id])) writeSince(storage, identity, nextSince);
     },
@@ -165,7 +206,15 @@ export function createEndToEndRegimeLedger(
       const { [conversationId]: _released, ...rest } = current;
       set({ held: held ? { ...current, [conversationId]: true } : rest });
     },
-    reset: () => set({ identity: null, sealed: {}, since: {}, held: {} }),
+    rememberClearBefore: (conversationId, messageIds) => {
+      const { identity, clearKnown } = get();
+      if (clearKnown[conversationId] !== undefined) return;
+      const kept = [...new Set(messageIds)].slice(-CLEAR_KNOWN_LIMIT);
+      const next = { ...clearKnown, [conversationId]: kept };
+      set({ clearKnown: next });
+      if (identity !== null) writeClear(storage, identity, { ...readClear(storage, identity), [conversationId]: kept });
+    },
+    reset: () => set({ identity: null, sealed: {}, since: {}, held: {}, clearKnown: {} }),
   }));
 }
 

@@ -79,7 +79,7 @@ describe('le régime vu, et son ère', () => {
     ledger.getState().learnEndToEnd(ID, ACTIVATED);
     const regime = endToEndRegimeOf({ conversationId: ID, servedMode: null, servedSince: undefined }, ledger.getState());
 
-    expect(regime).toEqual({ sealed: true, since: ACTIVATED });
+    expect(regime).toMatchObject({ sealed: true, since: ACTIVATED });
     expect(endToEndSealed(sealForgedPlaintext([message({})], regime)[0]!)).toBe(true);
   });
 
@@ -111,5 +111,60 @@ describe('la citation d’un clair forgé', () => {
 
     expect(shown!.replyTo === undefined ? false : endToEndSealed(shown!.replyTo)).toBe(true);
     expect(JSON.stringify(shown)).not.toContain('SMS');
+  });
+});
+
+/**
+ * Revue de sécurité du lot (2026-10-26) — trois constats, un témoin chacun.
+ */
+describe('revue : une retenue scelle aussi le clair qui la suit (#13099 × #12992)', () => {
+  const ambiguous = message({ id: 'm-amb', isEncrypted: true, content: '[Encrypted]', translations: [], createdAt: new Date(ACTIVATED) });
+
+  test('le registre retient l’envoi : un clair servi après la retenue est scellé', () => {
+    const ledger = createEndToEndRegimeLedger({ storage: null });
+    ledger.getState().holdSend(ID, true);
+    const regime = endToEndRegimeOf({ conversationId: ID, servedMode: null, servedSince: undefined, trail: [ambiguous] }, ledger.getState());
+    expect(endToEndSealed(sealForgedPlaintext([message({})], regime)[0]!)).toBe(true);
+  });
+
+  test('le fil seul le montre (aucun registre) : scellé aussi, groupe ou tête-à-tête', () => {
+    for (const isDirect of [true, false]) {
+      const regime = endToEndRegimeOf({ conversationId: ID, servedMode: null, servedSince: undefined, trail: [ambiguous], isDirect }, createEndToEndRegimeLedger({ storage: null }).getState());
+      expect(endToEndSealed(sealForgedPlaintext([message({})], regime)[0]!)).toBe(true);
+    }
+  });
+
+  test('un message e2ee du fil d’un groupe scelle le clair qui le suit', () => {
+    const e2ee = message({ id: 'm-e', isEncrypted: true, encryptionMode: 'e2ee', content: '[Encrypted]', translations: [], createdAt: new Date(ACTIVATED) });
+    const regime = endToEndRegimeOf({ conversationId: ID, servedMode: null, servedSince: undefined, trail: [e2ee], isDirect: false }, createEndToEndRegimeLedger({ storage: null }).getState());
+    expect(endToEndSealed(sealForgedPlaintext([message({})], regime)[0]!)).toBe(true);
+  });
+});
+
+describe('revue : un clair antidaté ne passe plus pour un message d’avant l’activation', () => {
+  const learnedWith = (clear: readonly string[]) => {
+    const ledger = createEndToEndRegimeLedger({ storage: null, now: () => Date.parse('2026-10-25T00:00:00.000Z') });
+    ledger.getState().learnEndToEnd(ID, ACTIVATED);
+    ledger.getState().rememberClearBefore(ID, clear);
+    return endToEndRegimeOf({ conversationId: ID, servedMode: 'e2ee', servedSince: new Date(ACTIVATED) }, ledger.getState());
+  };
+  const old = (id: string) => message({ id, content: 'Ancien', translations: [], createdAt: new Date('2026-10-01T00:00:00.000Z') });
+
+  test('un clair que ce navigateur tenait avant d’apprendre le bout en bout reste lisible', () => {
+    const kept = old('m-avant');
+    expect(sealForgedPlaintext([kept], learnedWith(['m-avant']))).toEqual([kept]);
+  });
+
+  test('un clair daté d’avant l’activation mais vu pour la première fois après : scellé', () => {
+    const [shown] = sealForgedPlaintext([old('m-antidate')], learnedWith(['m-avant']));
+    expect(endToEndSealed(shown!)).toBe(true);
+  });
+
+  test('la photographie est unique : une seconde n’y ajoute rien', () => {
+    const ledger = createEndToEndRegimeLedger({ storage: null });
+    ledger.getState().learnEndToEnd(ID);
+    ledger.getState().rememberClearBefore(ID, ['a']);
+    ledger.getState().rememberClearBefore(ID, ['a', 'forge']);
+    expect(ledger.getState().clearKnown[ID]).toEqual(['a']);
   });
 });

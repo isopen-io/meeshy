@@ -8,6 +8,8 @@ import type {
 import type { ListConversation, ListLastMessage } from '@/lib/api/list-preview';
 import type { Attachment, Conversation } from '@/lib/api/types';
 
+import { endToEndRegimeOf, isForgedPlaintext, SEALED_CONTENT, type EndToEndRegimeView } from './end-to-end-sealed';
+
 /**
  * CE QUE LA LIGNE SAIT EN PLUS DE LA CONVERSATION — le lecteur, ses langues,
  * l'instant, et les trois sources locales que le cache de liste ne porte pas :
@@ -24,6 +26,8 @@ export type PreviewContext = {
   readonly servedDeadline?: number | null;
   readonly typing?: readonly string[] | null;
   readonly draft?: string | null;
+  /** Le régime vu de la conversation (#12992) ; absent : lu dans le registre du compte. */
+  readonly regime?: EndToEndRegimeView;
 };
 
 type Hoisted = {
@@ -82,9 +86,24 @@ function attachmentOf(attachment: ProtectedAttachment): ConversationPreviewAttac
   };
 }
 
+/**
+ * #12992 — un clair forgé après l'activation du bout en bout se dit comme un
+ * message chiffré : la loi unique (`isForgedPlaintext`) que le fil applique.
+ */
+function sealedPreviewOf(message: ConversationPreviewMessage): ConversationPreviewMessage {
+  return { ...message, content: SEALED_CONTENT, isEncrypted: true, translations: null, location: null, sticker: null, attachment: null, attachmentSummary: null };
+}
+
 function messageOf(conversation: Conversation, context: PreviewContext): ConversationPreviewMessage | null {
   const message = conversation.lastMessage as (ListLastMessage & Hoisted) | undefined | null;
   if (message === undefined || message === null) return null;
+  const regime =
+    context.regime ?? endToEndRegimeOf({ conversationId: conversation.id, servedMode: conversation.encryptionMode, servedSince: conversation.encryptionEnabledAt });
+  const projected = projectedMessageOf(conversation, message, context);
+  return isForgedPlaintext(message, regime) ? sealedPreviewOf(projected) : projected;
+}
+
+function projectedMessageOf(conversation: Conversation, message: ListLastMessage & Hoisted, context: PreviewContext): ConversationPreviewMessage {
   const sender = message.sender;
   const attachments = (message.attachments ?? []) as readonly ProtectedAttachment[];
   const first = attachments[0];

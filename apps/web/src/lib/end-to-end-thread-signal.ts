@@ -100,11 +100,13 @@ const instantOf = (value: unknown): number | null => {
 /**
  * #12992 — la plus ancienne PREUVE datée du bout en bout dans le fil : l'avis
  * d'activation, ou un message chiffré de bout en bout (l'activation l'a
- * précédé). `null` sans preuve datée.
+ * précédé). `null` sans preuve datée. `withAmbiguous` y compte aussi un
+ * chiffré sans mode ou d'un mode inconnu : l'ère d'un fil qui RETIENT l'envoi
+ * (#13099), pour sceller un clair qui le suit — jamais pour apprendre.
  */
-export function endToEndShownSince(messages: readonly SignalSource[]): number | null {
+export function endToEndShownSince(messages: readonly SignalSource[], options: { readonly withAmbiguous?: boolean } = {}): number | null {
   const instants = messages
-    .filter((message) => announcesEndToEnd(message) || carriesEndToEnd(message))
+    .filter((message) => announcesEndToEnd(message) || carriesEndToEnd(message) || (options.withAmbiguous === true && ambiguouslyEncrypted(message)))
     .map((message) => instantOf(message.createdAt))
     .filter((at): at is number => at !== null);
   return instants.length === 0 ? null : Math.min(...instants);

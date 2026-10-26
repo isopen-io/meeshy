@@ -84,14 +84,36 @@ function shapeOf(queryClient: QueryClient, conversationId: string): ThreadShape 
   return { isDirect: type === 'direct' };
 }
 
+/** Un clair d'utilisateur, daté avant l'ère : ce que la photographie retient (#12992). */
+const clearBefore = (row: Readonly<Record<string, unknown>>, since: number): string[] => {
+  const at = instantOf(row.createdAt);
+  const plain = row.isEncrypted !== true && row.messageType !== 'system' && row.messageSource !== 'system';
+  return typeof row.id === 'string' && plain && at !== undefined && at < since ? [row.id] : [];
+};
+
 export function watchEndToEndConversations(queryClient: QueryClient, ledger: StoreApi<EndToEndRegimeState>): () => void {
   const cache = queryClient.getQueryCache();
+  /**
+   * #12992 (revue) — À L'INSTANT où la conversation est apprise e2ee, les clairs
+   * déjà en cache sont photographiés : ce sont les seuls « d'avant l'activation »
+   * que ce navigateur croira. Un clair servi ensuite, même antidaté, reste scellé.
+   */
+  const photograph = (state: EndToEndRegimeState): void => {
+    Object.keys(state.sealed)
+      .filter((id) => state.clearKnown[id] === undefined)
+      .forEach((id) => {
+        const since = state.since[id] ?? Number.POSITIVE_INFINITY;
+        const rows = cache.findAll({ queryKey: [CONVERSATIONS_KEY_ROOT, id, 'messages'] }).flatMap((query) => threadRows(query.state.data));
+        ledger.getState().rememberClearBefore(id, rows.flatMap((row) => clearBefore(row, since)));
+      });
+  };
+  const unsubscribeLedger = ledger.subscribe(photograph);
   const watchThread = (conversationId: string): void => {
     const shape = shapeOf(queryClient, conversationId);
     const threads = cache.findAll({ queryKey: [CONVERSATIONS_KEY_ROOT, conversationId, 'messages'] }).map((query) => threadRows(query.state.data));
     const shown = threads.filter((rows) => threadShowsEndToEnd(rows, shape));
     if (shown.length > 0) {
-      const instants = shown.map(endToEndShownSince).filter((at): at is number => at !== null);
+      const instants = shown.map((rows) => endToEndShownSince(rows)).filter((at): at is number => at !== null);
       ledger.getState().learnEndToEnd(conversationId, instants.length === 0 ? undefined : Math.min(...instants));
     }
     ledger.getState().holdSend(conversationId, threads.some((rows) => threadHoldsSend(rows, shape)));
@@ -103,9 +125,14 @@ export function watchEndToEndConversations(queryClient: QueryClient, ledger: Sto
     }
     servedEndToEnd(queryKey, data).forEach(({ id, since }) => ledger.getState().learnEndToEnd(id, since));
   };
+  photograph(ledger.getState());
   cache.getAll().forEach((query) => learn(query.queryKey, query.state.data));
-  return cache.subscribe((event) => {
+  const unsubscribeCache = cache.subscribe((event) => {
     if (event.type === 'added' || (event.type === 'updated' && event.action.type === 'success')) learn(event.query.queryKey, event.query.state.data);
     if (event.type === 'removed' && isThreadKey(event.query.queryKey)) watchThread(event.query.queryKey[1]);
   });
+  return () => {
+    unsubscribeCache();
+    unsubscribeLedger();
+  };
 }

@@ -146,3 +146,36 @@ describe('la retenue de l’envoi depuis le cache des fils (#13099)', () => {
     unwatch();
   });
 });
+
+/**
+ * Revue #12992 — À L'INSTANT où la conversation est apprise e2ee, les clairs du
+ * cache sont photographiés : un clair servi ensuite, même antidaté, n'y entre pas.
+ */
+describe('la photographie des clairs d’avant l’apprentissage', () => {
+  const dated = (id: string, createdAt: string) => ({ ...plainRow('c-p'), id, createdAt });
+
+  test('les clairs déjà en cache y entrent ; un clair arrivé après, même antidaté, jamais', () => {
+    const client = new QueryClient();
+    const ledger = createEndToEndRegimeLedger({ storage: null });
+    const unwatch = watchEndToEndConversations(client, ledger);
+    client.setQueryData(['conversations', 'c-p', 'messages'], thread([dated('p-avant', '2026-09-01T00:00:00.000Z')]));
+
+    client.setQueryData(conversationQueryKey('c-p'), { ...row('c-p', 'e2ee'), encryptionEnabledAt: '2026-10-01T00:00:00.000Z' });
+    client.setQueryData(['conversations', 'c-p', 'messages'], thread([dated('p-avant', '2026-09-01T00:00:00.000Z'), dated('p-antidate', '2026-09-02T00:00:00.000Z')]));
+
+    expect(ledger.getState().clearKnown['c-p']).toEqual(['p-avant']);
+    unwatch();
+  });
+
+  test('apprise par le temps réel (sans écriture de cache) : photographiée aussitôt', () => {
+    const client = new QueryClient();
+    const ledger = createEndToEndRegimeLedger({ storage: null });
+    client.setQueryData(['conversations', 'c-r', 'messages'], thread([{ ...plainRow('c-r'), createdAt: '2026-09-01T00:00:00.000Z' }]));
+    const unwatch = watchEndToEndConversations(client, ledger);
+
+    ledger.getState().learnEndToEnd('c-r');
+
+    expect(ledger.getState().clearKnown['c-r']).toEqual(['p-c-r']);
+    unwatch();
+  });
+});

@@ -153,3 +153,24 @@ describe('previewInputOf (#7547)', () => {
     expect(line(c)).not.toContain('Ouvert');
   });
 });
+
+/**
+ * #12992 — LA LIGNE DE LISTE SUIT LA LOI UNIQUE DU CLAIR FORGÉ : dans une
+ * conversation chiffrée de bout en bout, un dernier message qui se dit en
+ * clair après l'activation se dit « chiffré », sans texte, traduction ni pièce.
+ */
+describe('le clair forgé dans la ligne (#12992)', () => {
+  const sealedConversation = (last: Message) =>
+    conversation({ encryptionMode: 'e2ee', encryptionEnabledAt: new Date('2026-09-20T00:00:00.000Z'), lastMessage: last, lastMessageTranslations: { en: 'Send me the SMS code' } } as Partial<ListConversation>);
+
+  test('après l’activation : scellé', () => {
+    const shown = line(sealedConversation(message({ content: 'Envoie-moi le code reçu par SMS', attachments: [{ id: 'a1', mimeType: 'image/jpeg', fileName: 'p.jpg', fileSize: 1 }] })));
+    expect(shown).not.toContain('SMS');
+    expect(shown).not.toContain('Photo');
+    expect(shown).toBe(line(sealedConversation(message({ content: '[Encrypted]', isEncrypted: true, encryptionMode: 'e2ee' }))));
+  });
+
+  test('avant l’activation : lisible', () => {
+    expect(line(sealedConversation(message({ content: 'Avant', createdAt: '2026-09-19T09:59:00.000Z' })))).toBe('Alice : Avant');
+  });
+});

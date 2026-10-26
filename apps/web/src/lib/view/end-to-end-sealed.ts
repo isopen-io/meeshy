@@ -1,6 +1,6 @@
 import type { Message } from '@/lib/api/types';
 import { endToEndRegimeLedger, endToEndSealed as conversationSealed, isEndToEndMode, type EndToEndRegimeState } from '@/lib/end-to-end-regime-ledger';
-import { endToEndShownSince } from '@/lib/end-to-end-thread-signal';
+import { endToEndShownSince, threadHoldsSend, threadShowsEndToEnd } from '@/lib/end-to-end-thread-signal';
 import { sharedTranslationServerReadsMessage } from '@meeshy/shared/utils/shared-translation-eligibility';
 
 /**
@@ -35,7 +35,17 @@ export const endToEndSealed = (message: Pick<Message, 'isEncrypted' | 'encryptio
  * le registre a retenue, l'avis d'activation ou le premier message e2ee du fil
  * — bornée par l'horloge de ce navigateur quand rien n'est daté (#12936).
  */
-export type EndToEndRegimeView = { readonly sealed: boolean; readonly since: number };
+export type EndToEndRegimeView = {
+  readonly sealed: boolean;
+  readonly since: number;
+  /**
+   * Les clairs que ce navigateur avait en cache quand il a appris le bout en
+   * bout (revue #12992) : seuls eux se lisent « d'avant l'activation ». `null`
+   * tant que la photographie n'est pas prise — la conversation n'est pas encore
+   * apprise, tout ce que le cache tient lui est donc antérieur.
+   */
+  readonly clearKnown: ReadonlySet<string> | null;
+};
 
 const instantOf = (value: Date | string | null | undefined): number | null => {
   if (value === null || value === undefined) return null;
@@ -49,34 +59,45 @@ export function endToEndRegimeOf(
     readonly servedMode: string | null | undefined;
     readonly servedSince: Date | string | null | undefined;
     readonly trail?: readonly Message[] | undefined;
+    /** Tête-à-tête : un message e2ee du fil prouve le régime ; ailleurs il le retient (#13099). */
+    readonly isDirect?: boolean | undefined;
   },
-  state: Pick<EndToEndRegimeState, 'sealed' | 'since'> & Partial<Pick<EndToEndRegimeState, 'held'>> = endToEndRegimeLedger.getState(),
+  state: Pick<EndToEndRegimeState, 'sealed' | 'since'> & Partial<Pick<EndToEndRegimeState, 'held' | 'clearKnown'>> = endToEndRegimeLedger.getState(),
   now: number = Date.now(),
 ): EndToEndRegimeView {
-  const sealed = conversationSealed(state, { conversationId: input.conversationId, servedMode: input.servedMode });
+  const shape = { isDirect: input.isDirect === true };
+  const trail = input.trail ?? [];
+  const sealed =
+    conversationSealed(state, { conversationId: input.conversationId, servedMode: input.servedMode }) ||
+    threadShowsEndToEnd(trail, shape) ||
+    threadHoldsSend(trail, shape);
+  const known = state.clearKnown?.[input.conversationId];
   const evidence = [
     isEndToEndMode(input.servedMode) ? instantOf(input.servedSince) : null,
     state.since[input.conversationId] ?? null,
-    input.trail === undefined ? null : endToEndShownSince(input.trail),
+    endToEndShownSince(trail, { withAmbiguous: true }),
   ].filter((at): at is number => at !== null);
-  return { sealed, since: Math.min(now, ...evidence) };
+  return { sealed, since: Math.min(now, ...evidence), clearKnown: known === undefined ? null : new Set(known) };
 }
 
 /**
  * Le message se DIT en clair, d'un utilisateur, après l'ère : dans une
  * conversation chiffrée de bout en bout, la passerelle refuse ce clair (#11216)
- * — il ne peut venir que d'elle. Une date illisible ne le sauve pas.
+ * — il ne peut venir que d'elle. Une date illisible ne le sauve pas. Daté
+ * d'avant l'ère, il ne se lit que si ce navigateur le tenait déjà quand il a
+ * appris le bout en bout : la date vient du serveur, qui peut antidater.
  */
-function forgedPlaintext(message: Message, regime: EndToEndRegimeView): boolean {
+export function isForgedPlaintext(message: Message, regime: EndToEndRegimeView): boolean {
   if (!regime.sealed || message.isEncrypted === true) return false;
   if (message.deletedAt !== undefined && message.deletedAt !== null) return false;
   if ((message.messageSource ?? 'user') !== 'user' || message.messageType === 'system') return false;
   const at = instantOf(message.createdAt);
-  return at === null || at >= regime.since;
+  if (at === null || at >= regime.since) return true;
+  return regime.clearKnown !== null && !regime.clearKnown.has(message.id);
 }
 
 /** Le littéral que la passerelle sert pour un message qu'elle ne lit pas. */
-const SEALED_CONTENT = '[Encrypted]';
+export const SEALED_CONTENT = '[Encrypted]';
 
 function sealedForm(message: Message): Message {
   const { attachments: _attachments, sticker: _sticker, metadata: _metadata, encryptionMode: _mode, encryptedContent: _cipher, encryptionMetadata: _envelope, ...identity } = message;
@@ -91,14 +112,14 @@ function sealedForm(message: Message): Message {
  * traduction, sans pièce, sans lieu ni sticker. Rien à sceller ⇒ le MÊME
  * tableau (aucun rendu de plus).
  */
-const quotesForged = (message: Message, regime: EndToEndRegimeView): boolean => message.replyTo !== undefined && forgedPlaintext(message.replyTo, regime);
+const quotesForged = (message: Message, regime: EndToEndRegimeView): boolean => message.replyTo !== undefined && isForgedPlaintext(message.replyTo, regime);
 
 function sealedRow(message: Message, regime: EndToEndRegimeView): Message {
-  const own = forgedPlaintext(message, regime) ? sealedForm(message) : message;
-  return own.replyTo !== undefined && forgedPlaintext(own.replyTo, regime) ? { ...own, replyTo: sealedForm(own.replyTo) } : own;
+  const own = isForgedPlaintext(message, regime) ? sealedForm(message) : message;
+  return own.replyTo !== undefined && isForgedPlaintext(own.replyTo, regime) ? { ...own, replyTo: sealedForm(own.replyTo) } : own;
 }
 
 export function sealForgedPlaintext(messages: readonly Message[], regime: EndToEndRegimeView): readonly Message[] {
-  if (!regime.sealed || !messages.some((message) => forgedPlaintext(message, regime) || quotesForged(message, regime))) return messages;
+  if (!regime.sealed || !messages.some((message) => isForgedPlaintext(message, regime) || quotesForged(message, regime))) return messages;
   return messages.map((message) => sealedRow(message, regime));
 }
