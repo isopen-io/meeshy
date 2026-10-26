@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.friend.FriendRepository
@@ -27,6 +28,7 @@ data class ContactsUiState(
     val receivedRequests: List<FriendRequest> = emptyList(),
     val sentRequests: List<FriendRequest> = emptyList(),
     val isLoadingRequests: Boolean = false,
+    val isRefreshing: Boolean = false,
     val pendingActionIds: Set<String> = emptySet(),
     val errorMessage: String? = null,
 )
@@ -46,7 +48,11 @@ class ContactsViewModel @Inject constructor(
     /** One-shot outcome of an accept / decline / cancel (toast + haptic), as on iOS. */
     val feedback: SharedFlow<ConnectionFeedback> = _feedback.asSharedFlow()
 
+    private var lastReconciledGraph: PendingGraph = friendshipCache.pendingGraph()
+    private var revalidating = false
+
     init {
+        observeFriendshipCache()
         loadRequests()
     }
 
@@ -83,7 +89,47 @@ class ContactsViewModel @Inject constructor(
         }
     }
 
+    /**
+     * A request received or accepted live (the notification socket patches [FriendshipCache]) or
+     * answered from another surface changes the pending sets under this tab: one silent refetch
+     * repaints both lists. Our own optimistic actions and revalidations move the cache too — they
+     * are absorbed without a refetch.
+     */
+    private fun observeFriendshipCache() {
+        viewModelScope.launch {
+            friendshipCache.version.drop(1).collect {
+                val graph = friendshipCache.pendingGraph()
+                if (graph == lastReconciledGraph) return@collect
+                lastReconciledGraph = graph
+                if (revalidating || _state.value.pendingActionIds.isNotEmpty()) return@collect
+                loadRequests()
+            }
+        }
+    }
+
+    /** Pull-to-refresh: always asks the network, never gated by the cache. */
+    fun refresh() {
+        viewModelScope.launch {
+            _state.update { it.copy(isRefreshing = true) }
+            try {
+                revalidateRequests()
+            } finally {
+                _state.update { it.copy(isRefreshing = false) }
+            }
+        }
+    }
+
     private suspend fun revalidateRequests() {
+        revalidating = true
+        try {
+            fetchAndPublishRequests()
+        } finally {
+            lastReconciledGraph = friendshipCache.pendingGraph()
+            revalidating = false
+        }
+    }
+
+    private suspend fun fetchAndPublishRequests() {
         try {
             val received = friendRepository.receivedRequests()
             val sent = friendRepository.sentRequests()
@@ -232,3 +278,8 @@ class ContactsViewModel @Inject constructor(
 
     private fun toError(t: Throwable) = me.meeshy.sdk.net.ApiError(t.message ?: "Unknown error")
 }
+
+private data class PendingGraph(val received: Set<String>, val sent: Set<String>)
+
+private fun FriendshipCache.pendingGraph() =
+    PendingGraph(received = currentReceivedPendingSenderIds, sent = currentSentPendingReceiverIds)

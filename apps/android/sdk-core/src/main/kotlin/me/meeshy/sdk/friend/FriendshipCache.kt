@@ -70,6 +70,12 @@ class FriendshipCache @Inject constructor(
 
     val pendingReceivedCount: Int get() = synchronized(lock) { receivedPending.size }
 
+    /** Sender ids of the requests received and still pending — what the Requests tab reconciles against. */
+    val currentReceivedPendingSenderIds: Set<String> get() = synchronized(lock) { receivedPending.keys.toSet() }
+
+    /** Receiver ids of the requests sent and still pending. */
+    val currentSentPendingReceiverIds: Set<String> get() = synchronized(lock) { sentPending.keys.toSet() }
+
     // MARK: - Lookup
 
     fun status(userId: String): FriendshipStatus = synchronized(lock) {

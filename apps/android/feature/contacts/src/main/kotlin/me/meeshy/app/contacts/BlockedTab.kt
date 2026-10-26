@@ -20,7 +20,9 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -50,6 +52,7 @@ import me.meeshy.ui.theme.MeeshyTheme
  * load; a populated list paints immediately. Unblocking pops a confirm dialog,
  * then removes the row optimistically (the VM restores it on failure).
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BlockedTab(
     onOpenProfile: (String) -> Unit = {},
@@ -69,28 +72,34 @@ fun BlockedTab(
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        when {
-            state.showSkeleton -> Centered { CircularProgressIndicator() }
-            state.errorMessage != null -> BlockedErrorState(onRetry = viewModel::load)
-            state.isEmpty -> Centered {
-                Text(
-                    text = stringResource(R.string.contacts_blocked_empty),
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MeeshyTheme.tokens.textSecondary,
-                    modifier = Modifier.padding(32.dp),
-                )
-            }
-            else -> LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(vertical = 8.dp),
-            ) {
-                items(state.blocked, key = { it.id }) { user ->
-                    BlockedRow(
-                        user = user,
-                        pending = user.id in state.pendingIds,
-                        onUnblock = { confirmTarget = user },
-                        onOpenProfile = { onOpenProfile(user.id) },
+        PullToRefreshBox(
+            isRefreshing = state.isRefreshing,
+            onRefresh = viewModel::refresh,
+            modifier = Modifier.fillMaxSize(),
+        ) {
+            when {
+                state.showSkeleton -> Centered { CircularProgressIndicator() }
+                state.errorMessage != null -> BlockedErrorState(onRetry = viewModel::load)
+                state.isEmpty -> Centered {
+                    Text(
+                        text = stringResource(R.string.contacts_blocked_empty),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MeeshyTheme.tokens.textSecondary,
+                        modifier = Modifier.padding(32.dp),
                     )
+                }
+                else -> LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(vertical = 8.dp),
+                ) {
+                    items(state.blocked, key = { it.id }) { user ->
+                        BlockedRow(
+                            user = user,
+                            pending = user.id in state.pendingIds,
+                            onUnblock = { confirmTarget = user },
+                            onOpenProfile = { onOpenProfile(user.id) },
+                        )
+                    }
                 }
             }
         }

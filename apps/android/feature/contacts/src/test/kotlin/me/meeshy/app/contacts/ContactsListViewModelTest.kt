@@ -150,6 +150,20 @@ class ContactsListViewModelTest {
     }
 
     @Test
+    fun `pull to refresh re-reads the friend graph from the network and settles`() = runTest {
+        val vm = viewModel(received = listOf(accepted("r1", sender = user("alice"))))
+        coEvery { repository.friendshipGraph(any()) } returns NetworkResult.Success(
+            FriendshipPages(sent = emptyList(), received = listOf(accepted("r1", sender = user("alice")), accepted("r2", sender = user("bob")))),
+        )
+
+        vm.refresh()
+
+        assertThat(vm.state.value.friends.map { it.id }).containsExactly("alice", "bob")
+        assertThat(vm.state.value.isRefreshing).isFalse()
+        coVerify(exactly = 2) { repository.friendshipGraph(any()) }
+    }
+
+    @Test
     fun `loads accepted friends online-first on init`() = runTest {
         val vm = viewModel(
             received = listOf(

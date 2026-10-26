@@ -49,8 +49,10 @@ class ChromeViewModelTest {
     private val notificationRepository: NotificationRepository = mockk(relaxed = true)
     private val friendRepository: FriendRepository = mockk(relaxed = true)
     private val notificationCounts = MutableSharedFlow<NotificationCountsSocketEvent>()
+    private val notificationReceived = MutableSharedFlow<ApiNotification>()
     private val messageSocketManager: MessageSocketManager = mockk(relaxed = true) {
         every { notificationCounts } returns this@ChromeViewModelTest.notificationCounts
+        every { notificationReceived } returns this@ChromeViewModelTest.notificationReceived
     }
 
     private fun viewModel(cache: FriendshipCache = FriendshipCache()): ChromeViewModel {
@@ -98,6 +100,37 @@ class ChromeViewModelTest {
         cache.didReceiveRequest("alice", "r1")
 
         assertThat(vm.pendingFriendRequests.value).isEqualTo(1)
+    }
+
+    @Test
+    fun `a live friend request notification lands in the cache and the badge without any refresh`() = runTest {
+        val cache = FriendshipCache()
+        val vm = viewModel(cache)
+
+        notificationReceived.emit(
+            ApiNotification(
+                id = "n1",
+                type = "friend_request",
+                actor = me.meeshy.sdk.model.NotificationActor(id = "alice"),
+                context = me.meeshy.sdk.model.NotificationContext(friendRequestId = "r1"),
+            ),
+        )
+
+        assertThat(cache.currentReceivedPendingSenderIds).containsExactly("alice")
+        assertThat(vm.pendingFriendRequests.value).isEqualTo(1)
+    }
+
+    @Test
+    fun `a live acceptance notification makes the accepter a friend and clears the sent pending entry`() = runTest {
+        val cache = FriendshipCache()
+        cache.didSendRequest("bob", "r2")
+        viewModel(cache)
+
+        notificationReceived.emit(
+            ApiNotification(id = "n2", type = "friend_accepted", actor = me.meeshy.sdk.model.NotificationActor(id = "bob")),
+        )
+
+        assertThat(cache.isFriend("bob")).isTrue()
     }
 
     @Test

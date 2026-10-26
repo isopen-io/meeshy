@@ -26,6 +26,7 @@ enum class BlockedFeedback(val isError: Boolean) { Unblocked(false), UnblockFail
 data class BlockedListUiState(
     val blocked: List<BlockedUser> = emptyList(),
     val isLoading: Boolean = false,
+    val isRefreshing: Boolean = false,
     val hasLoaded: Boolean = false,
     val errorMessage: String? = null,
     /** Ids with an unblock in flight — guards the button + double-taps. */
@@ -71,6 +72,18 @@ class BlockedListViewModel @Inject constructor(
         viewModelScope.launch {
             paintFromCache()
             revalidate()
+        }
+    }
+
+    /** Pull-to-refresh (iOS `.refreshable { loadBlocked(forceNetwork: true) }`). */
+    fun refresh() {
+        viewModelScope.launch {
+            _state.update { it.copy(isRefreshing = true) }
+            try {
+                revalidate()
+            } finally {
+                _state.update { it.copy(isRefreshing = false) }
+            }
         }
     }
 

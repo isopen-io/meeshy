@@ -70,6 +70,43 @@ class ContactsViewModelTest {
     }
 
     @Test
+    fun `a request received live refetches both lists and paints it without any gesture`() = runTest {
+        val cache = FriendshipCache()
+        val vm = viewModel(cache = cache)
+        coEvery { repository.receivedRequests(any(), any()) } returns NetworkResult.Success(
+            listOf(FriendRequest(id = "r9", status = "pending", senderId = "alice")),
+        )
+
+        cache.didReceiveRequest("alice", "r9")
+
+        assertThat(vm.state.value.receivedRequests.map { it.id }).containsExactly("r9")
+        coVerify(exactly = 2) { repository.receivedRequests(any(), any()) }
+    }
+
+    @Test
+    fun `answering a request here moves the cache without a second refetch`() = runTest {
+        val cache = FriendshipCache()
+        val vm = viewModel(
+            received = listOf(FriendRequest(id = "r1", status = "pending", senderId = "alice")),
+            cache = cache,
+        )
+        coEvery { repository.respond("r1", true) } returns NetworkResult.Success(request("r1", "accepted"))
+
+        vm.acceptRequest("r1")
+
+        coVerify(exactly = 1) { repository.receivedRequests(any(), any()) }
+    }
+
+    @Test
+    fun `refresh asks the network again even when both lists are on screen`() = runTest {
+        val vm = viewModel(received = listOf(request("r1")))
+
+        vm.refresh()
+
+        coVerify(exactly = 2) { repository.receivedRequests(any(), any()) }
+    }
+
+    @Test
     fun `default selected tab is Contacts`() = runTest {
         val vm = viewModel()
 

@@ -65,6 +65,19 @@ class BlockedListViewModelTest {
     }
 
     @Test
+    fun `pull to refresh re-reads the blocklist from the network and settles`() = runTest {
+        coEvery { repository.listBlocked() } returns NetworkResult.Success(listOf(user("u1")))
+        val vm = viewModel()
+        vm.load()
+        coEvery { repository.listBlocked() } returns NetworkResult.Success(listOf(user("u1"), user("u2")))
+
+        vm.refresh()
+
+        assertThat(vm.state.value.blocked.map { it.id }).containsExactly("u1", "u2")
+        assertThat(vm.state.value.isRefreshing).isFalse()
+    }
+
+    @Test
     fun `load with nobody blocked settles into the empty state`() = runTest {
         coEvery { repository.listBlocked() } returns NetworkResult.Success(emptyList())
         val vm = viewModel()

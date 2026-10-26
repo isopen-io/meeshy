@@ -31,6 +31,7 @@ data class ContactsListUiState(
     val filter: ContactFilter = ContactFilter.All,
     val query: String = "",
     val isLoading: Boolean = false,
+    val isRefreshing: Boolean = false,
     val errorMessage: String? = null,
     val moodStatuses: List<StatusEntry> = emptyList(),
 ) {
@@ -142,6 +143,18 @@ class ContactsListViewModel @Inject constructor(
         _state.update {
             if (cached == null) it.copy(isLoading = true)
             else it.copy(friends = cached, isLoading = false)
+        }
+    }
+
+    /** Pull-to-refresh (iOS `.refreshable { loadFriends(forceNetwork: true) }`): network, never gated by the cache. */
+    fun refresh() {
+        viewModelScope.launch {
+            _state.update { it.copy(isRefreshing = true) }
+            try {
+                revalidate()
+            } finally {
+                _state.update { it.copy(isRefreshing = false) }
+            }
         }
     }
 

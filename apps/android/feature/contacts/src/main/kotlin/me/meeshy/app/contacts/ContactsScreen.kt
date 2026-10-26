@@ -31,6 +31,7 @@ import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.ui.graphics.Color
 import me.meeshy.ui.component.chrome.MeeshyBackground
@@ -134,6 +135,7 @@ fun ContactsScreen(
                     onAccept = viewModel::acceptRequest,
                     onDecline = viewModel::declineRequest,
                     onCancel = viewModel::cancelRequest,
+                    onRefresh = viewModel::refresh,
                     onOpenProfile = onOpenProfile,
                 )
                 ContactsTab.Discover -> DiscoverTab(onOpenProfile = onOpenProfile)
@@ -145,12 +147,14 @@ fun ContactsScreen(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun RequestsTab(
     state: ContactsUiState,
     onAccept: (String) -> Unit,
     onDecline: (String) -> Unit,
     onCancel: (String) -> Unit,
+    onRefresh: () -> Unit,
     onOpenProfile: (String) -> Unit,
 ) {
     if (state.isLoadingRequests) {
@@ -159,9 +163,14 @@ private fun RequestsTab(
         }
         return
     }
+    PullToRefreshBox(
+        isRefreshing = state.isRefreshing,
+        onRefresh = onRefresh,
+        modifier = Modifier.fillMaxSize(),
+    ) {
     if (state.receivedRequests.isEmpty() && state.sentRequests.isEmpty()) {
         EmptyState(stringResource(R.string.contacts_requests_empty))
-        return
+        return@PullToRefreshBox
     }
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -190,6 +199,7 @@ private fun RequestsTab(
                 )
             }
         }
+    }
     }
 }
 
