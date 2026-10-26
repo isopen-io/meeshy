@@ -98,7 +98,8 @@ class ReadingModeSessionTest {
         val rows = open(MemoryStore()).state.value.rows
         assertThat(rows.map { it.mode }).containsExactly(FOCAL, SCRIPT, BUBBLES, SUMMARY, ConversationReadingMode.RIVER).inOrder()
         assertThat(rows.single { it.mode == BUBBLES }.isAvailable).isTrue()
-        assertThat(rows.single { it.mode == FOCAL }.unavailableReason).isEqualTo(LensUnavailableReason.NotYetRendered)
+        assertThat(rows.single { it.mode == FOCAL }.isAvailable).isTrue()
+        assertThat(rows.single { it.mode == SUMMARY }.unavailableReason).isEqualTo(LensUnavailableReason.NotYetRendered)
         assertThat(rows.single { it.mode == ConversationReadingMode.RIVER }.unavailableReason).isEqualTo(LensUnavailableReason.RiverNever)
     }
 

@@ -56,6 +56,9 @@ internal fun ChatListRow(
     /** Script / Focal : la rangée plate au lieu de la bulle. */
     flat: Boolean = false,
     metaAlpha: () -> Float = { 0f },
+    /** Focal : cette rangée est l'élue de la scène, sa loupe vaut [focalScale]. */
+    focalElected: Boolean = false,
+    focalScale: Float = 1f,
 ) {
     when (item) {
         is ChatListItem.DayHeader -> DaySeparator(item.dayMillis)
@@ -74,6 +77,8 @@ internal fun ChatListRow(
             canWrite = canWrite,
             flat = flat,
             metaAlpha = metaAlpha,
+            focalElected = focalElected,
+            focalScale = focalScale,
         )
     }
 }

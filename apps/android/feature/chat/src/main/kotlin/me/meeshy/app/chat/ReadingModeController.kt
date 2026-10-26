@@ -30,12 +30,13 @@ import me.meeshy.sdk.session.AnonymousSessionStore
 import me.meeshy.sdk.session.SessionRepository
 
 /**
- * Les vues du fil qu'Android sait DÉJÀ dessiner : Bulles et Script (la rangée plate d'iOS). La
- * loi ouvre donc en Script par défaut, comme iOS ; Résumé (et Rivière, Focal) pas encore portés
- * retombent sur Script ([ReadingModeOpening.deliver]) et restent grisés dans le menu du chip.
+ * Les vues du fil qu'Android sait DÉJÀ dessiner : Bulles, Script (la rangée plate d'iOS) et Focal
+ * (Script + la scène au défilement). La loi ouvre donc en Script par défaut, comme iOS ; Résumé et
+ * Rivière, pas encore portés, retombent sur Script ([ReadingModeOpening.deliver]) et restent grisés
+ * dans le menu du chip.
  */
 internal val DELIVERED_READING_MODES: Set<ConversationReadingMode> =
-    setOf(ConversationReadingMode.BUBBLES, ConversationReadingMode.SCRIPT)
+    setOf(ConversationReadingMode.BUBBLES, ConversationReadingMode.SCRIPT, ConversationReadingMode.FOCAL)
 
 /**
  * Stockage local, scopé par lecteur, du mode de lecture — miroir de

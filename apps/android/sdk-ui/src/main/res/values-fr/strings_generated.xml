@@ -22,6 +22,8 @@
     <string name="emoji_category_smileys">Smileys</string>
     <string name="emoji_category_symbols">Symboles</string>
     <string name="emoji_category_travel">Voyages</string>
+    <string name="focal_focus_add_reaction">Ajouter une réaction</string>
+    <string name="focal_focus_translation_detail">Détails de traduction</string>
     <string name="focal_row_you">Toi</string>
     <string name="media_crop_a11y_handle_bottom">Bord inférieur</string>
     <string name="media_crop_a11y_handle_bottomLeft">Coin inférieur gauche</string>
