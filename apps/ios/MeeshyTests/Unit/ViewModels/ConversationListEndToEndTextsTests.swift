@@ -257,6 +257,27 @@ final class ConversationListEndToEndTextsTests: XCTestCase {
         XCTAssertNil(store.text(for: conversationId))
     }
 
+    /// Les flux du runtime naissent sur son acteur, hors du fil principal : la
+    /// liste ne les lit jamais dans une fermeture isolée au fil principal
+    /// (plantage `dispatch_assert_queue` à la fermeture de session).
+    func test_store_sessionAndOpeningsAnnouncedOffTheMainThread_doNotTrap() async {
+        let vault = MockEndToEndMessaging()
+        vault.store(.readable(content("On se voit à 18 h"), senderUserId: me), for: messageId)
+        let rows = CurrentValueSubject<[Conversation], Never>([sealedRow()])
+        let store = makeStore(rows: rows, vault: vault)
+
+        await withCheckedContinuation { (done: CheckedContinuation<Void, Never>) in
+            DispatchQueue.global().async {
+                vault.announceSession(nil)
+                vault.publish(.undecryptable(messageId: "autre", conversationId: "c"))
+                done.resume()
+            }
+        }
+        await waitUntil { store.text(for: self.conversationId) != nil }
+
+        XCTAssertEqual(store.text(for: conversationId)?.text, "On se voit à 18 h")
+    }
+
     /// Audit (M-8) — la liste n'ouvre jamais la feuille de téléchargement d'une langue.
     func test_store_pairNeedingADownload_isNotTranslatedFromTheList() async {
         let vault = MockEndToEndMessaging()

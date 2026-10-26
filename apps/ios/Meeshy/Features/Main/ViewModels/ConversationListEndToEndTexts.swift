@@ -142,8 +142,10 @@ final class ConversationListEndToEndTextStore {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.forgetEverything() }
             .store(in: &cancellables)
-        endToEnd.opened.map { _ in () }
-            .merge(with: endToEnd.sessions.map { _ in () })
+        // Les deux flux naissent sur l'acteur E2EE : ils rejoignent le fil
+        // principal AVANT toute fermeture, isolée comme ce type.
+        endToEnd.opened.receive(on: DispatchQueue.main).map { _ in () }
+            .merge(with: endToEnd.sessions.receive(on: DispatchQueue.main).map { _ in () })
             .debounce(for: .milliseconds(50), scheduler: DispatchQueue.main)
             .sink { [weak self] _ in
                 guard let self else { return }

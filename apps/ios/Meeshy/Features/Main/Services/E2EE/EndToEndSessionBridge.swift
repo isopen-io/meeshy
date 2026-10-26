@@ -83,6 +83,7 @@ final class EndToEndSessionBridge: EndToEndSessionBridging {
         let janitor = janitor
         enqueue { await janitor.drain() }
         runtime.opened
+            .receive(on: DispatchQueue.main)
             .compactMap { outcome -> String? in
                 guard case .opened(let message) = outcome else { return nil }
                 return message.messageId
