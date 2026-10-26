@@ -1,7 +1,6 @@
 #if DEBUG
 import Combine
 import Foundation
-import GRDB
 import MeeshySDK
 import MeeshyUI
 import UIKit
@@ -76,7 +75,7 @@ enum VitrineStage {
     private static func repartirANeuf() async {
         ComposerAutosaveStore.shared.deleteAll()
         do {
-            _ = try await DependencyContainer.shared.dbPool.write { db in try OutboxRecord.deleteAll(db) }
+            try await MessageRepository(persistence: DependencyContainer.shared.messagePersistence).purgeOutbox()
         } catch {
             fatalError("Vitrine : la file durable d'une prise précédente n'a pas pu être vidée — \(error)")
         }

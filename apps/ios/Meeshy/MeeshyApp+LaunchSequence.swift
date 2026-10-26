@@ -1,6 +1,5 @@
 import SwiftUI
 import Combine
-import GRDB
 import MeeshySDK
 import MeeshyUI
 import os
@@ -10,11 +9,11 @@ extension MeeshyApp {
         prepareProcess()
         await wireNotificationToasts()
         await bootCaches()
-        let bootPool = dependencies.dbPool
-        await bootOutbox(pool: bootPool)
+        let bootSession = dependencies.storeRouter.current
+        await bootOutbox(session: bootSession)
         await wireSettingsReplay()
         sweepLegacyOutboxFiles()
-        drainOutboxAtBoot(pool: bootPool)
+        drainOutboxAtBoot(session: bootSession)
         bootEngagementAndLiveActivities()
         await resolveStoredSession()
         if AuthManager.shared.isAuthenticated {
@@ -60,9 +59,9 @@ extension MeeshyApp {
         _ = NetworkMonitor.shared
     }
 
-    func bootOutbox(pool bootPool: DatabasePool) async {
+    func bootOutbox(session bootSession: MessageStoreSession) async {
         launchSplash.reach(.outbox)
-        await OfflineQueue.shared.configure(pool: bootPool)
+        await OfflineQueue.shared.configure(pool: bootSession.dbPool)
         Task { await SharePendingSendConsumer.shared.consumeAll() }
         Task { await ShareComposeHandoffConsumer.shared.consumeNext() }
         ShareRelayConsumer.shared.consumeNext()
@@ -133,7 +132,7 @@ extension MeeshyApp {
         }
     }
 
-    func drainOutboxAtBoot(pool bootPool: DatabasePool) {
+    func drainOutboxAtBoot(session bootSession: MessageStoreSession) {
         Task.detached(priority: .background) {
             do {
                 _ = try await OfflineQueue.shared.bootRecovery()
@@ -141,7 +140,7 @@ extension MeeshyApp {
                 Logger.messages.error("Boot recovery (outbox flusher path) failed: \(error.localizedDescription, privacy: .public) — retried on next foreground")
             }
             let flusher = OutboxFlusher(
-                pool: bootPool,
+                pool: bootSession.dbPool,
                 dispatcher: EndToEndOutboxGate(),
                 onOutcome: { @Sendable outcome in
                     Task { await OfflineQueue.shared.publishOutcome(outcome) }

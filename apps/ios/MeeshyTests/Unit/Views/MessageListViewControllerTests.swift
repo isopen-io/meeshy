@@ -461,7 +461,7 @@ final class MessageListViewControllerTests: XCTestCase {
             reactionService: MockReactionService(),
             reportService: MockReportService(),
             messageSocket: MockMessageSocket(),
-            dependencies: ConversationDependencies(dbPool: pool, persistence: MessagePersistenceActor(dbWriter: pool)),
+            dependencies: ConversationDependencies(persistence: MessagePersistenceActor(dbWriter: pool)),
             networkMonitor: FakeNetworkMonitor(isOnline: true),
             offlineQueue: FakeOfflineMessageQueue()
         )

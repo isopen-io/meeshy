@@ -50,7 +50,6 @@ final class ConversationViewModelDeviceTranslationTests: XCTestCase {
             reportService: MockReportService(),
             messageSocket: socket,
             dependencies: ConversationDependencies(
-                dbPool: pool,
                 persistence: MessagePersistenceActor(dbWriter: pool)
             )
         )

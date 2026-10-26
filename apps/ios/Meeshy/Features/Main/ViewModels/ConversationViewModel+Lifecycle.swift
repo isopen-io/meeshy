@@ -1,7 +1,6 @@
 import Foundation
 import Combine
 import UIKit
-import GRDB
 import MeeshySDK
 import MeeshyUI
 import os
@@ -31,7 +30,6 @@ import os
 // MARK: - ConversationDependencies
 
 struct ConversationDependencies {
-    let dbPool: any DatabaseWriter
     let persistence: MessagePersistenceActor
     var collaborators: ConversationCollaborators? = nil
     var transcriptionRetry: (any TranscriptionRetryScheduling)? = nil
@@ -43,10 +41,7 @@ struct ConversationDependencies {
 
     @MainActor
     static var live: ConversationDependencies {
-        ConversationDependencies(
-            dbPool: DependencyContainer.shared.dbPool,
-            persistence: DependencyContainer.shared.messagePersistence
-        )
+        ConversationDependencies(persistence: DependencyContainer.shared.messagePersistence)
     }
 }
 
