@@ -367,3 +367,59 @@ describe('relecture : la citation servie est bien le message cité', () => {
     expect(right!.replyTo?.content).toBe('Rendez-vous à 18 h');
   });
 });
+
+describe('troisième relecture : la protection de la pièce, et les deux formes servies d’un même clair', () => {
+  const regimeKnowing = (...known: readonly Message[]) => {
+    const ledger = createEndToEndRegimeLedger({ storage: null, now: () => Date.parse('2026-10-25T00:00:00.000Z') });
+    ledger.getState().learnEndToEnd(ID, ACTIVATED);
+    ledger.getState().rememberClearBefore(ID, known.map((row) => clearPrintOf(row)!));
+    return endToEndRegimeOf({ conversationId: ID, servedMode: 'e2ee', servedSince: new Date(ACTIVATED) }, ledger.getState());
+  };
+  const old = (extra: Readonly<Record<string, unknown>>) => message({ id: 'm-old', content: '', translations: [], createdAt: new Date('2026-10-01T00:00:00.000Z'), ...extra });
+
+  test('une pièce à vue unique ou floutée d’un clair reconnu garde sa protection ; la retirer défait l’empreinte', () => {
+    const photo = { id: 'a-1', mimeType: 'image/jpeg', fileUrl: 'https://cdn.meeshy.me/a-1.jpg', isViewOnce: true, isBlurred: true, effectFlags: 4 };
+    const known = old({ attachments: [photo] });
+    const regime = regimeKnowing(known);
+
+    const [shown] = sealForgedPlaintext([known], regime);
+    expect(shown!.attachments?.[0]).toMatchObject({ isViewOnce: true, isBlurred: true, effectFlags: 4 });
+
+    const stripped = old({ attachments: [{ id: 'a-1', mimeType: 'image/jpeg', fileUrl: 'https://cdn.meeshy.me/a-1.jpg' }] });
+    expect(endToEndSealed(sealForgedPlaintext([stripped], regime)[0]!)).toBe(true);
+  });
+
+  test('photographié en temps réel (lieu à la racine), relu en REST (racine et métadonnées) : reconnu', () => {
+    const place = { latitude: 48.85, longitude: 2.35, name: 'Gare' };
+    const live = old({ messageType: 'location', location: place });
+    const rest = old({ messageType: 'location', location: place, metadata: { location: place } });
+    const [shown] = sealForgedPlaintext([rest], regimeKnowing(live));
+    expect(endToEndSealed(shown!)).toBe(false);
+    expect((shown as unknown as { location: unknown }).location).toEqual(place);
+  });
+
+  test('une citation servie sans sa source se reconnaît comme la ligne citée', () => {
+    const cited = message({ id: 'm-cite', content: 'Rendez-vous à 18 h', translations: [], createdAt: new Date('2026-10-01T00:00:00.000Z') });
+    const { messageSource: _source, ...quoteShape } = cited as unknown as Record<string, unknown>;
+    const carrier = message({ id: 'm-e', isEncrypted: true, encryptionMode: 'e2ee', content: '[Encrypted]', translations: [], replyToId: 'm-cite', replyTo: quoteShape });
+    const [shown] = sealForgedPlaintext([carrier], regimeKnowing(cited));
+    expect(shown!.replyTo?.content).toBe('Rendez-vous à 18 h');
+  });
+});
+
+describe('troisième relecture : un vrai message chiffré garde ses marques sans contenu', () => {
+  test('transfert, story citée, identifiant local et protocole survivent au scellement', () => {
+    const e2ee = message({
+      isEncrypted: true,
+      content: '[Encrypted]',
+      translations: [],
+      encryptionMetadata: { protocol: 'libsignal-v1', note: 'SMS' },
+      forwardedFromId: 'm-src',
+      storyReplyToId: 'p-1',
+      clientMessageId: 'cid-1',
+    });
+    const [shown] = sealForgedPlaintext([e2ee], sealedRegime());
+    expect(shown).toMatchObject({ forwardedFromId: 'm-src', storyReplyToId: 'p-1', clientMessageId: 'cid-1', encryptionMetadata: { protocol: 'libsignal-v1' } });
+    expect(JSON.stringify(shown)).not.toContain('SMS');
+  });
+});

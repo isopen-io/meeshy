@@ -130,11 +130,15 @@ export const SEALED_CONTENT = '[Encrypted]';
  */
 const STATE_KEEPS = [
   'id', 'conversationId', 'senderId', 'anonymousSender', 'messageType', 'messageSource', 'originalLanguage', 'replyToId',
+  'forwardedFromId', 'storyReplyToId',
   'isEdited', 'editedAt', 'editedById', 'editedByRole', 'deletedAt',
   'effectFlags', 'expiresAt', 'ephemeralDuration', 'isViewOnce', 'maxViewOnceCount', 'viewOnceCount', 'consumedByMe', 'isFullyConsumed', 'isBlurred', 'viewOnceConsumed',
   'pinnedAt', 'pinnedBy', 'deliveredToAllAt', 'readByAllAt', 'deliveredCount', 'readCount', 'recipientCount', 'reactionCount',
   'createdAt', 'updatedAt', 'timestamp',
 ] as const satisfies readonly (keyof Message)[];
+
+/** L'identifiant LOCAL d'un envoi (outbox), hors du type servi : sans contenu, il relie la bulle à son accusé. */
+const LOCAL_KEEPS = ['clientMessageId'] as const;
 
 const pick = (message: Message, keys: readonly string[]): Record<string, unknown> => {
   const source = message as unknown as Readonly<Record<string, unknown>>;
@@ -155,10 +159,22 @@ const senderOf = (message: Message): Record<string, unknown> =>
   message.sender !== undefined && message.sender !== null && message.sender.id === message.senderId ? { sender: message.sender } : {};
 
 /** La forme commune : état sans contenu, expéditeur vérifié, réactions réduites aux emoji. */
-const stateOf = (message: Message): Record<string, unknown> => ({ ...pick(message, STATE_KEEPS), ...senderOf(message), ...reactionsOf(message) });
+const stateOf = (message: Message): Record<string, unknown> => ({ ...pick(message, [...STATE_KEEPS, ...LOCAL_KEEPS]), ...senderOf(message), ...reactionsOf(message) });
+
+/**
+ * Un message qui se dit chiffré garde ses MARQUES de régime (mode, protocole) :
+ * le fil y lit l'ère du bout en bout (`endToEndShownSince`), jamais un texte.
+ */
+function sealedMarksOf(message: Message): Record<string, unknown> {
+  const protocol = message.encryptionMetadata?.protocol;
+  return {
+    ...(typeof message.encryptionMode === 'string' ? { encryptionMode: message.encryptionMode } : {}),
+    ...(typeof protocol === 'string' ? { encryptionMetadata: { protocol } } : {}),
+  };
+}
 
 function sealedForm(message: Message): Message {
-  const mode = endToEndSealed(message) && typeof message.encryptionMode === 'string' ? { encryptionMode: message.encryptionMode } : {};
+  const mode = endToEndSealed(message) ? sealedMarksOf(message) : {};
   /* Tous les champs requis de `Message` sont dans l'état gardé ou posés ici. */
   return { ...stateOf(message), ...mode, content: SEALED_CONTENT, isEncrypted: true, translations: [] } as unknown as Message;
 }

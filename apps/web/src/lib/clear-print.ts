@@ -75,11 +75,17 @@ export const AUTHORED_FIELDS = [
   'content', 'originalLanguage', 'attachments', 'location', 'sticker', 'metadata', 'postReplyTo', 'isEncrypted', 'encryptionMode',
 ] as const;
 
-/** D'une pièce : ce que le téléversement a fixé, rien de ce que le serveur y ajoute ensuite. */
-const AUTHORED_ATTACHMENT_FIELDS = ['id', 'fileName', 'originalName', 'mimeType', 'fileSize', 'fileUrl', 'thumbnailUrl', 'width', 'height', 'duration'] as const;
+/**
+ * D'une pièce : ce que le téléversement a fixé, PROTECTION comprise (vue
+ * unique, flou, effets, chiffrement — relecture : sans eux, la forme vérifiée
+ * rendait ouverte une pièce que son auteur avait protégée), rien de ce que le
+ * serveur y ajoute ensuite.
+ */
+const AUTHORED_ATTACHMENT_FIELDS = [
+  'id', 'fileName', 'originalName', 'mimeType', 'fileSize', 'fileUrl', 'thumbnailUrl', 'width', 'height', 'duration',
+  'isViewOnce', 'isBlurred', 'effectFlags', 'isEncrypted', 'encryptionMode',
+] as const;
 
-/** Des métadonnées : le sticker et le lieu posés par l'auteur. */
-const AUTHORED_METADATA_FIELDS = ['sticker', 'location'] as const;
 
 const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> => typeof value === 'object' && value !== null;
 
@@ -90,18 +96,23 @@ const picked = (value: Readonly<Record<string, unknown>>, keys: readonly string[
 
 /**
  * La projection AUTEUR d'un message : ses seuls champs posés par l'auteur,
- * pièces et métadonnées réduites ; `null` et absent se confondent.
+ * pièces réduites ; `null` et absent se confondent. Le lieu et le sticker se
+ * lisent UNE fois — à la racine, sinon dans `metadata` : le temps réel ne sert
+ * que la racine, le REST les deux (relecture). Une source absente se lit
+ * `user` : la citation servie en REST ne la porte pas, la ligne citée si.
  */
 export function authoredOf(row: object): Record<string, unknown> {
   const message = row as Readonly<Record<string, unknown>>;
-  const base = picked(message, AUTHORED_FIELDS);
-  const attachments = Array.isArray(message.attachments) ? message.attachments.filter(isRecord).map((attachment) => picked(attachment, AUTHORED_ATTACHMENT_FIELDS)) : undefined;
-  const metadata = isRecord(message.metadata) ? picked(message.metadata, AUTHORED_METADATA_FIELDS) : undefined;
-  const { attachments: _attachments, metadata: _metadata, ...rest } = base;
+  const meta = isRecord(message.metadata) ? message.metadata : {};
+  const { attachments: _attachments, metadata: _metadata, location: _location, sticker: _sticker, ...rest } = picked(message, AUTHORED_FIELDS);
+  const attachments = Array.isArray(message.attachments) ? message.attachments.filter(isRecord).map((attachment) => picked(attachment, AUTHORED_ATTACHMENT_FIELDS)) : [];
+  const placed = picked({ location: message.location ?? meta.location, sticker: message.sticker ?? meta.sticker }, ['location', 'sticker']);
   return {
     ...rest,
-    ...(attachments === undefined || attachments.length === 0 ? {} : { attachments }),
-    ...(metadata === undefined || Object.keys(metadata).length === 0 ? {} : { metadata }),
+    messageSource: typeof message.messageSource === 'string' ? message.messageSource : 'user',
+    ...placed,
+    ...(attachments.length === 0 ? {} : { attachments }),
+    ...(Object.keys(placed).length === 0 ? {} : { metadata: placed }),
   };
 }
 
