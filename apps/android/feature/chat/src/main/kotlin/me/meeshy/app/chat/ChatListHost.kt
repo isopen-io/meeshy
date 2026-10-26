@@ -19,6 +19,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
@@ -152,14 +153,32 @@ internal fun ChatListHost(
             )
         }
     }
-    val pinnedDayMillis by remember(renderedItems) {
+    // La pastille de jour flottante suit la loi d'iOS `MessageDayStickyLaw` : elle nomme la rangée
+    // réellement en haut du fil, sous la bande d'en-tête, et se tait dès qu'un séparateur de jour
+    // est à l'écran — jamais deux pastilles empilées. Masquée quand l'en-tête est déplié.
+    val density = LocalDensity.current
+    val hasBanners = state.pinnedBanner != null || state.liveLocationBadges.isNotEmpty()
+    // Avec un bandeau, le fil démarre SOUS l'en-tête et ses bandeaux : la pastille aussi.
+    val listTopInset = if (hasBanners) 0.dp else topInset
+    val readingLinePx = with(density) { (MeeshySpacing.sm + listTopInset).toPx() }
+    val pinnedDayMillis by remember(renderedItems, readingLinePx) {
         derivedStateOf {
-            val topIndex = ChatScrollGeometry.topEdgeIndex(
-                firstVisibleIndex = listState.firstVisibleItemIndex,
-                lastVisibleIndex = listState.lastVisibleItemIndex(),
-                orientation = orientation,
-            )
-            PinnedDayHeader.governingDayMillis(renderedItems, topIndex, orientation)
+            if (host.chrome.isHeaderExpanded) return@derivedStateOf null
+            val info = listState.layoutInfo
+            val height = info.viewportSize.height.toFloat()
+            val before = info.beforeContentPadding.toFloat()
+            val visible = info.visibleItemsInfo.filter { it.index < renderedItems.size }
+            // `reverseLayout` : l'offset court depuis le bas du fil ; on le ramène à l'écran.
+            val rows = visible.map { item ->
+                val bottom = height - before - item.offset
+                PinnedDayHeader.Row(
+                    isDayHeader = renderedItems[item.index] is ChatListItem.DayHeader,
+                    minY = bottom - item.size,
+                    maxY = bottom,
+                )
+            }
+            val row = PinnedDayHeader.stickyRow(rows, readingLinePx, height) ?: return@derivedStateOf null
+            PinnedDayHeader.governingDayMillis(renderedItems, visible[row].index, orientation)
         }
     }
     var scrollAffordance by remember { mutableStateOf(ScrollAffordanceState()) }
@@ -224,7 +243,6 @@ internal fun ChatListHost(
             Column(modifier = Modifier.fillMaxSize()) {
                 // Les bandeaux (épinglé, positions en direct) se posent sous l'en-tête
                 // flottant ; sans bandeau, le fil remonte sous l'en-tête comme sur iOS.
-                val hasBanners = state.pinnedBanner != null || state.liveLocationBadges.isNotEmpty()
                 if (hasBanners) Spacer(Modifier.height(topInset))
                 state.pinnedBanner?.let { banner ->
                     PinnedBannerStrip(
@@ -268,7 +286,7 @@ internal fun ChatListHost(
                         }
                     },
                     modifier = Modifier.weight(1f),
-                    topInset = if (hasBanners) 0.dp else topInset,
+                    topInset = listTopInset,
                     bottomInset = bottomInset + typingReserve,
                 ) { item ->
                     ChatListRow(

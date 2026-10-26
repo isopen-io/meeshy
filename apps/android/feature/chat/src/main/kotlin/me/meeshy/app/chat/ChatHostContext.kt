@@ -57,6 +57,8 @@ internal class ChatSheetVisibility {
 @Stable
 internal class ChatChromeState {
     var isScrolling by mutableStateOf(false)
+    /** L'en-tête est déplié : la pastille de jour flottante se retire (iOS `isHeaderExpanded`). */
+    var isHeaderExpanded by mutableStateOf(false)
 }
 
 /**

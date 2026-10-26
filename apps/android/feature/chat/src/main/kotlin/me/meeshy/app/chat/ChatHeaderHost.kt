@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -71,6 +72,7 @@ internal fun ChatHeaderHost(host: ChatHostContext) {
     val appContext = LocalContext.current.applicationContext
     val memory = remember(appContext) { ChatHeaderMemory(appContext) }
     var expanded by remember(state.conversationId) { mutableStateOf(memory.isExpanded(state.conversationId)) }
+    SideEffect { host.chrome.isHeaderExpanded = expanded }
     val toggle: () -> Unit = {
         expanded = !expanded
         memory.setExpanded(expanded, state.conversationId)

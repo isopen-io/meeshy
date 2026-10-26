@@ -34,7 +34,10 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.PlatformTextStyle
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -374,6 +377,14 @@ private fun VisualMediaBody(content: BubbleContent, callbacks: BubbleCallbacks) 
     }
 }
 
+private val FreeEmojiTextStyle = TextStyle(
+    platformStyle = PlatformTextStyle(includeFontPadding = false),
+    lineHeightStyle = LineHeightStyle(
+        alignment = LineHeightStyle.Alignment.Center,
+        trim = LineHeightStyle.Trim.Both,
+    ),
+)
+
 /**
  * Emoji seul, sans fond ni bulle (iOS `emojiOnlyContent`) : l'emoji agrandi et un pied compact —
  * heure 12 sp + coche — posés sur la même ligne de base, en un bloc collé au bord de l'auteur.
@@ -391,6 +402,10 @@ private fun FreeEmojiBody(content: BubbleContent, onLongPress: (() -> Unit)?) {
             text = content.text.trim(),
             fontSize = fontSize.sp,
             lineHeight = (fontSize * 1.15f).sp,
+            // iOS : le cadre de l'emoji épouse le glyphe — sans la réserve de police d'Android ni
+            // l'interligne au-dessus et au-dessous, la bande de réactions vient à cheval sur son
+            // bord bas au lieu de flotter seule sous le message.
+            style = FreeEmojiTextStyle,
             modifier = Modifier.alignByBaseline(),
         )
         BubbleMetaTrailing(
