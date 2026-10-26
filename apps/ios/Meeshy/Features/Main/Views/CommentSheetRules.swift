@@ -6,6 +6,17 @@ import MeeshySDK
 /// façades statiques qui y délèguent — appelants et témoins inchangés.
 enum CommentSheetRules {
 
+    /// Asks the translation of a comment in the reader's request language —
+    /// the one send site for the sheet and the post detail (#13133).
+    static func requestTranslation(postId: String, commentId: String) {
+        let lang = FeedComment.translationRequestLanguage(
+            readerLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser))
+        Task {
+            try? await PostService.shared.requestCommentTranslation(
+                postId: postId, commentId: commentId, targetLanguage: lang)
+        }
+    }
+
     /// Variante pour les commentaires domaine déjà mappés (`FeedComment`). C'est
     /// celle réellement branchée dans la sheet : elle sème `likedIds` à partir de
     /// `post.comments` (et des réponses chargées) qui portent désormais
@@ -71,34 +82,5 @@ enum CommentSheetRules {
         }
         guard let current = liveComments else { return threads }
         return threads + [CacheWrite(key: "post-\(postId)", comments: persistableComments(current))]
-    }
-
-    /// Retire la ligne optimiste `tempId` (et décrémente le compteur de réponses
-    /// de son parent / le total de la feuille) — partagé par le refus
-    /// synchrone de la file et l'observateur `.exhausted`, qui restaurent le
-    /// même instantané d'avant l'envoi.
-    static func rollbackOptimistic(
-        tempId: String,
-        parentId: String?,
-        embeddedComments: [FeedComment],
-        liveComments: inout [FeedComment]?,
-        repliesMap: inout [String: [FeedComment]],
-        liveCommentCount: inout Int?
-    ) {
-        if let parentId {
-            var existing = repliesMap[parentId] ?? []
-            existing.removeAll { $0.id == tempId }
-            repliesMap[parentId] = existing
-            var current = liveComments ?? embeddedComments
-            if let idx = current.firstIndex(where: { $0.id == parentId }), current[idx].replies > 0 {
-                current[idx].replies -= 1
-                liveComments = current
-            }
-        } else {
-            var current = liveComments ?? embeddedComments
-            current.removeAll { $0.id == tempId }
-            liveComments = current
-        }
-        liveCommentCount = max((liveCommentCount ?? embeddedComments.count) - 1, 0)
     }
 }

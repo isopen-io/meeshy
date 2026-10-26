@@ -1,20 +1,23 @@
 {
   "rules": {
     "anyview": 96,
+    "app-grdb-import": 2,
     "async-after": 76,
     "autocapitalization": 0,
     "available-floor": 0,
+    "coder-strategy": 4,
     "corner-radius-modifier": 0,
     "disable-autocorrection": 0,
     "environment-router": 12,
     "fixed-font": 754,
-    "foreground-color": 2400,
+    "foreground-color": 2396,
     "idiom": 0,
     "logger-subsystem": 0,
-    "narrative-comment": 2471,
-    "nonisolated-unsafe": 110,
-    "nslock": 39,
+    "narrative-comment": 2467,
+    "nonisolated-unsafe": 107,
+    "nslock": 34,
     "nslog": 0,
+    "observed-singleton": 0,
     "observed-theme-singleton": 0,
     "onchange-single": 0,
     "plural-s": 0,
@@ -22,8 +25,9 @@
     "status-bar-hidden": 0,
     "try-sleep": 50,
     "uiscreen-main": 1,
-    "unchecked-sendable": 126,
-    "viewmodel-shared": 583
+    "unchecked-sendable": 122,
+    "unchecked-sendable-total": 211,
+    "viewmodel-shared": 581
   },
   "version": 1
 }

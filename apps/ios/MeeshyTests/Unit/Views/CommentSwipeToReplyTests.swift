@@ -137,7 +137,7 @@ final class CommentSwipeToReplyWiringGuardTests: XCTestCase {
     }
 
     func test_theBubble_readsTheSharedTrack_insteadOfItsOwnConstants() throws {
-        let bubble = try source("MessageListView.swift")
+        let bubble = try source("BubbleSwipeContainer.swift")
         XCTAssertTrue(bubble.contains("BubbleSwipeResistance.trackedOffset(translation:"))
         XCTAssertTrue(bubble.contains("BubbleSwipeResistance.commits(offset:"))
         XCTAssertFalse(bubble.contains("let zone: CGFloat = 72"),

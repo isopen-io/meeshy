@@ -875,8 +875,8 @@ final class MessageExitOfferTests: XCTestCase {
     // MARK: - Rangée de durée de l'écran de partage
 
     func test_durationRow_speaksAWholeDuration() {
-        XCTAssertFalse(ShareDurationRow.spokenDuration(seconds: 30).isEmpty)
-        XCTAssertNotEqual(ShareDurationRow.spokenDuration(seconds: 30), ShareDurationRow.spokenDuration(seconds: 300))
+        XCTAssertFalse(MediaFormat.duration(30, style: .spoken).isEmpty)
+        XCTAssertNotEqual(MediaFormat.duration(30, style: .spoken), MediaFormat.duration(300, style: .spoken))
     }
 
     // MARK: - Visionneuses

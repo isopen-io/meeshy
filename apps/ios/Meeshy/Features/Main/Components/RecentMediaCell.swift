@@ -185,6 +185,6 @@ struct RecentMediaCell: View {
     }
 
     private func formatDuration(_ seconds: TimeInterval) -> String {
-        LocalizedNumber.duration(seconds: seconds)
+        MediaFormat.duration(seconds)
     }
 }

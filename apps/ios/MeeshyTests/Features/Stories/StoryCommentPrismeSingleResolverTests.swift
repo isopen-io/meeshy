@@ -96,7 +96,8 @@ final class StoryCommentPrismeSingleResolverTests: XCTestCase {
     private func readerSource() throws -> String {
         // L'UNITÉ : la gestion des commentaires vit dans `StoryViewerView+Content+Comments.swift`.
         AppSourceGuard.stripComments(
-            try AppSourceGuard.unit("Meeshy/Features/Main/Views/StoryViewerView+Content.swift"))
+            try AppSourceGuard.unit("Meeshy/Features/Main/Views/StoryViewerView+Content.swift",
+                                    alsoIncluding: Self.sharedThreadFiles))
     }
 
     /// Le corps du BLOC qui commence à `anchor`, accolades appariées. `nil`
@@ -130,8 +131,15 @@ final class StoryCommentPrismeSingleResolverTests: XCTestCase {
         return bloc
     }
 
+    /// Depuis #13133, les pages de commentaires (racines et réponses) de la
+    /// story se chargent par le fil partagé : son chemin réseau est mesuré ici.
+    private static let sharedThreadFiles = [
+        "Meeshy/Features/Main/ViewModels/CommentThreadViewModel.swift",
+        "Meeshy/Features/Main/ViewModels/CommentThreadViewModel+Roots.swift",
+    ]
     private static let mapperAnchor = "static func storyComment(from"
-    private static let networkPathAnchor = "private func fetchStoryCommentsFromNetwork("
+    private static let pageMapperAnchor = "func mapped("
+    private static let networkPathAnchor = "private func fetchRootsPage("
     /// Depuis #9075, les chemins ne nomment plus le résolveur eux-mêmes : ils
     /// délèguent à `FeedComment(api:)`, le site UNIQUE de la projection, qui
     /// l'appelle (et porte la carte des liens suivis qu'aucune copie ne
@@ -143,13 +151,18 @@ final class StoryCommentPrismeSingleResolverTests: XCTestCase {
     /// mappeur OU si le chemin réseau cesse de passer par lui.
     func test_networkCommentPath_resolvesTheLanguageOnlyThroughTheCanonicalResolver() throws {
         let mapper = try block(Self.mapperAnchor)
+        let pageMapper = try block(Self.pageMapperAnchor)
         let networkPath = try block(Self.networkPathAnchor)
 
         XCTAssertTrue(mapper.contains(Self.canonicalCall),
-                      "Le mappeur de la première charge réseau doit appeler le résolveur canonique du Prisme.")
-        XCTAssertTrue(networkPath.contains("storyComment(from:"),
-                      "`fetchStoryCommentsFromNetwork` doit bâtir ses lignes par `storyComment(from:preferredLanguages:)`.")
+                      "Le mappeur d'un commentaire reçu doit appeler le résolveur canonique du Prisme.")
+        XCTAssertTrue(pageMapper.contains(Self.canonicalCall),
+                      "Le mappeur des pages du fil doit appeler le résolveur canonique du Prisme.")
+        XCTAssertTrue(networkPath.contains("mapped("),
+                      "`fetchRootsPage` doit bâtir ses lignes par le mappeur des pages du fil.")
         for lookup in Self.adHocLookups {
+            XCTAssertFalse(pageMapper.contains(lookup),
+                           "Une résolution de langue locale (`\(lookup)`) est revenue dans le mappeur des pages.")
             XCTAssertFalse(mapper.contains(lookup),
                            "Une résolution de langue locale (`\(lookup)`) est revenue dans le mappeur.")
             XCTAssertFalse(networkPath.contains(lookup),
@@ -163,9 +176,9 @@ final class StoryCommentPrismeSingleResolverTests: XCTestCase {
     func test_everyStoryCommentPath_namesTheCanonicalResolver() throws {
         let calls = try readerSource().components(separatedBy: Self.canonicalCall).count - 1
 
-        XCTAssertGreaterThanOrEqual(calls, 4,
-                                    "Les quatre chemins de commentaires de story (première charge réseau, " +
-                                    "réponses, temps réel, pagination) doivent tous passer par le " +
+        XCTAssertGreaterThanOrEqual(calls, 3,
+                                    "Les chemins de commentaires de story (pages du fil — racines et " +
+                                    "réponses —, temps réel, commentaire reçu) doivent tous passer par le " +
                                     "résolveur canonique du Prisme.")
     }
 

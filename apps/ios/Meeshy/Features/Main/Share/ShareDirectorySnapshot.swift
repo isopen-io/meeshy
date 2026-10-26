@@ -1,4 +1,5 @@
 import Foundation
+import MeeshySDK
 
 /// **Les destinataires que l'app remet à l'extension de partage** (#10947).
 ///
@@ -43,15 +44,13 @@ nonisolated struct ShareDirectorySnapshot: Codable, Equatable, Sendable {
     }
 
     func encoded() -> Data? {
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
+        let encoder = MeeshyCoders.encoder(.persistence)
         return try? encoder.encode(self)
     }
 
     static func decoded(from data: Data?) -> ShareDirectorySnapshot? {
         guard let data else { return nil }
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
+        let decoder = MeeshyCoders.decoder(.persistence)
         return try? decoder.decode(ShareDirectorySnapshot.self, from: data)
     }
 }

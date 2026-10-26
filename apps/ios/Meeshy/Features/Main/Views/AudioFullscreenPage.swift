@@ -379,9 +379,9 @@ struct AudioFullscreenPage: View, Equatable {
                 // temps écoulé à droite (directive porteur du 2026-10-13).
                 let total = metadataDuration > 0 ? metadataDuration : snapshot.duration
                 HStack {
-                    Text(formatMediaDuration(total))
+                    Text(MediaFormat.duration(total))
                     Spacer(minLength: MeeshySpacing.xxl)
-                    Text(formatMediaDuration(snapshot.progress * total))
+                    Text(MediaFormat.duration(snapshot.progress * total))
                 }
                 .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold, design: .monospaced))
                 .foregroundStyle(MeeshyColors.textSecondary(isDark: isDark))

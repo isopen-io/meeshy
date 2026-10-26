@@ -135,7 +135,7 @@ nonisolated enum ComposerObjectChips {
     /// vers zéro (c'est ce qu'une position de lecture demande), là où une
     /// BORNE de fenêtre s'arrondit — 5,7 s de durée annoncent 6 s, pas 5.
     static func timecode(_ seconds: Double, locale: Locale = .current) -> String {
-        LocalizedNumber.duration(seconds: max(0, Int(seconds.rounded())), locale: locale)
+        MediaFormat.duration(max(0, Int(seconds.rounded())), locale: locale)
     }
 
     /// Les cinq styles du modèle, dans les mots de la planche. Un style inconnu

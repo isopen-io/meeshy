@@ -90,12 +90,6 @@ public struct MessageCardMedia: Equatable, Sendable {
         return Array(samples[lower..<upper])
     }
 
-    /// « 0:12 », « 1:05 », « 12:00 ».
-    public static func clock(_ seconds: Double) -> String {
-        let total = max(0, Int(seconds.rounded(.down)))
-        return "\(total / 60):" + String(format: "%02d", total % 60)
-    }
-
     /// Une onde STABLE quand le son n'a pas (encore) été lu : dérivée de son
     /// identifiant, elle ne change pas d'un aperçu à l'autre.
     public static func syntheticSamples(seed: String, count: Int) -> [Double] {

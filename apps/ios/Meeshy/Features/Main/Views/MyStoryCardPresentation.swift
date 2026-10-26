@@ -1,4 +1,5 @@
 import Foundation
+import MeeshySDK
 
 // MARK: - Nature d'une carte
 
@@ -129,17 +130,9 @@ enum MyStoryCardPresentation {
         let threshold = calendar.date(byAdding: .month, value: -1, to: now) ?? now
 
         if date > threshold {
-            let formatter = relativeFormatters[locale.identifier] ?? {
-                let f = RelativeDateTimeFormatter()
-                f.locale = locale
-                f.unitsStyle = .full
-                relativeFormatters[locale.identifier] = f
-                return f
-            }()
-            // `localizedString(for:relativeTo:)` produit DÉJÀ « il y a … » :
-            // le préfixer à la main donnait le « il y a il y a 3 jours »
-            // qu'annonçait VoiceOver.
-            return formatter.localizedString(for: date, relativeTo: now)
+            // `fullString` produit DÉJÀ « il y a … » : le préfixer à la main
+            // donnait le « il y a il y a 3 jours » qu'annonçait VoiceOver.
+            return RelativeTimeFormatter.fullString(for: date, now: now, locale: locale)
         }
 
         let formatter = mediumDateFormatters[locale.identifier] ?? {
@@ -153,7 +146,6 @@ enum MyStoryCardPresentation {
         return formatter.string(from: date)
     }
 
-    private static var relativeFormatters: [String: RelativeDateTimeFormatter] = [:]
     private static var mediumDateFormatters: [String: DateFormatter] = [:]
 
     /// La bande basse. Une story publiée expose son engagement ; un brouillon

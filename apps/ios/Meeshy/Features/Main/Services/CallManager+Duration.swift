@@ -36,7 +36,7 @@ extension CallManager {
     /// L'orthographe est celle de l'app Téléphone : minutes remplies à deux
     /// chiffres sous l'heure (« 02:05 »), heures dès qu'il y en a
     /// (« 1:05:00 »). Elle diffère volontairement de celle des minuteries média
-    /// (« 2:05 », `DurationClock.minuteSecond`), et c'est le seul appelant du
+    /// (« 2:05 », `MediaFormat.DurationStyle.clock`), et c'est le seul appelant du
     /// dépôt à promouvoir les heures.
     ///
     /// `locale` est un paramètre — et non `.current` en dur — pour la raison
@@ -46,19 +46,14 @@ extension CallManager {
         _ duration: TimeInterval,
         locale: Locale = .current
     ) -> String {
-        let total = LocalizedNumber.wholeSeconds(from: duration)
-        return LocalizedNumber.duration(
-            seconds: total,
-            clock: total >= 3600 ? .hourMinuteSecond : .paddedMinuteSecond,
-            locale: locale
-        )
+        MediaFormat.duration(duration, style: .paddedClockPromotingHours, locale: locale)
     }
 
     nonisolated static func spokenDuration(
         _ duration: TimeInterval,
         locale: Locale = .current
     ) -> String {
-        LocalizedNumber.spokenDuration(seconds: duration, locale: locale)
+        MediaFormat.duration(duration, style: .spoken, locale: locale)
     }
 
 }

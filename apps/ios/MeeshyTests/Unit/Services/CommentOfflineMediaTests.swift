@@ -320,14 +320,17 @@ final class CommentOfflineMediaWiringGuardTests: XCTestCase {
     }
 
     func test_everyCommentHost_entrustsAFailedSendWithItsPieces() throws {
+        let thread = try source("Features/Main/ViewModels/CommentThreadViewModel+Send.swift")
+        XCTAssertTrue(thread.contains("CommentMediaDelivery.entrust(payload, medias:"),
+                      "Le fil partagé n'emporte pas les pièces d'un commentaire dont l'envoi échoue.")
+        XCTAssertTrue(thread.contains("CommentMediaDelivery.acquired(from: error)"),
+                      "Le fil partagé re-téléverserait ce que l'envoi direct a déjà monté.")
         for host in ["Features/Main/Views/FeedCommentsSheet.swift",
                      "Features/Main/ViewModels/PostDetailViewModel+CommentSend.swift",
                      "Features/Main/Views/StoryViewerView+Content.swift"] {
             let code = try source(host)
-            XCTAssertTrue(code.contains("CommentMediaDelivery.entrust(payload, medias:"),
-                          "\(host) n'emporte pas les pièces d'un commentaire dont l'envoi échoue.")
-            XCTAssertTrue(code.contains("CommentMediaDelivery.acquired(from: error)"),
-                          "\(host) re-téléverserait ce que l'envoi direct a déjà monté.")
+            XCTAssertTrue(code.contains(".deliver(payload, media: "),
+                          "\(host) n'envoie pas par le fil partagé (#13133).")
             XCTAssertTrue(code.contains("authorId: "), "\(host) : la charge ne déclare pas son auteur.")
         }
     }
@@ -573,7 +576,7 @@ final class CommentOfflineFirstSendTests: XCTestCase {
         let sheet = AppSourceGuard.stripComments(try String(
             contentsOf: root.appendingPathComponent("Meeshy/Features/Main/Views/FeedCommentsSheet.swift"), encoding: .utf8))
         let submit = try XCTUnwrap(sheet.range(of: "private func submitComment("))
-        let publish = try XCTUnwrap(sheet.range(of: "CommentPublisher.live.publish(", range: submit.upperBound..<sheet.endIndex))
+        let publish = try XCTUnwrap(sheet.range(of: "thread.deliver(", range: submit.upperBound..<sheet.endIndex))
         XCTAssertTrue(sheet[submit.upperBound..<publish.lowerBound].contains("composerText = \"\""),
                       "Sans vider la source, la remettre ne change rien et la barre reste vide.")
         XCTAssertTrue(sheet.contains("restoreRefusedComment(text: trimmed, attachments: staged, place: place)"))

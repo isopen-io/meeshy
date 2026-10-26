@@ -1,4 +1,5 @@
 import Foundation
+import MeeshySDK
 import MeeshyUI
 
 /// **Ce que la vue `4c` DIT de l'état d'un asset** (#5086).
@@ -92,7 +93,7 @@ nonisolated enum ComposerPreUploadCopy {
         let echelle = scale(for: total)
         let envoye = (Double(max(0, min(sent, total))) / echelle.divisor)
             .formatted(.number.locale(locale).precision(.fractionLength(0...1)))
-        return "\(envoye) / \(formatMediaFileSize(max(0, total), allowedUnits: echelle.units, locale: locale))"
+        return "\(envoye) / \(MediaFormat.bytes(max(0, total), allowedUnits: echelle.units, locale: locale))"
     }
 
     /// L'échelle et son diviseur, ensemble — les deux doivent s'accorder, et

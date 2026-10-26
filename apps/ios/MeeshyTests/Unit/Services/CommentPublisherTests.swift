@@ -220,19 +220,26 @@ final class CommentPublisherIsTheOnlyDoorGuardTests: XCTestCase {
             contentsOf: Self.appRoot.appendingPathComponent(relative), encoding: .utf8))
     }
 
-    func test_theFeedAndReelsSheet_sendsThroughThePublisher() throws {
-        XCTAssertTrue(try source("Features/Main/Views/FeedCommentsSheet.swift")
+    /// The sheet, the post detail and the story send through the shared
+    /// comment thread (#13133), whose transport is the publisher.
+    func test_theSharedThread_sendsThroughThePublisher() throws {
+        XCTAssertTrue(try source("Features/Main/ViewModels/CommentThreadViewModel+Send.swift")
             .contains("CommentPublisher.live.publish(payload, pieces: CommentPublisher.pieces(media))"))
     }
 
-    func test_thePostDetail_sendsThroughThePublisher() throws {
-        XCTAssertTrue(try source("Features/Main/ViewModels/PostDetailViewModel+CommentSend.swift")
-            .contains("CommentPublisher.live.publish(payload, pieces: CommentPublisher.pieces(pendingMedia))"))
+    func test_theFeedAndReelsSheet_sendsThroughTheSharedThread() throws {
+        XCTAssertTrue(try source("Features/Main/Views/FeedCommentsSheet.swift")
+            .contains("thread.deliver(payload, media: media)"))
     }
 
-    func test_theStory_sendsThroughThePublisher() throws {
+    func test_thePostDetail_sendsThroughTheSharedThread() throws {
+        XCTAssertTrue(try source("Features/Main/ViewModels/PostDetailViewModel+CommentSend.swift")
+            .contains("commentThreadModel.deliver(payload, media: pendingMedia, quoted: quoted)"))
+    }
+
+    func test_theStory_sendsThroughTheSharedThread() throws {
         XCTAssertTrue(try source("Features/Main/Views/StoryViewerView+Content.swift")
-            .contains("CommentPublisher.live.publish(payload, pieces: CommentPublisher.pieces(medias))"))
+            .contains("storyCommentThread.deliver(payload, media: medias, for: .story(story.id))"))
     }
 
     func test_theNotificationReply_sendsThroughThePublisher() throws {

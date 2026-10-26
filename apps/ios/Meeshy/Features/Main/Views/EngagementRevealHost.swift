@@ -40,7 +40,7 @@ private struct RevealItem: Identifiable {
 
 struct EngagementRevealHost: ViewModifier {
     @ObservedObject var router: Router
-    @ObservedObject private var onboarding = OnboardingPresenceSignal.shared
+    @ObservedObject var onboarding: OnboardingPresenceSignal
     @State private var file = EngagementRevealQueue()
     /// La carte du succès qu'on vient de célébrer (#7742) : le déroulé photo, ouvert PAR-DESSUS la révélation.
     @State private var photo: GamePhotoSession?
@@ -145,6 +145,6 @@ struct EngagementRevealHost: ViewModifier {
 extension View {
     /// Pose la célébration de palier sur une racine. UNE ligne, des deux côtés.
     func engagementReveal(router: Router) -> some View {
-        modifier(EngagementRevealHost(router: router))
+        modifier(EngagementRevealHost(router: router, onboarding: .shared))
     }
 }

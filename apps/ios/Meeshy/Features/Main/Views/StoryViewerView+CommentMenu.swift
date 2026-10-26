@@ -1,25 +1,9 @@
 import SwiftUI
 import MeeshySDK
 
-/// **Remplacer un commentaire de story EN PLACE** — racine ou réponse, par son
-/// id. Partagé par l'édition optimiste de l'auteur (#8709) et l'écho socket
-/// `comment:updated` : une seule règle, jamais d'insertion.
+/// **Le brouillon d'édition d'un commentaire de story** (#8709). Le
+/// remplacement et le retrait vivent dans le fil partagé (`FeedCommentThread`).
 enum StoryCommentEditing {
-
-    static func replacing(
-        _ edited: FeedComment,
-        comments: [FeedComment],
-        replies: [String: [FeedComment]]
-    ) -> (comments: [FeedComment], replies: [String: [FeedComment]]) {
-        if let parentId = edited.parentId,
-           let thread = replies[parentId],
-           thread.contains(where: { $0.id == edited.id }) {
-            var updated = replies
-            updated[parentId] = thread.map { $0.id == edited.id ? edited : $0 }
-            return (comments, updated)
-        }
-        return (comments.map { $0.id == edited.id ? edited : $0 }, replies)
-    }
 
     /// Le texte qui part au serveur — `nil` quand il est vide ou inchangé :
     /// « Enregistrer » ne coûte alors ni requête ni régénération des traductions.
@@ -27,30 +11,6 @@ enum StoryCommentEditing {
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, text != original.trimmingCharacters(in: .whitespacesAndNewlines) else { return nil }
         return text
-    }
-
-    /// **Retirer un commentaire du fil** (#11159) — une racine part avec ses
-    /// réponses (le serveur les emporte), une réponse décompte son parent.
-    /// `removedCount` : ce que le compteur de la story perd.
-    static func removing(
-        _ target: FeedComment,
-        comments: [FeedComment],
-        replies: [String: [FeedComment]]
-    ) -> (comments: [FeedComment], replies: [String: [FeedComment]], removedCount: Int) {
-        guard let parentId = target.parentId else {
-            var remaining = replies
-            remaining[target.id] = nil
-            return (comments.filter { $0.id != target.id }, remaining, 1 + target.replies)
-        }
-        var remaining = replies
-        remaining[parentId] = replies[parentId]?.filter { $0.id != target.id }
-        let parents = comments.map { parent -> FeedComment in
-            guard parent.id == parentId, parent.replies > 0 else { return parent }
-            var decremented = parent
-            decremented.replies -= 1
-            return decremented
-        }
-        return (parents, remaining, 1)
     }
 }
 
@@ -69,10 +29,9 @@ struct StoryCommentThreadWriter {
     /// Les effets et la langue d'origine restent ceux du commentaire : l'édition
     /// ne touche que le texte. L'écho `comment:updated` reconfirme la ligne.
     func edit(_ target: FeedComment, content: String) async {
-        let applied = StoryCommentEditing.replacing(
-            target.withEditedContent(content, effectFlags: target.effectFlags), comments: comments, replies: replies
-        )
-        let saved = await commit(comments: applied.comments, replies: applied.replies, countDelta: 0) {
+        let applied = FeedCommentThread(roots: comments, replies: replies)
+            .replacing(target.withEditedContent(content, effectFlags: target.effectFlags))
+        let saved = await commit(comments: applied.roots, replies: applied.replies, countDelta: 0) {
             _ = try await service.updateComment(
                 postId: postId, commentId: target.id, content: content,
                 effectFlags: target.effectFlags, originalLanguage: target.originalLanguage
@@ -85,8 +44,8 @@ struct StoryCommentThreadWriter {
     }
 
     func remove(_ target: FeedComment, reason: String) async {
-        let removal = StoryCommentEditing.removing(target, comments: comments, replies: replies)
-        let removed = await commit(comments: removal.comments, replies: removal.replies, countDelta: -removal.removedCount) {
+        let removal = FeedCommentThread(roots: comments, replies: replies).removing(target)
+        let removed = await commit(comments: removal.thread.roots, replies: removal.thread.replies, countDelta: -removal.removedCount) {
             try await service.deleteComment(postId: postId, commentId: target.id, reason: reason)
         }
         guard removed else {
@@ -161,8 +120,8 @@ extension StoryViewerView {
                 HapticFeedback.light()
                 Task { await toggleStoryCommentLike(comment) }
             },
-            root: comment.parentId.flatMap { parentId in storyComments.first { $0.id == parentId } },
-            loadedReplies: comment.parentId == nil ? (storyCommentRepliesMap[comment.id] ?? []) : [],
+            root: comment.parentId.flatMap { parentId in storyCommentThread.roots.first { $0.id == parentId } },
+            loadedReplies: comment.parentId == nil ? (storyCommentThread.replies[comment.id] ?? []) : [],
             story: commentCardStory,
             onCommitEdit: { text in
                 Task { await storyCommentWriter?.edit(comment, content: text) }
@@ -175,7 +134,7 @@ extension StoryViewerView {
 
     var storyCommentWriter: StoryCommentThreadWriter? {
         currentStory.map {
-            StoryCommentThreadWriter(postId: $0.id, comments: $storyComments, replies: $storyCommentRepliesMap, count: $storyCommentCount)
+            StoryCommentThreadWriter(postId: $0.id, comments: $storyCommentThread.roots, replies: $storyCommentThread.replies, count: $storyCommentCount)
         }
     }
 

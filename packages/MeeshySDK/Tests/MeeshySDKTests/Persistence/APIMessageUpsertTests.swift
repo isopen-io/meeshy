@@ -17,7 +17,7 @@ final class APIMessageUpsertTests: XCTestCase {
         ]
         overrides.forEach { json[$0.key] = $0.value }
         let data = try JSONSerialization.data(withJSONObject: json)
-        return try APIClient.makeAPIPayloadDecoder().decode(APIMessage.self, from: data)
+        return try MeeshyCoders.decoder(.api).decode(APIMessage.self, from: data)
     }
 
     private let context = APIMessageUpsert.Context(currentUserId: "me", preferredLanguages: [])

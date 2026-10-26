@@ -6,7 +6,10 @@ import MeeshyUI
 struct PrivacySettingsView: View {
     @Environment(\.dismiss) private var dismiss
     private var theme: ThemeManager { ThemeManager.shared }
-    @ObservedObject private var prefs = UserPreferencesManager.shared
+    @ObservedObject private var prefs: UserPreferencesManager
+    init(prefs: UserPreferencesManager = .shared) {
+        self.prefs = prefs
+    }
     /// Fiche « (i) » affichée en surimpression. Une seule à la fois.
     @State private var presentedInfo: SettingsInfo?
     /// Réglage de l'APPAREIL (#11296) : l'adresse IP à masquer est la sienne.

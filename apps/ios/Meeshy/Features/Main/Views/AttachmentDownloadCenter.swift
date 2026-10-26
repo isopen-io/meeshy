@@ -669,12 +669,4 @@ final class AttachmentDownloader: ObservableObject {
         guard let observedKey else { return }
         center.cancel(key: observedKey)
     }
-
-    /// Delegates to the single SDK-wide `formatMediaFileSize` helper (see
-    /// `MediaTypes.swift`) so download badges, the audio play-button label
-    /// and upload progress all render the exact same string for a given
-    /// byte count.
-    static func fmt(_ bytes: Int64) -> String {
-        formatMediaFileSize(bytes)
-    }
 }

@@ -12,6 +12,16 @@ import MeeshySDK
 /// `comment:updated` partage.
 extension PostDetailViewModel {
 
+    /// The post's comment thread — the same rules as the story's and the
+    /// sheet's (`FeedCommentThread`, #13133).
+    var commentThread: FeedCommentThread {
+        get { FeedCommentThread(roots: comments, replies: repliesMap) }
+        set {
+            comments = newValue.roots
+            repliesMap = newValue.replies
+        }
+    }
+
     /// PATCH du commentaire : remplacement optimiste EN PLACE (jamais
     /// d'insertion — même id), rollback complet si le serveur refuse.
     /// L'écho `comment:updated` reconfirme ensuite la ligne (idempotent).
@@ -43,14 +53,6 @@ extension PostDetailViewModel {
     /// Remplace la ligne éditée EN PLACE (racine ou réponse) — idempotent,
     /// partagé par l'optimiste local et l'écho socket `comment:updated`.
     func applyCommentUpdated(_ edited: FeedComment) {
-        if let parentId = edited.parentId, var existing = repliesMap[parentId],
-           let idx = existing.firstIndex(where: { $0.id == edited.id }) {
-            existing[idx] = edited
-            repliesMap[parentId] = existing
-            return
-        }
-        if let idx = comments.firstIndex(where: { $0.id == edited.id }) {
-            comments[idx] = edited
-        }
+        commentThread = commentThread.replacing(edited)
     }
 }

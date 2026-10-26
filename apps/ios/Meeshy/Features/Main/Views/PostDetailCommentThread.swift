@@ -48,13 +48,7 @@ struct PostDetailCommentThread: View {
                 Task { await viewModel.deleteComment(target, reason: reason) }
             },
             onEditComment: { target in onEditComment(target) },
-            onRequestTranslation: { target in
-                let lang = ReaderPrism.resolve(for: AuthManager.shared.currentUser).first?.lowercased() ?? "fr"
-                Task {
-                    try? await PostService.shared.requestCommentTranslation(
-                        postId: postId, commentId: target.id, targetLanguage: lang)
-                }
-            },
+            onRequestTranslation: { CommentSheetRules.requestTranslation(postId: postId, commentId: $0.id) },
             moodEmoji: statusViewModel.statusForUser(userId: comment.authorId)?.moodEmoji,
             storyState: storyViewModel.storyRingState(forUserId: comment.authorId),
             presenceState: PresenceManager.shared.knownPresenceState(for: comment.authorId),

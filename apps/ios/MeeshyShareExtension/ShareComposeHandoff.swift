@@ -1,4 +1,5 @@
 import Foundation
+import MeeshySDK
 
 /// **La pièce qu'on veut COMPOSER plutôt qu'envoyer telle quelle** — vue `2a`
 /// de la planche, « Entrée externe : publier une pièce jointe » (#5056).
@@ -116,16 +117,14 @@ extension JSONEncoder {
     /// (`timeIntervalSinceReferenceDate`) traverserait sans erreur et se
     /// relirait faux le jour où l'un des deux miroirs changerait de stratégie.
     nonisolated static var meeshyShareCompose: JSONEncoder {
-        let encodeur = JSONEncoder()
-        encodeur.dateEncodingStrategy = .iso8601
+        let encodeur = MeeshyCoders.encoder(.persistence)
         return encodeur
     }
 }
 
 extension JSONDecoder {
     nonisolated static var meeshyShareCompose: JSONDecoder {
-        let decodeur = JSONDecoder()
-        decodeur.dateDecodingStrategy = .iso8601
+        let decodeur = MeeshyCoders.decoder(.persistence)
         return decodeur
     }
 }

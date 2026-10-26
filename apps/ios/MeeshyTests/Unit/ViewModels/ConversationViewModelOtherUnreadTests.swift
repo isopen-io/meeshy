@@ -58,7 +58,6 @@ final class ConversationViewModelOtherUnreadTests: XCTestCase {
         mockAuthManager.simulateLoggedIn(user: user)
         let pool = try! makeInMemoryDBPool()
         let deps = ConversationDependencies(
-            dbPool: pool,
             persistence: MessagePersistenceActor(dbWriter: pool)
         )
         let sut = ConversationViewModel(

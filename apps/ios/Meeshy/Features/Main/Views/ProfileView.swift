@@ -970,12 +970,6 @@ struct ProfileView: View {
 
 
     private func parseAndFormatDate(_ dateString: String) -> String? {
-        guard let date = try? Date(dateString, strategy: .iso8601) else {
-            // Tentative sans les secondes fractionnaires si l'ISO8601 standard échoue
-            let strategy = Date.ISO8601FormatStyle(includingFractionalSeconds: true)
-            guard let dateFrac = try? Date(dateString, strategy: strategy) else { return nil }
-            return dateFrac.formatted(date: .abbreviated, time: .omitted)
-        }
-        return date.formatted(date: .abbreviated, time: .omitted)
+        WireDate.date(from: dateString)?.formatted(date: .abbreviated, time: .omitted)
     }
 }

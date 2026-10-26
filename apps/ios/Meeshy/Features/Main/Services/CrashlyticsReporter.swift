@@ -1,4 +1,5 @@
 import Foundation
+import MeeshySDK
 import FirebaseCrashlytics
 
 /// `CrashReporting` backend that forwards diagnostics to Firebase
@@ -35,7 +36,7 @@ nonisolated struct CrashlyticsReporter: CrashReporting {
                 NSLocalizedDescriptionKey: diagnostic.summary,
                 "diagnostic_id": diagnostic.id.uuidString,
                 "diagnostic_kind": diagnostic.kind.rawValue,
-                "diagnostic_timestamp": diagnostic.timestamp.formatted(.iso8601),
+                "diagnostic_timestamp": WireDate.string(from: diagnostic.timestamp),
                 "metrickit_details": truncatedDetails
             ]
         )

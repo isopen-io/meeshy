@@ -62,7 +62,7 @@ struct DataStorageView: View {
 
                             Spacer()
 
-                            Text(formatCacheSize(cacheSize))
+                            Text(MediaFormat.bytes(Int64(cacheSize)))
                                 .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
                                 .foregroundColor(Color(hex: accentColor))
                         }
@@ -95,10 +95,6 @@ struct DataStorageView: View {
         let videoSize = await CacheCoordinator.shared.video.estimatedDiskBytes()
         let thumbnailSize = await CacheCoordinator.shared.thumbnails.estimatedDiskBytes()
         cacheSize = imageSize + audioSize + videoSize + thumbnailSize
-    }
-
-    private func formatCacheSize(_ bytes: Int) -> String {
-        AudioPlayerView.formatBytes(Int64(bytes))
     }
 
     // MARK: - Helpers

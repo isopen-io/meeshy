@@ -310,19 +310,13 @@ public actor StoryPublishQueue {
     public nonisolated let publishFailed = SendablePassthrough<StoryPublishFailure>()
 
     private static let maxQueueSize = 50
-    private static let maxRetries = 5
-    /// Exponential backoff schedule (seconds). Index = retryCount before
-    /// next attempt. Beyond `maxRetries` the item is failed permanently.
-    /// TODO(lot ultérieur) : DÉCLARÉ MAIS JAMAIS LU — il n'existe aucune porte
-    /// temporelle entre deux passes, les passes sont déclenchées par
-    /// `observeConnection`, `setPublishHandler` et `retryFailedItem`. Le
-    /// brancher transformerait le comportement de reprise (fenêtres de
-    /// plusieurs heures) : hors périmètre, mais ne pas croire qu'il s'applique.
-    private static let retryDelays: [TimeInterval] = [30, 120, 600, 3600, 7200]
+    /// Budget seul : aucune porte temporelle entre deux passes, déclenchées par
+    /// `observeConnection`, `setPublishHandler` et `retryFailedItem`.
+    private static let retryPolicy = RetryPolicy.storyPublish
     /// Un item fautif ne doit pas geler les suivants ; une panne réseau ne doit
     /// pas brûler le budget de toute la file. La frontière entre les deux est
     /// le nombre d'échecs retryables CONSÉCUTIFS. Sans porte temporelle entre
-    /// deux passes (cf. `retryDelays`), un `continue` inconditionnel brûlerait
+    /// deux passes (cf. `retryPolicy`), un `continue` inconditionnel brûlerait
     /// 1 tentative sur CHAQUE item à chaque passe : 5 flaps réseau suffiraient
     /// à envoyer toute la file en échec permanent.
     private static let maxConsecutiveRetryableFailures = 2
@@ -353,14 +347,12 @@ public actor StoryPublishQueue {
     private let logger = MeeshyLog.logger(.storyPublishQueue, subsystem: .legacySDK)
 
     private let encoder: JSONEncoder = {
-        let e = JSONEncoder()
-        e.dateEncodingStrategy = .iso8601
+        let e = MeeshyCoders.encoder(.persistence)
         return e
     }()
 
     private let decoder: JSONDecoder = {
-        let d = JSONDecoder()
-        d.dateDecodingStrategy = .iso8601
+        let d = MeeshyCoders.decoder(.persistence)
         return d
     }()
 
@@ -662,7 +654,7 @@ public actor StoryPublishQueue {
                     items[idx].retryCount += 1
                     items[idx].lastError = error.localizedDescription
 
-                    if items[idx].retryCount >= Self.maxRetries {
+                    if Self.retryPolicy.isExhausted(afterFailures: items[idx].retryCount) {
                         permanentFailureIds.append(item.id)
                         failurePayloads.append(StoryPublishFailure(
                             queueId: item.id,
@@ -844,8 +836,7 @@ public actor StoryPublishQueue {
 
         do {
             let data = try Data(contentsOf: url)
-            let decoder = JSONDecoder()
-            decoder.dateDecodingStrategy = .iso8601
+            let decoder = MeeshyCoders.decoder(.persistence)
             return try decoder.decode([StoryPublishQueueItem].self, from: data)
         } catch {
             return []

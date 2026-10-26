@@ -119,7 +119,11 @@ struct StatusBubbleOverlayModifier: ViewModifier {
     // inherit the presenter's `.environmentObject(...)`. Several sheets apply
     // `.withStatusBubble()` (ConversationInfoSheet, ForwardPickerSheet,
     // FeedCommentsSheet, …) without re-injecting, which crashed on present.
-    @StateObject private var controller = StatusBubbleController.shared
+    @ObservedObject private var controller: StatusBubbleController
+
+    init(controller: StatusBubbleController = .shared) {
+        self.controller = controller
+    }
 
     /// Présentation dans laquelle un hôte ancêtre rend déjà la bulle, `nil`
     /// si aucun. Cf. `shouldRenderOverlay`.

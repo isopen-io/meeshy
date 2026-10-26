@@ -26,10 +26,7 @@ public actor EngagementOutbox {
     private let now: @Sendable () -> Date
     private static let logger = MeeshyLog.logger(.engagementOutbox, subsystem: .legacySDK)
 
-    /// Backoff identique au pattern existant : min(60s, 2^attempts × 5s).
-    private static func backoff(attempts: Int) -> TimeInterval {
-        min(60, pow(2.0, Double(max(0, attempts))) * 5)
-    }
+    private let retryPolicy: RetryPolicy
 
     public init() {
         let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
@@ -37,13 +34,14 @@ public actor EngagementOutbox {
     }
 
     /// Test-only / injectable init.
-    public init(dbPath: String, clock: @escaping @Sendable () -> Date = { Date() }) {
-        self.init(storage: ResilientDatabaseQueue.open(path: dbPath), clock: clock)
+    public init(dbPath: String, clock: @escaping @Sendable () -> Date = { Date() }, retryPolicy: RetryPolicy = .stateSync) {
+        self.init(storage: ResilientDatabaseQueue.open(path: dbPath), clock: clock, retryPolicy: retryPolicy)
     }
 
-    init(storage opened: OpenedDatabaseQueue, clock: @escaping @Sendable () -> Date = { Date() }) {
+    init(storage opened: OpenedDatabaseQueue, clock: @escaping @Sendable () -> Date = { Date() }, retryPolicy: RetryPolicy = .stateSync) {
         self.storage = Self.prepare(opened)
         self.now = clock
+        self.retryPolicy = retryPolicy
     }
 
     private static func prepare(_ opened: OpenedDatabaseQueue) -> DatabaseQueue? {
@@ -79,12 +77,8 @@ public actor EngagementOutbox {
         }
     }
 
-    private static let encoder: JSONEncoder = {
-        let e = JSONEncoder(); e.outputFormatting = [.sortedKeys]; e.dateEncodingStrategy = .iso8601; return e
-    }()
-    private static let decoder: JSONDecoder = {
-        let d = JSONDecoder(); d.dateDecodingStrategy = .iso8601; return d
-    }()
+    private static let encoder = MeeshyCoders.encoder(.outbox)
+    private static let decoder = MeeshyCoders.decoder(.outbox)
 
     /// Encodes a session to its stored JSON text, logging instead of
     /// returning a bare `nil` — a dropped encode means the session never
@@ -262,7 +256,7 @@ public actor EngagementOutbox {
             }
         case .failedTransient:
             let bumps: [(String, Double)] = ready.map { (id, _, attempts) in
-                (id, now().addingTimeInterval(Self.backoff(attempts: attempts + 1)).timeIntervalSince1970)
+                (id, now().addingTimeInterval(retryPolicy.delay(afterFailure: attempts + 1)).timeIntervalSince1970)
             }
             do {
                 try await db.write { db in

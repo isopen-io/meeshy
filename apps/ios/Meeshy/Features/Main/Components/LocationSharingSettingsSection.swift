@@ -108,7 +108,12 @@ nonisolated enum LocationSharingLabels {
 struct LocationSharingSettingsSection: View {
     let accentColor: String
 
-    @ObservedObject private var store = LocationSharingPreferencesStore.shared
+    @ObservedObject private var store: LocationSharingPreferencesStore
+
+    init(accentColor: String, store: LocationSharingPreferencesStore = .shared) {
+        self.accentColor = accentColor
+        self.store = store
+    }
     private var theme: ThemeManager { ThemeManager.shared }
 
     var body: some View {

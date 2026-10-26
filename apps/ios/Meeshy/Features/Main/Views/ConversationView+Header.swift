@@ -50,8 +50,7 @@ extension ConversationView {
             // `name`, avatar → `avatarURL`). Elle reçoit donc la conversation
             // VIVANTE : l'override serveur remonté par la feuille d'info après
             // un enregistrement, sinon la valeur figée de la navigation. Tous
-            // ses autres champs (`type`, `participantUserId`,
-            // `participantAvatarURL`) sortent inchangés de la fusion serveur
+            // ses autres champs (`type`, `participantUserId`, `participantAvatarURL`) sortent inchangés de la fusion serveur
             // (`MeeshyConversation.mergingMetadata` ne reporte QUE les
             // métadonnées du conteneur), donc une seule source ici suffit.
             conversation: liveConversation,
@@ -75,7 +74,8 @@ extension ConversationView {
             },
             onViewMemberProfile: { user in
                 router.openProfile(user, inConversation: conversation?.id)
-            }
+            },
+            presencePulse: PresenceManager.shared.refreshSignal
         )
     }
 
@@ -367,7 +367,7 @@ struct ConversationHeaderAvatarView: View {
     @EnvironmentObject private var statusViewModel: StatusViewModel
     /// Signal débouncé de `PresenceManager` (jamais le manager lui-même) :
     /// l'arrivée ou le départ d'un pair (#8892) repeint les points de l'en-tête.
-    @ObservedObject private var presencePulse: PresenceRefreshSignal = PresenceManager.shared.refreshSignal
+    @ObservedObject var presencePulse: PresenceRefreshSignal
 
     private var isDirect: Bool { conversation?.type == .direct }
 

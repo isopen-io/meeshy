@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshySDK
 import MeeshyUI
 import AVFoundation
 import CoreLocation
@@ -38,7 +39,7 @@ extension UniversalComposerBar {
                 .frame(maxWidth: 120)
 
             if let size = attachment.size {
-                Text(formatFileSize(size))
+                Text(MediaFormat.bytes(Int64(size)))
                     .font(.caption2)
                     .opacity(0.6)
             }
@@ -498,11 +499,5 @@ extension UniversalComposerBar {
         )
         .padding(.horizontal, MeeshySpacing.md)
         .padding(.bottom, MeeshySpacing.xs)
-    }
-
-    // MARK: - Helpers
-
-    func formatFileSize(_ bytes: Int) -> String {
-        Int64(bytes).formatted(.byteCount(style: .file))
     }
 }

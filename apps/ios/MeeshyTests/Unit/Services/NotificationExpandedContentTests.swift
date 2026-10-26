@@ -138,11 +138,11 @@ final class NotificationExpandedContentTests: XCTestCase {
     }
 
     func test_clock_formatsMinutesAndSeconds_andNeverGoesNegative() {
-        XCTAssertEqual(NotificationPlaybackRate.clock(seconds: 0), "0:00")
-        XCTAssertEqual(NotificationPlaybackRate.clock(seconds: 7.9), "0:07")
-        XCTAssertEqual(NotificationPlaybackRate.clock(seconds: 65), "1:05")
-        XCTAssertEqual(NotificationPlaybackRate.clock(seconds: -3), "0:00")
-        XCTAssertEqual(NotificationPlaybackRate.clock(seconds: .nan), "0:00")
+        XCTAssertEqual(MediaFormat.duration(0, locale: Locale(identifier: "en_US")), "0:00")
+        XCTAssertEqual(MediaFormat.duration(7.9, locale: Locale(identifier: "en_US")), "0:07")
+        XCTAssertEqual(MediaFormat.duration(65, locale: Locale(identifier: "en_US")), "1:05")
+        XCTAssertEqual(MediaFormat.duration(-3, locale: Locale(identifier: "en_US")), "0:00")
+        XCTAssertEqual(MediaFormat.duration(TimeInterval.nan, locale: Locale(identifier: "en_US")), "0:00")
     }
 
     func test_progress_isBoundedBetweenZeroAndOne() {

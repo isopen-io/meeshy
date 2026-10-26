@@ -297,12 +297,11 @@ struct StoryViewerView: View {
     /// active state so it only lights up when *this* viewer has reacted —
     /// not when somebody else has (bug 2026-05-28).
     @State var storyCurrentUserReactions: [String] = []
-    @State var storyComments: [FeedComment] = []
-    /// Pagination des commentaires top-level de la story — suivie pour la
-    /// chasse paginée d'un commentaire notifié hors de la première page (50).
-    @State var storyCommentsNextCursor: String?
-    @State var storyCommentsHasMore = false
-    @State var isLoadingComments = false
+    /// Le fil de commentaires de la slide — racines, réponses, dépliage et
+    /// pagination — le view model partagé avec le post et le reel (#13133).
+    @StateObject var storyCommentThread = CommentThreadViewModel(entity: .story(""))
+    /// A spinner only over an empty overlay: a cached list never waits.
+    var isLoadingComments: Bool { storyCommentThread.isLoadingRoots && storyCommentThread.roots.isEmpty }
     @State var storyCommentCount: Int = 0
     /// Impulsion (mirroir `heartBouncePulse`) incrémentée UNIQUEMENT par la
     /// réconciliation d'ouverture de `loadStoryCommentCount()` (+Content.swift :
@@ -317,14 +316,6 @@ struct StoryViewerView: View {
     /// était périmé » de « quelqu'un vient de commenter pendant que je lis ».
     @State var storyCommentCountReconciledPulse: Int = 0
     @State var replyingToStoryComment: FeedComment? = nil
-    @State var storyCommentRepliesMap: [String: [FeedComment]] = [:]
-    @State var storyCommentExpandedThreads: Set<String> = []
-    @State var storyCommentLoadingReplies: Set<String> = []
-    /// Pagination des réponses par commentaire racine (endpoint replies paginé
-    /// ASC 20/page). NON-private : consommé par l'extension frère
-    /// StoryViewerView+Content (piège protection level cross-file).
-    @State var storyCommentRepliesHasMore: [String: Bool] = [:]
-    @State var storyCommentRepliesNextCursor: [String: String] = [:]
     /// Optimistic local tracking of liked comments (id ∈ set => current user reacted).
     @State var storyCommentLikedIds: Set<String> = []
     /// Local like-count delta keyed by comment id, applied on top of the server `comment.likes`
@@ -717,7 +708,7 @@ struct StoryViewerView: View {
             storyShareCount: currentStory?.shareCount ?? 0,
             storyViewCount: currentStory?.viewCount ?? 0,
             storyRepostCount: currentStory?.repostCount ?? 0,
-            isStoryCommentsEmpty: storyComments.isEmpty,
+            isStoryCommentsEmpty: storyCommentThread.roots.isEmpty,
             storyHasAudibleSound: storyHasAudibleSound,
             storyHasTranslatableContent: storyHasTranslatableContent,
             backgroundSoundAnnouncement: backgroundSoundAnnouncement,
@@ -732,10 +723,10 @@ struct StoryViewerView: View {
                 withAnimation(.easeInOut(duration: 0.2)) { sessionLanguageOverride = lang }
             },
             composerAccentColor: currentGroup?.avatarColor ?? MeeshyColors.brandPrimaryHex,
-            storyComments: storyComments,
-            storyCommentRepliesMap: storyCommentRepliesMap,
-            storyCommentExpandedThreads: storyCommentExpandedThreads,
-            storyCommentLoadingReplies: storyCommentLoadingReplies,
+            storyComments: storyCommentThread.roots,
+            storyCommentRepliesMap: storyCommentThread.replies,
+            storyCommentExpandedThreads: storyCommentThread.expandedThreads,
+            storyCommentLoadingReplies: storyCommentThread.loadingReplies,
             isLoadingComments: isLoadingComments,
             commentsReaderLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser),
             isContentReady: $isContentReady,

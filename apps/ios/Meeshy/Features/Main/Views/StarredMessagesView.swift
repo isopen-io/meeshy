@@ -7,7 +7,10 @@ import MeeshyUI
 /// (sender, content preview, source conversation chip, star toggle) so the
 /// page works even when the source conversation is archived or offline.
 struct StarredMessagesView: View {
-    @StateObject private var store = StarredMessagesStore.shared
+    @ObservedObject private var store: StarredMessagesStore
+    init(store: StarredMessagesStore = .shared) {
+        self.store = store
+    }
     @Environment(\.dismiss) private var dismiss
     @Environment(\.isPresented) private var isPresented
     @Environment(\.meeshyPanelDismiss) private var panelDismiss

@@ -74,16 +74,6 @@ final class AudioTranscriptCueTests: XCTestCase {
     func test_activeIndex_aucuneLigne_rendNil() {
         XCTAssertNil(AudioTranscriptCue.activeIndex(in: [], at: 1))
     }
-
-    /// L'horloge MONTRÉE ne passe jamais par `String(format:)` — les chiffres
-    /// suivent la locale. Contre-épreuve minimale : la borne négative (une tête
-    /// de lecture peut valoir `-0.0`) ne produit pas « -1:00 ».
-    func test_horloge_valeurNonFinieOuNégative_rendZéro() {
-        XCTAssertEqual(MeeshyAudioTranscriptPlayer.horloge(-4),
-                       MeeshyAudioTranscriptPlayer.horloge(0))
-        XCTAssertEqual(MeeshyAudioTranscriptPlayer.horloge(.nan),
-                       MeeshyAudioTranscriptPlayer.horloge(0))
-    }
 }
 
 /// **Le regroupement des segments en phrases** — la granularité que l'œil suit.

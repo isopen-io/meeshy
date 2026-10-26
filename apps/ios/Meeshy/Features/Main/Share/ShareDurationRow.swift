@@ -28,14 +28,6 @@ struct ShareDurationRow: View, Equatable {
             && lhs.isDark == rhs.isDark
     }
 
-    /// La durée DITE par VoiceOver, dans la langue du système : « 30 secondes ».
-    nonisolated static func spokenDuration(seconds: Int) -> String {
-        let formatter = DateComponentsFormatter()
-        formatter.allowedUnits = [.hour, .minute, .second]
-        formatter.unitsStyle = .full
-        return formatter.string(from: TimeInterval(seconds)) ?? ForwardDurationChoice(seconds: seconds).label
-    }
-
     private var title: String {
         String(localized: "forward.duration.title", defaultValue: "Disparaît après", bundle: .meeshyShare)
     }
@@ -77,7 +69,7 @@ struct ShareDurationRow: View, Equatable {
 
     private func chip(_ choice: ForwardDurationChoice) -> some View {
         let isSelected = choice.seconds == selectedSeconds
-        let spoken: String = [title, Self.spokenDuration(seconds: choice.seconds)].joined(separator: ", ")
+        let spoken: String = [title, MediaFormat.duration(choice.seconds, style: .spoken)].joined(separator: ", ")
         return Button {
             onSelect(choice.seconds)
         } label: {

@@ -75,7 +75,7 @@ final class ConversationViewModelDirectEncryptionSendTests: XCTestCase {
             reportService: MockReportService(),
             messageSocket: socket,
             dependencies: ConversationDependencies(
-                dbPool: pool, persistence: persistence,
+                persistence: persistence,
                 collaborators: ConversationCollaborators(
                     persistence: persistence, syncEngine: ConversationSyncEngine.shared,
                     messageService: messageService, regimeLedger: ledger

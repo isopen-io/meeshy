@@ -282,8 +282,17 @@ struct PostDateWithPoints<DateLabel: View>: View {
     let postId: String
     let seed: Int?
     let color: Color
-    @ObservedObject var store: PostViewerPointsStore = .shared
+    @ObservedObject var store: PostViewerPointsStore
     @ViewBuilder let date: () -> DateLabel
+
+    init(postId: String, seed: Int?, color: Color, store: PostViewerPointsStore = .shared,
+         @ViewBuilder date: @escaping () -> DateLabel) {
+        self.postId = postId
+        self.seed = seed
+        self.color = color
+        self.store = store
+        self.date = date
+    }
 
     var body: some View {
         HStack(spacing: MeeshySpacing.xxs) {

@@ -19,7 +19,10 @@ struct SecurityView: View {
     @State private var showBackupCodesSheet = false
 
     // Conversation lock PIN
-    @ObservedObject private var lockManager = ConversationLockManager.shared
+    @ObservedObject private var lockManager: ConversationLockManager
+    init(lockManager: ConversationLockManager = .shared) {
+        self.lockManager = lockManager
+    }
     @State private var showPinSetupSheet = false
     @State private var showPinChangeSheet = false
     @State private var showPinRemoveSheet = false

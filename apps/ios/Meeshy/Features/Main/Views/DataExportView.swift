@@ -293,9 +293,8 @@ struct DataExportView: View {
         Task {
             do {
                 let result = try await service.requestExport(format: format, types: types)
-                let encoder = JSONEncoder()
+                let encoder = MeeshyCoders.encoder(.persistence)
                 encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-                encoder.dateEncodingStrategy = .iso8601
                 let jsonData = try encoder.encode(result)
 
                 await MainActor.run {

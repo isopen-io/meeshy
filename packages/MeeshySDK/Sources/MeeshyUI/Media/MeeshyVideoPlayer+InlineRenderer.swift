@@ -265,7 +265,7 @@ internal struct _InlineRenderer: View {
                     .font(.system(size: 22 * playButtonScale, weight: .bold))
                     .foregroundStyle(Color.white)
                 if player.attachment.fileSize > 0 {
-                    Text(formatSize(Int64(player.attachment.fileSize)))
+                    Text(MediaFormat.bytes(Int64(player.attachment.fileSize)))
                         .font(.system(size: 9 * playButtonScale, weight: .semibold, design: .monospaced))
                         .foregroundStyle(Color.white.opacity(0.9))
                 }
@@ -325,13 +325,6 @@ internal struct _InlineRenderer: View {
         hasReadableTransfer: (String) -> Bool = { CacheCoordinator.videoHasReadableTransfer(for: $0) }
     ) -> Bool {
         VideoAvailability.playsWhileDownloading(fileUrl: fileUrl, hasReadableTransfer: hasReadableTransfer)
-    }
-
-    private func formatSize(_ bytes: Int64) -> String {
-        let kb = Double(bytes) / 1024
-        if kb < 1 { return "\(bytes)B" }
-        if kb < 1024 { return String(format: "%.0fKB", kb) }
-        return String(format: "%.1fMB", kb / 1024)
     }
 
     private func handlePlayTap() {

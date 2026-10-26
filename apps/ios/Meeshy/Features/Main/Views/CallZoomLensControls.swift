@@ -9,7 +9,12 @@ import MeeshyUI
 
 struct CallZoomLensChips: View {
     let stops: [CGFloat]
-    @ObservedObject var zoom: CameraZoomController = .shared
+    @ObservedObject var zoom: CameraZoomController
+
+    init(stops: [CGFloat], zoom: CameraZoomController = .shared) {
+        self.stops = stops
+        self.zoom = zoom
+    }
 
     @Environment(\.locale) private var locale
 
@@ -49,7 +54,11 @@ struct CallZoomLensChips: View {
 }
 
 struct CallZoomCycleButton: View {
-    @ObservedObject var zoom: CameraZoomController = .shared
+    @ObservedObject var zoom: CameraZoomController
+
+    init(zoom: CameraZoomController = .shared) {
+        self.zoom = zoom
+    }
 
     @Environment(\.locale) private var locale
 
@@ -79,8 +88,14 @@ struct CallZoomCycleButton: View {
 /// `CallCameraRail.zoomControl` : rien tant que la caméra n'est pas zoomable.
 struct CallZoomRailSlot: View {
     let placement: CallCameraControlsPlacement
-    var tileSize: CGSize? = nil
-    @ObservedObject var zoom: CameraZoomController = .shared
+    var tileSize: CGSize?
+    @ObservedObject var zoom: CameraZoomController
+
+    init(placement: CallCameraControlsPlacement, tileSize: CGSize? = nil, zoom: CameraZoomController = .shared) {
+        self.placement = placement
+        self.tileSize = tileSize
+        self.zoom = zoom
+    }
 
     var body: some View {
         switch CallCameraRail.zoomControl(profile: zoom.profile, placement: placement, tileSize: tileSize) {

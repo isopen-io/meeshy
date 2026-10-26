@@ -26,8 +26,14 @@ struct GameSettingsPage: View {
 struct GameSettingsScreen: View {
     @ObservedObject var model: GameWave2Model
     @ObservedObject private var prefs = GameDevicePrefsStore.current()
-    @ObservedObject private var notificationPrefs = UserPreferencesManager.shared
+    @ObservedObject private var notificationPrefs: UserPreferencesManager
     let game: GameBlock
+
+    init(model: GameWave2Model, game: GameBlock, notificationPrefs: UserPreferencesManager = .shared) {
+        self.model = model
+        self.game = game
+        self.notificationPrefs = notificationPrefs
+    }
 
     private var theme: ThemeManager { ThemeManager.shared }
 

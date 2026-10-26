@@ -160,15 +160,7 @@ public extension CallSummaryMetadata {
     }
 
     static func formatDuration(_ seconds: Int) -> String {
-        let total = max(0, seconds)
-        let hours = total / 3600
-        let minutes = (total % 3600) / 60
-        let secs = total % 60
-        let pad2 = { (v: Int) in v < 10 ? "0\(v)" : "\(v)" }
-        if hours > 0 {
-            return "\(hours):\(pad2(minutes)):\(pad2(secs))"
-        }
-        return "\(pad2(minutes)):\(pad2(secs))"
+        MediaFormat.duration(seconds, style: .paddedClockPromotingHours)
     }
 
     /// Decimal units (1 KB = 1000 B), matching how data plans / WhatsApp /

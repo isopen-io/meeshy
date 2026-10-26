@@ -160,9 +160,9 @@ extension MessageCardLayoutEngine {
     /// Le minuteur : « 0:12 / 0:45 » en vidéo, la durée sur une image — rien s'il est masqué.
     private func clockText(elapsed: Double?, length: Double?) -> String? {
         guard input.disposition.showsTimer else { return nil }
-        guard let elapsed else { return length.map(MessageCardMedia.clock) }
-        let now = MessageCardMedia.clock(min(elapsed, length ?? elapsed))
-        return length.map { "\(now) / \(MessageCardMedia.clock($0))" } ?? now
+        guard let elapsed else { return length.map { MediaFormat.duration($0) } }
+        let now = MediaFormat.duration(min(elapsed, length ?? elapsed))
+        return length.map { "\(now) / \(MediaFormat.duration($0))" } ?? now
     }
 
     private func label(_ text: String, x: Double, baseline: Double, size: Double, align: MessageCardAlignment, color: MessageCardColor) -> MessageCardOp {

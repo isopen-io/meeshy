@@ -106,8 +106,7 @@ public final class DatabaseEncryption: DatabaseEncryptionProviding, @unchecked S
     // MARK: - Codable convenience
 
     public func encryptCodable<T: Encodable>(_ value: T) -> Data? {
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
+        let encoder = MeeshyCoders.encoder(.persistence)
         let json: Data
         do {
             json = try encoder.encode(value)
@@ -122,8 +121,7 @@ public final class DatabaseEncryption: DatabaseEncryptionProviding, @unchecked S
 
     public func decryptCodable<T: Decodable>(_ type: T.Type, from ciphertext: Data) -> T? {
         guard let json = decrypt(ciphertext) else { return nil }
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
+        let decoder = MeeshyCoders.decoder(.persistence)
         do {
             return try decoder.decode(type, from: json)
         } catch {

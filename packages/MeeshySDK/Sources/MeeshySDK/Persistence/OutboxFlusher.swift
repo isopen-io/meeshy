@@ -16,8 +16,7 @@ public protocol OutboxDispatching: Sendable {
 @inline(__always)
 internal func reactionContext(for record: OutboxRecord) -> OfflineRetrySuccess.ReactionContext? {
     guard record.kind == .sendReaction else { return nil }
-    let decoder = JSONDecoder()
-    decoder.dateDecodingStrategy = .iso8601
+    let decoder = MeeshyCoders.decoder(.persistence)
     guard let payload = decoder.decodeOrLog(
         ReactionOutboxPayload.self,
         from: record.payload,
@@ -50,8 +49,7 @@ internal func reactionContext(for record: OutboxRecord) -> OfflineRetrySuccess.R
 @inline(__always)
 internal func cleanupLocalFiles(for record: OutboxRecord) {
     guard record.kind == .sendMessage else { return }
-    let decoder = JSONDecoder()
-    decoder.dateDecodingStrategy = .iso8601
+    let decoder = MeeshyCoders.decoder(.persistence)
     guard let item = decoder.decodeOrLog(
         OfflineQueueItem.self,
         from: record.payload,
@@ -89,14 +87,12 @@ internal func cleanupLocalFiles(for record: OutboxRecord) {
 
 /// Drains the `outbox` table FIFO, dispatching each pending item via the
 /// supplied `OutboxDispatching`. Failures schedule an exponential backoff
-/// retry; after `maxAttempts` failures the item is marked `.exhausted`.
+/// retry; once `retryPolicy` is exhausted the item is marked `.exhausted`.
 public actor OutboxFlusher {
 
     private let pool: any DatabaseWriter
     private let dispatcher: any OutboxDispatching
-    private let maxAttempts: Int
-    private let baseBackoff: TimeInterval
-    private let maxBackoff: TimeInterval
+    private let retryPolicy: RetryPolicy
     private let onOutcome: (@Sendable (OutboxOutcome) -> Void)?
     /// BW1 — optional gate so the flusher can short-circuit when the device
     /// is offline. Without it, a long airplane-mode session burns through
@@ -110,17 +106,13 @@ public actor OutboxFlusher {
     public init(
         pool: any DatabaseWriter,
         dispatcher: any OutboxDispatching,
-        maxAttempts: Int = 5,
-        baseBackoff: TimeInterval = 2,
-        maxBackoff: TimeInterval = 30,
+        retryPolicy: RetryPolicy = .messageOutbox,
         onOutcome: (@Sendable (OutboxOutcome) -> Void)? = nil,
         isNetworkReachable: @escaping @Sendable () async -> Bool = { true }
     ) {
         self.pool = pool
         self.dispatcher = dispatcher
-        self.maxAttempts = maxAttempts
-        self.baseBackoff = baseBackoff
-        self.maxBackoff = maxBackoff
+        self.retryPolicy = retryPolicy
         self.onOutcome = onOutcome
         self.isNetworkReachable = isNetworkReachable
     }
@@ -526,7 +518,7 @@ public actor OutboxFlusher {
                 current.lastError = String(describing: error)
                 current.status = .pending
                 current.updatedAt = Date()
-                current.nextAttemptAt = Date().addingTimeInterval(maxBackoff)
+                current.nextAttemptAt = Date().addingTimeInterval(retryPolicy.deferral)
                 let deferredSnapshot = current
                 do {
                     try await pool.write { db in
@@ -559,7 +551,7 @@ public actor OutboxFlusher {
                     current.lastError = String(describing: error)
                     current.status = .pending
                     current.updatedAt = now
-                    current.nextAttemptAt = now.addingTimeInterval(maxBackoff)
+                    current.nextAttemptAt = now.addingTimeInterval(retryPolicy.deferral)
                     let deferredSnapshot = current
                     do {
                         try await pool.write { db in
@@ -582,14 +574,12 @@ public actor OutboxFlusher {
             current.updatedAt = Date()
 
             // A permanent 4xx will never succeed — dead-letter now rather than
-            // spin the full backoff schedule. Otherwise cap at `maxAttempts`.
-            if Self.isPermanentServerRejection(error) || current.attempts >= maxAttempts {
+            // spin the full backoff schedule. Otherwise stop once `retryPolicy` is exhausted.
+            if Self.isPermanentServerRejection(error) || retryPolicy.isExhausted(afterFailures: current.attempts) {
                 current.status = .exhausted
             } else {
                 current.status = .pending
-                let backoff = min(maxBackoff, baseBackoff * pow(2.0, Double(current.attempts - 1)))
-                let jitter = Double.random(in: 0...0.5)
-                current.nextAttemptAt = Date().addingTimeInterval(backoff + jitter)
+                current.nextAttemptAt = Date().addingTimeInterval(retryPolicy.delay(afterFailure: current.attempts))
             }
 
             let failedSnapshot = current

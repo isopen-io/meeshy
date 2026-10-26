@@ -78,11 +78,6 @@ public extension StoryNotificationContext {
     }
 
     private static func parseDate(_ raw: String) -> Date? {
-        // Modern Date.ISO8601FormatStyle supports fractional seconds and
-        // is more efficient than legacy ISO8601DateFormatter.
-        if let date = try? Date(raw, strategy: Date.ISO8601FormatStyle(includingFractionalSeconds: true)) {
-            return date
-        }
-        return try? Date(raw, strategy: .iso8601)
+        WireDate.date(from: raw)
     }
 }

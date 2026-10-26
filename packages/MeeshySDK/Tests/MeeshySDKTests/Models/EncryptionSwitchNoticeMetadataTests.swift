@@ -76,7 +76,7 @@ struct EncryptionSwitchNoticeMetadataTests {
     @Test("le message système porte l'avis depuis metadata, et la colonne d'avis du cache le rend tel quel")
     func apiMessageAndCacheColumnCarryTheNotice() throws {
         let json = #"{"id":"6720aa00000000000000c001","conversationId":"conv-1","senderId":"p-actor","content":"Ana a désactivé le chiffrement de bout en bout.","messageType":"system","messageSource":"system","createdAt":"2026-10-25T10:00:00.000Z","metadata":{"kind":"encryption-disabled","previousMode":"e2ee","epoch":4}}"#
-        let api = try APIClient.makeAPIPayloadDecoder().decode(APIMessage.self, from: Data(json.utf8))
+        let api = try MeeshyCoders.decoder(.api).decode(APIMessage.self, from: Data(json.utf8))
         #expect(api.encryptionSwitchNotice?.epoch == 4)
         #expect(api.joinNotice == nil)
         #expect(api.toMessage(currentUserId: "me").encryptionSwitchNotice == api.encryptionSwitchNotice)

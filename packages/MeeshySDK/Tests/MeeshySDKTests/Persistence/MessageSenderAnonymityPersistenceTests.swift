@@ -40,7 +40,7 @@ final class MessageSenderAnonymityPersistenceTests: XCTestCase {
             ]
         }
         let data = try JSONSerialization.data(withJSONObject: json)
-        return try APIClient.makeAPIPayloadDecoder().decode(APIMessage.self, from: data)
+        return try MeeshyCoders.decoder(.api).decode(APIMessage.self, from: data)
     }
 
     private func row(_ serverId: String, in conversationId: String) throws -> MessageRecord {

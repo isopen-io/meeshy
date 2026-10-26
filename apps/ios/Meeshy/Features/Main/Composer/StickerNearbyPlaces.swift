@@ -243,7 +243,11 @@ extension View {
 /// paierait un objet système à chaque rendu de chaque porte du composer, pour
 /// une réponse qui est la même partout.
 private struct StickerNearbyPlacesInjection: ViewModifier {
-    @ObservedObject private var autorisation = LocationAuthorizationObserver.shared
+    @ObservedObject private var autorisation: LocationAuthorizationObserver
+
+    init(autorisation: LocationAuthorizationObserver = .shared) {
+        self.autorisation = autorisation
+    }
 
     func body(content: Content) -> some View {
         content.environment(

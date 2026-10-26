@@ -47,7 +47,7 @@ struct ConversationListView: View {
     /// personne n'observait `PresenceManager` : les pastilles ne se
     /// rafraîchissaient que par coïncidence, au gré d'un autre re-render
     /// (audit 2026-07-20, "pastilles jamais rafraîchies sur user:status").
-    @ObservedObject private var presencePulse: PresenceRefreshSignal = PresenceManager.shared.refreshSignal
+    @ObservedObject private var presencePulse: PresenceRefreshSignal
     @EnvironmentObject var storyViewModel: StoryViewModel
     @EnvironmentObject var statusViewModel: StatusViewModel
     @EnvironmentObject var conversationViewModel: ConversationListViewModel
@@ -243,8 +243,10 @@ struct ConversationListView: View {
         onNotificationsTap: (() -> Void)? = nil,
         onSettingsTap: (() -> Void)? = nil,
         iPadFeedAction: (() -> Void)? = nil,
-        selectedConversationId: String? = nil
+        selectedConversationId: String? = nil,
+        presencePulse: PresenceRefreshSignal = PresenceManager.shared.refreshSignal
     ) {
+        self.presencePulse = presencePulse
         self._isScrollingDown = isScrollingDown ?? .constant(false)
         self._feedIsVisible = feedIsVisible ?? .constant(false)
         self.onSelect = onSelect
@@ -256,9 +258,6 @@ struct ConversationListView: View {
         self.iPadFeedAction = iPadFeedAction
         self.selectedConversationId = selectedConversationId
     }
-
-    // The filtered and grouped conversations are now calculated on a background queue
-    // inside `ConversationListViewModel` to prevent main thread freezes and overheating.
 
     // Empty Branch Resolution: `emptyBranch` / `currentEmptyBranch` live in
     // `ConversationListView+SectionRules.swift` (#8759).

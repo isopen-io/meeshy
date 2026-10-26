@@ -158,10 +158,17 @@ final class LentilleRowMetaReveal: ObservableObject {
 /// les points à VoiceOver dans sa propre phrase. « Réduire les animations » :
 /// même visibilité, sans fondu.
 struct LentilleRowMetaFade<Content: View>: View {
-    var alwaysVisible: Bool = false
-    @ObservedObject var reveal: LentilleRowMetaReveal = .shared
+    var alwaysVisible: Bool
+    @ObservedObject var reveal: LentilleRowMetaReveal
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ViewBuilder let content: () -> Content
+
+    init(alwaysVisible: Bool = false, reveal: LentilleRowMetaReveal = .shared,
+         @ViewBuilder content: @escaping () -> Content) {
+        self.alwaysVisible = alwaysVisible
+        self.reveal = reveal
+        self.content = content
+    }
 
     var body: some View {
         content()

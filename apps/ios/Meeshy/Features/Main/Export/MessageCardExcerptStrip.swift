@@ -29,7 +29,7 @@ struct MessageCardExcerptStrip: View {
     private var latest: Double { max(0, excerpt.total - excerpt.window.duration) }
 
     private var span: String {
-        "\(MessageCardMedia.clock(start)) – \(MessageCardMedia.clock(start + excerpt.window.duration))"
+        "\(MediaFormat.duration(start)) – \(MediaFormat.duration(start + excerpt.window.duration))"
     }
 
     var body: some View {

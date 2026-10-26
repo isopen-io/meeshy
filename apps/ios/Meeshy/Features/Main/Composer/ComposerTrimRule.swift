@@ -1,6 +1,7 @@
 import CoreGraphics
 import CoreMedia
 import Foundation
+import MeeshySDK
 import MeeshyUI
 
 /// **La découpe d'une vidéo capturée** (#9353, spec § 3.3) — le principe de
@@ -47,9 +48,7 @@ nonisolated enum ComposerTrimRule {
     /// Le style natif porte le système de chiffres et le séparateur décimal de
     /// la langue : une horloge composée à la main graverait les chiffres latins.
     static func millisecondText(_ time: TimeInterval, locale: Locale = .current) -> String {
-        let millis = time.isFinite ? Int((min(max(0, time), 86_400) * 1000).rounded()) : 0
-        return Duration.milliseconds(millis).formatted(
-            .time(pattern: .minuteSecond(padMinuteToLength: 0, fractionalSecondsLength: 3)).locale(locale))
+        MediaFormat.duration(time, style: .milliseconds, locale: locale)
     }
 
     /// L'instant que la règle montre pendant qu'une poignée bouge : SA borne

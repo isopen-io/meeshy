@@ -43,7 +43,7 @@ final class MessageTextRendererTests: XCTestCase {
     // MARK: - Display-name mentions (memoized rules path)
 
     func test_render_withDisplayNameMentions_runsCachedRulesPath() {
-        // Exercises displayNameRules(from:) -> DisplayNameRulesCache: the map is
+        // Exercises displayNameRules(from:) -> displayNameRulesCache: the map is
         // hashed as the cache key and the per-member regexes are compiled once.
         let names = ["atabeth": "Ata Beth", "jdoe": "John Doe"]
         let result = MessageTextRenderer.render(

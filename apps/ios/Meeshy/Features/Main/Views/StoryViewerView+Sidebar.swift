@@ -273,7 +273,10 @@ struct StoryActionSidebarView: View {
     /// dans `body` — est nécessaire pour que cette vue se redessine quand la
     /// progression change ; `@Published` seul ne déclenche rien sans
     /// souscription SwiftUI.
-    @ObservedObject private var saveService = StoryPhotoSaveService.shared
+    @ObservedObject var saveService: StoryPhotoSaveService
+    /// Les gestes du lecteur que la passerelle ne sert pas sur une story (commentaire,
+    /// envoi, republication) — mémoire de session, `StoryViewerParticipation.swift`.
+    @ObservedObject var participationStore: StoryViewerParticipationStore
 
     /// Transient scale of the heart button — driven only by `bounceHeart()`.
     @State private var heartScale: CGFloat = 1.0
@@ -329,10 +332,6 @@ struct StoryActionSidebarView: View {
             preferredLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? []
         )
     }
-
-    /// Les gestes du lecteur que la passerelle ne sert pas sur une story (commentaire,
-    /// envoi, republication) — mémoire de session, `StoryViewerParticipation.swift`.
-    @ObservedObject private var participationStore = StoryViewerParticipationStore.shared
 
     /// **Le contour de chaque action** (directive porteur 2026-10-01) — le son ouvert,
     /// le cœur posé, et l'anneau du cœur sur chaque geste déjà fait. `nil` ⇒ aucun.

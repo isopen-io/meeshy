@@ -66,7 +66,7 @@ struct RootView: View {
     @State private var showMenu = false
     /// Drives the immersive reels overlay. A long-press on the feed button (or a
     /// tap on a reel card in the feed) sets `reelsPresenter.launch`.
-    @ObservedObject private var reelsPresenter = ReelsPresenter.shared
+    @ObservedObject private var reelsPresenter: ReelsPresenter
     /// Liquid "water wave" reveal of the reels overlay. `reelsRevealProgress`
     /// drives the `LiquidRevealShape` mask 0→1 (open) / 1→0 (close) from the
     /// feed button's on-screen position. `reelsRevealCompleted` gates the first
@@ -121,7 +121,7 @@ struct RootView: View {
     @State private var floatingGeometry: FloatingButtonGeometry?
     /// L'onboarding recouvre le chrome ; les boutons flottants, posés au-dessus
     /// du chrome, s'effacent tant qu'il est là.
-    @ObservedObject private var onboardingPresence = OnboardingPresenceSignal.shared
+    @ObservedObject private var onboardingPresence: OnboardingPresenceSignal
 
     // Scroll visibility state (passed from ConversationListView)
     @State private var isScrollingDown = false
@@ -141,12 +141,15 @@ struct RootView: View {
     /// jumeau : l'iPad a sa racine PROPRE et n'hérite rien d'ici.
     @ObservedObject private var upgradeGate: UpgradeGateController
 
-    init(scope: RootScopeModels) {
+    init(scope: RootScopeModels, reelsPresenter: ReelsPresenter = .shared,
+         onboardingPresence: OnboardingPresenceSignal = .shared) {
         _storyViewModel = ObservedObject(wrappedValue: scope.story)
         _statusViewModel = ObservedObject(wrappedValue: scope.status)
         conversationVMOwner = scope.conversations
         _notifications = ObservedObject(wrappedValue: scope.notifications)
         _upgradeGate = ObservedObject(wrappedValue: scope.upgradeGate)
+        _reelsPresenter = ObservedObject(wrappedValue: reelsPresenter)
+        _onboardingPresence = ObservedObject(wrappedValue: onboardingPresence)
     }
 
     var body: some View {

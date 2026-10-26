@@ -15,17 +15,14 @@ public enum WireDate {
 
     // `ISO8601DateFormatter` est thread-safe une fois configuré (même motif
     // que `APIClient` et `MessageSocketManager`).
-    nonisolated(unsafe) private static let avecFractions: ISO8601DateFormatter = {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return formatter
-    }()
-
-    nonisolated(unsafe) private static let sansFractions: ISO8601DateFormatter = {
+    nonisolated(unsafe) private static let wholeSecondsFormatter: ISO8601DateFormatter = {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime]
         return formatter
     }()
+
+    private static let fractionalStyle = Date.ISO8601FormatStyle(includingFractionalSeconds: true)
+    private static let wholeSecondsStyle = Date.ISO8601FormatStyle()
 
     /// `2026-09-15T09:34:23.563Z`. Les millisecondes sont calculées ICI plutôt
     /// que confiées au formateur, pour que l'arrondi soit une règle écrite : une
@@ -33,18 +30,18 @@ public enum WireDate {
     /// sous la milliseconde s'arrondit vers le BAS — un watermark écrit plus tard
     /// que lui-même ferait sauter une ligne du delta.
     public static func string(from date: Date) -> String {
-        let exactes = date.timeIntervalSince1970 * 1_000
-        let voisine = exactes.rounded()
-        let millisecondes = abs(exactes - voisine) < 0.001 ? voisine : exactes.rounded(.down)
-        let secondes = (millisecondes / 1_000).rounded(.down)
-        let fraction = Int(millisecondes - secondes * 1_000)
-        let ronde = sansFractions.string(from: Date(timeIntervalSince1970: secondes))
-        return String(ronde.dropLast()) + String(format: ".%03dZ", fraction)
+        let exact = date.timeIntervalSince1970 * 1_000
+        let nearest = exact.rounded()
+        let milliseconds = abs(exact - nearest) < 0.001 ? nearest : exact.rounded(.down)
+        let seconds = (milliseconds / 1_000).rounded(.down)
+        let fraction = Int(milliseconds - seconds * 1_000)
+        let whole = wholeSecondsFormatter.string(from: Date(timeIntervalSince1970: seconds))
+        return String(whole.dropLast()) + String(format: ".%03dZ", fraction)
     }
 
     /// Une date-heure ISO 8601 avec ou sans fractions de seconde, en `Z` ou
     /// avec décalage. `nil` pour tout le reste — une heure seule n'est pas une date.
     public static func date(from string: String) -> Date? {
-        avecFractions.date(from: string) ?? sansFractions.date(from: string)
+        (try? fractionalStyle.parse(string)) ?? (try? wholeSecondsStyle.parse(string))
     }
 }

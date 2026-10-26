@@ -28,8 +28,8 @@ public struct ConnectionActionView: View {
     public var onError: ((String) -> Void)?
     public var onSuccess: ((String) -> Void)?
 
-    @ObservedObject private var friendshipCache = FriendshipCache.shared
-    @ObservedObject private var blockService = BlockService.shared
+    @ObservedObject private var friendshipCache: FriendshipCache
+    @ObservedObject private var blockService: BlockService
     @State private var isBusy = false
 
     private let friendService: FriendServiceProviding
@@ -45,6 +45,8 @@ public struct ConnectionActionView: View {
         friendService: FriendServiceProviding = FriendService.shared,
         resolver: UserRelationshipResolver = .shared,
         offlineQueue: OfflineQueueing = OfflineQueue.shared,
+        friendshipCache: FriendshipCache = .shared,
+        blockService: BlockService = .shared,
         onError: ((String) -> Void)? = nil,
         onSuccess: ((String) -> Void)? = nil
     ) {
@@ -54,6 +56,8 @@ public struct ConnectionActionView: View {
         self.friendService = friendService
         self.resolver = resolver
         self.offlineQueue = offlineQueue
+        self.friendshipCache = friendshipCache
+        self.blockService = blockService
         self.onError = onError
         self.onSuccess = onSuccess
     }

@@ -75,8 +75,20 @@ RULES = (
         ("apps/ios/Meeshy/MeeshyApp.swift",),
     ),
     _named("viewmodel-shared", r"\.shared\b", r"ViewModel[^/]*\.swift$"),
+    _pattern(
+        "observed-singleton",
+        r"@(?:ObservedObject|StateObject)\s+(?:\w+(?:\(set\))?\s+)*var\s+\w+\s*(?::\s*[\w.]+\s*)?=\s*(?:[\w.]+)?\.shared\b",
+        ("apps/ios/Meeshy/MeeshyApp.swift",),
+    ),
+    _named("app-grdb-import", r"(?m)^[ \t]*(?:@\w+[ \t]+)*import[ \t]+GRDB\b(?!\w)", r"^apps/ios/Meeshy/"),
     Rule("unchecked-sendable", re.compile(r"@unchecked\s+Sendable"), "unchecked"),
+    _pattern("unchecked-sendable-total", r"@unchecked\s+Sendable"),
     Rule("available-floor", re.compile(r"#available\(\s*iOS\s+(\d+)(?:\.(\d+))?"), "floor"),
+    _pattern(
+        "coder-strategy",
+        r"\.(?:date|key)(?:En|De)codingStrategy\s*=(?!=)",
+        ("packages/MeeshySDK/Sources/MeeshySDK/Utils/MeeshyCoders.swift",),
+    ),
     _pattern("environment-router", r"@EnvironmentObject\s+(?:\w+(?:\(set\))?\s+)*var\s+\w+\s*:\s*Router\b"),
     Rule(
         "narrative-comment",
@@ -99,7 +111,7 @@ FLOORS = (("apps/ios/MeeshyWidgets/", (17, 0)),)
 DEFAULT_FLOOR = (16, 0)
 JUSTIFICATION = "unchecked:"
 JUSTIFICATION_WINDOW = 3
-LOCK_PRIMITIVES = re.compile(r"OSAllocatedUnfairLock|NSLock|os_unfair_lock|Mutex<")
+LOCK_PRIMITIVES = re.compile(r"OSAllocatedUnfairLock|NSLock|os_unfair_lock|Mutex<|\bLocked\s*[<(]")
 HEADER_LINES = 12
 
 

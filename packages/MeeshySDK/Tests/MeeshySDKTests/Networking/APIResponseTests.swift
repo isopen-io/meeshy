@@ -18,7 +18,7 @@ final class APIResponseTests: XCTestCase {
     /// Le décodeur de PRODUCTION, jamais une copie de sa stratégie : une copie
     /// resterait verte le jour où l'original change (#6611).
     private func makeDateDecoder() -> JSONDecoder {
-        APIClient.makeAPIPayloadDecoder()
+        MeeshyCoders.decoder(.api)
     }
 
     // MARK: - APIResponse<T>

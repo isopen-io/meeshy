@@ -51,15 +51,29 @@ final class FeedInlineComposerGuardTests: XCTestCase {
         )
     }
 
-    // 2 — INVENTAIRE : FeedView ouvre le composer (le meuble) depuis CINQ
-    //     sites — le placeholder et les quatre entrées du menu « + » ;
-    //     l'audio ouvre `showAudioComposer`, pas le composer. Les
-    //     pré-ouvertures de picker sont parties avec l'overlay (2026-09-06).
+    // 2 — INVENTAIRE : le placeholder du fil ouvre le composer (le meuble)
+    //     depuis CINQ entrées — son champ et les quatre entrées du menu « + » ;
+    //     l'audio ouvre `showAudioComposer`, pas le composer. Les cinq passent
+    //     par UN site de `FeedView` (#13132). Les pré-ouvertures de picker sont
+    //     parties avec l'overlay (2026-09-06).
     func test_feedView_ouvreLeComposer_depuisCinqSitesNommes() throws {
         let feedView = compact(try source("Meeshy/Features/Main/Views/FeedView.swift"))
         XCTAssertEqual(
-            feedView.components(separatedBy: "showComposer=true").count - 1, 5,
-            "Et exactement CINQ `showComposer = true` — la contre-épreuve du SET ci-dessus."
+            feedView.components(separatedBy: "showComposer=true").count - 1, 1,
+            "Un seul `showComposer = true` dans `FeedView` : les entrées du placeholder l'appellent."
+        )
+        XCTAssertEqual(
+            feedView.components(separatedBy: "FeedComposerPlaceholder(onCompose:openComposer,").count - 1, 1,
+            "`FeedView` remet ce site unique au placeholder."
+        )
+        let placeholder = compact(try source("Meeshy/Features/Main/Views/FeedComposerPlaceholder.swift"))
+        XCTAssertEqual(
+            placeholder.components(separatedBy: "onCompose").count - 1, 6,
+            "Exactement CINQ entrées appellent `onCompose`, plus sa déclaration."
+        )
+        XCTAssertEqual(
+            placeholder.components(separatedBy: "onRecordAudio").count - 1, 2,
+            "L'audio a sa propre entrée, et une seule."
         )
     }
 

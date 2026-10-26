@@ -118,8 +118,7 @@ enum StoryPublishIntentWriter {
         // 3. Encode the slides payload. The custom encoder excludes
         //    `mediaData`, which is exactly why `mediaReferences` carries
         //    the disk paths separately.
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
+        let encoder = MeeshyCoders.encoder(.persistence)
         guard let payload = try? encoder.encode(slides) else {
             FeedbackToastManager.shared.showError(String(
                 localized: "story.publish.queue.encodeError",

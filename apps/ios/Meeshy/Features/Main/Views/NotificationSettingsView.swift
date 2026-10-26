@@ -6,7 +6,10 @@ import MeeshyUI
 struct NotificationSettingsView: View {
     @Environment(\.dismiss) private var dismiss
     private var theme: ThemeManager { ThemeManager.shared }
-    @ObservedObject private var prefs = UserPreferencesManager.shared
+    @ObservedObject private var prefs: UserPreferencesManager
+    init(prefs: UserPreferencesManager = .shared) {
+        self.prefs = prefs
+    }
 
     private let accentColor = MeeshyColors.brandPrimaryHex
 

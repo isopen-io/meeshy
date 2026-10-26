@@ -67,6 +67,7 @@ final class SceneWindowSizeWiringGuardTests: XCTestCase {
     func test_theRemainingLayoutReads_useTheirWindow() throws {
         for path in [
             "Meeshy/Features/Main/Views/MessageListView.swift",
+            "Meeshy/Features/Main/Views/MessageMenuPreviewContainer.swift",
             "Meeshy/Features/Main/Views/ConversationView+LongPressMenu.swift",
             "Meeshy/Features/Main/Views/AudioFullscreenView.swift",
             "Meeshy/Features/Main/Views/AudioFullscreenDismissDrag.swift",

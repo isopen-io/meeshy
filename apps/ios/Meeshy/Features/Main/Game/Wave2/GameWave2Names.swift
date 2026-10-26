@@ -131,11 +131,7 @@ enum GameWave2Format {
 
     /// « 26 octobre 2026 » — la date d'un trophée vue PAR SON PROPRIÉTAIRE.
     static func awardedDate(_ iso: String, locale: Locale = .current) -> String {
-        let parsers: [ISO8601DateFormatter] = [
-            { let f = ISO8601DateFormatter(); f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]; return f }(),
-            ISO8601DateFormatter(),
-        ]
-        guard let date = parsers.lazy.compactMap({ $0.date(from: iso) }).first else { return iso }
+        guard let date = WireDate.date(from: iso) else { return iso }
         let out = DateFormatter()
         out.locale = locale
         out.setLocalizedDateFormatFromTemplate("dMMMMy")

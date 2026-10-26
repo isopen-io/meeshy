@@ -10,7 +10,7 @@ struct NewConversationView: View {
     @StateObject private var viewModel: NewConversationViewModel
     /// Outgoing-block awareness for graying out / disabling blocked users in
     /// the picker. Observed so rows update live on block/unblock.
-    @ObservedObject private var blockService = BlockService.shared
+    @ObservedObject private var blockService: BlockService
 
     @State private var searchQuery = ""
     @State private var selectedUsers: [SearchedUser] = []
@@ -23,16 +23,18 @@ struct NewConversationView: View {
     /// of the parent. Constructing the VM inside the body of `init` is
     /// the only shape that gets the lazy semantics; passing a default
     /// argument (`viewModel: VM = VM()`) defeats them.
-    init() {
+    init(blockService: BlockService = .shared) {
         _viewModel = StateObject(wrappedValue: NewConversationViewModel())
+        self.blockService = blockService
     }
 
     /// Test- and preview-only initializer. Tests build the VM with a mock
     /// `APIClientProviding` and inject it ready-made; SwiftUI still
     /// honours the StateObject identity contract because the instance is
     /// captured exactly once.
-    init(testHook viewModel: NewConversationViewModel) {
+    init(testHook viewModel: NewConversationViewModel, blockService: BlockService = .shared) {
         _viewModel = StateObject(wrappedValue: viewModel)
+        self.blockService = blockService
     }
 
     private let accentColor = "818CF8"
