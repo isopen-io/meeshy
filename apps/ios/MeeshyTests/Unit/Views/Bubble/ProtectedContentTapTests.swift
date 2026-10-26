@@ -570,7 +570,7 @@ final class CaptureShieldCoverageGuardTests: XCTestCase {
     /// natif (iOS 26) est attaché SOUS la valeur d'annonce du fil, et son
     /// aperçu en hériterait — il la remet à faux, fermé par défaut.
     func test_longPressPreviews_stayBlack() throws {
-        XCTAssertTrue(try code("Views/MessageListView.swift").contains(".environment(\\.announcesCapture,false)"),
+        XCTAssertTrue(try code("Views/MessageMenuPreviewContainer.swift").contains(".environment(\\.announcesCapture,false)"),
                       "l'aperçu du menu natif ne doit pas hériter de l'annonce du fil")
         XCTAssertFalse(try code("Components/MessageOverlayMenu.swift").contains(".announcesCaptures()"))
     }

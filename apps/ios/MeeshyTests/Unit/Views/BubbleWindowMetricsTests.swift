@@ -42,7 +42,7 @@ final class BubbleWindowMetricsTests: XCTestCase {
     private static let deviceLayout = "Meeshy/Core/DeviceLayout.swift"
     private static let bubbleStandardLayout = "Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout.swift"
     private static let messageOverlayMenu = "Meeshy/Features/Main/Components/MessageOverlayMenu.swift"
-    private static let messageListView = "Meeshy/Features/Main/Views/MessageListView.swift"
+    private static let messageMenuPreviewContainer = "Meeshy/Features/Main/Views/MessageMenuPreviewContainer.swift"
 
     // MARK: - The ratio only constrains when it is taken against the window
 
@@ -170,7 +170,7 @@ final class BubbleWindowMetricsTests: XCTestCase {
     }
 
     func test_messageMenuPreviewContainer_capsAgainstTheWindow() throws {
-        let code = codeLines(try source(Self.messageListView))
+        let code = codeLines(try source(Self.messageMenuPreviewContainer))
 
         // La fenêtre qui PORTE l'aperçu (publiée par sa racine, Stage Manager / fenêtre détachée), la fenêtre
         // active n'étant que le repli avant la première mesure — jamais la dalle.

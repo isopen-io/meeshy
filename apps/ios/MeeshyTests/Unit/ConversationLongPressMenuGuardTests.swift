@@ -125,7 +125,7 @@ final class ConversationLongPressMenuGuardTests: XCTestCase {
     // MARK: - #11208 — une seule haptique, celle du geste
 
     func test_openingChain_firesASingleHaptic_theGesturesOwn() throws {
-        let list = try source("Features/Main/Views/MessageListView.swift")
+        let list = try source("Features/Main/Views/BubbleSwipeContainer.swift")
         guard let gesture = body(of: "private struct ConditionalBubbleLongPress", in: list) else {
             return XCTFail("`ConditionalBubbleLongPress` introuvable — la garde ne mesurerait rien.")
         }

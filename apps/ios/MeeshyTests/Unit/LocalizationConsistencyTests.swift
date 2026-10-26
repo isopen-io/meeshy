@@ -293,7 +293,8 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Views/Cells/PostStatAccessibility.swift",  // 4
         "apps/ios/Meeshy/Features/Main/Views/ConversationHelperViews.swift",  // 4
         "apps/ios/Meeshy/Features/Main/Views/ConversationView+ScrollIndicators.swift",  // 4
-        "apps/ios/Meeshy/Features/Main/Views/MessageListView.swift",  // 4
+        "apps/ios/Meeshy/Features/Main/Views/BubbleSwipeContainer.swift",  // 2
+        "apps/ios/Meeshy/Features/Main/Views/MessageRowOffer.swift",  // 2
         "apps/ios/Meeshy/Features/Main/Views/MyStoriesTab.swift",  // 4
         "apps/ios/Meeshy/Features/Main/Views/StoryAuthorIdentityCard.swift",  // 4
         "apps/ios/Meeshy/Features/Main/Views/StoryUploadPresentation.swift",  // 4
@@ -449,7 +450,8 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Views/ReelsPlayerView+EmptyState.swift",  // 2
         "apps/ios/Meeshy/Features/Main/Components/EditPostSheet.swift",  // 23
         "apps/ios/Meeshy/Features/Main/Components/ReportMessageSheet.swift",  // 21
-        "apps/ios/Meeshy/Features/Main/Views/FeedView.swift",  // 21
+        "apps/ios/Meeshy/Features/Main/Views/FeedView.swift",  // 12
+        "apps/ios/Meeshy/Features/Main/Views/FeedComposerPlaceholder.swift",  // 9
         "apps/ios/Meeshy/Features/Contacts/DiscoverTab.swift",  // 19
         "apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout.swift",  // 19
         // #4328 — la surface RÉPERTOIRE, en entier. Onze clés absentes du

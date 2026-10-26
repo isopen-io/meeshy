@@ -180,6 +180,8 @@ final class FixedFontSizeGuardTests: XCTestCase {
         "Features/Main/Views/ActiveSessionsView.swift",
         "Features/Main/Views/AffiliateView.swift",
         "Features/Main/Views/Bubble/BubbleFailedRetryBar.swift",
+        // #13132 — RELOCALISATION pure : le conteneur de glissé des bulles a quitté `MessageListView.swift` avec ses deux glyphes.
+        "Features/Main/Views/BubbleSwipeContainer.swift",
         "Features/Main/Views/CallEffectsOverlay.swift",
         // #8276 — `CallView.swift` découpé : ses glyphes figés ont suivi leurs
         // surfaces (tous dans un cercle ou un cadre fixe — doctrine 82i/86i).
@@ -256,6 +258,8 @@ final class FixedFontSizeGuardTests: XCTestCase {
         // quitté la feuille avec ses glyphes en CADRE FIXE (tuile de 72, pastille
         // de 20). RELOCALISATION pure : ni `totalCeiling` ni `textCeiling` ne bougent.
         "Features/Main/Views/FeedComposerAttachmentsRow.swift",
+        // #13132 — RELOCALISATION pure : le « + » du placeholder du fil (18 pt dans son cercle de 40) a quitté `FeedView.swift`.
+        "Features/Main/Views/FeedComposerPlaceholder.swift",
         "Features/Main/Views/FeedComposerSheet.swift",
         "Features/Main/Views/FeedPostCard+Media.swift",
         // #4096 — la vue `3f` remplace la mosaïque par un carrousel. Le fichier
@@ -277,7 +281,6 @@ final class FixedFontSizeGuardTests: XCTestCase {
         "Features/Main/Views/GlobalSearchView.swift",
         "Features/Main/Views/IncomingCallView.swift",
         "Features/Main/Views/MagicLinkView.swift",
-        "Features/Main/Views/MessageListView.swift",
         "Features/Main/Views/MyStoriesView.swift",
         "Features/Main/Views/MyStoryActionBar.swift",
         "Features/Main/Views/MyStoryCard.swift",
