@@ -88,64 +88,47 @@ const browserStorage = (): SealedStorage | null => {
   }
 };
 
-function readSealed(storage: SealedStorage | null, identity: string): Record<string, true> {
+/** Une valeur rangée, lue sans jamais lever : absente, illisible ou d'une autre forme ⇒ `undefined`. */
+function readStored(storage: SealedStorage | null, key: string): unknown {
   try {
-    const raw = storage?.getItem(storageKey(identity));
-    const parsed: unknown = raw ? JSON.parse(raw) : [];
-    const ids = Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === 'string') : [];
-    return Object.fromEntries(ids.map((id) => [id, true] as const));
+    const raw = storage?.getItem(key);
+    return raw ? JSON.parse(raw) : undefined;
   } catch {
-    return {};
+    return undefined;
   }
 }
 
-function writeSealed(storage: SealedStorage | null, identity: string, sealed: Readonly<Record<string, true>>): void {
+/** Un stockage absent, plein ou refusé n'ôte rien de ce qui est en mémoire. */
+function writeStored(storage: SealedStorage | null, key: string, value: unknown): void {
   try {
-    storage?.setItem(storageKey(identity), JSON.stringify(Object.keys(sealed)));
+    storage?.setItem(key, JSON.stringify(value));
   } catch {
     return;
   }
 }
 
-function readSince(storage: SealedStorage | null, identity: string): Record<string, number> {
-  try {
-    const raw = storage?.getItem(sinceKey(identity));
-    const parsed: unknown = raw ? JSON.parse(raw) : {};
-    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return {};
-    return Object.fromEntries(Object.entries(parsed).filter((entry): entry is [string, number] => typeof entry[1] === 'number' && Number.isFinite(entry[1])));
-  } catch {
-    return {};
-  }
-}
+const entriesOf = (value: unknown): readonly (readonly [string, unknown])[] =>
+  typeof value === 'object' && value !== null && !Array.isArray(value) ? Object.entries(value) : [];
 
-function writeSince(storage: SealedStorage | null, identity: string, since: Readonly<Record<string, number>>): void {
-  try {
-    storage?.setItem(sinceKey(identity), JSON.stringify(since));
-  } catch {
-    return;
-  }
-}
+const readSealed = (storage: SealedStorage | null, identity: string): Record<string, true> => {
+  const parsed = readStored(storage, storageKey(identity));
+  return Object.fromEntries((Array.isArray(parsed) ? parsed : []).filter((id): id is string => typeof id === 'string').map((id) => [id, true] as const));
+};
 
-function readClear(storage: SealedStorage | null, identity: string): Record<string, readonly string[]> {
-  try {
-    const raw = storage?.getItem(clearKey(identity));
-    const parsed: unknown = raw ? JSON.parse(raw) : {};
-    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return {};
-    return Object.fromEntries(
-      Object.entries(parsed).flatMap(([id, ids]) => (Array.isArray(ids) ? [[id, ids.filter((x): x is string => typeof x === 'string')] as const] : [])),
-    );
-  } catch {
-    return {};
-  }
-}
+const writeSealed = (storage: SealedStorage | null, identity: string, sealed: Readonly<Record<string, true>>): void =>
+  writeStored(storage, storageKey(identity), Object.keys(sealed));
 
-function writeClear(storage: SealedStorage | null, identity: string, clear: Readonly<Record<string, readonly string[]>>): void {
-  try {
-    storage?.setItem(clearKey(identity), JSON.stringify(clear));
-  } catch {
-    return;
-  }
-}
+const readSince = (storage: SealedStorage | null, identity: string): Record<string, number> =>
+  Object.fromEntries(entriesOf(readStored(storage, sinceKey(identity))).filter((entry): entry is [string, number] => typeof entry[1] === 'number' && Number.isFinite(entry[1])));
+
+const writeSince = (storage: SealedStorage | null, identity: string, since: Readonly<Record<string, number>>): void => writeStored(storage, sinceKey(identity), since);
+
+const readClear = (storage: SealedStorage | null, identity: string): Record<string, readonly string[]> =>
+  Object.fromEntries(
+    entriesOf(readStored(storage, clearKey(identity))).flatMap(([id, ids]) => (Array.isArray(ids) ? [[id, ids.filter((x): x is string => typeof x === 'string')] as const] : [])),
+  );
+
+const writeClear = (storage: SealedStorage | null, identity: string, clear: Readonly<Record<string, readonly string[]>>): void => writeStored(storage, clearKey(identity), clear);
 
 /** La plus ancienne des deux ères ; une ère absente cède toujours. */
 const earliest = (known: number | undefined, offered: number): number => (known === undefined ? offered : Math.min(known, offered));
