@@ -105,10 +105,14 @@ extension CommentThreadViewModel {
 
     /// Merges a page over the shown rows, keeping what only this device knows
     /// (an optimistic send, a socket echo). `dropping`: stale cached rows the
-    /// first page no longer serves (deleted meanwhile) do not survive it.
-    private func absorb(_ comments: [FeedComment], dropping stale: Set<String> = []) {
-        let kept = stale.isEmpty ? roots : roots.filter { !stale.contains($0.id) }
-        roots = CommentSheetRules.mergeFetchedComments(current: kept, fetched: comments)
+    /// page no longer serves (deleted meanwhile) do not survive it — unless
+    /// they are older than `reach`, the oldest row the page covers: those
+    /// belong to the next pages and stay after it.
+    private func absorb(_ comments: [FeedComment], dropping stale: Set<String> = [], reach: Date = .distantPast) {
+        let unserved = stale.subtracting(comments.map(\.id))
+        let kept = roots.filter { !unserved.contains($0.id) }
+        let beyond = roots.filter { unserved.contains($0.id) && $0.timestamp < reach }
+        roots = CommentSheetRules.mergeFetchedComments(current: kept, fetched: comments) + beyond
         onRootsLoaded(comments)
     }
 
@@ -121,9 +125,11 @@ extension CommentThreadViewModel {
                 postId: target.id, cursor: cursor, limit: target.rootsPageSize)
             let page = await mapped(response.data, parentId: nil)
             guard entity == target else { return .skipped }
-            absorb(page, dropping: stale)
+            let hasMore = response.pagination?.hasMore ?? false
+            absorb(page, dropping: stale,
+                   reach: hasMore ? page.map(\.timestamp).min() ?? .distantFuture : .distantPast)
             rootsNextCursor = response.pagination?.nextCursor
-            rootsHasMore = response.pagination?.hasMore ?? false
+            rootsHasMore = hasMore
             onRootsFetched(response.data)
             await store.save(target.rootsCacheKey, CommentSheetRules.persistableComments(roots))
             return .network

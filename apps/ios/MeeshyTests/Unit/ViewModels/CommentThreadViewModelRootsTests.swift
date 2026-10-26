@@ -99,6 +99,19 @@ final class CommentThreadViewModelRootsTests: XCTestCase {
         XCTAssertEqual(store.saved["post-s1"]?.map(\.id), ["c1", "c2"])
     }
 
+    func test_loadRoots_aStaleRowOlderThanTheFirstPage_staysForTheNextPages() async {
+        let (sut, mock, store) = makeSUT(.post("p1"))
+        let older = FeedComment(id: "deep", author: "bob", content: "c-deep",
+                                timestamp: Date(timeIntervalSince1970: 1_700_000_000))
+        store.cached["post-p1"] = .stale([Self.comment("c1"), Self.comment("gone"), older], age: 99)
+        mock.getCommentsResult = Self.page(["c1"], hasMore: true, cursor: "k1")
+
+        await sut.loadRoots()
+
+        XCTAssertEqual(sut.roots.map(\.id), ["c1", "deep"],
+                       "a cached row the first page does not reach is not gone: only a row inside its span is")
+    }
+
     func test_loadRoots_pageSize_isFiftyForAStory_andTwentyForAPostOrAReel() async {
         for (entity, size) in [(CommentThreadEntity.story("s1"), 50), (.post("p1"), 20), (.reel("r1"), 20)] {
             let (sut, mock, _) = makeSUT(entity)
@@ -219,6 +232,15 @@ final class CommentThreadViewModelRootsTests: XCTestCase {
     }
 
     // MARK: - The sheet's live rows
+
+    func test_init_theEmbeddedRows_areTheTopLevelRootsAtOnce() {
+        let reply = FeedComment(id: "r1", author: "a", content: "r", parentId: "e1")
+        let (sut, _, _) = makeSUT(.post("p1"), embedded: [Self.comment("e1", replies: 1), reply])
+
+        XCTAssertEqual(sut.topLevelRoots.map(\.id), ["e1"], "the sheet lists the embedded rows before any load")
+        XCTAssertEqual(sut.knownTotal, 2)
+        XCTAssertNil(sut.liveRoots)
+    }
 
     func test_liveRoots_isNilUntilTheRootsAreTouched_andNilRestoresTheEmbeddedRows() {
         let (sut, _, _) = makeSUT(.post("p1"), embedded: [Self.comment("e1")])
