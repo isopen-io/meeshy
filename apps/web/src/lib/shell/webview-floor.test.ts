@@ -75,6 +75,37 @@ describe('l’écran de mise à jour', () => {
     expect(page).toContain('https://play.google.com/store/apps/details?id=com.google.android.webview');
   });
 
+  type Rendered = { readonly title: string; readonly action: string; readonly actionHidden: boolean };
+
+  function render(userAgent: string): Rendered {
+    const element = () => ({ textContent: '', hidden: false });
+    const nodes = { title: element(), body: element(), action: element() };
+    const document = {
+      documentElement: { lang: '', dir: '' },
+      title: '',
+      getElementById: (id: keyof typeof nodes) => nodes[id],
+    };
+    const navigator = { userAgent, languages: ['fr-FR'], language: 'fr-FR' };
+    new Function('navigator', 'document', script.slice('<script>'.length))(navigator, document);
+    return { title: nodes.title.textContent, action: nodes.action.textContent, actionHidden: nodes.action.hidden };
+  }
+
+  test('sous le plancher, il demande la mise à jour et ouvre le Play Store', () => {
+    expect(render(webView(MIN_ANDROID_WEBVIEW_MAJOR - 1))).toEqual({
+      title: 'Mettez à jour Android System WebView',
+      action: 'Ouvrir le Play Store',
+      actionHidden: false,
+    });
+  });
+
+  test('une WebView à jour qui échoue à charger la page ne se fait pas dire trop ancienne (#13159)', () => {
+    for (const major of [MIN_ANDROID_WEBVIEW_MAJOR, 130]) {
+      const rendered = render(webView(major));
+      expect(rendered.title).toBe('Meeshy n’a pas pu s’ouvrir');
+      expect(rendered.actionHidden).toBe(true);
+    }
+  });
+
   test('son script se lit sur une WebView ancienne : ES5, aucun module', () => {
     expect(script).not.toMatch(/=>|\bconst\b|\blet\b|`|\?\?|\?\./);
     expect(page).not.toContain('type="module"');
