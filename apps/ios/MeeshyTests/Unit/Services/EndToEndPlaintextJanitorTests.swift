@@ -20,8 +20,8 @@ final class EndToEndPlaintextJanitorTests: XCTestCase {
                 localId: row.local, conversationId: conversationId, senderId: "00000000000000000000bb22", sender: nil,
                 text: "", originalLanguage: "fr", messageType: "text", replyToId: nil, storyReplyToId: nil,
                 forwardedFromId: nil, forwardedFromConversationId: nil, replyToJson: nil, effectFlags: 0,
-                maxViewOnceCount: nil, locationJson: nil, stickerJson: nil, now: Date(), ephemeralDuration: nil,
-                sealedEndToEnd: true
+                maxViewOnceCount: nil, locationJson: nil, stickerJson: nil, sealedEndToEnd: true,
+                now: Date(), ephemeralDuration: nil
             )
             record.serverId = row.server
             return record

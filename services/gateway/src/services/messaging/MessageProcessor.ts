@@ -48,6 +48,8 @@ import { mapWithConcurrency } from '@meeshy/shared/utils/concurrency';
 import { findExistingMessage, findContentWindowDuplicate } from './messageDedupProjection';
 import { MESSAGE_AUTHOR_USER_SELECT } from './messageAuthorSelect';
 import type { SocketAttachmentRow } from '../../socketio/serializeAttachmentForSocket';
+import { prismaAtRestFileStore, type AtRestFileAccess } from '../attachments/atRest/atRestFiles';
+import { contentDisappears, gatewaySealDeps, requireFileSealingKey, sealMessageAttachmentsAtRest, sendCarriesFiles } from './sealMessageAttachments';
 
 // Logger dédié pour MessageProcessor
 const logger = enhancedLogger.child({ module: 'MessageProcessor' });
@@ -77,16 +79,19 @@ export class MessageProcessor {
   private mentionService: MentionService;
   private encryptionService: EncryptionService;
   private attachmentService: AttachmentService;
+  private atRestFiles: AtRestFileAccess;
 
   constructor(
     private readonly prisma: PrismaClient,
     private readonly notificationService?: NotificationService,
-    private readonly translationService?: MessageTranslationService
+    private readonly translationService?: MessageTranslationService,
+    atRestFiles?: AtRestFileAccess
   ) {
     this.trackingLinkService = new TrackingLinkService(prisma);
     this.mentionService = new MentionService(prisma);
     this.encryptionService = new EncryptionService(prisma);
     this.attachmentService = new AttachmentService(prisma);
+    this.atRestFiles = atRestFiles ?? { store: prismaAtRestFileStore(prisma), keyring: this.encryptionService };
   }
 
   /**
@@ -313,6 +318,8 @@ export class MessageProcessor {
     // voit aucune adresse suivie (#10286) : ni réécriture, ni carte.
     // #11381 — au repos, aucune adresse ne se range en clair à côté du chiffré.
     const sealedAtRest = sealsAtRest(regime);
+    // #13100 — ses fichiers seront scellés : sans clé, refusé AVANT l'écriture.
+    if (sealedAtRest && sendCarriesFiles(request)) await requireFileSealingKey(this.atRestFiles, request.conversationId);
     const linkAuthor = !endToEnd && !sealedAtRest && this.containsLinks(data.content)
       ? await this.resolveLinkTrackingAuthor(data.senderId)
       : UNTRACKED_LINK_AUTHOR;
@@ -564,7 +571,7 @@ export class MessageProcessor {
     // ÉTAPE 4: Gérer les attachments (Lier ou Copier pour forward)
     await performanceLogger.withTiming(
       'messaging.handleAttachments',
-      () => this.handleAttachments(data, message, { serverReads: !endToEnd }),
+      () => this.handleAttachments(data, message, { serverReads: !endToEnd, sealsAtRest: sealedAtRest }),
       corrWithMsg
     );
 
@@ -664,8 +671,11 @@ export class MessageProcessor {
       conversationId: string;
     },
     message: Message,
-    options: { readonly serverReads: boolean }
+    options: { readonly serverReads: boolean; readonly sealsAtRest: boolean }
   ): Promise<void> {
+    const sealFiles = () => options.sealsAtRest
+      ? sealMessageAttachmentsAtRest(gatewaySealDeps(this.prisma, this.atRestFiles), { messageId: message.id, conversationId: data.conversationId })
+      : Promise.resolve();
     // Diffusion à plusieurs destinataires (PAS un transfert) : copie SERVEUR
     // des pièces jointes du message désigné. Volontairement HORS du
     // try/catch ci-dessous — celui-ci absorbe les échecs du forward en
@@ -696,6 +706,7 @@ export class MessageProcessor {
         );
         throw error;
       }
+      await sealFiles();
       return;
     }
 
@@ -703,16 +714,19 @@ export class MessageProcessor {
       // 1. Lier les attachments pré-uploadés
       if (data.attachmentIds && data.attachmentIds.length > 0) {
         await this.attachmentService.associateAttachmentsToMessage(data.attachmentIds, message.id, message);
+        // #13100 — scellés AVANT le départ de l'audio et avant `message:new`.
+        await sealFiles();
 
         // Déclencher le traitement audio si nécessaire — jamais en e2ee (#12518).
         if (this.translationService && options.serverReads) {
-          this.processAudioAttachments(data.attachmentIds, message.id, data.conversationId, data.senderId)
+          this.processAudioAttachments(data.attachmentIds, message.id, data.conversationId, data.senderId, { atRest: options.sealsAtRest || contentDisappears(message) })
             .catch(err => logger.error('[MessageProcessor] Audio processing failed', err));
         }
       }
       // 2. Copier les attachments si c'est un forward et qu'aucun nouvel attachment n'est fourni
       else if (data.forwardedFromId) {
         await this.copyForwardedAttachments(data.forwardedFromId, message.id, data.senderId, data.forwardCopySelection);
+        await sealFiles();
       }
     } catch (error) {
       logger.error('[MessageProcessor] Error handling attachments', error);
@@ -783,7 +797,8 @@ export class MessageProcessor {
     attachmentIds: readonly string[],
     messageId: string,
     conversationId: string,
-    senderId: string
+    senderId: string,
+    regime: { readonly atRest: boolean } = { atRest: false }
   ): Promise<void> {
     if (!this.translationService) return;
 
@@ -854,7 +869,8 @@ export class MessageProcessor {
               audioDurationMs: audioAtt.duration || 0,
               mobileTranscription: mobileTranscription,
               generateVoiceClone: true,
-              modelType: 'medium'
+              modelType: 'medium',
+              ...(regime.atRest ? { atRest: true } : {})
             });
             return true;
           } catch (error) {
