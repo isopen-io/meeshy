@@ -20,10 +20,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.PersonSearch
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -57,6 +53,7 @@ import me.meeshy.ui.component.FeedbackToastRequest
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.MeeshyEmptyState
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyMotion
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyTheme
@@ -99,7 +96,7 @@ fun CommunityInviteScreen(
                     .background(tokens.backgroundSecondary.copy(alpha = 0.5f)).padding(12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Icon(Icons.Filled.Search, null, tint = tokens.textMuted, modifier = Modifier.size(18.dp))
+                Icon(MeeshyIcons.Search, null, tint = tokens.textMuted, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
                 Box(Modifier.weight(1f)) {
                     PlainField(state.query, viewModel::onQuery, stringResource(R.string.community_invite_search_placeholder), ImeAction.Search)
@@ -115,7 +112,7 @@ fun CommunityInviteScreen(
                         CircularProgressIndicator(Modifier.padding(top = 32.dp).size(28.dp), strokeWidth = 2.dp, color = MeeshyPalette.Indigo500)
                     }
                     1 -> MeeshyEmptyState(
-                        Icons.Filled.PersonSearch,
+                        MeeshyIcons.Search,
                         stringResource(R.string.community_invite_empty_title),
                         stringResource(R.string.community_invite_empty_subtitle),
                     )
@@ -175,7 +172,7 @@ private fun InviteRow(user: UserSearchResult, invited: Boolean, inviting: Boolea
         if (invited) {
             val scale by animateFloatAsState(1f, MeeshyMotion.springBouncy(), label = "check")
             Icon(
-                Icons.Filled.CheckCircle, null, tint = MeeshyPalette.Success,
+                MeeshyIcons.CheckCircleFilled, null, tint = MeeshyPalette.Success,
                 modifier = Modifier.size(28.dp).graphicsLayer { scaleX = scale; scaleY = scale },
             )
         } else {

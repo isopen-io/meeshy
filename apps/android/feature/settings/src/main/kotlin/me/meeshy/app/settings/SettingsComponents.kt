@@ -4,9 +4,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -19,6 +16,7 @@ import androidx.compose.ui.unit.dp
 import me.meeshy.ui.component.settings.SettingsRow
 import me.meeshy.ui.component.settings.SettingsSwitchRow
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -54,7 +52,7 @@ internal fun SettingsChevronRow(
                 Spacer(Modifier.width(MeeshySpacing.xs))
             }
             Icon(
-                Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                MeeshyIcons.ChevronForward,
                 contentDescription = null,
                 tint = chevronTint,
                 modifier = Modifier.size(20.dp),
@@ -70,7 +68,7 @@ internal fun NotificationToggleRow(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
     enabled: Boolean = true,
-    icon: ImageVector = Icons.Filled.Notifications,
+    icon: ImageVector = MeeshyIcons.BellFilled,
     color: Color = MeeshyPalette.Warning,
 ) {
     val haptics = rememberMeeshyHaptics()

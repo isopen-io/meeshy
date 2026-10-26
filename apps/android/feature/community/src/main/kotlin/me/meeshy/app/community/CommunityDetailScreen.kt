@@ -21,21 +21,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.ExitToApp
-import androidx.compose.material.icons.automirrored.filled.Login
-import androidx.compose.material.icons.filled.AddComment
-import androidx.compose.material.icons.filled.ChatBubble
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.People
-import androidx.compose.material.icons.filled.PersonAdd
-import androidx.compose.material.icons.filled.PhotoLibrary
-import androidx.compose.material.icons.filled.Public
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Tag
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -79,6 +64,7 @@ import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.MeeshyEmptyState
 import me.meeshy.ui.component.MeeshySkeletonBox
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.ui.theme.hexColor
@@ -136,7 +122,7 @@ fun CommunityDetailScreen(
                 onAddChannel = { showAddChannel = true },
             )
             state.showError -> MeeshyEmptyState(
-                icon = Icons.Filled.Warning,
+                icon = MeeshyIcons.WarningFilled,
                 title = stringResource(R.string.community_common_error),
                 subtitle = stringResource(R.string.community_settings_error_default),
                 actionLabel = stringResource(R.string.community_common_retry),
@@ -146,7 +132,7 @@ fun CommunityDetailScreen(
         }
         if (community == null) {
             CommunityRoundButton(
-                icon = Icons.AutoMirrored.Filled.ArrowBack,
+                icon = MeeshyIcons.Back,
                 description = stringResource(R.string.community_back),
                 onClick = navigation.onBack,
                 modifier = Modifier.statusBarsPadding().padding(start = 8.dp),
@@ -211,7 +197,7 @@ private fun LoadedDetail(
             CommunityDetailTab.CHANNELS -> channelsSection(state, access, onAddChannel, navigation.onOpenChannel)
             CommunityDetailTab.FEED -> item(key = "feed", contentType = "feed") {
                 MeeshyEmptyState(
-                    icon = Icons.Filled.PhotoLibrary,
+                    icon = MeeshyIcons.PhotoLibrary,
                     title = stringResource(R.string.community_detail_posts_empty_title),
                     subtitle = stringResource(R.string.community_detail_posts_empty_subtitle),
                     modifier = Modifier.fillMaxWidth().height(220.dp),
@@ -234,17 +220,17 @@ private fun DetailTopBar(
         Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        CommunityRoundButton(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.community_back), navigation.onBack)
+        CommunityRoundButton(MeeshyIcons.Back, stringResource(R.string.community_back), navigation.onBack)
         Spacer(Modifier.weight(1f))
         if (access.showsHeaderMenu) {
             Box {
-                CommunityRoundButton(Icons.Filled.MoreVert, stringResource(R.string.community_detail_menu_settings), { menuOpen = true })
+                CommunityRoundButton(MeeshyIcons.MoreHorizontal, stringResource(R.string.community_detail_menu_settings), { menuOpen = true })
                 DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                     val openSettings = navigation.onOpenSettings
                     if (access.canEditSettings && openSettings != null) {
                         DropdownMenuItem(
                             text = { Text(stringResource(R.string.community_detail_menu_settings)) },
-                            leadingIcon = { Icon(Icons.Filled.Settings, contentDescription = null) },
+                            leadingIcon = { Icon(MeeshyIcons.SettingsFilled, contentDescription = null) },
                             onClick = {
                                 menuOpen = false
                                 openSettings(communityId)
@@ -254,7 +240,7 @@ private fun DetailTopBar(
                     if (access.canLeave) {
                         DropdownMenuItem(
                             text = { Text(stringResource(R.string.community_detail_menu_leave), color = MeeshyTheme.tokens.error) },
-                            leadingIcon = { Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = null, tint = MeeshyTheme.tokens.error) },
+                            leadingIcon = { Icon(MeeshyIcons.SignOut, contentDescription = null, tint = MeeshyTheme.tokens.error) },
                             onClick = {
                                 menuOpen = false
                                 onLeave()
@@ -304,7 +290,7 @@ private fun DetailHeader(community: Community, accentHex: String) {
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                Icon(if (community.isPrivate) Icons.Filled.Lock else Icons.Filled.Public, null, tint = tokens.textMuted, modifier = Modifier.size(11.dp))
+                Icon(if (community.isPrivate) MeeshyIcons.LockFilled else MeeshyIcons.Public, null, tint = tokens.textMuted, modifier = Modifier.size(11.dp))
                 Text(
                     stringResource(if (community.isPrivate) R.string.community_privacy_private else R.string.community_privacy_public),
                     color = tokens.textMuted,
@@ -328,9 +314,9 @@ private fun StatsRow(community: Community) {
             .padding(vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        StatItem(Modifier.weight(1f), community.memberCount, stringResource(R.string.community_detail_stats_members), Icons.Filled.People)
+        StatItem(Modifier.weight(1f), community.memberCount, stringResource(R.string.community_detail_stats_members), MeeshyIcons.GroupFilled)
         Box(Modifier.width(1.dp).height(30.dp).background(tokens.hairline))
-        StatItem(Modifier.weight(1f), community.conversationCount, stringResource(R.string.community_detail_stats_channels), Icons.Filled.ChatBubble)
+        StatItem(Modifier.weight(1f), community.conversationCount, stringResource(R.string.community_detail_stats_channels), MeeshyIcons.Chat)
     }
 }
 
@@ -402,7 +388,7 @@ private fun ActionsSection(
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Icon(Icons.AutoMirrored.Filled.ExitToApp, null, tint = error, modifier = Modifier.size(18.dp))
+                Icon(MeeshyIcons.SignOut, null, tint = error, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(6.dp))
                 Text(stringResource(R.string.community_detail_leave_label), color = error, fontWeight = FontWeight.Medium, fontSize = 14.sp)
             }
@@ -412,11 +398,11 @@ private fun ActionsSection(
 
 @Composable
 private fun CommunityDetailAction.face(): Pair<ImageVector, String> = when (this) {
-    CommunityDetailAction.MEMBERS -> Icons.Filled.People to stringResource(R.string.community_detail_action_members)
-    CommunityDetailAction.INVITE -> Icons.Filled.PersonAdd to stringResource(R.string.community_detail_action_invite)
-    CommunityDetailAction.CHANNEL -> Icons.Filled.AddComment to stringResource(R.string.community_detail_action_channel)
-    CommunityDetailAction.SETTINGS -> Icons.Filled.Settings to stringResource(R.string.community_detail_action_settings)
-    CommunityDetailAction.JOIN -> Icons.AutoMirrored.Filled.Login to stringResource(R.string.community_detail_action_join)
+    CommunityDetailAction.MEMBERS -> MeeshyIcons.GroupFilled to stringResource(R.string.community_detail_action_members)
+    CommunityDetailAction.INVITE -> MeeshyIcons.PersonAdd to stringResource(R.string.community_detail_action_invite)
+    CommunityDetailAction.CHANNEL -> MeeshyIcons.ForumFilled to stringResource(R.string.community_detail_action_channel)
+    CommunityDetailAction.SETTINGS -> MeeshyIcons.SettingsFilled to stringResource(R.string.community_detail_action_settings)
+    CommunityDetailAction.JOIN -> MeeshyIcons.SignIn to stringResource(R.string.community_detail_action_join)
 }
 
 @Composable
@@ -466,7 +452,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.channelsSection(
         item(key = "channels-empty", contentType = "empty") {
             val canAdd = access.canAddChannel
             MeeshyEmptyState(
-                icon = Icons.Filled.ChatBubble,
+                icon = MeeshyIcons.Chat,
                 title = stringResource(R.string.community_detail_channels_empty_title),
                 subtitle = stringResource(R.string.community_detail_channels_empty_subtitle),
                 actionLabel = if (canAdd) stringResource(R.string.community_detail_channels_empty_action) else null,
@@ -497,7 +483,7 @@ private fun ChannelRow(channel: CommunityChannelRow, onClick: () -> Unit, modifi
         Box(
             Modifier.size(40.dp).clip(RoundedCornerShape(10.dp)).background(MeeshyPalette.Indigo500.copy(alpha = 0.1f)),
             contentAlignment = Alignment.Center,
-        ) { Icon(Icons.Filled.Tag, null, tint = MeeshyPalette.Indigo500, modifier = Modifier.size(20.dp)) }
+        ) { Icon(MeeshyIcons.Tag, null, tint = MeeshyPalette.Indigo500, modifier = Modifier.size(20.dp)) }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(title, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, color = tokens.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
             channel.description?.let {

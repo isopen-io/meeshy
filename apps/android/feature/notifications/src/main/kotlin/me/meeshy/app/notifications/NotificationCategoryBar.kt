@@ -13,19 +13,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AlternateEmail
-import androidx.compose.material.icons.filled.Call
-import androidx.compose.material.icons.filled.ChatBubble
-import androidx.compose.material.icons.filled.Circle
-import androidx.compose.material.icons.filled.EmojiEvents
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.Groups
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.PersonAdd
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.ThumbUp
-import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -46,6 +33,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.notifications.R
 import me.meeshy.sdk.model.NotificationFilterCategory
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.hexColor
 
@@ -105,18 +93,18 @@ private fun NotificationCategoryChip(
 }
 
 internal fun NotificationFilterCategory.icon(): ImageVector = when (this) {
-    NotificationFilterCategory.ALL -> Icons.Filled.Notifications
-    NotificationFilterCategory.UNREAD -> Icons.Filled.Circle
-    NotificationFilterCategory.MESSAGES -> Icons.Filled.ChatBubble
-    NotificationFilterCategory.REACTIONS -> Icons.Filled.Favorite
-    NotificationFilterCategory.MENTIONS -> Icons.Filled.AlternateEmail
-    NotificationFilterCategory.SOCIAL -> Icons.Filled.ThumbUp
-    NotificationFilterCategory.ENGAGEMENT -> Icons.Filled.EmojiEvents
-    NotificationFilterCategory.CONTACTS -> Icons.Filled.PersonAdd
-    NotificationFilterCategory.GROUPS -> Icons.Filled.Groups
-    NotificationFilterCategory.CALLS -> Icons.Filled.Call
-    NotificationFilterCategory.TRANSLATIONS -> Icons.Filled.Translate
-    NotificationFilterCategory.SYSTEM -> Icons.Filled.Settings
+    NotificationFilterCategory.ALL -> MeeshyIcons.BellFilled
+    NotificationFilterCategory.UNREAD -> MeeshyIcons.Record
+    NotificationFilterCategory.MESSAGES -> MeeshyIcons.Chat
+    NotificationFilterCategory.REACTIONS -> MeeshyIcons.HeartFilled
+    NotificationFilterCategory.MENTIONS -> MeeshyIcons.Mention
+    NotificationFilterCategory.SOCIAL -> MeeshyIcons.ForumFilled
+    NotificationFilterCategory.ENGAGEMENT -> MeeshyIcons.Trophy
+    NotificationFilterCategory.CONTACTS -> MeeshyIcons.PersonAdd
+    NotificationFilterCategory.GROUPS -> MeeshyIcons.GroupsFilled
+    NotificationFilterCategory.CALLS -> MeeshyIcons.Call
+    NotificationFilterCategory.TRANSLATIONS -> MeeshyIcons.Translate
+    NotificationFilterCategory.SYSTEM -> MeeshyIcons.SettingsFilled
 }
 
 @StringRes

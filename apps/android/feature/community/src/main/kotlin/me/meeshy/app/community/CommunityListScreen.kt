@@ -28,17 +28,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.AddCircle
-import androidx.compose.material.icons.filled.ChatBubble
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Groups
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.People
-import androidx.compose.material.icons.filled.Public
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -83,6 +72,7 @@ import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.MeeshyEmptyState
 import me.meeshy.ui.component.MeeshySkeletonBox
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyMotion
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyTheme
@@ -117,14 +107,14 @@ fun CommunityListScreen(
             when {
                 state.showSkeleton -> SkeletonGrid()
                 state.showError -> MeeshyEmptyState(
-                    icon = Icons.Filled.Warning,
+                    icon = MeeshyIcons.WarningFilled,
                     title = stringResource(R.string.community_common_error),
                     subtitle = stringResource(R.string.community_settings_error_default),
                     actionLabel = stringResource(R.string.community_common_retry),
                     onAction = viewModel::retry,
                 )
                 state.showEmpty -> MeeshyEmptyState(
-                    icon = Icons.Filled.Groups,
+                    icon = MeeshyIcons.GroupsFilled,
                     title = stringResource(R.string.community_list_empty_title),
                     subtitle = stringResource(R.string.community_list_empty_subtitle),
                     actionLabel = stringResource(R.string.community_list_empty_create_button),
@@ -183,7 +173,7 @@ private fun ListHeader(onBack: () -> Unit, onCreate: () -> Unit) {
     ) {
         IconButton(onClick = onBack) {
             Icon(
-                Icons.AutoMirrored.Filled.ArrowBack,
+                MeeshyIcons.Back,
                 contentDescription = stringResource(R.string.community_back),
                 tint = MeeshyPalette.Indigo500,
             )
@@ -201,7 +191,7 @@ private fun ListHeader(onBack: () -> Unit, onCreate: () -> Unit) {
             onCreate()
         }) {
             Icon(
-                Icons.Filled.AddCircle,
+                MeeshyIcons.AddCircleFilled,
                 contentDescription = stringResource(R.string.community_list_create_accessibility_label),
                 tint = MeeshyPalette.Indigo500,
                 modifier = Modifier.size(28.dp),
@@ -222,7 +212,7 @@ private fun SearchField(query: String, onQueryChange: (String) -> Unit) {
             .padding(horizontal = 10.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(Icons.Filled.Search, contentDescription = null, tint = tokens.textMuted, modifier = Modifier.size(18.dp))
+        Icon(MeeshyIcons.Search, contentDescription = null, tint = tokens.textMuted, modifier = Modifier.size(18.dp))
         Spacer(Modifier.width(8.dp))
         Box(Modifier.weight(1f)) {
             if (query.isEmpty()) {
@@ -240,7 +230,7 @@ private fun SearchField(query: String, onQueryChange: (String) -> Unit) {
         }
         if (query.isNotEmpty()) {
             Icon(
-                Icons.Filled.Close,
+                MeeshyIcons.Close,
                 contentDescription = stringResource(R.string.community_common_close),
                 tint = tokens.textMuted,
                 modifier = Modifier.size(18.dp).clip(CircleShape).pressableScale(onClick = { onQueryChange("") }),
@@ -334,8 +324,8 @@ private fun CommunityCard(
                 Text(it, color = Color.White.copy(alpha = 0.8f), fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                CountBadge(Icons.Filled.People, CompactCountFormat.text(community.memberCount, countLocale))
-                CountBadge(Icons.Filled.ChatBubble, CompactCountFormat.text(community.conversationCount, countLocale))
+                CountBadge(MeeshyIcons.GroupFilled, CompactCountFormat.text(community.memberCount, countLocale))
+                CountBadge(MeeshyIcons.Chat, CompactCountFormat.text(community.conversationCount, countLocale))
             }
         }
     }
@@ -352,7 +342,7 @@ private fun PrivacyChip(isPrivate: Boolean, modifier: Modifier = Modifier) {
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Icon(
-            if (isPrivate) Icons.Filled.Lock else Icons.Filled.Public,
+            if (isPrivate) MeeshyIcons.LockFilled else MeeshyIcons.Public,
             contentDescription = stringResource(if (isPrivate) R.string.community_privacy_private else R.string.community_privacy_public),
             tint = Color.White.copy(alpha = 0.85f),
             modifier = Modifier.size(11.dp),

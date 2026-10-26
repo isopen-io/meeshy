@@ -18,17 +18,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.AdminPanelSettings
-import androidx.compose.material.icons.filled.Groups
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.PersonAdd
-import androidx.compose.material.icons.filled.PersonRemove
-import androidx.compose.material.icons.filled.Security
-import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material.icons.filled.WorkspacePremium
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -71,14 +60,15 @@ import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.MeeshyEmptyState
 import me.meeshy.ui.component.MeeshySkeletonBox
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.ui.theme.hexColor
 
 private fun MemberRole.icon(): ImageVector = when (this) {
-    MemberRole.CREATOR -> Icons.Filled.WorkspacePremium
-    MemberRole.ADMIN -> Icons.Filled.AdminPanelSettings
-    MemberRole.MODERATOR -> Icons.Filled.Security
-    MemberRole.MEMBER -> Icons.Filled.Person
+    MemberRole.CREATOR -> MeeshyIcons.Premium
+    MemberRole.ADMIN -> MeeshyIcons.AdminPanel
+    MemberRole.MODERATOR -> MeeshyIcons.Security
+    MemberRole.MEMBER -> MeeshyIcons.PersonFilled
 }
 
 @Composable
@@ -127,7 +117,7 @@ fun CommunityMembersScreen(
         Column(Modifier.fillMaxSize().statusBarsPadding()) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.community_back), tint = tokens.textPrimary)
+                    Icon(MeeshyIcons.Back, stringResource(R.string.community_back), tint = tokens.textPrimary)
                 }
                 Text(
                     stringResource(R.string.community_members_title), Modifier.weight(1f),
@@ -135,7 +125,7 @@ fun CommunityMembersScreen(
                 )
                 if (state.canInvite) {
                     IconButton(onClick = { haptics.light(); onInvite() }) {
-                        Icon(Icons.Filled.PersonAdd, stringResource(R.string.community_detail_action_invite), tint = androidx.compose.ui.graphics.Color(0xFF6366F1))
+                        Icon(MeeshyIcons.PersonAdd, stringResource(R.string.community_detail_action_invite), tint = androidx.compose.ui.graphics.Color(0xFF6366F1))
                     }
                 }
             }
@@ -145,12 +135,12 @@ fun CommunityMembersScreen(
                         repeat(6) { MeeshySkeletonBox(Modifier.fillMaxWidth().height(48.dp)) }
                     }
                     state.showError -> MeeshyEmptyState(
-                        Icons.Filled.Warning, stringResource(R.string.community_common_error),
+                        MeeshyIcons.WarningFilled, stringResource(R.string.community_common_error),
                         stringResource(R.string.community_settings_error_default),
                         actionLabel = stringResource(R.string.community_common_retry), onAction = viewModel::retry,
                     )
                     state.isEmpty -> MeeshyEmptyState(
-                        Icons.Filled.Groups, stringResource(R.string.community_members_empty_title),
+                        MeeshyIcons.GroupsFilled, stringResource(R.string.community_members_empty_title),
                         stringResource(R.string.community_members_empty_subtitle),
                         actionLabel = if (state.canInvite) stringResource(R.string.community_members_empty_action) else null,
                         onAction = if (state.canInvite) onInvite else null,
@@ -253,7 +243,7 @@ private fun MemberRowView(row: CommunityMemberRow, onRole: (MemberRole) -> Unit,
             if (!row.actions.isEmpty) {
                 Box {
                     IconButton(onClick = { menu = true }) {
-                        Icon(Icons.Filled.MoreVert, stringResource(R.string.community_member_options_a11y, name), tint = tokens.textMuted)
+                        Icon(MeeshyIcons.MoreHorizontal, stringResource(R.string.community_member_options_a11y, name), tint = tokens.textMuted)
                     }
                     DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                         row.actions.assignableRoles.forEach { target ->
@@ -267,7 +257,7 @@ private fun MemberRowView(row: CommunityMemberRow, onRole: (MemberRole) -> Unit,
                             HorizontalDivider()
                             DropdownMenuItem(
                                 text = { Text(stringResource(R.string.community_members_remove), color = tokens.error) },
-                                leadingIcon = { Icon(Icons.Filled.PersonRemove, null, tint = tokens.error) },
+                                leadingIcon = { Icon(MeeshyIcons.PersonRemove, null, tint = tokens.error) },
                                 onClick = { menu = false; onRemove() },
                             )
                         }

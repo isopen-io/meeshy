@@ -33,14 +33,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.AddCircle
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Public
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -79,6 +71,7 @@ import me.meeshy.sdk.net.api.UserSearchResult
 import me.meeshy.sdk.theme.DynamicColorGenerator
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyMotion
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyTheme
@@ -113,7 +106,7 @@ fun CommunityCreateScreen(
     Column(Modifier.fillMaxSize().background(tokens.backgroundPrimary).statusBarsPadding().imePadding()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             CommunityRoundButton(
-                Icons.AutoMirrored.Filled.ArrowBack,
+                MeeshyIcons.Back,
                 stringResource(R.string.community_back),
                 onBack,
                 tint = tokens.textPrimary,
@@ -180,7 +173,7 @@ private fun PreviewCard(state: CommunityCreateUiState) {
                 Text(draft.description, color = Color.White.copy(alpha = 0.8f), fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Icon(if (draft.isPrivate) Icons.Filled.Lock else Icons.Filled.Public, null, tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.size(11.dp))
+                Icon(if (draft.isPrivate) MeeshyIcons.LockFilled else MeeshyIcons.Public, null, tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.size(11.dp))
                 Text(
                     stringResource(if (draft.isPrivate) R.string.community_privacy_private else R.string.community_privacy_public),
                     color = Color.White.copy(alpha = 0.9f), fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
@@ -282,7 +275,7 @@ private fun PrivacyToggle(isPrivate: Boolean, onChange: (Boolean) -> Unit) {
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Icon(
-            if (isPrivate) Icons.Filled.Lock else Icons.Filled.Public,
+            if (isPrivate) MeeshyIcons.LockFilled else MeeshyIcons.Public,
             null,
             tint = if (isPrivate) MeeshyPalette.Indigo500 else MeeshyPalette.Success,
             modifier = Modifier.size(24.dp),
@@ -308,14 +301,14 @@ private fun MembersSection(state: CommunityCreateUiState, viewModel: CommunityCr
             Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(tokens.backgroundSecondary.copy(alpha = 0.5f)).padding(12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(Icons.Filled.Search, null, tint = tokens.textMuted, modifier = Modifier.size(18.dp))
+            Icon(MeeshyIcons.Search, null, tint = tokens.textMuted, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(8.dp))
             Box(Modifier.weight(1f)) {
                 PlainField(state.memberQuery, viewModel::onMemberQuery, stringResource(R.string.community_create_members_search_placeholder), ImeAction.Search)
             }
             if (state.memberQuery.isNotEmpty()) {
                 Icon(
-                    Icons.Filled.Close, stringResource(R.string.community_common_close), tint = tokens.textMuted,
+                    MeeshyIcons.Close, stringResource(R.string.community_common_close), tint = tokens.textMuted,
                     modifier = Modifier.size(18.dp).clip(CircleShape).pressableScale(onClick = { viewModel.onMemberQuery("") }),
                 )
             }
@@ -350,7 +343,7 @@ private fun SelectedChip(user: UserSearchResult, onRemove: () -> Unit) {
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Text(user.displayName ?: user.username, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium)
-        Icon(Icons.Filled.Close, stringResource(R.string.community_common_close), tint = Color.White, modifier = Modifier.size(12.dp))
+        Icon(MeeshyIcons.Close, stringResource(R.string.community_common_close), tint = Color.White, modifier = Modifier.size(12.dp))
     }
 }
 
@@ -380,7 +373,7 @@ private fun ResultRow(user: UserSearchResult, isSelected: Boolean, onClick: () -
             Text("@${user.username}", fontSize = 12.sp, color = tokens.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         AnimatedVisibility(visible = isSelected, enter = scaleIn(MeeshyMotion.springBouncy()) + fadeIn(), exit = scaleOut() + fadeOut()) {
-            Icon(Icons.Filled.CheckCircle, null, tint = MeeshyPalette.SuccessDeep, modifier = Modifier.size(22.dp))
+            Icon(MeeshyIcons.CheckCircleFilled, null, tint = MeeshyPalette.SuccessDeep, modifier = Modifier.size(22.dp))
         }
     }
 }
@@ -407,7 +400,7 @@ private fun CreateButton(state: CommunityCreateUiState, onClick: () -> Unit) {
         if (state.isCreating) {
             CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = Color.White)
         } else {
-            Icon(Icons.Filled.AddCircle, null, tint = Color.White, modifier = Modifier.size(20.dp))
+            Icon(MeeshyIcons.AddCircleFilled, null, tint = Color.White, modifier = Modifier.size(20.dp))
         }
         Spacer(Modifier.width(8.dp))
         Text(stringResource(R.string.community_create_button), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)

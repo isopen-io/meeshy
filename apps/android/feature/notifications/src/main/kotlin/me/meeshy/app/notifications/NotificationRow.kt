@@ -18,12 +18,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.ChatBubble
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.MarkEmailRead
-import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -59,6 +53,7 @@ import me.meeshy.ui.component.swipe.SwipeAction
 import me.meeshy.ui.component.swipe.SwipeableRow
 import me.meeshy.ui.format.RelativeTimeFormat
 import me.meeshy.ui.format.rememberRelativeTimeStrings
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -113,13 +108,13 @@ internal fun NotificationRow(
     val deleteLabel = stringResource(R.string.notifications_action_delete)
     val leading = remember(isUnread, markReadLabel, onMarkRead, notification) {
         if (isUnread) {
-            listOf(SwipeAction(Icons.Filled.MarkEmailRead, markReadLabel, MeeshyPalette.Indigo500) { onMarkRead(notification) })
+            listOf(SwipeAction(MeeshyIcons.MailOpen, markReadLabel, MeeshyPalette.Indigo500) { onMarkRead(notification) })
         } else {
             emptyList()
         }
     }
     val trailing = remember(deleteLabel, onDelete, notification) {
-        listOf(SwipeAction(Icons.Filled.Delete, deleteLabel, MeeshyPalette.Error) { onDelete(notification) })
+        listOf(SwipeAction(MeeshyIcons.DeleteFilled, deleteLabel, MeeshyPalette.Error) { onDelete(notification) })
     }
     val unreadState = stringResource(R.string.notifications_unread_prefix)
 
@@ -302,6 +297,6 @@ private fun NotificationQuickAction.labelRes(sent: Boolean): Int = when (this) {
 }
 
 private fun NotificationQuickAction.icon(sent: Boolean) = when (this) {
-    is NotificationQuickAction.Connect -> if (sent) Icons.Filled.Check else Icons.Filled.PersonAdd
-    is NotificationQuickAction.Write -> Icons.Filled.ChatBubble
+    is NotificationQuickAction.Connect -> if (sent) MeeshyIcons.Check else MeeshyIcons.PersonAdd
+    is NotificationQuickAction.Write -> MeeshyIcons.Chat
 }

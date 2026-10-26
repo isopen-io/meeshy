@@ -11,8 +11,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -31,6 +29,7 @@ import me.meeshy.sdk.model.NotificationFilterCategory
 import me.meeshy.ui.component.MeeshyEmptyState
 import me.meeshy.ui.component.MeeshyPrimaryButton
 import me.meeshy.ui.component.MeeshySkeletonBox
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -74,7 +73,7 @@ internal fun NotificationListErrorState(onRetry: () -> Unit, modifier: Modifier 
         verticalArrangement = Arrangement.spacedBy(MeeshySpacing.lg, Alignment.CenterVertically),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Icon(Icons.Filled.CloudOff, contentDescription = null, tint = MeeshyPalette.Error.copy(alpha = 0.6f), modifier = Modifier.size(56.dp))
+        Icon(MeeshyIcons.WifiOff, contentDescription = null, tint = MeeshyPalette.Error.copy(alpha = 0.6f), modifier = Modifier.size(56.dp))
         Text(
             stringResource(R.string.notifications_error_title),
             style = MaterialTheme.typography.titleMedium,

@@ -16,14 +16,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.background
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AddCircle
-import androidx.compose.material.icons.filled.ChatBubble
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.People
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.SwapHoriz
-import androidx.compose.material.icons.filled.Tag
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -48,6 +40,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.community.R
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyTheme
 
@@ -84,13 +77,13 @@ fun CommunityAddChannelSheet(
                     .background(tokens.backgroundSecondary.copy(alpha = 0.5f)).padding(12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Icon(Icons.Filled.Search, null, tint = tokens.textMuted, modifier = Modifier.size(18.dp))
+                Icon(MeeshyIcons.Search, null, tint = tokens.textMuted, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
                 Box(Modifier.weight(1f)) {
                     PlainField(state.query, viewModel::onQuery, stringResource(R.string.community_add_channel_search_prompt), ImeAction.Search)
                 }
                 if (state.query.isNotEmpty()) {
-                    Icon(Icons.Filled.Close, stringResource(R.string.community_common_close), tint = tokens.textMuted,
+                    Icon(MeeshyIcons.Close, stringResource(R.string.community_common_close), tint = tokens.textMuted,
                         modifier = Modifier.size(18.dp).pressableScale(onClick = { viewModel.onQuery("") }))
                 }
             }
@@ -98,7 +91,7 @@ fun CommunityAddChannelSheet(
             when {
                 state.isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
                 visible.isEmpty() -> Column(Modifier.fillMaxSize().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                    Icon(Icons.Filled.ChatBubble, null, tint = tokens.textMuted, modifier = Modifier.size(40.dp))
+                    Icon(MeeshyIcons.Chat, null, tint = tokens.textMuted, modifier = Modifier.size(40.dp))
                     Spacer(Modifier.height(12.dp))
                     Text(
                         stringResource(if (state.query.isEmpty()) R.string.community_add_channel_empty_no_conversations else R.string.community_add_channel_empty_no_results),
@@ -144,24 +137,24 @@ private fun CandidateRow(c: CommunityChannelCandidate, adding: Boolean, enabled:
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Box(Modifier.size(36.dp).clip(RoundedCornerShape(8.dp)).background(MeeshyPalette.Indigo500.copy(alpha = 0.1f)), contentAlignment = Alignment.Center) {
-            Icon(Icons.Filled.Tag, null, tint = MeeshyPalette.Indigo500, modifier = Modifier.size(18.dp))
+            Icon(MeeshyIcons.Tag, null, tint = MeeshyPalette.Indigo500, modifier = Modifier.size(18.dp))
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(c.title, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, color = tokens.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 c.memberCount?.let {
-                    Icon(Icons.Filled.People, null, tint = tokens.textMuted, modifier = Modifier.size(12.dp))
+                    Icon(MeeshyIcons.GroupFilled, null, tint = tokens.textMuted, modifier = Modifier.size(12.dp))
                     Text(it.toString(), fontSize = 12.sp, color = tokens.textMuted)
                 }
                 if (c.belongsToOtherCommunity) {
-                    Icon(Icons.Filled.SwapHoriz, null, tint = MeeshyPalette.Amber500, modifier = Modifier.size(12.dp))
+                    Icon(MeeshyIcons.SwapHorizontal, null, tint = MeeshyPalette.Amber500, modifier = Modifier.size(12.dp))
                     Text(stringResource(R.string.community_add_channel_other_community), fontSize = 11.sp, color = MeeshyPalette.Amber500)
                 }
             }
         }
         if (adding) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
         else Icon(
-            if (c.belongsToOtherCommunity) Icons.Filled.SwapHoriz else Icons.Filled.AddCircle, null,
+            if (c.belongsToOtherCommunity) MeeshyIcons.SwapHorizontal else MeeshyIcons.AddCircleFilled, null,
             tint = if (c.belongsToOtherCommunity) MeeshyPalette.Amber500 else MeeshyPalette.Indigo500,
             modifier = Modifier.size(24.dp),
         )

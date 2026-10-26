@@ -27,12 +27,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.PhotoLibrary
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -72,6 +66,7 @@ import me.meeshy.ui.component.FeedbackToastRequest
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.MeeshyEmptyState
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyMotion
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyTheme
@@ -149,7 +144,7 @@ fun CommunitySettingsScreen(
             val draft = state.draft
             when {
                 draft == null && state.failedToLoad -> MeeshyEmptyState(
-                    icon = Icons.Filled.Warning,
+                    icon = MeeshyIcons.WarningFilled,
                     title = stringResource(R.string.community_common_error),
                     subtitle = stringResource(R.string.community_settings_error_default),
                     actionLabel = stringResource(R.string.community_common_retry),
@@ -173,7 +168,7 @@ fun CommunitySettingsScreen(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(6.dp),
                         ) {
-                            Icon(Icons.Filled.PhotoLibrary, null, tint = Color.White, modifier = Modifier.size(14.dp))
+                            Icon(MeeshyIcons.PhotoLibrary, null, tint = Color.White, modifier = Modifier.size(14.dp))
                             Text(stringResource(R.string.community_settings_banner_edit), color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Medium)
                         }
                         if (state.uploading == ImageUploadTarget.BANNER) UploadScrim()
@@ -192,7 +187,7 @@ fun CommunitySettingsScreen(
                                 contentAlignment = Alignment.Center,
                             ) {
                                 Box(Modifier.size(28.dp).clip(CircleShape).background(accent).border(2.dp, tokens.backgroundPrimary, CircleShape), contentAlignment = Alignment.Center) {
-                                    Icon(Icons.Filled.Edit, null, tint = Color.White, modifier = Modifier.size(14.dp))
+                                    Icon(MeeshyIcons.EditFilled, null, tint = Color.White, modifier = Modifier.size(14.dp))
                                 }
                             }
                             if (state.uploading == ImageUploadTarget.AVATAR) Box(Modifier.matchParentSize().clip(CircleShape)) { UploadScrim() }
@@ -242,7 +237,7 @@ fun CommunitySettingsScreen(
                                 horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 if (state.isDeleting) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = error)
-                                else Icon(Icons.Filled.Delete, null, tint = error, modifier = Modifier.size(18.dp))
+                                else Icon(MeeshyIcons.DeleteFilled, null, tint = error, modifier = Modifier.size(18.dp))
                                 Spacer(Modifier.width(8.dp))
                                 Text(stringResource(R.string.community_settings_delete_label), color = error, fontWeight = FontWeight.SemiBold)
                             }
@@ -314,6 +309,6 @@ private fun Swatch(hex: String, index: Int, selected: Boolean, onClick: () -> Un
             .semantics { contentDescription = description; this.selected = selected },
         contentAlignment = Alignment.Center,
     ) {
-        if (selected) Icon(Icons.Filled.Check, null, tint = Color.White, modifier = Modifier.size(18.dp))
+        if (selected) Icon(MeeshyIcons.Check, null, tint = Color.White, modifier = Modifier.size(18.dp))
     }
 }

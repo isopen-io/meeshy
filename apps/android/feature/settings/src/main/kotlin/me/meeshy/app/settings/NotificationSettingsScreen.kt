@@ -16,10 +16,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Schedule
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -56,6 +52,7 @@ import me.meeshy.sdk.model.NotificationTypeCatalog
 import me.meeshy.sdk.model.UserNotificationPreferences
 import me.meeshy.ui.component.chrome.MeeshyBackground
 import me.meeshy.ui.component.settings.SettingsCard
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -89,7 +86,7 @@ fun NotificationSettingsScreen(
                     navigationIcon = {
                         IconButton(onClick = onBack) {
                             Icon(
-                                Icons.AutoMirrored.Filled.ArrowBack,
+                                MeeshyIcons.Back,
                                 contentDescription = stringResource(R.string.settings_back),
                             )
                         }
@@ -225,7 +222,7 @@ private fun DndTimeRow(
     val minutes = DndWindow.parseMinuteOfDay(timeHhmm) ?: 0
 
     SettingsChevronRow(
-        icon = Icons.Filled.Schedule,
+        icon = MeeshyIcons.ScheduleFilled,
         title = label,
         color = MeeshyPalette.Indigo500,
         value = timeHhmm,
@@ -340,7 +337,7 @@ private fun NotificationTypesEditor(
         value = query,
         onValueChange = onQueryChange,
         singleLine = true,
-        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+        leadingIcon = { Icon(MeeshyIcons.Search, contentDescription = null) },
         placeholder = { Text(stringResource(R.string.settings_notification_types_search)) },
         modifier = Modifier
             .fillMaxWidth()
