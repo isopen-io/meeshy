@@ -53,6 +53,10 @@ final class ConversationSocketHandler {
     nonisolated(unsafe) private var typingTimer: Timer?
     nonisolated(unsafe) private var typingIdleTimer: Timer?
     nonisolated(unsafe) private var isEmittingTyping = false
+    /// La frappe d'une conversation chiffrée part en signal chiffré (#13142) ;
+    /// `true` : le relais l'a prise, rien n'est émis en clair.
+    var endToEndTyping: (@MainActor (Bool) -> Bool)?
+    nonisolated(unsafe) private var typingIsEndToEnd = false
     private static let typingDebounceInterval: TimeInterval = 3.0
     private static let typingReemitInterval: TimeInterval = 3.0
     private static let typingSafetyTimeout: TimeInterval = 15.0
@@ -172,7 +176,7 @@ final class ConversationSocketHandler {
                     MessageSocketManager.shared.leaveConversation(id)
                 }
             }
-            if isEmittingTyping {
+            if isEmittingTyping && !typingIsEndToEnd {
                 MessageSocketManager.shared.emitTypingStop(conversationId: conversationId)
             }
         }
@@ -224,15 +228,29 @@ final class ConversationSocketHandler {
 
         if !isEmittingTyping {
             isEmittingTyping = true
-            messageSocket.emitTypingStart(conversationId: conversationId)
+            emitTyping(true)
         }
 
         guard typingTimer == nil else { return }
         typingTimer = Timer.scheduledTimer(withTimeInterval: Self.typingReemitInterval, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self, self.isEmittingTyping else { return }
-                self.messageSocket.emitTypingStart(conversationId: self.conversationId)
+                self.emitTyping(true)
             }
+        }
+    }
+
+    /// Chiffrée par le relais dans une conversation e2ee, en clair ailleurs.
+    private func emitTyping(_ active: Bool) {
+        if endToEndTyping?(active) == true {
+            typingIsEndToEnd = true
+            return
+        }
+        typingIsEndToEnd = false
+        if active {
+            messageSocket.emitTypingStart(conversationId: conversationId)
+        } else {
+            messageSocket.emitTypingStop(conversationId: conversationId)
         }
     }
 
@@ -244,7 +262,7 @@ final class ConversationSocketHandler {
 
         guard isEmittingTyping else { return }
         isEmittingTyping = false
-        messageSocket.emitTypingStop(conversationId: conversationId)
+        emitTyping(false)
     }
 
     // MARK: - Typing Safety Timers

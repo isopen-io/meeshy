@@ -158,12 +158,11 @@ extension MessagePersistenceActor {
         localId: String, deletedAt: Date, sparingOpenedViewOnce: Bool, expired: Bool, awaitingConfirmation: Bool,
         origin: PlaintextErasureOrigin
     ) throws {
-        let erasureOrigin: PlaintextErasureOrigin = expired ? .authenticated : origin
         guard try rowExists(localId) else {
             try dbWriter.write { db in
                 try MessagePlaintextErasures.record(localId, cause: .deleted, in: db)
                 try MessagePlaintextErasures.settle(localId, awaitingConfirmation: awaitingConfirmation, in: db)
-                try MessagePlaintextErasures.settle(localId, cause: .deleted, origin: erasureOrigin, in: db)
+                try MessagePlaintextErasures.settle(localId, cause: .deleted, origin: origin, in: db)
             }
             rememberPendingRowEvent(localId) { events in
                 events.tombstone = PendingTombstone(
@@ -192,7 +191,7 @@ extension MessagePersistenceActor {
                 arguments: [deletedAt, Date(), localId, localId]
             )
             try MessagePlaintextErasures.settle(localId, awaitingConfirmation: awaitingConfirmation, in: db)
-            try MessagePlaintextErasures.settle(localId, cause: .deleted, origin: erasureOrigin, in: db)
+            try MessagePlaintextErasures.settle(localId, cause: .deleted, origin: origin, in: db)
             try Self.followQuotes(of: record, in: db) { quote in
                 quote.isQuotedMessageDeleted || quote.isStoryReply ? nil : quote.tombstoned(at: deletedAt, expired: expired)
             }

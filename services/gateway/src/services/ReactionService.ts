@@ -25,6 +25,8 @@ import { enhancedLogger } from '../utils/logger-enhanced.js';
 import type { EngagementAxisKey } from '@meeshy/shared/types/engagement';
 import { EngagementService, type EngagementActivityOptions } from './engagement/EngagementService.js';
 import { recordConversationActivity } from './conversations/conversationActivity.js';
+import { E2eeSignalChannelRequiredError } from './e2ee/e2ee-signal-channel';
+import { isEndToEndMode } from './messaging/e2eePlaintextAdmission';
 
 const logger = enhancedLogger.child({ module: 'ReactionService' });
 
@@ -165,6 +167,13 @@ export class ReactionService {
     // Le RETRAIT reste ouvert, délibérément — voir `removeReaction`.
     if (isConversationClosed(message.conversation)) {
       throw new Error(CLOSED_CONVERSATION_REACTION_ERROR);
+    }
+
+    // #13142 — dans une conversation chiffrée de bout en bout, la réaction part en
+    // signal chiffré : la passerelle ne range jamais son emoji en clair. Les quatre
+    // transports convergent ici, le refus aussi (409, code et phrase lisibles).
+    if (isEndToEndMode(message.conversation.encryptionMode)) {
+      throw new E2eeSignalChannelRequiredError();
     }
 
     const isParticipant = message.conversation.participants.some(p => p.id === participantId);

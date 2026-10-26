@@ -25,6 +25,7 @@ import { getSocketRateLimiter, SOCKET_RATE_LIMITS } from '../../utils/socket-rat
 import { BoundedTtlCache } from '../../utils/bounded-cache.js';
 import { getBlockedUserIdsAmong } from '../../utils/blocking';
 import { guardedInterval } from '../../utils/guarded-timer.js';
+import { isEndToEndConversation } from '../../services/e2ee/e2ee-signal-channel';
 
 const logger = enhancedLogger.child({ module: 'StatusHandler' });
 
@@ -304,6 +305,11 @@ export class StatusHandler {
         });
         return;
       }
+
+      // #13142 — dans une conversation chiffrée de bout en bout, la frappe voyage en
+      // signal chiffré d'appareil à appareil : la passerelle n'en relaie ni n'en
+      // retient aucune en clair. Rien n'est suivi, donc aucun `typing:stop` à rendre.
+      if (await isEndToEndConversation(this.prisma, normalizedId)) return;
 
       // Mettre à jour l'activité
       this.statusService.updateLastSeen(userId, connectedUser.isAnonymous);

@@ -92,6 +92,28 @@ final class MessagePlaintextErasureAuthenticationTests: XCTestCase {
         XCTAssertEqual(queued, [])
     }
 
+    func test_aForgedExpiryBySocket_erasesNothing() async throws {
+        let (actor, queue) = try makeActor()
+        try insert(sealedRow("srv_11"), into: queue)
+
+        try await actor.markDeleted(localId: "srv_11", deletedAt: Date(), expired: true)
+
+        let queued = try await erasable(actor)
+        XCTAssertEqual(queued, [], "un serveur ne fait pas effacer un clair en le déclarant échu")
+    }
+
+    func test_aForgedExpiryDateSweptLocally_erasesNothing() async throws {
+        let (actor, queue) = try makeActor()
+        var row = sealedRow("srv_12")
+        row.expiresAt = Date().addingTimeInterval(-60)
+        try insert(row, into: queue)
+
+        try await actor.deleteExpiredEphemeral(before: Date())
+
+        let queued = try await erasable(actor)
+        XCTAssertEqual(queued, [], "une échéance servie par la passerelle n'authentifie pas l'effacement (#13103)")
+    }
+
     func test_aForgedConfirmationOfNothing_erasesNothing() async throws {
         let (actor, queue) = try makeActor()
         try insert(sealedRow("srv_6"), into: queue)
@@ -153,6 +175,6 @@ final class MessagePlaintextErasureAuthenticationTests: XCTestCase {
         let authenticated = try queue.read { db in
             try String.fetchAll(db, sql: "SELECT messageKey FROM e2ee_plaintext_erasures WHERE authenticated = 1 ORDER BY messageKey")
         }
-        XCTAssertEqual(authenticated, ["srv_b", "srv_c"], "une suppression encore en file avant ce lot pouvait venir du serveur : son clair reste")
+        XCTAssertEqual(authenticated, ["srv_c"], "une suppression ou une échéance encore en file avant ce lot pouvait venir du serveur : son clair reste")
     }
 }

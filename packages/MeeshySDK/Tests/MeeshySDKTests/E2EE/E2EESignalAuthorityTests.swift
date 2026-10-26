@@ -26,8 +26,15 @@ struct E2EESignalAuthorityTests {
         )
     }
 
+    /// Les lignes locales : `m1`…`m9` dans `c1`, `x1` dans `c2`.
+    private func rowConversation(_ id: String) -> String? {
+        if id.hasPrefix("m") { return "c1" }
+        if id.hasPrefix("x") { return "c2" }
+        return nil
+    }
+
     private func verdict(_ action: E2EESignalAction, from sender: String, target: E2EEPlaintextEntry?) -> E2EESignalVerdict {
-        E2EESignalAuthority.verdict(for: received(action, from: sender), localUserId: me, target: target)
+        E2EESignalAuthority.verdict(for: received(action, from: sender), localUserId: me, target: target, conversationOf: rowConversation)
     }
 
     @Test func onlyTheAuthenticatedAuthorDeletesForEveryone() {
@@ -64,6 +71,7 @@ struct E2EESignalAuthorityTests {
         #expect(verdict(.reaction(target: "m1", emoji: "👍", removed: false), from: bob, target: message(by: bob, in: "c2")) == .reject(.targetElsewhere))
         #expect(verdict(.deleteForEveryone(target: "m1"), from: bob, target: message(by: bob, in: "c2")) == .reject(.targetElsewhere))
         #expect(verdict(.pin(target: "m1", pinned: true), from: bob, target: message(by: me, in: "c2")) == .reject(.targetElsewhere))
+        #expect(verdict(.deleteForEveryone(target: "x1"), from: bob, target: message(by: bob)) == .reject(.targetElsewhere))
     }
 
     @Test func anyMemberReactsOrPins_withABoundedEmoji() {
@@ -76,6 +84,22 @@ struct E2EESignalAuthorityTests {
     @Test func myOwnTypingIsAnEcho_aPeersIsShown() {
         #expect(verdict(.typing(active: true), from: me, target: nil) == .reject(.ownEcho))
         #expect(verdict(.typing(active: true), from: bob, target: nil) == .apply)
+    }
+
+    @Test func anUndecryptableTarget_isLocatedByItsLocalRow_andNowhereWithoutOne() {
+        #expect(verdict(.reaction(target: "m1", emoji: "👍", removed: false), from: bob, target: .undecryptable) == .apply)
+        #expect(verdict(.reaction(target: "x1", emoji: "👍", removed: false), from: bob, target: .undecryptable) == .reject(.targetElsewhere))
+        #expect(verdict(.pin(target: "z1", pinned: true), from: bob, target: .undecryptable) == .reject(.targetElsewhere),
+                "une cible illisible sans ligne locale n'est dans aucune conversation")
+    }
+
+    @Test func aReadableTargetWhoseLocalRowIsElsewhere_isRefused() {
+        #expect(verdict(.reaction(target: "x1", emoji: "👍", removed: false), from: bob, target: message(by: me)) == .reject(.targetElsewhere))
+    }
+
+    @Test func aReceiptOnlyNamesMessagesOfItsConversation() {
+        #expect(verdict(.receipt(.read, targets: ["m1", "x1"]), from: bob, target: nil) == .reject(.targetElsewhere))
+        #expect(verdict(.receipt(.read, targets: ["m1", "z9"]), from: bob, target: nil) == .reject(.targetElsewhere))
     }
 
     @Test func receiptsAreBounded_andAProgressIsAFinitePosition() {

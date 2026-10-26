@@ -109,6 +109,16 @@ export const E2EE_CLIENT_OUTDATED_MESSAGE =
   'Cette conversation est chiffrée de bout en bout : mettez à jour Meeshy pour y écrire';
 
 /**
+ * Le texte servi avec `E2EE_SIGNAL_CHANNEL_REQUIRED` (#13142) : un client qui
+ * appelle encore la route en clair d'une réaction, de la frappe, d'une
+ * suppression pour tous, d'une vue unique ou d'un épinglage dans une
+ * conversation chiffrée de bout en bout l'affiche tel quel — rien ne se perd en
+ * silence (#9223).
+ */
+export const E2EE_SIGNAL_CHANNEL_REQUIRED_MESSAGE =
+  'Cette conversation est chiffrée de bout en bout : mettez à jour Meeshy pour réagir, épingler, supprimer ou ouvrir une vue unique';
+
+/**
  * Le texte servi avec `E2EE_IRREVERSIBLE` (#12949) : un ancien client qui
  * appelle la désactivation l'affiche tel quel.
  */

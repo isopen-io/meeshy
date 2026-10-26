@@ -46,7 +46,6 @@ extension MessagePersistenceActor {
             try MessagePlaintextErasures.record(
                 rowsMatching: "expiresAt IS NOT NULL AND expiresAt <= ?", arguments: [before], cause: .expired, in: db
             )
-            try MessagePlaintextErasures.authenticate(expired.map(\.localId), cause: .expired, in: db)
             try MessageRecord
                 .filter(Column("expiresAt") != nil)
                 .filter(Column("expiresAt") <= before)

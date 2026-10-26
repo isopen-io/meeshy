@@ -82,8 +82,9 @@ final class MessagePlaintextErasuresTests: XCTestCase {
 
         try await actor.deleteExpiredEphemeral(before: Date())
 
-        let recorded = try await pending(actor)
-        XCTAssertEqual(recorded, ["srv_4"])
+        let queued = try await pending(actor)
+        XCTAssertEqual(queued, [], "l'échéance vient du serveur : la ligne part, le clair reste au coffre (#13060, #13103)")
+        XCTAssertEqual(try recorded(queue), ["srv_4"])
     }
 
     func test_aMessageRemovedForMe_isRecorded() async throws {
@@ -232,8 +233,7 @@ final class MessagePlaintextErasuresTests: XCTestCase {
 
         try await actor.markUndeleted(localId: "srv_16")
 
-        let recorded = try await pending(actor)
-        XCTAssertEqual(recorded, ["srv_16"])
+        XCTAssertEqual(try recorded(queue), ["srv_16"], "annuler ne retire pas l'inscription d'un éphémère échu")
     }
 
     /// Audit (M-1) — une modification reçue avant sa ligne n'est pas une suppression.

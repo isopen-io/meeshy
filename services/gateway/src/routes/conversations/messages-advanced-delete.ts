@@ -19,8 +19,9 @@ import { applyMessageRemovalEffects } from '../../services/messaging/messageRemo
 import { broadcastMessageMutation } from '../../socketio/broadcastMessageMutation';
 import type { ConversationParams } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced';
-import { sendSuccess, sendBadRequest, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response';
+import { sendSuccess, sendBadRequest, sendError, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response';
 import { withOrphanedSenderRepair } from '../../services/messaging/withOrphanedSenderRepair';
+import { isEndToEndConversation, SIGNAL_CHANNEL_REFUSAL } from '../../services/e2ee/e2ee-signal-channel';
 
 // Logger dédié pour messages-advanced
 const logger = enhancedLogger.child({ module: 'messages-advanced' });
@@ -79,6 +80,7 @@ export function registerDeleteMessageRoute(
         401: errorResponseSchema,
         403: errorResponseSchema,
         404: errorResponseSchema,
+        409: errorResponseSchema,
         500: errorResponseSchema
       }
     },
@@ -125,6 +127,10 @@ export function registerDeleteMessageRoute(
       // global supprimait donc depuis Android et depuis le composer web, et
       // recevait 403 ici : c'est-à-dire depuis iOS et depuis la vue web, les
       // deux clients qui passent par cette route.
+      // #13142 — dans une conversation chiffrée, la suppression pour tous part en signal chiffré.
+      if (await isEndToEndConversation(prisma, conversationId)) {
+        return sendError(reply, 409, SIGNAL_CHANNEL_REFUSAL.error, { code: SIGNAL_CHANNEL_REFUSAL.code });
+      }
       const { admitted: canDelete, actorParticipantId, byModeration } = await admitMessageDelete({
         prisma,
         deleterUserId: userId,

@@ -59,6 +59,7 @@ import {
 import { logger, type MessageParams, type MessagesRouteDeps } from './messages-shared';
 import { callerParticipantWhere } from './conversations/utils/access-control';
 import { discoverConversationIdsByMessageIds, withOrphanedSenderRepair } from '../services/messaging/withOrphanedSenderRepair';
+import { isEndToEndConversation, SIGNAL_CHANNEL_REFUSAL } from '../services/e2ee/e2ee-signal-channel';
 
 interface UpdateMessageBody {
   content?: string;
@@ -528,6 +529,10 @@ export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: Mess
       //     donnait à lire une permission inexistante.
       // Le rôle global se lit désormais en BASE et non dans le jeton : un rôle
       // révoqué depuis l'émission du jeton ne supprime plus.
+      // #13142 — dans une conversation chiffrée, la suppression pour tous part en signal chiffré.
+      if (await isEndToEndConversation(prisma, message.conversationId)) {
+        return sendError(reply, 409, SIGNAL_CHANNEL_REFUSAL.error, { code: SIGNAL_CHANNEL_REFUSAL.code });
+      }
       const { admitted: canDelete, actorParticipantId, byModeration } = await admitMessageDelete({
         prisma,
         deleterUserId: userId,

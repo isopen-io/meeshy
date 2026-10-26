@@ -73,3 +73,22 @@ final class EndToEndSignalMergeTests: XCTestCase {
         XCTAssertEqual(reactions.map(\.emoji), [], "hors bout en bout, la passerelle fait foi")
     }
 }
+
+final class SignalTargetConversationTests: XCTestCase {
+    func test_eachMessageIsLocatedInItsConversation_byLocalOrServerId() async throws {
+        let queue = try DatabaseQueue()
+        try MessageDatabaseMigrations.runAll(on: queue)
+        let actor = MessagePersistenceActor(dbWriter: queue, currentUserId: "u-me")
+        var mine = MessageRecordFactory.make(localId: "cid_1", conversationId: "conv-a", senderId: "u-me", content: "[Encrypted]", state: .sent)
+        mine.serverId = "srv_1"
+        let other = MessageRecordFactory.make(localId: "srv_2", conversationId: "conv-b", senderId: "u-peer", content: "[Encrypted]", state: .sent)
+        try await queue.write { db in
+            try mine.insert(db)
+            try other.insert(db)
+        }
+
+        let located = try await actor.conversationIds(of: ["srv_1", "cid_1", "srv_2", "inconnu"])
+
+        XCTAssertEqual(located, ["srv_1": "conv-a", "cid_1": "conv-a", "srv_2": "conv-b"])
+    }
+}

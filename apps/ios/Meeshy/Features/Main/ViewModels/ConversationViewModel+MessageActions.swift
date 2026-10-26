@@ -77,11 +77,37 @@ extension ConversationViewModel {
         // L'id serveur canonique, pour que la file rejoue contre le vrai message.
         let remoteId = serverId(for: messageId)
         let alreadyReacted = messages[idx].reactions.contains { $0.emoji == emoji && $0.participantId == participantId }
+        if let signals = endToEndSignals {
+            reactEndToEnd(signals, localId: messageId, remoteId: remoteId, participantId: participantId, emoji: emoji, removed: alreadyReacted)
+            return
+        }
         guard alreadyReacted else {
             commands.addReaction(localId: messageId, remoteId: remoteId, participantId: participantId, emoji: emoji)
             return
         }
         commands.removeReaction(localId: messageId, remoteId: remoteId, participantId: participantId, emoji: emoji)
+    }
+
+    /// #13142 — la réaction d'une conversation chiffrée : posée localement, partie en signal chiffré.
+    private func reactEndToEnd(
+        _ signals: EndToEndSignalCommands, localId: String, remoteId: String, participantId: String, emoji: String, removed: Bool
+    ) {
+        if !removed { ReactionAnimationGate.markAdded(messageId: localId, emoji: emoji) }
+        let persistence = messagePersistence
+        Task {
+            if removed {
+                try? await persistence.removeReaction(
+                    localId: localId, emoji: emoji, participantId: participantId, ownerUserId: nil,
+                    aggregateCount: nil, aggregateParticipantIds: nil
+                )
+            } else {
+                try? await persistence.appendReaction(
+                    localId: localId, reactionId: UUID().uuidString, messageId: remoteId, participantId: participantId,
+                    emoji: emoji, maxCount: nil, ownerUserId: nil
+                )
+            }
+            await signals.react(localId: localId, serverId: remoteId, participantId: participantId, emoji: emoji, removed: removed)
+        }
     }
 
     // MARK: - Attachment Reactions (BUG2 A')
@@ -195,6 +221,10 @@ extension ConversationViewModel {
         case .local:
             report(await ConversationForMeRemoval(viewModel: self).run(messageId))
         case .everyone:
+            if let signals = endToEndSignals {
+                report(await signals.deleteForEveryone(messageId: messageId, serverId: serverId(for: messageId)))
+                return
+            }
             report(await commands.deleteForEveryone(messageId: messageId, serverId: serverId(for: messageId)))
         }
     }
@@ -231,6 +261,10 @@ extension ConversationViewModel {
     func togglePin(messageId: String) async {
         guard let idx = messageIndex(for: messageId) else { return }
         let previous = MessagePinState(pinnedAt: messages[idx].pinnedAt, pinnedBy: messages[idx].pinnedBy)
+        if let signals = endToEndSignals {
+            report(await signals.togglePin(messageId: messageId, serverId: serverId(for: messageId), previous: previous))
+            return
+        }
         report(await commands.togglePin(
             messageId: messageId, serverId: serverId(for: messageId),
             previous: previous, currentUserId: authManager.currentUser?.id
@@ -250,6 +284,7 @@ extension ConversationViewModel {
     /// ici, que le serveur réponde ou non.
     func consumeViewOnce(messageId: String) async -> Bool {
         await markViewOnceOpenedLocally(messageId: messageId)
+        if let signals = endToEndSignals { return await signals.viewOnceOpened(serverId: serverId(for: messageId)) }
         return await commands.consumeViewOnce(messageId: messageId, serverId: serverId(for: messageId))
     }
 

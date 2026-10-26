@@ -17,10 +17,11 @@ import { emitViewOnceConsumedPreview } from '../../socketio/emitConversationPrev
 import { resolveConversationId } from '../../utils/conversation-id-cache';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { canAccessConversation } from './utils/access-control';
-import { sendSuccess, sendBadRequest, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response.js';
+import { sendSuccess, sendBadRequest, sendError, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response.js';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import type { UnifiedAuthRequest } from '../../middleware/auth';
 import { logger } from './messages-shared';
+import { isEndToEndConversation, SIGNAL_CHANNEL_REFUSAL } from '../../services/e2ee/e2ee-signal-channel';
 
 /**
  * Enregistre la route de consommation d'un message à vue unique.
@@ -71,6 +72,7 @@ export function registerMessageViewOnceRoutes(
         401: errorResponseSchema,
         403: errorResponseSchema,
         404: errorResponseSchema,
+        409: errorResponseSchema,
         500: errorResponseSchema
       }
     },
@@ -100,6 +102,12 @@ export function registerMessageViewOnceRoutes(
 
       if (!message.isViewOnce) {
         return sendBadRequest(reply, 'Message is not view-once');
+      }
+
+      // #13142, #13060 — dans une conversation chiffrée, l'ouverture d'une vue unique
+      // part en signal chiffré vers MES appareils : la passerelle n'en consigne rien.
+      if (await isEndToEndConversation(prisma, conversationId)) {
+        return sendError(reply, 409, SIGNAL_CHANNEL_REFUSAL.error, { code: SIGNAL_CHANNEL_REFUSAL.code });
       }
 
       const now = new Date();

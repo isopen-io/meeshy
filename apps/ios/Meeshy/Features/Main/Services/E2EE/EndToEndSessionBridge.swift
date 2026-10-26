@@ -29,6 +29,7 @@ final class EndToEndSessionBridge: EndToEndSessionBridging {
     private let janitor: EndToEndPlaintextJanitor
     private let diskMigration: EndToEndDiskPlaintextMigration
     private let unsentRescue: EndToEndUnsentPlaintextRescue
+    private let signals: EndToEndSignalApplier
     private let storeChanges: AnyPublisher<Void, Never>
     private var subscriptions: Set<AnyCancellable> = []
     /// Les ouvertures et fermetures de session, dans l'ordre où elles sont
@@ -50,6 +51,7 @@ final class EndToEndSessionBridge: EndToEndSessionBridging {
             endToEnd: EndToEndMessagingRuntime.shared, rows: { DependencyContainer.shared.messagePersistence.endToEndRowSealer }
         ),
         unsentRescue: EndToEndUnsentPlaintextRescue = .live,
+        signals: EndToEndSignalApplier = .shared,
         storeChanges: AnyPublisher<Void, Never> = NotificationCenter.default
             .publisher(for: .messageStoreShouldRefresh).map { _ in () }.eraseToAnyPublisher()
     ) {
@@ -61,6 +63,7 @@ final class EndToEndSessionBridge: EndToEndSessionBridging {
         self.janitor = janitor
         self.diskMigration = diskMigration
         self.unsentRescue = unsentRescue
+        self.signals = signals
         self.storeChanges = storeChanges
     }
 
@@ -90,6 +93,9 @@ final class EndToEndSessionBridge: EndToEndSessionBridging {
         // #13067 — une bulle jamais partie d'une conversation chiffrée rend son clair au coffre.
         let unsentRescue = unsentRescue
         enqueue { await unsentRescue.run(for: userId) }
+        // #13142 — les signaux chiffrés gardés par la boîte (reçus avant un arrêt) s'appliquent.
+        let signals = signals
+        enqueue { await signals.drain(as: userId) }
         // #13001 — un effacement écrit dans la base des messages vide le coffre.
         let janitor = janitor
         enqueue { await janitor.drain() }
@@ -100,6 +106,12 @@ final class EndToEndSessionBridge: EndToEndSessionBridging {
                 return message.messageId
             }
             .sink { [weak self] messageId in Task { @MainActor in self?.enqueue { await janitor.reconsider(messageId) } } }
+            .store(in: &subscriptions)
+        // #13142 — chaque signal reçu s'applique ; une rafale (rattrapage) se juge d'un seul passage.
+        runtime.opened
+            .filter { if case .signal = $0 { true } else { false } }
+            .debounce(for: .milliseconds(150), scheduler: DispatchQueue.main)
+            .sink { [weak self] _ in Task { @MainActor in self?.enqueue { await signals.drain(as: userId) } } }
             .store(in: &subscriptions)
         storeChanges
             .debounce(for: .seconds(1), scheduler: DispatchQueue.main)

@@ -57,7 +57,7 @@ actor MockConversationSendPersistence: ConversationSendPersisting {
         attempts.append(Attempt(localId: localId, transport: transport, outcome: outcome, errorMessage: errorMessage))
     }
 
-    func purgeMessages(ids: [String]) async throws {
+    func purgeMessages(ids: [String], origin: PlaintextErasureOrigin) async throws {
         if let failure { throw failure }
         purgedIds.append(ids)
     }

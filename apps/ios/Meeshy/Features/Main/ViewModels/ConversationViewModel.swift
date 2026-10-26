@@ -585,6 +585,8 @@ class ConversationViewModel: ObservableObject, AttachmentSendHosting, Transcript
         )
         handler.delegate = self
         handler.persistence = persistence
+        // #13142 — dans une conversation chiffrée, la frappe part en signal chiffré.
+        handler.endToEndTyping = { [weak self] active in self?.relayTypingEndToEnd(active) ?? false }
         socketHandler = handler
     }
 

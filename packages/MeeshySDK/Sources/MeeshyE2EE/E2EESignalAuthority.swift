@@ -46,31 +46,44 @@ public enum E2EESignalAuthority {
     public static let maxEditedTextLength = 20_000
     public static let maxReceiptTargets = 500
 
-    public static func verdict(for received: E2EEReceivedSignal, localUserId: String, target: E2EEPlaintextEntry?) -> E2EESignalVerdict {
+    /// `conversationOf` : la conversation de la LIGNE locale d'un message, par son
+    /// identifiant ; `nil` si cet appareil n'en a pas. Une cible illisible et les
+    /// cibles d'un accusé n'ont que cette conversation-là pour se situer : une
+    /// conversation inconnue ou autre rejette le signal.
+    public static func verdict(
+        for received: E2EEReceivedSignal,
+        localUserId: String,
+        target: E2EEPlaintextEntry?,
+        conversationOf: (String) -> String? = { _ in nil }
+    ) -> E2EESignalVerdict {
         let fromMe = received.senderUserId == localUserId
+        let targetId = received.signal.action.target ?? ""
+        let located = Located(entry: target, rowConversation: conversationOf(targetId))
         switch received.signal.action {
         case .unknown:
             return .reject(.unsupported)
         case .typing:
             return fromMe ? .reject(.ownEcho) : .apply
         case .receipt(_, let targets):
-            return (1...maxReceiptTargets).contains(targets.count) ? .apply : .reject(.malformed)
+            guard (1...maxReceiptTargets).contains(targets.count) else { return .reject(.malformed) }
+            let allHere = targets.allSatisfy { conversationOf($0) == received.conversationId }
+            return allHere ? .apply : .reject(.targetElsewhere)
         case .reaction(_, let emoji, _):
             guard isEmoji(emoji) else { return .reject(.malformed) }
-            return known(target, in: received)
+            return known(located, in: received)
         case .readProgress(_, _, let position, _):
             guard position.isFinite, position >= 0 else { return .reject(.malformed) }
-            return known(target, in: received)
+            return known(located, in: received)
         case .pin:
-            return known(target, in: received)
+            return known(located, in: received)
         case .edit(_, let text, _):
             guard !text.isEmpty, text.count <= maxEditedTextLength else { return .reject(.malformed) }
-            return authored(target, in: received)
+            return authored(located, in: received)
         case .deleteForEveryone:
-            return authored(target, in: received)
+            return authored(located, in: received)
         case .viewOnceOpened:
             guard fromMe else { return .reject(.notOwnDevice) }
-            return known(target, in: received)
+            return known(located, in: received)
         }
     }
 
@@ -78,26 +91,47 @@ public enum E2EESignalAuthority {
         !emoji.isEmpty && emoji.utf8.count <= maxEmojiBytes && !emoji.contains(where: \.isNewline)
     }
 
-    /// Le message visé est connu ici, et dans la conversation du signal.
-    private static func known(_ target: E2EEPlaintextEntry?, in received: E2EEReceivedSignal) -> E2EESignalVerdict {
-        switch target {
-        case nil: .awaitTarget
-        case .undecryptable: .apply
-        case .readable(let content, _): content.belongs(to: received.conversationId) ? .apply : .reject(.targetElsewhere)
+    /// Le message visé : ce que le coffre en sait, et la conversation de sa ligne locale.
+    private struct Located {
+        let entry: E2EEPlaintextEntry?
+        let rowConversation: String?
+
+        /// La ligne locale, quand elle existe, est dans la conversation du signal.
+        func rowAgrees(with conversationId: String) -> Bool {
+            rowConversation.map { $0 == conversationId } ?? true
+        }
+    }
+
+    /// Le message visé est connu ici, et dans la conversation du signal. Une cible
+    /// illisible ne porte pas de conversation chiffrée : seule sa ligne locale la
+    /// situe, et sans ligne elle n'est nulle part.
+    private static func known(_ target: Located, in received: E2EEReceivedSignal) -> E2EESignalVerdict {
+        switch target.entry {
+        case nil:
+            return .awaitTarget
+        case .undecryptable:
+            return target.rowConversation == received.conversationId ? .apply : .reject(.targetElsewhere)
+        case .readable(let content, _):
+            guard content.belongs(to: received.conversationId), target.rowAgrees(with: received.conversationId) else {
+                return .reject(.targetElsewhere)
+            }
+            return .apply
         }
     }
 
     /// Le message visé est connu, lisible, dans la conversation du signal, et son
     /// auteur authentifié est l'expéditeur du signal. Un message illisible n'a pas
     /// d'auteur connu : personne ne le modifie ni ne le supprime pour tous.
-    private static func authored(_ target: E2EEPlaintextEntry?, in received: E2EEReceivedSignal) -> E2EESignalVerdict {
-        switch target {
+    private static func authored(_ target: Located, in received: E2EEReceivedSignal) -> E2EESignalVerdict {
+        switch target.entry {
         case nil:
             return .awaitTarget
         case .undecryptable:
             return .reject(.notAuthor)
         case .readable(let content, let author):
-            guard content.belongs(to: received.conversationId) else { return .reject(.targetElsewhere) }
+            guard content.belongs(to: received.conversationId), target.rowAgrees(with: received.conversationId) else {
+                return .reject(.targetElsewhere)
+            }
             return author == received.senderUserId ? .apply : .reject(.notAuthor)
         }
     }

@@ -132,6 +132,7 @@ import { enhancedLogger, performanceLogger } from '../../utils/logger-enhanced';
 import type { RedisDeliveryQueue } from '../../services/RedisDeliveryQueue';
 import type { QueuedVariantFor } from '../queuedEventContract';
 import { discoverConversationIdsByMessageIds, withOrphanedSenderRepair } from '../../services/messaging/withOrphanedSenderRepair';
+import { isEndToEndConversation, SIGNAL_CHANNEL_REFUSAL } from '../../services/e2ee/e2ee-signal-channel';
 
 const handlerLogger = enhancedLogger.child({ module: 'MessageHandler' });
 
@@ -1053,6 +1054,13 @@ export class MessageHandler {
 
       if (!message) {
         this._sendGenericError(callback, 'Message not found', socket);
+        return;
+      }
+
+      // #13142 — dans une conversation chiffrée, la suppression pour tous part en
+      // signal chiffré signé de l'auteur : la route en clair est refusée.
+      if (await isEndToEndConversation(this.prisma, message.conversationId)) {
+        callback?.({ success: false, ...SIGNAL_CHANNEL_REFUSAL });
         return;
       }
 

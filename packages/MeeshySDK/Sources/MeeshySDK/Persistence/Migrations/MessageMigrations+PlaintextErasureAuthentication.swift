@@ -12,14 +12,17 @@ import GRDB
 /// - un signal chiffré libsignal de l'auteur du message (suppression pour tous)
 ///   ou d'un de MES appareils (vue unique ouverte), jugé par `E2EESignalAuthority`.
 ///
-/// L'échéance d'un éphémère reste authentifiée comme avant : son minuteur ne
-/// voyage pas encore dans le chiffré (suivi : l'éphémère e2ee compte sur l'appareil).
+/// L'ÉCHÉANCE d'un éphémère n'est pas authentifiée non plus : `expiresAt` vient
+/// de la passerelle (socket `message:expired`, page REST, compte à rebours servi),
+/// qui pourrait déclarer échu n'importe quel message pour en faire effacer le
+/// clair. La ligne échue se retire ou se masque, le clair reste au coffre, tant
+/// que l'échéance ne voyage pas dans le chiffré et ne court pas sur l'appareil (#13103).
 ///
 /// Les déclencheurs de #13001 inscrivent toujours chaque effacement, quel que
 /// soit l'écrivain, mais NON authentifié ; seul le chemin authentifié lève le
-/// drapeau. À la migration, les inscriptions déjà retirées du coffre et les
-/// échéances restent tenues pour authentifiées ; une suppression ou une vue
-/// unique encore en file ne l'est pas : son clair reste au coffre.
+/// drapeau. À la migration, seules les inscriptions déjà retirées du coffre
+/// restent tenues pour authentifiées ; tout effacement encore en file a pu venir
+/// du serveur : son clair reste au coffre.
 struct MessagesPlaintextErasureAuthenticationMigration: DatabaseMigration {
     let identifier = "messages_e2ee_plaintext_erasures_authenticated_v1"
 
@@ -28,8 +31,7 @@ struct MessagesPlaintextErasureAuthenticationMigration: DatabaseMigration {
             t.add(column: "authenticated", .boolean).notNull().defaults(to: false)
         }
         try db.execute(sql: """
-            UPDATE \(MessagePlaintextErasures.table) SET authenticated = 1
-            WHERE acknowledgedAt IS NOT NULL OR cause = '\(MessagePlaintextErasures.Cause.expired.rawValue)'
+            UPDATE \(MessagePlaintextErasures.table) SET authenticated = 1 WHERE acknowledgedAt IS NOT NULL
             """)
     }
 }
