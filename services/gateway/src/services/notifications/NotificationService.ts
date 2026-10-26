@@ -11,6 +11,7 @@
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { boundApnsPayload } from './boundApnsPayload';
 import { ephemeralPushFields } from './ephemeralPushFields';
+import { encryptionModePushFields } from './push-encryption-mode';
 import { callBackPushFields } from './callBackPushFields';
 import { contentActionPushFields } from './contentActionPushFields';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
@@ -1059,6 +1060,7 @@ export class NotificationService {
                   ? String(params.metadata.reactionEmoji ?? '')
                   : ''),
                 notificationLocKey: params.context.notificationLocKey || '',
+                ...encryptionModePushFields(params.context),
                 // GW5 — persistance NSE : timestamp serveur + type du message,
                 // clés absentes (pas de '') quand la notification ne porte pas
                 // de message.
@@ -1327,6 +1329,8 @@ export class NotificationService {
     attachmentTracks?: Readonly<Record<string, AttachmentTranslationTrack>>;
     encryptedContent?: string;
     notificationLocKey?: string;
+    /** #13165 — le mode de la conversation, cf. `encryptionModePushFields`. */
+    conversationEncryptionMode?: string | null;
     /** #8857 — le détail du contenu, retenu par l'éventail dès que le média ne voyage pas. */
     contentDetail?: NotificationContentDetail;
     /**
@@ -1519,6 +1523,7 @@ export class NotificationService {
         ...(servedMedia.language ? { firstAttachmentLanguage: servedMedia.language } : {}),
         encryptedContent: params.encryptedContent,
         notificationLocKey: params.notificationLocKey,
+        ...(params.conversationEncryptionMode ? { conversationEncryptionMode: params.conversationEncryptionMode } : {}),
         ...(params.contentDetail ? { contentDetail: params.contentDetail } : {}),
         // GW5 — champs de persistance NSE (timestamp serveur + type + Prisme).
         ...this.messageClockFields({
@@ -1603,6 +1608,8 @@ export class NotificationService {
      * second verrou de `createNotification`.
      */
     notificationLocKey?: string;
+    /** #13165 — le mode de la conversation, cf. `encryptionModePushFields`. */
+    conversationEncryptionMode?: string | null;
     /** Cf. `createMessageNotification.contentDetail` — #8857. */
     contentDetail?: NotificationContentDetail;
   }): Promise<Notification | null> {
@@ -1708,6 +1715,7 @@ export class NotificationService {
         // unique producteur, donc sa présence DÉCLARE la protection là où une
         // base peut être omise par un appelant solo.
         notificationLocKey: params.notificationLocKey,
+        ...(params.conversationEncryptionMode ? { conversationEncryptionMode: params.conversationEncryptionMode } : {}),
         ...(params.contentDetail ? { contentDetail: params.contentDetail } : {}),
         ...this.messageClockFields(prismSource),
       },
@@ -1742,6 +1750,8 @@ export class NotificationService {
       previewBasis?: PreviewPrismBasis;
       /** Cf. `createMentionNotification.notificationLocKey`. */
       notificationLocKey?: string;
+      /** #13165 — cf. `createMentionNotification.conversationEncryptionMode`. */
+      conversationEncryptionMode?: string | null;
       /** Cf. `createMessageNotification.contentDetail` — #8857. */
       contentDetail?: NotificationContentDetail;
       /** Cf. `createMentionNotification.attachments` — cycle 125 bis. */
@@ -2298,6 +2308,8 @@ export class NotificationService {
      * second verrou de `createNotification`.
      */
     notificationLocKey?: string;
+    /** #13165 — le mode de la conversation, cf. `encryptionModePushFields`. */
+    conversationEncryptionMode?: string | null;
     /** Cf. `createMessageNotification.contentDetail` — #8857. */
     contentDetail?: NotificationContentDetail;
   }): Promise<Notification | null> {
@@ -2389,6 +2401,7 @@ export class NotificationService {
         // unique producteur, donc sa présence DÉCLARE la protection là où une
         // base peut être omise par un appelant solo.
         notificationLocKey: params.notificationLocKey,
+        ...(params.conversationEncryptionMode ? { conversationEncryptionMode: params.conversationEncryptionMode } : {}),
         ...(params.contentDetail ? { contentDetail: params.contentDetail } : {}),
         ...this.messageClockFields(prismSource),
       },

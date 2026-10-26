@@ -642,6 +642,7 @@ export async function notifyMessageRecipients(params: {
             // localisation cliente du placeholder et le second verrou de
             // `createNotification`.
             notificationLocKey,
+            conversationEncryptionMode: conversation.encryptionMode ?? undefined,
           });
           return created != null;
         })
@@ -673,6 +674,7 @@ export async function notifyMessageRecipients(params: {
               // Cycle 126 — cf. `createReplyNotification` : la clé de protection
               // qualifie l'aperçu que ce lot vient de recevoir.
               notificationLocKey,
+              conversationEncryptionMode: conversation.encryptionMode ?? undefined,
             },
             memberIds
           )
@@ -711,6 +713,7 @@ export async function notifyMessageRecipients(params: {
           messagePreview: notificationPreviewForPush,
           encryptedContent: message.encryptedContent || undefined,
           notificationLocKey,
+          conversationEncryptionMode: conversation.encryptionMode ?? undefined,
           // La transcription d'un vocal n'est PAS `Message.content` : ses
           // traductions vivent sur `MessageAttachment.translations`. Le cycle 122
           // s'en tenait à ne RIEN substituer ; le cycle 123 lui donne sa propre

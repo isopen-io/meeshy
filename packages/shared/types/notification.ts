@@ -250,6 +250,12 @@ export interface NotificationContext extends NotificationAttachmentWire {
   readonly parentCommentId?: string;
   readonly encryptedContent?: string;
   readonly notificationLocKey?: string;
+  /** #13165 — le mode de chiffrement de la CONVERSATION (`e2ee`, `server`,
+   *  `hybrid`) au moment de l'éventail. Il voyage sur le fil push (`encryptionMode`)
+   *  pour que la réponse rapide d'un appareil en retard sur le régime ne parte
+   *  jamais en clair. Absent : la conversation n'a pas de mode. Ne dit rien du
+   *  contenu, donc voyage aussi sous `showPreview: false`. */
+  readonly conversationEncryptionMode?: string;
   /** Date de publication ISO de l'entité sociale liée (post/story/réel/mood).
    *  Permet au client d'afficher « publié il y a 2 j » même quand le contenu
    *  n'est plus accessible (story expirée). @see schema.prisma Post.createdAt */
