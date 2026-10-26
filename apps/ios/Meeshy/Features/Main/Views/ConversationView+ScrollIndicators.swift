@@ -49,7 +49,7 @@ extension ConversationView {
 
     /// Ce que la pastille a le droit de peindre, et l'instant où elle doit se
     /// réévaluer (l'échéance d'un éphémère encore vivant).
-    struct UnreadPillPreview {
+    nonisolated struct UnreadPillPreview: Sendable {
         static let withheld = UnreadPillPreview(text: nil, attachment: nil, expiresAt: nil)
         let text: String?
         let attachment: MessageAttachment?
@@ -309,7 +309,7 @@ extension ConversationView {
 }
 
 /// La clé qui relance l'attente de l'échéance quand le message ou son échéance change.
-struct UnreadPillExpiry: Equatable {
+nonisolated struct UnreadPillExpiry: Equatable, Sendable {
     let messageId: String?
     let deadline: Date?
 }
