@@ -65,6 +65,32 @@ ne se croit jamais. Un client qui dépose un fichier commençant comme un chiffr
 ne fait rien ouvrir. Les copies transférées partagent les octets, donc la
 ligne. La ligne part quand le fichier est effacé (`AttachmentService`).
 
+### Concurrence, interruption, rattrapage, retour arrière (audit du 2026-10-26)
+
+- **Un verrou par fichier d'origine** (`atRest/sealLock.ts`, Redis `SET NX PX`,
+  10 min) est pris par l'envoi, le balayage et la migration. Deux scellements
+  d'une même pièce sous deux liaisons (la source et sa copie transférée dans une
+  autre conversation `server`) ne se croisent jamais : le second cède, le
+  balayage reprend. Verrou injoignable = occupé.
+- **Le clair remplacé ne s'efface que quand plus aucune ligne ne le désigne.**
+  Chaque fichier déplacé garde `replacedKey` ; `finishPendingErasures` repointe
+  toute ligne qui désigne encore l'ancien original (copie créée pendant le
+  scellement, repointage interrompu), même apparue après l'effacement. Rien ne
+  se perd.
+- **Un balayage toutes les dix minutes** (`jobs/at-rest-file-sweep.ts`) scelle
+  les pièces des conversations au repos des dernières 48 h restées en clair
+  (échec à l'envoi, fin de rendu différé perdue), termine les effacements en
+  attente sous le même verrou, et retire les pistes temporaires orphelines.
+- **Retour arrière** : la migration `2026-10-26-server-at-rest-attachment-files-unseal`
+  rouvre chaque fichier en place avant tout redéploiement d'une passerelle plus
+  ancienne (qui servirait le chiffré). Elle remet du clair : en production,
+  feu vert du porteur.
+- **Index préalables** : `2026-10-26-attachment-file-at-rest-indexes`, à jouer
+  avant le déploiement du code.
+- **Sans clé de signature des adresses**, l'envoi de fichiers dans une
+  conversation au repos est refusé (503) : scellées, ses pièces ne seraient
+  lisibles par personne.
+
 ### Le nom ne figure plus dans le chemin
 
 L'original et ses dérivés prennent une base opaque, l'empreinte SHA-256 de
@@ -110,7 +136,12 @@ savent déjà lire une adresse signée (vue unique, #9600).
   Ce n'est pas du bout en bout.
 - Le clair d'un envoi PAS ENCORE rattaché à un message : le dépôt (TUS ou
   multipart) ne connaît pas sa conversation. Il est scellé au rattachement ;
-  un dépôt abandonné reste en clair jusqu'à son balayage.
+  un dépôt abandonné reste en clair jusqu'à son balayage. Entre l'envoi et un
+  scellement échoué, le clair reste jusqu'au balayage suivant (10 min).
+- Une passerelle sans Redis scelle sans verrou partagé (une seule instance).
+- Un processus tué entre l'écriture de la ligne de scellement et le `rename`
+  d'un scellement EN PLACE (piste TTS) laisse une ligne sur un clair : non
+  rattrapé automatiquement.
 - Les octets effacés par `unlink` restent lisibles sur le support physique
   jusqu'à leur réécriture (pas d'effacement sécurisé).
 - La taille, le type, les dimensions et la durée restent en clair en base.
