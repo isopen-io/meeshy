@@ -37,6 +37,8 @@ internal data class ConversationRowActions(
     val onCreateCategory: (String) -> Unit = {},
     val onLoadPreview: () -> Unit = {},
     val onLockToggle: () -> Unit = {},
+    /** Glisser « Masquer » / « Supprimer » : ouvre la confirmation de retrait de la rangée. */
+    val onRemove: () -> Unit = {},
     /** « Rejoindre » l'appel en cours ; la ligne ne montre le bouton que si un appel est servi. */
     val onJoinCall: () -> Unit = {},
     /** Entrées de menu dont la destination dépend de l'hôte de navigation : `null` = entrée masquée. */
@@ -82,6 +84,7 @@ internal data class ConversationRowActions(
             onCreateCategory = { viewModel.createCategoryAndAssign(conversationId, it) },
             onLoadPreview = { viewModel.loadPreviewMessages(conversationId) },
             onLockToggle = { viewModel.dialogs.requestLock(conversationId) },
+            onRemove = { viewModel.dialogs.requestRemoval(conversationId) },
         )
     }
 }
