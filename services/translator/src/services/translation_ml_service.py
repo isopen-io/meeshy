@@ -195,7 +195,7 @@ class TranslationMLService:
         target_language: str = "en",
         model_type: str = "basic",
         source_channel: str = "unknown",
-        **cache_choice: bool
+        **cache_choice: Any
     ) -> Dict[str, Any]:
         """
         Traduction avec préservation de structure

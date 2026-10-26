@@ -18,16 +18,20 @@ const ERASE_TIMEOUT_MS = 3_000;
  *
  * La décision « ce fichier peut-il partir ? » appartient à l'appelant, qui
  * l'a déjà prise pour le disque : la copie suit la même règle, au même site.
+ *
+ * Rend `true` quand aucune copie ne reste (effacée, ou pas de seau) ; `false`
+ * sur un échec ou un délai dépassé — l'appelant qui MARQUE un effacement
+ * terminé (#13100) ne le marque qu'à `true`.
  */
 export async function eraseMirroredCopy(
   fullPath: string,
   uploadRoot: string,
   mirror: Pick<MediaObjectStore, 'remove'> | null = processMediaObjectStores().mirror,
   options: { readonly timeoutMs?: number } = {},
-): Promise<void> {
-  if (mirror === null) return;
+): Promise<boolean> {
+  if (mirror === null) return true;
   const key = storageKeyUnder(fullPath, uploadRoot);
-  if (key === null) return;
+  if (key === null) return true;
   const warn = (reason: string) => logger.warn('media bucket copy not erased, left to the sweep', { key, reason });
   const removal = mirror.remove(key).then(
     () => 'erased' as const,
@@ -44,4 +48,5 @@ export async function eraseMirroredCopy(
   const outcome = await Promise.race([removal, deadline]);
   clearTimeout(timer);
   if (outcome === 'timeout') warn('timeout');
+  return outcome === 'erased';
 }
