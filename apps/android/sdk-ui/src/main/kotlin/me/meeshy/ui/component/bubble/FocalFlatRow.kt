@@ -1,6 +1,9 @@
 package me.meeshy.ui.component.bubble
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
@@ -17,6 +20,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -37,7 +41,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onPlaced
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.contentDescription
@@ -84,6 +93,8 @@ public fun FocalFlatRow(
     metaAlpha: () -> Float = { 0f },
     /** L'aperçu de lien du premier lien, sous le texte (même carte que la bulle). */
     bodyAccessory: (@Composable (onColor: Color) -> Unit)? = null,
+    /** Focal : la rangée est l'ÉLUE de la scène (cadre, loupe, chips) ; null = rangée Script. */
+    focus: FlatRowFocus? = null,
 ) {
     val renderKind = rememberBubbleRenderKind(
         isDeleted = content.isDeleted,
@@ -118,6 +129,7 @@ public fun FocalFlatRow(
                     decor = BubbleTextDecor(mentionDisplayNames, highlightTerm, trackedLinks = null),
                     metaAlpha = metaAlpha,
                     bodyAccessory = bodyAccessory,
+                    focus = focus,
                 )
             }
         }
@@ -165,8 +177,20 @@ private fun FlatStandardBody(
     decor: BubbleTextDecor,
     metaAlpha: () -> Float,
     bodyAccessory: (@Composable (onColor: Color) -> Unit)?,
+    focus: FlatRowFocus?,
 ) {
     val onLongPress = callbacks.onLongPress
+    val focused = focus != null
+    // L'élue : seul son CONTENU grossit, depuis son bord haut d'attaque, en rendu seul (iOS
+    // `FocalElectedLoupe`, 250 ms ease-out) ; la hauteur de rangée ne change jamais.
+    val loupe by animateFloatAsState(
+        targetValue = focus?.contentScale ?: 1f,
+        animationSpec = tween(FocalMetrics.Scene.ENTER_DURATION_MS.toInt(), easing = LinearOutSlowInEasing),
+        label = "focal-loupe",
+    )
+    var contentRect by remember { mutableStateOf<Rect?>(null) }
+    val lift = if (focused) ElectedMetrics.lift(content.isFirstInGroup) else 0.dp
+    val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     val namedActions = callbacks.accessibilityActions
     val ink = MeeshyTheme.tokens.textPrimary
     Row(
@@ -174,6 +198,8 @@ private fun FlatStandardBody(
         horizontalArrangement = Arrangement.spacedBy(FlatRowMetrics.metaSpacing),
         modifier = Modifier
             .fillMaxWidth()
+            // Une SUITE élue descend sous sa chip d'identité, en rendu seul (iOS `focusLift`).
+            .offset(y = lift)
             .let { base ->
                 if (onLongPress == null) base
                 else base.combinedClickable(
@@ -191,15 +217,30 @@ private fun FlatStandardBody(
                 }
             },
     ) {
-        Column(
+        val column: @Composable () -> Unit = { Column(
             verticalArrangement = Arrangement.spacedBy(FlatRowMetrics.paddingVertical),
-            modifier = Modifier.weight(1f),
         ) {
             FlatBadges(content)
             if (content.isFirstInGroup) {
-                FlatIdentityHeader(content = content, onSenderTap = callbacks.onSenderTap)
+                // En focus l'identité passe sur la chip du cadre : l'en-tête garde sa place, s'efface.
+                Box(Modifier.graphicsLayer { alpha = if (focused) 0f else 1f }) {
+                    FlatIdentityHeader(content = content, onSenderTap = callbacks.onSenderTap)
+                }
             }
-            Box(modifier = Modifier.padding(start = FlatRowMetrics.indent)) {
+            Box(
+                modifier = Modifier
+                    .padding(start = FlatRowMetrics.indent)
+                    .onPlaced { coords ->
+                        if (focused) {
+                            contentRect = coords.parentLayoutCoordinates?.localBoundingBoxOf(coords, clipBounds = false)
+                        }
+                    }
+                    .graphicsLayer {
+                        scaleX = loupe
+                        scaleY = loupe
+                        transformOrigin = TransformOrigin(if (isRtl) 1f else 0f, 0f)
+                    },
+            ) {
                 val sections: @Composable () -> Unit = {
                     FlatContentSections(content, accentColor, ink, callbacks, audioPlayback, decor, bodyAccessory)
                 }
@@ -217,9 +258,31 @@ private fun FlatStandardBody(
             if (content.isOutgoing && content.deliveryStatus == DeliveryStatus.Failed) {
                 FlatFailedRetry(onRetry = callbacks.onRetry)
             }
-            FlatBottomLine(content, accentColor, callbacks)
+            // En focus, la bande du cadre remplace la ligne basse, qui garde sa place.
+            Box(Modifier.graphicsLayer { alpha = if (focused) 0f else 1f }) {
+                FlatBottomLine(content, accentColor, callbacks)
+            }
+        } }
+        if (focus == null) {
+            Box(Modifier.weight(1f), propagateMinConstraints = true) { column() }
+        } else {
+            FocalElectedFrame(
+                focus = focus,
+                lift = lift,
+                contentRect = { contentRect },
+                card = { ElectedGlassCard() },
+                identityChip = {
+                    Box(Modifier.offset(x = -ElectedMetrics.chipInset)) {
+                        ElectedIdentityChip(content, accentColor, callbacks.onSenderTap)
+                    }
+                },
+                strip = { ElectedStrip(content, focus, accentColor, callbacks) },
+                modifier = Modifier.weight(1f),
+                column = column,
+            )
         }
-        FlatMetaColumn(content = content, metaAlpha = metaAlpha)
+        // En focus, la chip de date dit la même chose : la colonne s'efface sans céder sa place.
+        FlatMetaColumn(content = content, metaAlpha = { if (focused) 0f else metaAlpha() })
     }
 }
 

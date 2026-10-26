@@ -23,7 +23,14 @@ import me.meeshy.sdk.link.LinkPreviewParser
 import me.meeshy.ui.component.bubble.BubbleAccessibilityAction
 import me.meeshy.ui.component.bubble.BubbleCallbacks
 import me.meeshy.ui.component.bubble.BubbleContent
+import me.meeshy.ui.component.bubble.FlatRowFocus
 import me.meeshy.ui.component.bubble.FocalFlatRow
+import me.meeshy.ui.format.bubbleClockLabel
+import me.meeshy.sdk.model.isoToEpochMillisOrNull
+import me.meeshy.sdk.model.reading.focal.FocalFocusTimestamp
+import java.time.Instant
+import java.time.ZoneId
+import java.util.Locale
 import me.meeshy.ui.component.bubble.MessageBubble
 import me.meeshy.ui.theme.MeeshyPalette
 
@@ -51,6 +58,8 @@ internal class ChatMessageRowActions(
     val onAddReaction: (messageId: String) -> Unit = {},
     /** Tap sur l'avatar de l'auteur (pied d'identité d'une suite reçue en groupe) : sa fiche profil. */
     val onSenderTap: (bubble: BubbleContent) -> Unit = {},
+    /** Icône de traduction de l'élu Focal : l'explorateur des langues du message. */
+    val onTranslationDetail: (messageId: String) -> Unit = {},
     /** Window-space frame of the bubble, captured during layout for the long-press hero. */
     val onBubbleFramed: (messageId: String, frame: Rect) -> Unit = { _, _ -> },
 )
@@ -85,6 +94,9 @@ internal fun ChatMessageRow(
     flat: Boolean = false,
     /** Opacité de l'heure et des coches de la rangée plate, lue au dessin. */
     metaAlpha: () -> Float = { 0f },
+    /** Focal : la rangée plate est l'élue de la scène (cadre, loupe [focalScale], chips). */
+    focalElected: Boolean = false,
+    focalScale: Float = 1f,
 ) {
     val uriHandler = LocalUriHandler.current
     val audioPlayback by remember(bubble.audios, audioPlayer) {
@@ -197,6 +209,7 @@ internal fun ChatMessageRow(
                 highlightTerm = highlightTerm,
                 metaAlpha = metaAlpha,
                 bodyAccessory = linkAccessory,
+                focus = if (focalElected) rememberFlatRowFocus(bubble, focalScale, actions) else null,
             )
         } else MessageBubble(
             content = bubble,
@@ -220,6 +233,42 @@ internal fun ChatMessageRow(
             accentColor = accentColor,
             onClick = { actions.onReplyCountTap(messageId) },
             onLongClick = { actions.onReplyCountLongPress(messageId) },
+        )
+    }
+}
+
+/**
+ * Ce que l'élue Focal montre et ouvre : sa date complète (`FocalFocusTimestamp` : « Aujourd'hui
+ * 12:30 », « Hier », jour de semaine, « Sam. 3 oct. 2025 · 14:41 »), le détail des langues par
+ * l'icône de traduction, et — faute d'une feuille « Infos » sur Android — le menu du message par
+ * la chip de date.
+ */
+@Composable
+private fun rememberFlatRowFocus(bubble: BubbleContent, scale: Float, actions: ChatMessageRowActions): FlatRowFocus {
+    val words = FocalFocusTimestamp.Words(
+        today = stringResource(R.string.chat_date_today),
+        yesterday = stringResource(R.string.chat_date_yesterday),
+        dayBeforeYesterday = stringResource(R.string.chat_date_day_before_yesterday),
+    )
+    val messageId = bubble.messageId
+    return remember(bubble.createdAtIso, scale, words, actions, messageId) {
+        val clock = bubbleClockLabel(bubble.createdAtIso).orEmpty()
+        val sentAt = isoToEpochMillisOrNull(bubble.createdAtIso)?.let(Instant::ofEpochMilli)
+        val label = sentAt?.let {
+            FocalFocusTimestamp.label(
+                sentAt = it,
+                timeString = clock,
+                now = Instant.now(),
+                zone = ZoneId.systemDefault(),
+                locale = Locale.getDefault(),
+                words = words,
+            )
+        } ?: clock
+        FlatRowFocus(
+            contentScale = scale,
+            timestampLabel = label,
+            onShowMessageInfo = { actions.onLongPress(messageId) },
+            onShowTranslationDetail = { actions.onTranslationDetail(messageId) },
         )
     }
 }

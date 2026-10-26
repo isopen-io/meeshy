@@ -34,6 +34,8 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import me.meeshy.feature.chat.R
 import me.meeshy.sdk.model.reading.focal.FocalMetrics
+import me.meeshy.sdk.model.reading.mode.ConversationReadingMode
+import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.sdk.model.reading.focal.ScrollTimePillLaw
 import me.meeshy.ui.profile.LocalProfileSheetOpener
 import me.meeshy.ui.component.location.LiveLocationBadge
@@ -200,6 +202,21 @@ internal fun ChatListHost(
     // Avec un bandeau, le fil démarre SOUS l'en-tête et ses bandeaux : la pastille aussi.
     val listTopInset = if (hasBanners) 0.dp else topInset
     val readingLinePx = with(density) { (MeeshySpacing.sm + listTopInset).toPx() }
+    // Focal : la scène au défilement (cadre de l'élu, loupe, passage des voisines).
+    val focalMode = host.readingMode?.state?.mode == ConversationReadingMode.FOCAL
+    val focalScene = remember { FocalSceneState() }
+    val reduceMotion = LocalReduceMotion.current
+    val renderedIndexOf = remember(renderedItems) {
+        HashMap<Any, Int>(renderedItems.size).apply { renderedItems.forEachIndexed { index, item -> put(item.key, index) } }
+    }
+    FocalSceneDriver(
+        enabled = focalMode,
+        scene = focalScene,
+        listState = listState,
+        renderedItems = renderedItems,
+        chrome = host.chrome,
+        reduceMotion = reduceMotion,
+    )
     val pinnedDayMillis by remember(renderedItems, readingLinePx, flatRows) {
         derivedStateOf {
             if (host.chrome.isHeaderExpanded) return@derivedStateOf null
@@ -241,6 +258,7 @@ internal fun ChatListHost(
             onRetry = { messageId -> actions.retryMessage(messageId) },
             onSenderTap = { bubble -> bubble.senderProfile?.let(profileOpener::open) },
             onAddReaction = { messageId -> actions.openEmojiPicker(messageId) },
+            onTranslationDetail = { messageId -> actions.openLanguageExplorer(messageId) },
             onBubbleFramed = { messageId, frame -> bubbleFrames[messageId] = frame },
         )
     }
@@ -330,7 +348,7 @@ internal fun ChatListHost(
                     topInset = listTopInset,
                     bottomInset = bottomInset + typingReserve,
                 ) { item ->
-                    ChatListRow(
+                    val row: @Composable (Boolean, Float) -> Unit = { elected, scale -> ChatListRow(
                         item = item,
                         accentColor = accentColor,
                         mentionDisplayNames = state.mentionDisplayNames.ifEmpty { null },
@@ -344,7 +362,14 @@ internal fun ChatListHost(
                         canWrite = state.viewerMayWrite,
                         flat = flatRows,
                         metaAlpha = metaAlpha,
-                    )
+                        focalElected = elected,
+                        focalScale = scale,
+                    ) }
+                    if (focalMode) {
+                        FocalPassageItem(item.key, focalScene, renderedIndexOf) { elected -> row(elected, focalScene.contentScale) }
+                    } else {
+                        row(false, 1f)
+                    }
                 }
             }
             // La frappe se pose juste au-dessus de la barre flottante, dans la réserve du fil.
