@@ -143,10 +143,7 @@ struct SessionRowPresentation: Equatable, Identifiable {
             return String(localized: "sessions.activity.now", defaultValue: "Active maintenant", bundle: .main)
         }
         guard let lastActive = session.lastActive else { return nil }
-        let formatter = RelativeDateTimeFormatter()
-        formatter.locale = locale
-        formatter.unitsStyle = .full
-        let relative = formatter.localizedString(for: min(lastActive, now), relativeTo: now)
+        let relative = RelativeTimeFormatter.fullString(for: min(lastActive, now), now: now, locale: locale)
         return String(format: String(localized: "sessions.activity.last", defaultValue: "Dernière activité %@", bundle: .main), relative)
     }
 }
