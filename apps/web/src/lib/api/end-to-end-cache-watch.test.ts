@@ -167,6 +167,22 @@ describe('la photographie des clairs d’avant l’apprentissage', () => {
     unwatch();
   });
 
+  test('déjà connue chiffrée au démarrage (registre restauré) : photographiée sur le cache restauré, avant toute écriture', () => {
+    const client = new QueryClient();
+    const ledger = createEndToEndRegimeLedger({ storage: null });
+    ledger.getState().learnEndToEnd('c-s', Date.parse('2026-10-01T00:00:00.000Z'));
+    client.setQueryData(['conversations', 'c-s', 'messages'], thread([{ ...plainRow('c-s'), createdAt: '2026-09-01T00:00:00.000Z' }]));
+    const unwatch = watchEndToEndConversations(client, ledger);
+
+    client.setQueryData(['conversations', 'c-s', 'messages'], thread([
+      { ...plainRow('c-s'), createdAt: '2026-09-01T00:00:00.000Z' },
+      { ...plainRow('c-s'), id: 'forge', createdAt: '2026-09-02T00:00:00.000Z' },
+    ]));
+
+    expect(ledger.getState().clearKnown['c-s']).toEqual(['p-c-s']);
+    unwatch();
+  });
+
   test('apprise par le temps réel (sans écriture de cache) : photographiée aussitôt', () => {
     const client = new QueryClient();
     const ledger = createEndToEndRegimeLedger({ storage: null });
