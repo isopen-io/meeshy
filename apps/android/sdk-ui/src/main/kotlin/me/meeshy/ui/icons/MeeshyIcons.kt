@@ -195,6 +195,7 @@ import androidx.compose.material.icons.filled.TheaterComedy as FiTheaterComedy
 import androidx.compose.material.icons.filled.Timer as FiTimer
 import androidx.compose.material.icons.filled.TimerOff as FiTimerOff
 import androidx.compose.material.icons.filled.TouchApp as FiTouchApp
+import androidx.compose.material.icons.filled.Bookmark as FiBookmark
 import androidx.compose.material.icons.filled.Translate as FiTranslate
 import androidx.compose.material.icons.filled.Tune as FiTune
 import androidx.compose.material.icons.filled.UnfoldLess as FiUnfoldLess
@@ -321,6 +322,7 @@ public object MeeshyIcons {
     public val Bold: ImageVector get() = Icons.Filled.FiFormatBold
     public val Bolt: ImageVector get() = Icons.Filled.FiBolt
     public val Bookmark: ImageVector get() = Icons.Outlined.OuBookmarkBorder
+    public val BookmarkFilled: ImageVector get() = Icons.Filled.FiBookmark
     public val Brightness: ImageVector get() = Icons.Outlined.OuLightMode
     public val BrightnessFilled: ImageVector get() = Icons.Filled.FiLightMode
     public val BrokenImage: ImageVector get() = Icons.Filled.FiBrokenImage

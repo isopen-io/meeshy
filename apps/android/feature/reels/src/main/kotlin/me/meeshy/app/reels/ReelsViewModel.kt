@@ -29,6 +29,14 @@ import me.meeshy.sdk.model.EmojiCatalog
 import me.meeshy.sdk.model.PostReactionPick
 import me.meeshy.sdk.reaction.EmojiUsageStore
 import me.meeshy.sdk.reaction.InMemoryEmojiUsageStore
+import me.meeshy.sdk.report.ReportRepository
+import me.meeshy.sdk.model.report.ReportReason
+import me.meeshy.ui.component.FeedbackKind
+import me.meeshy.ui.component.FeedbackToastRequest
+import me.meeshy.feature.reels.R
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.receiveAsFlow
 import javax.inject.Inject
 
 data class ReelsUiState(
@@ -50,6 +58,7 @@ class ReelsViewModel @Inject constructor(
     private val config: MeeshyConfig,
     private val clock: CacheClock,
     private val privacyPreferencesStore: PrivacyPreferencesStore,
+    private val reportRepository: ReportRepository,
     private val emojiUsageStore: EmojiUsageStore = InMemoryEmojiUsageStore(),
 ) : ViewModel() {
 
@@ -58,6 +67,10 @@ class ReelsViewModel @Inject constructor(
         .map { emojiUsageStore.top(EmojiCatalog.defaultQuickReactions.size) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emojiUsageStore.top(EmojiCatalog.defaultQuickReactions.size))
 
+
+    /** Les retours du menu « … » (épingler, supprimer, signaler) : un toast à la fois, jamais perdu. */
+    private val toastChannel = Channel<FeedbackToastRequest>(Channel.BUFFERED)
+    val toasts: Flow<FeedbackToastRequest> = toastChannel.receiveAsFlow()
 
     private val _state = MutableStateFlow(ReelsUiState())
     val state: StateFlow<ReelsUiState> = _state.asStateFlow()
@@ -422,5 +435,52 @@ class ReelsViewModel @Inject constructor(
         _state.update { state ->
             state.copy(reels = state.reels.map { if (it.id == reelId) transform(it) else it })
         }
+    }
+
+    /** Le reel est celui de l'utilisateur connecté : son menu propose épingler et supprimer, jamais signaler. */
+    fun isOwn(reel: ReelPresentation): Boolean =
+        reel.authorId != null && reel.authorId == sessionRepository.currentUserId
+
+    /** Suppression optimiste : le reel quitte le pager aussitôt, et revient à sa place si le serveur refuse. */
+    fun delete(reelId: String) {
+        val index = _state.value.reels.indexOfFirst { it.id == reelId }
+        if (index < 0) return
+        val removed = _state.value.reels[index]
+        _state.update { it.copy(reels = it.reels.filterNot { reel -> reel.id == reelId }) }
+        viewModelScope.launch {
+            when (postRepository.delete(reelId)) {
+                is NetworkResult.Success -> toast(R.string.reels_toast_deleted, FeedbackKind.Success)
+                is NetworkResult.Failure -> {
+                    _state.update { state ->
+                        if (state.reels.any { it.id == reelId }) state
+                        else state.copy(reels = state.reels.toMutableList().apply { add(index.coerceAtMost(size), removed) })
+                    }
+                    toast(R.string.reels_toast_delete_failed, FeedbackKind.Error)
+                }
+            }
+        }
+    }
+
+    fun pin(reelId: String) {
+        viewModelScope.launch {
+            when (postRepository.pinPost(reelId)) {
+                is NetworkResult.Success -> toast(R.string.reels_toast_pinned, FeedbackKind.Success)
+                is NetworkResult.Failure -> toast(R.string.reels_toast_pin_failed, FeedbackKind.Error)
+            }
+        }
+    }
+
+    /** Signalement direct, motif « inapproprié » comme sur iOS (`reportPost`). */
+    fun report(reelId: String) {
+        viewModelScope.launch {
+            when (reportRepository.reportPost(reelId, ReportReason.INAPPROPRIATE, details = null)) {
+                is NetworkResult.Success -> toast(R.string.reels_toast_reported, FeedbackKind.Success)
+                else -> toast(R.string.reels_toast_report_failed, FeedbackKind.Error)
+            }
+        }
+    }
+
+    private fun toast(messageRes: Int, kind: FeedbackKind) {
+        toastChannel.trySend(FeedbackToastRequest(messageRes, kind))
     }
 }

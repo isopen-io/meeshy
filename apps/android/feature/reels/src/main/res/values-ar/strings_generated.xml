@@ -1,5 +1,6 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="reels_author_profile">الملف الشخصي للمؤلف</string>
     <string name="reels_caption_translated">الترجمة متاحة</string>
     <string name="reels_close">إغلاق</string>
     <string name="reels_comments">التعليقات</string>
@@ -16,9 +17,25 @@
     <string name="reels_comments_send">إرسال</string>
     <string name="reels_comments_title">التعليقات</string>
     <string name="reels_empty">لا توجد ريلز حاليًا</string>
+    <string name="reels_impressions">الظهور</string>
     <string name="reels_like">إعجاب</string>
+    <string name="reels_menu_copy_text">نسخ النص</string>
+    <string name="reels_menu_delete">حذف</string>
+    <string name="reels_menu_hint">يفتح قائمة الإجراءات</string>
+    <string name="reels_menu_open">فتح</string>
+    <string name="reels_menu_pin">تثبيت</string>
+    <string name="reels_menu_report">إبلاغ</string>
+    <string name="reels_menu_share">مشاركة</string>
     <string name="reels_mute">كتم</string>
     <string name="reels_repost">إعادة النشر</string>
+    <string name="reels_scrub">التقدّم أو الرجوع</string>
     <string name="reels_share">مشاركة</string>
+    <string name="reels_toast_delete_failed">خطأ في حذف المنشور</string>
+    <string name="reels_toast_deleted">تم حذف المنشور</string>
+    <string name="reels_toast_pin_failed">خطأ في تثبيت المنشور</string>
+    <string name="reels_toast_pinned">تم تثبيت المنشور</string>
+    <string name="reels_toast_report_failed">خطأ في الإبلاغ عن المنشور</string>
+    <string name="reels_toast_reported">تم الإبلاغ عن المنشور</string>
     <string name="reels_unmute">إلغاء كتم الصوت</string>
+    <string name="reels_views">المشاهدات</string>
 </resources>

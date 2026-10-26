@@ -6,6 +6,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
@@ -55,10 +56,23 @@ fun ReelVideoSurface(
      * sans vidéo n'est qu'un rectangle noir posé sur le fond que l'appelant dessine.
      */
     showsPicture: Boolean = true,
+    /**
+     * `false` : aucun lecteur n'est créé (le décodeur n'est pas payé pour une page que personne
+     * ne regarde). `true` sur la page affichée ET sur la suivante, que le lecteur prépare en
+     * pause pour que son premier plan soit déjà là au passage — et sur elles seules.
+     */
+    loads: Boolean = true,
+    /** L'utilisateur a mis ce réel en pause (toucher) : il ne joue pas, même actif, et garde sa position. */
+    paused: Boolean = false,
+    /** Le lecteur vivant de cette surface (ou `null` à sa libération) : la barre de lecture y lit et y cherche. */
+    onPlayer: (ReelPlayerHandle?) -> Unit = {},
+    /** `true` : le média tient en entier dans la surface (iOS `resizeAspect`) au lieu de la remplir en rognant. */
+    fit: Boolean = false,
 ) {
     val context = LocalContext.current
     val mediaCache = remember(context) { MeeshyMediaCache.get(context) }
-    val player = remember(mediaUrl, sourceStartMs, sourceEndMs) {
+    val player = remember(mediaUrl, sourceStartMs, sourceEndMs, loads) {
+        if (!loads) return@remember null
         // Lecture par le cache disque (clé canonique) : un média déjà vu se rouvre sans réseau.
         ExoPlayer.Builder(context)
             .setMediaSourceFactory(mediaCache.mediaSourceFactory(MediaCacheCategory.VIDEO, mediaUrl))
@@ -93,7 +107,7 @@ fun ReelVideoSurface(
     // Le volume suit [muted] a chaud : le player est memoize par URL, donc la
     // valeur passee au constructeur ne refleterait jamais un toggle ulterieur.
     LaunchedEffect(player, muted) {
-        player.volume = if (muted) 0f else 1f
+        player?.volume = if (muted) 0f else 1f
     }
 
     // Hors premier plan (ON_STOP : touche Accueil, autre app), la lecture se suspend et
@@ -101,32 +115,41 @@ fun ReelVideoSurface(
     // le son était réactivé — derrière une autre application.
     val lifecycleState by LocalLifecycleOwner.current.lifecycle.currentStateFlow.collectAsState()
     val isForeground = lifecycleState.isAtLeast(Lifecycle.State.STARTED)
-    LaunchedEffect(player, isActive, isForeground) {
+    LaunchedEffect(player, isActive, isForeground, paused) {
+        val current = player ?: return@LaunchedEffect
         val command = ReelPlaybackGate.command(isActive, isForeground, rewindWhenInactive)
-        player.playWhenReady = command.playWhenReady
-        if (command.rewind) player.seekTo(0)
+        current.playWhenReady = command.playWhenReady && !paused
+        if (command.rewind) current.seekTo(0)
     }
 
     // Bail de lecture : la ressource jouée est à l'abri de l'éviction LRU tant que le player vit.
+    val currentOnPlayer by rememberUpdatedState(onPlayer)
     DisposableEffect(player) {
+        val live = player ?: return@DisposableEffect onDispose { }
         val releaseLease = mediaCache.lease(mediaUrl)
+        currentOnPlayer(ReelPlayerHandle(live))
         onDispose {
+            currentOnPlayer(null)
             releaseLease()
-            player.release()
+            live.release()
         }
     }
 
-    if (!showsPicture) return
+    if (!showsPicture || player == null) return
 
     AndroidView(
         modifier = modifier,
         factory = { ctx ->
             PlayerView(ctx).apply {
                 useController = false
-                resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                // Sans obturateur noir : le poster posé derrière reste visible jusqu'à la première image.
+                setShutterBackgroundColor(android.graphics.Color.TRANSPARENT)
             }
         },
-        update = { view -> view.player = player },
+        update = { view ->
+            view.resizeMode = if (fit) AspectRatioFrameLayout.RESIZE_MODE_FIT else AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+            view.player = player
+        },
         onRelease = { view -> view.player = null },
     )
 }

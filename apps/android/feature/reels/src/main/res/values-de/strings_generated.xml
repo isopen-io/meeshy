@@ -1,5 +1,6 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="reels_author_profile">Profil des Autors</string>
     <string name="reels_caption_translated">Übersetzung verfügbar</string>
     <string name="reels_close">Schließen</string>
     <string name="reels_comments">Kommentare</string>
@@ -12,9 +13,25 @@
     <string name="reels_comments_send">Senden</string>
     <string name="reels_comments_title">Kommentare</string>
     <string name="reels_empty">Derzeit keine Reels</string>
+    <string name="reels_impressions">Impressionen</string>
     <string name="reels_like">Gefällt mir</string>
+    <string name="reels_menu_copy_text">Text kopieren</string>
+    <string name="reels_menu_delete">Löschen</string>
+    <string name="reels_menu_hint">Öffnet das Aktionsmenü</string>
+    <string name="reels_menu_open">Öffnen</string>
+    <string name="reels_menu_pin">Anheften</string>
+    <string name="reels_menu_report">Melden</string>
+    <string name="reels_menu_share">Teilen</string>
     <string name="reels_mute">Stumm</string>
     <string name="reels_repost">Erneut posten</string>
+    <string name="reels_scrub">Vor- oder zurückspringen</string>
     <string name="reels_share">Teilen</string>
+    <string name="reels_toast_delete_failed">Fehler beim Löschen des Beitrags</string>
+    <string name="reels_toast_deleted">Beitrag gelöscht</string>
+    <string name="reels_toast_pin_failed">Fehler beim Anheften des Beitrags</string>
+    <string name="reels_toast_pinned">Beitrag angeheftet</string>
+    <string name="reels_toast_report_failed">Fehler beim Melden des Beitrags</string>
+    <string name="reels_toast_reported">Beitrag gemeldet</string>
     <string name="reels_unmute">Stummschaltung aufheben</string>
+    <string name="reels_views">Aufrufe</string>
 </resources>

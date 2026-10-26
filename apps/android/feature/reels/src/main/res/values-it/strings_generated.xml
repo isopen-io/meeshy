@@ -1,5 +1,6 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="reels_author_profile">Profilo dell\'autore</string>
     <string name="reels_caption_translated">Traduzione disponibile</string>
     <string name="reels_close">Chiudi</string>
     <string name="reels_comments">Commenti</string>
@@ -13,9 +14,25 @@
     <string name="reels_comments_send">Invia</string>
     <string name="reels_comments_title">Commenti</string>
     <string name="reels_empty">Nessun reel per ora</string>
+    <string name="reels_impressions">Impression</string>
     <string name="reels_like">Mi piace</string>
+    <string name="reels_menu_copy_text">Copia il testo</string>
+    <string name="reels_menu_delete">Elimina</string>
+    <string name="reels_menu_hint">Apre il menu delle azioni</string>
+    <string name="reels_menu_open">Apri</string>
+    <string name="reels_menu_pin">Fissa</string>
+    <string name="reels_menu_report">Segnala</string>
+    <string name="reels_menu_share">Condividi</string>
     <string name="reels_mute">Muto</string>
     <string name="reels_repost">Ricondividi</string>
+    <string name="reels_scrub">Avanti o indietro</string>
     <string name="reels_share">Condividi</string>
+    <string name="reels_toast_delete_failed">Errore durante l\'eliminazione del post</string>
+    <string name="reels_toast_deleted">Post eliminato</string>
+    <string name="reels_toast_pin_failed">Errore durante il fissaggio del post</string>
+    <string name="reels_toast_pinned">Post fissato</string>
+    <string name="reels_toast_report_failed">Errore durante la segnalazione del post</string>
+    <string name="reels_toast_reported">Post segnalato</string>
     <string name="reels_unmute">Riattiva audio</string>
+    <string name="reels_views">Visualizzazioni</string>
 </resources>

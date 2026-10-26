@@ -278,6 +278,12 @@
    "reason": "Icons.Outlined.BookmarkBorder"
   },
   {
+   "symbol": "bookmark.fill",
+   "status": "mapped",
+   "role": "BookmarkFilled",
+   "reason": "Icons.Filled.Bookmark; variante .fill rendue en Filled"
+  },
+  {
    "symbol": "bubble.left.and.bubble.right",
    "status": "mapped",
    "role": "Forum",
@@ -2023,6 +2029,10 @@
    "directional": false
   },
   "Bookmark": {
+   "origin": "material",
+   "directional": false
+  },
+  "BookmarkFilled": {
    "origin": "material",
    "directional": false
   },
