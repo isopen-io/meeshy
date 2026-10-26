@@ -309433,6 +309433,53 @@
         }
       }
     },
+    "conversation.send.e2ee.unkeptOutsideConversation": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "محادثة مشفّرة: لم تُرسل الرسالة وتعذّر الاحتفاظ بها على هذا الجهاز. افتح المحادثة لكتابتها من جديد."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verschlüsselte Unterhaltung: Die Nachricht wurde nicht gesendet und konnte auf diesem Gerät nicht gespeichert werden. Öffne die Unterhaltung, um sie erneut zu schreiben."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Encrypted conversation: the message wasn’t sent and couldn’t be kept on this device. Open the conversation to write it again."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conversación cifrada: el mensaje no se envió y no se pudo guardar en este dispositivo. Abre la conversación para escribirlo de nuevo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conversation chiffrée : le message n’est pas parti et n’a pas pu être gardé sur cet appareil. Ouvrez la conversation pour l’écrire à nouveau."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conversazione crittografata: il messaggio non è stato inviato e non è stato possibile conservarlo su questo dispositivo. Apri la conversazione per scriverlo di nuovo."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conversa criptografada: a mensagem não foi enviada e não pôde ser guardada neste dispositivo. Abra a conversa para escrevê-la novamente."
+          }
+        }
+      }
+    },
     "conversation.encryption.switched.enabled": {
       "extractionState": "manual",
       "localizations": {

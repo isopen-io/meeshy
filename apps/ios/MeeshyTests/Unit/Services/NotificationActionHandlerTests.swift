@@ -221,7 +221,8 @@ final class NotificationActionHandlerTests: XCTestCase {
             prepareReplyQueue: { preparedReplyQueueCount += 1 },
             conversationLocks: DeclaredConversationLocks(),
             destinationGuard: Self.destinationGuard(remembering: rememberedEndToEnd),
-            notifyRefusedEndToEndReply: { refusedReplyNotices += 1 }
+            notifyRefusedEndToEndReply: { _, _ in refusedReplyNotices += 1 },
+            endToEnd: MockEndToEndMessaging()
         )
 
         return SUTContext(
@@ -277,7 +278,8 @@ final class NotificationActionHandlerTests: XCTestCase {
 
         XCTAssertEqual(ctx.messageService.sendCallCount, 0)
         XCTAssertTrue(ctx.queue.enqueuedItems.isEmpty)
-        XCTAssertEqual(ctx.persistence.markFailedCalls.map { $0.reason }, [EndToEndSendRefusal.sealedOnlyInConversation.userMessage])
+        XCTAssertEqual(ctx.persistence.insertedRecords.map(\.content), [E2EEWire.contentPlaceholder], "#13067 — la bulle est scellée, le clair est au coffre")
+        XCTAssertEqual(ctx.persistence.insertedRecords.map(\.lastError), [EndToEndSendRefusal.sealedOnlyInConversation.userMessage])
         XCTAssertEqual(ctx.refusedReplyNotices(), 1, "audit M4 — le refus se dit, la bannière ne disparaît pas en silence")
     }
 
