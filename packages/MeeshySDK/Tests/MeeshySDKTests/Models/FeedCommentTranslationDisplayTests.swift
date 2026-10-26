@@ -45,4 +45,9 @@ final class FeedCommentTranslationDisplayTests: XCTestCase {
         XCTAssertTrue(comment(originalLanguage: "es").offersTranslationRequest(readerLanguages: []),
                       "no reader language: French is the fallback")
     }
+
+    func test_translationRequestLanguage_isTheReaderFirstLanguage_lowercased_thenFrench() {
+        XCTAssertEqual(FeedComment.translationRequestLanguage(readerLanguages: ["EN", "fr"]), "en")
+        XCTAssertEqual(FeedComment.translationRequestLanguage(readerLanguages: []), "fr")
+    }
 }

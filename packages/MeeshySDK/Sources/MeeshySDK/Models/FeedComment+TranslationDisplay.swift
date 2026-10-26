@@ -12,17 +12,19 @@ public extension FeedComment {
     /// The language the translated chip names: the rank the Prism serves,
     /// else the reader's first language, else French.
     func translatedChipLanguage(readerLanguages: [String]) -> String {
-        servedLanguage(preferredLanguages: readerLanguages)?.lowercased() ?? Self.firstLanguage(of: readerLanguages)
+        servedLanguage(preferredLanguages: readerLanguages)?.lowercased() ?? Self.translationRequestLanguage(readerLanguages: readerLanguages)
     }
 
     /// No translation yet and the original differs from the reader's first
     /// language: "Translate" is offered on demand.
     func offersTranslationRequest(readerLanguages: [String]) -> Bool {
         guard !hasServedTranslation, let originalLanguage else { return false }
-        return originalLanguage.lowercased() != Self.firstLanguage(of: readerLanguages)
+        return originalLanguage.lowercased() != Self.translationRequestLanguage(readerLanguages: readerLanguages)
     }
 
-    private static func firstLanguage(of readerLanguages: [String]) -> String {
+    /// The language an on-demand translation is asked in: the reader's first
+    /// language, else French — the one target for every comment surface.
+    static func translationRequestLanguage(readerLanguages: [String]) -> String {
         readerLanguages.first?.lowercased() ?? "fr"
     }
 }

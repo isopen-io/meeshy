@@ -259,7 +259,7 @@ struct CommentsSheetView: View {
                                     onEditComment: { target in
                                         beginEditComment(target)
                                     },
-                                    onRequestTranslation: { requestTranslation(of: $0) },
+                                    onRequestTranslation: { CommentSheetRules.requestTranslation(postId: post.id, commentId: $0.id) },
                                     moodEmoji: moodEmojiResolver?(comment.authorId),
                                     storyState: storyRingResolver?(comment.authorId) ?? .none,
                                     presenceState: PresenceManager.shared.knownPresenceState(for: comment.authorId),
@@ -873,15 +873,6 @@ struct CommentsSheetView: View {
     /// Retrait optimiste immédiat (racine + ses réponses chargées, ou réponse
     /// avec décrément du compteur du parent) puis appel API. Rollback complet
     /// du snapshot si l'API échoue. Miroir du flux optimiste d'envoi.
-    /// Demande la traduction d'un commentaire vers la langue préférée du lecteur.
-    private func requestTranslation(of target: FeedComment) {
-        let lang = ReaderPrism.resolve(for: AuthManager.shared.currentUser).first?.lowercased() ?? "fr"
-        Task {
-            try? await PostService.shared.requestCommentTranslation(
-                postId: post.id, commentId: target.id, targetLanguage: lang)
-        }
-    }
-
     private func deleteComment(_ comment: FeedComment, reason: String? = nil) async {
         let previousComments = liveComments
         let previousReplies = repliesMap
