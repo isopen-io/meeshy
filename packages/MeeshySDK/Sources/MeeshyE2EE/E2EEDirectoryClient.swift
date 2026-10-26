@@ -10,7 +10,10 @@ public protocol E2EEDirectoryClientProviding: Sendable {
     func enroll(_ request: E2EEEnrollDeviceRequest) async throws -> E2EEEnrollment
     func publishKeys(deviceId: UInt32, _ request: E2EEPublishKeysRequest) async throws -> E2EEPreKeyStock
     func preKeyStock() async throws -> E2EEPreKeyStock
-    func retireDevice(deviceId: UInt32) async throws -> E2EERetirement
+    /// Retire la place `deviceId` si elle porte encore la génération
+    /// `registrationId` lue par l'appelant ; une place reprise depuis est
+    /// refusée (409 `E2EE_DEVICE_CHANGED`) avant toute révocation (#13036).
+    func retireDevice(deviceId: UInt32, registrationId: UInt32) async throws -> E2EERetirement
     func bundles(userId: String, deviceIds: [UInt32]?) async throws -> E2EEUserBundles
     func devices(userId: String) async throws -> E2EEUserDevices
     /// MES appareils, avec leurs métadonnées (#13009). Une passerelle qui ne
@@ -45,10 +48,12 @@ public final class E2EEDirectoryClient: E2EEDirectoryClientProviding {
         return response.data
     }
 
-    public func retireDevice(deviceId: UInt32) async throws -> E2EERetirement {
+    public func retireDevice(deviceId: UInt32, registrationId: UInt32) async throws -> E2EERetirement {
         let response: APIResponse<E2EERetirement> = try await api.request(
             E2EeEndpoint.devicesByDeviceId(deviceId: String(deviceId)),
-            method: "DELETE"
+            method: "DELETE",
+            body: nil,
+            queryItems: [URLQueryItem(name: "registrationId", value: String(registrationId))]
         )
         return response.data
     }

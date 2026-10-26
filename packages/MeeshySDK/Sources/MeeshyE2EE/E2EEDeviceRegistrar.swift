@@ -19,6 +19,12 @@ public enum E2EEEnrollmentError: Error, Equatable {
     case deviceLimitReached
 }
 
+public enum E2EEDeviceRetirementError: Error, Equatable {
+    /// La place a changé d'occupant depuis la liste lue (`E2EE_DEVICE_CHANGED`) :
+    /// rien n'a été retiré, la liste se relit avant tout nouveau retrait.
+    case deviceChanged
+}
+
 /// L'enrôlement de CETTE installation auprès de l'annuaire (spec § 3.1 à 3.3),
 /// et son entretien : une installation déjà enrôlée pour ce compte ne se
 /// réenrôle pas à chaque lancement (le stock de pré-clés déborderait), elle
@@ -29,8 +35,10 @@ public protocol E2EEDeviceRegistering: Sendable {
     func ensureEnrolled(userId: String) async throws -> E2EEEnrolledDevice
     /// Les appareils actifs de mon compte (pour en retirer un).
     func ownDevices(userId: String) async throws -> [E2EEDeviceListing]
-    /// Retire un de mes appareils : son identité est révoquée sur le compte.
-    func retire(deviceId: UInt32) async throws
+    /// Retire un de mes appareils, désigné par sa place ET la génération lue :
+    /// son identité est révoquée sur le compte. Une place reprise depuis lève
+    /// `E2EEDeviceRetirementError.deviceChanged` et n'est pas retirée.
+    func retire(deviceId: UInt32, registrationId: UInt32) async throws
     /// Efface identité, sessions, pré-clés et clairs de cet appareil.
     func reset() throws
 }
@@ -81,8 +89,12 @@ public final class E2EEDeviceRegistrar: E2EEDeviceRegistering {
         try await directory.devices(userId: userId).devices
     }
 
-    public func retire(deviceId: UInt32) async throws {
-        _ = try await directory.retireDevice(deviceId: deviceId)
+    public func retire(deviceId: UInt32, registrationId: UInt32) async throws {
+        do {
+            _ = try await directory.retireDevice(deviceId: deviceId, registrationId: registrationId)
+        } catch let error as MeeshyError where error.e2eeCode == E2EEErrorCode.deviceChanged {
+            throw E2EEDeviceRetirementError.deviceChanged
+        }
     }
 
     public func reset() throws {

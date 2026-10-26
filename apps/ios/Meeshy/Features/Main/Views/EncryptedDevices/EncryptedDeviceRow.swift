@@ -85,6 +85,8 @@ enum EncryptedDeviceNoticeText {
                 devices.first { $0.deviceId == deviceId }.map(EncryptedDevicePresentation.title(of:))
                     ?? String(format: String(localized: "e2ee.devices.numbered", defaultValue: "Appareil n° %d", bundle: .main), Int(deviceId))
             )
+        case .deviceChanged:
+            String(localized: "e2ee.devices.notice.deviceChanged.title", defaultValue: "La liste a changé", bundle: .main)
         case .actionFailed, nil:
             String(localized: "e2ee.devices.notice.failed.title", defaultValue: "Action impossible", bundle: .main)
         }
@@ -108,6 +110,12 @@ enum EncryptedDeviceNoticeText {
             String(
                 localized: "e2ee.devices.notice.approved.message",
                 defaultValue: "Si ce n’est pas déjà fait, lisez aussi le code de cet appareil depuis l’autre : vos messages chiffrés se liront alors sur les deux.",
+                bundle: .main
+            )
+        case .deviceChanged:
+            String(
+                localized: "e2ee.devices.notice.deviceChanged.message",
+                defaultValue: "Un autre appareil a pris cette place depuis l’affichage de la liste. Rien n’a été retiré. Vérifiez la liste à jour avant de retirer un appareil.",
                 bundle: .main
             )
         case .actionFailed, nil:

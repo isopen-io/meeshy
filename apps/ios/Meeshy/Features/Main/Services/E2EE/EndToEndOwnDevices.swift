@@ -86,7 +86,9 @@ nonisolated protocol EndToEndOwnDeviceLinking: Sendable {
     func approve(_ candidate: E2EEPairingCandidate, as userId: String) async throws
     func revokeApproval(of deviceId: UInt32, as userId: String) async throws
     /// Retire l'appareil du COMPTE : son identité est révoquée par la passerelle.
-    func retire(deviceId: UInt32) async throws
+    /// La génération AFFICHÉE est nommée : une place reprise depuis la liste
+    /// lève `E2EEDeviceRetirementError.deviceChanged` et n'est pas retirée (#13036).
+    func retire(deviceId: UInt32, registrationId: UInt32) async throws
 }
 
 extension EndToEndMessagingRuntime: EndToEndOwnDeviceLinking {

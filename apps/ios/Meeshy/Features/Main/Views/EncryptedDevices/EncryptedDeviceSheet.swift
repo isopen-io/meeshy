@@ -19,8 +19,13 @@ struct EncryptedDeviceSheet: View {
     @State private var confirmation: Confirmation?
     private var theme: ThemeManager { ThemeManager.shared }
 
-    /// La ligne fraîche de cet appareil si la liste s'est rechargée, sinon celle reçue.
-    private var current: EndToEndOwnDevice { model.devices.first { $0.deviceId == device.deviceId } ?? device }
+    /// La ligne fraîche de CETTE génération si la liste s'est rechargée, sinon
+    /// celle reçue (#13036, audit) : une place reprise depuis l'ouverture de la
+    /// feuille n'en hérite jamais — le retrait nomme la génération ouverte, et
+    /// la passerelle refuse (409) une place qui a changé d'occupant.
+    private var current: EndToEndOwnDevice {
+        model.devices.first { $0.deviceId == device.deviceId && $0.registrationId == device.registrationId } ?? device
+    }
     private var title: String { EncryptedDevicePresentation.title(of: current) }
     private var shown: EncryptedDevicesViewModel.ShownCode? { model.shownCode?.device.deviceId == device.deviceId ? model.shownCode : nil }
 

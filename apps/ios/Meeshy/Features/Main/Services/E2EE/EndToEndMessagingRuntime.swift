@@ -66,7 +66,8 @@ nonisolated protocol EndToEndDeviceProvisioning: Sendable {
 /// est plein (`E2EE_DEVICE_LIMIT_REACHED`).
 nonisolated protocol EndToEndDeviceManaging: Sendable {
     func ownDevices(of userId: String) async throws -> [E2EEDeviceListing]
-    func retire(deviceId: UInt32) async throws
+    /// La génération lue est nommée : une place reprise depuis n'est pas retirée (#13036).
+    func retire(deviceId: UInt32, registrationId: UInt32) async throws
     /// Après un retrait : cet appareil retente de s'enrôler.
     func enroll(_ userId: String) async throws
 }
@@ -240,8 +241,8 @@ actor EndToEndMessagingRuntime: EndToEndMessagingProviding, EndToEndDeviceManagi
         try await provisioning.registrar().ownDevices(userId: userId)
     }
 
-    func retire(deviceId: UInt32) async throws {
-        try await provisioning.registrar().retire(deviceId: deviceId)
+    func retire(deviceId: UInt32, registrationId: UInt32) async throws {
+        try await provisioning.registrar().retire(deviceId: deviceId, registrationId: registrationId)
     }
 
     func enroll(_ userId: String) async throws {

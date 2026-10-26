@@ -22,7 +22,7 @@ enum QuotedReferenceFactory {
             .flatMap { piece in quoted.attachments.first { $0.id == piece.id } }
             ?? quoted.attachments.quotedRepresentative
         let messageIsProtected = quoted.isViewOnce || quoted.isBlurred || quoted.isEncrypted
-        let representativeIsProtected = representative.map { $0.isViewOnce || $0.isBlurred } ?? false
+        let representativeIsProtected = representative.map { $0.declaresViewOnce || $0.declaresBlur } ?? false
         let mediaMayTravel = !messageIsProtected && !representativeIsProtected
         var reference = ReplyReference(
             messageId: quoted.id,
@@ -37,7 +37,7 @@ enum QuotedReferenceFactory {
             attachmentId: representative?.id,
             attachmentThumbnailUrl: mediaMayTravel ? thumbnailUrl(of: representative) : nil,
             attachmentFileUrl: mediaMayTravel ? representative.flatMap { $0.fileUrl.isEmpty ? nil : $0.fileUrl } : nil,
-            attachmentIsProtected: messageIsProtected ? true : representative.map { $0.isViewOnce || $0.isBlurred },
+            attachmentIsProtected: messageIsProtected ? true : representative.map { $0.declaresViewOnce || $0.declaresBlur },
             attachmentFacts: representative.map { facts(of: $0, mediaMayTravel: mediaMayTravel) }
         )
         reference.quotedExitNature = quoted.contentExitLaw.nature

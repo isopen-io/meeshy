@@ -49,8 +49,22 @@ struct E2EEDirectoryClientTests {
         let client = E2EEDirectoryClient(api: api)
 
         #expect(try await client.preKeyStock().kyberPreKeys == 2)
-        #expect(try await client.retireDevice(deviceId: 2) == E2EERetirement(deviceId: 2, retired: true))
+        #expect(try await client.retireDevice(deviceId: 2, registrationId: 9) == E2EERetirement(deviceId: 2, retired: true))
         #expect(try await client.devices(userId: user).devices == [E2EEDeviceListing(deviceId: 1, registrationId: 7)])
+    }
+
+    /// #13036 — une place se réattribue : le retrait nomme la génération LUE,
+    /// pour que la passerelle refuse (409 `E2EE_DEVICE_CHANGED`) une place
+    /// reprise depuis la liste affichée, avant toute révocation.
+    @Test func retirementNamesTheGenerationItRead() async throws {
+        let api = MockE2EEAPIClient()
+        api.respond("DELETE", "/api/v1/e2ee/devices/2", json: #"{"success":true,"data":{"deviceId":2,"retired":true}}"#)
+
+        _ = try await E2EEDirectoryClient(api: api).retireDevice(deviceId: 2, registrationId: 9)
+
+        let sent = try #require(api.sent.first)
+        #expect(sent.method == "DELETE")
+        #expect(sent.query == ["registrationId": "9"])
     }
 
     @Test func ownDevicesReadMyListWithItsMetadataAndToleratesAnUnknownPlatform() async throws {

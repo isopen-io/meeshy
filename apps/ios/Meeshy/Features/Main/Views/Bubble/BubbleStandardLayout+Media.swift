@@ -306,7 +306,7 @@ fileprivate struct BubbleGridCell: View {
     @Environment(\.displayScale) private var displayScale: CGFloat
 
     private var attachmentIsProtected: Bool {
-        attachment.isViewOnce || attachment.isBlurred
+        attachment.declaresViewOnce || attachment.declaresBlur
     }
 
     /// Réaction par-image active seulement en grille multi-images (`!solo`), sur
@@ -522,7 +522,7 @@ fileprivate struct BubbleGridCell: View {
     private var blurOverlay: some View {
         if attachmentIsProtected && !isRevealed {
             AttachmentBlurOverlayView(
-                isViewOnce: attachment.isViewOnce,
+                isViewOnce: attachment.declaresViewOnce,
                 hint: ProtectedContentTap.resolve(cell: attachment).accessibilityHint,
                 onReveal: handleReveal
             )
@@ -531,7 +531,7 @@ fileprivate struct BubbleGridCell: View {
 
     @ViewBuilder
     private var viewCountBadge: some View {
-        if attachment.isViewOnce && attachment.viewOnceCount > 0 {
+        if attachment.declaresViewOnce && attachment.viewOnceCount > 0 {
             VStack {
                 HStack {
                     Spacer()
