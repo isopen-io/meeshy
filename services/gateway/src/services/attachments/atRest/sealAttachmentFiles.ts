@@ -236,7 +236,7 @@ async function sealUnderLock(
 ): Promise<SealOutcome> {
   const plan = await planAttachmentSealing(deps, input.attachmentId);
   if (plan.kind === 'skip') {
-    if (plan.outcome.status === 'already-sealed') await finishPendingErasures(deps, input.attachmentId);
+    if (plan.outcome.status === 'already-sealed') await erasePendingUnderHeldLock(deps, input.attachmentId);
     return plan.outcome;
   }
   const { seed, rows, toSeal } = plan;
@@ -266,7 +266,7 @@ async function sealUnderLock(
     );
   }
   await Promise.all(sealed.filter(({ slot }) => !moved.has(slot.key)).map(({ slot }) => deps.eraseMirrored?.(path.join(deps.uploadRoot, slot.key)) ?? Promise.resolve()));
-  await finishPendingErasures(deps, seed.id);
+  await erasePendingUnderHeldLock(deps, seed.id);
   logger.info('pièce jointe scellée au repos', { attachmentId: seed.id, files: sealed.length, rows: rows.length });
   return { status: 'sealed', files: sealed.length, rows: rows.length };
 }
@@ -279,10 +279,35 @@ async function sealUnderLock(
  * à volonté : le balayage la rejoue, et une ligne retardataire, même apparue
  * APRÈS l'effacement, se repointe encore — rien ne se perd.
  */
+export type PendingErasureOutcome = { readonly erased: number; readonly repointed: number; readonly busy?: true };
+
+/**
+ * Hors du scellement (balayage) : sous le MÊME verrou que le scellement, pris
+ * sur l'ancien original. Un scellement en cours tient ce verrou : le balayage
+ * cède (`busy`) plutôt que de repointer à moitié des lignes que le
+ * scellement n'a pas fini d'écrire.
+ */
 export async function finishPendingErasures(
+  deps: Pick<SealAttachmentDeps, 'prisma' | 'uploadRoot' | 'access' | 'eraseMirrored' | 'lock'>,
+  attachmentId: string
+): Promise<PendingErasureOutcome> {
+  const replacing = (await deps.access.store.ofAttachment(attachmentId)).filter((record) => record.replacedKey !== null);
+  const oldOriginal = replacing.find((record) => record.role === 'original')?.replacedKey;
+  if (!oldOriginal) return { erased: 0, repointed: 0 };
+  const held = deps.lock ? await deps.lock(oldOriginal).catch(() => 'busy' as const) : null;
+  if (held === 'busy') return { erased: 0, repointed: 0, busy: true };
+  try {
+    return await erasePendingUnderHeldLock(deps, attachmentId);
+  } finally {
+    await held?.release().catch(() => undefined);
+  }
+}
+
+/** Le scellement, qui tient déjà le verrou de l'ancien original, termine ici ses effacements. */
+async function erasePendingUnderHeldLock(
   deps: Pick<SealAttachmentDeps, 'prisma' | 'uploadRoot' | 'access' | 'eraseMirrored'>,
   attachmentId: string
-): Promise<{ readonly erased: number; readonly repointed: number }> {
+): Promise<PendingErasureOutcome> {
   const replacing = (await deps.access.store.ofAttachment(attachmentId)).filter((record) => record.replacedKey !== null);
   const oldOriginal = replacing.find((record) => record.role === 'original')?.replacedKey;
   if (!oldOriginal) return { erased: 0, repointed: 0 };

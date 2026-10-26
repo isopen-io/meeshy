@@ -169,3 +169,33 @@ describe('AUDIT W3 — une copie de transfert créée PENDANT le scellement', ()
     expect((await readStoredFileBytes(path.join(uploadRoot, late.filePath), { uploadRoot, access: a })).equals(SECRET)).toBe(true);
   });
 });
+
+
+describe('AUDIT W4 — un balayage concurrent d’un scellement en cours', () => {
+  it('cède au verrou : l’original reste intact, et la ligne finit cohérente', async () => {
+    const THUMB = OLD.replace('.jpg', '_thumb.webp');
+    await fs.writeFile(path.join(uploadRoot, THUMB), Buffer.from('SECRET-PASSEPORT-vignette'));
+    const rows = [{ ...row('aaaaaaaaaaaaaaaaaaaaaaa1'), thumbnailPath: THUMB, thumbnailUrl: THUMB }];
+    const prisma = prismaOf(rows);
+    let releaseThumb: () => void = () => undefined;
+    const thumbBlocked = new Promise<void>((resolve) => { releaseThumb = resolve; });
+    let reachedThumb: () => void = () => undefined;
+    const atThumb = new Promise<void>((resolve) => { reachedThumb = resolve; });
+    const a = access({ onSave: async (record) => { if (record.role === 'thumbnail') { reachedThumb(); await thumbBlocked; } } });
+    const lock = memoryLock();
+    const sealing = sealAttachmentFiles({ ...deps(prisma, a), lock }, { attachmentId: 'aaaaaaaaaaaaaaaaaaaaaaa1', conversationId: X1 });
+    await atThumb;
+
+    const swept = await finishPendingErasures({ ...deps(prisma, a), lock }, 'aaaaaaaaaaaaaaaaaaaaaaa1');
+    expect(swept).toEqual({ erased: 0, repointed: 0, busy: true });
+    expect(rows[0].filePath).toBe(OLD);
+    expect((await fs.readFile(path.join(uploadRoot, OLD))).equals(SECRET)).toBe(true);
+
+    releaseThumb();
+    await sealing;
+    expect(rows[0].filePath).not.toBe(OLD);
+    expect(rows[0].thumbnailPath).not.toBe(THUMB);
+    expect(a.records.get(rows[0].thumbnailPath as string)?.role).toBe('thumbnail');
+    expect(await plaintextOnDisk()).toBe(false);
+  });
+});
