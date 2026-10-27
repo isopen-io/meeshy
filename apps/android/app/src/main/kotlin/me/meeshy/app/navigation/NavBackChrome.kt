@@ -141,9 +141,10 @@ internal object NavBackChrome {
         arrow("FriendRequestsDestinations.ROUTE", FriendRequestsDestinations.ROUTE, contacts),
         arrow("Routes.NOTIFICATIONS", Routes.NOTIFICATIONS, "$FEATURE/notifications/src/main/kotlin/me/meeshy/app/notifications/NotificationsScreen.kt"),
         arrow("ProfileRoutes.OWN", ProfileRoutes.OWN, profile("OwnProfileScreen.kt")),
-        pendingSheet("Routes.PROFILE_USER", Routes.PROFILE_USER, IosPresentation.SHEET, profile("ProfileScreen.kt")),
-        pendingSheet("Routes.USER_POSTS", Routes.USER_POSTS, IosPresentation.SHEET, feed("UserPostsScreen.kt")),
-        modal("Routes.REPORT_USER", Routes.REPORT_USER, IosPresentation.SHEET, profile("ReportUserScreen.kt")),
+        // La route n'a plus d'écran : elle ouvre la fiche (`UserProfileSheet`, une feuille Material) par l'ouvreur global, puis se retire.
+        modal("Routes.PROFILE_USER", Routes.PROFILE_USER, IosPresentation.SHEET, profile("UserProfileSheet.kt")),
+        sheet("Routes.USER_POSTS", Routes.USER_POSTS, IosPresentation.SHEET, feed("UserPostsScreen.kt")),
+        sheet("Routes.REPORT_USER", Routes.REPORT_USER, IosPresentation.SHEET, profile("ReportUserScreen.kt")),
         // Appels : l'historique s'empile, l'appel en cours est plein écran.
         arrow("Routes.CALLS", Routes.CALLS, "$FEATURE/calls/src/main/kotlin/me/meeshy/app/calls/CallHistoryScreen.kt"),
         modal("Routes.CALL", Routes.CALL, IosPresentation.COVER, "$FEATURE/calls/src/main/kotlin/me/meeshy/app/calls/CallScreen.kt"),
