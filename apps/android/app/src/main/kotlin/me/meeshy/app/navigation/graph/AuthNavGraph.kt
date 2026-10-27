@@ -16,6 +16,8 @@ import me.meeshy.app.auth.ShareLinkEntryScreen
 import me.meeshy.app.auth.SignupScreen
 import me.meeshy.app.auth.WorldGuestEntryScreen
 import me.meeshy.app.navigation.Routes
+import me.meeshy.app.navigation.SheetStyle
+import me.meeshy.app.navigation.sheetComposable
 import me.meeshy.sdk.model.legal.LegalDocumentKind
 
 /** Connexion, inscription, lien magique et entree par lien de partage invite. */
@@ -36,11 +38,11 @@ internal fun NavGraphBuilder.authNavGraph(
             onMagicLink = { navController.navigate(Routes.MAGIC_LINK) },
         )
     }
-    composable(Routes.FORGOT_PASSWORD) {
-        ForgotPasswordScreen(onBack = { navController.popBackStack() })
+    sheetComposable(Routes.FORGOT_PASSWORD, navController) { _, dismiss ->
+        ForgotPasswordScreen(onBack = dismiss)
     }
-    composable(Routes.MAGIC_LINK) {
-        MagicLinkScreen(onBack = { navController.popBackStack() })
+    sheetComposable(Routes.MAGIC_LINK, navController) { _, dismiss ->
+        MagicLinkScreen(onBack = dismiss)
     }
     composable(
         route = Routes.MAGIC_LINK_VALIDATE,
@@ -76,9 +78,9 @@ internal fun NavGraphBuilder.authNavGraph(
     // L'inscription tient en UN écran (#5219) : `Routes.REGISTRATION`
     // conserve son chemin — le lien depuis la connexion, les tests et
     // l'historique de navigation le nomment — mais rend `SignupScreen`.
-    composable(Routes.REGISTRATION) {
+    sheetComposable(Routes.REGISTRATION, navController) { _, dismiss ->
         SignupScreen(
-            onClose = { navController.popBackStack() },
+            onClose = dismiss,
             onRegistered = {
                 navController.navigate(Routes.CONVERSATIONS) {
                     popUpTo(Routes.LOGIN) { inclusive = true }
@@ -92,14 +94,16 @@ internal fun NavGraphBuilder.authNavGraph(
             },
         )
     }
-    composable(
+    sheetComposable(
         route = Routes.GUEST_JOIN,
+        navController = navController,
+        style = SheetStyle.COVER,
         deepLinks = listOf(
             navDeepLink { uriPattern = Routes.GUEST_JOIN_DEEP_LINK },
             navDeepLink { uriPattern = Routes.GUEST_JOIN_WEB_DEEP_LINK },
             navDeepLink { uriPattern = Routes.GUEST_JOIN_CHAT_WEB_DEEP_LINK },
         ),
-    ) {
+    ) { _, dismiss ->
         ShareLinkEntryScreen(
             onOpenConversation = { conversationId ->
                 navController.navigate(Routes.chat(conversationId)) {
@@ -111,7 +115,7 @@ internal fun NavGraphBuilder.authNavGraph(
                     popUpTo(Routes.GUEST_JOIN) { inclusive = true }
                 }
             },
-            onBack = { navController.popBackStack() },
+            onBack = dismiss,
             onSignIn = {
                 navController.navigate(Routes.LOGIN) {
                     popUpTo(Routes.GUEST_JOIN) { inclusive = true }
@@ -119,13 +123,15 @@ internal fun NavGraphBuilder.authNavGraph(
             },
         )
     }
-    composable(
+    sheetComposable(
         route = Routes.WORLD_ENTRY,
+        navController = navController,
+        style = SheetStyle.COVER,
         deepLinks = listOf(
             navDeepLink { uriPattern = Routes.WORLD_ENTRY_DEEP_LINK },
             navDeepLink { uriPattern = Routes.WORLD_ENTRY_WEB_DEEP_LINK },
         ),
-    ) {
+    ) { _, dismiss ->
         WorldGuestEntryScreen(
             onEntered = { conversationId ->
                 navController.navigate(Routes.chat(conversationId)) {
@@ -138,7 +144,7 @@ internal fun NavGraphBuilder.authNavGraph(
                     popUpTo(Routes.WORLD_ENTRY) { inclusive = true }
                 }
             },
-            onClose = { navController.popBackStack() },
+            onClose = dismiss,
         )
     }
 }
