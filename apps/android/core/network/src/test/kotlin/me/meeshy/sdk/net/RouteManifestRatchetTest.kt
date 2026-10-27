@@ -50,8 +50,11 @@ class RouteManifestRatchetTest {
          * que porte `OnboardingApi.kt` depuis 76d43a11aa.
          * 264 : moins `GET /me/preferences/audio` (#13240 : la transcription automatique des vocaux
          * entrants), que porte `PreferencesApi.getAudio`.
+         * 258 : moins `GET /me/game/league/week`, `GET /me/game/league/friends`, `GET /me/game/privacy`,
+         * `POST /me/game/league/consent` et `PUT /me/game/privacy` (#13326 : les pages Joute et Réglages du jeu),
+         * que porte `GameApi.kt`.
          */
-        const val TO_PORT_CEILING = 263
+        const val TO_PORT_CEILING = 258
         val VERB_STATUSES = setOf("hors-perimetre-mobile", "ops-only", "a-porter", "implementee-par-url-serveur")
     }
 
