@@ -40,7 +40,7 @@ final class AnimatedStickerChainGuardTests: XCTestCase {
     /// `pngData()` direct : c'est ce ré-encodage qui détruisait l'animation
     /// AVANT le disque, donc avant tout site capable de la rattraper.
     func test_leCollage_remetLesOctetsALaRegle_jamaisUneImageReencodee() throws {
-        let paste = try appSource("Meeshy/Features/Main/Composer/StickerLibraryPaste.swift")
+        let paste = try appSource("Meeshy/Features/Composer/StickerLibraryPaste.swift")
 
         XCTAssertTrue(paste.contains("StickerLibraryArtwork.keep("),
                       "le collage doit passer par la règle : sans elle, un GIF est ré-encodé en PNG et perd ses images.")
@@ -71,7 +71,7 @@ final class AnimatedStickerChainGuardTests: XCTestCase {
     /// emporte les octets de « Mes stickers », d'un Mee et d'un pack cinématique.
     func test_leSiteUniqueDePose_emporteLesOctets() throws {
         let sdkAtelier = try sdkSource("MeeshyUI/Story/StoryComposerView+Media.swift")
-        let pose = try appSource("Meeshy/Features/Main/Composer/SceneStickerPose.swift")
+        let pose = try appSource("Meeshy/Features/Composer/SceneStickerPose.swift")
 
         XCTAssertFalse(sdkAtelier.contains("StickerPickerView("),
                        "l'atelier ne pose plus : une seconde pose redeviendrait une jumelle à tenir d'accord.")
@@ -99,9 +99,9 @@ final class AnimatedStickerChainGuardTests: XCTestCase {
     /// la voisine — l'écart le plus difficile à nommer pour un utilisateur.
     func test_lesTroisSurfacesDuMeuble_passentLesOctets() throws {
         for chemin in [
-            "Meeshy/Features/Main/Composer/ComposerSceneSurface.swift",
-            "Meeshy/Features/Main/Composer/ComposerDocumentSurface.swift",
-            "Meeshy/Features/Main/Composer/ComposerObjectEditorView.swift"
+            "Meeshy/Features/Composer/ComposerSceneSurface.swift",
+            "Meeshy/Features/Composer/ComposerDocumentSurface.swift",
+            "Meeshy/Features/Composer/ComposerObjectEditorView.swift"
         ] {
             let source = try appSource(chemin)
             XCTAssertTrue(source.contains("loadedStickerAnimations: sceneStickerAnimations"),

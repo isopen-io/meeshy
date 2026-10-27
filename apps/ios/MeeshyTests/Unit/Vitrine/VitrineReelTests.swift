@@ -305,7 +305,7 @@ final class VitrineReelTests: XCTestCase {
     /// La flèche publie comme l'auteur : le choix armé au chevron (`chooseArmedPublish`), puis « Publier »
     /// (`requestSoclePublish`) ; le fil se révèle comme par l'accès rapide.
     func test_reel_publishesThroughTheComposerArrow_andTheFeedRevealsLikeTheQuickAccess() throws {
-        let pickers = try source("apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost+Pickers.swift")
+        let pickers = try source("apps/ios/Meeshy/Features/Composer/MeeshyComposerHost+Pickers.swift")
         XCTAssertTrue(pickers.contains("armer: { chooseArmedPublish($0) }"))
         XCTAssertTrue(pickers.contains("publier: { requestSoclePublish($0) }"))
         XCTAssertTrue(pickers.contains("declaredMimeType: media.mimeType"))

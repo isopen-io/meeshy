@@ -306,7 +306,7 @@ final class ConversationOpeningClearsSurfacesTests: XCTestCase {
             ("Features/Main/Views/StoryViewerContainer.swift", ".closesForConversationOpening(.storyViewer"),
             ("Features/Main/Views/ReelsPresenter.swift", "surfaces.declare(.reels"),
             ("Features/Main/Views/SocialMediaGalleryPresentation.swift", ".closesForConversationOpening(.mediaGallery)"),
-            ("Features/Main/Composer/MeeshyComposerHost+Autosave.swift", ".closesForConversationOpening(.composer"),
+            ("Features/Composer/MeeshyComposerHost+Autosave.swift", ".closesForConversationOpening(.composer"),
         ]
         for (file, declaration) in mounts {
             XCTAssertTrue(try appSource(file).contains(declaration), "\(file) ne se déclare plus")
@@ -366,7 +366,7 @@ final class ConversationOpeningClearsSurfacesTests: XCTestCase {
     }
 
     func test_composerClosing_goesThroughTheAtelierExit() throws {
-        let host = try appSource("Features/Main/Composer/MeeshyComposerHost+Autosave.swift")
+        let host = try appSource("Features/Composer/MeeshyComposerHost+Autosave.swift")
         XCTAssertTrue(host.contains("ComposerConversationYield.close(atelierWritesItsDraft: atelierWritesItsDraft"))
         XCTAssertTrue(host.contains("exitIsArmed: publishTrigger.offersExit"))
     }

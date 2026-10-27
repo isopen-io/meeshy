@@ -243,7 +243,7 @@ final class PermissionGateSourceGuardTests: XCTestCase {
     /// composeur, servi seul en plein écran, porte la même promesse.
     func test_cameraView_rendersDeniedPanelInsteadOfBlackPreview() throws {
         // #9134 — l'aperçu est PARTAGÉ par les deux montages du viseur.
-        let src = try source("Meeshy/Features/Main/Composer/ComposerCaptureViews.swift")
+        let src = try source("Meeshy/Features/Composer/ComposerCaptureViews.swift")
         XCTAssertTrue(src.contains("CameraPermissionPanel()"),
                       "Le viseur doit exposer un panneau de refus.")
         XCTAssertTrue(src.contains("ComposerSceneCameraSurface.shown(stage: session.stage, permission: session.camera.permission)"),

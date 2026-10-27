@@ -35,7 +35,7 @@ final class ComposerDescriptionLayerTests: XCTestCase {
     /// « Ajouter une légende », la même avant et pendant la saisie : le volet
     /// reçoit donc l'amorce elle-même, et l'ancienne clé quitte le catalogue.
     func test_10359_leChampOuvert_porteLaMemeInviteQueLeRepos() throws {
-        let surfaces = compact(try source("Meeshy/Features/Main/Composer/MeeshyComposerHost+Surfaces.swift"))
+        let surfaces = compact(try source("Meeshy/Features/Composer/MeeshyComposerHost+Surfaces.swift"))
         XCTAssertTrue(surfaces.contains("ComposerSceneDescriptionPanel("),
                       "Le fusible : la garde doit lire le site qui monte le volet.")
         XCTAssertTrue(surfaces.contains("placeholder:ComposerDescriptionCopy.amorce,"),
@@ -90,7 +90,7 @@ final class ComposerDescriptionLayerTests: XCTestCase {
         if fichier == "MeeshyComposerHost.swift" {
             return AppSourceGuard.stripComments(try AppSourceGuard.composerHostSource())
         }
-        return try source("Meeshy/Features/Main/Composer/\(fichier)")
+        return try source("Meeshy/Features/Composer/\(fichier)")
     }
 
     private func compact(_ t: String) -> String {

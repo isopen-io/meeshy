@@ -131,7 +131,7 @@ final class StoryRepublishWiringGuardTests: XCTestCase {
     /// > DÉCIDE, et non plus celui qui la recopiait.
     func test_composerPresentation_capsTheAudienceWithTheSharedLaw() throws {
         let hydration = AppSourceGuard.stripComments(
-            try source("Meeshy/Features/Main/Composer/ComposerHydration.swift"))
+            try source("Meeshy/Features/Composer/ComposerHydration.swift"))
 
         XCTAssertTrue(
             hydration.contains("StoryRepostAudience.allowed(fromRawValue: story.visibility)"),
@@ -168,7 +168,7 @@ final class StoryRepublishWiringGuardTests: XCTestCase {
         // > Celle-ci nomme désormais le site qui DÉCIDE, et son message dit quoi
         // > chercher si le geste déménage encore.
         let composer = AppSourceGuard.stripComments(
-            try source("Meeshy/Features/Main/Composer/StoryRepublishComposer.swift"))
+            try source("Meeshy/Features/Composer/StoryRepublishComposer.swift"))
         XCTAssertTrue(
             composer.contains("repostOfId: source.story.id"),
             "La publication de la republication doit porter l'id de l'original. Si ce site n'est plus "

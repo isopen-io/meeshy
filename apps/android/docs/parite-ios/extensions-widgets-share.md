@@ -777,7 +777,7 @@ Transposition Android : Fiche App Group + lien meeshy://compose-share -> Intent 
 - `apps/ios/MeeshyShareExtension/ShareComposeHandoff.swift`
 - `apps/ios/Meeshy/Features/Main/Services/ShareComposeHandoffConsumer.swift`
 - `apps/ios/Meeshy/Features/Main/Services/ShareComposeLink.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ShareComposeDoor.swift`
+- `apps/ios/Meeshy/Features/Composer/ShareComposeDoor.swift`
 
 </details>
 

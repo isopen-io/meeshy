@@ -42,7 +42,7 @@ final class ComposerMediaIngestOrderTests: XCTestCase {
     private static let composerDirectory = URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent().deletingLastPathComponent()
         .deletingLastPathComponent().deletingLastPathComponent()
-        .appendingPathComponent("Meeshy/Features/Main/Composer")
+        .appendingPathComponent("Meeshy/Features/Composer")
 
     /// `+Intake` ET `+Ingestion` : les feuilles d'ingestion sont sorties du
     /// premier pour le second (#9138) — l'écrivain unique, lui, est resté.
@@ -246,7 +246,7 @@ final class ComposerMediaIngestOrderTests: XCTestCase {
                                     + "écrirait en direct rouvrirait #4879.")
         XCTAssertTrue(code.contains("routePickedMedia(medias)"), "La photothèque doit passer par le routage.")
         // …et le routage n'écrit, lui aussi, QUE par le site unique.
-        let routage = try AppSourceGuard.unit("Meeshy/Features/Main/Composer/MeeshyComposerHost+ScenePicking.swift")
+        let routage = try AppSourceGuard.unit("Meeshy/Features/Composer/MeeshyComposerHost+ScenePicking.swift")
         XCTAssertTrue(routage.contains("ingestIntoDocument(medias)"))
         XCTAssertTrue(routage.contains("ecrireDansLaListeDuDocument(medias, rail: .abandonne)"))
         XCTAssertFalse(routage.contains("documentLocalMedia.append"),

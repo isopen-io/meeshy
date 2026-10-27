@@ -111,7 +111,7 @@ final class ComposerLookStripTests: XCTestCase {
     /// Une case n'écrit plus rien (#9566) : elle a exactement la taille de sa
     /// miniature, donc la bande avance du pas de l'atlas.
     func test_cells_advanceByThePitch_eachTheSizeOfItsThumbnail() throws {
-        let bande = try Self.code("Meeshy/Features/Main/Composer/ComposerLookStrip.swift")
+        let bande = try Self.code("Meeshy/Features/Composer/ComposerLookStrip.swift")
         let debut = try XCTUnwrap(bande.range(of: "private func cell(item: ComposerLookStripItem, chosen: Bool)"))
         let fin = try XCTUnwrap(bande.range(of: "private func glyph(", range: debut.upperBound..<bande.endIndex))
         XCTAssertTrue(bande[debut.upperBound..<fin.lowerBound].contains(".frame(width: cellule.width, height: cellule.height)"))
@@ -120,9 +120,9 @@ final class ComposerLookStripTests: XCTestCase {
     /// **Sans filtre ni cadre, rien ne recopie la caméra en bas** (#9557) : la
     /// bande repliée montre un déclencheur simple, et aucune trame n'est retenue.
     func test_collapsedStrip_showsAPlainShutter_andHoldsNoFrame_untilALookIsChosen() throws {
-        let bande = try Self.code("Meeshy/Features/Main/Composer/ComposerLookStrip.swift")
+        let bande = try Self.code("Meeshy/Features/Composer/ComposerLookStrip.swift")
         XCTAssertTrue(bande.contains("ComposerLookStripRule.collapsedTrigger("), "la règle dit ce que la bande repliée montre")
-        let thermique = try Self.code("Meeshy/Features/Main/Composer/ComposerCaptureSession+Thermal.swift")
+        let thermique = try Self.code("Meeshy/Features/Composer/ComposerCaptureSession+Thermal.swift")
         XCTAssertTrue(thermique.contains("ComposerLookStripRule.paintsLive("), "le guet des trames suit la même règle")
     }
 
@@ -168,7 +168,7 @@ final class ComposerLookStripTests: XCTestCase {
     /// Le toucher du déclencheur se reconnaît À CÔTÉ de la tenue (#9557) : derrière
     /// elle, il ne partait jamais. La levée d'une tenue, elle, n'est pas un toucher.
     func test_triggerTap_isRecognisedBesideTheHold_andAHoldReleaseIsNotATap() throws {
-        let bande = try Self.code("Meeshy/Features/Main/Composer/ComposerLookStrip.swift")
+        let bande = try Self.code("Meeshy/Features/Composer/ComposerLookStrip.swift")
         XCTAssertTrue(bande.contains(".simultaneously(with: TapGesture()"), "le toucher n'attend pas l'échec de l'appui long")
         XCTAssertFalse(bande.contains(".exclusively(before: TapGesture()"))
         let fin = Date(timeIntervalSince1970: 1_000)
@@ -180,7 +180,7 @@ final class ComposerLookStripTests: XCTestCase {
     // MARK: - La case au centre, un seul nom, un rail sans cadre (#9566)
 
     func test_band_choosesTheCentredCell_andSnapsCellByCell() throws {
-        let bande = try Self.code("Meeshy/Features/Main/Composer/ComposerLookStrip.swift")
+        let bande = try Self.code("Meeshy/Features/Composer/ComposerLookStrip.swift")
         XCTAssertTrue(bande.contains("ComposerLookStripRule.centeredIndex("), "le centre se lit du défilement")
         XCTAssertTrue(bande.contains(".centered(on:"), "le suivi dit quelle case choisir")
         XCTAssertTrue(bande.contains(".scrollTargetBehavior(.viewAligned(limitBehavior: .never))"),
@@ -189,7 +189,7 @@ final class ComposerLookStripTests: XCTestCase {
     }
 
     func test_band_writesOneName_theChosenOne_largeUnderTheCells() throws {
-        let bande = try Self.code("Meeshy/Features/Main/Composer/ComposerLookStrip.swift")
+        let bande = try Self.code("Meeshy/Features/Composer/ComposerLookStrip.swift")
         let debut = try XCTUnwrap(bande.range(of: "private func cell(item: ComposerLookStripItem, chosen: Bool)"))
         let fin = try XCTUnwrap(bande.range(of: "private func glyph(", range: debut.upperBound..<bande.endIndex))
         let cellule = String(bande[debut.upperBound..<fin.lowerBound])
@@ -203,7 +203,7 @@ final class ComposerLookStripTests: XCTestCase {
         XCTAssertEqual(ComposerLookStripRule.railBottomInset,
                        ComposerLookStripRule.chosenNameHeight + ComposerTriggerOutline.outset,
                        "le bas de Filtres · Effets · Cadres s'aligne sur le bas des cases (porteur 2026-10-12)")
-        let rangee = try Self.code("Meeshy/Features/Main/Composer/ComposerCaptureBottomRow.swift")
+        let rangee = try Self.code("Meeshy/Features/Composer/ComposerCaptureBottomRow.swift")
         XCTAssertTrue(rangee.contains(".padding(.bottom, ComposerLookStripRule.railBottomInset)"))
         XCTAssertFalse(rangee.contains("cellSize.height + MeeshySpacing.xxxl * 2"), "la colonne ne flotte plus au-dessus de la bande")
     }
@@ -213,7 +213,7 @@ final class ComposerLookStripTests: XCTestCase {
         let appel = try Self.code("Meeshy/Features/Main/Views/CallModeControls.swift")
         XCTAssertTrue(appel.contains("symbol: \"photo.artframe\""),
                       "le même pictogramme que le cadre de l'appel vidéo")
-        let bande = try Self.code("Meeshy/Features/Main/Composer/ComposerLookStrip.swift")
+        let bande = try Self.code("Meeshy/Features/Composer/ComposerLookStrip.swift")
         let debut = try XCTUnwrap(bande.range(of: "struct ComposerLookRail: View {"))
         let fin = try XCTUnwrap(bande.range(of: "struct ComposerLookStrip: View {", range: debut.upperBound..<bande.endIndex))
         let rail = String(bande[debut.upperBound..<fin.lowerBound])
@@ -223,7 +223,7 @@ final class ComposerLookStripTests: XCTestCase {
     }
 
     func test_hint_isSilentWhileAFamilyIsOpen_theChosenNameTakesItsPlace() throws {
-        let bas = try Self.code("Meeshy/Features/Main/Composer/ComposerCaptureBottomRow.swift")
+        let bas = try Self.code("Meeshy/Features/Composer/ComposerCaptureBottomRow.swift")
         XCTAssertTrue(bas.contains("session.openFamily == nil"))
     }
 
@@ -234,7 +234,7 @@ final class ComposerLookStripTests: XCTestCase {
     }
 
     func test_strip_isOneMetalAtlas_paintedOnlyWhereVisible() throws {
-        let surface = try Self.code("Meeshy/Features/Main/Composer/ComposerLookStripSurface.swift")
+        let surface = try Self.code("Meeshy/Features/Composer/ComposerLookStripSurface.swift")
         XCTAssertEqual(surface.components(separatedBy: "MTKView(frame:").count - 1, 1, "UNE vue Metal pour toute la bande")
         XCTAssertTrue(surface.contains("ComposerLookPainter.paint("), "les miniatures sortent du peintre unique")
         XCTAssertTrue(surface.contains("makeBlitCommandEncoder"), "l'atlas garde les cases qui ne se repeignent pas")
@@ -244,7 +244,7 @@ final class ComposerLookStripTests: XCTestCase {
         XCTAssertTrue(surface.contains("reduced(frame, buffer: buffer)"), "la trame se réduit dans le passage du dessin")
         XCTAssertEqual(surface.components(separatedBy: "makeCommandBuffer").count - 1, 1,
                        "UN command buffer par dessin")
-        let bande = try Self.code("Meeshy/Features/Main/Composer/ComposerLookStrip.swift")
+        let bande = try Self.code("Meeshy/Features/Composer/ComposerLookStrip.swift")
         XCTAssertTrue(bande.contains("ComposerLookStripRule.paintedIndices("), "seules les cases visibles ±1 se peignent")
         XCTAssertTrue(bande.contains("ComposerCaptureGesture.action("), "la miniature choisie obéit à la table des gestes")
         XCTAssertTrue(bande.contains("ComposerCaptureGesture.tap("), "le toucher de la miniature passe par le seul décideur")
@@ -254,7 +254,7 @@ final class ComposerLookStripTests: XCTestCase {
     }
 
     func test_draw_asksForAFrame_withAndWithoutADrawable_withinTheBound() throws {
-        let surface = try Self.code("Meeshy/Features/Main/Composer/ComposerLookStripSurface.swift")
+        let surface = try Self.code("Meeshy/Features/Composer/ComposerLookStripSurface.swift")
         let dessin = try XCTUnwrap(Self.body(of: "func draw(in view: MTKView)", in: surface))
         XCTAssertEqual(dessin.components(separatedBy: "requestFrameIfNeeded()").count - 1, 2,
                        "le dessin réclame sa trame après avoir peint ET quand il n'a pas eu de drawable")
@@ -271,14 +271,14 @@ final class ComposerLookStripTests: XCTestCase {
     }
 
     func test_strip_reducesTheFrameInsideItsOwnCommandBuffer() throws {
-        let surface = try Self.code("Meeshy/Features/Main/Composer/ComposerLookStripSurface.swift")
+        let surface = try Self.code("Meeshy/Features/Composer/ComposerLookStripSurface.swift")
         XCTAssertFalse(surface.contains("CVPixelBuffer"),
                        "aucun rendu synchrone vers un tampon réécrit pendant qu'un dessin précédent le lit")
         XCTAssertTrue(surface.contains("CIImage(mtlTexture:"), "la trame réduite est une texture du même passage")
     }
 
     func test_strip_laysItsCellsLeftToRight_whateverTheLanguage() throws {
-        let bande = try Self.code("Meeshy/Features/Main/Composer/ComposerLookStrip.swift")
+        let bande = try Self.code("Meeshy/Features/Composer/ComposerLookStrip.swift")
         XCTAssertTrue(bande.contains(".environment(\\.layoutDirection, .leftToRight)"),
                       "en arabe, l'atlas Metal et les cases gardent le même ordre")
         XCTAssertFalse(bande.contains("@State private var scrollSettle"),

@@ -79,8 +79,8 @@ final class NavigationContainerMigrationTests: XCTestCase {
     /// cette seconde moitié, retirer le chrome à la main laisserait une feuille
     /// sans titre ni congé, et rien ne le dirait.
     func test_moodComposer_hostsItsChromeWithoutAnyNavigationContainer() throws {
-        let surfacePath = "Meeshy/Features/Main/Composer/ComposerMoodSurface.swift"
-        let hostPath = "Meeshy/Features/Main/Composer/MeeshyComposerHost.swift"
+        let surfacePath = "Meeshy/Features/Composer/ComposerMoodSurface.swift"
+        let hostPath = "Meeshy/Features/Composer/MeeshyComposerHost.swift"
 
         for path in [surfacePath, hostPath] {
             // Le meuble est découpé (#4102) : lire son seul fichier principal

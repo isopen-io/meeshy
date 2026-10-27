@@ -3995,8 +3995,8 @@
    "packages/MeeshySDK/Sources/MeeshySDK/Persistence/OfflineQueue+Audio.swift",
    "apps/ios/Meeshy/Features/Main/Services/OutboxDispatcher+Comments.swift",
    "apps/ios/Meeshy/Features/Main/Services/OutboxDispatcher.swift",
-   "apps/ios/Meeshy/Features/Main/Composer/ComposerDocumentDurablePublisher.swift",
-   "apps/ios/Meeshy/Features/Main/Composer/DocumentComposerDoor.swift"
+   "apps/ios/Meeshy/Features/Composer/ComposerDocumentDurablePublisher.swift",
+   "apps/ios/Meeshy/Features/Composer/DocumentComposerDoor.swift"
   ],
   "feature_keys": [
    "rfp-feed-offline-publish-outbox",

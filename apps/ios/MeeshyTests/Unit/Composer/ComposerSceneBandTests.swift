@@ -141,7 +141,7 @@ final class ComposerSceneBandTests: XCTestCase {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Composer/\(fichier)")
+            .appendingPathComponent("Meeshy/Features/Composer/\(fichier)")
         return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
     }
 
@@ -279,7 +279,7 @@ final class ComposerSceneBandOpeningRowGuardTests: XCTestCase {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerSceneBand.swift")
+            .appendingPathComponent("Meeshy/Features/Composer/ComposerSceneBand.swift")
         return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
     }
 
@@ -361,7 +361,7 @@ final class ComposerSceneBandOpeningContrastGuardTests: XCTestCase {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerSceneBand.swift")
+            .appendingPathComponent("Meeshy/Features/Composer/ComposerSceneBand.swift")
         return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
     }
 
@@ -445,7 +445,7 @@ final class ComposerLowZoneTests: XCTestCase {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerSceneSurface.swift")
+            .appendingPathComponent("Meeshy/Features/Composer/ComposerSceneSurface.swift")
         return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
     }
 

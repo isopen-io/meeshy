@@ -258,7 +258,7 @@ final class AppInitWireupTests: XCTestCase {
     /// que de présentations. Elle cesse seulement d'exiger qu'elles vivent dans
     /// le MÊME fichier, ce qu'aucune règle du produit n'a jamais demandé.
     private static let storyComposerPresentationUnits = [
-        "Meeshy/Features/Main/Composer/MeeshyComposerHost"
+        "Meeshy/Features/Composer/MeeshyComposerHost"
     ]
 
     // MARK: - V3-2 : la porte de création monte le MEUBLE, pas l'atelier nu
@@ -342,12 +342,12 @@ final class AppInitWireupTests: XCTestCase {
         // SCÈNE, et l'audience y traverse les mêmes deux maillons. Elle entre
         // ici plutôt que dans une garde à elle : le jour où un troisième site
         // ouvre l'atelier, c'est cette liste qu'on relira.
-        ("Meeshy/Features/Main/Composer/MediaComposerDoor.swift", "MeeshyComposerHost("),
+        ("Meeshy/Features/Composer/MediaComposerDoor.swift", "MeeshyComposerHost("),
         // #4102 — `composerSurface`, qui MONTE l'atelier, a suivi le découpage du
         // meuble vers `+Surfaces`. L'adresse suit le montage, jamais le nom
         // du type : laissée sur le fichier principal, la garde aurait rougi
         // « le maillon a disparu » pour un maillon simplement déménagé.
-        ("Meeshy/Features/Main/Composer/MeeshyComposerHost+Surfaces.swift", "StoryComposerView(")
+        ("Meeshy/Features/Composer/MeeshyComposerHost+Surfaces.swift", "StoryComposerView(")
     ]
 
     func test_everyCreationComposerPresentation_passesTheMemorisedAudience() throws {

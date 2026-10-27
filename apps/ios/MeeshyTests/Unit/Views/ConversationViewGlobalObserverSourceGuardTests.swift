@@ -136,7 +136,7 @@ final class ConversationViewGlobalObserverSourceGuardTests: XCTestCase {
             "Views/StoryViewerView.swift", "Views/MyStoriesView.swift", "Views/BookmarksView.swift",
             "Views/LinksHubView.swift", "Views/ShareLinksView.swift", "Views/GlobalSearchView.swift",
             "Views/RootViewComponents.swift",
-            "Composer/StoryEditComposer.swift", "Composer/StoryRepublishComposer.swift",
+            "../Composer/StoryEditComposer.swift", "../Composer/StoryRepublishComposer.swift",
         ]
         for host in hosts {
             let code = try strippedMainSource(host)

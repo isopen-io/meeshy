@@ -97,7 +97,7 @@ final class ComposerInlineEditTests: XCTestCase {
     /// contrôle inerte, et le plan ne désignerait qu'un texte.
     func test_laFenetre_secritParLeVerbeDesCinqFamilles() throws {
         let code = AppSourceGuard.stripComments(
-            try AppSourceGuard.unit("Meeshy/Features/Main/Composer/ComposerObjectTimingControls.swift"))
+            try AppSourceGuard.unit("Meeshy/Features/Composer/ComposerObjectTimingControls.swift"))
             .components(separatedBy: .whitespacesAndNewlines).joined()
         XCTAssertTrue(code.contains("viewModel.setSceneObjectTiming(id:objectId,"))
         XCTAssertFalse(code.contains("textObjectBinding(for:objectId)"),
@@ -544,7 +544,7 @@ final class ComposerInlineEditTests: XCTestCase {
     /// saisie, et le modèle referme le texte — l'auteur qui parcourt les
     /// polices perdait son clavier au premier glissé.
     func test_plaque_neRenvoieJamaisLeClavier() throws {
-        let code = try source("Meeshy/Features/Main/Composer/ComposerInlineToolPanel.swift")
+        let code = try source("Meeshy/Features/Composer/ComposerInlineToolPanel.swift")
             .components(separatedBy: .whitespacesAndNewlines).joined()
         let debut = try XCTUnwrap(code.range(of: "structComposerTrailingOptionsPlate<"))
         let fin = try XCTUnwrap(code.range(of: "extensionComposerInlinePanelLayout{", range: debut.upperBound..<code.endIndex))
@@ -556,7 +556,7 @@ final class ComposerInlineEditTests: XCTestCase {
     /// Le cadre que la plaque évite est celui du texte EN SAISIE quand c'est lui
     /// qu'on règle.
     func test_panneau_lisLeCadreDuTexteEnSaisie() throws {
-        let code = try source("Meeshy/Features/Main/Composer/ComposerInlineToolPanel.swift")
+        let code = try source("Meeshy/Features/Composer/ComposerInlineToolPanel.swift")
             .components(separatedBy: .whitespacesAndNewlines).joined()
         XCTAssertTrue(code.contains("typing:viewModel.textEditingMode.activeTextId==edit.objectId"),
                       "le panneau doit lire le texte là où le canvas le montre pendant la frappe")
@@ -632,7 +632,7 @@ final class ComposerInlineEditTests: XCTestCase {
     /// toute présentation plein écran : menu du fond, vignette, « Modifier »,
     /// sous-outils, rognage et jetons passent tous par lui.
     func test_openObjectEditor_consulteLEditionEnPlace_avantDOuvrirLEcranPleinEcran() throws {
-        let hote = try source("Meeshy/Features/Main/Composer/MeeshyComposerHost+ObjectEditing.swift")
+        let hote = try source("Meeshy/Features/Composer/MeeshyComposerHost+ObjectEditing.swift")
         let corps = try XCTUnwrap(hote.range(of: "func openObjectEditor(")
             .map { String(hote[$0.lowerBound...].prefix(900)) })
         let enPlace = try XCTUnwrap(corps.range(of: "beginInlineEdit("))
@@ -643,7 +643,7 @@ final class ComposerInlineEditTests: XCTestCase {
 
     /// **« Modifier » sur un média, un sticker ou un lieu reste sur la scène.**
     func test_editSceneItem_mediaStickerLieu_nOuvrentPlusLEcranPleinEcran() throws {
-        let code = try source("Meeshy/Features/Main/Composer/MeeshyComposerHost+SceneColumns.swift")
+        let code = try source("Meeshy/Features/Composer/MeeshyComposerHost+SceneColumns.swift")
             .components(separatedBy: .whitespacesAndNewlines).joined()
         let debut = try XCTUnwrap(code.range(of: "funceditSceneItem(_id:String,kind:StoryCanvasUIView.CanvasItemKind){"))
         let branche = try XCTUnwrap(code.range(of: "case.media,.sticker,.place:", range: debut.upperBound..<code.endIndex))

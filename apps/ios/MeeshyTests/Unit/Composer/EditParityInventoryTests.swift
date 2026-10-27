@@ -58,10 +58,10 @@ final class EditParityInventoryTests: XCTestCase {
         .deletingLastPathComponent()   // apps/ios
 
     private static let feuille = "Meeshy/Features/Main/Components/EditPostSheet.swift"
-    private static let surfaceDocument = "Meeshy/Features/Main/Composer/ComposerDocumentSurface.swift"
+    private static let surfaceDocument = "Meeshy/Features/Composer/ComposerDocumentSurface.swift"
     /// La PORTE du document, sortie de la surface au découpage `70b04d2aeb`.
     /// C'est elle qui poste le brouillon — donc elle qui porte `originalLanguage`.
-    private static let porteDuDocument = "Meeshy/Features/Main/Composer/DocumentComposerDoor.swift"
+    private static let porteDuDocument = "Meeshy/Features/Composer/DocumentComposerDoor.swift"
     private static let gardeQuiLitLaFeuille = "MeeshyTests/Unit/Views/SheetToolbarSemanticsTests.swift"
 
     private func lire(_ relativePath: String) throws -> String {

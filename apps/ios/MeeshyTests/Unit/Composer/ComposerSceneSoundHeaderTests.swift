@@ -72,7 +72,7 @@ final class ComposerSceneSoundHeaderTests: XCTestCase {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Composer/\(chemin)")
+            .appendingPathComponent("Meeshy/Features/Composer/\(chemin)")
         return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
     }
 

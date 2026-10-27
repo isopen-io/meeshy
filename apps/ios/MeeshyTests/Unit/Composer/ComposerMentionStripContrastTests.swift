@@ -218,13 +218,13 @@ final class ComposerMentionStripContrastTests: XCTestCase {
     /// relaie le schéma qu'il lit déjà (`CanvasChromeScheme`, épinglé par son
     /// volet) : une seule source pour son encre et celle de sa bande.
     func test_chaqueHote_declareLeFondQuIlPoseDerriereLaBande() throws {
-        XCTAssertTrue(try code("Meeshy/Features/Main/Composer/ComposerDescriptionLayer.swift")
+        XCTAssertTrue(try code("Meeshy/Features/Composer/ComposerDescriptionLayer.swift")
                         .contains("backdrop:.scene(colorScheme)"),
                       "le calque de description vit sur la SCÈNE : il relaie le schéma qu'il lit")
-        XCTAssertTrue(try code("Meeshy/Features/Main/Composer/ComposerDocumentSurface.swift")
+        XCTAssertTrue(try code("Meeshy/Features/Composer/ComposerDocumentSurface.swift")
                         .contains("backdrop:.plateau"),
                       "le champ du document vit sur le plateau")
-        XCTAssertTrue(try code("Meeshy/Features/Main/Composer/ComposerObjectEditorView+Mentions.swift")
+        XCTAssertTrue(try code("Meeshy/Features/Composer/ComposerObjectEditorView+Mentions.swift")
                         .contains("backdrop:.plateau"),
                       "l'éditeur d'objet vit sur le plateau")
     }
