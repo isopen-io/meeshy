@@ -176,17 +176,28 @@ fun MeeshyApp(
                             .then(if (showsCallPill) Modifier.consumeWindowInsets(WindowInsets.statusBars) else Modifier),
                     ) {
                         ProvideAppLocals(extensions.localsProviders) {
-                            NavHost(
-                                navController = navController,
-                                startDestination = startDestination,
+                            // Le retour interactif depuis le bord (#13364) : UN site, armé par le registre des routes.
+                            EdgeSwipeBackHost(
+                                enabled = NavBackChrome.edgeSwipeBackEnabled(currentRoute),
+                                canGoBack = { navController.previousBackStackEntry != null },
+                                modifier = Modifier.fillMaxSize(),
                             ) {
-                                authNavGraph(navController, authViewModel)
-                                conversationsNavGraph(navController, authViewModel, callStatus)
-                                feedNavGraph(navController)
-                                callNavGraph(navController, callViewModel)
-                                socialNavGraph(navController)
-                                settingsNavGraph(navController, authViewModel)
-                                extensions.graphContributors.forEach { it.contribute(this, navController) }
+                                NavHost(
+                                    navController = navController,
+                                    startDestination = startDestination,
+                                    enterTransition = { stackEnter() },
+                                    exitTransition = { stackExit() },
+                                    popEnterTransition = { stackPopEnter() },
+                                    popExitTransition = { stackPopExit() },
+                                ) {
+                                    authNavGraph(navController, authViewModel)
+                                    conversationsNavGraph(navController, authViewModel, callStatus)
+                                    feedNavGraph(navController)
+                                    callNavGraph(navController, callViewModel)
+                                    socialNavGraph(navController)
+                                    settingsNavGraph(navController, authViewModel)
+                                    extensions.graphContributors.forEach { it.contribute(this, navController) }
+                                }
                             }
                         }
                     }

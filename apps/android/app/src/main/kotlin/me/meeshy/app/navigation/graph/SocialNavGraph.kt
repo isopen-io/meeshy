@@ -40,6 +40,7 @@ internal fun NavGraphBuilder.socialNavGraph(
     }
     composable(Routes.NOTIFICATIONS) {
         NotificationsScreen(
+            onBack = { navController.popBackStack() },
             onOpenConversation = { navController.navigate(Routes.chat(it)) },
             onOpenPost = { navController.navigate(Routes.postDetail(it)) },
             onOpenReel = { navController.navigate(Routes.reels(seed = it)) },
