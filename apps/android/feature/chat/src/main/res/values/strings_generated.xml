@@ -157,6 +157,9 @@
     <string name="recentMedia_resolveFailed_multiple">%d media items couldn\'t be prepared — use the full photo library</string>
     <string name="sentiment_very_negative">Very negative</string>
     <string name="sentiment_very_positive">Very positive</string>
+    <string name="share_target_cancel">Cancel</string>
+    <string name="share_target_loading">Loading conversations…</string>
+    <string name="share_target_preview_title">What’s being sent</string>
     <string name="starred_more_options">More options</string>
     <string name="starred_remove">Remove from favourites</string>
     <string name="starred_remove_all">Remove all</string>

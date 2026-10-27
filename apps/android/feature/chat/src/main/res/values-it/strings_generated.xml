@@ -158,6 +158,9 @@
     <string name="recentMedia_resolveFailed_multiple">Non è stato possibile preparare %d media — usa l\'intera libreria foto</string>
     <string name="sentiment_very_negative">Molto negativo</string>
     <string name="sentiment_very_positive">Molto positivo</string>
+    <string name="share_target_cancel">Annulla</string>
+    <string name="share_target_loading">Caricamento delle conversazioni…</string>
+    <string name="share_target_preview_title">Cosa viene inviato</string>
     <string name="starred_more_options">Altre opzioni</string>
     <string name="starred_remove">Rimuovi dai preferiti</string>
     <string name="starred_remove_all">Rimuovi tutto</string>

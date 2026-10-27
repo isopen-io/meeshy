@@ -157,6 +157,9 @@
     <string name="recentMedia_resolveFailed_multiple">%d Medien konnten nicht vorbereitet werden – nutze die gesamte Fotomediathek</string>
     <string name="sentiment_very_negative">Sehr negativ</string>
     <string name="sentiment_very_positive">Sehr positiv</string>
+    <string name="share_target_cancel">Abbrechen</string>
+    <string name="share_target_loading">Unterhaltungen werden geladen …</string>
+    <string name="share_target_preview_title">Was gesendet wird</string>
     <string name="starred_more_options">Weitere Optionen</string>
     <string name="starred_remove">Aus Favoriten entfernen</string>
     <string name="starred_remove_all">Alle entfernen</string>

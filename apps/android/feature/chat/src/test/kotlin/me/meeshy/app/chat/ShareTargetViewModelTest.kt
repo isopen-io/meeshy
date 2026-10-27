@@ -56,6 +56,7 @@ class ShareTargetViewModelTest {
 
     private fun harness(
         currentUser: MeeshyUser? = me,
+        sessionResolved: Boolean = true,
         conversations: List<ApiConversation> = listOf(conversation("c1", "Alice"), conversation("c2", "Bob")),
     ): Harness {
         val conversationRepo = mockk<ConversationRepository>(relaxed = true)
@@ -64,6 +65,7 @@ class ShareTargetViewModelTest {
         val messages = mockk<MessageRepository>(relaxed = true)
         val session = mockk<SessionRepository>(relaxed = true)
         every { session.currentUser } returns MutableStateFlow(currentUser)
+        every { session.hasResolvedStoredSession } returns MutableStateFlow(sessionResolved)
         val workManager = mockk<WorkManager>(relaxed = true)
         val mediaQueue = mockk<MediaUploadQueue>(relaxed = true)
         io.mockk.coEvery { mediaQueue.enqueue(any(), any(), any()) } returns "upload-cmid"
@@ -252,5 +254,105 @@ class ShareTargetViewModelTest {
 
         coVerify(exactly = 0) { h.mediaQueue.enqueue(any(), any(), any()) }
         coVerify(exactly = 0) { h.messages.sendOptimistic(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun a_cold_share_waits_for_the_session_and_never_says_sign_in_by_mistake() = runTest(dispatcher) {
+        val h = harness(currentUser = null, sessionResolved = false)
+        h.vm.load("hello")
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.isSessionLoading).isTrue()
+        assertThat(h.vm.state.value.isSignedOut).isFalse()
+    }
+
+    @Test
+    fun once_the_stored_session_resolved_with_no_identity_the_share_asks_to_sign_in() = runTest(dispatcher) {
+        val h = harness(currentUser = null, sessionResolved = true)
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.isSessionLoading).isFalse()
+        assertThat(h.vm.state.value.isSignedOut).isTrue()
+    }
+
+    @Test
+    fun a_cold_share_restores_the_session_itself_since_no_main_activity_does() = runTest(dispatcher) {
+        val session = mockk<SessionRepository>(relaxed = true)
+        every { session.currentUser } returns MutableStateFlow(null)
+        every { session.hasResolvedStoredSession } returns MutableStateFlow(false)
+        val conversationRepo = mockk<ConversationRepository>(relaxed = true)
+        every { conversationRepo.conversationsStream(any(), any()) } returns flowOf(CacheResult.Fresh(emptyList(), ageMillis = 0))
+
+        ShareTargetViewModel(conversationRepo, mockk(relaxed = true), session, mockk(relaxed = true), mockk(relaxed = true))
+        advanceUntilIdle()
+
+        coVerify { session.refresh() }
+    }
+
+    @Test
+    fun choosing_a_conversation_shows_the_preview_and_sends_nothing() = runTest(dispatcher) {
+        val h = harness()
+        h.vm.load("a link")
+        advanceUntilIdle()
+
+        h.vm.select("c1")
+
+        assertThat(h.vm.state.value.selectedConversationId).isEqualTo("c1")
+        assertThat(h.vm.state.value.previewText).isEqualTo("a link")
+        coVerify(exactly = 0) { h.messages.sendOptimistic(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) }
+        verify(exactly = 0) { h.workManager.enqueue(any<androidx.work.WorkRequest>()) }
+    }
+
+    @Test
+    fun cancelling_the_preview_goes_back_to_the_choice_without_sending() = runTest(dispatcher) {
+        val h = harness()
+        h.vm.load("a link")
+        advanceUntilIdle()
+        h.vm.select("c1")
+
+        h.vm.cancelSelection()
+
+        assertThat(h.vm.state.value.selectedConversationId).isNull()
+        assertThat(h.vm.state.value.isFinished).isFalse()
+        coVerify(exactly = 0) { h.messages.sendOptimistic(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun dismissing_the_share_closes_it_without_sending() = runTest(dispatcher) {
+        val h = harness()
+        h.vm.load("a link")
+        advanceUntilIdle()
+
+        h.vm.dismiss()
+
+        assertThat(h.vm.state.value.isFinished).isTrue()
+        coVerify(exactly = 0) { h.messages.sendOptimistic(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun only_the_explicit_send_of_the_preview_sends() = runTest(dispatcher) {
+        val h = harness()
+        h.vm.load("a link")
+        advanceUntilIdle()
+        h.vm.select("c2")
+
+        h.vm.confirmSend()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { h.messages.sendOptimistic(conversationId = "c2", content = "a link", originalLanguage = any(), sender = me) }
+        assertThat(h.vm.state.value.isFinished).isTrue()
+    }
+
+    @Test
+    fun an_end_to_end_conversation_is_never_a_target_so_it_can_never_be_selected() = runTest(dispatcher) {
+        val sealed = ApiConversation(id = "c9", title = "Secret", type = "direct", encryptionMode = "e2ee")
+        val h = harness(conversations = listOf(sealed, conversation("c1", "Alice")))
+        h.vm.load("a link")
+        advanceUntilIdle()
+
+        h.vm.select("c9")
+
+        assertThat(h.vm.state.value.targets.map { it.conversationId }).containsExactly("c1")
+        assertThat(h.vm.state.value.selectedConversationId).isNull()
     }
 }
