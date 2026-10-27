@@ -247,4 +247,43 @@ class ConversationEncryptionViewModelTest {
         assertThat(vm.state.value.notice).isEqualTo(ConversationEncryptionNotice.FORBIDDEN)
         assertThat(vm.state.value.view().regime).isEqualTo(ConversationEncryptionRegime.NONE)
     }
+
+    @Test
+    fun `reopening the sheet after the conversation turned end to end never offers deactivation`() = runTest {
+        val ledger = InMemoryEndToEndRegimeLedger()
+        val provider = mockk<ConversationEncryptionProviding>()
+        coEvery { provider.status("c1") } returnsMany listOf(ok("server"), ok("e2ee", canToggle = false))
+        val vm = viewModel(provider, ledger)
+        vm.load("c1", isDirect = true)
+        advanceUntilIdle()
+        assertThat(vm.state.value.view().content).isEqualTo(ConversationEncryptionContent.Active(offersDeactivation = true))
+
+        ledger.learn("c1")
+        vm.load("c1", isDirect = true)
+
+        assertThat(vm.state.value.view().regime).isEqualTo(ConversationEncryptionRegime.END_TO_END)
+        assertThat(vm.state.value.view().content).isEqualTo(ConversationEncryptionContent.Active(offersDeactivation = false))
+        advanceUntilIdle()
+        assertThat(vm.state.value.view().regime).isEqualTo(ConversationEncryptionRegime.END_TO_END)
+        assertThat(vm.state.value.view().content).isEqualTo(ConversationEncryptionContent.Active(offersDeactivation = false))
+        coVerify(exactly = 2) { provider.status("c1") }
+    }
+
+    @Test
+    fun `an end to end conversation stays end to end when the account is momentarily unknown`() = runTest {
+        var account: String? = "me"
+        val ledger = InMemoryEndToEndRegimeLedger { account }.also { it.learn("c1") }
+        val provider = mockk<ConversationEncryptionProviding>()
+        coEvery { provider.status("c1") } returns ok("server")
+        val vm = viewModel(provider, ledger)
+        vm.load("c1", isDirect = true)
+
+        account = null
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.view().regime).isEqualTo(ConversationEncryptionRegime.END_TO_END)
+        assertThat(vm.state.value.view().content).isEqualTo(ConversationEncryptionContent.Active(offersDeactivation = false))
+        vm.requestDeactivation()
+        assertThat(vm.state.value.confirmsDeactivation).isFalse()
+    }
 }

@@ -60,7 +60,7 @@ data class ConversationEncryptionView(
             fallbackMayToggle: Boolean = false,
         ): ConversationEncryptionView {
             val displayedMode = when {
-                sealed -> EndToEndRegime.MODE
+                sealed || status?.isEndToEnd == true -> EndToEndRegime.MODE
                 status?.isEncrypted == true -> status.mode
                 else -> null
             }
