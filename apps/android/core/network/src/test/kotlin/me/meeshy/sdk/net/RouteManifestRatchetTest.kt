@@ -48,6 +48,8 @@ class RouteManifestRatchetTest {
          * Android la portera avec ses signaux chiffrés (#13202).
          * 265 : moins `GET /me/onboarding` et `PATCH /me/onboarding` (#13268 : le parcours d'accueil),
          * que porte `OnboardingApi.kt` depuis 76d43a11aa.
+         * 264 : moins `GET /me/preferences/audio` (#13240 : la transcription automatique des vocaux
+         * entrants), que porte `PreferencesApi.getAudio`.
          */
         const val TO_PORT_CEILING = 264
         val VERB_STATUSES = setOf("hors-perimetre-mobile", "ops-only", "a-porter", "implementee-par-url-serveur")

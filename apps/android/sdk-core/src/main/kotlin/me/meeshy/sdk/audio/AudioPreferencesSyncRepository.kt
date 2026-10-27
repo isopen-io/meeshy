@@ -1,6 +1,9 @@
 package me.meeshy.sdk.audio
 
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.serialization.encodeToString
 import me.meeshy.sdk.model.AudioPreferenceSyncBody
 import me.meeshy.sdk.model.AudioPreferences
@@ -62,5 +65,16 @@ public class AudioPreferencesSyncRepository @Inject constructor(
             is NetworkResult.Success -> store.setPreferences(result.data.toPreferences(store.preferences.value))
             is NetworkResult.Failure -> Timber.w("Relecture des préférences audio échouée : %s", result.error.message)
         }
+    }
+
+    /**
+     * Relit le bloc à chaque compte qui s'ouvre (démarrage à froid, connexion, changement de compte) —
+     * iOS `UserPreferencesManager` le recharge à la connexion. Sans elle, la bulle d'un vocal reçu
+     * suivrait le défaut local tant que l'écran des Réglages n'a pas été ouvert : un choix fait sur
+     * iOS ou le web, ou le bloc du compte suivant après un changement de compte, resterait ignoré. Une déconnexion
+     * (`null`) suivie d'une reconnexion au même compte relit aussi : la déconnexion a remis le bloc aux défauts.
+     */
+    public suspend fun refreshOnEachAccount(accountIds: Flow<String?>) {
+        accountIds.distinctUntilChanged().filterNotNull().collect { refresh() }
     }
 }

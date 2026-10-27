@@ -23,7 +23,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.settings.R
 import me.meeshy.sdk.model.reading.mode.LentilleFeatureFlag
 import me.meeshy.ui.component.settings.SettingsSeparator
-import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
@@ -43,7 +42,6 @@ internal fun InterfaceFeatureRows(
     viewModel: InterfaceFeaturesViewModel = hiltViewModel(),
 ) {
     val flags by viewModel.flags.collectAsStateWithLifecycle()
-    val haptics = rememberMeeshyHaptics()
     val riviereAlpha by animateFloatAsState(
         targetValue = if (flags.isRiviereAdjustable) 1f else DISABLED_ROW_ALPHA,
         animationSpec = tween(ROW_FADE_MILLIS),
@@ -73,10 +71,7 @@ internal fun InterfaceFeatureRows(
             label = stringResource(R.string.settings_interface_riviere_mode),
             checked = flags.riviereMode,
             enabled = flags.isRiviereAdjustable,
-            onCheckedChange = {
-                haptics.light()
-                viewModel.setEnabled(LentilleFeatureFlag.RIVIERE_MODE, it)
-            },
+            onCheckedChange = { viewModel.setEnabled(LentilleFeatureFlag.RIVIERE_MODE, it) },
             icon = MeeshyIcons.ChartLine,
             color = MeeshyPalette.Info,
         )

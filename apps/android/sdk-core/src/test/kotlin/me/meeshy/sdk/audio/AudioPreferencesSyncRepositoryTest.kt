@@ -5,6 +5,7 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
 import io.mockk.slot
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.decodeFromString
 import me.meeshy.sdk.model.ApiResponse
@@ -102,5 +103,16 @@ class AudioPreferencesSyncRepositoryTest {
         val f = fixture()
         AudioPreferencesAccountReset(f.store).clear()
         assertThat(f.store.preferences.value).isEqualTo(AudioPreferences())
+    }
+
+    @Test
+    fun `chaque compte qui s'ouvre relit le bloc audio de la passerelle, une fois par ouverture`() = runTest {
+        val f = fixture(local = AudioPreferences(autoTranscribeIncoming = true))
+        coEvery { f.api.getAudio() } returns ApiResponse(success = true, data = AudioPreferenceSyncBody(false))
+
+        f.repository.refreshOnEachAccount(flowOf(null, "me-42", "me-42", null, "me-42", "other-7"))
+
+        assertThat(f.store.preferences.value.autoTranscribeIncoming).isFalse()
+        coVerify(exactly = 3) { f.api.getAudio() }
     }
 }
