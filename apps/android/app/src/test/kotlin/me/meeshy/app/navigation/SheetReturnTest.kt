@@ -1,0 +1,82 @@
+package me.meeshy.app.navigation
+
+import androidx.navigation.NavHostController
+import androidx.navigation.compose.ComposeNavigator
+import androidx.navigation.compose.DialogNavigator
+import androidx.navigation.compose.composable
+import androidx.navigation.createGraph
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import org.robolectric.RuntimeEnvironment
+import com.google.common.truth.Truth.assertThat
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+
+/** #13371 — une feuille qui ouvre un écran empilé revient au retour, comme sur iOS. */
+@RunWith(RobolectricTestRunner::class)
+class SheetReturnTest {
+
+    private fun entry(id: String, sheet: Boolean = false, route: String = id, returns: Boolean = false) =
+        StackEntry(id = id, isSheet = sheet, route = route, returnsOnPop = returns)
+
+    private val home = entry("home")
+    private val posts = entry("p1", sheet = true, route = "profile/u1/posts", returns = true)
+    private val post = entry("d1")
+
+    @Test
+    fun `the sheet comes back when the screen it opened is popped`() {
+        val memory = SheetReturnMemory()
+        assertThat(memory.onStackChanged(listOf(home, posts), listOf(home, post))).isNull()
+        assertThat(memory.onStackChanged(listOf(home, post), listOf(home))).isEqualTo("profile/u1/posts")
+    }
+
+    @Test
+    fun `a sheet simply closed does not come back`() {
+        val memory = SheetReturnMemory()
+        assertThat(memory.onStackChanged(listOf(home, posts), listOf(home))).isNull()
+    }
+
+    @Test
+    fun `a sheet not declared as returning stays gone`() {
+        val memory = SheetReturnMemory()
+        val plain = entry("s1", sheet = true, route = "new-conversation")
+        memory.onStackChanged(listOf(home, plain), listOf(home, post))
+        assertThat(memory.onStackChanged(listOf(home, post), listOf(home))).isNull()
+    }
+
+    @Test
+    fun `a screen replaced by another does not bring the sheet back`() {
+        val memory = SheetReturnMemory()
+        memory.onStackChanged(listOf(home, posts), listOf(home, post))
+        val other = entry("o1")
+        assertThat(memory.onStackChanged(listOf(home, post), listOf(home, other))).isNull()
+        assertThat(memory.onStackChanged(listOf(home, other), listOf(home))).isNull()
+    }
+
+    @Test
+    fun `real navigation - sheet to screen and back shows the sheet again`() {
+        val nav = NavHostController(RuntimeEnvironment.getApplication()).apply {
+            navigatorProvider.addNavigator(ComposeNavigator())
+            navigatorProvider.addNavigator(DialogNavigator())
+            val self = this
+            graph = createGraph(startDestination = "root") {
+                composable("root") {}
+                composable("detail") {}
+                sheetComposable(Routes.DASHBOARD, self) { _, _ -> }
+            }
+        }
+        val job = CoroutineScope(Dispatchers.Unconfined).launch {
+            nav.sheetReturns().collect { nav.navigate(it) { launchSingleTop = true } }
+        }
+        nav.navigate(Routes.DASHBOARD)
+        nav.navigate("detail")
+        assertThat(nav.currentDestination?.route).isEqualTo("detail")
+
+        nav.popBackStack()
+
+        assertThat(nav.currentDestination?.route).isEqualTo(Routes.DASHBOARD)
+        job.cancel()
+    }
+}

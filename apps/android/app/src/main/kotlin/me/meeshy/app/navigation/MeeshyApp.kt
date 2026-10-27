@@ -66,6 +66,7 @@ fun MeeshyApp(
     onLaunchRouteConsumed: () -> Unit = {},
 ) {
     val navController = rememberNavController()
+    SheetReturnEffect(navController)
     val authViewModel: AuthViewModel = hiltViewModel()
     val incomingCallViewModel: IncomingCallViewModel = hiltViewModel()
     // Hoisted to the MeeshyApp root → resolved against the Activity's ViewModelStore
