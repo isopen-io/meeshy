@@ -207,6 +207,9 @@ object SocketEventNames {
     const val CONVERSATION_LEFT = "conversation:left"
     const val CONVERSATION_STATS = "conversation:stats"
     const val MESSAGE_CITED_POST_WITHDRAWN = "message:cited-post-withdrawn"
+
+    /** `engagement:conversation-updated` : l'instantané « N (M) 🔥 » du lecteur, vers sa room personnelle (#8906). */
+    const val ENGAGEMENT_CONVERSATION_UPDATED = "engagement:conversation-updated"
     const val MESSAGE_CONSUMED = "message:consumed"
     const val MESSAGE_COUNTDOWN_STARTED = "message:countdown-started"
     const val MESSAGE_HIDDEN_FOR_ME = "message:hidden-for-me"
@@ -297,6 +300,7 @@ object SocketEventNames {
         CONVERSATION_RESTORED,
         CONVERSATION_UNREAD_UPDATED,
         CONVERSATION_UPDATED,
+        ENGAGEMENT_CONVERSATION_UPDATED,
         LOCATION_LIVE_START,
         LOCATION_LIVE_STARTED,
         LOCATION_LIVE_STOP,

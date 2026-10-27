@@ -80,6 +80,11 @@ fun ChatScreen(
     val selectionController = remember(viewModel) { viewModel.controllers.find<MessageSelectionController>() }
     val selection by (selectionController?.selection ?: NO_SELECTION).collectAsStateWithLifecycle()
     BackHandler(enabled = selection.isActive, onBack = actions.endSelection)
+    val engagementController = remember(viewModel) { viewModel.controllers.find<ChatEngagementController>() }
+    val engagementSnapshot by (engagementController?.snapshot ?: NO_ENGAGEMENT).collectAsStateWithLifecycle()
+    val engagement = remember(engagementSnapshot, engagementController) {
+        ChatEngagementBinding(engagementSnapshot, engagementController?.sent ?: NO_SENT)
+    }
     val readingModeController = remember(viewModel) { viewModel.controllers.find<ReadingModeController>() }
     val readingModeState by (readingModeController?.state ?: NO_READING_MODE).collectAsStateWithLifecycle()
     val summaryController = remember(viewModel) { viewModel.controllers.find<LivingSummaryController>() }
@@ -114,6 +119,7 @@ fun ChatScreen(
         readingMode = readingMode,
         pendingPlace = pendingPlace,
         selection = selection,
+        engagement = engagement,
     )
 
     ChatBackgroundHost(appearance) {

@@ -18,6 +18,7 @@ import me.meeshy.sdk.model.AttachmentStatusUpdatedEvent
 import me.meeshy.sdk.model.AudioTranslationEvent
 import me.meeshy.sdk.model.AudioTranslationFailedEvent
 import me.meeshy.sdk.model.AudioTranslationStage
+import me.meeshy.sdk.model.ConversationEngagementSnapshot
 import me.meeshy.sdk.model.ConversationJoinErrorEvent
 import me.meeshy.sdk.model.ConversationParticipationPayload
 import me.meeshy.sdk.model.ConversationRoomAck
@@ -160,6 +161,7 @@ class ConversationSocketEventsManager internal constructor(
         },
         route<ConversationJoinErrorEvent>(SocketEventNames.CONVERSATION_JOIN_ERROR) { it },
         route<ConversationStatsEvent>(SocketEventNames.CONVERSATION_STATS) { it },
+        route<ConversationEngagementSnapshot>(SocketEventNames.ENGAGEMENT_CONVERSATION_UPDATED) { it },
         route<ParticipantRightsUpdatedEvent>(SocketEventNames.PARTICIPANT_RIGHTS_UPDATED) { it },
     )
 

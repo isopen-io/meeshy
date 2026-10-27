@@ -18,6 +18,11 @@
         <item quantity="many">Apagar %d mensagens?</item>
         <item quantity="other">Apagar %d mensagens?</item>
     </plurals>
+    <string name="chat_engagement_a11y_streak">%1$s · Faíscas: %2$d · Hoje: %3$d</string>
+    <string name="chat_engagement_a11y_streak_days_one">%d dia</string>
+    <string name="chat_engagement_a11y_streak_days_other">%d dias</string>
+    <string name="chat_engagement_a11y_total_one">%s faísca ganha nesta conversa</string>
+    <string name="chat_engagement_a11y_total_other">%s faíscas ganhas nesta conversa</string>
     <string name="chat_exit_blocked_after_read">Ela desaparece após a leitura: não pode ser encaminhada, salva nem compartilhada.</string>
     <string name="chat_exit_blocked_attachment_not_in_source">Este item não faz mais parte da mensagem.</string>
     <string name="chat_exit_blocked_encrypted_source">Este conteúdo criptografado é copiado deste dispositivo.</string>
@@ -25,6 +30,7 @@
     <string name="chat_exit_blocked_title">Esta mensagem fica no Meeshy</string>
     <string name="chat_exit_blocked_understood">Entendi</string>
     <string name="chat_exit_blocked_view_once">É de visualização única: não pode ser encaminhada, salva nem compartilhada. Fica na conversa até ser vista.</string>
+    <string name="chat_header_flame_hint">Oculta a chama até o cabeçalho ser expandido novamente</string>
     <string name="chat_selection_cap_reached">Máximo de 100 mensagens</string>
     <string name="chat_selection_count">%d selecionadas</string>
     <string name="chat_selection_toggle_message">Mensagem</string>

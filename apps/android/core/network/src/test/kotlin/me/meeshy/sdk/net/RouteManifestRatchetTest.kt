@@ -56,7 +56,7 @@ class RouteManifestRatchetTest {
          * 257 : moins `PUT /me/game/visibility` (#13326 : « Jeu masqué » ferme les quatre visibilités à « moi seul »,
          * comme iOS `closeEverything`), que porte `GameApi.setVisibility`.
          */
-        const val TO_PORT_CEILING = 257
+        const val TO_PORT_CEILING = 256
         val VERB_STATUSES = setOf("hors-perimetre-mobile", "ops-only", "a-porter", "implementee-par-url-serveur")
     }
 

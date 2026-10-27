@@ -21,6 +21,11 @@
         <item quantity="many">حذف %d رسالة؟</item>
         <item quantity="other">حذف %d رسالة؟</item>
     </plurals>
+    <string name="chat_engagement_a11y_streak">%1$s · الشرارات: %2$d · اليوم: %3$d</string>
+    <string name="chat_engagement_a11y_streak_days_one">%d يوم</string>
+    <string name="chat_engagement_a11y_streak_days_other">%d أيام</string>
+    <string name="chat_engagement_a11y_total_one">%s شرارة مكتسبة في هذه المحادثة</string>
+    <string name="chat_engagement_a11y_total_other">%s شرارات مكتسبة في هذه المحادثة</string>
     <string name="chat_exit_blocked_after_read">تختفي بعد القراءة: لا يمكن إعادة توجيهها أو حفظها أو مشاركتها.</string>
     <string name="chat_exit_blocked_attachment_not_in_source">لم يعد هذا العنصر جزءًا من الرسالة.</string>
     <string name="chat_exit_blocked_encrypted_source">يُنسخ هذا المحتوى المشفّر من هذا الجهاز.</string>
@@ -28,6 +33,7 @@
     <string name="chat_exit_blocked_title">هذه الرسالة لا تغادر Meeshy</string>
     <string name="chat_exit_blocked_understood">حسنًا</string>
     <string name="chat_exit_blocked_view_once">إنها للعرض مرة واحدة: لا يمكن إعادة توجيهها أو حفظها أو مشاركتها. تبقى في المحادثة حتى تُشاهَد.</string>
+    <string name="chat_header_flame_hint">يُخفي الشعلة حتى يُفتح الرأس مرة أخرى</string>
     <string name="chat_selection_cap_reached">الحد الأقصى 100 رسالة</string>
     <string name="chat_selection_count">تم تحديد %d</string>
     <string name="chat_selection_toggle_message">رسالة</string>

@@ -107,7 +107,19 @@ internal class ChatHostContext(
     val pendingPlace: me.meeshy.sdk.model.SharedPlace? = null,
     /** Le mode sélection multiple (#13294) : inactif tant qu'aucun appui long n'a choisi « Sélectionner ». */
     val selection: MessageSelection = MessageSelection.Inactive,
+    /** La Flamme de l'en-tête (#13297) : l'instantané servi et l'annonce d'un envoi du lecteur. */
+    val engagement: ChatEngagementBinding = ChatEngagementBinding.None,
 )
+
+/** Ce que l'en-tête lit du [ChatEngagementController], sans connaître le contrôleur. */
+internal class ChatEngagementBinding(
+    val snapshot: me.meeshy.sdk.model.ConversationEngagementSnapshot?,
+    val sent: kotlinx.coroutines.flow.SharedFlow<Unit>,
+) {
+    companion object {
+        val None = ChatEngagementBinding(null, NO_SENT)
+    }
+}
 
 /** Le mode de lecture résolu à l'ouverture et les écritures du chip. */
 internal class ChatReadingModeBinding(
@@ -141,13 +153,14 @@ internal fun rememberChatHostContext(
     readingMode: ChatReadingModeBinding? = null,
     pendingPlace: me.meeshy.sdk.model.SharedPlace? = null,
     selection: MessageSelection = MessageSelection.Inactive,
+    engagement: ChatEngagementBinding = ChatEngagementBinding.None,
 ): ChatHostContext {
     val sheets = remember { ChatSheetVisibility() }
     // A plain map, not snapshot state: written from onGloballyPositioned without forcing
     // recomposition, read only when the overlay opens.
     val bubbleFrames = remember { mutableMapOf<String, Rect>() }
     val chrome = remember { ChatChromeState() }
-    return ChatHostContext(state, composerText, pending, accentColor, actions, navigation, sheets, bubbleFrames, header, chrome, readingMode, pendingPlace, selection)
+    return ChatHostContext(state, composerText, pending, accentColor, actions, navigation, sheets, bubbleFrames, header, chrome, readingMode, pendingPlace, selection, engagement)
 }
 
 /** The ViewModel's user-intent entry points, as plain callbacks. */

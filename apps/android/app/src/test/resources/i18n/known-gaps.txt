@@ -1607,3 +1607,7 @@ bare-specifier :feature:chat en summary_header_partial_window
 bare-specifier :feature:chat en summary_header_people_count
 bare-specifier :feature:chat en chat_delete_confirm_title_many
 bare-specifier :feature:chat en chat_selection_count
+bare-specifier :feature:chat en chat_engagement_a11y_streak_days_one
+bare-specifier :feature:chat en chat_engagement_a11y_streak_days_other
+bare-specifier :feature:chat en chat_engagement_a11y_total_one
+bare-specifier :feature:chat en chat_engagement_a11y_total_other
