@@ -31,6 +31,9 @@ internal object RiverSwipe {
  *
  * - un balayage à UN doigt fait un pas de la loi (`resolveRiverStep`) ;
  * - un PINCE à deux doigts élargit les couloirs ([onPinch] reçoit l'échelle relative au début du geste).
+ *
+ * Un geste qu'un ANCÊTRE consomme à la passe initiale (le glissé du bord, `EdgeSwipeBackHost`) ne
+ * fait aucun pas : revenir en arrière ou s'y essayer ne déplace pas le curseur.
  */
 internal fun Modifier.riverGestures(
     swipeThresholdPx: Float,
@@ -45,6 +48,7 @@ internal fun Modifier.riverGestures(
         var last = start
         var startDistance = 0f
         var pinched = false
+        var claimedAbove = false
         do {
             val event = awaitPointerEvent(PointerEventPass.Initial)
             val pressed = event.changes.filter { it.pressed }
@@ -58,8 +62,12 @@ internal fun Modifier.riverGestures(
                     onPinch(distance / startDistance)
                 }
             }
-            event.changes.firstOrNull { it.id == first.id }?.let { last = it.position }
+            event.changes.firstOrNull { it.id == first.id }?.let { change ->
+                last = change.position
+                // Un ancêtre a pris le geste à la passe initiale (le glissé du bord qui revient en arrière) : il n'est plus à nous.
+                if (change.isConsumed) claimedAbove = true
+            }
         } while (event.changes.any { it.pressed })
-        if (!pinched) RiverSwipe.direction(last - start, swipeThresholdPx, isRtl)?.let(onStep)
+        if (!pinched && !claimedAbove) RiverSwipe.direction(last - start, swipeThresholdPx, isRtl)?.let(onStep)
     }
 }

@@ -18,6 +18,7 @@ internal fun riverBubble(
     endToEnd: Boolean = false,
     viewOnce: Boolean = false,
     viewOnceOpened: Boolean = false,
+    expiresAtIso: String? = null,
 ): BubbleContent = BubbleContent(
     messageId = id,
     text = text,
@@ -37,4 +38,5 @@ internal fun riverBubble(
     isEndToEndSealed = endToEnd,
     isViewOnce = viewOnce,
     isViewOnceOpenedByMe = viewOnceOpened,
+    expiresAtIso = expiresAtIso,
 )

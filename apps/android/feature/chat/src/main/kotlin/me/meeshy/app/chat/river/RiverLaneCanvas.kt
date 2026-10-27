@@ -91,7 +91,7 @@ internal fun RiverLaneCanvas(
         val known = knownFrames(rendering, listState, columns, sizes, scroll)
         val extent = RankExtent(known, size.height, sizes.margin)
         clipRect(top = sizes.topExclusion) {
-            drawConnectors(geometry, extent, columns, scroll, laneColors, sizes)
+            drawConnectors(geometry, rendering.bubbleByRank, extent, columns, scroll, laneColors, sizes)
             drawLanes(geometry, extent, columns, scroll, laneColors, sizes)
         }
     }
@@ -145,6 +145,12 @@ private class RankExtent(private val known: Map<Int, Rect>, private val height: 
 
     fun isOnScreen(rank: Int): Boolean = known.containsKey(rank)
 
+    private val firstKnown: Int = known.keys.minOrNull() ?: Int.MAX_VALUE
+    private val lastKnown: Int = known.keys.maxOrNull() ?: Int.MIN_VALUE
+
+    /** Un intervalle de rangs qui ne touche pas le champ n'a ni nœud à l'écran ni trait qui le traverse. */
+    fun misses(startRank: Int, endRank: Int): Boolean = endRank < firstKnown || startRank > lastKnown
+
     fun placement(rank: Int): RiverRankPlacement<Rect> = RiverRankPlacement.resolve(rank, known)
 }
 
@@ -152,13 +158,13 @@ private fun railX(columns: RiverColumnLayout, laneIndex: Int, scroll: Float): Fl
 
 private fun DrawScope.drawConnectors(
     geometry: RiverGeometry,
+    bubbleByRank: Map<Int, RiverBubble>,
     extent: RankExtent,
     columns: RiverColumnLayout,
     scroll: Float,
     laneColors: Map<String, Color>,
     sizes: RiverCanvasSizes,
 ) {
-    val bubbleByRank = geometry.bubbles.associateBy { it.rank }
     val dash = PathEffect.dashPathEffect(floatArrayOf(sizes.dashOn, sizes.dashOff))
     for (connector in geometry.connectors) {
         if (!extent.isOnScreen(connector.fromRank) && !extent.isOnScreen(connector.toRank)) continue
@@ -203,6 +209,7 @@ private fun DrawScope.drawLanes(
  * un nœud `ADDRESSED` (branche reparue pour recevoir une réponse) est un anneau creux en pointillé.
  */
 private fun DrawScope.drawSpan(span: RiverLaneSpan, color: Color, cx: Float, extent: RankExtent, sizes: RiverCanvasSizes) {
+    if (extent.misses(span.startRank, span.endRank)) return
     val crosses = extent.placement(span.startRank) == RiverRankPlacement.Above &&
         extent.placement(span.endRank) == RiverRankPlacement.Below
     if (span.nodes.none { extent.isOnScreen(it.rank) } && !crosses) return

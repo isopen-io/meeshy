@@ -72,6 +72,20 @@ class RiverRenderingTest {
     }
 
     @Test
+    fun `un ephemere se retire a son echeance, comme dans le fil, et un message ordinaire jamais`() {
+        val rendering = render(
+            riverBubble("eph", "alice", 0, expiresAtIso = "2026-10-27T10:05:00.000Z"),
+            riverBubble("n", "bob", 1),
+        )
+        val ephemeral = rendering.contentByMessageId.getValue("eph")
+        val deadline = java.time.Instant.parse("2026-10-27T10:05:00Z").toEpochMilli()
+        assertThat(ephemeral.expiresAtMs).isEqualTo(deadline)
+        assertThat(RiverRenderingBuilder.isExpired(ephemeral, deadline - 1)).isFalse()
+        assertThat(RiverRenderingBuilder.isExpired(ephemeral, deadline)).isTrue()
+        assertThat(RiverRenderingBuilder.isExpired(rendering.contentByMessageId.getValue("n"), Long.MAX_VALUE)).isFalse()
+    }
+
+    @Test
     fun `l'echelle du temps est resolue une fois avec le rendu, absente quand rien ne se gradue`() {
         assertThat(render(riverBubble("a", "alice", 0), riverBubble("b", "bob", 90)).timeScale).isNotNull()
         assertThat(render(riverBubble("a", "alice", 0)).timeScale).isNull()

@@ -1,5 +1,10 @@
 package me.meeshy.app.chat.river
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -20,6 +25,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.State
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -43,6 +50,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
 import me.meeshy.feature.chat.R
 import me.meeshy.sdk.model.profile.ProfileSheetUser
 import me.meeshy.sdk.model.reading.focal.FocalMetrics
@@ -86,6 +94,36 @@ internal fun RiverBubble(
     contentWidth: Dp,
     actions: RiverBubbleActions,
     modifier: Modifier = Modifier,
+) {
+    val expired by rememberRiverExpiry(content)
+    AnimatedVisibility(
+        visible = !expired,
+        enter = EnterTransition.None,
+        exit = fadeOut() + scaleOut(targetScale = 0.8f) + shrinkVertically(),
+    ) {
+        RiverBubbleBody(content, contentWidth, actions, modifier)
+    }
+}
+
+/**
+ * L'échéance d'un éphémère, lue SANS horloge par image : une seule attente jusqu'à l'instant dit,
+ * puis la bulle se retire avec l'animation du fil (`MessageBubble`, rendu `isEphemeralExpired`).
+ */
+@Composable
+private fun rememberRiverExpiry(content: RiverBubbleContent): State<Boolean> =
+    produceState(RiverRenderingBuilder.isExpired(content, System.currentTimeMillis()), content.expiresAtMs) {
+        val deadline = content.expiresAtMs ?: return@produceState
+        val wait = deadline - System.currentTimeMillis()
+        if (wait > 0) delay(wait)
+        value = true
+    }
+
+@Composable
+private fun RiverBubbleBody(
+    content: RiverBubbleContent,
+    contentWidth: Dp,
+    actions: RiverBubbleActions,
+    modifier: Modifier,
 ) {
     Column(modifier.width(contentWidth)) {
         if (!content.groupPosition.joinsAbove) Spacer(Modifier.height(RiverMetrics.Row.GAP.dp))
