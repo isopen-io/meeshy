@@ -64,6 +64,7 @@ fun CallScreen(
     val liveSeconds = remember(viewModel) { viewModel.state.map { it.durationSeconds }.distinctUntilChanged() }
         .collectAsStateWithLifecycle(initialValue = viewModel.state.value.durationSeconds)
     val permissionGate = rememberCallPermissionGate(config.isVideo)
+    val declineReply: CallDeclineReplyViewModel = hiltViewModel()
 
     LaunchedEffect(config.peerId, config.isOutgoing, config.isVideo) {
         if (config.isOutgoing) {
@@ -174,6 +175,12 @@ fun CallScreen(
                     },
                     onDecline = viewModel::decline,
                     modifier = content,
+                    onDeclineWithMessage = config.peerId.takeIf { it.isNotBlank() }?.let { peerId ->
+                        { text ->
+                            declineReply.send(peerId, config.conversationId, text)
+                            viewModel.decline()
+                        }
+                    },
                 )
                 state.status == CallStatus.OUTGOING_RINGING -> CallOutgoingRingingScreen(
                     state = state,

@@ -1,0 +1,88 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:calls": {
+      "resDir": "feature/calls/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "call.decline.open",
+          "androidName": "call_decline_open",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.decline.open.label",
+          "androidName": "call_decline_open_label",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.decline.open.hint",
+          "androidName": "call_decline_open_hint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.decline.title",
+          "androidName": "call_decline_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.decline.cancel",
+          "androidName": "call_decline_cancel",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.decline.custom.placeholder",
+          "androidName": "call_decline_custom_placeholder",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.decline.custom.label",
+          "androidName": "call_decline_custom_label",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.decline.custom.send",
+          "androidName": "call_decline_custom_send",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.decline.reply.hint",
+          "androidName": "call_decline_reply_hint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.decline.reply.callBack",
+          "androidName": "call_decline_reply_call_back",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.decline.reply.meeting",
+          "androidName": "call_decline_reply_meeting",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.decline.reply.cantTalk",
+          "androidName": "call_decline_reply_cant_talk",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.decline.reply.writeMe",
+          "androidName": "call_decline_reply_write_me",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}
