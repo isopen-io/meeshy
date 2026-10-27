@@ -80,7 +80,7 @@ const IOS_APP_ROOT = join(REPO_ROOT, 'apps/ios/Meeshy');
 // jamais compter comme un « consommateur ».
 const IOS_DEFINITION_FILES = [
   'Features/Lens/Core/LentilleMetrics.swift',
-  'Features/Main/Focal/Core/FocalMetrics.swift',
+  'Features/Focal/Core/FocalMetrics.swift',
   'Features/River/Core/RiverMetrics.swift',
 ].map((p) => join(IOS_APP_ROOT, p));
 

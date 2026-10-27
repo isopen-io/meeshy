@@ -142,9 +142,9 @@ final class ProtectedContentTapTests: XCTestCase {
 
     func test_wiring_noVeilLayerOpensFullscreenAnyMore() throws {
         for path in ["Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout.swift",
-                     "Meeshy/Features/Main/Focal/Row/FocalRow.swift",
-                     "Meeshy/Features/Main/Focal/Row/FocalProtectedContent.swift",
-                     "Meeshy/Features/Main/Focal/Row/FocalAttachmentBlock.swift",
+                     "Meeshy/Features/Focal/Row/FocalRow.swift",
+                     "Meeshy/Features/Focal/Row/FocalProtectedContent.swift",
+                     "Meeshy/Features/Focal/Row/FocalAttachmentBlock.swift",
                      "Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout+Media.swift"] {
             let source = try AppSourceGuard.text(at: Self.iosRoot.appendingPathComponent(path))
             XCTAssertFalse(source.contains("ProtectedGridCellTapLayer"), "\(path) : la couche qui ouvrait chaque case sous le voile est retirée")
@@ -165,17 +165,17 @@ final class ProtectedContentTapTests: XCTestCase {
 
     func test_wiring_focalProtectedContent_neverOpensOnTheFirstTap() throws {
         let affordance = try body(of: "private var revealAffordance: some View",
-                                  in: "Meeshy/Features/Main/Focal/Row/FocalProtectedContent.swift")
+                                  in: "Meeshy/Features/Focal/Row/FocalProtectedContent.swift")
         XCTAssertFalse(affordance.contains("onMediaTap"), affordance)
     }
 
     func test_wiring_focalBlurredCell_revealsInPlace() throws {
         let cell = try body(of: "struct FocalGridCell: View",
-                            in: "Meeshy/Features/Main/Focal/Row/FocalAttachmentBlock.swift")
+                            in: "Meeshy/Features/Focal/Row/FocalAttachmentBlock.swift")
         XCTAssertTrue(cell.contains("isRevealed: isRevealed"), "l'état de protection lit la révélation de la case")
         XCTAssertTrue(cell.contains("FocalMediaProtection.tap(on: attachment"), cell)
         let law = try body(of: "static func tap(on attachment: MessageAttachment",
-                           in: "Meeshy/Features/Main/Focal/Row/FocalAttachmentBlock.swift")
+                           in: "Meeshy/Features/Focal/Row/FocalAttachmentBlock.swift")
         XCTAssertTrue(law.contains("ProtectedContentTap.resolve(cell: attachment)"), "la décision unique du toucher protégé (#8009)")
         XCTAssertTrue(law.contains("case .revealInPlace"), law)
     }
@@ -380,11 +380,11 @@ final class CaptureShieldCoverageGuardTests: XCTestCase {
     /// défaut — annoncé OU noir, jamais capturé en silence (#9617).
     private static let surfaces: [(file: String, shield: String)] = [
         ("Main/Views/ThemedMessageBubble.swift", ".captureShield(content.captureVerdict.shieldsCapture(surfaceAnnounces:announcesCapture))"),
-        ("Main/Focal/Row/FocalRow.swift", ".captureShield(content.captureVerdict.shieldsCapture(surfaceAnnounces:announcesCapture))"),
+        ("Focal/Row/FocalRow.swift", ".captureShield(content.captureVerdict.shieldsCapture(surfaceAnnounces:announcesCapture))"),
         ("River/View/RiverBubbleView.swift", "messageBox.captureShield(content.capturesBlocked)"),
         ("River/View/RiverBubbleView.swift", ".captureShield(reply.capturesBlocked)"),
         ("Main/Views/Bubble/BubbleQuotedReply.swift", "quotedBody.captureShield(reply.quotedCapture(quotedMessage:nil).shieldsCapture(surfaceAnnounces:announcesCapture))"),
-        ("Main/Focal/Row/FocalQuotedReplyView.swift", "quotedBody.captureShield(reference.quotedCapture(quotedMessage:nil).shieldsCapture(surfaceAnnounces:announcesCapture))"),
+        ("Focal/Row/FocalQuotedReplyView.swift", "quotedBody.captureShield(reference.quotedCapture(quotedMessage:nil).shieldsCapture(surfaceAnnounces:announcesCapture))"),
         ("Main/Views/ConversationView+MediaGallery.swift", ".captureShieldScope(captureScope)"),
         ("Main/Views/ConversationMediaGalleryView+Pages.swift", "pageBody.captureShield(captureScope.shields(attachment.id))"),
         ("Main/Components/MediaHub/ConversationMediaHubView.swift", ".captureShieldScope(MessageExitOffer.captureShieldScope("),
@@ -497,8 +497,8 @@ final class CaptureShieldCoverageGuardTests: XCTestCase {
     /// : elles n'annoncent que montées sous une surface ENREGISTRÉE, et restent
     /// noires partout ailleurs (aperçu de l'appui long, feuille « Plus »…).
     private static let announcingReaders: Set<String> = [
-        "Main/Views/ThemedMessageBubble.swift", "Main/Focal/Row/FocalRow.swift",
-        "Main/Views/Bubble/BubbleQuotedReply.swift", "Main/Focal/Row/FocalQuotedReplyView.swift",
+        "Main/Views/ThemedMessageBubble.swift", "Focal/Row/FocalRow.swift",
+        "Main/Views/Bubble/BubbleQuotedReply.swift", "Focal/Row/FocalQuotedReplyView.swift",
         "Main/Views/ConversationView+MediaGallery.swift", "Main/Views/ConversationMediaGalleryView+Pages.swift",
     ]
 

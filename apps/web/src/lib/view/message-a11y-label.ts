@@ -25,7 +25,7 @@ import { isContactCardAttachment } from '@meeshy/shared/utils/vcard';
  * accusé, ni un badge.
  *
  * Port de `MessageAccessibilityLabelComposer.compose`
- * (`apps/ios/Meeshy/Features/Main/Focal/Preferences/MessageAccessibilityLabelComposer.swift:36-93`),
+ * (`apps/ios/Meeshy/Features/Focal/Preferences/MessageAccessibilityLabelComposer.swift:36-93`),
  * DANS L'ORDRE iOS : « Sans compte » (participant `anonymous`, jamais pour
  * soi — écart ASSUMÉ ajouté par la revue #5935, voir plus bas) → auteur (ou
  * « Vous » pour un message à soi — le NOM est alors ABSENT, pas remplacé) →

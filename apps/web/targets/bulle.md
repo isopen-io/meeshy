@@ -106,7 +106,7 @@ notifications). La loi métrique est éclatée en quatre : `MeeshySpacing` /
 `MeeshyRadius` / `MeeshyFont` / `MeeshyLayout`
 (`packages/MeeshySDK/Sources/MeeshyUI/Theme/DesignTokens.swift:5-59`),
 `DeviceLayout` (`apps/ios/Meeshy/Core/DeviceLayout.swift:93-97`),
-`FocalMetrics` (`apps/ios/Meeshy/Features/Main/Focal/Core/FocalMetrics.swift`)
+`FocalMetrics` (`apps/ios/Meeshy/Features/Focal/Core/FocalMetrics.swift`)
 et — pour la bulle, l'essentiel — **des littéraux posés dans les vues**, hors
 de toute table.
 
@@ -117,7 +117,7 @@ de toute table.
 ### 2.1 La loi partagée
 
 La loi vit dans `packages/shared/utils/reading-modes.ts`, gelée, et son
-équivalent Swift dans `apps/ios/Meeshy/Features/Main/Focal/Core/ReadingModeOrchestrator.swift`.
+équivalent Swift dans `apps/ios/Meeshy/Features/Focal/Core/ReadingModeOrchestrator.swift`.
 Les cinq modes rendus sont `focal, script, summary, river, bubbles`
 (`ReadingModeOrchestrator.swift:39-45`, `packages/shared/types/reading-modes.ts:17-23`) ;
 les six mots du choix sont `auto, focal, script, resume, riviere, bulles`

@@ -1040,7 +1040,7 @@ Transposition Android : UserDefaults scopé → Preferences DataStore ; CryptoKi
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Focal/Preferences/ConversationViewerIdentityResolver.swift`
+- `apps/ios/Meeshy/Features/Focal/Preferences/ConversationViewerIdentityResolver.swift`
 - `apps/ios/Meeshy/Features/Main/Models/ReadingModeProtectionChrome.swift`
 
 </details>

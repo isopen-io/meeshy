@@ -201,7 +201,7 @@ final class FocalVoiceOverParityTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Focal/Row")
+            .appendingPathComponent("Meeshy/Features/Focal/Row")
     }
 
     /// Pour chaque `Image(systemName:` de `Focal/Row/**`, vérifie qu'une des

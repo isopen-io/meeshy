@@ -92,12 +92,12 @@ final class ConversationViewModelAfterReadTests: XCTestCase {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().appendingPathComponent("Meeshy/Features/Main")
-        let hosts = ["Views/ThemedMessageBubble.swift", "Focal/Row/FocalRow.swift", "../River/View/RiverBubbleView.swift"]
+        let hosts = ["Views/ThemedMessageBubble.swift", "../Focal/Row/FocalRow.swift", "../River/View/RiverBubbleView.swift"]
         for host in hosts {
             let source = try String(contentsOf: root.appendingPathComponent(host), encoding: .utf8)
             XCTAssertTrue(source.contains(".afterReadWatermark(content.protection.isAfterRead"), host)
         }
-        let summary = try String(contentsOf: root.appendingPathComponent("Focal/Summary/SummaryProtectionsView.swift"), encoding: .utf8)
+        let summary = try String(contentsOf: root.appendingPathComponent("../Focal/Summary/SummaryProtectionsView.swift"), encoding: .utf8)
         XCTAssertTrue(summary.contains("FlameEyeGlyph("), "le Résumé désigne la flamme-œil")
     }
 

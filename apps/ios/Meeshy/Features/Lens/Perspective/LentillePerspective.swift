@@ -91,7 +91,7 @@ nonisolated enum LentilleFocusBand {
 /// contrat plutôt que contourné dans la peau.
 ///
 /// @see tasks/lentille-implementation-contract.md LWS-8, §4.1, §4.2, §4.3
-/// @see apps/ios/Meeshy/Features/Main/Focal/Core/FocalFocusCurve.swift
+/// @see apps/ios/Meeshy/Features/Focal/Core/FocalFocusCurve.swift
 struct LentillePerspective: ViewModifier {
 
     /// Le seul état lu par la passe — et il vient de l'environnement, pas

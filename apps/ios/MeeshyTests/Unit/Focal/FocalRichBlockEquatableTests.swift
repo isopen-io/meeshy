@@ -26,7 +26,7 @@ final class FocalRichBlockEquatableTests: XCTestCase {
             .deletingLastPathComponent()   // .../Unit
             .deletingLastPathComponent()   // .../MeeshyTests
             .deletingLastPathComponent()   // .../apps/ios
-            .appendingPathComponent("Meeshy/Features/Main/Focal/Row/\(fileName)")
+            .appendingPathComponent("Meeshy/Features/Focal/Row/\(fileName)")
         return try String(contentsOf: url, encoding: .utf8)
     }
 

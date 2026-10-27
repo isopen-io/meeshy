@@ -37,7 +37,7 @@ import { VeilRevealContext, ViewOnceOpenedContext, revealedAttachment, type Veil
 
 /**
  * LE VOILE, LE TOMBSTONE ET LE MINUTEUR — miroir de `FocalProtectedContent.swift`
- * (`apps/ios/Meeshy/Features/Main/Focal/Row/`) et de la protection intégrée
+ * (`apps/ios/Meeshy/Features/Focal/Row/`) et de la protection intégrée
  * de `ThemedMessageBubble`/`BubbleStandardLayout.swift` (D-23, #5676), pour
  * les DEUX peaux du fil (`focal-row.tsx`, `bubble.tsx`) — UN composant, la
  * loi vit dans `lib/reading-mode/protection.ts`, jamais réécrite ici.

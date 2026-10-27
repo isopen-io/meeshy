@@ -355,7 +355,7 @@ Transposition Android : Génération à l'arrivée des modules ; les chaînes co
 
 - `apps/ios/Meeshy/Localizable.xcstrings (préfixes composer., focal., lentille.)`
 - `apps/ios/Meeshy/Features/Main/Composer`
-- `apps/ios/Meeshy/Features/Main/Focal`
+- `apps/ios/Meeshy/Features/Focal`
 - `apps/ios/Meeshy/Features/Lens`
 
 </details>

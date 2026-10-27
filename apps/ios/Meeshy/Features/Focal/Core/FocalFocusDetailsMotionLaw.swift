@@ -1,4 +1,4 @@
-// apps/ios/Meeshy/Features/Main/Focal/Core/FocalFocusDetailsMotionLaw.swift
+// apps/ios/Meeshy/Features/Focal/Core/FocalFocusDetailsMotionLaw.swift
 
 import CoreGraphics
 import Foundation

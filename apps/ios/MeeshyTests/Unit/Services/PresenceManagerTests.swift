@@ -73,7 +73,7 @@ final class PresenceManagerTests: XCTestCase {
             "Meeshy/Features/Main/Views/ConversationView+Header.swift",
             "Meeshy/Features/Main/Views/ConversationView.swift",
             "Meeshy/Features/Main/Views/MessageListViewController+Rows.swift",
-            "Meeshy/Features/Main/Focal/Summary/LivingSummaryAssembly.swift",
+            "Meeshy/Features/Focal/Summary/LivingSummaryAssembly.swift",
             "Meeshy/Features/Main/Components/ConversationInfoSheet.swift",
             "Meeshy/Features/Main/Views/ParticipantsView.swift",
         ]

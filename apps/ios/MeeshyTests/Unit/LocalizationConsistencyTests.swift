@@ -195,7 +195,7 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Views/AudioFullscreenPage.swift",
         "apps/ios/Meeshy/Features/Main/Views/AudioFullscreenPage+Transcription.swift",
         "apps/ios/Meeshy/Features/Main/Views/CallBubbleView.swift",  // 14
-        "apps/ios/Meeshy/Features/Main/Focal/Lens/ReadingModeLensSheet.swift",  // 13
+        "apps/ios/Meeshy/Features/Focal/Lens/ReadingModeLensSheet.swift",  // 13
         "apps/ios/Meeshy/Features/Main/Views/ActiveSessionsView.swift",  // 12
         // #9612 — ce que la ligne dit d'une session, et l'avis d'une session
         // fermée par le serveur : épinglés dès leur création.
@@ -224,7 +224,7 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Contacts/DiscoverViewModel.swift",  // 4
         "apps/ios/Meeshy/Features/Contacts/RequestsViewModel.swift",  // 8
         "apps/ios/Meeshy/Features/Main/Components/MessageDetail/MessageEditsDetailView.swift",  // 8
-        "apps/ios/Meeshy/Features/Main/Focal/Summary/LivingSummaryView.swift",  // 8
+        "apps/ios/Meeshy/Features/Focal/Summary/LivingSummaryView.swift",  // 8
         // 2026-10-02 — `CallManager.swift` découpé par responsabilité : ses clés
         // ont suivi leur code, la liste suit les hôtes (leçon 578).
         "apps/ios/Meeshy/Features/Main/Services/CallManager+Answer.swift",
@@ -275,7 +275,7 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Components/LanguageFlagChip.swift",  // 5
         "apps/ios/Meeshy/Features/Main/Composer/ComposerDescriptionLayer.swift",  // 5
         "apps/ios/Meeshy/Features/Main/Composer/ComposerFormatAvailability.swift",  // 5
-        "apps/ios/Meeshy/Features/Main/Focal/Summary/EpisodeSegmenter.swift",  // 5
+        "apps/ios/Meeshy/Features/Focal/Summary/EpisodeSegmenter.swift",  // 5
         "apps/ios/Meeshy/Features/Lens/Chrome/LentilleSectionIdentity.swift",  // 5
         "apps/ios/Meeshy/Features/Main/Services/CrashDiagnosticsManager.swift",  // 5
         "apps/ios/Meeshy/Features/Main/Services/MediaPermissionCoordinator.swift",  // 5
@@ -311,9 +311,9 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Components/BrandSignature.swift",  // 2
         "apps/ios/Meeshy/Features/Main/Components/ReelFeedSoundButton.swift",  // 2
         "apps/ios/Meeshy/Features/Main/Components/ToggleStateAccessibility.swift",  // 2
-        "apps/ios/Meeshy/Features/Main/Focal/Row/FocalIdentityHeader.swift",  // 2
-        "apps/ios/Meeshy/Features/Main/Focal/Summary/EpisodeListView.swift",  // 2
-        "apps/ios/Meeshy/Features/Main/Focal/Summary/FaceRampView.swift",  // 2
+        "apps/ios/Meeshy/Features/Focal/Row/FocalIdentityHeader.swift",  // 2
+        "apps/ios/Meeshy/Features/Focal/Summary/EpisodeListView.swift",  // 2
+        "apps/ios/Meeshy/Features/Focal/Summary/FaceRampView.swift",  // 2
         "apps/ios/Meeshy/Features/Lens/Mode/LentilleModeMenu.swift",  // 2
         "apps/ios/Meeshy/Features/Main/Models/ConversationFilterComposition.swift",  // 2
         "apps/ios/Meeshy/Features/Main/Services/MessageForwardService.swift",  // 2
@@ -351,8 +351,8 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Components/ComposerMentionStrip.swift",  // 1
         "apps/ios/Meeshy/Features/Main/Components/LocalizedNumber.swift",  // 1
         "apps/ios/Meeshy/Features/Main/Composer/ComposerTrailingRail.swift",  // 1
-        "apps/ios/Meeshy/Features/Main/Focal/Row/FocalConversationStartRow.swift",  // 1
-        "apps/ios/Meeshy/Features/Main/Focal/Row/FocalMetaRow.swift",  // 1
+        "apps/ios/Meeshy/Features/Focal/Row/FocalConversationStartRow.swift",  // 1
+        "apps/ios/Meeshy/Features/Focal/Row/FocalMetaRow.swift",  // 1
         "apps/ios/Meeshy/Features/Main/Navigation/Router+StoryReply.swift",  // 1
         "apps/ios/Meeshy/Features/River/Core/RiverConversationMapping.swift",  // 1
         "apps/ios/Meeshy/Features/River/View/RiverLaneHeaderStrip.swift",  // 1
@@ -564,7 +564,7 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleFooter.swift",  // 8
         "apps/ios/Meeshy/Features/Main/Views/ConversationView+Header.swift",  // 8
         "apps/ios/Meeshy/Features/Main/Views/VideoFilterControlView.swift",  // 8
-        "apps/ios/Meeshy/Features/Main/Focal/Row/FocalQuotedReplyView.swift",  // 6
+        "apps/ios/Meeshy/Features/Focal/Row/FocalQuotedReplyView.swift",  // 6
         "apps/ios/Meeshy/Features/Main/ViewModels/StatusViewModel.swift",  // 7
         "apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleDeliveryCheck.swift",  // 7
         "apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleQuotedReply.swift",  // 7
@@ -607,8 +607,8 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Views/WebRTCVideoView.swift",  // 3
         "apps/ios/Meeshy/Features/Contacts/ContactsHubView.swift",  // 2
         "apps/ios/Meeshy/Features/Main/Components/MentionSuggestionPanel.swift",  // 2
-        "apps/ios/Meeshy/Features/Main/Focal/Row/FocalProtectedContent.swift",  // 2
-        "apps/ios/Meeshy/Features/Main/Focal/Row/FocalSystemRows.swift",  // 2
+        "apps/ios/Meeshy/Features/Focal/Row/FocalProtectedContent.swift",  // 2
+        "apps/ios/Meeshy/Features/Focal/Row/FocalSystemRows.swift",  // 2
         "apps/ios/Meeshy/Features/Main/ViewModels/BookmarksViewModel.swift",  // 2
         "apps/ios/Meeshy/Features/Main/Views/StoryRepostEmbedCell.swift",  // 2
         "apps/ios/Meeshy/Features/Contacts/AffiliatesViewModel.swift",  // 1
@@ -620,10 +620,10 @@ final class LocalizationConsistencyTests: XCTestCase {
         // shipped French to the six other locales; each is now translated in all
         // seven. Three of the four are ACCESSIBILITY surfaces, where the gap was
         // spoken rather than read.
-        "apps/ios/Meeshy/Features/Main/Focal/Preferences/MessageAccessibilityLabelComposer.swift",  // 20
+        "apps/ios/Meeshy/Features/Focal/Preferences/MessageAccessibilityLabelComposer.swift",  // 20
         "apps/ios/Meeshy/Features/Main/Components/AddParticipantSheet.swift",  // 11
         "apps/ios/Meeshy/Features/Main/Components/SyncPill.swift",  // 4
-        "apps/ios/Meeshy/Features/Main/Focal/Lens/ReadingModeChip.swift",  // 4
+        "apps/ios/Meeshy/Features/Focal/Lens/ReadingModeChip.swift",  // 4
         // 270i — the first two sources OUTSIDE the app target ever pinned. They
         // needed no work: both already passed BOTH rules against the widget
         // catalog. What was missing was the map entry telling this suite which

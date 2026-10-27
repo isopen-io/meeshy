@@ -1,6 +1,6 @@
 /**
  * LE TAMPON DE LA RANGÉE ÉLUE (#5648) — port de
- * `Main/Focal/Core/FocalFocusTimestamp.label` (`apps/ios/...`, :22-59) :
+ * `Focal/Core/FocalFocusTimestamp.label` (`apps/ios/...`, :22-59) :
  * « Aujourd'hui 12:45 », « Hier 18:45 », « Avant-hier 12:45 », le nom du
  * jour jusqu'à `WEEKDAY_WINDOW_DAYS` (6) jours, puis la date abrégée
  * (« Ven. 14 août · 14:41 »), avec l'année si elle diffère de `now`.

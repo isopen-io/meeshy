@@ -59,7 +59,7 @@ const defaultNow = (): number => Date.now();
 
 /**
  * LA RANGÉE PLATE DU FIL (Focal / Script) — miroir de `FocalRow.swift`
- * (`apps/ios/Meeshy/Features/Main/Focal/Row/`, §1.5 de la spécification #5566).
+ * (`apps/ios/Meeshy/Features/Focal/Row/`, §1.5 de la spécification #5566).
  * « Pastille 22, "Pseudo · HH:mm" en tête de groupe, texte 15 pleine largeur
  * au retrait 41, méta discrète, AUCUNE bulle. »
  *
