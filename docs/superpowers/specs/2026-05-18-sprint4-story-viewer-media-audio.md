@@ -8,7 +8,7 @@
 - `packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/Layers/StoryMediaLayer.swift` — la vidéo/image foreground résout `mediaURL` directement au lieu de passer par le `postMediaURLResolver`.
 - `packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryRenderer.swift` — propagation du `resolver` / `imageCache` vers `StoryMediaLayer` (le filtrage `isBackground == false` y est déjà correct).
 - `packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryReaderRepresentable.swift` — exposition du `ReaderAudioMixer` au viewer pour un teardown déterministe.
-- `apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift` — teardown audio explicite sur `.onDisappear` et `scenePhase == .background`.
+- `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift` — teardown audio explicite sur `.onDisappear` et `scenePhase == .background`.
 - Tests : `packages/MeeshySDK/Tests/MeeshyUITests/Story/Reader/Audio/*`, `packages/MeeshySDK/Tests/MeeshyUITests/Story/Canvas/*`.
 
 **Sprint 4 n'ajoute AUCUN fichier `.swift` de production et ne touche PAS `project.pbxproj`.** Les seuls fichiers créés sont des fichiers de test sous `packages/MeeshySDK/` (compilés automatiquement par SPM).
@@ -288,7 +288,7 @@ Vérification manuelle sur simulateur **et** device réel :
 | `packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryRenderer.swift` | MODIFIER — propager `resolver`/`imageCache` à `renderItem` | — |
 | `packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryCanvasUIView.swift` | MODIFIER — capture `slideTimelineOriginHost`, `audioMixer.play(originHost:slideKey:)`, `MediaSessionCoordinator.request/release`, `PlaybackCoordinator.willStartPlaying`, teardown lifecycle, abonnement `events`, `scheduleContentReadyEvaluation` foreground vidéo | — |
 | `packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryReaderRepresentable.swift` | MODIFIER — exposer la référence `ReaderAudioMixer` au viewer (`onAudioMixerReady`) | — |
-| `apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift` | MODIFIER — `audioMixer.stop()/shutdown()` + `MediaSessionCoordinator` sur `onDisappear` + `scenePhase == .background` | — |
+| `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift` | MODIFIER — `audioMixer.stop()/shutdown()` + `MediaSessionCoordinator` sur `onDisappear` + `scenePhase == .background` | — |
 | `packages/MeeshySDK/Tests/MeeshyUITests/Story/Reader/Audio/ReaderAudioMixerBackgroundTests.swift` | **CRÉER** — démarrage + scheduling du background (SPM, pas de `pbxproj`) | ✅ (SDK/SPM) |
 | `packages/MeeshySDK/Tests/MeeshyUITests/Story/Reader/Audio/ReaderAudioMixerIdempotenceTests.swift` | **CRÉER** — garde `slideKey`, no double-schedule (SPM, pas de `pbxproj`) | ✅ (SDK/SPM) |
 | `packages/MeeshySDK/Tests/MeeshyUITests/Story/Reader/Audio/ReaderAudioMixerDefaultEnvelopeTests.swift` | **CRÉER** — enveloppe par défaut vs fade explicite (SPM, pas de `pbxproj`) | ✅ (SDK/SPM) |

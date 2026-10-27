@@ -60,7 +60,7 @@ final class StoryViewerExportRailTests: XCTestCase {
     // MARK: - #9953 : plus de « Partager » au rail de l'auteur, « Envoyer » reste
 
     private func sidebar() throws -> String {
-        try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift")
+        try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Stories/Views/StoryViewerView+Sidebar.swift")
     }
 
     func test_theAuthorRail_noLongerCarriesTheShareButton() throws {

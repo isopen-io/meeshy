@@ -319,8 +319,8 @@ final class CommentMediaGalleryWiringGuardTests: XCTestCase {
         // Cohésion de `StoryViewerView` : la liste des commentaires de story est son
         // propre type — c'est elle qui déclare la galerie, plus le fichier du lecteur.
         (
-            "Meeshy/Features/Main/Views/StoryCommentsOverlayView.swift",
-            ["Meeshy/Features/Main/Views/StoryCommentRowView.swift"]
+            "Meeshy/Features/Stories/Views/StoryCommentsOverlayView.swift",
+            ["Meeshy/Features/Stories/Views/StoryCommentRowView.swift"]
         ),
     ]
 

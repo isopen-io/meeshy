@@ -31,8 +31,8 @@ export function storyReaderCurveFailures({ root }) {
   // Le cadrage a quitté l'hôte pour son type, `StoryReaderCanvasLayout` (#10988) :
   // l'hôte n'en garde qu'une délégation. Le gate lit les deux, le type en tête.
   const canvas = [
-    'apps/ios/Meeshy/Features/Main/Views/StoryReaderCanvasLayout.swift',
-    'apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift',
+    'apps/ios/Meeshy/Features/Stories/Views/StoryReaderCanvasLayout.swift',
+    'apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Canvas.swift',
   ].map(read).join('\n');
   const sceneShape = read('packages/MeeshySDK/Sources/MeeshySDK/Story/SceneShape.swift');
   const sceneFloor = read('packages/MeeshySDK/Sources/MeeshyUI/Story/ScenePlayer/SceneFloorView.swift');

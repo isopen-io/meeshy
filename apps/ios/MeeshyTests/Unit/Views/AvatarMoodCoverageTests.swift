@@ -115,7 +115,7 @@ final class AvatarMoodCoverageTests: XCTestCase {
     }
 
     func test_storyViewerProfileSheet_readsTheMoodFromTheRootResolvers() throws {
-        let code = try stripped(views + "StoryViewerView+Header.swift")
+        let code = try stripped(AppSourceGuard.featureViewPath("StoryViewerView+Header.swift"))
         XCTAssertTrue(code.contains("moodEmoji: moodEmojiResolver?(user.userId ?? \"\")"))
         XCTAssertTrue(code.contains("onMoodTap: moodTapResolver?(user.userId ?? \"\")"))
     }

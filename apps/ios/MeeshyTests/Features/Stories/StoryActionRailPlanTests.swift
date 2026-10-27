@@ -139,7 +139,7 @@ extension StoryActionRailPlanTests {
                 .deletingLastPathComponent()   // Features
                 .deletingLastPathComponent()   // MeeshyTests
                 .deletingLastPathComponent()   // ios
-                .appendingPathComponent("Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift"),
+                .appendingPathComponent("Meeshy/Features/Stories/Views/StoryViewerView+Sidebar.swift"),
             encoding: .utf8
         )
 
@@ -174,7 +174,7 @@ extension StoryActionRailPlanTests {
                 .deletingLastPathComponent()   // Features
                 .deletingLastPathComponent()   // MeeshyTests
                 .deletingLastPathComponent()   // ios
-                .appendingPathComponent("Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift"),
+                .appendingPathComponent("Meeshy/Features/Stories/Views/StoryViewerView+Sidebar.swift"),
             encoding: .utf8
         )
 
@@ -218,18 +218,18 @@ extension StoryActionRailPlanTests {
                 .deletingLastPathComponent()   // Features
                 .deletingLastPathComponent()   // MeeshyTests
                 .deletingLastPathComponent()   // ios
-                .appendingPathComponent("Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift"),
+                .appendingPathComponent("Meeshy/Features/Stories/Views/StoryViewerView+Sidebar.swift"),
             encoding: .utf8
         )
     }
 
     private func contentSource() throws -> String {
-        try AppSourceGuard.unit("Meeshy/Features/Main/Views/StoryViewerView.swift")
+        try AppSourceGuard.unit("Meeshy/Features/Stories/Views/StoryViewerView.swift")
     }
 
     /// The opening reconciliation and its pulse live in `StoryCommentSession` (#13135).
     private func sessionSource() throws -> String {
-        try AppSourceGuard.unit("Meeshy/Features/Main/Views/StoryCommentSession.swift")
+        try AppSourceGuard.unit("Meeshy/Features/Stories/Views/StoryCommentSession.swift")
     }
 
     /// Reproduit le cas confirmé cassé : le rail doit finir par réagir à la

@@ -324,7 +324,7 @@ final class LentilleChromeSourceGuardTests: XCTestCase {
 
         let definitions = sources.filter { $0.code.contains("func latestStoryThumbnailURL(") }.map(\.name)
         XCTAssertEqual(
-            definitions, ["Features/Main/Views/StoryTrayView.swift"],
+            definitions, ["Features/Stories/Views/StoryTrayView.swift"],
             "Le résolveur de couverture doit exister UNE fois, dans StoryTrayView.swift. " +
             "Trouvé : \(definitions)."
         )
@@ -337,7 +337,7 @@ final class LentilleChromeSourceGuardTests: XCTestCase {
         // il faut la repointer, jamais l'élargir.
         let callers = sources.filter { $0.code.contains("StoryCoverThumbnail.preferredCoverURLString(") }.map(\.name)
         XCTAssertEqual(
-            callers, ["Features/Main/Views/StoryCoverURLMemo.swift"],
+            callers, ["Features/Stories/Views/StoryCoverURLMemo.swift"],
             "La cascade pure (`preferredCoverURLString`) ne doit être consommée qu'à UN endroit — " +
             "la mémoire de couverture, seul site qui touche encore le disque. Un second appelant " +
             "serait une troisième écriture de l'ordre de préférence. Trouvé : \(callers)."

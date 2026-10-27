@@ -125,7 +125,7 @@ final class StoryVerticalGestureFeatureGuardTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Views/StoryViewerView+Content+Gestures.swift")
+            .appendingPathComponent("Meeshy/Features/Stories/Views/StoryViewerView+Content+Gestures.swift")
         let source = try String(contentsOf: url, encoding: .utf8)
         guard let start = source.range(of: "var unifiedDragGesture: some Gesture {"),
               let end = source.range(of: "\n    }", range: start.upperBound..<source.endIndex) else {
@@ -141,7 +141,7 @@ final class StoryVerticalGestureFeatureGuardTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Views/StoryViewerView+Content+Gestures.swift")
+            .appendingPathComponent("Meeshy/Features/Stories/Views/StoryViewerView+Content+Gestures.swift")
         let source = try String(contentsOf: url, encoding: .utf8)
         guard let start = source.range(of: "private func concludeVerticalSwipe("),
               let end = source.range(of: "\n    }", range: start.upperBound..<source.endIndex) else {
@@ -283,7 +283,7 @@ final class StoryVerticalGestureFeatureGuardTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Views/StoryViewerView+Content+Gestures.swift")
+            .appendingPathComponent("Meeshy/Features/Stories/Views/StoryViewerView+Content+Gestures.swift")
         let source = try String(contentsOf: url, encoding: .utf8)
         guard let start = source.range(of: "func resetGestureTracking() {"),
               let end = source.range(of: "\n    }", range: start.upperBound..<source.endIndex) else {
@@ -318,7 +318,7 @@ final class StoryVerticalGestureFeatureGuardTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Views/StoryViewerView+PlaybackHold.swift")
+            .appendingPathComponent("Meeshy/Features/Stories/Views/StoryViewerView+PlaybackHold.swift")
         let source = try String(contentsOf: url, encoding: .utf8)
         guard let start = source.range(of: "var playbackCauses: StoryPlaybackCauses {"),
               let end = source.range(of: "\n    }", range: start.upperBound..<source.endIndex) else {

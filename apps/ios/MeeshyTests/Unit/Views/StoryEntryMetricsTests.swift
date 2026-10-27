@@ -16,7 +16,7 @@ final class StoryEntryMetricsTests: XCTestCase {
     }
 
     private var feedTray: String {
-        get throws { try source("Meeshy/Features/Main/Views/StoryTrayView.swift") }
+        get throws { try source("Meeshy/Features/Stories/Views/StoryTrayView.swift") }
     }
 
     func test_theEntry_isTheFeedTrayAvatarAndRing() {

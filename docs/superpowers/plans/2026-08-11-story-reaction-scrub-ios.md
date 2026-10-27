@@ -24,7 +24,7 @@
 ### Task 1: `StoryScrubSelectionResolver` (pur + tests XCTest)
 
 **Files:**
-- Create: `apps/ios/Meeshy/Features/Main/Views/StoryScrubSelectionResolver.swift`
+- Create: `apps/ios/Meeshy/Features/Stories/Views/StoryScrubSelectionResolver.swift`
 - Test: `apps/ios/MeeshyTests/Features/Stories/StoryScrubSelectionResolverTests.swift`
 
 **Interfaces:**
@@ -186,7 +186,7 @@ Expected: PASS
 - [ ] **Step 5: Commit**
 
 ```bash
-git add apps/ios/Meeshy/Features/Main/Views/StoryScrubSelectionResolver.swift apps/ios/MeeshyTests/Features/Stories/StoryScrubSelectionResolverTests.swift
+git add apps/ios/Meeshy/Features/Stories/Views/StoryScrubSelectionResolver.swift apps/ios/MeeshyTests/Features/Stories/StoryScrubSelectionResolverTests.swift
 git commit -m 'feat(ios/stories): resolver pur de survol scrub + espace de coordonnees partage'
 ```
 
@@ -328,7 +328,7 @@ git commit -m 'feat(ios/sdk-ui): EmojiReactionPicker scrubbable (survol + public
 ### Task 3: `StoryLanguageQuickBar` scrubbable
 
 **Files:**
-- Modify: `apps/ios/Meeshy/Features/Main/Views/StoryLanguageQuickBar.swift`
+- Modify: `apps/ios/Meeshy/Features/Stories/Views/StoryLanguageQuickBar.swift`
 
 **Interfaces:**
 - Consumes: `ScrubTileFramesKey` (Task 2, `import MeeshyUI` déjà présent).
@@ -411,7 +411,7 @@ Expected: BUILD SUCCEEDED
 - [ ] **Step 3: Commit**
 
 ```bash
-git add apps/ios/Meeshy/Features/Main/Views/StoryLanguageQuickBar.swift
+git add apps/ios/Meeshy/Features/Stories/Views/StoryLanguageQuickBar.swift
 git commit -m 'feat(ios/stories): StoryLanguageQuickBar scrubbable (survol + cadres publies)'
 ```
 
@@ -420,7 +420,7 @@ git commit -m 'feat(ios/stories): StoryLanguageQuickBar scrubbable (survol + cad
 ### Task 4: Sidebar — tap ❤️ direct + gestes de scrub sur cœur et langue
 
 **Files:**
-- Modify: `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift`
+- Modify: `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Sidebar.swift`
 
 **Interfaces:**
 - Consumes: `StoryScrubSelectionResolver`, `StoryScrubRelease`, `StoryScrubSpace`, `StoryHeartFrameKey` (Task 1) ; pickers étendus (Tasks 2–3).
@@ -658,10 +658,10 @@ Expected: erreurs UNIQUEMENT sur le call site `StoryActionSidebarView(...)` (+Ca
 ### Task 5: Viewer — vol de réaction, suppression big reaction, pause, câblage
 
 **Files:**
-- Create: `apps/ios/Meeshy/Features/Main/Views/StoryReactionFlightView.swift`
-- Modify: `apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift` (états, `triggerStoryReaction`)
-- Modify: `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift` (coordinateSpace, Layer 9, câblage sidebar)
-- Modify: `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift` (`shouldPauseTimer`)
+- Create: `apps/ios/Meeshy/Features/Stories/Views/StoryReactionFlightView.swift`
+- Modify: `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift` (états, `triggerStoryReaction`)
+- Modify: `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Canvas.swift` (coordinateSpace, Layer 9, câblage sidebar)
+- Modify: `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Content.swift` (`shouldPauseTimer`)
 
 **Interfaces:**
 - Consumes: `StoryScrubSpace`, `StoryHeartFrameKey` (Task 1), contrat sidebar étendu (Task 4).
@@ -829,7 +829,7 @@ Expected: BUILD SUCCEEDED ; tous les tests verts (dont `StoryScrubSelectionResol
 - [ ] **Step 6: Commit**
 
 ```bash
-git add apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift apps/ios/Meeshy/Features/Main/Views/StoryReactionFlightView.swift apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift
+git add apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Sidebar.swift apps/ios/Meeshy/Features/Stories/Views/StoryReactionFlightView.swift apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Canvas.swift apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Content.swift
 git commit -m 'feat(ios/stories): tap coeur direct, scrub longpress, vol de reaction, big reaction retiree'
 ```
 

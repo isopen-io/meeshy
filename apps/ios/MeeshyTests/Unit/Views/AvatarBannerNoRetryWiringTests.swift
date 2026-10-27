@@ -123,7 +123,7 @@ final class AvatarBannerNoRetryWiringTests: XCTestCase {
     }
 
     func test_storyCommentRow_avatarIsAnAvatarComponent() throws {
-        let source = try appSource("Meeshy/Features/Main/Views/StoryCommentRowView.swift")
+        let source = try appSource("Meeshy/Features/Stories/Views/StoryCommentRowView.swift")
         let avatar = try block(from: "private var avatar: some View {", upTo: "private var headerRow", in: source)
         XCTAssertTrue(avatar.contains("CachedAvatarImage("), "Le visage de l'auteur : sa photo, sinon ses initiales.")
         XCTAssertTrue(avatar.contains("urlString: comment.authorAvatarURL"))

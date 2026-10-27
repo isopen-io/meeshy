@@ -327,7 +327,7 @@ final class CommentOfflineMediaWiringGuardTests: XCTestCase {
                       "Le fil partagé re-téléverserait ce que l'envoi direct a déjà monté.")
         for host in ["Features/Main/Views/FeedCommentsSheet.swift",
                      "Features/Main/ViewModels/PostDetailViewModel+CommentSend.swift",
-                     "Features/Main/Views/StoryCommentSession.swift"] {
+                     "Features/Stories/Views/StoryCommentSession.swift"] {
             let code = try source(host)
             XCTAssertTrue(code.contains(".deliver(payload, media: "),
                           "\(host) n'envoie pas par le fil partagé (#13133).")
@@ -652,7 +652,7 @@ final class StoryRefusedCommentTests: XCTestCase {
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
         func code(_ path: String) throws -> String {
-            AppSourceGuard.stripComments(try String(contentsOf: root.appendingPathComponent("Meeshy/Features/Main/Views/\(path)"), encoding: .utf8))
+            AppSourceGuard.stripComments(try String(contentsOf: root.appendingPathComponent(AppSourceGuard.featureViewPath(path)), encoding: .utf8))
         }
         XCTAssertTrue(try code("StoryViewerView+Content.swift")
             .contains("returnRefusedStoryComment(storyId: story.id, text: text, medias: medias)"))

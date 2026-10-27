@@ -1,7 +1,7 @@
 /**
  * **LE RAIL D'ACTIONS DU LECTEUR DE STORIES** — loi PURE, portage vecteur à
  * vecteur de `StoryActionRailPlan.resolve`
- * (`apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift:45-73`),
+ * (`apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Sidebar.swift:45-73`),
  * et de son GEL (`frozenRailPlan`, `:216-232` et `:578-645`).
  *
  * Ce module ne connaît NI le DOM, NI le réseau, NI React : il répond à deux

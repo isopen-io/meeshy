@@ -20,10 +20,10 @@ final class ReaderPrismReadingSurfacesGuardTests: XCTestCase {
     /// Les seuls sites qui gardent les défauts de composition : ils PROPOSENT
     /// une langue (composer, réponse, export, document légal) et le disent.
     private static let compositionSites = [
-        "Main/Views/StoryViewerView+Header.swift", "Main/Views/StoryViewerView+Sidebar.swift", "Main/Views/StoryViewerSheets.swift",
+        "Stories/Views/StoryViewerView+Header.swift", "Stories/Views/StoryViewerView+Sidebar.swift", "Stories/Views/StoryViewerSheets.swift",
         "Main/Services/MoodSpotlight/MoodReplySender.swift", "Main/Services/NotificationActionHandler.swift",
         "Main/Views/ConversationView.swift", "Call/Views/CallDeclineSheet.swift",
-        "Main/Services/StoryPhotoSaveService.swift", "Main/ViewModels/StoryExportShareViewModel.swift",
+        "Stories/Services/StoryPhotoSaveService.swift", "Stories/ViewModels/StoryExportShareViewModel.swift",
         "Settings/Views/PrivacyPolicyView.swift", "Settings/Views/TermsOfServiceView.swift",
     ]
 
@@ -33,8 +33,8 @@ final class ReaderPrismReadingSurfacesGuardTests: XCTestCase {
         "Main/Views/PostDetailView+RepostEmbed.swift", "Main/Views/PostTranslationSheet.swift", "Main/Services/NSEPendingPostConsumer.swift",
     ]
     private static let stories = [
-        "Main/Views/StoryViewerView.swift", "Main/Views/StoryViewerView+PrefetchPipeline.swift",
-        "Main/Views/StoryViewerView+Content+Comments.swift", "Main/Views/StoryCommentsOverlayHost.swift", "Main/Views/MyStoriesView.swift",
+        "Stories/Views/StoryViewerView.swift", "Stories/Views/StoryViewerView+PrefetchPipeline.swift",
+        "Stories/Views/StoryViewerView+Content+Comments.swift", "Stories/Views/StoryCommentsOverlayHost.swift", "Stories/Views/MyStoriesView.swift",
     ]
     private static let comments = [
         "Main/Views/CommentRowView.swift", "Main/Views/CommentsSheetLiveSync.swift", "Main/Views/FeedCommentsSheet.swift",
@@ -55,7 +55,7 @@ final class ReaderPrismReadingSurfacesGuardTests: XCTestCase {
     /// du fil directement, les lignes de post et de story par la bascule
     /// partagée (#13133), dont `FeedCommentTranslationDisplayTests` prouve la règle.
     private static let commentChips = ["Main/Views/FeedPostCard+CommentsPreview.swift"]
-    private static let sharedToggleRows = ["Main/Views/StoryCommentRowView.swift", "Main/Views/CommentRowView.swift"]
+    private static let sharedToggleRows = ["Stories/Views/StoryCommentRowView.swift", "Main/Views/CommentRowView.swift"]
 
     private static var repoRoot: URL {
         URL(fileURLWithPath: #filePath)

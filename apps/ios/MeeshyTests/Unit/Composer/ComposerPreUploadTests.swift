@@ -104,7 +104,7 @@ final class ComposerPreUploadTests: XCTestCase {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/ViewModels/StoryViewModel+PublicationUpload.swift")
+            .appendingPathComponent("Meeshy/Features/Stories/ViewModels/StoryViewModel+PublicationUpload.swift")
         let code = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
             .components(separatedBy: .whitespacesAndNewlines).joined()
         XCTAssertTrue(code.contains("wheremediaObjects[i].postMediaId.isEmpty"),

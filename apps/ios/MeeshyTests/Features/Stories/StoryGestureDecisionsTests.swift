@@ -283,7 +283,7 @@ final class StoryGestureDecisionsTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Views/StoryGestureOverlayView.swift")
+            .appendingPathComponent("Meeshy/Features/Stories/Views/StoryGestureOverlayView.swift")
         let source = try String(contentsOf: canvasURL, encoding: .utf8)
 
         guard let start = source.range(of: "let isCleanTap ="),

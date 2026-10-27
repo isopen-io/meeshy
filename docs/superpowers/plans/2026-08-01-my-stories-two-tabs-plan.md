@@ -18,7 +18,7 @@ détaillés en § 7, mais ils conditionnent tout le reste.
 JAMAIS mes stories périmées. Côté client, la purge locale les protège explicitement
 (`packages/MeeshySDK/Sources/MeeshySDK/Models/StoryTrayPurge.swift:87` — « Mes propres
 stories expirées restent »), mais le chemin de refetch complet fait
-`storyGroups = groups` (`apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift:417`),
+`storyGroups = groups` (`apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel.swift:417`),
 donc un pull-to-refresh les efface. **La demande « story périmée avec voile gris »
 exige une réinjection locale** — sinon la fonctionnalité n'est visible qu'entre deux
 refetchs complets. C'est un incrément à part entière (inc. 3).
@@ -120,10 +120,10 @@ le refetch complet ») reste app-side, dans `StoryViewModel`.
 
 | Fichier | Modification |
 |---|---|
-| `apps/ios/Meeshy/Features/Main/Views/MyStoriesView.swift` | 1085 → ~260 l. : `Picker` d'onglets + `switch` + les sheets/alertes/actions serveur existantes |
+| `apps/ios/Meeshy/Features/Stories/Views/MyStoriesView.swift` | 1085 → ~260 l. : `Picker` d'onglets + `switch` + les sheets/alertes/actions serveur existantes |
 | `apps/ios/Meeshy/Features/Main/Views/MyStoriesEmptyStateResolver.swift` | signature par onglet (§ 3.4) |
-| `apps/ios/Meeshy/Features/Main/Views/StoryTrayView.swift` | **deux** call sites (l.120 et l.779) : nouveaux callbacks `onOpenDraft` / `onResumeFailedItem` |
-| `apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift` | l.417 : `storyGroups = groups.mergingOwnExpiredArchive(previous:…)` |
+| `apps/ios/Meeshy/Features/Stories/Views/StoryTrayView.swift` | **deux** call sites (l.120 et l.779) : nouveaux callbacks `onOpenDraft` / `onResumeFailedItem` |
+| `apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel.swift` | l.417 : `storyGroups = groups.mergingOwnExpiredArchive(previous:…)` |
 | `apps/ios/Meeshy/Localizable.xcstrings` | ~14 clés neuves (onglets, états vides, actions brouillon, a11y) |
 
 ### 1.4 Fichiers à SUPPRIMER
@@ -557,7 +557,7 @@ Chaque incrément compile, passe `./apps/ios/meeshy.sh test`, et se commite seul
 
 ### Inc. 0 — Ré-ancrer les gardes de source (RED puis GREEN, zéro code produit)
 
-Cinq fichiers de tests lisent `Meeshy/Features/Main/Views/MyStoriesView.swift` en dur et
+Cinq fichiers de tests lisent `Meeshy/Features/Stories/Views/MyStoriesView.swift` en dur et
 découpent sur des ancres qui vont disparaître (§ 7.10). Les ré-ancrer **avant** de bouger
 quoi que ce soit : sur le comportement (les glyphes existent, dans cet ordre, masqués du
 rotor), pas sur des fenêtres de caractères — leçon
@@ -637,7 +637,7 @@ Lot séparé, architecture A (§ 5). L'entrée de menu reste filtrée jusque-là
 ## 7. Pièges concrets repérés en lisant le code
 
 **7.1 — `@ObservedObject` sur un singleton, dans une cellule de liste.**
-`apps/ios/Meeshy/Features/Main/Views/MyStoriesView.swift:641` :
+`apps/ios/Meeshy/Features/Stories/Views/MyStoriesView.swift:641` :
 `@ObservedObject var saveService: StoryPhotoSaveService`. Chaque tick de progression
 d'enregistrement invalide **toutes** les lignes, y compris `textObjectsOverlay`
 (l.921-938) qui reconstruit un `Text` positionné par objet texte. Violation directe de

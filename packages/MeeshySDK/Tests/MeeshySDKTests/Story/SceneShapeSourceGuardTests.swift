@@ -165,8 +165,8 @@ final class SceneShapeSourceGuardTests: XCTestCase {
             "apps/ios/Meeshy/Features/Main/Views/ConversationMediaGalleryView+ScenePage.swift",
             "apps/ios/Meeshy/Features/Main/Views/GallerySceneStage.swift",
             // le lecteur de stories — la surface de RÉFÉRENCE
-            "apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift",
-            "apps/ios/Meeshy/Features/Main/Views/StoryViewerView+ReaderCard.swift",
+            "apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Canvas.swift",
+            "apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+ReaderCard.swift",
             // le réel composé
             "apps/ios/Meeshy/Features/Main/Views/ReelsPlayerView+Scene.swift",
         ]
@@ -198,7 +198,7 @@ final class SceneShapeSourceGuardTests: XCTestCase {
         // rien) et `StoryViewerView+ReaderCard` une ligne de montage de la carte
         // — le sol de la story vit chez son canvas, qui est l'hôte qui l'anime.
         let solsAttendus = [
-            "apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift",
+            "apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Canvas.swift",
             "apps/ios/Meeshy/Features/Main/Views/ConversationMediaGalleryView+ScenePage.swift",
             "apps/ios/Meeshy/Features/Main/Views/ReelsPlayerView+Scene.swift",
         ]
@@ -234,7 +234,7 @@ final class SceneShapeSourceGuardTests: XCTestCase {
         // commune aux trois natures de page (photo, vidéo, scène), là où le sol
         // n'habille qu'une page de scène.
         let voilesAttendus = [
-            "apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift",
+            "apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Canvas.swift",
             "apps/ios/Meeshy/Features/Main/Views/ConversationMediaGalleryView+Scrims.swift",
             "apps/ios/Meeshy/Features/Main/Views/ReelsPlayerView+Scene.swift",
         ]

@@ -1079,7 +1079,7 @@ MyStoryThumbnailResolver choisit la source de la miniature de MyStoryCard : le t
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/MyStoryThumbnailResolver.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/MyStoryThumbnailResolver.swift`
 
 </details>
 

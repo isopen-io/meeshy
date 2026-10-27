@@ -2247,13 +2247,13 @@
    "apps/android/feature/stories/src/test/kotlin/me/meeshy/app/stories/MyStoriesViewModelTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/MyStoriesTab.swift",
-   "apps/ios/Meeshy/Features/Main/Views/MyStoryCardModelRules.swift",
-   "apps/ios/Meeshy/Features/Main/Views/MyStoryCardPresentation.swift",
-   "apps/ios/Meeshy/Features/Main/Views/MyStoriesDeleteConfirmation.swift",
-   "apps/ios/Meeshy/Features/Main/Views/MyStoriesSheetTargets.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/MyStoriesTab.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/MyStoryCardModelRules.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/MyStoryCardPresentation.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/MyStoriesDeleteConfirmation.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/MyStoriesSheetTargets.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Services/StoryService.swift",
-   "apps/ios/Meeshy/Features/Main/Views/MyStoryThumbnailResolver.swift"
+   "apps/ios/Meeshy/Features/Stories/Views/MyStoryThumbnailResolver.swift"
   ],
   "feature_keys": [
    "profile-mystories-shell-tabs",
@@ -2968,15 +2968,15 @@
    "apps/android/feature/stories/src/main/res/values/strings_story_my_stories.xml"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/MyStoriesView.swift",
-   "apps/ios/Meeshy/Features/Main/Views/MyStoryCard.swift",
-   "apps/ios/Meeshy/Features/Main/Views/MyStoryActionBar.swift",
-   "apps/ios/Meeshy/Features/Main/Views/MyStoriesTab.swift",
-   "apps/ios/Meeshy/Features/Main/Views/MyStoryCardPresentation.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryTrayActions.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryVisibilityMenuResolver.swift",
-   "apps/ios/Meeshy/Features/Main/Services/StoryVisibilityPreferenceStore.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StorySelectionResolver.swift"
+   "apps/ios/Meeshy/Features/Stories/Views/MyStoriesView.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/MyStoryCard.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/MyStoryActionBar.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/MyStoriesTab.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/MyStoryCardPresentation.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryTrayActions.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryVisibilityMenuResolver.swift",
+   "apps/ios/Meeshy/Features/Stories/Services/StoryVisibilityPreferenceStore.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StorySelectionResolver.swift"
   ],
   "feature_keys": [
    "profile-mystories-shell-tabs",
@@ -9032,9 +9032,9 @@
    "apps/android/feature/stories/src/test/kotlin/me/meeshy/app/stories/MyStoriesQueueViewModelTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/MyStoriesQueueRows.swift",
-   "apps/ios/Meeshy/Features/Main/Views/MyStoriesView.swift",
-   "apps/ios/Meeshy/Features/Main/Views/MyStoryCardPresentation.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/MyStoriesQueueRows.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/MyStoriesView.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/MyStoryCardPresentation.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Services/StoryService.swift"
   ],
   "feature_keys": [
@@ -9617,11 +9617,11 @@
    "apps/android/feature/stories/src/test/kotlin/me/meeshy/app/stories/MyStoryExportTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/MyStoryActionMenu.swift",
-   "apps/ios/Meeshy/Features/Main/Views/MyStoriesDeleteAlerts.swift",
-   "apps/ios/Meeshy/Features/Main/Views/MyStoriesDeleteConfirmation.swift",
-   "apps/ios/Meeshy/Features/Main/Views/MyStoriesView.swift",
-   "apps/ios/Meeshy/Features/Main/Views/MyStoriesSheetTargets.swift"
+   "apps/ios/Meeshy/Features/Stories/Views/MyStoryActionMenu.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/MyStoriesDeleteAlerts.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/MyStoriesDeleteConfirmation.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/MyStoriesView.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/MyStoriesSheetTargets.swift"
   ],
   "feature_keys": [
    "profile-mystories-actions-delete"

@@ -1,6 +1,6 @@
 /**
  * **LA PROGRESSION D'UN EXPORT DE STORY** (#7116) — miroir PUR de
- * `StorySaveProgressMapper` (`apps/ios/Meeshy/Features/Main/Services/StoryPhotoSaveService.swift:7-24`)
+ * `StorySaveProgressMapper` (`apps/ios/Meeshy/Features/Stories/Services/StoryPhotoSaveService.swift:7-24`)
  * et de `StorySaveProgressRing` (`:12-121`).
  *
  * Le bake/téléchargement occupe **0…0,9** de l'anneau, la livraison

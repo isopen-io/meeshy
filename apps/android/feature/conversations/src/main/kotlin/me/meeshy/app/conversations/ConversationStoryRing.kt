@@ -10,7 +10,7 @@ import me.meeshy.ui.component.StoryRingState
 /**
  * Pure port of iOS `StoryViewModel.storyRingState(forUserId:)` and
  * `ConversationListView.storyRingState(for:)` (SSOT:
- * `apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift:1351`,
+ * `apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel.swift:1351`,
  * `apps/ios/Meeshy/Features/Main/Views/ConversationListView.swift:690`).
  *
  * The rules — first match wins:

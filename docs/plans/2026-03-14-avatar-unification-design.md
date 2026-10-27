@@ -159,14 +159,14 @@ No per-context exceptions. If story is already viewed (.read/.none), onTap natur
 - `Profile/FullscreenImageView.swift` — migrate custom avatar
 
 ### App (apps/ios/Meeshy/)
-- `Features/Main/Views/StoryTrayView.swift` — migrate to .storyTray
+- `Features/Stories/Views/StoryTrayView.swift` — migrate to .storyTray
 - `Features/Main/Views/ConversationView+Header.swift` — migrate to header contexts
 - `Features/Main/Views/ThemedConversationRow.swift` — migrate to .conversationList
 - `Features/Main/Views/ThemedMessageBubble.swift` — migrate to .messageBubble
 - `Features/Main/Views/ConversationListHelpers.swift` — migrate custom avatar
 - `Features/Main/Views/RootViewComponents.swift` — migrate custom avatar
 - `Features/Main/Views/FeedPostCard.swift` — migrate custom avatars
-- `Features/Main/Views/StoryViewerView+Content.swift` — migrate CachedAsyncImage
+- `Features/Stories/Views/StoryViewerView+Content.swift` — migrate CachedAsyncImage
 - `Features/Profile/Views/ProfileView.swift` — migrate to .profileBanner
 - `Features/Main/Views/ThreadView.swift` — migrate to .messageBubble
 - `Features/Main/Views/EditProfileView.swift` — migrate to .profileEdit

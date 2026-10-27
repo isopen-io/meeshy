@@ -176,7 +176,7 @@ final class StoryGroupIntroRevealOverlapTests: XCTestCase {
                 .deletingLastPathComponent()   // Features
                 .deletingLastPathComponent()   // MeeshyTests
                 .deletingLastPathComponent()   // ios
-                .appendingPathComponent("Meeshy/Features/Main/Views/StoryViewerView+GroupIntro.swift"),
+                .appendingPathComponent("Meeshy/Features/Stories/Views/StoryViewerView+GroupIntro.swift"),
             encoding: .utf8
         )
 
@@ -197,7 +197,7 @@ final class StoryGroupIntroRevealOverlapTests: XCTestCase {
             contentsOf: URL(fileURLWithPath: #filePath)
                 .deletingLastPathComponent().deletingLastPathComponent()
                 .deletingLastPathComponent().deletingLastPathComponent()
-                .appendingPathComponent("Meeshy/Features/Main/Views/StoryGroupIntroPresenter.swift"),
+                .appendingPathComponent("Meeshy/Features/Stories/Views/StoryGroupIntroPresenter.swift"),
             encoding: .utf8
         )
         guard let taskStart = presenter.range(of: "pending = Task { @MainActor"),

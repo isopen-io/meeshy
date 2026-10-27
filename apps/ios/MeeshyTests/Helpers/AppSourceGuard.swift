@@ -115,6 +115,23 @@ enum AppSourceGuard {
             .deletingLastPathComponent()   // apps/ios
     }
 
+    /// **Une vue se trouve par son nom, quel que soit son domaine** (#13139).
+    ///
+    /// `Features/Main/Views` se range par domaine (`Features/Stories/Views`,
+    /// `Features/Settings/Views`…). Une garde qui lit une vue par son nom ne
+    /// doit pas rougir parce qu'elle a changé de dossier : ce chemin la cherche
+    /// dans les `Views/` de chaque domaine, et rend celui de `Main` quand elle
+    /// n'existe nulle part — l'erreur « fichier introuvable » reste bruyante.
+    static func featureViewPath(_ relativeToViews: String) -> String {
+        let features = appRoot.appendingPathComponent("Meeshy/Features")
+        let domains = (try? FileManager.default.contentsOfDirectory(atPath: features.path)) ?? []
+        let found = domains.sorted().first { domain in
+            FileManager.default.fileExists(
+                atPath: features.appendingPathComponent("\(domain)/Views/\(relativeToViews)").path)
+        }
+        return "Meeshy/Features/\(found ?? "Main")/Views/\(relativeToViews)"
+    }
+
     /// **Un type découpé garde UNE adresse.**
     ///
     /// `Type.swift` scindé en `Type+Rôle.swift` reste une seule source aux yeux
@@ -342,8 +359,8 @@ enum AppSourceGuard {
     /// le préfixe `StoryViewModel+…`, donc le glob ne l'attrape pas, et sans
     /// lui toute garde négative dont l'interdit a suivi les règles pures
     /// passerait au vert en lisant la moitié qui ne les contient plus.
-    static let storyViewModelPath = "Meeshy/Features/Main/ViewModels/StoryViewModel.swift"
-    static let storyViewModelCompanions = ["Meeshy/Features/Main/ViewModels/StoryViewModelRules.swift"]
+    static let storyViewModelPath = "Meeshy/Features/Stories/ViewModels/StoryViewModel.swift"
+    static let storyViewModelCompanions = ["Meeshy/Features/Stories/ViewModels/StoryViewModelRules.swift"]
 
     static func storyViewModelURLs() -> [URL] {
         unitURLs(storyViewModelPath, alsoIncluding: storyViewModelCompanions)

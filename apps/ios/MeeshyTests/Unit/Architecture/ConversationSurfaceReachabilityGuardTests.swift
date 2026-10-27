@@ -62,6 +62,8 @@ final class ConversationSurfaceReachabilityGuardTests: XCTestCase {
     private static let surfaceDirectories = [
         "apps/ios/Meeshy/Features/Main/Views",
         "apps/ios/Meeshy/Features/Main/ViewModels",
+        "apps/ios/Meeshy/Features/Stories/Views",
+        "apps/ios/Meeshy/Features/Stories/ViewModels",
     ]
 
     /// Les exceptions, chacune avec la raison qui la rend légitime.

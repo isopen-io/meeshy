@@ -31,7 +31,7 @@
 **Files:**
 - Create: `apps/ios/Meeshy/Features/Main/Views/StoryThumbnailSizing.swift`
 - Test: `apps/ios/MeeshyTests/Unit/Views/StoryThumbnailSizingTests.swift`
-- Modify: `apps/ios/Meeshy/Features/Main/Views/MyStoriesView.swift:217-233` (`MyStoryRow.thumbnail`)
+- Modify: `apps/ios/Meeshy/Features/Stories/Views/MyStoriesView.swift:217-233` (`MyStoryRow.thumbnail`)
 
 **Interfaces:**
 - Produces: `enum StoryThumbnailSizing { static func width(forAspectRatio: Double?, height: CGFloat = 64) -> CGFloat }`, consumed by `MyStoryRow.thumbnail` in this same task's Step 6.
@@ -126,7 +126,7 @@ git commit -m "feat(ios/story): StoryThumbnailSizing — largeur de vignette pro
 
 - [ ] **Step 6: Wire into `MyStoryRow.thumbnail`**
 
-In `apps/ios/Meeshy/Features/Main/Views/MyStoriesView.swift`, replace:
+In `apps/ios/Meeshy/Features/Stories/Views/MyStoriesView.swift`, replace:
 
 ```swift
     @ViewBuilder
@@ -179,7 +179,7 @@ Expected: `BUILD SUCCEEDED` (check the tail of the log, not just exit code — `
 - [ ] **Step 8: Commit**
 
 ```bash
-git add apps/ios/Meeshy/Features/Main/Views/MyStoriesView.swift
+git add apps/ios/Meeshy/Features/Stories/Views/MyStoriesView.swift
 git commit -m "feat(ios/story): vignette Mes stories proportionnelle au ratio réel du contenu"
 ```
 
@@ -188,9 +188,9 @@ git commit -m "feat(ios/story): vignette Mes stories proportionnelle au ratio r�
 ## Task 2: `StoryIndexResolver` — fix tapping a row always opening story index 0
 
 **Files:**
-- Create: `apps/ios/Meeshy/Features/Main/Views/StoryIndexResolver.swift`
+- Create: `apps/ios/Meeshy/Features/Stories/Views/StoryIndexResolver.swift`
 - Test: `apps/ios/MeeshyTests/Unit/Views/StoryIndexResolverTests.swift`
-- Modify: `apps/ios/Meeshy/Features/Main/Views/StoryViewerContainer.swift:43-67`
+- Modify: `apps/ios/Meeshy/Features/Stories/Views/StoryViewerContainer.swift:43-67`
 
 **Interfaces:**
 - Consumes: `StoryGroup` (`packages/MeeshySDK/Sources/MeeshySDK/Models/StoryModels.swift:1910`, `.stories: [StoryItem]`, ascending by `createdAt`), `StoryItem.id: String`.
@@ -264,7 +264,7 @@ Expected: FAIL — `cannot find 'StoryIndexResolver' in scope`.
 
 - [ ] **Step 3: Write minimal implementation**
 
-Create `apps/ios/Meeshy/Features/Main/Views/StoryIndexResolver.swift`:
+Create `apps/ios/Meeshy/Features/Stories/Views/StoryIndexResolver.swift`:
 
 ```swift
 import Foundation
@@ -310,13 +310,13 @@ Expected: PASS (5/5 tests green)
 - [ ] **Step 5: Commit**
 
 ```bash
-git add apps/ios/Meeshy/Features/Main/Views/StoryIndexResolver.swift apps/ios/MeeshyTests/Unit/Views/StoryIndexResolverTests.swift apps/ios/Meeshy.xcodeproj/project.pbxproj
+git add apps/ios/Meeshy/Features/Stories/Views/StoryIndexResolver.swift apps/ios/MeeshyTests/Unit/Views/StoryIndexResolverTests.swift apps/ios/Meeshy.xcodeproj/project.pbxproj
 git commit -m "feat(ios/story): StoryIndexResolver — résout l'index de lecture par postId"
 ```
 
 - [ ] **Step 6: Wire into `StoryViewerContainer.body`**
 
-In `apps/ios/Meeshy/Features/Main/Views/StoryViewerContainer.swift`, replace:
+In `apps/ios/Meeshy/Features/Stories/Views/StoryViewerContainer.swift`, replace:
 
 ```swift
             if let resolvedIndex = viewModel.groupIndex(forUserId: uid) {
@@ -391,7 +391,7 @@ Expected: `BUILD SUCCEEDED`
 - [ ] **Step 8: Commit**
 
 ```bash
-git add apps/ios/Meeshy/Features/Main/Views/StoryViewerContainer.swift
+git add apps/ios/Meeshy/Features/Stories/Views/StoryViewerContainer.swift
 git commit -m "fix(ios/story): taper une story dans Mes stories ouvre la story tapée, pas toujours la 1re"
 ```
 
@@ -401,7 +401,7 @@ git commit -m "fix(ios/story): taper une story dans Mes stories ouvre la story t
 
 **Files:**
 - Test: `apps/ios/MeeshyTests/Unit/Views/StoryTrayMyStoryTapGuardTests.swift`
-- Modify: `apps/ios/Meeshy/Features/Main/Views/StoryTrayView.swift:394-401`
+- Modify: `apps/ios/Meeshy/Features/Stories/Views/StoryTrayView.swift:394-401`
 
 **Interfaces:**
 - Consumes: `MyStoryButton.onManageStories: (() -> Void)?` (already exists, always supplied at the one call site, `StoryTrayView.swift:210`).
@@ -440,7 +440,7 @@ final class StoryTrayMyStoryTapGuardTests: XCTestCase {
     }
 
     func test_myStoryButton_onTap_hasMyStory_callsOnManageStories_notOnViewMyStory() throws {
-        let trayViewSource = try source("Meeshy/Features/Main/Views/StoryTrayView.swift")
+        let trayViewSource = try source("Meeshy/Features/Stories/Views/StoryTrayView.swift")
 
         guard let onTapRange = trayViewSource.range(of: "onTap: {") else {
             XCTFail("MyStoryButton doit définir un closure `onTap:`")
@@ -476,7 +476,7 @@ Expected: FAIL — current source has `onViewMyStory()` inside the `if hasMyStor
 
 - [ ] **Step 3: Write minimal implementation**
 
-In `apps/ios/Meeshy/Features/Main/Views/StoryTrayView.swift`, replace:
+In `apps/ios/Meeshy/Features/Stories/Views/StoryTrayView.swift`, replace:
 
 ```swift
                     onTap: {
@@ -515,7 +515,7 @@ Expected: `BUILD SUCCEEDED`
 - [ ] **Step 6: Commit**
 
 ```bash
-git add apps/ios/Meeshy/Features/Main/Views/StoryTrayView.swift apps/ios/MeeshyTests/Unit/Views/StoryTrayMyStoryTapGuardTests.swift apps/ios/Meeshy.xcodeproj/project.pbxproj
+git add apps/ios/Meeshy/Features/Stories/Views/StoryTrayView.swift apps/ios/MeeshyTests/Unit/Views/StoryTrayMyStoryTapGuardTests.swift apps/ios/Meeshy.xcodeproj/project.pbxproj
 git commit -m "feat(ios/story): tap avatar « Ma story » ouvre la liste au lieu du player direct"
 ```
 
@@ -525,8 +525,8 @@ git commit -m "feat(ios/story): tap avatar « Ma story » ouvre la liste au lieu
 
 **Files:**
 - Test: `apps/ios/MeeshyTests/Unit/Views/MyStoriesCreateStoryGuardTests.swift`
-- Modify: `apps/ios/Meeshy/Features/Main/Views/MyStoriesView.swift:17-23` (struct properties), `:73-79` (toolbar)
-- Modify: `apps/ios/Meeshy/Features/Main/Views/StoryTrayView.swift:66-85` (`.sheet` instantiation)
+- Modify: `apps/ios/Meeshy/Features/Stories/Views/MyStoriesView.swift:17-23` (struct properties), `:73-79` (toolbar)
+- Modify: `apps/ios/Meeshy/Features/Stories/Views/StoryTrayView.swift:66-85` (`.sheet` instantiation)
 
 **Interfaces:**
 - Produces: `MyStoriesView.onCreateStory: () -> Void` (new required param — every call site must supply it from here on, there is exactly one: `StoryTrayView.swift`).
@@ -554,7 +554,7 @@ final class MyStoriesCreateStoryGuardTests: XCTestCase {
     }
 
     func test_myStoriesView_declaresOnCreateStoryCallback() throws {
-        let viewSource = try source("Meeshy/Features/Main/Views/MyStoriesView.swift")
+        let viewSource = try source("Meeshy/Features/Stories/Views/MyStoriesView.swift")
 
         XCTAssertTrue(
             viewSource.contains("let onCreateStory: () -> Void"),
@@ -567,7 +567,7 @@ final class MyStoriesCreateStoryGuardTests: XCTestCase {
     }
 
     func test_storyTrayView_wiresOnCreateStory_closingSheetBeforeComposer() throws {
-        let traySource = try source("Meeshy/Features/Main/Views/StoryTrayView.swift")
+        let traySource = try source("Meeshy/Features/Stories/Views/StoryTrayView.swift")
 
         guard let callbackRange = traySource.range(of: "onCreateStory: {") else {
             XCTFail("StoryTrayView doit fournir onCreateStory: à MyStoriesView")
@@ -596,7 +596,7 @@ Expected: FAIL — both assertions fail against current source (no `onCreateStor
 
 - [ ] **Step 3: Add the `onCreateStory` param to `MyStoriesView`**
 
-In `apps/ios/Meeshy/Features/Main/Views/MyStoriesView.swift`, replace:
+In `apps/ios/Meeshy/Features/Stories/Views/MyStoriesView.swift`, replace:
 
 ```swift
 struct MyStoriesView: View {
@@ -663,7 +663,7 @@ with:
 
 - [ ] **Step 5: Wire `onCreateStory` in `StoryTrayView`**
 
-In `apps/ios/Meeshy/Features/Main/Views/StoryTrayView.swift`, replace:
+In `apps/ios/Meeshy/Features/Stories/Views/StoryTrayView.swift`, replace:
 
 ```swift
         .sheet(isPresented: $showMyStories) {
@@ -736,7 +736,7 @@ Expected: `BUILD SUCCEEDED`
 - [ ] **Step 8: Commit**
 
 ```bash
-git add apps/ios/Meeshy/Features/Main/Views/MyStoriesView.swift apps/ios/Meeshy/Features/Main/Views/StoryTrayView.swift apps/ios/MeeshyTests/Unit/Views/MyStoriesCreateStoryGuardTests.swift apps/ios/Meeshy.xcodeproj/project.pbxproj
+git add apps/ios/Meeshy/Features/Stories/Views/MyStoriesView.swift apps/ios/Meeshy/Features/Stories/Views/StoryTrayView.swift apps/ios/MeeshyTests/Unit/Views/MyStoriesCreateStoryGuardTests.swift apps/ios/Meeshy.xcodeproj/project.pbxproj
 git commit -m "feat(ios/story): bouton créer une story depuis la liste Mes stories"
 ```
 
@@ -745,7 +745,7 @@ git commit -m "feat(ios/story): bouton créer une story depuis la liste Mes stor
 ## Task 5: `StorySelectionResolver` — live-filtered multi-select set
 
 **Files:**
-- Create: `apps/ios/Meeshy/Features/Main/Views/StorySelectionResolver.swift`
+- Create: `apps/ios/Meeshy/Features/Stories/Views/StorySelectionResolver.swift`
 - Test: `apps/ios/MeeshyTests/Unit/Views/StorySelectionResolverTests.swift`
 
 **Interfaces:**
@@ -796,7 +796,7 @@ Expected: FAIL — `cannot find 'StorySelectionResolver' in scope`.
 
 - [ ] **Step 3: Write minimal implementation**
 
-Create `apps/ios/Meeshy/Features/Main/Views/StorySelectionResolver.swift`:
+Create `apps/ios/Meeshy/Features/Stories/Views/StorySelectionResolver.swift`:
 
 ```swift
 import Foundation
@@ -821,7 +821,7 @@ Expected: PASS (4/4)
 - [ ] **Step 5: Commit**
 
 ```bash
-git add apps/ios/Meeshy/Features/Main/Views/StorySelectionResolver.swift apps/ios/MeeshyTests/Unit/Views/StorySelectionResolverTests.swift apps/ios/Meeshy.xcodeproj/project.pbxproj
+git add apps/ios/Meeshy/Features/Stories/Views/StorySelectionResolver.swift apps/ios/MeeshyTests/Unit/Views/StorySelectionResolverTests.swift apps/ios/Meeshy.xcodeproj/project.pbxproj
 git commit -m "feat(ios/story): StorySelectionResolver — sélection multiple filtrée contre la liste vivante"
 ```
 
@@ -831,7 +831,7 @@ git commit -m "feat(ios/story): StorySelectionResolver — sélection multiple f
 
 **Files:**
 - Test: `apps/ios/MeeshyTests/Unit/Views/MyStoriesBulkDeleteGuardTests.swift`
-- Modify: `apps/ios/Meeshy/Features/Main/Views/MyStoriesView.swift` (state, toolbar, row rendering, bottom bar, `bulkDelete()`, `MyStoryRow`)
+- Modify: `apps/ios/Meeshy/Features/Stories/Views/MyStoriesView.swift` (state, toolbar, row rendering, bottom bar, `bulkDelete()`, `MyStoryRow`)
 
 **Interfaces:**
 - Consumes: `StorySelectionResolver.liveSelection(selectedIDs:liveIDs:)` (Task 5), `StoryViewModel.deleteStory(storyId:) async -> Bool` (existing, `StoryViewModel.swift:1603-1625`).
@@ -864,7 +864,7 @@ final class MyStoriesBulkDeleteGuardTests: XCTestCase {
     }
 
     func test_myStoriesView_neverReadsSelectedIDsRaw_outsideItsOwnDeclarationAndToggle() throws {
-        let viewSource = try source("Meeshy/Features/Main/Views/MyStoriesView.swift")
+        let viewSource = try source("Meeshy/Features/Stories/Views/MyStoriesView.swift")
 
         XCTAssertTrue(
             viewSource.contains("private var selectedStoryIDs: Set<String>"),
@@ -877,7 +877,7 @@ final class MyStoriesBulkDeleteGuardTests: XCTestCase {
     }
 
     func test_bulkDelete_reusesExistingDeleteStory_noNewViewModelMethod() throws {
-        let viewSource = try source("Meeshy/Features/Main/Views/MyStoriesView.swift")
+        let viewSource = try source("Meeshy/Features/Stories/Views/MyStoriesView.swift")
 
         guard let funcRange = viewSource.range(of: "private func bulkDelete()") else {
             XCTFail("MyStoriesView doit définir bulkDelete()")
@@ -894,7 +894,7 @@ final class MyStoriesBulkDeleteGuardTests: XCTestCase {
     }
 
     func test_myStoryRow_selectionCircle_hasAccessibilityLabel() throws {
-        let viewSource = try source("Meeshy/Features/Main/Views/MyStoriesView.swift")
+        let viewSource = try source("Meeshy/Features/Stories/Views/MyStoriesView.swift")
 
         XCTAssertTrue(
             viewSource.contains(".accessibilityLabel(isSelected"),
@@ -911,7 +911,7 @@ Expected: FAIL — none of the asserted strings exist in the current source yet.
 
 - [ ] **Step 3: Add selection state and `selectedStoryIDs`**
 
-In `apps/ios/Meeshy/Features/Main/Views/MyStoriesView.swift`, replace:
+In `apps/ios/Meeshy/Features/Stories/Views/MyStoriesView.swift`, replace:
 
 ```swift
     @State private var viewersStory: StoryItem?
@@ -1360,7 +1360,7 @@ Expected: `BUILD SUCCEEDED`
 - [ ] **Step 11: Commit**
 
 ```bash
-git add apps/ios/Meeshy/Features/Main/Views/MyStoriesView.swift apps/ios/MeeshyTests/Unit/Views/MyStoriesBulkDeleteGuardTests.swift apps/ios/Meeshy.xcodeproj/project.pbxproj
+git add apps/ios/Meeshy/Features/Stories/Views/MyStoriesView.swift apps/ios/MeeshyTests/Unit/Views/MyStoriesBulkDeleteGuardTests.swift apps/ios/Meeshy.xcodeproj/project.pbxproj
 git commit -m "feat(ios/story): sélection multiple + suppression groupée dans Mes stories"
 ```
 

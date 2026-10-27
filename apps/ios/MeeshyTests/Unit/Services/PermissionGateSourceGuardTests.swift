@@ -538,7 +538,7 @@ final class PermissionGateSourceGuardTests: XCTestCase {
     }
 
     func test_storyViewer_submitComment_declaresTheComposerLanguageOnBothPaths() throws {
-        let src = try source("Meeshy/Features/Main/Views/StoryCommentSession.swift")
+        let src = try source("Meeshy/Features/Stories/Views/StoryCommentSession.swift")
 
         let offline = try body(from: "return CreateCommentPayload(",
                                to: "try await CommentMediaDelivery.entrust(", in: src)
@@ -648,7 +648,7 @@ final class PermissionGateSourceGuardTests: XCTestCase {
         XCTAssertFalse(bar.contains("onRecordingChange"),
                        "Un rappel jamais invoqué ne doit pas rester déclaré.")
 
-        let host = try source("Meeshy/Features/Main/Views/StoryViewerView+CanvasComposerBar.swift")
+        let host = try source("Meeshy/Features/Stories/Views/StoryViewerView+CanvasComposerBar.swift")
         XCTAssertTrue(host.contains("onHasContentChange:"),
                       "La pause de story reste portée par onHasContentChange.")
     }

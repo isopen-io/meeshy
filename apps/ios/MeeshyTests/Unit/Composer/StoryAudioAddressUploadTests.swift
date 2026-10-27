@@ -38,7 +38,7 @@ final class StoryAudioAddressUploadTests: XCTestCase {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/ViewModels/StoryViewModel+PublicationUpload.swift")
+            .appendingPathComponent("Meeshy/Features/Stories/ViewModels/StoryViewModel+PublicationUpload.swift")
         return try String(contentsOf: url, encoding: .utf8)
     }
 

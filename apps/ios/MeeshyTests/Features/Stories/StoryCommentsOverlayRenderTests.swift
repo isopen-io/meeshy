@@ -117,10 +117,10 @@ final class StoryCommentsOverlayRenderTests: XCTestCase {
             .deletingLastPathComponent().deletingLastPathComponent()
         func read(_ name: String) throws -> String {
             AppSourceGuard.stripComments(try String(
-                contentsOf: root.appendingPathComponent("Meeshy/Features/Main/Views/" + name), encoding: .utf8))
+                contentsOf: root.appendingPathComponent(AppSourceGuard.featureViewPath(name)), encoding: .utf8))
         }
         let canvas = AppSourceGuard.stripComments(
-            try AppSourceGuard.unit("Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift"))
+            try AppSourceGuard.unit("Meeshy/Features/Stories/Views/StoryViewerView+Canvas.swift"))
         XCTAssertTrue(canvas.contains("let makeCommentsOverlay: () -> StoryCommentsOverlayHost"))
         XCTAssertTrue(canvas.contains("makeCommentsOverlay().placed(commentsZoneReading(geometry: geometry)).equatable()"),
                       "la carte place la liste sur son composeur avant la comparaison (#9893)")

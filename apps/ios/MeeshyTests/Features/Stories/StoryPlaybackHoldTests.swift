@@ -20,7 +20,7 @@ private enum StoryPlaybackHoldSource {
             contentsOf: root.appendingPathComponent(relative), encoding: .utf8))
     }
 
-    static let views = "Meeshy/Features/Main/Views/"
+    static let views = "Meeshy/Features/Stories/Views/"
     static func hold() throws -> String { try read(views + "StoryViewerView+PlaybackHold.swift") }
     static func viewer() throws -> String { try read(views + "StoryViewerView.swift") }
     static func content() throws -> String {
@@ -30,7 +30,7 @@ private enum StoryPlaybackHoldSource {
     static func canvas() throws -> String { try read(views + "StoryViewerView+Canvas.swift") }
     static func sidebar() throws -> String { try read(views + "StoryViewerView+Sidebar.swift") }
     static func header() throws -> String { try read(views + "StoryViewerView+Header.swift") }
-    static func revealHost() throws -> String { try read(views + "EngagementRevealHost.swift") }
+    static func revealHost() throws -> String { try read(AppSourceGuard.featureViewPath("EngagementRevealHost.swift")) }
 
     static func block(_ source: String, from marker: String) throws -> String {
         let start = try XCTUnwrap(source.range(of: marker), "« \(marker) » introuvable")

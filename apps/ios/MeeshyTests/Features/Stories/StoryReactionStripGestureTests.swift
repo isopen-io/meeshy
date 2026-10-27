@@ -225,7 +225,7 @@ final class StoryReactionStripGestureTests: XCTestCase {
         var tracker = StoryReaderDragTracker()
         XCTAssertEqual(tracker.track(dx: 40, dy: 0, featureAtStart: false, horizontalYields: { true }), .undecided,
                        "La consultation doit PRÉCÉDER l'arrêt de l'axe horizontal.")
-        let cession = try strippedSource(at: "Meeshy/Features/Main/Views/StoryReaderDragOwnership.swift")
+        let cession = try strippedSource(at: "Meeshy/Features/Stories/Views/StoryReaderDragOwnership.swift")
         guard let yields = self.corps("static func yields(", dans: cession) else {
             return XCTFail("`StoryReaderHorizontalYield.yields` introuvable — la garde ne mesurerait rien.")
         }
@@ -280,12 +280,12 @@ final class StoryReactionStripGestureTests: XCTestCase {
     }
 
     private func sidebarSource() throws -> String {
-        try strippedSource(at: "Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift")
+        try strippedSource(at: "Meeshy/Features/Stories/Views/StoryViewerView+Sidebar.swift")
     }
 
     private func contentSource() throws -> String {
         // L'unité de `StoryViewerView+Content` : le drag du lecteur vit dans `+Content+Gestures`.
-        Self.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Views/StoryViewerView+Content.swift"))
+        Self.stripComments(try AppSourceGuard.unit("Meeshy/Features/Stories/Views/StoryViewerView+Content.swift"))
     }
 
     /// COMMENTAIRES RETIRÉS : une garde qui compte des occurrences dans un

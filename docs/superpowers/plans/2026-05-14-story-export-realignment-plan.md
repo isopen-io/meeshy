@@ -75,7 +75,7 @@ Chaque étape = **1 commit atomique**. RED → GREEN → REFACTOR. Le build et l
 
 ### Étape 1 — Retirer le wiring `prepareExport` du publish path
 
-**Fichier** : `apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift`
+**Fichier** : `apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel.swift`
 
 **Lignes à supprimer/modifier** :
 - `:64-75` — docstrings sur le fast-path TUS resume (à conserver mais simplifier)
@@ -134,7 +134,7 @@ persisted with the old field (decoder ignores unknown keys).
 
 ### Étape 3 — Retirer la phase `.exporting` du `StoryTrayView` (P6 revert)
 
-**Fichier** : `apps/ios/Meeshy/Features/Main/Views/StoryTrayView.swift`
+**Fichier** : `apps/ios/Meeshy/Features/Stories/Views/StoryTrayView.swift`
 
 **Changements** :
 - `:285-287` — retirer la branche `phase == .exporting` dans `storyTrayUploadLabel()`
@@ -195,7 +195,7 @@ author-only "Export to share" scenario.
 
 ### Étape 6 — Réorienter `StoryVideoExportService` pour le partage externe
 
-**Fichier** : `apps/ios/Meeshy/Features/Main/Services/StoryVideoExportService.swift`
+**Fichier** : `apps/ios/Meeshy/Features/Stories/Services/StoryVideoExportService.swift`
 
 **Changements** :
 - Garder `prepareExport(slide:, onProgress:, onPhaseChange:) async -> URL?` — l'API est correcte pour ce use case
@@ -221,12 +221,12 @@ view in upcoming commits).
 
 | Fichier | Rôle |
 |---------|------|
-| `apps/ios/Meeshy/Features/Main/Views/StoryExportShareSheet.swift` | SwiftUI view : bouton "Exporter en vidéo" + progress + UIActivityViewController wrapper |
-| `apps/ios/Meeshy/Features/Main/ViewModels/StoryExportShareViewModel.swift` | @MainActor VM : drive `StoryVideoExportService.prepareExport`, expose progress + URL, gère cleanup post-share |
+| `apps/ios/Meeshy/Features/Stories/Views/StoryExportShareSheet.swift` | SwiftUI view : bouton "Exporter en vidéo" + progress + UIActivityViewController wrapper |
+| `apps/ios/Meeshy/Features/Stories/ViewModels/StoryExportShareViewModel.swift` | @MainActor VM : drive `StoryVideoExportService.prepareExport`, expose progress + URL, gère cleanup post-share |
 | `apps/ios/MeeshyTests/Unit/ViewModels/StoryExportShareViewModelTests.swift` | Tests TDD : happy path, fail-fallback, cancel |
 
 **Fichiers à modifier** :
-- `apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift` ou `StoryViewerView+Content.swift` — ajouter un bouton "Exporter" visible **seulement si `story.authorId == currentUser.id`**. Sur tap → présenter `StoryExportShareSheet`.
+- `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift` ou `StoryViewerView+Content.swift` — ajouter un bouton "Exporter" visible **seulement si `story.authorId == currentUser.id`**. Sur tap → présenter `StoryExportShareSheet`.
 
 **Test scenarios à couvrir** (XCTest, `@MainActor`) :
 1. `test_export_videoSlide_producesURL_presentsActivityVC` — happy path

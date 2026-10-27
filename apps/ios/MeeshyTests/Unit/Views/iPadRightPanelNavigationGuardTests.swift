@@ -78,8 +78,7 @@ final class iPadRightPanelNavigationGuardTests: XCTestCase {
             .deletingLastPathComponent()   // Unit
             .deletingLastPathComponent()   // MeeshyTests
             .deletingLastPathComponent()   // apps/ios
-            .appendingPathComponent("Meeshy/Features/Main/Views")
-            .appendingPathComponent(fileName)
+            .appendingPathComponent(AppSourceGuard.featureViewPath(fileName))
         let raw = try String(contentsOf: appRoot, encoding: .utf8)
         return strippingComments(raw)
     }

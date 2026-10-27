@@ -163,7 +163,7 @@ final class StoryExportShareSheetPaletteTests: XCTestCase {
     /// légitime — c'est-à-dire une convergence défaite sans mise à jour de ce
     /// garde-fou.
     func test_shareSheetIsTheSoleBridgeToUIActivityViewController() throws {
-        for converged in ["Features/Main/Views/StoryExportShareSheet.swift",
+        for converged in ["Features/Stories/Views/StoryExportShareSheet.swift",
                           "Features/Main/Components/MediaSaveFlowHost.swift"] {
             let code = strippingComments(
                 try String(contentsOf: appRoot.appendingPathComponent(converged), encoding: .utf8)

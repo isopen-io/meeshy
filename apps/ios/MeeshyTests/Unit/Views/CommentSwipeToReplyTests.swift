@@ -94,7 +94,7 @@ final class CommentSwipeToReplyTests: XCTestCase {
 final class CommentSwipeToReplyWiringGuardTests: XCTestCase {
 
     private func source(_ path: String) throws -> String {
-        try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Main/Views/" + path)
+        try MyStoriesSourceCorpus.text(of: AppSourceGuard.featureViewPath(path))
     }
 
     private static let commentRows = [

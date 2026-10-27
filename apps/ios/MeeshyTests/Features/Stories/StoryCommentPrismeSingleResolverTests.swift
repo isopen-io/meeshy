@@ -96,7 +96,7 @@ final class StoryCommentPrismeSingleResolverTests: XCTestCase {
     private func readerSource() throws -> String {
         // Les commentaires de la slide vivent dans `StoryCommentSession` (#13135).
         AppSourceGuard.stripComments(
-            try AppSourceGuard.unit("Meeshy/Features/Main/Views/StoryViewerView+Content.swift",
+            try AppSourceGuard.unit("Meeshy/Features/Stories/Views/StoryViewerView+Content.swift",
                                     alsoIncluding: Self.sharedThreadFiles))
     }
 
@@ -136,7 +136,7 @@ final class StoryCommentPrismeSingleResolverTests: XCTestCase {
     private static let sharedThreadFiles = [
         "Meeshy/Features/Main/ViewModels/CommentThreadViewModel.swift",
         "Meeshy/Features/Main/ViewModels/CommentThreadViewModel+Roots.swift",
-        "Meeshy/Features/Main/Views/StoryCommentSession.swift",
+        "Meeshy/Features/Stories/Views/StoryCommentSession.swift",
     ]
     private static let mapperAnchor = "static func comment(from"
     private static let pageMapperAnchor = "func mapped("

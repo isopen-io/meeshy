@@ -5,7 +5,7 @@ import MeeshySDK
 // MARK: - StoryExportIntroFactory
 //
 // Task 9 (2026-07-26) : déplacée depuis
-// `apps/ios/Meeshy/Features/Main/Services/StoryExportPreflight.swift`, où
+// `apps/ios/Meeshy/Features/Stories/Services/StoryExportPreflight.swift`, où
 // elle ne vivait que par accident de la Task 1. Aucune de ses dépendances
 // n'est app-side : `AuthManager` / `CacheCoordinator` (MeeshySDK),
 // `MeeshyConfig` / `ThumbHashDecoder` / `StoryExportIntroContent` (MeeshyUI,

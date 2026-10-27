@@ -75,7 +75,7 @@ final class StoryReaderScrimsTests: XCTestCase {
     /// voiles comme le reste des décorateurs.
     func test_theReaderMountsTheVeilsOnItsChrome() throws {
         let source = AppSourceGuard.stripComments(
-            try AppSourceGuard.unit("Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift"))
+            try AppSourceGuard.unit("Meeshy/Features/Stories/Views/StoryViewerView+Canvas.swift"))
         XCTAssertEqual(source.components(separatedBy: "StoryReaderScrims(topInset: topInset, chromeVisible: readerChromeShown)").count - 1,
                        1, "un seul montage, alimenté par la visibilité du chrome")
         XCTAssertFalse(source.contains(".black.opacity(0.92)"),

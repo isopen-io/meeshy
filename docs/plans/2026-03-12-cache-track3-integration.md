@@ -945,7 +945,7 @@ git commit -m "refactor(ios): migrate UserProfileViewModel to CacheCoordinator"
 - `apps/ios/Meeshy/Features/Settings/Views/DataStorageView.swift`
 - `apps/ios/Meeshy/Features/Main/Views/ConversationMediaGalleryView.swift`
 - `apps/ios/Meeshy/Features/Main/Views/ConversationMediaViews.swift`
-- `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Content.swift`
 
 **Step 1: Determine which DiskCacheStore to use per context**
 

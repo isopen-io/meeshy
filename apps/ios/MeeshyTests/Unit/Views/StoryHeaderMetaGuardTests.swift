@@ -74,7 +74,7 @@ final class StoryHeaderMetaGuardTests: XCTestCase {
     /// fichier matcherait alors le premier glyphe venu, d'où qu'il vienne.
     private func headerBlock() throws -> String {
         let fileSource = strippingComments(
-            try source("Meeshy/Features/Main/Views/StoryViewerView+Header.swift"))
+            try source("Meeshy/Features/Stories/Views/StoryViewerView+Header.swift"))
         guard let start = fileSource.range(of: "struct StoryHeaderView: View {") else {
             XCTFail("StoryHeaderView introuvable")
             return ""
@@ -218,7 +218,7 @@ final class StoryHeaderMetaGuardTests: XCTestCase {
     /// restent réservés aux pistes FOREGROUND (`AudioForegroundReaderOverlay`).
     func test_canvas_rendersNoWaveformChipForBackgroundAudio() throws {
         let canvas = strippingComments(
-            try AppSourceGuard.unit("Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift"))
+            try AppSourceGuard.unit("Meeshy/Features/Stories/Views/StoryViewerView+Canvas.swift"))
 
         XCTAssertFalse(
             canvas.contains("StoryWaveformBadgeView("),
@@ -273,7 +273,7 @@ final class StoryHeaderMetaGuardTests: XCTestCase {
     private func canvasCode() throws -> String {
         // L'UNITÉ du canvas : le chrome haut (en-tête, rangée des références) vit dans `+Canvas+Layers`.
         strippingComments(
-            try AppSourceGuard.unit("Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift"))
+            try AppSourceGuard.unit("Meeshy/Features/Stories/Views/StoryViewerView+Canvas.swift"))
     }
 
     func test_theReaderMountsTheReferenceNoteRow_fedByTheCurrentStory() throws {

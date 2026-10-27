@@ -11,7 +11,7 @@ import org.junit.Test
 /**
  * Pure port of iOS `StoryViewModel.storyRingState(forUserId:)` +
  * `ConversationListView.storyRingState(for:)` (SSOT:
- * `apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift:1351`,
+ * `apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel.swift:1351`,
  * `apps/ios/Meeshy/Features/Main/Views/ConversationListView.swift:690`).
  *
  * The per-user rule, first match wins:

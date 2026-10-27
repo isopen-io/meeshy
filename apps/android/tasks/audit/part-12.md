@@ -4,7 +4,7 @@ Scope: 17 files from `apps/ios/Meeshy/Features/Main/Views/` — story viewer (co
 
 ---
 
-## apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift
+## apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Content.swift
 
 Purpose: Largest extension of the story viewer — text/media/filter rendering, gestures, navigation, the display-link progress timer, comments, reactions, and the comments-overlay sub-view. ~1960 lines.
 
@@ -30,7 +30,7 @@ Dependencies: `StoryViewModel`, `PostService`, `APIClient`, `CacheCoordinator`, 
 
 Android-port note: `CADisplayLink` → `Choreographer.FrameCallback` or a Compose `withInfiniteAnimationFrameMillis` loop; the pause-aware accumulator pattern ports directly. Drag axis-lock → `pointerInput` with a custom axis detector. Cross-dissolve → `AnimatedContent`/`Crossfade` with a kept outgoing layer. Comments overlay → `ModalBottomSheet` with `LazyColumn`. The `shouldPauseTimer` aggregate predicate is good design — keep it.
 
-## apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift
+## apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Sidebar.swift
 
 Purpose: Extracted real-struct views for the story viewer's right action sidebar and top header (broken out of the viewer's opaque type to dodge a type-metadata crash).
 
@@ -44,7 +44,7 @@ Dependencies: `StoryItem`/`StoryGroup`, `EmojiReactionPicker`, `MeeshyAvatar`, `
 
 Android-port note: Sidebar → vertical `Column` of icon buttons over the canvas. Kebab → `DropdownMenu`. `ShareLink` → `Intent.ACTION_SEND`. Translate strip → horizontal `LazyRow` of flag chips. Bindings collapse into a single state holder / `StoryViewerUiState`.
 
-## apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift
+## apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift
 
 Purpose: Root story viewer view — owns all viewer `@State`, the prefetcher + gated-timer pipeline wire-up, sheet/fullScreenCover routing (viewers, export, share, repost-as-story, repost-as-post), and lifecycle.
 

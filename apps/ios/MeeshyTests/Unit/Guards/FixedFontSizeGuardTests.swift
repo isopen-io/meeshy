@@ -281,9 +281,9 @@ final class FixedFontSizeGuardTests: XCTestCase {
         "Features/Main/Views/GlobalSearchView.swift",
         "Features/Call/Views/IncomingCallView.swift",
         "Features/Auth/Views/MagicLinkView.swift",
-        "Features/Main/Views/MyStoriesView.swift",
-        "Features/Main/Views/MyStoryActionBar.swift",
-        "Features/Main/Views/MyStoryCard.swift",
+        "Features/Stories/Views/MyStoriesView.swift",
+        "Features/Stories/Views/MyStoryActionBar.swift",
+        "Features/Stories/Views/MyStoryCard.swift",
         // #5218 — le carrousel de cinq pages est parti avec son unique site
         // figé (le glyphe de 80 pt de chaque page). `WelcomeView` n'en a pas.
         "Features/Profile/Views/ParticipantProfileSheet.swift",
@@ -302,10 +302,10 @@ final class FixedFontSizeGuardTests: XCTestCase {
         // sort de la liste (règle 4) : sa croix monte `FullscreenTopBar`.
         "Features/Main/Views/ReelsPlayerView+ActionRail.swift",
         "Features/Links/Views/ShareLinksView.swift",
-        "Features/Main/Views/StoryExportShareSheet.swift",
-        "Features/Main/Views/StoryLanguageQuickBar.swift",
-        "Features/Main/Views/StoryTrayView.swift",
-        "Features/Main/Views/StoryViewerContainer.swift",
+        "Features/Stories/Views/StoryExportShareSheet.swift",
+        "Features/Stories/Views/StoryLanguageQuickBar.swift",
+        "Features/Stories/Views/StoryTrayView.swift",
+        "Features/Stories/Views/StoryViewerContainer.swift",
         // #8878 — `StoryViewerView+ActionButton.swift` sort de la liste (règle 4) :
         // `StoryActionButton` monte `FullscreenActionButton` (MeeshyUI), qui porte
         // SES glyphe et libellé figés dans sa cellule de 56.
@@ -315,7 +315,7 @@ final class FixedFontSizeGuardTests: XCTestCase {
         // pour son propre fichier (dette de taille). La population ne bouge pas
         // — ni `totalCeiling` ni `textCeiling` — seul le NOM change ; le canvas
         // n'en porte plus aucun, il sort de la liste et n'y revient jamais.
-        "Features/Main/Views/StoryViewerView+CanvasComposerBar.swift",
+        "Features/Stories/Views/StoryViewerView+CanvasComposerBar.swift",
         // #12568 : `StoryCommentRowView` sort — son monogramme de 13 pt laisse la
         // place à `CachedAvatarImage`, photo sinon initiales.
         // Cohésion de `StoryViewerView` — RELOCALISATION pure, même forme : la liste des
@@ -323,7 +323,7 @@ final class FixedFontSizeGuardTests: XCTestCase {
         // `StoryViewerView+Content.swift` pour son propre fichier et emporte son site
         // figé — le glyphe héros de l'état vide, masqué de VoiceOver. L'hôte n'en garde
         // plus aucun et sort de la liste ; la POPULATION ne bouge pas.
-        "Features/Main/Views/StoryCommentsOverlayView.swift",
+        "Features/Stories/Views/StoryCommentsOverlayView.swift",
         // #8878 — `StoryViewerView+Header.swift` sort de la liste (règle 4) : la
         // croix et le menu ⋯ montent `FullscreenCloseButton` / `FullscreenMoreMenu`
         // (MeeshyUI), qui portent leur glyphe figé dans leur disque.
@@ -562,7 +562,7 @@ final class FixedFontSizeGuardTests: XCTestCase {
     ]
 
     private static let exactSizeTextExceptions: Set<ExactSizeTextSite> = [
-        ExactSizeTextSite(file: "Features/Main/Views/StoryTrayView.swift",
+        ExactSizeTextSite(file: "Features/Stories/Views/StoryTrayView.swift",
                           head: #"Text("\(Int(displayedProgress * 100))%")"#),
         ExactSizeTextSite(file: "Features/Main/Views/ConversationHelperViews.swift",
                           head: "Text(Self.displayedUnread(unreadCount))"),
@@ -738,7 +738,7 @@ final class FixedFontSizeGuardTests: XCTestCase {
         EmojiSite(file: "Features/Stories/Notifications/StoryExpiredContent.swift",
                   head: "Text(emoji)",
                   marker: ".font(MeeshyFont.emoji(64))"),
-        EmojiSite(file: "Features/Main/Views/StoryReactionFlightView.swift",
+        EmojiSite(file: "Features/Stories/Views/StoryReactionFlightView.swift",
                   head: "Text(flight.emoji)",
                   marker: ".font(MeeshyFont.emoji(MeeshyFont.displaySize))"),
         EmojiSite(file: "Features/Main/Components/UniversalComposerBar+Send.swift",
@@ -747,10 +747,10 @@ final class FixedFontSizeGuardTests: XCTestCase {
         EmojiSite(file: "Features/Main/Views/ConversationAnimatedBackground.swift",
                   head: "Text(flags[i])",
                   marker: ".font(MeeshyFont.emoji(24))"),
-        EmojiSite(file: "Features/Main/Views/StoryLanguageQuickBar.swift",
+        EmojiSite(file: "Features/Stories/Views/StoryLanguageQuickBar.swift",
                   head: "Text(language.flag)",
                   marker: ".font(MeeshyFont.emoji(MeeshyFont.titleSize))"),
-        EmojiSite(file: "Features/Main/Views/StoryTrayView.swift",
+        EmojiSite(file: "Features/Stories/Views/StoryTrayView.swift",
                   head: #"Text("\u{1F4AD}")"#,
                   marker: ".font(MeeshyFont.emoji(MeeshyFont.title3Size))")
     ]

@@ -17,7 +17,7 @@
 | 1 | B.2 | Original B.2 only added `originalRepostOfId` to `StoryItem`, but C.1/C.2 need `currentStoryIsPublic` derived from visibility, and the embed needs `audioUrl`. `StoryItem` (`StoryModels.swift:778-822`) carries neither. | **Expand B.2** to also add `visibility: String?` and `audioUrl: String?` ; propagate through `toStoryGroups` (`StoryModels.swift:891-936`) ; add `currentStoryIsPublic` helper in `StoryViewerView` (consumed by C.1/C.2). |
 | 2 | B.3 | Test JSON and init signature use wrong property names (`text`, `fontSize`, `fontStyle: "default"`). Real `StoryTextObject` (`StoryModels.swift:142-211`) uses `content`, `textSize`, `textStyle` (with values `bold\|neon\|typewriter\|handwriting\|classic`). `CodingKeys` is explicit (line 171-175) and must be extended ; custom `init(from:)` / `encode(to:)` do not exist (synthesized). Adding `case isLocked` to `CodingKeys` is sufficient since `Bool?` is decoded with `decodeIfPresent` automatically by the synthesized init. | **Fix B.3** : use real property names ; add `case isLocked` to existing `CodingKeys` ; rely on synthesized Codable conformance ; revise tests. |
 | 3 | B.4 | Plan writes `init(slide: ..., mute: ...)`. Real param is named `story:` (`StoryCanvasReaderView.swift:37`). Also `ReaderState` is `@StateObject private` (line 35) — direct introspection from outside the View is impossible. | **Fix B.4** : use `story:` everywhere ; replace player-introspection test with an indirect strategy (assert `StoryMediaCoordinator.shared.activate(...)` is **not** called when `mute=true`, plus a smoke check via `XCUITest` for no audio output). |
-| 4 | B.5b (NEW) | Plan B.5 replaces `PostService.repost(postId:quote:)` with new signature returning `APIPost`. Two existing callers must migrate : `apps/ios/Meeshy/Features/Main/ViewModels/FeedViewModel.swift` (uses `repost(postId:` directly) and `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift:796` (`reshareStory()` calls `APIClient.shared.post` directly, bypassing the SDK). Without migration these callers regress at runtime. | **Add B.5b** task : migrate both call sites to the new SDK signature. |
+| 4 | B.5b (NEW) | Plan B.5 replaces `PostService.repost(postId:quote:)` with new signature returning `APIPost`. Two existing callers must migrate : `apps/ios/Meeshy/Features/Main/ViewModels/FeedViewModel.swift` (uses `repost(postId:` directly) and `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Content.swift:796` (`reshareStory()` calls `APIClient.shared.post` directly, bypassing the SDK). Without migration these callers regress at runtime. | **Add B.5b** task : migrate both call sites to the new SDK signature. |
 | 5 | B.5c (NEW) | Plan B.6 step 3 says "createPost SDK method must already accept repostOfId — if not, also add it" — left in flux. Real `PostService.create(...)` (`PostService.swift:46`) and `createStory(...)` (`:132`) do **not** accept `repostOfId`. `CreatePostRequest` and `CreateStoryRequest` structs also lack the field. | **Add B.5c** task : extend both methods + their request structs to accept `repostOfId: String?` ; backend Phase A already supports it (`createPost accepts repostOfId and computes originalRepostOfId`, commit `1afb94e8`). |
 | 6 | B.6 | (a) Plan writes `var cloned = currentSlide` on `currentSlide: StoryItem`, then `self.slides = [cloned]`. But ViewModel stores `var slides: [StorySlide]` (`StoryComposerViewModel.swift:68`). `StorySlide` (`StoryModels.swift:391-432`) ≠ `StoryItem` — does not compile. (b) Plan step 3 says "modify the existing publish flow to propagate IDs" — but the ViewModel does not publish ; publication goes through `onPublishSlide` callback (`StoryComposerView.swift:181`) implemented by the iOS app caller. | **Fix B.6** : (a) add explicit `StoryItem → StorySlide` conversion in the secondary init (mediaURL = first media URL, content = content, effects = storyEffects ?? `StoryEffects()`, duration = 5, order = 0). (b) **Do not** modify publish flow inside the VM — expose `repostOfId` and `originalRepostOfId` as public stored properties ; the iOS caller (Phase C) reads them and passes to `PostService.create(...)` (now accepting `repostOfId`, see B.5c). |
 
@@ -655,7 +655,7 @@ Note : the new `repost(...)` returns `APIPost` whereas the old one returned `Voi
 
 **Files:**
 - Modify: `apps/ios/Meeshy/Features/Main/ViewModels/FeedViewModel.swift`
-- Modify: `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift:796-812` (delete old `reshareStory()`)
+- Modify: `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Content.swift:796-812` (delete old `reshareStory()`)
 
 - [ ] **Step 1: Audit current callers**
 
@@ -665,7 +665,7 @@ grep -rn "PostService.shared.repost\|\.repost(postId" apps/ios/ --include='*.swi
 
 Expected hits :
 - `apps/ios/Meeshy/Features/Main/ViewModels/FeedViewModel.swift` — calls `PostService.shared.repost(postId: ..., quote: ...)` to repost a feed item.
-- `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift:796-812` — `reshareStory()` builds `RepostRequest(content: nil, isQuote: false)` and calls `APIClient.shared.post` directly (bypasses the SDK).
+- `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Content.swift:796-812` — `reshareStory()` builds `RepostRequest(content: nil, isQuote: false)` and calls `APIClient.shared.post` directly (bypasses the SDK).
 
 - [ ] **Step 2: Migrate `FeedViewModel`**
 
@@ -695,7 +695,7 @@ Expected : zero result (apart from this delete).
 
 ```bash
 ./apps/ios/meeshy.sh build
-git add apps/ios/Meeshy/Features/Main/ViewModels/FeedViewModel.swift apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift
+git add apps/ios/Meeshy/Features/Main/ViewModels/FeedViewModel.swift apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Content.swift
 git commit -m "refactor(ios): migrate repost callers to new SDK signature, drop reshareStory"
 ```
 
@@ -1162,8 +1162,8 @@ git commit -m "feat(sdk): UnifiedPostComposer init for repost mode with embedded
 > **Patched 2026-05-05** : composer init takes `(StoryItem + authorHandle: String)` — no `APIPost` reverse-mapping needed. Visibility is gated via `currentStory?.isPublic == true` (helper added in B.2). The deletion of the old `reshareStory()` is now done in B.5b. Reference : Patch log rows 1, 4, 6.
 
 **Files:**
-- Modify: `apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift:572-579` (action of share button)
-- Modify: `apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift` (add @State + .fullScreenCover)
+- Modify: `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift:572-579` (action of share button)
+- Modify: `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift` (add @State + .fullScreenCover)
 
 - [ ] **Step 1: Add state for the wrapper**
 
@@ -1222,7 +1222,7 @@ If `StoryComposerView`'s public init does not yet accept a pre-built `viewModel`
 
 ```bash
 ./apps/ios/meeshy.sh build
-git add apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift
+git add apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift
 git commit -m "feat(ios): share button opens StoryComposerView in repost mode"
 ```
 
@@ -1233,7 +1233,7 @@ git commit -m "feat(ios): share button opens StoryComposerView in repost mode"
 > **Patched 2026-05-05** : visibility gating via `currentStory?.isPublic == true` ; `UnifiedPostComposer` init takes `(StoryItem + authorHandle)` ; the `onPublishRepost` callback receives `(content, sourceStory)` and the iOS caller uses `sourceStory.id` to call `PostService.repost(...)`. Reference : Patch log row 6.
 
 **Files:**
-- Modify: `apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift:1252-1271`
+- Modify: `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift:1252-1271`
 - Add: `repostAsPostDirect()` method on the view (or the helper extension file)
 
 - [ ] **Step 1: Add `repostAsPostDirect()` method**
@@ -1335,7 +1335,7 @@ private struct RepostPostSourceWrapper: Identifiable {
 
 ```bash
 ./apps/ios/meeshy.sh build
-git add apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift
+git add apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift
 git commit -m "feat(ios): kebab menu adds Republier en post + Editer et republier en post"
 ```
 
@@ -1344,7 +1344,7 @@ git commit -m "feat(ios): kebab menu adds Republier en post + Editer et republie
 ### Task C.3 : Cellule feed — extraire `StoryRepostEmbedCell`
 
 **Files:**
-- Create: `apps/ios/Meeshy/Features/Main/Views/StoryRepostEmbedCell.swift`
+- Create: `apps/ios/Meeshy/Features/Stories/Views/StoryRepostEmbedCell.swift`
 - Modify: existing feed cell (likely `PostDetailView.swift` or `FeedPostRow.swift` — locate first)
 
 - [ ] **Step 1: Create the extracted cell**
@@ -1420,7 +1420,7 @@ private var contentView: some View {
 
 ```bash
 ./apps/ios/meeshy.sh build
-git add apps/ios/Meeshy/Features/Main/Views/StoryRepostEmbedCell.swift apps/ios/Meeshy/Features/Main/Views/PostDetailView.swift  # or whichever
+git add apps/ios/Meeshy/Features/Stories/Views/StoryRepostEmbedCell.swift apps/ios/Meeshy/Features/Main/Views/PostDetailView.swift  # or whichever
 git commit -m "feat(ios): feed cell renders repost-of-story via StoryCanvasReaderView (muted)"
 ```
 
@@ -1429,7 +1429,7 @@ git commit -m "feat(ios): feed cell renders repost-of-story via StoryCanvasReade
 ### Task C.4 : Header double-attribution
 
 **Files:**
-- Modify: `apps/ios/Meeshy/Features/Main/Views/StoryRepostEmbedCell.swift` (extracted in C.3)
+- Modify: `apps/ios/Meeshy/Features/Stories/Views/StoryRepostEmbedCell.swift` (extracted in C.3)
 
 - [ ] **Step 1: Add `originalRepostOfId` resolution**
 
