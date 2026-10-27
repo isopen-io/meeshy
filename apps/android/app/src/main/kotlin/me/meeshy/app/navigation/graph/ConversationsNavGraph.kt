@@ -14,7 +14,7 @@ import androidx.navigation.navArgument
 import androidx.navigation.navDeepLink
 import me.meeshy.app.auth.AuthViewModel
 import me.meeshy.app.calls.CallPillPresenter
-import me.meeshy.app.calls.CallUiState
+import me.meeshy.app.calls.CallStatus
 import me.meeshy.app.chat.ChatScreen
 import me.meeshy.app.chat.ChatViewModel
 import me.meeshy.app.chat.ConversationMembersPresenter
@@ -40,7 +40,7 @@ import me.meeshy.app.stories.StoryTray
 internal fun NavGraphBuilder.conversationsNavGraph(
     navController: NavHostController,
     authViewModel: AuthViewModel,
-    callState: CallUiState,
+    callStatus: CallStatus,
 ) {
     composable(
         route = Routes.CONVERSATIONS,
@@ -201,7 +201,7 @@ internal fun NavGraphBuilder.conversationsNavGraph(
             },
             // A live local call (minimised/floating) suppresses the rejoin
             // pill — don't offer to rejoin the call this device is in.
-            hasLocalLiveCall = CallPillPresenter.isMinimizable(callState.status),
+            hasLocalLiveCall = CallPillPresenter.isMinimizable(callStatus),
         )
     }
     composable(Routes.STARRED) {

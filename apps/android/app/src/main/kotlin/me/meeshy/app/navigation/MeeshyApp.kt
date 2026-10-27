@@ -20,6 +20,9 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import androidx.navigation.NavHostController
 import me.meeshy.app.auth.AuthViewModel
 import me.meeshy.app.auth.LoggingOutVeil
 import me.meeshy.app.calls.CallPill
@@ -76,8 +79,12 @@ fun MeeshyApp(
     val chromeViewModel: ChromeViewModel = hiltViewModel()
     val extensions = hiltViewModel<AppExtensionsViewModel>().extensions
     val authState by authViewModel.state.collectAsStateWithLifecycle()
-    val callState by callViewModel.state.collectAsStateWithLifecycle()
-    val callPeerVisual by callViewModel.peerVisual.collectAsStateWithLifecycle()
+    // Seule la PHASE de l'appel est lue ici : l'etat complet change chaque seconde (le chrono),
+    // et le lire a la racine recomposerait MeeshyApp et redonnerait au `builder` du NavHost une
+    // identite neuve chaque seconde — le graphe reconstruit pendant tout l'appel. La pastille
+    // lit l'etat vivant dans [MinimizedCallPill].
+    val callStatus by remember(callViewModel) { callViewModel.state.map { it.status }.distinctUntilChanged() }
+        .collectAsStateWithLifecycle(initialValue = callViewModel.state.value.status)
 
     LaunchedEffect(authState.isAuthenticated) {
         chromeViewModel.warmUpIfAuthenticated(authState.isAuthenticated)
@@ -92,8 +99,8 @@ fun MeeshyApp(
     // runs while it is composed, so an ended call left in the pill would strand the
     // Activity-scoped FSM in ENDED and block the next call. The pill has already
     // vanished (ENDED is not a pill status); this only resets the state machine.
-    LaunchedEffect(callState.status, onCallScreen) {
-        if (callState.status == CallStatus.ENDED && !onCallScreen) {
+    LaunchedEffect(callStatus, onCallScreen) {
+        if (callStatus == CallStatus.ENDED && !onCallScreen) {
             delay(CALL_ENDED_MINIMISED_SETTLE_MS)
             callViewModel.dismiss()
         }
@@ -145,7 +152,7 @@ fun MeeshyApp(
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
         ) { padding ->
             Box(modifier = Modifier.fillMaxSize().rootPresentationContent()) {
-                val showsCallPill = CallPillPresenter.shouldShow(callState.status, onCallScreen)
+                val showsCallPill = CallPillPresenter.shouldShow(callStatus, onCallScreen)
                 // The minimised-call pill PUSHES the destination down instead of floating
                 // over it: pinned under the status bar, it would lie under the system status
                 // window (its controls untappable) and cover the destination's top bar. The
@@ -155,17 +162,9 @@ fun MeeshyApp(
                     // CALL route from the live config; the Activity-scoped [callViewModel] is
                     // reused, so `start()` is inert.
                     if (showsCallPill) {
-                        CallPill(
-                            state = callState,
-                            peerAvatarUrl = callPeerVisual.avatarUrl,
-                            onClick = {
-                                navController.navigate(CallRoute.reopen(callViewModel.activeConfig)) {
-                                    launchSingleTop = true
-                                }
-                            },
-                            onToggleMute = callViewModel::toggleMute,
-                            onToggleSpeaker = callViewModel::toggleSpeaker,
-                            onHangUp = callViewModel::hangUp,
+                        MinimizedCallPill(
+                            callViewModel = callViewModel,
+                            navController = navController,
                             modifier = Modifier
                                 .statusBarsPadding()
                                 .padding(vertical = MeeshySpacing.xs),
@@ -182,7 +181,7 @@ fun MeeshyApp(
                                 startDestination = startDestination,
                             ) {
                                 authNavGraph(navController, authViewModel)
-                                conversationsNavGraph(navController, authViewModel, callState)
+                                conversationsNavGraph(navController, authViewModel, callStatus)
                                 feedNavGraph(navController)
                                 callNavGraph(navController, callViewModel)
                                 socialNavGraph(navController)
@@ -227,3 +226,27 @@ fun MeeshyApp(
     }
 }
 
+
+/** La pastille d'appel reduit : seule a lire l'etat VIVANT (chrono compris), elle seule se recompose chaque seconde. */
+@Composable
+private fun MinimizedCallPill(
+    callViewModel: CallViewModel,
+    navController: NavHostController,
+    modifier: Modifier = Modifier,
+) {
+    val callState by callViewModel.state.collectAsStateWithLifecycle()
+    val callPeerVisual by callViewModel.peerVisual.collectAsStateWithLifecycle()
+    CallPill(
+        state = callState,
+        peerAvatarUrl = callPeerVisual.avatarUrl,
+        onClick = {
+            navController.navigate(CallRoute.reopen(callViewModel.activeConfig)) {
+                launchSingleTop = true
+            }
+        },
+        onToggleMute = callViewModel::toggleMute,
+        onToggleSpeaker = callViewModel::toggleSpeaker,
+        onHangUp = callViewModel::hangUp,
+        modifier = modifier,
+    )
+}
