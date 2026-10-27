@@ -114,13 +114,8 @@ struct StoryViewerView: View {
 
     @Environment(\.colorScheme) private var colorScheme
 
-    /// Durée dynamique du slide courant — max(6, durée max des médias vidéo/audio).
-    /// Static text/image slides default to 6s (parité Instagram/Snapchat) — la
-    /// transition n'interrompt JAMAIS un média en cours : `updateStoryDuration`
-    /// retient `max(6, durée vidéo BG, durée vidéo FG, durée audio, words/6)` puis
-    /// arrondit à `ceil(base / loopPeriod) × loopPeriod` pour que chaque loop bg
-    /// termine son cycle avant l'avance.
-    @State var computedStoryDuration: Double = 6.0 // internal for cross-file extension access
+    /// The current slide's duration (`StorySlideDuration`).
+    @State var computedStoryDuration: Double = StorySlideDuration.fallback
 
     /// Visibilité du chrome (header, sidebar droite, composer) — animé par
     /// glissements directionnels. En mode normal `chromeVisible = true` au

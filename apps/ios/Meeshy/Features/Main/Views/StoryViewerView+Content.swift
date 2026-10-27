@@ -179,7 +179,7 @@ extension StoryViewerView {
                              viewing: { currentStory?.id })
         reactions.begin(count: currentStory?.reactionCount ?? 0,
                         userReactions: currentStory?.currentUserReactions ?? [])
-        updateStoryDuration()
+        computedStoryDuration = StorySlideDuration.of(currentStory)
 
         // PROGRESS = StoryReaderTimerController (SDK), unique display-link de
         // progression. Gating : `markContentReady` (canvas visible via
@@ -215,44 +215,6 @@ extension StoryViewerView {
         // figée jusqu'à un changement de GROUPE ou la sortie du lecteur.
         drag.releaseAxis()
         startTimer()
-    }
-
-    /// Calcule la durée du slide courant en fonction des médias (vidéo/audio).
-    /// Minimum 6s pour les slides texte/image seules — parité Instagram/Snapchat,
-    /// abaissé depuis 12s après retour utilisateur « les stories durent trop ».
-    ///
-    /// Spec: la story dure `max(longest_media_end_time, configured_slideDuration, 6s_minimum)`,
-    /// puis arrondie au multiple supérieur de chaque période de loop bg pour
-    /// que la vidéo/audio bg ne soit JAMAIS coupée au milieu d'un cycle.
-    /// Avant ce fix, `effects.slideDuration` early-returned et les médias plus longs
-    /// que la durée configurée étaient coupés (la vidéo apparaissait quelques
-    /// secondes puis disparaissait alors que le son continuait — typique d'un
-    /// timer de slide expirant avant la fin du média).
-    /// SINGLE SOURCE OF TRUTH pour la durée du slide.
-    /// User spec 2026-05-27 :
-    /// - Slide statique → 6 s
-    /// - Slide avec vidéo OU audio bg → durée du media (loopé si < 6 s)
-    /// - `storyEffects.slideDuration` configuré prime quand > 0
-    ///
-    /// Délégation à `StorySlide.toRenderableSlide(...).computedTotalDuration()`
-    /// pour aligner exactement avec la durée que pilote le canvas
-    /// (`StoryCanvasUIView.displayLinkTick.effectiveDuration`). Garantit que
-    /// progress bar (wall-clock viewer-side) et auto-advance (canvas-side)
-    /// utilisent la MÊME valeur.
-    static let defaultSlideDuration: Double = 6.0
-
-    private func updateStoryDuration() {
-        guard let story = currentStory else {
-            computedStoryDuration = Self.defaultSlideDuration
-            return
-        }
-        // `preferredLanguages: []` — la résolution de langue n'affecte
-        // pas la durée (computedTotalDuration ne consulte plus le texte
-        // résolu depuis sa simplification single-source-of-truth).
-        // Évite la dépendance sur `resolvedViewerLanguageChain` (private
-        // dans StoryViewerView.swift, inaccessible depuis cette extension).
-        let renderable = story.toRenderableSlide(preferredLanguages: [])
-        computedStoryDuration = renderable.computedTotalDuration()
     }
 
     /// Un écran PLEIN recouvre la story (composeur, citer ou republier en post,

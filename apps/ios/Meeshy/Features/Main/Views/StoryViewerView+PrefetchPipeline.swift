@@ -9,7 +9,7 @@ extension StoryViewerView {
 
     /// Slide duration used to arm the gated timer (6 s when not computed yet).
     var currentSlideDuration: TimeInterval {
-        computedStoryDuration > 0 ? computedStoryDuration : 6.0
+        computedStoryDuration > 0 ? computedStoryDuration : StorySlideDuration.fallback
     }
 
     /// `pipeline` lets the integration tests drive a dedicated pipeline: a
