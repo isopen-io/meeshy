@@ -61,8 +61,10 @@ class RouteManifestRatchetTest {
          * 244 : moins `PUT /me/game/showcase/order`, `PUT /me/game/league/pseudonym`, `POST /me/game/duo/invite`,
          * `POST /me/game/duo/:duoId/accept` et `POST /me/game/duo/:duoId/abandon` (#13347 : ranger la vitrine, l'alliance et
          * le nom de joute), que porte `GameApi.kt`, chacune avec son identifiant d'idempotence.
+         * 240 : moins `GET /sounds/mine`, `GET /stories/audio`, `PATCH /sounds/:id` et `DELETE /sounds/:id`
+         * (#13428 : l'étagère des sons du composeur), que porte `SoundLibraryApi.kt`.
          */
-        const val TO_PORT_CEILING = 244
+        const val TO_PORT_CEILING = 240
         val VERB_STATUSES = setOf("hors-perimetre-mobile", "ops-only", "a-porter", "implementee-par-url-serveur")
     }
 
