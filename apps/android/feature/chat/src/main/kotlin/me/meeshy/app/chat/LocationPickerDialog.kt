@@ -42,6 +42,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -146,8 +147,8 @@ internal fun LocationPickerDialog(
             )
             MapCenterPin(lifted = moving, color = accent, modifier = Modifier.align(Alignment.Center))
 
-            Column(Modifier.fillMaxSize().statusBarsPadding()) {
-                PickerTopBar(accent = accent, onCancel = onDismiss)
+            Column(Modifier.fillMaxSize()) {
+                PickerHeader(accent = accent, onCancel = onDismiss)
                 SearchBar(
                     query = query,
                     accent = accent,
@@ -185,6 +186,19 @@ internal fun LocationPickerDialog(
             if (showSettings) settingsSheet(accent) { showSettings = false }
             PermissionFlowHost(permissions, accent = accent)
         }
+    }
+}
+
+internal const val PICKER_HEADER_TAG = "location-picker-header"
+
+/**
+ * L'en-tête de la feuille sur un FOND (surface opaque), barre d'état comprise : « Annuler » et le titre se lisent
+ * sur n'importe quelle carte et le fil de la conversation ne se voit plus sous l'heure (#13388, iOS : en-tête de feuille).
+ */
+@Composable
+internal fun PickerHeader(accent: Color, onCancel: () -> Unit) {
+    Surface(color = MaterialTheme.colorScheme.surface, modifier = Modifier.fillMaxWidth().testTag(PICKER_HEADER_TAG)) {
+        Column(Modifier.statusBarsPadding()) { PickerTopBar(accent = accent, onCancel = onCancel) }
     }
 }
 
