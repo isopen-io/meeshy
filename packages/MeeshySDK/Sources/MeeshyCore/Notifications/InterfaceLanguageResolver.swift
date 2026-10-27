@@ -12,7 +12,7 @@ public protocol InterfaceLanguageProviding {
 }
 
 public struct AppGroupInterfaceLanguageStore: InterfaceLanguageProviding, Sendable {
-    public static let appGroupSuite = "group.me.meeshy.apps"
+    public static let appGroupSuite = AppGroupPreferences.suiteName
     public static let key = "meeshy.interface.language"
 
     private let suiteName: String

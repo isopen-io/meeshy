@@ -355,6 +355,10 @@ targets:
       # partage et l'extension de contenu hébergent du SwiftUI : elles restent
       # MainActor, et ce commentaire dit pourquoi.
       SWIFT_DEFAULT_ACTOR_ISOLATION: nonisolated
+      # #13137 — un fichier qui n'importe que MeeshyCore ne voit que les membres
+      # de MeeshyCore : sans ce réglage, les extensions de MeeshySDK, lié à côté,
+      # fuient dans tout le module et le cliquet d'import ne prouve rien.
+      SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY: YES
     dependencies:
       # #13137 — le noyau LÉGER (sans Socket.IO ni WebRTC) : la NSE n'importe
       # plus que lui, fichier par fichier ; MeeshySDK reste lié tant que

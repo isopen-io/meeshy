@@ -21,6 +21,10 @@ final class AppGroupPreferencesTests: XCTestCase {
         XCTAssertEqual(UserPreferencesManager.appGroupNotificationPrefsKey, AppGroupPreferences.notificationPreferencesKey)
     }
 
+    func test_interfaceLanguageStore_readsTheSameAppGroup() {
+        XCTAssertEqual(AppGroupInterfaceLanguageStore.appGroupSuite, AppGroupPreferences.suiteName)
+    }
+
     func test_mirroredPreferences_decodeFromTheCoreKey() throws {
         let suite = "test.app-group-preferences.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
