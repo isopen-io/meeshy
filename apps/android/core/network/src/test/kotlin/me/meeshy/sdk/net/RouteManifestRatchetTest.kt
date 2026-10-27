@@ -55,14 +55,15 @@ class RouteManifestRatchetTest {
          * que porte `GameApi.kt`.
          * 257 : moins `PUT /me/game/visibility` (#13326 : « Jeu masqué » ferme les quatre visibilités à « moi seul »,
          * comme iOS `closeEverything`), que porte `GameApi.setVisibility`.
-         * 249 : moins les sept ÉCRITURES du jeu qui touchent un solde (#13325, #13346) — `POST /me/game/missions/:missionId/reroll`,
+         * 250 : moins les sept ÉCRITURES du jeu qui touchent un solde (#13325, #13346) — `POST /me/game/missions/:missionId/reroll`,
          * `chest/claim`, `flame/freezes`, `flame/relight`, `season/steps/:step/claim`, `season/seal` et `prestige` —
          * que porte `GameApi.kt`, chacune avec son identifiant d'idempotence.
-         * 244 : moins `PUT /me/game/showcase/order`, `PUT /me/game/league/pseudonym`, `POST /me/game/duo/invite`,
+         * 245 : moins `PUT /me/game/showcase/order`, `PUT /me/game/league/pseudonym`, `POST /me/game/duo/invite`,
          * `POST /me/game/duo/:duoId/accept` et `POST /me/game/duo/:duoId/abandon` (#13347 : ranger la vitrine, l'alliance et
          * le nom de joute), que porte `GameApi.kt`, chacune avec son identifiant d'idempotence.
-         * 240 : moins `GET /sounds/mine`, `GET /stories/audio`, `PATCH /sounds/:id` et `DELETE /sounds/:id`
+         * 241 : moins `GET /sounds/mine`, `GET /stories/audio`, `PATCH /sounds/:id` et `DELETE /sounds/:id`
          * (#13428 : l'étagère des sons du composeur), que porte `SoundLibraryApi.kt`.
+         * 240 : moins `GET /conversations/:id/engagement` (la Flamme dans l'en-tête du fil), que porte `ConversationEngagementApi.kt`.
          */
         const val TO_PORT_CEILING = 240
         val VERB_STATUSES = setOf("hors-perimetre-mobile", "ops-only", "a-porter", "implementee-par-url-serveur")

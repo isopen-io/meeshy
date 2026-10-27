@@ -2349,7 +2349,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
         let envoi = try doorSendBlock()
 
         XCTAssertTrue(
-            envoi.contains("viewModel.publish(PublishIntent.document("),
+            envoi.contains("let intent = PublishIntent.document(") && envoi.contains("viewModel.publish(intent)"),
             "L'envoi doit passer par `FeedViewModel.publish(PublishIntent.document(…))` — le publieur unique "
                 + "qui enfile SANS condition réseau, média compris."
         )

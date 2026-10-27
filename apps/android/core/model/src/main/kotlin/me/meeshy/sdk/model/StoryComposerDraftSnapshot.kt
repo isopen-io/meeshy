@@ -178,6 +178,10 @@ data class StoryDraftSlideSnapshot(
  * story (blank/absent otherwise); [updatedAt] is an ISO timestamp for diagnostics and is
  * never part of the content identity ([sameContentAs]).
  *
+ * [awaitingPublication] names the outbox rows a publish of this draft queued (#13417): the
+ * draft is then kept — never restored into a new composer, never purged by it — until every
+ * one of them is gone (confirmed by the server, or discarded by the author).
+ *
  * Every field is defaulted so a legacy/partial persisted blob decodes rather than
  * throwing; a structurally broken blob (no slides, or a [selectedId] that names no
  * present slide) is reported by [isStructurallyValid] and treated as "no draft" by the
@@ -192,7 +196,12 @@ data class StoryComposerDraftSnapshot(
     /** La liste « visible par » / « sauf » du brouillon ; vide pour tout autre mode et pour un blob d'avant. */
     val visibilityUserIds: List<String> = emptyList(),
     val updatedAt: String? = null,
+    val awaitingPublication: List<String> = emptyList(),
 ) {
+    /** Whether a publish of this draft is still owed a server confirmation (see [awaitingPublication]). */
+    val isAwaitingPublication: Boolean
+        get() = awaitingPublication.isNotEmpty()
+
     /**
      * Whether this snapshot describes a composer that could actually be rebuilt: it holds
      * at least one slide **and** its [selectedId] names one of them. A blob failing this

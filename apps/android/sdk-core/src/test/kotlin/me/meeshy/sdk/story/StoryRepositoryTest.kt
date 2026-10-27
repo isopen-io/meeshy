@@ -16,6 +16,7 @@ import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.Pagination
+import me.meeshy.sdk.model.PostMentionInput
 import me.meeshy.sdk.model.StoryAudioPlayerObject
 import me.meeshy.sdk.model.StoryEffects
 import me.meeshy.sdk.model.StoryItem
@@ -391,6 +392,26 @@ class StoryRepositoryTest {
     fun `enqueuePublish serializes the request as the row payload`() = runTest {
         val outbox = outbox()
         val request = CreateStoryRequest(content = "bonjour", visibility = "PUBLIC", originalLanguage = "fr")
+
+        repository(outbox).enqueuePublish(request)
+
+        val payload = outbox.deliverable(OutboxLanes.STORY).single().payload
+        assertThat(MeeshyApi.json.decodeFromString<CreateStoryRequest>(payload)).isEqualTo(request)
+    }
+
+    @Test
+    fun `enqueuePublish keeps the whole audience in the durable payload, so a replayed story is not widened`() = runTest {
+        val outbox = outbox()
+        val request = CreateStoryRequest(
+            content = "pour vous",
+            visibility = "ONLY",
+            mediaIds = listOf("photo-1"),
+            visibilityUserIds = listOf("a", "b"),
+            mentions = listOf(PostMentionInput(userId = "u1", username = "ana", display = "NOTE")),
+            allowSoundExtraction = false,
+            mediaAlt = mapOf("photo-1" to "un chat"),
+            mediaCaption = mapOf("photo-1" to "Mon chat"),
+        )
 
         repository(outbox).enqueuePublish(request)
 

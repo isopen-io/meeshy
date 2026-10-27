@@ -1343,9 +1343,10 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
 
         XCTAssertTrue(compacte.contains("onPublishDocument("), "Le bloc lu n'est pas celui de l'envoi du socle.")
         XCTAssertTrue(
-            compacte.contains(compact("if accepted { discardAutosavedDraft(); onDismiss() }")),
+            compacte.contains(compact("if accepted { handOverAutosavedDraft(); onDismiss() }")),
             "La sortie doit être CONDITIONNÉE par l'acceptation du site de montage — et c'est elle, et elle seule, "
-                + "qui efface le brouillon autosauvegardé (#8848). Un `onDismiss()` "
+                + "qui range le brouillon autosauvegardé dans le tiroir de la publication (#8848, #13415 : il ne "
+                + "s'efface qu'avec la ligne, à la confirmation du serveur). Un `onDismiss()` "
                 + "inconditionnel jetterait ce que l'auteur vient d'écrire sur un envoi que le publieur a "
                 + "refusé — et l'écran se refermerait comme si tout allait bien."
         )

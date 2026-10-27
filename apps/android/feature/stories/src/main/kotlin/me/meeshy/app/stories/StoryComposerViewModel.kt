@@ -33,7 +33,6 @@ import me.meeshy.sdk.model.media.TusUploadContext
 import me.meeshy.sdk.model.scene.StoryBackgroundFraming
 import me.meeshy.sdk.model.scene.StoryCanvasTransform
 import me.meeshy.sdk.model.scene.StoryTextBackground
-import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.model.net.MediaRequestCredential
@@ -43,6 +42,7 @@ import me.meeshy.sdk.outbox.OutboxFlushWorker
 import me.meeshy.sdk.outbox.OutboxIds
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.story.StoryComposerDraftStore
+import me.meeshy.sdk.story.StoryDraftConfirmation
 import me.meeshy.sdk.story.StoryRepository
 import java.time.Instant
 import javax.inject.Inject
@@ -69,6 +69,7 @@ class StoryComposerViewModel @Inject constructor(
     private val workManager: WorkManager,
     private val draftStore: StoryComposerDraftStore,
     private val mediaBlobStore: MediaBlobStore,
+    private val draftConfirmation: StoryDraftConfirmation,
     private val blocks: BlockCache = BlockCache(),
     private val config: MeeshyConfig = MeeshyConfig(),
 ) : ViewModel() {
@@ -94,6 +95,7 @@ class StoryComposerViewModel @Inject constructor(
      */
     fun onEnterComposer() {
         viewModelScope.launch {
+            draftConfirmation.settle()
             val stored = draftStore.load()
             val restored = StoryComposerAutosave.restore(
                 stored = stored,
@@ -491,13 +493,13 @@ class StoryComposerViewModel @Inject constructor(
      * (re-entrancy guard). On success the new media is **appended** so multiple
      * picks accumulate; an empty result (every row unusable) surfaces a message.
      *
-     * When the synchronous upload **fails transiently** (offline / throttled / 5xx),
+     * When the synchronous upload **fails** (offline, throttled, 5xx — or refused, #13417),
      * every accepted item is instead queued **durably** ([queueDurably]) and staged
      * as a [PendingMediaUpload] placeholder, so the user can still publish — the
      * outbox uploads each and grafts the real ids when the network returns. Several
      * pending uploads accumulate across picks (and a multi-item offline batch stages
      * each item), surpassing iOS, which drops the pick on an offline upload. A
-     * permanent failure (4xx) surfaces the error and stages nothing.
+     * refused media is kept the same way: the publication carrying it fails retryable.
      */
     fun onMediaPicked(items: List<MediaUploadItem>) {
         if (items.isEmpty() || _state.value.isUploadingMedia) return
@@ -512,7 +514,7 @@ class StoryComposerViewModel @Inject constructor(
             try {
                 when (val result = mediaUploader.upload(accepted)) {
                     is NetworkResult.Success -> applyUploaded(result.data)
-                    is NetworkResult.Failure -> onUploadFailed(accepted, result.error)
+                    is NetworkResult.Failure -> queueDurably(accepted)
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -536,18 +538,11 @@ class StoryComposerViewModel @Inject constructor(
     }
 
     /**
-     * A transient failure → durably queue every accepted item (single pick or batch);
-     * a permanent error (4xx) surfaces the message and stages nothing.
-     */
-    private suspend fun onUploadFailed(accepted: List<MediaUploadItem>, error: ApiError) {
-        if (MediaUploadRetryPolicy.isQueueable(error)) {
-            queueDurably(accepted)
-        } else {
-            _state.update { it.copy(isUploadingMedia = false, errorMessage = error.message) }
-        }
-    }
-
-    /**
+     * Any failed upload is queued durably (single pick or batch). A refusal (4xx, e.g. a HEIC
+     * the server would not take, #13412) is queued too (#13417): the media stays on the device
+     * and the publication that carries it fails retryable in « Publications non envoyées »
+     * instead of losing what the author picked.
+     *
      * Enqueues each item durably and stages it as a pending upload, one at a time so
      * partial progress survives if a later enqueue throws (the already-staged items
      * stay, the caller's catch surfaces the error). Each enqueued blob + outbox row
@@ -609,11 +604,11 @@ class StoryComposerViewModel @Inject constructor(
         _state.update { it.copy(isPublishing = true, errorMessage = null) }
         viewModelScope.launch {
             try {
-                publishPlans(current, resolvePublishLanguage()).forEach { plan ->
+                val queued = publishPlans(current, resolvePublishLanguage()).mapNotNull { plan ->
                     storyRepository.enqueuePublish(plan.request, dependsOn = plan.dependsOn)
                 }
                 workManager.enqueue(OutboxFlushWorker.buildRequest())
-                draftStore.clear()
+                keepDraftUntilConfirmed(current, queued)
                 _state.update { StoryComposerUiState() }
                 resetHistory()
                 _published.tryEmit(Unit)
@@ -623,6 +618,25 @@ class StoryComposerViewModel @Inject constructor(
                 _state.update { it.copy(isPublishing = false, errorMessage = e.message ?: "Publish failed") }
             }
         }
+    }
+
+    /**
+     * The draft is not erased at publish (#13417): it stays on the device, marked as awaiting
+     * the stories it queued, until [StoryDraftConfirmation] sees every one of them confirmed by
+     * the server or discarded by the author.
+     */
+    private suspend fun keepDraftUntilConfirmed(published: StoryComposerUiState, queued: List<String>) {
+        if (queued.isEmpty()) {
+            draftStore.clear()
+            return
+        }
+        val snapshot = published.deck.toDraftSnapshot(
+            visibility = published.draft.visibility,
+            repostOfId = published.draft.repostOfId,
+            nowIso = Instant.now().toString(),
+            visibilityUserIds = published.draft.visibilityUserIds,
+        )
+        draftStore.save(snapshot.copy(awaitingPublication = queued))
     }
 
     /**

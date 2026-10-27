@@ -37,6 +37,17 @@ final class MockComposerAutosaveStore: ComposerAutosaveProviding, @unchecked Sen
         waitCallCount += 1
     }
 
+    private(set) var moves: [(from: ComposerAutosaveSlot, to: ComposerAutosaveSlot)] = []
+    var publicationSlotsResult: [ComposerAutosaveSlot] = []
+
+    func move(account: ComposerAutosaveAccount, from: ComposerAutosaveSlot, to: ComposerAutosaveSlot) {
+        moves.append((from, to))
+    }
+
+    func publicationSlots(account: ComposerAutosaveAccount) -> [ComposerAutosaveSlot] {
+        publicationSlotsResult
+    }
+
     func reset() {
         loadResult = nil
         hasDraftResult = false
@@ -46,5 +57,7 @@ final class MockComposerAutosaveStore: ComposerAutosaveProviding, @unchecked Sen
         deleteCallCount = 0
         deleteAllCallCount = 0
         waitCallCount = 0
+        moves = []
+        publicationSlotsResult = []
     }
 }

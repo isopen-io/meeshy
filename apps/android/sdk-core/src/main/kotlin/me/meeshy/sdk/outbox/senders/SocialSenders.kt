@@ -21,6 +21,7 @@ import me.meeshy.sdk.outbox.toSendResult
 import me.meeshy.sdk.outbox.withPayload
 import me.meeshy.sdk.post.PostRepository
 import me.meeshy.sdk.story.PublishMediaWriteBack
+import me.meeshy.sdk.story.StoryDraftConfirmation
 import me.meeshy.sdk.story.StoryRepository
 import javax.inject.Inject
 
@@ -28,13 +29,15 @@ import javax.inject.Inject
  * `PUBLISH_STORY`: publishes the queued story. Once the story has its server id, every like
  * or bookmark that waited on the `pending_` handle is re-addressed to it and leaves the hold.
  * It owns the graft that swaps an upload's placeholder `cmid` for the real media id in the
- * story's `mediaIds`.
+ * story's `mediaIds`. The composer draft that queued it leaves the device only now
+ * ([StoryDraftConfirmation], #13417).
  */
 public class PublishStoryHandler @Inject constructor(
     private val postApi: PostApi,
     private val outboxRepository: OutboxRepository,
     private val json: Json,
     private val storyRepository: StoryRepository,
+    private val draftConfirmation: StoryDraftConfirmation,
 ) : OutboxKindHandler {
 
     override val payloadGraft: OutboxPayloadGraft = PublishMediaWriteBack::graft
@@ -45,6 +48,7 @@ public class PublishStoryHandler @Inject constructor(
                 is NetworkResult.Success -> {
                     runCatching { outboxRepository.resolveLocalId(row.targetId, result.data.id) }
                     runCatching { storyRepository.adoptPublished(result.data) }
+                    runCatching { draftConfirmation.settle(delivered = row.cmid) }
                     SendResult.Success
                 }
                 is NetworkResult.Failure -> SendResult.TransientFailure

@@ -2265,6 +2265,27 @@ final class MessagePersistenceActorTests: XCTestCase {
         XCTAssertEqual(remaining, 0, "aucune ligne épuisée périmée ne doit survivre à la purge")
     }
 
+    /// #13415 — une PUBLICATION non envoyée ne se purge jamais en silence :
+    /// elle reste sur l'appareil jusqu'à la confirmation du serveur ou à sa
+    /// suppression par l'auteur, quel que soit son âge.
+    func test_purgeExhaustedOlderThan_keepsAnUnsentPublication_whateverItsAge() async throws {
+        let old = Date().addingTimeInterval(-90 * 86_400)
+        try await dbQueue.write { db in
+            try OutboxRecord(id: "ofqm_post", kind: .createPost, conversationId: "", clientMessageId: "cmid_post",
+                             payload: Data(), status: .exhausted, attempts: 5, lastError: "415",
+                             createdAt: old, updatedAt: old, nextAttemptAt: old).insert(db)
+            try OutboxRecord(id: "ex_read", kind: .markAsRead, conversationId: "c", clientMessageId: "c1",
+                             payload: Data(), status: .exhausted, attempts: 5, lastError: "500",
+                             createdAt: old, updatedAt: old, nextAttemptAt: old).insert(db)
+        }
+
+        let deleted = try await actor.purgeExhaustedOlderThan(days: 7)
+
+        XCTAssertEqual(deleted, 1)
+        let remaining = try await dbQueue.read { db in try OutboxRecord.fetchAll(db).map(\.id) }
+        XCTAssertEqual(remaining, ["ofqm_post"])
+    }
+
     // MARK: - appendReaction authoritative cap (own-reaction echo double-count)
 
     private func reactions(in conv: String) throws -> [MeeshyReaction] {

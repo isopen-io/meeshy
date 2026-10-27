@@ -37,6 +37,20 @@ nonisolated struct ComposerAutosaveSlot: Hashable, Sendable {
     let directoryName: String
 
     static let creation = ComposerAutosaveSlot(directoryName: "creation")
+
+    /// #13415 — le brouillon d'une publication ACCEPTÉE par la file, gardé
+    /// jusqu'à ce que sa ligne parte (confirmée par le serveur ou supprimée
+    /// par l'auteur) : c'est lui que « Rouvrir en brouillon » rend au meuble.
+    static func publication(_ clientMutationId: String) -> ComposerAutosaveSlot {
+        ComposerAutosaveSlot(directoryName: publicationPrefix + clientMutationId)
+    }
+
+    static let publicationPrefix = "publication-"
+
+    var publicationId: String? {
+        directoryName.hasPrefix(Self.publicationPrefix)
+            ? String(directoryName.dropFirst(Self.publicationPrefix.count)) : nil
+    }
 }
 
 /// Un nom de fichier STABLE par source : un même fichier, d'une sauvegarde à la

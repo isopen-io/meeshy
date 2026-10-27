@@ -147,6 +147,10 @@ const ptStudioChrome = {
   'story.studio.edit.saving': 'A guardar…',
   'story.studio.edit.cancel': 'Descartar as alterações',
   'story.studio.publish.as.storyAndReel': 'Publicar story e reel',
+  'story.studio.unsent': 'Publicação não enviada.',
+  'story.studio.unsent.retry': 'Tentar novamente',
+  'story.studio.unsent.discard': 'Excluir',
+  'story.studio.volatile': 'Este dispositivo não guarda as suas mídias: não recarregue a página antes de publicar.',
 } satisfies StudioChromeCatalogSlice;
 
 export default ptStudioChrome;

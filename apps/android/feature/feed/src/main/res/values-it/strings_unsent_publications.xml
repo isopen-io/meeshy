@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="feed_notice_publish_queued">Il tuo post è in fase di invio</string>
+    <string name="feed_unsent_title">Post non inviati</string>
+    <plurals name="feed_unsent_count">
+        <item quantity="one">%1$d post non inviato</item>
+        <item quantity="many">%1$d post non inviati</item>
+        <item quantity="other">%1$d post non inviati</item>
+    </plurals>
+    <string name="feed_unsent_open">Mostra i post non inviati</string>
+    <string name="feed_unsent_sending">Invio in corso…</string>
+    <string name="feed_unsent_failed">Invio non riuscito</string>
+    <string name="feed_unsent_retry">Riprova</string>
+    <string name="feed_unsent_reopen">Riapri</string>
+    <string name="feed_unsent_delete">Elimina</string>
+    <string name="feed_unsent_delete_confirm_title">Eliminare questo post?</string>
+    <string name="feed_unsent_delete_confirm_body">Verrà rimosso da questo dispositivo insieme ai suoi media.</string>
+    <string name="feed_unsent_cancel">Annulla</string>
+    <string name="feed_unsent_kind_post">Post</string>
+    <string name="feed_unsent_kind_reel">Reel</string>
+    <string name="feed_unsent_kind_story">Storia</string>
+    <plurals name="feed_unsent_media_count">
+        <item quantity="one">%1$d media</item>
+        <item quantity="many">%1$d media</item>
+        <item quantity="other">%1$d media</item>
+    </plurals>
+</resources>

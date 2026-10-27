@@ -17,4 +17,8 @@ internal abstract class PostAccountCachesModule {
     @Binds
     @IntoSet
     abstract fun bindFeedCache(repository: PostRepository): PerAccountCache
+
+    @Binds
+    @IntoSet
+    abstract fun bindComposerDrafts(store: PostComposerDraftStore): PerAccountCache
 }

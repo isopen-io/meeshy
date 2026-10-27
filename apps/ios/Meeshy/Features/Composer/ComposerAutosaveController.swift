@@ -126,6 +126,27 @@ final class ComposerAutosaveController: ObservableObject {
         ownsStoredDraft = false
     }
 
+    /// #13415 — un post ou un réel accepté par la file garde son brouillon
+    /// jusqu'à la confirmation du serveur ; sans publication nommée (mood), il
+    /// s'efface comme avant.
+    func handOver(to publicationId: String?, finalState: Capture) {
+        guard let publicationId else { return discard() }
+        flushNow(finalState)
+        park(publicationId: publicationId)
+    }
+
+    /// #13415 — publication acceptée par la FILE, pas encore par le serveur :
+    /// le brouillon n'est pas effacé, il passe dans le tiroir de la
+    /// publication, qui ne part qu'avec la ligne (confirmation ou suppression).
+    /// Plus rien n'écrit ensuite dans la création.
+    func park(publicationId: String) {
+        isDiscarded = true
+        cancelPending()
+        guard let account, ownsStoredDraft || mayWrite else { return }
+        store.move(account: account, from: slot, to: .publication(publicationId))
+        ownsStoredDraft = false
+    }
+
     private func write(_ capture: Capture) {
         guard mayWrite, !isDiscarded, let account, let state = capture() else { return }
         guard state.hasContent else {

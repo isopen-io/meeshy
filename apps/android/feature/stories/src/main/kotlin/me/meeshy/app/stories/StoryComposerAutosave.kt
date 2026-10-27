@@ -69,7 +69,8 @@ object StoryComposerAutosave {
      *   stored to make room for a snapshot that, structurally, has nothing to save.
      * - **No restorable content at all** (no slide carries a caption, media, a publishable
      *   text element / sticker, *or* a stroke) → [StoryDraftPersist.Clear] over a stored
-     *   draft, else [StoryDraftPersist.None].
+     *   draft, else [StoryDraftPersist.None]. A stored draft awaiting its publication is not
+     *   the composer's to purge (#13417): only its confirmation or its discard removes it.
      * - **Restorable content, unchanged** from [previous] → [StoryDraftPersist.None].
      * - **Restorable content, changed** → [StoryDraftPersist.Save] with a fresh snapshot
      *   stamped [nowIso].
@@ -96,11 +97,13 @@ object StoryComposerAutosave {
      * stored draft is restored only when the composer is [deckIsPristine] — a single blank
      * slide with no content — so a restore never clobbers work already begun (the load is
      * asynchronous and may resolve after the first edit). A `null`, corrupt, or
-     * content-empty [stored] draft is ignored (returns `null`).
+     * content-empty [stored] draft is ignored (returns `null`), and so is a draft awaiting the
+     * confirmation of its publication (#13417): it is already on its way, restoring it would
+     * publish it twice.
      */
     fun restore(stored: StoryComposerDraftSnapshot?, deckIsPristine: Boolean): StoryComposerDraftSnapshot? {
         if (!deckIsPristine) return null
-        if (stored == null || !stored.isWorthRestoring) return null
+        if (stored == null || !stored.isWorthRestoring || stored.isAwaitingPublication) return null
         return stored
     }
 
@@ -123,7 +126,7 @@ object StoryComposerAutosave {
             }
 
     private fun purgeOrNone(previous: StoryComposerDraftSnapshot?): StoryDraftPersist =
-        if (previous != null) StoryDraftPersist.Clear else StoryDraftPersist.None
+        if (previous != null && !previous.isAwaitingPublication) StoryDraftPersist.Clear else StoryDraftPersist.None
 }
 
 /** Projects the deck's persistable fields onto a durable snapshot stamped [nowIso]. */

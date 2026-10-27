@@ -5,6 +5,9 @@ import androidx.lifecycle.viewModelScope
 import androidx.work.WorkManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -14,6 +17,12 @@ import kotlinx.coroutines.launch
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.media.MediaUploadItem
+import me.meeshy.sdk.media.MediaUploadQueue
+import me.meeshy.sdk.model.PostComposerDraftSnapshot
+import me.meeshy.sdk.model.media.TusUploadContext
+import me.meeshy.sdk.net.api.CreatePostRequest
+import me.meeshy.sdk.post.PostComposerDraftStore
+import me.meeshy.sdk.publication.PublicationOutbox
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.PostType
@@ -22,6 +31,7 @@ import me.meeshy.sdk.model.UploadedMedia
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.outbox.OutboxFlushWorker
+import me.meeshy.sdk.outbox.OutboxIds
 import me.meeshy.sdk.model.analytics.ContentSurface
 import me.meeshy.sdk.model.analytics.ImpressionSource
 import me.meeshy.sdk.post.FeedEngagementRepository
@@ -99,6 +109,9 @@ class FeedViewModel @Inject constructor(
     private val reportRepository: ReportRepository,
     private val workManager: WorkManager,
     engagement: FeedEngagementRepository,
+    private val publications: PublicationOutbox,
+    private val composerDrafts: PostComposerDraftStore,
+    private val mediaUploadQueue: MediaUploadQueue,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(FeedUiState())
@@ -596,32 +609,18 @@ class FeedViewModel @Inject constructor(
     }
 
     /**
-     * Publish a post: the pure [FeedComposerDraft]/[FeedPostPublishRequest] already
-     * validated [content]/[visibility]/[mediaIds] before calling this (the publish gate
-     * is that draft's SSOT, not re-checked here — mirror of
-     * [StatusesViewModel.setStatus] trusting its own [StatusPublishRequest]). Port of
-     * iOS `FeedViewModel.createPost`'s direct (non-durable) path: confirmed by the
-     * network before the post is shown, so there is nothing to roll back on failure. A
-     * blank [content] (a media-only post) is sent as `null`, never an empty string, so
-     * a stricter gateway validation on the text field is never exercised for a post
-     * that carries only media. A successful create is prepended to the realtime head
-     * via [FeedRealtimeReducer.created] — visible at the top instantly, without raising
-     * the "new posts" banner. [type] carries the reel-classification decision the pure
-     * [FeedComposerDraft.postType] already resolved (`ReelComposition.defaultType`) —
-     * defaulted to [PostType.POST] so any other call site is unaffected. [location]
-     * carries the optional device-captured [me.meeshy.sdk.model.SharedPlace] attachment
-     * the composer's location tile resolved — forwarded to the gateway verbatim,
-     * `null` when no location was attached (the common case, unaffected). [language]
-     * carries the composer's source-language choice ([me.meeshy.sdk.model.ComposerLanguage],
-     * mirrors iOS's `composerLanguage`) — forwarded to the gateway's `originalLanguage`
-     * field verbatim, `null` when the caller doesn't supply one (every other existing
-     * call site is unaffected; the real composer always supplies one, see
-     * `FeedComposerDraft.language`). **Deliberate, documented scope cuts**: no
-     * durable-outbox queueing yet (unlike iOS's `enqueueDurableTextPost`, U1 ST3) — a
-     * post typed while offline is lost rather than durably queued; a tracked follow-up
-     * once Android's `OutboxKind` gains a `CREATE_POST` lane. Camera capture, file and
-     * audio attachments remain separately-scoped follow-ups to this photo/video
-     * sub-slice.
+     * Publish a post or a reel through the durable outbox (#13417; iOS `enqueueDurableTextPost`):
+     * the pure [FeedComposerDraft]/[FeedPostPublishRequest] already validated the payload. The
+     * post is queued on the device WITH its media — a media still uploading rides as its upload
+     * `cmid` and the post waits on it — and [draft] is parked under the post instead of being
+     * erased: it leaves the device only when the server confirms the post, or when the author
+     * discards it from « Publications non envoyées ». Offline, killed, refused: nothing is lost.
+     *
+     * A blank [content] (a media-only post) is sent as `null`, an empty [mediaIds] or [mediaAlt]
+     * as absent. [type] carries the reel classification, [location] the attached place and
+     * [language] the composer's source language — all forwarded verbatim. Once the gateway
+     * confirms, the post joins the head of the feed (`CREATE_POST` delivery); the immediate
+     * feedback is the « en cours d'envoi » notice and the unsent row.
      */
     fun publishPost(
         content: String,
@@ -631,25 +630,27 @@ class FeedViewModel @Inject constructor(
         location: SharedPlace? = null,
         language: String? = null,
         mediaAlt: Map<String, String> = emptyMap(),
+        draft: PostComposerDraftSnapshot? = null,
     ) {
         viewModelScope.launch {
             try {
-                val result = postRepository.create(
-                    content = content.ifBlank { null },
-                    type = type,
-                    visibility = visibility,
-                    mediaIds = mediaIds.ifEmpty { null },
-                    location = location,
-                    originalLanguage = language,
-                    mediaAlt = mediaAlt.ifEmpty { null },
+                // A pending autosave must not resurrect the editing draft after it was parked.
+                draftSave?.cancelAndJoin()
+                draftSave = null
+                publications.enqueuePost(
+                    CreatePostRequest(
+                        content = content.ifBlank { null },
+                        type = type,
+                        visibility = visibility,
+                        mediaIds = mediaIds.ifEmpty { null },
+                        originalLanguage = language,
+                        location = location,
+                        mediaAlt = mediaAlt.ifEmpty { null },
+                    ),
+                    draft,
                 )
-                when (result) {
-                    is NetworkResult.Success -> {
-                        realtimeHead.update { FeedRealtimeReducer.created(it, result.data) }
-                        _state.update { it.copy(notice = FeedNotice.PUBLISHED) }
-                    }
-                    is NetworkResult.Failure -> _state.update { it.withPublishFailure(content, visibility) }
-                }
+                workManager.enqueue(OutboxFlushWorker.buildRequest())
+                _state.update { it.copy(notice = FeedNotice.PUBLISH_QUEUED) }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -657,6 +658,46 @@ class FeedViewModel @Inject constructor(
             }
         }
     }
+
+    /**
+     * A composer media the network refused or could not take now (offline, 4xx, 5xx) is kept on
+     * the device (#13417): its bytes go to the durable upload queue under the `post` context and
+     * the returned `cmid` stands in for its id until the upload lands.
+     */
+    suspend fun queueMedia(item: MediaUploadItem): String = mediaUploadQueue.enqueue(item, TusUploadContext.POST)
+
+    /**
+     * The author removed a media from the composer: a media still waiting on the device is the
+     * author's explicit discard — its upload and its bytes leave. A served media is left alone
+     * (the server sweeps an unclaimed upload by itself).
+     */
+    fun discardQueuedMedia(id: String) {
+        if (!OutboxIds.isCmid(id)) return
+        viewModelScope.launch { runCatching { mediaUploadQueue.cancel(id) } }
+    }
+
+    /** The composer's autosaved draft, or `null` — read when the composer opens. */
+    suspend fun restorableDraft(): FeedComposerDraft? =
+        runCatching { composerDrafts.loadEditing() }.getOrNull()
+            ?.takeIf { it.isWorthRestoring }
+            ?.toComposerDraft()
+
+    /**
+     * Autosaves the composer — an emptied composer (no words, no media) is the author's own
+     * erasure and clears the slot. Debounced so typing writes once a pause, not per keystroke.
+     */
+    fun persistComposerDraft(draft: FeedComposerDraft) {
+        draftSave?.cancel()
+        draftSave = viewModelScope.launch {
+            delay(DRAFT_SAVE_DEBOUNCE_MS)
+            val snapshot = draft.toSnapshot(System.currentTimeMillis())
+            runCatching {
+                if (snapshot.isWorthRestoring) composerDrafts.saveEditing(snapshot) else composerDrafts.clearEditing()
+            }
+        }
+    }
+
+    private var draftSave: Job? = null
 
     /**
      * Uploads freshly-picked composer media as `post`-context TUS attachments — the
@@ -672,6 +713,7 @@ class FeedViewModel @Inject constructor(
 
     private companion object {
         const val LOAD_MORE_THRESHOLD = 5
+        const val DRAFT_SAVE_DEBOUNCE_MS = 400L
     }
 }
 

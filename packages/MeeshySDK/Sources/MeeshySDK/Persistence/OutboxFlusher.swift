@@ -336,7 +336,11 @@ public actor OutboxFlusher {
     /// supprimé ce que la ligne avait créé, soit la source éphémère a expiré.
     /// Sans lui dans cette liste, la ligne brûlait ses cinq tentatives pour
     /// finir au même endroit, une minute de ⏳ plus tard.
-    private static let permanentRejectionStatusCodes: Set<Int> = [400, 403, 404, 410, 413, 422]
+    ///
+    /// 415 (#13414) : un média refusé APRÈS le repli JPEG
+    /// (`HEICUploadFallback`) ne passera jamais — rejouer renverrait cinq fois
+    /// les mêmes octets. La ligne sort en échec, gardée sur l'appareil.
+    private static let permanentRejectionStatusCodes: Set<Int> = [400, 403, 404, 410, 413, 415, 422]
     static func isPermanentServerRejection(_ error: Error) -> Bool {
         // 403 is surfaced as a distinct `.forbidden` case by APIClient (resource
         // access loss, not a session problem) — a permanent reject all the same.
@@ -348,6 +352,7 @@ public actor OutboxFlusher {
         // #12985 — un refus posé par l'appareil avant tout transport (cible
         // chiffrée de bout en bout) ne se lèvera pas en rejouant.
         if error is EndToEndSendRefusal { return true }
+        if error is UnsupportedImageFormatRefusal { return true }
         if case let MeeshyError.server(statusCode, _) = error {
             return permanentRejectionStatusCodes.contains(statusCode)
         }

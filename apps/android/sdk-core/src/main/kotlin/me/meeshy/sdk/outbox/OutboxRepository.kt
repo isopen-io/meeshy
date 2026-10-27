@@ -264,6 +264,25 @@ class OutboxRepository @Inject constructor(
     }
 
     /**
+     * [retry] for a row that waits on prerequisites (a publication behind its uploads, #13417):
+     * every EXHAUSTED prerequisite is revived first, otherwise the revived row would meet the
+     * same dead dependency and be cascade-exhausted on the very next pass. A prerequisite that
+     * is gone (delivered) or still queued is left as it is.
+     *
+     * @return `false` when [cmid] no longer exists.
+     */
+    suspend fun retryWithPrerequisites(cmid: String): Boolean {
+        val row = outboxDao.find(cmid) ?: return false
+        OutboxDependencyKey.decode(row.dependsOn)
+            .filter { outboxDao.find(it)?.stateEnum == OutboxState.EXHAUSTED }
+            .forEach { retry(it) }
+        return retry(cmid)
+    }
+
+    /** The queued row [cmid], or `null` once it is gone (delivered or discarded). */
+    suspend fun row(cmid: String): OutboxEntity? = outboxDao.find(cmid)
+
+    /**
      * Removes a row outright — a user **discarding** a permanently-failed mutation
      * (e.g. an exhausted story publish they no longer want to retry). Unknown
      * `cmid`s are a no-op. Unlike [markSucceeded] this signals no outcome: it is a
@@ -281,21 +300,25 @@ class OutboxRepository @Inject constructor(
     /**
      * Grafts a delivered prerequisite's outcome into its still-queued dependents
      * (ARCHITECTURE.md §5) — the second half of the durable upload→publish chain.
-     * For every **`PENDING`** row whose `dependsOn` is [prerequisiteCmid], [rewrite]
-     * is applied to its payload; a non-`null` result is persisted, a `null` result
-     * (no-op) leaves the row untouched. `INFLIGHT`/`EXHAUSTED` dependents are skipped
-     * — only a row that has not yet started delivery can safely have its payload
-     * rewritten. The generic `(payload) -> payload?` shape keeps the queue agnostic
+     * For every row whose `dependsOn` is [prerequisiteCmid] and that is not `INFLIGHT`,
+     * [rewrite] is applied to its payload; a non-`null` result is persisted, a `null`
+     * result (no-op) leaves the row untouched. Only an in-flight dependent is skipped —
+     * its request is already on the wire. An `EXHAUSTED` one is rewritten too (#13417):
+     * a publication that gave up before its upload landed keeps the real id for its retry. The generic `(payload) -> payload?` shape keeps the queue agnostic
      * of any one mutation's payload format.
      *
      * @return how many dependents were actually rewritten.
      */
-    suspend fun rewriteDependents(prerequisiteCmid: String, rewrite: (String) -> String?): Int {
+    suspend fun rewriteDependents(prerequisiteCmid: String, rewrite: (String) -> String?): Int =
+        rewriteDependentRows(prerequisiteCmid) { rewrite(it.payload) }
+
+    /** [rewriteDependents], handing [rewrite] the whole dependent row (its kind picks the write-back). */
+    suspend fun rewriteDependentRows(prerequisiteCmid: String, rewrite: (OutboxEntity) -> String?): Int {
         val dependents = outboxDao.findDependents(OutboxDependencyKey.likePattern(prerequisiteCmid))
-            .filter { it.stateEnum == OutboxState.PENDING }
+            .filter { it.stateEnum != OutboxState.INFLIGHT }
         var changed = 0
         for (row in dependents) {
-            val newPayload = rewrite(row.payload) ?: continue
+            val newPayload = rewrite(row) ?: continue
             outboxDao.updatePayload(row.cmid, newPayload, now())
             changed++
         }
