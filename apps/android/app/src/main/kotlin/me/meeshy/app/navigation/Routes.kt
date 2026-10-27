@@ -127,6 +127,7 @@ object Routes {
     const val PROFILE_SHARE_WEB_DEEP_LINK =
         "https://${ProfileShareLink.WEB_HOST}/${ProfileShareLink.USER_SEGMENT}/{userId}"
     const val USER_POSTS = "profile/{userId}/posts"
+    const val HASHTAG_RESULTS = "hashtag/{tag}"
     const val REPORT_USER = "report/{${ReportUserViewModel.USER_ID_ARG}}?${ReportUserViewModel.USERNAME_ARG}={${ReportUserViewModel.USERNAME_ARG}}"
     const val STORY_VIEWER = "story/{${StoryViewerViewModel.USER_ID_ARG}}"
     const val STORY_DEEP_LINK = "meeshy://$STORY_VIEWER"
@@ -147,6 +148,7 @@ object Routes {
         ChatRouteArgs.route(conversationId, highlightMessageId)
     fun profile(userId: String): String = "profile/$userId"
     fun userPosts(userId: String): String = "profile/$userId/posts"
+    fun hashtag(tag: String): String = "hashtag/${Uri.encode(tag.removePrefix("#"))}"
     fun reportUser(userId: String, username: String): String =
         "report/$userId?${ReportUserViewModel.USERNAME_ARG}=${Uri.encode(username)}"
     fun story(userId: String): String = "story/$userId"

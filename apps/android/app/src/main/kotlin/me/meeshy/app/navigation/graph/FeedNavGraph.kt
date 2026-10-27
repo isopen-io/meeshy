@@ -8,6 +8,8 @@ import androidx.navigation.navArgument
 import androidx.navigation.navDeepLink
 import me.meeshy.app.feed.BookmarksScreen
 import me.meeshy.app.feed.FeedScreen
+import me.meeshy.app.feed.HashtagResultsScreen
+import me.meeshy.app.feed.HashtagResultsViewModel
 import me.meeshy.app.feed.NearbyScreen
 import me.meeshy.app.feed.PostDetailScreen
 import me.meeshy.app.feed.PostDetailViewModel
@@ -28,6 +30,19 @@ internal fun NavGraphBuilder.feedNavGraph(
             onOpenReels = { navController.navigate(Routes.reels()) },
             onOpenNearby = { navController.navigate(Routes.NEARBY_DISCOVERY) },
             onOpenProfile = { userId -> navController.navigate(Routes.profile(userId)) },
+            onOpenHashtag = { tag -> navController.navigate(Routes.hashtag(tag)) },
+        )
+    }
+    composable(
+        route = Routes.HASHTAG_RESULTS,
+        arguments = listOf(navArgument(HashtagResultsViewModel.TAG_ARG) { type = NavType.StringType }),
+    ) {
+        HashtagResultsScreen(
+            onBack = { navController.popBackStack() },
+            onPostClick = { postId -> navController.navigate(Routes.reels(seed = postId)) },
+            onOpenPost = { postId -> navController.navigate(Routes.postDetail(postId)) },
+            onOpenProfile = { userId -> navController.navigate(Routes.profile(userId)) },
+            onOpenHashtag = { tag -> navController.navigate(Routes.hashtag(tag)) },
         )
     }
     composable(Routes.SAVED_POSTS) {
@@ -57,6 +72,7 @@ internal fun NavGraphBuilder.feedNavGraph(
             onBack = { navController.popBackStack() },
             onOpenPost = { postId -> navController.navigate(Routes.postDetail(postId)) },
             onOpenProfile = { userId -> navController.navigate(Routes.profile(userId)) },
+            onOpenHashtag = { tag -> navController.navigate(Routes.hashtag(tag)) },
         )
     }
     composable(

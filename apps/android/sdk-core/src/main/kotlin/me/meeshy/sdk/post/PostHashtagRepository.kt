@@ -18,19 +18,27 @@ class PostHashtagRepository @Inject constructor(
     private val hashtagApi: HashtagApi,
     private val listings: FeedListingRegistry,
 ) {
+    private val firstPages = object : LinkedHashMap<String, PostPage>(CACHED_TAGS, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, PostPage>): Boolean =
+            size > CACHED_TAGS
+    }
+
+    /** La première page déjà vue de [tag] (cache-first : l'écran s'ouvre dessus, puis se revalide), ou `null`. */
+    fun cachedFirstPage(tag: String): PostPage? = synchronized(firstPages) { firstPages[normalizedTag(tag)] }
+
     suspend fun posts(tag: String, cursor: String? = null, limit: Int = PAGE_SIZE): NetworkResult<PostPage> =
         when (val result = pagedApiCall { postApi.getByHashtag(normalizedTag(tag), cursor, limit) }) {
             is NetworkResult.Failure -> result
             is NetworkResult.Success -> {
                 val page = result.data
                 listings.note(ContentSurface.HASHTAG, page.meta?.feedRequestId, page.data.map(ApiPost::id))
-                NetworkResult.Success(
-                    PostPage(
-                        posts = page.data,
-                        nextCursor = page.nextCursor,
-                        hasMore = page.pagination?.hasMore ?: false,
-                    ),
+                val fetched = PostPage(
+                    posts = page.data,
+                    nextCursor = page.nextCursor,
+                    hasMore = page.pagination?.hasMore ?: false,
                 )
+                if (cursor == null) synchronized(firstPages) { firstPages[normalizedTag(tag)] = fetched }
+                NetworkResult.Success(fetched)
             }
         }
 
@@ -43,5 +51,6 @@ class PostHashtagRepository @Inject constructor(
     private companion object {
         const val PAGE_SIZE = 20
         const val TRENDING_SIZE = 20
+        const val CACHED_TAGS = 12
     }
 }

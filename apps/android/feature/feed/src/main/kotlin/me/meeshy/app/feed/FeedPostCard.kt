@@ -31,6 +31,7 @@ internal fun PostCard(
     onReport: () -> Unit = {},
     onDelete: () -> Unit = {},
     onComments: () -> Unit = onClick,
+    onOpenHashtag: (String) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     MeeshyGlassSurface(
@@ -54,7 +55,7 @@ internal fun PostCard(
                 onReport = onReport,
                 onDelete = onDelete,
             )
-            FeedPostCardBody(post = post, onFlagTap = onFlagTap)
+            FeedPostCardBody(post = post, onFlagTap = onFlagTap, onOpenHashtag = onOpenHashtag)
             FeedPostCardMediaSlot(post = post, onImageTap = onImageTap, onOpenPost = onOpenPost)
             FeedPostCardFooter(
                 post = post,

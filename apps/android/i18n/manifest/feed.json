@@ -792,6 +792,12 @@
         },
         {
           "catalog": "app",
+          "iosKey": "hashtag.results.empty",
+          "androidName": "hashtag_results_empty",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
           "iosKey": "feed.nearby.empty.denied.action",
           "status": "disabled"
         },

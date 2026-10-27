@@ -75,6 +75,7 @@
     <string name="feed_translated">Traduzione disponibile</string>
     <string name="feed_unknown_author">Sconosciuto</string>
     <string name="feed_unlike">Non mi piace più</string>
+    <string name="hashtag_results_empty">Nessun post con #%s</string>
     <string name="nearby_back">Indietro</string>
     <string name="nearby_retry">Riprova</string>
     <string name="nearby_title">Nelle vicinanze</string>

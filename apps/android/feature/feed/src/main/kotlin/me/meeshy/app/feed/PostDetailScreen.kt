@@ -74,6 +74,7 @@ import me.meeshy.ui.component.reaction.PostReactionPaletteAnchor
 import me.meeshy.ui.modifier.reactionPaletteTrigger
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.component.bubble.RichMessageText
 import me.meeshy.ui.component.rememberPresence
 import me.meeshy.sdk.model.PostAbsenceReason
 import me.meeshy.ui.component.MeeshySkeletonBox
@@ -84,6 +85,7 @@ import me.meeshy.ui.format.RelativeTimeFormat
 import me.meeshy.ui.format.rememberRelativeTimeStrings
 import me.meeshy.ui.format.shortDateTimeLabel
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
+import me.meeshy.ui.component.bubble.RichMessageText
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
@@ -105,6 +107,7 @@ fun PostDetailScreen(
     onBack: () -> Unit = {},
     onOpenPost: (String) -> Unit = {},
     onOpenProfile: ((String) -> Unit)? = null,
+    onOpenHashtag: (String) -> Unit = {},
     viewModel: PostDetailViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -175,6 +178,7 @@ fun PostDetailScreen(
                         onFlagTap = viewModel::onFlagTap,
                         onOpenPost = onOpenPost,
                         onOpenProfile = onOpenProfile,
+                        onOpenHashtag = onOpenHashtag,
                         onRepost = viewModel::repost,
                         onQuote = viewModel::beginQuote,
                         onLike = viewModel::toggleLike,
@@ -205,6 +209,7 @@ private fun PostDetailContent(
     onFlagTap: (String) -> Unit,
     onOpenPost: (String) -> Unit,
     onOpenProfile: ((String) -> Unit)?,
+    onOpenHashtag: (String) -> Unit,
     onRepost: () -> Unit,
     onQuote: () -> Unit,
     onLike: () -> Unit,
@@ -266,12 +271,14 @@ private fun PostDetailContent(
 
                 if (post.content.isNotBlank()) {
                     Spacer(Modifier.height(MeeshySpacing.md))
-                    SelectionContainer {
-                        Text(
-                            text = post.content,
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MeeshyTheme.tokens.textPrimary,
-                        )
+                    HashtagAwareLinks(onOpenHashtag) {
+                        SelectionContainer {
+                            RichMessageText(
+                                text = post.content,
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MeeshyTheme.tokens.textPrimary,
+                            )
+                        }
                     }
                 }
 

@@ -81,6 +81,7 @@
     <string name="feed_translated">الترجمة متاحة</string>
     <string name="feed_unknown_author">غير معروف</string>
     <string name="feed_unlike">إلغاء الإعجاب</string>
+    <string name="hashtag_results_empty">لا توجد منشورات بالوسم #%s</string>
     <string name="nearby_back">رجوع</string>
     <string name="nearby_retry">إعادة المحاولة</string>
     <string name="nearby_title">بالقرب مني</string>

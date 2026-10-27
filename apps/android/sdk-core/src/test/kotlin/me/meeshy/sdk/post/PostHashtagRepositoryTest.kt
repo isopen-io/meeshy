@@ -37,6 +37,32 @@ class PostHashtagRepositoryTest {
     }
 
     @Test
+    fun `la premiere page vue est gardee pour ouvrir l ecran sans attente`() = runTest {
+        coEvery { postApi.getByHashtag("paris", null, 20) } returns ApiResponse(
+            success = true,
+            data = listOf(ApiPost(id = "a")),
+            pagination = Pagination(hasMore = true, nextCursor = "c2"),
+        )
+        assertThat(repository.cachedFirstPage("#Paris")).isNull()
+
+        repository.posts("paris")
+
+        assertThat(repository.cachedFirstPage("PARIS")?.posts?.map { it.id }).containsExactly("a")
+    }
+
+    @Test
+    fun `une page suivante ne remplace pas la premiere en cache`() = runTest {
+        coEvery { postApi.getByHashtag("paris", "c2", 20) } returns ApiResponse(
+            success = true,
+            data = listOf(ApiPost(id = "z")),
+        )
+
+        repository.posts("paris", cursor = "c2")
+
+        assertThat(repository.cachedFirstPage("paris")).isNull()
+    }
+
+    @Test
     fun `le curseur est renvoye a la page suivante`() = runTest {
         coEvery { postApi.getByHashtag("paris", "c2", 20) } returns ApiResponse(
             success = true,
