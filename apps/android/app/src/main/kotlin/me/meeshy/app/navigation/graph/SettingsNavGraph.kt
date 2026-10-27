@@ -13,6 +13,7 @@ import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.composable
+import me.meeshy.app.navigation.sheetComposable
 import androidx.navigation.navArgument
 import me.meeshy.app.auth.AuthViewModel
 import me.meeshy.app.navigation.ProfileRoutes
@@ -72,14 +73,15 @@ internal fun NavGraphBuilder.settingsNavGraph(
             onOpenDeleteAccount = { navController.navigate(Routes.DELETE_ACCOUNT) },
         )
     }
-    settingsComposable(Routes.NOTIFICATION_SETTINGS) {
-        NotificationSettingsScreen(onBack = { navController.popBackStack() })
+    sheetComposable(Routes.NOTIFICATION_SETTINGS, navController) { _, dismiss ->
+        NotificationSettingsScreen(onBack = dismiss)
     }
-    settingsComposable(Routes.CHANGE_PASSWORD) {
-        ChangePasswordScreen(onBack = { navController.popBackStack() })
+    sheetComposable(Routes.CHANGE_PASSWORD, navController) { _, dismiss ->
+        ChangePasswordScreen(onBack = dismiss)
     }
-    settingsComposable(
+    sheetComposable(
         route = "${Routes.TWO_FACTOR}?step={step}",
+        navController = navController,
         arguments = listOf(
             navArgument("step") {
                 type = NavType.StringType
@@ -87,63 +89,64 @@ internal fun NavGraphBuilder.settingsNavGraph(
                 defaultValue = null
             },
         ),
-    ) { backStackEntry ->
+    ) { backStackEntry, dismiss ->
         TwoFactorScreen(
-            onBack = { navController.popBackStack() },
+            onBack = dismiss,
             startStep = backStackEntry.arguments?.getString("step"),
         )
     }
-    settingsComposable(Routes.SECURITY) { SecurityRoute(navController) }
-    settingsComposable(Routes.ACCOUNT_CONTACT) { SecurityRoute(navController) }
-    settingsComposable(Routes.DELETE_ACCOUNT) {
-        AccountDeletionScreen(onBack = { navController.popBackStack() })
+    sheetComposable(Routes.SECURITY, navController) { _, dismiss -> SecurityRoute(navController, dismiss) }
+    sheetComposable(Routes.ACCOUNT_CONTACT, navController) { _, dismiss -> SecurityRoute(navController, dismiss) }
+    sheetComposable(Routes.DELETE_ACCOUNT, navController) { _, dismiss ->
+        AccountDeletionScreen(onBack = dismiss)
     }
-    settingsComposable(Routes.MEDIA_DOWNLOAD) {
-        MediaDownloadScreen(onBack = { navController.popBackStack() })
+    sheetComposable(Routes.MEDIA_DOWNLOAD, navController) { _, dismiss ->
+        MediaDownloadScreen(onBack = dismiss)
     }
-    settingsComposable(Routes.MEDIA_CACHE) {
-        MediaCacheScreen(onBack = { navController.popBackStack() })
+    sheetComposable(Routes.MEDIA_CACHE, navController) { _, dismiss ->
+        MediaCacheScreen(onBack = dismiss)
     }
-    settingsComposable(Routes.DATA_EXPORT) {
-        DataExportScreen(onBack = { navController.popBackStack() })
+    sheetComposable(Routes.DATA_EXPORT, navController) { _, dismiss ->
+        DataExportScreen(onBack = dismiss)
     }
-    settingsComposable(Routes.DIAGNOSTICS) {
-        CrashReportScreen(onBack = { navController.popBackStack() })
+    sheetComposable(Routes.DIAGNOSTICS, navController) { _, dismiss ->
+        CrashReportScreen(onBack = dismiss)
     }
-    settingsComposable(Routes.ABOUT) {
-        AboutScreen(onBack = { navController.popBackStack() })
+    sheetComposable(Routes.ABOUT, navController) { _, dismiss ->
+        AboutScreen(onBack = dismiss)
     }
-    settingsComposable(Routes.SUPPORT) {
-        SupportScreen(onBack = { navController.popBackStack() })
+    sheetComposable(Routes.SUPPORT, navController) { _, dismiss ->
+        SupportScreen(onBack = dismiss)
     }
-    settingsComposable(Routes.LICENSES) {
-        LicensesScreen(onBack = { navController.popBackStack() })
+    sheetComposable(Routes.LICENSES, navController) { _, dismiss ->
+        LicensesScreen(onBack = dismiss)
     }
-    settingsComposable(
+    sheetComposable(
         route = Routes.LEGAL,
+        navController = navController,
         arguments = listOf(navArgument(Routes.LEGAL_DOC_ARG) { type = NavType.StringType }),
-    ) { backStackEntry ->
+    ) { backStackEntry, dismiss ->
         val kind = LegalDocumentKind.fromArg(
             backStackEntry.arguments?.getString(Routes.LEGAL_DOC_ARG),
         ) ?: LegalDocumentKind.TERMS_OF_SERVICE
-        LegalDocumentScreen(kind = kind, onBack = { navController.popBackStack() })
+        LegalDocumentScreen(kind = kind, onBack = dismiss)
     }
-    settingsComposable(Routes.PRIVACY) {
-        PrivacySettingsScreen(onBack = { navController.popBackStack() })
+    sheetComposable(Routes.PRIVACY, navController) { _, dismiss ->
+        PrivacySettingsScreen(onBack = dismiss)
     }
-    settingsComposable(Routes.ACTIVE_SESSIONS) {
-        ActiveSessionsScreen(onBack = { navController.popBackStack() })
+    sheetComposable(Routes.ACTIVE_SESSIONS, navController) { _, dismiss ->
+        ActiveSessionsScreen(onBack = dismiss)
     }
-    settingsComposable(Routes.ENCRYPTED_DEVICES) {
-        EncryptedDevicesScreen(onBack = { navController.popBackStack() })
+    sheetComposable(Routes.ENCRYPTED_DEVICES, navController) { _, dismiss ->
+        EncryptedDevicesScreen(onBack = dismiss)
     }
 }
 
 /** Page Sécurité ; l'ancienne route `settings/account-contact` y mène aussi. */
 @androidx.compose.runtime.Composable
-private fun SecurityRoute(navController: NavHostController) {
+private fun SecurityRoute(navController: NavHostController, dismiss: () -> Unit) {
     SecurityScreen(
-        onBack = { navController.popBackStack() },
+        onBack = dismiss,
         onOpenChangePassword = { navController.navigate(Routes.CHANGE_PASSWORD) },
         onOpenTwoFactor = { step -> navController.navigate("${Routes.TWO_FACTOR}?step=$step") },
         onOpenSessions = { navController.navigate(Routes.ACTIVE_SESSIONS) },

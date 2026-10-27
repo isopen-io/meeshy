@@ -22,18 +22,25 @@ class NavBackChromeTest {
     private val arrowMarkers = Regex(
         "MeeshyBackButton|HeaderBackButton|CollapsibleHeader|MeeshyIcons\\.Back|MeeshyIcons\\.ChevronBackward|" +
             "ArrowBack|CommunityRoundButton|FullscreenChromeSymbol\\.Back|SettingsDetailScaffold|SettingsSubScreen|" +
-            "backArrowColor|MeeshyTopBar\\(.{0,200}onBack =",
+            "backArrowColor|leadingNavigationIcon|MeeshyTopBar\\(.{0,200}onBack =",
         RegexOption.DOT_MATCHES_ALL,
     )
 
     private val closeMarkers = Regex(
-        "MeeshyIcons\\.(Close|Xmark)|onClose|onDone|onDismiss|onCancel|common_(cancel|done|ok)",
+        "MeeshyIcons\\.(Close|Xmark)|onClose|onDone|onDismiss|onCancel|common_(cancel|done|ok)|" +
+            "leadingNavigationIcon|HeaderBackButton|MeeshyBackButton|CollapsibleHeader|SettingsSubScreen",
     )
 
     /** Chaque route déclarée dans un `composable(...)` du graphe, écrite comme dans la source (`Routes.X`, `Classe.ROUTE`). */
-    private fun declaredRoutes(): List<String> = graphDir.listFiles { f -> f.extension == "kt" }.orEmpty()
+    private fun declaredRoutes(): List<String> = declaredRoutes(Regex("""[cC]omposable\(\s*(?:route = )?("[^"]*"|[A-Za-z_.]+)"""))
+
+    /** Les routes déclarées par `sheetComposable(...)` : celles que l'hôte de feuilles présente. */
+    private fun sheetHostedRoutes(): List<String> =
+        declaredRoutes(Regex("""sheetComposable\(\s*(?:route = )?("[^"]*"|[A-Za-z_.]+)"""))
+
+    private fun declaredRoutes(call: Regex): List<String> = graphDir.listFiles { f -> f.extension == "kt" }.orEmpty()
         .flatMap { file ->
-            Regex("""[cC]omposable\(\s*(?:route = )?("[^"]*"|[A-Za-z_.]+)""").findAll(file.readText()).map { m ->
+            call.findAll(file.readText()).map { m ->
                 val raw = m.groupValues[1]
                 val inner = Regex("""\$\{([A-Za-z_.]+)}""").find(raw)?.groupValues?.get(1)
                 when {
@@ -129,11 +136,25 @@ class NavBackChromeTest {
     }
 
     @Test
+    fun `a route is presented by the sheet host exactly when the registry says so`() {
+        assertThat(sheetHostedRoutes().toSet())
+            .containsExactlyElementsIn(NavBackChrome.entries.filter { it.viaSheetHost }.map { it.source })
+    }
+
+    @Test
+    fun `a route iOS presents as a sheet or cover is a modal, never a stacked screen`() {
+        val hosted = NavBackChrome.entries.filter { it.viaSheetHost }
+        assertThat(hosted.map { it.ios }.toSet()).containsNoneOf(IosPresentation.PUSH, IosPresentation.PUSH_CLOSE, IosPresentation.NONE)
+        assertThat(hosted.map { it.chrome }.toSet()).containsExactly(BackChrome.MODAL)
+        assertThat(NavBackChrome.entries.filter { it.viaSheetHost }.all { !NavBackChrome.edgeSwipeBackEnabled(it.route) }).isTrue()
+    }
+
+    @Test
     fun `roots and immersive screens follow iOS and carry no edge swipe`() {
         assertThat(NavBackChrome.entries.filter { it.chrome == BackChrome.ROOT }.map { it.source }).containsExactly(
             "Routes.LOGIN", "Routes.MAGIC_LINK_VALIDATE", "Routes.CONVERSATIONS", "Routes.FEED",
         )
-        assertThat(NavBackChrome.entries.filter { it.chrome == BackChrome.MODAL }.map { it.source }).containsExactly(
+        assertThat(NavBackChrome.entries.filter { it.chrome == BackChrome.MODAL && !it.viaSheetHost }.map { it.source }).containsExactly(
             "Routes.MOOD_SPOTLIGHT", "Routes.REELS", "Routes.STORY_VIEWER", "Routes.STORY_COMPOSER_ROUTE",
             "Routes.REPORT_USER", "Routes.CALL",
         )
@@ -152,11 +173,7 @@ class NavBackChromeTest {
         val PENDING_SHEET = setOf(
             "Routes.FORGOT_PASSWORD", "Routes.MAGIC_LINK", "Routes.REGISTRATION", "Routes.GUEST_JOIN", "Routes.WORLD_ENTRY",
             "Routes.SHARE_LINK_PICKER", "Routes.GLOBAL_SEARCH", "Routes.DASHBOARD", "Routes.CREATE_SHARE_LINK",
-            "Routes.NEW_CONVERSATION", "Routes.MY_STORIES", "Routes.NOTIFICATION_SETTINGS", "Routes.CHANGE_PASSWORD",
-            "Routes.TWO_FACTOR", "Routes.ACCOUNT_CONTACT", "Routes.SECURITY", "Routes.DELETE_ACCOUNT",
-            "Routes.MEDIA_DOWNLOAD", "Routes.MEDIA_CACHE", "Routes.DATA_EXPORT", "Routes.DIAGNOSTICS", "Routes.ABOUT",
-            "Routes.SUPPORT", "Routes.LICENSES", "Routes.LEGAL", "Routes.PRIVACY", "Routes.ACTIVE_SESSIONS",
-            "Routes.ENCRYPTED_DEVICES", "Routes.BLOCKED_USERS", "Routes.PROFILE_USER", "Routes.USER_POSTS",
+            "Routes.NEW_CONVERSATION", "Routes.MY_STORIES", "Routes.PROFILE_USER", "Routes.USER_POSTS",
         )
     }
 }

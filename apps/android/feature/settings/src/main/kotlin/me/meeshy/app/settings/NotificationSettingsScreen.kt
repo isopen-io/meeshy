@@ -56,6 +56,8 @@ import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
+import me.meeshy.ui.component.chrome.leadingNavigationIcon
+import me.meeshy.ui.component.chrome.leadingNavigationLabel
 
 /**
  * « Plus d'options » des notifications (iOS `NotificationSettingsView`) : e-mail, aperçu,
@@ -86,8 +88,8 @@ fun NotificationSettingsScreen(
                     navigationIcon = {
                         IconButton(onClick = onBack) {
                             Icon(
-                                MeeshyIcons.Back,
-                                contentDescription = stringResource(R.string.settings_back),
+                                leadingNavigationIcon(),
+                                contentDescription = leadingNavigationLabel(stringResource(R.string.settings_back)),
                             )
                         }
                     },

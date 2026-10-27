@@ -37,6 +37,8 @@ internal data class RouteChrome(
     val chrome: BackChrome,
     val ios: IosPresentation,
     val evidence: String? = null,
+    /** Vrai quand la route est déclarée par `sheetComposable` : une feuille animée, glissée vers le bas, qui laisse l'écran dessous. */
+    val viaSheetHost: Boolean = false,
 )
 
 /**
@@ -57,6 +59,10 @@ internal object NavBackChrome {
     /** Feuille ou plein écran sur iOS, présenté comme tel sur Android : croix ou boutons, pas de flèche. */
     private fun modal(source: String, route: String, ios: IosPresentation, evidence: String) =
         RouteChrome(source, route, BackChrome.MODAL, ios, evidence)
+
+    /** Feuille ou plein écran iOS rendu par l'hôte de feuilles (`sheetComposable`, #13369) : croix à la place de la flèche, glissé vers le bas. */
+    private fun sheet(source: String, route: String, ios: IosPresentation, evidence: String) =
+        RouteChrome(source, route, BackChrome.MODAL, ios, evidence, viaSheetHost = true)
 
     /**
      * Feuille sur iOS, encore écran empilé (flèche) sur Android : l'écart que #13369 solde, route par route. Ne
@@ -110,28 +116,28 @@ internal object NavBackChrome {
         modal("Routes.STORY_COMPOSER_ROUTE", Routes.STORY_COMPOSER_ROUTE, IosPresentation.COVER, "$FEATURE/stories/src/main/kotlin/me/meeshy/app/stories/StoryComposerScreen.kt"),
         // Réglages.
         arrow("Routes.SETTINGS", Routes.SETTINGS, settings("SettingsScreen.kt")),
-        pendingSheet("Routes.NOTIFICATION_SETTINGS", Routes.NOTIFICATION_SETTINGS, IosPresentation.SHEET, settings("NotificationSettingsScreen.kt")),
-        pendingSheet("Routes.CHANGE_PASSWORD", Routes.CHANGE_PASSWORD, IosPresentation.SHEET, settings("ChangePasswordScreen.kt")),
-        pendingSheet("Routes.TWO_FACTOR", "${Routes.TWO_FACTOR}?step={step}", IosPresentation.SHEET, settings("TwoFactorScreen.kt")),
-        pendingSheet("Routes.ACCOUNT_CONTACT", Routes.ACCOUNT_CONTACT, IosPresentation.SHEET, settings("SecurityScreen.kt")),
-        pendingSheet("Routes.SECURITY", Routes.SECURITY, IosPresentation.SHEET, settings("SecurityScreen.kt")),
-        pendingSheet("Routes.DELETE_ACCOUNT", Routes.DELETE_ACCOUNT, IosPresentation.SHEET, settings("AccountDeletionScreen.kt")),
-        pendingSheet("Routes.MEDIA_DOWNLOAD", Routes.MEDIA_DOWNLOAD, IosPresentation.SHEET, settings("MediaDownloadScreen.kt")),
-        pendingSheet("Routes.MEDIA_CACHE", Routes.MEDIA_CACHE, IosPresentation.SHEET, settings("MediaCacheScreen.kt")),
-        pendingSheet("Routes.DATA_EXPORT", Routes.DATA_EXPORT, IosPresentation.SHEET, settings("DataExportScreen.kt")),
-        pendingSheet("Routes.DIAGNOSTICS", Routes.DIAGNOSTICS, IosPresentation.SHEET, settings("CrashReportScreen.kt")),
-        pendingSheet("Routes.ABOUT", Routes.ABOUT, IosPresentation.SHEET, settings("AboutScreen.kt")),
-        pendingSheet("Routes.SUPPORT", Routes.SUPPORT, IosPresentation.SHEET, settings("SupportScreen.kt")),
-        pendingSheet("Routes.LICENSES", Routes.LICENSES, IosPresentation.SHEET, settings("LicensesScreen.kt")),
-        pendingSheet("Routes.LEGAL", Routes.LEGAL, IosPresentation.SHEET, settings("LegalDocumentScreen.kt")),
-        pendingSheet("Routes.PRIVACY", Routes.PRIVACY, IosPresentation.SHEET, settings("PrivacySettingsScreen.kt")),
-        pendingSheet("Routes.ACTIVE_SESSIONS", Routes.ACTIVE_SESSIONS, IosPresentation.SHEET, settings("ActiveSessionsScreen.kt")),
-        pendingSheet("Routes.ENCRYPTED_DEVICES", Routes.ENCRYPTED_DEVICES, IosPresentation.SHEET, settings("EncryptedDevicesScreen.kt")),
+        sheet("Routes.NOTIFICATION_SETTINGS", Routes.NOTIFICATION_SETTINGS, IosPresentation.SHEET, settings("NotificationSettingsScreen.kt")),
+        sheet("Routes.CHANGE_PASSWORD", Routes.CHANGE_PASSWORD, IosPresentation.SHEET, settings("ChangePasswordScreen.kt")),
+        sheet("Routes.TWO_FACTOR", "${Routes.TWO_FACTOR}?step={step}", IosPresentation.SHEET, settings("TwoFactorScreen.kt")),
+        sheet("Routes.ACCOUNT_CONTACT", Routes.ACCOUNT_CONTACT, IosPresentation.SHEET, settings("SecurityScreen.kt")),
+        sheet("Routes.SECURITY", Routes.SECURITY, IosPresentation.SHEET, settings("SecurityScreen.kt")),
+        sheet("Routes.DELETE_ACCOUNT", Routes.DELETE_ACCOUNT, IosPresentation.SHEET, settings("AccountDeletionScreen.kt")),
+        sheet("Routes.MEDIA_DOWNLOAD", Routes.MEDIA_DOWNLOAD, IosPresentation.SHEET, settings("MediaDownloadScreen.kt")),
+        sheet("Routes.MEDIA_CACHE", Routes.MEDIA_CACHE, IosPresentation.SHEET, settings("MediaCacheScreen.kt")),
+        sheet("Routes.DATA_EXPORT", Routes.DATA_EXPORT, IosPresentation.SHEET, settings("DataExportScreen.kt")),
+        sheet("Routes.DIAGNOSTICS", Routes.DIAGNOSTICS, IosPresentation.SHEET, settings("CrashReportScreen.kt")),
+        sheet("Routes.ABOUT", Routes.ABOUT, IosPresentation.SHEET, settings("AboutScreen.kt")),
+        sheet("Routes.SUPPORT", Routes.SUPPORT, IosPresentation.SHEET, settings("SupportScreen.kt")),
+        sheet("Routes.LICENSES", Routes.LICENSES, IosPresentation.SHEET, settings("LicensesScreen.kt")),
+        sheet("Routes.LEGAL", Routes.LEGAL, IosPresentation.SHEET, settings("LegalDocumentScreen.kt")),
+        sheet("Routes.PRIVACY", Routes.PRIVACY, IosPresentation.SHEET, settings("PrivacySettingsScreen.kt")),
+        sheet("Routes.ACTIVE_SESSIONS", Routes.ACTIVE_SESSIONS, IosPresentation.SHEET, settings("ActiveSessionsScreen.kt")),
+        sheet("Routes.ENCRYPTED_DEVICES", Routes.ENCRYPTED_DEVICES, IosPresentation.SHEET, settings("EncryptedDevicesScreen.kt")),
         arrow("BirthDateDestinations.ROUTE", BirthDateDestinations.ROUTE, settings("BirthDateDeclarationScreen.kt"), IosPresentation.NONE),
         // Contacts, notifications, profils.
         arrow("Routes.CONTACTS", Routes.CONTACTS, contacts),
         arrow("Routes.CONTACTS_DISCOVER", Routes.CONTACTS_DISCOVER, contacts),
-        pendingSheet("Routes.BLOCKED_USERS", Routes.BLOCKED_USERS, IosPresentation.SHEET, contacts),
+        sheet("Routes.BLOCKED_USERS", Routes.BLOCKED_USERS, IosPresentation.SHEET, contacts),
         arrow("FriendRequestsDestinations.ROUTE", FriendRequestsDestinations.ROUTE, contacts),
         arrow("Routes.NOTIFICATIONS", Routes.NOTIFICATIONS, "$FEATURE/notifications/src/main/kotlin/me/meeshy/app/notifications/NotificationsScreen.kt"),
         arrow("ProfileRoutes.OWN", ProfileRoutes.OWN, profile("OwnProfileScreen.kt")),

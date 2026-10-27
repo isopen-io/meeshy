@@ -9,6 +9,7 @@ import me.meeshy.app.contacts.ContactsScreen
 import me.meeshy.app.feed.UserPostsScreen
 import me.meeshy.app.navigation.ProfileRoutes
 import me.meeshy.app.navigation.Routes
+import me.meeshy.app.navigation.sheetComposable
 import me.meeshy.app.notifications.NotificationsScreen
 import me.meeshy.app.profile.OwnProfileScreen
 import me.meeshy.app.profile.ReportUserScreen
@@ -31,9 +32,9 @@ internal fun NavGraphBuilder.socialNavGraph(
             onOpenProfile = openProfile,
         )
     }
-    composable(Routes.BLOCKED_USERS) {
+    sheetComposable(Routes.BLOCKED_USERS, navController) { _, dismiss ->
         ContactsScreen(
-            onBack = { navController.popBackStack() },
+            onBack = dismiss,
             initialTab = me.meeshy.app.contacts.ContactsTab.Blocked,
             onOpenProfile = openProfile,
         )
