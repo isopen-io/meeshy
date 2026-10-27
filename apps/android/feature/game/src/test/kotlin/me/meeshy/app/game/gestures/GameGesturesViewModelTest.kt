@@ -20,7 +20,10 @@ import me.meeshy.sdk.model.game.DailyChest
 import me.meeshy.sdk.model.game.FlameFreezeResponse
 import me.meeshy.sdk.model.game.FlameRelightResponse
 import me.meeshy.sdk.model.game.GameIntentIds
+import me.meeshy.sdk.model.game.GameMintPreview
 import me.meeshy.sdk.model.game.GameMission
+import me.meeshy.sdk.model.game.MeeshEdition
+import me.meeshy.sdk.model.game.MeeshMintResponse
 import me.meeshy.sdk.model.game.MissionDifficulty
 import me.meeshy.sdk.model.game.MissionRerollResponse
 import me.meeshy.sdk.network.InMemoryNetworkMonitor
@@ -250,5 +253,77 @@ class GameGesturesViewModelTest {
 
         assertThat(sent).hasSize(2)
         assertThat(sent[1]).isEqualTo(sent[0])
+    }
+
+    private val preview = GameMintPreview(
+        number = 92, price = 1221, edition = MeeshEdition.Silver, canMint = true, missingPoints = 0,
+        levelBefore = 9, levelAfter = 8, levelsLost = 1, gloryGained = 1000,
+    )
+
+    @Test
+    fun `la frappe envoie le prix montre et celebre la piece de la reponse`() = runTest {
+        coEvery { gestures.mint(any(), 1221) } returns GameWriteOutcome.Done(
+            MeeshMintResponse(status = "minted", number = 93, edition = MeeshEdition.Gold, balance = 7L),
+        )
+        val vm = viewModel()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect { } }
+
+        vm.mint(preview)
+
+        assertThat(vm.state.value.celebration).isEqualTo(MintCelebration(93, MeeshEdition.Gold, 1))
+        coVerify(exactly = 1) { progress.refresh() }
+        assertThat(vm.state.value.minting).isFalse()
+    }
+
+    @Test
+    fun `une frappe deja faite ne rejoue pas la celebration`() = runTest {
+        coEvery { gestures.mint(any(), any()) } returns GameWriteOutcome.Done(MeeshMintResponse(status = "already-minted"))
+        val vm = viewModel()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect { } }
+
+        vm.mint(preview)
+
+        assertThat(vm.state.value.celebration).isNull()
+        assertThat(vm.state.value.failures).isEmpty()
+    }
+
+    @Test
+    fun `un statut insufficient ne debite rien, ne celebre rien et se dit`() = runTest {
+        coEvery { gestures.mint(any(), any()) } returns GameWriteOutcome.Done(MeeshMintResponse(status = "insufficient"))
+        val vm = viewModel()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect { } }
+
+        vm.mint(preview)
+
+        assertThat(vm.state.value.celebration).isNull()
+        assertThat(vm.state.value.failures[GameGesture.Mint]).isNotNull()
+    }
+
+    @Test
+    fun `le prix qui a change refuse la frappe, relit le prix et ne celebre pas`() = runTest {
+        coEvery { gestures.mint(any(), any()) } returns GameWriteOutcome.Refused("PRICE_CHANGED", offline = false)
+        val vm = viewModel()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect { } }
+
+        vm.mint(preview)
+
+        assertThat(vm.state.value.failures[GameGesture.Mint]?.code).isEqualTo("PRICE_CHANGED")
+        assertThat(vm.state.value.celebration).isNull()
+        coVerify(exactly = 1) { progress.refresh() }
+    }
+
+    @Test
+    fun `un double appui sur frapper ne debite qu une fois`() = runTest {
+        val gate = CompletableDeferred<GameWriteOutcome<MeeshMintResponse>>()
+        coEvery { gestures.mint(any(), any()) } coAnswers { gate.await() }
+        val vm = viewModel()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect { } }
+
+        vm.mint(preview)
+        vm.mint(preview)
+        gate.complete(GameWriteOutcome.Done(MeeshMintResponse(status = "minted", number = 92)))
+
+        coVerify(exactly = 1) { gestures.mint(any(), any()) }
+        assertThat(vm.state.value.celebration?.number).isEqualTo(92)
     }
 }

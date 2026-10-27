@@ -379,6 +379,13 @@
     <string name="game_fiche_heritage_opens_reserve">the Reserve opens at %s</string>
     <string name="game_fiche_heritage_opens_tresor">the Treasure opens at %s</string>
     <string name="game_fiche_light_to_heritage">Open your Legacy</string>
+    <string name="game_fiche_mint_mee_gold">This one will be gold: your ancestors will see it.</string>
+    <string name="game_fiche_mint_mee_next_gold">No. %s will be gold.</string>
+    <string name="game_fiche_mint_mee_next_prism">No. %s will be prism.</string>
+    <string name="game_fiche_mint_mee_prism">This one will be prism: every language will shine in it.</string>
+    <string name="game_fiche_mint_mee_wait">A little more light, and we mint together.</string>
+    <string name="game_fiche_mint_missing">%s more to mint it.</string>
+    <string name="game_fiche_mint_sentence">It sets %1$s of your light into the coin; your light holds %2$s.</string>
     <string name="game_fiche_more">Go further</string>
     <string name="game_fiche_use">How I use it</string>
     <string name="game_fiche_what">What is it?</string>
@@ -416,7 +423,15 @@
     <string name="game_meeshes_none">No Meesh</string>
     <string name="game_meeshes_one">%s Meesh</string>
     <string name="game_meeshes_other">%s Meeshes</string>
+    <string name="game_mint_action">Mint with Mee and Meo</string>
+    <string name="game_mint_blocked_debt">A shadow veils %s sparks of your light: your next sparks will clear it, then you can mint.</string>
     <string name="game_mint_blocked_debt_plain">A shadow veils your light: your next sparks will clear it. While it’s there, no Meesh can be minted.</string>
+    <string name="game_mint_blocked_reserve">This Meesh would open the “%1$s” reserve: it takes the %2$s rank.</string>
+    <string name="game_mint_chip_glory">+%s glory</string>
+    <string name="game_mint_minted_line">Meesh no. %1$s minted, %2$s.</string>
+    <string name="game_mint_minting">Minting…</string>
+    <string name="game_mint_next_title">Meesh no. %s</string>
+    <string name="game_mint_offline">Offline: minting will resume when you are back online.</string>
     <string name="game_mission_comment_stranger_post_one">Comment on a public post by someone you don’t know</string>
     <string name="game_mission_comment_stranger_post_other">Comment on %s public posts by people you don’t know</string>
     <string name="game_mission_comment_text_one">Comment on someone’s post</string>
@@ -572,4 +587,5 @@
     <string name="game_treasury_next">%1$s to the %2$s</string>
     <string name="game_treasury_reserve">Reserve</string>
     <string name="game_treasury_tresor">Treasure</string>
+    <string name="progression_meesh_mint_error">Minting failed — try again</string>
 </resources>

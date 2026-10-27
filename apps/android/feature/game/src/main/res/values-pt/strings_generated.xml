@@ -379,6 +379,13 @@
     <string name="game_fiche_heritage_opens_reserve">a Reserva se abre com %s</string>
     <string name="game_fiche_heritage_opens_tresor">o Tesouro se abre com %s</string>
     <string name="game_fiche_light_to_heritage">Abrir sua Herança</string>
+    <string name="game_fiche_mint_mee_gold">Esta será de ouro: seus ancestrais vão vê-la.</string>
+    <string name="game_fiche_mint_mee_next_gold">A nº %s será de ouro.</string>
+    <string name="game_fiche_mint_mee_next_prism">A nº %s será de prisma.</string>
+    <string name="game_fiche_mint_mee_prism">Esta será de prisma: todos os idiomas vão brilhar nela.</string>
+    <string name="game_fiche_mint_mee_wait">Mais um pouco de luz, e cunhamos juntos.</string>
+    <string name="game_fiche_mint_missing">Ainda faltam %s para cunhá-la.</string>
+    <string name="game_fiche_mint_sentence">Ela fixa %1$s da sua luz, que tem %2$s.</string>
     <string name="game_fiche_more">Ir mais longe</string>
     <string name="game_fiche_use">Como usar</string>
     <string name="game_fiche_what">O que é?</string>
@@ -416,7 +423,15 @@
     <string name="game_meeshes_none">Nenhuma Meesh</string>
     <string name="game_meeshes_one">%s Meesh</string>
     <string name="game_meeshes_other">%s Meeshes</string>
+    <string name="game_mint_action">Cunhar com Mee e Meo</string>
+    <string name="game_mint_blocked_debt">Uma sombra cobre %s faíscas da sua luz: suas próximas faíscas vão dissipá-la, e então você poderá cunhar.</string>
     <string name="game_mint_blocked_debt_plain">Uma sombra cobre sua luz: suas próximas faíscas vão dissipá-la. Enquanto ela estiver aí, não dá para cunhar.</string>
+    <string name="game_mint_blocked_reserve">Esta Meesh abriria a reserva “%1$s”: é preciso a patente %2$s.</string>
+    <string name="game_mint_chip_glory">+%s de glória</string>
+    <string name="game_mint_minted_line">Meesh n.º %1$s cunhada, %2$s.</string>
+    <string name="game_mint_minting">Cunhando…</string>
+    <string name="game_mint_next_title">A Meesh n.º %s</string>
+    <string name="game_mint_offline">Sem conexão: a cunhagem volta com a conexão.</string>
     <string name="game_mission_comment_stranger_post_one">Comentar a publicação pública de alguém que você não conhece</string>
     <string name="game_mission_comment_stranger_post_other">Comentar %s publicações públicas de pessoas que você não conhece</string>
     <string name="game_mission_comment_text_one">Comentar a publicação de alguém</string>
@@ -575,4 +590,5 @@
     <string name="game_treasury_next">%1$s até o %2$s</string>
     <string name="game_treasury_reserve">Reserva</string>
     <string name="game_treasury_tresor">Tesouro</string>
+    <string name="progression_meesh_mint_error">A cunhagem não foi concluída — tente novamente</string>
 </resources>

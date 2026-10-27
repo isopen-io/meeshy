@@ -379,6 +379,13 @@
     <string name="game_fiche_heritage_opens_reserve">die Reserve öffnet sich bei %s</string>
     <string name="game_fiche_heritage_opens_tresor">der Schatz öffnet sich bei %s</string>
     <string name="game_fiche_light_to_heritage">Dein Erbe öffnen</string>
+    <string name="game_fiche_mint_mee_gold">Diese wird aus Gold sein: Deine Ahnen werden sie sehen.</string>
+    <string name="game_fiche_mint_mee_next_gold">Nr. %s wird aus Gold sein.</string>
+    <string name="game_fiche_mint_mee_next_prism">Nr. %s wird aus Prisma sein.</string>
+    <string name="game_fiche_mint_mee_prism">Diese wird aus Prisma sein: Alle Sprachen werden darin leuchten.</string>
+    <string name="game_fiche_mint_mee_wait">Noch ein wenig Licht, dann prägen wir zusammen.</string>
+    <string name="game_fiche_mint_missing">Es fehlen noch %s, um sie zu prägen.</string>
+    <string name="game_fiche_mint_sentence">Sie hält %1$s deines Lichts fest, das %2$s zählt.</string>
     <string name="game_fiche_more">Mehr entdecken</string>
     <string name="game_fiche_use">So nutze ich es</string>
     <string name="game_fiche_what">Was ist das?</string>
@@ -416,7 +423,15 @@
     <string name="game_meeshes_none">Keine Meesh</string>
     <string name="game_meeshes_one">%s Meesh</string>
     <string name="game_meeshes_other">%s Meeshes</string>
+    <string name="game_mint_action">Mit Mee und Meo prägen</string>
+    <string name="game_mint_blocked_debt">Ein Schatten verhüllt %s Funken deines Lichts: Deine nächsten Funken werden ihn vertreiben, dann kannst du prägen.</string>
     <string name="game_mint_blocked_debt_plain">Ein Schatten verhüllt dein Licht: Deine nächsten Funken werden ihn vertreiben. Solange er da ist, wird nicht geprägt.</string>
+    <string name="game_mint_blocked_reserve">Diese Meesh würde die Reserve „%1$s“ öffnen: Dafür brauchst du den Rang %2$s.</string>
+    <string name="game_mint_chip_glory">+%s Ruhm</string>
+    <string name="game_mint_minted_line">Meesh Nr. %1$s geprägt, %2$s.</string>
+    <string name="game_mint_minting">Prägung läuft…</string>
+    <string name="game_mint_next_title">Die Meesh Nr. %s</string>
+    <string name="game_mint_offline">Offline: Das Prägen geht mit der Verbindung weiter.</string>
     <string name="game_mission_comment_stranger_post_one">Den öffentlichen Beitrag einer unbekannten Person kommentieren</string>
     <string name="game_mission_comment_stranger_post_other">%s öffentliche Beiträge unbekannter Personen kommentieren</string>
     <string name="game_mission_comment_text_one">Den Beitrag einer anderen Person kommentieren</string>
@@ -572,4 +587,5 @@
     <string name="game_treasury_next">%1$s bis %2$s</string>
     <string name="game_treasury_reserve">Reserve</string>
     <string name="game_treasury_tresor">Schatz</string>
+    <string name="progression_meesh_mint_error">Die Prägung ist fehlgeschlagen — versuchen Sie es erneut</string>
 </resources>
