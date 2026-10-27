@@ -155,7 +155,7 @@ final class LentilleSceneActivityTests: XCTestCase {
                      "case .invite: showCreateAffiliate = true", "case .shortcutLink: showCreateTrackingLink = true"] {
             XCTAssertTrue(code.contains(door), "Chaque accès rapide route vers une porte EXISTANTE : \(door)")
         }
-        let commands = try normalizedUnit("Meeshy/Features/Main/Navigation/RouterCommands.swift")
+        let commands = try normalizedUnit("Meeshy/Features/Navigation/RouterCommands.swift")
         XCTAssertTrue(commands.contains("func requestFeedComposer() { router?.pendingOpenFeedComposer = true }"),
                       "« Publier » lève le drapeau que le flux consomme")
     }

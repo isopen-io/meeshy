@@ -246,8 +246,8 @@
    "apps/android/app/src/main/kotlin/me/meeshy/app/navigation/LaunchRouter.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Navigation/EmailLinkSecret.swift",
-   "apps/ios/Meeshy/Features/Main/Navigation/InAppLinks.swift"
+   "apps/ios/Meeshy/Features/Navigation/EmailLinkSecret.swift",
+   "apps/ios/Meeshy/Features/Navigation/InAppLinks.swift"
   ],
   "feature_keys": [
    "dst-email-link-secret-inapp-links"
@@ -360,11 +360,11 @@
    "apps/android/app/src/main/AndroidManifest.xml"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Navigation/Router.swift",
-   "apps/ios/Meeshy/Features/Main/Navigation/RouterCommands.swift",
-   "apps/ios/Meeshy/Features/Main/Navigation/PresentedSurfaceRegistry.swift",
-   "apps/ios/Meeshy/Features/Main/Navigation/PresentedSurfaceModifier.swift",
-   "apps/ios/Meeshy/Features/Main/Navigation/InteractivePopEnabler.swift"
+   "apps/ios/Meeshy/Features/Navigation/Router.swift",
+   "apps/ios/Meeshy/Features/Navigation/RouterCommands.swift",
+   "apps/ios/Meeshy/Features/Navigation/PresentedSurfaceRegistry.swift",
+   "apps/ios/Meeshy/Features/Navigation/PresentedSurfaceModifier.swift",
+   "apps/ios/Meeshy/Features/Navigation/InteractivePopEnabler.swift"
   ],
   "feature_keys": [
    "dst-nav-router-stack",
@@ -1056,7 +1056,7 @@
   "ios_reference_files": [
    "apps/ios/Meeshy/App/ExternalEntry.swift",
    "apps/ios/Meeshy/App/ExternalEntryHandlers.swift",
-   "apps/ios/Meeshy/Features/Main/Navigation/DeepLinkRouter.swift",
+   "apps/ios/Meeshy/Features/Navigation/DeepLinkRouter.swift",
    "apps/ios/Meeshy/MeeshyApp+VisitorContent.swift",
    "apps/ios/Meeshy/Features/Auth/Views/PendingLinkNotice.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Auth/PendingReferralStore.swift"
@@ -1310,7 +1310,7 @@
   ],
   "ios_reference_files": [
    "packages/MeeshySDK/Sources/MeeshyUI/Primitives/MeeshyAvatar.swift",
-   "apps/ios/Meeshy/Features/Main/Navigation/SocialChromeEnvironment.swift",
+   "apps/ios/Meeshy/Features/Navigation/SocialChromeEnvironment.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Primitives/PresenceDotWaves.swift"
   ],
   "feature_keys": [
@@ -1558,7 +1558,7 @@
    "packages/MeeshySDK/Sources/MeeshyUI/Auth/MeeshyNewPasswordView.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Auth/PasswordReset.swift",
    "apps/ios/Meeshy/Features/Auth/PasswordResetLinkPresenter.swift",
-   "apps/ios/Meeshy/Features/Main/Navigation/DeepLinkRouter.swift"
+   "apps/ios/Meeshy/Features/Navigation/DeepLinkRouter.swift"
   ],
   "feature_keys": [
    "auth-password-reset-new-password"
@@ -2147,9 +2147,9 @@
    "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/deeplink/ConversationLinkTarget.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Navigation/DeepLinkRouter.swift",
+   "apps/ios/Meeshy/Features/Navigation/DeepLinkRouter.swift",
    "apps/ios/Meeshy/Features/Main/Components/ConversationCard/ConversationLinkTarget.swift",
-   "apps/ios/Meeshy/Features/Main/Navigation/ShareLinkEntryResolver.swift"
+   "apps/ios/Meeshy/Features/Navigation/ShareLinkEntryResolver.swift"
   ],
   "feature_keys": [
    "cl-root-deeplinks",
@@ -2425,13 +2425,13 @@
    "apps/android/docs/magic-link-app-links.md"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Navigation/DeepLinkRouter.swift",
+   "apps/ios/Meeshy/Features/Navigation/DeepLinkRouter.swift",
    "apps/ios/Meeshy/Features/Main/Views/RootView.swift",
-   "apps/ios/Meeshy/Features/Main/Navigation/ShareLinkEntryResolver.swift",
-   "apps/ios/Meeshy/Features/Main/Navigation/Router.swift",
-   "apps/ios/Meeshy/Features/Main/Navigation/PackFocusSlug.swift",
-   "apps/ios/Meeshy/Features/Main/Navigation/ConversationListEntry.swift",
-   "apps/ios/Meeshy/Features/Main/Navigation/InAppLinks.swift"
+   "apps/ios/Meeshy/Features/Navigation/ShareLinkEntryResolver.swift",
+   "apps/ios/Meeshy/Features/Navigation/Router.swift",
+   "apps/ios/Meeshy/Features/Navigation/PackFocusSlug.swift",
+   "apps/ios/Meeshy/Features/Navigation/ConversationListEntry.swift",
+   "apps/ios/Meeshy/Features/Navigation/InAppLinks.swift"
   ],
   "feature_keys": [
    "cl-root-deeplinks",
@@ -4690,10 +4690,10 @@
    "apps/android/app/src/main/kotlin/me/meeshy/app/navigation/Routes.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Navigation/NotificationContentRouter.swift",
-   "apps/ios/Meeshy/Features/Main/Navigation/ReelDoor.swift",
-   "apps/ios/Meeshy/Features/Main/Navigation/StoryDoor.swift",
-   "apps/ios/Meeshy/Features/Main/Navigation/DetailOpenSource.swift"
+   "apps/ios/Meeshy/Features/Navigation/NotificationContentRouter.swift",
+   "apps/ios/Meeshy/Features/Navigation/ReelDoor.swift",
+   "apps/ios/Meeshy/Features/Navigation/StoryDoor.swift",
+   "apps/ios/Meeshy/Features/Navigation/DetailOpenSource.swift"
   ],
   "feature_keys": [
    "dst-nav-content-doors"
@@ -5119,8 +5119,8 @@
    "apps/ios/Meeshy/MeeshyApp+VisitorContent.swift",
    "apps/ios/Meeshy/App/ExternalEntry.swift",
    "apps/ios/Meeshy/App/RootPresentationRules.swift",
-   "apps/ios/Meeshy/Features/Main/Navigation/VisitorContent.swift",
-   "apps/ios/Meeshy/Features/Main/Navigation/VisitorContentReach.swift"
+   "apps/ios/Meeshy/Features/Navigation/VisitorContent.swift",
+   "apps/ios/Meeshy/Features/Navigation/VisitorContentReach.swift"
   ],
   "feature_keys": [
    "auth-visitor-content-landing",
@@ -7577,7 +7577,7 @@
   "ios_reference_files": [
    "apps/ios/Meeshy/Features/Main/Views/iPadRootView+Panels.swift",
    "apps/ios/Meeshy/Features/Main/Views/iPadRootSheetTargets.swift",
-   "apps/ios/Meeshy/Features/Main/Navigation/PanelBackAction.swift"
+   "apps/ios/Meeshy/Features/Navigation/PanelBackAction.swift"
   ],
   "feature_keys": [
    "dst-tablet-panel-routing-deeplinks"
@@ -7948,7 +7948,7 @@
    "apps/ios/Meeshy/App/RootScene.swift",
    "apps/ios/Meeshy/Features/Main/Views/RootLayers/RootRouteDestination.swift",
    "apps/ios/Meeshy/Features/Main/Views/RootLayers/RootSharedLayers.swift",
-   "apps/ios/Meeshy/Features/Main/Navigation/NowPlayingReturnNavigation.swift"
+   "apps/ios/Meeshy/Features/Navigation/NowPlayingReturnNavigation.swift"
   ],
   "feature_keys": [
    "clist-root-launch-routing",
@@ -10500,7 +10500,7 @@
    "apps/android/app/src/main/AndroidManifest.xml"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Navigation/NowPlayingReturnNavigation.swift"
+   "apps/ios/Meeshy/Features/Navigation/NowPlayingReturnNavigation.swift"
   ],
   "feature_keys": [
    "dst-nav-now-playing-return"
@@ -10863,9 +10863,9 @@
    "apps/android/feature/conversations/src/main/res/values-pt/strings_tablet.xml"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Navigation/MeeshyCommands.swift",
-   "apps/ios/Meeshy/Features/Main/Navigation/MeeshyShortcut.swift",
-   "apps/ios/Meeshy/Features/Main/Navigation/SceneCommandFocus.swift",
+   "apps/ios/Meeshy/Features/Navigation/MeeshyCommands.swift",
+   "apps/ios/Meeshy/Features/Navigation/MeeshyShortcut.swift",
+   "apps/ios/Meeshy/Features/Navigation/SceneCommandFocus.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Primitives/PointerInteractive.swift",
    "apps/ios/Meeshy/Features/Main/Views/ConversationListKeyboardNavigation.swift",
    "apps/ios/Meeshy/Features/Main/Views/ConversationListView+HeaderOverlay.swift",
@@ -11255,7 +11255,7 @@
   ],
   "ios_reference_files": [
    "apps/ios/Meeshy/Features/Main/Views/ReelsRevealContainer.swift",
-   "apps/ios/Meeshy/Features/Main/Navigation/ReelDoor.swift",
+   "apps/ios/Meeshy/Features/Navigation/ReelDoor.swift",
    "apps/ios/Meeshy/Features/Main/Views/RootView.swift"
   ],
   "feature_keys": [
@@ -11312,7 +11312,7 @@
    "apps/ios/Meeshy/Features/Main/Views/RootLayers/RootViewLayers.swift",
    "apps/ios/Meeshy/Features/Main/Views/RootLayers/RootSharedLayers.swift",
    "apps/ios/Meeshy/Features/Main/Services/StatusBubbleController.swift",
-   "apps/ios/Meeshy/Features/Main/Navigation/StoryDoor.swift"
+   "apps/ios/Meeshy/Features/Navigation/StoryDoor.swift"
   ],
   "feature_keys": [
    "clist-root-story-doors",

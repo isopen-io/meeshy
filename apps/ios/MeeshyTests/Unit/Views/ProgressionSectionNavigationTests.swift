@@ -35,7 +35,7 @@ final class ProgressionSectionNavigationTests: XCTestCase {
     }
 
     private func routeur() throws -> String {
-        try source("Meeshy/Features/Main/Navigation/Router.swift")
+        try source("Meeshy/Features/Navigation/Router.swift")
     }
 
     private func destinations() throws -> String {

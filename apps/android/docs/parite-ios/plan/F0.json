@@ -986,7 +986,7 @@
   ],
   "ios_reference_files": [
    "apps/ios/Meeshy/Features/Main/Views/AdaptiveRootView.swift",
-   "apps/ios/Meeshy/Features/Main/Navigation/Router.swift",
+   "apps/ios/Meeshy/Features/Navigation/Router.swift",
    "apps/ios/Meeshy/Features/Main/Views/RootView.swift",
    "apps/ios/Meeshy/Features/Main/Views/RootLayers/RootRouteDestination.swift",
    "apps/ios/Meeshy/Features/Main/Views/RootLayers/RootViewLayers.swift",

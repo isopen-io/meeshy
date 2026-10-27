@@ -5533,7 +5533,7 @@
    "apps/ios/Meeshy/Features/Main/Services/ConversationAudioCoordinator.swift",
    "apps/ios/Meeshy/Features/Main/Views/Bubble/CoordinatedAudioPlayer.swift",
    "apps/ios/Meeshy/Features/Main/Views/Bubble/AudioBubbleRouter.swift",
-   "apps/ios/Meeshy/Features/Main/Navigation/NowPlayingReturnNavigation.swift",
+   "apps/ios/Meeshy/Features/Navigation/NowPlayingReturnNavigation.swift",
    "apps/ios/Meeshy/Features/Main/Views/RootLayers/RootViewLayers.swift"
   ],
   "feature_keys": [

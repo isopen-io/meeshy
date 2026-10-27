@@ -353,7 +353,7 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Composer/ComposerTrailingRail.swift",  // 1
         "apps/ios/Meeshy/Features/Focal/Row/FocalConversationStartRow.swift",  // 1
         "apps/ios/Meeshy/Features/Focal/Row/FocalMetaRow.swift",  // 1
-        "apps/ios/Meeshy/Features/Main/Navigation/Router+StoryReply.swift",  // 1
+        "apps/ios/Meeshy/Features/Navigation/Router+StoryReply.swift",  // 1
         "apps/ios/Meeshy/Features/River/Core/RiverConversationMapping.swift",  // 1
         "apps/ios/Meeshy/Features/River/View/RiverLaneHeaderStrip.swift",  // 1
         "apps/ios/Meeshy/Features/River/View/RiverTimeHandle.swift",  // 1
@@ -434,7 +434,7 @@ final class LocalizationConsistencyTests: XCTestCase {
         // sélecteur de transfert : ses mots sont traduits dans les sept langues.
         "apps/ios/Meeshy/Features/Share/ShareSheetCopy.swift",
         "apps/ios/Meeshy/Features/Share/ShareContentZone.swift",
-        "apps/ios/Meeshy/Features/Main/Navigation/Router.swift",  // 27
+        "apps/ios/Meeshy/Features/Navigation/Router.swift",  // 27
         "apps/ios/Meeshy/Features/Main/Components/EffectsPickerView.swift",  // 24
         "apps/ios/Meeshy/Features/Main/Views/CreateTrackingLinkView.swift",  // 24
         "apps/ios/Meeshy/Features/Main/Views/ProfileUserPostsList.swift",  // 10

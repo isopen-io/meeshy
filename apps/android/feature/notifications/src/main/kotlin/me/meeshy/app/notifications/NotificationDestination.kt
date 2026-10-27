@@ -4,7 +4,7 @@ import me.meeshy.sdk.model.ApiNotification
 
 /**
  * Where tapping a notification row leads — port of iOS `NotificationContentRouter` +
- * `RootView.navigateFromNotification` (`apps/ios/Meeshy/Features/Main/Navigation/
+ * `RootView.navigateFromNotification` (`apps/ios/Meeshy/Features/Navigation/
  * NotificationContentRouter.swift`, `Views/RootView.swift`), scoped to the destinations Android
  * can actually reach today.
  *

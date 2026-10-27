@@ -53,7 +53,7 @@
     "apps/ios/Meeshy/Features/Game/GameGuideCopy.swift::GameGuideCopy.moment": 130,
     "apps/ios/Meeshy/Features/Game/Photo/GamePhotoFlowView.swift::GamePhotoFlowView.result": 96,
     "apps/ios/Meeshy/Features/Lens/Row/LentilleConversationRow.swift::LentilleConversationRow.headerLine": 85,
-    "apps/ios/Meeshy/Features/Main/Navigation/Router.swift::Router.handleDeepLink": 89,
+    "apps/ios/Meeshy/Features/Navigation/Router.swift::Router.handleDeepLink": 89,
     "apps/ios/Meeshy/Features/River/Core/RiverConversationMapping.swift::RiverConversationMapping.contents": 98,
     "apps/ios/Meeshy/Features/River/Core/RiverLaneResolver.swift::RiverLaneResolver.resolveRiverLanes": 103,
     "apps/ios/Meeshy/Features/River/View/RiverBubbleView.swift::RiverBubbleView.messageBox": 117,

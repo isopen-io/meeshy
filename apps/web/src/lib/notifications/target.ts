@@ -6,7 +6,7 @@ import type { NotificationRecord } from './record';
 
 /**
  * **OÙ MÈNE UNE NOTIFICATION** (#6288) — miroir de `NotificationContentRouter`
- * (`apps/ios/Meeshy/Features/Main/Navigation/NotificationContentRouter.swift`).
+ * (`apps/ios/Meeshy/Features/Navigation/NotificationContentRouter.swift`).
  *
  * **Le TYPE n'est pas un discriminant d'entité.** La passerelle émet
  * `story_thread_reply` / `friend_story_comment` / `story_new_comment` pour un

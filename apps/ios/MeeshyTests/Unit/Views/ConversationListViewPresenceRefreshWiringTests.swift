@@ -98,7 +98,7 @@ final class LivePresenceRepaintGuardTests: XCTestCase {
     private static let readsWithoutLivePresence: [String: String] = [
         "Features/Main/Services/PresenceManager.swift": "le manager lui-même",
         "Features/Main/Services/WidgetDataManager.swift": "hors vue — cliché du widget, republié à son rythme",
-        "Features/Main/Navigation/SocialChromeEnvironment.swift": "fournisseur posé à la racine — les vues du SDK se repeignent par MeeshyLivePresence",
+        "Features/Navigation/SocialChromeEnvironment.swift": "fournisseur posé à la racine — les vues du SDK se repeignent par MeeshyLivePresence",
         "Features/Main/Views/RootLayers/RootViewLayers.swift": "fournisseur de UserProfileSheet — l'en-tête se repeint par MeeshyLivePresence",
         "Features/Main/Views/RootLayers/iPadRootViewLayers.swift": "fournisseur de UserProfileSheet — l'en-tête se repeint par MeeshyLivePresence",
         "Features/Main/Views/AdaptiveRootView.swift": "fournisseur de UserProfileSheet — l'en-tête se repeint par MeeshyLivePresence",
@@ -174,7 +174,7 @@ final class LivePresenceRepaintGuardTests: XCTestCase {
     }
 
     func test_socialChrome_handsTheHeartbeatToTheSDKViews() throws {
-        let source = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Navigation/SocialChromeEnvironment.swift"))
+        let source = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Navigation/SocialChromeEnvironment.swift"))
         XCTAssertTrue(source.contains("refresh: PresenceManager.shared.refreshPublisher"))
     }
 

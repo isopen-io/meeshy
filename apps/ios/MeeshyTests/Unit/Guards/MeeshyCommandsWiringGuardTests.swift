@@ -19,7 +19,7 @@ final class MeeshyCommandsWiringGuardTests: XCTestCase {
     }
 
     func test_commands_readEveryBindingFromMeeshyShortcut_andThePreference() throws {
-        let commands = try code("Meeshy/Features/Main/Navigation/MeeshyCommands.swift")
+        let commands = try code("Meeshy/Features/Navigation/MeeshyCommands.swift")
         XCTAssertFalse(commands.contains(".keyboardShortcut(\""))
         XCTAssertFalse(commands.contains("KeyboardShortcut(\""))
         XCTAssertTrue(commands.contains("keyboardShortcutsEnabled"))
@@ -27,7 +27,7 @@ final class MeeshyCommandsWiringGuardTests: XCTestCase {
     }
 
     func test_commands_offerSendMessage() throws {
-        let commands = try code("Meeshy/Features/Main/Navigation/MeeshyCommands.swift")
+        let commands = try code("Meeshy/Features/Navigation/MeeshyCommands.swift")
         XCTAssertTrue(commands.contains("item(.sendMessage)"))
         XCTAssertTrue(commands.contains("\\.meeshySendMessage"))
     }
