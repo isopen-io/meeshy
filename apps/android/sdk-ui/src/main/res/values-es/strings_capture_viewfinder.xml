@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="capture_disarm">Volver a la escena</string>
+    <string name="capture_flip">Cambiar de cámara</string>
+    <string name="capture_flash_on">Flash activado</string>
+    <string name="capture_flash_auto">Flash automático</string>
+    <string name="capture_flash_off">Flash desactivado</string>
+    <string name="capture_flash_intensity">Intensidad del flash</string>
+    <string name="capture_drop_segment">Quitar el último segmento</string>
+    <string name="capture_validate">Poner en la escena</string>
+    <string name="capture_recording">Grabando</string>
+    <string name="capture_hint_photo">toca dos veces para una foto · mantén para grabar</string>
+    <string name="capture_hint_holding">suelta para poner en la escena</string>
+    <string name="capture_hint_lock">Desliza hacia el candado para bloquear</string>
+    <string name="capture_hint_locked">toca para detener y poner en la escena</string>
+    <string name="capture_discard_video">¿Descartar el vídeo?</string>
+    <string name="capture_discard_confirm">Descartar</string>
+    <string name="capture_discard_keep">Continuar</string>
+    <string name="capture_camera_unavailable">No se pudo iniciar la cámara</string>
+    <string name="capture_take_lost">Se perdió la toma</string>
+    <string name="capture_zoom_reset">Zoom %1$s</string>
+    <string name="capture_shutter">Hacer una foto</string>
+    <string name="capture_shutter_film">Grabar, manos libres</string>
+    <plurals name="capture_segments">
+        <item quantity="one">%d segmento</item>
+        <item quantity="other">%d segmentos</item>
+    </plurals>
+</resources>

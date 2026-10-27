@@ -54,6 +54,9 @@ sealed interface CaptureEvent {
     data class RecordingFailed(val token: String) : CaptureEvent
     data class SegmentWritten(val token: String, val path: String, val durationSec: Double) : CaptureEvent
     data class SegmentLost(val token: String) : CaptureEvent
+    data class RecordingCancelled(val token: String) : CaptureEvent
+    data class PhotoDelivered(val token: String) : CaptureEvent
+    data class PhotoFailed(val token: String) : CaptureEvent
     data object DropLastSegment : CaptureEvent
     data object Validate : CaptureEvent
     data class CloseTapped(val nowMs: Long) : CaptureEvent
@@ -64,6 +67,8 @@ sealed interface CaptureEvent {
     data class FlashSliderExpired(val generation: Int, val voiceOver: Boolean) : CaptureEvent
     data object FlipTapped : CaptureEvent
     data object FlipFinished : CaptureEvent
+    /** La caméra a lié l'objectif : si une bascule attendait ce signal, elle se termine. */
+    data object FlipFinishedIfSwitching : CaptureEvent
     data class ZoomChanged(val displayed: Float) : CaptureEvent
 }
 
@@ -83,6 +88,9 @@ object CaptureSessionReducer {
         is CaptureEvent.RecordingFailed -> CaptureStep(settled(s).copy(ledger = s.ledger.abandon(e.token)), listOf(CaptureEffect.Haptic(CaptureHaptic.WARNING)))
         is CaptureEvent.SegmentWritten -> segmentWritten(s, e)
         is CaptureEvent.SegmentLost -> CaptureStep(settled(s).copy(ledger = s.ledger.abandon(e.token)), listOf(CaptureEffect.Haptic(CaptureHaptic.WARNING)))
+        is CaptureEvent.RecordingCancelled -> CaptureStep(settled(s).copy(ledger = s.ledger.cancel(e.token)))
+        is CaptureEvent.PhotoDelivered -> CaptureStep(s.copy(ledger = s.ledger.deliver(e.token)))
+        is CaptureEvent.PhotoFailed -> CaptureStep(s.copy(ledger = s.ledger.abandon(e.token)), listOf(CaptureEffect.Haptic(CaptureHaptic.WARNING)))
         CaptureEvent.DropLastSegment -> dropLast(s)
         CaptureEvent.Validate -> validate(s)
         is CaptureEvent.CloseTapped -> close(s, e.nowMs)
@@ -92,6 +100,7 @@ object CaptureSessionReducer {
         is CaptureEvent.FlashSliderTouched -> CaptureStep(s.copy(flashSlider = s.flashSlider.hold(e.held)))
         is CaptureEvent.FlashSliderExpired -> CaptureStep(s.copy(flashSlider = s.flashSlider.expire(e.generation, e.voiceOver)))
         CaptureEvent.FlipTapped -> flipTapped(s)
+        CaptureEvent.FlipFinishedIfSwitching -> if (s.switching) reduce(s, CaptureEvent.FlipFinished) else CaptureStep(s)
         CaptureEvent.FlipFinished -> CaptureStep(s.copy(facing = flipped(s.facing), switching = false, zoom = 1f), listOf(CaptureEffect.Haptic(CaptureHaptic.LIGHT)))
         is CaptureEvent.ZoomChanged -> CaptureStep(s.copy(zoom = e.displayed), listOf(CaptureEffect.ApplyZoom(e.displayed)))
     }
