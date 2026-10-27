@@ -44,9 +44,10 @@ object NotificationChannelIds {
      * Les canaux sur lesquels l'app RENDT elle-même (le pipeline) : vibration, nom localisé. Un
      * canal est immuable une fois créé et recréer un id supprimé restaure ses anciens réglages —
      * les installs qui l'ont créé sans vibration (S8 du porteur, #13394) ne la retrouvent que sous
-     * un id neuf. [CHANNEL_MESSAGES] reste l'id que la passerelle cible quand le système rend la
-     * bannière lui-même (repli) ; [CHANNEL_SOCIAL] et [CHANNEL_SYSTEM], que personne ne cible,
-     * sont supprimés à l'installation.
+     * un id neuf. Les trois v1 sont supprimés à l'installation : `MeeshyFcmService.handleIntent`
+     * remet chaque push au pipeline, donc le système ne rend plus jamais sur [CHANNEL_MESSAGES]
+     * (que la passerelle nomme encore) ; si cela arrivait, FCM retombe sur le canal par défaut du
+     * manifeste, [CHANNEL_MESSAGES_V2].
      */
     const val CHANNEL_MESSAGES_V2: String = "meeshy_messages_v2"
     const val CHANNEL_SOCIAL_V2: String = "meeshy_social_v2"
@@ -61,7 +62,7 @@ object NotificationChannelIds {
 
     /**
      * The channel of a category the pipeline renders on. Messages and every unknown type land
-     * on [CHANNEL_MESSAGES_V2] ; [CHANNEL_MESSAGES] stays installed for the system-rendered fallback.
+     * on [CHANNEL_MESSAGES_V2].
      */
     fun forCategory(category: PushChannelCategory): String = when (category) {
         PushChannelCategory.MESSAGES -> CHANNEL_MESSAGES_V2

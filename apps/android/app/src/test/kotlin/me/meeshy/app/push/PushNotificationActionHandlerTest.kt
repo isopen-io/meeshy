@@ -86,4 +86,31 @@ class PushNotificationActionHandlerTest {
         assertThat(outcome).isEqualTo(PushNotificationActionHandler.Outcome.FAILED)
         assertThat(outcome.dismissesBanner).isFalse()
     }
+
+    @Test
+    fun `la banniere d un autre compte ne repond pas avec la session du compte connecte`() = runTest {
+        val f = Fixture(me, sealed = false)
+
+        val outcome = f.handler.reply("c1", "salut", accountId = "previous-account")
+
+        assertThat(outcome).isEqualTo(PushNotificationActionHandler.Outcome.ACCOUNT_CHANGED)
+        assertThat(outcome.dismissesBanner).isTrue()
+        coVerify(exactly = 0) { f.messages.sendOptimistic(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `la banniere d un autre compte ne marque rien comme lu`() = runTest {
+        val f = Fixture(me, sealed = false)
+
+        assertThat(f.handler.markRead("c1", accountId = "previous-account"))
+            .isEqualTo(PushNotificationActionHandler.Outcome.ACCOUNT_CHANGED)
+        coVerify(exactly = 0) { f.conversations.markReadOptimistic(any()) }
+    }
+
+    @Test
+    fun `la banniere du compte connecte repond normalement`() = runTest {
+        val f = Fixture(me, sealed = false)
+
+        assertThat(f.handler.reply("c1", "salut", accountId = "me")).isEqualTo(PushNotificationActionHandler.Outcome.SENT)
+    }
 }

@@ -209,6 +209,11 @@
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_icon"
             android:resource="@drawable/ic_stat_meeshy" />
+        <!-- Et le canal « Messages » v2 (NotificationChannelIds.CHANNEL_MESSAGES_V2) : le v1 que la
+             passerelle nomme encore n'est plus installé. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="meeshy_messages_v2" />
 
         <!-- Bouton « Refuser » de la notification d'appel (CallStyle) -->
         <receiver

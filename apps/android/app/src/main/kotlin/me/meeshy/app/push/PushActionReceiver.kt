@@ -27,13 +27,14 @@ class PushActionReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val conversationId = intent.getStringExtra(EXTRA_CONVERSATION_ID)?.takeIf { it.isNotBlank() } ?: return
         val notificationId = intent.getIntExtra(EXTRA_NOTIFICATION_ID, 0)
+        val accountId = intent.getStringExtra(EXTRA_ACCOUNT_ID)
         val reply = RemoteInput.getResultsFromIntent(intent)?.getCharSequence(KEY_REPLY)?.toString()
         val pending = goAsync()
         CoroutineScope(SupervisorJob() + Dispatchers.Default).launch {
             try {
                 val outcome = when (intent.action) {
-                    ACTION_REPLY -> handler.reply(conversationId, reply.orEmpty())
-                    ACTION_MARK_READ -> handler.markRead(conversationId)
+                    ACTION_REPLY -> handler.reply(conversationId, reply.orEmpty(), accountId)
+                    ACTION_MARK_READ -> handler.markRead(conversationId, accountId)
                     else -> return@launch
                 }
                 settle(context, notificationId, outcome)
@@ -58,6 +59,7 @@ class PushActionReceiver : BroadcastReceiver() {
         const val ACTION_MARK_READ = "me.meeshy.app.push.action.MARK_READ"
         const val EXTRA_CONVERSATION_ID = "conversationId"
         const val EXTRA_NOTIFICATION_ID = "notificationId"
+        const val EXTRA_ACCOUNT_ID = "accountId"
         const val KEY_REPLY = "key_text_reply"
     }
 }

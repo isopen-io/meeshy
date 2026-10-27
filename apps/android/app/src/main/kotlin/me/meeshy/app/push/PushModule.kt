@@ -16,6 +16,7 @@ import me.meeshy.app.push.pipeline.MessagingStyleEnricher
 import me.meeshy.app.push.pipeline.NotificationEnricher
 import me.meeshy.app.push.pipeline.PushEnvironment
 import me.meeshy.app.push.pipeline.SubtitleEnricher
+import me.meeshy.sdk.session.PerAccountCache
 
 /**
  * The push pipeline's extension points : [PushObserver] and [NotificationEnricher] are
@@ -30,6 +31,10 @@ interface PushModule {
 
     @Multibinds
     fun notificationEnrichers(): Set<@JvmSuppressWildcards NotificationEnricher>
+
+    @Binds
+    @IntoSet
+    fun postedNotificationsTeardown(impl: PostedNotificationsTeardown): PerAccountCache
 
     @Binds
     fun pushEnvironment(impl: AndroidPushEnvironment): PushEnvironment

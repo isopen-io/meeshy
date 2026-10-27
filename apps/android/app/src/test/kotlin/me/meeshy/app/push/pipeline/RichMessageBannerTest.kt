@@ -9,6 +9,8 @@ import androidx.core.app.NotificationCompat
 import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
 import io.mockk.coEvery
+import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import me.meeshy.app.R
@@ -17,6 +19,8 @@ import me.meeshy.app.push.PushTapExtras
 import me.meeshy.app.push.media.PushMediaFetcher
 import me.meeshy.sdk.notification.ActiveConversationStore
 import me.meeshy.sdk.notification.InMemoryNotificationPreferencesStore
+import me.meeshy.sdk.session.SessionRepository
+import me.meeshy.app.push.PushActionReceiver
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -38,9 +42,15 @@ class RichMessageBannerTest {
         manager.cancelAll()
     }
 
+    private val fetcher = mockk<PushMediaFetcher>().also {
+        coEvery { it.fetch(any(), any(), any(), any(), any()) } returns null
+    }
+
+    private val session = mockk<SessionRepository>(relaxed = true) {
+        every { currentUserId } returns "me"
+    }
+
     private fun pipeline(): PushNotificationPipeline {
-        val fetcher = mockk<PushMediaFetcher>()
-        coEvery { fetcher.fetch(any(), any(), any(), any(), any()) } returns null
         return PushNotificationPipeline(
             context = context,
             preferencesStore = InMemoryNotificationPreferencesStore(),
@@ -51,7 +61,7 @@ class RichMessageBannerTest {
                 override fun interruptionFilter() = 1
                 override suspend fun localUnreadConversations(): Int? = null
             },
-            enrichers = setOf(MessagingStyleEnricher(context, fetcher), BigTextEnricher(), MessageActionsEnricher(context)),
+            enrichers = setOf(MessagingStyleEnricher(context, fetcher), BigTextEnricher(), MessageActionsEnricher(context, session)),
             summaryNotifier = PushSummaryNotifier(context),
         )
     }
@@ -154,5 +164,27 @@ class RichMessageBannerTest {
         assertThat(payload.senderId).isEqualTo("u9")
         assertThat(intent.component?.className).isEqualTo("me.meeshy.app.MainActivity")
         assertThat(intent.flags and Intent.FLAG_ACTIVITY_SINGLE_TOP).isNotEqualTo(0)
+    }
+
+    @Test
+    fun `la photo de l expediteur d un message protege n est jamais telechargee`() = runTest {
+        val avatar = "https://gate.meeshy.me/u/alice.jpg"
+        val pipeline = pipeline()
+        pipeline.renderNow(push("senderAvatar" to avatar, "notificationLocKey" to "message.viewOnce"))
+        pipeline.renderNow(push("notificationId" to "n5", "senderAvatar" to avatar, "ephemeralDuration" to "30"))
+
+        coVerify(exactly = 0) { fetcher.fetch(avatar, any(), any(), any(), any()) }
+
+        pipeline.renderNow(push("notificationId" to "n6", "senderAvatar" to avatar))
+        coVerify(exactly = 1) { fetcher.fetch(avatar, any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `les boutons portent le compte connecte au rendu`() = runTest {
+        pipeline().renderNow(push())
+
+        val reply = manager.activeNotifications.first { it.notification.actions != null }.notification.actions[0].actionIntent
+        val intent = org.robolectric.Shadows.shadowOf(reply).savedIntent
+        assertThat(intent.getStringExtra(PushActionReceiver.EXTRA_ACCOUNT_ID)).isEqualTo("me")
     }
 }
