@@ -366,6 +366,8 @@ data class SendMessageRequest(
     val ephemeralDuration: Int? = null,
     val expiresAt: String? = null,
     val maxViewOnceCount: Int? = null,
+    /** Lieu partagé : champ dédié que la passerelle valide (`parseSharedPlace`) et écrit dans `metadata.location`. */
+    val location: SharedPlace? = null,
 )
 
 internal object TolerantPostReplyTargetSerializer :
