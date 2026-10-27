@@ -4,6 +4,8 @@ import kotlin.math.max
 import kotlin.math.min
 import me.meeshy.sdk.model.StoryTextObject
 import me.meeshy.sdk.model.StoryTextStyle
+import me.meeshy.sdk.model.scene.StoryTextBackground
+import me.meeshy.sdk.model.scene.StoryTextBackgroundPresets
 
 /**
  * **LE TEXTE DE LA RETOUCHE** (#12591, #12651) — miroir de `ComposerRetouchTextRule` + `ComposerRetouchTextBoard`
@@ -63,9 +65,19 @@ public data class ComposerRetouchTextBoard(
 
     public fun aligning(id: String, align: String): ComposerRetouchTextBoard = updating(id) { it.copy(textAlign = align) }
 
+    /** Le fond du texte : `None` retire le style, jamais un `textBg` ancien ne le contredit. */
+    public fun backgrounding(id: String, background: StoryTextBackground): ComposerRetouchTextBoard =
+        updating(id) { it.copy(backgroundStyle = background.toStyleWire(), textBg = null) }
+
+    /** Toucher le fond avance d'un cran dans les douze du composer, en boucle. */
+    public fun cyclingBackground(id: String): ComposerRetouchTextBoard {
+        val current = texts.firstOrNull { it.id == id } ?: return this
+        return backgrounding(id, StoryTextBackgroundPresets.next(StoryTextBackground.resolve(current.backgroundStyle, current.textBg)))
+    }
+
     /** Ce qui se VOIT des textes, champ par champ : l'empreinte change dès qu'un texte change. */
     val fingerprint: String
-        get() = written.joinToString("|") { listOf(it.text, it.x, it.y, it.scale, it.rotation, it.fontSize, it.textStyle, it.textColor, it.textAlign).joinToString(",") }
+        get() = written.joinToString("|") { listOf(it.text, it.x, it.y, it.scale, it.rotation, it.fontSize, it.textStyle, it.textColor, it.textAlign, it.backgroundStyle?.type, it.backgroundStyle?.hex, it.backgroundStyle?.radius, it.textBg).joinToString(",") }
 
     private fun addingAndTyping(id: String): ComposerRetouchTextBoard =
         copy(texts = texts + fresh(id, texts.size), typingId = id)
@@ -86,6 +98,9 @@ public data class ComposerRetouchTextBoard(
 
         /** Les couleurs du composer, du blanc au noir. */
         public val PALETTE: List<String> = listOf("#FFFFFF", "#000000", "#FF3B30", "#FF9500", "#FFCC00", "#34C759", "#007AFF", "#AF52DE")
+
+        /** Les douze fonds du composer, dans son ordre : aucun, Verre, puis les pleins. */
+        public val BACKGROUNDS: List<StoryTextBackground> = StoryTextBackgroundPresets.all
 
         public val ALIGNMENTS: List<String> = listOf("left", "center", "right")
 
