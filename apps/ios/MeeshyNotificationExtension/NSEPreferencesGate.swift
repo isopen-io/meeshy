@@ -1,5 +1,5 @@
 import Foundation
-import MeeshySDK
+import MeeshyCore
 import UserNotifications
 import os
 
@@ -20,9 +20,9 @@ enum NSEPreferencesGate {
     /// appelants retombent sur `.defaults` (tout activé = comportement
     /// historique).
     static func loadPreferences(
-        defaults: UserDefaults? = UserDefaults(suiteName: UserPreferencesManager.appGroupSuiteName)
+        defaults: UserDefaults? = UserDefaults(suiteName: AppGroupPreferences.suiteName)
     ) -> UserNotificationPreferences? {
-        guard let data = defaults?.data(forKey: UserPreferencesManager.appGroupNotificationPrefsKey) else {
+        guard let data = defaults?.data(forKey: AppGroupPreferences.notificationPreferencesKey) else {
             return nil
         }
         // Sans préférences lisibles, la gate laisse passer la notification

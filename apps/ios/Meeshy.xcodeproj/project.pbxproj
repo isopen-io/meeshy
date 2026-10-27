@@ -1351,6 +1351,7 @@
 		54876D9C655344CFDF68DCF9 /* StoryViewerCardTransform.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B66C0696A1DA879378C6E0A /* StoryViewerCardTransform.swift */; };
 		548D8A0DAC58EB90F1D67A61 /* FeedViewModelPendingPublicationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2776408B327871423A238A63 /* FeedViewModelPendingPublicationTests.swift */; };
 		54993859095CAFFAF3DBA88E /* ContactSyncService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13E0093588E570A338A6204F /* ContactSyncService.swift */; };
+		54A2E55412C53BE8AA9BDC88 /* MeeshySDK in Frameworks */ = {isa = PBXBuildFile; productRef = FFCEA5A4127A16444DE39978 /* MeeshySDK */; };
 		54B87C5630C6E1971539D06C /* NSEAttachmentPolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A38ED6808426D7FA220B53EF /* NSEAttachmentPolicyTests.swift */; };
 		54B93E1464FFB175110C18CD /* FeedCommentsSheet+CommentEdit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 459383315A019980DFDDDFC8 /* FeedCommentsSheet+CommentEdit.swift */; };
 		54BA87A0B399858A54A233D7 /* ConversationListViewModel+SocketEvents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6313AD53A1CFA50C382D86AE /* ConversationListViewModel+SocketEvents.swift */; };
@@ -1538,7 +1539,7 @@
 		60217B38DF603F4206000ADB /* AffiliateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5683953E8A118D806C26F400 /* AffiliateView.swift */; };
 		6038186732ED54D2CA25F88C /* CommentQuotedMediaTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1189CE77AA93B858A88F233D /* CommentQuotedMediaTests.swift */; };
 		603FDCC32C0398D4C701FA63 /* ComposerEditTools.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90EB9C450A4B7652AADE080E /* ComposerEditTools.swift */; };
-		606D0FA9916588BE1C11BF57 /* MeeshyE2EE in Frameworks */ = {isa = PBXBuildFile; productRef = DBDBBEF1C16D0ADFD1C615E6 /* MeeshyE2EE */; };
+		606D0FA9916588BE1C11BF57 /* MeeshySDK in Frameworks */ = {isa = PBXBuildFile; productRef = 2D4BD86B5E825E53F2008016 /* MeeshySDK */; };
 		607247AB325C00FE1C5D9A65 /* PresentedSurfaceRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 415F024122DD3BADC5D6C585 /* PresentedSurfaceRegistry.swift */; };
 		6077853167318A0769A1F890 /* SocialEventsV2Reporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EBA5D7AE947C9D616450BF0 /* SocialEventsV2Reporter.swift */; };
 		607A8224724C5208FE83BD9F /* ConversationSendPersisting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18E2864914739F167122FC28 /* ConversationSendPersisting.swift */; };
@@ -3012,7 +3013,7 @@
 		BB7975915D5DE6500D693743 /* ScrollTimePillState.swift in Sources */ = {isa = PBXBuildFile; fileRef = A781514A6B46A12E83A2EC29 /* ScrollTimePillState.swift */; };
 		BBAC79C7D3A0CAEF2D1252B3 /* AppSourceGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3CE66C1F8945461C57C1634 /* AppSourceGuardTests.swift */; };
 		BBBBB1CD257FBFC76E21C3B2 /* MediaGalleryChromeReachTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10AA452A79F7C884269E113D /* MediaGalleryChromeReachTests.swift */; };
-		BBC06957E3FCDEAE3CAB430F /* MeeshySDK in Frameworks */ = {isa = PBXBuildFile; productRef = FFCEA5A4127A16444DE39978 /* MeeshySDK */; };
+		BBC06957E3FCDEAE3CAB430F /* MeeshyCore in Frameworks */ = {isa = PBXBuildFile; productRef = 4D96DDC42369B831B198887E /* MeeshyCore */; };
 		BBC618BD022613D43813F796 /* RenderedScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EEF3B489A89D56EE295565C /* RenderedScreen.swift */; };
 		BBE86208C69DB1B7769ABE8E /* CallFrameRenderer+Ornaments.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72EF18ABBE1EFA0A57813AAC /* CallFrameRenderer+Ornaments.swift */; };
 		BBEEF1011A294E1D7BF0AEA2 /* ComposerPhotoEncoding.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3504C1973F5CF3493195B0D /* ComposerPhotoEncoding.swift */; };
@@ -3681,7 +3682,7 @@
 		E45A8F231383D5760853F716 /* ComposerIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26653F1999C7908952BF8EC1 /* ComposerIntent.swift */; };
 		E483EF90D4EAD401ACE709EF /* NSEEnrichmentPlan.swift in Sources */ = {isa = PBXBuildFile; fileRef = B68967C75D79BA3B0CA676B0 /* NSEEnrichmentPlan.swift */; };
 		E499C72CCE59ABAD99E35ED1 /* ComposerPreUploadCopyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE31338D9DA9CB55FCB90E5C /* ComposerPreUploadCopyTests.swift */; };
-		E4A4724D86933186E23940FE /* MeeshySDK in Frameworks */ = {isa = PBXBuildFile; productRef = 2D4BD86B5E825E53F2008016 /* MeeshySDK */; };
+		E4A4724D86933186E23940FE /* MeeshyCore in Frameworks */ = {isa = PBXBuildFile; productRef = 7DA959E4E2C4C58002F2CFBB /* MeeshyCore */; };
 		E4A94ACC66A79D945E23AF7A /* SheetEnvironmentObjectGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BCDFA9C24F61A3A0C64E55E /* SheetEnvironmentObjectGuardTests.swift */; };
 		E4B6AD1406E0D16A07663504 /* EngagementCountConsolidationGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1005B797ECFF1787A148CD34 /* EngagementCountConsolidationGuardTests.swift */; };
 		E4BBD6813C0507D59F925CC2 /* ConversationTopChromeFadeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7356ABDDF60964DCC357738 /* ConversationTopChromeFadeTests.swift */; };
@@ -3706,6 +3707,7 @@
 		E5D5FB09415F2CABF79207B2 /* GroupCallMeshContracts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22A68341186490728175E546 /* GroupCallMeshContracts.swift */; };
 		E5DFECD7AC8A97B55F32469D /* LongMessageExpansionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93DF7F7FC5B7C2AC30EAA4A6 /* LongMessageExpansionTests.swift */; };
 		E5E3197815F31DBA29365F30 /* LentilleSceneActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CE38FF5E1FB556817612C6C /* LentilleSceneActivity.swift */; };
+		E5F520AEB029E0264597D941 /* MeeshyE2EE in Frameworks */ = {isa = PBXBuildFile; productRef = DBDBBEF1C16D0ADFD1C615E6 /* MeeshyE2EE */; };
 		E5FC1C2B8C454A3919B62F5C /* ConversationSendCoordinatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8FC295EA9DD26A1B55EB410 /* ConversationSendCoordinatorTests.swift */; };
 		E60878EB7356975CA7186ACF /* ConversationDashboardClientStats.swift in Sources */ = {isa = PBXBuildFile; fileRef = D63CF12AA2187A30EAF00664 /* ConversationDashboardClientStats.swift */; };
 		E60DEF9DA28F407AFA7761E5 /* ConversationViewModel+Translations.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04E0E084F0FF3F0E911FEA42 /* ConversationViewModel+Translations.swift */; };
@@ -8281,7 +8283,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				BBC06957E3FCDEAE3CAB430F /* MeeshySDK in Frameworks */,
+				BBC06957E3FCDEAE3CAB430F /* MeeshyCore in Frameworks */,
+				54A2E55412C53BE8AA9BDC88 /* MeeshySDK in Frameworks */,
 				F4301F7E18395EE42D891D40 /* UserNotificationsUI.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -8290,8 +8293,9 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				E4A4724D86933186E23940FE /* MeeshySDK in Frameworks */,
-				606D0FA9916588BE1C11BF57 /* MeeshyE2EE in Frameworks */,
+				E4A4724D86933186E23940FE /* MeeshyCore in Frameworks */,
+				606D0FA9916588BE1C11BF57 /* MeeshySDK in Frameworks */,
+				E5F520AEB029E0264597D941 /* MeeshyE2EE in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -13509,6 +13513,7 @@
 			);
 			name = MeeshyNotificationContentExtension;
 			packageProductDependencies = (
+				4D96DDC42369B831B198887E /* MeeshyCore */,
 				FFCEA5A4127A16444DE39978 /* MeeshySDK */,
 			);
 			productName = MeeshyNotificationContentExtension;
@@ -13598,6 +13603,7 @@
 			);
 			name = MeeshyNotificationExtension;
 			packageProductDependencies = (
+				7DA959E4E2C4C58002F2CFBB /* MeeshyCore */,
 				2D4BD86B5E825E53F2008016 /* MeeshySDK */,
 				DBDBBEF1C16D0ADFD1C615E6 /* MeeshyE2EE */,
 			);
@@ -18569,6 +18575,10 @@
 			isa = XCSwiftPackageProductDependency;
 			productName = MeeshySDK;
 		};
+		4D96DDC42369B831B198887E /* MeeshyCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = MeeshyCore;
+		};
 		52A8D6C05F60D2E8F5BFDC9F /* MeeshyUI */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = MeeshyUI;
@@ -18576,6 +18586,10 @@
 		5AFEA29F7DE4EBACDE524C99 /* MeeshyUI */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = MeeshyUI;
+		};
+		7DA959E4E2C4C58002F2CFBB /* MeeshyCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = MeeshyCore;
 		};
 		A2EA1255277DE18035F0BAFF /* MeeshySDK */ = {
 			isa = XCSwiftPackageProductDependency;

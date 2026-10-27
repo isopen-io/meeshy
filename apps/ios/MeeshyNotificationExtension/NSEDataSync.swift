@@ -1,6 +1,6 @@
 import Foundation
 import os
-import MeeshySDK
+import MeeshyCore
 
 /// Lightweight data sync for the Notification Service Extension.
 ///

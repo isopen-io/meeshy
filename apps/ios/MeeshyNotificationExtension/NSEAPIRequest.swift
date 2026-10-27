@@ -1,5 +1,5 @@
 import Foundation
-import MeeshySDK
+import MeeshyCore
 
 /// **La seule fabrique de requêtes API de la NSE** (#7804).
 ///

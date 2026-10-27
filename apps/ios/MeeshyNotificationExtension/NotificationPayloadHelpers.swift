@@ -1,5 +1,5 @@
 import Foundation
-import MeeshySDK
+import MeeshyCore
 
 /// Pure, side-effect-free helpers used by `NotificationService` (the rich-push
 /// `UNNotificationServiceExtension`) to repair fields that iOS Communication
