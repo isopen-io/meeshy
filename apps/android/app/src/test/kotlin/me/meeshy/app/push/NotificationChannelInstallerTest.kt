@@ -96,8 +96,44 @@ class NotificationChannelInstallerTest {
     fun `install creates one channel per category`() {
         installer().install()
 
-        assertThat(manager.getNotificationChannel(NotificationChannelIds.CHANNEL_SOCIAL)).isNotNull()
-        assertThat(manager.getNotificationChannel(NotificationChannelIds.CHANNEL_SYSTEM)).isNotNull()
+        assertThat(manager.getNotificationChannel(NotificationChannelIds.CHANNEL_SOCIAL_V2)).isNotNull()
+        assertThat(manager.getNotificationChannel(NotificationChannelIds.CHANNEL_SYSTEM_V2)).isNotNull()
+        assertThat(manager.getNotificationChannel(NotificationChannelIds.CHANNEL_MESSAGES_V2)).isNotNull()
+    }
+
+    @Test
+    fun `the channels that ring vibrate and the silent one does not`() {
+        installer().install()
+
+        listOf(
+            NotificationChannelIds.CHANNEL_MESSAGES,
+            NotificationChannelIds.CHANNEL_MESSAGES_V2,
+            NotificationChannelIds.CHANNEL_SOCIAL_V2,
+            NotificationChannelIds.CHANNEL_SYSTEM_V2,
+        ).forEach { id -> assertThat(manager.getNotificationChannel(id).shouldVibrate()).isTrue() }
+        assertThat(manager.getNotificationChannel(NotificationChannelIds.CHANNEL_SILENT).shouldVibrate()).isFalse()
+    }
+
+    @Test
+    fun `the messages channel is named and described by the app strings, not hardcoded English`() {
+        installer().install()
+
+        val channel = manager.getNotificationChannel(NotificationChannelIds.CHANNEL_MESSAGES_V2)
+
+        assertThat(channel.name.toString()).isEqualTo(context.getString(me.meeshy.app.R.string.push_channel_messages_name))
+        assertThat(channel.description).isEqualTo(context.getString(me.meeshy.app.R.string.push_channel_messages_description))
+    }
+
+    @Test
+    fun `the vibration-less pre-v2 social and system channels are deleted`() {
+        listOf(NotificationChannelIds.CHANNEL_SOCIAL, NotificationChannelIds.CHANNEL_SYSTEM).forEach {
+            manager.createNotificationChannel(NotificationChannel(it, "old", NotificationManager.IMPORTANCE_DEFAULT))
+        }
+
+        installer().install()
+
+        assertThat(manager.getNotificationChannel(NotificationChannelIds.CHANNEL_SOCIAL)).isNull()
+        assertThat(manager.getNotificationChannel(NotificationChannelIds.CHANNEL_SYSTEM)).isNull()
     }
 
     @Test
@@ -116,7 +152,7 @@ class NotificationChannelInstallerTest {
         installer().install()
 
         assertThat(NotificationChannelIds.forCategory(me.meeshy.sdk.model.push.PushChannelCategory.MESSAGES))
-            .isEqualTo(NotificationChannelIds.CHANNEL_MESSAGES)
+            .isEqualTo(NotificationChannelIds.CHANNEL_MESSAGES_V2)
         assertThat(manager.getNotificationChannel(NotificationChannelIds.CHANNEL_MESSAGES)).isNotNull()
     }
 }

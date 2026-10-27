@@ -49,7 +49,7 @@ public class EndToEndOutboxAdmission @Inject constructor(
 ) : OutboxPlaintextAdmission {
 
     override suspend fun admits(row: OutboxEntity): Boolean =
-        conversationsOf(row).none { sealed(it) }
+        conversationsOf(row).none { isConversationSealed(it) }
 
     private suspend fun conversationsOf(row: OutboxEntity): List<String> = when (row.kindEnum) {
         OutboxKind.SEND_MESSAGE -> listOf(row.targetId)
@@ -75,7 +75,8 @@ public class EndToEndOutboxAdmission @Inject constructor(
             ?.conversationId
             ?.takeIf { it.isNotBlank() }
 
-    private suspend fun sealed(conversationId: String): Boolean {
+    /** Cette conversation est-elle chiffrée de bout en bout pour CET appareil ? Inconnue ⇒ non scellée (voir la classe). */
+    public suspend fun isConversationSealed(conversationId: String): Boolean {
         if (ledger.isSealed(conversationId)) return true
         val payload = conversationDao.find(conversationId)?.payload ?: return false
         val cached = runCatching { MeeshyApi.json.decodeFromString<ApiConversation>(payload) }.getOrNull() ?: return false

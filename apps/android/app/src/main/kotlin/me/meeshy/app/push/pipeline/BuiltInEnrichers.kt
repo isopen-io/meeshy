@@ -14,11 +14,12 @@ class SubtitleEnricher @Inject constructor() : NotificationEnricher {
     }
 }
 
-/** STYLE : the full body readable when the notification is expanded. */
+/** STYLE : the full body readable when the notification is expanded (a conversation message uses [MessagingStyleEnricher]). */
 class BigTextEnricher @Inject constructor() : NotificationEnricher {
     override val phase: EnrichmentPhase = EnrichmentPhase.STYLE
 
     override suspend fun enrich(builder: NotificationCompat.Builder, request: EnrichmentRequest) {
+        if (MessagingStyleEnricher.appliesTo(request)) return
         val body = request.push.notificationBody ?: request.push.payload.body ?: return
         builder.setStyle(NotificationCompat.BigTextStyle().bigText(body))
     }
