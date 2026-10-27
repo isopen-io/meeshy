@@ -9,7 +9,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import me.meeshy.ui.R
-import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 
 /**
@@ -26,8 +25,8 @@ public fun MeeshyBackButton(
 ) {
     IconButton(onClick = onClick, modifier = modifier.size(BACK_TARGET_DP.dp)) {
         Icon(
-            imageVector = MeeshyIcons.Back,
-            contentDescription = stringResource(R.string.fullscreen_back),
+            imageVector = leadingNavigationIcon(),
+            contentDescription = leadingNavigationLabel(stringResource(R.string.fullscreen_back)),
             tint = tint,
         )
     }
