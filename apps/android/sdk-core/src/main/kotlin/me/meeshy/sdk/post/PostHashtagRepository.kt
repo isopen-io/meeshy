@@ -10,14 +10,19 @@ import me.meeshy.sdk.net.api.HashtagApi
 import me.meeshy.sdk.net.api.PostApi
 import me.meeshy.sdk.net.apiCall
 import me.meeshy.sdk.net.pagedApiCall
+import me.meeshy.sdk.session.PerAccountCache
 
-/** Les posts d'un mot-dièse (pagination par curseur) et les mots-dièse en tendance. */
+/**
+ * Les posts d'un mot-dièse (pagination par curseur) et les mots-dièse en tendance. Les premières
+ * pages gardées en mémoire sont vidées à la déconnexion ([PerAccountCache]) : un second compte
+ * n'ouvre jamais un mot-dièse sur ce que le premier a vu.
+ */
 @Singleton
 class PostHashtagRepository @Inject constructor(
     private val postApi: PostApi,
     private val hashtagApi: HashtagApi,
     private val listings: FeedListingRegistry,
-) {
+) : PerAccountCache {
     private val firstPages = object : LinkedHashMap<String, PostPage>(CACHED_TAGS, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, PostPage>): Boolean =
             size > CACHED_TAGS
@@ -41,6 +46,10 @@ class PostHashtagRepository @Inject constructor(
                 NetworkResult.Success(fetched)
             }
         }
+
+    override suspend fun clear() {
+        synchronized(firstPages) { firstPages.clear() }
+    }
 
     suspend fun trending(limit: Int = TRENDING_SIZE): NetworkResult<List<ApiHashtag>> =
         apiCall { hashtagApi.trending(limit) }

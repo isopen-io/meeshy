@@ -12,6 +12,7 @@ import me.meeshy.sdk.model.Pagination
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.HashtagApi
 import me.meeshy.sdk.net.api.PostApi
+import me.meeshy.sdk.session.DefaultSessionTeardown
 import org.junit.Test
 
 class PostHashtagRepositoryTest {
@@ -48,6 +49,30 @@ class PostHashtagRepositoryTest {
         repository.posts("paris")
 
         assertThat(repository.cachedFirstPage("PARIS")?.posts?.map { it.id }).containsExactly("a")
+    }
+
+    @Test
+    fun `la deconnexion oublie les premieres pages du compte precedent`() = runTest {
+        coEvery { postApi.getByHashtag("paris", null, 20) } returns ApiResponse(
+            success = true,
+            data = listOf(ApiPost(id = "a")),
+        )
+        repository.posts("paris")
+
+        val teardown = DefaultSessionTeardown(
+            database = mockk(relaxed = true),
+            categorySnapshotStore = mockk(relaxed = true),
+            conversationDraftStore = mockk(relaxed = true),
+            conversationLockStore = mockk(relaxed = true),
+            storyComposerDraftStore = mockk(relaxed = true),
+            friendshipCache = mockk(relaxed = true),
+            notificationRepository = mockk(relaxed = true),
+            blockCache = mockk(relaxed = true),
+            perAccountCaches = setOf(repository),
+        )
+        teardown.wipe()
+
+        assertThat(repository.cachedFirstPage("paris")).isNull()
     }
 
     @Test
