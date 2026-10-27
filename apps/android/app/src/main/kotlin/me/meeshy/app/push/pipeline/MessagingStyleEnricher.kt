@@ -19,7 +19,8 @@ import javax.inject.Inject
  * conversation = une bannière, [me.meeshy.app.push.MessageNotificationId]).
  *
  * Le TEXTE est celui que la passerelle a servi (Prisme résolu serveur, corps de la bannière) :
- * jamais recalculé ici. Un média image garde sa grande image (phase MEDIA, plus tard).
+ * jamais recalculé ici. Un message PROTÉGÉ (éphémère, vue unique, flouté, chiffré) garde le
+ * placeholder servi et ne télécharge pas la photo de l'expéditeur. Un média image garde sa grande image (phase MEDIA, plus tard).
  */
 class MessagingStyleEnricher @Inject constructor(
     @ApplicationContext private val context: Context,
@@ -58,8 +59,11 @@ class MessagingStyleEnricher @Inject constructor(
         return style.messages.takeLast(MAX_HISTORY - 1)
     }
 
+    /** La photo de l'expéditeur ne voyage jamais avec un message protégé : seul son nom est dit, comme le titre servi. */
     private suspend fun avatarOf(request: EnrichmentRequest): IconCompat? {
-        val url = request.push.payload.senderAvatar ?: return null
+        val payload = request.push.payload
+        if (!payload.mediaMayTravel) return null
+        val url = payload.senderAvatar ?: return null
         val budget = minOf(AVATAR_BUDGET_MILLIS, request.deadlineMillis - System.currentTimeMillis())
         val file = fetcher.fetch(url = url, mimeType = AVATAR_MIME, declaredSize = null, data = emptyMap(), budgetMillis = budget) ?: return null
         return try {

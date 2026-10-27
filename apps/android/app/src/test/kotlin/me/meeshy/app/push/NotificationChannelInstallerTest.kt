@@ -13,16 +13,10 @@ import org.robolectric.annotation.Config
 
 /**
  * Behavioural spec for eager, process-start channel creation (`MeeshyApplication.onCreate`,
- * ARCHITECTURE.md §18 — the notification-channel taxonomy). The channel this installer
- * creates MUST carry the exact id the gateway already sends for Android non-call pushes
- * (`services/gateway/src/services/PushNotificationService.ts` `sendViaFCM`,
- * `message.android.notification.channelId = 'meeshy_notifications'`): when the OS
- * auto-renders a push while the app is backgrounded/killed (every non-call push today
- * carries both a `notification` and a `data` block), `MeeshyFcmService.onMessageReceived`
- * never runs — the system posts directly against that channel id. A client that only ever
- * created a differently-named channel (the former `meeshy_messages`, lazily, inside a
- * handler that doesn't run in this exact scenario) leaves that id unregistered on the
- * device precisely when push delivery matters most.
+ * ARCHITECTURE.md §18 — the notification-channel taxonomy). Since `MeeshyFcmService.handleIntent`
+ * hands every push to the pipeline (#13394), the system never renders on the v1 id the gateway
+ * still names (`meeshy_notifications`) : one v2 channel per category, the v1 deleted after its
+ * user-set mute is carried over, and the manifest's FCM default channel is the messages v2.
  */
 // Pinned to the app's own `minSdk = 26` floor (`NotificationChannel` requires O+, and
 // every device this code ships to is guaranteed to be at least that) rather than
@@ -44,13 +38,45 @@ class NotificationChannelInstallerTest {
     private fun installer() = NotificationChannelInstaller(context)
 
     @Test
-    fun `install creates the messages channel under the id the gateway targets`() {
+    fun `install creates the messages channel the pipeline posts to`() {
         installer().install()
 
-        val channel = manager.getNotificationChannel(NotificationChannelIds.CHANNEL_MESSAGES)
+        val channel = manager.getNotificationChannel(NotificationChannelIds.CHANNEL_MESSAGES_V2)
 
         assertThat(channel).isNotNull()
         assertThat(channel.importance).isEqualTo(NotificationManager.IMPORTANCE_HIGH)
+    }
+
+    @Test
+    fun `the system settings list one messages channel, never the v1 next to the v2`() {
+        manager.createNotificationChannel(
+            NotificationChannel(NotificationChannelIds.CHANNEL_MESSAGES, "Messages", NotificationManager.IMPORTANCE_HIGH),
+        )
+
+        installer().install()
+
+        assertThat(manager.getNotificationChannel(NotificationChannelIds.CHANNEL_MESSAGES)).isNull()
+        assertThat(manager.notificationChannels.count { it.name.toString() == context.getString(me.meeshy.app.R.string.push_channel_messages_name) })
+            .isEqualTo(1)
+    }
+
+    @Test
+    fun `a v1 channel the user had muted or blocked stays quiet under its v2`() {
+        manager.createNotificationChannel(
+            NotificationChannel(NotificationChannelIds.CHANNEL_MESSAGES, "Messages", NotificationManager.IMPORTANCE_NONE),
+        )
+        manager.createNotificationChannel(
+            NotificationChannel(NotificationChannelIds.CHANNEL_SOCIAL, "Social", NotificationManager.IMPORTANCE_LOW),
+        )
+
+        installer().install()
+
+        assertThat(manager.getNotificationChannel(NotificationChannelIds.CHANNEL_MESSAGES_V2).importance)
+            .isEqualTo(NotificationManager.IMPORTANCE_NONE)
+        assertThat(manager.getNotificationChannel(NotificationChannelIds.CHANNEL_SOCIAL_V2).importance)
+            .isEqualTo(NotificationManager.IMPORTANCE_LOW)
+        assertThat(manager.getNotificationChannel(NotificationChannelIds.CHANNEL_SYSTEM_V2).importance)
+            .isEqualTo(NotificationManager.IMPORTANCE_HIGH)
     }
 
     @Test
@@ -73,7 +99,7 @@ class NotificationChannelInstallerTest {
         installer().install()
         installer().install()
 
-        assertThat(manager.notificationChannels.count { it.id == NotificationChannelIds.CHANNEL_MESSAGES })
+        assertThat(manager.notificationChannels.count { it.id == NotificationChannelIds.CHANNEL_MESSAGES_V2 })
             .isEqualTo(1)
     }
 
@@ -106,7 +132,6 @@ class NotificationChannelInstallerTest {
         installer().install()
 
         listOf(
-            NotificationChannelIds.CHANNEL_MESSAGES,
             NotificationChannelIds.CHANNEL_MESSAGES_V2,
             NotificationChannelIds.CHANNEL_SOCIAL_V2,
             NotificationChannelIds.CHANNEL_SYSTEM_V2,
@@ -148,11 +173,12 @@ class NotificationChannelInstallerTest {
     }
 
     @Test
-    fun `install keeps the historic messages channel the gateway targets`() {
+    fun `every category lands on its v2 channel`() {
         installer().install()
 
         assertThat(NotificationChannelIds.forCategory(me.meeshy.sdk.model.push.PushChannelCategory.MESSAGES))
             .isEqualTo(NotificationChannelIds.CHANNEL_MESSAGES_V2)
-        assertThat(manager.getNotificationChannel(NotificationChannelIds.CHANNEL_MESSAGES)).isNotNull()
+        assertThat(manager.getNotificationChannel(NotificationChannelIds.forCategory(me.meeshy.sdk.model.push.PushChannelCategory.SOCIAL)))
+            .isNotNull()
     }
 }

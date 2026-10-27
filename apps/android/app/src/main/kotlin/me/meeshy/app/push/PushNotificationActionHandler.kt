@@ -43,13 +43,18 @@ class PushNotificationActionHandler @Inject constructor(
         EMPTY(false),
         NOT_SIGNED_IN(false),
         END_TO_END(false),
+
+        /** La bannière appartient à un autre compte que celui connecté : rien ne part, elle s'en va. */
+        ACCOUNT_CHANGED(true),
         FAILED(false),
     }
 
-    suspend fun reply(conversationId: String, text: String): Outcome {
+    /** [accountId] : le compte connecté quand la bannière a été posée (null s'il n'était pas encore connu). */
+    suspend fun reply(conversationId: String, text: String, accountId: String? = null): Outcome {
         val content = text.trim()
         if (content.isEmpty()) return Outcome.EMPTY
         val user = signedInUser() ?: return Outcome.NOT_SIGNED_IN
+        if (accountId != null && accountId != user.id) return Outcome.ACCOUNT_CHANGED
         return guarded {
             if (admission.isConversationSealed(conversationId)) return@guarded Outcome.END_TO_END
             messageRepository.sendOptimistic(
@@ -63,8 +68,9 @@ class PushNotificationActionHandler @Inject constructor(
         }
     }
 
-    suspend fun markRead(conversationId: String): Outcome {
-        if (signedInUser() == null) return Outcome.NOT_SIGNED_IN
+    suspend fun markRead(conversationId: String, accountId: String? = null): Outcome {
+        val user = signedInUser() ?: return Outcome.NOT_SIGNED_IN
+        if (accountId != null && accountId != user.id) return Outcome.ACCOUNT_CHANGED
         return guarded {
             conversationRepository.markReadOptimistic(conversationId)
             WorkManager.getInstance(context).enqueue(OutboxFlushWorker.buildRequest())
