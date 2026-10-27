@@ -1,5 +1,6 @@
 package me.meeshy.app.stories
 
+import me.meeshy.sdk.model.StoryAudioPlayerObject
 import me.meeshy.sdk.model.StoryBackgroundValue
 import me.meeshy.sdk.model.StoryDrawingStroke
 import me.meeshy.sdk.model.StoryDurationPin
@@ -41,6 +42,8 @@ data class StorySlide(
     val background: StoryBackgroundValue? = null,
     val backgroundMediaId: String? = null,
     val backgroundLoop: Boolean = true,
+    /** Les sons de la slide (fond + premier plan) : le fond appartient à la SLIDE, pas à la publication. */
+    val audio: List<StoryAudioPlayerObject> = emptyList(),
 )
 
 /**
@@ -110,7 +113,8 @@ data class StorySlideDeck(
                 slide.mediaIds.isNotEmpty() ||
                 slide.elements.any { it.isPublishable } ||
                 slide.stickers.any { it.isPublishable } ||
-                slide.strokes.isNotEmpty()
+                slide.strokes.isNotEmpty() ||
+                slide.audio.isNotEmpty()
         }
 
     /** Free media slots left on the **selected** slide; never negative so the UI can size a pick. */

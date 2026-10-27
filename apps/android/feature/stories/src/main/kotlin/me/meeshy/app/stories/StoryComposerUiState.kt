@@ -144,6 +144,14 @@ data class StoryComposerUiState(
     val selectedSlideTextElements: List<StoryTextElement>
         get() = deck.selectedSlide.elements
 
+    /** Les sons de la slide sélectionnée (fond + premier plan). */
+    val selectedSlideAudio: List<me.meeshy.sdk.model.StoryAudioPlayerObject>
+        get() = deck.selectedSlide.audio
+
+    /** Le son de FOND de la slide sélectionnée — ce que la trace de la scène montre. */
+    val selectedSlideBackgroundSound: me.meeshy.sdk.model.StoryAudioPlayerObject?
+        get() = me.meeshy.sdk.model.composer.sound.ComposerSoundPlacement.background(deck.selectedSlide.audio)
+
     /** The on-canvas stickers of the **selected** slide, in order, for rendering. */
     val selectedSlideStickers: List<StoryStickerElement>
         get() = deck.selectedSlide.stickers
