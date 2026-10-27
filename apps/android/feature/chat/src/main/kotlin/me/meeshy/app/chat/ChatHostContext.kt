@@ -235,6 +235,11 @@ internal class ChatHostActions(
     val closeForward: () -> Unit,
     val onForwardQueryChange: (String) -> Unit,
     val forwardTo: (String) -> Unit,
+    /** The single share sheet (#13469): tick a recipient, caption, flame duration, then Send. */
+    val toggleForwardRecipient: (String) -> Unit = {},
+    val onForwardCaptionChange: (String) -> Unit = {},
+    val onForwardDurationChange: (Int) -> Unit = {},
+    val sendForward: () -> Unit = {},
     val stageFile: (File, String?) -> Unit = { _, _ -> },
     val stageCapturedUris: suspend (List<Uri>) -> Unit = {},
     /** Une pièce en attente retouchée (#12735) : elle est remplacée à sa place. */
@@ -339,6 +344,10 @@ internal fun ChatViewModel.hostActions(): ChatHostActions = ChatHostActions(
     closeForward = this::closeForward,
     onForwardQueryChange = this::onForwardQueryChange,
     forwardTo = this::forwardTo,
+    toggleForwardRecipient = this::toggleForwardRecipient,
+    onForwardCaptionChange = this::onForwardCaptionChange,
+    onForwardDurationChange = this::onForwardDurationChange,
+    sendForward = this::sendForward,
     beginSelection = { id -> controllers.find<MessageSelectionController>()?.begin(id) },
     toggleSelection = { id -> controllers.find<MessageSelectionController>()?.toggle(id) ?: MessageSelection.Toggle.Ignored },
     endSelection = { controllers.find<MessageSelectionController>()?.end() },

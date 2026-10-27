@@ -57,6 +57,7 @@ import me.meeshy.sdk.reaction.ReactionRepository
 import me.meeshy.sdk.reaction.RecentEmojiStore
 import me.meeshy.sdk.report.ReportRepository
 import me.meeshy.sdk.session.AnonymousSessionStore
+import me.meeshy.sdk.friend.BlockCache
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.MessageSocketManager
 import me.meeshy.sdk.theme.accentHex
@@ -102,6 +103,7 @@ class ChatViewModel @Inject constructor(
     contributedControllers: Set<@JvmSuppressWildcards ChatController> = emptySet(),
     recentEmojiStore: RecentEmojiStore = InMemoryRecentEmojiStore(),
     languageIdentifier: LanguageIdentifying = LanguageIdentifying.Unavailable,
+    private val blockCache: BlockCache = BlockCache(),
 ) : ViewModel() {
 
     private val conversationId: String = checkNotNull(savedStateHandle[CONVERSATION_ID_ARG]) {
@@ -222,6 +224,7 @@ class ChatViewModel @Inject constructor(
         messageRepository = messageRepository,
         sessionRepository = sessionRepository,
         workManager = workManager,
+        blockedUserIds = { blockCache.currentBlockedIds },
     )
 
     private val fileDownload = ChatFileDownloadController(
@@ -720,6 +723,16 @@ class ChatViewModel @Inject constructor(
 
     /** Optimistically forward the source message into [targetConversationId]; one at a time. */
     fun forwardTo(targetConversationId: String) = forward.forwardTo(targetConversationId)
+
+    /** The single share sheet (#13469): tick or untick a recipient row. */
+    fun toggleForwardRecipient(targetConversationId: String) = forward.toggleRecipient(targetConversationId)
+
+    fun onForwardCaptionChange(text: String) = forward.onCaptionChange(text)
+
+    fun onForwardDurationChange(seconds: Int) = forward.onDurationChange(seconds)
+
+    /** Send to every ticked recipient: optimistic per row, durable through the outbox. */
+    fun sendForward() = forward.sendSelection()
 
     /** The gateway refused the forward with [code] (`FORWARD_REFUSAL_CODES`): show the refusal card. */
     fun onForwardGatewayRefusal(code: String?) = forward.onGatewayRefusal(code)

@@ -10,11 +10,21 @@ import me.meeshy.sdk.conversation.LocalSendState
 import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ContentExitLaw
 import me.meeshy.sdk.model.ForwardRefusalReason
 import me.meeshy.sdk.model.MessageEffects
 import me.meeshy.sdk.model.contentExitSubject
 import me.meeshy.sdk.model.exitOffer
+import me.meeshy.sdk.model.share.OutgoingShare
+import me.meeshy.sdk.model.share.ShareDelivery
+import me.meeshy.sdk.model.share.ShareDestination
+import me.meeshy.sdk.model.share.ShareFailure
+import me.meeshy.sdk.model.share.ShareLimits
+import me.meeshy.sdk.model.share.ShareOutgoingBuilder
+import me.meeshy.sdk.model.share.ShareOutgoingResult
+import me.meeshy.sdk.model.share.SharePlanner
+import me.meeshy.sdk.model.share.ShareSubject
 import me.meeshy.sdk.outbox.OutboxFlushWorker
 import me.meeshy.sdk.session.SessionRepository
 
@@ -31,6 +41,8 @@ internal class ChatForwardController(
     private val messageRepository: MessageRepository,
     private val sessionRepository: SessionRepository,
     private val workManager: WorkManager,
+    /** The blocklist: a direct conversation with a blocked person is never a recipient. */
+    private val blockedUserIds: () -> Set<String> = { emptySet() },
 ) {
 
     private var allConversations: List<ApiConversation> = emptyList()
@@ -79,6 +91,7 @@ internal class ChatForwardController(
                 ),
             )
         }
+        updateForward { replan(it) }
         recomputeTargets()
     }
 
@@ -185,6 +198,99 @@ internal class ChatForwardController(
         }
     }
 
+    // --- The single share sheet (#13469): tick recipients, then Send ---------------------------
+
+    /** The synced source messages of the open sheet, in thread order. */
+    private fun sources(forward: ForwardUiState): List<ApiMessage> {
+        val synced = messages.value.filter { it.sendState == LocalSendState.SYNCED }.map { it.message }
+        return (listOf(forward.sourceMessageId) + forward.additionalSourceMessageIds).mapNotNull { id -> synced.firstOrNull { it.id == id } }
+    }
+
+    private fun subject(forward: ForwardUiState) = ShareSubject.Messages(sources(forward), conversationId)
+
+    private fun replan(forward: ForwardUiState): ForwardUiState {
+        val destinations = forward.selectedConversationIds.map { ShareDestination("conv:$it") }
+        val plan = SharePlanner.plan(subject(forward).entry(), destinations)
+        val bound = plan.flameMaxDurationSeconds
+        val chosen = forward.chosenDurationSeconds?.let { if (bound != null) minOf(it, bound) else it }
+        return forward.copy(plan = plan, chosenDurationSeconds = chosen ?: bound)
+    }
+
+    /** Ticks or unticks a recipient row; a row already served is inert, a failed one can be retried. */
+    fun toggleRecipient(targetConversationId: String) = updateForward { forward ->
+        val delivery = forward.deliveries[targetConversationId]
+        if (delivery != null && delivery !is ShareDelivery.Failed) return@updateForward forward
+        val selected = forward.selectedConversationIds
+        replan(
+            forward.copy(
+                selectedConversationIds = if (targetConversationId in selected) selected - targetConversationId else selected + targetConversationId,
+            ),
+        )
+    }
+
+    fun onCaptionChange(text: String) = updateForward { it.copy(caption = text.take(ShareLimits.MAX_CAPTION_LENGTH)) }
+
+    fun onDurationChange(seconds: Int) = updateForward { forward ->
+        val bound = forward.plan?.flameMaxDurationSeconds
+        forward.copy(chosenDurationSeconds = if (bound != null) minOf(seconds, bound) else seconds)
+    }
+
+    /**
+     * Sends to every ticked recipient not yet served. Each row flips to « sending » at once (the
+     * optimistic feedback); every copy is a local bubble in its target plus a durable outbox entry,
+     * so the share survives going offline and closing the sheet. A failure flips only its own row.
+     */
+    fun sendSelection() {
+        val forward = state.value.forward ?: return
+        if (forward.refusal != null || forward.plan?.canSend != true) return
+        val user = sessionRepository.currentUser.value ?: return
+        val pending = forward.selectedConversationIds.filter { id -> forward.deliveries[id].let { it == null || it is ShareDelivery.Failed } }
+        if (pending.isEmpty()) return
+        val sourceId = forward.sourceMessageId
+        val built = ShareOutgoingBuilder.build(subject(forward), emptySet(), forward.caption, forward.chosenDurationSeconds)
+        if (built is ShareOutgoingResult.Refused) {
+            pending.forEach { markDelivery(sourceId, it, ShareDelivery.Failed(built.failure)) }
+            return
+        }
+        val outgoing = (built as ShareOutgoingResult.Ready).messages
+        pending.forEach { markDelivery(sourceId, it, ShareDelivery.Sending) }
+        scope.launch {
+            pending.forEach { target -> markDelivery(sourceId, target, deliver(outgoing, target, user)) }
+            workManager.enqueue(OutboxFlushWorker.buildRequest())
+        }
+    }
+
+    private suspend fun deliver(outgoing: List<OutgoingShare>, target: String, user: me.meeshy.sdk.model.MeeshyUser): ShareDelivery = try {
+        outgoing.forEach { post ->
+            messageRepository.sendOptimistic(
+                conversationId = target,
+                content = post.content,
+                originalLanguage = post.originalLanguage ?: user.systemLanguage?.takeIf { it.isNotBlank() } ?: LanguageResolver.FALLBACK_LANGUAGE,
+                sender = user,
+                forwardedFromId = post.forwardedFromId,
+                forwardedFromConversationId = post.forwardedFromConversationId,
+                effects = MessageEffects(flags = post.effectFlags, ephemeralDuration = post.ephemeralDuration),
+            )
+        }
+        ShareDelivery.Sent
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        ShareDelivery.Failed(ShareFailure.GENERIC)
+    }
+
+    private fun markDelivery(sourceId: String, target: String, delivery: ShareDelivery) = updateForward { forward ->
+        if (forward.sourceMessageId != sourceId) return@updateForward forward
+        forward.copy(
+            deliveries = forward.deliveries + (target to delivery),
+            sentConversationIds = if (delivery == ShareDelivery.Sent) forward.sentConversationIds + target else forward.sentConversationIds,
+        )
+    }
+
+    private fun updateForward(transform: (ForwardUiState) -> ForwardUiState) {
+        state.update { s -> s.forward?.let { s.copy(forward = transform(it)) } ?: s }
+    }
+
     private fun recomputeTargets() {
         state.update { s ->
             val forward = s.forward ?: return@update s
@@ -196,6 +302,7 @@ internal class ChatForwardController(
                         sourceConversationId = conversationId,
                         query = forward.query,
                         currentUserId = sessionRepository.currentUser.value?.id,
+                        blockedUserIds = blockedUserIds(),
                     ),
                 ),
             )

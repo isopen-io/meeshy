@@ -224,6 +224,16 @@ data class ForwardUiState(
     val sentConversationIds: Set<String> = emptySet(),
     /** Why this message cannot leave Meeshy; non-null shows the refusal card instead of recipients. */
     val refusal: me.meeshy.sdk.model.ForwardRefusalReason? = null,
+    /** The conversations ticked as recipients, in tap order (#13469): « toucher un récent, puis Envoyer ». */
+    val selectedConversationIds: List<String> = emptyList(),
+    /** The optional message sent with the copies (a separate message after them, D4). */
+    val caption: String = "",
+    /** What the exit law lets leave, what can be done with it, and whether Send is armed. */
+    val plan: me.meeshy.sdk.model.share.SharePlan? = null,
+    /** The flame duration chosen for the copies; never above the source's own. */
+    val chosenDurationSeconds: Int? = null,
+    /** Per recipient: sending, sent, queued or failed — the optimistic row state. */
+    val deliveries: Map<String, me.meeshy.sdk.model.share.ShareDelivery> = emptyMap(),
 )
 
 internal fun BubbleContent.toPinnable(): PinnableMessage = object : PinnableMessage {

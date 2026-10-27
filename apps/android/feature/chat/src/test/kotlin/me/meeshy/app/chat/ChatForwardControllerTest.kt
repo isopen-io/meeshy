@@ -21,6 +21,8 @@ import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiParticipant
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.MessageEffectFlags
+import me.meeshy.sdk.model.share.ShareDelivery
 import me.meeshy.sdk.session.SessionRepository
 import org.junit.Test
 
@@ -53,7 +55,7 @@ class ChatForwardControllerTest {
         val forward: ForwardUiState? get() = flow.value.forward
     }
 
-    private fun TestScope.rig(loaded: List<LocalMessage> = listOf(source())): Rig {
+    private fun TestScope.rig(loaded: List<LocalMessage> = listOf(source()), blocked: Set<String> = emptySet()): Rig {
         val flow = MutableStateFlow(ChatUiState(conversationId = "c1", actionMessageId = "m1"))
         val repo = mockk<MessageRepository>(relaxed = true)
         coEvery { repo.sendOptimistic(any(), any(), any(), any(), any(), any(), any(), any()) } returns "cmid_1"
@@ -68,6 +70,7 @@ class ChatForwardControllerTest {
             messageRepository = repo,
             sessionRepository = session,
             workManager = workManager,
+            blockedUserIds = { blocked },
         )
         controller.onConversationsLoaded(conversations)
         return Rig(controller, flow, repo, workManager)
@@ -243,5 +246,112 @@ class ChatForwardControllerTest {
         r.controller.open(listOf("m0"))
 
         assertThat(r.forward?.refusal).isNotNull()
+    }
+
+    @Test
+    fun `ticking recipients arms Send and one tap sends to each of them optimistically`() = runTest {
+        val r = rig()
+        r.controller.open("m1")
+        assertThat(r.forward?.plan?.canSend).isFalse()
+
+        r.controller.toggleRecipient("c2")
+        r.controller.toggleRecipient("c3")
+        assertThat(r.forward?.selectedConversationIds).containsExactly("c2", "c3").inOrder()
+        assertThat(r.forward?.plan?.canSend).isTrue()
+
+        r.controller.sendSelection()
+        assertThat(r.forward?.deliveries?.values?.toSet()).containsExactly(ShareDelivery.Sending)
+        advanceUntilIdle()
+
+        assertThat(r.forward?.deliveries?.values?.toSet()).containsExactly(ShareDelivery.Sent)
+        assertThat(r.forward?.sentConversationIds).containsExactly("c2", "c3")
+        coVerify(exactly = 1) { r.repo.sendOptimistic("c2", "salut", "fr", me, null, null, "m1", "c1") }
+        coVerify(exactly = 1) { r.repo.sendOptimistic("c3", "salut", "fr", me, null, null, "m1", "c1") }
+        verify(atLeast = 1) { r.workManager.enqueue(any<androidx.work.WorkRequest>()) }
+    }
+
+    @Test
+    fun `a served recipient is inert, Send twice does not duplicate, and a failed row can be retried`() = runTest {
+        val r = rig()
+        coEvery { r.repo.sendOptimistic("c3", any(), any(), any(), any(), any(), any(), any()) } throws IllegalStateException("db")
+        r.controller.open("m1")
+        r.controller.toggleRecipient("c2")
+        r.controller.toggleRecipient("c3")
+        r.controller.sendSelection()
+        r.controller.sendSelection()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { r.repo.sendOptimistic("c2", any(), any(), any(), any(), any(), any(), any()) }
+        r.controller.toggleRecipient("c2")
+        assertThat(r.forward?.selectedConversationIds).containsExactly("c2", "c3")
+        assertThat(r.forward?.deliveries?.get("c3")).isInstanceOf(ShareDelivery.Failed::class.java)
+
+        coEvery { r.repo.sendOptimistic("c3", any(), any(), any(), any(), any(), any(), any()) } returns "cmid_2"
+        r.controller.sendSelection()
+        advanceUntilIdle()
+        assertThat(r.forward?.deliveries?.get("c3")).isEqualTo(ShareDelivery.Sent)
+        coVerify(exactly = 1) { r.repo.sendOptimistic("c2", any(), any(), any(), any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `a caption leaves as a separate message after the copy`() = runTest {
+        val r = rig()
+        r.controller.open("m1")
+        r.controller.toggleRecipient("c2")
+        r.controller.onCaptionChange("regarde ça")
+        r.controller.sendSelection()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { r.repo.sendOptimistic("c2", "salut", "fr", me, null, null, "m1", "c1") }
+        coVerify(exactly = 1) { r.repo.sendOptimistic("c2", "regarde ça", any(), me, null, null, null, null) }
+    }
+
+    @Test
+    fun `a direct conversation with a blocked person is not a recipient`() = runTest {
+        val direct = ApiConversation(
+            id = "d1", type = "direct", title = "Bloqué",
+            participants = listOf(ApiParticipant(id = "pm", userId = "me"), ApiParticipant(id = "pb", userId = "bad")),
+        )
+        val r = rig(blocked = setOf("bad"))
+        r.controller.onConversationsLoaded(conversations + direct)
+        r.controller.open("m1")
+        assertThat(r.forward?.targets?.map { it.conversationId }).containsExactly("c2", "c3")
+    }
+
+    @Test
+    fun `a flame source plans its bound and the chosen duration never exceeds it`() = runTest {
+        val flame = LocalMessage(
+            ApiMessage(
+                id = "m1", conversationId = "c1", senderId = "other", content = "chut", originalLanguage = "fr",
+                effectFlags = MessageEffectFlags.EPHEMERAL.toInt(), ephemeralDuration = 60,
+            ),
+            sendState = LocalSendState.SYNCED,
+        )
+        val r = rig(listOf(flame))
+        r.controller.open("m1")
+        assertThat(r.forward?.plan?.flameMaxDurationSeconds).isEqualTo(60)
+        assertThat(r.forward?.chosenDurationSeconds).isEqualTo(60)
+
+        r.controller.onDurationChange(3600)
+        assertThat(r.forward?.chosenDurationSeconds).isEqualTo(60)
+        r.controller.onDurationChange(30)
+        r.controller.toggleRecipient("c2")
+        r.controller.sendSelection()
+        advanceUntilIdle()
+        coVerify(exactly = 1) { r.repo.sendOptimistic("c2", "chut", "fr", me, null, null, "m1", "c1", match { it.ephemeralDuration == 30 }) }
+    }
+
+    @Test
+    fun `an end to end source is refused at the door and never reaches a recipient as text`() = runTest {
+        val sealed = LocalMessage(
+            ApiMessage(id = "m1", conversationId = "c1", senderId = "other", content = "cipher", originalLanguage = "fr", isEncrypted = true),
+            sendState = LocalSendState.SYNCED,
+        )
+        val r = rig(listOf(sealed))
+        r.controller.open("m1")
+        r.controller.toggleRecipient("c2")
+        r.controller.sendSelection()
+        advanceUntilIdle()
+        coVerify(exactly = 0) { r.repo.sendOptimistic(any(), any(), any(), any(), any(), any(), any(), any()) }
     }
 }
