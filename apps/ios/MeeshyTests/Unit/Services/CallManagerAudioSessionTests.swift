@@ -1901,14 +1901,15 @@ final class CallManagerBackgroundVideoTests: XCTestCase {
 
     func test_backgroundObserver_promotesStillRingingCallToCallKit() throws {
         let source = try callManagerSource()
-        guard let bgRange = source.range(of: "didEnterBackgroundNotification") else {
+        // Le corps ÉQUILIBRÉ de l'observateur (#11522) : la fenêtre « de la
+        // première mention jusqu'à foregroundObserver » partait d'un
+        // doc-comment de CallManager.swift et embrassait la DÉFINITION de la
+        // promotion — retirer l'appel la laissait verte.
+        guard let bgBlock = DeclarationBodyScanner.body(
+            containing: "forName: UIApplication.didEnterBackgroundNotification", in: source
+        ) else {
             XCTFail("didEnterBackgroundNotification observer not found in CallManager.swift"); return
         }
-        let afterBg = String(source[bgRange.upperBound...])
-        guard let blockEnd = afterBg.range(of: "foregroundObserver = NotificationCenter")?.lowerBound else {
-            XCTFail("Could not find foregroundObserver boundary"); return
-        }
-        let bgBlock = String(afterBg[..<blockEnd])
         XCTAssertTrue(
             bgBlock.contains("promoteRingingCallToCallKitIfNeeded"),
             "didEnterBackground handler must call promoteRingingCallToCallKitIfNeeded() — a call " +
@@ -4013,12 +4014,14 @@ final class CallManagerBackgroundDuplicateEmitTests: XCTestCase {
     func test_backgroundEntry_doesNotEmitVideoOff_whenHoldAlreadySentIt() throws {
         let source = try callManagerSource()
 
-        // Locate the didEnterBackgroundNotification observer body.
-        guard let bgRange = source.range(of: "UIApplication.didEnterBackgroundNotification") else {
+        // Le corps ÉQUILIBRÉ de l'observateur `forName:` (#11522) : la première
+        // mention nue de la notification est l'aperçu d'appel
+        // (`CallManager+CallPreview`), étranger à ce handler.
+        guard let observerBody = DeclarationBodyScanner.body(
+            containing: "forName: UIApplication.didEnterBackgroundNotification", in: source
+        ) else {
             XCTFail("didEnterBackgroundNotification observer not found"); return
         }
-        // Capture the next 800 chars — enough to cover the full handler block.
-        let observerBody = String(source[bgRange.upperBound...].prefix(800))
 
         // Lot C · C3 — l'entrée en arrière-plan n'émet PLUS rien. C'est la
         // suppression du doublon à sa racine : elle ne prouvait pas que la
