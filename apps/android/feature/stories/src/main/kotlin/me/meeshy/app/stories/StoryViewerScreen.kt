@@ -559,6 +559,7 @@ fun StoryViewerScreen(
                     name = state.authorName,
                     avatarUrl = state.authorAvatarUrl,
                     accentHex = accent,
+                    authorUserId = state.authorUserId,
                     createdAtMillis = slide?.createdAtMillis,
                     repostAttribution = slide?.repostAttribution,
                     modifier = Modifier

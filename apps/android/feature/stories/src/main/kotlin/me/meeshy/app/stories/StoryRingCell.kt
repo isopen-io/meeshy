@@ -50,6 +50,7 @@ import kotlinx.coroutines.delay
 import me.meeshy.feature.stories.R
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.meeshyPresenceDotColor
+import me.meeshy.ui.component.rememberPresence
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyTheme
@@ -224,7 +225,8 @@ private fun BoxScope.MoodBadge(emoji: String) {
 
 @Composable
 private fun BoxScope.PresenceDot(ring: StoryRing) {
-    val color = meeshyPresenceDotColor(ring.presence) ?: return
+    val presence = rememberPresence(ring.userId.takeUnless { ring.isMine }, ring.servedPresence)
+    val color = meeshyPresenceDotColor(presence) ?: return
     Box(
         modifier = Modifier
             .align(Alignment.BottomEnd)

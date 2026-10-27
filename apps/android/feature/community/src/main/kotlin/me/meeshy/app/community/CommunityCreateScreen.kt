@@ -66,10 +66,11 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.community.R
 import me.meeshy.sdk.model.CommunityCreateDraft
-import me.meeshy.sdk.model.PresenceState
 import me.meeshy.sdk.net.api.UserSearchResult
 import me.meeshy.sdk.theme.DynamicColorGenerator
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.sdk.model.UserPresence
+import me.meeshy.ui.component.rememberPresence
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyMotion
@@ -365,7 +366,7 @@ private fun ResultRow(user: UserSearchResult, isSelected: Boolean, onClick: () -
             name = name,
             size = 40.dp,
             containerColor = hexColor(DynamicColorGenerator.colorForName(user.username)),
-            presence = PresenceState.ONLINE.takeIf { user.isOnline == true },
+            presence = rememberPresence(user.id, UserPresence.served(user.isOnline, null)),
             imageUrl = user.avatar,
         )
         Column(Modifier.weight(1f)) {

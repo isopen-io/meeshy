@@ -74,6 +74,7 @@ import me.meeshy.ui.component.reaction.PostReactionPaletteAnchor
 import me.meeshy.ui.modifier.reactionPaletteTrigger
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.component.rememberPresence
 import me.meeshy.sdk.model.PostAbsenceReason
 import me.meeshy.ui.component.MeeshySkeletonBox
 import me.meeshy.ui.component.bubble.LanguageChip
@@ -232,6 +233,7 @@ private fun PostDetailContent(
                         name = post.authorName ?: unknownAuthor,
                         size = 44.dp,
                         imageUrl = post.authorAvatarUrl,
+                        presence = rememberPresence(post.authorId),
                         modifier = profileTap,
                     )
                     Spacer(Modifier.width(MeeshySpacing.md))

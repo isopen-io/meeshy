@@ -21,6 +21,7 @@ import java.util.Locale
 import me.meeshy.feature.feed.R
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.component.rememberPresence
 import me.meeshy.ui.format.RelativeTimeFormat
 import me.meeshy.ui.format.rememberRelativeTimeStrings
 import me.meeshy.ui.format.shortDateTimeLabel
@@ -52,6 +53,7 @@ internal fun FeedPostCardHeader(
             name = post.authorName ?: unknownAuthor,
             size = 40.dp,
             imageUrl = post.authorAvatarUrl,
+            presence = rememberPresence(post.authorId),
             modifier = profileTap,
         )
         Spacer(Modifier.width(MeeshySpacing.md))

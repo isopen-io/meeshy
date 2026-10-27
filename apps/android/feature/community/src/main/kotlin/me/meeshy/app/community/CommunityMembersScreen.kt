@@ -51,12 +51,13 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import me.meeshy.feature.community.R
 import me.meeshy.sdk.model.ApiCommunityMember
 import me.meeshy.sdk.model.MemberRole
-import me.meeshy.sdk.model.PresenceState
 import me.meeshy.sdk.theme.DynamicColorGenerator
 import me.meeshy.ui.component.FeedbackKind
 import me.meeshy.ui.component.FeedbackToastHost
 import me.meeshy.ui.component.FeedbackToastRequest
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.sdk.model.UserPresence
+import me.meeshy.ui.component.rememberPresence
 import me.meeshy.ui.component.MeeshyEmptyState
 import me.meeshy.ui.component.MeeshySkeletonBox
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
@@ -230,7 +231,7 @@ private fun MemberRowView(row: CommunityMemberRow, onRole: (MemberRole) -> Unit,
             MeeshyAvatar(
                 name = name, size = 44.dp,
                 containerColor = hexColor(DynamicColorGenerator.colorForName(name)),
-                presence = PresenceState.ONLINE.takeIf { user?.isOnline == true },
+                presence = rememberPresence(user?.id, UserPresence.served(user?.isOnline, null)),
                 imageUrl = user?.avatar,
             )
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {

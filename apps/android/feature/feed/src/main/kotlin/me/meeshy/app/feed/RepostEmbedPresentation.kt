@@ -44,6 +44,8 @@ data class RepostEmbedPresentation(
      * has one source of truth.
      */
     val location: FeedLocationPresentation? = null,
+    /** Le compte de l'auteur cité : sa présence servie se lit sur la carte unique. */
+    val authorId: String? = null,
 )
 
 object RepostEmbedBuilder {
@@ -62,6 +64,7 @@ object RepostEmbedBuilder {
         val mediaCount = repost.media?.size ?: 0
         return RepostEmbedPresentation(
             id = repost.id,
+            authorId = repost.author?.id?.takeIf { it.isNotBlank() },
             authorName = (repost.author?.displayName ?: repost.author?.username)
                 ?.takeIf { it.isNotBlank() },
             authorAvatarUrl = repost.author?.avatar

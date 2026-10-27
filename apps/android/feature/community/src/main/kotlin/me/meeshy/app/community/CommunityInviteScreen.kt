@@ -44,13 +44,14 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.MutableSharedFlow
 import me.meeshy.feature.community.R
-import me.meeshy.sdk.model.PresenceState
 import me.meeshy.sdk.net.api.UserSearchResult
 import me.meeshy.sdk.theme.DynamicColorGenerator
 import me.meeshy.ui.component.FeedbackKind
 import me.meeshy.ui.component.FeedbackToastHost
 import me.meeshy.ui.component.FeedbackToastRequest
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.sdk.model.UserPresence
+import me.meeshy.ui.component.rememberPresence
 import me.meeshy.ui.component.MeeshyEmptyState
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.icons.MeeshyIcons
@@ -162,7 +163,7 @@ private fun InviteRow(user: UserSearchResult, invited: Boolean, inviting: Boolea
         MeeshyAvatar(
             name = name, size = 44.dp,
             containerColor = hexColor(DynamicColorGenerator.colorForName(user.username)),
-            presence = PresenceState.ONLINE.takeIf { user.isOnline == true },
+            presence = rememberPresence(user.id, UserPresence.served(user.isOnline, null)),
             imageUrl = user.avatar,
         )
         Column(Modifier.weight(1f)) {
