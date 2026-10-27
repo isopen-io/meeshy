@@ -83,11 +83,8 @@ internal fun ComposerInputCapsule(
     val reduceMotion = LocalReduceMotion.current
     val border = ComposerFocusBorderPolicy.resolve(focused)
     val shape = RoundedCornerShape(MeeshyRadius.xlPlus)
-    val textStyle = TextStyle(
-        fontSize = 16.sp.boundedScale(),
-        lineHeight = 21.sp.boundedScale(),
-        color = MeeshyTheme.tokens.textPrimary,
-    )
+    val textStyle = TextStyle(fontSize = 16.sp, lineHeight = 21.sp, color = MeeshyTheme.tokens.textPrimary)
+    val placeholderStyle = textStyle.copy(fontSize = 16.sp.boundedScale(), lineHeight = 21.sp.boundedScale())
     val scale by animateFloatAsState(
         targetValue = if (focused && !reduceMotion) 1.02f else 1f,
         animationSpec = spring(dampingRatio = 0.55f, stiffness = MeeshyMotion.stiffnessForResponse(0.35f)),
@@ -163,7 +160,7 @@ internal fun ComposerInputCapsule(
                     if (value.text.isEmpty()) {
                         Text(
                             text = stringResource(R.string.chat_message_placeholder),
-                            style = textStyle,
+                            style = placeholderStyle,
                             color = MeeshyTheme.tokens.textMuted,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
