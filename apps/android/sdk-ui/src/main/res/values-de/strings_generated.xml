@@ -113,6 +113,18 @@
     <string name="retouch_text_align_center">ZENTRIERT</string>
     <string name="retouch_text_align_left">LINKS</string>
     <string name="retouch_text_align_right">RECHTS</string>
+    <string name="retouch_text_background">Texthintergrund</string>
+    <string name="retouch_text_bg_amber">Bernstein</string>
+    <string name="retouch_text_bg_black">Schwarz</string>
+    <string name="retouch_text_bg_black65" formatted="false">Schwarz 65%</string>
+    <string name="retouch_text_bg_glass">Glas</string>
+    <string name="retouch_text_bg_green">Grün</string>
+    <string name="retouch_text_bg_indigo">Indigo</string>
+    <string name="retouch_text_bg_indigo65" formatted="false">Indigo 65%</string>
+    <string name="retouch_text_bg_pink">Rosa</string>
+    <string name="retouch_text_bg_red">Rot</string>
+    <string name="retouch_text_bg_white">Weiß</string>
+    <string name="retouch_text_bg_white65" formatted="false">Weiß 65%</string>
     <string name="retouch_text_color">Textfarbe</string>
     <string name="retouch_text_style_bold">FETT</string>
     <string name="retouch_text_style_classic">KLASSISCH</string>

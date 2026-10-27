@@ -85,6 +85,9 @@ public fun ComposerRetouchScreen(
     val writing = ComposerEditTool.TEXT in state.activeTools && state.openFamily == null
     val previewCrop = if (cropping) null else state.crop
 
+    val glass by produceState<Bitmap?>(null, preview, text.fingerprint) {
+        value = withContext(paintContext) { RetouchGlassPainter.panes(preview, text.texts) }
+    }
     val previewLook = if (cropping) state.look.withoutFrame else state.look
 
     LaunchedEffect(previewLook, previewCrop, face) {
@@ -140,7 +143,7 @@ public fun ComposerRetouchScreen(
         BoxWithConstraints(Modifier.fillMaxSize()) {
             Image(preview.asImageBitmap(), contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
             val display = with(LocalDensity.current) { ComposerLookCanvas.displayRect(maxWidth.toPx(), maxHeight.toPx(), preview.width, preview.height) }
-            if (!cropping) RetouchTextLayer(board = text, display = display, interactive = writing && !finishing, newId = newTextId, onBoard = { text = it })
+            if (!cropping) RetouchTextLayer(board = text, display = display, interactive = writing && !finishing, newId = newTextId, onBoard = { text = it }, glass = glass)
             if (cropping) {
                 RetouchCropBrackets(
                     crop = state.crop,
