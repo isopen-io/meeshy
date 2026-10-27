@@ -41,7 +41,7 @@ public class OutgoingMediaSanitizer @Inject constructor(
             ImageSourceFormat.PNG -> verified(item, ImageMetadataScrubber::png) ?: asJpeg(item)
             ImageSourceFormat.WEBP -> verified(item, ImageMetadataScrubber::webp) ?: asJpeg(item)
             ImageSourceFormat.GIF -> verified(item, ImageMetadataScrubber::gif)
-            ImageSourceFormat.HEIC -> if (isClearlyNotAnImage(item.bytes)) item else asJpeg(item)
+            ImageSourceFormat.HEIC -> if (isClearlyNotAnImage(item)) item else asJpeg(item)
             ImageSourceFormat.UNKNOWN -> if (mayBeAnImage(item)) asJpeg(item) else item
         }
         clean?.let { NetworkResult.Success(it) } ?: NetworkResult.Failure(ApiError(REFUSED_MESSAGE, code = REFUSED_CODE))
@@ -68,7 +68,7 @@ public class OutgoingMediaSanitizer @Inject constructor(
 
     private fun verifiedJpeg(item: MediaUploadItem): MediaUploadItem? =
         ImageMetadataScrubber.jpeg(item.bytes)
-            ?.takeUnless { ImageMetadataScrubber.jpegCarriesMetadata(it) }
+            ?.takeIf { ImageMetadataScrubber.isStable(it, ImageMetadataScrubber::jpeg) && !ImageMetadataScrubber.jpegCarriesMetadata(it) }
             ?.let { item.withBytes(it) }
 
     /** Le ré-encodage de dernier recours : pixels debout, aucune métadonnée. `null` si l'image ne se décode pas. */
@@ -102,15 +102,18 @@ public class OutgoingMediaSanitizer @Inject constructor(
         if (isBlank()) "image.jpg" else substringBeforeLast('.', this) + ".jpg"
 
     /**
-     * Une boîte `ftyp` est une vidéo ou un son SEULEMENT si sa marque principale l'est ET qu'aucune marque compatible
-     * ne dit « image » (HEIC, HEIF, AVIF). Dans le doute — marque inconnue comprise — c'est une image.
+     * Une boîte `ftyp` est une vidéo ou un son SEULEMENT si sa marque principale l'est — ou que l'appelant la déclare
+     * `video/…` ou `audio/…` — ET qu'aucune marque compatible ne dit « image » (HEIC, HEIF, AVIF). Dans le doute —
+     * marque inconnue d'un fichier qui ne se déclare ni vidéo ni son — c'est une image.
      */
-    private fun isClearlyNotAnImage(bytes: ByteArray): Boolean {
+    private fun isClearlyNotAnImage(item: MediaUploadItem): Boolean {
+        val bytes = item.bytes
         if (bytes.size < 16) return false
         val size = ByteBuffer.wrap(bytes, 0, 4).int.toLong().and(0xFFFFFFFFL).coerceIn(16L, bytes.size.toLong()).toInt()
         val major = String(bytes, 8, 4, Charsets.ISO_8859_1)
         val compatible = (16 until size - 3 step 4).map { String(bytes, it, 4, Charsets.ISO_8859_1) }
-        return major in MEDIA_BRANDS && (compatible + major).none { it in HEIF_BRANDS }
+        val declaredMedia = item.mimeType.startsWith("video/", ignoreCase = true) || item.mimeType.startsWith("audio/", ignoreCase = true)
+        return (major in MEDIA_BRANDS || declaredMedia) && (compatible + major).none { it in HEIF_BRANDS }
     }
 
     internal companion object {

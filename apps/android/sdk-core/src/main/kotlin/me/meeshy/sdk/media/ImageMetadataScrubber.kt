@@ -7,14 +7,21 @@ import java.nio.ByteOrder
 /**
  * **Le retrait du lieu d'une photo, SANS la ré-encoder** (#13450 ; miroir de `OutgoingImageLocation` d'iOS #12905).
  *
- * Les pixels ne bougent pas : on réécrit les conteneurs. JPEG — EXIF reconstruit depuis une liste blanche
- * ([ExifPrivacyRewriter]), XMP, IPTC, commentaires, vignettes MPF et octets après la fin d'image retirés. PNG —
+ * Les pixels ne bougent pas : on réécrit les conteneurs. JPEG — liste BLANCHE de segments : ceux du décodage, l'EXIF
+ * reconstruit depuis une liste blanche ([ExifPrivacyRewriter]), l'en-tête JFIF sans sa vignette, le profil couleur
+ * `ICC_PROFILE` et l'APP14 `Adobe` ; tout le reste tombe (XMP, IPTC, commentaires, MPF, JFXX, FlashPix, APPn de
+ * fabricant) ainsi que les octets après la fin d'image. PNG —
  * `eXIf` et blocs texte (dont l'XMP) retirés. WebP — `EXIF` et `XMP ` retirés, drapeaux du `VP8X` baissés.
  * Chaque méthode rend `null` quand le conteneur est illisible : l'appelant ne laisse alors RIEN partir tel quel.
  */
 internal object ImageMetadataScrubber {
     private const val FF = 0xFF
     private val EXIF_HEADER = "Exif\u0000\u0000".toByteArray(Charsets.ISO_8859_1)
+    private val JFIF_HEADER = "JFIF\u0000".toByteArray(Charsets.ISO_8859_1)
+    private val ICC_HEADER = "ICC_PROFILE\u0000".toByteArray(Charsets.ISO_8859_1)
+    private val ADOBE_HEADER = "Adobe".toByteArray(Charsets.ISO_8859_1)
+    private const val JFIF_WITHOUT_THUMBNAIL = 14
+    private val DECODING_MARKERS = (0xC0..0xCF).toSet() - 0xC8 + setOf(0xDA, 0xDB, 0xDC, 0xDD, 0xDE, 0xDF)
     private val PNG_SIGNATURE = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A)
     private val PNG_KEPT = setOf(
         "IHDR", "PLTE", "IDAT", "IEND", "tRNS", "gAMA", "cHRM", "sRGB", "iCCP", "sBIT", "pHYs", "bKGD", "acTL", "fcTL", "fdAT",
@@ -64,6 +71,12 @@ internal object ImageMetadataScrubber {
                         out.write((body.size + 2) shr 8); out.write((body.size + 2) and 0xFF)
                         out.write(body)
                     }
+                marker == 0xE0 && payload.startsWith(JFIF_HEADER) && payload.size >= JFIF_WITHOUT_THUMBNAIL - 2 -> {
+                    out.write(FF); out.write(0xE0)
+                    out.write(0); out.write(JFIF_WITHOUT_THUMBNAIL + 2)
+                    out.write(payload, 0, JFIF_WITHOUT_THUMBNAIL - 2)
+                    out.write(0); out.write(0)
+                }
                 keepsSegment(marker, payload) -> out.write(raw)
             }
         }
@@ -73,11 +86,12 @@ internal object ImageMetadataScrubber {
         return out.toByteArray()
     }
 
+    /** Liste BLANCHE : ce que le décodage lit, le profil couleur et l'APP14 Adobe. L'APP0 JFIF est réécrit à part. */
     private fun keepsSegment(marker: Int, payload: ByteArray): Boolean = when (marker) {
-        0xE1, 0xED, 0xFE, 0xEF -> false
-        in 0xE3..0xEC -> false
-        0xE2 -> !payload.startsWith("MPF\u0000".toByteArray(Charsets.ISO_8859_1))
-        else -> true
+        0xE2 -> payload.startsWith(ICC_HEADER)
+        0xEE -> payload.startsWith(ADOBE_HEADER)
+        in DECODING_MARKERS -> true
+        else -> marker == 0x01 || marker in 0xD0..0xD7
     }
 
     /**
