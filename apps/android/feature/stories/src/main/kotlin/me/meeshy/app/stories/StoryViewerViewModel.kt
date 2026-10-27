@@ -545,6 +545,7 @@ class StoryViewerViewModel @Inject constructor(
             authorAvatarUrl = playback.currentGroup?.avatarUrl,
             groupCount = playback.groups.size,
             authorUserId = playback.currentGroup?.userId,
+            authorPresence = playback.currentGroup?.authorPresence?.takeUnless { playback.currentGroup?.userId == sessionRepository.currentUserId },
         )
     }
 
@@ -646,6 +647,7 @@ class StoryViewerViewModel @Inject constructor(
             authorName = username,
             slides = stories.map { it.toSlideView(avatarColor, prefs) },
             avatarUrl = resolveServedImageUrl(avatarURL, config.apiBaseUrl),
+            authorPresence = authorPresence,
         )
     }
 

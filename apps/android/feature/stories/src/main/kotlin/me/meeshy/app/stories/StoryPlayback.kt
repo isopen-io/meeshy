@@ -1,6 +1,7 @@
 package me.meeshy.app.stories
 
 import androidx.compose.runtime.Immutable
+import me.meeshy.sdk.model.UserPresence
 
 /** One author's slides as projected into the viewer. Pure data. */
 @Immutable
@@ -9,6 +10,8 @@ data class StoryGroupSlides(
     val authorName: String,
     val slides: List<StorySlideView>,
     val avatarUrl: String? = null,
+    /** Présence que la charge a servie pour l'auteur (`null` = rien servi) : repli de la carte unique. */
+    val authorPresence: UserPresence? = null,
 )
 
 /**

@@ -8,6 +8,7 @@ import me.meeshy.sdk.model.StoryDrawingStroke
 import me.meeshy.sdk.model.StoryKeyframe
 import me.meeshy.sdk.model.StorySlideDuration
 import me.meeshy.sdk.model.StorySourceWindowMs
+import me.meeshy.sdk.model.UserPresence
 import me.meeshy.sdk.model.scene.ResolvedKeyframeTransform
 import me.meeshy.sdk.model.scene.StoryBackgroundObjectTransform
 import me.meeshy.sdk.model.scene.StoryClipTransitionResolver
@@ -280,6 +281,8 @@ data class StoryViewerUiState(
     val groupCount: Int = 1,
     /** Identifiant de l'auteur du groupe courant : cible du tap sur son identité (profil). */
     val authorUserId: String? = null,
+    /** Présence servie de l'auteur courant (jamais la sienne) : repli de la carte unique pour le point de l'en-tête. */
+    val authorPresence: UserPresence? = null,
 ) {
     val hasNextGroup: Boolean get() = groupIndex < groupCount - 1
     val hasPreviousGroup: Boolean get() = groupIndex > 0

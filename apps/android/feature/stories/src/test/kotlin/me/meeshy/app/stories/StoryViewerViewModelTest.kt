@@ -659,6 +659,30 @@ class StoryViewerViewModelTest {
         assertThat(vm.state.value.isOwnStory).isFalse()
     }
 
+    @Test
+    fun `the header carries the author's served presence, never one's own`() = runTest {
+        every { session.currentUser } returns MutableStateFlow<MeeshyUser?>(null)
+        every { session.currentUserId } returns "a"
+        val online = { post: ApiPost -> post.copy(author = post.author?.copy(isOnline = true, lastActiveAt = isoAgo(0))) }
+        coEvery { storyRepository.list(any(), any()) } returns NetworkResult.Success(twoAuthors().map(online))
+        coEvery { storyRepository.markViewed(any()) } returns NetworkResult.Success(Unit)
+        val handle = SavedStateHandle(mapOf(StoryViewerViewModel.USER_ID_ARG to "a"))
+        val vm = StoryViewerViewModel(storyRepository, postRepository, session, socialSocket, config, reportRepository, dwellClock, InMemoryPrivacyPreferencesStore(), handle)
+
+        assertThat(vm.state.value.authorPresence).isNull()
+
+        vm.advance()
+
+        assertThat(vm.state.value.authorPresence?.isOnline).isTrue()
+    }
+
+    @Test
+    fun `an author served without presence gives the header nothing to fabricate`() = runTest {
+        val vm = viewModel(startUserId = "b", posts = twoAuthors())
+
+        assertThat(vm.state.value.authorPresence).isNull()
+    }
+
     private fun imagePost(id: String, authorId: String, hoursAgo: Long, imageUrl: String) =
         storyPost(id, authorId, hoursAgo).copy(
             media = listOf(ApiPostMedia(id = "m-$id", fileUrl = imageUrl)),

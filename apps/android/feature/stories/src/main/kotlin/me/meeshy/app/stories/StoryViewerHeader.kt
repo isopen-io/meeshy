@@ -26,6 +26,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.stories.R
+import me.meeshy.sdk.model.UserPresence
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.rememberPresence
 import me.meeshy.ui.format.RelativeTimeFormat
@@ -51,6 +52,7 @@ internal fun StoryAuthorIdentity(
     avatarUrl: String?,
     accentHex: String,
     authorUserId: String?,
+    authorPresence: UserPresence?,
     createdAtMillis: Long?,
     repostAttribution: StoryRepostAttribution?,
     modifier: Modifier = Modifier,
@@ -68,7 +70,7 @@ internal fun StoryAuthorIdentity(
             size = HEADER_AVATAR_SIZE,
             containerColor = hexColor(accentHex),
             imageUrl = avatarUrl,
-            presence = rememberPresence(authorUserId),
+            presence = rememberPresence(authorUserId, authorPresence),
         )
         Column(modifier = Modifier.padding(start = MeeshySpacing.sm)) {
             Row(verticalAlignment = Alignment.CenterVertically) {

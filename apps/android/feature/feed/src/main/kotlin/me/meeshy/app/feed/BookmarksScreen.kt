@@ -56,6 +56,7 @@ import coil.compose.AsyncImage
 import me.meeshy.feature.feed.R
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.MeeshySkeletonBox
+import me.meeshy.ui.component.rememberPresence
 import me.meeshy.ui.component.chrome.MeeshyBackground
 import me.meeshy.ui.component.chrome.MeeshyGlassSurface
 import me.meeshy.ui.theme.MeeshyPalette
@@ -195,6 +196,7 @@ private fun SavedPostCard(
                     name = post.authorName ?: unknownAuthor,
                     size = 40.dp,
                     imageUrl = post.authorAvatarUrl,
+                    presence = rememberPresence(post.authorId),
                     modifier = profileTap,
                 )
                 Spacer(Modifier.width(MeeshySpacing.md))
