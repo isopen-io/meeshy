@@ -13,7 +13,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
-/** Une photo retouchée garde la date, le lieu et l'appareil de la prise, debout et aux dimensions du rendu (#12606). */
+/** Une photo retouchée garde la date et l'appareil de la prise, jamais son lieu, debout et aux dimensions du rendu (#12606, #11247). */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -32,6 +32,8 @@ class RetouchExifTest {
                 setAttribute(ExifInterface.TAG_DATETIME_ORIGINAL, "2026:10:24 10:42:00")
                 setAttribute(ExifInterface.TAG_GPS_LATITUDE, "48/1,51/1,0/1")
                 setAttribute(ExifInterface.TAG_GPS_LATITUDE_REF, "N")
+                setAttribute(ExifInterface.TAG_GPS_LONGITUDE, "2/1,21/1,0/1")
+                setAttribute(ExifInterface.TAG_GPS_LONGITUDE_REF, "E")
                 setAttribute(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_ROTATE_90.toString())
                 saveAttributes()
             }
@@ -44,13 +46,27 @@ class RetouchExifTest {
     private fun exif(bytes: ByteArray) = ExifInterface(ByteArrayInputStream(bytes))
 
     @Test
-    fun `le rendu garde l appareil, la date et le lieu de la prise`() {
+    fun `le rendu garde l appareil et la date de la prise`() {
         val out = exif(RetouchExif.jpeg(bitmap(20, 40), like = take()))
         assertThat(out.getAttribute(ExifInterface.TAG_MAKE)).isEqualTo("Samsung")
         assertThat(out.getAttribute(ExifInterface.TAG_MODEL)).isEqualTo("SM-G950F")
         assertThat(out.getAttribute(ExifInterface.TAG_DATETIME_ORIGINAL)).isEqualTo("2026:10:24 10:42:00")
-        assertThat(out.getAttribute(ExifInterface.TAG_GPS_LATITUDE_REF)).isEqualTo("N")
-        assertThat(out.getAttribute(ExifInterface.TAG_GPS_LATITUDE)).isNotNull()
+    }
+
+    @Test
+    fun `le lieu de la prise ne part jamais avec la photo retouchee (iOS retire le GPS par defaut)`() {
+        val take = take()
+        assertThat(exif(take).getLatLong(FloatArray(2))).isTrue()
+        val out = exif(RetouchExif.jpeg(bitmap(20, 40), like = take))
+        assertThat(out.getAttribute(ExifInterface.TAG_GPS_LATITUDE)).isNull()
+        assertThat(out.getAttribute(ExifInterface.TAG_GPS_LATITUDE_REF)).isNull()
+        assertThat(out.getLatLong(FloatArray(2))).isFalse()
+    }
+
+    @Test
+    fun `la vignette de la prise non retouchee ne voyage pas`() {
+        val out = exif(RetouchExif.jpeg(bitmap(20, 40), like = take()))
+        assertThat(out.hasThumbnail()).isFalse()
     }
 
     @Test
