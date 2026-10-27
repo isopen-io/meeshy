@@ -30,6 +30,7 @@ public enum class OutboxKind {
     RESPOND_FRIEND_REQUEST,
     REPORT_ATTACHMENT_STATUS,
     UPDATE_AUDIO_SETTINGS,
+    CREATE_POST,
 }
 
 /** Lifecycle of an outbox row; a succeeded mutation is deleted, never flagged. */
@@ -72,6 +73,7 @@ public object OutboxLanes {
     public const val FRIEND: String = "friend"
     public const val PIN: String = "pin"
     public const val MEDIA_STATUS: String = "mediaStatus"
+    public const val POST: String = "post"
 }
 
 /**
@@ -140,6 +142,7 @@ public object OutboxLaneMap {
         -> OutboxLaneAssignment.Shared(OutboxLanes.SOCIAL)
 
         OutboxKind.REPORT_ATTACHMENT_STATUS -> OutboxLaneAssignment.Shared(OutboxLanes.MEDIA_STATUS)
+        OutboxKind.CREATE_POST -> OutboxLaneAssignment.Shared(OutboxLanes.POST)
     }
 
     /**

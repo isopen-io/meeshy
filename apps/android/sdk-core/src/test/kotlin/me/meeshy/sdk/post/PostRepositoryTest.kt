@@ -852,6 +852,26 @@ class PostRepositoryTest {
         assertThat(stored).isFalse()
     }
 
+    // --- A post the outbox just created (#13417) joins the feed at once. ---
+
+    @Test
+    fun adoptPublished_putsTheAuthorsNewPostAtTheHeadOfTheFeed() = runTest {
+        val repo = seed(ApiPost(id = "p1", content = "older"))
+
+        repo.adoptPublished(ApiPost(id = "p2", content = "mine"))
+
+        assertThat(repo.feedCacheSnapshot?.map { it.id }).containsExactly("p2", "p1").inOrder()
+    }
+
+    @Test
+    fun adoptPublished_leavesAPostTheEchoAlreadyBroughtAlone() = runTest {
+        val repo = seed(ApiPost(id = "p1", content = "from the echo"))
+
+        repo.adoptPublished(ApiPost(id = "p1", content = "from the response"))
+
+        assertThat(repo.feedCacheSnapshot?.map { it.content }).containsExactly("from the echo")
+    }
+
     // --- Realtime post edit push (applyPostUpdate): the author edited the post and the
     //     gateway broadcast the whole new (unpersonalized) post. ---
 

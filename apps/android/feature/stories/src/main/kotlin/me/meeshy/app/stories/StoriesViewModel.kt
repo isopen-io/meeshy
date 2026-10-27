@@ -19,6 +19,7 @@ import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.SocialSocketManager
 import me.meeshy.sdk.story.FailedStoryPublish
 import me.meeshy.sdk.story.PendingStoryPublish
+import me.meeshy.sdk.publication.PublicationOutbox
 import me.meeshy.sdk.story.StoryRepository
 import me.meeshy.sdk.story.toStoryGroups
 import javax.inject.Inject
@@ -43,6 +44,7 @@ class StoriesViewModel @Inject constructor(
     private val config: MeeshyConfig,
     private val workManager: WorkManager,
     private val socialSocket: SocialSocketManager,
+    private val publications: PublicationOutbox,
     private val coverMemo: StoryCoverMemo = StoryCoverMemo(),
 ) : ViewModel() {
 
@@ -183,9 +185,12 @@ class StoriesViewModel @Inject constructor(
         }
     }
 
-    /** Permanently discards a failed publish the user no longer wants to retry. */
+    /**
+     * Permanently discards a failed publish the user no longer wants to retry — with the media
+     * bytes the device kept for it (#13417), which only this explicit gesture removes.
+     */
     fun discardPublish(cmid: String) {
-        viewModelScope.launch { storyRepository.discardPublish(cmid) }
+        viewModelScope.launch { publications.discard(cmid) }
     }
 
     /** Pull-to-refresh / retry. Background SWR keeps the visible tray; a failure just leaves the skeleton. */

@@ -16,6 +16,7 @@ import me.meeshy.sdk.media.MediaUploadQueue
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.story.InMemoryStoryComposerDraftStore
+import me.meeshy.sdk.story.StoryDraftConfirmation
 import me.meeshy.sdk.story.StoryRepository
 import org.junit.After
 import org.junit.Before
@@ -41,6 +42,7 @@ class StoryComposerUndoRedoTest {
             mockk<WorkManager>(relaxed = true),
             InMemoryStoryComposerDraftStore(),
             mockk<MediaBlobStore>(relaxed = true),
+            mockk<StoryDraftConfirmation>(relaxed = true),
         )
     }
 

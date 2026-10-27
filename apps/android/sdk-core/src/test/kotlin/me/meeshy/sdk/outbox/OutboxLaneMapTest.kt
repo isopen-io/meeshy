@@ -142,4 +142,12 @@ class OutboxLaneMapTest {
             assertThat(lane).isNotEmpty()
         }
     }
+
+    @Test
+    fun `a post publication drains on its own lane, never behind a story or a like`() {
+        assertThat(OutboxLaneMap.assignmentFor(OutboxKind.CREATE_POST))
+            .isEqualTo(OutboxLaneAssignment.Shared(OutboxLanes.POST))
+        assertThat(OutboxLaneMap.sharedDrainLanes).contains(OutboxLanes.POST)
+        assertThat(OutboxLocalTargets.isRouteAddressed(OutboxKind.CREATE_POST)).isFalse()
+    }
 }

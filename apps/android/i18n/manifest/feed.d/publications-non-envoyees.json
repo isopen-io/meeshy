@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:feed": {
+      "resDir": "feature/feed/src/main/res",
+      "entries": [
+        {
+          "androidName": "feed_notice_publish_queued",
+          "status": "android-only"
+        },
+        {
+          "androidName": "feed_unsent_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "feed_unsent_count",
+          "status": "android-only"
+        },
+        {
+          "androidName": "feed_unsent_open",
+          "status": "android-only"
+        },
+        {
+          "androidName": "feed_unsent_sending",
+          "status": "android-only"
+        },
+        {
+          "androidName": "feed_unsent_failed",
+          "status": "android-only"
+        },
+        {
+          "androidName": "feed_unsent_retry",
+          "status": "android-only"
+        },
+        {
+          "androidName": "feed_unsent_reopen",
+          "status": "android-only"
+        },
+        {
+          "androidName": "feed_unsent_delete",
+          "status": "android-only"
+        },
+        {
+          "androidName": "feed_unsent_delete_confirm_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "feed_unsent_delete_confirm_body",
+          "status": "android-only"
+        },
+        {
+          "androidName": "feed_unsent_cancel",
+          "status": "android-only"
+        },
+        {
+          "androidName": "feed_unsent_kind_post",
+          "status": "android-only"
+        },
+        {
+          "androidName": "feed_unsent_kind_reel",
+          "status": "android-only"
+        },
+        {
+          "androidName": "feed_unsent_kind_story",
+          "status": "android-only"
+        },
+        {
+          "androidName": "feed_unsent_media_count",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

@@ -18,6 +18,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -159,14 +160,20 @@ import java.io.File
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FeedComposerSheet(
-    onPublish: (FeedPostPublishRequest) -> Unit,
+    onPublish: (FeedPostPublishRequest, FeedComposerDraft) -> Unit,
     onDismiss: () -> Unit,
     onUploadMedia: suspend (List<MediaUploadItem>) -> NetworkResult<List<UploadedMedia>>,
     onMediaError: (String) -> Unit,
     initialDraft: FeedComposerDraft = FeedComposerDraft(),
+    onDraftChange: (FeedComposerDraft) -> Unit = {},
+    onQueueMedia: (suspend (MediaUploadItem) -> String)? = null,
+    onRemoveMedia: (String) -> Unit = {},
 ) {
     var draft by remember { mutableStateOf(initialDraft) }
-    var attachedMedia by remember { mutableStateOf<List<UploadedMedia>>(emptyList()) }
+    var attachedMedia by remember { mutableStateOf(initialDraft.media) }
+    // Autosave (#13417): every change reaches the durable draft, so a closed sheet or a killed
+    // app reopens on what the author wrote.
+    LaunchedEffect(draft) { onDraftChange(draft) }
     var isUploadingMedia by remember { mutableStateOf(false) }
     var showLanguagePicker by remember { mutableStateOf(false) }
     val context = LocalContext.current
@@ -178,7 +185,7 @@ fun FeedComposerSheet(
     // directly-built voice-recording MediaUploadItem) converges on: upload, then fold the
     // result into both the pure draft and the richer display-only previews. Extracted from
     // dispatchPicked (refactor while extending, not duplicating).
-    suspend fun uploadAndAttach(items: List<MediaUploadItem>) {
+    suspend fun uploadAndAttach(items: List<MediaUploadItem>, previews: List<String?> = emptyList()) {
         if (items.isEmpty()) return
         isUploadingMedia = true
         when (val result = onUploadMedia(items)) {
@@ -189,7 +196,20 @@ fun FeedComposerSheet(
                     draft = draft.withMedia(result.data)
                     attachedMedia = attachedMedia + result.data
                 }
-            is NetworkResult.Failure -> onMediaError(result.error.message ?: mediaUnusableMessage)
+            is NetworkResult.Failure -> {
+                // Offline, refused, or a server fault: the media stays on the device (#13417) and
+                // a placeholder carries its upload cmid until the outbox uploads it.
+                val queue = onQueueMedia
+                if (queue == null) {
+                    onMediaError(result.error.message ?: mediaUnusableMessage)
+                } else {
+                    val pending = items.mapIndexed { index, item ->
+                        FeedPendingMedia.placeholder(queue(item), item, previews.getOrNull(index))
+                    }
+                    draft = draft.withMedia(pending)
+                    attachedMedia = attachedMedia + pending
+                }
+            }
         }
         isUploadingMedia = false
     }
@@ -202,10 +222,10 @@ fun FeedComposerSheet(
             return
         }
         scope.launch {
-            val items = withContext(Dispatchers.IO) {
-                uris.take(remaining).mapNotNull { context.contentResolver.readMediaUploadItem(it) }
+            val picked = withContext(Dispatchers.IO) {
+                uris.take(remaining).mapNotNull { uri -> context.contentResolver.readMediaUploadItem(uri)?.let { it to uri.toString() } }
             }
-            uploadAndAttach(items)
+            uploadAndAttach(picked.map { it.first }, picked.map { it.second })
         }
     }
 
@@ -323,6 +343,7 @@ fun FeedComposerSheet(
     fun removeMedia(id: String) {
         draft = draft.withoutMedia(id)
         attachedMedia = attachedMedia.filterNot { it.id == id }
+        onRemoveMedia(id)
     }
 
     val locationUnavailableMessage = stringResource(R.string.feed_composer_location_unavailable)
@@ -345,7 +366,7 @@ fun FeedComposerSheet(
             FeedComposerHeader(
                 canPublish = draft.canPublish && !isUploadingMedia && !voice.session.isRecording,
                 onClose = onDismiss,
-                onPublish = { draft.publishRequest()?.let(onPublish) },
+                onPublish = { draft.publishRequest()?.let { request -> onPublish(request, draft) } },
             )
 
             ComposerLanguagePill(

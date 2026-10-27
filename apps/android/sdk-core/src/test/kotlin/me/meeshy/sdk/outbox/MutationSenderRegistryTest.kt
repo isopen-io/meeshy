@@ -158,4 +158,37 @@ class MutationSenderRegistryTest {
         assertThat(secondPass.sumOf { it.delivered }).isEqualTo(1)
         assertThat(message.sent.single().payload).isEqualTo("""{"attachmentIds":["media-1"]}""")
     }
+
+    @Test
+    fun `a delivered upload id is grafted by the write back of the dependent's own kind only`() = withOutbox { outbox ->
+        val upload = RecordingHandler(result = SendResult.SuccessWithId("media-1"))
+        val story = RecordingHandler(payloadGraft = { _, _, _ -> """{"rewrittenAs":"story"}""" })
+        val post = RecordingHandler(
+            payloadGraft = { payload, placeholder, realId -> payload.replace(placeholder, realId) },
+        )
+        val registry = MutationSenderRegistry(
+            mapOf(
+                OutboxKind.PUBLISH_STORY to story,
+                OutboxKind.UPLOAD_MEDIA to upload,
+                OutboxKind.CREATE_POST to post,
+            ),
+        )
+        outbox.enqueue(mutation(OutboxKind.UPLOAD_MEDIA, OutboxLanes.MEDIA, "up", cmid = "up-1"))
+        outbox.enqueue(
+            mutation(
+                OutboxKind.CREATE_POST,
+                OutboxLanes.POST,
+                "post-1",
+                cmid = "post-1",
+                dependsOn = setOf("up-1"),
+                payload = """{"mediaIds":["up-1"],"location":{"latitude":1.0,"longitude":2.0}}""",
+            ),
+        )
+
+        registry.drainAll(outbox)
+        registry.drainAll(outbox)
+
+        assertThat(post.sent.single().payload)
+            .isEqualTo("""{"mediaIds":["media-1"],"location":{"latitude":1.0,"longitude":2.0}}""")
+    }
 }
