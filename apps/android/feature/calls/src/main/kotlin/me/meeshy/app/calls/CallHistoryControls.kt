@@ -7,8 +7,10 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -16,10 +18,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -30,9 +31,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -43,6 +46,9 @@ import androidx.compose.foundation.text.KeyboardOptions
 import me.meeshy.feature.calls.R
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
+import me.meeshy.ui.theme.MeeshyControlSize
+import me.meeshy.ui.theme.MeeshyFontSize
+import me.meeshy.ui.theme.MeeshyOpacity
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -76,7 +82,6 @@ internal fun CallHistorySearchField(query: String, onChange: (String) -> Unit, m
 }
 
 /** « Tous · Manqués · Vidéo » et, à droite, « Tout effacer » tant que le journal a des lignes. */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun CallHistoryFilterRow(
     missedOnly: Boolean,
@@ -98,29 +103,29 @@ internal fun CallHistoryFilterRow(
             horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            FilterChip(
+            CallFilterChip(
+                label = stringResource(R.string.call_history_filter_all),
                 selected = !missedOnly,
                 onClick = {
                     haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                     onMissed(false)
                 },
-                label = { Text(stringResource(R.string.call_history_filter_all)) },
             )
-            FilterChip(
+            CallFilterChip(
+                label = stringResource(R.string.call_history_filter_missed),
                 selected = missedOnly,
                 onClick = {
                     haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                     onMissed(true)
                 },
-                label = { Text(stringResource(R.string.call_history_filter_missed)) },
             )
-            FilterChip(
+            CallFilterChip(
+                label = stringResource(R.string.call_journal_filter_video),
                 selected = videoOnly,
                 onClick = {
                     haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                     onVideo(!videoOnly)
                 },
-                label = { Text(stringResource(R.string.call_journal_filter_video)) },
             )
         }
         Crossfade(targetState = canClear, label = "calls-clear-all") { shown ->
@@ -137,6 +142,39 @@ internal fun CallHistoryFilterRow(
                 }
             }
         }
+    }
+}
+
+/**
+ * La capsule de filtre d'iOS (`ContactsFilterChip`, `hitTarget: true`) : texte 13 semi-gras, 14 dp de marge,
+ * pleine en indigo quand elle est choisie, cerclée sinon, cible de 44 dp autour d'une capsule compacte.
+ * La puce Material (16 dp de marge, texte 14) faisait déborder « Vidéo » sous « Tout effacer » à 360 dp (#13379).
+ */
+@Composable
+private fun CallFilterChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    val capsule = RoundedCornerShape(percent = 50)
+    Box(
+        modifier = Modifier
+            .heightIn(min = MeeshyControlSize.tapTarget)
+            .selectable(selected = selected, onClick = onClick, role = Role.Tab),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = label,
+            color = if (selected) Color.White else MeeshyPalette.Indigo500,
+            fontSize = MeeshyFontSize.subhead,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            softWrap = false,
+            modifier = Modifier
+                .background(if (selected) MeeshyPalette.Indigo500 else Color.Transparent, capsule)
+                .border(
+                    width = 1.dp,
+                    color = if (selected) Color.Transparent else MeeshyPalette.Indigo900.copy(alpha = MeeshyOpacity.medium),
+                    shape = capsule,
+                )
+                .padding(horizontal = MeeshySpacing.mdPlus, vertical = MeeshySpacing.xsPlus),
+        )
     }
 }
 
