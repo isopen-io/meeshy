@@ -8,6 +8,8 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.navigationBars
@@ -29,7 +31,10 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
@@ -170,48 +175,81 @@ internal fun SelectionBar(
     bottomClearance: Dp = selectionBarBottomClearance(),
 ) {
     ComposerGlassPlate(modifier = modifier.padding(bottom = bottomClearance)) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.xs),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
         ) {
-            TextButton(onClick = onCancel) {
-                Text(stringResource(R.string.chat_delete_confirm_cancel), color = accentColor)
+            SelectionCountLine(count)
+            SelectionActionRow(count, offer, accentColor, onCancel, onDelete, onCopy, onStar, onForward)
+        }
+    }
+}
+
+/**
+ * Le compteur, SUR UNE LIGNE au-dessus des actions (#13385) : entre Supprimer et Copier il ne gardait que ~36 dp sur
+ * un 360 dp et se cassait lettre par lettre, la barre montant de 70 à 300 px. La ligne est TOUJOURS posée (un espace
+ * insécable sous 2 éléments) : la barre garde la même hauteur, quel que soit le nombre de messages cochés.
+ */
+@Composable
+private fun SelectionCountLine(count: Int) {
+    Text(
+        text = if (count >= 2) stringResource(R.string.chat_selection_count, count) else NO_BREAK_SPACE,
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+        maxLines = 1,
+        softWrap = false,
+        overflow = TextOverflow.Ellipsis,
+        textAlign = TextAlign.Center,
+        modifier = Modifier.fillMaxWidth().testTag(SELECTION_COUNT_TAG),
+    )
+}
+
+private const val NO_BREAK_SPACE = "\u00A0"
+internal const val SELECTION_COUNT_TAG = "selection-count"
+
+@Composable
+private fun SelectionActionRow(
+    count: Int,
+    offer: SelectionOffer,
+    accentColor: Color,
+    onCancel: () -> Unit,
+    onDelete: () -> Unit,
+    onCopy: () -> Unit,
+    onStar: () -> Unit,
+    onForward: () -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+    ) {
+        TextButton(onClick = onCancel) {
+            Text(stringResource(R.string.chat_delete_confirm_cancel), color = accentColor, maxLines = 1, softWrap = false)
+        }
+        if (offer.offersDelete) {
+            IconButton(onClick = onDelete, enabled = count > 0) {
+                Icon(
+                    MeeshyIcons.Delete,
+                    contentDescription = stringResource(R.string.chat_action_delete_for_me),
+                    tint = MeeshyPalette.Error,
+                )
             }
-            if (offer.offersDelete) {
-                IconButton(onClick = onDelete, enabled = count > 0) {
-                    Icon(
-                        MeeshyIcons.Delete,
-                        contentDescription = stringResource(R.string.chat_action_delete_for_me),
-                        tint = MeeshyPalette.Error,
-                    )
-                }
+        }
+        Spacer(Modifier.weight(1f))
+        if (offer.copy) {
+            IconButton(onClick = onCopy, enabled = count > 0) {
+                Icon(MeeshyIcons.Copy, contentDescription = stringResource(R.string.chat_action_copy), tint = accentColor)
             }
-            Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                if (count >= 2) {
-                    Text(
-                        stringResource(R.string.chat_selection_count, count),
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                    )
-                }
+        }
+        if (offer.star) {
+            IconButton(onClick = onStar, enabled = count > 0) {
+                Icon(MeeshyIcons.Star, contentDescription = stringResource(R.string.chat_action_star), tint = accentColor)
             }
-            if (offer.copy) {
-                IconButton(onClick = onCopy, enabled = count > 0) {
-                    Icon(MeeshyIcons.Copy, contentDescription = stringResource(R.string.chat_action_copy), tint = accentColor)
-                }
-            }
-            if (offer.star) {
-                IconButton(onClick = onStar, enabled = count > 0) {
-                    Icon(MeeshyIcons.Star, contentDescription = stringResource(R.string.chat_action_star), tint = accentColor)
-                }
-            }
-            if (offer.forward) {
-                IconButton(onClick = onForward, enabled = count > 0) {
-                    Icon(MeeshyIcons.ForwardMessage, contentDescription = stringResource(R.string.chat_action_forward), tint = accentColor)
-                }
+        }
+        if (offer.forward) {
+            IconButton(onClick = onForward, enabled = count > 0) {
+                Icon(MeeshyIcons.ForwardMessage, contentDescription = stringResource(R.string.chat_action_forward), tint = accentColor)
             }
         }
     }
