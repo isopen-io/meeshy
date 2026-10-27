@@ -7,7 +7,11 @@ package me.meeshy.sdk.model.composer
  */
 public object PendingRetouchRule {
     public fun opens(item: PendingAttachment): Boolean =
-        item.type in RETOUCHABLE && item.isReady && !item.localPath.isNullOrBlank()
+        item.type in RETOUCHABLE && item.isReady && !item.localPath.isNullOrBlank() && !isGif(item)
+
+    /** Un GIF ne s'offre pas à la retouche : la scène le rendrait en image fixe (iOS `offersRetouche`). */
+    private fun isGif(item: PendingAttachment): Boolean =
+        item.type == PendingAttachmentType.IMAGE && item.mimeType.equals("image/gif", ignoreCase = true)
 
     private val RETOUCHABLE = setOf(PendingAttachmentType.IMAGE, PendingAttachmentType.VIDEO)
 }
