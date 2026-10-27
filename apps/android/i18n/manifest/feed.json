@@ -785,8 +785,10 @@
           "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "bookmarks.filter.posts",
           "androidName": "user_posts_title",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
           "catalog": "app",

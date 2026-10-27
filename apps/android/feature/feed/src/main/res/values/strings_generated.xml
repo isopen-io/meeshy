@@ -131,4 +131,5 @@
     <string name="status_feed_friends">Friends</string>
     <string name="user_posts_back">Back</string>
     <string name="user_posts_empty">No posts yet</string>
+    <string name="user_posts_title">Posts</string>
 </resources>

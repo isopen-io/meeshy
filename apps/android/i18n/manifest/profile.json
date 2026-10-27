@@ -393,8 +393,10 @@
           "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "profile.posts.stat.posts",
           "androidName": "profile_view_posts",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
           "catalog": "app",
