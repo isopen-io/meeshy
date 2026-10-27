@@ -19,6 +19,7 @@ import me.meeshy.sdk.cache.KeyedJsonCache
 import me.meeshy.sdk.cache.store.FakeClock
 import me.meeshy.sdk.cache.store.inMemoryDatabase
 import me.meeshy.sdk.model.ApiResponse
+import me.meeshy.sdk.model.game.ShowcaseVisibility
 import me.meeshy.sdk.net.api.GameApi
 import org.junit.After
 import org.junit.Before
@@ -138,5 +139,22 @@ class GamePagesRepositoryTest {
         val offline = repository().setLeagueConsent(requestId = "req-12345678", consent = true)
 
         assertThat(offline).isEqualTo(GameWriteOutcome.Refused(code = "NETWORK", offline = true))
+    }
+
+    @Test fun `fermer les visibilites met les quatre facettes a moi seul et rend celles du serveur`() = runTest {
+        coEvery { api.setVisibility(any()) } returns ApiResponse(
+            success = true,
+            data = buildJsonObject {
+                put("visibility", buildJsonObject { put("showcase", "me"); put("rank", "me"); put("treasury", "me"); put("atlas", "me") })
+            },
+        )
+
+        val closed = repository().closeVisibility(requestId = "req-12345678")
+
+        assertThat((closed as GameWriteOutcome.Done).value.visibility.showcase).isEqualTo(ShowcaseVisibility.Me)
+        val me = ShowcaseVisibility.Me
+        coVerify {
+            api.setVisibility(match { it.requestId == "req-12345678" && it.showcase == me && it.rank == me && it.treasury == me && it.atlas == me })
+        }
     }
 }

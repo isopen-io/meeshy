@@ -53,8 +53,10 @@ class RouteManifestRatchetTest {
          * 258 : moins `GET /me/game/league/week`, `GET /me/game/league/friends`, `GET /me/game/privacy`,
          * `POST /me/game/league/consent` et `PUT /me/game/privacy` (#13326 : les pages Joute et Réglages du jeu),
          * que porte `GameApi.kt`.
+         * 257 : moins `PUT /me/game/visibility` (#13326 : « Jeu masqué » ferme les quatre visibilités à « moi seul »,
+         * comme iOS `closeEverything`), que porte `GameApi.setVisibility`.
          */
-        const val TO_PORT_CEILING = 258
+        const val TO_PORT_CEILING = 257
         val VERB_STATUSES = setOf("hors-perimetre-mobile", "ops-only", "a-porter", "implementee-par-url-serveur")
     }
 

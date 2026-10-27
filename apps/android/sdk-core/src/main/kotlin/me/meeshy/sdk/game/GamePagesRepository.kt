@@ -23,6 +23,9 @@ import me.meeshy.sdk.model.game.LeagueConsentRequest
 import me.meeshy.sdk.model.game.LeagueConsentResponse
 import me.meeshy.sdk.model.game.LeagueFriendsResponse
 import me.meeshy.sdk.model.game.LeagueWeekResponse
+import me.meeshy.sdk.model.game.ShowcaseVisibility
+import me.meeshy.sdk.model.game.ShowcaseVisibilityRequest
+import me.meeshy.sdk.model.game.ShowcaseVisibilityResponse
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.GameApi
@@ -40,8 +43,8 @@ sealed interface GameWriteOutcome<out T> {
 
 /**
  * Les lectures des pages du jeu — port de `GameWave2Model` (iOS), partie lecture : le classement de MA semaine, la
- * ligue Amis et les réglages du jeu, plus les deux écritures qui ne touchent à aucun solde (le consentement à la ligue
- * publique, « Jeu masqué »).
+ * ligue Amis et les réglages du jeu, plus les trois écritures qui ne touchent à aucun solde (le consentement à la ligue
+ * publique, « Jeu masqué », et la fermeture des quatre visibilités qui l'accompagne).
  *
  * **Cache-first, gardé BRUT.** Chaque lecture sert le disque d'abord (`Fresh`, `Stale`, `Syncing`), `Empty` seulement à
  * froid ; un échec réseau garde ce qui est peint. Le cache garde la charge du serveur clé pour clé, et une charge
@@ -92,6 +95,14 @@ class GamePagesRepository(
         friendsLeagueOptOut: Boolean? = null,
     ): GameWriteOutcome<GamePrivacyResponse> =
         write(GameWave2Parser::privacy) { api.setPrivacy(GamePrivacyRequest(requestId, gameHidden, friendsLeagueOptOut)) }
+
+    /** Les quatre visibilités à « moi seul » — ce que « Jeu masqué » ferme et que réafficher ne rouvre pas. */
+    suspend fun closeVisibility(requestId: String): GameWriteOutcome<ShowcaseVisibilityResponse> {
+        val me = ShowcaseVisibility.Me
+        return write(GameWave2Parser::showcaseVisibility) {
+            api.setVisibility(ShowcaseVisibilityRequest(requestId, showcase = me, rank = me, treasury = me, atlas = me))
+        }
+    }
 
     private suspend fun <T : Any> write(parse: (String?) -> T?, send: suspend () -> ApiResponse<JsonElement>): GameWriteOutcome<T> =
         when (val result = apiCall(send)) {

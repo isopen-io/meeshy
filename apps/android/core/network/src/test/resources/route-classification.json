@@ -484,7 +484,6 @@
     "PUT /api/v1/me/game/league/pseudonym",
     "PUT /api/v1/me/game/photo-moments/invitations",
     "PUT /api/v1/me/game/showcase/order",
-    "PUT /api/v1/me/game/visibility",
     "PUT /api/v1/me/preferences/application",
     "PUT /api/v1/me/preferences/audio",
     "PUT /api/v1/me/preferences/document",

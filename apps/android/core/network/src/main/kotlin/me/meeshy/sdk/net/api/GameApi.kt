@@ -4,6 +4,7 @@ import kotlinx.serialization.json.JsonElement
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.game.GamePrivacyRequest
 import me.meeshy.sdk.model.game.LeagueConsentRequest
+import me.meeshy.sdk.model.game.ShowcaseVisibilityRequest
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.POST
@@ -32,4 +33,7 @@ interface GameApi {
 
     @PUT("me/game/privacy")
     suspend fun setPrivacy(@Body body: GamePrivacyRequest): ApiResponse<JsonElement>
+
+    @PUT("me/game/visibility")
+    suspend fun setVisibility(@Body body: ShowcaseVisibilityRequest): ApiResponse<JsonElement>
 }

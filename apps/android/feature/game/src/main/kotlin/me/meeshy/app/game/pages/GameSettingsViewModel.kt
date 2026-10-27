@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -20,6 +21,9 @@ import me.meeshy.sdk.game.GameDevicePrefsStore
 import me.meeshy.sdk.game.GamePagesRepository
 import me.meeshy.sdk.game.GameWriteOutcome
 import me.meeshy.sdk.model.game.GameSettingsResponse
+import me.meeshy.sdk.model.game.GameVisibility
+import me.meeshy.sdk.model.game.LeagueAccess
+import me.meeshy.sdk.model.game.ShowcaseVisibility
 import me.meeshy.sdk.model.game.pages.GameDevicePrefs
 
 /** Le refus d'un interrupteur : la coupure, ou le code de la passerelle (mis en phrase par l'écran). */
@@ -46,6 +50,11 @@ data class GameSettingsUiState(
  * « Jeu masqué » et l'opposition à la ligue Amis sont dits au serveur, qui reste maître. Masquer ne tient que si le
  * serveur l'a pris — « masqué » ici alors que les autres voient encore serait une fausse promesse — ; réafficher ne se
  * bloque JAMAIS côté appareil. Hors ligne, masquer est suspendu pour la même raison.
+ *
+ * Une fois le masquage pris, le reste se ferme comme sur iOS (`closeEverything`) : les quatre visibilités passent à
+ * « moi seul » — réafficher ne les rouvrira pas — et l'accord à la ligue publique est retiré. Ne sachant pas, l'écran
+ * ferme : une visibilité ou un accès à la ligue inconnus se ferment aussi. Un refus se dit sans défaire le masquage,
+ * que le serveur applique déjà.
  *
  * L'identifiant d'idempotence naît UNE fois par intention et ne se renouvelle qu'après un succès. Aucun solde n'est
  * touché par ces interrupteurs.
@@ -103,6 +112,7 @@ class GameSettingsViewModel @Inject constructor(
                         friendsLeagueOptOut = outcome.value.friendsLeagueOptOut,
                     )
                     prefsStore.set(friendsLeagueOptOut = outcome.value.friendsLeagueOptOut)
+                    if (hidden && outcome.value.gameHidden) closeEverything()
                     refreshProgress()
                 }
                 is GameWriteOutcome.Refused -> {
@@ -133,6 +143,44 @@ class GameSettingsViewModel @Inject constructor(
         }
     }
 
+    private suspend fun closeEverything() {
+        if (served.value?.visibility != CLOSED) closeVisibility()
+        if (leagueMayBeOpen()) withdrawLeagueConsent()
+    }
+
+    private suspend fun closeVisibility() {
+        val requestId = intents.getOrPut(CLOSE_VISIBILITY) { UUID.randomUUID().toString() }
+        when (val outcome = pages.closeVisibility(requestId)) {
+            is GameWriteOutcome.Done -> {
+                intents.remove(CLOSE_VISIBILITY)
+                served.value = served.value?.copy(visibility = outcome.value.visibility)
+            }
+            is GameWriteOutcome.Refused -> hideRefusal.value = refusal(outcome)
+        }
+    }
+
+    private suspend fun withdrawLeagueConsent() {
+        val requestId = intents.getOrPut(WITHDRAW_CONSENT) { UUID.randomUUID().toString() }
+        when (val outcome = pages.setLeagueConsent(requestId, consent = false)) {
+            is GameWriteOutcome.Done -> {
+                intents.remove(WITHDRAW_CONSENT)
+                pages.forgetLeagueWeek()
+            }
+            is GameWriteOutcome.Refused -> hideRefusal.value = refusal(outcome)
+        }
+    }
+
+    private suspend fun leagueMayBeOpen(): Boolean {
+        val access = try {
+            progress.progress().first().valueOrNull?.game?.league?.access
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            null
+        }
+        return access == null || access == LeagueAccess.Open
+    }
+
     private suspend fun refreshProgress() {
         try {
             progress.refresh()
@@ -148,5 +196,8 @@ class GameSettingsViewModel @Inject constructor(
 
     private companion object {
         const val STOP_TIMEOUT_MILLIS = 5_000L
+        const val CLOSE_VISIBILITY = "close-visibility"
+        const val WITHDRAW_CONSENT = "consent:false"
+        val CLOSED = ShowcaseVisibility.Me.let { me -> GameVisibility(me, me, me, me) }
     }
 }
