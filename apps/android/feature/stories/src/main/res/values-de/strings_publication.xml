@@ -4,5 +4,6 @@
     <string name="stories_audience_pick_empty">Noch keine Kontakte</string>
     <string name="stories_audience_pick_title_mention">Erwähnen</string>
     <string name="stories_audience_mention_add">Jemanden erwähnen</string>
+    <string name="stories_audience_mention_remove">Diese Erwähnung entfernen</string>
     <string name="stories_media_undescribed">Einige Medien haben noch keine Beschreibung</string>
 </resources>

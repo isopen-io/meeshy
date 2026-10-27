@@ -4,5 +4,6 @@
     <string name="stories_audience_pick_empty">لا توجد جهات اتصال بعد</string>
     <string name="stories_audience_pick_title_mention">إشارة</string>
     <string name="stories_audience_mention_add">الإشارة إلى شخص</string>
+    <string name="stories_audience_mention_remove">إزالة هذه الإشارة</string>
     <string name="stories_media_undescribed">بعض الوسائط ليس لها وصف بعد</string>
 </resources>
