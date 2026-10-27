@@ -79,7 +79,7 @@ class VoicePlaybackSessionControllerTest {
             context.getString(me.meeshy.app.R.string.voice_playback_pause),
             context.getString(me.meeshy.app.R.string.voice_playback_forward),
         ).inOrder()
-        assertThat(notification.visibility).isEqualTo(Notification.VISIBILITY_PUBLIC)
+        assertThat(notification.visibility).isEqualTo(Notification.VISIBILITY_PRIVATE)
     }
 
     @Test
@@ -133,17 +133,41 @@ class VoicePlaybackSessionControllerTest {
     }
 
     @Test
-    fun `a protected voice note tells only its author`() {
+    fun `a protected voice note carries no identifying metadata at all`() {
         val bridge = VoicePlaybackSessionBridge(clock = { 0L })
         val foreground = RecordingForeground()
         started(bridge, foreground)
 
-        bridge.publish(card.copy(isProtected = true), VoicePlaybackTransportState(positionMs = 0, isPlaying = true))
+        bridge.publish(
+            card.copy(isProtected = true, artworkUrl = "https://cdn.meeshy.me/nour.jpg"),
+            VoicePlaybackTransportState(positionMs = 0, isPlaying = true),
+        )
 
         val notification = foreground.entered.single()
-        assertThat(notification.extras.getCharSequence(Notification.EXTRA_TITLE)).isEqualTo("Nour")
+        assertThat(notification.extras.getCharSequence(Notification.EXTRA_TITLE))
+            .isEqualTo(context.getString(me.meeshy.app.R.string.voice_playback_voice_message))
         assertThat(notification.extras.getCharSequence(Notification.EXTRA_TEXT))
             .isEqualTo(context.getString(me.meeshy.app.R.string.voice_playback_protected))
+        assertThat(notification.getLargeIcon()).isNull()
+    }
+
+    @Test
+    fun `the lock screen shows a generic public version, never the name, the conversation or the avatar`() {
+        val bridge = VoicePlaybackSessionBridge(clock = { 0L })
+        val foreground = RecordingForeground()
+        started(bridge, foreground)
+
+        bridge.publish(card, VoicePlaybackTransportState(positionMs = 0, isPlaying = true))
+
+        val notification = foreground.entered.single()
+        assertThat(notification.visibility).isEqualTo(Notification.VISIBILITY_PRIVATE)
+        val public = notification.publicVersion!!
+        assertThat(public.extras.getCharSequence(Notification.EXTRA_TITLE))
+            .isEqualTo(context.getString(me.meeshy.app.R.string.voice_playback_voice_message))
+        assertThat(public.extras.getCharSequence(Notification.EXTRA_TEXT)).isNull()
+        assertThat(public.getLargeIcon()).isNull()
+        val channel = context.getSystemService(NotificationManager::class.java).getNotificationChannel("meeshy_voice_playback")
+        assertThat(channel.lockscreenVisibility).isEqualTo(Notification.VISIBILITY_PRIVATE)
     }
 
     @Test

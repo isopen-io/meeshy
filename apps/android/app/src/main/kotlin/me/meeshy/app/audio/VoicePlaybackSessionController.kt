@@ -17,6 +17,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import me.meeshy.app.MainActivity
 import me.meeshy.app.R
+import me.meeshy.sdk.model.playback.VoicePlaybackCard
 import me.meeshy.sdk.model.playback.VoicePlaybackCardRules
 import me.meeshy.sdk.model.playback.VoicePlaybackCommand
 import me.meeshy.sdk.model.playback.VoicePlaybackTransportState
@@ -103,7 +104,7 @@ internal class VoicePlaybackSessionController(
             foreground.leave()
             return
         }
-        val url = snapshot.card.artworkUrl
+        val url = shown(snapshot).artworkUrl
         val cached = url?.let(artwork::get)
         session.setMetadata(metadata(snapshot, cached))
         session.setPlaybackState(playbackState(snapshot))
@@ -127,8 +128,19 @@ internal class VoicePlaybackSessionController(
         }
     }
 
+    /**
+     * Un vocal protégé (éphémère, à vue unique, flouté, chiffré) ne livre AUCUNE métadonnée
+     * identifiante à la session : ni auteur, ni conversation, ni date, ni avatar.
+     */
+    private fun shown(snapshot: VoicePlaybackSnapshot): VoicePlaybackCard =
+        if (snapshot.card.isProtected) {
+            snapshot.card.copy(sender = null, conversation = null, sentAtLabel = null, artworkUrl = null)
+        } else {
+            snapshot.card
+        }
+
     private fun labels(snapshot: VoicePlaybackSnapshot) = VoicePlaybackCardRules.labels(
-        card = snapshot.card,
+        card = shown(snapshot),
         voiceMessage = context.getString(R.string.voice_playback_voice_message),
         protectedMessage = context.getString(R.string.voice_playback_protected),
     )
@@ -193,7 +205,8 @@ internal class VoicePlaybackSessionController(
             .setCategory(Notification.CATEGORY_TRANSPORT)
             .setOngoing(playing)
             .setShowWhen(false)
-            .setVisibility(Notification.VISIBILITY_PUBLIC)
+            .setVisibility(Notification.VISIBILITY_PRIVATE)
+            .setPublicVersion(publicVersion(open, playing))
             .setContentIntent(open)
             .setDeleteIntent(servicePending(ACTION_STOP, REQUEST_STOP))
             .setStyle(
@@ -214,6 +227,18 @@ internal class VoicePlaybackSessionController(
         return builder.build()
     }
 
+    /** Ce que l'écran verrouillé montre : « Message vocal », sans nom, conversation ni avatar. */
+    private fun publicVersion(open: PendingIntent, playing: Boolean): Notification =
+        Notification.Builder(context, CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.ic_media_play)
+            .setContentTitle(context.getString(R.string.voice_playback_voice_message))
+            .setCategory(Notification.CATEGORY_TRANSPORT)
+            .setOngoing(playing)
+            .setShowWhen(false)
+            .setVisibility(Notification.VISIBILITY_PUBLIC)
+            .setContentIntent(open)
+            .build()
+
     private fun action(action: String, icon: Int, label: Int, request: Int): Notification.Action =
         Notification.Action.Builder(Icon.createWithResource(context, icon), context.getString(label), servicePending(action, request)).build()
 
@@ -232,6 +257,7 @@ internal class VoicePlaybackSessionController(
             NotificationManager.IMPORTANCE_LOW,
         )
         channel.setShowBadge(false)
+        channel.lockscreenVisibility = Notification.VISIBILITY_PRIVATE
         manager.createNotificationChannel(channel)
     }
 
