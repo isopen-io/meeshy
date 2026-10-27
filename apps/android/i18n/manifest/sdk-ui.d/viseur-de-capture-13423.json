@@ -1,0 +1,98 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        {
+          "androidName": "capture_disarm",
+          "status": "android-only"
+        },
+        {
+          "androidName": "capture_flip",
+          "status": "android-only"
+        },
+        {
+          "androidName": "capture_flash_on",
+          "status": "android-only"
+        },
+        {
+          "androidName": "capture_flash_auto",
+          "status": "android-only"
+        },
+        {
+          "androidName": "capture_flash_off",
+          "status": "android-only"
+        },
+        {
+          "androidName": "capture_flash_intensity",
+          "status": "android-only"
+        },
+        {
+          "androidName": "capture_drop_segment",
+          "status": "android-only"
+        },
+        {
+          "androidName": "capture_validate",
+          "status": "android-only"
+        },
+        {
+          "androidName": "capture_recording",
+          "status": "android-only"
+        },
+        {
+          "androidName": "capture_hint_photo",
+          "status": "android-only"
+        },
+        {
+          "androidName": "capture_hint_holding",
+          "status": "android-only"
+        },
+        {
+          "androidName": "capture_hint_lock",
+          "status": "android-only"
+        },
+        {
+          "androidName": "capture_hint_locked",
+          "status": "android-only"
+        },
+        {
+          "androidName": "capture_discard_video",
+          "status": "android-only"
+        },
+        {
+          "androidName": "capture_discard_confirm",
+          "status": "android-only"
+        },
+        {
+          "androidName": "capture_discard_keep",
+          "status": "android-only"
+        },
+        {
+          "androidName": "capture_camera_unavailable",
+          "status": "android-only"
+        },
+        {
+          "androidName": "capture_take_lost",
+          "status": "android-only"
+        },
+        {
+          "androidName": "capture_zoom_reset",
+          "status": "android-only"
+        },
+        {
+          "androidName": "capture_shutter",
+          "status": "android-only"
+        },
+        {
+          "androidName": "capture_shutter_film",
+          "status": "android-only"
+        },
+        {
+          "androidName": "capture_segments",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

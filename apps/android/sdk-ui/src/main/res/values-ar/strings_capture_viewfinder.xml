@@ -22,11 +22,11 @@
     <string name="capture_shutter">التقاط صورة</string>
     <string name="capture_shutter_film">التصوير دون استخدام اليدين</string>
     <plurals name="capture_segments">
-        <item quantity="zero">%d مقطع</item>
+        <item quantity="zero">%1$d مقطع</item>
         <item quantity="one">مقطع واحد</item>
         <item quantity="two">مقطعان</item>
-        <item quantity="few">%d مقاطع</item>
-        <item quantity="many">%d مقطعًا</item>
-        <item quantity="other">%d مقطع</item>
+        <item quantity="few">%1$d مقاطع</item>
+        <item quantity="many">%1$d مقطعًا</item>
+        <item quantity="other">%1$d مقطع</item>
     </plurals>
 </resources>
