@@ -64,7 +64,6 @@
     "apps/ios/Meeshy/Features/Main/Services/CallFrames/CallFrameRenderer+Decor.swift::CallFrameRenderer.paintBorder": 91,
     "apps/ios/Meeshy/Features/Main/Services/CallFrames/CallFrameRenderer+Decor.swift::CallFrameRenderer.paintPattern": 145,
     "apps/ios/Meeshy/Features/Main/Services/CallFrames/CallFrameRenderer+Ornaments.swift::CallFrameRenderer.paintOrnament": 265,
-    "apps/ios/Meeshy/Features/Main/Services/CallManager+Teardown.swift::CallManager.endCallInternal": 189,
     "apps/ios/Meeshy/Features/Main/Services/CrashStackDumper.swift::CrashStackDumper.install": 159,
     "apps/ios/Meeshy/Features/Main/Services/NSEPendingMessageConsumer.swift::NSEPendingMessageConsumer.consumeAll": 91,
     "apps/ios/Meeshy/Features/Main/Services/OutboxDispatcher+Messages.swift::OutboxDispatcher.dispatchSendMessage": 217,
@@ -364,7 +363,7 @@
   "types": {
     "Meeshy::BubbleStandardLayout": 1663,
     "Meeshy::CallFrameRenderer": 2583,
-    "Meeshy::CallManager": 6375,
+    "Meeshy::CallManager": 6371,
     "Meeshy::CallView": 3317,
     "Meeshy::ComposerCaptureSession": 1638,
     "Meeshy::ConversationListView": 1748,

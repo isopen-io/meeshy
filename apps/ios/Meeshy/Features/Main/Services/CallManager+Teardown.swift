@@ -135,6 +135,55 @@ extension CallManager {
         ringbackPlayer.stop()
         ringbackPlayer.stopRingtone()
         if wasActive { ringbackPlayer.playEnded() }
+        cancelCallScopedWork()
+        remoteMedia = remoteMedia.applying(.qualityDegraded(false))
+        isSignalingDegraded = false
+        pendingRemoteOffer = nil
+        pendingIceCandidates = []
+        thermalMonitor.stopMonitoring()
+        // Snapshot analytics before state is torn down so the payload has access
+        // to callId, callDuration, callStartDate, etc.
+        emitCallAnalyticsIfNeeded(reason: reason, reports: reportsAnalytics)
+        resetPerCallState()
+        // C6 — l'appel se termine pendant que la fenêtre PiP flotte au-dessus
+        // d'une autre app. La pilule et la bulle se masquent toutes deux dès
+        // `.ended`, et le `fullScreenCover` exige `.fullScreen` : sans ça,
+        // l'utilisateur revient dans une app où l'appel a disparu sans motif.
+        // Posé AVANT `detachSystemPiP()` (qui remet `isSystemPiPActive` à faux)
+        // et avant `.ended` — `shouldPresentFullScreenCover` accepte encore
+        // l'état actif, puis reste vrai par `isEnded` jusqu'au reset `.idle`.
+        // La condition sur le PiP est ce qui évite d'imposer un modal plein
+        // écran à chaque raccrochage depuis la pilule, le flux le plus courant.
+        if CallPiPPolicy.shouldRestoreFullScreenBeforeTeardown(
+            isPiPActive: isSystemPiPActive,
+            currentMode: displayMode
+        ) {
+            displayMode = .fullScreen
+        }
+        detachSystemPiP()
+        CallQualitySummaryStore().persist(stats: lastKnownStats, callId: currentCallId,
+                                          duration: callDuration, remote: remoteUsername, reason: reason)
+        lastKnownStats = nil
+        CallQualityStatsFeed.shared.reset()
+        webRTCService.close()
+        deactivateAudioSession()
+        callState = .ended(reason: reason)
+        connectionQuality = .new
+        liveVideoQualityLevel = nil
+        degradedLinkTracker.reset()
+        isLinkQualityDegraded = false
+        activeCallUUID = nil
+        // Audit P2-iOS-1 — drop any pending "busy" incoming call. If a 2nd
+        // call arrived while this one was active and got immediately ended
+        // (.unanswered), the banner kept pointing at a callId that the
+        // gateway has already torn down — tapping it joined a phantom room.
+        pendingIncomingCall = nil
+        showCallWaitingBanner = false
+        scheduleEndedSettle()
+    }
+
+    /// Every task, timer and observer scoped to the call, in teardown order.
+    fileprivate func cancelCallScopedWork() {
         durationTask?.cancel()
         durationTask = nil
         reliabilityMonitorTask?.cancel()
@@ -150,11 +199,8 @@ extension CallManager {
         outgoingRingTimeoutTask = nil
         incomingRingTimeoutTask?.cancel()
         incomingRingTimeoutTask = nil
-        // Cancel le Task de setup outgoing (force-leave + ACK + media +
-        // listenForParticipantJoined). Sans ça, après endCallInternal, ce
-        // Task continuait à tourner et pouvait re-armer la connexion, faire
-        // des emit/setup sur un appel déjà clos, ou laisser des observables
-        // attachés.
+        // Le setup sortant (force-leave, ACK, média) ne doit pas réarmer un
+        // appel déjà clos.
         setupCallTask?.cancel()
         setupCallTask = nil
         turnRefreshTask?.cancel()
@@ -202,14 +248,10 @@ extension CallManager {
         voipFreshnessTask = nil
         analyticsSnapshotTask?.cancel()
         analyticsSnapshotTask = nil
-        remoteMedia = remoteMedia.applying(.qualityDegraded(false))
-        isSignalingDegraded = false
-        pendingRemoteOffer = nil
-        pendingIceCandidates = []
-        thermalMonitor.stopMonitoring()
-        // Snapshot analytics before state is torn down so the payload has access
-        // to callId, callDuration, callStartDate, etc.
-        emitCallAnalyticsIfNeeded(reason: reason, reports: reportsAnalytics)
+    }
+
+    /// The per-call UI and media state, reset after the analytics snapshot.
+    fileprivate func resetPerCallState() {
         hasLocalVideoTrack = false
         hasRemoteVideoTrack = false
         remoteTranscriptionActive = false
@@ -219,12 +261,9 @@ extension CallManager {
         callStartDate = nil
         reconnectAttempt = 0
         analytics.totalReconnects = 0
-        // Reset inconditionnel de l'état vidéo per-call. Avant, seul
-        // `resetEndedStateForNewCall` (fenêtre settle 1,5 s) le faisait : un
-        // appel démarré plus tard héritait d'`isRemoteVideoEnabled == false`
-        // (placeholder "Caméra désactivée" fantôme) et d'un FSM de survie
-        // vidéo potentiellement suspendu — violation du contrat documenté de
-        // `VideoSurvivalControlling.reset()`.
+        // Reset inconditionnel de l'état vidéo : sinon un appel démarré après la
+        // fenêtre de 1,5 s héritait d'un « Caméra désactivée » fantôme et d'une
+        // survie vidéo suspendue (contrat de `VideoSurvivalControlling.reset()`).
         remoteMedia = .initial
         screenShare.callEnded()
         recording.callEnded()
@@ -232,62 +271,19 @@ extension CallManager {
         isVideoSuspended = false
         isVideoSuspendedByCaptureInterruption = false
         isVideoSuspendedByHold = false
-        // Même rationale que le reset vidéo ci-dessus : `resetEndedStateForNewCall`
-        // ne reset la bulle QUE si le nouvel appel arrive dans la fenêtre de
-        // settle 1,5s (callState encore `.ended`). Le cas ordinaire — un appel
-        // qui démarre plus tard — passe par `callState == .idle`, où ce garde
-        // ne se déclenche jamais. Sans ce reset inconditionnel, la bulle
-        // réapparaît silencieusement à la position de l'appel PRÉCÉDENT.
+        // Idem pour la bulle : hors de la fenêtre de 1,5 s, elle réapparaissait
+        // à la position de l'appel PRÉCÉDENT.
         bubbleEdge = .trailing
         bubbleVerticalFraction = 0.08
-        // C6 — l'appel se termine pendant que la fenêtre PiP flotte au-dessus
-        // d'une autre app. La pilule et la bulle se masquent toutes deux dès
-        // `.ended`, et le `fullScreenCover` exige `.fullScreen` : sans ça,
-        // l'utilisateur revient dans une app où l'appel a disparu sans motif.
-        // Posé AVANT `detachSystemPiP()` (qui remet `isSystemPiPActive` à faux)
-        // et avant `.ended` — `shouldPresentFullScreenCover` accepte encore
-        // l'état actif, puis reste vrai par `isEnded` jusqu'au reset `.idle`.
-        // La condition sur le PiP est ce qui évite d'imposer un modal plein
-        // écran à chaque raccrochage depuis la pilule, le flux le plus courant.
-        if CallPiPPolicy.shouldRestoreFullScreenBeforeTeardown(
-            isPiPActive: isSystemPiPActive,
-            currentMode: displayMode
-        ) {
-            displayMode = .fullScreen
-        }
-        detachSystemPiP()
-        CallQualitySummaryStore().persist(stats: lastKnownStats, callId: currentCallId,
-                                          duration: callDuration, remote: remoteUsername, reason: reason)
-        lastKnownStats = nil
-        CallQualityStatsFeed.shared.reset()
-        webRTCService.close()
-        deactivateAudioSession()
-        callState = .ended(reason: reason)
-        connectionQuality = .new
-        liveVideoQualityLevel = nil
-        degradedLinkTracker.reset()
-        isLinkQualityDegraded = false
-        activeCallUUID = nil
-        // Audit P2-iOS-1 — drop any pending "busy" incoming call. If a 2nd
-        // call arrived while this one was active and got immediately ended
-        // (.unanswered), the banner kept pointing at a callId that the
-        // gateway has already torn down — tapping it joined a phantom room.
-        pendingIncomingCall = nil
-        showCallWaitingBanner = false
+    }
 
-        // L'UI se base sur `callState == .ended` pour afficher le panneau de
-        // fin d'appel ; on garde l'état visible 1.5s avant de reset à `.idle`
-        // pour laisser le user voir le motif. Si une nouvelle tentative
-        // d'appel arrive PENDANT ce délai, on accepte et on force-reset
-        // (cf. `forceResetIfEndedThenStart`/branches `case .ended` dans
-        // startCall et handleIncomingCallNotification). Le délai legacy de
-        // 3s + double-call entrant via VoIP push faisait que tout appel
-        // entrant ou sortant suivant un ended remote était rejeté avec
-        // "already in state ended(...)" pendant 3s — le user voyait le
-        // signal d'appel disparaître. 1.5s suffit pour le feedback UI.
-        // Audit P1-2 — stamp this settle window with a token. If a new call
-        // arrives within 1.5s, `resetEndedStateForNewCall` nils the token and
-        // we must NOT clobber its freshly-assigned identity.
+    /// Holds `.ended` on screen, then settles to `.idle` unless a new call came.
+    fileprivate func scheduleEndedSettle() {
+        // `.ended` reste visible 1,5 s (le panneau de fin montre le motif) puis
+        // repasse à `.idle`. Un nouvel appel pendant ce délai est accepté :
+        // `resetEndedStateForNewCall` annule le jeton (audit P1-2) et ce reset
+        // ne doit pas écraser l'identité du nouvel appel. L'ancien délai de 3 s
+        // rejetait tout appel suivant un raccroché distant.
         let token = UUID()
         settleToken = token
         // A retryable transient failure holds the ended screen LONGER so the user

@@ -3162,6 +3162,26 @@ final class EndCallInternalTeardownOrderTests: XCTestCase {
         return String(source[funcRange.lowerBound..<bodyEnd])
     }
 
+    /// #11522 — the teardown reads as named steps, called from `endCallInternal`
+    /// itself and in the order the single body used: call-scoped work stopped,
+    /// analytics snapshot, per-call state reset, WebRTC closed, then the settle.
+    func test_endCallInternal_runsItsTeardownStepsInOrder() throws {
+        let source = try callManagerSource()
+        guard let start = source.range(of: "func endCallInternal(reason: CallEndReason, reportsAnalytics: Bool = true) {"),
+              let end = source.range(of: "\n    }\n", range: start.upperBound..<source.endIndex) else {
+            return XCTFail("endCallInternal not found")
+        }
+        let body = String(source[start.upperBound..<end.lowerBound])
+        let steps = ["cancelCallScopedWork()", "emitCallAnalyticsIfNeeded(reason: reason, reports: reportsAnalytics)",
+                     "resetPerCallState()", "webRTCService.close()", "callState = .ended(reason: reason)", "scheduleEndedSettle()"]
+        let positions = steps.compactMap { body.range(of: $0)?.lowerBound }
+        XCTAssertEqual(positions.count, steps.count, "endCallInternal must call every teardown step itself")
+        XCTAssertEqual(positions, positions.sorted(), "the teardown steps must keep their order")
+        for step in ["fileprivate func cancelCallScopedWork() {", "fileprivate func resetPerCallState() {", "fileprivate func scheduleEndedSettle() {"] {
+            XCTAssertEqual(source.components(separatedBy: step).count - 1, 1, "\(step) must exist once")
+        }
+    }
+
     /// The TURN credential refresh task must be cancelled in `endCallInternal`.
     /// Without this, the scheduled refresh fires after teardown, re-registers
     /// stale ICE credentials, and logs confusing "TURN refreshed for call X"
@@ -6487,9 +6507,11 @@ final class CallManagerBubblePositionTests: XCTestCase {
     /// unconditionally, not only in the conditional settle-window path.
     func test_endCallInternal_resetsBubblePositionUnconditionally() throws {
         let source = try callManagerSource()
-        guard let body = DeclarationBodyScanner.body(containing: "func endCallInternal(reason: CallEndReason", in: source) else {
-            XCTFail("endCallInternal not found in the CallManager unit"); return
+        guard let caller = DeclarationBodyScanner.body(containing: "func endCallInternal(reason: CallEndReason", in: source),
+              let body = DeclarationBodyScanner.body(containing: "fileprivate func resetPerCallState()", in: source) else {
+            XCTFail("endCallInternal or resetPerCallState not found in the CallManager unit"); return
         }
+        XCTAssertTrue(caller.contains("resetPerCallState()"), "endCallInternal must reset the per-call state unconditionally")
         XCTAssertTrue(
             body.contains("bubbleEdge = .trailing"),
             "endCallInternal must unconditionally reset bubbleEdge to .trailing — otherwise a call started " +
