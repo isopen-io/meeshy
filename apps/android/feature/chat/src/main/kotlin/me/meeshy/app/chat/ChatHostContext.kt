@@ -234,7 +234,6 @@ internal class ChatHostActions(
     val onReplyThreadReplyTap: (String) -> Unit,
     val closeForward: () -> Unit,
     val onForwardQueryChange: (String) -> Unit,
-    val forwardTo: (String) -> Unit,
     /** The single share sheet (#13469): tick a recipient, caption, flame duration, then Send. */
     val toggleForwardRecipient: (String) -> Unit = {},
     val onForwardCaptionChange: (String) -> Unit = {},
@@ -343,7 +342,6 @@ internal fun ChatViewModel.hostActions(): ChatHostActions = ChatHostActions(
     onReplyThreadReplyTap = this::onReplyThreadReplyTap,
     closeForward = this::closeForward,
     onForwardQueryChange = this::onForwardQueryChange,
-    forwardTo = this::forwardTo,
     toggleForwardRecipient = this::toggleForwardRecipient,
     onForwardCaptionChange = this::onForwardCaptionChange,
     onForwardDurationChange = this::onForwardDurationChange,

@@ -721,9 +721,6 @@ class ChatViewModel @Inject constructor(
 
     fun closeForward() = forward.close()
 
-    /** Optimistically forward the source message into [targetConversationId]; one at a time. */
-    fun forwardTo(targetConversationId: String) = forward.forwardTo(targetConversationId)
-
     /** The single share sheet (#13469): tick or untick a recipient row. */
     fun toggleForwardRecipient(targetConversationId: String) = forward.toggleRecipient(targetConversationId)
 

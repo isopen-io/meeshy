@@ -103,7 +103,6 @@ class ChatHostsSmokeTest {
         onReplyThreadReplyTap = { _ -> },
         closeForward = { },
         onForwardQueryChange = { _ -> },
-        forwardTo = { _ -> },
     )
 
     private fun host(state: ChatUiState = ChatUiState(conversationTitle = "Équipe")) = ChatHostContext(
