@@ -5,7 +5,11 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
@@ -15,6 +19,7 @@ import androidx.compose.ui.res.stringResource
 import java.time.ZoneId
 import java.util.Locale
 import me.meeshy.app.chat.appearance.ConversationAppearanceSheet
+import me.meeshy.app.chat.export.CardExportSheet
 import me.meeshy.app.chat.mediahub.ConversationMediaHubSheet
 import me.meeshy.feature.chat.R
 import me.meeshy.sdk.model.selection.MessageSelectionHost
@@ -44,6 +49,7 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
     val bubbleFrames = host.bubbleFrames
     val gallery = state.imageViewer
     val localRoute = rememberLocalDetailRoute()
+    var exportMessageId by rememberSaveable { mutableStateOf<String?>(null) }
     if (gallery != null) {
         val relativeStrings = rememberRelativeTimeStrings()
         val galleryNow = remember(gallery) { System.currentTimeMillis() }
@@ -135,6 +141,7 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
             onHistory = { localRoute.open(MessageDetailRoute.History(actionTarget.messageId)) },
             onSentiment = { localRoute.open(MessageDetailRoute.Sentiment(actionTarget.messageId)) },
             onMap = { localRoute.open(MessageDetailRoute.Map(actionTarget.messageId)) },
+            onExportCard = { exportMessageId = actionTarget.messageId },
             onSelect = {
                 // Un lecteur sans interface de sélection (Résumé, Rivière) rend la main au Script.
                 host.readingMode?.let { reading ->
@@ -147,6 +154,12 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
             },
             canWrite = state.viewerMayWrite,
         )
+    }
+
+    exportMessageId?.let { id ->
+        state.messages.firstOrNull { it.messageId == id }?.let { target ->
+            CardExportSheet(bubble = target, conversationTitle = state.conversationTitle, onDismiss = { exportMessageId = null })
+        }
     }
 
     FileAttachmentDownloadOverlay(
@@ -411,7 +424,10 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
 
 /** Detail/selection entries the chat host can serve today; each joins once its fiche renderer exists. */
 private val HOSTED_DETAIL_ENTRIES: Set<MessageAction> =
-    setOf(MessageAction.Views, MessageAction.History, MessageAction.Sentiment, MessageAction.Map, MessageAction.Select)
+    setOf(
+        MessageAction.Views, MessageAction.History, MessageAction.Sentiment, MessageAction.Map, MessageAction.Select,
+        MessageAction.ExportCard,
+    )
 
 /**
  * Réciprocité des accusés, comme `MessageActionResolver` iOS : qui a coupé ses accusés de lecture
