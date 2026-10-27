@@ -192,7 +192,7 @@ final class LocationModelsTests: XCTestCase {
             .deletingLastPathComponent()  // Tests/
             .deletingLastPathComponent()  // packages/MeeshySDK
         let sourceURL = packageRoot
-            .appendingPathComponent("Sources/MeeshySDK/Networking/ClientInfoProvider.swift")
+            .appendingPathComponent("Sources/MeeshyCore/Networking/ClientInfoProvider.swift")
         let src = try String(contentsOf: sourceURL, encoding: .utf8)
 
         XCTAssertFalse(src.contains("import CoreLocation"), "ClientInfoProvider ne doit plus toucher CoreLocation.")
