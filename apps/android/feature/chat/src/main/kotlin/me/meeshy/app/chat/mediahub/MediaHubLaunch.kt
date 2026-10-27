@@ -5,6 +5,7 @@ import java.util.Locale
 import me.meeshy.app.chat.ChatLinkLaunch
 import me.meeshy.app.chat.chatLinkLaunchFor
 import me.meeshy.sdk.model.mediahub.MediaHubPayload
+import me.meeshy.sdk.model.mediahub.MediaHubRowExit
 
 /**
  * Ce que devient l'appui sur une rangée du hub qui n'ouvre pas la visionneuse. Une adresse vient d'un MESSAGE, donc
@@ -14,8 +15,20 @@ internal sealed interface MediaHubLaunch {
     /** Un lien ou un lieu : le chemin des liens du fil ([chatLinkLaunchFor] / `openChatLink`), mêmes gardes. */
     data class ChatLink(val url: String) : MediaHubLaunch
 
-    /** Une pièce servie par la passerelle elle-même, en https (http seulement si la passerelle configurée l'est). */
+    /**
+     * Un fichier servi par la passerelle elle-même (https ; http seulement si la passerelle configurée l'est). Il ne
+     * s'ouvre QUE par le circuit de téléchargement du fil (`FileAttachmentDownload`), jamais par une intention brute.
+     */
     data class GatewayFile(val url: String, val mimeType: String?) : MediaHubLaunch
+
+    /**
+ * Une vidéo de la passerelle : lue par le lecteur intégré de Meeshy, pas par l'application système. [shieldsCapture] :
+ * le porteur impose la couche sécurisée (#9574) — fenêtre exclue des captures, aucune copie dans le cache disque.
+ */
+    data class Video(val url: String, val shieldsCapture: Boolean) : MediaHubLaunch
+
+    /** Le portillon de sortie du porteur refuse : un contenu qui disparaît ne sort pas de Meeshy (#9573). */
+    data object Refused : MediaHubLaunch
 
     /** Rien : pièce scellée, schéma refusé, ou adresse hors de la passerelle. */
     data object Ignored : MediaHubLaunch
@@ -29,6 +42,7 @@ internal fun mediaHubLaunchFor(
     payload: MediaHubPayload,
     apiBaseUrl: String,
     resolveMedia: (String) -> String,
+    exit: MediaHubRowExit,
 ): MediaHubLaunch = when (payload) {
     is MediaHubPayload.Link -> if (isHubLink(payload.url)) MediaHubLaunch.ChatLink(payload.url) else MediaHubLaunch.Ignored
     is MediaHubPayload.Place -> {
@@ -38,7 +52,12 @@ internal fun mediaHubLaunchFor(
     is MediaHubPayload.Attachment -> {
         val piece = payload.attachment
         val url = if (piece.isEncrypted || hasForeignScheme(piece.url)) null else resolveMedia(piece.url)
-        if (url != null && isGatewayMedia(url, apiBaseUrl)) MediaHubLaunch.GatewayFile(url, piece.mimeType) else MediaHubLaunch.Ignored
+        when {
+            url == null || !isGatewayMedia(url, apiBaseUrl) -> MediaHubLaunch.Ignored
+            piece.isVideo -> MediaHubLaunch.Video(url, exit.shieldsCapture)
+            exit.mayLeave -> MediaHubLaunch.GatewayFile(url, piece.mimeType)
+            else -> MediaHubLaunch.Refused
+        }
     }
 }
 

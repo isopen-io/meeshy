@@ -9,7 +9,10 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -24,6 +27,7 @@ import me.meeshy.sdk.model.game.engagement.MeeshMintOutcome
 import me.meeshy.sdk.model.game.engagement.outcome
 import me.meeshy.sdk.model.game.GameRefusalLaw
 import me.meeshy.sdk.network.NetworkMonitor
+import me.meeshy.sdk.session.SessionRepository
 
 /** Les gestes du jeu qui touchent un solde. Un seul vol à la fois PAR geste : un double appui n'envoie qu'une requête. */
 enum class GameGesture { Reroll, Chest, Freeze, Relight, Mint, Claim, Seal, Prestige }
@@ -35,7 +39,13 @@ enum class GameGesture { Reroll, Chest, Freeze, Relight, Mint, Claim, Seal, Pres
 data class GameGestureFailure(val offline: Boolean, val code: String?)
 
 /** Ce que la passerelle a RENDU aux derniers gestes, tel quel. */
-private data class Results(val chestReward: DailyChest?, val celebration: MintCelebration?, val claimingStep: Int?, val prestigePassed: Int?)
+private data class Results(
+    val chestReward: DailyChest?,
+    val celebration: MintCelebration?,
+    val claimingStep: Int?,
+    val prestigePassed: Int?,
+    val accountTimezone: String?,
+)
 
 /** La pièce que la passerelle vient de frapper — le numéro et l'édition sont CEUX DE SA RÉPONSE. [key] rejoue la scène. */
 data class MintCelebration(val number: Int, val edition: MeeshEdition?, val key: Int)
@@ -58,6 +68,8 @@ data class GameGesturesUiState(
     /** La dernière frappe confirmée par la passerelle ; `null` tant qu'aucune ne l'a été sur cet écran. */
     val celebration: MintCelebration? = null,
     val failures: Map<GameGesture, GameGestureFailure> = emptyMap(),
+    /** Le fuseau du COMPTE, où la passerelle découpe le jour de jeu : jamais celui de l'appareil. */
+    val accountTimezone: String? = null,
     /** Le contenu du coffre TEL QUE LA PASSERELLE L'A RENDU — posé à la réponse, jamais deviné. */
     val chestReward: DailyChest? = null,
 )
@@ -84,6 +96,7 @@ class GameGesturesViewModel internal constructor(
     private val progress: EngagementProgressRepository,
     network: NetworkMonitor,
     private val ids: GameIntentIds,
+    accountTimezone: Flow<String?>,
 ) : ViewModel() {
 
     @Inject
@@ -91,7 +104,14 @@ class GameGesturesViewModel internal constructor(
         gestures: GameGestureRepository,
         progress: EngagementProgressRepository,
         network: NetworkMonitor,
-    ) : this(gestures, progress, network, GameIntentIds { UUID.randomUUID().toString() })
+        session: SessionRepository,
+    ) : this(
+        gestures,
+        progress,
+        network,
+        GameIntentIds { UUID.randomUUID().toString() },
+        session.currentUser.map { it?.timezone }.distinctUntilChanged(),
+    )
 
     private val inFlight = MutableStateFlow<Set<GameGesture>>(emptySet())
     private val rerollingMission = MutableStateFlow<String?>(null)
@@ -102,8 +122,8 @@ class GameGesturesViewModel internal constructor(
     private val prestigePassedFlow = MutableStateFlow<Int?>(null)
 
     val state: StateFlow<GameGesturesUiState> = combine(
-        network.isOnline, inFlight, rerollingMission, failures, combine(chestReward, celebrationFlow, claimingStepFlow, prestigePassedFlow, ::Results),
-    ) { online, busy, rerolling, failed, (reward, celebration, claiming, passed) ->
+        network.isOnline, inFlight, rerollingMission, failures, combine(chestReward, celebrationFlow, claimingStepFlow, prestigePassedFlow, accountTimezone, ::Results),
+    ) { online, busy, rerolling, failed, (reward, celebration, claiming, passed, timezone) ->
         GameGesturesUiState(
             online = online,
             rerollingMissionId = rerolling,
@@ -117,6 +137,7 @@ class GameGesturesViewModel internal constructor(
             prestigePassed = passed,
             celebration = celebration,
             failures = failed,
+            accountTimezone = timezone,
             chestReward = reward,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), GameGesturesUiState(online = network.isOnline.value))

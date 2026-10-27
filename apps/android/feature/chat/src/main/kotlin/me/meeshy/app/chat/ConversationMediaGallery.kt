@@ -31,6 +31,11 @@ public data class GalleryPage(
      * opened it, but never saved nor shared out of Meeshy.
      */
     val isProtected: Boolean = false,
+    /**
+     * Une pièce qui disparaît (vue unique, flou, flamme — #9574) : la visionneuse, fenêtre à part, s'exclut des
+     * captures et ne copie rien dans le cache disque d'images tant qu'elle la montre.
+     */
+    val shieldsCapture: Boolean = false,
 )
 
 /**
@@ -84,6 +89,9 @@ public data class ConversationGallery(
 
     /** Per page, whether the piece may leave Meeshy (save, share) — false for a protected one. */
     val exportable: List<Boolean> get() = pages.map { !it.isProtected }
+
+    /** Android ne protège qu'une fenêtre entière : une seule page qui disparaît ferme celle de la visionneuse. */
+    val shieldsCapture: Boolean get() = pages.any { it.shieldsCapture }
 
     /** True when the conversation carries no showable image — nothing to open. */
     val isEmpty: Boolean get() = pages.isEmpty()
@@ -146,6 +154,7 @@ public object ConversationMediaGallery {
                         createdAtIso = createdAtIso,
                         alt = it.alt,
                         isProtected = isProtected || !message.exitOffer.offers(MessageExit.SAVE),
+                        shieldsCapture = isProtected || message.exitOffer.capture.shieldsCapture(),
                     ),
                 )
             }

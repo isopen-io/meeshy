@@ -75,6 +75,7 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
             thumbnailUrls = gallery.thumbnailUrls,
             altTexts = gallery.altTexts,
             exportable = gallery.exportable,
+            secure = gallery.shieldsCapture,
             onImageSaved = { result ->
                 val message = if (result.isSuccess) savedMessage else saveFailedMessage
                 Toast.makeText(galleryContext, message, Toast.LENGTH_SHORT).show()
@@ -171,10 +172,10 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
             add(ConversationInfoEntry(MeeshyIcons.PhotoLibrary, stringResource(R.string.media_hub_title), openFrom { sheets.media = true }))
             // Moderator+ viewers of a group get the admin surfaces: the share-link creator
             // and the conversation-settings sheet (write-role / announcement / slow-mode).
+            if (host.navigation.mayInviteFriends) {
+                add(ConversationInfoEntry(MeeshyIcons.AddLink, stringResource(R.string.context_invite_friends), openFrom(host.navigation.onCreateShareLink)))
+            }
             if (state.slowModeExempt) {
-                if (state.isGroup) {
-                    add(ConversationInfoEntry(MeeshyIcons.AddLink, stringResource(R.string.context_invite_friends), openFrom(host.navigation.onCreateShareLink)))
-                }
                 add(ConversationInfoEntry(MeeshyIcons.Tune, stringResource(R.string.conversation_settings_title), openFrom { sheets.settings = true }))
             }
         }
@@ -235,10 +236,12 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
             conversationId = state.conversationId,
             accentColor = accentColor,
             isEndToEnd = state.isEndToEnd,
+            conversationTitle = state.conversationTitle,
             onGoToMessage = { messageId ->
                 sheets.media = false
                 actions.scrollToMessage(messageId)
             },
+            onOpenFile = { messageId, attachment -> actions.onHubFileOpen(messageId, attachment) },
             onDismiss = { sheets.media = false },
         )
     }

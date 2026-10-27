@@ -147,6 +147,10 @@ const enStudioChrome = {
   'story.studio.edit.saving': 'Saving…',
   'story.studio.edit.cancel': 'Discard changes',
   'story.studio.publish.as.storyAndReel': 'Publish story and reel',
+  'story.studio.unsent': 'Post not sent.',
+  'story.studio.unsent.retry': 'Retry',
+  'story.studio.unsent.discard': 'Delete',
+  'story.studio.volatile': 'This device can’t keep your media: don’t reload the page before publishing.',
 } satisfies StudioChromeCatalogSlice;
 
 export default enStudioChrome;

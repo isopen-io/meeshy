@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:game": {
+      "resDir": "feature/game/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "game.missions.prism_hour",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.photo.offer.start",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

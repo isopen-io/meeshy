@@ -38,6 +38,14 @@ public object GameRefusalLaw {
      */
     public fun refreshesAfter(code: String?): Boolean = !isOffline(code)
 
+    /**
+     * Un refus DÉFINITIF : la passerelle a répondu par un code de son contrat (un 409 d'état). L'intention est jugée ; la
+     * rejouer sous le même identifiant rendrait le même refus, alors qu'un nouvel essai, une fois l'écran relu, peut
+     * aboutir — l'identifiant se renouvelle. Une coupure, un délai ou un 5xx (code inconnu) ne jugent rien : l'écriture
+     * a pu être prise, l'identifiant est rejoué tel quel et la passerelle reconnaît la première.
+     */
+    public fun isDefinitive(code: String?): Boolean = GameErrorCode.fromWire(code) != null
+
     /** « Identifiant déjà servi à une AUTRE écriture » : le rejouer se heurterait au même refus. */
     public fun releasesId(code: String?): Boolean = GameErrorCode.fromWire(code) == GameErrorCode.RequestIdConflict
 }

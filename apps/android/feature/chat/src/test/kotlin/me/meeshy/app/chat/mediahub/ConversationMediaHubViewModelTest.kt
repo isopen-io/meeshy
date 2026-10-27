@@ -160,6 +160,27 @@ class ConversationMediaHubViewModelTest {
         val piece = vm.state.value.items.single().attachment!!
         assertThat(piece.url).isEqualTo("https://gate.meeshy.me/api/v1/attachments/file/2026/10/p.png")
         assertThat(piece.thumbnailUrl).isEqualTo("https://gate.meeshy.me/api/v1/attachments/file/2026/10/p_t.jpg")
-        assertThat(vm.launchFor(vm.state.value.items.single().payload)).isInstanceOf(MediaHubLaunch.GatewayFile::class.java)
+        assertThat(vm.launchFor(vm.state.value.items.single(), isEndToEnd = false)).isInstanceOf(MediaHubLaunch.GatewayFile::class.java)
+    }
+
+    @Test
+    fun `un porteur ephemere ne laisse pas sortir son fichier depuis le hub`() = runTest(dispatcher) {
+        val flame = ApiMessage(
+            id = "m8",
+            conversationId = "c1",
+            createdAt = "2026-10-01T10:08:00.000Z",
+            expiresAt = "2099-01-01T00:00:00.000Z",
+            ephemeralDuration = 30,
+            attachments = listOf(ApiMessageAttachment(id = "a8", mimeType = "image/png", fileUrl = "/api/v1/attachments/file/2026/10/f.png")),
+        )
+        val index = ConversationMediaHubIndex().apply { merge("c1", ConversationMediaKind.VISUAL, listOf(flame), complete = true) }
+        val vm = sut(mockk(), index)
+
+        vm.start("c1")
+        advanceUntilIdle()
+
+        val item = vm.state.value.items.single()
+        assertThat(vm.launchFor(item, isEndToEnd = false)).isEqualTo(MediaHubLaunch.Refused)
+        assertThat(vm.rowExit(item, isEndToEnd = false).shieldsCapture).isTrue()
     }
 }

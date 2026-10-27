@@ -1,6 +1,7 @@
 package me.meeshy.app.notifications
 
 import me.meeshy.sdk.model.ApiNotification
+import me.meeshy.sdk.model.game.GameTarget
 import me.meeshy.sdk.model.push.PushPayload
 import me.meeshy.sdk.model.push.PushTapDestination
 
@@ -35,6 +36,9 @@ public sealed interface NotificationDestination {
 
     /** Une NOUVELLE humeur ouvre sa page plein écran (iOS `Route.moodSpotlight`, #10814). */
     public data class Mood(val statusId: String) : NotificationDestination
+
+    /** Un palier ou un événement du jeu ouvre l'écran que la carte de navigation du jeu nomme (iOS `GameNavigationMap.entry`). */
+    public data class Game(val target: GameTarget) : NotificationDestination
     public data object None : NotificationDestination
 }
 
@@ -43,7 +47,7 @@ public sealed interface NotificationDestination {
  * row and the system banner : [PushTapDestination] (`:core:model`, iOS
  * `RootNotificationNavigator.navigateFromNotification`) — the row is projected onto the push keys
  * it carries, and the destinations the list does not open from a row (the notifications list
- * itself, the progression page) stay put ([NotificationDestination.None]).
+ * itself) stay put ([NotificationDestination.None]).
  */
 public object NotificationDestinationResolver {
 
@@ -55,7 +59,8 @@ public object NotificationDestinationResolver {
             is PushTapDestination.Story -> NotificationDestination.Story(destination.userId)
             is PushTapDestination.Mood -> NotificationDestination.Mood(destination.statusId)
             is PushTapDestination.Profile -> NotificationDestination.Profile(destination.userId)
-            PushTapDestination.Notifications, PushTapDestination.Progression, PushTapDestination.None -> NotificationDestination.None
+            is PushTapDestination.Game -> NotificationDestination.Game(destination.target)
+            PushTapDestination.Notifications, PushTapDestination.None -> NotificationDestination.None
         }
 
     private fun payloadOf(notification: ApiNotification): PushPayload {
@@ -78,6 +83,7 @@ internal fun NotificationDestination.dispatch(
     onOpenStory: (String) -> Unit,
     onOpenProfile: (String) -> Unit,
     onOpenMood: (String) -> Unit = onOpenPost,
+    onOpenGame: (GameTarget) -> Unit = {},
 ) {
     when (this) {
         is NotificationDestination.Conversation -> onOpenConversation(conversationId)
@@ -86,6 +92,7 @@ internal fun NotificationDestination.dispatch(
         is NotificationDestination.Story -> onOpenStory(userId)
         is NotificationDestination.Profile -> onOpenProfile(userId)
         is NotificationDestination.Mood -> onOpenMood(statusId)
+        is NotificationDestination.Game -> onOpenGame(target)
         NotificationDestination.None -> Unit
     }
 }
