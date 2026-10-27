@@ -183,4 +183,16 @@ class NavBackChromeTest {
         assertThat(NavBackChrome.edgeSwipeBackEnabled(null)).isFalse()
         assertThat(NavBackChrome.edgeSwipeBackEnabled("route-inconnue")).isFalse()
     }
+
+    @Test
+    fun `no source draws the Material back arrow, the back glyph is the chevron of iOS`() {
+        val offenders = androidRoot.walkTopDown()
+            .onEnter { it.name != "build" && it.name != ".gradle" && it.name != "test" && it.name != "androidTest" }
+            .filter { it.isFile && it.extension == "kt" && "/src/main/" in it.path }
+            .filter { Regex("""\bArrowBack\b""").containsMatchIn(it.readText()) }
+            .map { it.relativeTo(androidRoot).path }
+            .toList()
+        assertWithMessage("#13377 : flèche Material « ← » au lieu du chevron « < » (MeeshyIcons.Back) : $offenders")
+            .that(offenders).isEmpty()
+    }
 }

@@ -1,5 +1,6 @@
 package me.meeshy.app.feed
 
+import me.meeshy.ui.icons.MeeshyIcons
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -21,7 +22,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material3.CircularProgressIndicator
@@ -102,7 +102,7 @@ fun BookmarksScreen(
                     navigationIcon = {
                         IconButton(onClick = onBack) {
                             Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                imageVector = MeeshyIcons.Back,
                                 contentDescription = stringResource(R.string.bookmarks_back),
                                 tint = MeeshyTheme.tokens.textPrimary,
                             )

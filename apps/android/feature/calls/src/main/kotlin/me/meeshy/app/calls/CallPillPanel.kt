@@ -1,5 +1,6 @@
 package me.meeshy.app.calls
 
+import me.meeshy.ui.icons.MeeshyIcons
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
@@ -7,7 +8,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -43,7 +43,7 @@ internal fun CallPillPanel(
         ) {
             PanelHeaderButton(onBack) {
                 Icon(
-                    Icons.AutoMirrored.Filled.ArrowBack,
+                    MeeshyIcons.Back,
                     contentDescription = stringResource(R.string.call_panel_back),
                     tint = MeeshyMediaChromeColors.OnMediaSecondary,
                     modifier = Modifier.size(20.dp),

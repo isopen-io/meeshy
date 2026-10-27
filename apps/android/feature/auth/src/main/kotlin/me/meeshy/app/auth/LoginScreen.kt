@@ -24,7 +24,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.AutoFixHigh
 import androidx.compose.material.icons.filled.Check
@@ -386,7 +385,7 @@ private fun SelectedAccountForm(
     Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             IconButton(onClick = viewModel::deselectAccount) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.registration_back))
+                Icon(MeeshyIcons.Back, contentDescription = stringResource(R.string.registration_back))
             }
             Spacer(modifier = Modifier.width(MeeshySpacing.sm))
             MeeshyAvatar(name = account.shortName, size = 40.dp, imageUrl = account.avatarUrl)
@@ -443,7 +442,7 @@ private fun NormalLoginForm(
             modifier = Modifier.fillMaxWidth().padding(top = MeeshySpacing.xl),
         ) {
             TextButton(onClick = viewModel::backToSavedAccounts) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, tint = MeeshyTheme.tokens.textMuted)
+                Icon(MeeshyIcons.Back, contentDescription = null, tint = MeeshyTheme.tokens.textMuted)
                 Text(
                     text = stringResource(R.string.login_saved_accounts),
                     style = MaterialTheme.typography.bodySmall,

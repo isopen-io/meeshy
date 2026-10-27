@@ -31,4 +31,8 @@ class MeeshyIconsDirectionalTest {
         assertThat(icons.getValue("Heart")).isNotSameInstanceAs(icons.getValue("HeartFilled"))
         assertThat(icons.getValue("Lock")).isNotSameInstanceAs(icons.getValue("LockFilled"))
     }
+
+    @Test fun `le retour est le chevron chevron-left d'iOS, pas la fleche Material`() {
+        assertThat(icons.getValue("Back")).isSameInstanceAs(icons.getValue("ChevronBackward"))
+    }
 }

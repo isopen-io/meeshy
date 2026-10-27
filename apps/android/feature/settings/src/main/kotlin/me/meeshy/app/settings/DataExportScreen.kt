@@ -1,5 +1,6 @@
 package me.meeshy.app.settings
 
+import me.meeshy.ui.icons.MeeshyIcons
 import android.content.Context
 import android.content.Intent
 import androidx.compose.foundation.background
@@ -18,7 +19,6 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.IosShare

@@ -1,5 +1,6 @@
 package me.meeshy.app.conversations
 
+import me.meeshy.ui.icons.MeeshyIcons
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -23,7 +24,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Share
@@ -148,7 +148,7 @@ fun ShareLinkDetailScreen(
                     navigationIcon = {
                         IconButton(onClick = onBack) {
                             Icon(
-                                Icons.AutoMirrored.Filled.ArrowBack,
+                                MeeshyIcons.Back,
                                 contentDescription = stringResource(R.string.my_share_links_back),
                             )
                         }
