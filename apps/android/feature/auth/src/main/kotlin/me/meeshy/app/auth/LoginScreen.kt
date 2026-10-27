@@ -413,6 +413,8 @@ private fun SelectedAccountForm(
             modifier = Modifier.fillMaxWidth().padding(top = MeeshySpacing.lg),
         )
 
+        KeepSignedInToggle(state = state, onChange = viewModel::onKeepSignedInChange)
+
         AuthErrorMessage(
             text = state.errorRes?.let { stringResource(it) } ?: state.errorMessage,
             modifier = Modifier.padding(top = MeeshySpacing.md),
@@ -475,6 +477,8 @@ private fun NormalLoginForm(
             .fillMaxWidth()
             .padding(top = MeeshySpacing.md),
     )
+
+    KeepSignedInToggle(state = state, onChange = viewModel::onKeepSignedInChange)
 
     AuthErrorMessage(
         text = state.errorRes?.let { stringResource(it) } ?: state.errorMessage,

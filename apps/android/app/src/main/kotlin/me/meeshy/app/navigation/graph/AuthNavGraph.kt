@@ -63,6 +63,13 @@ internal fun NavGraphBuilder.authNavGraph(
                     popUpTo(0) { inclusive = true }
                 }
             },
+            // Refuser un lien qu'on n'a pas demande ne deconnecte personne : un compte ouvert reste ouvert.
+            onDeclined = {
+                val destination = if (authViewModel.state.value.isAuthenticated) Routes.CONVERSATIONS else Routes.LOGIN
+                navController.navigate(destination) {
+                    popUpTo(0) { inclusive = true }
+                }
+            },
         )
     }
     // L'inscription tient en UN écran (#5219) : `Routes.REGISTRATION`

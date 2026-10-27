@@ -58,8 +58,16 @@
     <string name="guest_join_title">Entrar na conversa</string>
     <string name="guest_join_username">Nome de usuário</string>
     <string name="guest_join_username_optional">Usuário (opcional)</string>
+    <string name="link_signin_cancel">Cancelar</string>
+    <string name="link_signin_claim">Este endereço será associado a %s e removido de qualquer outra conta Meeshy.</string>
+    <string name="link_signin_confirm">Entrar</string>
+    <string name="link_signin_confirm_claim">Associar o endereço e entrar</string>
+    <string name="link_signin_message">Este link de acesso não foi solicitado neste aparelho. Ele abre a conta %s.\n\nSó continue se esta conta for sua.</string>
+    <string name="link_signin_message_replacing">Este link de acesso não foi solicitado neste aparelho. Ele abre a conta %1$s no lugar de %2$s, que está conectada (ela continua no seletor de contas).\n\nSó continue se esta conta for sua.</string>
+    <string name="link_signin_title">Entrar como %s?</string>
     <string name="login_button">Entrar</string>
     <string name="login_forgot_password">Esqueceu a senha?</string>
+    <string name="login_keep_signed_in">Manter sessão neste dispositivo</string>
     <string name="login_magic_link">Entrar com e-mail</string>
     <string name="login_other_account">Outra conta</string>
     <string name="login_password_label">Senha</string>

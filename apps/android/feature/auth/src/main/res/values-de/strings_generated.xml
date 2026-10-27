@@ -58,8 +58,16 @@
     <string name="guest_join_title">Der Unterhaltung beitreten</string>
     <string name="guest_join_username">Benutzername</string>
     <string name="guest_join_username_optional">Benutzername (optional)</string>
+    <string name="link_signin_cancel">Abbrechen</string>
+    <string name="link_signin_claim">Diese Adresse wird %s zugeordnet und aus jedem anderen Meeshy-Konto entfernt.</string>
+    <string name="link_signin_confirm">Anmelden</string>
+    <string name="link_signin_confirm_claim">Adresse zuordnen und anmelden</string>
+    <string name="link_signin_message">Dieser Anmeldelink wurde nicht von diesem Gerät angefordert. Er öffnet das Konto %s.\n\nFahre nur fort, wenn dieses Konto dir gehört.</string>
+    <string name="link_signin_message_replacing">Dieser Anmeldelink wurde nicht von diesem Gerät angefordert. Er öffnet das Konto %1$s anstelle von %2$s, das angemeldet ist (es bleibt in der Kontoauswahl).\n\nFahre nur fort, wenn dieses Konto dir gehört.</string>
+    <string name="link_signin_title">Als %s anmelden?</string>
     <string name="login_button">Anmelden</string>
     <string name="login_forgot_password">Passwort vergessen?</string>
+    <string name="login_keep_signed_in">Auf diesem Gerät angemeldet bleiben</string>
     <string name="login_magic_link">Mit E-Mail anmelden</string>
     <string name="login_other_account">Anderes Konto</string>
     <string name="login_password_label">Passwort</string>

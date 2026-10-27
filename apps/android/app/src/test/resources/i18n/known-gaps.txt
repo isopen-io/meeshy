@@ -1556,6 +1556,9 @@ bare-specifier :feature:stories en my_stories_delete_selected_error
 bare-specifier :feature:feed en mood_spotlight_reply_placeholder
 bare-specifier :feature:auth en onboarding_global_reward
 bare-specifier :feature:auth en onboarding_story_reward
+bare-specifier :feature:auth en link_signin_claim
+bare-specifier :feature:auth en link_signin_message
+bare-specifier :feature:auth en link_signin_title
 bare-specifier :feature:chat en message_detail_edits_previous_one
 bare-specifier :feature:chat en message_detail_edits_previous_other
 bare-specifier :feature:chat en message_detail_edits_version_n

@@ -58,8 +58,16 @@
     <string name="guest_join_title">Join the conversation</string>
     <string name="guest_join_username">Username</string>
     <string name="guest_join_username_optional">Username (optional)</string>
+    <string name="link_signin_cancel">Cancel</string>
+    <string name="link_signin_claim">This address will be attached to %s and removed from any other Meeshy account.</string>
+    <string name="link_signin_confirm">Sign in</string>
+    <string name="link_signin_confirm_claim">Attach the address and sign in</string>
+    <string name="link_signin_message">This sign-in link was not requested from this device. It opens the account %s.\n\nOnly continue if this account belongs to you.</string>
+    <string name="link_signin_message_replacing">This sign-in link was not requested from this device. It opens the account %1$s instead of %2$s, which is signed in (it stays in the account switcher).\n\nOnly continue if this account belongs to you.</string>
+    <string name="link_signin_title">Sign in as %s?</string>
     <string name="login_button">Log in</string>
     <string name="login_forgot_password">Forgot password?</string>
+    <string name="login_keep_signed_in">Stay signed in on this device</string>
     <string name="login_magic_link">Sign in with email</string>
     <string name="login_other_account">Other account</string>
     <string name="login_password_label">Password</string>

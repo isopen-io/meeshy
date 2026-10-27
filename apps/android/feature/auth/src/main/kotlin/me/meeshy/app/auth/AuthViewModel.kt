@@ -16,6 +16,7 @@ import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.auth.CredentialRefusal
 import me.meeshy.sdk.model.auth.EmailVerificationRequest
+import me.meeshy.sdk.model.auth.KeepSignedInPolicy
 import me.meeshy.sdk.model.auth.LoginOutcome
 import me.meeshy.sdk.model.auth.PendingEmailVerification
 import me.meeshy.sdk.model.auth.SavedAccount
@@ -58,7 +59,14 @@ data class AuthUiState(
     val isLoggingOut: Boolean = false,
     /** iOS `SessionClosedNoticeView` : la session a été fermée sans que l'utilisateur l'ait demandé. */
     val sessionClosedNotice: Boolean = false,
+    /** iOS `LoginView.keepSignedIn` : la case « Rester connecté sur cet appareil », cochée par défaut. */
+    val keepSignedIn: Boolean = true,
+    /** iOS `AuthManager.offersKeepSignedIn` : un AUTRE compte garde déjà sa session — sinon la case ne se montre pas. */
+    val offersKeepSignedIn: Boolean = false,
 ) {
+    /** Ce que la session qui s'ouvre garde : le premier compte de l'appareil l'est sans question (iOS `keepsNewSession`). */
+    val keepsNewSession: Boolean get() = KeepSignedInPolicy.keepsNewSession(offersKeepSignedIn, keepSignedIn)
+
     val canSubmit: Boolean get() = username.isNotBlank() && password.isNotBlank() && !isSubmitting
 
     /** iOS `LoginView` : « Se connecter » de l'étape 2FA reste grisé sous 6 caractères. */
@@ -122,9 +130,19 @@ class AuthViewModel @Inject constructor(
         }
         viewModelScope.launch {
             savedAccountsStore.accounts.collect { accounts ->
-                _state.update { it.copy(savedAccounts = accounts) }
+                _state.update {
+                    it.copy(savedAccounts = accounts, offersKeepSignedIn = offersKeepSignedIn(accounts))
+                }
             }
         }
+    }
+
+    private fun offersKeepSignedIn(accounts: List<SavedAccount>): Boolean =
+        KeepSignedInPolicy.offers(accounts, activeId = null, accountsWithTokens = authRepository.accountsKeepingASession(accounts.map { it.id }))
+
+    /** La case « Rester connecté sur cet appareil » : le choix part avec la connexion (`rememberDevice`). */
+    fun onKeepSignedInChange(value: Boolean) {
+        _state.update { it.copy(keepSignedIn = value) }
     }
 
     fun onUsernameChange(value: String) {
@@ -216,7 +234,7 @@ class AuthViewModel @Inject constructor(
         }
         _state.update { it.copy(isSubmitting = true, errorMessage = null, errorRes = null) }
         viewModelScope.launch {
-            when (val result = authRepository.loginOutcome(current.username.trim(), current.password, rememberDevice = false)) {
+            when (val result = authRepository.loginOutcome(current.username.trim(), current.password, rememberDevice = current.keepsNewSession)) {
                 is NetworkResult.Failure -> showRefusal(result.error.code, result.error.httpStatus, result.error.message)
                 is NetworkResult.Success -> followOutcome(result.data)
             }
@@ -342,6 +360,7 @@ class AuthViewModel @Inject constructor(
                 displayName = user.displayName,
                 avatarUrl = user.avatar,
                 lastActiveAtMillis = cacheClock.nowMillis(),
+                keepsSession = _state.value.keepsNewSession,
             ),
         )
         _state.update {
@@ -404,6 +423,7 @@ class AuthViewModel @Inject constructor(
                 customHostInput = serverEnvironmentStore.customHost,
                 showEnvironmentSelector = config.enableLogging,
                 sessionClosedNotice = explain,
+                offersKeepSignedIn = offersKeepSignedIn(savedAccountsStore.accounts.value),
             )
         }
     }

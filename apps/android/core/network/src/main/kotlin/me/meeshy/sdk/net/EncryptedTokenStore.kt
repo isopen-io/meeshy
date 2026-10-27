@@ -42,6 +42,8 @@ class EncryptedTokenStore(private val store: SecureStore) : TokenStore {
 
     override val isAuthenticated: Boolean get() = jwt != null || sessionToken != null
 
+    override fun accountsWithTokens(candidates: Collection<String>): Set<String> = vault.accountsWithTokens(candidates)
+
     /** Signs the active account out: its tokens and the active pointer go; dormant accounts stay. */
     override fun clear() {
         store.get(KEY_USER_ID)?.let(vault::remove)

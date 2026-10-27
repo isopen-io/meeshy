@@ -58,8 +58,16 @@
     <string name="guest_join_title">الانضمام إلى المحادثة</string>
     <string name="guest_join_username">اسم المستخدم</string>
     <string name="guest_join_username_optional">اسم المستخدم (اختياري)</string>
+    <string name="link_signin_cancel">إلغاء</string>
+    <string name="link_signin_claim">سيُربط هذا العنوان بـ ‎%s‎ ويُزال من أي حساب Meeshy آخر.</string>
+    <string name="link_signin_confirm">تسجيل الدخول</string>
+    <string name="link_signin_confirm_claim">ربط العنوان وتسجيل الدخول</string>
+    <string name="link_signin_message">لم يُطلب رابط تسجيل الدخول هذا من هذا الجهاز. إنه يفتح الحساب %s.\n\nلا تتابع إلا إذا كان هذا الحساب ملكك.</string>
+    <string name="link_signin_message_replacing">لم يُطلب رابط تسجيل الدخول هذا من هذا الجهاز. إنه يفتح الحساب %1$s بدلًا من %2$s المفتوح (سيبقى في محدد الحسابات).\n\nلا تتابع إلا إذا كان هذا الحساب ملكك.</string>
+    <string name="link_signin_title">تسجيل الدخول باسم %s؟</string>
     <string name="login_button">تسجيل الدخول</string>
     <string name="login_forgot_password">هل نسيت كلمة المرور؟</string>
+    <string name="login_keep_signed_in">البقاء متصلاً على هذا الجهاز</string>
     <string name="login_magic_link">تسجيل الدخول بالبريد الإلكتروني</string>
     <string name="login_other_account">حساب آخر</string>
     <string name="login_password_label">كلمة المرور</string>
