@@ -209,6 +209,7 @@ class AuthViewModel @Inject constructor(
 
     fun login() {
         val current = _state.value
+        if (current.isSubmitting) return
         if (current.username.isBlank() || current.password.isBlank()) {
             _state.update { it.copy(errorRes = R.string.login_error_required) }
             return
