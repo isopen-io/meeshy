@@ -373,8 +373,9 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
       // CONTOURNE MessagingService.handleMessage / MessageProcessor.saveMessage,
       // donc la validation `parseSharedPlace` + l'écriture dans
       // `metadata.location` doivent être refaites ICI. Chiffrement : stockage
-      // EN CLAIR, même décision assumée que pour le chemin nominal (cf.
-      // sharedPlace.ts).
+      // EN CLAIR hors bout en bout. En `e2ee` rien n'arrive jusqu'ici : le
+      // contenu est REQUIS par le schéma et `plaintextRefusedIn` vient de le
+      // refuser ; un lieu en clair n'y est donc jamais écrit (#12526).
       const sharedPlace = parseSharedPlace(body.location);
 
       // Créer le message avec le contenu transformé.

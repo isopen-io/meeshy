@@ -42,6 +42,7 @@ import {
   type PostReplyTo,
 } from './postReplySnapshot';
 import { clientDeclaredMetadata } from './clientDeclaredMetadata';
+import { E2EE_PLAINTEXT_LOCATION_WITHHELD } from '../location/sharedPlace';
 import { LIVE_MESSAGE_MARK } from './liveMessage';
 import { unsetOrNull } from '../../utils/prisma-unset';
 import { mapWithConcurrency } from '@meeshy/shared/utils/concurrency';
@@ -383,10 +384,16 @@ export class MessageProcessor {
 
     // Les blocs que le CLIENT déclare (`location`, `sticker`) passent par leurs
     // parseurs dédiés — jamais un `metadata` brut, cf. `clientDeclaredMetadata.ts`.
+    // #12526 — en e2ee, un lieu en clair est retenu ; le message chiffré passe.
     const messageMetadata: Record<string, unknown> = {
       ...(postReplyTo ? { postReplyTo } : {}),
       ...(trackingLinks.length > 0 ? { trackingLinks } : {}),
-      ...clientDeclaredMetadata(data),
+      ...clientDeclaredMetadata(data, {
+        endToEnd,
+        onWithheld: (field) => logger.warn('plaintext block withheld from an end-to-end conversation', {
+          code: E2EE_PLAINTEXT_LOCATION_WITHHELD, field, conversationId: data.conversationId,
+        }),
+      }),
     };
 
     // ÉTAPE 3: Créer le message avec le contenu traité et encryption.

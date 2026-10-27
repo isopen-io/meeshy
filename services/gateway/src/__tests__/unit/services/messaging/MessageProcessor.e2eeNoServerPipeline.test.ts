@@ -20,9 +20,10 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import type { PrismaClient, Message } from '@meeshy/shared/prisma/client';
 
+const mockLoggerWarn = jest.fn();
 jest.mock('../../../../utils/logger-enhanced', () => ({
   enhancedLogger: {
-    child: jest.fn(() => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() })),
+    child: jest.fn(() => ({ info: jest.fn(), warn: mockLoggerWarn, error: jest.fn(), debug: jest.fn() })),
     warn: jest.fn(),
   },
   performanceLogger: {
@@ -77,6 +78,7 @@ jest.mock('../../../../utils/transcription', () => ({
 
 import { MessageProcessor } from '../../../../services/messaging/MessageProcessor';
 import { E2EE_PLAINTEXT_REFUSED } from '../../../../services/messaging/e2eePlaintextAdmission';
+import { E2EE_PLAINTEXT_LOCATION_WITHHELD } from '../../../../services/location/sharedPlace';
 import { createFakeE2EEStore } from '../../../../services/e2ee/__tests__/fake-e2ee-store';
 
 const CONV_ID = '507f1f77bcf86cd799439011';
@@ -244,7 +246,61 @@ describe('conversation e2ee — rien du texte ne quitte la garde', () => {
   });
 });
 
+describe('conversation e2ee — un lieu en clair à côté du chiffré n’est jamais écrit (#12526)', () => {
+  const PLACE = { latitude: 48.85837, longitude: 2.29448, name: 'Chez Marcel', address: '12 rue Cler, 75007 Paris', category: 'restaurant' };
+
+  it('le message chiffré passe, le lieu en clair n’atteint pas la base', async () => {
+    const { prisma, processor } = harness(E2EE);
+
+    await processor.saveMessage({ ...send, ...sealed, content: '[Encrypted]', location: PLACE });
+
+    expect(prisma.message.create).toHaveBeenCalledTimes(1);
+    const written = prisma.message.create.mock.calls[0][0].data;
+    expect(written.encryptedContent).toBe('libsignal-v1');
+    expect(written.metadata?.location).toBeUndefined();
+    expect(JSON.stringify(written)).not.toContain('48.858');
+    expect(JSON.stringify(written)).not.toContain('rue Cler');
+  });
+
+  it('mesure l’usage : le retrait se journalise sous un code stable, sans coordonnée', async () => {
+    const { processor } = harness(E2EE);
+
+    await processor.saveMessage({ ...send, ...sealed, content: '[Encrypted]', location: PLACE });
+
+    const withheld = mockLoggerWarn.mock.calls.find(([, meta]) =>
+      (meta as { code?: string } | undefined)?.code === E2EE_PLAINTEXT_LOCATION_WITHHELD);
+    expect(withheld).toBeDefined();
+    expect(JSON.stringify(withheld)).not.toContain('48.858');
+    expect(JSON.stringify(withheld)).not.toContain('rue Cler');
+  });
+
+  it('un lieu SEUL, sans chiffré, est un message en clair : refusé, rien n’est écrit', async () => {
+    const { prisma, processor } = harness(E2EE);
+
+    await expect(processor.saveMessage({ ...send, location: PLACE }))
+      .rejects.toMatchObject({ code: E2EE_PLAINTEXT_REFUSED });
+    expect(prisma.message.create).not.toHaveBeenCalled();
+  });
+
+  it('un lieu malformé ne se journalise pas : rien n’aurait été écrit de toute façon', async () => {
+    const { processor } = harness(E2EE);
+
+    await processor.saveMessage({ ...send, ...sealed, content: '[Encrypted]', location: { latitude: 'x' } });
+
+    expect(mockLoggerWarn.mock.calls.some(([, meta]) =>
+      (meta as { code?: string } | undefined)?.code === E2EE_PLAINTEXT_LOCATION_WITHHELD)).toBe(false);
+  });
+});
+
 describe('conversation en clair — les pipelines serveur restent intacts (non-régression)', () => {
+  it('un lieu partagé s’écrit toujours dans metadata.location', async () => {
+    const { prisma, processor } = harness(CLEAR);
+
+    await processor.saveMessage({ ...send, location: { latitude: 48.85837, longitude: 2.29448, name: 'Chez Marcel' } });
+
+    expect(prisma.message.create.mock.calls[0][0].data.metadata.location).toMatchObject({ latitude: 48.85837, name: 'Chez Marcel' });
+  });
+
   it('un vocal part toujours à la transcription', async () => {
     const { processor, processAudioAttachment } = harness(CLEAR);
 

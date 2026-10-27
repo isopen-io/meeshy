@@ -48,6 +48,9 @@ export const E2EE_PLAINTEXT_REFUSAL_MESSAGE =
 export const E2EE_PLAINTEXT_ATTACHMENT_REFUSAL_MESSAGE =
   'Cette conversation est chiffrée de bout en bout : le serveur n’accepte aucune pièce jointe en clair';
 
+export const E2EE_PLAINTEXT_LOCATION_REFUSAL_MESSAGE =
+  'Cette conversation est chiffrée de bout en bout : le serveur n’accepte aucun lieu en clair';
+
 /** Le littéral que les clients posent dans `content` quand ils envoient un chiffré. */
 export const E2EE_CONTENT_PLACEHOLDER = '[Encrypted]';
 
