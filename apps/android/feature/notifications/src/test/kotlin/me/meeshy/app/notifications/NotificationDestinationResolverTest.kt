@@ -181,12 +181,12 @@ class NotificationDestinationResolverTest {
     // `type: PostType.STORY` exclusively — so it falls back to the post detail rather
     // than opening the author's (STORY-only) tray, which the mood is never actually in.
     @Test
-    fun `a fresh mood publication opens the post detail, not its author's story tray`() {
+    fun `a fresh mood publication opens its own mood page, not its author's story tray`() {
         val dest = NotificationDestinationResolver.resolve(
             notification("friend_new_mood", postId = "p1", actorId = "author1", postType = "MOOD"),
         )
 
-        assertThat(dest).isEqualTo(NotificationDestination.Post("p1"))
+        assertThat(dest).isEqualTo(NotificationDestination.Mood("p1"))
     }
 
     @Test
@@ -219,7 +219,7 @@ class NotificationDestinationResolverTest {
     @Test
     fun `the contentType discriminant is read when postType is absent`() {
         val dest = NotificationDestinationResolver.resolve(
-            notification("friend_new_mood", postId = "p1", actorId = "author1", contentType = "MOOD"),
+            notification("story_reaction", postId = "p1", actorId = "author1", contentType = "MOOD"),
         )
 
         assertThat(dest).isEqualTo(NotificationDestination.Post("p1"))
@@ -271,6 +271,21 @@ class NotificationDestinationResolverTest {
         )
 
         assertThat(opened).containsExactly("reel", "p1")
+    }
+
+    @Test
+    fun `dispatch fans a mood destination to onOpenMood only`() {
+        val opened = mutableMapOf<String, String?>()
+        NotificationDestination.Mood("m1").dispatch(
+            onOpenConversation = { opened["conversation"] = it },
+            onOpenPost = { opened["post"] = it },
+            onOpenReel = { opened["reel"] = it },
+            onOpenStory = { opened["story"] = it },
+            onOpenProfile = { opened["profile"] = it },
+            onOpenMood = { opened["mood"] = it },
+        )
+
+        assertThat(opened).containsExactly("mood", "m1")
     }
 
     @Test

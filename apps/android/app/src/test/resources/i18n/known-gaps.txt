@@ -1533,3 +1533,4 @@ bare-specifier :feature:feed en hashtag_results_empty
 bare-specifier :feature:stories en my_stories_card_expired
 bare-specifier :feature:stories en my_stories_delete_selected
 bare-specifier :feature:stories en my_stories_delete_selected_error
+bare-specifier :feature:feed en mood_spotlight_reply_placeholder

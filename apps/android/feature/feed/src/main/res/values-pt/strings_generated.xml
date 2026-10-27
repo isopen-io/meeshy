@@ -76,6 +76,13 @@
     <string name="feed_unknown_author">Desconhecido</string>
     <string name="feed_unlike">Descurtir</string>
     <string name="hashtag_results_empty">Nenhuma postagem com #%s</string>
+    <string name="mood_spotlight_close">Fechar</string>
+    <string name="mood_spotlight_loading">Carregando o humor</string>
+    <string name="mood_spotlight_reply_failed">A resposta não foi enviada</string>
+    <string name="mood_spotlight_reply_placeholder">Responder a %s…</string>
+    <string name="mood_spotlight_reply_send">Enviar resposta</string>
+    <string name="mood_spotlight_reply_sent">Resposta enviada</string>
+    <string name="mood_spotlight_unavailable">Este humor não está mais disponível</string>
     <string name="nearby_back">Voltar</string>
     <string name="nearby_retry">Tentar novamente</string>
     <string name="nearby_title">Por perto</string>

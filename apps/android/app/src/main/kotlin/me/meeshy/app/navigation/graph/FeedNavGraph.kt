@@ -10,6 +10,8 @@ import me.meeshy.app.feed.BookmarksScreen
 import me.meeshy.app.feed.FeedScreen
 import me.meeshy.app.feed.HashtagResultsScreen
 import me.meeshy.app.feed.HashtagResultsViewModel
+import me.meeshy.app.feed.MoodSpotlightScreen
+import me.meeshy.app.feed.MoodSpotlightViewModel
 import me.meeshy.app.feed.NearbyScreen
 import me.meeshy.app.feed.PostDetailScreen
 import me.meeshy.app.feed.PostDetailViewModel
@@ -46,6 +48,12 @@ internal fun NavGraphBuilder.feedNavGraph(
             onOpenProfile = { userId -> navController.navigate(Routes.profile(userId)) },
             onOpenHashtag = { tag -> navController.navigate(Routes.hashtag(tag)) },
         )
+    }
+    composable(
+        route = Routes.MOOD_SPOTLIGHT,
+        arguments = listOf(navArgument(MoodSpotlightViewModel.STATUS_ID_ARG) { type = NavType.StringType }),
+    ) {
+        MoodSpotlightScreen(onClose = { navController.popBackStack() })
     }
     composable(Routes.MY_STORIES) {
         MyStoriesScreen(

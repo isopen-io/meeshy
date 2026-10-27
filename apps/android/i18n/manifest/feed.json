@@ -798,6 +798,48 @@
         },
         {
           "catalog": "app",
+          "iosKey": "mood.spotlight.close",
+          "androidName": "mood_spotlight_close",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "mood.spotlight.loading",
+          "androidName": "mood_spotlight_loading",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "mood.spotlight.unavailable",
+          "androidName": "mood_spotlight_unavailable",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "mood.spotlight.reply.sent",
+          "androidName": "mood_spotlight_reply_sent",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "mood.spotlight.reply.failed",
+          "androidName": "mood_spotlight_reply_failed",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "mood.spotlight.reply.placeholder",
+          "androidName": "mood_spotlight_reply_placeholder",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "mood.spotlight.reply.send",
+          "androidName": "mood_spotlight_reply_send",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
           "iosKey": "hashtag.results.empty",
           "androidName": "hashtag_results_empty",
           "status": "adopted"

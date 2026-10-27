@@ -74,6 +74,13 @@
     <string name="feed_unknown_author">Unbekannt</string>
     <string name="feed_unlike">Gefällt mir nicht mehr</string>
     <string name="hashtag_results_empty">Keine Beiträge mit #%s</string>
+    <string name="mood_spotlight_close">Schließen</string>
+    <string name="mood_spotlight_loading">Stimmung wird geladen</string>
+    <string name="mood_spotlight_reply_failed">Die Antwort wurde nicht gesendet</string>
+    <string name="mood_spotlight_reply_placeholder">%s antworten…</string>
+    <string name="mood_spotlight_reply_send">Antwort senden</string>
+    <string name="mood_spotlight_reply_sent">Antwort gesendet</string>
+    <string name="mood_spotlight_unavailable">Diese Stimmung ist nicht mehr verfügbar</string>
     <string name="nearby_back">Zurück</string>
     <string name="nearby_retry">Erneut versuchen</string>
     <string name="nearby_title">In der Nähe</string>

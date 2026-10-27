@@ -44,6 +44,7 @@ internal fun NavGraphBuilder.socialNavGraph(
             onOpenPost = { navController.navigate(Routes.postDetail(it)) },
             onOpenReel = { navController.navigate(Routes.reels(seed = it)) },
             onOpenStory = { navController.navigate(Routes.story(it)) },
+            onOpenMood = { navController.navigate(Routes.moodSpotlight(it)) },
             onOpenProfile = { navController.navigate(Routes.profile(it)) },
         )
     }

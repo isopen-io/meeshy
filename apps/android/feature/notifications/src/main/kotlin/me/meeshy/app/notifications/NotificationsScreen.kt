@@ -74,6 +74,7 @@ fun NotificationsScreen(
     onOpenPost: (String) -> Unit = {},
     onOpenReel: (String) -> Unit = {},
     onOpenStory: (String) -> Unit = {},
+    onOpenMood: (String) -> Unit = onOpenPost,
     onOpenProfile: (String) -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -84,6 +85,7 @@ fun NotificationsScreen(
     val openPost by rememberUpdatedState(onOpenPost)
     val openReel by rememberUpdatedState(onOpenReel)
     val openStory by rememberUpdatedState(onOpenStory)
+    val openMood by rememberUpdatedState(onOpenMood)
     val openProfile by rememberUpdatedState(onOpenProfile)
 
     LaunchedEffect(viewModel) {
@@ -112,6 +114,7 @@ fun NotificationsScreen(
                 onOpenReel = { openReel(it) },
                 onOpenStory = { openStory(it) },
                 onOpenProfile = { openProfile(it) },
+                onOpenMood = { openMood(it) },
             )
         }
     }

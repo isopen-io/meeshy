@@ -74,6 +74,13 @@
     <string name="feed_unknown_author">Unknown</string>
     <string name="feed_unlike">Unlike</string>
     <string name="hashtag_results_empty">No posts with #%s</string>
+    <string name="mood_spotlight_close">Close</string>
+    <string name="mood_spotlight_loading">Loading mood</string>
+    <string name="mood_spotlight_reply_failed">Your reply wasn\'t sent</string>
+    <string name="mood_spotlight_reply_placeholder">Reply to %s…</string>
+    <string name="mood_spotlight_reply_send">Send reply</string>
+    <string name="mood_spotlight_reply_sent">Reply sent</string>
+    <string name="mood_spotlight_unavailable">This mood is no longer available</string>
     <string name="nearby_back">Back</string>
     <string name="nearby_retry">Try again</string>
     <string name="nearby_title">Nearby</string>

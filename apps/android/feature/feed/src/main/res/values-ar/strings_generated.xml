@@ -82,6 +82,13 @@
     <string name="feed_unknown_author">غير معروف</string>
     <string name="feed_unlike">إلغاء الإعجاب</string>
     <string name="hashtag_results_empty">لا توجد منشورات بالوسم #%s</string>
+    <string name="mood_spotlight_close">إغلاق</string>
+    <string name="mood_spotlight_loading">جارٍ تحميل المزاج</string>
+    <string name="mood_spotlight_reply_failed">لم يتم إرسال الرد</string>
+    <string name="mood_spotlight_reply_placeholder">الرد على %s…</string>
+    <string name="mood_spotlight_reply_send">إرسال الرد</string>
+    <string name="mood_spotlight_reply_sent">تم إرسال الرد</string>
+    <string name="mood_spotlight_unavailable">لم يعد هذا المزاج متاحًا</string>
     <string name="nearby_back">رجوع</string>
     <string name="nearby_retry">إعادة المحاولة</string>
     <string name="nearby_title">بالقرب مني</string>

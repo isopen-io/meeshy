@@ -76,6 +76,13 @@
     <string name="feed_unknown_author">Inconnu</string>
     <string name="feed_unlike">Je n\'aime plus</string>
     <string name="hashtag_results_empty">Aucun post avec #%s</string>
+    <string name="mood_spotlight_close">Fermer</string>
+    <string name="mood_spotlight_loading">Chargement de l\'humeur</string>
+    <string name="mood_spotlight_reply_failed">La réponse n\'est pas partie</string>
+    <string name="mood_spotlight_reply_placeholder">Répondre à %s…</string>
+    <string name="mood_spotlight_reply_send">Envoyer la réponse</string>
+    <string name="mood_spotlight_reply_sent">Réponse envoyée</string>
+    <string name="mood_spotlight_unavailable">Cette humeur n\'est plus disponible</string>
     <string name="nearby_back">Retour</string>
     <string name="nearby_retry">Réessayer</string>
     <string name="nearby_title">À proximité</string>
