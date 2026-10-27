@@ -315,6 +315,8 @@
     <string name="share_caption_hint">Add a message…</string>
     <string name="share_close">Close</string>
     <string name="share_content_messages_kept">What’s being sent · %1$d of %2$d messages</string>
+    <string name="share_detail_direct">Conversation</string>
+    <string name="share_detail_group_unsized">Group</string>
     <string name="share_empty_body">Search for someone by name, username or number.</string>
     <string name="share_empty_title">No one here yet</string>
     <string name="share_error_generic">Error while sharing</string>

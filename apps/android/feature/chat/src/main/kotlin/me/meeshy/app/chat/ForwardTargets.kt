@@ -2,6 +2,7 @@ package me.meeshy.app.chat
 
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.interlocutor
+import me.meeshy.sdk.model.isDirect
 import me.meeshy.sdk.model.mayCurrentUserWrite
 import me.meeshy.sdk.theme.accentHex
 import me.meeshy.sdk.theme.displayTitle
@@ -19,6 +20,8 @@ data class ForwardTarget(
     val accentHex: String,
     /** Le compte du vis-à-vis d'une conversation directe : sa présence servie lit la carte unique. */
     val peerUserId: String? = null,
+    /** A one-to-one conversation: its row says « Conversation », never a member count. */
+    val isDirect: Boolean = false,
 )
 
 /**
@@ -70,6 +73,7 @@ object ForwardTargets {
                     avatar = conversation.avatar?.takeIf { it.isNotBlank() },
                     accentHex = conversation.accentHex(),
                     peerUserId = conversation.interlocutor(currentUserId)?.userId,
+                    isDirect = conversation.isDirect,
                 )
             }
             .filter { trimmed.isEmpty() || it.title.contains(trimmed, ignoreCase = true) }

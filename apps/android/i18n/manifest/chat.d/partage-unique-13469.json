@@ -141,6 +141,18 @@
           "iosKey": "share.refused.undecrypted-source",
           "androidName": "share_refused_undecrypted_source",
           "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.sheet.detail.direct",
+          "androidName": "share_detail_direct",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.sheet.detail.group-unsized",
+          "androidName": "share_detail_group_unsized",
+          "status": "adopted"
         }
       ]
     }

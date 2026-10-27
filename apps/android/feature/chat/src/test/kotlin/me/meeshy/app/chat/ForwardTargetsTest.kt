@@ -36,6 +36,17 @@ class ForwardTargetsTest {
         ApiConversation(id = id, type = "direct", title = null, participants = participants.toList())
 
     @Test
+    fun a_direct_conversation_is_marked_direct_and_a_group_is_not() {
+        val targets = ForwardTargets.of(
+            listOf(direct("d1", ApiParticipant(id = "p1", userId = "me"), ApiParticipant(id = "p2", userId = "ana")), group("g1", title = "Team")),
+            sourceConversationId = "c1",
+            query = "",
+            currentUserId = "me",
+        )
+        assertThat(targets.associate { it.conversationId to it.isDirect }).containsExactly("d1", true, "g1", false)
+    }
+
+    @Test
     fun no_conversations_yields_no_targets() {
         assertThat(ForwardTargets.of(emptyList(), sourceConversationId = "c1", query = "")).isEmpty()
     }
