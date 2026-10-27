@@ -136,8 +136,8 @@ struct UnsentPublicationRow: View {
                     Label(stateLabel, systemImage: publication.state == .failed ? "exclamationmark.triangle.fill" : "clock")
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
                         .foregroundStyle(stateColor)
-                    if publication.state == .failed, let lastError = publication.lastError {
-                        Text(lastError)
+                    if publication.state == .failed {
+                        Text(UnsentPublicationFailureReason(lastError: publication.lastError).message)
                             .font(MeeshyFont.relative(MeeshyFont.smallSize))
                             .foregroundStyle(Color.secondary)
                             .lineLimit(2)

@@ -115,6 +115,10 @@ extension OutboxKind {
         self == .createPost
     }
 
+    public static var keptUntilTheAuthorDecides: [String] {
+        allCases.filter(\.isKeptUntilTheAuthorDecides).map(\.rawValue)
+    }
+
     /// **Une ligne TERMINALE de ce genre peut-elle être jetée sans rien perdre ?**
     /// (#5965)
     ///

@@ -114,6 +114,14 @@ final class UnsentPublicationsViewModelTests: XCTestCase {
         XCTAssertTrue(drafts.reopened.isEmpty)
     }
 
+    func test_failureReason_saysTheCauseInWords_neverTheTrace() {
+        XCTAssertEqual(UnsentPublicationFailureReason(lastError: "UnsupportedImageFormatRefusal()"), .unsupportedFormat)
+        XCTAssertEqual(UnsentPublicationFailureReason(lastError: "server(statusCode: 415, message: nil)"), .unsupportedFormat)
+        XCTAssertEqual(UnsentPublicationFailureReason(lastError: "Error Domain=NSURLErrorDomain Code=-1009"), .offline)
+        XCTAssertEqual(UnsentPublicationFailureReason(lastError: "auth(MeeshySDK.AuthError.sessionExpired)"), .sessionExpired)
+        XCTAssertEqual(UnsentPublicationFailureReason(lastError: nil), .other)
+    }
+
     @MainActor
     final class FakeDrafts: UnsentPublicationDrafts {
         var parked: Set<String>

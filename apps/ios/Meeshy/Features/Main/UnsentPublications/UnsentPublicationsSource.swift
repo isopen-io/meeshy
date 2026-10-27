@@ -120,3 +120,39 @@ enum UnsentPublicationsCopy {
             : String(localized: "feed.unsent.type.post", defaultValue: "Post", bundle: .main)
     }
 }
+
+/// **Pourquoi une publication n'est pas partie, dit à l'auteur** (#13415) :
+/// `lastError` est la description technique que la file a gardée ; la liste
+/// n'en montre que la cause, en mots.
+nonisolated enum UnsentPublicationFailureReason: Equatable {
+    case unsupportedFormat
+    case offline
+    case sessionExpired
+    case other
+
+    init(lastError: String?) {
+        let trace = lastError ?? ""
+        if trace.contains("UnsupportedImageFormatRefusal") || trace.contains("statusCode: 415") {
+            self = .unsupportedFormat
+        } else if trace.contains("NSURLErrorDomain") || trace.contains("network") || trace.contains("URLError") {
+            self = .offline
+        } else if trace.contains("sessionExpired") {
+            self = .sessionExpired
+        } else {
+            self = .other
+        }
+    }
+
+    var message: String {
+        switch self {
+        case .unsupportedFormat:
+            return String(localized: "feed.unsent.reason.format", defaultValue: "Le serveur a refusé le format d'une photo.", bundle: .main)
+        case .offline:
+            return String(localized: "feed.unsent.reason.offline", defaultValue: "Pas de connexion au moment de l'envoi.", bundle: .main)
+        case .sessionExpired:
+            return String(localized: "feed.unsent.reason.session", defaultValue: "Session expirée : reconnectez-vous, puis réessayez.", bundle: .main)
+        case .other:
+            return String(localized: "feed.unsent.reason.other", defaultValue: "L'envoi a échoué.", bundle: .main)
+        }
+    }
+}

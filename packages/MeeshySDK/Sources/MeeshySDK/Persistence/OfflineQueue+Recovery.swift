@@ -168,7 +168,6 @@ extension OfflineQueue {
         // `purgeDiscardableTerminalRows`, qui ne jette que ce qu'aucune surface
         // ne relit plus).
         await purgeDiscardableTerminalRows()
-        PendingMediaDirectories.sweepEmptyDirectories()
         return report
     }
 
