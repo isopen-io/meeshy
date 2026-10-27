@@ -14,4 +14,8 @@ abstract class ChatRealtimeModule {
     @Binds
     @IntoSet
     abstract fun controller(impl: ChatRealtimeController): ChatController
+
+    @Binds
+    @IntoSet
+    abstract fun resync(impl: ChatResyncController): ChatController
 }
