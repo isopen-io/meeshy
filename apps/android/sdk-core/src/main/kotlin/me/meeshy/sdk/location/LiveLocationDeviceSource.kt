@@ -33,13 +33,8 @@ class LiveLocationDeviceSource @Inject constructor(
 
     override fun updates(intervalMillis: Long): Flow<LiveLocationFix> = callbackFlow {
         val manager = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
-        val provider = when {
-            manager == null || !isGranted() -> null
-            manager.isProviderEnabled(LocationManager.GPS_PROVIDER) -> LocationManager.GPS_PROVIDER
-            manager.isProviderEnabled(LocationManager.NETWORK_PROVIDER) -> LocationManager.NETWORK_PROVIDER
-            else -> null
-        }
-        if (manager == null || provider == null) {
+        val providers = if (manager == null || !isGranted()) emptyList() else manager.enabledFixProviders()
+        if (manager == null || providers.isEmpty()) {
             close()
             return@callbackFlow
         }
@@ -52,7 +47,9 @@ class LiveLocationDeviceSource @Inject constructor(
             override fun onProviderEnabled(provider: String) {}
             override fun onProviderDisabled(provider: String) {}
         }
-        manager.requestLocationUpdates(provider, intervalMillis, 0f, listener, Looper.getMainLooper())
+        providers.forEach { provider ->
+            manager.requestLocationUpdates(provider, intervalMillis, 0f, listener, Looper.getMainLooper())
+        }
         awaitClose { manager.removeUpdates(listener) }
     }
 

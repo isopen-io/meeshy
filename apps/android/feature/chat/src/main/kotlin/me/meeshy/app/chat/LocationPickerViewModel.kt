@@ -54,6 +54,11 @@ class LocationPickerViewModel @Inject constructor(
     private val _isLocating = MutableStateFlow(false)
     val isLocating: StateFlow<Boolean> = _isLocating.asStateFlow()
 
+    private val _locateFailed = MutableStateFlow(false)
+
+    /** Le dernier relevé n'a rien rendu (aucun fournisseur actif, ou aucune position avant le délai) : le sélecteur le dit. */
+    val locateFailed: StateFlow<Boolean> = _locateFailed.asStateFlow()
+
     private val _confirmed = MutableSharedFlow<SharedPlace>(extraBufferCapacity = 1)
     val confirmed: SharedFlow<SharedPlace> = _confirmed.asSharedFlow()
 
@@ -71,6 +76,7 @@ class LocationPickerViewModel @Inject constructor(
         _query.value = ""
         _target.value = null
         _isLocating.value = false
+        _locateFailed.value = false
     }
 
     /** La porte de permission a répondu. Refus : bandeau, la sélection manuelle reste utilisable. */
@@ -92,9 +98,14 @@ class LocationPickerViewModel @Inject constructor(
     private fun locate(zoom: Int) {
         if (locateJob?.isActive == true) return
         _isLocating.value = true
+        _locateFailed.value = false
         locateJob = viewModelScope.launch {
             try {
-                val fix = fixes.currentFix() ?: return@launch
+                val fix = fixes.currentFix()
+                if (fix == null) {
+                    _locateFailed.value = true
+                    return@launch
+                }
                 val point = GeoPoint(fix.latitude, fix.longitude)
                 _state.update { it.userFixed(point) }
                 _target.value = MapTarget(point, zoom, ++nonce)
