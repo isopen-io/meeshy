@@ -253,6 +253,7 @@ private fun QuickActionsRow(
 ) {
     Row(
         modifier = Modifier
+            .floatingChromeLateralReserve()
             .fillMaxWidth()
             .padding(start = MeeshySpacing.lg + 44.dp + MeeshySpacing.md, end = MeeshySpacing.lg, bottom = MeeshySpacing.md),
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
