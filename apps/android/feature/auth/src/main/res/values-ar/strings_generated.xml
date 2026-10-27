@@ -94,7 +94,7 @@
     <string name="onboarding_contacts_offer_promise">لن يتواصل أحد مع أي شخص نيابةً عنك.</string>
     <string name="onboarding_contacts_offer_title">ربما يكون أصدقاؤك هنا بالفعل</string>
     <string name="onboarding_contacts_settings">اعثر على أصدقائك: اسمح بالوصول إلى جهات الاتصال من الإعدادات</string>
-    <string name="onboarding_email_address">أُرسل إلى %1$s</string>
+    <string name="onboarding_email_address">أُرسل إلى %s</string>
     <string name="onboarding_email_body">أرسلنا إليك رابطًا. المسه في بريدك: يتأكّد حسابك وينفتح لك Meeshy بالكامل.</string>
     <string name="onboarding_email_failed">تعذّر إرسال الرابط. حاول مجددًا.</string>
     <string name="onboarding_email_resend">أعد إرسال الرابط</string>
@@ -102,14 +102,14 @@
     <string name="onboarding_email_title">أكّد بريدك الإلكتروني</string>
     <string name="onboarding_email_waiting">ننتقل إلى التالي فور تأكيد عنوانك.</string>
     <string name="onboarding_friends_add">إضافة</string>
-    <string name="onboarding_friends_add_a11y">إضافة %1$s كصديق</string>
+    <string name="onboarding_friends_add_a11y">إضافة %s كصديق</string>
     <string name="onboarding_friends_added">أُرسل</string>
-    <string name="onboarding_friends_added_a11y">تم إرسال الطلب إلى %1$s</string>
+    <string name="onboarding_friends_added_a11y">تم إرسال الطلب إلى %s</string>
     <string name="onboarding_friends_badge">+%d لكلٍّ منكما</string>
-    <string name="onboarding_friends_body">أضف ٣ أشخاص يشبهونك. عندما يقبلون، يربح كلٌّ منكما +%1$d على الأقل.</string>
+    <string name="onboarding_friends_body">أضف ٣ أشخاص يشبهونك. عندما يقبلون، يربح كلٌّ منكما +%d على الأقل.</string>
     <string name="onboarding_friends_failed">لم يُرسل الطلب. أعد المحاولة.</string>
     <string name="onboarding_friends_more">عرض المزيد من الملفات</string>
-    <string name="onboarding_friends_pending">+%1$d على الأقل لكلٍّ منكما عند القبول</string>
+    <string name="onboarding_friends_pending">+%d على الأقل لكلٍّ منكما عند القبول</string>
     <string name="onboarding_friends_row_a11y">%1$s، يتحدث %2$s</string>
     <string name="onboarding_friends_title">اعثر على جماعتك</string>
     <string name="onboarding_gauge_level1">%1$d / %2$d شرارة للمستوى ١</string>
@@ -148,7 +148,7 @@
     <string name="onboarding_languages_demo_translated">مرحبًا، كيف حالك؟</string>
     <string name="onboarding_languages_failed">تعذّر حفظ لغتك. يمكنك تغييرها من ملفك الشخصي.</string>
     <string name="onboarding_languages_primary">لغتك</string>
-    <string name="onboarding_languages_primary_a11y">لغتك: %1$s. تغيير</string>
+    <string name="onboarding_languages_primary_a11y">لغتك: %s. تغيير</string>
     <string name="onboarding_languages_secondary">لغة ثانية؟ (اختياري)</string>
     <string name="onboarding_languages_title">لغتك، عالمك</string>
     <string name="onboarding_later">لاحقًا</string>
@@ -184,7 +184,7 @@
     <string name="onboarding_recap_points">الشرارات</string>
     <string name="onboarding_recap_streak">اللهب (أيام)</string>
     <string name="onboarding_recap_title">أحسنت!</string>
-    <string name="onboarding_recap_tomorrow">غدًا، يشتعل لهبك منذ %1$d أيام. لا عجلة، عُد متى شئت.</string>
+    <string name="onboarding_recap_tomorrow">غدًا، يشتعل لهبك منذ %d أيام. لا عجلة، عُد متى شئت.</string>
     <plurals name="onboarding_reward_announce">
         <item quantity="zero">زائد %d شرارة</item>
         <item quantity="one">زائد %d شرارة</item>

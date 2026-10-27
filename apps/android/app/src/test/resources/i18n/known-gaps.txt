@@ -41,6 +41,13 @@ bare-specifier :feature:chat en reading_mode_chip_a11y_label
 bare-specifier :feature:chat en reading_mode_river_threshold_only
 bare-specifier :feature:auth en onboarding_friends_badge
 bare-specifier :feature:auth en signup_phone_too_short
+bare-specifier :feature:auth en onboarding_email_address
+bare-specifier :feature:auth en onboarding_friends_add_a11y
+bare-specifier :feature:auth en onboarding_friends_added_a11y
+bare-specifier :feature:auth en onboarding_friends_body
+bare-specifier :feature:auth en onboarding_friends_pending
+bare-specifier :feature:auth en onboarding_languages_primary_a11y
+bare-specifier :feature:auth en onboarding_recap_tomorrow
 bare-specifier :feature:conversations en row_a11y_conversation_with
 bare-specifier :feature:conversations en row_a11y_last_message
 bare-specifier :feature:conversations en row_a11y_unread_count

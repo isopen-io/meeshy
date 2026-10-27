@@ -94,7 +94,7 @@
     <string name="onboarding_contacts_offer_promise">Nessuno viene contattato al posto tuo.</string>
     <string name="onboarding_contacts_offer_title">I tuoi amici potrebbero essere già qui</string>
     <string name="onboarding_contacts_settings">Ritrova i tuoi amici: consenti l\'accesso ai contatti in Impostazioni</string>
-    <string name="onboarding_email_address">Inviato a %1$s</string>
+    <string name="onboarding_email_address">Inviato a %s</string>
     <string name="onboarding_email_body">Ti abbiamo inviato un link. Toccalo nella tua casella: il tuo account è confermato e tutto Meeshy si apre per te.</string>
     <string name="onboarding_email_failed">Non è stato possibile inviare il link. Riprova.</string>
     <string name="onboarding_email_resend">Invia di nuovo il link</string>
@@ -102,14 +102,14 @@
     <string name="onboarding_email_title">Conferma il tuo indirizzo e-mail</string>
     <string name="onboarding_email_waiting">Si prosegue appena il tuo indirizzo è confermato.</string>
     <string name="onboarding_friends_add">Aggiungi</string>
-    <string name="onboarding_friends_add_a11y">Aggiungi %1$s agli amici</string>
+    <string name="onboarding_friends_add_a11y">Aggiungi %s agli amici</string>
     <string name="onboarding_friends_added">Inviata</string>
-    <string name="onboarding_friends_added_a11y">Richiesta inviata a %1$s</string>
+    <string name="onboarding_friends_added_a11y">Richiesta inviata a %s</string>
     <string name="onboarding_friends_badge">+%d a testa</string>
-    <string name="onboarding_friends_body">Aggiungi 3 persone che ti somigliano. Quando accettano, guadagnate almeno +%1$d entrambi.</string>
+    <string name="onboarding_friends_body">Aggiungi 3 persone che ti somigliano. Quando accettano, guadagnate almeno +%d entrambi.</string>
     <string name="onboarding_friends_failed">La richiesta non è partita. Riprova.</string>
     <string name="onboarding_friends_more">Vedi altri profili</string>
-    <string name="onboarding_friends_pending">Almeno +%1$d a testa quando la persona accetta</string>
+    <string name="onboarding_friends_pending">Almeno +%d a testa quando la persona accetta</string>
     <string name="onboarding_friends_row_a11y">%1$s, parla %2$s</string>
     <string name="onboarding_friends_title">Trova la tua gente</string>
     <string name="onboarding_gauge_level1">%1$d / %2$d scintille per il tuo livello 1</string>
@@ -145,7 +145,7 @@
     <string name="onboarding_languages_demo_translated">Ciao, come va?</string>
     <string name="onboarding_languages_failed">Non è stato possibile salvare la tua lingua. Puoi cambiarla nel tuo profilo.</string>
     <string name="onboarding_languages_primary">La tua lingua</string>
-    <string name="onboarding_languages_primary_a11y">La tua lingua: %1$s. Cambia</string>
+    <string name="onboarding_languages_primary_a11y">La tua lingua: %s. Cambia</string>
     <string name="onboarding_languages_secondary">Una seconda lingua? (facoltativa)</string>
     <string name="onboarding_languages_title">La tua lingua, il tuo mondo</string>
     <string name="onboarding_later">Più tardi</string>
@@ -175,7 +175,7 @@
     <string name="onboarding_recap_points">Scintille</string>
     <string name="onboarding_recap_streak">Fiamma (giorni)</string>
     <string name="onboarding_recap_title">Ben fatto!</string>
-    <string name="onboarding_recap_tomorrow">Domani, la tua Fiamma arderà da %1$d giorni. Senza fretta: torna quando vuoi.</string>
+    <string name="onboarding_recap_tomorrow">Domani, la tua Fiamma arderà da %d giorni. Senza fretta: torna quando vuoi.</string>
     <plurals name="onboarding_reward_announce">
         <item quantity="one">Più %d scintilla</item>
         <item quantity="many">Più %d scintille</item>

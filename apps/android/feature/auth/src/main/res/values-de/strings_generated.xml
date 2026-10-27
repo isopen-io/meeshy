@@ -94,7 +94,7 @@
     <string name="onboarding_contacts_offer_promise">Niemand wird in deinem Namen kontaktiert.</string>
     <string name="onboarding_contacts_offer_title">Deine Freunde sind vielleicht schon da</string>
     <string name="onboarding_contacts_settings">Finde deine Freunde: Erlaube den Zugriff auf Kontakte in den Einstellungen</string>
-    <string name="onboarding_email_address">Gesendet an %1$s</string>
+    <string name="onboarding_email_address">Gesendet an %s</string>
     <string name="onboarding_email_body">Wir haben dir einen Link geschickt. Tippe ihn in deinem Postfach an: Dein Konto ist bestätigt und ganz Meeshy steht dir offen.</string>
     <string name="onboarding_email_failed">Der Link konnte nicht gesendet werden. Versuch es noch einmal.</string>
     <string name="onboarding_email_resend">Link erneut senden</string>
@@ -102,14 +102,14 @@
     <string name="onboarding_email_title">Bestätige deine E-Mail-Adresse</string>
     <string name="onboarding_email_waiting">Es geht weiter, sobald deine Adresse bestätigt ist.</string>
     <string name="onboarding_friends_add">Hinzufügen</string>
-    <string name="onboarding_friends_add_a11y">%1$s als Freund:in hinzufügen</string>
+    <string name="onboarding_friends_add_a11y">%s als Freund:in hinzufügen</string>
     <string name="onboarding_friends_added">Gesendet</string>
-    <string name="onboarding_friends_added_a11y">Anfrage an %1$s gesendet</string>
+    <string name="onboarding_friends_added_a11y">Anfrage an %s gesendet</string>
     <string name="onboarding_friends_badge">je +%d</string>
-    <string name="onboarding_friends_body">Füge 3 Leute hinzu, die zu dir passen. Wenn sie annehmen, bekommt ihr beide mindestens +%1$d.</string>
+    <string name="onboarding_friends_body">Füge 3 Leute hinzu, die zu dir passen. Wenn sie annehmen, bekommt ihr beide mindestens +%d.</string>
     <string name="onboarding_friends_failed">Die Anfrage wurde nicht gesendet. Versuch es noch mal.</string>
     <string name="onboarding_friends_more">Mehr Profile ansehen</string>
-    <string name="onboarding_friends_pending">Je mindestens +%1$d, sobald die Person annimmt</string>
+    <string name="onboarding_friends_pending">Je mindestens +%d, sobald die Person annimmt</string>
     <string name="onboarding_friends_row_a11y">%1$s, spricht %2$s</string>
     <string name="onboarding_friends_title">Finde deine Crew</string>
     <string name="onboarding_gauge_level1">%1$d / %2$d Funken bis Level 1</string>
@@ -144,7 +144,7 @@
     <string name="onboarding_languages_demo_translated">Hallo, wie geht\'s?</string>
     <string name="onboarding_languages_failed">Deine Sprache konnte nicht gespeichert werden. Du kannst sie in deinem Profil ändern.</string>
     <string name="onboarding_languages_primary">Deine Sprache</string>
-    <string name="onboarding_languages_primary_a11y">Deine Sprache: %1$s. Ändern</string>
+    <string name="onboarding_languages_primary_a11y">Deine Sprache: %s. Ändern</string>
     <string name="onboarding_languages_secondary">Eine zweite Sprache? (optional)</string>
     <string name="onboarding_languages_title">Deine Sprache, deine Welt</string>
     <string name="onboarding_later">Später</string>
@@ -172,7 +172,7 @@
     <string name="onboarding_recap_points">Funken</string>
     <string name="onboarding_recap_streak">Flamme (Tage)</string>
     <string name="onboarding_recap_title">Gut gemacht!</string>
-    <string name="onboarding_recap_tomorrow">Morgen brennt deine Flamme seit %1$d Tagen. Ganz ohne Eile – komm wieder, wann du willst.</string>
+    <string name="onboarding_recap_tomorrow">Morgen brennt deine Flamme seit %d Tagen. Ganz ohne Eile – komm wieder, wann du willst.</string>
     <plurals name="onboarding_reward_announce">
         <item quantity="one">Plus %d Funke</item>
         <item quantity="other">Plus %d Funken</item>
