@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:game": {
+      "resDir": "feature/game/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "game.flame_panel.title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.flame_panel.bonus",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.flame_panel.freezes",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.flame_panel.freeze_full",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.flame_panel.freeze_buy",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.flame_panel.relight_intro",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.flame_panel.relight",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.flame_panel.relight_missing_window",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.flame_panel.relight_closed",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.flame_panel.offline",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.spend.missing.freeze",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.spend.missing.relight",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

@@ -389,6 +389,16 @@
     <string name="game_flame_form_line">%1$s · +%2$s %% en tus sueños</string>
     <string name="game_flame_form_soleil">Sol</string>
     <string name="game_flame_no_streak">Llama por encender</string>
+    <string name="game_flame_panel_bonus">Cada día de Llama alimenta tus sueños: +%1$s %% de chispas por acto, hasta +%2$s %%.</string>
+    <string name="game_flame_panel_freeze_buy">Tomar una Vela · %s</string>
+    <string name="game_flame_panel_freeze_full">Tus Velas están completas: una Vela mantiene tu Llama encendida un día de ausencia, no necesitas otra.</string>
+    <string name="game_flame_panel_freezes">Velas: %1$s / %2$s</string>
+    <string name="game_flame_panel_offline">Sin conexión: las Velas y el reencendido se reanudarán con la conexión.</string>
+    <string name="game_flame_panel_relight">Volver a encender la Llama · %s</string>
+    <string name="game_flame_panel_relight_closed">Esta Llama ya no se puede volver a encender. Una nueva Llama empieza con tu próximo gesto.</string>
+    <string name="game_flame_panel_relight_intro">Tu Llama se apagó: vuelve a encenderla ahora, continúa donde se quedó.</string>
+    <string name="game_flame_panel_relight_missing_window">Necesitas %s para volver a encenderla, si se apagó hace menos de 48 h.</string>
+    <string name="game_flame_panel_title">Velar por tu Llama</string>
     <string name="game_flame_status_at_risk">Haz un gesto antes de medianoche</string>
     <string name="game_level_cap_short">se abre con el rango %s</string>
     <string name="game_level_ring_a11y">Nivel %1$s, %2$s, %3$s estado de tu luz</string>
@@ -508,6 +518,8 @@
         <item quantity="other">%d chispas</item>
     </plurals>
     <string name="game_sparks_debt">Una sombra sobre %s chispas</string>
+    <string name="game_spend_missing_freeze">Te faltan %s para tomar una Vela.</string>
+    <string name="game_spend_missing_relight">Te faltan %s para volver a encender tu Llama.</string>
     <string name="game_spend_missing_reroll">Te faltan %s para cambiar este acto.</string>
     <string name="game_starFragments_one">%s fragmento de estrella</string>
     <string name="game_starFragments_other">%s fragmentos de estrella</string>

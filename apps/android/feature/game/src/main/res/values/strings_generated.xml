@@ -389,6 +389,16 @@
     <string name="game_flame_form_line">%1$s · +%2$s %% on your dreams</string>
     <string name="game_flame_form_soleil">Sun</string>
     <string name="game_flame_no_streak">A Flame to light</string>
+    <string name="game_flame_panel_bonus">Each day of Flame feeds your dreams: +%1$s %% sparks per act, up to +%2$s %%.</string>
+    <string name="game_flame_panel_freeze_buy">Take a Vigil · %s</string>
+    <string name="game_flame_panel_freeze_full">Your Vigils are all here: a Vigil keeps your Flame lit for one day away, and you don’t need another.</string>
+    <string name="game_flame_panel_freezes">Vigils: %1$s / %2$s</string>
+    <string name="game_flame_panel_offline">Offline: Vigils and relighting will resume once you’re connected.</string>
+    <string name="game_flame_panel_relight">Relight the Flame · %s</string>
+    <string name="game_flame_panel_relight_closed">This Flame can no longer be relit. A new Flame starts with your next action.</string>
+    <string name="game_flame_panel_relight_intro">Your Flame went out: relight it now, it picks up where it stopped.</string>
+    <string name="game_flame_panel_relight_missing_window">You need %s to relight it, if it went out less than 48 h ago.</string>
+    <string name="game_flame_panel_title">Watch over your Flame</string>
     <string name="game_flame_status_at_risk">Do something before midnight</string>
     <string name="game_level_cap_short">opens at the %s rank</string>
     <string name="game_level_ring_a11y">Level %1$s, %2$s, %3$s phase of your light</string>
@@ -506,6 +516,8 @@
         <item quantity="other">%d sparks</item>
     </plurals>
     <string name="game_sparks_debt">A shadow on %s sparks</string>
+    <string name="game_spend_missing_freeze">You lack %s to take a Vigil.</string>
+    <string name="game_spend_missing_relight">Still missing to relight your Flame: %s.</string>
     <string name="game_spend_missing_reroll">You lack %s to change this act.</string>
     <string name="game_starFragments_one">%s star fragment</string>
     <string name="game_starFragments_other">%s star fragments</string>

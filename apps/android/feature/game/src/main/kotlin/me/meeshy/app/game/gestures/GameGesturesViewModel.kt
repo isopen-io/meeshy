@@ -22,7 +22,7 @@ import me.meeshy.sdk.model.game.GameRefusalLaw
 import me.meeshy.sdk.network.NetworkMonitor
 
 /** Les gestes du jeu qui touchent un solde. Un seul vol à la fois PAR geste : un double appui n'envoie qu'une requête. */
-enum class GameGesture { Reroll, Chest }
+enum class GameGesture { Reroll, Chest, Freeze, Relight }
 
 /**
  * Le refus du DERNIER essai d'un geste. Jamais un code affiché : l'écran le met en phrase ([offline] ⇒ rien n'est
@@ -36,6 +36,8 @@ data class GameGesturesUiState(
     /** La mission dont la remplaçante est attendue. */
     val rerollingMissionId: String? = null,
     val chestOpening: Boolean = false,
+    val buyingFreeze: Boolean = false,
+    val relighting: Boolean = false,
     val failures: Map<GameGesture, GameGestureFailure> = emptyMap(),
     /** Le contenu du coffre TEL QUE LA PASSERELLE L'A RENDU — posé à la réponse, jamais deviné. */
     val chestReward: DailyChest? = null,
@@ -84,6 +86,8 @@ class GameGesturesViewModel internal constructor(
             online = online,
             rerollingMissionId = rerolling,
             chestOpening = GameGesture.Chest in busy,
+            buyingFreeze = GameGesture.Freeze in busy,
+            relighting = GameGesture.Relight in busy,
             failures = failed,
             chestReward = reward,
         )
@@ -101,6 +105,16 @@ class GameGesturesViewModel internal constructor(
     /** Ouvrir l'Offrande du jour. Son contenu n'existe qu'une fois la passerelle l'a tiré : il se pose à la réponse. */
     fun claimChest() {
         run(GameGesture.Chest, "chest", onDone = { chestReward.value = it.reward }) { id -> gestures.claimChest(id) }
+    }
+
+    /** Prendre une Veilleuse : 1 Meesh, 2 en réserve au plus. Le nombre de Veilleuses est celui que la passerelle sert ensuite. */
+    fun buyFreeze() {
+        run(GameGesture.Freeze, "freeze") { id -> gestures.buyFlameFreeze(id) }
+    }
+
+    /** Rallumer la Flamme éteinte : 3 Meeshes, 48 h, une fois par mois. La série rendue est celle de la passerelle. */
+    fun relight() {
+        run(GameGesture.Relight, "relight") { id -> gestures.relightFlame(id) }
     }
 
     private fun <T : Any> run(

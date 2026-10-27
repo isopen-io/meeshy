@@ -389,6 +389,16 @@
     <string name="game_flame_form_line">%1$s · ⁦+%2$s %%⁩ على أحلامك</string>
     <string name="game_flame_form_soleil">شمس</string>
     <string name="game_flame_no_streak">لهب ينتظر الإشعال</string>
+    <string name="game_flame_panel_bonus">كل يوم من اللهب يغذّي أحلامك: ⁦+%1$s %%⁩ من الشرارات لكل فصل، حتى ⁦+%2$s %%⁩.</string>
+    <string name="game_flame_panel_freeze_buy">خذ قنديلًا · %s</string>
+    <string name="game_flame_panel_freeze_full">قناديلك مكتملة: القنديل يُبقي لهبك مشتعلًا يوم غيابك، ولا تحتاج إلى قنديل آخر.</string>
+    <string name="game_flame_panel_freezes">القناديل: ⁦%1$s / %2$s⁩</string>
+    <string name="game_flame_panel_offline">بلا اتصال: ستعود القناديل وإعادة الإشعال مع عودة الاتصال.</string>
+    <string name="game_flame_panel_relight">أعد إشعال اللهب · %s</string>
+    <string name="game_flame_panel_relight_closed">لا يمكن إعادة إشعال هذا اللهب بعد الآن. يبدأ لهب جديد مع إجرائك التالي.</string>
+    <string name="game_flame_panel_relight_intro">انطفأ لهبك: أعد إشعاله الآن، فيستأنف من حيث توقّف.</string>
+    <string name="game_flame_panel_relight_missing_window">تحتاج إلى %s لإعادة إشعاله إذا انطفأ قبل أقل من 48 ساعة.</string>
+    <string name="game_flame_panel_title">اسهر على لهبك</string>
     <string name="game_flame_status_at_risk">قم بإجراء قبل منتصف الليل</string>
     <string name="game_level_cap_short">يُفتح برتبة %s</string>
     <string name="game_level_ring_a11y">المستوى %1$s، %2$s، الحالة %3$s لنورك</string>
@@ -514,6 +524,8 @@
         <item quantity="other">%d شرارة</item>
     </plurals>
     <string name="game_sparks_debt">ظلّ على ⁦%s⁩ شرارة</string>
+    <string name="game_spend_missing_freeze">ينقصك %s لأخذ قنديل.</string>
+    <string name="game_spend_missing_relight">ينقص %s لإعادة إشعال لهبك.</string>
     <string name="game_spend_missing_reroll">ينقصك %s لتبديل هذا الفصل.</string>
     <string name="game_starFragments_one">%s شظية نجم</string>
     <string name="game_starFragments_other">%s شظايا نجم</string>
