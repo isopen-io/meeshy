@@ -14,6 +14,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import java.time.ZoneId
 import java.util.Locale
+import me.meeshy.app.chat.mediahub.ConversationMediaHubSheet
 import me.meeshy.feature.chat.R
 import me.meeshy.sdk.model.MessageDeletability
 import me.meeshy.sdk.model.MessageEditability
@@ -154,11 +155,12 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
             }
             add(ConversationInfoEntry(MeeshyIcons.ChartBar, stringResource(R.string.conversation_stats_title), openFrom { sheets.stats = true }))
             add(ConversationInfoEntry(MeeshyIcons.Sparkles, stringResource(R.string.conversation_analysis_title), openFrom { sheets.analysis = true }))
+            add(ConversationInfoEntry(MeeshyIcons.PhotoLibrary, stringResource(R.string.media_hub_title), openFrom { sheets.media = true }))
             // Moderator+ viewers of a group get the admin surfaces: the share-link creator
             // and the conversation-settings sheet (write-role / announcement / slow-mode).
             if (state.slowModeExempt) {
                 if (state.isGroup) {
-                    add(ConversationInfoEntry(MeeshyIcons.AddLink, stringResource(R.string.chat_create_share_link), openFrom(host.navigation.onCreateShareLink)))
+                    add(ConversationInfoEntry(MeeshyIcons.AddLink, stringResource(R.string.context_invite_friends), openFrom(host.navigation.onCreateShareLink)))
                 }
                 add(ConversationInfoEntry(MeeshyIcons.Tune, stringResource(R.string.conversation_settings_title), openFrom { sheets.settings = true }))
             }
@@ -204,6 +206,19 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
             accentColor = accentColor,
             clientMessages = clientMessages,
             onDismiss = { sheets.stats = false },
+        )
+    }
+
+    if (sheets.media) {
+        ConversationMediaHubSheet(
+            conversationId = state.conversationId,
+            accentColor = accentColor,
+            isEndToEnd = state.isEndToEnd,
+            onGoToMessage = { messageId ->
+                sheets.media = false
+                actions.scrollToMessage(messageId)
+            },
+            onDismiss = { sheets.media = false },
         )
     }
 

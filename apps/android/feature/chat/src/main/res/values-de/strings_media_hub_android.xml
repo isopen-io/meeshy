@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="media_hub_encrypted_notice">Verschlüsselte Unterhaltung: Dateien bleiben versiegelt, ihre Vorschauen können hier nicht angezeigt werden.</string>
+    <string name="media_hub_encrypted_tile">Verschlüsselte Datei</string>
+</resources>

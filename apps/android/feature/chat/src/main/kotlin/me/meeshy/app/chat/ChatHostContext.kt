@@ -53,6 +53,9 @@ internal class ChatSheetVisibility {
 
     /** La fiche Conversation, ouverte par l'avatar de l'en-tête (parité iOS `ConversationInfoSheet`). */
     var info by mutableStateOf(false)
+
+    /** L'écran « Médias, liens et documents », ouvert depuis la fiche Conversation. */
+    var media by mutableStateOf(false)
 }
 
 /**
