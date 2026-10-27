@@ -15,6 +15,7 @@
     "logger-subsystem": 0,
     "narrative-comment": 2458,
     "nonisolated-unsafe": 107,
+    "nse-full-sdk-import": 10,
     "nslock": 34,
     "nslog": 0,
     "observed-singleton": 0,

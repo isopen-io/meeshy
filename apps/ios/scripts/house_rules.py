@@ -85,6 +85,11 @@ RULES = (
         r"(?m)^[ \t]*(?:@\w+[ \t]+)*import[ \t]+GRDB\b(?!\w)",
         r"^apps/ios/Meeshy(?:NotificationExtension|NotificationContentExtension|ShareExtension|BroadcastExtension|Widgets)?/",
     ),
+    _named(
+        "nse-full-sdk-import",
+        r"(?m)^[ \t]*(?:@\w+[ \t]+)*import[ \t]+MeeshySDK\b(?!\w)",
+        r"^apps/ios/MeeshyNotificationExtension/",
+    ),
     Rule("unchecked-sendable", re.compile(r"@unchecked\s+Sendable"), "unchecked"),
     _pattern("unchecked-sendable-total", r"@unchecked\s+Sendable"),
     Rule("available-floor", re.compile(r"#available\(\s*iOS\s+(\d+)(?:\.(\d+))?"), "floor"),

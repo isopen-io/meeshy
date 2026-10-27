@@ -496,6 +496,29 @@ class AppGRDBImportRule(unittest.TestCase):
                 self.assertEqual(count("app-grdb-import", "import GRDB\n", rel), 0)
 
 
+class NotificationExtensionFullSDKImportRule(unittest.TestCase):
+    NSE = "apps/ios/MeeshyNotificationExtension/X.swift"
+
+    def test_counts_each_extension_file_importing_the_whole_sdk(self):
+        for src in ("import MeeshySDK\n", "@preconcurrency import MeeshySDK\n", "import Foundation\nimport MeeshySDK\n"):
+            with self.subTest(src=src):
+                self.assertEqual(count("nse-full-sdk-import", src, self.NSE), 1)
+
+    def test_the_light_core_and_lookalikes_do_not_count(self):
+        for src in ("import MeeshyCore\n", "import MeeshySDKTesting\n", "// import MeeshySDK\n", "let s = \"import MeeshySDK\"\n"):
+            with self.subTest(src=src):
+                self.assertEqual(count("nse-full-sdk-import", src, self.NSE), 0)
+
+    def test_only_the_notification_service_extension_is_measured(self):
+        for rel in (
+            "apps/ios/Meeshy/X.swift",
+            "apps/ios/MeeshyShareExtension/X.swift",
+            "packages/MeeshySDK/Sources/MeeshyUI/X.swift",
+        ):
+            with self.subTest(rel=rel):
+                self.assertEqual(count("nse-full-sdk-import", "import MeeshySDK\n", rel), 0)
+
+
 class CommittedBaseline(unittest.TestCase):
     def setUp(self):
         scanned = ENGINE.scan(ENGINE.collect(ENGINE.ROOT))
