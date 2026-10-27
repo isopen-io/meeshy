@@ -148,7 +148,7 @@ SOURCES DE VERITE, dans cet ordre — lis-les AVANT d'ecrire quoi que ce soit :
 1. ${IOS}/Meeshy/Features/** et ${SDK}/Sources/**   LA REFERENCE (decision D-1) : disposition,
    hierarchie, etats et gestes de CHAQUE ecran se lisent dans le code SwiftUI — jamais dans la
    planche web de l'ancienne v3. Un ecran apps/web se specifie en CITANT les fichiers Swift qui
-   font foi (Features/Main/Views/*, Features/Lens/*, Features/Main/Focal/*,
+   font foi (Features/Main/Views/*, Features/Lens/*, Features/Focal/*,
    Features/River/*, Features/Main/Composer/*, Features/Stories/*, Features/Auth/*,
    Features/Contacts/*).
 2. ${V3}/decisions.md   les decisions D-1 a D-14 (et suivantes), OPPOSABLES : D-1 la v4 suit

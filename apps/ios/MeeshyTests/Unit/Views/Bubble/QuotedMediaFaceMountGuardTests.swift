@@ -28,7 +28,7 @@ final class QuotedMediaFaceMountGuardTests: XCTestCase {
     func test_lesDeuxPeaux_montentLePosterEtLApercuAudio_parLaRegle() throws {
         let skins = [
             "Meeshy/Features/Main/Views/Bubble/BubbleQuotedReply.swift",
-            "Meeshy/Features/Main/Focal/Row/FocalQuotedReplyView.swift"
+            "Meeshy/Features/Focal/Row/FocalQuotedReplyView.swift"
         ]
         for path in skins {
             let code = try source(path)

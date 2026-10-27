@@ -112,7 +112,7 @@ final class LivePresenceRepaintGuardTests: XCTestCase {
         "Features/Main/Views/ConversationView+ReaderLayers.swift": "fil de messages — repeint par MessageListViewController (refreshSignal)",
         "Features/Main/Views/MessageListViewController+MessageCellInputs.swift": "fil de messages — repeint par MessageListViewController (refreshSignal)",
         "Features/Main/Views/Bubble/BubbleStandardLayout+Attachments.swift": "fil de messages — repeint par MessageListViewController (refreshSignal)",
-        "Features/Main/Focal/Summary/LivingSummaryAssembly.swift": "assemblage du résumé, résolu à sa construction (suivi #11412)",
+        "Features/Focal/Summary/LivingSummaryAssembly.swift": "assemblage du résumé, résolu à sa construction (suivi #11412)",
         "Features/Main/Components/MessageOverlayMenu.swift": "menu transitoire, résolu à l'ouverture",
         "Features/Main/Views/StoryViewerView.swift": "face voisine du cube, résolue au basculement (directive 2026-07-10)",
         "Features/Main/Views/StoryViewerView+GroupIntro.swift": "interstitiel, résolu au basculement (directive 2026-07-10)",

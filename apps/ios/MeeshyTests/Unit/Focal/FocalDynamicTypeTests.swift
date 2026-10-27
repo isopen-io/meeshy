@@ -37,14 +37,14 @@ final class FocalDynamicTypeTests: XCTestCase {
             .deletingLastPathComponent()   // .../Unit
             .deletingLastPathComponent()   // .../MeeshyTests
             .deletingLastPathComponent()   // .../apps/ios
-            .appendingPathComponent("Meeshy/Features/Main/Focal/Row")
+            .appendingPathComponent("Meeshy/Features/Focal/Row")
     }
 
     private func bubbleRoot() -> URL {
         rowRoot()
             .deletingLastPathComponent()   // .../Focal
-            .deletingLastPathComponent()   // .../Main
-            .appendingPathComponent("Views/Bubble")
+            .deletingLastPathComponent()   // .../Features
+            .appendingPathComponent("Main/Views/Bubble")
     }
 
     private func source(_ url: URL) throws -> String {

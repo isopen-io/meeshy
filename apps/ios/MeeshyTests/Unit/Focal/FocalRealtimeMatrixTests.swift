@@ -42,7 +42,7 @@ final class FocalRealtimeMatrixTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Focal/Row")
+            .appendingPathComponent("Meeshy/Features/Focal/Row")
     }
 
     private func source(_ url: URL) throws -> String {
@@ -388,7 +388,7 @@ final class FocalRealtimeMatrixTests: XCTestCase {
     /// deux implémentations divergentes.
     func test_F12_searchAndQuoteJump_shareTheSameLandingMechanism() throws {
         let views = rowRoot().deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Views")
+            .appendingPathComponent("Main/Views")
         // La fin de passe (re-visée) vit dans l'extension `+ScrollSettle`
         // depuis #9907 : le témoin lit l'hôte SEUL et cette extension — pas
         // l'unité entière, où `+UnreadSeparator` pose son propre atterrissage,
@@ -435,7 +435,7 @@ final class FocalRealtimeMatrixTests: XCTestCase {
     /// MessageListLayout.
     func test_F14_offsetPreservation_isCarriedByMessageListLayout() throws {
         let root = rowRoot().deletingLastPathComponent().deletingLastPathComponent()
-        let code = try source(root.appendingPathComponent("Views/MessageListViewController.swift"))
+        let code = try source(root.appendingPathComponent("Main/Views/MessageListViewController.swift"))
         XCTAssertTrue(
             code.contains("MessageListLayout {"),
             "F14 : l'hôte doit construire MessageListLayout — c'est lui qui préserve le champ visuel au prepend de pagination"

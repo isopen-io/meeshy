@@ -1157,13 +1157,13 @@ final class MessageExitOfferTests: XCTestCase {
     /// celui de son porteur, et seuls les hôtes de PUBLICATION ouvrent.
     func test_hosts_poseTheGateOfTheirCarrier() throws {
         XCTAssertTrue(try source("Views/ThemedMessageBubble.swift").contains(".contentExitGate(message.exitGate)"))
-        XCTAssertTrue(try source("Focal/Row/FocalRow.swift").contains(".contentExitGate(content.exitGate)"))
+        XCTAssertTrue(try source("../Focal/Row/FocalRow.swift").contains(".contentExitGate(content.exitGate)"))
         XCTAssertTrue(try source("Views/ConversationView+MediaGallery.swift").contains(".contentExitGate(mediaExitGate)"))
         XCTAssertTrue(try source("Views/ConversationMediaViews.swift").contains(".mediaExitGate(carriers:allAudioItems.map(\\.message))"))
         let hub = try source("Components/MediaHub/ConversationMediaHubView.swift")
         XCTAssertTrue(hub.contains(".contentExitGate(model.carrier(item.messageId)?.exitGate??.sealed)"))
         XCTAssertFalse(hub.contains(".contentExitGate(.open)"))
-        for conversationHost in ["Views/ThemedMessageBubble.swift", "Focal/Row/FocalRow.swift",
+        for conversationHost in ["Views/ThemedMessageBubble.swift", "../Focal/Row/FocalRow.swift",
                                  "Views/ConversationView+MediaGallery.swift", "Views/ConversationMediaViews.swift"] {
             XCTAssertFalse(try source(conversationHost).contains(".contentExitGate(.open)"),
                            "\(conversationHost) : un hôte de conversation n'ouvre jamais d'office")

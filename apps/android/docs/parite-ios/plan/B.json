@@ -1898,7 +1898,7 @@
    "apps/android/sdk-ui/src/main/res/values-pt/strings_message_a11y.xml"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Focal/Preferences/MessageAccessibilityLabelComposer.swift"
+   "apps/ios/Meeshy/Features/Focal/Preferences/MessageAccessibilityLabelComposer.swift"
   ],
   "feature_keys": [
    "cl-message-a11y-label"
@@ -2040,14 +2040,14 @@
    "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/reading/focal/AgentAuthoredStyle.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Focal/Core/FocalMetrics.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Core/LongMessageExpansionLaw.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Core/KeyboardFirstScroll.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Core/FocalChromeReturn.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Row/FocalAttachmentBlock.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Row/FocalAudioBlock.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Row/FocalProtectedContent.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Agent/AgentAuthoredStyle.swift"
+   "apps/ios/Meeshy/Features/Focal/Core/FocalMetrics.swift",
+   "apps/ios/Meeshy/Features/Focal/Core/LongMessageExpansionLaw.swift",
+   "apps/ios/Meeshy/Features/Focal/Core/KeyboardFirstScroll.swift",
+   "apps/ios/Meeshy/Features/Focal/Core/FocalChromeReturn.swift",
+   "apps/ios/Meeshy/Features/Focal/Row/FocalAttachmentBlock.swift",
+   "apps/ios/Meeshy/Features/Focal/Row/FocalAudioBlock.swift",
+   "apps/ios/Meeshy/Features/Focal/Row/FocalProtectedContent.swift",
+   "apps/ios/Meeshy/Features/Focal/Agent/AgentAuthoredStyle.swift"
   ],
   "feature_keys": [
    "clist-focal-attachments-grid",
@@ -2097,13 +2097,13 @@
    "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/reading/focal/FocalFocusTimestamp.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Focal/Core/FocalFocusCurve.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Core/FocalScrollPerspective.swift",
+   "apps/ios/Meeshy/Features/Focal/Core/FocalFocusCurve.swift",
+   "apps/ios/Meeshy/Features/Focal/Core/FocalScrollPerspective.swift",
    "apps/ios/Meeshy/Features/Lens/Perspective/LentilleFocusElection.swift",
    "apps/ios/Meeshy/Features/Lens/Perspective/LentilleSceneActivity.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Core/FocalFocusDetailsMotionLaw.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Core/ScrollTimePillLaw.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Core/FocalFocusTimestamp.swift",
+   "apps/ios/Meeshy/Features/Focal/Core/FocalFocusDetailsMotionLaw.swift",
+   "apps/ios/Meeshy/Features/Focal/Core/ScrollTimePillLaw.swift",
+   "apps/ios/Meeshy/Features/Focal/Core/FocalFocusTimestamp.swift",
    "apps/ios/Meeshy/Features/Lens/Perspective/LentillePerspective.swift"
   ],
   "feature_keys": [
@@ -2697,17 +2697,17 @@
    "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/ReadingModeCycle.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Focal/Core/ReadingModeOrchestrator.swift",
+   "apps/ios/Meeshy/Features/Focal/Core/ReadingModeOrchestrator.swift",
    "apps/ios/Meeshy/Features/Lens/Mode/LentilleReadingModeContext.swift",
    "apps/ios/Meeshy/Features/Lens/Core/LentilleProviders.swift",
    "apps/ios/Meeshy/Features/Lens/Core/LentilleBridgeFormatter.swift",
    "apps/ios/Meeshy/Features/Lens/Core/GatewayBridgeProvider.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Core/AgentAssistContracts.swift",
+   "apps/ios/Meeshy/Features/Focal/Core/AgentAssistContracts.swift",
    "apps/ios/Meeshy/Features/Lens/Row/LentilleBridgeLine.swift",
    "apps/ios/Meeshy/Features/River/Core/RiverLaneResolver.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Preferences/ConversationViewerIdentityResolver.swift",
+   "apps/ios/Meeshy/Features/Focal/Preferences/ConversationViewerIdentityResolver.swift",
    "apps/ios/Meeshy/Features/Main/Models/ReadingModeProtectionChrome.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Preferences/ReadingModeController.swift"
+   "apps/ios/Meeshy/Features/Focal/Preferences/ReadingModeController.swift"
   ],
   "feature_keys": [
    "clist-reading-mode-law",
@@ -2898,10 +2898,10 @@
    "apps/android/sdk-core/src/test/kotlin/me/meeshy/sdk/settings/InterfaceFeatureFlagsStoreTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Focal/Preferences/ReadingModePreferenceStore.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Preferences/ReadingModeController.swift",
+   "apps/ios/Meeshy/Features/Focal/Preferences/ReadingModePreferenceStore.swift",
+   "apps/ios/Meeshy/Features/Focal/Preferences/ReadingModeController.swift",
    "apps/ios/Meeshy/Features/Lens/Core/LentilleFeatureFlag.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Preferences/MeeshyFeatureFlags.swift",
+   "apps/ios/Meeshy/Features/Focal/Preferences/MeeshyFeatureFlags.swift",
    "apps/ios/Meeshy/Features/Main/Views/SettingsView.swift"
   ],
   "feature_keys": [
@@ -2967,14 +2967,14 @@
    "apps/android/sdk-ui/src/main/res/values-pt/strings_focal_row.xml"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Focal/Row/FocalRow.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Core/FocalRowInput.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Core/FocalMetrics.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Row/FocalIdentityHeader.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Row/FocalMetaColumn.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Row/FocalMetaRow.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Row/FocalConversationStartRow.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Row/EquatableFocalRow.swift"
+   "apps/ios/Meeshy/Features/Focal/Row/FocalRow.swift",
+   "apps/ios/Meeshy/Features/Focal/Core/FocalRowInput.swift",
+   "apps/ios/Meeshy/Features/Focal/Core/FocalMetrics.swift",
+   "apps/ios/Meeshy/Features/Focal/Row/FocalIdentityHeader.swift",
+   "apps/ios/Meeshy/Features/Focal/Row/FocalMetaColumn.swift",
+   "apps/ios/Meeshy/Features/Focal/Row/FocalMetaRow.swift",
+   "apps/ios/Meeshy/Features/Focal/Row/FocalConversationStartRow.swift",
+   "apps/ios/Meeshy/Features/Focal/Row/EquatableFocalRow.swift"
   ],
   "feature_keys": [
    "clist-focal-flat-message-row",
@@ -7788,11 +7788,11 @@
    "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/reading/summary/LivingSummaryAssembly.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Focal/Summary/DeterministicDigestBuilder.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Summary/EpisodeSegmenter.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Summary/FaceRampRanking.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Summary/LivingSummaryAssembly.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Core/LivingSummaryModels.swift"
+   "apps/ios/Meeshy/Features/Focal/Summary/DeterministicDigestBuilder.swift",
+   "apps/ios/Meeshy/Features/Focal/Summary/EpisodeSegmenter.swift",
+   "apps/ios/Meeshy/Features/Focal/Summary/FaceRampRanking.swift",
+   "apps/ios/Meeshy/Features/Focal/Summary/LivingSummaryAssembly.swift",
+   "apps/ios/Meeshy/Features/Focal/Core/LivingSummaryModels.swift"
   ],
   "feature_keys": [
    "cl-living-summary-engine",
@@ -8477,12 +8477,12 @@
    "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/chrome/ScrollMotionVisibility.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Focal/Chrome/ScrollTimePillOverlay.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Chrome/ScrollTimePillState.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Core/ScrollTimePillLaw.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Chrome/FocalTimestampRevealState.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Chrome/EdgeHiddenChrome.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Core/KeyboardFirstScroll.swift"
+   "apps/ios/Meeshy/Features/Focal/Chrome/ScrollTimePillOverlay.swift",
+   "apps/ios/Meeshy/Features/Focal/Chrome/ScrollTimePillState.swift",
+   "apps/ios/Meeshy/Features/Focal/Core/ScrollTimePillLaw.swift",
+   "apps/ios/Meeshy/Features/Focal/Chrome/FocalTimestampRevealState.swift",
+   "apps/ios/Meeshy/Features/Focal/Chrome/EdgeHiddenChrome.swift",
+   "apps/ios/Meeshy/Features/Focal/Core/KeyboardFirstScroll.swift"
   ],
   "feature_keys": [
    "clist-focal-scroll-time-pill",
@@ -8529,9 +8529,9 @@
    "apps/android/sdk-ui/src/main/res/values-pt/strings_long_message.xml"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Focal/Core/LongMessageExpansionLaw.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Row/FocalGlassBlock.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Row/FocalRow.swift"
+   "apps/ios/Meeshy/Features/Focal/Core/LongMessageExpansionLaw.swift",
+   "apps/ios/Meeshy/Features/Focal/Row/FocalGlassBlock.swift",
+   "apps/ios/Meeshy/Features/Focal/Row/FocalRow.swift"
   ],
   "feature_keys": [
    "clist-focal-long-message-expansion"
@@ -8575,9 +8575,9 @@
    "apps/android/feature/chat/src/main/kotlin/me/meeshy/app/chat/ReplyJump.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Focal/Row/FocalQuotedReplyView.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Row/FocalQuoteRail.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Row/FocalRow.swift"
+   "apps/ios/Meeshy/Features/Focal/Row/FocalQuotedReplyView.swift",
+   "apps/ios/Meeshy/Features/Focal/Row/FocalQuoteRail.swift",
+   "apps/ios/Meeshy/Features/Focal/Row/FocalRow.swift"
   ],
   "feature_keys": [
    "clist-focal-quoted-reply"
@@ -8625,10 +8625,10 @@
    "apps/android/feature/chat/src/main/kotlin/me/meeshy/app/chat/FlatThreadRow.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Focal/Row/FocalAttachmentBlock.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Row/FocalNonMediaBlock.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Row/FocalProtectedContent.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Row/FocalRow.swift"
+   "apps/ios/Meeshy/Features/Focal/Row/FocalAttachmentBlock.swift",
+   "apps/ios/Meeshy/Features/Focal/Row/FocalNonMediaBlock.swift",
+   "apps/ios/Meeshy/Features/Focal/Row/FocalProtectedContent.swift",
+   "apps/ios/Meeshy/Features/Focal/Row/FocalRow.swift"
   ],
   "feature_keys": [
    "clist-focal-attachments-grid",
@@ -8673,9 +8673,9 @@
    "apps/android/feature/chat/src/main/kotlin/me/meeshy/app/chat/FlatThreadRow.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Focal/Row/FocalAudioBlock.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Row/FocalSystemRows.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Row/FocalRow.swift"
+   "apps/ios/Meeshy/Features/Focal/Row/FocalAudioBlock.swift",
+   "apps/ios/Meeshy/Features/Focal/Row/FocalSystemRows.swift",
+   "apps/ios/Meeshy/Features/Focal/Row/FocalRow.swift"
   ],
   "feature_keys": [
    "clist-focal-audio-block",
@@ -8798,8 +8798,8 @@
    "apps/android/feature/chat/src/main/kotlin/me/meeshy/app/chat/ReadingModeMenu.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Focal/Lens/ReadingModeChip.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Lens/ReadingModeLensSheet.swift",
+   "apps/ios/Meeshy/Features/Focal/Lens/ReadingModeChip.swift",
+   "apps/ios/Meeshy/Features/Focal/Lens/ReadingModeLensSheet.swift",
    "apps/ios/Meeshy/Features/Lens/Mode/LentilleModeMenu.swift",
    "apps/ios/Meeshy/Features/Lens/Mode/LentilleModeLabels.swift",
    "apps/ios/Meeshy/Features/Lens/Mode/LentilleReadingModeContext.swift"
@@ -9038,13 +9038,13 @@
    "apps/android/feature/chat/src/main/kotlin/me/meeshy/app/chat/summary/EpisodeListView.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Focal/Summary/LivingSummaryView.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Summary/LivingSummaryHost.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Summary/LivingSummaryViewModel.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Summary/FaceRampView.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Summary/EpisodeListView.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Summary/SummaryProtectionsView.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Summary/ConversationAnalysisProviding.swift"
+   "apps/ios/Meeshy/Features/Focal/Summary/LivingSummaryView.swift",
+   "apps/ios/Meeshy/Features/Focal/Summary/LivingSummaryHost.swift",
+   "apps/ios/Meeshy/Features/Focal/Summary/LivingSummaryViewModel.swift",
+   "apps/ios/Meeshy/Features/Focal/Summary/FaceRampView.swift",
+   "apps/ios/Meeshy/Features/Focal/Summary/EpisodeListView.swift",
+   "apps/ios/Meeshy/Features/Focal/Summary/SummaryProtectionsView.swift",
+   "apps/ios/Meeshy/Features/Focal/Summary/ConversationAnalysisProviding.swift"
   ],
   "feature_keys": [
    "cl-living-summary-screen",
@@ -11365,11 +11365,11 @@
    "apps/android/sdk-ui/src/main/res/values-pt/strings_focal_focus.xml"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Focal/Row/FocalFocusChrome.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Row/FocalGlassBlock.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Core/FocalScrollPerspective.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Core/FocalFocusTimestamp.swift",
-   "apps/ios/Meeshy/Features/Main/Focal/Core/FocalFocusDetailsMotionLaw.swift"
+   "apps/ios/Meeshy/Features/Focal/Row/FocalFocusChrome.swift",
+   "apps/ios/Meeshy/Features/Focal/Row/FocalGlassBlock.swift",
+   "apps/ios/Meeshy/Features/Focal/Core/FocalScrollPerspective.swift",
+   "apps/ios/Meeshy/Features/Focal/Core/FocalFocusTimestamp.swift",
+   "apps/ios/Meeshy/Features/Focal/Core/FocalFocusDetailsMotionLaw.swift"
   ],
   "feature_keys": [
    "clist-focal-focus-card",

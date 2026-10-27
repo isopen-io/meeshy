@@ -232,7 +232,7 @@ final class FocalScrollPerspectiveTests: XCTestCase {
             )
         }
         // La machinerie RESTE en place : c'est le point de rebranchement.
-        let perspective = try normalizedSource("Meeshy/Features/Main/Focal/Core/FocalScrollPerspective.swift")
+        let perspective = try normalizedSource("Meeshy/Features/Focal/Core/FocalScrollPerspective.swift")
         XCTAssertTrue(perspective.contains("static let overscanFraction"), "la fraction reste nommée")
         let layout = try normalizedSource("Meeshy/Features/Main/Views/MessageListLayout.swift")
         XCTAssertTrue(layout.contains("let extended = rect.insetBy(dx: 0, dy: -focalOverscan)"), "le layout garde son extension de rect")

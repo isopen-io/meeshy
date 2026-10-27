@@ -215,14 +215,14 @@ final class FocalMetricsTests: XCTestCase {
         XCTAssertEqual(try tokenNumber("pill", "dismissAfterMs"), 900, "le JSON documente toujours la loi à 900 ms")
 
         // Ce fichier vit sous apps/ios/MeeshyTests/Unit/Focal/ ; la source
-        // sous apps/ios/Meeshy/Features/Main/Focal/Core/ — 4 remontées
+        // sous apps/ios/Meeshy/Features/Focal/Core/ — 4 remontées
         // jusqu'à apps/ios/, puis redescente vers la source.
         let sourceURL = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent() // Focal/
             .deletingLastPathComponent() // Unit/
             .deletingLastPathComponent() // MeeshyTests/
             .deletingLastPathComponent() // apps/ios/
-            .appendingPathComponent("Meeshy/Features/Main/Focal/Core/FocalMetrics.swift")
+            .appendingPathComponent("Meeshy/Features/Focal/Core/FocalMetrics.swift")
         let source = try String(contentsOf: sourceURL, encoding: .utf8)
         let codeLines = AppSourceGuard.strippedLines(source)
             .map { $0.trimmingCharacters(in: .whitespaces) }

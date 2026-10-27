@@ -19,7 +19,7 @@
 #
 # Skin files (rule R15, contract §5):
 #   - apps/ios/Meeshy/Features/Lens/** (except Core/** — hosts law mirrors)
-#   - apps/ios/Meeshy/Features/Main/Focal/** (except Core/** — hosts law mirrors)
+#   - apps/ios/Meeshy/Features/Focal/** (except Core/** — hosts law mirrors)
 #   - apps/ios/Meeshy/Features/River/** (except Core/** — hosts law mirrors)
 #
 # Le web n'a plus de racine de peau ICI : les peaux Lentille/Focal/Rivière du
@@ -57,7 +57,7 @@ NC='\033[0m' # No Color
 # Directories to scan
 declare -a SKIN_DIRS=(
   "apps/ios/Meeshy/Features/Lens"
-  "apps/ios/Meeshy/Features/Main/Focal"
+  "apps/ios/Meeshy/Features/Focal"
   "apps/ios/Meeshy/Features/River"
 )
 

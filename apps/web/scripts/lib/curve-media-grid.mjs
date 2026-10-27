@@ -32,7 +32,7 @@ import { readSwiftDesignTokens, SWIFT_VALUE } from './swift-design-tokens.mjs';
 export function mediaGridCurveFailures({ root, count }) {
   const failures = [];
   const focalAttachmentSwift = readFileSync(
-    `${root}apps/ios/Meeshy/Features/Main/Focal/Row/FocalAttachmentBlock.swift`,
+    `${root}apps/ios/Meeshy/Features/Focal/Row/FocalAttachmentBlock.swift`,
     'utf8',
   );
   const bubbleMediaSwift = readFileSync(

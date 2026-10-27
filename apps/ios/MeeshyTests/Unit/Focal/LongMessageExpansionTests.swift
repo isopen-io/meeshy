@@ -113,15 +113,15 @@ final class LongMessageExpansionTests: XCTestCase {
     }
 
     func test_theReadMoreSheet_isGone_andNothingPresentsItAgain() throws {
-        let sheetPath = Self.iosRoot.appendingPathComponent("Meeshy/Features/Main/Focal/Lens/FocalReadMoreSheet.swift").path
+        let sheetPath = Self.iosRoot.appendingPathComponent("Meeshy/Features/Focal/Lens/FocalReadMoreSheet.swift").path
         XCTAssertFalse(FileManager.default.fileExists(atPath: sheetPath), "la feuille « Lire plus » est supprimée (#8147)")
         let chain = [
             "Meeshy/Features/Main/Views/ConversationView.swift",
             "Meeshy/Features/Main/Views/ConversationView+MessageListLayer.swift",
             "Meeshy/Features/Main/Views/MessageListView.swift",
             "Meeshy/Features/Main/Views/MessageListViewController.swift",
-            "Meeshy/Features/Main/Focal/Core/FocalRowInput.swift",
-            "Meeshy/Features/Main/Focal/Row/FocalRow.swift",
+            "Meeshy/Features/Focal/Core/FocalRowInput.swift",
+            "Meeshy/Features/Focal/Row/FocalRow.swift",
         ]
         for path in chain {
             let code = try source(path)
@@ -142,7 +142,7 @@ final class LongMessageExpansionTests: XCTestCase {
     }
 
     func test_everyReadingMode_mountsTheInPlaceExpansion() throws {
-        let row = try source("Meeshy/Features/Main/Focal/Row/FocalRow.swift")
+        let row = try source("Meeshy/Features/Focal/Row/FocalRow.swift")
         XCTAssertTrue(row.contains("expansion: expansion"), "Script/Focal : la rangée plate déplie en place")
         let host = try source("Meeshy/Features/Main/Views/MessageListViewController.swift")
         // L'état est lu AVANT la fermeture stockée de la cellule (c97e31e6ca) : la lire dedans capturait le contrôleur

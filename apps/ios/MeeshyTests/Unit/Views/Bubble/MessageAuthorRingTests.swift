@@ -81,11 +81,11 @@ final class MessageAuthorRingTests: XCTestCase {
     }
 
     func test_guard_focalAndScriptHeaderPassTheServedRingToTheAvatar() throws {
-        let header = try source("Meeshy/Features/Main/Focal/Row/FocalIdentityHeader.swift")
+        let header = try source("Meeshy/Features/Focal/Row/FocalIdentityHeader.swift")
         XCTAssertTrue(header.contains("ring: senderRing,"))
         XCTAssertFalse(header.contains(".avatarRingWithin("))
-        let row = try source("Meeshy/Features/Main/Focal/Row/FocalRow.swift")
-            + "\n" + source("Meeshy/Features/Main/Focal/Row/FocalFocusChrome.swift")
+        let row = try source("Meeshy/Features/Focal/Row/FocalRow.swift")
+            + "\n" + source("Meeshy/Features/Focal/Row/FocalFocusChrome.swift")
         XCTAssertEqual(row.components(separatedBy: "senderRing: input.senderRing").count - 1, 2, "les deux en-têtes de la rangée plate")
         let rows = try source("Meeshy/Features/Main/Views/MessageListViewController+Rows.swift")
         XCTAssertTrue(rows.contains("senderRing: isMine ? nil : message.senderRing"))
@@ -97,7 +97,7 @@ final class MessageAuthorRingTests: XCTestCase {
     func test_guard_noDecorSurfaceFreezesItsAnimatedLayer() throws {
         let surfaces = [
             "Meeshy/Features/Main/Views/Bubble/BubbleFooter.swift",
-            "Meeshy/Features/Main/Focal/Row/FocalIdentityHeader.swift",
+            "Meeshy/Features/Focal/Row/FocalIdentityHeader.swift",
             "Meeshy/Features/Main/Views/ThemedConversationRow.swift",
             "Meeshy/Features/Lens/Row/LentilleConversationRow.swift",
             "Meeshy/Features/Main/Views/ParticipantsView.swift",
