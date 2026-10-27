@@ -15,6 +15,7 @@ import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.OutboxRepository
 import me.meeshy.sdk.outbox.SendResult
 import me.meeshy.sdk.post.PostRepository
+import me.meeshy.sdk.story.StoryDraftConfirmation
 import me.meeshy.sdk.story.StoryRepository
 import org.junit.Test
 import java.io.IOException
@@ -25,6 +26,7 @@ class SocialSendersTest {
     private val postRepository = mockk<PostRepository>(relaxed = true)
     private val outboxRepository = mockk<OutboxRepository>(relaxed = true)
     private val storyRepository = mockk<StoryRepository>(relaxed = true)
+    private val draftConfirmation = mockk<StoryDraftConfirmation>(relaxed = true)
 
     private val story = CreateStoryRequest(content = "bonjour", mediaIds = listOf("upload-cmid"))
 
@@ -33,7 +35,7 @@ class SocialSendersTest {
 
     @Test
     fun `publish story posts the queued story and maps the outcome`() = runTest {
-        val handler = PublishStoryHandler(postApi, outboxRepository, senderJson, storyRepository)
+        val handler = PublishStoryHandler(postApi, outboxRepository, senderJson, storyRepository, draftConfirmation)
 
         coEvery { postApi.createStory(story) } returns accepted(ApiPost(id = "p1"))
         assertThat(handler.send(storyRow())).isEqualTo(SendResult.Success)
@@ -47,7 +49,7 @@ class SocialSendersTest {
 
     @Test
     fun `a published story re-addresses the rows that waited on its pending handle to its server id`() = runTest {
-        val handler = PublishStoryHandler(postApi, outboxRepository, senderJson, storyRepository)
+        val handler = PublishStoryHandler(postApi, outboxRepository, senderJson, storyRepository, draftConfirmation)
         val row = outboxRow(OutboxKind.PUBLISH_STORY, targetId = "pending_abc", payload = encodedPayload(story))
         coEvery { postApi.createStory(story) } returns accepted(ApiPost(id = "665f1c2e9b1d8a0012345678"))
 
@@ -59,7 +61,7 @@ class SocialSendersTest {
 
     @Test
     fun `a story that could not be re-addressed is still delivered`() = runTest {
-        val handler = PublishStoryHandler(postApi, outboxRepository, senderJson, storyRepository)
+        val handler = PublishStoryHandler(postApi, outboxRepository, senderJson, storyRepository, draftConfirmation)
         coEvery { postApi.createStory(story) } returns accepted(ApiPost(id = "p1"))
         coEvery { outboxRepository.resolveLocalId(any(), any()) } throws IllegalStateException("db closed")
 
@@ -68,7 +70,7 @@ class SocialSendersTest {
 
     @Test
     fun `a published story joins the tray cache at once, without waiting for a revalidation`() = runTest {
-        val handler = PublishStoryHandler(postApi, outboxRepository, senderJson, storyRepository)
+        val handler = PublishStoryHandler(postApi, outboxRepository, senderJson, storyRepository, draftConfirmation)
         val published = ApiPost(id = "665f1c2e9b1d8a0012345678", type = "STORY", author = ApiAuthor(id = "me", username = "me"))
         coEvery { postApi.createStory(story) } returns accepted(published)
 
@@ -79,7 +81,7 @@ class SocialSendersTest {
 
     @Test
     fun `a story the cache cannot adopt is still delivered`() = runTest {
-        val handler = PublishStoryHandler(postApi, outboxRepository, senderJson, storyRepository)
+        val handler = PublishStoryHandler(postApi, outboxRepository, senderJson, storyRepository, draftConfirmation)
         coEvery { postApi.createStory(story) } returns accepted(ApiPost(id = "p1"))
         coEvery { storyRepository.adoptPublished(any()) } throws IllegalStateException("db closed")
 
@@ -87,8 +89,21 @@ class SocialSendersTest {
     }
 
     @Test
+    fun `only a confirmed story lets the composer draft that queued it settle`() = runTest {
+        val handler = PublishStoryHandler(postApi, outboxRepository, senderJson, storyRepository, draftConfirmation)
+        coEvery { postApi.createStory(story) } returns refused()
+        handler.send(storyRow())
+        coVerify(exactly = 0) { draftConfirmation.settle(any()) }
+
+        coEvery { postApi.createStory(story) } returns accepted(ApiPost(id = "p1"))
+        handler.send(storyRow())
+
+        coVerify(exactly = 1) { draftConfirmation.settle("cmid-1") }
+    }
+
+    @Test
     fun `a story that failed to publish re-addresses nothing`() = runTest {
-        val handler = PublishStoryHandler(postApi, outboxRepository, senderJson, storyRepository)
+        val handler = PublishStoryHandler(postApi, outboxRepository, senderJson, storyRepository, draftConfirmation)
         coEvery { postApi.createStory(story) } returns refused()
 
         assertThat(handler.send(storyRow())).isEqualTo(SendResult.TransientFailure)
@@ -98,7 +113,7 @@ class SocialSendersTest {
 
     @Test
     fun `publish story with an undecodable payload fails permanently without calling the gateway`() = runTest {
-        val handler = PublishStoryHandler(postApi, outboxRepository, senderJson, storyRepository)
+        val handler = PublishStoryHandler(postApi, outboxRepository, senderJson, storyRepository, draftConfirmation)
 
         val result = handler.send(outboxRow(OutboxKind.PUBLISH_STORY, payload = "oops"))
 
@@ -108,7 +123,7 @@ class SocialSendersTest {
 
     @Test
     fun `publish story owns the graft that swaps an upload placeholder for the real media id`() {
-        val grafted = PublishStoryHandler(postApi, outboxRepository, senderJson, storyRepository)
+        val grafted = PublishStoryHandler(postApi, outboxRepository, senderJson, storyRepository, draftConfirmation)
             .payloadGraft
             ?.invoke(encodedPayload(story), "upload-cmid", "media-42")
 

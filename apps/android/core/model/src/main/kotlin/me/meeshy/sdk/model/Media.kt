@@ -13,6 +13,7 @@ import kotlinx.serialization.Serializable
  * iOS discards, since it references media by URL) because stories reference media
  * by id.
  */
+@Serializable
 data class UploadedMedia(
     val id: String,
     val url: String,

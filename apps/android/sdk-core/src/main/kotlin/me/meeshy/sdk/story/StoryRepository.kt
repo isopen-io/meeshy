@@ -326,10 +326,12 @@ class StoryRepository @Inject constructor(
 
     /**
      * Revives an exhausted publish for a user-initiated retry — back to the live
-     * queue with a fresh attempt budget. The caller kicks the drain worker.
+     * queue with a fresh attempt budget, the uploads it waits on with it (#13417: an
+     * upload that gave up keeps its bytes now, so the retry can actually run). The
+     * caller kicks the drain worker.
      * @return `false` when the row no longer exists.
      */
-    suspend fun retryPublish(cmid: String): Boolean = outboxRepository.retry(cmid)
+    suspend fun retryPublish(cmid: String): Boolean = outboxRepository.retryWithPrerequisites(cmid)
 
     /** Permanently discards an exhausted publish the user no longer wants to retry. */
     suspend fun discardPublish(cmid: String) = outboxRepository.discard(cmid)

@@ -1,0 +1,82 @@
+package me.meeshy.sdk.outbox.senders
+
+import dagger.Binds
+import dagger.Module
+import dagger.hilt.InstallIn
+import dagger.hilt.components.SingletonComponent
+import dagger.multibindings.IntoMap
+import kotlinx.serialization.json.Json
+import me.meeshy.core.database.entity.OutboxEntity
+import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.net.api.CreatePostRequest
+import me.meeshy.sdk.net.api.PostApi
+import me.meeshy.sdk.net.apiCall
+import me.meeshy.sdk.outbox.OutboxKind
+import me.meeshy.sdk.outbox.OutboxKindHandler
+import me.meeshy.sdk.outbox.OutboxKindKey
+import me.meeshy.sdk.outbox.OutboxPayloadGraft
+import me.meeshy.sdk.outbox.OutboxRepository
+import me.meeshy.sdk.outbox.SendResult
+import me.meeshy.sdk.outbox.withPayload
+import me.meeshy.sdk.post.PostComposerDraftStore
+import me.meeshy.sdk.post.PostPublishMediaWriteBack
+import me.meeshy.sdk.post.PostRepository
+import javax.inject.Inject
+
+/**
+ * `CREATE_POST` (#13417): publishes a post or a reel the device queued, under the row's own
+ * `cmid` as `X-Client-Mutation-Id` — the gateway's MutationLog answers a replay with the post
+ * it already wrote, so a response lost on the way back never publishes twice.
+ *
+ * Once created, every row that waited on the post's local id is re-addressed to the server id
+ * and the post joins the feed cache at once; only then does the draft parked for it leave the
+ * device ([PostComposerDraftStore.release]). A refusal the same payload would meet again
+ * (4xx other than 401/408/429) exhausts the row immediately instead of replaying it five
+ * times: the row is KEPT, with its media, for the author to retry or discard from
+ * « Publications non envoyées ».
+ */
+public class CreatePostHandler @Inject constructor(
+    private val postApi: PostApi,
+    private val outboxRepository: OutboxRepository,
+    private val json: Json,
+    private val postRepository: PostRepository,
+    private val draftStore: PostComposerDraftStore,
+) : OutboxKindHandler {
+
+    override val payloadGraft: OutboxPayloadGraft = PostPublishMediaWriteBack::graft
+
+    override suspend fun send(row: OutboxEntity): SendResult =
+        json.withPayload<CreatePostRequest>(row) { request ->
+            when (val result = apiCall { postApi.create(request, row.cmid) }) {
+                is NetworkResult.Success -> {
+                    runCatching { outboxRepository.resolveLocalId(row.targetId, result.data.id) }
+                    runCatching { postRepository.adoptPublished(result.data) }
+                    runCatching { draftStore.release(row.cmid) }
+                    SendResult.Success
+                }
+                is NetworkResult.Failure -> result.error.httpStatus.toPostFailure()
+            }
+        }
+
+    private fun Int?.toPostFailure(): SendResult = when {
+        this == null || this in HTTP_RETRYABLE || this >= HTTP_SERVER_ERROR -> SendResult.TransientFailure
+        this in HTTP_CLIENT_ERRORS -> SendResult.PermanentFailure("Post refused: HTTP $this")
+        else -> SendResult.TransientFailure
+    }
+
+    private companion object {
+        const val HTTP_SERVER_ERROR = 500
+        val HTTP_RETRYABLE = setOf(401, 408, 429)
+        val HTTP_CLIENT_ERRORS = 400..499
+    }
+}
+
+@Module
+@InstallIn(SingletonComponent::class)
+public interface PostSendersModule {
+
+    @Binds
+    @IntoMap
+    @OutboxKindKey(OutboxKind.CREATE_POST)
+    public fun createPost(handler: CreatePostHandler): OutboxKindHandler
+}
