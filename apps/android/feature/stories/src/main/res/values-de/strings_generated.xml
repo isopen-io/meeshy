@@ -1,5 +1,25 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="audience_picker_except_title">Alle außer</string>
+    <string name="audience_picker_only_title">Nur diese Personen</string>
+    <string name="audience_picker_search">Suchen…</string>
+    <string name="composer_audience_apply">Übernehmen</string>
+    <string name="composer_audience_hashtag_remove">Diesen Hashtag entfernen</string>
+    <string name="composer_audience_hashtags">HASHTAGS</string>
+    <string name="composer_audience_mention_inline">im Text</string>
+    <string name="composer_audience_mention_note">Zeile „Mit …“</string>
+    <string name="composer_audience_mention_outside">Außerhalb der gewählten Zielgruppe — diese Person sieht ihre Erwähnung nicht.</string>
+    <string name="composer_audience_mention_pinned">Badge auf der Szene</string>
+    <string name="composer_audience_mention_silent">nur benachrichtigt</string>
+    <string name="composer_audience_mentions">ERWÄHNUNGEN</string>
+    <string name="composer_audience_scope">Die Zielgruppe gehört zum Beitrag, nie zu einer Folie: Ein Profilwechsel behält sie bei.</string>
+    <string name="composer_audience_sub_community">Die Mitglieder deiner Communitys</string>
+    <string name="composer_audience_sub_count">%d ausgewählt</string>
+    <string name="composer_audience_sub_friends">Deine bestätigten Kontakte</string>
+    <string name="composer_audience_sub_pick">Personen auswählen</string>
+    <string name="composer_audience_sub_private">Nur du — nichts wird veröffentlicht</string>
+    <string name="composer_audience_sub_public">Alle, auch Nicht-Abonnenten</string>
+    <string name="composer_audience_title">Zielgruppe</string>
     <string name="composer_object_editor_adjust_blur">Weichzeichner</string>
     <string name="composer_object_editor_adjust_brightness">Helligkeit</string>
     <string name="composer_object_editor_adjust_contrast">Kontrast</string>
@@ -12,6 +32,10 @@
     <string name="composer_object_editor_adjust_vignette">Vignette</string>
     <string name="composer_object_editor_effects_bloom">Bloom</string>
     <string name="composer_object_editor_effects_grain">Körnung</string>
+    <string name="composer_publish_as_story">Story veröffentlichen</string>
+    <string name="composer_publish_as_storyAndReel">Story und Reel veröffentlichen</string>
+    <string name="composer_socle_audience">Publikum</string>
+    <string name="composer_socle_publish">Veröffentlichen</string>
     <string name="my_stories_archive_empty_subtitle">Ihre abgelaufenen Storys landen in diesem Archiv.</string>
     <string name="my_stories_archive_empty_title">Kein Archiv</string>
     <string name="my_stories_back">Zurück</string>
@@ -50,6 +74,8 @@
     <string name="stories_action_repost">Erneut posten</string>
     <string name="stories_action_translations">Übersetzungen</string>
     <string name="stories_add">Hinzufügen</string>
+    <string name="stories_audience_picker_cancel">Abbrechen</string>
+    <string name="stories_audience_picker_done">Fertig</string>
     <string name="stories_cancel">Abbrechen</string>
     <string name="stories_caption_see_less">weniger anzeigen</string>
     <string name="stories_caption_see_more">mehr anzeigen</string>
@@ -127,7 +153,9 @@
     <string name="stories_viewers_empty_title">Noch keine Aufrufe</string>
     <string name="stories_viewers_title">Aufrufe</string>
     <string name="stories_visibility_community">Community</string>
+    <string name="stories_visibility_except">Außer…</string>
     <string name="stories_visibility_friends">Freunde</string>
+    <string name="stories_visibility_only">Nur…</string>
     <string name="stories_visibility_private">Nur ich</string>
     <string name="stories_visibility_public">Öffentlich</string>
     <string name="story_composer_fab_badge">%d aktive(s) Element(e)</string>
@@ -140,6 +168,16 @@
     <string name="story_composer_grabber_hint_resize">Nach oben ziehen zum Vergrößern, nach unten zum Verkleinern oder Schließen.</string>
     <string name="story_composer_redo">Wiederholen</string>
     <string name="story_composer_undo">Rückgängig</string>
+    <string name="story_media_accessibility">Barrierefreiheit</string>
+    <string name="story_media_alt_a11yHint">Beschreibt dieses Medium für Personen, die VoiceOver nutzen.</string>
+    <string name="story_media_alt_label">Alternativtext</string>
+    <string name="story_media_alt_placeholder">Beschreibe dieses Medium für VoiceOver</string>
+    <string name="story_media_caption_a11yHint">Text, der unter diesem Medium angezeigt wird. Anders als der Alternativtext, der das Bild beschreibt, ohne angezeigt zu werden.</string>
+    <string name="story_media_caption_label">Bildunterschrift</string>
+    <string name="story_media_caption_placeholder">Bildunterschrift für dieses Medium schreiben</string>
+    <string name="story_media_soundExtraction_a11yHint">Andere Personen können den Ton der Videos dieses Beitrags in ihren eigenen Beiträgen wiederverwenden.</string>
+    <string name="story_media_soundExtraction_caption">Andere Personen können den Ton der Videos dieses Beitrags wiederverwenden.</string>
+    <string name="story_media_soundExtraction_label">Wiederverwendung des Tons erlauben</string>
     <string name="story_send_caption_hint">Nachricht hinzufügen…</string>
     <string name="story_send_loading">Unterhaltungen werden geladen …</string>
     <plurals name="story_send_members">

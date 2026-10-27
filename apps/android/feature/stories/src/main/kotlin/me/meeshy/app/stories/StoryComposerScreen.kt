@@ -36,6 +36,8 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -132,6 +134,22 @@ fun StoryComposerScreen(
         )
     }
 
+    var showAudience by rememberSaveable { mutableStateOf(false) }
+    if (showAudience) {
+        StoryAudienceSheet(
+            visibility = state.draft.visibility,
+            userIds = state.draft.visibilityUserIds,
+            mentions = state.draft.mentions,
+            hashtags = state.hashtags,
+            onChooseVisibility = viewModel::onVisibilityChange,
+            onUserIdsChange = viewModel::onAudienceUserIdsChange,
+            onAddMention = viewModel::onAddMention,
+            onRemoveMention = viewModel::onRemoveMention,
+            onRemoveHashtag = viewModel::onRemoveHashtag,
+            onDismiss = { showAudience = false },
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -149,7 +167,7 @@ fun StoryComposerScreen(
                         Icon(Icons.AutoMirrored.Filled.Redo, contentDescription = stringResource(R.string.story_composer_redo))
                     }
                     TextButton(onClick = viewModel::publish, enabled = state.canPublish) {
-                        Text(stringResource(R.string.stories_composer_publish))
+                        Text(publishLabel(state.publishTitle))
                     }
                 },
             )
@@ -163,6 +181,13 @@ fun StoryComposerScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            AudiencePill(
+                visibility = state.draft.visibility,
+                count = state.draft.visibilityUserIds.size,
+                onClick = { showAudience = true },
+                modifier = Modifier.align(Alignment.End),
+            )
+
             if (!state.band.isChromeHidden) SlideStrip(
                 deck = state.deck,
                 onSelect = viewModel::onSelectSlide,
@@ -281,13 +306,23 @@ fun StoryComposerScreen(
                             onToggleBackground = viewModel::onToggleSlideBackgroundMedia,
                             onToggleBackgroundLoop = { viewModel.onSetSlideBackgroundLoop(!state.selectedSlideBackgroundLoop) },
                         )
+                        ComposerMediaDescription(
+                            mediaIds = state.deck.selectedSlide.mediaIds,
+                            alt = state.draft.mediaAlt,
+                            caption = state.draft.mediaCaption,
+                            undescribedCount = state.undescribedMediaIds.size,
+                            offersSoundExtraction = state.offersSoundExtraction,
+                            allowSoundExtraction = state.draft.allowSoundExtraction == true,
+                            onAltChange = viewModel::onMediaAltChange,
+                            onCaptionChange = viewModel::onMediaCaptionChange,
+                            onAllowSoundExtractionChange = viewModel::onAllowSoundExtractionChange,
+                        )
                     }
                 },
                 panel = {
                     if (ComposerBandTools.showsPanel(state.isDrawingActive, state.isEditingTextElement)) {
                         ComposerToolPanel(
                             band = state.band,
-                            visibility = state.draft.visibility,
                             selectedFilter = state.selectedSlideFilter,
                             filterIntensity = state.selectedSlideFilterIntensity,
                             slideDurationSeconds = state.selectedSlideDurationSeconds,
@@ -309,7 +344,6 @@ fun StoryComposerScreen(
                                 }
                             },
                             onEnterDrawing = viewModel::onEnterDrawingMode,
-                            onSelectVisibility = viewModel::onVisibilityChange,
                             onSelectFilter = viewModel::onSelectFilter,
                             onFilterIntensityChange = viewModel::onFilterIntensityChange,
                             onSlideDurationChange = viewModel::onSlideDurationChange,
@@ -360,3 +394,11 @@ internal fun ContentResolver.displayName(uri: Uri): String? =
             if (index >= 0 && cursor.moveToFirst()) cursor.getString(index) else null
         }
     }.getOrNull()
+
+/** Ce que le bouton de publication nomme : la story, N stories (une par slide), ou la story et son réel. */
+@androidx.compose.runtime.Composable
+internal fun publishLabel(title: me.meeshy.sdk.model.composer.StoryPublishTitle): String = when (title) {
+    me.meeshy.sdk.model.composer.StoryPublishTitle.Single -> stringResource(R.string.composer_publish_as_story)
+    is me.meeshy.sdk.model.composer.StoryPublishTitle.Many -> stringResource(R.string.stories_composer_publish_many, title.count)
+    me.meeshy.sdk.model.composer.StoryPublishTitle.StoryAndReel -> stringResource(R.string.composer_publish_as_storyAndReel)
+}

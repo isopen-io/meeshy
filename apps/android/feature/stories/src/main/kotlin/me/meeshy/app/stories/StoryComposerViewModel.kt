@@ -12,15 +12,22 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.updateAndGet
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.lang.LanguageResolver
+import me.meeshy.sdk.friend.BlockCache
 import me.meeshy.sdk.media.MediaBlobStore
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.media.MediaUploadQueue
+import me.meeshy.sdk.model.PostMentionInput
 import me.meeshy.sdk.model.StoryDrawingStrokePoint
 import me.meeshy.sdk.model.StoryFilter
 import me.meeshy.sdk.model.UploadedMedia
+import me.meeshy.sdk.model.composer.AudienceCandidate
+import me.meeshy.sdk.model.composer.ComposerAudienceSelection
 import me.meeshy.sdk.model.composer.ComposerBandState
+import me.meeshy.sdk.model.composer.ComposerHashtags
+import me.meeshy.sdk.model.composer.MediaDescriptionLaw
 import me.meeshy.sdk.model.composer.StoryToolMode
 import me.meeshy.sdk.model.media.TusUploadContext
 import me.meeshy.sdk.model.scene.StoryBackgroundFraming
@@ -60,6 +67,7 @@ class StoryComposerViewModel @Inject constructor(
     private val draftStore: StoryComposerDraftStore,
     private val mediaBlobStore: MediaBlobStore,
     private val draftConfirmation: StoryDraftConfirmation,
+    private val blocks: BlockCache = BlockCache(),
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(StoryComposerUiState())
@@ -108,6 +116,7 @@ class StoryComposerViewModel @Inject constructor(
                     deck = deck,
                     draft = it.draft
                         .withVisibility(StoryVisibility.fromWire(reconciled.snapshot.visibility))
+                        .withVisibilityUserIds(reachable(reconciled.snapshot.visibilityUserIds, StoryVisibility.fromWire(reconciled.snapshot.visibility)))
                         .withRepostOf(reconciled.snapshot.repostOfId),
                     errorMessage = if (reconciled.hasLoss) MEDIA_RESTORE_LOST else it.errorMessage,
                 ).mirrorDraftToSelection()
@@ -143,6 +152,7 @@ class StoryComposerViewModel @Inject constructor(
                 repostOfId = current.draft.repostOfId,
                 nowIso = Instant.now().toString(),
                 previous = draftStore.load(),
+                visibilityUserIds = current.draft.visibilityUserIds,
             )
             when (action) {
                 is StoryDraftPersist.Save -> draftStore.save(action.snapshot)
@@ -266,6 +276,48 @@ class StoryComposerViewModel @Inject constructor(
 
     fun onVisibilityChange(visibility: StoryVisibility) {
         _state.update { it.copy(draft = it.draft.withVisibility(visibility)) }
+    }
+
+    /** La liste « visible par » / « sauf » : l'appelant l'a déjà bornée aux personnes proposées. */
+    fun onAudienceUserIdsChange(ids: List<String>) {
+        _state.update { it.copy(draft = it.draft.withVisibilityUserIds(ids.distinct().take(ComposerAudienceSelection.MAX_USERS))) }
+    }
+
+    /** Nomme [person] dans la publication (rangée « Avec… »), une seule fois par pseudo. */
+    fun onAddMention(person: AudienceCandidate) {
+        _state.update { current ->
+            val mentions = current.draft.mentions
+            if (mentions.size >= MAX_MENTIONS) return@update current
+            if (mentions.any { it.username.equals(person.username, ignoreCase = true) }) return@update current
+            current.copy(
+                draft = current.draft.copy(
+                    mentions = mentions + PostMentionInput(userId = person.id, username = person.username, display = MENTION_DISPLAY),
+                ),
+            )
+        }
+    }
+
+    fun onRemoveMention(username: String) {
+        _state.update { current ->
+            current.copy(draft = current.draft.copy(mentions = current.draft.mentions.filterNot { it.username.equals(username, ignoreCase = true) }))
+        }
+    }
+
+    fun onMediaAltChange(mediaId: String, text: String) {
+        _state.update { it.copy(draft = it.draft.copy(mediaAlt = MediaDescriptionLaw.with(it.draft.mediaAlt, mediaId, text))) }
+    }
+
+    fun onMediaCaptionChange(mediaId: String, text: String) {
+        _state.update { it.copy(draft = it.draft.copy(mediaCaption = MediaDescriptionLaw.with(it.draft.mediaCaption, mediaId, text))) }
+    }
+
+    fun onAllowSoundExtractionChange(allowed: Boolean) {
+        _state.update { it.copy(draft = it.draft.copy(allowSoundExtraction = allowed)) }
+    }
+
+    /** Retire [tag] du texte de TOUTES les slides : la balise EST dans la phrase, il n'y a pas de liste à côté. */
+    fun onRemoveHashtag(tag: String) = reduce { current ->
+        current.withDeckTransform { deck -> deck.mapSlideTexts { ComposerHashtags.removing(tag, it) } }
     }
 
     /**
@@ -511,7 +563,7 @@ class StoryComposerViewModel @Inject constructor(
             } else {
                 it.copy(deck = deck, attachments = it.attachments.filterNot { media -> media.id == id })
             }
-            next.mirrorDraftToSelection()
+            next.withDescriptionsPruned().mirrorDraftToSelection()
         }
         record()
         if (wasPending) cancelDurableUpload(id)
@@ -530,7 +582,7 @@ class StoryComposerViewModel @Inject constructor(
     }
 
     fun publish() {
-        val current = _state.value
+        val current = _state.updateAndGet { it.withAudiencePurged() }
         if (!current.canPublish) return
         _state.update { it.copy(isPublishing = true, errorMessage = null) }
         viewModelScope.launch {
@@ -565,8 +617,30 @@ class StoryComposerViewModel @Inject constructor(
             visibility = published.draft.visibility,
             repostOfId = published.draft.repostOfId,
             nowIso = Instant.now().toString(),
+            visibilityUserIds = published.draft.visibilityUserIds,
         )
         draftStore.save(snapshot.copy(awaitingPublication = queued))
+    }
+
+    /**
+     * La liste encore valable pour [visibility]. Sous ONLY, un compte bloqué depuis (et soi) n'est
+     * plus un destinataire. Sous EXCEPT, la liste EXCLUT : retirer un bloqué en ferait de nouveau
+     * un destinataire, donc seul soi en sort — une exclusion existante ne se perd jamais.
+     */
+    private fun reachable(ids: List<String>, visibility: StoryVisibility): List<String> {
+        val selfId = sessionRepository.currentUser.value?.id
+        if (visibility != StoryVisibility.ONLY) return ids.filter { it != selfId }
+        val blocked = blocks.currentBlockedIds
+        return ids.filter { it != selfId && it !in blocked }
+    }
+
+    private fun StoryComposerUiState.withAudiencePurged(): StoryComposerUiState {
+        val blocked = blocks.currentBlockedIds
+        val purged = draft.copy(
+            visibilityUserIds = reachable(draft.visibilityUserIds, draft.visibility),
+            mentions = draft.mentions.filterNot { mention -> mention.userId?.let { it in blocked } == true },
+        )
+        return if (purged == draft) this else copy(draft = purged)
     }
 
     /** One publishable slide's wire request paired with the offline uploads it must wait on. */
@@ -595,6 +669,11 @@ class StoryComposerViewModel @Inject constructor(
                 background = slide.background,
                 backgroundMedia = resolveBackgroundMedia(slide, current),
                 repostOfId = current.draft.repostOfId,
+                visibilityUserIds = current.draft.visibilityUserIds,
+                mentions = current.draft.mentions,
+                mediaAlt = current.draft.mediaAlt,
+                mediaCaption = current.draft.mediaCaption,
+                allowSoundExtraction = current.draft.allowSoundExtraction,
             )
             PublishPlan(
                 request = draft.toCreateStoryRequest(language),
@@ -650,6 +729,9 @@ class StoryComposerViewModel @Inject constructor(
             ?: LanguageResolver.FALLBACK_LANGUAGE
 
     internal companion object {
+        const val MENTION_DISPLAY = "NOTE"
+        /** Plafond de la passerelle (`mentions.max(50)`) : au-delà, toute la story serait refusée. */
+        const val MAX_MENTIONS = 50
         const val MEDIA_FAILED = "Couldn't attach that media"
         const val MEDIA_UNUSABLE = "That media couldn't be attached"
         const val MEDIA_LIMIT = "You can attach up to ${StoryComposerDraft.MAX_MEDIA} items"

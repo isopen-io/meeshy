@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="stories_composer_publish_many">Publier %1$d stories</string>
+    <string name="stories_audience_pick_empty">Aucun contact pour l\'instant</string>
+    <string name="stories_audience_pick_title_mention">Mentionner</string>
+    <string name="stories_audience_mention_add">Mentionner quelqu\'un</string>
+    <string name="stories_audience_mention_remove">Retirer cette mention</string>
+    <string name="stories_media_undescribed">Des médias n\'ont pas encore de description</string>
+</resources>

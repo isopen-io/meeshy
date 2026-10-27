@@ -1,5 +1,25 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="audience_picker_except_title">Todos exceto</string>
+    <string name="audience_picker_only_title">Apenas estas pessoas</string>
+    <string name="audience_picker_search">Buscar…</string>
+    <string name="composer_audience_apply">Aplicar</string>
+    <string name="composer_audience_hashtag_remove">Remover esta hashtag</string>
+    <string name="composer_audience_hashtags">HASHTAGS</string>
+    <string name="composer_audience_mention_inline">no texto</string>
+    <string name="composer_audience_mention_note">linha «Com…»</string>
+    <string name="composer_audience_mention_outside">Fora do público escolhido — esta pessoa não verá a menção.</string>
+    <string name="composer_audience_mention_pinned">selo na cena</string>
+    <string name="composer_audience_mention_silent">apenas notificada</string>
+    <string name="composer_audience_mentions">MENÇÕES</string>
+    <string name="composer_audience_scope">O público pertence à publicação, nunca a um slide: mudar de perfil o mantém.</string>
+    <string name="composer_audience_sub_community">Os membros das suas comunidades</string>
+    <string name="composer_audience_sub_count">%d selecionadas</string>
+    <string name="composer_audience_sub_friends">Seus contatos aceitos</string>
+    <string name="composer_audience_sub_pick">Escolher pessoas</string>
+    <string name="composer_audience_sub_private">Só você — nada é publicado</string>
+    <string name="composer_audience_sub_public">Todos, inclusive não seguidores</string>
+    <string name="composer_audience_title">Público</string>
     <string name="composer_object_editor_adjust_blur">Desfoque</string>
     <string name="composer_object_editor_adjust_brightness">Brilho</string>
     <string name="composer_object_editor_adjust_contrast">Contraste</string>
@@ -12,6 +32,10 @@
     <string name="composer_object_editor_adjust_vignette">Vinheta</string>
     <string name="composer_object_editor_effects_bloom">Brilho</string>
     <string name="composer_object_editor_effects_grain">Granulação</string>
+    <string name="composer_publish_as_story">Publicar story</string>
+    <string name="composer_publish_as_storyAndReel">Publicar story e reel</string>
+    <string name="composer_socle_audience">Público</string>
+    <string name="composer_socle_publish">Publicar</string>
     <string name="my_stories_archive_empty_subtitle">Suas stories expiradas entrarão neste arquivo.</string>
     <string name="my_stories_archive_empty_title">Nenhum arquivo</string>
     <string name="my_stories_back">Voltar</string>
@@ -50,6 +74,8 @@
     <string name="stories_action_repost">Republicar</string>
     <string name="stories_action_translations">Traduções</string>
     <string name="stories_add">Adicionar</string>
+    <string name="stories_audience_picker_cancel">Cancelar</string>
+    <string name="stories_audience_picker_done">Concluído</string>
     <string name="stories_cancel">Cancelar</string>
     <string name="stories_caption_see_less">ver menos</string>
     <string name="stories_caption_see_more">ver mais</string>
@@ -129,7 +155,9 @@
     <string name="stories_viewers_empty_title">Nenhuma visualização ainda</string>
     <string name="stories_viewers_title">Visualizações</string>
     <string name="stories_visibility_community">Comunidade</string>
+    <string name="stories_visibility_except">Exceto…</string>
     <string name="stories_visibility_friends">Amigos</string>
+    <string name="stories_visibility_only">Somente…</string>
     <string name="stories_visibility_private">Só eu</string>
     <string name="stories_visibility_public">Público</string>
     <string name="story_composer_fab_badge">%d elemento(s) ativo(s)</string>
@@ -142,6 +170,16 @@
     <string name="story_composer_grabber_hint_resize">Arraste para cima para ampliar, para baixo para reduzir ou fechar.</string>
     <string name="story_composer_redo">Refazer</string>
     <string name="story_composer_undo">Desfazer</string>
+    <string name="story_media_accessibility">Acessibilidade</string>
+    <string name="story_media_alt_a11yHint">Descreve esta mídia para pessoas que usam o VoiceOver.</string>
+    <string name="story_media_alt_label">Texto alternativo</string>
+    <string name="story_media_alt_placeholder">Descreva esta mídia para o VoiceOver</string>
+    <string name="story_media_caption_a11yHint">Texto exibido sob esta mídia. Diferente do texto alternativo, que descreve a imagem sem ser exibido.</string>
+    <string name="story_media_caption_label">Legenda</string>
+    <string name="story_media_caption_placeholder">Escreva a legenda desta mídia</string>
+    <string name="story_media_soundExtraction_a11yHint">Outras pessoas poderão reaproveitar a trilha sonora dos vídeos desta publicação em suas próprias publicações.</string>
+    <string name="story_media_soundExtraction_caption">Outras pessoas poderão reaproveitar a trilha sonora dos vídeos desta publicação.</string>
+    <string name="story_media_soundExtraction_label">Permitir reaproveitamento do som</string>
     <string name="story_send_caption_hint">Adicionar uma mensagem…</string>
     <string name="story_send_loading">Carregando conversas…</string>
     <plurals name="story_send_members">

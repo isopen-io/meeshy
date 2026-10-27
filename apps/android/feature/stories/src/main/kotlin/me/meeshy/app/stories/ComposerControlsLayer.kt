@@ -49,7 +49,6 @@ import me.meeshy.sdk.model.composer.StoryToolMode
 @Composable
 internal fun ComposerToolPanel(
     band: ComposerBandState,
-    visibility: StoryVisibility,
     selectedFilter: StoryFilter?,
     filterIntensity: Float,
     slideDurationSeconds: Double,
@@ -65,7 +64,6 @@ internal fun ComposerToolPanel(
     onAddSticker: () -> Unit,
     onPickMedia: () -> Unit,
     onEnterDrawing: () -> Unit,
-    onSelectVisibility: (StoryVisibility) -> Unit,
     onSelectFilter: (StoryFilter?) -> Unit,
     onFilterIntensityChange: (Float) -> Unit,
     onSlideDurationChange: (Double) -> Unit,
@@ -127,7 +125,6 @@ internal fun ComposerToolPanel(
                                 onIntensityChange = onFilterIntensityChange,
                             )
                             DurationRow(seconds = slideDurationSeconds, onSecondsChange = onSlideDurationChange)
-                            VisibilityRow(selected = visibility, onSelect = onSelectVisibility)
                         }
                         else -> Unit
                     }
