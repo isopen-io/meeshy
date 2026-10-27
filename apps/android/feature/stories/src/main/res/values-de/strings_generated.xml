@@ -168,6 +168,7 @@
     <string name="story_composer_grabber_hint_resize">Nach oben ziehen zum Vergrößern, nach unten zum Verkleinern oder Schließen.</string>
     <string name="story_composer_redo">Wiederholen</string>
     <string name="story_composer_undo">Rückgängig</string>
+    <string name="story_media_accessibility">Barrierefreiheit</string>
     <string name="story_media_alt_a11yHint">Beschreibt dieses Medium für Personen, die VoiceOver nutzen.</string>
     <string name="story_media_alt_label">Alternativtext</string>
     <string name="story_media_alt_placeholder">Beschreibe dieses Medium für VoiceOver</string>

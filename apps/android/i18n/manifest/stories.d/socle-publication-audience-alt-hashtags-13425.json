@@ -5,6 +5,11 @@
       "resDir": "feature/stories/src/main/res",
       "entries": [
         {
+          "catalog": "ui",
+          "iosKey": "story.media.accessibility",
+          "status": "adopted"
+        },
+        {
           "catalog": "app",
           "iosKey": "composer.audience.title",
           "status": "adopted"
