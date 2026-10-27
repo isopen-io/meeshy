@@ -71,8 +71,11 @@ import me.meeshy.ui.component.permission.PermissionFlowHost
 import me.meeshy.ui.component.permission.openAppSettings
 import me.meeshy.ui.component.permission.rememberPermissionFlow
 import me.meeshy.ui.icons.MeeshyIcons
+import me.meeshy.ui.theme.MeeshyOpacity
+import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
+import me.meeshy.ui.theme.MeeshyTheme
 
 private val WORLD_CENTER = GeoPoint(20.0, 0.0)
 private const val WORLD_ZOOM = 3
@@ -301,20 +304,20 @@ private fun LocateFailedBanner() {
 
 @Composable
 private fun PickerNotice(text: String, onClick: (() -> Unit)?) {
-    val warning = Color(0xFFB45309)
+    val warning = MeeshyPalette.Warning
     Row(
         Modifier
             .fillMaxWidth()
             .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.sm)
             .clip(RoundedCornerShape(MeeshyRadius.md))
-            .background(Color(0xFFFBBF24).copy(alpha = 0.22f))
+            .background(warning.copy(alpha = MeeshyOpacity.light))
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
             .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.smPlus),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
     ) {
         Icon(MeeshyIcons.LocationOff, contentDescription = null, tint = warning, modifier = Modifier.size(16.dp))
-        Text(text, style = MaterialTheme.typography.bodySmall, color = warning)
+        Text(text, style = MaterialTheme.typography.bodySmall, color = MeeshyTheme.tokens.textPrimary)
     }
 }
 
