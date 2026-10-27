@@ -184,7 +184,7 @@ private fun ShelfSearch(query: String, onChange: (String) -> Unit) {
 private fun ShelfContent(
     state: SoundShelfState,
     preview: SoundPreviewController,
-    playableUrl: (ApiSound) -> String,
+    playableUrl: (ApiSound) -> String?,
     onUse: (ApiSound) -> Unit,
     onRename: (ApiSound) -> Unit,
     onRemove: (ApiSound) -> Unit,
@@ -204,7 +204,7 @@ private fun ShelfContent(
                         isMine = state.canRename,
                         isPlaying = preview.state.isPlaying(sound.id),
                         isPreparing = preview.state.isPreparing(sound.id),
-                        onTogglePreview = { haptics.light(); preview.toggle(sound, playableUrl(sound)) },
+                        onTogglePreview = { haptics.light(); playableUrl(sound)?.let { preview.toggle(sound, it) } },
                         onRename = if (state.canRename) ({ onRename(sound) }) else null,
                         onRemove = if (state.canRemove) ({ onRemove(sound) }) else null,
                         onUse = { haptics.light(); onUse(sound) },

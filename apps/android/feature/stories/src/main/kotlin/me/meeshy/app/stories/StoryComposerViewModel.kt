@@ -35,7 +35,7 @@ import me.meeshy.sdk.model.scene.StoryCanvasTransform
 import me.meeshy.sdk.model.scene.StoryTextBackground
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
-import me.meeshy.sdk.util.resolveMediaUrl
+import me.meeshy.sdk.model.net.MediaRequestCredential
 import me.meeshy.sdk.model.StoryAudioPlayerObject
 import me.meeshy.sdk.net.api.CreateStoryRequest
 import me.meeshy.sdk.outbox.OutboxFlushWorker
@@ -415,7 +415,7 @@ class StoryComposerViewModel @Inject constructor(
 
     /** L'adresse chargeable d'une piste posée : un son emprunté porte le chemin RELATIF que sert la passerelle. */
     fun playableSoundUrl(track: StoryAudioPlayerObject): String? =
-        track.mediaURL?.takeIf { it.isNotEmpty() }?.let { resolveMediaUrl(it, config.apiBaseUrl) }
+        MediaRequestCredential.libraryAudioUrl(track.mediaURL, config.apiBaseUrl)
 
     /** Retire une piste de la slide sélectionnée — le son reste sur l'étagère, c'est un retrait de la scène. */
     fun onRemoveSound(id: String) = applyDeck { it.removeSelectedSound(id) }

@@ -17,7 +17,7 @@ import me.meeshy.sdk.model.composer.sound.SoundShelfLaw
 import me.meeshy.sdk.model.composer.sound.SoundShelfTab
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
-import me.meeshy.sdk.util.resolveMediaUrl
+import me.meeshy.sdk.model.net.MediaRequestCredential
 import javax.inject.Inject
 
 @Immutable
@@ -60,7 +60,7 @@ class SoundShelfViewModel @Inject constructor(
     private var queryJob: Job? = null
 
     /** L'adresse chargeable d'un son : la passerelle sert `/api/v1/static/…`, relatif à son origine. */
-    fun playableUrl(sound: ApiSound): String = resolveMediaUrl(sound.fileUrl, config.apiBaseUrl)
+    fun playableUrl(sound: ApiSound): String? = MediaRequestCredential.libraryAudioUrl(sound.fileUrl, config.apiBaseUrl)
 
     fun loadIfNeeded() {
         if (loadedOnce) return

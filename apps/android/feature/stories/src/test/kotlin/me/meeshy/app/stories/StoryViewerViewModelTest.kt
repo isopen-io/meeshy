@@ -1135,6 +1135,22 @@ class StoryViewerViewModelTest {
     }
 
     @Test
+    fun `an author-written mediaURL outside the library route never plays, so the reader's identity never follows it`() = runTest {
+        listOf("/api/v1/users/me", "/api/v1/static/../conversations", "https://evil.example/api/v1/static/s.m4a").forEach { hostile ->
+            val post = storyPost("a1", "a", hoursAgo = 1).copy(
+                storyEffects = StoryEffects(
+                    audioPlayerObjects = listOf(
+                        StoryAudioPlayerObject(id = "b", postMediaId = "", isBackground = true, mediaURL = hostile, soundId = "s1"),
+                    ),
+                ),
+            )
+            val vm = viewModel(startUserId = "a", posts = listOf(post))
+
+            assertThat(vm.state.value.current?.backgroundAudioUrl).isNull()
+        }
+    }
+
+    @Test
     fun `a non-background audioPlayerObject is exposed as foregroundAudioUrl`() = runTest {
         val post = storyPost("a1", "a", hoursAgo = 1).copy(
             media = listOf(ApiPostMedia(id = "voice", fileUrl = "http://cdn/voice.mp3", mimeType = "audio/mp4")),
