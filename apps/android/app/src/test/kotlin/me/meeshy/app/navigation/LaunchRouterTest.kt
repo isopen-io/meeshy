@@ -308,8 +308,18 @@ class LaunchRouterTest {
 
     @Test
     fun `a progression route hint opens the progression screen`() {
-        assertThat(tapRoute("type" to "level_up", routeHint = "progression"))
+        assertThat(tapRoute("type" to "post_like", routeHint = "progression"))
             .isEqualTo(me.meeshy.app.navigation.graph.GameRoutes.PROGRESSION)
+    }
+
+    @Test
+    fun `a game notification tap opens the screen the game map names`() {
+        val routes = me.meeshy.app.navigation.graph.GameRoutes
+        assertThat(tapRoute("type" to "level_up")).isEqualTo("progression/level")
+        assertThat(tapRoute("type" to "game_league_result")).isEqualTo("progression/page/league")
+        assertThat(tapRoute("type" to "game_season_step")).isEqualTo("progression/page/season")
+        assertThat(tapRoute("type" to "badge_earned")).isEqualTo("progression/badges")
+        assertThat(routes.route(me.meeshy.sdk.model.game.GameTarget.Home)).isEqualTo(routes.PROGRESSION)
     }
 
     @Test

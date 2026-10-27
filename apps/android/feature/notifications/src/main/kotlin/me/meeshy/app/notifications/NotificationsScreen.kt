@@ -45,6 +45,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.notifications.R
 import me.meeshy.sdk.model.ApiNotification
+import me.meeshy.sdk.model.game.GameTarget
 import me.meeshy.sdk.model.NotificationQuickAction
 import me.meeshy.ui.component.chrome.MeeshyBackground
 import me.meeshy.ui.component.chrome.MeeshyTopBar
@@ -64,6 +65,7 @@ private const val PREFETCH_DISTANCE = 4
  * @param onOpenReel Navigate to a réel, anchored at its id ([NotificationDestination.Reel]).
  * @param onOpenStory Navigate to a user's story tray ([NotificationDestination.Story]).
  * @param onOpenProfile Navigate to a user's profile ([NotificationDestination.Profile]).
+ * @param onOpenGame Navigate to the game screen a level/streak/badge/duo/league notice names ([NotificationDestination.Game]).
  *
  * Every parameter defaults to a no-op so existing callers keep compiling; wiring them is what
  * makes a row tap actually open its target (issue #4793).
@@ -79,6 +81,7 @@ fun NotificationsScreen(
     onOpenStory: (String) -> Unit = {},
     onOpenMood: (String) -> Unit = onOpenPost,
     onOpenProfile: (String) -> Unit = {},
+    onOpenGame: (GameTarget) -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
@@ -90,6 +93,7 @@ fun NotificationsScreen(
     val openStory by rememberUpdatedState(onOpenStory)
     val openMood by rememberUpdatedState(onOpenMood)
     val openProfile by rememberUpdatedState(onOpenProfile)
+    val openGame by rememberUpdatedState(onOpenGame)
 
     LaunchedEffect(viewModel) {
         viewModel.events.collect { event ->
@@ -118,6 +122,7 @@ fun NotificationsScreen(
                 onOpenStory = { openStory(it) },
                 onOpenProfile = { openProfile(it) },
                 onOpenMood = { openMood(it) },
+                onOpenGame = { openGame(it) },
             )
         }
     }

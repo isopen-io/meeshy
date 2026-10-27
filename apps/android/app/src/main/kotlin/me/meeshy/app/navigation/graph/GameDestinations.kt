@@ -26,6 +26,7 @@ import me.meeshy.app.game.pages.SeasonScreen
 import me.meeshy.app.game.pages.ShowcaseScreen
 import me.meeshy.app.game.progression.ProgressionConceptScreen
 import me.meeshy.app.game.progression.ProgressionScreen
+import me.meeshy.sdk.model.game.GameTarget
 import me.meeshy.sdk.model.game.pages.GamePage
 import me.meeshy.sdk.model.game.progression.ProgressionConcept
 
@@ -46,6 +47,13 @@ object GameRoutes {
 
     /** Une sous-page du jeu (iOS `Route.gamePage`) : Ligue, Voyage, Vitrine, Atlas, Renaissance, Réglages. */
     fun page(page: GamePage): String = "$PROGRESSION/page/${page.wire}"
+
+    /** La route d'un écran du jeu ouvert par une entrée extérieure (notification) : [GameTarget]. */
+    fun route(target: GameTarget): String = when (target) {
+        GameTarget.Home -> PROGRESSION
+        is GameTarget.Concept -> concept(target.concept)
+        is GameTarget.Page -> page(target.page)
+    }
 }
 
 /**

@@ -6,6 +6,9 @@ import me.meeshy.sdk.model.NotificationActor
 import me.meeshy.sdk.model.NotificationContext
 import me.meeshy.sdk.model.NotificationMetadata
 import me.meeshy.sdk.model.NotificationState
+import me.meeshy.sdk.model.game.GameTarget
+import me.meeshy.sdk.model.game.pages.GamePage
+import me.meeshy.sdk.model.game.progression.ProgressionConcept
 import org.junit.Test
 
 /**
@@ -286,6 +289,39 @@ class NotificationDestinationResolverTest {
         )
 
         assertThat(opened).containsExactly("mood", "m1")
+    }
+
+    @Test
+    fun `une notification de jeu ou de palier ouvre l ecran que la carte du jeu nomme`() {
+        mapOf(
+            "level_up" to GameTarget.Concept(ProgressionConcept.Level),
+            "streak_milestone" to GameTarget.Concept(ProgressionConcept.Flame),
+            "badge_earned" to GameTarget.Concept(ProgressionConcept.Badges),
+            "achievement_unlocked" to GameTarget.Concept(ProgressionConcept.Succes),
+            "game_mission_window" to GameTarget.Concept(ProgressionConcept.Missions),
+            "game_duo_invited" to GameTarget.Page(GamePage.League),
+            "game_duo_accepted" to GameTarget.Page(GamePage.League),
+            "game_league_result" to GameTarget.Page(GamePage.League),
+            "game_season_step" to GameTarget.Page(GamePage.Season),
+        ).forEach { (type, target) ->
+            assertThat(NotificationDestinationResolver.resolve(notification(type)))
+                .isEqualTo(NotificationDestination.Game(target))
+        }
+    }
+
+    @Test
+    fun `dispatch fans a game destination to onOpenGame only`() {
+        val opened = mutableListOf<GameTarget>()
+        NotificationDestination.Game(GameTarget.Page(GamePage.Season)).dispatch(
+            onOpenConversation = { error("no") },
+            onOpenPost = { error("no") },
+            onOpenReel = { error("no") },
+            onOpenStory = { error("no") },
+            onOpenProfile = { error("no") },
+            onOpenGame = { opened += it },
+        )
+
+        assertThat(opened).containsExactly(GameTarget.Page(GamePage.Season))
     }
 
     @Test
