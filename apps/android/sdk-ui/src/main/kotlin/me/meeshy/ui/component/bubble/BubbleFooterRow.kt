@@ -52,6 +52,7 @@ import me.meeshy.sdk.model.DisplayName
 import me.meeshy.sdk.model.avatar.AvatarContext
 import me.meeshy.ui.R
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.component.rememberPresence
 import me.meeshy.ui.format.bubbleClockLabel
 import me.meeshy.ui.theme.MeeshyFontSize
 import me.meeshy.ui.theme.MeeshyPalette
@@ -125,6 +126,7 @@ private fun BubbleIdentityFooter(
                 context = AvatarContext.MessageBubble,
                 containerColor = senderColor,
                 imageUrl = content.senderAvatarUrl,
+                presence = rememberPresence(content.senderProfile?.userId),
                 modifier = Modifier
                     .clip(CircleShape)
                     .let { base ->

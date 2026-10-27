@@ -42,6 +42,7 @@ import me.meeshy.sdk.model.reading.focal.FocalScrollPerspective
 import me.meeshy.sdk.theme.DynamicColorGenerator
 import me.meeshy.ui.R
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.component.rememberPresence
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyGradients
 import me.meeshy.ui.theme.MeeshyPalette
@@ -201,6 +202,7 @@ internal fun ElectedIdentityChip(content: BubbleContent, accent: Color, onSender
                 size = ElectedMetrics.identityAvatar,
                 containerColor = senderColor,
                 imageUrl = content.senderAvatarUrl,
+                presence = rememberPresence(content.senderProfile?.userId),
             )
             Text(
                 text = if (content.isOutgoing) you else senderName ?: "",

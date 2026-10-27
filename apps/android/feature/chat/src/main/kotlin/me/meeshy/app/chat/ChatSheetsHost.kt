@@ -171,6 +171,7 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
             },
             avatarUrl = host.header.avatarUrl,
             accentColor = accentColor,
+            peerUserId = state.directPeerUserId.takeUnless { state.isGroup },
             entries = entries,
             onDismiss = { sheets.info = false },
         )

@@ -54,6 +54,8 @@ import me.meeshy.sdk.model.PaginatedParticipant
 import me.meeshy.sdk.model.displayLabel
 import me.meeshy.sdk.model.role
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.sdk.model.UserPresence
+import me.meeshy.ui.component.rememberPresence
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -301,7 +303,16 @@ private fun MemberRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
     ) {
-        MeeshyAvatar(name = name, size = 40.dp, containerColor = accentColor, imageUrl = member.avatar)
+        MeeshyAvatar(
+            name = name,
+            size = 40.dp,
+            containerColor = accentColor,
+            imageUrl = member.avatar,
+            presence = rememberPresence(
+                member.userId.takeUnless { isSelf },
+                UserPresence.served(member.isOnline, member.lastActiveAt),
+            ),
+        )
 
         Column(modifier = Modifier.weight(1f)) {
             Row(

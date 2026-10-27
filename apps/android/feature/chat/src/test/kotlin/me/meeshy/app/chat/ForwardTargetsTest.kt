@@ -185,4 +185,21 @@ class ForwardTargetsTest {
         )
         assertThat(targets).isEmpty()
     }
+
+    @Test
+    fun a_direct_target_carries_the_peer_account_for_its_presence_dot() {
+        val targets = ForwardTargets.of(
+            listOf(direct("d1", ApiParticipant(id = "p1", userId = "me"), ApiParticipant(id = "p2", userId = "peer"))),
+            sourceConversationId = "c1",
+            query = "",
+            currentUserId = "me",
+        )
+        assertThat(targets.single().peerUserId).isEqualTo("peer")
+    }
+
+    @Test
+    fun a_group_target_has_no_peer_account() {
+        val targets = ForwardTargets.of(listOf(group("g1", "Team")), sourceConversationId = "c1", query = "", currentUserId = "me")
+        assertThat(targets.single().peerUserId).isNull()
+    }
 }

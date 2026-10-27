@@ -33,6 +33,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.chat.R
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.component.rememberPresence
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyFontSize
 import me.meeshy.ui.theme.MeeshySpacing
@@ -55,6 +56,7 @@ internal fun ConversationInfoSheet(
     subtitle: String?,
     avatarUrl: String?,
     accentColor: Color,
+    peerUserId: String?,
     entries: List<ConversationInfoEntry>,
     onDismiss: () -> Unit,
 ) {
@@ -79,6 +81,7 @@ internal fun ConversationInfoSheet(
                 size = 80.dp,
                 containerColor = accentColor,
                 imageUrl = avatarUrl,
+                presence = rememberPresence(peerUserId),
             )
             Spacer(Modifier.size(MeeshySpacing.md))
             Text(

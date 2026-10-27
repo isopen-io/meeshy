@@ -20,6 +20,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.chat.R
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.component.rememberPresence
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 
@@ -66,14 +67,20 @@ internal fun TypingAvatarCluster(stack: TypingAvatarStack, accentColor: Color) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy((-6).dp),
     ) {
-        stack.visible.forEach { chip ->
+        stack.visible.forEachIndexed { index, chip ->
             Box(
                 modifier = Modifier
                     .clip(CircleShape)
                     .background(ringColor)
                     .padding(1.5.dp),
             ) {
-                MeeshyAvatar(name = chip.name, size = 20.dp, containerColor = accentColor, imageUrl = chip.avatarUrl)
+                MeeshyAvatar(
+                    name = chip.name,
+                    size = 20.dp,
+                    containerColor = accentColor,
+                    imageUrl = chip.avatarUrl,
+                    presence = if (index == 0) rememberPresence(chip.userId) else null,
+                )
             }
         }
         if (stack.overflow > 0) {

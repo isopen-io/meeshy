@@ -26,6 +26,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import me.meeshy.sdk.mention.MentionAutocompleteState
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.component.rememberPresence
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 
@@ -62,6 +63,7 @@ internal fun MentionSuggestionStrip(
                         size = 36.dp,
                         containerColor = accentColor,
                         imageUrl = candidate.avatarURL,
+                        presence = rememberPresence(candidate.id),
                     )
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
