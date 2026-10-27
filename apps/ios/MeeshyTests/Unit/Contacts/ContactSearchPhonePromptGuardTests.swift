@@ -15,7 +15,7 @@ final class ContactSearchPhonePromptGuardTests: XCTestCase {
         "Meeshy/Features/Contacts/PhonebookListView.swift",
         "Meeshy/Features/Contacts/DiscoverTab.swift",
     ]
-    private static let securityView = "Meeshy/Features/Main/Views/SecurityView.swift"
+    private static let securityView = "Meeshy/Features/Settings/Views/SecurityView.swift"
     private static let promptSheet = "Meeshy/Features/Contacts/PhonePromptSheet.swift"
     private static let catalog = "Meeshy/Localizable.xcstrings"
     private static let sevenLanguages: Set<String> = ["fr", "en", "es", "pt-BR", "de", "it", "ar"]

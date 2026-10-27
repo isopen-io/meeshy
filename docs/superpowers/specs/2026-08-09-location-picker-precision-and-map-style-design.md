@@ -63,7 +63,7 @@ Le test du grain de `packages/MeeshySDK/CLAUDE.md` s'applique :
 ```
 packages/MeeshySDK/Sources/MeeshySDK/Models/LocationSharingPreferences.swift
 packages/MeeshySDK/Sources/MeeshyUI/Location/LocationSharingPreferencesStore.swift
-apps/ios/Meeshy/Features/Main/Components/LocationSharingSettingsSection.swift
+apps/ios/Meeshy/Features/Settings/Components/LocationSharingSettingsSection.swift
 packages/MeeshySDK/Tests/MeeshySDKTests/Models/LocationPrecisionTests.swift
 packages/MeeshySDK/Tests/MeeshyUITests/Location/LocationSharingPreferencesStoreTests.swift
 apps/ios/MeeshyTests/Unit/Views/LocationPickerSourceGuardTests.swift
@@ -74,7 +74,7 @@ apps/ios/MeeshyTests/Unit/Views/LocationPickerSourceGuardTests.swift
 ```
 packages/MeeshySDK/Sources/MeeshyUI/Compatibility/AdaptiveMap.swift
 apps/ios/Meeshy/Features/Main/Components/LocationPickerView.swift
-apps/ios/Meeshy/Features/Main/Views/PrivacySettingsView.swift
+apps/ios/Meeshy/Features/Settings/Views/PrivacySettingsView.swift
 apps/ios/Meeshy/Localizable.xcstrings
 ```
 

@@ -164,7 +164,7 @@ enum Mode {
 - `apps/ios/Meeshy/Features/Main/Components/ConversationLockSheet.swift` — nouveaux modes + UI multi-étapes
 - `apps/ios/Meeshy/Features/Main/Views/ConversationListView.swift` — toggles swipe + règle block/archive
 - `apps/ios/Meeshy/Features/Main/Views/ConversationListView+Overlays.swift` — toggles context menu
-- `apps/ios/Meeshy/Features/Main/Views/SecurityView.swift` — section conversations verrouillées redesign
+- `apps/ios/Meeshy/Features/Settings/Views/SecurityView.swift` — section conversations verrouillées redesign
 
 ### Aucune modification requise
 - `packages/MeeshySDK/` — le modèle `MeeshyConversation` est suffisant

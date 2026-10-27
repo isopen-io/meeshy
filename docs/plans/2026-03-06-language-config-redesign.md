@@ -504,7 +504,7 @@ git commit -m "feat(ios): enhance ProfileView language section with full picker 
 ### Task 4: iOS — Reorganize SettingsView (move interface language to Appearance)
 
 **Files:**
-- Modify: `apps/ios/Meeshy/Features/Main/Views/SettingsView.swift`
+- Modify: `apps/ios/Meeshy/Features/Settings/Views/SettingsView.swift`
 
 **Step 1: Remove the languageSection entirely**
 
@@ -548,7 +548,7 @@ Expected: BUILD SUCCEEDED
 **Step 5: Commit**
 
 ```bash
-git add apps/ios/Meeshy/Features/Main/Views/SettingsView.swift
+git add apps/ios/Meeshy/Features/Settings/Views/SettingsView.swift
 git commit -m "feat(ios): move interface language to Appearance section, remove standalone Language section"
 ```
 

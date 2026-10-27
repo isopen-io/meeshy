@@ -129,7 +129,7 @@ Scope: Main feature ViewModels (conversation, feed, social, story, voice, 2FA, p
 
 **Android-port note**: TUS resumable upload has an Android client (`tus-java-client` / OkHttp). Background upload → `WorkManager` job (survives process death — replaces both `uploadTask` and the offline queue). RAW publish + per-slide Post creation ports directly. Story tray = Compose horizontal list.
 
-## apps/ios/Meeshy/Features/Main/ViewModels/TwoFactorViewModel.swift
+## apps/ios/Meeshy/Features/Settings/ViewModels/TwoFactorViewModel.swift
 
 **Purpose**: TOTP 2FA setup/enable/disable/recovery-codes management.
 
@@ -153,7 +153,7 @@ Scope: Main feature ViewModels (conversation, feed, social, story, voice, 2FA, p
 
 **Android-port note**: ViewModel + Room profile cache; outbox-driven block/unblock ports directly.
 
-## apps/ios/Meeshy/Features/Main/ViewModels/VoiceProfileManageViewModel.swift
+## apps/ios/Meeshy/Features/Settings/ViewModels/VoiceProfileManageViewModel.swift
 
 **Purpose**: Manage an existing voice-clone profile — samples, consent, cloning toggle, deletion.
 
@@ -165,7 +165,7 @@ Scope: Main feature ViewModels (conversation, feed, social, story, voice, 2FA, p
 
 **Android-port note**: ViewModel; audio sample upload via multipart. Duration estimate heuristic ports directly.
 
-## apps/ios/Meeshy/Features/Main/ViewModels/VoiceProfileWizardViewModel.swift
+## apps/ios/Meeshy/Features/Settings/ViewModels/VoiceProfileWizardViewModel.swift
 
 **Purpose**: Onboarding wizard to create a voice-clone profile (consent → recording → processing → complete).
 
@@ -177,7 +177,7 @@ Scope: Main feature ViewModels (conversation, feed, social, story, voice, 2FA, p
 
 **Android-port note**: Multi-step wizard → Compose with a `currentStep` enum in `StateFlow`; date picker for birth date.
 
-## apps/ios/Meeshy/Features/Main/Views/AboutView.swift
+## apps/ios/Meeshy/Features/Settings/Views/AboutView.swift
 
 **Purpose**: Static "About" screen — app version, platform info, description, feature list, external links, copyright.
 
@@ -201,7 +201,7 @@ Scope: Main feature ViewModels (conversation, feed, social, story, voice, 2FA, p
 
 **Android-port note**: Compose component; progress ring via `Canvas`/`drawArc` or `CircularProgressIndicator`. Leaf component — pass primitives.
 
-## apps/ios/Meeshy/Features/Main/Views/ActiveSessionsView.swift
+## apps/ios/Meeshy/Features/Settings/Views/ActiveSessionsView.swift
 
 **Purpose**: Lists active login sessions with revoke-one / revoke-all-others. Includes its `ActiveSessionsViewModel` in-file.
 

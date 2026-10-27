@@ -151,7 +151,7 @@ Une vérification `git fetch origin main` a été effectuée à chaque fin de ph
 Plusieurs nouveaux fichiers `.swift` doivent être ajoutés au `project.pbxproj` via drag-drop Xcode (registres explicites) :
 
 **Sources app :**
-- `apps/ios/Meeshy/Features/Main/ViewModels/ActiveSessionsViewModel.swift`
+- `apps/ios/Meeshy/Features/Settings/ViewModels/ActiveSessionsViewModel.swift`
 - `apps/ios/Meeshy/Features/Main/Services/VoIPDedupRing.swift`
 - `apps/ios/Meeshy/Features/Main/Services/TaskTimeout.swift`
 

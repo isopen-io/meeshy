@@ -845,7 +845,7 @@ Transposition Android : Génération ; les libellés iOS-only (Siri, Live Activi
 <details><summary>Sources iOS (2)</summary>
 
 - `apps/ios/Meeshy/Localizable.xcstrings (préfixes settings., export., a11y., accessibility., sessions., about., tracking., sync.)`
-- `apps/ios/Meeshy/Features/Main/Views/AboutView.swift`
+- `apps/ios/Meeshy/Features/Settings/Views/AboutView.swift`
 
 </details>
 
@@ -1008,8 +1008,8 @@ Transposition Android : legal.xml reste un fichier non généré ; sa date et so
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/TermsOfServiceView.swift`
-- `apps/ios/Meeshy/Features/Main/Views/PrivacyPolicyView.swift`
+- `apps/ios/Meeshy/Features/Settings/Views/TermsOfServiceView.swift`
+- `apps/ios/Meeshy/Features/Settings/Views/PrivacyPolicyView.swift`
 - `apps/ios/Meeshy/Localizable.xcstrings (legal.*)`
 
 </details>

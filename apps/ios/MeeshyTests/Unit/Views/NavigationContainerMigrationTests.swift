@@ -52,7 +52,7 @@ final class NavigationContainerMigrationTests: XCTestCase {
     }
 
     func test_voiceProfileAddSamplesSheet_usesNavigationStack() throws {
-        try assertMigrated("Meeshy/Features/Main/Views/VoiceProfileManageView.swift")
+        try assertMigrated("Meeshy/Features/Settings/Views/VoiceProfileManageView.swift")
     }
 
     /// Depuis #10947, l'extension de partage héberge l'écran de partage unique :

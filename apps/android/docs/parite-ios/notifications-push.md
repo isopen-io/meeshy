@@ -901,7 +901,7 @@ Transposition Android : Toggle SwiftUI + DatePicker deviennent Switch Material 3
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/NotificationSettingsView.swift`
+- `apps/ios/Meeshy/Features/Settings/Views/NotificationSettingsView.swift`
 
 </details>
 
@@ -972,7 +972,7 @@ Transposition Android : DatePicker hourAndMinute devient TimePicker Material 3 e
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/NotificationSettingsView.swift`
+- `apps/ios/Meeshy/Features/Settings/Views/NotificationSettingsView.swift`
 
 </details>
 

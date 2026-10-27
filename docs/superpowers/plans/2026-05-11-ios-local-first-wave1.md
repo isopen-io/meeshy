@@ -1922,7 +1922,7 @@ git commit -m "feat(ux): ConnectionBanner syncing state via ConnectionStatusView
 - Modify: `apps/ios/Meeshy/MeeshyApp.swift:16`
 - Modify: `apps/ios/Meeshy/Features/Auth/Views/SecurityView.swift:12, 24`
 - Modify: `apps/ios/Meeshy/Features/Main/Views/EditProfileView.swift:12`
-- Modify: `apps/ios/Meeshy/Features/Main/Views/SettingsView.swift:10-11`
+- Modify: `apps/ios/Meeshy/Features/Settings/Views/SettingsView.swift:10-11`
 - Modify: `apps/ios/Meeshy/Features/Main/Views/ProfileView.swift:13`
 - Modify: `apps/ios/Meeshy/Features/Main/Views/AudioPostComposerView.swift:13`
 

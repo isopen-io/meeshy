@@ -6,7 +6,7 @@
 
 ## Cible
 
-`apps/ios/Meeshy/Features/Main/Views/ChangePasswordView.swift` → helper
+`apps/ios/Meeshy/Features/Settings/Views/ChangePasswordView.swift` → helper
 `secureField(icon:title:text:placeholder:color:field:)` (3 usages).
 
 ## Étapes

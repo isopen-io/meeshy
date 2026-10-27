@@ -52,7 +52,7 @@ Files covered: 20. Feature areas: app shell / root navigation, settings & securi
 
 **Android-port note**: Feed overlay = a Compose `LazyColumn` modal sheet/overlay. The optimistic-like reconciliation (local set + delta map + in-flight set, socket reconcile) is the canonical pattern — implement in `FeedViewModel` with `StateFlow`. `.equatable()` cells → stable keys + `@Stable`/`@Immutable` data classes. Drop ALL legacy shim structs — do not port. The attachment menu = a Compose dropdown / floating action chip group.
 
-## apps/ios/Meeshy/Features/Main/Views/SecurityView.swift
+## apps/ios/Meeshy/Features/Settings/Views/SecurityView.swift
 
 **Purpose**: Account security settings: password change, 2FA, email change/verify, phone change/verify, conversation-lock master PIN, active sessions.
 
@@ -69,7 +69,7 @@ Files covered: 20. Feature areas: app shell / root navigation, settings & securi
 
 **Android-port note**: Compose screen with sections; back-stack via Navigation Compose. 2FA / PIN / sessions = sub-screens or modal bottom sheets. Email/phone change flows are stateful multi-step — model with a `SecurityViewModel` exposing per-section sealed UI states. Resend cooldown `Timer` → coroutine `delay` loop or `CountDownTimer`. Numeric code filtering → `OutlinedTextField` with `KeyboardType.Number` + input filter.
 
-## apps/ios/Meeshy/Features/Main/Views/SettingsView.swift
+## apps/ios/Meeshy/Features/Settings/Views/SettingsView.swift
 
 **Purpose**: Main settings hub — profile card + grouped sections (account, appearance, voice profile, transcription, notifications, data, tools, support, about, logout).
 

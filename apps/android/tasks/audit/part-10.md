@@ -40,7 +40,7 @@ Scope: 19 files from `apps/ios/Meeshy/Features/Main/Views/` — auth (login, mag
 - **Dependencies**: `AuthManager` (env), `AuthService`, `APIError`, `os.Logger`.
 - **Android-port note**: Compose 2-step screen; coroutine countdown in ViewModel (cancel on leave). `AuthService.requestMagicLink` → Retrofit call returning expiry. Magic link deep-link handled by app's intent filter.
 
-## apps/ios/Meeshy/Features/Main/Views/MediaDownloadSettingsView.swift
+## apps/ios/Meeshy/Features/Settings/Views/MediaDownloadSettingsView.swift
 
 - **Purpose**: Settings for auto-downloading media by type (image/audio/video) over Wi-Fi vs cellular.
 - **Public API**: `struct MediaDownloadPreferences: Codable, Equatable, Sendable` (6 bools); `struct MediaDownloadSettingsView: View`.
@@ -89,7 +89,7 @@ Scope: 19 files from `apps/ios/Meeshy/Features/Main/Views/` — auth (login, mag
 - **Dependencies**: `APIClient`, `AuthManager`, `StatusViewModel` (env), `Router`, `MeeshyAvatar`, `DynamicColorGenerator`.
 - **Android-port note**: `NewConversationViewModel` with debounced search (`Flow.debounce(350)`). Notification → use a shared event bus / `SharedFlow` rather than `NotificationCenter`. `SearchedUser` = Kotlin data class with Moshi/kotlinx.serialization.
 
-## apps/ios/Meeshy/Features/Main/Views/NotificationSettingsView.swift
+## apps/ios/Meeshy/Features/Settings/Views/NotificationSettingsView.swift
 
 - **Purpose**: Comprehensive notification preferences (7 sections: General, Messages, Conversations, Contacts/Groups, Feed, Display, Do-Not-Disturb).
 - **Public API**: `struct NotificationSettingsView: View`.
@@ -158,14 +158,14 @@ Scope: 19 files from `apps/ios/Meeshy/Features/Main/Views/` — auth (login, mag
 - **Dependencies**: `FeedPost`, `PostTranslation`, `PostService`, `AuthManager`, `LanguageDisplay`, `ToastManager`.
 - **Android-port note**: `ModalBottomSheet` with sectioned list. Request translation = ViewModel call with per-language loading state map.
 
-## apps/ios/Meeshy/Features/Main/Views/PrivacyPolicyView.swift
+## apps/ios/Meeshy/Features/Settings/Views/PrivacyPolicyView.swift
 
 - **Purpose**: Static privacy policy document with fr/en language toggle.
 - **Public API**: `struct PrivacyPolicyView: View`. Hardcoded `sections` dictionary (fr/en, 7 sections each).
 - **Key behaviors**: Segmented picker switches language; numbered policy section cards; "last updated" line. Pure static content.
 - **Android-port note**: Static screen; store the policy text in string resources (`values/`, `values-en/`) instead of an inline dictionary, or fetch from a remote/bundled markdown. Segmented toggle → `SegmentedButton`.
 
-## apps/ios/Meeshy/Features/Main/Views/PrivacySettingsView.swift
+## apps/ios/Meeshy/Features/Settings/Views/PrivacySettingsView.swift
 
 - **Purpose**: Privacy preferences (4 sections: Visibility, Contacts/Groups, Media/Data, Encryption).
 - **Public API**: `struct PrivacySettingsView: View`.

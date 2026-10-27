@@ -892,7 +892,7 @@ git commit -m "feat(ios): add @mention autocomplete with gateway integration"
 **Files:**
 - Create: `services/gateway/src/routes/me/export.ts`
 - Modify: `services/gateway/src/routes/me/index.ts`
-- Modify: `apps/ios/Meeshy/Features/Main/Views/DataExportView.swift`
+- Modify: `apps/ios/Meeshy/Features/Settings/Views/DataExportView.swift`
 - Create: `packages/MeeshySDK/Sources/MeeshySDK/Services/DataExportService.swift`
 
 - [ ] **Step 1: Create export endpoint in gateway**
@@ -920,7 +920,7 @@ cd services/gateway && pnpm build
 ```bash
 git add services/gateway/src/routes/me/
 git add packages/MeeshySDK/Sources/MeeshySDK/Services/DataExportService.swift
-git add apps/ios/Meeshy/Features/Main/Views/DataExportView.swift
+git add apps/ios/Meeshy/Features/Settings/Views/DataExportView.swift
 git commit -m "feat: add GDPR data export endpoint and wire iOS UI"
 ```
 
@@ -980,7 +980,7 @@ git commit -m "feat: add message pinning endpoints, Socket.IO events, and iOS UI
 ### Task 14: Read Receipts & Typing Indicator Toggles
 
 **Files:**
-- Modify: `apps/ios/Meeshy/Features/Main/Views/PrivacySettingsView.swift`
+- Modify: `apps/ios/Meeshy/Features/Settings/Views/PrivacySettingsView.swift`
 - Modify: `packages/MeeshySDK/Sources/MeeshySDK/Models/UserModels.swift`
 - Modify: `apps/ios/Meeshy/Features/Main/ViewModels/ConversationViewModel.swift`
 
@@ -994,7 +994,7 @@ git commit -m "feat: add message pinning endpoints, Socket.IO events, and iOS UI
 ### Task 15: Media Auto-Download Settings
 
 **Files:**
-- Create: `apps/ios/Meeshy/Features/Main/Views/MediaDownloadSettingsView.swift`
+- Create: `apps/ios/Meeshy/Features/Settings/Views/MediaDownloadSettingsView.swift`
 - Modify: `packages/MeeshySDK/Sources/MeeshySDK/Models/UserModels.swift`
 
 - [ ] **Step 1: Add MediaDownloadPreferences model**

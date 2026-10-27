@@ -335,7 +335,7 @@ Vues à corriger :
 - `apps/ios/Meeshy/Features/Main/Views/ConnectionBanner.swift:7-8` → ConnectionViewModel léger
 - `apps/ios/Meeshy/Features/Auth/Views/SecurityView.swift:12,24`
 - `apps/ios/Meeshy/Features/Main/Views/EditProfileView.swift:12`
-- `apps/ios/Meeshy/Features/Main/Views/SettingsView.swift:10-11`
+- `apps/ios/Meeshy/Features/Settings/Views/SettingsView.swift:10-11`
 - `apps/ios/Meeshy/Features/Main/Views/ProfileView.swift:13`
 - `apps/ios/Meeshy/Features/Main/Views/AudioPostComposerView.swift:13`
 

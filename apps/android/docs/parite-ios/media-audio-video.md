@@ -744,7 +744,7 @@ Transposition Android : alert SwiftUI → AlertDialog Material 3 ; sheet → éc
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/VoiceProfileManageView.swift`
+- `apps/ios/Meeshy/Features/Settings/Views/VoiceProfileManageView.swift`
 
 </details>
 
@@ -1045,7 +1045,7 @@ Transposition Android : List SwiftUI devient LazyColumn ; alert devient AlertDia
 <details><summary>Sources iOS (2)</summary>
 
 - `packages/MeeshySDK/Sources/MeeshyUI/VoiceProfile/VoiceProfileManageView.swift`
-- `apps/ios/Meeshy/Features/Main/ViewModels/VoiceProfileManageViewModel.swift`
+- `apps/ios/Meeshy/Features/Settings/ViewModels/VoiceProfileManageViewModel.swift`
 
 </details>
 
@@ -1074,7 +1074,7 @@ Transposition Android : NavigationStack d'étapes devient une feuille/écran Com
 <details><summary>Sources iOS (2)</summary>
 
 - `packages/MeeshySDK/Sources/MeeshyUI/VoiceProfile/VoiceProfileWizardView.swift`
-- `apps/ios/Meeshy/Features/Main/ViewModels/VoiceProfileWizardViewModel.swift`
+- `apps/ios/Meeshy/Features/Settings/ViewModels/VoiceProfileWizardViewModel.swift`
 
 </details>
 
@@ -1978,7 +1978,7 @@ Transposition Android : UserDefaults → DataStore ; Toggle → Switch Material.
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/MediaDownloadSettingsView.swift`
+- `apps/ios/Meeshy/Features/Settings/Views/MediaDownloadSettingsView.swift`
 
 </details>
 
@@ -2109,7 +2109,7 @@ Transposition Android : DatePicker roue → DatePickerDialog Material 3 ; GRDB/U
 
 <details><summary>Sources iOS (4)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/VoiceProfileWizardView.swift`
+- `apps/ios/Meeshy/Features/Settings/Views/VoiceProfileWizardView.swift`
 - `packages/MeeshySDK/Sources/MeeshySDK/Models/VoiceProfileModels.swift`
 - `packages/MeeshySDK/Sources/MeeshySDK/Models/VoiceProfilePrompts.swift`
 - `packages/MeeshySDK/Sources/MeeshySDK/Services/VoiceProfileService.swift`

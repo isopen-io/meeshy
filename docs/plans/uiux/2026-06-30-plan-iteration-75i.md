@@ -9,7 +9,7 @@ typographique mécanique, borné, épuré, disjoint des PR iOS en vol (71i–74i
 `main` HEAD (resync avant de commencer). Branche `claude/upbeat-euler-nbbwqv`.
 
 ## Changements
-`apps/ios/Meeshy/Features/Main/Views/VoiceProfileManageView.swift`
+`apps/ios/Meeshy/Features/Settings/Views/VoiceProfileManageView.swift`
 - **28** `.font(.system(size: X, …))` → `.font(MeeshyFont.relative(X, weight:, design:))`
   (weight + design préservés, dont `.monospaced`/`.rounded`). Tout le texte de lecture +
   glyphes inline accolés à un libellé.

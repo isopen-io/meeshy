@@ -29,16 +29,19 @@ final class SettingsDestinationsGlassHeaderGuardTests: XCTestCase {
         "SupportView", "AboutView", "PrivacyPolicyView", "TermsOfServiceView", "LicensesView"
     ]
 
+    private static let domains = ["Settings", "Main"]
+
     private func source(_ page: String) throws -> String {
-        try String(
-            contentsOf: URL(fileURLWithPath: #filePath)
-                .deletingLastPathComponent()   // Views
-                .deletingLastPathComponent()   // Unit
-                .deletingLastPathComponent()   // MeeshyTests
-                .deletingLastPathComponent()   // ios
-                .appendingPathComponent("Meeshy/Features/Main/Views/\(page).swift"),
-            encoding: .utf8
-        )
+        let features = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // Views
+            .deletingLastPathComponent()   // Unit
+            .deletingLastPathComponent()   // MeeshyTests
+            .deletingLastPathComponent()   // ios
+            .appendingPathComponent("Meeshy/Features")
+        let candidates = Self.domains.map { features.appendingPathComponent("\($0)/Views/\(page).swift") }
+        let file = try XCTUnwrap(candidates.first { FileManager.default.fileExists(atPath: $0.path) },
+                                 "\(page).swift introuvable dans \(Self.domains)")
+        return try String(contentsOf: file, encoding: .utf8)
     }
 
     func test_everySettingsPage_mountsTheSharedHeader() throws {

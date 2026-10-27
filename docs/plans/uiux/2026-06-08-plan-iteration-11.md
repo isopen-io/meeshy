@@ -11,7 +11,7 @@ File: `apps/ios/Meeshy/Features/Main/Views/ThreadView.swift`
 - Line 158: `Text(message.senderName ?? "Inconnu")` → same pattern
 
 ### [I2] NotificationSettingsView — dayLabel localization
-File: `apps/ios/Meeshy/Features/Main/Views/NotificationSettingsView.swift`
+File: `apps/ios/Meeshy/Features/Settings/Views/NotificationSettingsView.swift`
 
 Replace `dayLabel` helper (lines 257–267) with localized strings:
 | Case | Old | New key | English default |
@@ -27,7 +27,7 @@ Replace `dayLabel` helper (lines 257–267) with localized strings:
 Add a `dayAccessibilityLabel(_:)` helper returning the full English day name for VoiceOver.
 
 ### [I3] ChangePasswordView — French defaultValues
-File: `apps/ios/Meeshy/Features/Main/Views/ChangePasswordView.swift`
+File: `apps/ios/Meeshy/Features/Settings/Views/ChangePasswordView.swift`
 
 - Line 343: `defaultValue: "Mot de passe actuel incorrect"` → `defaultValue: "Incorrect current password"`
 - Line 356: `defaultValue: "Une erreur est survenue"` → `defaultValue: "An error occurred"`

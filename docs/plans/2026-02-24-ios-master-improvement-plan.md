@@ -136,7 +136,7 @@
 **Fichiers concernes**:
 - Modifier: `apps/ios/Meeshy/Features/Main/Views/ProfileView.swift`
 - Creer: `apps/ios/Meeshy/Features/Main/Views/EditProfileView.swift`
-- Creer: `apps/ios/Meeshy/Features/Main/Views/ChangePasswordView.swift`
+- Creer: `apps/ios/Meeshy/Features/Settings/Views/ChangePasswordView.swift`
 
 ### 2.5 Gestion des participants (groupes)
 **Priorite**: Haute
@@ -169,7 +169,7 @@
 **Fichiers concernes**:
 - Modifier: `apps/ios/Meeshy/MeeshyApp.swift` (UNUserNotificationCenter setup)
 - Modifier: `packages/MeeshySDK/Sources/MeeshySDK/Notifications/PushNotificationManager.swift`
-- Creer: `apps/ios/Meeshy/Features/Main/Views/NotificationSettingsView.swift`
+- Creer: `apps/ios/Meeshy/Features/Settings/Views/NotificationSettingsView.swift`
 
 ### 2.7 Block/Unblock utilisateurs
 **Priorite**: Moyenne
@@ -183,8 +183,8 @@
 - Mettre a jour l'UI (masquer messages, griser conversation)
 
 **Fichiers concernes**:
-- Modifier: `apps/ios/Meeshy/Features/Main/Views/SettingsView.swift`
-- Creer: `apps/ios/Meeshy/Features/Main/Views/BlockedUsersView.swift`
+- Modifier: `apps/ios/Meeshy/Features/Settings/Views/SettingsView.swift`
+- Creer: `apps/ios/Meeshy/Features/Settings/Views/BlockedUsersView.swift`
 - Modifier: `apps/ios/Meeshy/Features/Main/Components/ConversationInfoSheet.swift`
 
 ---

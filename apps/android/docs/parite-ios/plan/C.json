@@ -5035,7 +5035,7 @@
   "ios_reference_files": [
    "packages/MeeshySDK/Sources/MeeshyUI/Packs/UnifiedShopView.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Packs/PackShopView.swift",
-   "apps/ios/Meeshy/Features/Main/Views/PacksSettingsView.swift",
+   "apps/ios/Meeshy/Features/Settings/Views/PacksSettingsView.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Story/StickerPickerView+Packs.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Story/StickerPackShopView.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Story/StickerSheetPage.swift"
@@ -6599,7 +6599,7 @@
   ],
   "ios_reference_files": [
    "apps/ios/Meeshy/Features/Main/Components/LocationPickerView.swift",
-   "apps/ios/Meeshy/Features/Main/Components/LocationSharingSettingsSection.swift",
+   "apps/ios/Meeshy/Features/Settings/Components/LocationSharingSettingsSection.swift",
    "apps/ios/Meeshy/Features/Main/Views/SendPlaceTileLaw.swift"
   ],
   "feature_keys": [
@@ -6686,7 +6686,7 @@
    "apps/ios/Meeshy/Features/Main/Views/ConversationStickerRendering.swift",
    "apps/ios/Meeshy/Features/Main/Views/ConversationView+StickerSheet.swift",
    "apps/ios/Meeshy/Features/Main/Views/StickerSheetLinks.swift",
-   "apps/ios/Meeshy/Features/Main/Views/PacksSettingsView.swift",
+   "apps/ios/Meeshy/Features/Settings/Views/PacksSettingsView.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Models/StickerPackModels.swift"
   ],
   "feature_keys": [
@@ -9088,7 +9088,7 @@
    "apps/android/feature/settings/src/main/res/values-fr/location_sharing_strings.xml"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Components/LocationSharingSettingsSection.swift",
+   "apps/ios/Meeshy/Features/Settings/Components/LocationSharingSettingsSection.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Location/LocationSharingPreferencesStore.swift"
   ],
   "feature_keys": [

@@ -577,7 +577,7 @@ Transposition Android : swipeActions -> SwipeToDismissBox ; alert -> AlertDialog
 
 - `apps/ios/Meeshy/Features/Contacts/BlockedTab.swift`
 - `apps/ios/Meeshy/Features/Contacts/BlockedViewModel.swift`
-- `apps/ios/Meeshy/Features/Main/Views/BlockedUsersView.swift`
+- `apps/ios/Meeshy/Features/Settings/Views/BlockedUsersView.swift`
 
 </details>
 
@@ -723,7 +723,7 @@ Transposition Android : sheet + presentationDetents -> ModalBottomSheet ; textCo
 
 - `apps/ios/Meeshy/Features/Contacts/PhonePromptPolicy.swift`
 - `apps/ios/Meeshy/Features/Contacts/PhonePromptSheet.swift`
-- `apps/ios/Meeshy/Features/Main/ViewModels/PhoneChangeFlowModel.swift`
+- `apps/ios/Meeshy/Features/Settings/ViewModels/PhoneChangeFlowModel.swift`
 
 </details>
 

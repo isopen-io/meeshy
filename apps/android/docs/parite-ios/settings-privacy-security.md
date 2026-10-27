@@ -219,7 +219,7 @@ Transposition Android : LentilleFeatureFlag (UserDefaults) -> DataStore Preferen
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/SettingsView.swift`
+- `apps/ios/Meeshy/Features/Settings/Views/SettingsView.swift`
 
 </details>
 
@@ -286,7 +286,7 @@ Transposition Android : keyPath WritableKeyPath -> PrivacyToggle enum + descript
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/PrivacySettingsView.swift`
+- `apps/ios/Meeshy/Features/Settings/Views/PrivacySettingsView.swift`
 
 </details>
 
@@ -311,7 +311,7 @@ Transposition Android : Feuilles SwiftUI -> destinations de navigation plein éc
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/SecurityView.swift`
+- `apps/ios/Meeshy/Features/Settings/Views/SecurityView.swift`
 
 </details>
 
@@ -339,7 +339,7 @@ Transposition Android : CollapsibleHeader -> LargeTopAppBar + scrollBehavior ; H
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/SettingsView.swift`
+- `apps/ios/Meeshy/Features/Settings/Views/SettingsView.swift`
 
 </details>
 
@@ -417,7 +417,7 @@ Transposition Android : CacheCoordinator stores (images/audio/video/thumbnails) 
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/DataStorageView.swift`
+- `apps/ios/Meeshy/Features/Settings/Views/DataStorageView.swift`
 - `packages/MeeshySDK/Sources/MeeshyUI/Settings/SelectiveCachePurgeView.swift`
 
 </details>
@@ -446,9 +446,9 @@ Transposition Android : confirmationDialog -> AlertDialog ; refreshable -> PullT
 
 <details><summary>Sources iOS (4)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/ActiveSessionsView.swift`
-- `apps/ios/Meeshy/Features/Main/ViewModels/ActiveSessionsViewModel.swift`
-- `apps/ios/Meeshy/Features/Main/ViewModels/ActiveSessionsPresentation.swift`
+- `apps/ios/Meeshy/Features/Settings/Views/ActiveSessionsView.swift`
+- `apps/ios/Meeshy/Features/Settings/ViewModels/ActiveSessionsViewModel.swift`
+- `apps/ios/Meeshy/Features/Settings/ViewModels/ActiveSessionsPresentation.swift`
 - `packages/MeeshySDK/Sources/MeeshySDK/Services/SessionService.swift`
 
 </details>
@@ -475,7 +475,7 @@ Transposition Android : FocusState -> FocusRequester + ImeAction ; SecureField -
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/ChangePasswordView.swift`
+- `apps/ios/Meeshy/Features/Settings/Views/ChangePasswordView.swift`
 
 </details>
 
@@ -499,7 +499,7 @@ Transposition Android : ConversationLockManager.shared (ObservableObject) -> Flo
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/SecurityView.swift`
+- `apps/ios/Meeshy/Features/Settings/Views/SecurityView.swift`
 
 </details>
 
@@ -524,7 +524,7 @@ Transposition Android : alert SwiftUI -> AlertDialog ; transition spring -> Anim
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/DeleteAccountView.swift`
+- `apps/ios/Meeshy/Features/Settings/Views/DeleteAccountView.swift`
 
 </details>
 
@@ -548,7 +548,7 @@ Transposition Android : scenePhase.active -> LifecycleEventEffect(ON_RESUME) ; t
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/SecurityView.swift`
+- `apps/ios/Meeshy/Features/Settings/Views/SecurityView.swift`
 
 </details>
 
@@ -601,7 +601,7 @@ Transposition Android : Keychain -> Android Keystore + EncryptedSharedPreference
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/SettingsView.swift`
+- `apps/ios/Meeshy/Features/Settings/Views/SettingsView.swift`
 
 </details>
 
@@ -723,7 +723,7 @@ Transposition Android : Navigation sheet SwiftUI -> destinations NavHost ; prefs
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/SettingsView.swift`
+- `apps/ios/Meeshy/Features/Settings/Views/SettingsView.swift`
 
 </details>
 
@@ -749,7 +749,7 @@ Transposition Android : AppleLanguages/UILanguageOverride -> AppCompatDelegate.s
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/SettingsView.swift`
+- `apps/ios/Meeshy/Features/Settings/Views/SettingsView.swift`
 
 </details>
 
@@ -777,8 +777,8 @@ Transposition Android : UIPasteboard expirant -> ClipboardManager avec ClipDescr
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/TwoFactorSetupView.swift`
-- `apps/ios/Meeshy/Features/Main/ViewModels/TwoFactorViewModel.swift`
+- `apps/ios/Meeshy/Features/Settings/Views/TwoFactorSetupView.swift`
+- `apps/ios/Meeshy/Features/Settings/ViewModels/TwoFactorViewModel.swift`
 - `packages/MeeshySDK/Sources/MeeshySDK/Services/TwoFactorService.swift`
 
 </details>
@@ -803,7 +803,7 @@ Transposition Android : Link(destination:) -> Intent.ACTION_VIEW ; menu contextu
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/AboutView.swift`
+- `apps/ios/Meeshy/Features/Settings/Views/AboutView.swift`
 
 </details>
 
@@ -828,7 +828,7 @@ Transposition Android : ShareSheet(UIActivityViewController) -> Intent.ACTION_SE
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/DataExportView.swift`
+- `apps/ios/Meeshy/Features/Settings/Views/DataExportView.swift`
 - `packages/MeeshySDK/Sources/MeeshySDK/Services/DataExportService.swift`
 
 </details>
@@ -853,8 +853,8 @@ Transposition Android : Picker segmenté -> SegmentedButton ; dictionnaires Swif
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/TermsOfServiceView.swift`
-- `apps/ios/Meeshy/Features/Main/Views/PrivacyPolicyView.swift`
+- `apps/ios/Meeshy/Features/Settings/Views/TermsOfServiceView.swift`
+- `apps/ios/Meeshy/Features/Settings/Views/PrivacyPolicyView.swift`
 
 </details>
 
@@ -877,7 +877,7 @@ Transposition Android : Link -> ACTION_VIEW ; liste statique -> OpenSourceLicens
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/LicensesView.swift`
+- `apps/ios/Meeshy/Features/Settings/Views/LicensesView.swift`
 
 </details>
 
@@ -899,7 +899,7 @@ Transposition Android : SKStoreReviewController -> Google Play In-App Review API
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/SupportView.swift`
+- `apps/ios/Meeshy/Features/Settings/Views/SupportView.swift`
 
 </details>
 

@@ -2045,7 +2045,7 @@ struct FriendRequestListView: View {
 ### Task D2: Add Friend Requests entry in Settings/Menu
 
 **Files**:
-- Modify: `apps/ios/Meeshy/Features/Main/Views/SettingsView.swift` (or wherever the settings navigation is)
+- Modify: `apps/ios/Meeshy/Features/Settings/Views/SettingsView.swift` (or wherever the settings navigation is)
 
 **Why**: Users need a way to access the friend request list. The natural place is in Settings under a "Friend Requests" row.
 
