@@ -61,6 +61,8 @@
     <string name="composer_recent_grantAccess">السماح بالوصول إلى الصور</string>
     <string name="composer_recent_grantAccess_hint">لعرض وسائطك الأخيرة هنا</string>
     <string name="composer_recent_select">تحديد</string>
+    <string name="contact_card_a11y_label">جهة اتصال مشتركة: %s</string>
+    <string name="contact_card_shared">جهة اتصال مشتركة</string>
     <string name="context_invite_friends">دعوة أصدقائي</string>
     <string name="conversation_appearance_accent_auto">تلقائي</string>
     <string name="conversation_appearance_entry_title">خلفية المحادثة</string>

@@ -1,5 +1,6 @@
 package me.meeshy.app.chat
 
+import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.conversationlist.ConversationRowMenuCapabilities
 import me.meeshy.sdk.model.composer.look.ComposerLookPerson
 import androidx.lifecycle.SavedStateHandle
@@ -691,6 +692,10 @@ class ChatViewModel @Inject constructor(
      * completed file to a share sheet instead of opening it. */
     fun onFileAttachmentShare(messageId: String, attachmentId: String? = null) =
         fileDownload.share(messageId, attachmentId)
+
+    /** « Ouvrir » une pièce du hub média : le circuit du fil, pour un porteur que le fil n'a pas chargé. */
+    fun onHubFileOpen(messageId: String, attachment: ApiMessageAttachment) =
+        fileDownload.openProvided(messageId, attachment)
 
     fun dismissFileDownload() = fileDownload.dismiss()
 

@@ -57,6 +57,8 @@
     <string name="composer_recent_grantAccess">Allow photo access</string>
     <string name="composer_recent_grantAccess_hint">To find your recent media here</string>
     <string name="composer_recent_select">Select</string>
+    <string name="contact_card_a11y_label">Shared contact: %s</string>
+    <string name="contact_card_shared">Shared contact</string>
     <string name="context_invite_friends">Invite my friends</string>
     <string name="conversation_appearance_accent_auto">Automatic</string>
     <string name="conversation_appearance_entry_title">Conversation background</string>

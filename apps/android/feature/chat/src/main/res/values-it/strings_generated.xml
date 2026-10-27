@@ -58,6 +58,8 @@
     <string name="composer_recent_grantAccess">Consenti l\'accesso alle foto</string>
     <string name="composer_recent_grantAccess_hint">Per ritrovare qui i tuoi contenuti recenti</string>
     <string name="composer_recent_select">Seleziona</string>
+    <string name="contact_card_a11y_label">Contatto condiviso: %s</string>
+    <string name="contact_card_shared">Contatto condiviso</string>
     <string name="context_invite_friends">Invita i miei amici</string>
     <string name="conversation_appearance_accent_auto">Automatico</string>
     <string name="conversation_appearance_entry_title">Sfondo della conversazione</string>

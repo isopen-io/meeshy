@@ -235,10 +235,12 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
             conversationId = state.conversationId,
             accentColor = accentColor,
             isEndToEnd = state.isEndToEnd,
+            conversationTitle = state.conversationTitle,
             onGoToMessage = { messageId ->
                 sheets.media = false
                 actions.scrollToMessage(messageId)
             },
+            onOpenFile = { messageId, attachment -> actions.onHubFileOpen(messageId, attachment) },
             onDismiss = { sheets.media = false },
         )
     }
