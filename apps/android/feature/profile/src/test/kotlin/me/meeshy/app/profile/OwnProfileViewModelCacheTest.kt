@@ -130,7 +130,7 @@ class OwnProfileViewModelCacheTest {
     @Test
     fun timeline_paintFromCache_evenWhenTheNetworkFetchFails() = runTest(dispatcher) {
         val cache = mockk<ProfileStatsCacheRepository>(relaxed = true)
-        coEvery { cache.cachedTimeline() } returns timeline
+        coEvery { cache.cachedTimeline(any()) } returns timeline
         val userRepo = mockk<UserRepository>(relaxed = true)
         coEvery { userRepo.getUserStatsTimeline(any()) } returns NetworkResult.Failure(ApiError("boom"))
 
@@ -141,13 +141,13 @@ class OwnProfileViewModelCacheTest {
 
         assertThat(vm.state.value.timeline).isNotNull()
         assertThat(vm.state.value.timeline!!.peak).isEqualTo(8)
-        coVerify(exactly = 0) { cache.persistTimeline(any()) }
+        coVerify(exactly = 0) { cache.persistTimeline(any(), any()) }
     }
 
     @Test
     fun timeline_writeThroughToCache_onASuccessfulNetworkFetch() = runTest(dispatcher) {
         val cache = mockk<ProfileStatsCacheRepository>(relaxed = true)
-        coEvery { cache.cachedTimeline() } returns null
+        coEvery { cache.cachedTimeline(any()) } returns null
         val userRepo = mockk<UserRepository>(relaxed = true)
         coEvery { userRepo.getUserStatsTimeline(any()) } returns NetworkResult.Success(timeline)
 
@@ -157,14 +157,14 @@ class OwnProfileViewModelCacheTest {
         advanceUntilIdle()
 
         assertThat(vm.state.value.timeline).isNotNull()
-        coVerify(exactly = 1) { cache.persistTimeline(timeline) }
+        coVerify(exactly = 1) { cache.persistTimeline("u1", timeline) }
     }
 
     @Test
     fun timeline_staysNull_whenBothTheEmptyCacheAndTheNetworkYieldNothing() = runTest(dispatcher) {
         val cache = mockk<ProfileStatsCacheRepository>(relaxed = true)
         // synced-empty cache: builds to null (nothing to chart)
-        coEvery { cache.cachedTimeline() } returns emptyList()
+        coEvery { cache.cachedTimeline(any()) } returns emptyList()
         val userRepo = mockk<UserRepository>(relaxed = true)
         coEvery { userRepo.getUserStatsTimeline(any()) } returns NetworkResult.Failure(ApiError("boom"))
 
@@ -174,6 +174,26 @@ class OwnProfileViewModelCacheTest {
         advanceUntilIdle()
 
         assertThat(vm.state.value.timeline).isNull()
-        coVerify(exactly = 0) { cache.persistTimeline(any()) }
+        coVerify(exactly = 0) { cache.persistTimeline(any(), any()) }
+    }
+
+    @Test
+    fun timeline_neverPaintsThePreviousAccountsActivity_underTheNextAccount() = runTest(dispatcher) {
+        val cache = mockk<ProfileStatsCacheRepository>(relaxed = true)
+        coEvery { cache.cachedTimeline("u1") } returns timeline
+        coEvery { cache.cachedTimeline("u2") } returns null
+        val userRepo = mockk<UserRepository>(relaxed = true)
+        coEvery { userRepo.getUserStatsTimeline(any()) } returns NetworkResult.Failure(ApiError("offline"))
+
+        val flow = MutableStateFlow<MeeshyUser?>(user())
+        val vm = ownProfileVm(flow, userRepo, cache)
+        advanceUntilIdle()
+        assertThat(vm.state.value.timeline).isNotNull()
+
+        flow.value = user().copy(id = "u2")
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.timeline).isNull()
+        coVerify(exactly = 1) { cache.cachedTimeline("u2") }
     }
 }

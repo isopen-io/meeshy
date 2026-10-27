@@ -50,7 +50,7 @@ class OwnProfileViewModelStatsTest {
     private fun coldStatsCache(): ProfileStatsCacheRepository {
         val cache = mockk<ProfileStatsCacheRepository>(relaxed = true)
         coEvery { cache.cachedStats(any()) } returns null
-        coEvery { cache.cachedTimeline() } returns null
+        coEvery { cache.cachedTimeline(any()) } returns null
         return cache
     }
 

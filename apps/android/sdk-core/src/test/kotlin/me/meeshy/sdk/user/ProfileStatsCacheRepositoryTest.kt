@@ -3,6 +3,7 @@ package me.meeshy.sdk.user
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.core.database.entity.ProfileStatsCacheEntity
@@ -109,37 +110,37 @@ class ProfileStatsCacheRepositoryTest {
 
     @Test
     fun `cachedTimeline is null on a cold cache`() = runTest {
-        assertThat(repository().cachedTimeline()).isNull()
+        assertThat(repository().cachedTimeline("me")).isNull()
     }
 
     @Test
     fun `persistTimeline then cachedTimeline round-trips the points in order`() = runTest {
         val repo = repository()
 
-        repo.persistTimeline(timeline)
+        repo.persistTimeline("me", timeline)
 
-        assertThat(repo.cachedTimeline()).containsExactlyElementsIn(timeline).inOrder()
+        assertThat(repo.cachedTimeline("me")).containsExactlyElementsIn(timeline).inOrder()
     }
 
     @Test
     fun `an empty persisted timeline reads back as synced-empty, not cold`() = runTest {
         val repo = repository()
 
-        repo.persistTimeline(emptyList())
+        repo.persistTimeline("me", emptyList())
 
         // synced-but-empty: a real "no activity" window, distinct from the cold `null`.
-        assertThat(repo.cachedTimeline()).isEqualTo(emptyList<TimelinePoint>())
+        assertThat(repo.cachedTimeline("me")).isEqualTo(emptyList<TimelinePoint>())
     }
 
     @Test
     fun `persistTimeline overwrites the previous window - newest wins`() = runTest {
         val repo = repository()
 
-        repo.persistTimeline(timeline)
+        repo.persistTimeline("me", timeline)
         val newer = listOf(TimelinePoint(date = "2026-07-04", messages = 5))
-        repo.persistTimeline(newer)
+        repo.persistTimeline("me", newer)
 
-        assertThat(repo.cachedTimeline()).containsExactlyElementsIn(newer).inOrder()
+        assertThat(repo.cachedTimeline("me")).containsExactlyElementsIn(newer).inOrder()
     }
 
     @Test
@@ -147,13 +148,13 @@ class ProfileStatsCacheRepositoryTest {
         val repo = repository()
         db.profileStatsCacheDao().upsert(
             ProfileStatsCacheEntity(
-                cacheKey = ProfileStatsCacheRepository.TIMELINE_KEY,
+                cacheKey = ProfileStatsCacheRepository.timelineKey("me"),
                 payload = "not-an-array",
                 cachedAt = 0L,
             ),
         )
 
-        assertThat(repo.cachedTimeline()).isNull()
+        assertThat(repo.cachedTimeline("me")).isNull()
     }
 
     @Test
@@ -161,10 +162,10 @@ class ProfileStatsCacheRepositoryTest {
         val repo = repository()
 
         repo.persistStats("me", richStats)
-        repo.persistTimeline(timeline)
+        repo.persistTimeline("me", timeline)
 
         assertThat(repo.cachedStats("me")).isEqualTo(richStats)
-        assertThat(repo.cachedTimeline()).containsExactlyElementsIn(timeline).inOrder()
+        assertThat(repo.cachedTimeline("me")).containsExactlyElementsIn(timeline).inOrder()
     }
 
     @Test
@@ -187,5 +188,34 @@ class ProfileStatsCacheRepositoryTest {
         repo.persistTimeline("alice", emptyList())
 
         assertThat(repo.cachedTimeline("alice")).isEqualTo(emptyList<TimelinePoint>())
+    }
+
+    @Test
+    fun `le changement de compte ne laisse ni statistiques ni activite au compte suivant`() = runTest {
+        val repo = repository()
+        repo.persistStats("alice", richStats)
+        repo.persistTimeline("alice", timeline)
+
+        repo.clear()
+
+        assertThat(repo.cachedStats("alice")).isNull()
+        assertThat(repo.cachedTimeline("alice")).isNull()
+    }
+
+    @Test
+    fun `la cle partagee d avant la cle par compte disparait a la premiere ecriture`() = runTest {
+        val repo = repository()
+        val dao = db.profileStatsCacheDao()
+        dao.upsert(
+            ProfileStatsCacheEntity(
+                cacheKey = ProfileStatsCacheRepository.LEGACY_SHARED_TIMELINE_KEY,
+                payload = "[]",
+                cachedAt = 0L,
+            ),
+        )
+
+        repo.persistTimeline("bob", timeline)
+
+        assertThat(dao.observe(ProfileStatsCacheRepository.LEGACY_SHARED_TIMELINE_KEY).first()).isNull()
     }
 }
