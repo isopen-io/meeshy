@@ -103,14 +103,17 @@ internal fun HeaderFlameDecoration(
     var isPlaying by remember { mutableStateOf(false) }
     var heldPoints by remember { mutableStateOf<Int?>(null) }
     var replayCount by remember { mutableStateOf(0) }
-    val currentToday by rememberUpdatedState(shown?.todayPoints ?: 0)
+    // L'effet vit aussi longtemps que [sent] : il lit la flamme et la réduction des animations de
+    // l'instant de l'envoi, jamais celles de son premier lancement (la flamme arrive souvent APRÈS).
+    val currentShown by rememberUpdatedState(shown)
+    val currentReduceMotion by rememberUpdatedState(reduceMotion)
     LaunchedEffect(sent) {
         sent.collect {
-            if (shown == null) return@collect
-            heldPoints = heldPoints ?: currentToday
+            val showing = currentShown ?: return@collect
+            heldPoints = heldPoints ?: showing.todayPoints
             replayCount += 1
             val replay = replayCount
-            val duration = if (reduceMotion) 0.6 else HeaderFlameLaw.DURATION_SECONDS
+            val duration = if (currentReduceMotion) 0.6 else HeaderFlameLaw.DURATION_SECONDS
             val releaseMs = (duration * HeaderFlameLaw.VALUE_RELEASE * 1000).toLong()
             phase.snapTo(0f)
             isPlaying = true
