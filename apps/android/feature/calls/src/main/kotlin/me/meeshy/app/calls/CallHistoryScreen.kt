@@ -1,5 +1,7 @@
 package me.meeshy.app.calls
 
+import androidx.compose.foundation.layout.PaddingValues
+import me.meeshy.ui.component.chrome.floatingChromeBottomReserve
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -107,7 +109,7 @@ fun CallHistoryScreen(
                     onRefresh = viewModel::refresh,
                     modifier = Modifier.fillMaxSize(),
                 ) {
-                    LazyColumn(Modifier.fillMaxSize()) {
+                    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = floatingChromeBottomReserve())) {
                         items(state.records, key = { it.callId }) { record ->
                             CallHistoryRow(
                                 record = record,

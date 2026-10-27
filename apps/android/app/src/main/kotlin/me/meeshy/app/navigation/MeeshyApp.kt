@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -44,6 +45,8 @@ import me.meeshy.app.startup.AppOverlayStack
 import me.meeshy.app.startup.ProvideAppLocals
 import me.meeshy.sdk.chrome.FloatingButtonPositionStore
 import me.meeshy.sdk.net.SessionExpiryNotifier
+import me.meeshy.ui.component.chrome.FloatingChromeReserveState
+import me.meeshy.ui.component.chrome.LocalFloatingChromeReserve
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 
@@ -152,66 +155,68 @@ fun MeeshyApp(
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
         ) { padding ->
             Box(modifier = Modifier.fillMaxSize().rootPresentationContent()) {
-                val showsCallPill = CallPillPresenter.shouldShow(callStatus, onCallScreen)
-                // The minimised-call pill PUSHES the destination down instead of floating
-                // over it: pinned under the status bar, it would lie under the system status
-                // window (its controls untappable) and cover the destination's top bar. The
-                // pill takes the status-bar inset, so the destination below consumes it.
-                Column(modifier = Modifier.fillMaxSize().padding(padding)) {
-                    // A live, non-incoming call while off the CALL screen. A tap rebuilds the
-                    // CALL route from the live config; the Activity-scoped [callViewModel] is
-                    // reused, so `start()` is inert.
-                    if (showsCallPill) {
-                        MinimizedCallPill(
-                            callViewModel = callViewModel,
-                            navController = navController,
+                CompositionLocalProvider(LocalFloatingChromeReserve provides remember { FloatingChromeReserveState() }) {
+                    val showsCallPill = CallPillPresenter.shouldShow(callStatus, onCallScreen)
+                    // The minimised-call pill PUSHES the destination down instead of floating
+                    // over it: pinned under the status bar, it would lie under the system status
+                    // window (its controls untappable) and cover the destination's top bar. The
+                    // pill takes the status-bar inset, so the destination below consumes it.
+                    Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+                        // A live, non-incoming call while off the CALL screen. A tap rebuilds the
+                        // CALL route from the live config; the Activity-scoped [callViewModel] is
+                        // reused, so `start()` is inert.
+                        if (showsCallPill) {
+                            MinimizedCallPill(
+                                callViewModel = callViewModel,
+                                navController = navController,
+                                modifier = Modifier
+                                    .statusBarsPadding()
+                                    .padding(vertical = MeeshySpacing.xs),
+                            )
+                        }
+                        Box(
                             modifier = Modifier
-                                .statusBarsPadding()
-                                .padding(vertical = MeeshySpacing.xs),
-                        )
-                    }
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .then(if (showsCallPill) Modifier.consumeWindowInsets(WindowInsets.statusBars) else Modifier),
-                    ) {
-                        ProvideAppLocals(extensions.localsProviders) {
-                            // Le retour interactif depuis le bord (#13364) : UN site, armé par le registre des routes.
-                            EdgeSwipeBackHost(
-                                enabled = NavBackChrome.edgeSwipeBackEnabled(currentRoute),
-                                canGoBack = { navController.previousBackStackEntry != null },
-                                modifier = Modifier.fillMaxSize(),
-                            ) {
-                                NavHost(
-                                    navController = navController,
-                                    startDestination = startDestination,
-                                    enterTransition = { stackEnter() },
-                                    exitTransition = { stackExit() },
-                                    popEnterTransition = { stackPopEnter() },
-                                    popExitTransition = { stackPopExit() },
+                                .weight(1f)
+                                .then(if (showsCallPill) Modifier.consumeWindowInsets(WindowInsets.statusBars) else Modifier),
+                        ) {
+                            ProvideAppLocals(extensions.localsProviders) {
+                                // Le retour interactif depuis le bord (#13364) : UN site, armé par le registre des routes.
+                                EdgeSwipeBackHost(
+                                    enabled = NavBackChrome.edgeSwipeBackEnabled(currentRoute),
+                                    canGoBack = { navController.previousBackStackEntry != null },
+                                    modifier = Modifier.fillMaxSize(),
                                 ) {
-                                    authNavGraph(navController, authViewModel)
-                                    conversationsNavGraph(navController, authViewModel, callStatus)
-                                    feedNavGraph(navController)
-                                    callNavGraph(navController, callViewModel)
-                                    socialNavGraph(navController)
-                                    settingsNavGraph(navController, authViewModel)
-                                    extensions.graphContributors.forEach { it.contribute(this, navController) }
+                                    NavHost(
+                                        navController = navController,
+                                        startDestination = startDestination,
+                                        enterTransition = { stackEnter() },
+                                        exitTransition = { stackExit() },
+                                        popEnterTransition = { stackPopEnter() },
+                                        popExitTransition = { stackPopExit() },
+                                    ) {
+                                        authNavGraph(navController, authViewModel)
+                                        conversationsNavGraph(navController, authViewModel, callStatus)
+                                        feedNavGraph(navController)
+                                        callNavGraph(navController, callViewModel)
+                                        socialNavGraph(navController)
+                                        settingsNavGraph(navController, authViewModel)
+                                        extensions.graphContributors.forEach { it.contribute(this, navController) }
+                                    }
                                 }
                             }
                         }
                     }
-                }
 
-                // Les deux boutons flottants (parite iOS RootView.draggableFloatingButtons),
-                // par-dessus le NavHost. Leurs StateFlow sont lus DANS MeeshyFloatingChrome,
-                // jamais ici : une pastille qui bouge ne reconstruit pas le graphe.
-                if (showMenuFab) {
-                    MeeshyFloatingChrome(
-                        navController = navController,
-                        currentRoute = currentRoute,
-                        floatingButtonPositions = floatingButtonPositions,
-                    )
+                    // Les deux boutons flottants (parite iOS RootView.draggableFloatingButtons),
+                    // par-dessus le NavHost. Leurs StateFlow sont lus DANS MeeshyFloatingChrome,
+                    // jamais ici : une pastille qui bouge ne reconstruit pas le graphe.
+                    if (showMenuFab) {
+                        MeeshyFloatingChrome(
+                            navController = navController,
+                            currentRoute = currentRoute,
+                            floatingButtonPositions = floatingButtonPositions,
+                        )
+                    }
                 }
             }
         }
