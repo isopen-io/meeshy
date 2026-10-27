@@ -188,7 +188,7 @@ final class LocalizationConsistencyTests: XCTestCase {
         // raison qu'au #4084 : un écran qui remplace un écran épinglé n'a
         // aucune raison de sortir du cliquet.
         "apps/ios/Meeshy/Features/Main/Views/WelcomeView.swift",
-        "apps/ios/Meeshy/Features/Main/Lentille/Row/LentilleConversationRow.swift",  // 14
+        "apps/ios/Meeshy/Features/Lens/Row/LentilleConversationRow.swift",  // 14
         "apps/ios/Meeshy/Features/Main/Views/AudioFullscreenView.swift",  // 14
         // #10383 — la page du plein écran audio a quitté le fichier épinglé :
         // ses clés la suivent, et le cliquet avec elles.
@@ -203,8 +203,8 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Auth/SessionClosedNoticeView.swift",
         "apps/ios/Meeshy/Features/Main/Views/ConversationListQuickActions.swift",  // 12
         "apps/ios/Meeshy/Features/Main/Components/MediaKindLabel.swift",  // 11
-        "apps/ios/Meeshy/Features/Main/Lentille/Mode/LentilleModeLabels.swift",  // 10
-        "apps/ios/Meeshy/Features/Main/Lentille/Row/LentilleBridgeLine.swift",  // 9
+        "apps/ios/Meeshy/Features/Lens/Mode/LentilleModeLabels.swift",  // 10
+        "apps/ios/Meeshy/Features/Lens/Row/LentilleBridgeLine.swift",  // 9
         "apps/ios/Meeshy/Features/Main/Models/ConversationFilterLabel.swift",  // 9
         "apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift",  // 9
         "apps/ios/Meeshy/Features/Main/Views/ConversationMediaGalleryView.swift",  // 9
@@ -276,7 +276,7 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Composer/ComposerDescriptionLayer.swift",  // 5
         "apps/ios/Meeshy/Features/Main/Composer/ComposerFormatAvailability.swift",  // 5
         "apps/ios/Meeshy/Features/Main/Focal/Summary/EpisodeSegmenter.swift",  // 5
-        "apps/ios/Meeshy/Features/Main/Lentille/Chrome/LentilleSectionIdentity.swift",  // 5
+        "apps/ios/Meeshy/Features/Lens/Chrome/LentilleSectionIdentity.swift",  // 5
         "apps/ios/Meeshy/Features/Main/Services/CrashDiagnosticsManager.swift",  // 5
         "apps/ios/Meeshy/Features/Main/Services/MediaPermissionCoordinator.swift",  // 5
         "apps/ios/Meeshy/Features/Main/ViewModels/ConversationOptionsViewModel.swift",  // 5
@@ -287,7 +287,7 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Composer/MediaComposerDoor.swift",  // 4
         "apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost.swift",  // 4
         "apps/ios/Meeshy/Features/Main/Composer/UpgradeGateView.swift",  // 4
-        "apps/ios/Meeshy/Features/Main/Lentille/Mode/LentilleFocusCard.swift",  // 4
+        "apps/ios/Meeshy/Features/Lens/Mode/LentilleFocusCard.swift",  // 4
         "apps/ios/Meeshy/Features/Main/Services/StoryPhotoSaveService.swift",  // 4
         "apps/ios/Meeshy/Features/Main/Services/StoryPublishService.swift",  // 4
         "apps/ios/Meeshy/Features/Main/Views/Cells/PostStatAccessibility.swift",  // 4
@@ -314,7 +314,7 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Focal/Row/FocalIdentityHeader.swift",  // 2
         "apps/ios/Meeshy/Features/Main/Focal/Summary/EpisodeListView.swift",  // 2
         "apps/ios/Meeshy/Features/Main/Focal/Summary/FaceRampView.swift",  // 2
-        "apps/ios/Meeshy/Features/Main/Lentille/Mode/LentilleModeMenu.swift",  // 2
+        "apps/ios/Meeshy/Features/Lens/Mode/LentilleModeMenu.swift",  // 2
         "apps/ios/Meeshy/Features/Main/Models/ConversationFilterComposition.swift",  // 2
         "apps/ios/Meeshy/Features/Main/Services/MessageForwardService.swift",  // 2
         "apps/ios/Meeshy/Features/Main/ViewModels/UserProfileViewModel.swift",  // 2

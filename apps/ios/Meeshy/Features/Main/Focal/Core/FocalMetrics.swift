@@ -3,7 +3,7 @@ import MeeshyUI
 
 /// Cotes normatives de la rangée plate du Fil (Focal) — miroir Swift de
 /// `packages/shared/design/lentille-tokens.json` → `thread` (LECTURE SEULE,
-/// source de vérité). Même patron que `Lentille/Core/LentilleMetrics.swift`
+/// source de vérité). Même patron que `Lens/Core/LentilleMetrics.swift`
 /// (GELÉ, imité ici — jamais édité) : structures nichées par zone d'écran,
 /// `FocalMetricsTests` fait la parité valeur par valeur contre le JSON.
 /// « On répare le token, jamais le test » (règle sacrée, recopiée du patron

@@ -5,7 +5,7 @@ import Foundation
 ///
 /// RE-PREUVE (F-080) : `grep -rn "reading_modes\|MEESHY_FLAG_READING"
 /// apps/ios` montre que le drapeau existe déjà — `LentilleFeatureFlag.readingModes`
-/// (M-046, `Lentille/Core/LentilleFeatureFlag.swift`), résolu
+/// (M-046, `Lens/Core/LentilleFeatureFlag.swift`), résolu
 /// `ProcessInfo` (`MEESHY_FLAG_READING_MODES`) PRIME sur `UserDefaults`
 /// (clé `meeshy.flag.reading_modes` — SI POSÉE EXPLICITEMENT), déjà couvert
 /// par `LentilleFlagGateTests`.
@@ -54,7 +54,7 @@ nonisolated enum MeeshyFeatureFlags {
     /// chantier.
     ///
     /// Résolution AUTONOME (pas une délégation à `LentilleFeatureFlag`,
-    /// contrairement à `isReadingModesEnabled`) : `Lentille/Core/` est
+    /// contrairement à `isReadingModesEnabled`) : `Lens/Core/` est
     /// GELÉ et interdit d'édition dans ce chantier (fichiers interdits,
     /// mission F-089) — ajouter un troisième cas à `LentilleFeatureFlag`
     /// exigerait de l'éditer. Même patron de résolution (`ProcessInfo`

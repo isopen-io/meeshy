@@ -18,7 +18,7 @@ import org.junit.Test
  * cross-plateforme de la résolution du Prisme sur l'aperçu de dernier message
  * (CLAUDE.md § *Prisme Linguistique*, règle #3). TS le rejoue
  * (`packages/shared/__tests__/vectors/prism-preview.vectors.test.ts`) et iOS aussi
- * (`apps/ios/MeeshyTests/Unit/Lentille/PrismPreviewVectorTests.swift`).
+ * (`apps/ios/MeeshyTests/Unit/Lens/PrismPreviewVectorTests.swift`).
  *
  * Les trois clients rendent la MÊME ligne depuis le MÊME payload REST, et chacun
  * portait jusqu'ici sa propre suite écrite À LA MAIN se déclarant « one-for-one

@@ -210,7 +210,7 @@ final class UnreadCountLabelTests: XCTestCase {
             ("Meeshy/Features/Main/Views/ConversationView+ScrollIndicators.swift", "UnreadCountLabel.messages("),
             ("Meeshy/Features/Main/Views/GlobalSearchView.swift", "UnreadCountLabel.messages("),
             ("Meeshy/Features/Main/Views/RootFloatingChrome.swift", "UnreadCountLabel.notifications("),
-            // Un cinquième site a vécu ici — `Lentille/Mode/LentilleFocusCard.swift`,
+            // Un cinquième site a vécu ici — `Lens/Mode/LentilleFocusCard.swift`,
             // découvert par la CI parce que 235i avait retiré
             // `accessibility.unread_messages` du catalogue en ne corrigeant que
             // DEUX de ses trois porteurs. Il n'a plus de SUJET depuis le
@@ -227,8 +227,8 @@ final class UnreadCountLabelTests: XCTestCase {
             // n'ont plus de site nommé dans cet inventaire.
         ]
         let retiredKeyScopes = [
-            "Meeshy/Features/Main/Lentille/Mode",
-            "Meeshy/Features/Main/Lentille/Row"
+            "Meeshy/Features/Lens/Mode",
+            "Meeshy/Features/Lens/Row"
         ]
         for site in sites {
             let source = try iosSource(at: site.path)

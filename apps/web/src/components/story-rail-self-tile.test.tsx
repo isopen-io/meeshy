@@ -18,7 +18,7 @@ import { MOOD_BADGE_PLACEHOLDER, selfBadgeDiameter } from './story-rail-self-til
  * sous iOS ».
  *
  * Référence de géographie : `LentilleRailSelfEntryView`
- * (`apps/ios/.../Lentille/Chrome/StoriesVivantsRail.swift`) —
+ * (`apps/ios/.../Lens/Chrome/StoriesVivantsRail.swift`) —
  * `ZStack(alignment: .bottomTrailing)` pour l'humeur,
  * `.overlay(alignment: .topLeading)` pour le (+), deux `Button(.plain)`
  * DISTINCTS. Son commentaire tranche l'ambiguïté que ces témoins gardent :

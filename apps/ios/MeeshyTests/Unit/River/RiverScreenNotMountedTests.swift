@@ -103,7 +103,7 @@ final class RiverScreenNotMountedTests: XCTestCase {
     /// rougir cet ancien témoin — le voici mis à jour en conscience, pas
     /// supprimé.
     func test_modeMenu_noLongerHardcodesRiviereDisabled_derivesFromCapabilitiesLikeEveryEntry() throws {
-        let url = Self.meeshyRoot.appendingPathComponent("Features/Main/Lentille/Mode/LentilleModeMenu.swift")
+        let url = Self.meeshyRoot.appendingPathComponent("Features/Lens/Mode/LentilleModeMenu.swift")
         let code = try String(contentsOf: url, encoding: .utf8)
 
         XCTAssertFalse(

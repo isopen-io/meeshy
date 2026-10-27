@@ -6,7 +6,7 @@ import MeeshyUI
 /// Test de PARITÉ — `FocalMetrics` contre son domicile de vérité,
 /// `packages/shared/design/lentille-tokens.json` → `thread` (tâche 0,
 /// workshop §« TÂCHE 0 — FocalMetrics »). Patron recopié mot pour mot de
-/// `LentilleMetricsTests` (`Lentille/Core/`, GELÉ, lecture seule — imité,
+/// `LentilleMetricsTests` (`Lens/Core/`, GELÉ, lecture seule — imité,
 /// jamais édité) : même mécanique de folder reference pour localiser
 /// `lentille-tokens.json` dans le bundle de tests (leçon 265 : le chemin de
 /// bundle `design/lentille-tokens.json` est une ressource PARTAGÉE, déjà

@@ -10,7 +10,7 @@ import MeeshySDK
 /// TypeScript partagé par les trois frontends ; ce fichier est le miroir iOS
 /// (phase 1), sous `Focal/Core/` par amendement A2 du workshop d'exécution
 /// (`tasks/lentille-workshop-execution.md`, tâche M-042) — les miroirs Swift
-/// des lois de lecture vivent ici, pas sous `Lentille/Core/` (LWS-5, cotes de
+/// des lois de lecture vivent ici, pas sous `Lens/Core/` (LWS-5, cotes de
 /// design uniquement).
 ///
 /// **`ConversationType` est le type du SDK** (`MeeshyConversation.ConversationType`,

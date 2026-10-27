@@ -13,7 +13,7 @@ import Foundation
 /// `.bubbleLegacy = "bubbles"` — seuls les noms de cas diffèrent, jamais les
 /// valeurs persistées). Réutiliser ce type (Single Source of Truth,
 /// `CLAUDE.md` racine) plutôt que d'en déclarer un second est le même choix
-/// que `Lentille/Core/LentilleProviders.swift` a fait pour
+/// que `Lens/Core/LentilleProviders.swift` a fait pour
 /// `ReadingModePreference` — voir son commentaire "Collision de nom".
 /// Écart à corriger quand WS-0 livrera le fichier Core décrit par le
 /// contrat : ce typealias disparaît alors au profit du type réel.
@@ -24,7 +24,7 @@ typealias ConversationReadingMode = ReadingModeOrchestrator.ConversationReadingM
 ///
 /// **Collision de nom évitée, PAS arbitrée** (F-080) : le contrat nomme ce
 /// protocole `ReadingModePreferenceStoring`, comme
-/// `Lentille/Core/LentilleProviders.swift` (M-048, LWS-2bis GELÉ, propriété
+/// `Lens/Core/LentilleProviders.swift` (M-048, LWS-2bis GELÉ, propriété
 /// Lentille — hors périmètre Focal, lecture seule). Les deux protocoles
 /// vivraient dans le MÊME module `Meeshy` : une redéclaration stricte du nom
 /// romprait la compilation, quelle que soit leur forme (l'un `Sendable`
@@ -40,7 +40,7 @@ typealias ConversationReadingMode = ReadingModeOrchestrator.ConversationReadingM
 /// `nonisolated` : cible `Meeshy` isolée `@MainActor` par défaut
 /// (`SWIFT_DEFAULT_ACTOR_ISOLATION` — même contrainte documentée par
 /// `Focal/Core/ScrollTimePillLaw.swift` et les protocoles LWS-2bis de
-/// `Lentille/Core/LentilleProviders.swift`). Un stockage `UserDefaults`
+/// `Lens/Core/LentilleProviders.swift`). Un stockage `UserDefaults`
 /// (thread-safe par construction Apple) n'a aucune raison d'exiger le
 /// `MainActor` — sans cette sortie explicite, les tests synchrones
 /// (`ReadingModePreferenceStoreTests`) ne pourraient pas appeler ce
@@ -183,7 +183,7 @@ nonisolated enum ReadingModePreferenceMapping {
 /// Lecture/écriture en `ReadingModePreference` par-dessus le magasin scopé —
 /// le point d'entrée partagé que l'adaptateur Lentille
 /// (`LentilleScopedReadingModePreferenceStore`,
-/// `Lentille/Mode/LentilleReadingModeContext.swift`) réutilise pour ne PAS
+/// `Lens/Mode/LentilleReadingModeContext.swift`) réutilise pour ne PAS
 /// dupliquer la logique de clé (REV-3/B2). Une extension de protocole plutôt
 /// que des méthodes de classe : n'importe quel double de test conforme à
 /// `FocalReadingModePreferenceStoring` en hérite gratuitement, et le calcul de

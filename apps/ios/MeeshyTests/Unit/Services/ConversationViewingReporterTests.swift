@@ -558,7 +558,7 @@ final class ConversationViewingReporterTests: XCTestCase {
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent("Meeshy/Features/Main")
-        for row in ["Views/ThemedConversationRow.swift", "Lentille/Row/LentilleConversationRow.swift"] {
+        for row in ["Views/ThemedConversationRow.swift", "../Lens/Row/LentilleConversationRow.swift"] {
             let source = AppSourceGuard.stripComments(try String(contentsOf: main.appendingPathComponent(row), encoding: .utf8))
             XCTAssertFalse(source.contains("moodStatus == nil"), "\(row) retire la présence sous un mood")
         }

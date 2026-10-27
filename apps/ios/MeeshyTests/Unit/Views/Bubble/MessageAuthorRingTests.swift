@@ -99,7 +99,7 @@ final class MessageAuthorRingTests: XCTestCase {
             "Meeshy/Features/Main/Views/Bubble/BubbleFooter.swift",
             "Meeshy/Features/Main/Focal/Row/FocalIdentityHeader.swift",
             "Meeshy/Features/Main/Views/ThemedConversationRow.swift",
-            "Meeshy/Features/Main/Lentille/Row/LentilleConversationRow.swift",
+            "Meeshy/Features/Lens/Row/LentilleConversationRow.swift",
             "Meeshy/Features/Main/Views/ParticipantsView.swift",
             "Meeshy/Features/Main/Components/ConversationInfoSheet.swift",
             "Meeshy/Features/Main/Views/ProfileDecorSheet.swift",

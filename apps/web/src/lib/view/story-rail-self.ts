@@ -7,7 +7,7 @@ import type { StoryTrayGroup } from '@/lib/view/story-tray';
  * **LA CELLULE « SOI » DU RAIL DES STORIES** (#6150) — sa loi, PURE, hors de
  * tout rendu. Miroir de `LentilleRailSelfEntry` et de
  * `LentilleRailPolicy.shouldRender(selfEntry:entries:)`
- * (`apps/ios/.../Lentille/Chrome/StoriesVivantsRail.swift`).
+ * (`apps/ios/.../Lens/Chrome/StoriesVivantsRail.swift`).
  *
  * **Elle est SÉPARÉE des groupes d'auteurs, et ce n'est pas une commodité.**
  * Un `StoryTrayGroup` naît d'au moins UNE story (`groupStoriesByAuthor` ne

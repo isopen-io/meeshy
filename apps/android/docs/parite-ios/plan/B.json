@@ -1923,7 +1923,7 @@
   ],
   "tests": [
    "sdk-ui LentilleMetricsTest: valeurs gelées de chaque cote",
-   "sdk-ui LentilleMetricsSourceParityTest: relit apps/ios/Meeshy/Features/Main/Lentille/Core/LentilleMetrics.swift en remontant l'arborescence et compare les constantes numériques (garde de parité, patron des gardes source iOS)",
+   "sdk-ui LentilleMetricsSourceParityTest: relit apps/ios/Meeshy/Features/Lens/Core/LentilleMetrics.swift en remontant l'arborescence et compare les constantes numériques (garde de parité, patron des gardes source iOS)",
    "feature/conversations ConversationRowActionsTest: valeurs par défaut sans effet, copie immuable",
    "Non-régression: ConversationListContentTest, EmptyStateVisualTest, ConversationSectionsTest inchangés"
   ],
@@ -1945,7 +1945,7 @@
   ],
   "ios_reference_files": [
    "apps/ios/Meeshy/Features/Main/Views/ConversationListView.swift",
-   "apps/ios/Meeshy/Features/Main/Lentille/Core/LentilleMetrics.swift",
+   "apps/ios/Meeshy/Features/Lens/Core/LentilleMetrics.swift",
    "apps/ios/Meeshy/Features/Main/Views/ConversationListView+Rows.swift",
    "apps/ios/Meeshy/Features/Main/Views/ConversationListView+EmptyState.swift"
   ],
@@ -2099,12 +2099,12 @@
   "ios_reference_files": [
    "apps/ios/Meeshy/Features/Main/Focal/Core/FocalFocusCurve.swift",
    "apps/ios/Meeshy/Features/Main/Focal/Core/FocalScrollPerspective.swift",
-   "apps/ios/Meeshy/Features/Main/Lentille/Perspective/LentilleFocusElection.swift",
-   "apps/ios/Meeshy/Features/Main/Lentille/Perspective/LentilleSceneActivity.swift",
+   "apps/ios/Meeshy/Features/Lens/Perspective/LentilleFocusElection.swift",
+   "apps/ios/Meeshy/Features/Lens/Perspective/LentilleSceneActivity.swift",
    "apps/ios/Meeshy/Features/Main/Focal/Core/FocalFocusDetailsMotionLaw.swift",
    "apps/ios/Meeshy/Features/Main/Focal/Core/ScrollTimePillLaw.swift",
    "apps/ios/Meeshy/Features/Main/Focal/Core/FocalFocusTimestamp.swift",
-   "apps/ios/Meeshy/Features/Main/Lentille/Perspective/LentillePerspective.swift"
+   "apps/ios/Meeshy/Features/Lens/Perspective/LentillePerspective.swift"
   ],
   "feature_keys": [
    "clist-lentille-perspective-scroll",
@@ -2192,8 +2192,8 @@
    "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/conversationlist/ConversationListSectionDefaults.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Lentille/Core/LentilleSectionResolver.swift",
-   "apps/ios/Meeshy/Features/Main/Lentille/Chrome/LentilleSectionIdentity.swift",
+   "apps/ios/Meeshy/Features/Lens/Core/LentilleSectionResolver.swift",
+   "apps/ios/Meeshy/Features/Lens/Chrome/LentilleSectionIdentity.swift",
    "apps/ios/Meeshy/Features/Main/ViewModels/ConversationListWorldHead.swift",
    "apps/ios/Meeshy/Features/Main/Components/SectionFoldedUnread.swift",
    "apps/ios/Meeshy/Features/Main/Views/ConversationListSectionMemory.swift",
@@ -2290,7 +2290,7 @@
   "ios_reference_files": [
    "apps/ios/Meeshy/Features/Main/Views/ConversationListView+EmptyState.swift",
    "apps/ios/Meeshy/Features/Main/Views/ConversationListView+SectionRules.swift",
-   "apps/ios/Meeshy/Features/Main/Lentille/Row/LentilleSkeletonRow.swift"
+   "apps/ios/Meeshy/Features/Lens/Row/LentilleSkeletonRow.swift"
   ],
   "feature_keys": [
    "cl-list-empty-states",
@@ -2492,11 +2492,11 @@
    "apps/android/feature/conversations/src/main/res/values-pt/strings_row.xml"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Lentille/Row/LentilleConversationRow.swift",
+   "apps/ios/Meeshy/Features/Lens/Row/LentilleConversationRow.swift",
    "apps/ios/Meeshy/Features/Main/Views/ConversationListView+Rows.swift",
    "apps/ios/Meeshy/Features/Main/Views/ThemedConversationRow.swift",
    "apps/ios/Meeshy/Features/Main/Views/ConversationRowWidthLaw.swift",
-   "apps/ios/Meeshy/Features/Main/Lentille/Core/LentilleMetrics.swift"
+   "apps/ios/Meeshy/Features/Lens/Core/LentilleMetrics.swift"
   ],
   "feature_keys": [
    "clist-lentille-flat-row"
@@ -2698,12 +2698,12 @@
   ],
   "ios_reference_files": [
    "apps/ios/Meeshy/Features/Main/Focal/Core/ReadingModeOrchestrator.swift",
-   "apps/ios/Meeshy/Features/Main/Lentille/Mode/LentilleReadingModeContext.swift",
-   "apps/ios/Meeshy/Features/Main/Lentille/Core/LentilleProviders.swift",
-   "apps/ios/Meeshy/Features/Main/Lentille/Core/LentilleBridgeFormatter.swift",
-   "apps/ios/Meeshy/Features/Main/Lentille/Core/GatewayBridgeProvider.swift",
+   "apps/ios/Meeshy/Features/Lens/Mode/LentilleReadingModeContext.swift",
+   "apps/ios/Meeshy/Features/Lens/Core/LentilleProviders.swift",
+   "apps/ios/Meeshy/Features/Lens/Core/LentilleBridgeFormatter.swift",
+   "apps/ios/Meeshy/Features/Lens/Core/GatewayBridgeProvider.swift",
    "apps/ios/Meeshy/Features/Main/Focal/Core/AgentAssistContracts.swift",
-   "apps/ios/Meeshy/Features/Main/Lentille/Row/LentilleBridgeLine.swift",
+   "apps/ios/Meeshy/Features/Lens/Row/LentilleBridgeLine.swift",
    "apps/ios/Meeshy/Features/River/Core/RiverLaneResolver.swift",
    "apps/ios/Meeshy/Features/Main/Focal/Preferences/ConversationViewerIdentityResolver.swift",
    "apps/ios/Meeshy/Features/Main/Models/ReadingModeProtectionChrome.swift",
@@ -2900,7 +2900,7 @@
   "ios_reference_files": [
    "apps/ios/Meeshy/Features/Main/Focal/Preferences/ReadingModePreferenceStore.swift",
    "apps/ios/Meeshy/Features/Main/Focal/Preferences/ReadingModeController.swift",
-   "apps/ios/Meeshy/Features/Main/Lentille/Core/LentilleFeatureFlag.swift",
+   "apps/ios/Meeshy/Features/Lens/Core/LentilleFeatureFlag.swift",
    "apps/ios/Meeshy/Features/Main/Focal/Preferences/MeeshyFeatureFlags.swift",
    "apps/ios/Meeshy/Features/Main/Views/SettingsView.swift"
   ],
@@ -3199,7 +3199,7 @@
   "ios_reference_files": [
    "apps/ios/Meeshy/Features/Main/Views/ConversationListView+SectionHeader.swift",
    "apps/ios/Meeshy/Features/Main/Views/ConversationListView+SectionRows.swift",
-   "apps/ios/Meeshy/Features/Main/Lentille/Chrome/LentilleSticker.swift",
+   "apps/ios/Meeshy/Features/Lens/Chrome/LentilleSticker.swift",
    "apps/ios/Meeshy/Features/Main/Views/ConversationListView+StickyHeaderInset.swift",
    "apps/ios/Meeshy/Features/Main/ViewModels/ConversationListReorderMotion.swift",
    "apps/ios/Meeshy/Features/Main/Views/ConversationListView.swift"
@@ -8240,7 +8240,7 @@
   ],
   "ios_reference_files": [
    "apps/ios/Meeshy/Features/Main/Views/ConversationListView+PeerSignals.swift",
-   "apps/ios/Meeshy/Features/Main/Lentille/Row/LentilleConversationRow.swift",
+   "apps/ios/Meeshy/Features/Lens/Row/LentilleConversationRow.swift",
    "apps/ios/Meeshy/Features/Main/Views/ThemedConversationRow.swift",
    "apps/ios/Meeshy/Features/Main/Views/ConversationListView+Rows.swift"
   ],
@@ -8314,7 +8314,7 @@
    "apps/ios/Meeshy/Features/Main/Views/ConversationListView+FilterChips.swift",
    "apps/ios/Meeshy/Features/Main/Views/ConversationListHelpers.swift",
    "apps/ios/Meeshy/Features/Main/Models/ConversationFilterLabel.swift",
-   "apps/ios/Meeshy/Features/Main/Lentille/Core/LentilleSectionResolver.swift",
+   "apps/ios/Meeshy/Features/Lens/Core/LentilleSectionResolver.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Models/MeeshyConversationFilter.swift"
   ],
   "feature_keys": [
@@ -8729,9 +8729,9 @@
    "apps/android/feature/conversations/src/main/res/values-pt/strings_live_call.xml"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Lentille/Row/LentilleConversationRow.swift",
-   "apps/ios/Meeshy/Features/Main/Lentille/Core/LentilleProviders.swift",
-   "apps/ios/Meeshy/Features/Main/Lentille/Core/GatewayBridgeProvider.swift",
+   "apps/ios/Meeshy/Features/Lens/Row/LentilleConversationRow.swift",
+   "apps/ios/Meeshy/Features/Lens/Core/LentilleProviders.swift",
+   "apps/ios/Meeshy/Features/Lens/Core/GatewayBridgeProvider.swift",
    "apps/ios/Meeshy/Features/Main/Views/ConversationListView+PeerSignals.swift"
   ],
   "feature_keys": [
@@ -8800,9 +8800,9 @@
   "ios_reference_files": [
    "apps/ios/Meeshy/Features/Main/Focal/Lens/ReadingModeChip.swift",
    "apps/ios/Meeshy/Features/Main/Focal/Lens/ReadingModeLensSheet.swift",
-   "apps/ios/Meeshy/Features/Main/Lentille/Mode/LentilleModeMenu.swift",
-   "apps/ios/Meeshy/Features/Main/Lentille/Mode/LentilleModeLabels.swift",
-   "apps/ios/Meeshy/Features/Main/Lentille/Mode/LentilleReadingModeContext.swift"
+   "apps/ios/Meeshy/Features/Lens/Mode/LentilleModeMenu.swift",
+   "apps/ios/Meeshy/Features/Lens/Mode/LentilleModeLabels.swift",
+   "apps/ios/Meeshy/Features/Lens/Mode/LentilleReadingModeContext.swift"
   ],
   "feature_keys": [
    "cl-reading-mode-selector",
@@ -8918,7 +8918,7 @@
    "apps/ios/Meeshy/Features/Main/Views/ConversationListView+DragDrop.swift",
    "apps/ios/Meeshy/Features/Main/Views/ConversationListView+ChipDrag.swift",
    "apps/ios/Meeshy/Features/Main/Views/ConversationListView+SectionHeader.swift",
-   "apps/ios/Meeshy/Features/Main/Lentille/Chrome/LentilleSectionIdentity.swift"
+   "apps/ios/Meeshy/Features/Lens/Chrome/LentilleSectionIdentity.swift"
   ],
   "feature_keys": [
    "cl-row-drag-to-section"
@@ -11429,13 +11429,13 @@
    "apps/android/feature/conversations/src/main/res/values-pt/strings_lentille.xml"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Lentille/Perspective/LentillePerspective.swift",
-   "apps/ios/Meeshy/Features/Main/Lentille/Perspective/LentilleSceneActivity.swift",
-   "apps/ios/Meeshy/Features/Main/Lentille/Perspective/LentilleFocusElectionHost.swift",
-   "apps/ios/Meeshy/Features/Main/Lentille/Mode/LentilleMagnification.swift",
-   "apps/ios/Meeshy/Features/Main/Lentille/Mode/LentilleFocusCard.swift",
-   "apps/ios/Meeshy/Features/Main/Lentille/Mode/LentilleFocusBreathing.swift",
-   "apps/ios/Meeshy/Features/Main/Lentille/Row/LentilleWholeChipsLine.swift",
+   "apps/ios/Meeshy/Features/Lens/Perspective/LentillePerspective.swift",
+   "apps/ios/Meeshy/Features/Lens/Perspective/LentilleSceneActivity.swift",
+   "apps/ios/Meeshy/Features/Lens/Perspective/LentilleFocusElectionHost.swift",
+   "apps/ios/Meeshy/Features/Lens/Mode/LentilleMagnification.swift",
+   "apps/ios/Meeshy/Features/Lens/Mode/LentilleFocusCard.swift",
+   "apps/ios/Meeshy/Features/Lens/Mode/LentilleFocusBreathing.swift",
+   "apps/ios/Meeshy/Features/Lens/Row/LentilleWholeChipsLine.swift",
    "apps/ios/Meeshy/Features/Main/Views/ConversationListView+ReaderAnonymity.swift"
   ],
   "feature_keys": [

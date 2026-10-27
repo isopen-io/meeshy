@@ -34,7 +34,7 @@ final class AnchoredPickerWiringGuardTests: XCTestCase {
     }
 
     func test_lentilleFilter_staysANativeMenu() {
-        for file in swiftFiles(under: "Meeshy/Features/Main/Lentille/Mode") {
+        for file in swiftFiles(under: "Meeshy/Features/Lens/Mode") {
             let source = AppSourceGuard.stripComments((try? String(contentsOf: file, encoding: .utf8)) ?? "")
             XCTAssertFalse(source.contains(".anchoredPicker("), file.lastPathComponent)
             XCTAssertFalse(source.contains(".popover("), file.lastPathComponent)

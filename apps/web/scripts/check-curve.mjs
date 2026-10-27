@@ -39,7 +39,7 @@ const UPSTREAM = `${ROOT}packages/shared/utils/focus-curve.ts`;
  * Lentille, donc iOS en est la source. Même dispositif que le générateur de
  * jetons, qui va chercher la palette dans `MeeshyColors.swift`.
  */
-const UPSTREAM_SWIFT = `${ROOT}apps/ios/Meeshy/Features/Main/Lentille/Core/LentilleMetrics.swift`;
+const UPSTREAM_SWIFT = `${ROOT}apps/ios/Meeshy/Features/Lens/Core/LentilleMetrics.swift`;
 const DOWNSTREAM = `${ROOT}apps/web/src/lib/lens/law.ts`;
 
 /**

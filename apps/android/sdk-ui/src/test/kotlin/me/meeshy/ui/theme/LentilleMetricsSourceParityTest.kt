@@ -17,7 +17,7 @@ class LentilleMetricsSourceParityTest {
     private val constant = Regex("""static\s+let\s+(\w+)\s*:\s*(?:CGFloat|Double|Int)\s*=\s*(-?\d+(?:\.\d+)?)\s*$""")
 
     private fun source(): String {
-        val relative = "apps/ios/Meeshy/Features/Main/Lentille/Core/LentilleMetrics.swift"
+        val relative = "apps/ios/Meeshy/Features/Lens/Core/LentilleMetrics.swift"
         var dir: File? = File("").absoluteFile
         while (dir != null) {
             val candidate = File(dir, relative)
