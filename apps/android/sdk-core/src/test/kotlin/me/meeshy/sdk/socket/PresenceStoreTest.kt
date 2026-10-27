@@ -208,4 +208,40 @@ class PresenceStoreTest {
             cancelAndIgnoreRemainingEvents()
         }
     }
+
+    @Test
+    fun `a served presence stands in when the live map has nothing and decays with the clock`() = runTest {
+        val f = fixture()
+        val served = UserPresence(isOnline = false, lastActiveAt = iso(epoch - 30_000))
+
+        f.store.presenceOf("u1", served).test {
+            assertThat(awaitItem()).isEqualTo(PresenceState.ONLINE)
+            testScheduler.advanceTimeBy(61_000)
+            testScheduler.runCurrent()
+            assertThat(expectMostRecentItem()).isEqualTo(PresenceState.AWAY)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `the live map wins over the served presence`() = runTest {
+        val f = fixture()
+        val served = UserPresence(isOnline = true, lastActiveAt = iso(epoch))
+        f.userStatus.emit(UserStatusEvent("u1", "a", false, iso(epoch - 400_000)))
+        testScheduler.runCurrent()
+
+        f.store.presenceOf("u1", served).test {
+            assertThat(awaitItem()).isEqualTo(PresenceState.OFFLINE)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `nothing served and nothing live is no dot`() = runTest {
+        val f = fixture()
+        f.store.presenceOf("ghost", null).test {
+            assertThat(awaitItem()).isNull()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
 }

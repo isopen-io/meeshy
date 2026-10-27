@@ -50,6 +50,14 @@ data class UserPresence(
     }
 
     companion object {
+        /**
+         * La présence que la charge d'une LIGNE a servie (`isOnline` + `lastActiveAt`), ou `null`
+         * quand elle n'en porte aucune : rien n'est alors fabriqué, la ligne ne donne aucun point.
+         */
+        fun served(isOnline: Boolean?, lastActiveAt: String?): UserPresence? =
+            if (isOnline == null && lastActiveAt.isNullOrBlank()) null
+            else UserPresence(isOnline = isOnline == true, lastActiveAt = lastActiveAt)
+
         /** Actif à l'instant (dot pulsant) — 60 s. */
         const val ONLINE_WINDOW_MS: Long = 60_000L
 

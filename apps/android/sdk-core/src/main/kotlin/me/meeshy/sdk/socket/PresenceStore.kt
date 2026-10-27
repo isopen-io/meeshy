@@ -163,8 +163,19 @@ class PresenceStore internal constructor(
      * L'état du point de [userId], recalculé avec le temps ; `null` = aucune entrée, aucun point.
      * N'émet qu'au changement d'état (jamais à chaque tick).
      */
-    fun presenceOf(userId: String): Flow<PresenceState?> =
-        entryOf(userId).flatMapLatest { presence ->
+    fun presenceOf(userId: String): Flow<PresenceState?> = decayingState(entryOf(userId))
+
+    /**
+     * Comme [presenceOf], avec la présence que la charge a SERVIE ([served] : `isOnline` +
+     * `lastActiveAt` de la ligne) en repli : la carte vivante d'abord, la charge sinon (miroir de
+     * `PresenceManager.resolvedState` iOS). Sans carte ni charge : aucun point.
+     */
+    fun presenceOf(userId: String, served: UserPresence?): Flow<PresenceState?> =
+        if (served == null) presenceOf(userId)
+        else decayingState(_entries.map { it[userId] ?: served }.distinctUntilChanged())
+
+    private fun decayingState(entry: Flow<UserPresence?>): Flow<PresenceState?> =
+        entry.flatMapLatest { presence ->
             flow {
                 val first = PresenceDecayClock.derive(presence, clock.nowMillis())
                 emit(first)

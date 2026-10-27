@@ -27,7 +27,6 @@ import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.graphics.Color
-import me.meeshy.sdk.model.UserPresence
 import me.meeshy.ui.icons.MeeshyIcons
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -52,6 +51,7 @@ import me.meeshy.sdk.model.call.CallDirection
 import me.meeshy.sdk.model.call.CallRecord
 import me.meeshy.sdk.theme.DynamicColorGenerator
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.component.rememberPresence
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -114,9 +114,7 @@ private fun CallHistoryRowContent(
     modifier: Modifier = Modifier,
 ) {
     val name = record.displayName(fallback = stringResource(R.string.call_unknown_peer))
-    val presence = remember(record.peer) {
-        record.peer?.let { UserPresence(isOnline = it.isOnline).state(System.currentTimeMillis()) }
-    }
+    val presence = rememberPresence(record.peer?.userId)
     Row(
         modifier = modifier
             .fillMaxWidth()

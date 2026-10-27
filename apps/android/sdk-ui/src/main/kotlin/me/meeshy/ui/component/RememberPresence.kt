@@ -6,6 +6,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.sdk.model.PresenceState
+import me.meeshy.sdk.model.UserPresence
 import me.meeshy.sdk.socket.PresenceStore
 
 /**
@@ -32,6 +33,23 @@ fun rememberPresence(userId: String?): PresenceState? {
     val flow = remember(store, userId) { store.presenceOf(userId) }
     val initial = remember(store, userId) {
         store.entries.value[userId]?.state(store.nowMillis())
+    }
+    val state by flow.collectAsStateWithLifecycle(initialValue = initial)
+    return state
+}
+
+/**
+ * Comme [rememberPresence], avec la présence que la charge de la ligne a SERVIE ([served]) en
+ * repli quand la carte vivante n'a rien pour [userId]. La visibilité reste celle du serveur : une
+ * ligne qui ne porte rien (non-ami) et une carte vide donnent `null`, donc aucun point.
+ */
+@Composable
+fun rememberPresence(userId: String?, served: UserPresence?): PresenceState? {
+    val store = LocalPresenceStore.current ?: return null
+    if (userId.isNullOrBlank()) return null
+    val flow = remember(store, userId, served) { store.presenceOf(userId, served) }
+    val initial = remember(store, userId, served) {
+        (store.entries.value[userId] ?: served)?.state(store.nowMillis())
     }
     val state by flow.collectAsStateWithLifecycle(initialValue = initial)
     return state
