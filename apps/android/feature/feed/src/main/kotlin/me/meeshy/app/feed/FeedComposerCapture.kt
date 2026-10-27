@@ -82,26 +82,6 @@ private fun ContentResolver.displayName(uri: Uri): String? =
     }.getOrNull()
 
 /**
- * Runs [launch] (a system `ACTION_IMAGE_CAPTURE`/`ACTION_VIDEO_CAPTURE` start) only once [ensureAccess]
- * says the camera is usable. The manifest DECLARES `CAMERA`, so the system refuses the intent with a
- * `SecurityException` the moment the user has revoked it — [ensureAccess] is where the explanation
- * sheet, the system prompt or the « Open Settings » card live, and the exception handler is the
- * last line of defence (permission revoked between the check and the start, no camera app).
- * Returns whether the capture was started; never throws.
- */
-internal suspend fun launchWithCameraAccess(ensureAccess: suspend () -> Boolean, launch: () -> Unit): Boolean {
-    if (!ensureAccess()) return false
-    return try {
-        launch()
-        true
-    } catch (_: SecurityException) {
-        false
-    } catch (_: android.content.ActivityNotFoundException) {
-        false
-    }
-}
-
-/**
  * The camera-photo and camera-video tiles: both [ActivityResultContracts.TakePicture] and
  * [ActivityResultContracts.CaptureVideo] write into a Uri WE provide, so the destination is created
  * up front and held only long enough to resolve the callback — cleared either way so a second tap

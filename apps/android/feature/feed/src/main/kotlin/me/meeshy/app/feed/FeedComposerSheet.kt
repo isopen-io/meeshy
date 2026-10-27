@@ -44,6 +44,7 @@ import me.meeshy.sdk.model.waveform.VoiceRecordingSession
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.model.PermissionNature
 import me.meeshy.ui.component.permission.PermissionFlowHost
+import me.meeshy.ui.component.permission.launchWithCameraAccess
 import me.meeshy.ui.component.permission.rememberPermissionFlow
 import me.meeshy.ui.component.recording.VoiceRecordingPill
 import me.meeshy.ui.icons.MeeshyIcons
@@ -78,8 +79,9 @@ import java.io.File
  * [dispatchPicked] pipeline. **Deliberate, documented scope cut vs. iOS**: two system-delegated
  * tiles, no in-composer photo/video toggle ([CameraView]'s combined `.photo`/`.video` case) — iOS
  * opens a single custom AVFoundation capture screen with an in-app mode switch; Android delegates
- * to the system camera app's own `ACTION_IMAGE_CAPTURE`/`ACTION_VIDEO_CAPTURE` intents, so no
- * camera runtime permission is requested up front through [rememberPermissionFlow] (the manifest declares `CAMERA`, so the system refuses the intent otherwise).
+ * to the system camera app's own `ACTION_IMAGE_CAPTURE`/`ACTION_VIDEO_CAPTURE` intents. Because the
+ * manifest declares `CAMERA`, the system refuses those intents unless the permission is granted, so
+ * each capture goes through [launchWithCameraAccess] behind [rememberPermissionFlow] first.
  *
  * Generic file attachment (`onAttachFile`, [MeeshyIcons.AttachFile] tile) mirrors iOS's
  * `doc.fill` button: [ActivityResultContracts.OpenMultipleDocuments] (any MIME type) lets the

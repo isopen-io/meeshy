@@ -18,6 +18,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.FileProvider
 import java.io.File
 import kotlinx.coroutines.launch
+import me.meeshy.sdk.model.PermissionNature
+import me.meeshy.ui.component.permission.PermissionFlowHost
+import me.meeshy.ui.component.permission.launchWithCameraAccess
+import me.meeshy.ui.component.permission.rememberPermissionFlow
 
 /**
  * Filenames for a composer-drawer camera capture (issue #3738) — photo or video.
@@ -70,10 +74,14 @@ class ChatCameraCaptureLaunchers internal constructor(
  * Wires the two system capture intents — `ACTION_IMAGE_CAPTURE` and
  * `ACTION_VIDEO_CAPTURE` — behind [ActivityResultContracts.TakePicture] /
  * [ActivityResultContracts.CaptureVideo], the exact pattern
- * `me.meeshy.app.feed.FeedComposerSheet`'s own two camera tiles already proved:
- * no CameraX dependency (absent from the version catalog), no `CAMERA` runtime
- * permission to request here — the system camera app that resolves the intent
- * owns that permission, not this composer.
+ * `me.meeshy.app.feed.FeedComposerSheet`'s own two camera tiles already proved,
+ * with no CameraX dependency (absent from the version catalog). The manifest
+ * DECLARES `CAMERA`, so the system refuses both intents with a
+ * `SecurityException` until the user grants it: each launch therefore goes
+ * through [launchWithCameraAccess] behind [rememberPermissionFlow] (explanation
+ * sheet, system prompt, « Open Settings » card — hosted here by
+ * [PermissionFlowHost]), and a refused or failed launch deletes the
+ * destination it had just created.
  *
  * A fresh [ChatCameraCaptureFile]-named destination is created under the app's
  * `FileProvider` before each launch; write permission is granted directly on
@@ -132,16 +140,34 @@ fun rememberChatCameraCapture(onCaptured: suspend (uri: Uri, isVideo: Boolean) -
         finish(uri, success, isVideo = true)
     }
 
+    val cameraAccess = rememberPermissionFlow()
+    PermissionFlowHost(cameraAccess)
+
+    fun guardedLaunch(fileName: () -> String, start: (Uri) -> Unit) {
+        scope.launch {
+            var created: Uri? = null
+            val started = launchWithCameraAccess(
+                ensureAccess = { cameraAccess.ensure(PermissionNature.CAMERA) },
+                launch = {
+                    val uri = context.createChatCaptureUri(fileName())
+                    created = uri
+                    pendingUri = uri
+                    start(uri)
+                },
+            )
+            if (!started) {
+                created?.let { runCatching { context.contentResolver.delete(it, null, null) } }
+                pendingUri = null
+            }
+        }
+    }
+
     return ChatCameraCaptureLaunchers(
         launchPhotoImpl = {
-            val uri = context.createChatCaptureUri(ChatCameraCaptureFile.next(System.currentTimeMillis()))
-            pendingUri = uri
-            takePicture.launch(uri)
+            guardedLaunch({ ChatCameraCaptureFile.next(System.currentTimeMillis()) }, takePicture::launch)
         },
         launchVideoImpl = {
-            val uri = context.createChatCaptureUri(ChatCameraCaptureFile.nextVideo(System.currentTimeMillis()))
-            pendingUri = uri
-            captureVideo.launch(uri)
+            guardedLaunch({ ChatCameraCaptureFile.nextVideo(System.currentTimeMillis()) }, captureVideo::launch)
         },
     )
 }
