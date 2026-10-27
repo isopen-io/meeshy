@@ -148,6 +148,10 @@ data class StoryComposerUiState(
     val selectedSlideAudio: List<me.meeshy.sdk.model.StoryAudioPlayerObject>
         get() = deck.selectedSlide.audio
 
+    /** La scène accepte une piste de plus — ou le fond emprunté en REMPLACE un (jamais deux fonds). */
+    val canBorrowSound: Boolean
+        get() = me.meeshy.sdk.model.composer.sound.ComposerSoundPlacement.canBorrow(deck.selectedSlide.audio)
+
     /** Le son de FOND de la slide sélectionnée — ce que la trace de la scène montre. */
     val selectedSlideBackgroundSound: me.meeshy.sdk.model.StoryAudioPlayerObject?
         get() = me.meeshy.sdk.model.composer.sound.ComposerSoundPlacement.background(deck.selectedSlide.audio)

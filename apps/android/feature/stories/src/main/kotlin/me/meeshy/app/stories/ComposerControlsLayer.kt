@@ -68,6 +68,11 @@ internal fun ComposerToolPanel(
     onFilterIntensityChange: (Float) -> Unit,
     onSlideDurationChange: (Double) -> Unit,
     onSelectBackground: (StoryBackgroundValue?) -> Unit,
+    audio: List<me.meeshy.sdk.model.StoryAudioPlayerObject> = emptyList(),
+    canAddSound: Boolean = true,
+    onOpenSoundShelf: () -> Unit = {},
+    onToggleSoundMute: (String) -> Unit = {},
+    onRemoveSound: (String) -> Unit = {},
 ) {
     var panelHeightDp by remember { mutableFloatStateOf(DEFAULT_PANEL_HEIGHT_DP) }
     val activeTool = band.activeTool
@@ -115,6 +120,13 @@ internal fun ComposerToolPanel(
                             enabled = true,
                             onClick = onEnterDrawing,
                             modifier = Modifier.fillMaxWidth(),
+                        )
+                        StoryToolMode.AUDIO -> ComposerSoundPanel(
+                            audio = audio,
+                            canAddSound = canAddSound,
+                            onOpenShelf = onOpenSoundShelf,
+                            onToggleMute = onToggleSoundMute,
+                            onRemove = onRemoveSound,
                         )
                         StoryToolMode.TEXTURE -> {
                             BackgroundRow(selected = selectedBackground, onSelect = onSelectBackground)

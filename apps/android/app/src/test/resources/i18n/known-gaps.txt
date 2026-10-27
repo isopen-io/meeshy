@@ -1634,3 +1634,7 @@ bare-specifier :feature:conversations en shareLink_arrivals_total
 bare-specifier :feature:chat en contact_card_a11y_label
 # Atelier « Imagine » (#13421) : le compteur de la galerie arrive en %d nu du catalogue iOS.
 bare-specifier :feature:chat en export_card_gallery_count
+# Étagère des sons (#13428) : compteurs et message de retrait adoptés tels quels du catalogue iOS, %d nu pour un seul argument.
+bare-specifier :feature:stories en story_sound_library_playCount
+bare-specifier :feature:stories en story_sound_library_postCount
+bare-specifier :feature:stories en story_sound_library_removeMessageUsed
