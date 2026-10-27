@@ -20,7 +20,12 @@ data class ConversationListUiState(
     val conversations: List<ApiConversation> = emptyList(),
     val isSyncing: Boolean = false,
     val isUserRefreshing: Boolean = false,
-    val showSkeleton: Boolean = false,
+    /**
+     * Vrai tant que le cache n'a pas répondu : l'état initial est « on charge », jamais « aucune
+     * conversation » — sinon un écran rouvert (liste recréée au retour d'un écran ouvert à froid)
+     * montrait un instant « Aucune conversation » par-dessus des rangées en cache (#13392).
+     */
+    val showSkeleton: Boolean = true,
     val errorMessage: String? = null,
     val connection: SocketConnectionState = SocketConnectionState.DISCONNECTED,
     /**
