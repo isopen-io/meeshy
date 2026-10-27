@@ -69,6 +69,7 @@ private const val PREFETCH_DISTANCE = 4
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NotificationsScreen(
+    onBack: () -> Unit,
     viewModel: NotificationsViewModel = hiltViewModel(),
     onOpenConversation: (String) -> Unit = {},
     onOpenPost: (String) -> Unit = {},
@@ -155,6 +156,7 @@ fun NotificationsScreen(
             topBar = {
                 MeeshyTopBar(
                     title = stringResource(R.string.notifications_title),
+                    onBack = onBack,
                     actions = {
                         AnimatedVisibility(visible = state.unreadCount > 0, enter = fadeIn(), exit = fadeOut()) {
                             IconButton(onClick = onMarkAllRead) {

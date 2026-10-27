@@ -43,6 +43,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.calls.R
 import me.meeshy.sdk.model.call.CallRecord
 import me.meeshy.ui.component.MeeshySkeletonBox
+import me.meeshy.ui.component.chrome.MeeshyBackButton
 import me.meeshy.ui.component.chrome.MeeshyBackground
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -57,6 +58,7 @@ import me.meeshy.ui.theme.MeeshyTheme
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CallHistoryScreen(
+    onBack: () -> Unit,
     onRedial: (record: CallRecord, isVideo: Boolean) -> Unit,
     viewModel: CallHistoryViewModel = hiltViewModel(),
 ) {
@@ -75,6 +77,7 @@ fun CallHistoryScreen(
                     scrolledContainerColor = Color.Transparent,
                     titleContentColor = MeeshyTheme.tokens.textPrimary,
                 ),
+                navigationIcon = { MeeshyBackButton(onClick = onBack) },
                 title = { Text(stringResource(R.string.call_history_title)) },
             )
         },

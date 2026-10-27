@@ -19,6 +19,7 @@ internal fun NavGraphBuilder.callNavGraph(
 ) {
     composable(Routes.CALLS) {
         CallHistoryScreen(
+            onBack = { navController.popBackStack() },
             onRedial = { record, isVideo ->
                 navController.navigate(CallRoute.redial(record, isVideo))
             },
