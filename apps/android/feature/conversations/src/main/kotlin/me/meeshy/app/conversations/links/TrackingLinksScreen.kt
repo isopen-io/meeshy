@@ -110,8 +110,8 @@ fun TrackingLinksScreen(
 @Composable
 private fun StatsRow(stats: TrackingLinkStats, accent: Color) {
     Row(horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.smPlus)) {
-        LinkStatTile(MeeshyIcons.Link, stats.totalLinks, stringResource(R.string.links_tracking_stats_links), accent, Modifier.weight(1f))
-        LinkStatTile(MeeshyIcons.Touch, stats.totalClicks, stringResource(R.string.links_tracking_stats_clicks), accent, Modifier.weight(1f))
+        LinkStatTile(MeeshyIcons.Link, stats.totalLinks, R.plurals.links_count_links, accent, Modifier.weight(1f))
+        LinkStatTile(MeeshyIcons.Touch, stats.totalClicks, R.plurals.links_count_clicks, accent, Modifier.weight(1f))
         LinkStatTile(MeeshyIcons.Person, stats.uniqueClicks, stringResource(R.string.links_tracking_stats_uniques), accent, Modifier.weight(1f))
         LinkStatTile(MeeshyIcons.CheckCircle, stats.activeLinks, stringResource(R.string.links_tracking_stats_active), accent, Modifier.weight(1f))
     }

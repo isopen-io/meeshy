@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Le décompte de l'Atlas, accordé à la quantité de langues tamponnées : « 1 langue sur 83 » (#13357). -->
+<resources>
+    <plurals name="game_atlas_languages">
+        <item quantity="zero">⁦%1$s⁩ لغات من ⁦%2$s⁩</item>
+        <item quantity="one">⁦%1$s⁩ لغة من ⁦%2$s⁩</item>
+        <item quantity="two">⁦%1$s⁩ لغتان من ⁦%2$s⁩</item>
+        <item quantity="few">⁦%1$s⁩ لغات من ⁦%2$s⁩</item>
+        <item quantity="many">⁦%1$s⁩ لغة من ⁦%2$s⁩</item>
+        <item quantity="other">⁦%1$s⁩ لغة من ⁦%2$s⁩</item>
+    </plurals>
+</resources>

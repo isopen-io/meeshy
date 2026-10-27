@@ -20,6 +20,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.customActions
@@ -150,7 +151,8 @@ private fun HubCard(
 private fun FiguresLine(entry: LinksHubEntry, figures: LinksHubFigures, accent: androidx.compose.ui.graphics.Color) {
     val (firstLabel, secondLabel) = entry.figureLabels()
     Text(
-        text = "${animatedCount(figures.count)} ${stringResource(firstLabel)} · ${animatedCount(figures.engagement)} ${stringResource(secondLabel)}",
+        text = "${animatedCount(figures.count)} ${pluralStringResource(firstLabel, figures.count)}" +
+            " · ${animatedCount(figures.engagement)} ${pluralStringResource(secondLabel, figures.engagement)}",
         style = MaterialTheme.typography.labelMedium,
         fontWeight = FontWeight.SemiBold,
         color = accent,
@@ -187,8 +189,8 @@ private fun LinksHubEntry.createLabelRes(): Int? = when (this) {
 }
 
 private fun LinksHubEntry.figureLabels(): Pair<Int, Int> = when (this) {
-    LinksHubEntry.SHARE -> R.string.my_share_links_stats_total to R.string.my_share_links_stats_uses
-    LinksHubEntry.TRACKING -> R.string.links_tracking_stats_links to R.string.links_tracking_stats_clicks
-    LinksHubEntry.COMMUNITY -> R.string.links_community_stat_groups to R.string.links_community_stat_members
-    LinksHubEntry.AFFILIATE -> R.string.links_affiliate_stat_links to R.string.links_affiliate_stat_signups
+    LinksHubEntry.SHARE -> R.plurals.links_count_links to R.plurals.links_count_joined
+    LinksHubEntry.TRACKING -> R.plurals.links_count_links to R.plurals.links_count_clicks
+    LinksHubEntry.COMMUNITY -> R.plurals.links_count_groups to R.plurals.links_count_members
+    LinksHubEntry.AFFILIATE -> R.plurals.links_count_links to R.plurals.links_count_signups
 }

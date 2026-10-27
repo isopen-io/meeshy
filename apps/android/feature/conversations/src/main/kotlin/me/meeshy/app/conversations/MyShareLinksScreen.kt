@@ -299,7 +299,7 @@ private fun StatsHeader(stats: MyShareLinkStats) {
     Row(horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm)) {
         StatCard(
             value = stats.totalLinks,
-            label = stringResource(R.string.my_share_links_stats_total),
+            label = pluralStringResource(R.plurals.links_count_links, stats.totalLinks).replaceFirstChar { it.titlecase() },
             modifier = Modifier.weight(1f),
         )
         StatCard(
@@ -309,7 +309,7 @@ private fun StatsHeader(stats: MyShareLinkStats) {
         )
         StatCard(
             value = stats.totalUses,
-            label = stringResource(R.string.my_share_links_stats_uses),
+            label = pluralStringResource(R.plurals.links_count_joined, stats.totalUses).replaceFirstChar { it.titlecase() },
             modifier = Modifier.weight(1f),
         )
     }

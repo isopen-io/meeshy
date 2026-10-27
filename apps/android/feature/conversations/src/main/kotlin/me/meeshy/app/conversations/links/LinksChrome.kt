@@ -5,6 +5,7 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.widget.Toast
+import androidx.annotation.PluralsRes
 import androidx.compose.animation.core.animateIntAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -45,6 +46,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -190,6 +192,12 @@ internal fun LinkStatTile(icon: ImageVector, value: Int, label: String, accent: 
         )
         Text(text = label, style = MaterialTheme.typography.labelSmall, color = MeeshyTheme.tokens.textSecondary, maxLines = 1)
     }
+}
+
+/** Une tuile dont le nom s'accorde au nombre (« 1 Lien », « 2 Liens » — CLDR, #13357). */
+@Composable
+internal fun LinkStatTile(icon: ImageVector, value: Int, @PluralsRes label: Int, accent: Color, modifier: Modifier = Modifier) {
+    LinkStatTile(icon, value, pluralStringResource(label, value).replaceFirstChar { it.titlecase() }, accent, modifier)
 }
 
 /** État vide d'une liste de liens : icône, titre, sous-titre. */

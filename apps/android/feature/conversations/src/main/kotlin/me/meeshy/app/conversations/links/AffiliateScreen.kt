@@ -90,8 +90,8 @@ fun AffiliateScreen(
         if (state.refreshFailed) item(key = "failed", contentType = "banner") { LinkRefreshFailedBanner(viewModel::refresh) }
         item(key = "stats", contentType = "stats") {
             Row(horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md)) {
-                LinkStatTile(MeeshyIcons.Link, state.tokens.linkCount, stringResource(R.string.links_affiliate_stat_links), accent, Modifier.weight(1f))
-                LinkStatTile(MeeshyIcons.PersonVerified, state.tokens.signupCount, stringResource(R.string.links_affiliate_stat_signups), accent, Modifier.weight(1f))
+                LinkStatTile(MeeshyIcons.Link, state.tokens.linkCount, R.plurals.links_count_links, accent, Modifier.weight(1f))
+                LinkStatTile(MeeshyIcons.PersonVerified, state.tokens.signupCount, R.plurals.links_count_signups, accent, Modifier.weight(1f))
                 LinkStatTile(MeeshyIcons.Touch, state.tokens.clickCount, stringResource(R.string.links_affiliate_stat_clicks), accent, Modifier.weight(1f))
             }
         }

@@ -17,6 +17,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.semantics
@@ -72,7 +73,7 @@ private fun AtlasContent(game: GameBlock) {
 
 @Composable
 private fun AtlasHeader(atlas: GameAtlasBlock) {
-    val line = stringResource(R.string.game2_atlas_count, count(atlas.stamped), count(atlas.total))
+    val line = pluralStringResource(R.plurals.game_atlas_languages, atlas.stamped, count(atlas.stamped), count(atlas.total))
     GameCard(title = stringResource(R.string.game2_atlas_title), tint = MeeshyPalette.Indigo500) {
         Text(line, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, color = MeeshyTheme.tokens.textPrimary)
         GameProgressBar(atlas.stamped.toFloat() / maxOf(1, atlas.total), MeeshyPalette.Indigo500, line)
