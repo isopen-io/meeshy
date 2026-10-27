@@ -263,7 +263,7 @@ final class WindowMetricsSSOTTests: XCTestCase {
 
         let deliberate: Set<String> = [
             "DeviceLayout.swift",  // the single resolution
-            "CallManager+SystemMonitoring.swift"    // screen-capture probe: genuinely about every scene
+            "CallAppStateObserver.swift"    // screen-capture probe: genuinely about every scene
         ]
 
         var found: Set<String> = []

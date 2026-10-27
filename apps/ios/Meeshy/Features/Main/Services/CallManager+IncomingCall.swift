@@ -464,7 +464,7 @@ extension CallManager {
         // while still ringing. Safe to call twice per call (once here, once at
         // connect): startBackgroundMonitoring() starts with
         // stopBackgroundMonitoring() to stay idempotent.
-        startBackgroundMonitoring()
+        appStateObserver.startBackgroundMonitoring()
 
         // Phase 2 fix — Bug 2: emit call:join IMMEDIATELY (before awaiting
         // startLocalMedia) so the caller receives PARTICIPANT_JOINED without

@@ -186,7 +186,7 @@ extension CallManager {
         // place that flips RTCAudioSession.isAudioEnabled.
         // On reconnect use a lighter haptic — the user is mid-call, not initiating.
         playHaptic(wasReconnecting ? .light : .heavy)
-        startScreenCaptureMonitoring()
+        appStateObserver.startScreenCaptureMonitoring()
         resetCallClockIfNeeded(wasReconnecting: wasReconnecting)
         // Snapshots analytics périodiques — idempotent (les reconnexions
         // repassent ici sans re-armer) ; annulé dans endCallInternal.
@@ -210,7 +210,7 @@ extension CallManager {
         startHeartbeat()
         webRTCService.startQualityMonitor()
         startThermalMonitoring()
-        startBackgroundMonitoring()
+        appStateObserver.startBackgroundMonitoring()
 
         reportOutgoingCallConnected(wasReconnecting: wasReconnecting)
     }

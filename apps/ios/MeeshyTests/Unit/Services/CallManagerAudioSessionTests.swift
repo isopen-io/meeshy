@@ -431,11 +431,11 @@ final class CallManagerAudioSessionTests: XCTestCase {
         guard let fnRange = source.range(of: "private func handleAudioRouteChange(") else {
             XCTFail("handleAudioRouteChange not found in CallManager.swift"); return
         }
-        let endIdx = source.index(fnRange.lowerBound, offsetBy: 1500, limitedBy: source.endIndex) ?? source.endIndex
+        let endIdx = source.index(fnRange.lowerBound, offsetBy: 2200, limitedBy: source.endIndex) ?? source.endIndex
         let fnBody = String(source[fnRange.lowerBound ..< endIdx])
 
         XCTAssertTrue(
-            fnBody.contains("guard callState.isActive else { return }"),
+            fnBody.contains("guard let call, call.callState.isActive else { return }"),
             "handleAudioRouteChange must early-return when no call is active — otherwise idle route " +
             "changes (headset plug) corrupt the initial speaker state of the next call."
         )
@@ -471,7 +471,7 @@ final class CallManagerAudioSessionTests: XCTestCase {
         guard let fnRange = source.range(of: "private func handleAudioRouteChange(") else {
             XCTFail("handleAudioRouteChange not found in CallManager.swift"); return
         }
-        let endIdx = source.index(fnRange.lowerBound, offsetBy: 1500, limitedBy: source.endIndex) ?? source.endIndex
+        let endIdx = source.index(fnRange.lowerBound, offsetBy: 2200, limitedBy: source.endIndex) ?? source.endIndex
         let fnBody = String(source[fnRange.lowerBound ..< endIdx])
 
         XCTAssertTrue(
@@ -506,13 +506,13 @@ final class CallManagerAudioSessionTests: XCTestCase {
         guard let fnRange = source.range(of: "private func handleAudioRouteChange(") else {
             XCTFail("handleAudioRouteChange not found in CallManager.swift"); return
         }
-        let endIdx = source.index(fnRange.lowerBound, offsetBy: 1500, limitedBy: source.endIndex) ?? source.endIndex
+        let endIdx = source.index(fnRange.lowerBound, offsetBy: 2200, limitedBy: source.endIndex) ?? source.endIndex
         let fnBody = String(source[fnRange.lowerBound ..< endIdx])
 
         let newDevBody = try newDeviceAvailableCaseBody(in: fnBody)
 
         XCTAssertTrue(
-            newDevBody.contains("if !applySpeakerRoute()"),
+            newDevBody.contains("if !call.applySpeakerRoute()"),
             ".newDeviceAvailable must check applySpeakerRoute()'s result and revert isSpeaker on " +
             "failure — same discipline as toggleSpeaker(), otherwise a route-priority failure leaves " +
             "isSpeaker desynced from the real audio route."
@@ -529,7 +529,7 @@ final class CallManagerAudioSessionTests: XCTestCase {
         guard let fnRange = source.range(of: "private func handleAudioRouteChange(") else {
             XCTFail("handleAudioRouteChange not found in CallManager.swift"); return
         }
-        let endIdx = source.index(fnRange.lowerBound, offsetBy: 1500, limitedBy: source.endIndex) ?? source.endIndex
+        let endIdx = source.index(fnRange.lowerBound, offsetBy: 2200, limitedBy: source.endIndex) ?? source.endIndex
         let fnBody = String(source[fnRange.lowerBound ..< endIdx])
 
         XCTAssertTrue(
@@ -558,7 +558,7 @@ final class CallManagerAudioSessionTests: XCTestCase {
         guard let fnRange = source.range(of: "private func handleAudioRouteChange(") else {
             XCTFail("handleAudioRouteChange not found in CallManager.swift"); return
         }
-        let endIdx = source.index(fnRange.lowerBound, offsetBy: 1500, limitedBy: source.endIndex) ?? source.endIndex
+        let endIdx = source.index(fnRange.lowerBound, offsetBy: 2200, limitedBy: source.endIndex) ?? source.endIndex
         let fnBody = String(source[fnRange.lowerBound ..< endIdx])
 
         XCTAssertTrue(
@@ -568,7 +568,7 @@ final class CallManagerAudioSessionTests: XCTestCase {
         guard let overrideRange = fnBody.range(of: "case .override:") else {
             XCTFail(".override case not found"); return
         }
-        let overrideEnd = fnBody.index(overrideRange.upperBound, offsetBy: 200, limitedBy: fnBody.endIndex) ?? fnBody.endIndex
+        let overrideEnd = fnBody.range(of: "default:", range: overrideRange.upperBound..<fnBody.endIndex)?.lowerBound ?? fnBody.endIndex
         let overrideBody = String(fnBody[overrideRange.lowerBound ..< overrideEnd])
 
         XCTAssertFalse(
@@ -1928,11 +1928,11 @@ final class CallManagerBackgroundVideoTests: XCTestCase {
         }
         let fnBody = String(afterFn[..<fnEnd])
         XCTAssertTrue(
-            fnBody.contains("case .ringing(isOutgoing: false) = callState"),
+            fnBody.contains("case .ringing(isOutgoing: false) = call.callState"),
             "must only promote a still-ringing INCOMING call — an outgoing call or an already " +
             "answered/connected call must never be re-reported to CallKit")
         XCTAssertTrue(
-            fnBody.contains("!callUsesCallKit"),
+            fnBody.contains("!call.callUsesCallKit"),
             "must skip promotion when the call already has a CallKit registration — re-reporting " +
             "an already-registered call would be a duplicate CXProvider call")
         XCTAssertTrue(
@@ -2135,7 +2135,7 @@ final class CallManagerBackgroundVideoTests: XCTestCase {
     func test_foregroundObserver_restoresThroughTheSingleCameraSuspensionFunnel() throws {
         let body = try foregroundObserverBody()
         XCTAssertTrue(
-            body.contains("self.applyCameraSuspension(false, cause: \"foreground\")"),
+            body.contains("call.applyCameraSuspension(false, cause: \"foreground\")"),
             "Le retour en avant-plan doit lever la suspension par applyCameraSuspension(false:) — " +
             "le point de passage unique du signal caméra, qui porte les gardes."
         )
@@ -4526,7 +4526,7 @@ final class CallManagerMediaServicesResetMonitoringTests: XCTestCase {
             .joined(separator: "\n")
 
         XCTAssertTrue(
-            initBody.contains("startMediaServicesResetMonitoring()"),
+            initBody.contains("audioSystemObserver.start(observing: self)"),
             "CallManager.init must call startMediaServicesResetMonitoring() to register the " +
             "AVAudioSession.mediaServicesWereResetNotification observer at startup."
         )
@@ -4542,7 +4542,7 @@ final class CallManagerMediaServicesResetMonitoringTests: XCTestCase {
         let fnBody = String(source[fnRange.lowerBound ..< endIdx])
 
         XCTAssertTrue(
-            fnBody.contains("guard callState.isActive"),
+            fnBody.contains("guard let call, call.callState.isActive"),
             "handleMediaServicesReset must guard callState.isActive — running audio reconstruction " +
             "outside an active call wastes CPU and may corrupt the idle audio state."
         )

@@ -209,8 +209,8 @@ extension CallManager {
         turnRefreshWatchdogTask = nil
         turnRefreshRetryAttempt = 0
         stopHeartbeat()
-        stopScreenCaptureMonitoring()
-        stopBackgroundMonitoring()
+        appStateObserver.stopScreenCaptureMonitoring()
+        appStateObserver.stopBackgroundMonitoring()
         transcriptionService.resetForCallEnd(
             callId: currentCallId,
             conversationId: conversationId ?? "",

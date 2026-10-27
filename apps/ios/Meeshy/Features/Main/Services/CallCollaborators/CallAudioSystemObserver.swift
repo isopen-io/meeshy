@@ -1,18 +1,37 @@
 import Foundation
 import AVFoundation
-@preconcurrency import CallKit
-import Combine
-import Network
-import UIKit
 import MeeshySDK
-import MeeshyUI
 @preconcurrency import WebRTC
 import os
 
-/// Les interruptions audio du système pendant un appel : appel GSM, alarme,
-/// Siri, changement de route, réinitialisation des services média.
+@MainActor
+protocol CallAudioSystemObserverProviding: AnyObject {
+    func start(observing call: CallManager)
+}
 
-extension CallManager {
+/// Les interruptions audio du système pendant un appel : appel GSM, alarme,
+/// Siri, changement de route, réinitialisation des services média. Le
+/// collaborateur possède ses trois observateurs, tient l'appel faiblement et
+/// rejoue chaque notification sur le MainActor, comme `CallManager` le faisait
+/// avant l'extraction (#11522). Les réactivations de session passent toujours
+/// par `audioSessionQueue`, l'unique file de la session audio.
+@MainActor
+final class CallAudioSystemObserver: CallAudioSystemObserverProviding {
+    nonisolated deinit {}
+
+    private weak var call: CallManager?
+    private var observers: [NSObjectProtocol] = []
+
+    var observerCount: Int { observers.count }
+
+    func start(observing call: CallManager) {
+        self.call = call
+        observers.forEach { NotificationCenter.default.removeObserver($0) }
+        observers.removeAll()
+        startAudioInterruptionMonitoring()
+        startAudioRouteChangeMonitoring()
+        startMediaServicesResetMonitoring()
+    }
 
     /// Audit P1-31 — observe `AVAudioSession.interruptionNotification`
     /// throughout the singleton's lifetime. When iOS interrupts a VoIP call
@@ -23,13 +42,12 @@ extension CallManager {
     /// action. Without an explicit interruption-end observer, the VoIP
     /// audio path stayed silent indefinitely after the interrupting event
     /// ended, even though WebRTC ICE was still connected.
-    @MainActor
-    func startAudioInterruptionMonitoring() {
+    private func startAudioInterruptionMonitoring() {
         // Swift 6 : Notification n'est pas Sendable, donc on extrait les
         // valeurs primitives (UInt? sont Sendable) AVANT de traverser la
         // frontière Task. Le closure d'observateur exécute déjà sur .main
         // (queue: .main), l'extraction est donc synchrone et sûre.
-        NotificationCenter.default.addObserver(
+        observers.append(NotificationCenter.default.addObserver(
             forName: AVAudioSession.interruptionNotification,
             object: nil,
             queue: .main
@@ -40,12 +58,11 @@ extension CallManager {
             Task { @MainActor [weak self] in
                 self?.handleAudioInterruption(typeRaw: typeRaw, optionsRaw: optionsRaw)
             }
-        }
+        })
     }
 
-    @MainActor
     private func handleAudioInterruption(typeRaw: UInt?, optionsRaw: UInt?) {
-        guard callState.isActive else { return }
+        guard let call, call.callState.isActive else { return }
         guard let typeRaw,
               let type = AVAudioSession.InterruptionType(rawValue: typeRaw) else {
             return
@@ -72,7 +89,7 @@ extension CallManager {
             // RTCAudioSession configuration run. The audio reconfiguration is
             // fire-and-forget: the call stays active; the next ICE heartbeat
             // will surface any persistent failure to the user.
-            audioSessionQueue.async {
+            call.audioSessionQueue.async {
                 // Re-check INSIDE the queue, not just via the `callState.isActive`
                 // guard above: a hangup can race this async dispatch from a
                 // different thread (MainActor teardown, or CallKit's own
@@ -110,9 +127,8 @@ extension CallManager {
     // UI speaker button stays out of sync: the user taps "speaker on", plugs
     // headphones → audio routes to headphones but `isSpeaker` stays true;
     // unplugging then re-routes to the built-in speaker unexpectedly.
-    @MainActor
-    func startAudioRouteChangeMonitoring() {
-        NotificationCenter.default.addObserver(
+    private func startAudioRouteChangeMonitoring() {
+        observers.append(NotificationCenter.default.addObserver(
             forName: AVAudioSession.routeChangeNotification,
             object: nil,
             queue: .main
@@ -121,12 +137,11 @@ extension CallManager {
             Task { @MainActor [weak self] in
                 self?.handleAudioRouteChange(reasonRaw: reasonRaw)
             }
-        }
+        })
     }
 
-    @MainActor
     private func handleAudioRouteChange(reasonRaw: UInt) {
-        guard callState.isActive else { return }
+        guard let call, call.callState.isActive else { return }
         let reason = AVAudioSession.RouteChangeReason(rawValue: reasonRaw) ?? .unknown
         switch reason {
         case .newDeviceAvailable:
@@ -138,30 +153,30 @@ extension CallManager {
             // actually applied — desyncing the speaker-toggle UI from the real
             // audio route until an unrelated route change or manual toggle
             // happened to reconcile it.
-            let previousSpeaker = isSpeaker
-            isSpeaker = false
-            if !applySpeakerRoute() {
-                isSpeaker = previousSpeaker
+            let previousSpeaker = call.isSpeaker
+            call.isSpeaker = false
+            if !call.applySpeakerRoute() {
+                call.isSpeaker = previousSpeaker
             }
-            Logger.calls.info("Audio route: new device available — isSpeaker = \(self.isSpeaker)")
+            Logger.calls.info("Audio route: new device available — isSpeaker = \(call.isSpeaker)")
         case .oldDeviceUnavailable:
             // Headset / Bluetooth disconnected — iOS routes back to built-in;
             // re-apply the current speaker preference so RTCAudioSession follows.
-            applySpeakerRoute()
-            Logger.calls.info("Audio route: device removed — re-applying speaker route (isSpeaker=\(self.isSpeaker))")
+            call.applySpeakerRoute()
+            Logger.calls.info("Audio route: device removed — re-applying speaker route (isSpeaker=\(call.isSpeaker))")
         case .override:
-            reconcileSpeakerWithCurrentOutput()
+            call.reconcileSpeakerWithCurrentOutput()
         default:
-            if currentOutputKind()?.isExternalOutput == true {
-                isSpeaker = false
+            if call.currentOutputKind()?.isExternalOutput == true {
+                call.isSpeaker = false
                 break
             }
-            applySpeakerRoute()
+            call.applySpeakerRoute()
         }
     }
 
-    func startMediaServicesResetMonitoring() {
-        NotificationCenter.default.addObserver(
+    private func startMediaServicesResetMonitoring() {
+        observers.append(NotificationCenter.default.addObserver(
             forName: AVAudioSession.mediaServicesWereResetNotification,
             object: nil,
             queue: .main
@@ -169,26 +184,25 @@ extension CallManager {
             Task { @MainActor [weak self] in
                 self?.handleMediaServicesReset()
             }
-        }
+        })
     }
 
-    @MainActor
     private func handleMediaServicesReset() {
-        guard callState.isActive else { return }
+        guard let call, call.callState.isActive else { return }
         Logger.calls.fault("AVAudioSession media services reset during call — rebuilding audio stack")
         // The media server process crashed and restarted. All session state is
         // gone. Reconstruct: reconfigure RTCAudioSession (category / mode /
         // options), then notify libwebrtc that the session cycled so it
         // restarts its audio I/O unit. Re-apply the speaker route last, once
         // the engine is live again.
-        configureAudioSession()
-        audioSessionQueue.async { [weak self] in
+        call.configureAudioSession()
+        call.audioSessionQueue.async { [weak call] in
             // Re-check INSIDE the queue, not just via the `callState.isActive`
             // guard above: a hangup can race this async dispatch from a
             // different thread (MainActor teardown, or CallKit's own
             // `didDeactivate`/`providerDidReset` on its private delegate
             // queue) — mirrors handleAudioInterruption's reactivation guard.
-            guard self != nil, CallManager.isAudioSessionExpectedActive else {
+            guard call != nil, CallManager.isAudioSessionExpectedActive else {
                 Logger.calls.info("Skipping media-services-reset reactivation — audio session already torn down")
                 return
             }
@@ -208,9 +222,9 @@ extension CallManager {
             rtc.isAudioEnabled = true
             rtc.unlockForConfiguration()
         }
-        Task { @MainActor [weak self] in
+        Task { @MainActor [weak call] in
             _ = await cancellableSleep(for: .seconds(QualityThresholds.mediaServicesResetSpeakerDelaySeconds))
-            self?.applySpeakerRoute()
+            call?.applySpeakerRoute()
         }
     }
 

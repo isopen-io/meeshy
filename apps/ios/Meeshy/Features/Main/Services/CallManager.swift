@@ -602,10 +602,6 @@ final class CallManager: ObservableObject, Sendable {
     var cancellables = Set<AnyCancellable>()
     let audioSessionQueue = DispatchQueue(label: "me.meeshy.callmanager.audiosession")
 
-    // Screen capture monitoring
-    var screenCaptureObserver: NSObjectProtocol?
-    var backgroundObserver: NSObjectProtocol?
-    var foregroundObserver: NSObjectProtocol?
     /// C3 — `true` quand la session de capture caméra a été INTERROMPUE par le
     /// système, donc que le pair doit voir notre avatar plutôt qu'un dernier
     /// frame figé (`call:media-toggled false`).
@@ -711,13 +707,22 @@ final class CallManager: ObservableObject, Sendable {
     let signalingRouter: CallSignalingRouterProviding
     /// L'époque SDP et les relances d'offre et de réponse (`CallSdpSignaler`).
     let sdpSignaler: CallSdpSignalerProviding
+    /// Interruptions, changements de route et réinitialisation des services
+    /// média (`CallAudioSystemObserver`).
+    let audioSystemObserver: CallAudioSystemObserverProviding
+    /// Capture d'écran, arrière-plan et premier plan (`CallAppStateObserver`).
+    let appStateObserver: CallAppStateObserverProviding
 
     private init(
         signalingRouter: CallSignalingRouterProviding = CallSignalingRouter(),
-        sdpSignaler: CallSdpSignalerProviding = CallSdpSignaler()
+        sdpSignaler: CallSdpSignalerProviding = CallSdpSignaler(),
+        audioSystemObserver: CallAudioSystemObserverProviding = CallAudioSystemObserver(),
+        appStateObserver: CallAppStateObserverProviding = CallAppStateObserver()
     ) {
         self.signalingRouter = signalingRouter
         self.sdpSignaler = sdpSignaler
+        self.audioSystemObserver = audioSystemObserver
+        self.appStateObserver = appStateObserver
         // Survival controller is created with no actuator yet; `attach(self)` wires
         // it below once `self` is fully initialized (avoids a self-before-init use).
         self.videoSurvivalController = VideoSurvivalController()
@@ -787,11 +792,10 @@ final class CallManager: ObservableObject, Sendable {
             .store(in: &cancellables)
 
         sdpSignaler.isCurrentCall = { [weak self] callId in self?.currentCallId == callId }
+        appStateObserver.attach(to: self)
         signalingRouter.start(routingTo: self)
         startNetworkMonitoring()
-        startAudioInterruptionMonitoring()
-        startAudioRouteChangeMonitoring()
-        startMediaServicesResetMonitoring()
+        audioSystemObserver.start(observing: self)
         Logger.calls.info("CallManager initialized")
     }
 
