@@ -256,6 +256,7 @@ private fun SkeletonGrid() {
 }
 
 private val CARD_HEIGHT = 180.dp
+private val AVATAR_SIZE = 44.dp
 private const val SKELETON_COUNT = 6
 private const val ENTRANCE_STAGGER_CAP = 10
 
@@ -300,32 +301,39 @@ private fun CommunityCard(
                 Brush.verticalGradient(0f to Color.Transparent, 0.4f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.65f)),
             ),
         )
-        PrivacyChip(community.isPrivate, Modifier.align(Alignment.TopStart).padding(start = 10.dp, top = 10.dp))
-        MeeshyAvatar(
-            name = community.name,
-            size = 44.dp,
-            containerColor = accentColor,
-            imageUrl = community.avatar,
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(end = 10.dp, top = 10.dp)
-                .border(BorderStroke(2.dp, Color.White.copy(alpha = 0.85f)), CircleShape),
-        )
-        Column(Modifier.align(Alignment.BottomStart).padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(
-                community.name,
-                color = Color.White,
-                fontWeight = FontWeight.Bold,
-                fontSize = 16.sp,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-            community.description?.takeIf { it.isNotBlank() }?.let {
-                Text(it, color = Color.White.copy(alpha = 0.8f), fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        Column(Modifier.fillMaxSize()) {
+            Row(
+                Modifier.fillMaxWidth().padding(start = 10.dp, end = 10.dp, top = 10.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top,
+            ) {
+                PrivacyChip(community.isPrivate)
+                MeeshyAvatar(
+                    name = community.name,
+                    size = AVATAR_SIZE,
+                    containerColor = accentColor,
+                    imageUrl = community.avatar,
+                    modifier = Modifier.border(BorderStroke(2.dp, Color.White.copy(alpha = 0.85f)), CircleShape),
+                )
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                CountBadge(MeeshyIcons.GroupFilled, CompactCountFormat.text(community.memberCount, countLocale))
-                CountBadge(MeeshyIcons.Chat, CompactCountFormat.text(community.conversationCount, countLocale))
+            Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.BottomStart) {
+                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        community.name,
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    community.description?.takeIf { it.isNotBlank() }?.let {
+                        Text(it, color = Color.White.copy(alpha = 0.8f), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        CountBadge(MeeshyIcons.GroupFilled, CompactCountFormat.text(community.memberCount, countLocale))
+                        CountBadge(MeeshyIcons.Chat, CompactCountFormat.text(community.conversationCount, countLocale))
+                    }
+                }
             }
         }
     }
