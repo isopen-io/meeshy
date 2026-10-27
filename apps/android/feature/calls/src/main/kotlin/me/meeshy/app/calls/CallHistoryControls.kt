@@ -7,13 +7,14 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -91,40 +92,46 @@ internal fun CallHistoryFilterRow(
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        FilterChip(
-            selected = !missedOnly,
-            onClick = {
-                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                onMissed(false)
-            },
-            label = { Text(stringResource(R.string.call_history_filter_all)) },
-        )
-        FilterChip(
-            selected = missedOnly,
-            onClick = {
-                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                onMissed(true)
-            },
-            label = { Text(stringResource(R.string.call_history_filter_missed)) },
-        )
-        FilterChip(
-            selected = videoOnly,
-            onClick = {
-                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                onVideo(!videoOnly)
-            },
-            label = { Text(stringResource(R.string.call_journal_filter_video)) },
-        )
-        Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
-            Crossfade(targetState = canClear, label = "calls-clear-all") { shown ->
-                if (shown) {
-                    TextButton(onClick = onClearAll) {
-                        Text(
-                            text = stringResource(R.string.call_journal_clear_all),
-                            color = MeeshyPalette.Error,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                    }
+        Row(
+            modifier = Modifier.weight(1f).horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            FilterChip(
+                selected = !missedOnly,
+                onClick = {
+                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    onMissed(false)
+                },
+                label = { Text(stringResource(R.string.call_history_filter_all)) },
+            )
+            FilterChip(
+                selected = missedOnly,
+                onClick = {
+                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    onMissed(true)
+                },
+                label = { Text(stringResource(R.string.call_history_filter_missed)) },
+            )
+            FilterChip(
+                selected = videoOnly,
+                onClick = {
+                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    onVideo(!videoOnly)
+                },
+                label = { Text(stringResource(R.string.call_journal_filter_video)) },
+            )
+        }
+        Crossfade(targetState = canClear, label = "calls-clear-all") { shown ->
+            if (shown) {
+                TextButton(onClick = onClearAll) {
+                    Text(
+                        text = stringResource(R.string.call_journal_clear_all),
+                        color = MeeshyPalette.Error,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        softWrap = false,
+                    )
                 }
             }
         }
