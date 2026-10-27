@@ -30,6 +30,8 @@
     <string name="call_journal_search_empty">Ninguna llamada coincide con «%s»</string>
     <string name="call_journal_search_empty_hint">El registro abarca los últimos tres meses.</string>
     <string name="call_journal_search_placeholder">Buscar una llamada</string>
+    <string name="call_open_conversation">Conversación</string>
+    <string name="call_open_conversation_hint">Abre la conversación manteniendo la llamada activa</string>
     <string name="call_recording_accept">Aceptar</string>
     <string name="call_recording_active">Grabación en curso</string>
     <string name="call_recording_ask">%s quiere grabar la llamada</string>
