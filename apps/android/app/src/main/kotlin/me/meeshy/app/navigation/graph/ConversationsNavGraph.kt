@@ -34,6 +34,8 @@ import me.meeshy.app.navigation.CallRoute
 import me.meeshy.app.navigation.ChatRouteArgs
 import me.meeshy.app.navigation.ReportsConversationViewing
 import me.meeshy.app.navigation.Routes
+import me.meeshy.app.navigation.SheetStyle
+import me.meeshy.app.navigation.sheetComposable
 import me.meeshy.app.stories.StoriesViewModel
 import me.meeshy.app.stories.StoryTray
 
@@ -89,16 +91,16 @@ internal fun NavGraphBuilder.conversationsNavGraph(
             onOpenSettings = { navController.navigate(Routes.SETTINGS) },
         )
     }
-    composable(Routes.SHARE_LINK_PICKER) {
+    sheetComposable(Routes.SHARE_LINK_PICKER, navController) { _, dismiss ->
         CreateShareLinkScreen(
-            onBack = { navController.popBackStack() },
-            onCreated = { navController.popBackStack() },
+            onBack = dismiss,
+            onCreated = dismiss,
             onNewConversation = { navController.navigate(Routes.NEW_CONVERSATION) },
         )
     }
-    composable(Routes.GLOBAL_SEARCH) {
+    sheetComposable(Routes.GLOBAL_SEARCH, navController, style = SheetStyle.COVER) { _, dismiss ->
         GlobalSearchScreen(
-            onBack = { navController.popBackStack() },
+            onBack = dismiss,
             onOpenConversation = { conversationId ->
                 navController.navigate(Routes.chat(conversationId))
             },
@@ -107,9 +109,9 @@ internal fun NavGraphBuilder.conversationsNavGraph(
             },
         )
     }
-    composable(Routes.DASHBOARD) {
+    sheetComposable(Routes.DASHBOARD, navController) { _, dismiss ->
         DashboardScreen(
-            onBack = { navController.popBackStack() },
+            onBack = dismiss,
             onOpenConversation = { conversationId ->
                 navController.navigate(Routes.chat(conversationId))
             },
@@ -119,15 +121,16 @@ internal fun NavGraphBuilder.conversationsNavGraph(
             onContacts = { navController.navigate(Routes.CONTACTS) },
         )
     }
-    composable(
+    sheetComposable(
         route = Routes.CREATE_SHARE_LINK,
+        navController = navController,
         arguments = listOf(
             navArgument(CreateShareLinkViewModel.CONVERSATION_ID_ARG) { type = NavType.StringType },
         ),
-    ) {
+    ) { _, dismiss ->
         CreateShareLinkScreen(
-            onBack = { navController.popBackStack() },
-            onCreated = { navController.popBackStack() },
+            onBack = dismiss,
+            onCreated = dismiss,
         )
     }
     composable(Routes.MY_SHARE_LINKS) {
@@ -149,9 +152,9 @@ internal fun NavGraphBuilder.conversationsNavGraph(
             onDeleted = { navController.popBackStack() },
         )
     }
-    composable(Routes.NEW_CONVERSATION) {
+    sheetComposable(Routes.NEW_CONVERSATION, navController) { _, dismiss ->
         NewConversationScreen(
-            onBack = { navController.popBackStack() },
+            onBack = dismiss,
             onConversationCreated = { conversationId ->
                 navController.navigate(Routes.chat(conversationId)) {
                     popUpTo(Routes.CONVERSATIONS)

@@ -82,6 +82,8 @@ import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.ui.theme.hexColor
+import me.meeshy.ui.component.chrome.leadingNavigationIcon
+import me.meeshy.ui.component.chrome.leadingNavigationLabel
 
 /**
  * « Mes stories » (iOS `MyStoriesView`) : la grille de ses stories actives, l'archive des
@@ -137,7 +139,7 @@ fun MyStoriesScreen(
                     title = { Text(stringResource(R.string.my_stories_title), fontWeight = FontWeight.Bold) },
                     navigationIcon = {
                         IconButton(onClick = onBack) {
-                            Icon(MeeshyIcons.Back, stringResource(R.string.my_stories_back), tint = MeeshyTheme.tokens.textPrimary)
+                            Icon(leadingNavigationIcon(), leadingNavigationLabel(stringResource(R.string.my_stories_back)), tint = MeeshyTheme.tokens.textPrimary)
                         }
                     },
                     actions = {

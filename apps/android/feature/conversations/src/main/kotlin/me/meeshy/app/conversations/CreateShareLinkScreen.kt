@@ -21,7 +21,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AddCircle
@@ -89,6 +88,8 @@ import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
+import me.meeshy.ui.component.chrome.leadingNavigationIcon
+import me.meeshy.ui.component.chrome.leadingNavigationLabel
 
 private val EXPIRATION_OPTIONS = listOf(
     ShareLinkExpiration.Never to R.string.share_link_expiration_never,
@@ -170,8 +171,8 @@ fun CreateShareLinkScreen(
                     navigationIcon = {
                         IconButton(onClick = onBack) {
                             Icon(
-                                Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = stringResource(R.string.share_link_create_back),
+                                leadingNavigationIcon(),
+                                contentDescription = leadingNavigationLabel(stringResource(R.string.share_link_create_back)),
                             )
                         }
                     },
