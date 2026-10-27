@@ -261,6 +261,7 @@ fun CallScreen(
                         showsMinimize = true,
                         onMinimize = onMinimize,
                         modifier = Modifier.padding(top = MeeshySpacing.xs),
+                        isVideoStage = videoStage,
                     )
                 }
             }

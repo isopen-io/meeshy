@@ -56,6 +56,7 @@ internal fun CallHeaderBar(
     showsMinimize: Boolean,
     onMinimize: () -> Unit,
     modifier: Modifier = Modifier,
+    isVideoStage: Boolean = state.isVideoCall,
 ) {
     Row(
         modifier = modifier.fillMaxWidth(),
@@ -82,7 +83,7 @@ internal fun CallHeaderBar(
             }
         }
         Box(Modifier.weight(1f))
-        if (CallHeaderLaw.showsDurationChip(state.showsConnectedLayout, isVideoUiActive = state.isVideoCall)) {
+        if (CallHeaderLaw.showsDurationChip(state.showsConnectedLayout, isVideoUiActive = isVideoStage)) {
             CallDurationChip(state)
         }
     }
