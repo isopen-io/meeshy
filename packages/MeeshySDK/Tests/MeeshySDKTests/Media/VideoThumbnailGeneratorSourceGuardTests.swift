@@ -9,7 +9,7 @@ final class VideoThumbnailGeneratorSourceGuardTests: XCTestCase {
     private static let allowed: [String: String] = [
         "packages/MeeshySDK/Sources/MeeshySDK/Media/VideoThumbnailGenerator.swift": "le générateur",
         "packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryForegroundVideoFrameSource.swift": "export : une image par trame de rendu",
-        "apps/ios/Meeshy/Features/Main/Export/MessageCardMotionExporter.swift": "export animé : une image par trame",
+        "apps/ios/Meeshy/Features/Export/MessageCardMotionExporter.swift": "export animé : une image par trame",
         "apps/ios/Meeshy/Features/Vitrine/VitrineReel.swift": "affiche pleine définition écrite une fois sur disque, jamais réaffichée",
     ]
 

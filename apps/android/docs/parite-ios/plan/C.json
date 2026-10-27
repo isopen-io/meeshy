@@ -10321,7 +10321,7 @@
    "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/imagine/ImagineRequestBuilder.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Export/MessageCardExportPresenter.swift"
+   "apps/ios/Meeshy/Features/Export/MessageCardExportPresenter.swift"
   ],
   "feature_keys": [
    "ext-imagine-entry-points",
@@ -10506,7 +10506,7 @@
    "apps/android/feature/chat/src/main/kotlin/me/meeshy/app/chat/imagine/ImagineExcerptStrip.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Export/MessageCardMediaLoader.swift"
+   "apps/ios/Meeshy/Features/Export/MessageCardMediaLoader.swift"
   ],
   "feature_keys": [
    "ext-imagine-media-excerpt"
@@ -10544,7 +10544,7 @@
    "apps/android/feature/chat/src/main/kotlin/me/meeshy/app/chat/imagine/ImagineTrayPanels.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Export/MessageCardExportTray.swift"
+   "apps/ios/Meeshy/Features/Export/MessageCardExportTray.swift"
   ],
   "feature_keys": [
    "ext-imagine-tray"
@@ -10584,7 +10584,7 @@
    "apps/android/feature/chat/src/main/kotlin/me/meeshy/app/chat/imagine/ImagineViewModel.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Export/MessageCardExportSheet.swift"
+   "apps/ios/Meeshy/Features/Export/MessageCardExportSheet.swift"
   ],
   "feature_keys": [
    "ext-imagine-export-sheet"
@@ -10720,7 +10720,7 @@
    "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/MessageCardSource.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Export/MessageCardExportMenu.swift",
+   "apps/ios/Meeshy/Features/Export/MessageCardExportMenu.swift",
    "apps/ios/Meeshy/Features/Main/Views/ConversationView+MessageExport.swift"
   ],
   "feature_keys": [
@@ -10777,7 +10777,7 @@
    "apps/android/feature/chat/src/main/kotlin/me/meeshy/app/chat/MessageCardGallerySheet.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Export/MessageCardExportGallery.swift",
+   "apps/ios/Meeshy/Features/Export/MessageCardExportGallery.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/MessageCard/MessageCardTemplates.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/MessageCard/MessageCardSearch.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/MessageCard/MessageCardFormat.swift"
@@ -10885,7 +10885,7 @@
    "apps/android/feature/chat/src/main/kotlin/me/meeshy/app/chat/MessageCardExportSheet.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Export/MessageCardExportSheet+Output.swift",
+   "apps/ios/Meeshy/Features/Export/MessageCardExportSheet+Output.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/MessageCard/MessageCardLayout+Audio.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/MessageCard/MessageCardMedia.swift"
   ],

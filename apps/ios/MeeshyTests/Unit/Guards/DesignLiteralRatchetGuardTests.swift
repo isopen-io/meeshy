@@ -189,8 +189,8 @@ final class DesignLiteralRatchetGuardTests: XCTestCase {
             reason: "cartes de message exportées : thèmes de carte",
             globs: [
                 "\(ui)/MessageCard/*",
-                "\(app)/Export/MessageCardThumbnails.swift",
-                "\(app)/Export/MessageCardExportGallery.swift",
+                "apps/ios/Meeshy/Features/Export/MessageCardThumbnails.swift",
+                "apps/ios/Meeshy/Features/Export/MessageCardExportGallery.swift",
             ]
         ),
         Exemption(

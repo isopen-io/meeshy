@@ -495,7 +495,7 @@ Transposition Android : Pur Swift -> Kotlin pur dans :core:model ou feature:chat
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Export/MessageCardDiscussion.swift`
+- `apps/ios/Meeshy/Features/Export/MessageCardDiscussion.swift`
 
 </details>
 
@@ -518,8 +518,8 @@ Transposition Android : Menus contextuels iOS -> entrée de MessageActionMenu / 
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Export/MessageCardExportMenu.swift`
-- `apps/ios/Meeshy/Features/Main/Export/MessageCardExportPresenter.swift`
+- `apps/ios/Meeshy/Features/Export/MessageCardExportMenu.swift`
+- `apps/ios/Meeshy/Features/Export/MessageCardExportPresenter.swift`
 
 </details>
 
@@ -544,8 +544,8 @@ Transposition Android : SwiftUI + Liquid Glass -> Compose Canvas / Bitmap rendu 
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Export/MessageCardExportSheet.swift`
-- `apps/ios/Meeshy/Features/Main/Export/MessageCardExportSheet+Stage.swift`
+- `apps/ios/Meeshy/Features/Export/MessageCardExportSheet.swift`
+- `apps/ios/Meeshy/Features/Export/MessageCardExportSheet+Stage.swift`
 
 </details>
 
@@ -568,8 +568,8 @@ Transposition Android : LazyVGrid + NSCache -> LazyVerticalGrid + LruCache/Coil 
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Export/MessageCardExportGallery.swift`
-- `apps/ios/Meeshy/Features/Main/Export/MessageCardThumbnails.swift`
+- `apps/ios/Meeshy/Features/Export/MessageCardExportGallery.swift`
+- `apps/ios/Meeshy/Features/Export/MessageCardThumbnails.swift`
 
 </details>
 
@@ -592,8 +592,8 @@ Transposition Android : AVAsset/AVAudioFile -> MediaMetadataRetriever + décodag
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Export/MessageCardMediaLoader.swift`
-- `apps/ios/Meeshy/Features/Main/Export/MessageCardExcerptStrip.swift`
+- `apps/ios/Meeshy/Features/Export/MessageCardMediaLoader.swift`
+- `apps/ios/Meeshy/Features/Export/MessageCardExcerptStrip.swift`
 
 </details>
 
@@ -618,9 +618,9 @@ Transposition Android : AVAssetWriter / ImageIO -> MediaCodec + MediaMuxer / enc
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Export/MessageCardExportSheet+Output.swift`
-- `apps/ios/Meeshy/Features/Main/Export/MessageCardSharePayload.swift`
-- `apps/ios/Meeshy/Features/Main/Export/MessageCardMotionExporter.swift`
+- `apps/ios/Meeshy/Features/Export/MessageCardExportSheet+Output.swift`
+- `apps/ios/Meeshy/Features/Export/MessageCardSharePayload.swift`
+- `apps/ios/Meeshy/Features/Export/MessageCardMotionExporter.swift`
 
 </details>
 
@@ -644,9 +644,9 @@ Transposition Android : Plateau Liquid Glass -> BottomSheet Compose non modal av
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Export/MessageCardExportTray.swift`
-- `apps/ios/Meeshy/Features/Main/Export/MessageCardExportTray+Imagine.swift`
-- `apps/ios/Meeshy/Features/Main/Export/MessageCardExportText.swift`
+- `apps/ios/Meeshy/Features/Export/MessageCardExportTray.swift`
+- `apps/ios/Meeshy/Features/Export/MessageCardExportTray+Imagine.swift`
+- `apps/ios/Meeshy/Features/Export/MessageCardExportText.swift`
 
 </details>
 
