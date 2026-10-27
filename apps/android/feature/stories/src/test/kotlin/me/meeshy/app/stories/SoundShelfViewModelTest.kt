@@ -61,6 +61,7 @@ class SoundShelfViewModelTest {
 
         assertThat(vm.playableUrl(ApiSound(id = "s", fileUrl = "/api/v1/static/s.m4a")))
             .isEqualTo("https://gate.staging.meeshy.me/api/v1/static/s.m4a")
+        assertThat(vm.playableUrl(ApiSound(id = "x", fileUrl = "/api/v1/users/me"))).isNull()
     }
 
     @Test

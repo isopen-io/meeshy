@@ -1,5 +1,6 @@
 package me.meeshy.app.stories
 
+import me.meeshy.sdk.model.net.MediaRequestCredential
 import me.meeshy.sdk.util.resolveMediaUrl
 import me.meeshy.sdk.util.resolveServedImageUrl
 import androidx.lifecycle.SavedStateHandle
@@ -814,12 +815,12 @@ class StoryViewerViewModel @Inject constructor(
         val match = storyEffects?.audioPlayerObjects.orEmpty()
             .firstOrNull { (it.isBackground == true) == preferBackground }
         // Un son EMPRUNTÉ à la bibliothèque n'a aucun média de post (`postMediaId` vide) : il voyage par son
-        // `mediaURL` (#13428), comme iOS (`StoryAudioSourceResolver`) et le web le lisent.
-        val fromObject = (
-            match?.postMediaId?.let { mediaId -> media.firstOrNull { it.id == mediaId }?.url }
-                ?: match?.mediaURL?.takeIf { it.isNotBlank() }
-            )
+        // `mediaURL` (#13428), comme iOS (`StoryAudioSourceResolver`) et le web le lisent — mais cette adresse est
+        // écrite par l'AUTEUR : seule la forme canonique d'un son de la bibliothèque est jouée.
+        val fromObject = match?.postMediaId
+            ?.let { mediaId -> media.firstOrNull { it.id == mediaId }?.url }
             ?.let { resolveMediaUrl(it, config.apiBaseUrl) }
+            ?: MediaRequestCredential.libraryAudioUrl(match?.mediaURL, config.apiBaseUrl)
         if (fromObject != null) {
             return AudioTrack(
                 url = fromObject,
