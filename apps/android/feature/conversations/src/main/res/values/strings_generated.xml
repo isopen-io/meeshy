@@ -155,6 +155,8 @@
     <string name="global_search_searching">Searching…</string>
     <string name="global_search_tab_conversations">Conversations</string>
     <string name="global_search_tab_messages">Messages</string>
+    <string name="invite_customize">Customise the options</string>
+    <string name="invite_defaultMessage">Join me to talk with no filters and no barriers…</string>
     <string name="links_affiliate_action_copy">Copy the referral link</string>
     <string name="links_affiliate_action_create">Create a referral link</string>
     <string name="links_affiliate_action_delete">Delete the referral link</string>

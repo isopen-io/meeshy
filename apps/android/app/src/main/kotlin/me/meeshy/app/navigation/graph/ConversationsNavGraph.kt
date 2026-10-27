@@ -132,6 +132,7 @@ internal fun NavGraphBuilder.conversationsNavGraph(
         CreateShareLinkScreen(
             onBack = dismiss,
             onCreated = dismiss,
+            createOnOpen = true,
         )
     }
     composable(Routes.MY_SHARE_LINKS) {
