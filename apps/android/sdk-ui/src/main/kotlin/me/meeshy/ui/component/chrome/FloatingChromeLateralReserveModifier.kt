@@ -20,7 +20,7 @@ import me.meeshy.sdk.model.chrome.FloatingChromeLateralReserve
 
 /** La place d'une rangée dans la fenêtre, en dp, côtés LOGIQUES. */
 @Immutable
-private data class RowSpan(val top: Float, val bottom: Float, val startGap: Float, val endGap: Float)
+private data class RowSpan(val top: Float, val bottom: Float, val startGap: Float, val endGap: Float, val width: Float)
 
 /**
  * Écarte une rangée des disques flottants parqués à sa hauteur (#12497, #13299) : du côté d'un disque dont la
@@ -39,7 +39,7 @@ public fun Modifier.floatingChromeLateralReserve(): Modifier {
     val span = remember { mutableStateOf<RowSpan?>(null) }
     val insets = remember(reserve) {
         derivedStateOf {
-            span.value?.let { FloatingChromeLateralReserve.insets(reserve.bands, it.top, it.bottom, it.startGap, it.endGap) }
+            span.value?.let { FloatingChromeLateralReserve.insets(reserve.bands, it.top, it.bottom, it.startGap, it.endGap, it.width) }
                 ?: FloatingChromeLateralReserve.Insets.None
         }
     }
@@ -55,6 +55,7 @@ public fun Modifier.floatingChromeLateralReserve(): Modifier {
                 bottom = top + coordinates.size.height / density,
                 startGap = if (rtl) right else left,
                 endGap = if (rtl) left else right,
+                width = coordinates.size.width / density,
             )
             if (span.value != next) span.value = next
         }

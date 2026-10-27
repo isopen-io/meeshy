@@ -16,8 +16,8 @@ class FloatingChromeLateralReserveTest {
     fun `chaque disque reserve de son cote une bande de sa hauteur, du bord au-dela du disque, avec un peu d'air`() {
         assertThat(bands).hasSize(2)
         val left = bands.single { it.side == FloatingButtonSide.LEADING }
-        assertThat(left.top).isWithin(0.001f).of(366f - 26f - FloatingChromeLateralReserve.CLEARANCE)
-        assertThat(left.bottom).isWithin(0.001f).of(366f + 26f + FloatingChromeLateralReserve.CLEARANCE)
+        assertThat(left.top).isWithin(0.001f).of(366f - 26f)
+        assertThat(left.bottom).isWithin(0.001f).of(366f + 26f)
         assertThat(left.reach).isWithin(0.001f).of(26f + 26f + FloatingChromeLateralReserve.CLEARANCE)
         val right = bands.single { it.side == FloatingButtonSide.TRAILING }
         assertThat(right.reach).isWithin(0.001f).of(360f - (334f - 26f) + FloatingChromeLateralReserve.CLEARANCE)
@@ -60,5 +60,29 @@ class FloatingChromeLateralReserveTest {
         assertThat(inset.leading).isWithin(0.001f).of(left.reach - 16f)
         val farInside = FloatingChromeLateralReserve.insets(bands, rowTop = 340f, rowBottom = 390f, startGap = 200f)
         assertThat(farInside.leading).isEqualTo(0f)
+    }
+
+    @Test
+    fun `une rangee qui commence juste sous le disque, sans passer dessous, garde toute sa largeur`() {
+        val justBelowMenu = FloatingChromeLateralReserve.insets(bands, rowTop = 290f + 26f + 2f, rowBottom = 330f)
+        assertThat(justBelowMenu.trailing).isEqualTo(0f)
+    }
+
+    @Test
+    fun `une rangee etroite touchee des deux cotes ne cede que le cote du disque qui la touche le plus haut`() {
+        // Recette S8 : menu à droite (264…316), fil à gauche (340…392), notification de 300 à 420.
+        val narrow = FloatingChromeLateralReserve.insets(bands, rowTop = 300f, rowBottom = 420f, rowWidth = 360f)
+        assertThat(narrow.leading).isEqualTo(0f)
+        assertThat(narrow.trailing).isGreaterThan(0f)
+        val wide = FloatingChromeLateralReserve.insets(bands, rowTop = 300f, rowBottom = 420f, rowWidth = 800f)
+        assertThat(wide.leading).isGreaterThan(0f)
+        assertThat(wide.trailing).isGreaterThan(0f)
+    }
+
+    @Test
+    fun `le cote choisi ne depend pas de la hauteur de la rangee`() {
+        val short = FloatingChromeLateralReserve.insets(bands, rowTop = 300f, rowBottom = 350f, rowWidth = 360f)
+        val tall = FloatingChromeLateralReserve.insets(bands, rowTop = 300f, rowBottom = 600f, rowWidth = 360f)
+        assertThat(short).isEqualTo(tall)
     }
 }
