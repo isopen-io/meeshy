@@ -46,9 +46,7 @@
     <string name="call_journal_search_empty_hint">O histórico cobre os últimos três meses.</string>
     <string name="call_journal_search_placeholder">Pesquisar uma chamada</string>
     <string name="call_live_frame_accept">Aplicar</string>
-    <string name="call_live_frame_answer_accepted">%s aplicou sua moldura</string>
     <string name="call_live_frame_answer_accepted_anonymous">A outra pessoa aplicou sua moldura</string>
-    <string name="call_live_frame_answer_declined">%s mantém a própria visualização</string>
     <string name="call_live_frame_answer_declined_anonymous">A outra pessoa mantém a própria visualização</string>
     <string name="call_live_frame_caption">Moldura</string>
     <string name="call_live_frame_decline">Não, obrigado</string>
@@ -57,8 +55,6 @@
     <string name="call_live_frame_none">Sem moldura</string>
     <string name="call_live_frame_not_proposed">A moldura está aplicada para você, mas não pôde ser proposta</string>
     <string name="call_live_frame_proposal">%1$s sugere a moldura “%2$s”</string>
-    <string name="call_live_frame_proposal_anonymous">A outra pessoa sugere a moldura “%s”</string>
-    <string name="call_live_frame_surface">Moldura %s ao redor dos dois vídeos</string>
     <string name="call_open_conversation">Conversa</string>
     <string name="call_open_conversation_hint">Abre a conversa mantendo a chamada ativa</string>
     <string name="call_recording_accept">Aceitar</string>
@@ -88,5 +84,4 @@
     <string name="call_recording_waiting">À espera do consentimento de todos…</string>
     <string name="call_zoom_hint">Deslize para cima ou para baixo para dar zoom. Na tela, faça o gesto de pinça na sua imagem; toque duas vezes para voltar a 1×</string>
     <string name="call_zoom_label">Zoom da minha câmera</string>
-    <string name="call_zoom_lens">Zoom %s</string>
 </resources>

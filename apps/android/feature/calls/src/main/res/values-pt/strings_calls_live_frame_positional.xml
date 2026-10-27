@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_live_frame_answer_accepted">%1$s aplicou sua moldura</string>
+    <string name="call_live_frame_answer_declined">%1$s mantém a própria visualização</string>
+    <string name="call_live_frame_proposal_anonymous">A outra pessoa sugere a moldura “%1$s”</string>
+    <string name="call_live_frame_surface">Moldura %1$s ao redor dos dois vídeos</string>
+    <string name="call_zoom_lens">Zoom %1$s</string>
+</resources>

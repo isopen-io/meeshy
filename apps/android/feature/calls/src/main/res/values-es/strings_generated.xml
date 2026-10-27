@@ -46,9 +46,7 @@
     <string name="call_journal_search_empty_hint">El registro abarca los últimos tres meses.</string>
     <string name="call_journal_search_placeholder">Buscar una llamada</string>
     <string name="call_live_frame_accept">Aplicar</string>
-    <string name="call_live_frame_answer_accepted">%s aplicó tu marco</string>
     <string name="call_live_frame_answer_accepted_anonymous">La otra persona aplicó tu marco</string>
-    <string name="call_live_frame_answer_declined">%s mantiene su vista</string>
     <string name="call_live_frame_answer_declined_anonymous">La otra persona mantiene su vista</string>
     <string name="call_live_frame_caption">Marco</string>
     <string name="call_live_frame_decline">No, gracias</string>
@@ -57,8 +55,6 @@
     <string name="call_live_frame_none">Sin marco</string>
     <string name="call_live_frame_not_proposed">El marco se aplica en tu pantalla, pero no se pudo proponer</string>
     <string name="call_live_frame_proposal">%1$s te propone el marco «%2$s»</string>
-    <string name="call_live_frame_proposal_anonymous">La otra persona te propone el marco «%s»</string>
-    <string name="call_live_frame_surface">Marco %s alrededor de los dos vídeos</string>
     <string name="call_open_conversation">Conversación</string>
     <string name="call_open_conversation_hint">Abre la conversación manteniendo la llamada activa</string>
     <string name="call_recording_accept">Aceptar</string>
@@ -88,5 +84,4 @@
     <string name="call_recording_waiting">Esperando el consentimiento de todos…</string>
     <string name="call_zoom_hint">Desliza hacia arriba o abajo para hacer zoom. En pantalla, pellizca tu imagen; toca dos veces para volver a 1×</string>
     <string name="call_zoom_label">Zoom de mi cámara</string>
-    <string name="call_zoom_lens">Zoom %s</string>
 </resources>

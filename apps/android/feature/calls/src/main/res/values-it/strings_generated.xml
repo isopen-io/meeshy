@@ -46,9 +46,7 @@
     <string name="call_journal_search_empty_hint">Il registro copre gli ultimi tre mesi.</string>
     <string name="call_journal_search_placeholder">Cerca una chiamata</string>
     <string name="call_live_frame_accept">Applica</string>
-    <string name="call_live_frame_answer_accepted">%s ha applicato la tua cornice</string>
     <string name="call_live_frame_answer_accepted_anonymous">L\'altra persona ha applicato la tua cornice</string>
-    <string name="call_live_frame_answer_declined">%s mantiene la propria vista</string>
     <string name="call_live_frame_answer_declined_anonymous">L\'altra persona mantiene la propria vista</string>
     <string name="call_live_frame_caption">Cornice</string>
     <string name="call_live_frame_decline">No, grazie</string>
@@ -57,8 +55,6 @@
     <string name="call_live_frame_none">Nessuna cornice</string>
     <string name="call_live_frame_not_proposed">La cornice è applicata da te, ma non è stato possibile proporla</string>
     <string name="call_live_frame_proposal">%1$s ti propone la cornice «%2$s»</string>
-    <string name="call_live_frame_proposal_anonymous">L\'altra persona ti propone la cornice «%s»</string>
-    <string name="call_live_frame_surface">Cornice %s intorno ai due video</string>
     <string name="call_open_conversation">Conversazione</string>
     <string name="call_open_conversation_hint">Apre la conversazione mantenendo la chiamata attiva</string>
     <string name="call_recording_accept">Accetta</string>
@@ -88,5 +84,4 @@
     <string name="call_recording_waiting">In attesa del consenso di tutti…</string>
     <string name="call_zoom_hint">Scorri in alto o in basso per lo zoom. Sullo schermo, pizzica la tua immagine; tocca due volte per tornare a 1×</string>
     <string name="call_zoom_label">Zoom della mia fotocamera</string>
-    <string name="call_zoom_lens">Zoom %s</string>
 </resources>

@@ -46,9 +46,7 @@
     <string name="call_journal_search_empty_hint">Le journal couvre les trois derniers mois.</string>
     <string name="call_journal_search_placeholder">Rechercher un appel</string>
     <string name="call_live_frame_accept">Appliquer</string>
-    <string name="call_live_frame_answer_accepted">%s a appliqué votre cadre</string>
     <string name="call_live_frame_answer_accepted_anonymous">Votre correspondant a appliqué votre cadre</string>
-    <string name="call_live_frame_answer_declined">%s garde son affichage</string>
     <string name="call_live_frame_answer_declined_anonymous">Votre correspondant garde son affichage</string>
     <string name="call_live_frame_caption">Cadre</string>
     <string name="call_live_frame_decline">Non merci</string>
@@ -57,8 +55,6 @@
     <string name="call_live_frame_none">Aucun cadre</string>
     <string name="call_live_frame_not_proposed">Le cadre est appliqué chez vous, mais n\'a pas pu être proposé</string>
     <string name="call_live_frame_proposal">%1$s vous propose le cadre « %2$s »</string>
-    <string name="call_live_frame_proposal_anonymous">Votre correspondant vous propose le cadre « %s »</string>
-    <string name="call_live_frame_surface">Cadre %s autour des deux vidéos</string>
     <string name="call_open_conversation">Conversation</string>
     <string name="call_open_conversation_hint">Ouvre la conversation en gardant l\'appel actif</string>
     <string name="call_recording_accept">Accepter</string>
@@ -88,5 +84,4 @@
     <string name="call_recording_waiting">En attente de l’accord de tous…</string>
     <string name="call_zoom_hint">Balayez vers le haut ou le bas pour zoomer. Sur l\'écran, pincez votre image ; touchez deux fois pour revenir à 1×</string>
     <string name="call_zoom_label">Zoom de ma caméra</string>
-    <string name="call_zoom_lens">Zoom %s</string>
 </resources>

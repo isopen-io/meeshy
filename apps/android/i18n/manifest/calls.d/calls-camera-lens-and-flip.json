@@ -4,14 +4,38 @@
     ":feature:calls": {
       "resDir": "feature/calls/src/main/res",
       "entries": [
-        { "catalog": "app", "iosKey": "call.zoom.label", "androidName": "call_zoom_label", "status": "adopted" },
-        { "catalog": "app", "iosKey": "call.zoom.hint", "androidName": "call_zoom_hint", "status": "adopted" },
-        { "catalog": "app", "iosKey": "call.zoom.lens", "androidName": "call_zoom_lens", "status": "adopted" },
-        { "androidName": "call_camera_hold_hint", "status": "android-only" },
-        { "androidName": "call_camera_state_on", "status": "android-only" },
-        { "androidName": "call_camera_state_off", "status": "android-only" },
-        { "androidName": "call_camera_toggle_off", "status": "android-only" },
-        { "androidName": "call_camera_toggle_on", "status": "android-only" }
+        {
+          "catalog": "app",
+          "iosKey": "call.zoom.label",
+          "androidName": "call_zoom_label",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.zoom.hint",
+          "androidName": "call_zoom_hint",
+          "status": "adopted"
+        },
+        {
+          "androidName": "call_camera_hold_hint",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_camera_state_on",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_camera_state_off",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_camera_toggle_off",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_camera_toggle_on",
+          "status": "android-only"
+        }
       ]
     }
   }

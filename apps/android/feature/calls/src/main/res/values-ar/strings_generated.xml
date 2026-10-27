@@ -46,9 +46,7 @@
     <string name="call_journal_search_empty_hint">يغطي السجل الأشهر الثلاثة الأخيرة.</string>
     <string name="call_journal_search_placeholder">البحث عن مكالمة</string>
     <string name="call_live_frame_accept">تطبيق</string>
-    <string name="call_live_frame_answer_accepted">طبّق %s إطارك</string>
     <string name="call_live_frame_answer_accepted_anonymous">طبّق الطرف الآخر إطارك</string>
-    <string name="call_live_frame_answer_declined">يحتفظ %s بعرضه</string>
     <string name="call_live_frame_answer_declined_anonymous">يحتفظ الطرف الآخر بعرضه</string>
     <string name="call_live_frame_caption">إطار</string>
     <string name="call_live_frame_decline">لا، شكرًا</string>
@@ -57,8 +55,6 @@
     <string name="call_live_frame_none">بلا إطار</string>
     <string name="call_live_frame_not_proposed">تم تطبيق الإطار لديك، لكن تعذّر اقتراحه</string>
     <string name="call_live_frame_proposal">يقترح %1$s الإطار «%2$s»</string>
-    <string name="call_live_frame_proposal_anonymous">يقترح الطرف الآخر الإطار «%s»</string>
-    <string name="call_live_frame_surface">إطار %s حول الفيديوهين</string>
     <string name="call_open_conversation">المحادثة</string>
     <string name="call_open_conversation_hint">يفتح المحادثة مع إبقاء المكالمة نشطة</string>
     <string name="call_recording_accept">قبول</string>
@@ -88,5 +84,4 @@
     <string name="call_recording_waiting">بانتظار موافقة الجميع…</string>
     <string name="call_zoom_hint">اسحب لأعلى أو لأسفل للتكبير. على الشاشة، اضغط بإصبعين على صورتك؛ انقر مرتين للعودة إلى 1×</string>
     <string name="call_zoom_label">تكبير كاميرتي</string>
-    <string name="call_zoom_lens">تكبير %s</string>
 </resources>

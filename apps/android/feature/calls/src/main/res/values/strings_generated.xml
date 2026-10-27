@@ -46,9 +46,7 @@
     <string name="call_journal_search_empty_hint">The log covers the last three months.</string>
     <string name="call_journal_search_placeholder">Search calls</string>
     <string name="call_live_frame_accept">Apply</string>
-    <string name="call_live_frame_answer_accepted">%s applied your frame</string>
     <string name="call_live_frame_answer_accepted_anonymous">The other person applied your frame</string>
-    <string name="call_live_frame_answer_declined">%s keeps their own view</string>
     <string name="call_live_frame_answer_declined_anonymous">The other person keeps their own view</string>
     <string name="call_live_frame_caption">Frame</string>
     <string name="call_live_frame_decline">No thanks</string>
@@ -57,8 +55,6 @@
     <string name="call_live_frame_none">No frame</string>
     <string name="call_live_frame_not_proposed">The frame is applied on your side but couldn\'t be offered</string>
     <string name="call_live_frame_proposal">%1$s suggests the “%2$s” frame</string>
-    <string name="call_live_frame_proposal_anonymous">The other person suggests the “%s” frame</string>
-    <string name="call_live_frame_surface">%s frame around both videos</string>
     <string name="call_open_conversation">Conversation</string>
     <string name="call_open_conversation_hint">Opens the conversation while keeping the call active</string>
     <string name="call_recording_accept">Accept</string>
@@ -88,5 +84,4 @@
     <string name="call_recording_waiting">Waiting for everyone’s consent…</string>
     <string name="call_zoom_hint">Swipe up or down to zoom. On screen, pinch your image; double-tap to return to 1×</string>
     <string name="call_zoom_label">My camera zoom</string>
-    <string name="call_zoom_lens">Zoom %s</string>
 </resources>
