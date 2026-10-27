@@ -1,5 +1,17 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="call_journal_cancel">Cancel</string>
+    <string name="call_journal_clear_action">Clear</string>
+    <string name="call_journal_clear_all">Clear all</string>
+    <string name="call_journal_clear_message">Other participants keep theirs.</string>
+    <string name="call_journal_clear_title">Clear your whole call log?</string>
+    <string name="call_journal_close">Close</string>
+    <string name="call_journal_erase_failed">Couldn\'t delete. Try again.</string>
+    <string name="call_journal_filter_video">Video</string>
+    <string name="call_journal_hide">Delete</string>
+    <string name="call_journal_search_empty">No call matches “%s”</string>
+    <string name="call_journal_search_empty_hint">The log covers the last three months.</string>
+    <string name="call_journal_search_placeholder">Search calls</string>
     <string name="call_recording_accept">Accept</string>
     <string name="call_recording_active">Recording in progress</string>
     <string name="call_recording_ask">%s wants to record the call</string>

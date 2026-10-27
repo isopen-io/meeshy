@@ -20,7 +20,7 @@ import javax.inject.Inject
  * screen. Cache-first: the cached journal paints immediately from
  * [CallHistoryRepository.historyStream] (SWR), older pages are appended via
  * [CallHistoryRepository.fetchPage], and the missed-only filter is applied
- * client-side (instant), paging on by itself when the loaded pages hold too few. All list algebra lives in the pure
+ * client-side (instant, with the video filter, the typed name and the erased lines), paging on by itself when the loaded pages hold too few. All list algebra lives in the pure
  * [CallHistoryList]; this class only orchestrates intents and side-effects.
  */
 @HiltViewModel
@@ -39,6 +39,9 @@ class CallHistoryViewModel @Inject constructor(
 
     /** Cursor for the next [CallHistoryRepository.fetchPage]; `null` starts at the head. */
     private var nextCursor: String? = null
+
+    /** Lines erased by the reader that the gateway has not confirmed yet — they stay off the list. */
+    private var hiddenIds: Set<String> = emptySet()
 
     init {
         viewModelScope.launch {
@@ -64,6 +67,54 @@ class CallHistoryViewModel @Inject constructor(
     fun setMissedOnly(value: Boolean) {
         _state.update { it.copy(missedOnly = value).withVisible() }
         fillFilteredList()
+    }
+
+    /** Le filtre « Vidéo » (iOS `setType(.video)`) : local et immédiat, la liste se remplit en paginant. */
+    fun setVideoOnly(value: Boolean) {
+        _state.update { it.copy(videoOnly = value).withVisible() }
+        fillFilteredList()
+    }
+
+    /** Le nom tapé : la liste répond à chaque frappe sur les lignes déjà chargées, puis pagine si besoin. */
+    fun setSearchQuery(value: String) {
+        _state.update { it.copy(searchQuery = value).withVisible() }
+        fillFilteredList()
+    }
+
+    /**
+     * Efface UNE ligne de MON journal (les autres participants gardent le leur). Optimiste : la
+     * ligne part tout de suite ; si la passerelle refuse, elle revient à sa place et la bannière
+     * d'échec se lève.
+     */
+    fun hide(callId: String) = erase(listOf(callId)) { repository.hide(callId) }
+
+    /** Efface TOUT mon journal, avec le même retour arrière que [hide]. */
+    fun clearAll() {
+        val ids = (streamRecords + pagedRecords).map { it.callId }
+        if (ids.isEmpty()) return
+        erase(ids) { repository.clearAll() }
+    }
+
+    fun dismissEraseFailure() {
+        _state.update { it.copy(eraseFailed = false) }
+    }
+
+    private fun erase(callIds: List<String>, remote: suspend () -> NetworkResult<*>) {
+        val gone = callIds.toSet()
+        hiddenIds = hiddenIds + gone
+        _state.update { it.copy(eraseFailed = false).withVisible() }
+        viewModelScope.launch {
+            val applied = try {
+                remote() is NetworkResult.Success
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                false
+            }
+            if (applied) return@launch
+            hiddenIds = hiddenIds - gone
+            _state.update { it.copy(eraseFailed = true).withVisible() }
+        }
     }
 
     /** « Réessayer » : revalidates an empty journal, else refetches the page that failed. */
@@ -123,7 +174,7 @@ class CallHistoryViewModel @Inject constructor(
 
     private fun fillFilteredList(budget: Int = MAX_FILL_PAGES) {
         val current = _state.value
-        if (!current.missedOnly || current.records.size >= FILL_TARGET) return
+        if (!current.isFiltered || current.records.size >= FILL_TARGET) return
         fetchNextPage(fillBudget = budget - 1)
     }
 
@@ -158,7 +209,14 @@ class CallHistoryViewModel @Inject constructor(
     }
 
     private fun CallHistoryUiState.withVisible(): CallHistoryUiState =
-        copy(records = CallHistoryList.filter(CallHistoryList.combine(streamRecords, pagedRecords), missedOnly))
+        copy(
+            records = CallHistoryList.visible(
+                records = CallHistoryList.combine(streamRecords, pagedRecords),
+                query = query,
+                hidden = hiddenIds,
+                fallbackName = UNKNOWN_PEER,
+            ),
+        )
 
     /**
      * Maps a [CacheResult]'s SWR flags onto the screen state — skeleton only on a
@@ -180,6 +238,9 @@ class CallHistoryViewModel @Inject constructor(
 
     private companion object {
         const val LOAD_MORE_THRESHOLD = 5
+
+        /** Le repli de nom de `CallRecord.displayName` — ce que la recherche compare quand un appel n'a pas de nom. */
+        const val UNKNOWN_PEER = "Inconnu"
 
         /** Missed calls the filter tries to show before it stops paging on its own. */
         const val FILL_TARGET = 10

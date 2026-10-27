@@ -1,5 +1,17 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="call_journal_cancel">إلغاء</string>
+    <string name="call_journal_clear_action">مسح</string>
+    <string name="call_journal_clear_all">مسح الكل</string>
+    <string name="call_journal_clear_message">يحتفظ المشاركون الآخرون بسجلاتهم.</string>
+    <string name="call_journal_clear_title">مسح سجل المكالمات بالكامل؟</string>
+    <string name="call_journal_close">إغلاق</string>
+    <string name="call_journal_erase_failed">تعذّر المسح. حاول مرة أخرى.</string>
+    <string name="call_journal_filter_video">فيديو</string>
+    <string name="call_journal_hide">مسح</string>
+    <string name="call_journal_search_empty">لا توجد مكالمة تطابق «%s»</string>
+    <string name="call_journal_search_empty_hint">يغطي السجل الأشهر الثلاثة الأخيرة.</string>
+    <string name="call_journal_search_placeholder">البحث عن مكالمة</string>
     <string name="call_recording_accept">قبول</string>
     <string name="call_recording_active">التسجيل جارٍ</string>
     <string name="call_recording_ask">%s يريد تسجيل المكالمة</string>

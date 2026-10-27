@@ -1,5 +1,17 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="call_journal_cancel">Cancelar</string>
+    <string name="call_journal_clear_action">Borrar</string>
+    <string name="call_journal_clear_all">Borrar todo</string>
+    <string name="call_journal_clear_message">Los demás participantes conservan el suyo.</string>
+    <string name="call_journal_clear_title">¿Borrar todo el registro de llamadas?</string>
+    <string name="call_journal_close">Cerrar</string>
+    <string name="call_journal_erase_failed">No se pudo borrar. Inténtalo de nuevo.</string>
+    <string name="call_journal_filter_video">Vídeo</string>
+    <string name="call_journal_hide">Borrar</string>
+    <string name="call_journal_search_empty">Ninguna llamada coincide con «%s»</string>
+    <string name="call_journal_search_empty_hint">El registro abarca los últimos tres meses.</string>
+    <string name="call_journal_search_placeholder">Buscar una llamada</string>
     <string name="call_recording_accept">Aceptar</string>
     <string name="call_recording_active">Grabación en curso</string>
     <string name="call_recording_ask">%s quiere grabar la llamada</string>

@@ -1,0 +1,82 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:calls": {
+      "resDir": "feature/calls/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "calls.search.placeholder",
+          "androidName": "call_journal_search_placeholder",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "calls.filter.video",
+          "androidName": "call_journal_filter_video",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "calls.clearAll",
+          "androidName": "call_journal_clear_all",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "calls.clearAll.confirm.title",
+          "androidName": "call_journal_clear_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "calls.clearAll.confirm.message",
+          "androidName": "call_journal_clear_message",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "calls.clearAll.confirm.action",
+          "androidName": "call_journal_clear_action",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "calls.erase.failed",
+          "androidName": "call_journal_erase_failed",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "calls.hide",
+          "androidName": "call_journal_hide",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "calls.search.empty",
+          "androidName": "call_journal_search_empty",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "calls.search.empty.hint",
+          "androidName": "call_journal_search_empty_hint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "common.cancel",
+          "androidName": "call_journal_cancel",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "common.close",
+          "androidName": "call_journal_close",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

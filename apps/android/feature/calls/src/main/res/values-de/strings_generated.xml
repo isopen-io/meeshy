@@ -1,5 +1,17 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="call_journal_cancel">Abbrechen</string>
+    <string name="call_journal_clear_action">Löschen</string>
+    <string name="call_journal_clear_all">Alle löschen</string>
+    <string name="call_journal_clear_message">Die anderen Teilnehmenden behalten ihres.</string>
+    <string name="call_journal_clear_title">Gesamtes Anrufprotokoll löschen?</string>
+    <string name="call_journal_close">Schließen</string>
+    <string name="call_journal_erase_failed">Löschen fehlgeschlagen. Versuche es erneut.</string>
+    <string name="call_journal_filter_video">Video</string>
+    <string name="call_journal_hide">Löschen</string>
+    <string name="call_journal_search_empty">Kein Anruf entspricht „%s“</string>
+    <string name="call_journal_search_empty_hint">Das Protokoll umfasst die letzten drei Monate.</string>
+    <string name="call_journal_search_placeholder">Anruf suchen</string>
     <string name="call_recording_accept">Zustimmen</string>
     <string name="call_recording_active">Aufnahme läuft</string>
     <string name="call_recording_ask">%s möchte den Anruf aufnehmen</string>

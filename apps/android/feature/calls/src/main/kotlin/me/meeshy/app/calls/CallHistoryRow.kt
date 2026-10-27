@@ -20,6 +20,15 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
+import androidx.compose.material3.rememberSwipeToDismissBoxState
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.graphics.Color
+import me.meeshy.sdk.model.UserPresence
+import me.meeshy.ui.icons.MeeshyIcons
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -29,6 +38,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -49,18 +60,65 @@ import me.meeshy.ui.theme.hexColor
 /**
  * One journal row — port of the iOS `CallJournalRow`. A tap opens the call's detail
  * ([onOpen]); calling back is a separate trailing button whose menu picks voice or
- * video ([onRedial]), so a row brushed while scrolling never places a call. The
- * avatar carries the contact's photo and its name colour.
+ * video ([onRedial]), so a row brushed while scrolling never places a call. A swipe from
+ * the end erases the line from MY journal alone ([onHide], iOS `swipeActions`), and the
+ * TalkBack custom action « Effacer » does the same. The avatar carries the contact's photo,
+ * its name colour and the SERVED presence (nothing when the server serves none), and a
+ * group call lists its first participants.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun CallHistoryRow(
     record: CallRecord,
     onOpen: () -> Unit,
     onRedial: (isVideo: Boolean) -> Unit,
+    onHide: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val hideLabel = stringResource(R.string.call_journal_hide)
+    val dismiss = rememberSwipeToDismissBoxState(
+        confirmValueChange = { target ->
+            (target == SwipeToDismissBoxValue.EndToStart).also { if (it) onHide() }
+        },
+    )
+    SwipeToDismissBox(
+        state = dismiss,
+        modifier = modifier,
+        enableDismissFromStartToEnd = false,
+        backgroundContent = {
+            if (dismiss.dismissDirection == SwipeToDismissBoxValue.EndToStart) {
+                Box(
+                    Modifier.fillMaxSize().background(MeeshyPalette.Error).padding(horizontal = MeeshySpacing.xl),
+                    contentAlignment = Alignment.CenterEnd,
+                ) {
+                    Icon(MeeshyIcons.DeleteFilled, contentDescription = null, tint = Color.White)
+                }
+            }
+        },
+    ) {
+        CallHistoryRowContent(
+            record = record,
+            onOpen = onOpen,
+            onRedial = onRedial,
+            modifier = Modifier
+                .semantics { customActions = listOf(CustomAccessibilityAction(hideLabel) { onHide(); true }) },
+        )
+    }
+}
+
+@Composable
+private fun CallHistoryRowContent(
+    record: CallRecord,
+    onOpen: () -> Unit,
+    onRedial: (isVideo: Boolean) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val name = record.displayName(fallback = stringResource(R.string.call_unknown_peer))
+    val presence = remember(record.peer) {
+        record.peer?.let { UserPresence(isOnline = it.isOnline).state(System.currentTimeMillis()) }
+    }
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .padding(start = MeeshySpacing.lg, end = MeeshySpacing.xs, top = MeeshySpacing.sm, bottom = MeeshySpacing.sm),
         verticalAlignment = Alignment.CenterVertically,
@@ -73,6 +131,7 @@ internal fun CallHistoryRow(
                 name = name,
                 size = 48.dp,
                 containerColor = hexColor(DynamicColorGenerator.colorForName(name), MeeshyPalette.Indigo500),
+                presence = presence,
                 imageUrl = record.avatarUrl,
             )
             Spacer(Modifier.width(MeeshySpacing.md))
@@ -85,6 +144,15 @@ internal fun CallHistoryRow(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
+                record.participantsLabel?.let { participants ->
+                    Text(
+                        text = participants,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MeeshyTheme.tokens.textMuted,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     CallDirectionIcon(record.directionKind)
                     if (record.isVideo) {

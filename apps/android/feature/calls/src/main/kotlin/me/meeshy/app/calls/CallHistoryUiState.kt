@@ -1,5 +1,8 @@
 package me.meeshy.app.calls
 
+import me.meeshy.sdk.model.call.CallJournalFilter
+import me.meeshy.sdk.model.call.CallJournalQuery
+import me.meeshy.sdk.model.call.CallJournalType
 import me.meeshy.sdk.model.call.CallRecord
 
 /**
@@ -19,7 +22,27 @@ data class CallHistoryUiState(
     val hasMore: Boolean = true,
     val isLoadingMore: Boolean = false,
     val missedOnly: Boolean = false,
+    /** Le filtre « Vidéo » (iOS `viewModel.type == .video`). */
+    val videoOnly: Boolean = false,
+    /** Le nom tapé dans le champ de recherche, tel quel. */
+    val searchQuery: String = "",
+    /** Le dernier effacement a été refusé par la passerelle : la bannière le dit. */
+    val eraseFailed: Boolean = false,
 ) {
+    /** Ce que le journal demande : direction × type de média × nom tapé (iOS `CallJournalQuery`). */
+    val query: CallJournalQuery
+        get() = CallJournalQuery(
+            filter = if (missedOnly) CallJournalFilter.MISSED else CallJournalFilter.ALL,
+            type = if (videoOnly) CallJournalType.VIDEO else CallJournalType.ALL,
+            search = searchQuery,
+        )
+
+    /** Un filtre ou une recherche est actif : la liste se remplit en paginant d'elle-même. */
+    val isFiltered: Boolean get() = !query.isDefault
+
+    /** Un nom est tapé : les états vides parlent de la recherche. */
+    val isSearching: Boolean get() = query.foldedSearch.isNotEmpty()
+
     /**
      * The missed-only filter is active yet nothing matches — distinct from a
      * cold-empty cache (which shows the skeleton) so the UI can show an
@@ -43,7 +66,7 @@ enum class CallHistoryContent {
             state.showSkeleton -> SKELETON
             state.records.isNotEmpty() -> LIST
             state.errorMessage != null -> ERROR
-            state.missedOnly && (state.hasMore || state.isLoadingMore) -> LIST
+            state.isFiltered && (state.hasMore || state.isLoadingMore) -> LIST
             else -> EMPTY
         }
     }
