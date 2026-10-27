@@ -122,6 +122,10 @@ fun MediaDownloadScreen(
                     onSavesOriginal = viewModel::setSavesOriginal,
                     onRenderedAutomatic = viewModel::setRenderedAutomatic,
                 )
+                OutgoingSection(
+                    keepsLocation = state.keepsPhotoLocation,
+                    onKeepsLocation = viewModel::setKeepsPhotoLocation,
+                )
                 Spacer(Modifier.height(MeeshySpacing.xl))
             }
         }
@@ -310,5 +314,36 @@ private fun CaptureToggleRow(
             )
         }
         Switch(checked = checked, onCheckedChange = null)
+    }
+}
+
+@Composable
+private fun OutgoingSection(keepsLocation: Boolean, onKeepsLocation: (Boolean) -> Unit) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.sm),
+        ) {
+            Icon(
+                imageVector = MeeshyIcons.Send,
+                contentDescription = null,
+                tint = MeeshyPalette.Indigo500,
+                modifier = Modifier.size(18.dp),
+            )
+            Spacer(Modifier.width(MeeshySpacing.sm))
+            Text(
+                text = stringResource(R.string.settings_media_outgoing_header),
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+                color = MeeshyPalette.Indigo500,
+            )
+        }
+        CaptureToggleRow(
+            icon = MeeshyIcons.Location,
+            title = stringResource(R.string.settings_media_outgoing_location_title),
+            subtitle = stringResource(R.string.settings_media_outgoing_location_subtitle),
+            checked = keepsLocation,
+            onCheckedChange = onKeepsLocation,
+        )
     }
 }
