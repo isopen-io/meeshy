@@ -20,6 +20,7 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.graphicsLayer
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
@@ -78,12 +79,16 @@ internal fun ReactionStrip(
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xxs),
     ) {
         visible.forEach { entry ->
-            ReactionChip(
-                entry = entry,
-                accent = accent,
-                onClick = onReactionClick?.let { { it(entry.emoji) } },
-                onLongClick = onReactionLongPress,
-            )
+            // Une pastille garde son état (le rebond) attaché à SON emoji : sans clé, une réaction
+            // qui change de rang ferait rebondir la voisine qui prend sa place.
+            key(entry.emoji) {
+                ReactionChip(
+                    entry = entry,
+                    accent = accent,
+                    onClick = onReactionClick?.let { { it(entry.emoji) } },
+                    onLongClick = onReactionLongPress,
+                )
+            }
         }
         if (overflow > 0) OverflowChip(count = overflow, accent = accent, onClick = onReactionLongPress)
         if (showsAddButton && onAddReaction != null) AddReactionChip(accent = accent, onClick = onAddReaction)

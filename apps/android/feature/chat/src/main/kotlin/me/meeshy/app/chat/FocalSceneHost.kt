@@ -5,6 +5,7 @@ import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.lazy.LazyListItemInfo
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -23,6 +24,29 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.model.reading.focal.FocalMetrics
 import me.meeshy.sdk.model.reading.focal.FocalScrollPerspective
+
+/**
+ * La géométrie des rangées visibles, nommées par [ChatListItem.key] — l'identifiant que
+ * [FocalPassageItem] et `renderedIndexOf` comparent — et jamais par la clé de MISE EN PAGE du
+ * `LazyColumn` (`layoutKeys`, suivie par `clientMessageId`), qui ne désigne pas le même texte.
+ */
+internal fun focalCells(
+    visible: List<LazyListItemInfo>,
+    rendered: List<ChatListItem>,
+    viewportHeight: Double,
+    beforePadding: Double,
+    density: Double,
+): List<FocalScrollPerspective.CellGeometry> =
+    visible.filter { it.index < rendered.size }.map { item ->
+        val bottom = viewportHeight - beforePadding - item.offset
+        val row = rendered[item.index]
+        FocalScrollPerspective.CellGeometry(
+            id = row.key,
+            visualMidY = (bottom - item.size / 2.0) / density,
+            height = item.size / density,
+            isMessage = row is ChatListItem.Message,
+        )
+    }
 
 /**
  * Le moteur de la scène Focal : il lit la géométrie du `LazyColumn` (renversé) à chaque image
@@ -63,15 +87,7 @@ internal fun FocalSceneDriver(
             val height = info.viewportSize.height.toDouble()
             val before = info.beforeContentPadding.toDouble()
             // `reverseLayout` : l'offset court depuis le bas du fil, après la réserve basse.
-            val cells = visible.filter { it.index < rendered.size }.map { item ->
-                val bottom = height - before - item.offset
-                FocalScrollPerspective.CellGeometry(
-                    id = item.key.toString(),
-                    visualMidY = (bottom - item.size / 2.0) / d,
-                    height = item.size / d,
-                    isMessage = rendered[item.index] is ChatListItem.Message,
-                )
-            }
+            val cells = focalCells(visible, rendered, viewportHeight = height, beforePadding = before, density = d)
             val offsetFromBottom = if (listState.firstVisibleItemIndex == 0) {
                 listState.firstVisibleItemScrollOffset / d
             } else {

@@ -235,3 +235,23 @@ class LayoutKeysTest {
         assertThat(keys.toSet()).hasSize(3)
     }
 }
+
+class FocalCellsTest {
+
+    private class Row(
+        override val index: Int,
+        override val key: Any,
+        override val offset: Int = 0,
+        override val size: Int = 100,
+    ) : androidx.compose.foundation.lazy.LazyListItemInfo
+
+    @Test
+    fun `a focal cell is named by the message id the passage compares, not by its layout key`() {
+        val rendered = listOf(ChatListItem.Message(bubble("srv9", "2026-10-27T10:00:00Z").copy(clientMessageId = "cid_1")))
+        val visible = listOf(Row(index = 0, key = layoutKeys(rendered).single()))
+
+        val cells = focalCells(visible, rendered, viewportHeight = 1000.0, beforePadding = 0.0, density = 1.0)
+
+        assertThat(cells.map { it.id }).containsExactly(rendered.single().key)
+    }
+}
