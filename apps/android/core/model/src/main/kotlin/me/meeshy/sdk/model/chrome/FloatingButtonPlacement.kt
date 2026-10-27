@@ -127,8 +127,15 @@ public data class FloatingButtonGeometry(
 
     private val half: Float get() = BUTTON_SIZE / 2f
 
-    /** Le plus haut centre possible : juste sous la zone sure du haut. */
-    public val minY: Float get() = safeZone.top + VERTICAL_MARGIN + half
+    /**
+     * La zone où un disque peut se garer : sous la BARRE D'EN-TÊTE (la plus haute, [HEADER_BAND] sous la zone sûre).
+     * Un disque posé sur l'en-tête recouvrait « + Nouvelle conversation » de la liste et le chevron « < » des
+     * Réglages, des Appels et des Notifications — aucun contrôle d'écran ne reste sous un disque au repos (#12497).
+     */
+    private val parkingZone: RectDp get() = safeZone.copy(top = safeZone.top + HEADER_BAND)
+
+    /** Le plus haut centre possible : juste sous la barre d'en-tête. */
+    public val minY: Float get() = parkingZone.top + VERTICAL_MARGIN + half
 
     /** Le plus bas centre possible : juste au-dessus de la zone sure du bas. */
     public val maxY: Float get() = maxOf(minY, safeZone.bottom - VERTICAL_MARGIN - half)
@@ -169,7 +176,7 @@ public data class FloatingButtonGeometry(
     }
 
     /** Borne un centre a la plage, par la loi de zone sure (marge verticale incluse). */
-    private fun clampY(y: Float): Float = SafeZoneLaw.clampCenterY(y, half + VERTICAL_MARGIN, safeZone)
+    private fun clampY(y: Float): Float = SafeZoneLaw.clampCenterY(y, half + VERTICAL_MARGIN, parkingZone)
 
     /** Le Flux garde sa place ; le Menu, s'il tombe sur lui, se decale. */
     public fun layout(feedStorage: String?, menuStorage: String?): FloatingButtonsLayout {
@@ -220,6 +227,9 @@ public data class FloatingButtonGeometry(
 
     public companion object {
         public const val BUTTON_SIZE: Float = 52f
+
+        /** La hauteur de la plus haute barre d'en-tête, sous la zone sûre : un disque ne s'y gare pas. */
+        public const val HEADER_BAND: Float = CollapsibleHeaderMetrics.EXPANDED_HEIGHT
 
         /** Ecart horizontal entre le disque et le bord de l'ecran. */
         public const val EDGE_PADDING: Float = 20f
