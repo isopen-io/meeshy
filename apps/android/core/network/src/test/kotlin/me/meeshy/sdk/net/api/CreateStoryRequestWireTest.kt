@@ -40,4 +40,28 @@ class CreateStoryRequestWireTest {
 
         assertThat(decoded).isEqualTo(request)
     }
+
+    @Test
+    fun `the five publication fields ride the wire under the gateway names, absent when unset`() {
+        val bare = encoded(CreateStoryRequest(content = "x"))
+        listOf("visibilityUserIds", "mentions", "mediaAlt", "mediaCaption", "allowSoundExtraction")
+            .forEach { assertThat(bare.containsKey(it)).isFalse() }
+
+        val full = encoded(
+            CreateStoryRequest(
+                visibility = "ONLY",
+                visibilityUserIds = listOf("u1"),
+                mentions = listOf(me.meeshy.sdk.model.PostMentionInput(userId = "u2", display = "NOTE")),
+                mediaIds = listOf("m1"),
+                mediaAlt = mapOf("m1" to "un chat"),
+                mediaCaption = mapOf("m1" to "Mon chat"),
+                allowSoundExtraction = true,
+            ),
+        )
+        assertThat(full["visibilityUserIds"].toString()).isEqualTo("[\"u1\"]")
+        assertThat(full["mediaAlt"]!!.jsonObject["m1"]?.jsonPrimitive?.content).isEqualTo("un chat")
+        assertThat(full["mediaCaption"]!!.jsonObject["m1"]?.jsonPrimitive?.content).isEqualTo("Mon chat")
+        assertThat(full["allowSoundExtraction"]?.jsonPrimitive?.content).isEqualTo("true")
+        assertThat(full["mentions"].toString()).contains("\"display\":\"NOTE\"")
+    }
 }

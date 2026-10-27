@@ -63,6 +63,8 @@ internal fun StoryVisibility.labelRes(): Int = when (this) {
     StoryVisibility.FRIENDS -> R.string.stories_visibility_friends
     StoryVisibility.COMMUNITY -> R.string.stories_visibility_community
     StoryVisibility.PRIVATE -> R.string.stories_visibility_private
+    StoryVisibility.ONLY -> R.string.stories_visibility_only
+    StoryVisibility.EXCEPT -> R.string.stories_visibility_except
 }
 
 /**
