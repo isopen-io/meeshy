@@ -49,6 +49,7 @@ import me.meeshy.sdk.model.chrome.FloatingButtonsLayout
 import me.meeshy.sdk.model.layout.PointDp
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.layout.currentMeeshyWindowInfo
+import me.meeshy.ui.component.swipe.LocalSwipeRowCoordinator
 import me.meeshy.ui.theme.MeeshyMotion
 import kotlin.math.roundToInt
 
@@ -106,7 +107,8 @@ public fun MeeshyFloatingButtons(
     rightContent: @Composable () -> Unit,
 ) {
     val safeInsets = currentMeeshyWindowInfo().safeInsets
-    val scrolling = LocalScrollMotionActive.current
+    val swipeCoordinator = LocalSwipeRowCoordinator.current
+    val scrolling = LocalScrollMotionActive.current || swipeCoordinator.isRowOpen
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         val geometry = remember(maxWidth, maxHeight, safeInsets) {
             FloatingButtonGeometry(screenWidth = maxWidth.value, screenHeight = maxHeight.value, safeInsets = safeInsets)

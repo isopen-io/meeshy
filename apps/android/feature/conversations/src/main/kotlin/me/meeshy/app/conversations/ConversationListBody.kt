@@ -1,6 +1,8 @@
 package me.meeshy.app.conversations
 
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
@@ -62,6 +64,7 @@ internal fun ConversationListBody(
                         ConversationListRow(state, conversation, viewModel, nowMillis, signals, rowNavigation)
                     }
                 }
+                item(key = "list-tail") { Spacer(Modifier.height(LIST_TAIL_HEIGHT)) }
                 return@LazyColumn
             }
             sections.forEach { section ->
@@ -87,9 +90,13 @@ internal fun ConversationListBody(
                     }
                 }
             }
+            item(key = "list-tail") { Spacer(Modifier.height(LIST_TAIL_HEIGHT)) }
         }
     }
 }
+
+/** Marge de fin de liste (iOS `Color.clear.frame(height: 60)`) : la derniere rangee passe au-dessus des disques flottants. */
+private val LIST_TAIL_HEIGHT = 60.dp
 
 @Composable
 private fun ConversationListRow(
