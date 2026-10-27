@@ -12,8 +12,10 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.updateAndGet
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.lang.LanguageResolver
+import me.meeshy.sdk.friend.BlockCache
 import me.meeshy.sdk.media.MediaBlobStore
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.media.MediaUploadQueue
@@ -64,6 +66,7 @@ class StoryComposerViewModel @Inject constructor(
     private val workManager: WorkManager,
     private val draftStore: StoryComposerDraftStore,
     private val mediaBlobStore: MediaBlobStore,
+    private val blocks: BlockCache = BlockCache(),
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(StoryComposerUiState())
@@ -111,7 +114,7 @@ class StoryComposerViewModel @Inject constructor(
                     deck = deck,
                     draft = it.draft
                         .withVisibility(StoryVisibility.fromWire(reconciled.snapshot.visibility))
-                        .withVisibilityUserIds(reconciled.snapshot.visibilityUserIds)
+                        .withVisibilityUserIds(reachable(reconciled.snapshot.visibilityUserIds))
                         .withRepostOf(reconciled.snapshot.repostOfId),
                     errorMessage = if (reconciled.hasLoss) MEDIA_RESTORE_LOST else it.errorMessage,
                 ).mirrorDraftToSelection()
@@ -282,6 +285,7 @@ class StoryComposerViewModel @Inject constructor(
     fun onAddMention(person: AudienceCandidate) {
         _state.update { current ->
             val mentions = current.draft.mentions
+            if (mentions.size >= MAX_MENTIONS) return@update current
             if (mentions.any { it.username.equals(person.username, ignoreCase = true) }) return@update current
             current.copy(
                 draft = current.draft.copy(
@@ -583,7 +587,7 @@ class StoryComposerViewModel @Inject constructor(
     }
 
     fun publish() {
-        val current = _state.value
+        val current = _state.updateAndGet { it.withAudiencePurged() }
         if (!current.canPublish) return
         _state.update { it.copy(isPublishing = true, errorMessage = null) }
         viewModelScope.launch {
@@ -602,6 +606,22 @@ class StoryComposerViewModel @Inject constructor(
                 _state.update { it.copy(isPublishing = false, errorMessage = e.message ?: "Publish failed") }
             }
         }
+    }
+
+    /** Les personnes encore ciblables : ni soi, ni un compte bloqué depuis que le brouillon les a retenues. */
+    private fun reachable(ids: List<String>): List<String> {
+        val blocked = blocks.currentBlockedIds
+        val selfId = sessionRepository.currentUser.value?.id
+        return ids.filter { it != selfId && it !in blocked }
+    }
+
+    private fun StoryComposerUiState.withAudiencePurged(): StoryComposerUiState {
+        val blocked = blocks.currentBlockedIds
+        val purged = draft.copy(
+            visibilityUserIds = reachable(draft.visibilityUserIds),
+            mentions = draft.mentions.filterNot { mention -> mention.userId?.let { it in blocked } == true },
+        )
+        return if (purged == draft) this else copy(draft = purged)
     }
 
     /** One publishable slide's wire request paired with the offline uploads it must wait on. */
@@ -691,6 +711,8 @@ class StoryComposerViewModel @Inject constructor(
 
     internal companion object {
         const val MENTION_DISPLAY = "NOTE"
+        /** Plafond de la passerelle (`mentions.max(50)`) : au-delà, toute la story serait refusée. */
+        const val MAX_MENTIONS = 50
         const val MEDIA_FAILED = "Couldn't attach that media"
         const val MEDIA_UNUSABLE = "That media couldn't be attached"
         const val MEDIA_LIMIT = "You can attach up to ${StoryComposerDraft.MAX_MEDIA} items"
