@@ -312,3 +312,7 @@ export function idbSendQueueStorage(factory: IDBFactory | undefined = typeof ind
       ),
   };
 }
+
+export type DeviceRecords = { readonly load: (key: string) => Promise<unknown>; readonly save: (key: string, value: unknown) => Promise<void> };
+export const memoryDeviceRecords = (): DeviceRecords => ({ load: async () => undefined, save: async () => undefined });
+export const idbDeviceRecords = (_factory?: IDBFactory): DeviceRecords => memoryDeviceRecords();
