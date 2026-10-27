@@ -389,6 +389,16 @@
     <string name="game_flame_form_line">%1$s · +%2$s %% sur tes rêves</string>
     <string name="game_flame_form_soleil">Soleil</string>
     <string name="game_flame_no_streak">Flamme à allumer</string>
+    <string name="game_flame_panel_bonus">Chaque jour de Flamme nourrit tes rêves : +%1$s %% d’étincelles par acte, jusqu’à +%2$s %%.</string>
+    <string name="game_flame_panel_freeze_buy">Prendre une Veilleuse · %s</string>
+    <string name="game_flame_panel_freeze_full">Tes Veilleuses sont au complet : une Veilleuse garde ta Flamme allumée un jour d’absence, tu n’en as pas besoin d’une de plus.</string>
+    <string name="game_flame_panel_freezes">Veilleuses : %1$s / %2$s</string>
+    <string name="game_flame_panel_offline">Hors ligne : les Veilleuses et le rallumage reprendront avec la connexion.</string>
+    <string name="game_flame_panel_relight">Rallumer la Flamme · %s</string>
+    <string name="game_flame_panel_relight_closed">Cette Flamme ne peut plus être rallumée. Une nouvelle Flamme commence dès ton prochain geste.</string>
+    <string name="game_flame_panel_relight_intro">Ta Flamme s’est éteinte : rallume-la maintenant, elle repart là où elle s’était arrêtée.</string>
+    <string name="game_flame_panel_relight_missing_window">Il te faut %s pour la rallumer, si elle s’est éteinte il y a moins de 48 h.</string>
+    <string name="game_flame_panel_title">Veiller sur ta Flamme</string>
     <string name="game_flame_status_at_risk">Fais un geste avant minuit</string>
     <string name="game_level_cap_short">s’ouvre au rang %s</string>
     <string name="game_level_ring_a11y">Niveau %1$s, %2$s, %3$s état de ta lumière</string>
@@ -508,6 +518,8 @@
         <item quantity="other">%d étincelles</item>
     </plurals>
     <string name="game_sparks_debt">Une ombre sur %s étincelles</string>
+    <string name="game_spend_missing_freeze">Il manque %s pour prendre une Veilleuse.</string>
+    <string name="game_spend_missing_relight">Il manque %s pour rallumer ta Flamme.</string>
     <string name="game_spend_missing_reroll">Il manque %s pour changer cet acte.</string>
     <string name="game_starFragments_one">%s fragment d’étoile</string>
     <string name="game_starFragments_other">%s fragments d’étoile</string>

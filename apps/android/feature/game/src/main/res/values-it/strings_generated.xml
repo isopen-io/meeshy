@@ -389,6 +389,16 @@
     <string name="game_flame_form_line">%1$s · +%2$s %% sui tuoi sogni</string>
     <string name="game_flame_form_soleil">Sole</string>
     <string name="game_flame_no_streak">Fiamma da accendere</string>
+    <string name="game_flame_panel_bonus">Ogni giorno di Fiamma nutre i tuoi sogni: +%1$s %% di scintille per atto, fino a +%2$s %%.</string>
+    <string name="game_flame_panel_freeze_buy">Prendi una Lucerna · %s</string>
+    <string name="game_flame_panel_freeze_full">Le tue Lucerne sono al completo: una Lucerna tiene accesa la tua Fiamma per un giorno di assenza, non te ne serve un’altra.</string>
+    <string name="game_flame_panel_freezes">Lucerne: %1$s / %2$s</string>
+    <string name="game_flame_panel_offline">Offline: le Lucerne e la riaccensione riprenderanno con la connessione.</string>
+    <string name="game_flame_panel_relight">Riaccendi la Fiamma · %s</string>
+    <string name="game_flame_panel_relight_closed">Questa Fiamma non può più essere riaccesa. Una nuova Fiamma inizia con il tuo prossimo gesto.</string>
+    <string name="game_flame_panel_relight_intro">La tua Fiamma si è spenta: riaccendila adesso, riparte da dove si era fermata.</string>
+    <string name="game_flame_panel_relight_missing_window">Per riaccenderla ti serve %s, se si è spenta meno di 48 ore fa.</string>
+    <string name="game_flame_panel_title">Vegliare sulla tua Fiamma</string>
     <string name="game_flame_status_at_risk">Fai un gesto prima di mezzanotte</string>
     <string name="game_level_cap_short">si apre al rango %s</string>
     <string name="game_level_ring_a11y">Livello %1$s, %2$s, %3$s stato della tua luce</string>
@@ -508,6 +518,8 @@
         <item quantity="other">%d scintille</item>
     </plurals>
     <string name="game_sparks_debt">Un’ombra su %s scintille</string>
+    <string name="game_spend_missing_freeze">Mancano %s per prendere una Lucerna.</string>
+    <string name="game_spend_missing_relight">Mancano %s per riaccendere la tua Fiamma.</string>
     <string name="game_spend_missing_reroll">Mancano %s per cambiare questo atto.</string>
     <string name="game_starFragments_one">%s frammento di stella</string>
     <string name="game_starFragments_other">%s frammenti di stella</string>

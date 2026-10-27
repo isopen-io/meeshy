@@ -389,6 +389,16 @@
     <string name="game_flame_form_line">%1$s · +%2$s %% auf deine Träume</string>
     <string name="game_flame_form_soleil">Sonne</string>
     <string name="game_flame_no_streak">Flamme noch zu entzünden</string>
+    <string name="game_flame_panel_bonus">Jeder Tag deiner Flamme nährt deine Träume: +%1$s %% Funken pro Akt, bis zu +%2$s %%.</string>
+    <string name="game_flame_panel_freeze_buy">Eine Hüterin rufen · %s</string>
+    <string name="game_flame_panel_freeze_full">Deine Hüterinnen sind vollzählig: Eine Hüterin hält deine Flamme einen Tag deiner Abwesenheit am Brennen, eine weitere brauchst du nicht.</string>
+    <string name="game_flame_panel_freezes">Hüterinnen: %1$s / %2$s</string>
+    <string name="game_flame_panel_offline">Offline: Hüterinnen und Neuentzünden gehen mit der Verbindung weiter.</string>
+    <string name="game_flame_panel_relight">Flamme neu entzünden · %s</string>
+    <string name="game_flame_panel_relight_closed">Diese Flamme kann nicht mehr neu entzündet werden. Eine neue Flamme beginnt mit deiner nächsten Aktion.</string>
+    <string name="game_flame_panel_relight_intro">Deine Flamme ist erloschen: entzünde sie jetzt neu, sie macht dort weiter, wo sie aufgehört hat.</string>
+    <string name="game_flame_panel_relight_missing_window">Zum Neuentzünden brauchst du %s, falls sie vor weniger als 48 h erloschen ist.</string>
+    <string name="game_flame_panel_title">Über deine Flamme wachen</string>
     <string name="game_flame_status_at_risk">Handle vor Mitternacht</string>
     <string name="game_level_cap_short">öffnet ab Rang %s</string>
     <string name="game_level_ring_a11y">Level %1$s, %2$s, %3$s Gestalt deines Lichts</string>
@@ -506,6 +516,8 @@
         <item quantity="other">%d Funken</item>
     </plurals>
     <string name="game_sparks_debt">Ein Schatten auf %s Funken</string>
+    <string name="game_spend_missing_freeze">Es fehlen %s, um eine Hüterin zu rufen.</string>
+    <string name="game_spend_missing_relight">Es fehlen %s, um deine Flamme neu zu entzünden.</string>
     <string name="game_spend_missing_reroll">Es fehlen %s, um diesen Akt zu tauschen.</string>
     <string name="game_starFragments_one">%s Sternfragment</string>
     <string name="game_starFragments_other">%s Sternfragmente</string>

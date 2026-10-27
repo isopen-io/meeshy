@@ -17,6 +17,8 @@ import me.meeshy.sdk.game.GameGestureRepository
 import me.meeshy.sdk.game.GameWriteOutcome
 import me.meeshy.sdk.model.game.ChestClaimResponse
 import me.meeshy.sdk.model.game.DailyChest
+import me.meeshy.sdk.model.game.FlameFreezeResponse
+import me.meeshy.sdk.model.game.FlameRelightResponse
 import me.meeshy.sdk.model.game.GameIntentIds
 import me.meeshy.sdk.model.game.GameMission
 import me.meeshy.sdk.model.game.MissionDifficulty
@@ -204,5 +206,49 @@ class GameGesturesViewModelTest {
         vm.reroll("m-1")
 
         coVerify(exactly = 0) { progress.refresh() }
+    }
+
+    @Test
+    fun `une Veilleuse prise relit la progression, le nombre affiche est celui du serveur`() = runTest {
+        coEvery { gestures.buyFlameFreeze(any()) } returns GameWriteOutcome.Done(FlameFreezeResponse("bought", freezes = 1, balance = 2L))
+        val vm = viewModel()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect { } }
+
+        vm.buyFreeze()
+
+        coVerify(exactly = 1) { progress.refresh() }
+        assertThat(vm.state.value.buyingFreeze).isFalse()
+        assertThat(vm.state.value.failures).isEmpty()
+    }
+
+    @Test
+    fun `la reserve de Veilleuses pleine est un refus dit par son code et relu`() = runTest {
+        coEvery { gestures.buyFlameFreeze(any()) } returns GameWriteOutcome.Refused("FREEZE_AT_MAXIMUM", offline = false)
+        val vm = viewModel()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect { } }
+
+        vm.buyFreeze()
+
+        assertThat(vm.state.value.failures[GameGesture.Freeze]?.code).isEqualTo("FREEZE_AT_MAXIMUM")
+        coVerify(exactly = 1) { progress.refresh() }
+    }
+
+    @Test
+    fun `un double appui sur rallumer n envoie qu une requete et le meme identifiant sert au reessai`() = runTest {
+        val gate = CompletableDeferred<GameWriteOutcome<FlameRelightResponse>>()
+        val sent = mutableListOf<String>()
+        coEvery { gestures.relightFlame(capture(sent)) } coAnswers { gate.await() }
+        val vm = viewModel()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect { } }
+
+        vm.relight()
+        vm.relight()
+        assertThat(vm.state.value.relighting).isTrue()
+        gate.complete(GameWriteOutcome.Refused("NETWORK", offline = true))
+        coEvery { gestures.relightFlame(capture(sent)) } returns GameWriteOutcome.Done(FlameRelightResponse("relit", streak = 9, balance = 0L))
+        vm.relight()
+
+        assertThat(sent).hasSize(2)
+        assertThat(sent[1]).isEqualTo(sent[0])
     }
 }
