@@ -97,6 +97,23 @@ class LocationPickerViewModelTest {
     }
 
     @Test
+    fun `un releve sans position le dit, et le recentrage suivant efface l'echec`() = runTest(dispatcher) {
+        val fixes = FakeFixes(fix = null)
+        val vm = vm(fixes = fixes)
+
+        vm.onAccessResolved(true)
+        advanceUntilIdle()
+        assertThat(vm.locateFailed.value).isTrue()
+        assertThat(vm.target.value).isNull()
+
+        fixes.fix = LiveLocationFix(48.85661, 2.35222)
+        vm.recenter()
+        advanceUntilIdle()
+        assertThat(vm.locateFailed.value).isFalse()
+        assertThat(vm.target.value?.point).isEqualTo(paris)
+    }
+
+    @Test
     fun `une rafale de deplacements ne geocode que le dernier point`() = runTest(dispatcher) {
         val geocoder = FakeGeocoder()
         val vm = vm(geocoder)

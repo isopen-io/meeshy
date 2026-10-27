@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Sélecteur de lieu : le relevé n'a rien rendu (intérieur, aucun fournisseur) — sans équivalent iOS (#13363). -->
+<resources>
+    <string name="location_locate_failed">Dein Standort wurde nicht gefunden. Geh näher ans Fenster oder schalte WLAN ein und versuche es erneut.</string>
+</resources>

@@ -97,6 +97,7 @@ internal fun LocationPickerDialog(
     val query by viewModel.query.collectAsStateWithLifecycle()
     val target by viewModel.target.collectAsStateWithLifecycle()
     val locating by viewModel.isLocating.collectAsStateWithLifecycle()
+    val locateFailed by viewModel.locateFailed.collectAsStateWithLifecycle()
     val preferences by viewModel.preferences.collectAsStateWithLifecycle()
     val permissions = rememberPermissionFlow()
     val context = LocalContext.current
@@ -156,6 +157,7 @@ internal fun LocationPickerDialog(
                 if (state.isLocationRefused) {
                     DeniedBanner(onClick = { context.openAppSettings() })
                 }
+                if (locateFailed && !state.isLocationRefused) LocateFailedBanner()
                 if (state.results.isEmpty()) {
                     FloatingControls(
                         accent = accent,
@@ -289,6 +291,16 @@ private fun ResultsList(results: List<me.meeshy.sdk.model.location.LocationSearc
 
 @Composable
 private fun DeniedBanner(onClick: () -> Unit) {
+    PickerNotice(text = stringResource(R.string.permission_location_denied), onClick = onClick)
+}
+
+@Composable
+private fun LocateFailedBanner() {
+    PickerNotice(text = stringResource(R.string.location_locate_failed), onClick = null)
+}
+
+@Composable
+private fun PickerNotice(text: String, onClick: (() -> Unit)?) {
     val warning = Color(0xFFB45309)
     Row(
         Modifier
@@ -296,13 +308,13 @@ private fun DeniedBanner(onClick: () -> Unit) {
             .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.sm)
             .clip(RoundedCornerShape(MeeshyRadius.md))
             .background(Color(0xFFFBBF24).copy(alpha = 0.22f))
-            .clickable(onClick = onClick)
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
             .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.smPlus),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
     ) {
         Icon(MeeshyIcons.LocationOff, contentDescription = null, tint = warning, modifier = Modifier.size(16.dp))
-        Text(stringResource(R.string.permission_location_denied), style = MaterialTheme.typography.bodySmall, color = warning)
+        Text(text, style = MaterialTheme.typography.bodySmall, color = warning)
     }
 }
 
