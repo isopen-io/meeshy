@@ -23,7 +23,8 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -46,6 +47,7 @@ import me.meeshy.sdk.model.NotificationQuickAction
 import me.meeshy.ui.component.chrome.MeeshyBackground
 import me.meeshy.ui.component.chrome.MeeshyTopBar
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 
@@ -152,8 +154,12 @@ fun NotificationsScreen(
                     title = stringResource(R.string.notifications_title),
                     actions = {
                         AnimatedVisibility(visible = state.unreadCount > 0, enter = fadeIn(), exit = fadeOut()) {
-                            TextButton(onClick = onMarkAllRead) {
-                                Text(stringResource(R.string.notifications_mark_all_read), color = MeeshyPalette.Indigo500)
+                            IconButton(onClick = onMarkAllRead) {
+                                Icon(
+                                    imageVector = MeeshyIcons.CheckCircle,
+                                    contentDescription = stringResource(R.string.notifications_mark_all_read),
+                                    tint = MeeshyPalette.Indigo500,
+                                )
                             }
                         }
                     },
