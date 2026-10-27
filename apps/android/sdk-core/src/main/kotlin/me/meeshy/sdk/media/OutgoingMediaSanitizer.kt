@@ -6,6 +6,7 @@ import android.graphics.Matrix
 import android.media.ExifInterface
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
+import java.nio.ByteBuffer
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.CoroutineDispatcher
@@ -37,15 +38,33 @@ public class OutgoingMediaSanitizer @Inject constructor(
         if (location.keepsLocation.value) return@withContext NetworkResult.Success(item)
         val clean = when (ImageSourceFormat.sniff(item.bytes)) {
             ImageSourceFormat.JPEG -> verifiedJpeg(item) ?: asJpeg(item)
-            ImageSourceFormat.PNG -> ImageMetadataScrubber.png(item.bytes)?.let { item.withBytes(it) } ?: asJpeg(item)
-            ImageSourceFormat.WEBP -> ImageMetadataScrubber.webp(item.bytes)?.let { item.withBytes(it) } ?: asJpeg(item)
-            ImageSourceFormat.HEIC -> if (isHeifImage(item.bytes)) asJpeg(item) else item
-            ImageSourceFormat.GIF, ImageSourceFormat.UNKNOWN -> item
+            ImageSourceFormat.PNG -> verified(item, ImageMetadataScrubber::png) ?: asJpeg(item)
+            ImageSourceFormat.WEBP -> verified(item, ImageMetadataScrubber::webp) ?: asJpeg(item)
+            ImageSourceFormat.GIF -> verified(item, ImageMetadataScrubber::gif)
+            ImageSourceFormat.HEIC -> if (isClearlyNotAnImage(item.bytes)) item else asJpeg(item)
+            ImageSourceFormat.UNKNOWN -> if (mayBeAnImage(item)) asJpeg(item) else item
         }
         clean?.let { NetworkResult.Success(it) } ?: NetworkResult.Failure(ApiError(REFUSED_MESSAGE, code = REFUSED_CODE))
     }
 
     private fun MediaUploadItem.withBytes(bytes: ByteArray) = MediaUploadItem(bytes, fileName, mimeType)
+
+    private fun verified(item: MediaUploadItem, scrub: (ByteArray) -> ByteArray?): MediaUploadItem? =
+        scrub(item.bytes)?.takeIf { ImageMetadataScrubber.isStable(it, scrub) }?.let { item.withBytes(it) }
+
+    /** Un TIFF/DNG, une image déclarée comme telle, ou tout ce que le décodeur d'images sait lire : jamais renvoyé tel quel. */
+    private fun mayBeAnImage(item: MediaUploadItem): Boolean =
+        item.mimeType.startsWith("image/", ignoreCase = true) || isTiff(item.bytes) || decodes(item.bytes)
+
+    private fun isTiff(bytes: ByteArray): Boolean =
+        bytes.size >= 4 && (bytes[0] == bytes[1]) && ((bytes[0] == 0x49.toByte() && bytes[2] == 0x2A.toByte() && bytes[3] == 0.toByte()) ||
+            (bytes[0] == 0x4D.toByte() && bytes[2] == 0.toByte() && bytes[3] == 0x2A.toByte()))
+
+    private fun decodes(bytes: ByteArray): Boolean = runCatching {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+        bounds.outWidth > 0 && bounds.outHeight > 0
+    }.getOrDefault(false)
 
     private fun verifiedJpeg(item: MediaUploadItem): MediaUploadItem? =
         ImageMetadataScrubber.jpeg(item.bytes)
@@ -82,15 +101,27 @@ public class OutgoingMediaSanitizer @Inject constructor(
     private fun String.withJpegExtension(): String =
         if (isBlank()) "image.jpg" else substringBeforeLast('.', this) + ".jpg"
 
-    /** Une boîte `ftyp` de marque image (HEIC, HEIF, AVIF) — jamais une vidéo MP4/MOV, qui porte la même boîte. */
-    private fun isHeifImage(bytes: ByteArray): Boolean =
-        bytes.size >= 12 && String(bytes, 8, 4, Charsets.ISO_8859_1) in HEIF_BRANDS
+    /**
+     * Une boîte `ftyp` est une vidéo ou un son SEULEMENT si sa marque principale l'est ET qu'aucune marque compatible
+     * ne dit « image » (HEIC, HEIF, AVIF). Dans le doute — marque inconnue comprise — c'est une image.
+     */
+    private fun isClearlyNotAnImage(bytes: ByteArray): Boolean {
+        if (bytes.size < 16) return false
+        val size = ByteBuffer.wrap(bytes, 0, 4).int.toLong().and(0xFFFFFFFFL).coerceIn(16L, bytes.size.toLong()).toInt()
+        val major = String(bytes, 8, 4, Charsets.ISO_8859_1)
+        val compatible = (16 until size - 3 step 4).map { String(bytes, it, 4, Charsets.ISO_8859_1) }
+        return major in MEDIA_BRANDS && (compatible + major).none { it in HEIF_BRANDS }
+    }
 
     internal companion object {
         const val JPEG_QUALITY: Int = 92
         const val JPEG_MIME: String = "image/jpeg"
         const val REFUSED_CODE: String = "IMAGE_LOCATION_NOT_REMOVABLE"
         const val REFUSED_MESSAGE: String = "The photo's location could not be removed, so it was not sent."
+        private val MEDIA_BRANDS = setOf(
+            "isom", "iso2", "iso3", "iso4", "iso5", "iso6", "mp41", "mp42", "mp4x", "avc1", "qt  ", "M4V ", "M4A ", "M4B ", "M4P ",
+            "3gp4", "3gp5", "3gp6", "3g2a", "dash",
+        )
         private val HEIF_BRANDS = setOf("heic", "heix", "hevc", "hevx", "heim", "heis", "mif1", "msf1", "avif", "avis")
     }
 }

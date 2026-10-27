@@ -179,14 +179,108 @@ class OutgoingMediaSanitizerTest {
         assertThat((result as NetworkResult.Failure).error.code).isEqualTo(OutgoingMediaSanitizer.REFUSED_CODE)
     }
 
-    @Test
-    fun `un GIF une vidéo et des octets inconnus passent inchangés`() = runTest {
-        val gif = ascii("GIF89a") + ByteArray(20)
-        val mp4 = byteArrayOf(0, 0, 0, 0x18) + ascii("ftypisom") + ByteArray(16)
-        val unknown = byteArrayOf(1, 2, 3)
+    private fun pngChunk(type: String, data: ByteArray) = ByteBuffer.allocate(12 + data.size).putInt(data.size).put(ascii(type)).put(data).putInt(0).array()
 
-        assertThat(clean(gif, name = "a.gif", mime = "image/gif").bytes).isEqualTo(gif)
-        assertThat(clean(mp4, name = "v.mp4", mime = "video/mp4").bytes).isEqualTo(mp4)
-        assertThat(clean(unknown).bytes).isEqualTo(unknown)
+    private fun riffChunk(type: String, data: ByteArray): ByteArray {
+        val padded = if (data.size % 2 == 1) data + 0 else data
+        return ByteBuffer.allocate(8 + padded.size).order(ByteOrder.LITTLE_ENDIAN).put(ascii(type)).putInt(data.size).put(padded).array()
+    }
+
+    private fun webp(vararg chunks: ByteArray): ByteArray {
+        val body = ascii("WEBP") + chunks.fold(ByteArray(0)) { acc, c -> acc + c }
+        return ByteBuffer.allocate(8 + body.size).order(ByteOrder.LITTLE_ENDIAN).put(ascii("RIFF")).putInt(body.size).put(body).array()
+    }
+
+    private val pngSignature = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A)
+
+    @Test
+    fun `un PNG avec un bloc privé inconnu ne le transporte pas`() = runTest {
+        val png = pngSignature + pngChunk("IHDR", ByteArray(13)) + pngChunk("pHYs", ByteArray(9)) + pngChunk("prVt", ascii("GPSPRIVATE")) +
+            pngChunk("IDAT", ascii("pixels")) + pngChunk("IEND", ByteArray(0))
+
+        val sent = clean(png, name = "p.png", mime = "image/png").bytes
+
+        assertThat("GPSPRIVATE".occursIn(sent)).isFalse()
+        assertThat("pHYs".occursIn(sent)).isTrue()
+        assertThat("pixels".occursIn(sent)).isTrue()
+    }
+
+    @Test
+    fun `un WebP avec un bloc inconnu ne le transporte pas et garde son animation`() = runTest {
+        val flags = ByteArray(10).also { it[0] = 0x32 }
+        val webp = webp(riffChunk("VP8X", flags), riffChunk("ANIM", ByteArray(6)), riffChunk("ANMF", ascii("frames")), riffChunk("zzzz", ascii("GPSPRIVATE")))
+
+        val sent = clean(webp, name = "p.webp", mime = "image/webp").bytes
+
+        assertThat("GPSPRIVATE".occursIn(sent)).isFalse()
+        assertThat("frames".occursIn(sent)).isTrue()
+        assertThat(sent[20].toInt()).isEqualTo(0x32)
+        assertThat(ByteBuffer.wrap(sent, 4, 4).order(ByteOrder.LITTLE_ENDIAN).int).isEqualTo(sent.size - 8)
+    }
+
+    private fun box(type: String, body: ByteArray) = ByteBuffer.allocate(8 + body.size).putInt(8 + body.size).put(ascii(type)).put(body).array()
+
+    private fun ftyp(major: String, vararg compatible: String) =
+        box("ftyp", ascii(major) + ByteArray(4) + compatible.fold(ByteArray(0)) { acc, b -> acc + ascii(b) }) + box("mdat", ascii("GPSPRIVATE"))
+
+    @Test
+    fun `un conteneur dont une marque secondaire est une image n est pas pris pour une vidéo`() = runTest {
+        val disguised = ftyp("isom", "mp42", "heic")
+
+        val result = sanitizer().sanitize(item(disguised, "p.mp4", "video/mp4"))
+
+        assertThat(result).isInstanceOf(NetworkResult.Failure::class.java)
+    }
+
+    @Test
+    fun `une vidéo et un son restent inchangés`() = runTest {
+        val video = ftyp("isom", "iso2", "avc1", "mp41")
+        val qt = ftyp("qt  ")
+        val audio = ftyp("M4A ", "mp42", "isom")
+
+        listOf(video to "video/mp4", qt to "video/quicktime", audio to "audio/mp4").forEach { (bytes, mime) ->
+            assertThat(clean(bytes, name = "m", mime = mime).bytes).isEqualTo(bytes)
+        }
+    }
+
+    @Test
+    fun `des octets inconnus déclarés image ne partent jamais tels quels`() = runTest {
+        val tiff = byteArrayOf(0x49, 0x49, 0x2A, 0x00) + ascii("GPSPRIVATE-IFD")
+        val dng = byteArrayOf(0x4D, 0x4D, 0x00, 0x2A) + ascii("GPSPRIVATE-IFD")
+        val mystery = ascii("XXXXXXXXXXXXXXXXGPSPRIVATE")
+
+        listOf(tiff, dng, mystery).forEach { bytes ->
+            assertThat(sanitizer().sanitize(item(bytes, "p.tiff", "image/tiff"))).isInstanceOf(NetworkResult.Failure::class.java)
+        }
+    }
+
+    private fun gif(vararg blocks: ByteArray) =
+        ascii("GIF89a") + byteArrayOf(1, 0, 1, 0, 0x80.toByte(), 0, 0) + ByteArray(6) + blocks.fold(ByteArray(0)) { acc, b -> acc + b } + byteArrayOf(0x3B)
+
+    private fun ext(label: Int, vararg subs: ByteArray) =
+        byteArrayOf(0x21, label.toByte()) + subs.fold(ByteArray(0)) { acc, b -> acc + byteArrayOf(b.size.toByte()) + b } + byteArrayOf(0)
+
+    private val frame = byteArrayOf(0x2C, 0, 0, 0, 0, 1, 0, 1, 0, 0, 2, 2, 0x44, 0x01, 0)
+
+    @Test
+    fun `un GIF perd ses extensions XMP et commentaire mais reste animé`() = runTest {
+        val loop = ext(0xFF, ascii("NETSCAPE2.0"), byteArrayOf(1, 0, 0))
+        val xmp = ext(0xFF, ascii("XMP DataXMP"), ascii("GPSPRIVATE"))
+        val comment = ext(0xFE, ascii("taken in Paris"))
+        val control = ext(0xF9, byteArrayOf(4, 10, 0, 0))
+        val gif = gif(loop, xmp, comment, control, frame, control, frame)
+
+        val sent = clean(gif, name = "a.gif", mime = "image/gif").bytes
+
+        assertThat("GPSPRIVATE".occursIn(sent)).isFalse()
+        assertThat("Paris".occursIn(sent)).isFalse()
+        assertThat("NETSCAPE2.0".occursIn(sent)).isTrue()
+        assertThat(sent.toList().windowed(4).count { it == listOf<Byte>(0x21, 0xF9.toByte(), 4, 4) }).isEqualTo(2)
+    }
+
+    @Test
+    fun `des octets sans rapport avec une image passent inchangés`() = runTest {
+        val blob = byteArrayOf(1, 2, 3)
+        assertThat(clean(blob, name = "a.bin", mime = "application/octet-stream").bytes).isEqualTo(blob)
     }
 }
