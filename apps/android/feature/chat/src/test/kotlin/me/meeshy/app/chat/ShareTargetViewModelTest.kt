@@ -58,10 +58,10 @@ class ShareTargetViewModelTest {
         currentUser: MeeshyUser? = me,
         sessionResolved: Boolean = true,
         conversations: List<ApiConversation> = listOf(conversation("c1", "Alice"), conversation("c2", "Bob")),
+        stream: kotlinx.coroutines.flow.Flow<CacheResult<List<ApiConversation>>> = flowOf(CacheResult.Fresh(conversations, ageMillis = 0)),
     ): Harness {
         val conversationRepo = mockk<ConversationRepository>(relaxed = true)
-        every { conversationRepo.conversationsStream(any(), any()) } returns
-            flowOf(CacheResult.Fresh(conversations, ageMillis = 0))
+        every { conversationRepo.conversationsStream(any(), any()) } returns stream
         val messages = mockk<MessageRepository>(relaxed = true)
         val session = mockk<SessionRepository>(relaxed = true)
         every { session.currentUser } returns MutableStateFlow(currentUser)
@@ -354,5 +354,21 @@ class ShareTargetViewModelTest {
 
         assertThat(h.vm.state.value.targets.map { it.conversationId }).containsExactly("c1")
         assertThat(h.vm.state.value.selectedConversationId).isNull()
+    }
+
+    @Test
+    fun a_selection_that_became_end_to_end_before_send_sends_nothing() = runTest(dispatcher) {
+        val stream = MutableStateFlow<CacheResult<List<ApiConversation>>>(CacheResult.Fresh(listOf(conversation("c1", "Alice")), ageMillis = 0))
+        val h = harness(stream = stream)
+        h.vm.load("a link")
+        advanceUntilIdle()
+        h.vm.select("c1")
+
+        stream.value = CacheResult.Fresh(listOf(ApiConversation(id = "c1", title = "Alice", type = "group", encryptionMode = "e2ee")), ageMillis = 0)
+        advanceUntilIdle()
+        h.vm.confirmSend()
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { h.messages.sendOptimistic(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) }
     }
 }

@@ -145,8 +145,9 @@ class ShareTargetViewModel @Inject constructor(
     }
 
     /** « Envoyer » de l'aperçu : seul chemin qui envoie la sélection. */
+    /** La cible est relue au moment d'envoyer : une conversation devenue chiffrée entre-temps a quitté les cibles, rien ne part. */
     fun confirmSend() {
-        _state.value.selectedConversationId?.let(::sendTo)
+        _state.value.selectedTarget?.conversationId?.let(::sendTo)
     }
 
     fun onQueryChange(query: String) {
