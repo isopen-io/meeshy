@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_camera_hold_hint">Mantén pulsado para apagar o encender la cámara</string>
+    <string name="call_camera_state_on">Cámara activada</string>
+    <string name="call_camera_state_off">Cámara apagada</string>
+    <string name="call_camera_toggle_off">Apagar la cámara</string>
+    <string name="call_camera_toggle_on">Encender la cámara</string>
+</resources>

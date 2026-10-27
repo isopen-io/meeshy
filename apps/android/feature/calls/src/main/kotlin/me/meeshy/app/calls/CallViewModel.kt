@@ -317,6 +317,9 @@ class CallViewModel @Inject constructor(
     /** Le serveur-id de l'appel en cours (vide avant que l'ACK ne le donne) : la clé par appel des surfaces. */
     val activeCallId: String get() = callId
     val localVideoTrack get() = coordinator.localVideoTrack
+
+    /** Le zoom de MA caméra (objectifs, pincement) : lu par les feuilles, jamais par l'écran entier. */
+    val cameraZoom get() = coordinator.cameraZoom
     val remoteVideoTracks get() = coordinator.remoteVideoTracks
 
     /** Toggle the local camera (only meaningful on a video call) and signal the peer. */

@@ -1,6 +1,10 @@
 package me.meeshy.app.calls
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.spring
@@ -50,7 +54,9 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import me.meeshy.feature.calls.R
+import me.meeshy.sdk.model.call.CallChromeVisibility
 import me.meeshy.sdk.model.call.CallSafeInsets
+import me.meeshy.sdk.model.call.CallSelfTileControlsLaw
 import me.meeshy.sdk.model.call.CallSelfTileCorner
 import me.meeshy.sdk.model.call.CallSelfTileLaw
 import me.meeshy.sdk.model.call.CallSelfTileMemory
@@ -76,6 +82,9 @@ private val TileShadow = 8.dp
  * appel ; un toucher permute les deux vidéos. Pour TalkBack elle est ajustable (petite, moyenne,
  * grande) et dit son état de survie quand [paused].
  *
+ * [controls] est la rangée de commandes de ma caméra (pastilles d'objectifs, bascule) : [controlCount]
+ * boutons, posés contre son cadre, qui la suivent au glissé et s'effacent avec le chrome.
+ *
  * [content] est le flux qu'elle montre ; [overlay] se pose par-dessus, au coin (micro coupé du pair
  * après une permutation).
  */
@@ -87,6 +96,9 @@ internal fun CallSelfTile(
     reduceMotion: Boolean,
     onSwap: () -> Unit,
     modifier: Modifier = Modifier,
+    controlCount: Int = 0,
+    controlsVisible: Boolean = true,
+    controls: @Composable () -> Unit = {},
     overlay: @Composable BoxScope.() -> Unit = {},
     content: @Composable BoxScope.() -> Unit,
 ) {
@@ -202,6 +214,19 @@ internal fun CallSelfTile(
         ) {
             content()
             overlay()
+        }
+
+        val row = CallSelfTileControlsLaw.frame(center, size, container, insets, controlCount)
+        if (row != null) {
+            val rowX = if (rtl) container.widthDp - row.xDp - row.widthDp else row.xDp
+            AnimatedVisibility(
+                visible = controlsVisible,
+                enter = fadeIn(tween(CallChromeVisibility.FADE_DURATION_MILLIS.toInt())),
+                exit = fadeOut(tween(CallChromeVisibility.FADE_DURATION_MILLIS.toInt())),
+                modifier = Modifier
+                    .offset { IntOffset((rowX * density.density + drag.x).roundToInt(), (row.yDp * density.density + drag.y).roundToInt()) }
+                    .size(row.widthDp.dp, row.heightDp.dp),
+            ) { controls() }
         }
     }
 }

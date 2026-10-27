@@ -57,4 +57,7 @@
     <string name="call_recording_stopped_timeout">No todos respondieron: no hay grabación</string>
     <string name="call_recording_unavailable">La grabación no está disponible ahora</string>
     <string name="call_recording_waiting">Esperando el consentimiento de todos…</string>
+    <string name="call_zoom_hint">Desliza hacia arriba o abajo para hacer zoom. En pantalla, pellizca tu imagen; toca dos veces para volver a 1×</string>
+    <string name="call_zoom_label">Zoom de mi cámara</string>
+    <string name="call_zoom_lens">Zoom %s</string>
 </resources>

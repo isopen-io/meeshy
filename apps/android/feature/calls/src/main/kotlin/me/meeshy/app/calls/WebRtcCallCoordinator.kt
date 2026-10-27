@@ -153,6 +153,9 @@ class WebRtcCallCoordinator @Inject constructor(
 
     fun setCameraEnabled(enabled: Boolean) = engine.setVideoEnabled(enabled)
 
+    /** Le zoom de ma caméra (pincement, objectifs, retour à 1×). */
+    val cameraZoom get() = engine.cameraZoom
+
     /** Caméra avant ⇄ arrière : local, jamais signalé au pair ; [onSwitched] dit la face active, `null` si rien n'a basculé. */
     fun switchCamera(onSwitched: (isFront: Boolean?) -> Unit) = engine.switchCamera(onSwitched)
 

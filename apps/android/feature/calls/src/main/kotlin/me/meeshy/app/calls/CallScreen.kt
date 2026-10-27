@@ -147,6 +147,9 @@ fun CallScreen(
                     null
                 }
             }
+            val selfCamera = remember(viewModel) {
+                CallSelfCameraActions(viewModel.cameraZoom, onFlip = viewModel::flipCamera, onToggleCamera = viewModel::toggleCamera)
+            }
             if (videoStage) {
                 CallDuoVideoStage(
                     state = state,
@@ -158,6 +161,8 @@ fun CallScreen(
                     connected = state.showsConnectedLayout,
                     reduceMotion = reduceMotion,
                     onSceneTap = sceneTap,
+                    selfCamera = selfCamera,
+                    controlsVisible = chromeVisibility.isVisible(CallChromeElement.Controls) && !inPip,
                 )
             }
 
