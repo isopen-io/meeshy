@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -40,6 +41,7 @@ import me.meeshy.sdk.model.call.CallChromeElement
 import me.meeshy.sdk.model.call.CallChromeInteraction
 import me.meeshy.sdk.model.call.CallChromeVisibility
 import me.meeshy.sdk.model.call.CallGroupStageSizing
+import me.meeshy.sdk.model.call.CallHeaderLaw
 import me.meeshy.sdk.model.call.CallScreenMode
 import me.meeshy.sdk.model.call.CallScreenPanel
 import me.meeshy.ui.theme.MeeshySpacing
@@ -181,8 +183,10 @@ internal fun CallConnectedColumn(
         ) {
             Spacer(Modifier.height(MeeshySpacing.xl))
 
-            if (videoStage) {
-                CallPeerBlock(state = state, accent = accent, videoStage = true)
+            if (!CallHeaderLaw.centersPeerBlock(videoStage)) {
+                // L'image est le pair : ni nom, ni chrono, ni barres au centre. Le temps et le signal
+                // vivent dans la puce de l'en-tête (CallHeaderBar) ; ne reste que ce que le pair fait SUBIR.
+                CallVideoPeerNotices(state = state, modifier = Modifier.weight(1f).fillMaxWidth())
             } else {
                 CallAudioStage(state = state, peer = peer)
             }

@@ -30,6 +30,8 @@
     <string name="call_journal_search_empty">لا توجد مكالمة تطابق «%s»</string>
     <string name="call_journal_search_empty_hint">يغطي السجل الأشهر الثلاثة الأخيرة.</string>
     <string name="call_journal_search_placeholder">البحث عن مكالمة</string>
+    <string name="call_open_conversation">المحادثة</string>
+    <string name="call_open_conversation_hint">يفتح المحادثة مع إبقاء المكالمة نشطة</string>
     <string name="call_recording_accept">قبول</string>
     <string name="call_recording_active">التسجيل جارٍ</string>
     <string name="call_recording_ask">%s يريد تسجيل المكالمة</string>

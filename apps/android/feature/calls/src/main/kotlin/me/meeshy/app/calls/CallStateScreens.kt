@@ -69,6 +69,19 @@ internal fun CallPeerBlock(state: CallUiState, accent: Color, videoStage: Boolea
     }
 }
 
+/**
+ * Sur la scène vidéo, ce que le pair fait subir à MON appareil — sa capture d'écran — reste dit, en
+ * haut sous l'en-tête, jamais au centre de son image.
+ */
+@Composable
+internal fun CallVideoPeerNotices(state: CallUiState, modifier: Modifier = Modifier) {
+    Column(modifier = modifier.padding(top = 56.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        if (state.isPeerScreenCapturing) {
+            PeerNotice(stringResource(R.string.call_peer_screen_capturing, state.peerName), MeeshyTheme.tokens.error)
+        }
+    }
+}
+
 /** One small centered line about the other side, under the status. */
 @Composable
 private fun PeerNotice(text: String, color: Color) {

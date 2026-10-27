@@ -30,6 +30,8 @@
     <string name="call_journal_search_empty">Kein Anruf entspricht „%s“</string>
     <string name="call_journal_search_empty_hint">Das Protokoll umfasst die letzten drei Monate.</string>
     <string name="call_journal_search_placeholder">Anruf suchen</string>
+    <string name="call_open_conversation">Unterhaltung</string>
+    <string name="call_open_conversation_hint">Öffnet die Unterhaltung, während der Anruf aktiv bleibt</string>
     <string name="call_recording_accept">Zustimmen</string>
     <string name="call_recording_active">Aufnahme läuft</string>
     <string name="call_recording_ask">%s möchte den Anruf aufnehmen</string>
