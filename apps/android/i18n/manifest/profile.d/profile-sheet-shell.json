@@ -8,7 +8,7 @@
         {"catalog": "ui", "iosKey": "common.retry", "status": "adopted"},
         {"catalog": "ui", "iosKey": "common.close", "status": "adopted"},
         {"catalog": "ui", "iosKey": "profile.close.hint", "status": "adopted"},
-        {"catalog": "ui", "iosKey": "profile.tab.posts", "status": "adopted"},
+        {"androidName": "profile_tab_posts", "status": "android-only"},
         {"catalog": "ui", "iosKey": "profile.tab.conversations", "status": "adopted"},
         {"catalog": "ui", "iosKey": "profile.tab.details", "status": "adopted"}
       ]

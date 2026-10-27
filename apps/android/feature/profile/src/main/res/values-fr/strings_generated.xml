@@ -84,7 +84,6 @@
     <string name="profile_system_language_label">Langue principale</string>
     <string name="profile_tab_conversations">Conversations</string>
     <string name="profile_tab_details">Détails</string>
-    <string name="profile_tab_posts">Postes</string>
     <string name="profile_title">Profil</string>
     <string name="profile_toast_block_failed">Impossible de bloquer</string>
     <string name="profile_toast_unblock_failed">Impossible de débloquer</string>
@@ -93,7 +92,6 @@
     <string name="profile_unknown">Inconnu</string>
     <string name="profile_username">Pseudo</string>
     <string name="profile_verified">Vérifié</string>
-    <string name="profile_view_posts">Postes</string>
     <string name="profile_voice_title">Voix</string>
     <string name="report_close">Fermer</string>
     <string name="report_details_header">Détails (facultatif)</string>
