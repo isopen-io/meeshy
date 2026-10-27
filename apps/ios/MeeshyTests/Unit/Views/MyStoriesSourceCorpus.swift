@@ -21,11 +21,11 @@ enum MyStoriesSourceCorpus {
     /// doit pas échouer parce qu'un fichier n'existe pas ENCORE.
     static let relativePaths = [
         "Meeshy/Features/Stories/Views/MyStoriesView.swift",
-        "Meeshy/Features/Main/Views/MyStoriesPublishedTab.swift",
-        "Meeshy/Features/Main/Views/MyStoriesDraftsTab.swift",
+        "Meeshy/Features/Stories/Views/MyStoriesPublishedTab.swift",
+        "Meeshy/Features/Stories/Views/MyStoriesDraftsTab.swift",
         "Meeshy/Features/Stories/Views/MyStoryCard.swift",
         "Meeshy/Features/Stories/Views/MyStoryActionBar.swift",
-        "Meeshy/Features/Main/Views/MyStoryThumbnail.swift",
+        "Meeshy/Features/Stories/Views/MyStoryThumbnail.swift",
         "Meeshy/Features/Stories/Views/MyStoryCardPresentation.swift",
         "Meeshy/Features/Stories/Views/MyStoriesDeleteConfirmation.swift",
         "Meeshy/Features/Stories/Views/MyStoriesDeleteAlerts.swift",
