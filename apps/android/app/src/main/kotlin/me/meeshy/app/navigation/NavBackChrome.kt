@@ -82,7 +82,7 @@ internal object NavBackChrome {
         sheet("Routes.FORGOT_PASSWORD", Routes.FORGOT_PASSWORD, IosPresentation.SHEET, auth("AccountRecoveryScreens.kt")),
         sheet("Routes.MAGIC_LINK", Routes.MAGIC_LINK, IosPresentation.SHEET, auth("AccountRecoveryScreens.kt")),
         root("Routes.MAGIC_LINK_VALIDATE", Routes.MAGIC_LINK_VALIDATE),
-        sheet("Routes.REGISTRATION", Routes.REGISTRATION, IosPresentation.SHEET, auth("SignupScreen.kt")),
+        sheet("Routes.REGISTRATION", Routes.REGISTRATION, IosPresentation.COVER, auth("SignupScreen.kt")),
         sheet("Routes.GUEST_JOIN", Routes.GUEST_JOIN, IosPresentation.COVER, auth("ShareLinkEntryScreen.kt")),
         sheet("Routes.WORLD_ENTRY", Routes.WORLD_ENTRY, IosPresentation.COVER, auth("WorldGuestEntryScreen.kt")),
         // Conversations.

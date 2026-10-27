@@ -86,7 +86,16 @@ internal fun NavGraphBuilder.sheetComposable(
         decorFitsSystemWindows = false,
     ),
 ) { entry ->
-    PresentedSheet(style = style, onClosed = { navController.popBackStack() }) { dismiss -> content(entry, dismiss) }
+    PresentedSheet(style = style, onClosed = { navController.closeSheet(entry) }) { dismiss -> content(entry, dismiss) }
+}
+
+/**
+ * Retire la feuille [entry] — elle seule. Une croix touchée deux fois, ou une croix touchée pendant que le glissé
+ * vers le bas finit, rappelle la fermeture : un `popBackStack()` nu dépilait alors aussi l'écran DESSOUS (les
+ * Réglages sous une de leurs sous-pages, la connexion sous le mot de passe oublié).
+ */
+internal fun NavHostController.closeSheet(entry: NavBackStackEntry) {
+    if (currentBackStackEntry?.id == entry.id) popBackStack()
 }
 
 @Composable

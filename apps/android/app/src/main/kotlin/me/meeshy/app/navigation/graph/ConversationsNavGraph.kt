@@ -35,6 +35,7 @@ import me.meeshy.app.navigation.ChatRouteArgs
 import me.meeshy.app.navigation.ReportsConversationViewing
 import me.meeshy.app.navigation.Routes
 import me.meeshy.app.navigation.SheetStyle
+import me.meeshy.app.navigation.rememberProfileOpenerOverSheet
 import me.meeshy.app.navigation.sheetComposable
 import me.meeshy.app.stories.StoriesViewModel
 import me.meeshy.app.stories.StoryTray
@@ -104,9 +105,7 @@ internal fun NavGraphBuilder.conversationsNavGraph(
             onOpenConversation = { conversationId ->
                 navController.navigate(Routes.chat(conversationId))
             },
-            onOpenUser = { userId ->
-                navController.navigate(Routes.profile(userId))
-            },
+            onOpenUser = rememberProfileOpenerOverSheet(navController),
         )
     }
     sheetComposable(Routes.DASHBOARD, navController) { _, dismiss ->

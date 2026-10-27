@@ -78,7 +78,8 @@ internal fun NavGraphBuilder.authNavGraph(
     // L'inscription tient en UN écran (#5219) : `Routes.REGISTRATION`
     // conserve son chemin — le lien depuis la connexion, les tests et
     // l'historique de navigation le nomment — mais rend `SignupScreen`.
-    sheetComposable(Routes.REGISTRATION, navController) { _, dismiss ->
+    // iOS présente l'inscription en `.fullScreenCover` (LoginView) : pas de glissé qui la fermerait pendant l'envoi.
+    sheetComposable(Routes.REGISTRATION, navController, style = SheetStyle.COVER) { _, dismiss ->
         SignupScreen(
             onClose = dismiss,
             onRegistered = {
