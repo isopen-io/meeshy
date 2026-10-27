@@ -21,12 +21,13 @@ import me.meeshy.sdk.session.SessionRepository
 
 /**
  * Grave, à chaque compte et à chaque changement de langue, le prisme du lecteur que les widgets
- * relisent à froid ([WidgetReaderPrismStore]). Sans compte, la descente est vidée : un widget ne
+ * relisent à froid ([WidgetReaderPrismStore]) et redemande leur repeinte quand elle change. Sans compte, la descente est vidée : un widget ne
  * traduit pour personne.
  */
 class WidgetReaderPrismInitializer @Inject constructor(
     @ApplicationContext private val context: Context,
     private val session: SessionRepository,
+    private val refresher: WidgetRefresher,
 ) : AppInitializer {
     override fun initialize() {
         val store = WidgetReaderPrismStore(context)
@@ -34,7 +35,7 @@ class WidgetReaderPrismInitializer @Inject constructor(
             session.currentUser
                 .map { user -> user?.let(LanguageResolver::preferredContentLanguages).orEmpty() }
                 .distinctUntilChanged()
-                .collect { prism -> store.save(prism) }
+                .collect { prism -> if (store.save(prism)) refresher.request() }
         }
     }
 }

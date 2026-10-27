@@ -30,6 +30,7 @@ import dagger.hilt.android.EntryPointAccessors
 import me.meeshy.app.MainActivity
 import me.meeshy.app.R
 import me.meeshy.app.widget.kit.WidgetTheme
+import me.meeshy.app.widget.kit.widgetSurface
 import me.meeshy.app.widget.kit.WidgetReaderPrismStore
 import me.meeshy.app.widget.kit.widgetPreviewLabels
 
@@ -80,7 +81,7 @@ private fun QuickReplyWidgetContent(presentation: QuickReplyWidgetPresentation?)
     Column(
         modifier = GlanceModifier
             .fillMaxSize()
-            .background(WidgetTheme.background)
+            .widgetSurface()
             .padding(12.dp),
     ) {
         Text(
