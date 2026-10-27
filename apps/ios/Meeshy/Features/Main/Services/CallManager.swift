@@ -537,11 +537,6 @@ final class CallManager: ObservableObject, Sendable {
     var sdpOfferTimeoutTask: Task<Void, Never>?
     /// Tracks the at-most-one in-flight offer retry loop so `endCallInternal`
     /// can cancel it promptly instead of waiting for the settle window to expire.
-    /// A new offer supersedes the previous one via the generation guard inside
-    /// `emitOfferWithRetry`, but cancelling the Task is cheaper than sleeping.
-    var offerRetryTask: Task<Void, Never>?
-    /// Same as `offerRetryTask` for the SDP answer backoff path.
-    var answerRetryTask: Task<Void, Never>?
     /// Tracks the in-flight toggleVideo Task. Cancelled when a rapid second tap arrives
     /// so the later intent always wins and `isVideoEnabled` stays consistent with WebRTC.
     var videoToggleTask: Task<Void, Never>?
@@ -711,20 +706,18 @@ final class CallManager: ObservableObject, Sendable {
     /// un signal quand c'est le PAIR qui vient de bouger.
     var publishedListeningIntent = false
 
-    /// §3.5 — current negotiation generation (high-water mark of generations
-    /// SENT or SEEN). Stamped on every outgoing offer/answer/ICE; incoming
-    /// signals older than this are dropped. Reset per call in
-    /// `applyNegotiationRole` (CallManager is a singleton, so it must not carry
-    /// over between calls — otherwise a peer with a higher counter from a prior
-    /// call would wrongly drop the new call's first offer).
-    var negotiationId = 0
-
     let answerActionHold: CallKitAnswerActionHoldProviding = CallKitAnswerActionHold()
     /// Les écoutes `call:*` de la passerelle (`CallSignalingRouter`).
     let signalingRouter: CallSignalingRouterProviding
+    /// L'époque SDP et les relances d'offre et de réponse (`CallSdpSignaler`).
+    let sdpSignaler: CallSdpSignalerProviding
 
-    private init(signalingRouter: CallSignalingRouterProviding = CallSignalingRouter()) {
+    private init(
+        signalingRouter: CallSignalingRouterProviding = CallSignalingRouter(),
+        sdpSignaler: CallSdpSignalerProviding = CallSdpSignaler()
+    ) {
         self.signalingRouter = signalingRouter
+        self.sdpSignaler = sdpSignaler
         // Survival controller is created with no actuator yet; `attach(self)` wires
         // it below once `self` is fully initialized (avoids a self-before-init use).
         self.videoSurvivalController = VideoSurvivalController()
@@ -793,6 +786,7 @@ final class CallManager: ObservableObject, Sendable {
             }
             .store(in: &cancellables)
 
+        sdpSignaler.isCurrentCall = { [weak self] callId in self?.currentCallId == callId }
         signalingRouter.start(routingTo: self)
         startNetworkMonitoring()
         startAudioInterruptionMonitoring()

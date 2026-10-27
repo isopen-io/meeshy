@@ -824,7 +824,7 @@ final class CallManagerEarlyJoinTests: XCTestCase {
             return
         }
         XCTAssertTrue(
-            offerBody.contains("emitOfferWithRetry"),
+            offerBody.contains("sdpSignaler.emitOffer("),
             "emitCallOffer must delegate to the at-least-once retry path (§6.3)"
         )
         guard let retryBody = body(of: "func emitOfferWithRetry", in: source) else {
@@ -3100,7 +3100,7 @@ final class NegotiationEpochResetTests: XCTestCase {
             XCTFail("applyNegotiationRole not found in CallManager.swift"); return
         }
         XCTAssertTrue(
-            body.contains("negotiationId = 0"),
+            body.contains("sdpSignaler.resetEpoch()"),
             "applyNegotiationRole must reset negotiationId to 0 — without this reset, a " +
             "high-water mark from the previous call rejects the first offer of the new call"
         )
@@ -3128,8 +3128,8 @@ final class NegotiationEpochResetTests: XCTestCase {
     /// when accepting a signal, so stale duplicates from a churned socket are
     /// rejected by `isStaleNegotiation`.
     func test_acceptIncomingNegotiation_advancesHighWaterMark() throws {
-        let source = try callManagerSource()
-        guard let body = functionBody(of: "func acceptIncomingNegotiation(", in: source) else {
+        let source = try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallCollaborators/CallSdpSignaler.swift")
+        guard let body = functionBody(of: "func acceptIncomingNegotiation(_ generation: Int, isOffer: Bool = false)", in: source) else {
             XCTFail("acceptIncomingNegotiation not found"); return
         }
         XCTAssertTrue(

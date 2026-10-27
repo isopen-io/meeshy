@@ -31,7 +31,7 @@ extension CallManager: WebRTCServiceDelegate {
                 "to": userId,
                 "from": fromUserId,
                 // §3.5 — candidates belong to the current negotiation generation.
-                "negotiationId": self.negotiationId
+                "negotiationId": self.sdpSignaler.negotiationId
             ]
             if let sdpMid = candidate.sdpMid {
                 payload["sdpMid"] = sdpMid

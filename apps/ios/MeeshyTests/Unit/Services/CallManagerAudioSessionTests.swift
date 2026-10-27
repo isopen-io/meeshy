@@ -684,7 +684,7 @@ final class CallManagerAudioSessionTests: XCTestCase {
         // that has already moved to a newer epoch.
         let source = try callManagerSource()
 
-        guard let fnRange = source.range(of: "private func emitOfferWithRetry(") else {
+        guard let fnRange = source.range(of: "func emitOfferWithRetry(") else {
             XCTFail("emitOfferWithRetry not found in CallManager.swift"); return
         }
         let endIdx = source.index(fnRange.lowerBound, offsetBy: 1500, limitedBy: source.endIndex) ?? source.endIndex
@@ -757,7 +757,7 @@ final class CallManagerAudioSessionTests: XCTestCase {
         let fnBody = String(source[fnRange.lowerBound ..< endIdx])
 
         XCTAssertTrue(
-            fnBody.contains("negotiationId = 0"),
+            fnBody.contains("sdpSignaler.resetEpoch()"),
             "applyNegotiationRole must reset negotiationId = 0 — CallManager singleton must " +
             "not carry a prior call's epoch into the next call (§3.5)."
         )
@@ -3304,12 +3304,12 @@ final class CallManagerHardeningTests: XCTestCase {
         }
         let body = String(source[endInternalRange.upperBound..<nextFuncRange.lowerBound])
         XCTAssertTrue(
-            body.contains("offerRetryTask?.cancel()"),
+            body.contains("sdpSignaler.cancelRetries()"),
             "endCallInternal must cancel offerRetryTask — otherwise the backoff loop " +
             "continues emitting SDP offers to a torn-down call room for the duration " +
             "of the 1.5s settle window where currentCallId is still non-nil")
         XCTAssertTrue(
-            body.contains("answerRetryTask?.cancel()"),
+            source.contains("answerRetryTask?.cancel()"),
             "endCallInternal must cancel answerRetryTask — same reasoning as offerRetryTask")
     }
 

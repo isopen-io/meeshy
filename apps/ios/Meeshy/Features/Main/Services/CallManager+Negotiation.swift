@@ -105,7 +105,7 @@ extension CallManager {
     /// per call, right after `webRTCService.configure`. Also resets the §3.5
     /// epoch for the new call (single per-call setup chokepoint).
     func applyNegotiationRole() {
-        negotiationId = 0
+        sdpSignaler.resetEpoch()
         // §7.7 — front camera by default on iPhone/iPad (mirror), not on Mac.
         isUsingFrontCamera = !ProcessInfo.processInfo.isiOSAppOnMac
         let localId = AuthManager.shared.currentUser?.id ?? ""
@@ -116,17 +116,9 @@ extension CallManager {
     }
 
     /// §3.5 — accept an incoming signal of `generation` unless it is stale
-    /// (older than the high-water mark). Advances the mark on accept. The first
-    /// signal of a call (generation 0 or 1) is always accepted.
+    /// (`CallSdpSignaler` owns the epoch).
     func acceptIncomingNegotiation(_ generation: Int, isOffer: Bool = false) -> Bool {
-        if Self.isStaleNegotiation(incoming: generation, highWaterMark: negotiationId, isOffer: isOffer) {
-            Logger.calls.info("[CALL-DIAG] dropping stale signal gen=\(generation) < current=\(self.negotiationId)")
-            return false
-        }
-        let freshLink = Self.isFreshLinkOffer(incoming: generation, highWaterMark: negotiationId, isOffer: isOffer)
-        negotiationId = max(negotiationId, generation)
-        if freshLink { negotiationId = generation }
-        return true
+        sdpSignaler.acceptIncomingNegotiation(generation, isOffer: isOffer)
     }
 
     /// Pure, testable epoch rule (§3.5): a signal is stale when its generation
@@ -134,14 +126,6 @@ extension CallManager {
     /// accepted (offer, its answer, and the matching ICE share a generation).
     static func isStaleNegotiation(incoming: Int, highWaterMark: Int, isOffer: Bool = false) -> Bool {
         incoming < highWaterMark && !isFreshLinkOffer(incoming: incoming, highWaterMark: highWaterMark, isOffer: isOffer)
-    }
-
-    /// §3.5 — begin a new outgoing negotiation: bump the epoch and return it to
-    /// stamp on the offer. Only offer creation starts a new generation; the
-    /// answer and ICE reuse the current value.
-    private func nextOutgoingNegotiationId() -> Int {
-        negotiationId += 1
-        return negotiationId
     }
 
     /// Pure, testable politeness rule (W3C perfect negotiation): the
@@ -176,106 +160,26 @@ extension CallManager {
     func emitCallOffer(callId: String, toUserId: String, isVideo: Bool, sdp: SessionDescription) {
         let fromUserId = AuthManager.shared.currentUser?.id ?? ""
         // §3.5 — a new offer opens a new negotiation generation.
-        let generation = nextOutgoingNegotiationId()
+        let generation = sdpSignaler.beginOutgoingNegotiation()
         let payload: [String: Any] = [
             "sdp": sdp.sdp, "to": offerTarget(for: toUserId), "from": fromUserId, "negotiationId": generation
         ]
-        // §6.3 — at-least-once delivery. The offer is the single most critical
-        // signal (no offer ⇒ caller rings forever, callee stuck "Connexion…").
-        // Fire-and-forget dropped it silently on socket churn; the gateway
-        // buffer/replay (§4.6) is the *backstop* for a target not-yet-in-room,
-        // but the EMITTER must also retry when its own socket lost the frame.
-        offerRetryTask?.cancel()
-        offerRetryTask = Task { [weak self] in
-            await self?.emitOfferWithRetry(callId: callId, payload: payload, generation: generation)
-        }
+        sdpSignaler.emitOffer(callId: callId, payload: payload, generation: generation)
     }
 
-    /// §6.3 — ACK + bounded exponential backoff for the SDP offer. Stops early
-    /// if the call ended or a newer negotiation superseded this offer (epoch),
-    /// so a stale retry never lands on the peer after a renegotiation.
-    private func emitOfferWithRetry(callId: String, payload: [String: Any], generation: Int) async {
-        let maxAttempts = QualityThresholds.signalOfferMaxAttempts
-        var delay: TimeInterval = QualityThresholds.signalRetryInitialDelaySeconds
-        for attempt in 1...maxAttempts {
-            guard !Task.isCancelled, currentCallId == callId, generation >= negotiationId else {
-                Logger.calls.info("[CALL-DIAG] offer gen=\(generation) superseded/cancelled — stop retry")
-                return
-            }
-            let acked = await MessageSocketManager.shared.emitCallSignalWithAck(
-                callId: callId, type: "offer", payload: payload
-            )
-            if acked {
-                if attempt > 1 { Logger.calls.info("[CALL-DIAG] offer ACK'd on attempt \(attempt)") }
-                return
-            }
-            Logger.calls.warning("[CALL-DIAG] offer ACK timed out (attempt \(attempt)/\(maxAttempts)) call=\(callId)")
-            if attempt < maxAttempts {
-                _ = await cancellableSleep(for: .seconds(delay))
-                delay *= 2
-            }
-        }
-        Logger.calls.error("[CALL-DIAG] offer never ACK'd after \(maxAttempts) attempts — relying on gateway replay (§4.6)")
-    }
-
-    /// PERF-004: Awaits gateway ACK (3s timeout) confirming the SDP answer
-    /// was relayed to the remote peer. Returning from this method means the
-    /// answer is on the wire — so CXAnswerCallAction.fulfill() can run with
-    /// confidence that the ICE/SDP exchange has actually started.
+    /// PERF-004 + H3 — the answer is ACK'd inline, then retried in the
+    /// background by `CallSdpSignaler.emitAnswer`. Returning `true` means the
+    /// answer is on the wire, so CXAnswerCallAction.fulfill() can run.
     @discardableResult
     func emitCallAnswer(callId: String, toUserId: String, sdp: SessionDescription) async -> Bool {
         let fromUserId = AuthManager.shared.currentUser?.id ?? ""
         // §3.5 — the answer belongs to the offer's generation (the current
         // high-water mark, advanced when the offer was accepted).
-        let generation = negotiationId
+        let generation = sdpSignaler.negotiationId
         let payload: [String: Any] = [
             "sdp": sdp.sdp, "to": toUserId, "from": fromUserId, "negotiationId": generation
         ]
-        // PERF-004 — first attempt awaited inline so CXAnswerCallAction.fulfill()
-        // is paired with a relayed answer in the common case.
-        let acked = await MessageSocketManager.shared.emitCallSignalWithAck(
-            callId: callId, type: "answer", payload: payload
-        )
-        if acked { return true }
-        // H3 — an un-ACK'd answer used to be dropped silently, leaving the peer
-        // stuck on "Connexion…" until the reliability watchdog fired. The offer
-        // already retries (`emitOfferWithRetry`); mirror it for the answer, but
-        // in the BACKGROUND so the CallKit fulfill window isn't blocked. The
-        // gateway dedupes the duplicate by `negotiationId` (§3.5), so a re-sent
-        // answer never causes glare.
-        Logger.calls.warning("[CALL-DIAG] answer ACK timed out (attempt 1) call=\(callId) — retrying in background")
-        answerRetryTask?.cancel()
-        answerRetryTask = Task { [weak self] in
-            await self?.emitAnswerRetry(callId: callId, payload: payload, generation: generation)
-        }
-        return false
-    }
-
-    /// H3 — bounded exponential backoff for the SDP answer (attempts 2…4, the
-    /// first having run inline in `emitCallAnswer`). Stops early if the call
-    /// ended or a newer negotiation superseded this answer (epoch), so a stale
-    /// answer never lands on the peer after a renegotiation.
-    private func emitAnswerRetry(callId: String, payload: [String: Any], generation: Int) async {
-        var delay: TimeInterval = QualityThresholds.signalRetryInitialDelaySeconds
-        let total = QualityThresholds.signalAnswerTotalAttempts
-        for attempt in 2...total {
-            guard !Task.isCancelled, currentCallId == callId, generation >= negotiationId else {
-                Logger.calls.info("[CALL-DIAG] answer gen=\(generation) superseded/cancelled — stop retry")
-                return
-            }
-            _ = await cancellableSleep(for: .seconds(delay))
-            delay *= 2
-            guard !Task.isCancelled, currentCallId == callId, generation >= negotiationId else { return }
-            let acked = await MessageSocketManager.shared.emitCallSignalWithAck(
-                callId: callId, type: "answer", payload: payload
-            )
-            if acked {
-                Logger.calls.info("[CALL-DIAG] answer ACK'd on attempt \(attempt)")
-                return
-            }
-            Logger.calls.warning("[CALL-DIAG] answer ACK timed out (attempt \(attempt)/\(total)) call=\(callId)")
-        }
-        Logger.calls.error("[CALL-DIAG] answer never ACK'd after \(total) attempts — relying on gateway replay (§4.6)")
+        return await sdpSignaler.emitAnswer(callId: callId, payload: payload)
     }
 
     // Refus explicite = `call:end {reason: "rejected"}` (plus `call:leave`) :

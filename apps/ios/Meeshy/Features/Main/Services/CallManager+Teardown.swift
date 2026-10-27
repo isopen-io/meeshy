@@ -223,10 +223,7 @@ extension CallManager {
         participantJoinedCancellable = nil
         sdpOfferTimeoutTask?.cancel()
         sdpOfferTimeoutTask = nil
-        offerRetryTask?.cancel()
-        offerRetryTask = nil
-        answerRetryTask?.cancel()
-        answerRetryTask = nil
+        sdpSignaler.cancelRetries()
         videoToggleTask?.cancel()
         videoToggleTask = nil
         holdVideoTask?.cancel()
