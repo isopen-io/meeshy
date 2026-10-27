@@ -14,6 +14,7 @@ import me.meeshy.app.auth.MagicLinkValidateScreen
 import me.meeshy.app.auth.MagicLinkValidateViewModel
 import me.meeshy.app.auth.ShareLinkEntryScreen
 import me.meeshy.app.auth.SignupScreen
+import me.meeshy.app.auth.WorldGuestEntryScreen
 import me.meeshy.app.navigation.Routes
 import me.meeshy.sdk.model.legal.LegalDocumentKind
 
@@ -116,6 +117,28 @@ internal fun NavGraphBuilder.authNavGraph(
                     popUpTo(Routes.GUEST_JOIN) { inclusive = true }
                 }
             },
+        )
+    }
+    composable(
+        route = Routes.WORLD_ENTRY,
+        deepLinks = listOf(
+            navDeepLink { uriPattern = Routes.WORLD_ENTRY_DEEP_LINK },
+            navDeepLink { uriPattern = Routes.WORLD_ENTRY_WEB_DEEP_LINK },
+        ),
+    ) {
+        WorldGuestEntryScreen(
+            onEntered = { conversationId ->
+                navController.navigate(Routes.chat(conversationId)) {
+                    popUpTo(Routes.WORLD_ENTRY) { inclusive = true }
+                }
+            },
+            // Un compte ouvert n'entre jamais en invité : la porte des comptes choisit l'identité.
+            onJoinWithAccount = { linkKey ->
+                navController.navigate(Routes.guestJoin(linkKey)) {
+                    popUpTo(Routes.WORLD_ENTRY) { inclusive = true }
+                }
+            },
+            onClose = { navController.popBackStack() },
         )
     }
 }

@@ -23,7 +23,7 @@ class NavGraphRouteSetTest {
     @Test
     fun `every pre-split destination is registered exactly once`() {
         assertThat(registered).containsExactly(
-            "LOGIN", "FORGOT_PASSWORD", "MAGIC_LINK", "MAGIC_LINK_VALIDATE", "REGISTRATION", "GUEST_JOIN",
+            "LOGIN", "FORGOT_PASSWORD", "MAGIC_LINK", "MAGIC_LINK_VALIDATE", "REGISTRATION", "GUEST_JOIN", "WORLD_ENTRY",
             "CONVERSATIONS", "SHARE_LINK_PICKER", "GLOBAL_SEARCH", "DASHBOARD", "CREATE_SHARE_LINK",
             "MY_SHARE_LINKS", "SHARE_LINK_DETAIL", "NEW_CONVERSATION", "CHAT", "STARRED",
             "FEED", "SAVED_POSTS", "NEARBY_DISCOVERY", "POST_DETAIL", "REELS", "STORY_VIEWER", "STORY_COMPOSER_ROUTE",
@@ -46,6 +46,7 @@ class NavGraphRouteSetTest {
             .flatMap { Regex("""uriPattern = (Routes\.[A-Z_]+)""").findAll(it.readText()).map { m -> m.groupValues[1] }.toList() }
         assertThat(deepLinks).containsExactly(
             "Routes.GUEST_JOIN_DEEP_LINK", "Routes.GUEST_JOIN_WEB_DEEP_LINK", "Routes.GUEST_JOIN_CHAT_WEB_DEEP_LINK",
+            "Routes.WORLD_ENTRY_DEEP_LINK", "Routes.WORLD_ENTRY_WEB_DEEP_LINK",
             "Routes.CONVERSATIONS_DEEP_LINK",
             "Routes.CHAT_DEEP_LINK", "Routes.CONVERSATION_DEEP_LINK", "Routes.CONVERSATION_SINGULAR_DEEP_LINK",
             "Routes.CONVERSATION_SHORT_DEEP_LINK", "Routes.CONVERSATION_DRAFT_DEEP_LINK",

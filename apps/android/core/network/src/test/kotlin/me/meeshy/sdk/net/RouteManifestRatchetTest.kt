@@ -51,7 +51,7 @@ class RouteManifestRatchetTest {
          * 264 : moins `GET /me/preferences/audio` (#13240 : la transcription automatique des vocaux
          * entrants), que porte `PreferencesApi.getAudio`.
          */
-        const val TO_PORT_CEILING = 264
+        const val TO_PORT_CEILING = 263
         val VERB_STATUSES = setOf("hors-perimetre-mobile", "ops-only", "a-porter", "implementee-par-url-serveur")
     }
 

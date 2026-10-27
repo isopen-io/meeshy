@@ -23,6 +23,16 @@
     <string name="auth_magic_success">Anmeldung erfolgreich!</string>
     <string name="auth_magic_title">Anmeldung per E-Mail</string>
     <string name="common_error_generic">Ein Fehler ist aufgetreten</string>
+    <string name="email_gate_invite">Um per E-Mail einzuladen, bestätige deine Adresse. Deine Einladung geht raus, sobald der Code bestätigt ist.</string>
+    <string name="email_gate_label">Bestätige deine E-Mail-Adresse</string>
+    <string name="email_gate_later">Später</string>
+    <string name="email_gate_link">Um einen Link zu erstellen, bestätige deine Adresse. Dein Link wird erstellt, sobald der Code bestätigt ist.</string>
+    <string name="email_gate_more_links">Für mehr als 5 aktive Links bestätige deine Adresse. Dein Link wird erstellt, sobald der Code bestätigt ist.</string>
+    <string name="email_gate_publish">Um zu veröffentlichen, bestätige deine Adresse. Dein Beitrag bleibt erhalten und geht raus, sobald der Code bestätigt ist.</string>
+    <string name="email_gate_send">Code erhalten</string>
+    <string name="email_gate_sending">Wird gesendet…</string>
+    <string name="email_gate_sent">Code an %s gesendet. Gib ihn unten ein.</string>
+    <string name="email_gate_title">Bestätige deine E-Mail-Adresse</string>
     <string name="email_verification_code_a11y_label">Bestätigungscode</string>
     <string name="email_verification_code_placeholder">000000</string>
     <string name="email_verification_error_expired_code">Dieser Code ist abgelaufen. Fordere einen neuen an.</string>
@@ -229,4 +239,18 @@
     <string name="signup_sign_in">Anmelden</string>
     <string name="signup_subtitle">Du liest alle in deiner Sprache.</string>
     <string name="signup_title">Erstelle dein Konto</string>
+    <string name="world_entry_back">Zurück</string>
+    <string name="world_entry_close">Schließen</string>
+    <string name="world_entry_continue">Weiter</string>
+    <string name="world_entry_enter">%s betreten</string>
+    <string name="world_entry_error_enter">Der Zutritt ist gerade nicht möglich. Versuch es noch einmal.</string>
+    <string name="world_entry_error_offline">Keine Verbindung. Versuch es erneut, sobald du online bist.</string>
+    <string name="world_entry_language_greeting">Hallo %s, du liest alles auf…</string>
+    <string name="world_entry_language_group">Hauptsprache</string>
+    <string name="world_entry_language_hint">Von deinem Gerät vorgeschlagen.</string>
+    <string name="world_entry_name_label">Dein Name</string>
+    <string name="world_entry_name_placeholder">z. B. Amina</string>
+    <string name="world_entry_name_prompt">Wie sollen wir dich nennen?</string>
+    <string name="world_entry_step">Schritt %1$d von %2$d</string>
+    <string name="world_entry_unavailable">Der Zugang ohne Konto ist gerade nicht geöffnet.</string>
 </resources>

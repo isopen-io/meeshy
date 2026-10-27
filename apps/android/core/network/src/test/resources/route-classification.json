@@ -397,7 +397,6 @@
     "GET /api/v1/voice/languages",
     "GET /api/v1/voice/profile",
     "GET /api/v1/voice/profile/consent",
-    "GET /api/v1/world",
     "GET /api/v1/world/participants/:participantId",
     "PATCH /api/v1/conversations/:id",
     "PATCH /api/v1/conversations/:id/participants/:participantKey",

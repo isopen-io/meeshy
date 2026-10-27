@@ -23,6 +23,16 @@
     <string name="auth_magic_success">Login successful!</string>
     <string name="auth_magic_title">Email sign-in</string>
     <string name="common_error_generic">Something went wrong</string>
+    <string name="email_gate_invite">To invite by email, verify your address. Your invitation will go out as soon as the code is confirmed.</string>
+    <string name="email_gate_label">Confirm your email address</string>
+    <string name="email_gate_later">Later</string>
+    <string name="email_gate_link">To create a link, verify your address. Your link will be created as soon as the code is confirmed.</string>
+    <string name="email_gate_more_links">Beyond 5 active links, verify your address to create more. Your link will be created as soon as the code is confirmed.</string>
+    <string name="email_gate_publish">To publish, verify your address. Your post is kept and will go out as soon as the code is confirmed.</string>
+    <string name="email_gate_send">Get the code</string>
+    <string name="email_gate_sending">Sending…</string>
+    <string name="email_gate_sent">Code sent to %s. Enter it below.</string>
+    <string name="email_gate_title">Verify your email address</string>
     <string name="email_verification_code_a11y_label">Verification code</string>
     <string name="email_verification_code_placeholder">000000</string>
     <string name="email_verification_error_expired_code">This code has expired. Request a new one.</string>
@@ -229,4 +239,18 @@
     <string name="signup_sign_in">Log in</string>
     <string name="signup_subtitle">You’ll read everyone in your own language.</string>
     <string name="signup_title">Create your account</string>
+    <string name="world_entry_back">Back</string>
+    <string name="world_entry_close">Close</string>
+    <string name="world_entry_continue">Continue</string>
+    <string name="world_entry_enter">Enter %s</string>
+    <string name="world_entry_error_enter">Couldn\'t get you in right now. Please try again.</string>
+    <string name="world_entry_error_offline">No connection. Try again once you\'re online.</string>
+    <string name="world_entry_language_greeting">Hi %s, you\'ll read everything in…</string>
+    <string name="world_entry_language_group">Main language</string>
+    <string name="world_entry_language_hint">Suggested from your device.</string>
+    <string name="world_entry_name_label">Your name</string>
+    <string name="world_entry_name_placeholder">e.g. Amina</string>
+    <string name="world_entry_name_prompt">What should we call you?</string>
+    <string name="world_entry_step">Step %1$d of %2$d</string>
+    <string name="world_entry_unavailable">Entry without an account isn\'t open right now.</string>
 </resources>

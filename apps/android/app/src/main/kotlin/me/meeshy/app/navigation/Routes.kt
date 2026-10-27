@@ -41,6 +41,14 @@ object Routes {
     const val GUEST_JOIN_CHAT_WEB_DEEP_LINK =
         "https://meeshy.me/chat/{${GuestJoinViewModel.IDENTIFIER_ARG}}"
     fun guestJoin(identifier: String): String = "join/$identifier"
+
+    /**
+     * L'entrée SANS COMPTE dans World Wide (#10006) : nom → langue → fil. Elle ne s'atteint que par le QR de
+     * meeshy.me vers `/world` (directive porteur 2026-10-16, #10784) — jamais par un bouton de l'écran de connexion.
+     */
+    const val WORLD_ENTRY = "world"
+    const val WORLD_ENTRY_DEEP_LINK = "meeshy://world"
+    const val WORLD_ENTRY_WEB_DEEP_LINK = "https://meeshy.me/world"
     const val CONVERSATIONS = "conversations"
     const val NEW_CONVERSATION = "conversations/new"
     const val GLOBAL_SEARCH = "search"

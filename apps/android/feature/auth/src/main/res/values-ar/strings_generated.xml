@@ -23,6 +23,16 @@
     <string name="auth_magic_success">تم تسجيل الدخول!</string>
     <string name="auth_magic_title">تسجيل الدخول عبر البريد الإلكتروني</string>
     <string name="common_error_generic">حدث خطأ</string>
+    <string name="email_gate_invite">للدعوة عبر البريد الإلكتروني، أكّد عنوانك. ستُرسل دعوتك فور تأكيد الرمز.</string>
+    <string name="email_gate_label">أكّد عنوان بريدك الإلكتروني</string>
+    <string name="email_gate_later">لاحقًا</string>
+    <string name="email_gate_link">لإنشاء رابط، أكّد عنوانك. سيُنشأ رابطك فور تأكيد الرمز.</string>
+    <string name="email_gate_more_links">بعد 5 روابط نشطة، أكّد عنوانك لإنشاء المزيد. سيُنشأ رابطك فور تأكيد الرمز.</string>
+    <string name="email_gate_publish">للنشر، أكّد عنوانك. منشورك محفوظ وسيُنشر فور تأكيد الرمز.</string>
+    <string name="email_gate_send">استلام الرمز</string>
+    <string name="email_gate_sending">جارٍ الإرسال…</string>
+    <string name="email_gate_sent">أُرسل الرمز إلى %s. أدخله أدناه.</string>
+    <string name="email_gate_title">أكّد عنوان بريدك الإلكتروني</string>
     <string name="email_verification_code_a11y_label">رمز التحقّق</string>
     <string name="email_verification_code_placeholder">000000</string>
     <string name="email_verification_error_expired_code">انتهت صلاحية هذا الرمز. اطلب رمزًا جديدًا.</string>
@@ -249,4 +259,18 @@
     <string name="signup_sign_in">تسجيل الدخول</string>
     <string name="signup_subtitle">ستقرأ الجميع بلغتك.</string>
     <string name="signup_title">أنشئ حسابك</string>
+    <string name="world_entry_back">رجوع</string>
+    <string name="world_entry_close">إغلاق</string>
+    <string name="world_entry_continue">متابعة</string>
+    <string name="world_entry_enter">ادخل إلى %s</string>
+    <string name="world_entry_error_enter">تعذّر الدخول الآن. حاول مرة أخرى.</string>
+    <string name="world_entry_error_offline">لا يوجد اتصال. حاول مجددًا عند الاتصال بالإنترنت.</string>
+    <string name="world_entry_language_greeting">مرحبًا %s، ستقرأ كل شيء بـ…</string>
+    <string name="world_entry_language_group">اللغة الرئيسية</string>
+    <string name="world_entry_language_hint">مقترحة من جهازك.</string>
+    <string name="world_entry_name_label">اسمك</string>
+    <string name="world_entry_name_placeholder">مثال: أمينة</string>
+    <string name="world_entry_name_prompt">بماذا نناديك؟</string>
+    <string name="world_entry_step">الخطوة %1$d من %2$d</string>
+    <string name="world_entry_unavailable">الدخول بدون حساب غير متاح حاليًا.</string>
 </resources>

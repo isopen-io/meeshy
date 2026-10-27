@@ -23,6 +23,16 @@
     <string name="auth_magic_success">Accesso riuscito!</string>
     <string name="auth_magic_title">Accesso via email</string>
     <string name="common_error_generic">Si è verificato un errore</string>
+    <string name="email_gate_invite">Per invitare via e-mail, convalida il tuo indirizzo. Il tuo invito partirà appena il codice sarà convalidato.</string>
+    <string name="email_gate_label">Conferma il tuo indirizzo email</string>
+    <string name="email_gate_later">Più tardi</string>
+    <string name="email_gate_link">Per creare un link, convalida il tuo indirizzo. Il tuo link sarà creato appena il codice sarà convalidato.</string>
+    <string name="email_gate_more_links">Oltre 5 link attivi, convalida il tuo indirizzo per crearne altri. Il tuo link sarà creato appena il codice sarà convalidato.</string>
+    <string name="email_gate_publish">Per pubblicare, convalida il tuo indirizzo. Il tuo contenuto è conservato e partirà appena il codice sarà convalidato.</string>
+    <string name="email_gate_send">Ricevi il codice</string>
+    <string name="email_gate_sending">Invio…</string>
+    <string name="email_gate_sent">Codice inviato a %s. Inseriscilo qui sotto.</string>
+    <string name="email_gate_title">Convalida il tuo indirizzo e-mail</string>
     <string name="email_verification_code_a11y_label">Codice di verifica</string>
     <string name="email_verification_code_placeholder">000000</string>
     <string name="email_verification_error_expired_code">Questo codice è scaduto. Richiedine uno nuovo.</string>
@@ -234,4 +244,18 @@
     <string name="signup_sign_in">Accedi</string>
     <string name="signup_subtitle">Leggerai tutti nella tua lingua.</string>
     <string name="signup_title">Crea il tuo account</string>
+    <string name="world_entry_back">Indietro</string>
+    <string name="world_entry_close">Chiudi</string>
+    <string name="world_entry_continue">Continua</string>
+    <string name="world_entry_enter">Entra in %s</string>
+    <string name="world_entry_error_enter">Impossibile entrare al momento. Riprova.</string>
+    <string name="world_entry_error_offline">Nessuna connessione. Riprova quando sei online.</string>
+    <string name="world_entry_language_greeting">Ciao %s, leggerai tutto in…</string>
+    <string name="world_entry_language_group">Lingua principale</string>
+    <string name="world_entry_language_hint">Suggerita dal tuo dispositivo.</string>
+    <string name="world_entry_name_label">Il tuo nome</string>
+    <string name="world_entry_name_placeholder">Es. Amina</string>
+    <string name="world_entry_name_prompt">Come dobbiamo chiamarti?</string>
+    <string name="world_entry_step">Passo %1$d di %2$d</string>
+    <string name="world_entry_unavailable">L\'accesso senza account non è aperto al momento.</string>
 </resources>

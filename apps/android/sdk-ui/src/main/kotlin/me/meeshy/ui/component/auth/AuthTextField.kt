@@ -63,6 +63,7 @@ import me.meeshy.ui.theme.MeeshyTheme
 public enum class AuthContentType(
     internal val autofillTypes: List<AutofillType>,
     internal val keyboardType: KeyboardType,
+    internal val capitalization: KeyboardCapitalization = KeyboardCapitalization.None,
 ) {
     None(emptyList(), KeyboardType.Text),
     Username(listOf(AutofillType.Username), KeyboardType.Text),
@@ -70,6 +71,9 @@ public enum class AuthContentType(
     OneTimeCode(listOf(AutofillType.SmsOtpCode), KeyboardType.Number),
     Password(listOf(AutofillType.Password), KeyboardType.Password),
     NewPassword(listOf(AutofillType.NewPassword), KeyboardType.Password),
+
+    /** Un prénom ou un nom d'usage : initiale en majuscule à chaque mot (iOS `.textContentType(.name)`). */
+    PersonName(listOf(AutofillType.PersonFullName), KeyboardType.Text, KeyboardCapitalization.Words),
 }
 
 /** Le liseré courant d'un champ, lisible par les témoins de test (jamais par l'accessibilité). */
@@ -220,7 +224,7 @@ private fun AuthInput(
         textStyle = authInputTextStyle(),
         cursorBrush = SolidColor(MeeshyPalette.Indigo500),
         keyboardOptions = KeyboardOptions(
-            capitalization = KeyboardCapitalization.None,
+            capitalization = contentType.capitalization,
             autoCorrectEnabled = false,
             keyboardType = contentType.keyboardType,
             imeAction = imeAction,

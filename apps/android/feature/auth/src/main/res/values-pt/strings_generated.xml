@@ -23,6 +23,16 @@
     <string name="auth_magic_success">Login realizado!</string>
     <string name="auth_magic_title">Login por e-mail</string>
     <string name="common_error_generic">Ocorreu um erro</string>
+    <string name="email_gate_invite">Para convidar por e-mail, valide seu endereço. Seu convite será enviado assim que o código for validado.</string>
+    <string name="email_gate_label">Confirme seu endereço de e-mail</string>
+    <string name="email_gate_later">Mais tarde</string>
+    <string name="email_gate_link">Para criar um link, valide seu endereço. Seu link será criado assim que o código for validado.</string>
+    <string name="email_gate_more_links">Além de 5 links ativos, valide seu endereço para criar outros. Seu link será criado assim que o código for validado.</string>
+    <string name="email_gate_publish">Para publicar, valide seu endereço. Sua publicação fica guardada e será enviada assim que o código for validado.</string>
+    <string name="email_gate_send">Receber o código</string>
+    <string name="email_gate_sending">Enviando…</string>
+    <string name="email_gate_sent">Código enviado para %s. Digite-o abaixo.</string>
+    <string name="email_gate_title">Valide seu endereço de e-mail</string>
     <string name="email_verification_code_a11y_label">Código de verificação</string>
     <string name="email_verification_code_placeholder">000000</string>
     <string name="email_verification_error_expired_code">Este código expirou. Solicite um novo.</string>
@@ -234,4 +244,18 @@
     <string name="signup_sign_in">Entrar</string>
     <string name="signup_subtitle">Você vai ler todo mundo no seu idioma.</string>
     <string name="signup_title">Crie sua conta</string>
+    <string name="world_entry_back">Voltar</string>
+    <string name="world_entry_close">Fechar</string>
+    <string name="world_entry_continue">Continuar</string>
+    <string name="world_entry_enter">Entrar no %s</string>
+    <string name="world_entry_error_enter">Não foi possível entrar agora. Tente novamente.</string>
+    <string name="world_entry_error_offline">Sem conexão. Tente novamente quando estiver on-line.</string>
+    <string name="world_entry_language_greeting">Olá %s, você vai ler tudo em…</string>
+    <string name="world_entry_language_group">Idioma principal</string>
+    <string name="world_entry_language_hint">Sugerido pelo seu dispositivo.</string>
+    <string name="world_entry_name_label">Seu nome</string>
+    <string name="world_entry_name_placeholder">Ex.: Amina</string>
+    <string name="world_entry_name_prompt">Como devemos chamar você?</string>
+    <string name="world_entry_step">Etapa %1$d de %2$d</string>
+    <string name="world_entry_unavailable">A entrada sem conta não está aberta no momento.</string>
 </resources>
