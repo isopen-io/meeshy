@@ -108,6 +108,7 @@
     <string name="game2_prestige_stars">Renacimientos: %1$s de %2$s</string>
     <string name="game2_prestige_title">Renacimiento</string>
     <string name="game2_retry">Reintentar</string>
+    <string name="game2_season_claim">Reclamar la parada %s</string>
     <string name="game2_season_completed">Viaje cumplido: una copa, una medalla fechada y %s de gloria.</string>
     <string name="game2_season_heading">Viaje %1$s · semana %2$s de %3$s</string>
     <string name="game2_season_how">Cada acto hecho realidad y cada alianza te hacen avanzar unos pasos: %s pasos llevan a la parada siguiente. Todo el viaje es gratis.</string>
@@ -117,6 +118,7 @@
     <string name="game2_season_reward_freeze">Una Vela para tu Llama</string>
     <string name="game2_season_reward_season_cup">La copa del viaje</string>
     <string name="game2_season_seal_body">El Sello es puramente decorativo: un objeto de colección cada %s paradas, que no cambia nada del juego.</string>
+    <string name="game2_season_seal_buy">Conseguir el Sello · %s</string>
     <string name="game2_season_seal_cosmetic">Objeto del Sello</string>
     <string name="game2_season_seal_owned">Tienes el Sello de este viaje.</string>
     <string name="game2_season_seal_title">El Sello del viaje</string>
@@ -536,6 +538,7 @@
     <string name="game_spend_missing_freeze">Te faltan %s para tomar una Vela.</string>
     <string name="game_spend_missing_relight">Te faltan %s para volver a encender tu Llama.</string>
     <string name="game_spend_missing_reroll">Te faltan %s para cambiar este acto.</string>
+    <string name="game_spend_missing_seal">Te faltan %s para conseguir el Sello del viaje.</string>
     <string name="game_starFragments_one">%s fragmento de estrella</string>
     <string name="game_starFragments_other">%s fragmentos de estrella</string>
     <plurals name="game_streak_record">

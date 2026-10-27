@@ -108,6 +108,7 @@
     <string name="game2_prestige_stars">Rebirths: %1$s of %2$s</string>
     <string name="game2_prestige_title">Rebirth</string>
     <string name="game2_retry">Try again</string>
+    <string name="game2_season_claim">Claim stop %s</string>
     <string name="game2_season_completed">Journey accomplished: a cup, a dated medal and %s glory.</string>
     <string name="game2_season_heading">Journey %1$s · week %2$s of %3$s</string>
     <string name="game2_season_how">Each act you complete and each alliance carry you a few strides: %s strides lead to the next stop. The whole journey is free.</string>
@@ -117,6 +118,7 @@
     <string name="game2_season_reward_freeze">A Vigil for your Flame</string>
     <string name="game2_season_reward_season_cup">The journey cup</string>
     <string name="game2_season_seal_body">The Seal is purely decorative: a collectible every %s stops, which changes nothing in the game.</string>
+    <string name="game2_season_seal_buy">Get the Seal · %s</string>
     <string name="game2_season_seal_cosmetic">Seal item</string>
     <string name="game2_season_seal_owned">You have this journey’s Seal.</string>
     <string name="game2_season_seal_title">The Journey Seal</string>
@@ -534,6 +536,7 @@
     <string name="game_spend_missing_freeze">You lack %s to take a Vigil.</string>
     <string name="game_spend_missing_relight">Still missing to relight your Flame: %s.</string>
     <string name="game_spend_missing_reroll">You lack %s to change this act.</string>
+    <string name="game_spend_missing_seal">You lack %s to take the Journey Seal.</string>
     <string name="game_starFragments_one">%s star fragment</string>
     <string name="game_starFragments_other">%s star fragments</string>
     <plurals name="game_streak_record">

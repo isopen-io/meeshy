@@ -26,6 +26,10 @@ import me.meeshy.sdk.model.game.MeeshEdition
 import me.meeshy.sdk.model.game.MeeshMintResponse
 import me.meeshy.sdk.model.game.MissionDifficulty
 import me.meeshy.sdk.model.game.MissionRerollResponse
+import me.meeshy.sdk.model.game.SeasonClaimResponse
+import me.meeshy.sdk.model.game.SeasonRewardBlock
+import me.meeshy.sdk.model.game.SeasonRewardKind
+import me.meeshy.sdk.model.game.SeasonSealResponse
 import me.meeshy.sdk.network.InMemoryNetworkMonitor
 import org.junit.After
 import org.junit.Before
@@ -325,5 +329,76 @@ class GameGesturesViewModelTest {
 
         coVerify(exactly = 1) { gestures.mint(any(), any()) }
         assertThat(vm.state.value.celebration?.number).isEqualTo(92)
+    }
+
+    private val claimed = SeasonClaimResponse(
+        status = "claimed", step = 7, reward = SeasonRewardBlock(SeasonRewardKind.Points, 100),
+        seal = null, completed = false, gloryGained = 0, score = 100,
+    )
+
+    @Test
+    fun `reclamer une halte nomme la halte pendant le vol puis relit la progression`() = runTest {
+        val gate = CompletableDeferred<GameWriteOutcome<SeasonClaimResponse>>()
+        coEvery { gestures.claimSeasonStep(any(), 7) } coAnswers { gate.await() }
+        val vm = viewModel()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect { } }
+
+        vm.claimStep(7)
+        vm.claimStep(8)
+        assertThat(vm.state.value.claimingStep).isEqualTo(7)
+        coVerify(exactly = 0) { progress.refresh() }
+        gate.complete(GameWriteOutcome.Done(claimed))
+
+        assertThat(vm.state.value.claimingStep).isNull()
+        coVerify(exactly = 1) { gestures.claimSeasonStep(any(), any()) }
+        coVerify(exactly = 1) { progress.refresh() }
+    }
+
+    @Test
+    fun `une halte deja reclamee est un refus dit et relu`() = runTest {
+        coEvery { gestures.claimSeasonStep(any(), any()) } returns GameWriteOutcome.Refused("SEASON_STEP_ALREADY_CLAIMED", offline = false)
+        val vm = viewModel()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect { } }
+
+        vm.claimStep(7)
+
+        assertThat(vm.state.value.failures[GameGesture.Claim]?.code).isEqualTo("SEASON_STEP_ALREADY_CLAIMED")
+        coVerify(exactly = 1) { progress.refresh() }
+    }
+
+    @Test
+    fun `chaque halte a son identifiant, le meme sert au reessai de la meme halte`() = runTest {
+        val sent = mutableListOf<String>()
+        coEvery { gestures.claimSeasonStep(capture(sent), any()) } returnsMany listOf(
+            GameWriteOutcome.Refused("NETWORK", offline = true),
+            GameWriteOutcome.Refused("NETWORK", offline = true),
+            GameWriteOutcome.Done(claimed),
+        )
+        val vm = viewModel()
+
+        vm.claimStep(7)
+        vm.claimStep(8)
+        vm.claimStep(7)
+
+        assertThat(sent[0]).isNotEqualTo(sent[1])
+        assertThat(sent[2]).isEqualTo(sent[0])
+    }
+
+    @Test
+    fun `le Sceau pris relit la progression et le refus de solde se dit`() = runTest {
+        coEvery { gestures.buySeasonSeal(any()) } returnsMany listOf(
+            GameWriteOutcome.Refused("INSUFFICIENT_MEESHES", offline = false),
+            GameWriteOutcome.Done(SeasonSealResponse("bought", balance = 0)),
+        )
+        val vm = viewModel()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect { } }
+
+        vm.buySeal()
+        assertThat(vm.state.value.failures[GameGesture.Seal]?.code).isEqualTo("INSUFFICIENT_MEESHES")
+        vm.buySeal()
+
+        assertThat(vm.state.value.failures).isEmpty()
+        assertThat(vm.state.value.buyingSeal).isFalse()
+        coVerify(exactly = 2) { progress.refresh() }
     }
 }

@@ -108,6 +108,7 @@
     <string name="game2_prestige_stars">Rinascite: %1$s su %2$s</string>
     <string name="game2_prestige_title">Rinascita</string>
     <string name="game2_retry">Riprova</string>
+    <string name="game2_season_claim">Riscatta la sosta %s</string>
     <string name="game2_season_completed">Viaggio compiuto: una coppa, una medaglia datata e %s di gloria.</string>
     <string name="game2_season_heading">Viaggio %1$s · settimana %2$s su %3$s</string>
     <string name="game2_season_how">Ogni atto compiuto e ogni alleanza ti fanno avanzare di qualche passo: %s passi portano alla sosta successiva. Tutto il viaggio è gratuito.</string>
@@ -117,6 +118,7 @@
     <string name="game2_season_reward_freeze">Una Lucerna per la tua Fiamma</string>
     <string name="game2_season_reward_season_cup">La coppa del viaggio</string>
     <string name="game2_season_seal_body">Il Sigillo è puramente decorativo: un oggetto da collezione ogni %s soste, che non cambia nulla nel gioco.</string>
+    <string name="game2_season_seal_buy">Prendi il Sigillo · %s</string>
     <string name="game2_season_seal_cosmetic">Oggetto del Sigillo</string>
     <string name="game2_season_seal_owned">Hai il Sigillo di questo viaggio.</string>
     <string name="game2_season_seal_title">Il Sigillo del viaggio</string>
@@ -536,6 +538,7 @@
     <string name="game_spend_missing_freeze">Mancano %s per prendere una Lucerna.</string>
     <string name="game_spend_missing_relight">Mancano %s per riaccendere la tua Fiamma.</string>
     <string name="game_spend_missing_reroll">Mancano %s per cambiare questo atto.</string>
+    <string name="game_spend_missing_seal">Mancano %s per prendere il Sigillo del viaggio.</string>
     <string name="game_starFragments_one">%s frammento di stella</string>
     <string name="game_starFragments_other">%s frammenti di stella</string>
     <plurals name="game_streak_record">

@@ -26,13 +26,16 @@ import me.meeshy.sdk.model.game.GameRefusalLaw
 import me.meeshy.sdk.network.NetworkMonitor
 
 /** Les gestes du jeu qui touchent un solde. Un seul vol à la fois PAR geste : un double appui n'envoie qu'une requête. */
-enum class GameGesture { Reroll, Chest, Freeze, Relight, Mint }
+enum class GameGesture { Reroll, Chest, Freeze, Relight, Mint, Claim, Seal, Prestige }
 
 /**
  * Le refus du DERNIER essai d'un geste. Jamais un code affiché : l'écran le met en phrase ([offline] ⇒ rien n'est
  * parti, [code] ⇒ la passerelle a répondu).
  */
 data class GameGestureFailure(val offline: Boolean, val code: String?)
+
+/** Ce que la passerelle a RENDU aux derniers gestes, tel quel. */
+private data class Results(val chestReward: DailyChest?, val celebration: MintCelebration?, val claimingStep: Int?, val prestigePassed: Int?)
 
 /** La pièce que la passerelle vient de frapper — le numéro et l'édition sont CEUX DE SA RÉPONSE. [key] rejoue la scène. */
 data class MintCelebration(val number: Int, val edition: MeeshEdition?, val key: Int)
@@ -46,6 +49,12 @@ data class GameGesturesUiState(
     val buyingFreeze: Boolean = false,
     val relighting: Boolean = false,
     val minting: Boolean = false,
+    /** La halte dont la récompense est attendue. */
+    val claimingStep: Int? = null,
+    val buyingSeal: Boolean = false,
+    val passingPrestige: Boolean = false,
+    /** Le numéro de la Renaissance que la passerelle vient d'enregistrer (sa réponse) ; `null` sinon. */
+    val prestigePassed: Int? = null,
     /** La dernière frappe confirmée par la passerelle ; `null` tant qu'aucune ne l'a été sur cet écran. */
     val celebration: MintCelebration? = null,
     val failures: Map<GameGesture, GameGestureFailure> = emptyMap(),
@@ -89,10 +98,12 @@ class GameGesturesViewModel internal constructor(
     private val failures = MutableStateFlow<Map<GameGesture, GameGestureFailure>>(emptyMap())
     private val chestReward = MutableStateFlow<DailyChest?>(null)
     private val celebrationFlow = MutableStateFlow<MintCelebration?>(null)
+    private val claimingStepFlow = MutableStateFlow<Int?>(null)
+    private val prestigePassedFlow = MutableStateFlow<Int?>(null)
 
     val state: StateFlow<GameGesturesUiState> = combine(
-        network.isOnline, inFlight, rerollingMission, failures, combine(chestReward, celebrationFlow) { a, b -> a to b },
-    ) { online, busy, rerolling, failed, (reward, celebration) ->
+        network.isOnline, inFlight, rerollingMission, failures, combine(chestReward, celebrationFlow, claimingStepFlow, prestigePassedFlow, ::Results),
+    ) { online, busy, rerolling, failed, (reward, celebration, claiming, passed) ->
         GameGesturesUiState(
             online = online,
             rerollingMissionId = rerolling,
@@ -100,6 +111,10 @@ class GameGesturesViewModel internal constructor(
             buyingFreeze = GameGesture.Freeze in busy,
             relighting = GameGesture.Relight in busy,
             minting = GameGesture.Mint in busy,
+            claimingStep = claiming,
+            buyingSeal = GameGesture.Seal in busy,
+            passingPrestige = GameGesture.Prestige in busy,
+            prestigePassed = passed,
             celebration = celebration,
             failures = failed,
             chestReward = reward,
@@ -147,6 +162,25 @@ class GameGesturesViewModel internal constructor(
                 }
             },
         ) { id -> gestures.mint(id, preview.price) }
+    }
+
+    /** Réclamer la récompense d'une halte du Voyage. Le crédit (points, fragment, Veilleuse) est celui que la passerelle applique. */
+    fun claimStep(step: Int) {
+        run(GameGesture.Claim, "claim:$step", onStart = { claimingStepFlow.value = step }, onEnd = { claimingStepFlow.value = null }) { id ->
+            gestures.claimSeasonStep(id, step)
+        }
+    }
+
+    /** Prendre le Sceau du Voyage : 10 Meeshes, purement décoratif. */
+    fun buySeal() {
+        run(GameGesture.Seal, "seal") { id -> gestures.buySeasonSeal(id) }
+    }
+
+    /** Renaître : le niveau repart à 1, les étincelles à 0 — c'est la passerelle qui le fait, et l'écran relit ce qu'elle sert. */
+    fun passPrestige() {
+        run(GameGesture.Prestige, "prestige", onStart = { prestigePassedFlow.value = null }, onDone = { prestigePassedFlow.value = it.prestige }) { id ->
+            gestures.passPrestige(id)
+        }
     }
 
     private fun <T : Any> run(

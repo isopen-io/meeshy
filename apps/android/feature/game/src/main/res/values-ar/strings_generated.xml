@@ -108,6 +108,7 @@
     <string name="game2_prestige_stars">الانبعاثات: ⁦%1$s⁩ من ⁦%2$s⁩</string>
     <string name="game2_prestige_title">الانبعاث</string>
     <string name="game2_retry">إعادة المحاولة</string>
+    <string name="game2_season_claim">استلم المحطة ⁦%s⁩</string>
     <string name="game2_season_completed">اكتملت الرحلة: كأس، ووسام مؤرّخ، و%s من المجد.</string>
     <string name="game2_season_heading">الرحلة ⁦%1$s⁩ · الأسبوع ⁦%2$s⁩ من ⁦%3$s⁩</string>
     <string name="game2_season_how">كل فصل محقّق وكل تحالف يُقدّمانك بضع خطوات: ⁦%s⁩ خطوات تقودك إلى المحطة التالية. الرحلة كلها مجانية.</string>
@@ -117,6 +118,7 @@
     <string name="game2_season_reward_freeze">قنديل للهبك</string>
     <string name="game2_season_reward_season_cup">كأس الرحلة</string>
     <string name="game2_season_seal_body">الخاتم للزينة فقط: قطعة للجمع كل ⁦%s⁩ محطات، لا تغيّر شيئًا في اللعبة.</string>
+    <string name="game2_season_seal_buy">احصل على الختم · %s</string>
     <string name="game2_season_seal_cosmetic">عنصر الختم</string>
     <string name="game2_season_seal_owned">لديك خاتم هذه الرحلة.</string>
     <string name="game2_season_seal_title">خاتم الرحلة</string>
@@ -542,6 +544,7 @@
     <string name="game_spend_missing_freeze">ينقصك %s لأخذ قنديل.</string>
     <string name="game_spend_missing_relight">ينقص %s لإعادة إشعال لهبك.</string>
     <string name="game_spend_missing_reroll">ينقصك %s لتبديل هذا الفصل.</string>
+    <string name="game_spend_missing_seal">ينقصك %s لأخذ خاتم الرحلة.</string>
     <string name="game_starFragments_one">%s شظية نجم</string>
     <string name="game_starFragments_other">%s شظايا نجم</string>
     <plurals name="game_streak_record">

@@ -1,6 +1,7 @@
 package me.meeshy.app.game.pages
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -14,6 +15,18 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.semantics.Role
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import me.meeshy.app.game.gestures.GameGesture
+import me.meeshy.app.game.gestures.GameGesturesUiState
+import me.meeshy.app.game.gestures.GameGesturesViewModel
+import me.meeshy.app.game.gestures.SpendRow
+import me.meeshy.app.game.gestures.gestureMessage
+import me.meeshy.app.game.gestures.meeshes
+import me.meeshy.sdk.model.game.GameSpend
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -47,28 +60,29 @@ import me.meeshy.ui.theme.MeeshyTheme
  * rangée Sceau purement décorative. Les pas viennent des missions du jour et de l'alliance ; quatre pas ouvrent une
  * halte. Chaque halte dit son état par le TEXTE (réclamée, à réclamer, à venir), pas seulement par la couleur.
  *
- * LECTURE SEULE : le parcours est celui que la passerelle sert (`claimedSteps`, `steps`) et la récompense d'une halte
- * est la loi partagée — le client ne calcule ni ne crédite rien. Réclamer une halte et prendre le Sceau (qui se paie
- * en Meeshes) sont des gestes qui touchent un solde : ils viennent avec leur audit.
+ * Le parcours est celui que la passerelle sert (`claimedSteps`, `steps`) et la récompense d'une halte est la loi
+ * partagée. **Réclamer une halte** (toucher une halte prête, ou le bouton qui nomme la prochaine) et **prendre le Sceau**
+ * (10 Meeshes) envoient une intention : rien n'est crédité ni débité ici, l'écran relit ce que la passerelle sert.
  *
  * Aucune saison ouverte est une VALEUR, pas une panne : la prochaine commence bientôt.
  */
 @Composable
-fun SeasonScreen(onBack: () -> Unit) {
+fun SeasonScreen(onBack: () -> Unit, gestures: GameGesturesViewModel = hiltViewModel()) {
+    val state by gestures.state.collectAsStateWithLifecycle()
     GamePageHost(title = stringResource(R.string.game2_season_title), onBack = onBack) { game ->
-        SeasonContent(game)
+        SeasonContent(game, state, gestures)
     }
 }
 
 @Composable
-private fun SeasonContent(game: GameBlock) {
+private fun SeasonContent(game: GameBlock, gestures: GameGesturesUiState, viewModel: GameGesturesViewModel) {
     val season = game.season
     val upcoming = game.seasonUpcoming
     when {
         season != null -> {
             SeasonHeader(season)
-            SeasonPathCard(season)
-            SeasonSealCard(season)
+            SeasonPathCard(season, gestures, onClaim = viewModel::claimStep)
+            SeasonSealCard(season, game.treasury.held, gestures, onBuy = viewModel::buySeal)
         }
         upcoming != null -> SeasonUpcoming(upcoming)
         else -> GameCard(title = stringResource(R.string.game2_season_title)) { GameNote(stringResource(R.string.game2_season_none)) }
@@ -132,22 +146,47 @@ private fun SeasonHeader(season: GameSeasonBlock) {
 private const val STEPS_PER_ROW = 5
 
 @Composable
-private fun SeasonPathCard(season: GameSeasonBlock) {
+private fun SeasonPathCard(season: GameSeasonBlock, gestures: GameGesturesUiState, onClaim: (Int) -> Unit) {
     GameCard(title = stringResource(R.string.game2_season_path)) {
+        season.nextReward?.let { next ->
+            GameActionButton(
+                title = stringResource(R.string.game2_season_claim, count(next.step)) + " · " + rewardLabel(next.reward),
+                onClick = { onClaim(next.step) },
+                busy = gestures.claimingStep != null,
+                enabled = gestures.online,
+                tint = MeeshyPalette.Indigo500,
+            )
+        }
+        GameErrorLine(gestureMessage(gestures.failures[GameGesture.Claim]))
         SeasonPath.steps.chunked(STEPS_PER_ROW).forEachIndexed { rowIndex, steps ->
             Row(
                 Modifier.fillMaxWidth().staggeredAppear(minOf(rowIndex, MAX_STAGGER_ROW)),
                 horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
             ) {
-                steps.forEach { step -> SeasonStepCell(step, season, Modifier.weight(1f)) }
+                steps.forEach { step ->
+                    SeasonStepCell(
+                        step, season, Modifier.weight(1f),
+                        claimable = gestures.online && gestures.claimingStep == null,
+                        busy = gestures.claimingStep == step,
+                        onClaim = { onClaim(step) },
+                    )
+                }
             }
         }
+        GameOfflineNote(online = gestures.online)
     }
 }
 
 /** Une halte (44 dp) : son état est dit par un mot, jamais par la seule couleur ; les récompenses spéciales portent leur marque. */
 @Composable
-private fun SeasonStepCell(step: Int, season: GameSeasonBlock, modifier: Modifier = Modifier) {
+private fun SeasonStepCell(
+    step: Int,
+    season: GameSeasonBlock,
+    modifier: Modifier = Modifier,
+    claimable: Boolean = false,
+    busy: Boolean = false,
+    onClaim: () -> Unit = {},
+) {
     val state = SeasonPath.state(step, season)
     val reward = SeasonPath.reward(step, season)
     val tokens = MeeshyTheme.tokens
@@ -170,6 +209,8 @@ private fun SeasonStepCell(step: Int, season: GameSeasonBlock, modifier: Modifie
         modifier
             .heightIn(min = 44.dp)
             .clip(shape)
+            .graphicsLayer { alpha = if (busy) BUSY_ALPHA else 1f }
+            .clickable(enabled = state == SeasonStepState.Ready && claimable, role = Role.Button, onClick = onClaim)
             .background(if (state == SeasonStepState.Locked) Color.Transparent else tint.copy(alpha = if (state == SeasonStepState.Ready) READY_ALPHA else DONE_ALPHA))
             .border(1.dp, tint.copy(alpha = if (state == SeasonStepState.Locked) LOCKED_BORDER else DONE_BORDER), shape)
             .semantics(mergeDescendants = true) { contentDescription = spoken },
@@ -183,7 +224,7 @@ private fun SeasonStepCell(step: Int, season: GameSeasonBlock, modifier: Modifie
 
 /** La rangée Sceau : un cosmétique toutes les quatre haltes, SANS AUCUN avantage de jeu. Allumée quand possédée ET atteinte. */
 @Composable
-private fun SeasonSealCard(season: GameSeasonBlock) {
+private fun SeasonSealCard(season: GameSeasonBlock, held: Int, gestures: GameGesturesUiState, onBuy: () -> Unit) {
     GameCard(title = stringResource(R.string.game2_season_seal_title)) {
         GameNote(stringResource(R.string.game2_season_seal_body, count(GameSeason.SEAL_EVERY)))
         val cosmetic = stringResource(R.string.game2_season_seal_cosmetic)
@@ -197,7 +238,22 @@ private fun SeasonSealCard(season: GameSeasonBlock) {
                 }
             }
         }
-        if (season.sealOwned) GameNote(stringResource(R.string.game2_season_seal_owned), tone = MeeshyPalette.Success)
+        if (season.sealOwned) {
+            GameNote(stringResource(R.string.game2_season_seal_owned), tone = MeeshyPalette.Success)
+        } else {
+            val spend = GameSpend.preview(held = held.toLong(), cost = season.sealPrice.toLong())
+            SpendRow(spend, { meeshes(it) }, { stringResource(R.string.game_spend_missing_seal, it) })
+            GameActionButton(
+                title = stringResource(R.string.game2_season_seal_buy, meeshes(season.sealPrice.toLong())),
+                onClick = onBuy,
+                busy = gestures.buyingSeal,
+                enabled = gestures.online && spend.affordable,
+                tint = MeeshyPalette.Warning,
+                ink = MeeshyPalette.Indigo950,
+            )
+        }
+        GameErrorLine(gestureMessage(gestures.failures[GameGesture.Seal]))
+        GameOfflineNote(online = gestures.online)
     }
 }
 
@@ -220,6 +276,7 @@ private fun SealMark(step: Int, lit: Boolean, modifier: Modifier = Modifier) {
 }
 
 private const val MAX_STAGGER_ROW = 8
+private const val BUSY_ALPHA = 0.6f
 private const val READY_ALPHA = 0.14f
 private const val DONE_ALPHA = 0.08f
 private const val LOCKED_BORDER = 0.3f

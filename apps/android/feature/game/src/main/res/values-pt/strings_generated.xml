@@ -108,6 +108,7 @@
     <string name="game2_prestige_stars">Renascimentos: %1$s de %2$s</string>
     <string name="game2_prestige_title">Renascimento</string>
     <string name="game2_retry">Tentar de novo</string>
+    <string name="game2_season_claim">Resgatar a parada %s</string>
     <string name="game2_season_completed">Viagem cumprida: uma taça, uma medalha datada e %s de glória.</string>
     <string name="game2_season_heading">Viagem %1$s · semana %2$s de %3$s</string>
     <string name="game2_season_how">Cada ato realizado e cada aliança fazem você avançar alguns passos: %s passos levam à parada seguinte. A viagem inteira é gratuita.</string>
@@ -117,6 +118,7 @@
     <string name="game2_season_reward_freeze">Uma Lamparina para a sua Chama</string>
     <string name="game2_season_reward_season_cup">A taça da viagem</string>
     <string name="game2_season_seal_body">O Selo é puramente decorativo: um objeto de coleção a cada %s paradas, que não muda nada no jogo.</string>
+    <string name="game2_season_seal_buy">Pegar o Selo · %s</string>
     <string name="game2_season_seal_cosmetic">Item do Selo</string>
     <string name="game2_season_seal_owned">Você tem o Selo desta viagem.</string>
     <string name="game2_season_seal_title">O Selo da viagem</string>
@@ -536,6 +538,7 @@
     <string name="game_spend_missing_freeze">Faltam %s para pegar uma Lamparina.</string>
     <string name="game_spend_missing_relight">Faltam %s para reacender sua Chama.</string>
     <string name="game_spend_missing_reroll">Faltam %s para trocar este ato.</string>
+    <string name="game_spend_missing_seal">Faltam %s para pegar o Selo da viagem.</string>
     <string name="game_starFragments_one">%s fragmento de estrela</string>
     <string name="game_starFragments_other">%s fragmentos de estrela</string>
     <plurals name="game_streak_record">

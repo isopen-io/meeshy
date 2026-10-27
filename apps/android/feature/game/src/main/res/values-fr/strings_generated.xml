@@ -108,6 +108,7 @@
     <string name="game2_prestige_stars">Renaissances : %1$s sur %2$s</string>
     <string name="game2_prestige_title">Renaissance</string>
     <string name="game2_retry">Réessayer</string>
+    <string name="game2_season_claim">Réclamer la halte %s</string>
     <string name="game2_season_completed">Voyage accompli : une coupe, une médaille datée et %s de gloire.</string>
     <string name="game2_season_heading">Voyage %1$s · semaine %2$s sur %3$s</string>
     <string name="game2_season_how">Chaque acte réalisé et chaque alliance te font avancer de quelques pas : %s pas mènent à la halte suivante. Tout le voyage est gratuit.</string>
@@ -117,6 +118,7 @@
     <string name="game2_season_reward_freeze">Une Veilleuse pour ta Flamme</string>
     <string name="game2_season_reward_season_cup">La coupe du voyage</string>
     <string name="game2_season_seal_body">Le Sceau est purement décoratif : un objet à collectionner toutes les %s haltes, qui ne change rien au jeu.</string>
+    <string name="game2_season_seal_buy">Prendre le Sceau · %s</string>
     <string name="game2_season_seal_cosmetic">Objet du Sceau</string>
     <string name="game2_season_seal_owned">Tu as le Sceau de ce voyage.</string>
     <string name="game2_season_seal_title">Le Sceau du voyage</string>
@@ -536,6 +538,7 @@
     <string name="game_spend_missing_freeze">Il manque %s pour prendre une Veilleuse.</string>
     <string name="game_spend_missing_relight">Il manque %s pour rallumer ta Flamme.</string>
     <string name="game_spend_missing_reroll">Il manque %s pour changer cet acte.</string>
+    <string name="game_spend_missing_seal">Il manque %s pour prendre le Sceau du voyage.</string>
     <string name="game_starFragments_one">%s fragment d’étoile</string>
     <string name="game_starFragments_other">%s fragments d’étoile</string>
     <plurals name="game_streak_record">
