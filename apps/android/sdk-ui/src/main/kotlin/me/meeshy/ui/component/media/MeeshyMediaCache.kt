@@ -87,6 +87,12 @@ public class MeeshyMediaCache private constructor(context: Context) : CachedSpan
     public fun exporter(category: MediaCacheCategory): MediaFileExporter =
         MediaFileExporter(dataSourceFactory(category))
 
+    /** Vide [category] : chaque ressource du cache disque part (changement de compte, déconnexion). */
+    public fun clear(category: MediaCacheCategory) {
+        val cache = cacheFor(category)
+        cache.keys.toList().forEach { key -> runCatching { cache.removeResource(key) } }
+    }
+
     /**
      * Bail de lecture : tant qu'il n'est pas rendu, la ressource de [url] est à l'abri de
      * l'éviction. Rend la fonction qui le libère (idempotente).
