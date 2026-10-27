@@ -108,6 +108,14 @@ describe('#13298 — acceptedFriendIds : l’audience de user:status exclut tout
     expect(prisma.user.findMany).toHaveBeenCalledTimes(1);
     expect(prisma.user.findUnique).toHaveBeenCalledTimes(1);
   });
+
+  it('#13350 — la relation de blocage déjà lue par l’appelant n’est pas relue, et filtre toujours', async () => {
+    const { svc, prisma } = service(monde());
+    const audience = await svc.acceptedFriendIds(SUJET, { blockRelated: new Set([JE_BLOQUE, ME_BLOQUE]) });
+    expect(audience).toEqual(new Set([AMIE]));
+    expect(prisma.user.findMany).not.toHaveBeenCalled();
+    expect(prisma.user.findUnique).not.toHaveBeenCalled();
+  });
 });
 
 describe('#13298 — resolveForPresenceEvent : presence:snapshot ne part ni vers ni depuis un bloqué', () => {

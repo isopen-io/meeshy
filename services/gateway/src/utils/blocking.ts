@@ -128,7 +128,7 @@ export async function getBlockedUserIdsAmong(
  * have dropped it.
  */
 export async function getBlockRelatedUserIds(
-  prisma: PrismaClient,
+  prisma: Pick<PrismaClient, 'user'>,
   userId: string
 ): Promise<Set<string>> {
   const [blockers, userRow] = await Promise.all([

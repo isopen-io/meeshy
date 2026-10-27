@@ -36,7 +36,7 @@ function createMockPrisma() {
     },
     communityMember: {
       findMany: jest.fn().mockResolvedValue([]),
-    },
+    }, user: { findMany: jest.fn().mockResolvedValue([]), findUnique: jest.fn().mockResolvedValue(null) },
   } as any;
 }
 

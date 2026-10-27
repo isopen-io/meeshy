@@ -20,6 +20,7 @@ import { getUserStats } from '../../../routes/users/preferences';
 function buildPrisma(): PrismaClient {
   const prisma = {
     user: {
+      findMany: jest.fn(async () => []),
       findFirst: jest.fn(() =>
         Promise.resolve({ id: 'real-id', createdAt: new Date(Date.now() - 45 * 24 * 60 * 60 * 1000) })
       ),

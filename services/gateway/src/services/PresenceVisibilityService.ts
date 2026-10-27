@@ -145,8 +145,14 @@ export class PresenceVisibilityService {
    * membres. Le coût reste borné par le nombre d'amis du sujet — jamais par la
    * population connectée de la passerelle, dont l'énumération avait déjà fait
    * grossir ce chemin avec le serveur plutôt qu'avec la question posée.
+   *
+   * `blockRelated` : la relation de blocage COMPLÈTE du sujet, quand l'appelant
+   * l'a déjà lue (`getBlockRelatedUserIds`) — elle n'est alors pas relue (#13350).
    */
-  async acceptedFriendIds(userId: string): Promise<Set<string>> {
+  async acceptedFriendIds(
+    userId: string,
+    options: { readonly blockRelated?: ReadonlySet<string> } = {},
+  ): Promise<Set<string>> {
     const rows = await this.prisma.friendRequest.findMany({
       where: {
         status: 'accepted',
@@ -162,7 +168,7 @@ export class PresenceVisibilityService {
           .filter((friendId) => friendId !== userId),
       ),
     ];
-    const blocked = await getBlockedUserIdsAmong(this.prisma, userId, friendIds);
+    const blocked = options.blockRelated ?? await getBlockedUserIdsAmong(this.prisma, userId, friendIds);
     return new Set(friendIds.filter((friendId) => !blocked.has(friendId)));
   }
 

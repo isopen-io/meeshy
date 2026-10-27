@@ -20,6 +20,7 @@ import { ACTIVATION_SELECT, mayPublish, resolveAccountActivation } from '../auth
 import { onboardingStepRewards } from './onboardingRewards';
 import { writeBirthDateOnce } from '../auth/birth-date-write';
 import { engagementScaleServiceFor } from '../engagement/EngagementScaleService';
+import { getBlockRelatedUserIds } from '../../utils/blocking';
 
 /**
  * L'état d'onboarding post-inscription (#7729) — le SEUL site qui le calcule,
@@ -263,7 +264,7 @@ export class OnboardingService {
       window === 'open' && globalConversationId
         ? this.suggestions({ user, ageClass, globalConversationId, now })
         : Promise.resolve([]),
-      this.prisma.friendRequest.count({ where: { senderId: user.id, status: 'pending' } }),
+      this.pendingFriendRequestCount(user.id),
       this.stepRewards(user.id, levelSparksOf(sparksOf(user)), storyDefaultVisibility, now),
     ]);
     return {
@@ -281,6 +282,18 @@ export class OnboardingService {
       stepRewards,
       ...minorGlobalRestriction(user.birthDate, now),
     };
+  }
+
+  /**
+   * Les demandes ENVOYÉES encore en attente, hors personne en relation de
+   * blocage avec le lecteur (#13350) : la liste qu'on lui sert les retire
+   * déjà (#13298), le compteur ne peut pas en annoncer davantage.
+   */
+  private async pendingFriendRequestCount(userId: string): Promise<number> {
+    const blocked = await getBlockRelatedUserIds(this.prisma, userId);
+    return this.prisma.friendRequest.count({
+      where: { senderId: userId, status: 'pending', ...(blocked.size > 0 ? { receiverId: { notIn: [...blocked] } } : {}) },
+    });
   }
 
   /**

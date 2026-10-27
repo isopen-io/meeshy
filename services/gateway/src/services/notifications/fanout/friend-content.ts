@@ -8,6 +8,7 @@ import { getCommunityCoMemberIds } from '../../posts/communityVisibility';
 import { truncateMessage } from '../notification-preview';
 import { resolvePostMedia } from '../post-media-thumbnail';
 import { FANOUT_ROW_CAP } from './row-cap';
+import { getBlockedUserIdsAmong } from '../../../utils/blocking';
 import type { FanoutDependencies } from './dependencies';
 
 export type FriendContentFanoutParams = {
@@ -158,7 +159,18 @@ export async function createFriendContentNotificationsBatch(
     recipientIds = baseFriendIds;
   }
 
-  const uniqueRecipientIds = [...new Set(recipientIds)];
+  // #13350 — le blocage ne rompt pas l'amitié en base : une personne en
+  // relation de blocage avec l'auteur, dans un sens ou dans l'autre, sort de
+  // l'éventail ici, en UNE lecture groupée. Une lecture qui échoue n'envoie rien.
+  const candidateIds = [...new Set(recipientIds)];
+  let blocked: Set<string>;
+  try {
+    blocked = await getBlockedUserIdsAmong(deps.prisma, params.authorId, candidateIds);
+  } catch (error) {
+    notificationLogger.error('Fan-out de publication abandonné : blocage illisible', { postId: params.postId, error });
+    return;
+  }
+  const uniqueRecipientIds = candidateIds.filter((id) => !blocked.has(id));
   const langs = await deps.resolveRecipientLangs(uniqueRecipientIds);
 
   const actorInfo = {

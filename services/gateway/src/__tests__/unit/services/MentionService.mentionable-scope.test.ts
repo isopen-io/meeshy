@@ -191,6 +191,7 @@ function fakePrisma(world: World) {
           .slice(0, take ?? Infinity)
           .map(publicUser)
       ),
+      findUnique: jest.fn(async () => ({ blockedUserIds: [] })),
     },
     conversationMessageStats: {
       findUnique: jest.fn(async () => null),
@@ -342,7 +343,8 @@ describe('recherche de mention — la portée des suggestions est celle de la va
 
       await service.getUserSuggestionsForConversation(PUBLIC, ME.id, 'm');
 
-      expect(prisma.user.findMany).not.toHaveBeenCalled();
+      const directoryReads = prisma.user.findMany.mock.calls.filter(call => JSON.stringify(call).includes('searchTokens'));
+      expect(directoryReads).toEqual([]);
     });
   });
 

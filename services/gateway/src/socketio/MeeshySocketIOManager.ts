@@ -2812,10 +2812,14 @@ export class MeeshySocketIOManager {
       // amis, ni les ADMIN, ni ses autres appareils ne reçoivent la transition.
       if (user.deactivatedAt) return;
 
+      // La relation de blocage est lue UNE fois (#13350) : elle retire les
+      // bloqués de l'audience AMIS et, plus bas, leurs sockets par `.except()`.
+      const blockedUserIds = await getBlockRelatedUserIds(this.prisma, user.id);
+
       // La requête d'amitiés n'est même pas lancée quand elle ne peut servir
       // personne : `showOnlineStatus = false` retire tout le sous-ensemble AMIS.
       const friendIds = privacyPrefs.showOnlineStatus
-        ? [...await this.presenceVisibilityService.acceptedFriendIds(user.id)]
+        ? [...await this.presenceVisibilityService.acceptedFriendIds(user.id, { blockRelated: blockedUserIds })]
         : [];
 
       const emissions = presenceStatusEmissions({
@@ -2845,7 +2849,6 @@ export class MeeshySocketIOManager {
       // socket vivant n'apporte rien à `.except()`. `userSockets` est vidé à la
       // déconnexion (`AuthHandler.handleDisconnection`), donc l'intersection se
       // fait ici, en mémoire, au lieu d'en base.
-      const blockedUserIds = await getBlockRelatedUserIds(this.prisma, user.id);
       const blockedSocketIds = [...blockedUserIds].flatMap(
         id => [...(this.userSockets.get(id) ?? [])],
       );

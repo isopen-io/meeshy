@@ -11,6 +11,7 @@ import { enhancedLogger } from '../../utils/logger-enhanced';
 import { getCommunityCoMemberIds } from '../../services/posts/communityVisibility';
 import { emitServerEvent, type ServerEventName, type ServerEventPayload } from '../serverEmit';
 import { withAudienceListFor, withoutAudienceList } from '../../services/posts/audienceList';
+import { getBlockedUserIdsAmong } from '../../utils/blocking';
 import type {
   Post,
   PostLikedEventData,
@@ -148,6 +149,28 @@ export class SocialEventsHandler {
       logger.error('social events — error fetching friend IDs', { userId, error });
       return [];
     }
+  }
+
+  /**
+   * Retire de l'audience toute personne en relation de blocage avec l'auteur,
+   * dans un sens ou dans l'autre (#13350). Appliqué APRÈS le cache d'amitiés,
+   * jamais dedans : un blocage prend effet à l'émission suivante, sans attendre
+   * l'expiration des 30 s. Une lecture qui échoue ferme l'audience.
+   */
+  private async withoutBlocked(authorId: string, recipientIds: string[]): Promise<string[]> {
+    if (recipientIds.length === 0) return recipientIds;
+    try {
+      const blocked = await getBlockedUserIdsAmong(this.prisma, authorId, recipientIds);
+      return blocked.size === 0 ? recipientIds : recipientIds.filter((id) => !blocked.has(id));
+    } catch (error) {
+      logger.error('social events — block resolution failed, audience closed', { authorId, error });
+      return [];
+    }
+  }
+
+  /** Les amis de l'auteur hors relation de blocage (#13350). */
+  private async getUnblockedFriendIds(authorId: string): Promise<string[]> {
+    return this.withoutBlocked(authorId, await this.getFriendIds(authorId));
   }
 
   /**
@@ -326,6 +349,14 @@ export class SocialEventsHandler {
     visibility: string | null | undefined,
     visibilityUserIds: string[]
   ): Promise<string[]> {
+    return this.withoutBlocked(authorId, await this.getAudienceBeforeBlocking(authorId, visibility, visibilityUserIds));
+  }
+
+  private async getAudienceBeforeBlocking(
+    authorId: string,
+    visibility: string | null | undefined,
+    visibilityUserIds: string[]
+  ): Promise<string[]> {
     if (visibility === 'COMMUNITY') {
       return getCommunityCoMemberIds(this.prisma, authorId);
     }
@@ -383,7 +414,7 @@ export class SocialEventsHandler {
     // suppression, sinon un viewer non-ami resté sur le détail/reel d'un post
     // supprimé ne le sait jamais. `post:join` est gaté par visibilité côté
     // serveur (PostReactionHandler) et io.to([...]) dédoublonne.
-    const friendIds = await this.getFriendIds(authorId);
+    const friendIds = await this.getUnblockedFriendIds(authorId);
     this.emitToFeedsAndPostRoom(friendIds, authorId, postId, SERVER_EVENTS.POST_DELETED, { postId, authorId });
   }
 
@@ -475,7 +506,7 @@ export class SocialEventsHandler {
   /// the visibility metadata anymore — and over-broadcasting a deletion is safe:
   /// recipients who never had the story silently ignore it).
   async broadcastStoryDeleted(storyId: string, authorId: string): Promise<void> {
-    const friendIds = await this.getFriendIds(authorId);
+    const friendIds = await this.getUnblockedFriendIds(authorId);
     this.emitToFriends(friendIds, authorId, SERVER_EVENTS.STORY_DELETED, { storyId, authorId });
   }
 

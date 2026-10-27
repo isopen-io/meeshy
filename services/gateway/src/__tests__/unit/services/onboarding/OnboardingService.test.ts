@@ -88,7 +88,7 @@ function makePrisma(world: World = {}) {
   return {
     user: {
       findUnique: jest.fn<any>(async (args: any) => users.find((u) => u.id === args.where.id) ?? null),
-      findMany: jest.fn<any>(async (args: any) => users.filter((u) => args.where.id.in.includes(u.id))),
+      findMany: jest.fn<any>(async (args: any) => users.filter((u) => args.where.id?.in.includes(u.id))),
       update: jest.fn<any>(async (args: any) => ({ ...viewer, ...args.data })),
     },
     conversation: {
@@ -110,7 +110,7 @@ function makePrisma(world: World = {}) {
       ),
       findMany: jest.fn<any>(async () => friendRequests),
       count: jest.fn<any>(async (args: any) =>
-        friendRequests.filter((fr) => fr.senderId === args.where.senderId && fr.status === args.where.status).length,
+        friendRequests.filter((fr) => fr.senderId === args.where.senderId && fr.status === args.where.status && !(args.where.receiverId?.notIn ?? []).includes(fr.receiverId)).length,
       ),
     },
     post: {
@@ -451,6 +451,24 @@ describe('OnboardingService.getState — demandes en attente (#7910)', () => {
         { senderId: 'c', receiverId: VIEWER, status: 'pending' },
       ],
     });
+    const state = await new OnboardingService(prisma).getState(VIEWER, NOW);
+    expect(state?.pendingFriendRequests).toBe(1);
+  });
+
+  it.each([
+    ['le lecteur a bloqué le destinataire', { viewerBlocks: ['a'], blockers: [] as string[] }],
+    ['le destinataire a bloqué le lecteur', { viewerBlocks: [] as string[], blockers: ['a'] }],
+  ])('#13350 — une demande vers une personne en relation de blocage ne compte pas : %s', async (_sens, b) => {
+    const prisma = makePrisma({
+      viewer: makeUser({ blockedUserIds: b.viewerBlocks }),
+      friendRequests: [
+        { senderId: VIEWER, receiverId: 'a', status: 'pending' },
+        { senderId: VIEWER, receiverId: 'd', status: 'pending' },
+      ],
+    });
+    prisma.user.findMany.mockImplementation(async (args: any) =>
+      args.where.blockedUserIds ? b.blockers.map((id) => ({ id })) : [],
+    );
     const state = await new OnboardingService(prisma).getState(VIEWER, NOW);
     expect(state?.pendingFriendRequests).toBe(1);
   });
