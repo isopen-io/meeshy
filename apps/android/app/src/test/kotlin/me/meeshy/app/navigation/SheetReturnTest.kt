@@ -1,5 +1,6 @@
 package me.meeshy.app.navigation
 
+import androidx.lifecycle.ViewModelStore
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.ComposeNavigator
 import androidx.navigation.compose.DialogNavigator
@@ -56,10 +57,30 @@ class SheetReturnTest {
     }
 
     @Test
-    fun `real navigation - sheet to screen and back shows the sheet again`() {
-        val nav = NavHostController(RuntimeEnvironment.getApplication()).apply {
+    fun `a sheet reopened then closed by back does not come back again`() {
+        val memory = SheetReturnMemory()
+        memory.onStackChanged(listOf(home, posts), listOf(home, post))
+        memory.onStackChanged(listOf(home, post), listOf(home))
+        val reopened = entry("p2", sheet = true, route = "profile/u1/posts", returns = true)
+        assertThat(memory.onStackChanged(listOf(home), listOf(home, reopened))).isNull()
+        assertThat(memory.onStackChanged(listOf(home, reopened), listOf(home))).isNull()
+    }
+
+    @Test
+    fun `a replaced screen frees the kept state of its sheet`() {
+        val memory = SheetReturnMemory()
+        val kept = posts.copy(destinationId = 42)
+        memory.decide(listOf(home, kept), listOf(home, post))
+        val decision = memory.decide(listOf(home, post), listOf(home, entry("o1")))
+        assertThat(decision.reopen).isNull()
+        assertThat(decision.forget).containsExactly(42)
+    }
+
+    private fun navigation(): NavHostController =
+        NavHostController(RuntimeEnvironment.getApplication()).apply {
             navigatorProvider.addNavigator(ComposeNavigator())
             navigatorProvider.addNavigator(DialogNavigator())
+            setViewModelStore(ViewModelStore())
             val self = this
             graph = createGraph(startDestination = "root") {
                 composable("root") {}
@@ -67,9 +88,14 @@ class SheetReturnTest {
                 sheetComposable(Routes.DASHBOARD, self) { _, _ -> }
             }
         }
-        val job = CoroutineScope(Dispatchers.Unconfined).launch {
-            nav.sheetReturns().collect { nav.navigate(it) { launchSingleTop = true } }
-        }
+
+    private fun NavHostController.followSheetReturns() =
+        CoroutineScope(Dispatchers.Unconfined).launch { sheetReturns().collect { applySheetReturn(it) } }
+
+    @Test
+    fun `real navigation - sheet to screen and back shows the sheet again`() {
+        val nav = navigation()
+        val job = nav.followSheetReturns()
         nav.navigate(Routes.DASHBOARD)
         nav.navigate("detail")
         assertThat(nav.currentDestination?.route).isEqualTo("detail")
@@ -77,6 +103,27 @@ class SheetReturnTest {
         nav.popBackStack()
 
         assertThat(nav.currentDestination?.route).isEqualTo(Routes.DASHBOARD)
+        nav.popBackStack()
+        assertThat(nav.currentDestination?.route).isEqualTo("root")
+        job.cancel()
+    }
+
+    @Test
+    fun `real navigation - the sheet comes back in the same state`() {
+        val nav = navigation()
+        val job = nav.followSheetReturns()
+        nav.navigate(Routes.DASHBOARD)
+        val before = nav.currentBackStackEntry!!
+        before.savedStateHandle["scroll"] = 12
+
+        nav.navigateKeepingSheet("detail")
+        assertThat(nav.currentDestination?.route).isEqualTo("detail")
+        nav.popBackStack()
+
+        val after = nav.currentBackStackEntry!!
+        assertThat(after.destination.route).isEqualTo(Routes.DASHBOARD)
+        assertThat(after.viewModelStore).isSameInstanceAs(before.viewModelStore)
+        assertThat(after.savedStateHandle.get<Int>("scroll")).isEqualTo(12)
         job.cancel()
     }
 }
