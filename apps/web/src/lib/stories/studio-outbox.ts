@@ -1,4 +1,5 @@
-import { idbDeviceRecords, type DeviceRecords } from '@/lib/send/send-queue';
+import { idbDeviceRecords, type DeviceRecords } from '@/lib/send/device-records';
+import { studioOutboxFilesKey, studioOutboxMetaKey } from './studio-outbox-records';
 
 import type { PublishChoice } from './publication-layout';
 import { isStudioDraftEmpty, STUDIO_PAGE_MAX, type StudioDraft } from './studio';
@@ -60,8 +61,8 @@ const DOORS: readonly StudioDoor[] = ['visual', 'overlay', 'sound'];
 
 const slotKey = (pageId: string, door: StudioDoor): string => `${pageId}:${door}`;
 
-const filesKey = (viewerId: string): string => `studio-outbox.${viewerId}.files`;
-const metaKey = (viewerId: string): string => `studio-outbox.${viewerId}.meta`;
+const filesKey = studioOutboxFilesKey;
+const metaKey = studioOutboxMetaKey;
 
 const assetOf = (page: StudioPage, door: StudioDoor): StudioVisualAsset | StudioSoundAsset | null =>
   door === 'sound' ? page.sound : door === 'visual' ? page.background : page.overlay;

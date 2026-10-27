@@ -185,7 +185,7 @@ export type PublicationsEraser = { readonly clear: (userId: string) => Promise<u
 
 /* Chargé au geste : la fin d'un compte n'embarque pas le studio. */
 const studioPublications: PublicationsEraser = {
-  clear: (userId) => import('../stories/studio-outbox').then(({ studioOutbox }) => studioOutbox.clear(userId)),
+  clear: (userId) => import('../stories/studio-outbox-records').then(({ eraseStudioOutbox }) => eraseStudioOutbox(userId)),
 };
 
 export function forgetAccountCaches({
