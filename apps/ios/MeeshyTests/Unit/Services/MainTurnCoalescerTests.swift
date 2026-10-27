@@ -59,7 +59,7 @@ final class MainTurnCoalescerTests: XCTestCase {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager+GroupMesh.swift")
+            .appendingPathComponent("Meeshy/Features/Call/Services/CallManager+GroupMesh.swift")
         let source = try String(contentsOf: url, encoding: .utf8)
         guard let start = source.range(of: "let state = manager.$callState") else {
             return XCTFail("le binding du maillage doit écouter l'état de CallManager")

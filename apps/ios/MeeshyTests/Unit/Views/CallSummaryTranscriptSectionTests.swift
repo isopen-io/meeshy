@@ -13,7 +13,7 @@ final class CallSummaryTranscriptSectionTests: XCTestCase {
     }
 
     private func sectionSource() throws -> String {
-        try source("Meeshy/Features/Main/Views/CallTranscriptSection.swift")
+        try source("Meeshy/Features/Call/Views/CallTranscriptSection.swift")
     }
 
     func test_callSummaryDetailSheet_looksUpTranscript_bySummaryCallId() throws {

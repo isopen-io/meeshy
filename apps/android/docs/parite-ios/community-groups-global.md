@@ -257,8 +257,8 @@ Transposition Android : RTCPeerConnection iOS vers org.webrtc.PeerConnection (un
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Services/GroupCallMeshCoordinator.swift`
-- `apps/ios/Meeshy/Features/Main/Services/GroupCallMeshContracts.swift`
+- `apps/ios/Meeshy/Features/Call/Services/GroupCallMeshCoordinator.swift`
+- `apps/ios/Meeshy/Features/Call/Services/GroupCallMeshContracts.swift`
 - `apps/ios/Meeshy/Features/Main/Services/GroupSignalRouting.swift`
 
 </details>
@@ -283,7 +283,7 @@ Transposition Android : struct Equatable vers data class immuable ; with(...) ve
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Services/GroupCallRoster.swift`
+- `apps/ios/Meeshy/Features/Call/Services/GroupCallRoster.swift`
 
 </details>
 
@@ -311,8 +311,8 @@ Transposition Android : LazyVGrid avec GridItem fixe vers Layout personnalisé o
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/GroupCallStageView.swift`
-- `apps/ios/Meeshy/Features/Main/Services/GroupCallGridLayout.swift`
+- `apps/ios/Meeshy/Features/Call/Views/GroupCallStageView.swift`
+- `apps/ios/Meeshy/Features/Call/Services/GroupCallGridLayout.swift`
 
 </details>
 
@@ -562,7 +562,7 @@ Transposition Android : contextMenu vers combinedClickable(onLongClick) + Dropdo
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/GroupCallStageView+Moderation.swift`
+- `apps/ios/Meeshy/Features/Call/Views/GroupCallStageView+Moderation.swift`
 
 </details>
 

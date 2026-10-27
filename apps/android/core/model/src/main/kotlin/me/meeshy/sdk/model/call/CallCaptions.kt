@@ -3,7 +3,7 @@ package me.meeshy.sdk.model.call
 /**
  * The live in-call captions button's 3-state cycle: [Off] → [Translated] →
  * [Original] → [Off]. Faithful port of iOS `CaptionsMode`
- * (`apps/ios/Meeshy/Features/Main/Models/CaptionsMode.swift`).
+ * (`apps/ios/Meeshy/Features/Call/Models/CaptionsMode.swift`).
  *
  * Derived from the two authoritative flags the overlay already owns — the
  * transcription service's on/off state and a display-only "show original"

@@ -9,7 +9,7 @@ import org.junit.Test
  *
  * The buffer is the pure SSOT the captions overlay renders. It folds incoming
  * transcript segments exactly like iOS `CallTranscriptionService.appendSegment`
- * (`apps/ios/Meeshy/Features/Main/Services/CallTranscriptionService.swift`):
+ * (`apps/ios/Meeshy/Features/Call/Services/CallTranscriptionService.swift`):
  *
  *  - a new segment from a speaker first drops that speaker's *in-progress*
  *    (non-final) line, so at most one interim line per speaker is ever live;

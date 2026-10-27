@@ -1383,8 +1383,8 @@
    "critere": "WebRTCGroupPeerLink : scaleResolutionDownBy, maxBitrateBps = budget/(N−1), maxFramerate 20, setCodecPreferences H264, iceCandidatePoolSize ; VideoSurvivalController appliqué à tous les liens ; témoins sur la loi de budget par lien",
    "existe": "WebRTCGroupPeerLink.swift sans applyVideoEncoding ni codec prefs (grep vide)",
    "fichiers": [
-    "apps/ios/Meeshy/Features/Main/Services/WebRTC/WebRTCGroupPeerLink.swift",
-    "apps/ios/Meeshy/Features/Main/Services/GroupCallMeshCoordinator.swift"
+    "apps/ios/Meeshy/Features/Call/Services/WebRTC/WebRTCGroupPeerLink.swift",
+    "apps/ios/Meeshy/Features/Call/Services/GroupCallMeshCoordinator.swift"
    ],
    "depend": []
   },
@@ -1402,8 +1402,8 @@
    "critere": "RTCVideoSource.adaptOutputFormat à chaque applyVideoEncoding ; format AVCapture rebaissé (640×480@24) en .serious ; les 4 sites startCapture passent par une seule loi de format ; témoins",
    "existe": "P2PWebRTCClient+CaptureFormat.swift:9-50 format fixe ≤ 720p30 ; 4 sites startCapture",
    "fichiers": [
-    "apps/ios/Meeshy/Features/Main/Services/WebRTC/P2PWebRTCClient+CaptureFormat.swift",
-    "apps/ios/Meeshy/Features/Main/Services/WebRTC/P2PWebRTCClient.swift"
+    "apps/ios/Meeshy/Features/Call/Services/WebRTC/P2PWebRTCClient+CaptureFormat.swift",
+    "apps/ios/Meeshy/Features/Call/Services/WebRTC/P2PWebRTCClient.swift"
    ],
    "depend": []
   },
@@ -1421,7 +1421,7 @@
    "critere": "CallStats lit freezeCount, totalFreezesDuration, framesPerSecond, qualityLimitationReason, jitterBufferDelay, concealedSamples, nackCount, pliCount ; MOS E-model simplifié (G.107) ; envoyé dans call:analytics (S22) ; témoins sur le calcul",
    "existe": "CallStats.swift:171-180 RTT, débit, jitter seulement",
    "fichiers": [
-    "apps/ios/Meeshy/Features/Main/Services/WebRTC/CallStats.swift"
+    "apps/ios/Meeshy/Features/Call/Services/WebRTC/CallStats.swift"
    ],
    "depend": [
     "S22"
@@ -1441,8 +1441,8 @@
    "critere": "LIRE d'abord CallManager+CallKitProxy.swift:236 (un commentaire dit que l'API n'a pas compilé) : si AVCaptureDevice.showSystemUserInterface(.microphoneModes) compile sur la cible, bouton dans le panneau d'appel qui reflète activeMicrophoneMode (iOS 15+) ; sinon fermer l'issue motivée avec la preuve de compilation CI ; témoin",
    "existe": "grep preferredMicrophoneMode vide",
    "fichiers": [
-    "apps/ios/Meeshy/Features/Main/Views/CallDeviceControls.swift",
-    "apps/ios/Meeshy/Features/Main/Services/CallManager+CallKitProxy.swift"
+    "apps/ios/Meeshy/Features/Call/Views/CallDeviceControls.swift",
+    "apps/ios/Meeshy/Features/Call/Services/CallManager+CallKitProxy.swift"
    ],
    "depend": []
   },
@@ -1460,7 +1460,7 @@
    "critere": "préférence ⇒ iceTransportPolicy = .relay sur toutes les PC ; réglage dans Confidentialité ; témoin ; équivalent web dans W14",
    "existe": "aucune iceTransportPolicy",
    "fichiers": [
-    "apps/ios/Meeshy/Features/Main/Services/WebRTC/P2PWebRTCClient.swift"
+    "apps/ios/Meeshy/Features/Call/Services/WebRTC/P2PWebRTCClient.swift"
    ],
    "depend": [
     "IC14"
@@ -1480,7 +1480,7 @@
    "critere": "témoin de géométrie CallFrameLayoutGeometry × CallFrameChromeReserve ; contraste automatique des contrôles sur la luminance de la bande ; recette #9755 décrite",
    "existe": "CallLiveFrameRule.swift:28 reserve existe, non appliqué aux contrôles",
    "fichiers": [
-    "apps/ios/Meeshy/Features/Main/Models/CallFrames/CallLiveFrameRule.swift"
+    "apps/ios/Meeshy/Features/Call/Models/CallFrames/CallLiveFrameRule.swift"
    ],
    "depend": []
   },
@@ -1497,7 +1497,7 @@
    "critere": "composition récepteur sur GroupCallGridLayout ; CallLiveFrameBudgetMeter p95 ≤ 2,5 ms à 6 vignettes (à mesurer) ; témoins",
    "existe": "duo seulement (S24 lève la garde serveur)",
    "fichiers": [
-    "apps/ios/Meeshy/Features/Main/Services/CallFrames/CallLiveFrameCompositor.swift"
+    "apps/ios/Meeshy/Features/Call/Services/CallFrames/CallLiveFrameCompositor.swift"
    ],
    "depend": [
     "S24",
@@ -1539,7 +1539,7 @@
    "critere": "CallFaceTracker expose les 76 landmarks + yaw/roll/pitch (VNDetectFaceLandmarksRequest révision 3) sur sonde réduite ; LensFaceFrame partagé ; ≤ 3 ms sur sonde 320 px (à mesurer) ; témoins sur fixtures",
    "existe": "CallFaceTracker.swift:31-40 boîte + 3 centres",
    "fichiers": [
-    "apps/ios/Meeshy/Features/Main/Services/CallFaceTracker.swift"
+    "apps/ios/Meeshy/Features/Call/Services/CallFaceTracker.swift"
    ],
    "depend": []
   },

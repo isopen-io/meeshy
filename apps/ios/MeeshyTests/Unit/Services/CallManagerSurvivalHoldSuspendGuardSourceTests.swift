@@ -34,7 +34,7 @@ import XCTest
 final class CallManagerSurvivalHoldSuspendGuardSourceTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     /// Bounds the pre-flight guard in `applySurvivalVideoSend(enabled:)`,

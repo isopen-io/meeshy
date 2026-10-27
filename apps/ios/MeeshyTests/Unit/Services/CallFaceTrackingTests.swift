@@ -112,7 +112,7 @@ final class CallFaceTrackingTests: XCTestCase {
         let racine = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
-        let code = try String(contentsOf: racine.appendingPathComponent("Meeshy/Features/Main/Services/CallFaceTracker.swift"),
+        let code = try String(contentsOf: racine.appendingPathComponent("Meeshy/Features/Call/Services/CallFaceTracker.swift"),
                               encoding: .utf8)
         XCTAssertTrue(code.contains("VNDetectFaceLandmarksRequestRevision3"))
         XCTAssertTrue(code.contains(".constellation76Points"))

@@ -29,7 +29,7 @@ import XCTest
 final class CallManagerHandleHoldSurvivalResetSourceTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     /// Bounded by the unique log message this branch emits, up to the next

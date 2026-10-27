@@ -2275,9 +2275,9 @@ Transposition Android : SFSpeechRecognizer on-device devient SpeechRecognizer.cr
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Models/CaptionsMode.swift`
+- `apps/ios/Meeshy/Features/Call/Models/CaptionsMode.swift`
 - `apps/ios/Meeshy/Features/Main/Models/TranscriptionError.swift`
-- `apps/ios/Meeshy/Features/Main/Models/TranscriptionPermission.swift`
+- `apps/ios/Meeshy/Features/Call/Models/TranscriptionPermission.swift`
 
 </details>
 

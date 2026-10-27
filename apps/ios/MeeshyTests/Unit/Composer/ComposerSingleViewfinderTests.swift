@@ -182,7 +182,7 @@ final class ComposerPhotoLookTests: XCTestCase {
     }
 
     func test_cubeDeLAppel_resteEnSRGBParDefaut() throws {
-        let peintre = try Self.code("Meeshy/Features/Main/Services/CallColorLook.swift")
+        let peintre = try Self.code("Meeshy/Features/Call/Services/CallColorLook.swift")
         XCTAssertTrue(peintre.contains("colorSpace: CGColorSpace = CallColorLook.callColorSpace"),
                       "le flux d'appel (sRGB) garde son cube ; seule la photo passe son espace")
     }

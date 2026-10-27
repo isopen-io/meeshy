@@ -17,7 +17,7 @@ final class CallBubbleViewMiniMenuWiringTests: XCTestCase {
             .deletingLastPathComponent()   // Unit/
             .deletingLastPathComponent()   // MeeshyTests/
             .deletingLastPathComponent()   // ios/
-            .appendingPathComponent("Meeshy/Features/Main/Views/CallBubbleView.swift")
+            .appendingPathComponent("Meeshy/Features/Call/Views/CallBubbleView.swift")
         return try String(contentsOf: url, encoding: .utf8)
     }
 

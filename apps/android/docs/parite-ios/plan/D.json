@@ -4925,7 +4925,7 @@
   "ios_reference_files": [
    "packages/MeeshySDK/Sources/MeeshySDK/Services/EdgeTranscriptionService.swift",
    "apps/ios/Meeshy/Features/Main/Models/TranscriptionError.swift",
-   "apps/ios/Meeshy/Features/Main/Models/TranscriptionPermission.swift",
+   "apps/ios/Meeshy/Features/Call/Models/TranscriptionPermission.swift",
    "apps/ios/Meeshy/Features/Main/Services/AudioTapFormatReadiness.swift"
   ],
   "feature_keys": [

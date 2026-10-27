@@ -41,7 +41,7 @@ final class CallRingPlaybackLawTests: XCTestCase {
     /// qui commence ne détruit plus les lecteurs (`stopAll`) : il les
     /// interrompt, pour qu'ils reprennent au raccrochage.
     func test_theCallStateDrivesTheLaw() throws {
-        let source = try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        let source = try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
         let start = try XCTUnwrap(source.range(of: "@Published var callState: CallState = .idle {"))
         let didSet = String(source[start.upperBound...].prefix(2_500))
         XCTAssertTrue(didSet.contains("CallRingPlayback.apply(CallRingPlaybackLaw.effect(from: oldValue, to: callState))"))

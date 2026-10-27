@@ -891,7 +891,7 @@ Transposition Android : FloatingCallPillView => overlay Compose dans MeeshyApp (
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/FloatingCallPillView.swift`
+- `apps/ios/Meeshy/Features/Call/Views/FloatingCallPillView.swift`
 
 </details>
 

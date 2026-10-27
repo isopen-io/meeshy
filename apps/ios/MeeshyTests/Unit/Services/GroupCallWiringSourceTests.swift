@@ -30,7 +30,7 @@ final class GroupCallWiringSourceTests: XCTestCase {
     func test_handleCallOffer_ringsThePrincipal_notTheInitiator() throws {
         let handler = try body(
             of: "func handleCallOffer(",
-            in: "Meeshy/Features/Main/Services/CallCollaborators/CallIncomingRing.swift"
+            in: "Meeshy/Features/Call/Services/CallCollaborators/CallIncomingRing.swift"
         )
 
         XCTAssertTrue(
@@ -42,7 +42,7 @@ final class GroupCallWiringSourceTests: XCTestCase {
 
     // MARK: - #9085 — un départ ne rompt pas le groupe
 
-    private let manager = "Meeshy/Features/Main/Services/CallManager.swift"
+    private let manager = "Meeshy/Features/Call/Services/CallManager.swift"
 
     func test_endCall_groupCall_sendsNoInBandBye() throws {
         let hangup = try body(of: "func endCall() {", in: manager, length: 4_000)
@@ -57,7 +57,7 @@ final class GroupCallWiringSourceTests: XCTestCase {
     func test_inBandBye_goesThroughTheGroupAwareHandler() throws {
         let channel = try body(
             of: "didReceiveTranscriptionData data: Data",
-            in: "Meeshy/Features/Main/Services/CallManager+DataChannel.swift",
+            in: "Meeshy/Features/Call/Services/CallManager+DataChannel.swift",
             length: 800
         )
 
@@ -68,7 +68,7 @@ final class GroupCallWiringSourceTests: XCTestCase {
     func test_handleRemoteBye_endsOnlyWhenTheGroupDoesNotContinue() throws {
         let bye = try body(
             of: "func handleRemoteBye(",
-            in: "Meeshy/Features/Main/Services/CallManager+GroupMesh.swift",
+            in: "Meeshy/Features/Call/Services/CallManager+GroupMesh.swift",
             length: 500
         )
 
@@ -125,7 +125,7 @@ final class GroupCallWiringSourceTests: XCTestCase {
     func test_groupCallTitleDidChange_retitlesTheWholeCallChrome() throws {
         let retitle = try body(
             of: "func groupCallTitleDidChange(",
-            in: "Meeshy/Features/Main/Services/CallManager+GroupMesh.swift",
+            in: "Meeshy/Features/Call/Services/CallManager+GroupMesh.swift",
             length: 300
         )
 
@@ -135,7 +135,7 @@ final class GroupCallWiringSourceTests: XCTestCase {
     func test_participantName_ofADepartedPrimary_isNotTheGroupTitle() throws {
         let name = try body(
             of: "func participantName(for userId: String) -> String {",
-            in: "Meeshy/Features/Main/Services/CallManager+Controls.swift",
+            in: "Meeshy/Features/Call/Services/CallManager+Controls.swift",
             length: 400
         )
 

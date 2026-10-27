@@ -194,7 +194,7 @@ final class LocalizationConsistencyTests: XCTestCase {
         // ses clés la suivent, et le cliquet avec elles.
         "apps/ios/Meeshy/Features/Main/Views/AudioFullscreenPage.swift",
         "apps/ios/Meeshy/Features/Main/Views/AudioFullscreenPage+Transcription.swift",
-        "apps/ios/Meeshy/Features/Main/Views/CallBubbleView.swift",  // 14
+        "apps/ios/Meeshy/Features/Call/Views/CallBubbleView.swift",  // 14
         "apps/ios/Meeshy/Features/Focal/Lens/ReadingModeLensSheet.swift",  // 13
         "apps/ios/Meeshy/Features/Main/Views/ActiveSessionsView.swift",  // 12
         // #9612 — ce que la ligne dit d'une session, et l'avis d'une session
@@ -227,21 +227,21 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Focal/Summary/LivingSummaryView.swift",  // 8
         // 2026-10-02 — `CallManager.swift` découpé par responsabilité : ses clés
         // ont suivi leur code, la liste suit les hôtes (leçon 578).
-        "apps/ios/Meeshy/Features/Main/Services/CallManager+Answer.swift",
-        "apps/ios/Meeshy/Features/Main/Services/CallManager+Connection.swift",
-        "apps/ios/Meeshy/Features/Main/Services/CallManager+Hold.swift",
-        "apps/ios/Meeshy/Features/Main/Services/CallManager+IncomingSignal.swift",
-        "apps/ios/Meeshy/Features/Main/Services/CallManager+MediaControls.swift",
-        "apps/ios/Meeshy/Features/Main/Services/CallManager+Outgoing.swift",
-        "apps/ios/Meeshy/Features/Main/Services/CallManager+RemoteEvents.swift",
-        "apps/ios/Meeshy/Features/Main/Services/CallCollaborators/CallSignalingRouter.swift",
-        "apps/ios/Meeshy/Features/Main/Services/CallManager+VideoFallback.swift",
-        "apps/ios/Meeshy/Features/Main/Views/CallWaitingBannerView.swift",  // 8
+        "apps/ios/Meeshy/Features/Call/Services/CallManager+Answer.swift",
+        "apps/ios/Meeshy/Features/Call/Services/CallManager+Connection.swift",
+        "apps/ios/Meeshy/Features/Call/Services/CallManager+Hold.swift",
+        "apps/ios/Meeshy/Features/Call/Services/CallManager+IncomingSignal.swift",
+        "apps/ios/Meeshy/Features/Call/Services/CallManager+MediaControls.swift",
+        "apps/ios/Meeshy/Features/Call/Services/CallManager+Outgoing.swift",
+        "apps/ios/Meeshy/Features/Call/Services/CallManager+RemoteEvents.swift",
+        "apps/ios/Meeshy/Features/Call/Services/CallCollaborators/CallSignalingRouter.swift",
+        "apps/ios/Meeshy/Features/Call/Services/CallManager+VideoFallback.swift",
+        "apps/ios/Meeshy/Features/Call/Views/CallWaitingBannerView.swift",  // 8
         "apps/ios/Meeshy/Features/Main/Views/StarredMessagesView.swift",  // 8
         "apps/ios/Meeshy/Features/Main/Views/StoryTrayActions.swift",  // 8
         "apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift",  // 8
         "apps/ios/Meeshy/Features/Composer/ComposerLeadingRail.swift",  // 7
-        "apps/ios/Meeshy/Features/Main/Views/CallEffectsOverlay.swift",  // 7
+        "apps/ios/Meeshy/Features/Call/Views/CallEffectsOverlay.swift",  // 7
         "apps/ios/Meeshy/Features/Main/Views/ConversationView+ComposerBanners.swift",  // 7
         "apps/ios/Meeshy/Features/Main/Views/FriendRequestListView.swift",  // 7
         "apps/ios/Meeshy/Features/Main/Components/MiniAudioPlayerBar.swift",  // 6
@@ -271,7 +271,7 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Views/MyStoriesDeleteConfirmation.swift",  // 6
         "apps/ios/Meeshy/Features/Main/Views/RootMenuLadderEntry.swift",  // 6
         "apps/ios/Meeshy/Features/Main/Views/ShareLinkIdentitySheet.swift",  // 0 — #7795 : la page vit dans MeeshyUI
-        "apps/ios/Meeshy/Features/Main/Components/CallSignalGlyph.swift",  // 5
+        "apps/ios/Meeshy/Features/Call/Components/CallSignalGlyph.swift",  // 5
         "apps/ios/Meeshy/Features/Main/Components/LanguageFlagChip.swift",  // 5
         "apps/ios/Meeshy/Features/Composer/ComposerDescriptionLayer.swift",  // 5
         "apps/ios/Meeshy/Features/Composer/ComposerFormatAvailability.swift",  // 5
@@ -514,7 +514,7 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/ViewModels/PostDetailViewModel+CommentEdit.swift",  // 1
         // Cohésion de `PostDetailViewModel` : les actions sur le post ont quitté l hôte avec leurs clés (leçon 578).
         "apps/ios/Meeshy/Features/Main/ViewModels/PostDetailViewModel+PostActions.swift",
-        "apps/ios/Meeshy/Features/Main/Views/FloatingCallPillView.swift",  // 16
+        "apps/ios/Meeshy/Features/Call/Views/FloatingCallPillView.swift",  // 16
         "apps/ios/Meeshy/Features/Main/Views/MagicLinkView.swift",  // 16
         "apps/ios/Meeshy/Features/Main/Views/ReportUserView.swift",  // 16
         "apps/ios/Meeshy/Features/Main/Views/VideoFiltersPanel.swift",  // 16
@@ -522,7 +522,7 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Contacts/RequestsTab.swift",  // 15
         "apps/ios/Meeshy/Features/Main/Components/MemberManagementSection.swift",  // 15
         "apps/ios/Meeshy/Features/Main/Views/EmojiPickerSheet.swift",  // 15
-        "apps/ios/Meeshy/Features/Main/Views/IncomingCallView.swift",  // 15
+        "apps/ios/Meeshy/Features/Call/Views/IncomingCallView.swift",  // 15
         "apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift",  // 15
         // #9727 — la feuille « Vues » quitte l'hôte ci-dessus et naît certifiée :
         // ce que chaque personne a fait, sept locales, `defaultValue` alignés sur le `fr`.
@@ -613,7 +613,7 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Views/StoryRepostEmbedCell.swift",  // 2
         "apps/ios/Meeshy/Features/Contacts/AffiliatesViewModel.swift",  // 1
         "apps/ios/Meeshy/Features/Main/Components/CharacterCountLabel.swift",  // 1
-        "apps/ios/Meeshy/Features/Main/Services/VoIPPushManager.swift",  // 1
+        "apps/ios/Meeshy/Features/Call/Services/VoIPPushManager.swift",  // 1
         "apps/ios/Meeshy/Features/Stories/Notifications/StoryNotificationLoadingView.swift",  // 1
         // 270i (#4364) — the four screens the eleven new catalog entries unblock.
         // Each held a key that was ABSENT from the catalog, so its `defaultValue`

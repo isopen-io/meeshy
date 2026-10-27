@@ -21,7 +21,7 @@ final class PiPVideoRendererTests: XCTestCase {
             .deletingLastPathComponent()   // Unit/
             .deletingLastPathComponent()   // MeeshyTests/
             .deletingLastPathComponent()   // ios/
-            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTC/PiPVideoRenderer.swift")
+            .appendingPathComponent("Meeshy/Features/Call/Services/WebRTC/PiPVideoRenderer.swift")
         return (try? String(contentsOf: url, encoding: .utf8)) ?? ""
     }()
 
@@ -35,7 +35,7 @@ final class PiPVideoRendererTests: XCTestCase {
             .deletingLastPathComponent()   // Unit/
             .deletingLastPathComponent()   // MeeshyTests/
             .deletingLastPathComponent()   // ios/
-            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTC/AVSampleBufferDisplayLayer+Meeshy.swift")
+            .appendingPathComponent("Meeshy/Features/Call/Services/WebRTC/AVSampleBufferDisplayLayer+Meeshy.swift")
         return (try? String(contentsOf: url, encoding: .utf8)) ?? ""
     }()
 

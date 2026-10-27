@@ -68,7 +68,7 @@ final class AvatarBannerNoRetryWiringTests: XCTestCase {
     }
 
     func test_callParticipantVisualAvatar_migratesToCachedAvatarImage() throws {
-        let source = try appSource("Meeshy/Features/Main/Views/CallParticipantVisual.swift")
+        let source = try appSource("Meeshy/Features/Call/Views/CallParticipantVisual.swift")
         let avatar = try block(
             from: "private var avatarView: some View {",
             upTo: "/// Résolution cache-first",
@@ -97,7 +97,7 @@ final class AvatarBannerNoRetryWiringTests: XCTestCase {
     }
 
     func test_callSelfView_suspendedTile_showsTheLocalUserPhoto() throws {
-        let source = try appSource("Meeshy/Features/Main/Views/CallView+SelfView.swift")
+        let source = try appSource("Meeshy/Features/Call/Views/CallView+SelfView.swift")
         let tile = try block(from: "private var videoSuspendedTileBody: some View {", upTo: "VStack(spacing: MeeshySpacing.xsPlus)", in: source)
         XCTAssertTrue(tile.contains("CachedAvatarImage("))
         XCTAssertTrue(tile.contains("localUser?.avatar"), "La vignette « vidéo en pause » montre la photo de l'utilisateur local.")
@@ -105,13 +105,13 @@ final class AvatarBannerNoRetryWiringTests: XCTestCase {
     }
 
     func test_callAvatars_neverStackInitialsUnderThePhoto() throws {
-        let states = try appSource("Meeshy/Features/Main/Views/CallView+States.swift")
+        let states = try appSource("Meeshy/Features/Call/Views/CallView+States.swift")
         let circle = try block(from: "func avatarCircle(size: CGFloat) -> some View {", upTo: "func callAvatarPair", in: states)
         let badge = try block(from: "private func localAvatarBadge(size: CGFloat) -> some View {", upTo: "var callTypeBadge", in: states)
         let incoming = try block(
             from: "private var avatarView: some View {",
             upTo: "// MARK: - Call Type Badge",
-            in: try appSource("Meeshy/Features/Main/Views/IncomingCallView.swift")
+            in: try appSource("Meeshy/Features/Call/Views/IncomingCallView.swift")
         )
         for (label, body) in [("avatarCircle", circle), ("localAvatarBadge", badge), ("IncomingCallView.avatarView", incoming)] {
             XCTAssertTrue(body.contains("CachedAvatarImage("), "\(label) monte CachedAvatarImage (photo OU initiales).")

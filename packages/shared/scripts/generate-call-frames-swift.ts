@@ -103,7 +103,7 @@ const LAYERS = ['back', 'front'] as const;
 const TITLE_PLACES = ['top', 'bottom'] as const;
 const LETTER_CASES = ['upper', 'as-is'] as const;
 
-export const OUTPUT_RELATIVE_DIR = 'apps/ios/Meeshy/Features/Main/Models/CallFrames/Generated';
+export const OUTPUT_RELATIVE_DIR = 'apps/ios/Meeshy/Features/Call/Models/CallFrames/Generated';
 
 type Json = Readonly<Record<string, unknown>>;
 

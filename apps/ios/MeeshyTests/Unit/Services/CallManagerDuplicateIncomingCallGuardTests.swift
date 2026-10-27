@@ -30,7 +30,7 @@ import XCTest
 final class CallManagerDuplicateIncomingCallGuardTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     func test_reportIncomingVoIPCall_guardsAgainstSameCallIdAlreadyActive_beforeBusyPath() throws {

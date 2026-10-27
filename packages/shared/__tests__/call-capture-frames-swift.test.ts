@@ -47,7 +47,7 @@ import {
 import * as sharedSpec from '../types/capture-frames';
 
 const WEB_SPEC = join(REPO_ROOT, 'apps/web/src/lib/calls/frames/frame-spec.ts');
-const SWIFT_SPECS = ['CallFrameSpec.swift', 'CallFrameFormatExtension.swift'].map((name) => join(REPO_ROOT, 'apps/ios/Meeshy/Features/Main/Models/CallFrames', name));
+const SWIFT_SPECS = ['CallFrameSpec.swift', 'CallFrameFormatExtension.swift'].map((name) => join(REPO_ROOT, 'apps/ios/Meeshy/Features/Call/Models/CallFrames', name));
 
 
 const swiftCases = (source: string, typeName: string): readonly string[] => {

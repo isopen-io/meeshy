@@ -5,7 +5,7 @@ import type { TileSize } from './call-self-tile';
  * **EN MODE EFFETS, LES AUTRES RESTENT À L'ÉCRAN** (#8737) — la scène montre
  * MON image filtrée ; les autres participants l'accompagnent dans un bloc posé
  * en haut. Miroir de `CallEffectsCompanionRule`
- * (`apps/ios/Meeshy/Features/Main/Models/CallEffectsCompanions.swift`) : le duo
+ * (`apps/ios/Meeshy/Features/Call/Models/CallEffectsCompanions.swift`) : le duo
  * est le cas du groupe à un seul accompagnant — une règle, une vue.
  *
  * - qui : jamais moi, sauf quand une vignette distante est à la une ; les
