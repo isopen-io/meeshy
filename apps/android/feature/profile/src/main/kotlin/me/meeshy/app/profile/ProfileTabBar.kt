@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -58,6 +59,7 @@ import me.meeshy.ui.theme.MeeshyTheme
 internal val PROFILE_SHEET_TABS: List<ProfileTab> = ProfileTab.entries.toList()
 
 internal const val PROFILE_TAB_BAR_TAG = "profile-tab-bar"
+internal const val PROFILE_TAB_UNDERLINE_TAG = "profile-tab-underline"
 
 /**
  * L'onglet choisi de la fiche (miroir de `@State selectedTab = .details` iOS) : Détails par défaut,
@@ -148,6 +150,9 @@ private fun ProfileTabButton(tab: ProfileTab, isSelected: Boolean, accent: Color
     Column(
         modifier = Modifier
             .widthIn(min = minWidth)
+            // Sous un defilement horizontal la largeur max est infinie : sans largeur intrinseque, le
+            // soulignement (`fillMaxWidth`) retomberait a 0 et l'onglet choisi ne serait plus marque.
+            .width(IntrinsicSize.Max)
             .heightIn(min = MeeshyMinTapTarget)
             .selectable(selected = isSelected, role = Role.Tab, onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -168,7 +173,7 @@ private fun ProfileTabButton(tab: ProfileTab, isSelected: Boolean, accent: Color
                 softWrap = false,
             )
         }
-        Box(Modifier.fillMaxWidth().height(2.dp).background(underline))
+        Box(Modifier.fillMaxWidth().height(2.dp).background(underline).testTag("$PROFILE_TAB_UNDERLINE_TAG-${tab.name}"))
     }
 }
 
