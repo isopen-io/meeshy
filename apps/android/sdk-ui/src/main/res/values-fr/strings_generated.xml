@@ -1,5 +1,37 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="audio_editor_a11y_playhead">Position de lecture</string>
+    <string name="audio_editor_apply">Appliquer les modifications</string>
+    <string name="audio_editor_close">Fermer</string>
+    <string name="audio_editor_error_generic">L\'édition a échoué.</string>
+    <string name="audio_editor_error_load">Impossible de charger cet audio.</string>
+    <string name="audio_editor_fade_in">Fondu d\'entrée</string>
+    <string name="audio_editor_fade_out">Fondu de sortie</string>
+    <string name="audio_editor_mode_pro">Pro</string>
+    <string name="audio_editor_mode_simple">Simple</string>
+    <string name="audio_editor_op_fade">Fondu</string>
+    <string name="audio_editor_op_gain">Volume</string>
+    <string name="audio_editor_op_original">Original</string>
+    <string name="audio_editor_op_removerange">Section coupée</string>
+    <string name="audio_editor_op_speed">Vitesse</string>
+    <string name="audio_editor_op_trim">Rogné</string>
+    <string name="audio_editor_pause">Pause</string>
+    <string name="audio_editor_play">Lire</string>
+    <string name="audio_editor_preparing">Préparation de l\'audio…</string>
+    <string name="audio_editor_processing">Traitement…</string>
+    <string name="audio_editor_redo">Rétablir</string>
+    <string name="audio_editor_reset">Réinitialiser</string>
+    <string name="audio_editor_split_hint">Sélectionnez la section à supprimer.</string>
+    <string name="audio_editor_tool_fade">Fondu</string>
+    <string name="audio_editor_tool_speed">Vitesse</string>
+    <string name="audio_editor_tool_split">Couper</string>
+    <string name="audio_editor_tool_transcribe">Transcrire</string>
+    <string name="audio_editor_tool_trim">Rogner</string>
+    <string name="audio_editor_tool_volume">Volume</string>
+    <string name="audio_editor_trim_hint">Glissez les poignées pour garder une portion.</string>
+    <string name="audio_editor_undo">Annuler</string>
+    <string name="audio_editor_use">Utiliser l\'audio</string>
+    <string name="audio_editor_volume_normal">Normal</string>
     <string name="audio_fullscreen_dial">Position dans le vocal</string>
     <string name="avatar_a11y_mood">humeur %s</string>
     <string name="bubble_story_citation_answer">réponse à sa story</string>

@@ -197,7 +197,10 @@ import androidx.compose.material.icons.filled.TimerOff as FiTimerOff
 import androidx.compose.material.icons.filled.TouchApp as FiTouchApp
 import androidx.compose.material.icons.filled.Bookmark as FiBookmark
 import androidx.compose.material.icons.filled.Translate as FiTranslate
+import androidx.compose.material.icons.filled.Speed as FiSpeed
+import androidx.compose.material.icons.filled.Subtitles as FiSubtitles
 import androidx.compose.material.icons.filled.Tune as FiTune
+import androidx.compose.material.icons.filled.VerticalSplit as FiVerticalSplit
 import androidx.compose.material.icons.filled.UnfoldLess as FiUnfoldLess
 import androidx.compose.material.icons.filled.UnfoldMore as FiUnfoldMore
 import androidx.compose.material.icons.filled.Verified as FiVerified
@@ -508,6 +511,9 @@ public object MeeshyIcons {
     public val Triangle: ImageVector get() = Icons.Filled.FiChangeHistory
     public val Trophy: ImageVector get() = Icons.Filled.FiEmojiEvents
     public val Tune: ImageVector get() = Icons.Filled.FiTune
+    public val Speed: ImageVector get() = Icons.Filled.FiSpeed
+    public val Subtitles: ImageVector get() = Icons.Filled.FiSubtitles
+    public val VerticalSplit: ImageVector get() = Icons.Filled.FiVerticalSplit
     public val UnfoldLess: ImageVector get() = Icons.Filled.FiUnfoldLess
     public val UnfoldMore: ImageVector get() = Icons.Filled.FiUnfoldMore
     public val Verified: ImageVector get() = Icons.Outlined.OuVerified

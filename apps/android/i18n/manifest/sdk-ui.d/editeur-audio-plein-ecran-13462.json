@@ -1,0 +1,202 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        {
+          "catalog": "ui",
+          "iosKey": "audio.editor.a11y.playhead",
+          "androidName": "audio_editor_a11y_playhead",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "audio.editor.apply",
+          "androidName": "audio_editor_apply",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "audio.editor.close",
+          "androidName": "audio_editor_close",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "audio.editor.error.generic",
+          "androidName": "audio_editor_error_generic",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "audio.editor.error.load",
+          "androidName": "audio_editor_error_load",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "audio.editor.fade.in",
+          "androidName": "audio_editor_fade_in",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "audio.editor.fade.out",
+          "androidName": "audio_editor_fade_out",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "audio.editor.mode.pro",
+          "androidName": "audio_editor_mode_pro",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "audio.editor.mode.simple",
+          "androidName": "audio_editor_mode_simple",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "audio.editor.op.fade",
+          "androidName": "audio_editor_op_fade",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "audio.editor.op.gain",
+          "androidName": "audio_editor_op_gain",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "audio.editor.op.original",
+          "androidName": "audio_editor_op_original",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "audio.editor.op.removeRange",
+          "androidName": "audio_editor_op_removerange",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "audio.editor.op.speed",
+          "androidName": "audio_editor_op_speed",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "audio.editor.op.trim",
+          "androidName": "audio_editor_op_trim",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "audio.editor.pause",
+          "androidName": "audio_editor_pause",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "audio.editor.play",
+          "androidName": "audio_editor_play",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "audio.editor.preparing",
+          "androidName": "audio_editor_preparing",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "audio.editor.processing",
+          "androidName": "audio_editor_processing",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "audio.editor.redo",
+          "androidName": "audio_editor_redo",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "audio.editor.reset",
+          "androidName": "audio_editor_reset",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "audio.editor.split.hint",
+          "androidName": "audio_editor_split_hint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "audio.editor.tool.fade",
+          "androidName": "audio_editor_tool_fade",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "audio.editor.tool.speed",
+          "androidName": "audio_editor_tool_speed",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "audio.editor.tool.split",
+          "androidName": "audio_editor_tool_split",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "audio.editor.tool.trim",
+          "androidName": "audio_editor_tool_trim",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "audio.editor.tool.volume",
+          "androidName": "audio_editor_tool_volume",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "audio.editor.trim.hint",
+          "androidName": "audio_editor_trim_hint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "audio.editor.undo",
+          "androidName": "audio_editor_undo",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "audio.editor.use",
+          "androidName": "audio_editor_use",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "audio.editor.volume.normal",
+          "androidName": "audio_editor_volume_normal",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "audio.editor.tool.transcribe",
+          "androidName": "audio_editor_tool_transcribe",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

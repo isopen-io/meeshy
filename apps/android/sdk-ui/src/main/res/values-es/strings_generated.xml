@@ -1,5 +1,37 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="audio_editor_a11y_playhead">Posición de reproducción</string>
+    <string name="audio_editor_apply">Aplicar los cambios</string>
+    <string name="audio_editor_close">Cerrar</string>
+    <string name="audio_editor_error_generic">La edición ha fallado.</string>
+    <string name="audio_editor_error_load">No se ha podido cargar este audio.</string>
+    <string name="audio_editor_fade_in">Aparición gradual</string>
+    <string name="audio_editor_fade_out">Desvanecimiento</string>
+    <string name="audio_editor_mode_pro">Pro</string>
+    <string name="audio_editor_mode_simple">Simple</string>
+    <string name="audio_editor_op_fade">Fundido</string>
+    <string name="audio_editor_op_gain">Volumen</string>
+    <string name="audio_editor_op_original">Original</string>
+    <string name="audio_editor_op_removerange">Sección eliminada</string>
+    <string name="audio_editor_op_speed">Velocidad</string>
+    <string name="audio_editor_op_trim">Recortado</string>
+    <string name="audio_editor_pause">Pausa</string>
+    <string name="audio_editor_play">Reproducir</string>
+    <string name="audio_editor_preparing">Preparando el audio…</string>
+    <string name="audio_editor_processing">Procesando…</string>
+    <string name="audio_editor_redo">Rehacer</string>
+    <string name="audio_editor_reset">Restablecer</string>
+    <string name="audio_editor_split_hint">Selecciona la sección que quieres eliminar.</string>
+    <string name="audio_editor_tool_fade">Fundido</string>
+    <string name="audio_editor_tool_speed">Velocidad</string>
+    <string name="audio_editor_tool_split">Cortar</string>
+    <string name="audio_editor_tool_transcribe">Transcribir</string>
+    <string name="audio_editor_tool_trim">Recortar</string>
+    <string name="audio_editor_tool_volume">Volumen</string>
+    <string name="audio_editor_trim_hint">Arrastra los tiradores para conservar una parte.</string>
+    <string name="audio_editor_undo">Deshacer</string>
+    <string name="audio_editor_use">Usar el audio</string>
+    <string name="audio_editor_volume_normal">Normal</string>
     <string name="audio_fullscreen_dial">Posición en el mensaje de voz</string>
     <string name="avatar_a11y_mood">estado de ánimo %s</string>
     <string name="bubble_story_citation_answer">respuesta a su historia</string>
