@@ -8,7 +8,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import java.io.ByteArrayOutputStream
 import java.io.File
 import java.text.DateFormat
 import java.util.Date
@@ -21,6 +20,7 @@ import me.meeshy.ui.component.retouch.ComposerRetouchResult
 import me.meeshy.ui.component.retouch.ComposerRetouchScreen
 import me.meeshy.ui.component.retouch.ComposerVideoRetouchResult
 import me.meeshy.ui.component.retouch.ComposerVideoRetouchScreen
+import me.meeshy.ui.component.retouch.RetouchExif
 import me.meeshy.ui.component.retouch.RetouchVideoProbe
 import me.meeshy.ui.component.retouch.RetouchSourceDecoder
 
@@ -49,11 +49,8 @@ internal object ChatRetouchDelivery {
 
     fun file(pending: ChatRetouchPending, result: ComposerRetouchResult, nowMillis: Long): ChatRetouchedFile = when (result) {
         ComposerRetouchResult.Original -> ChatRetouchedFile(pending.bytes, pending.fileName, pending.mimeType)
-        is ComposerRetouchResult.Rendered -> ChatRetouchedFile(jpeg(result.bitmap), ChatCameraCaptureFile.nextRetouched(nowMillis), JPEG_MIME)
+        is ComposerRetouchResult.Rendered -> ChatRetouchedFile(RetouchExif.jpeg(result.bitmap, like = pending.bytes), ChatCameraCaptureFile.nextRetouched(nowMillis), JPEG_MIME)
     }
-
-    private fun jpeg(bitmap: Bitmap): ByteArray =
-        ByteArrayOutputStream().also { bitmap.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, it) }.toByteArray()
 }
 
 /**

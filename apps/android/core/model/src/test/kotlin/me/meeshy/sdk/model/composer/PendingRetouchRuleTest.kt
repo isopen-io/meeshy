@@ -5,11 +5,12 @@ import org.junit.Test
 
 class PendingRetouchRuleTest {
 
-    private fun item(type: PendingAttachmentType = PendingAttachmentType.IMAGE, path: String? = "/cache/p.jpg", ready: Boolean = true) =
+    private fun item(type: PendingAttachmentType = PendingAttachmentType.IMAGE, path: String? = "/cache/p.jpg", ready: Boolean = true, mime: String? = "image/jpeg") =
         PendingAttachment(
             id = "p1",
             type = type,
             fileName = "p.jpg",
+            mimeType = mime,
             localPath = path,
             phase = if (ready) PendingAttachmentPhase.Ready else PendingAttachmentPhase.Preparing,
         )
@@ -31,5 +32,13 @@ class PendingRetouchRuleTest {
         assertThat(PendingRetouchRule.opens(item(path = null))).isFalse()
         assertThat(PendingRetouchRule.opens(item(type = PendingAttachmentType.AUDIO))).isFalse()
         assertThat(PendingRetouchRule.opens(item(type = PendingAttachmentType.FILE))).isFalse()
+    }
+
+    @Test
+    fun `un GIF ne s ouvre pas en retouche, la scene le figerait (iOS offersRetouche)`() {
+        assertThat(PendingRetouchRule.opens(item(mime = "image/gif"))).isFalse()
+        assertThat(PendingRetouchRule.opens(item(mime = "IMAGE/GIF"))).isFalse()
+        assertThat(PendingRetouchRule.opens(item(mime = "image/png"))).isTrue()
+        assertThat(PendingRetouchRule.opens(item(mime = null))).isTrue()
     }
 }
