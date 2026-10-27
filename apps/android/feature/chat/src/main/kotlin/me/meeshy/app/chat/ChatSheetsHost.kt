@@ -336,7 +336,7 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
                     },
                     onDismiss = actions.dismissEmojiPicker,
                     accentColor = accentColor,
-                    modifier = Modifier.align(androidx.compose.ui.Alignment.BottomCenter),
+                    modifier = Modifier.align(androidx.compose.ui.Alignment.BottomCenter).navigationBarsPadding(),
                 )
             }
         }
