@@ -147,6 +147,10 @@ const arStudioChrome = {
   'story.studio.edit.saving': 'جارٍ الحفظ…',
   'story.studio.edit.cancel': 'تجاهل التعديلات',
   'story.studio.publish.as.storyAndReel': 'نشر القصة والريل',
+  'story.studio.unsent': 'لم يُرسَل المنشور.',
+  'story.studio.unsent.retry': 'إعادة المحاولة',
+  'story.studio.unsent.discard': 'حذف',
+  'story.studio.volatile': 'هذا الجهاز لا يحتفظ بالوسائط: لا تُعِد تحميل الصفحة قبل النشر.',
 } satisfies StudioChromeCatalogSlice;
 
 export default arStudioChrome;

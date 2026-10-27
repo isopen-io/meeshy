@@ -147,6 +147,10 @@ const esStudioChrome = {
   'story.studio.edit.saving': 'Guardando…',
   'story.studio.edit.cancel': 'Descartar los cambios',
   'story.studio.publish.as.storyAndReel': 'Publicar historia y reel',
+  'story.studio.unsent': 'Publicación no enviada.',
+  'story.studio.unsent.retry': 'Reintentar',
+  'story.studio.unsent.discard': 'Eliminar',
+  'story.studio.volatile': 'Este dispositivo no guarda tus archivos: no recargues la página antes de publicar.',
 } satisfies StudioChromeCatalogSlice;
 
 export default esStudioChrome;

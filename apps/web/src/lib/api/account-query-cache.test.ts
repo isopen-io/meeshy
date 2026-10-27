@@ -13,6 +13,8 @@ import { createAppQueryClient, type StorageLike } from './query-client';
 import { reactionStore } from './reaction-store';
 import { createSessionStore, type SessionStoreApi } from './session';
 import { TUS_CHECKPOINT_DB_NAME } from './tus-checkpoint';
+import { memoryDeviceRecords } from '../send/send-queue';
+import { createStudioOutbox } from '../stories/studio-outbox';
 
 /**
  * CHANGER DE COMPTE GARDE LE CACHE DE CHAQUE COMPTE (#8674).
@@ -271,6 +273,37 @@ describe('l’étagère est bornée et se vide à la fin d’un compte', () => {
 
     expect(() => forgetAccountCaches({ userId: 'a', storage: fakeStorage(), cacheStorage, indexedDb: null })).not.toThrow();
     expect(() => forgetAccountCaches({ userId: 'a', storage: fakeStorage(), cacheStorage, indexedDb: refusing })).not.toThrow();
+  });
+
+  /* Une déconnexion EXPLICITE vaut suppression par l'utilisateur (#13416) : la règle « rien ne s'efface
+     avant la confirmation du serveur » ne vaut que pour le compte CONNECTÉ. */
+  const pendingPublications = async () => {
+    const outbox = createStudioOutbox(memoryDeviceRecords());
+    const record = { slots: [{ pageId: 'page-1', door: 'visual' as const, file: new File([new Uint8Array(3)], 'a.jpg', { type: 'image/jpeg' }), meta: { mediaType: 'image' } }], intent: null };
+    await outbox.save('a', record);
+    await outbox.save('b', record);
+    return outbox;
+  };
+
+  test('fin d’A ⇒ ses publications non envoyées (médias et intention, IndexedDB) partent avec lui, pas celles de B (#13416)', async () => {
+    const publications = await pendingPublications();
+
+    forgetAccountCaches({ userId: 'a', storage: fakeStorage(), cacheStorage: { keys: async () => [], delete: async () => false }, indexedDb: null, publications });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(await publications.load('a')).toBeNull();
+    expect(await publications.load('b')).not.toBeNull();
+  });
+
+  test('session révoquée ⇒ les publications non envoyées d’A partent aussi (#13416)', async () => {
+    const storage = fakeStorage();
+    const { session } = appWith(storage, 'a');
+    const publications = await pendingPublications();
+
+    endRevokedSession(session, { storage, cacheStorage: { keys: async () => [], delete: async () => false }, publications });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(await publications.load('a')).toBeNull();
   });
 
   test('session révoquée (401) ⇒ la session finit et le cache d’A part avec elle', () => {

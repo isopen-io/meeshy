@@ -107,8 +107,21 @@ async function prepared(file: File, port: ImagePort): Promise<File> {
   return new File([blob], renamed(file.name, blob.type), { type: blob.type, lastModified: file.lastModified });
 }
 
+/**
+ * **CONVERTIR UNE IMAGE QUE LE SERVEUR REFUSE** (#13416) — un HEIC qu'un
+ * ancien serveur rejette (415) est décodé par le MÊME worker, quand le
+ * navigateur le sait (Safari), et ré-écrit en WebP ou JPEG. `null` : le
+ * navigateur ne sait pas le lire, l'échec reste celui du serveur.
+ */
+async function converted(file: File, port: ImagePort): Promise<File | null> {
+  const blob = await port({ input: { kind: 'file', blob: file }, maxEdge: PHOTO_MAX_EDGE, look: null, output: { kind: 'efficient', quality: QUALITY, opaque: true } });
+  if (blob === undefined || blob === null || !PREPARABLE.has(blob.type)) return null;
+  return new File([blob], renamed(file.name, blob.type), { type: blob.type, lastModified: file.lastModified });
+}
+
 export type ImagePreparer = {
   readonly prepare: (file: File) => Promise<File>;
+  readonly transcode: (file: File) => Promise<File | null>;
   readonly prepareUploads: (pending: readonly PendingUpload[]) => Promise<readonly PendingUpload[]>;
 };
 
@@ -123,6 +136,7 @@ export function createImagePreparer(port: ImagePort): ImagePreparer {
   };
   return {
     prepare,
+    transcode: (file) => converted(file, port).catch(() => null),
     prepareUploads: (pending) => Promise.all(pending.map(async (piece) => ({ ...piece, file: await prepare(piece.file) }))),
   };
 }
@@ -131,5 +145,7 @@ export function createImagePreparer(port: ImagePort): ImagePreparer {
 export const browserImagePreparer: ImagePreparer = createImagePreparer((job) => imageJobClient.run(job));
 
 export const prepareImageForUpload = browserImagePreparer.prepare;
+
+export const transcodeRefusedImage = browserImagePreparer.transcode;
 
 export const prepareUploads = browserImagePreparer.prepareUploads;
