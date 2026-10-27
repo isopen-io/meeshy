@@ -94,7 +94,9 @@ public class CameraXCaptureEngine(
         val capture = imageCapture ?: return sink(CaptureEngineSignal.PhotoFailed(token))
         val options = ImageCapture.OutputFileOptions.Builder(file).build()
         capture.takePicture(options, mainExecutor, object : ImageCapture.OnImageSavedCallback {
-            override fun onImageSaved(output: ImageCapture.OutputFileResults) = sink(CaptureEngineSignal.PhotoSaved(token, file))
+            override fun onImageSaved(output: ImageCapture.OutputFileResults) {
+                if (released) file.delete() else sink(CaptureEngineSignal.PhotoSaved(token, file))
+            }
             override fun onError(exception: ImageCaptureException) = sink(CaptureEngineSignal.PhotoFailed(token))
         })
     }
@@ -127,7 +129,7 @@ public class CameraXCaptureEngine(
     private fun finalizeSegment(token: String, file: File, event: VideoRecordEvent.Finalize) {
         recording = null
         recordingToken = null
-        val cancelled = cancelRequested
+        val cancelled = cancelRequested || released
         cancelRequested = false
         val seconds = TimeUnit.NANOSECONDS.toMillis(event.recordingStats.recordedDurationNanos) / 1000.0
         val usable = !event.hasError() || (file.length() > 0 && event.error != VideoRecordEvent.Finalize.ERROR_NO_VALID_DATA)
