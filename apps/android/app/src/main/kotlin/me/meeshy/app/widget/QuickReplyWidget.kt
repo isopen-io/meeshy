@@ -32,6 +32,7 @@ import me.meeshy.app.R
 import me.meeshy.app.widget.kit.WidgetTheme
 import me.meeshy.app.widget.kit.widgetSurface
 import me.meeshy.app.widget.kit.WidgetReaderPrismStore
+import me.meeshy.app.widget.kit.widgetEphemeralLabel
 import me.meeshy.app.widget.kit.widgetPreviewLabels
 
 /**
@@ -67,6 +68,7 @@ internal class QuickReplyWidget : GlanceAppWidget() {
             currentUserId = currentUserId,
             previewLabels = labels,
             preferredLanguages = WidgetReaderPrismStore(context).load(),
+            ephemeralLabel = widgetEphemeralLabel(context),
         )
 
         provideContent {
