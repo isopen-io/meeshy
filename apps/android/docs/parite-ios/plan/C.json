@@ -7792,8 +7792,8 @@
    "apps/android/app/src/test/kotlin/me/meeshy/app/liveactivity/LiveActivityNotifierTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/LiveActivity/LiveActivityBackend.swift",
-   "apps/ios/Meeshy/Features/Main/LiveActivity/LiveActivityHost.swift",
+   "apps/ios/Meeshy/Features/LiveActivity/LiveActivityBackend.swift",
+   "apps/ios/Meeshy/Features/LiveActivity/LiveActivityHost.swift",
    "apps/ios/MeeshyWidgets/CallLiveActivity.swift",
    "apps/ios/MeeshyWidgets/OutboxLiveActivity.swift",
    "apps/ios/MeeshyWidgets/VoicePlaybackLiveActivity.swift",
@@ -8086,7 +8086,7 @@
    "apps/android/app/src/main/kotlin/me/meeshy/app/ongoing/recording/RecordingOngoingController.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/LiveActivity/VoiceRecordingActivityLaw.swift"
+   "apps/ios/Meeshy/Features/LiveActivity/VoiceRecordingActivityLaw.swift"
   ],
   "feature_keys": [
    "ext-ongoing-voice-recording"
@@ -10468,7 +10468,7 @@
    "apps/android/app/src/main/kotlin/me/meeshy/app/ongoing/outbox/OutboxOngoingController.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/LiveActivity/OutboxActivityLaw.swift"
+   "apps/ios/Meeshy/Features/LiveActivity/OutboxActivityLaw.swift"
   ],
   "feature_keys": [
    "ext-ongoing-outbox-progress"

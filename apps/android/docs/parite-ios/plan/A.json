@@ -4123,9 +4123,9 @@
    "apps/ios/Meeshy/Features/Main/Services/CallManager+CallKitProxy.swift",
    "apps/ios/Meeshy/Features/Main/Services/CallManager+Teardown.swift",
    "apps/ios/Meeshy/Features/Main/Services/CallManager.swift",
-   "apps/ios/Meeshy/Features/Main/LiveActivity/CallActivityLaw.swift",
-   "apps/ios/Meeshy/Features/Main/LiveActivity/CallLiveActivityCoordinator.swift",
-   "apps/ios/Meeshy/Features/Main/LiveActivity/CallActivityAvatarPublisher.swift"
+   "apps/ios/Meeshy/Features/LiveActivity/CallActivityLaw.swift",
+   "apps/ios/Meeshy/Features/LiveActivity/CallLiveActivityCoordinator.swift",
+   "apps/ios/Meeshy/Features/LiveActivity/CallActivityAvatarPublisher.swift"
   ],
   "feature_keys": [
    "calls-telecom-foreground-service",

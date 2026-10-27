@@ -921,7 +921,7 @@
    "apps/ios/Meeshy/Features/Main/Services/AudioPlaybackEngineDriving.swift",
    "apps/ios/Meeshy/Features/Main/Services/AudioQueueBuilder.swift",
    "apps/ios/Meeshy/Features/Main/Services/ConversationAudioCoordinator.swift",
-   "apps/ios/Meeshy/Features/Main/LiveActivity/VoicePlaybackLiveActivityCoordinator.swift"
+   "apps/ios/Meeshy/Features/LiveActivity/VoicePlaybackLiveActivityCoordinator.swift"
   ],
   "feature_keys": [
    "mav-audio-shared-engine-queue",
@@ -5281,7 +5281,7 @@
    "apps/ios/Meeshy/Features/Main/Services/ConversationAudioCoordinator+NowPlaying.swift",
    "apps/ios/Meeshy/Features/Main/Services/NowPlayingArtwork.swift",
    "apps/ios/Meeshy/Features/Main/Services/MediaBackgroundPolicy.swift",
-   "apps/ios/Meeshy/Features/Main/LiveActivity/VoicePlaybackActivityLaw.swift"
+   "apps/ios/Meeshy/Features/LiveActivity/VoicePlaybackActivityLaw.swift"
   ],
   "feature_keys": [
    "mav-audio-now-playing-system",

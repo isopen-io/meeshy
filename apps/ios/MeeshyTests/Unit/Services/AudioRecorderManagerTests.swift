@@ -156,7 +156,7 @@ final class AudioRecorderManagerTests: XCTestCase {
     /// #9887 — en arrière-plan, l'îlot est le seul écran : il relève lui-même
     /// le niveau, sinon son vumètre restait figé sur le dernier niveau vu.
     func test_liveActivity_metersTheRecorderWhileTheAppIsOffScreen() throws {
-        let source = try AppSourceGuard.unit("Meeshy/Features/Main/LiveActivity/VoiceRecordingLiveActivityCoordinator.swift")
+        let source = try AppSourceGuard.unit("Meeshy/Features/LiveActivity/VoiceRecordingLiveActivityCoordinator.swift")
         let start = try XCTUnwrap(source.range(of: "private func meterOffScreen() {"))
         let body = String(source[start.upperBound...].prefix(300))
         XCTAssertTrue(body.contains("UIApplication.shared.applicationState != .active"))
