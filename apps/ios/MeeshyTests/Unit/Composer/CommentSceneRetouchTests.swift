@@ -74,7 +74,7 @@ final class CommentSceneRetouchTests: XCTestCase {
         let hotes = [
             "Meeshy/Features/Main/Views/FeedCommentsSheet.swift",
             "Meeshy/Features/Main/Views/PostDetailView.swift",
-            "Meeshy/Features/Main/Views/StoryViewerView.swift",
+            "Meeshy/Features/Stories/Views/StoryViewerView.swift",
         ]
         for hote in hotes {
             let code = AppSourceGuard.stripComments(try AppSourceGuard.unit(hote))

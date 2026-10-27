@@ -56,7 +56,7 @@ final class E2EEStagingRecetteTests: XCTestCase {
         } catch {
             failure = error
         }
-        _ = try? await registrar.retire(deviceId: enrolled.device.deviceId)
+        _ = try? await registrar.retire(deviceId: enrolled.device.deviceId, registrationId: enrolled.device.registrationId)
         if let failure { throw failure }
     }
 

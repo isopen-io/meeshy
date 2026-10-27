@@ -339,13 +339,13 @@ struct SocialMediaGalleryContent: View {
         .onReceive(SocialSocketManager.shared.commentAdded.receive(on: DispatchQueue.main)) { recu in
             guard recu.postId == post.id else { return }
             comments = PostGalleryCommentFeed.adding(
-                StoryViewerView.storyComment(from: recu.comment, preferredLanguages: readerLanguages),
+                StoryCommentSession.comment(from: recu.comment, preferredLanguages: readerLanguages),
                 to: comments)
         }
         .onReceive(SocialSocketManager.shared.commentUpdated.receive(on: DispatchQueue.main)) { recu in
             guard recu.postId == post.id, comments.contains(where: { $0.id == recu.comment.id }) else { return }
             comments = PostGalleryCommentFeed.adding(
-                StoryViewerView.storyComment(from: recu.comment, preferredLanguages: readerLanguages),
+                StoryCommentSession.comment(from: recu.comment, preferredLanguages: readerLanguages),
                 to: comments)
         }
         .onReceive(SocialSocketManager.shared.commentDeleted.receive(on: DispatchQueue.main)) { recu in

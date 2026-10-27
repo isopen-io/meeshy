@@ -31,7 +31,7 @@ import me.meeshy.sdk.socket.MessageSocketManager
 import me.meeshy.sdk.socket.PreferencesSocketManager
 import me.meeshy.sdk.socket.SocketConnectionState
 import me.meeshy.sdk.socket.SocketManager
-import me.meeshy.sdk.socket.TypingPresenceRelay
+import me.meeshy.sdk.socket.PresenceStore
 import me.meeshy.sdk.status.StatusBarCache
 import me.meeshy.sdk.status.StatusRepository
 import me.meeshy.sdk.story.StoryRepository
@@ -47,7 +47,7 @@ class ConversationListViewModel @Inject constructor(
     private val repository: ConversationRepository,
     messageRepository: MessageRepository,
     messageSocketManager: MessageSocketManager,
-    typingPresenceRelay: TypingPresenceRelay,
+    presenceStore: PresenceStore,
     workManager: WorkManager,
     draftStore: ConversationDraftStore,
     starredStore: StarredMessagesStore,
@@ -127,7 +127,7 @@ class ConversationListViewModel @Inject constructor(
         scope = viewModelScope,
         state = _state,
         messageSocketManager = messageSocketManager,
-        typingPresenceRelay = typingPresenceRelay,
+        presenceStore = presenceStore,
         categoryRepository = categoryRepository,
         categorySocketManager = categorySocketManager,
         storyRepository = storyRepository,
@@ -216,7 +216,11 @@ class ConversationListViewModel @Inject constructor(
     fun setReaction(id: String, emoji: String?) = actions.setReaction(id, emoji)
 
     fun setTags(id: String, tags: List<String>) = actions.setTags(id, tags)
-    fun markRead(id: String) = actions.markRead(id)
+    /** Lire défait la marque « non lu » : sinon la réconciliation d'un rafraîchissement la rétablirait. */
+    fun markRead(id: String) {
+        loadingDeps.explicitUnreadMarks.clear(id)
+        actions.markRead(id)
+    }
     fun markUnread(id: String) {
         loadingDeps.explicitUnreadMarks.note(id)
         actions.markUnread(id)

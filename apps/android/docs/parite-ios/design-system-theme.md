@@ -468,8 +468,8 @@ Transposition Android : fullScreenCover/sheet → Dialog, ModalBottomSheet et de
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Navigation/PresentedSurfaceRegistry.swift`
-- `apps/ios/Meeshy/Features/Main/Navigation/PresentedSurfaceModifier.swift`
+- `apps/ios/Meeshy/Features/Navigation/PresentedSurfaceRegistry.swift`
+- `apps/ios/Meeshy/Features/Navigation/PresentedSurfaceModifier.swift`
 
 </details>
 
@@ -493,7 +493,7 @@ Transposition Android : Router.pendingReplyContext → argument/SavedStateHandle
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Navigation/Router+StoryReply.swift`
+- `apps/ios/Meeshy/Features/Navigation/Router+StoryReply.swift`
 
 </details>
 
@@ -518,8 +518,8 @@ Transposition Android : Écran visiteur Compose sans authentification ; Impressi
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Navigation/VisitorContent.swift`
-- `apps/ios/Meeshy/Features/Main/Navigation/VisitorContentReach.swift`
+- `apps/ios/Meeshy/Features/Navigation/VisitorContent.swift`
+- `apps/ios/Meeshy/Features/Navigation/VisitorContentReach.swift`
 
 </details>
 
@@ -813,10 +813,10 @@ Transposition Android : Commands/KeyboardShortcut → Modifier.onPreviewKeyEvent
 
 <details><summary>Sources iOS (4)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Navigation/MeeshyCommands.swift`
-- `apps/ios/Meeshy/Features/Main/Navigation/MeeshyShortcut.swift`
-- `apps/ios/Meeshy/Features/Main/Navigation/SceneCommandFocus.swift`
-- `apps/ios/Meeshy/Features/Main/Navigation/SceneCommandHosts.swift`
+- `apps/ios/Meeshy/Features/Navigation/MeeshyCommands.swift`
+- `apps/ios/Meeshy/Features/Navigation/MeeshyShortcut.swift`
+- `apps/ios/Meeshy/Features/Navigation/SceneCommandFocus.swift`
+- `apps/ios/Meeshy/Features/Navigation/SceneCommandHosts.swift`
 
 </details>
 
@@ -840,7 +840,7 @@ Transposition Android : MPNowPlayingInfoCenter + retour foreground → media3 Me
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Navigation/NowPlayingReturnNavigation.swift`
+- `apps/ios/Meeshy/Features/Navigation/NowPlayingReturnNavigation.swift`
 
 </details>
 
@@ -906,7 +906,7 @@ Transposition Android : Shape animatableData vers GenericShape + animateFloatAsS
 <details><summary>Sources iOS (2)</summary>
 
 - `apps/ios/Meeshy/Features/Main/Views/FullScreenGate.swift`
-- `apps/ios/Meeshy/Features/Main/Views/RevealCircleShape.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/RevealCircleShape.swift`
 
 </details>
 
@@ -1236,9 +1236,9 @@ Transposition Android : Universal Links + scheme meeshy:// → Android App Links
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Navigation/DeepLinkRouter.swift`
-- `apps/ios/Meeshy/Features/Main/Navigation/PackFocusSlug.swift`
-- `apps/ios/Meeshy/Features/Main/Navigation/ConversationListEntry.swift`
+- `apps/ios/Meeshy/Features/Navigation/DeepLinkRouter.swift`
+- `apps/ios/Meeshy/Features/Navigation/PackFocusSlug.swift`
+- `apps/ios/Meeshy/Features/Navigation/ConversationListEntry.swift`
 
 </details>
 
@@ -1290,8 +1290,8 @@ Transposition Android : OpenURLAction + SFSafariViewController → LocalUriHandl
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Navigation/EmailLinkSecret.swift`
-- `apps/ios/Meeshy/Features/Main/Navigation/InAppLinks.swift`
+- `apps/ios/Meeshy/Features/Navigation/EmailLinkSecret.swift`
+- `apps/ios/Meeshy/Features/Navigation/InAppLinks.swift`
 
 </details>
 
@@ -1509,10 +1509,10 @@ Transposition Android : NavigationStack + path → Navigation Compose NavHost (r
 
 <details><summary>Sources iOS (4)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Navigation/Router.swift`
-- `apps/ios/Meeshy/Features/Main/Navigation/RouterCommands.swift`
-- `apps/ios/Meeshy/Features/Main/Navigation/PanelBackAction.swift`
-- `apps/ios/Meeshy/Features/Main/Navigation/InteractivePopEnabler.swift`
+- `apps/ios/Meeshy/Features/Navigation/Router.swift`
+- `apps/ios/Meeshy/Features/Navigation/RouterCommands.swift`
+- `apps/ios/Meeshy/Features/Navigation/PanelBackAction.swift`
+- `apps/ios/Meeshy/Features/Navigation/InteractivePopEnabler.swift`
 
 </details>
 
@@ -1758,7 +1758,7 @@ Transposition Android : HStack de boutons verre → Row de IconButton glass sur 
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Composer/ComposerTopBar.swift`
+- `apps/ios/Meeshy/Features/Composer/ComposerTopBar.swift`
 - `packages/MeeshySDK/Sources/MeeshyUI/Story/StoryComposerView+TopBar.swift`
 - `packages/MeeshySDK/Sources/MeeshyUI/Story/StoryTextEditTopBar.swift`
 
@@ -2137,11 +2137,11 @@ Transposition Android : Notification tap PendingIntent → LaunchRouter ; cache-
 
 <details><summary>Sources iOS (5)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Navigation/NotificationContentRouter.swift`
-- `apps/ios/Meeshy/Features/Main/Navigation/ReelDoor.swift`
-- `apps/ios/Meeshy/Features/Main/Navigation/ReelNotificationOpener.swift`
-- `apps/ios/Meeshy/Features/Main/Navigation/StoryDoor.swift`
-- `apps/ios/Meeshy/Features/Main/Navigation/DetailOpenSource.swift`
+- `apps/ios/Meeshy/Features/Navigation/NotificationContentRouter.swift`
+- `apps/ios/Meeshy/Features/Navigation/ReelDoor.swift`
+- `apps/ios/Meeshy/Features/Navigation/ReelNotificationOpener.swift`
+- `apps/ios/Meeshy/Features/Navigation/StoryDoor.swift`
+- `apps/ios/Meeshy/Features/Navigation/DetailOpenSource.swift`
 
 </details>
 
@@ -2164,7 +2164,7 @@ Transposition Android : EnvironmentValues → CompositionLocal
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Navigation/SocialChromeEnvironment.swift`
+- `apps/ios/Meeshy/Features/Navigation/SocialChromeEnvironment.swift`
 
 </details>
 
@@ -2580,7 +2580,7 @@ Transposition Android : Portage direct (déjà fait).
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Navigation/ShareLinkEntryResolver.swift`
+- `apps/ios/Meeshy/Features/Navigation/ShareLinkEntryResolver.swift`
 
 </details>
 

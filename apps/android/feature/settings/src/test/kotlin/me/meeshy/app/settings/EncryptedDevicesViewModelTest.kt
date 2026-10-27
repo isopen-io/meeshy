@@ -254,4 +254,24 @@ class EncryptedDevicesViewModelTest {
 
         assertThat(vm.state.value.retireFailure).isEqualTo(EncryptedDevicesFailure.CHANGED)
     }
+
+    /**
+     * #13039 — la passerelle n'a pas pu fermer la session de l'appareil (503
+     * `E2EE_DEVICE_SESSION_NOT_CLOSED`) : rien n'est retiré, et l'écran le dit au lieu
+     * d'une panne générique, l'appareil restant listé.
+     */
+    @Test
+    fun `a session that could not be closed says nothing was removed`() = runTest(dispatcher) {
+        val notClosed = NetworkResult.Failure(ApiError(message = "non fermée", code = "E2EE_DEVICE_SESSION_NOT_CLOSED", httpStatus = 503))
+        val repo = FakeDevices(served = { NetworkResult.Success(listOf(device(1), device(2))) }, retireResult = { notClosed })
+        val vm = EncryptedDevicesViewModel(repo)
+        advanceUntilIdle()
+
+        vm.requestRetire(device(2))
+        vm.confirmRetire()
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.retireFailure).isEqualTo(EncryptedDevicesFailure.SESSION_NOT_CLOSED)
+        assertThat(vm.state.value.devices).contains(device(2))
+    }
 }

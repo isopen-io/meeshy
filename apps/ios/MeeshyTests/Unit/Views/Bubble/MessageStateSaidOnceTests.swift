@@ -91,13 +91,13 @@ final class MessageStateSaidOnceTests: XCTestCase {
     }
 
     func test_flatRowFlags_hideOnEveryVeiledMessage() throws {
-        let src = try source("Focal/Row/FocalRow.swift")
+        let src = try source("../Focal/Row/FocalRow.swift")
         XCTAssertFalse(src.contains("!content.isBlurred"))
         XCTAssertFalse(src.contains("isBlurred: content.isBlurred,"))
     }
 
     func test_flatRowMeta_usesTheSharedFailureRule() throws {
-        let src = try source("Focal/Row/FocalRow.swift")
+        let src = try source("../Focal/Row/FocalRow.swift")
         XCTAssertTrue(src.contains("BubbleFooterModel.glyphStatus(content.meta.deliveryStatus, retryBandShown: isFailedOutgoing)"))
     }
 

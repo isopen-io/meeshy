@@ -93,7 +93,7 @@ final class StoryOptionsMenuPlanTests: XCTestCase {
 /// La vue rend le plan, rien que le plan.
 final class StoryHeaderMenuWiringGuardTests: XCTestCase {
 
-    private static let headerFile = "Meeshy/Features/Main/Views/StoryViewerView+Header.swift"
+    private static let headerFile = "Meeshy/Features/Stories/Views/StoryViewerView+Header.swift"
 
     private func header() throws -> String {
         try MyStoriesSourceCorpus.text(of: Self.headerFile)
@@ -184,7 +184,7 @@ final class StoryHeaderMenuWiringGuardTests: XCTestCase {
         XCTAssertTrue(menu.contains("showAudioTranscript = true"))
         XCTAssertTrue(menu.contains("showAudioTranscript = false"), "« Masquer » quand elle est affichée.")
         let layers = MyStoriesSourceCorpus.strippingComments(
-            try AppSourceGuard.unit("Meeshy/Features/Main/Views/StoryViewerView+Canvas+Layers.swift"))
+            try AppSourceGuard.unit("Meeshy/Features/Stories/Views/StoryViewerView+Canvas+Layers.swift"))
         let headerCall = try XCTUnwrap(layers.range(of: "StoryHeaderView("))
         let call = String(layers[headerCall.upperBound...].prefix(1400))
         XCTAssertTrue(call.contains("transcriptMenu: StoryReaderContentRules.transcriptMenu(of: currentStory, chain: resolvedViewerLanguageChain, select: onSelectLanguageOverride)"))
@@ -196,13 +196,13 @@ final class StoryHeaderMenuWiringGuardTests: XCTestCase {
         // Le chrome haut (donc l'appel de l'en-tête) vit dans `+Canvas+Layers`, et les feuilles dans
         // `StoryViewerSheets` : le lecteur ne fait plus que les monter.
         let canvas = MyStoriesSourceCorpus.strippingComments(
-            try AppSourceGuard.unit("Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift"))
+            try AppSourceGuard.unit("Meeshy/Features/Stories/Views/StoryViewerView+Canvas.swift"))
         let headerCall = try XCTUnwrap(canvas.range(of: "StoryHeaderView("))
         XCTAssertTrue(canvas[headerCall.upperBound...].prefix(1600).contains("showExportShareSheet: $showExportShareSheet"))
-        let viewer = try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Main/Views/StoryViewerSheets.swift")
+        let viewer = try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Stories/Views/StoryViewerSheets.swift")
         XCTAssertTrue(viewer.contains(".sheet(isPresented: $showExportShareSheet"))
         XCTAssertTrue(viewer.contains("viewModel: exportShareViewModel, author: currentGroup.map(StoryExportAuthor.init(group:))"))
-        let sheet = try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Main/Views/StoryExportShareSheet.swift")
+        let sheet = try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Stories/Views/StoryExportShareSheet.swift")
         XCTAssertTrue(sheet.contains("languagePicker"), "La feuille garde le choix de la langue à graver.")
         XCTAssertTrue(sheet.contains("viewModel.startExport(story: story, author: author)"))
     }
@@ -234,7 +234,7 @@ final class StoryDirectRepostTests: XCTestCase {
     }
 
     func test_theThreeGestures_shareOneWriter() throws {
-        let sidebar = try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift")
+        let sidebar = try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Stories/Views/StoryViewerView+Sidebar.swift")
         XCTAssertTrue(sidebar.contains(".simple(postId: storyId, targetType: destination.targetType, visibility: nil)"))
         XCTAssertTrue(sidebar.contains("StoryViewerParticipationStore.shared.note(.reposted, storyId: storyId)"),
                       "Le rail pose l'anneau « republié » comme le faisait la porte de republication.")
@@ -261,7 +261,7 @@ final class StoryRailComposeTests: XCTestCase {
     }
 
     func test_theRailButton_opensTheSameDoorAsTheMenu() throws {
-        let rail = try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift")
+        let rail = try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Stories/Views/StoryViewerView+Sidebar.swift")
         let button = try XCTUnwrap(rail.range(of: "if railPlan.showsCompose {"))
         let block = String(rail[button.upperBound...].prefix(500))
         XCTAssertTrue(block.contains("demanderComposer(cible)"), "Même porte que l'entrée « Composer » du menu.")
@@ -269,7 +269,7 @@ final class StoryRailComposeTests: XCTestCase {
         XCTAssertTrue(rail.contains("@Environment(\\.meeshyComposeSeedRequest) private var demanderComposer"))
         XCTAssertTrue(rail.contains("canCompose: railPlan.showsCompose"),
                       "La réconciliation des commentaires re-gèle le rail sans perdre « Composer ».")
-        let header = try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Main/Views/StoryViewerView+Header.swift")
+        let header = try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Stories/Views/StoryViewerView+Header.swift")
         XCTAssertTrue(header.contains("case .compose:"), "L'entrée du menu reste.")
     }
 }

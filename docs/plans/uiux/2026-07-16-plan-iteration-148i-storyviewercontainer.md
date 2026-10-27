@@ -8,7 +8,7 @@ Combler 2 lacunes VoiceOver réelles sur les overlays plein écran du viewer de 
 (`loadingOverlay` + `notFoundOverlay`), sans toucher la logique ni le rendu visuel.
 
 ## Périmètre (1 fichier)
-`apps/ios/Meeshy/Features/Main/Views/StoryViewerContainer.swift`
+`apps/ios/Meeshy/Features/Stories/Views/StoryViewerContainer.swift`
 
 ## Étapes
 1. `closeButton` (partagé par les 2 overlays) : ajouter `.accessibilityLabel(common.close)` sur

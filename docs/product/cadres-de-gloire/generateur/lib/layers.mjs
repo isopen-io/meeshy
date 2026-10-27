@@ -15,9 +15,10 @@
 //                       de Mee hors d'un oiseau posé (frappée sur une pièce, en hologramme) est une ILLUSTRATION
 //                       du décor, comptée à part (`art`)
 //   text                tout `<text>` (et ses tspan, textPath) : un emplacement vivant
+//   baked               un `<text>` de décor NEUTRE (markBaked) : cuit dans la couche decor, jamais un emplacement
 // Un élément de définition (masque, motif, filtre, dégradé…) n'est jamais touché : seul ce qui se PEINT l'est.
 
-export const KINDS = ['photo', 'photo-bg', 'backdrop', 'grade-<n>', 'front:<rang>', 'crest', 'plate', 'birds', 'text'];
+export const KINDS = ['photo', 'photo-bg', 'backdrop', 'grade-<n>', 'front:<rang>', 'crest', 'plate', 'birds', 'text', 'baked'];
 export const isFront = (kind) => kind.startsWith('front:');
 
 export function classify() {
@@ -145,10 +146,22 @@ export function show({ kinds, probe = null, flatSlots = null, photo = null }) {
     return getComputedStyle(el).visibility === 'visible';
   };
   return {
-    text: [...root.querySelectorAll('text')].filter(shown).length,
+    text: [...root.querySelectorAll('text')].filter((el) => !el.hasAttribute('data-baked')).filter(shown).length,
+    baked: [...root.querySelectorAll('text[data-baked]')].filter(shown).length,
     birds: [...root.querySelectorAll('[data-layer="birds"] image')].filter(shown).length,
     art: [...root.querySelectorAll('image')].filter((im) => !im.closest('[data-layer="birds"]')).filter(shown).length,
   };
+}
+
+// Les textes de décor NEUTRES (#10256, lib/decor-sorts.mjs) changent de nature : `baked`, une couche que l'export rend
+// AVEC le décor — ils y sont cuits et quittent les emplacements que l'app peint.
+export function markBaked(slots) {
+  const wanted = new Set(slots);
+  document.querySelectorAll('text[data-slot]').forEach((el) => {
+    if (!wanted.has(el.getAttribute('data-slot'))) return;
+    el.setAttribute('data-baked', '1');
+    [el, ...el.querySelectorAll('[data-k]')].forEach((node) => node.setAttribute('data-k', 'baked'));
+  });
 }
 
 // Ce que l'app peindra, lu dans le DOM du cadre : chaque <text> (police, graisse, taille, interlettrage, ancre,

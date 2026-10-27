@@ -2,31 +2,11 @@
 
 import Foundation
 import Combine
-import GRDB
 import MeeshySDK
 import os
 import UIKit
 
 private nonisolated let containerLogger = MeeshyLog.logger(.dependencyContainer)
-
-/// Diagnostic record produced by ``DependencyContainer`` boot.
-///
-/// The container no longer crashes the app when the on-disk database
-/// cannot be opened — corrupted SQLite files are quarantined and
-/// recreated, inaccessible paths fall back to Application Support
-/// (entitlement-less builds: the app-group container resolves but the
-/// sandbox denies access, seen on iOS-on-Mac),
-/// and as a last resort a unique temp-file pool is used so the user
-/// lands in the app (in degraded mode) instead of a crash loop. This
-/// struct records what happened so the host app can surface the issue
-/// to the user and to Crashlytics.
-nonisolated struct DatabaseInitDiagnostics: Sendable, Equatable {
-    var firstAttemptError: String?
-    var recoveryAttempted: Bool = false
-    var quarantinedFilePath: String?
-    var fellBackToSecondaryPath: Bool = false
-    var fellBackToEphemeralStorage: Bool = false
-}
 
 @MainActor
 final class DependencyContainer {
@@ -42,7 +22,7 @@ final class DependencyContainer {
     /// consulte au moment d'écrire vise la bonne base, un site qui a capturé
     /// une session garde celle du compte qui l'a ouverte.
     let storeRouter: MessageStoreRouter
-    nonisolated var dbPool: DatabasePool { storeRouter.current.dbPool }
+    nonisolated var database: MessageStoreDatabase { storeRouter.current.database }
     nonisolated var messagePersistence: MessagePersistenceActor { storeRouter.current.messagePersistence }
     nonisolated var feedPersistence: FeedPersistenceActor { storeRouter.current.feedPersistence }
     /// Sessions quittées dont la purge de sortie n'a pas encore tourné : la
@@ -196,7 +176,7 @@ final class DependencyContainer {
         // un environnement changé à l'écran de connexion doit l'atteindre
         // AVANT le premier push de la session.
         if key != nil { WidgetDataManager.shared.publishAPIBaseURL() }
-        let incoming = storeRouter.current.dbPool
+        let incoming = storeRouter.current.database.pool
         Task { await OfflineQueue.shared.configure(pool: incoming) }
     }
 
@@ -295,7 +275,7 @@ final class DependencyContainer {
         guard session.key != nil, !session.diagnostics.fellBackToEphemeralStorage else { return }
         let flag = autoVacuumKey(for: session.fileName)
         guard !UserDefaults.standard.bool(forKey: flag) else { return }
-        let pool = session.dbPool
+        let pool = session.database.pool
         Task.detached(priority: .background) {
             do {
                 try DatabaseMaintenance.enableIncrementalAutoVacuumOneShot(on: pool)
@@ -524,189 +504,6 @@ final class DependencyContainer {
         ArrivalCelebrationController.shared.resetForLogout()
     }
 
-    // MARK: - Recovery (P1.5 — no more fatalError on DB init)
-
-    /// Open the on-disk database with one-shot recovery: if the first
-    /// `DatabasePool(path:)` throws with a corruption-shaped error
-    /// (typically `SQLITE_CORRUPT`), the offending file is moved aside
-    /// with its WAL/SHM siblings, then a fresh database is opened at the
-    /// same path. Access-denied errors skip the quarantine entirely — an
-    /// unreadable file is not a corrupt one, and renaming or deleting it
-    /// would destroy data a correctly-signed build could still read
-    /// (iOS-on-Mac build 1750: the sandbox denies the app-group container
-    /// when the binary lost its entitlement, `SQLITE_AUTH`).
-    ///
-    /// When the primary path is unusable, `fallbackPath` (Application
-    /// Support in production) gets the same open-then-recover treatment.
-    /// The last resort is a unique temp-file pool — NEVER `:memory:`,
-    /// which a `DatabasePool` cannot honor (WAL requires a real file:
-    /// "could not activate WAL Mode at path: :memory:"), so that old
-    /// "fallback" trapped unconditionally and boot-looped the app.
-    ///
-    /// Internal access for ``DependencyContainerTests`` to drive the
-    /// corrupted-file and denied-path flows against tmp directories.
-    nonisolated static func openWithRecovery(
-        dbPath: String,
-        fallbackPath: @autoclosure () -> String? = nil,
-        config: Configuration,
-        fileManager: FileManager = .default,
-        clock: () -> Date = Date.init,
-        diagnostics: inout DatabaseInitDiagnostics
-    ) -> DatabasePool {
-        do {
-            return try DatabasePool(path: dbPath, configuration: config)
-        } catch {
-            containerLogger.fault("Database open failed at \(dbPath, privacy: .public): \(error.localizedDescription, privacy: .public) — attempting recovery")
-            diagnostics.firstAttemptError = error.localizedDescription
-            if let pool = reopenReplacingCorruptFile(
-                at: dbPath, after: error, config: config,
-                fileManager: fileManager, clock: clock, diagnostics: &diagnostics
-            ) {
-                return pool
-            }
-        }
-
-        if let secondary = fallbackPath(), secondary != dbPath {
-            diagnostics.fellBackToSecondaryPath = true
-            do {
-                let pool = try DatabasePool(path: secondary, configuration: config)
-                containerLogger.info("Database opened at fallback path \(secondary, privacy: .public)")
-                return pool
-            } catch {
-                containerLogger.fault("Fallback database open failed at \(secondary, privacy: .public): \(error.localizedDescription, privacy: .public)")
-                diagnostics.firstAttemptError = (diagnostics.firstAttemptError ?? "") + " | fallback: \(error.localizedDescription)"
-                if let pool = reopenReplacingCorruptFile(
-                    at: secondary, after: error, config: config,
-                    fileManager: fileManager, clock: clock, diagnostics: &diagnostics
-                ) {
-                    return pool
-                }
-            }
-        }
-
-        diagnostics.fellBackToEphemeralStorage = true
-        let ephemeralPath = fileManager.temporaryDirectory
-            .appendingPathComponent("meeshy_messages_ephemeral_\(UUID().uuidString).sqlite")
-            .path
-        containerLogger.fault("All database paths unusable — falling back to an ephemeral pool at \(ephemeralPath, privacy: .public)")
-        do {
-            return try DatabasePool(path: ephemeralPath, configuration: config)
-        } catch {
-            containerLogger.fault("Ephemeral DatabasePool init failed: \(error.localizedDescription, privacy: .public)")
-            preconditionFailure("Ephemeral DatabasePool unavailable: \(error)")
-        }
-    }
-
-    /// Quarantine-then-reopen, reserved for corruption-shaped failures.
-    /// Returns `nil` when the error is access-shaped, suspension-shaped, or
-    /// when the fresh open still fails — the caller moves on to the next
-    /// fallback tier.
-    ///
-    /// Interne (et non `private`) pour que ``DependencyContainerSuspensionTests``
-    /// puisse présenter une erreur EXACTE à la garde : une interruption ne se
-    /// fabrique pas en ouvrant un vrai fichier, et un témoin qui n'y arrive pas
-    /// serait vert par omission — la branche ne serait jamais jouée.
-    nonisolated static func reopenReplacingCorruptFile(
-        at path: String,
-        after error: Error,
-        config: Configuration,
-        fileManager: FileManager,
-        clock: () -> Date,
-        diagnostics: inout DatabaseInitDiagnostics
-    ) -> DatabasePool? {
-        guard !isAccessDenied(error) else {
-            containerLogger.fault("Access denied at \(path, privacy: .public) — leaving the file untouched (unreadable ≠ corrupt)")
-            return nil
-        }
-        // UNE INTERRUPTION N'EST PAS UNE CORRUPTION, et ici elle coûte
-        // LE STORE DE MESSAGES DE L'UTILISATEUR.
-        //
-        // Armer la suspension juste au-dessus fait apparaître une erreur : une
-        // ouverture pendant la fenêtre de suspension (réveil d'arrière-plan,
-        // extension, tâche BG) rend `SQLITE_INTERRUPT`. `isAccessDenied` ne couvre
-        // que AUTH / PERM / CANTOPEN / READONLY : sans cette garde, l'interruption
-        // tomberait dans la branche « corrompu », le fichier partirait en
-        // quarantaine et une base VIDE le remplacerait — une perte de données,
-        // strictement pire qu'une suppression par le système.
-        guard !DatabaseSuspension.isSuspensionInterruption(error) else {
-            containerLogger.fault("Database open interrupted by suspension at \(path, privacy: .public) — leaving the file untouched (interrupted ≠ corrupt)")
-            return nil
-        }
-        diagnostics.recoveryAttempted = true
-        diagnostics.quarantinedFilePath = quarantineCorruptDatabase(
-            at: path,
-            fileManager: fileManager,
-            clock: clock
-        )
-        do {
-            let pool = try DatabasePool(path: path, configuration: config)
-            containerLogger.info("Database recovered with a fresh file at \(path, privacy: .public)")
-            return pool
-        } catch {
-            containerLogger.fault("Database recovery failed at \(path, privacy: .public): \(error.localizedDescription, privacy: .public)")
-            diagnostics.firstAttemptError = (diagnostics.firstAttemptError ?? "") + " | recovery: \(error.localizedDescription)"
-            return nil
-        }
-    }
-
-    private nonisolated static func isAccessDenied(_ error: Error) -> Bool {
-        guard let dbError = error as? DatabaseError else { return false }
-        let code = dbError.resultCode
-        return code == .SQLITE_AUTH
-            || code == .SQLITE_PERM
-            || code == .SQLITE_CANTOPEN
-            || code == .SQLITE_READONLY
-    }
-
-    /// Move the suspected-corrupt SQLite file (plus its WAL / SHM siblings)
-    /// out of the way so a fresh one can be created at the canonical path.
-    /// Returns the new location of the quarantined main file, or `nil` when
-    /// the move failed (in which case we delete instead).
-    nonisolated static func quarantineCorruptDatabase(
-        at path: String,
-        fileManager: FileManager = .default,
-        clock: () -> Date = Date.init
-    ) -> String? {
-        let timestamp = Int(clock().timeIntervalSince1970)
-        let quarantined = "\(path).corrupted.\(timestamp)"
-
-        let mainExists = fileManager.fileExists(atPath: path)
-        if mainExists {
-            do {
-                try fileManager.moveItem(atPath: path, toPath: quarantined)
-            } catch {
-                containerLogger.error("Failed to quarantine corrupt DB: \(error.localizedDescription, privacy: .public) — deleting instead")
-                do {
-                    try fileManager.removeItem(atPath: path)
-                } catch {
-                    containerLogger.error("Failed to delete corrupt DB at \(path, privacy: .public): \(error.localizedDescription, privacy: .public)")
-                }
-            }
-        }
-        // The WAL and SHM siblings reference a now-missing main file and
-        // would prevent GRDB from creating a fresh database. They never
-        // carry data we can recover separately, so they're safe to remove.
-        let walPath = path + "-wal"
-        if fileManager.fileExists(atPath: walPath) {
-            do {
-                try fileManager.removeItem(atPath: walPath)
-            } catch {
-                containerLogger.error("Failed to remove WAL file at \(path, privacy: .public)-wal: \(error.localizedDescription, privacy: .public)")
-            }
-        }
-
-        let shmPath = path + "-shm"
-        if fileManager.fileExists(atPath: shmPath) {
-            do {
-                try fileManager.removeItem(atPath: shmPath)
-            } catch {
-                containerLogger.error("Failed to remove SHM file at \(path, privacy: .public)-shm: \(error.localizedDescription, privacy: .public)")
-            }
-        }
-
-        return (mainExists && fileManager.fileExists(atPath: quarantined)) ? quarantined : nil
-    }
-
     // MARK: - App Group shared path (O6)
 
     /// Le conteneur est résolu hors du fil principal dès l'entrée du processus
@@ -769,42 +566,4 @@ final class DependencyContainer {
             }
         }
     }
-
-    // MARK: - Database config (O7, N7, N8)
-
-    nonisolated static func dbConfig() -> Configuration {
-        var config = Configuration()
-        config.maximumReaderCount = min(ProcessInfo.processInfo.activeProcessorCount * 2, 16)
-        // N1 — the NSE opens its own pool on the same App Group file. GRDB's
-        // default `.immediateError` busy mode turns any cross-process write
-        // collision into SQLITE_BUSY; a 5 s timeout absorbs the contention
-        // (the NSE's writes are sub-millisecond, the app's are batched).
-        config.busyMode = .timeout(5)
-        // LE SECOND POOL APPREND, LUI AUSSI, QUE L'APPLICATION SE SUSPEND.
-        //
-        // `observesSuspensionNotifications` se pose PAR POOL : l'armer sur
-        // `AppDatabase` (`meeshy.sqlite`) seul laisse revenir le `0xDEAD10CC`, car
-        // deux fils `GRDB.DatabasePool.writer` peuvent être vivants au moment de la
-        // suppression — l'un en `sqlite3_wal_checkpoint_v2` jusqu'à
-        // `guarded_pwrite_np`, l'autre dans un `write` synchrone. Celui-ci est le
-        // pool de `meeshy_messages.sqlite`.
-        //
-        // C'est le pool le plus exposé des deux : `MessagePersistenceActor`
-        // écrit dessus à chaque message reçu, y compris pendant la transition
-        // vers l'arrière-plan.
-        DatabaseSuspension.arm(&config)
-        config.prepareDatabase { db in
-            try db.execute(sql: "PRAGMA synchronous = NORMAL")
-            try db.execute(sql: "PRAGMA journal_size_limit = 16777216")
-            try db.execute(sql: "PRAGMA wal_autocheckpoint = 1000")
-            // `cache_size`, `mmap_size` et `temp_store` vivent sur la
-            // CONNEXION, pas dans le fichier. `applyTuning(on:)` les poserait via
-            // `pool.write`, donc sur le seul rédacteur : les seize lecteurs
-            // travailleraient sans mmap ni cache de pages. Ici, ils atteignent
-            // chaque connexion — et sans transaction d'écriture au démarrage.
-            try DatabaseMaintenance.prepareTuning(db)
-        }
-        return config
-    }
 }
-

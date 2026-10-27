@@ -17,7 +17,7 @@ final class CallEffectsOverlayTests: XCTestCase {
             .deletingLastPathComponent()   // Unit/
             .deletingLastPathComponent()   // MeeshyTests/
             .deletingLastPathComponent()   // ios/
-            .appendingPathComponent("Meeshy/Features/Main/Views/CallEffectsOverlay.swift")
+            .appendingPathComponent("Meeshy/Features/Call/Views/CallEffectsOverlay.swift")
         return try String(contentsOf: url, encoding: .utf8)
     }
 

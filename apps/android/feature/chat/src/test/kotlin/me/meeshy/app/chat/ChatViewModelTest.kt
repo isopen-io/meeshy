@@ -76,7 +76,6 @@ import me.meeshy.sdk.model.TranslatedAudioPayload
 import me.meeshy.sdk.model.TranslationEvent
 import me.meeshy.sdk.model.MessageUnpinnedEvent
 import me.meeshy.sdk.model.PresenceSnapshotEvent
-import me.meeshy.sdk.model.PresenceState
 import me.meeshy.sdk.model.UserStatusEvent
 import me.meeshy.sdk.model.ReactionGroup
 import me.meeshy.sdk.model.ReactionSyncResponse
@@ -94,7 +93,6 @@ import me.meeshy.sdk.reaction.ReactionRepository
 import me.meeshy.sdk.report.ReportRepository
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.MessageSocketManager
-import me.meeshy.sdk.socket.TypingPresenceRelay
 import me.meeshy.sdk.theme.accentHex
 import me.meeshy.ui.component.bubble.DeliveryStatus
 import org.junit.After
@@ -169,13 +167,6 @@ class ChatViewModelTest {
             justRun { emitTypingStop(any()) }
         }
 
-    private fun typingPresenceRelay(
-        forcedOnline: MutableSharedFlow<UserStatusEvent> = MutableSharedFlow(),
-    ): TypingPresenceRelay =
-        mockk<TypingPresenceRelay> {
-            every { this@mockk.forcedOnline } returns forcedOnline
-        }
-
     private data class Harness(
         val vm: ChatViewModel,
         val repo: MessageRepository,
@@ -217,7 +208,6 @@ class ChatViewModelTest {
         offline: Boolean = false,
         initialDraftArg: String? = null,
         socket: MessageSocketManager = socketManager(),
-        relay: TypingPresenceRelay = typingPresenceRelay(),
     ): Harness {
         val repo = mockk<MessageRepository>(relaxed = true)
         every { repo.messagesStream(any(), any(), any()) } returns stream
@@ -235,7 +225,7 @@ class ChatViewModelTest {
         coEvery { activeCallRepo.activeCallFor(any()) } returns activeCall
         val reportRepo = mockk<ReportRepository>(relaxed = true)
         val mediaQueue = mockk<MediaUploadQueue>(relaxed = true)
-        coEvery { mediaQueue.enqueue(any()) } returns "upload-cmid"
+        coEvery { mediaQueue.enqueue(any(), any(), any()) } returns "upload-cmid"
         val anonymousStore = InMemoryAnonymousSessionStore(anonymousSession)
         val privacyStore = InMemoryPrivacyPreferencesStore(
             PrivacyPreferences(showReadReceipts = showReadReceipts),
@@ -269,7 +259,6 @@ class ChatViewModelTest {
                 locallyHidden,
                 starred,
                 socket,
-                relay,
                 workManager,
                 MeeshyConfig(),
                 clock,
@@ -1041,7 +1030,7 @@ class ChatViewModelTest {
 
         assertThat(vm.state.value.clipboardContent).isNull()
         val itemSlot = slot<MediaUploadItem>()
-        coVerify(exactly = 1) { h.mediaQueue.enqueue(capture(itemSlot)) }
+        coVerify(exactly = 1) { h.mediaQueue.enqueue(capture(itemSlot), any(), any()) }
         assertThat(String(itemSlot.captured.bytes, Charsets.UTF_8)).isEqualTo(pasted)
         assertThat(itemSlot.captured.mimeType).isEqualTo("text/plain")
         coVerify(exactly = 1) {
@@ -1097,7 +1086,7 @@ class ChatViewModelTest {
         advanceUntilIdle()
 
         val itemSlot = slot<MediaUploadItem>()
-        coVerify(exactly = 1) { h.mediaQueue.enqueue(capture(itemSlot)) }
+        coVerify(exactly = 1) { h.mediaQueue.enqueue(capture(itemSlot), any(), any()) }
         assertThat(itemSlot.captured.fileName).isEqualTo("report.pdf")
         assertThat(itemSlot.captured.mimeType).isEqualTo("application/pdf")
         val attachSlot = slot<List<ApiMessageAttachment>>()
@@ -1186,7 +1175,7 @@ class ChatViewModelTest {
         advanceUntilIdle()
 
         val itemSlot = slot<MediaUploadItem>()
-        coVerify(exactly = 1) { h.mediaQueue.enqueue(capture(itemSlot)) }
+        coVerify(exactly = 1) { h.mediaQueue.enqueue(capture(itemSlot), any(), any()) }
         assertThat(itemSlot.captured.mimeType).isEqualTo("video/mp4")
     }
 
@@ -1200,7 +1189,7 @@ class ChatViewModelTest {
         advanceUntilIdle()
 
         val itemSlot = slot<MediaUploadItem>()
-        coVerify(exactly = 1) { h.mediaQueue.enqueue(capture(itemSlot)) }
+        coVerify(exactly = 1) { h.mediaQueue.enqueue(capture(itemSlot), any(), any()) }
         assertThat(itemSlot.captured.fileName).isEqualTo("attachment")
     }
 
@@ -1213,7 +1202,7 @@ class ChatViewModelTest {
         h.vm.sendFileAttachment(ByteArray(0), "empty.pdf", declaredMimeType = "application/pdf")
         advanceUntilIdle()
 
-        coVerify(exactly = 0) { h.mediaQueue.enqueue(any()) }
+        coVerify(exactly = 0) { h.mediaQueue.enqueue(any(), any(), any()) }
         coVerify(exactly = 0) { h.repo.sendOptimistic(any(), any(), any(), any(), any()) }
     }
 
@@ -1236,7 +1225,7 @@ class ChatViewModelTest {
             h.vm.sendFileAttachment("PDF2".toByteArray(), "two.pdf", declaredMimeType = "application/pdf")
             advanceUntilIdle()
 
-            coVerify(exactly = 1) { h.mediaQueue.enqueue(any()) }
+            coVerify(exactly = 1) { h.mediaQueue.enqueue(any(), any(), any()) }
         }
 
     @Test
@@ -1254,7 +1243,7 @@ class ChatViewModelTest {
         h.vm.sendFileAttachment("PDF".toByteArray(), "report.pdf", declaredMimeType = "application/pdf")
         advanceUntilIdle()
 
-        coVerify(exactly = 0) { h.mediaQueue.enqueue(any()) }
+        coVerify(exactly = 0) { h.mediaQueue.enqueue(any(), any(), any()) }
     }
 
     @Test
@@ -1270,7 +1259,7 @@ class ChatViewModelTest {
         h.vm.sendFileAttachment("PDF".toByteArray(), "report.pdf", declaredMimeType = "application/pdf")
         advanceUntilIdle()
 
-        coVerify(exactly = 0) { h.mediaQueue.enqueue(any()) }
+        coVerify(exactly = 0) { h.mediaQueue.enqueue(any(), any(), any()) }
         assertThat(h.vm.state.value.lastSelfSentAtMillis).isNull()
     }
 
@@ -1287,7 +1276,7 @@ class ChatViewModelTest {
         h.vm.sendFileAttachment("PNG".toByteArray(), "avatar.png", declaredMimeType = "image/png")
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { h.mediaQueue.enqueue(any()) }
+        coVerify(exactly = 1) { h.mediaQueue.enqueue(any(), any(), any()) }
     }
 
     @Test
@@ -1326,7 +1315,7 @@ class ChatViewModelTest {
         h.vm.send()
         advanceUntilIdle()
 
-        coVerify(exactly = 0) { h.mediaQueue.enqueue(any()) }
+        coVerify(exactly = 0) { h.mediaQueue.enqueue(any(), any(), any()) }
         coVerify(exactly = 0) { h.repo.sendOptimistic(any(), any(), any(), any(), any()) }
     }
 
@@ -1540,67 +1529,6 @@ class ChatViewModelTest {
 
         assertThat(h.vm.state.value.isGroup).isFalse()
         assertThat(h.vm.state.value.memberCount).isEqualTo(2)
-    }
-
-    // --- Chat header presence dot (port of iOS ConversationView.headerPresenceState) ---
-
-    @Test
-    fun headerPresence_resolves_the_other_participants_live_presence_in_a_direct_conversation() = runTest(dispatcher) {
-        val userStatusFlow = MutableSharedFlow<UserStatusEvent>()
-        val h = harness(
-            flowOf(CacheResult.Empty),
-            currentUser = me,
-            conversation = directConversation(),
-            socket = socketManager(userStatus = userStatusFlow),
-        )
-        advanceUntilIdle()
-
-        userStatusFlow.emit(UserStatusEvent(userId = "u1", isOnline = true, lastActiveAt = null))
-        advanceUntilIdle()
-
-        assertThat(h.vm.state.value.headerPresence(nowEpochMillis = 0L)).isEqualTo(PresenceState.ONLINE)
-    }
-
-    @Test
-    fun headerPresence_reflects_a_forced_online_event_from_a_typing_frame() = runTest(dispatcher) {
-        val forcedOnlineFlow = MutableSharedFlow<UserStatusEvent>()
-        val h = harness(
-            flowOf(CacheResult.Empty),
-            currentUser = me,
-            conversation = directConversation(),
-            relay = typingPresenceRelay(forcedOnline = forcedOnlineFlow),
-        )
-        advanceUntilIdle()
-
-        forcedOnlineFlow.emit(UserStatusEvent(userId = "u1", isOnline = true, lastActiveAt = null))
-        advanceUntilIdle()
-
-        assertThat(h.vm.state.value.headerPresence(nowEpochMillis = 0L)).isEqualTo(PresenceState.ONLINE)
-    }
-
-    @Test
-    fun headerPresence_is_null_for_a_group_conversation_even_with_live_presence_data() = runTest(dispatcher) {
-        val userStatusFlow = MutableSharedFlow<UserStatusEvent>()
-        val h = harness(
-            flowOf(CacheResult.Empty),
-            currentUser = me,
-            conversation = conversationWithRoster(),
-            socket = socketManager(userStatus = userStatusFlow),
-        )
-        advanceUntilIdle()
-
-        userStatusFlow.emit(UserStatusEvent(userId = "u1", isOnline = true, lastActiveAt = null))
-        advanceUntilIdle()
-
-        assertThat(h.vm.state.value.headerPresence(nowEpochMillis = 0L)).isNull()
-    }
-
-    @Test
-    fun headerPresence_is_null_before_any_live_presence_data_arrives() = runTest(dispatcher) {
-        val h = harness(flowOf(CacheResult.Empty), currentUser = me, conversation = directConversation())
-        advanceUntilIdle()
-
-        assertThat(h.vm.state.value.headerPresence(nowEpochMillis = 0L)).isNull()
     }
 
     @Test

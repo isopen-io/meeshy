@@ -333,6 +333,28 @@ export class EncryptionService implements AtRestKeyring {
     return this.getOrCreateConversationKey(conversationId);
   }
 
+  /**
+   * #13100 — la clé sous laquelle SCELLER un fichier de pièce jointe de cette
+   * conversation : la même que son texte (`writableConversationKey`), sous les
+   * mêmes refus — clé maîtresse absente, clé illisible, base injoignable.
+   */
+  async fileSealingKey(conversationId: string): Promise<{ readonly keyId: string; readonly key: Buffer }> {
+    if (!this.keyVault.masterKeyAvailable) throw new ServerAtRestUnavailableError('missing');
+    const designated = await this.keyVault.designatedKeyId(conversationId);
+    return this.writableConversationKey(conversationId, designated);
+  }
+
+  /**
+   * #13100 — la clé qui OUVRE un fichier scellé, seulement si elle appartient à
+   * la conversation inscrite au scellement (`getKeyFor`, pas d'oracle).
+   */
+  async fileOpeningKey(keyId: string, conversationId: string): Promise<Buffer> {
+    if (!this.keyVault.masterKeyAvailable) throw new ServerAtRestUnreadableError('master-key-unavailable');
+    const key = await this.keyVault.getKeyFor(keyId, conversationId);
+    if (!key) throw new ServerAtRestUnreadableError('data-key-unavailable');
+    return key;
+  }
+
   /** Ouvre un chiffré au repos ; tout échec est EXPLICITE (`ServerAtRestUnreadableError`). */
   async openAtRest(envelope: AtRestEnvelope, conversationId: string): Promise<string> {
     return this.openUnder(envelope, conversationId, envelope.aad === AT_REST_AAD_V1 ? atRestAad(conversationId) : undefined);

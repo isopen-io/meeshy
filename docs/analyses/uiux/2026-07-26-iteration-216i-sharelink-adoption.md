@@ -2,8 +2,8 @@
 
 **Date** : 2026-07-26
 **Surfaces** :
-- `apps/ios/Meeshy/Features/Main/Views/AffiliateView.swift`
-- `apps/ios/Meeshy/Features/Main/Views/ShareLinkDetailView.swift`
+- `apps/ios/Meeshy/Features/Links/Views/AffiliateView.swift`
+- `apps/ios/Meeshy/Features/Links/Views/ShareLinkDetailView.swift`
 
 **Axe** : Intégration native / HIG — adoption de `ShareLink`, compatibilité iPad
 & multitâche, suppression d'un contrôle mort

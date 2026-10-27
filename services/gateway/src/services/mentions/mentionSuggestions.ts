@@ -20,6 +20,7 @@ import { unsetOrNull } from '../../utils/prisma-unset';
 import { jetonRecherche } from '../../utils/search-tokens';
 import { mentionableScope, scopeRequiresMembership, type MentionableScope } from './mentionableScope';
 import { keepDiscoverable } from '../profile-discoverability';
+import { getBlockRelatedUserIds } from '../../utils/blocking';
 import type { PersonProfileDecor } from '@meeshy/shared/types/profile-decor';
 import { AVATAR_RING_COLUMN, authorProfileDecor } from '../appearance/authorProfileDecor';
 
@@ -45,6 +46,7 @@ export const MAX_SUGGESTIONS = 10;
  * personne n'invalide ne survit pas plus d'une minute.
  */
 const CACHE_TTL_SECONDS = 60;
+const NO_BLOCKS: ReadonlySet<string> = new Set();
 const CACHE_PREFIX = 'mentions:suggestions:v2';
 
 export const ACCESS_DENIED = 'Conversation non trouvée ou accès refusé';
@@ -272,14 +274,15 @@ export class MentionSuggestionFinder {
   private async appendDirectory(
     current: readonly MentionSuggestion[],
     query: string,
-    currentUserId: string
+    currentUserId: string,
+    blocked: ReadonlySet<string>
   ): Promise<MentionSuggestion[]> {
     // L'annuaire est une RECHERCHE : un compte caché (#8104) n'y est pas
     // proposé. Membres et amis, listés plus haut, ne passent pas par ici.
     const others = await keepDiscoverable(
       this.prisma,
       currentUserId,
-      await this.searchDirectory(query, [...current.map(s => s.id), currentUserId], MAX_SUGGESTIONS - current.length)
+      await this.searchDirectory(query, [...current.map(s => s.id), currentUserId, ...blocked], MAX_SUGGESTIONS - current.length)
     );
     return appendUnique(
       current,
@@ -290,13 +293,17 @@ export class MentionSuggestionFinder {
   async forConversation(conversationId: string, currentUserId: string, query: string): Promise<MentionSuggestion[]> {
     const scope = await this.resolveScope(conversationId, currentUserId);
 
+    // #13350 — une conversation OUVERTE propose amis, membres et annuaire :
+    // personne en relation de blocage avec l'appelant n'y figure, cache compris
+    // (relu à chaque appel, le blocage prend effet sans attendre son expiration).
+    const blocked = scope === 'directory' ? await getBlockRelatedUserIds(this.prisma, currentUserId) : NO_BLOCKS;
     const key = this.cacheKey(conversationId, currentUserId, query);
     const cached = await this.readCache(key);
-    if (cached) return cached;
+    if (cached) return cached.filter(s => !blocked.has(s.id));
 
-    const matches = queryMatcher(query);
+    const matches = (user: SuggestedUser): boolean => !blocked.has(user.id) && queryMatcher(query)(user);
     const members = (await this.rankedMembers(conversationId, currentUserId)).filter(matches);
-    const friends = scope === 'directory' ? await this.friendsOf(currentUserId) : [];
+    const friends = scope === 'directory' ? (await this.friendsOf(currentUserId)).filter(f => !blocked.has(f.id)) : [];
     const friendIds = new Set(friends.map(f => f.id));
 
     const withMembers = appendUnique(
@@ -308,7 +315,7 @@ export class MentionSuggestionFinder {
       friends.filter(matches).map(user => suggestion(user, 'friend', { inConversation: false, isFriend: true }))
     );
     const suggestions =
-      scope === 'directory' ? await this.appendDirectory(withFriends, query, currentUserId) : withFriends;
+      scope === 'directory' ? await this.appendDirectory(withFriends, query, currentUserId, blocked) : withFriends;
 
     await this.writeCache(key, suggestions);
     return suggestions;
@@ -327,7 +334,8 @@ export class MentionSuggestionFinder {
       throw new Error('Post non trouvé ou accès refusé');
     }
 
-    const matches = queryMatcher(query);
+    const blocked = await getBlockRelatedUserIds(this.prisma, currentUserId);
+    const matches = (user: SuggestedUser): boolean => !blocked.has(user.id) && queryMatcher(query)(user);
     const author = post.author && post.author.id !== currentUserId ? [post.author] : [];
 
     const comments = await this.prisma.postComment.findMany({
@@ -350,6 +358,6 @@ export class MentionSuggestionFinder {
       thread,
       friends.filter(matches).map(user => suggestion(user, 'friend', { inConversation: false, isFriend: true }))
     );
-    return this.appendDirectory(withFriends, query, currentUserId);
+    return this.appendDirectory(withFriends, query, currentUserId, blocked);
   }
 }

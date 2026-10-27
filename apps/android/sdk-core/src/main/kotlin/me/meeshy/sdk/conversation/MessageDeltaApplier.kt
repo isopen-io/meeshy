@@ -11,6 +11,7 @@ import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.AttachmentReactionUpdateEvent
 import me.meeshy.sdk.model.ConversationEventDeltas
 import me.meeshy.sdk.model.ConversationSocketEvent
+import me.meeshy.sdk.model.MessageCitedPostWithdrawnEvent
 import me.meeshy.sdk.model.MessageConsumedEvent
 import me.meeshy.sdk.model.MessageCountdownStartedEvent
 import me.meeshy.sdk.model.MessageHiddenForMeEvent
@@ -22,7 +23,7 @@ import me.meeshy.sdk.model.MessageViewOncePurgedEvent
  * Applique à Room, SANS appel réseau, les événements du fil qui modifient un message déjà en cache
  * (miroir des écritures `MessagePersistenceActor` déclenchées par `ConversationSocketHandler`, iOS) :
  * suppression, expiration, épingle, échéance servie, masquage personnel, consommation et purge d'une
- * vue unique, réactions d'une pièce.
+ * vue unique, réactions d'une pièce, retrait du post cité.
  *
  * La ligne est modifiée SUR PLACE (même clé, même rang) : la bulle ne saute pas. Une transformation
  * inerte ([ConversationEventDeltas] rend l'instance reçue) n'écrit rien, donc le fil ne recompose pas.
@@ -57,6 +58,7 @@ class MessageDeltaApplier internal constructor(
             is MessageHiddenForMeEvent -> purge(event.messages.map { it.messageId })
             is MessageConsumedEvent -> transform(event.messageId) { ConversationEventDeltas.consumed(it, event, viewerId) }
             is MessageViewOncePurgedEvent -> transform(event.messageId) { ConversationEventDeltas.viewOncePurged(it) }
+            is MessageCitedPostWithdrawnEvent -> withdrawCitedPost(event)
             is AttachmentReactionUpdateEvent -> transform(event.messageId) {
                 ConversationEventDeltas.attachmentReactions(it, event.attachmentId, event.reactionSummary)
             }
@@ -74,12 +76,20 @@ class MessageDeltaApplier internal constructor(
             ConversationEventDeltas.attachmentReactionToggled(message, attachmentId, emoji, adding)
         } != null
 
+    /** Chaque message du fil qui cite le post retiré devient « Story indisponible » (#7969, #13296). */
+    private suspend fun withdrawCitedPost(event: MessageCitedPostWithdrawnEvent) {
+        database.messageDao().mentioning(event.conversationId, event.postId).forEach { row ->
+            transform(row.id) { ConversationEventDeltas.citedPostWithdrawn(it, event.postId) }
+        }
+    }
+
     private suspend fun transform(messageId: String, delta: (ApiMessage) -> ApiMessage) {
         updater.update(messageId, requireSynced = false, transform = delta)
     }
 
     /** Une suppression pour tous laisse une pierre tombale ; une expiration retire la ligne. */
     private suspend fun remove(event: MessageRemoved) {
+        database.editRevisionDao().deleteForMessage(event.messageId)
         if (event.expired) {
             purge(listOf(event.messageId))
         } else {
@@ -100,6 +110,7 @@ class MessageDeltaApplier internal constructor(
         database.withTransaction {
             val rowIds = messageIds.mapNotNull { MessageIdReconciliation.locate(database, it)?.id }.distinct()
             if (rowIds.isNotEmpty()) database.messageDao().deleteByIds(rowIds)
+            messageIds.forEach { database.editRevisionDao().deleteForMessage(it) }
         }
     }
 

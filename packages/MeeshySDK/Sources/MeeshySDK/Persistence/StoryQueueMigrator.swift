@@ -93,8 +93,7 @@ public enum StoryQueueMigrator {
             return 0
         }
 
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
+        let decoder = MeeshyCoders.decoder(.persistence)
 
         let legacyItems: [StoryOfflineQueueItem]
         do {

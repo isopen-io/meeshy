@@ -12,7 +12,7 @@ import me.meeshy.sdk.category.CategoryRepository
 import me.meeshy.sdk.model.UserCategoryCatalog
 import me.meeshy.sdk.socket.CategorySocketManager
 import me.meeshy.sdk.socket.MessageSocketManager
-import me.meeshy.sdk.socket.TypingPresenceRelay
+import me.meeshy.sdk.socket.PresenceStore
 import me.meeshy.sdk.status.StatusBarCache
 import me.meeshy.sdk.status.StatusFeedMode
 import me.meeshy.sdk.story.StoryRepository
@@ -26,7 +26,7 @@ internal class ConversationListObservers(
     private val scope: CoroutineScope,
     private val state: MutableStateFlow<ConversationListUiState>,
     private val messageSocketManager: MessageSocketManager,
-    private val typingPresenceRelay: TypingPresenceRelay,
+    private val presenceStore: PresenceStore,
     private val categoryRepository: CategoryRepository,
     private val categorySocketManager: CategorySocketManager,
     private val storyRepository: StoryRepository,
@@ -91,21 +91,7 @@ internal class ConversationListObservers(
 
     private fun observePresence() {
         scope.launch {
-            messageSocketManager.userStatus.collect { event ->
-                state.update { it.copy(presenceByUserId = it.presenceByUserId + (event.userId to event)) }
-            }
-        }
-        scope.launch {
-            typingPresenceRelay.forcedOnline.collect { event ->
-                state.update { it.copy(presenceByUserId = it.presenceByUserId + (event.userId to event)) }
-            }
-        }
-        scope.launch {
-            messageSocketManager.presenceSnapshot.collect { snapshot ->
-                state.update {
-                    it.copy(presenceByUserId = it.presenceByUserId + snapshot.users.associateBy { u -> u.userId })
-                }
-            }
+            presenceStore.entries.collect { entries -> state.update { it.copy(presenceByUserId = entries) } }
         }
     }
 

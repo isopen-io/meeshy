@@ -2,6 +2,9 @@
 <resources>
     <string name="bubble_message_deleted">Messaggio eliminato</string>
     <string name="bubble_edited">modificato</string>
+    <string name="bubble_view_profile">Vedi profilo</string>
+    <string name="bubble_add_reaction">Aggiungi una reazione</string>
+    <string name="bubble_failed_retry">Non inviato — tocca per riprovare</string>
     <string name="bubble_forwarded">Inoltrato</string>
     <string name="bubble_forwarded_from">Inoltrato da %1$s</string>
     <string name="bubble_starred">Preferito</string>

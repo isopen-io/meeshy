@@ -697,7 +697,7 @@ Rendu : Grande vignette à la une avec les autres en bande ; bannière sur son p
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Models/GroupCallSpotlight.swift`
+- `apps/ios/Meeshy/Features/Call/Models/GroupCallSpotlight.swift`
 
 </details>
 
@@ -740,7 +740,7 @@ Rendu : En-têtes de section en majuscules (EN DIRECT, AUJOURD'HUI, HIER, CETTE 
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Lentille/Core/LentilleSectionResolver.swift`
+- `apps/ios/Meeshy/Features/Lens/Core/LentilleSectionResolver.swift`
 
 </details>
 
@@ -1020,7 +1020,7 @@ Rendu : Traits décoratifs, contenu prioritaire pour lecteurs d'écran (ordre DO
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Riviere/Core/RiverLaneResolver.swift`
+- `apps/ios/Meeshy/Features/River/Core/RiverLaneResolver.swift`
 
 </details>
 
@@ -1040,7 +1040,7 @@ Transposition Android : UserDefaults scopé → Preferences DataStore ; CryptoKi
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Focal/Preferences/ConversationViewerIdentityResolver.swift`
+- `apps/ios/Meeshy/Features/Focal/Preferences/ConversationViewerIdentityResolver.swift`
 - `apps/ios/Meeshy/Features/Main/Models/ReadingModeProtectionChrome.swift`
 
 </details>
@@ -1079,7 +1079,7 @@ MyStoryThumbnailResolver choisit la source de la miniature de MyStoryCard : le t
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/MyStoryThumbnailResolver.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/MyStoryThumbnailResolver.swift`
 
 </details>
 

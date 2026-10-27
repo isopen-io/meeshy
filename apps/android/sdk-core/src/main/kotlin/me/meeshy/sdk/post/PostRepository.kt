@@ -55,6 +55,7 @@ import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.OutboxLanes
 import me.meeshy.sdk.outbox.OutboxMutation
 import me.meeshy.sdk.outbox.OutboxRepository
+import me.meeshy.sdk.session.PerAccountCache
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -75,7 +76,7 @@ class PostRepository @Inject constructor(
     private val translationApi: TranslationApi,
     private val outboxRepository: OutboxRepository,
     private val clock: CacheClock = SystemCacheClock,
-) {
+) : PerAccountCache {
     // In-memory cache for Phase 1 — Room-backed FeedEntity added in Phase 3 (ARCHITECTURE.md §13).
     private val _feedCache = MutableStateFlow<List<ApiPost>?>(null)
     private val _feedSyncedAt = MutableStateFlow<Long?>(null)
@@ -165,6 +166,14 @@ class PostRepository @Inject constructor(
             ),
         )
         return true
+    }
+
+    /** The feed held in memory belongs to the signed-in account: a second account starts cold. */
+    override suspend fun clear() {
+        _feedCache.value = null
+        _feedSyncedAt.value = null
+        feedCursor = null
+        _feedHasMore.value = true
     }
 
     /** The post as the feed cache holds it, or `null` when it is not there. */

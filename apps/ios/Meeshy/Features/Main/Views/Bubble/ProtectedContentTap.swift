@@ -43,8 +43,8 @@ nonisolated enum ProtectedContentTap {
     /// Ce que fait un toucher sur une CELLULE de grille dont la pièce porte
     /// elle-même sa protection.
     static func resolve(cell attachment: MessageAttachment) -> ProtectedContentTap {
-        if attachment.isViewOnce, opensFullscreen(attachment) { return .openFullscreen(attachment) }
-        return attachment.isBlurred ? .revealInPlace : .none
+        if attachment.declaresViewOnce, opensFullscreen(attachment) { return .openFullscreen(attachment) }
+        return attachment.declaresBlur ? .revealInPlace : .none
     }
 
     /// Ce que fait le toucher SUIVANT la révélation d'un message flouté qui

@@ -17,8 +17,8 @@ import XCTest
 final class SecurityViewErrorMappingTests: XCTestCase {
 
     private static let files = [
-        "Meeshy/Features/Main/Views/SecurityView.swift",
-        "Meeshy/Features/Main/ViewModels/PhoneChangeFlowModel.swift",
+        "Meeshy/Features/Settings/Views/SecurityView.swift",
+        "Meeshy/Features/Settings/ViewModels/PhoneChangeFlowModel.swift",
     ]
 
     private func securityFlowSource() throws -> String {

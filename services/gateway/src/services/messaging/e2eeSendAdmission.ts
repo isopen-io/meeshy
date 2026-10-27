@@ -30,9 +30,12 @@ import { createE2EEEnvelopeRelay, type AdmittedRelay } from '../e2ee/E2EEEnvelop
 import { regimeEpochOf } from '../conversations/encryptionRegime';
 import { clientOutdated, E2eeRelayRefusedError } from '../e2ee/e2ee-relay-errors';
 import { isServerAtRestMode, ServerAtRestCiphertextRefusedError } from './serverAtRest';
+import { parseSharedPlace } from '../location/sharedPlace';
 import {
   assertNoPlaintextPieces,
   assertPlaintextAdmitted,
+  E2EE_PLAINTEXT_LOCATION_REFUSAL_MESSAGE,
+  E2eePlaintextRefusedError,
   isEndToEndMode,
   plaintextBesideCiphertext,
   type EncryptionRegime,
@@ -51,6 +54,8 @@ export type SendUnderRegime = {
   readonly senderId?: string;
   /** L'envoi libsignal par appareil (#3706), absent de tout autre envoi. */
   readonly e2eeRelay?: E2EERelayRequest;
+  /** Le lieu déclaré à côté (#12526) : seul, sans chiffré, c'est un message en clair. */
+  readonly location?: unknown;
 };
 
 export type SendAdmission = {
@@ -85,6 +90,9 @@ export async function admitSendUnderRegime(prisma: AdmissionPrisma, request: Sen
     return { regime, carriesCiphertext, endToEnd, relay: null };
   }
   assertNoPlaintextPieces({ encryptionMode: regime?.encryptionMode, carriedPieceCount: await countCarriedPieces(prisma, request) });
+  // #12526 — à côté d'un chiffré, un lieu en clair est RETENU (`admitSharedPlace`) ;
+  // sans chiffré, le lieu EST le message : un clair, refusé comme tel.
+  if (!carriesCiphertext && parseSharedPlace(request.location)) throw new E2eePlaintextRefusedError(E2EE_PLAINTEXT_LOCATION_REFUSAL_MESSAGE);
   if (!carriesCiphertext) return { regime, carriesCiphertext, endToEnd, relay: null };
   if (sealedUnderStaleEpoch(request.encryptionMetadata, regimeEpochOf(regime))) throw regimeChanged();
   if (!request.e2eeRelay) throw clientOutdated();

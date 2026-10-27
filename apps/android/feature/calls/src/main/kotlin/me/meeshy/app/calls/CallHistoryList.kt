@@ -1,5 +1,6 @@
 package me.meeshy.app.calls
 
+import me.meeshy.sdk.model.call.CallJournalQuery
 import me.meeshy.sdk.model.call.CallRecord
 
 /**
@@ -22,4 +23,19 @@ object CallHistoryList {
     /** The visible list: every record, or only the missed ones when [missedOnly]. */
     fun filter(records: List<CallRecord>, missedOnly: Boolean): List<CallRecord> =
         if (missedOnly) records.filter { it.isMissed } else records
+
+    /**
+     * What the journal shows: the combined list minus the lines [hidden] by the reader (erased
+     * optimistically, the gateway has not answered yet), narrowed by [query] (direction, media
+     * type, typed name — computed locally so typing answers at once, even offline).
+     */
+    fun visible(
+        records: List<CallRecord>,
+        query: CallJournalQuery,
+        hidden: Set<String>,
+        fallbackName: String,
+    ): List<CallRecord> {
+        val kept = if (hidden.isEmpty()) records else records.filterNot { it.callId in hidden }
+        return if (query.isDefault) kept else query.apply(kept, fallbackName)
+    }
 }

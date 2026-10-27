@@ -9,7 +9,7 @@ import MeeshyUI
 
 // MARK: - Swipe-to-go-back enabler
 // `InteractivePopEnabler` vit désormais dans
-// `Features/Main/Navigation/InteractivePopEnabler.swift` — les sections du
+// `Features/Navigation/InteractivePopEnabler.swift` — les sections du
 // hub de progression en ont besoin aussi (#5843), et une jumelle recopiée
 // aurait perdu la politique `allowsEdgeSwipe` dont la Rivière dépend.
 

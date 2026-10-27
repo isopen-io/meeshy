@@ -28,7 +28,7 @@ final class CallManagerSelectCameraFailureCorrectionSourceTests: XCTestCase {
             .deletingLastPathComponent()   // Unit/
             .deletingLastPathComponent()   // MeeshyTests/
             .deletingLastPathComponent()   // ios/
-            .appendingPathComponent("Meeshy/Features/Main/Services/\(filename)")
+            .appendingPathComponent("Meeshy/Features/Call/Services/\(filename)")
         guard let contents = try? String(contentsOf: url, encoding: .utf8) else {
             XCTFail("Could not read \(filename)", file: file, line: line)
             return ""
@@ -50,7 +50,7 @@ final class CallManagerSelectCameraFailureCorrectionSourceTests: XCTestCase {
 
     func test_callManager_selectCamera_revertsOptimisticStateOnFailure() {
         guard let fn = body(
-            ((try? AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")) ?? ""),
+            ((try? AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")) ?? ""),
             from: "func selectCamera(id: String) {",
             to: "var videoFilters: VideoFilterPipeline"
         ) else { return }

@@ -102,6 +102,7 @@ class StoriesViewModel @Inject constructor(
         }
         observeStoryDeletions()
         observeStoryUpdates()
+        observeStoryCreations()
     }
 
     /**
@@ -114,6 +115,19 @@ class StoriesViewModel @Inject constructor(
         viewModelScope.launch {
             socialSocket.storyDeleted.collectEachSafely { payload ->
                 storyRepository.removeCachedStory(payload.storyId)
+            }
+        }
+    }
+
+    /**
+     * Folds a realtime `story:created` — a friend just posted — into the authoritative Room
+     * cache, so their ring appears (unseen, first) without waiting for a revalidation. A story
+     * already held (our own publish echoed back, a re-broadcast) is left as is. Mirrors iOS `StoryViewModel.storyCreated`.
+     */
+    private fun observeStoryCreations() {
+        viewModelScope.launch {
+            socialSocket.storyCreated.collectEachSafely { payload ->
+                storyRepository.adoptAnnounced(payload.story)
             }
         }
     }

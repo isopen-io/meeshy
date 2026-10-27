@@ -55,12 +55,12 @@ final class VitrineInteractionsComposeurTests: XCTestCase {
 
     /// La porte s'ouvre par le rail (`handleRailDoor(.sticker)`), le choix passe par la fonction même de la feuille.
     func test_sticker_opensAndPicksThroughTheComposerItself() throws {
-        let pickers = try source("apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost+Pickers.swift")
+        let pickers = try source("apps/ios/Meeshy/Features/Composer/MeeshyComposerHost+Pickers.swift")
         XCTAssertEqual(pickers.components(separatedBy: "choisirDansLesStickers").count - 1, 3,
                        "la feuille et la vitrine choisissent par la même fonction, déclarée une fois")
         XCTAssertTrue(pickers.contains("VitrineRendu.shared.composeurAffiche { handleRailDoor(.sticker) }"))
         XCTAssertTrue(pickers.contains("openingPickFoundsScenes = true"), "la photo entre comme le choix d'ouverture")
-        let portails = try source("apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost+Portals.swift")
+        let portails = try source("apps/ios/Meeshy/Features/Composer/MeeshyComposerHost+Portals.swift")
         XCTAssertTrue(portails.contains(".onAppear { preterLeComposeurALaVitrine() }"))
     }
 

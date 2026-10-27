@@ -752,6 +752,13 @@ class PostDetailViewModelTest {
     }
 
     @Test
+    fun `an administrator may list the viewers of a post, a plain reader may not`() = runTest {
+        val admin = user(Prefs()).copy(role = "ADMIN")
+        assertThat(loadedVm(currentUser = admin).state.value.canListViewers).isTrue()
+        assertThat(loadedVm(currentUser = user(Prefs())).state.value.canListViewers).isFalse()
+    }
+
+    @Test
     fun `repost of an original post targets its own id with no content and flags it reposted`() = runTest {
         val vm = loadedVm(loaded = post(id = "p1", content = "Hello"))
 

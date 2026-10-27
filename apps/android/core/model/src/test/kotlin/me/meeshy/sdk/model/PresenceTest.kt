@@ -142,4 +142,17 @@ class PresenceTest {
         assertThat(UserPresence.AWAY_WINDOW_MS).isEqualTo(180_000L)
         assertThat(UserPresence.IDLE_WINDOW_MS).isEqualTo(300_000L)
     }
+
+    @Test
+    fun `a row that serves no presence yields no served presence`() {
+        org.junit.Assert.assertNull(UserPresence.served(null, null))
+        org.junit.Assert.assertNull(UserPresence.served(null, " "))
+    }
+
+    @Test
+    fun `a served row keeps its activity date so it decays`() {
+        val served = UserPresence.served(false, "2026-01-01T00:00:00Z")
+        org.junit.Assert.assertEquals(UserPresence(false, "2026-01-01T00:00:00Z"), served)
+        org.junit.Assert.assertEquals(UserPresence(true, null), UserPresence.served(true, null))
+    }
 }

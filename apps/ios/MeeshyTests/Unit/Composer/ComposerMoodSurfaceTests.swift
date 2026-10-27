@@ -173,7 +173,7 @@ final class ComposerMoodSurfaceTests: XCTestCase {
             .deletingLastPathComponent()   // .../Unit
             .deletingLastPathComponent()   // .../MeeshyTests
             .deletingLastPathComponent()   // .../apps/ios
-            .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerMoodSurface.swift")
+            .appendingPathComponent("Meeshy/Features/Composer/ComposerMoodSurface.swift")
         let doorURL = url.deletingLastPathComponent().appendingPathComponent("MoodComposerDoor.swift")
         return AppSourceGuard.stripComments(
             try String(contentsOf: url, encoding: .utf8) + "\n" + String(contentsOf: doorURL, encoding: .utf8))
@@ -1284,7 +1284,7 @@ final class ComposerMoodSurfaceContrastTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerMoodSurface.swift")
+            .appendingPathComponent("Meeshy/Features/Composer/ComposerMoodSurface.swift")
         let code = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
         XCTAssertTrue(code.contains("struct ComposerMoodSurface"), "Source de la surface introuvable — la garde ne mesurerait rien")
 

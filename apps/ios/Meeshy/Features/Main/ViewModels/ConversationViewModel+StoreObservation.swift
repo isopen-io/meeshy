@@ -1,7 +1,6 @@
 import Foundation
 import Combine
 import UIKit
-import GRDB
 import MeeshySDK
 import MeeshyUI
 import os
@@ -230,6 +229,6 @@ extension ConversationViewModel {
 
     /// Pose le clair que cet appareil a déchiffré ou écrit (#3707).
     func decryptMessagesIfNeeded(_ msgs: inout [Message]) async {
-        await startupDependencies.endToEndClear.resolve(&msgs, from: endToEnd, conversationId: conversationId)
+        await startupDependencies.endToEndClear.resolve(&msgs, from: endToEnd, conversationId: conversationId, account: currentUserId)
     }
 }

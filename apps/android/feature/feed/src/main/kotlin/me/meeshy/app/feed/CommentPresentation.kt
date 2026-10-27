@@ -37,6 +37,8 @@ data class CommentPresentation(
     val depth: Int = 0,
     /** Les médias joints au commentaire (#12972), dans leur ordre. */
     val media: List<CommentMediaPreview> = emptyList(),
+    /** Le compte de l'auteur : sa présence servie se lit sur la carte unique. */
+    val authorId: String? = null,
 ) {
     /**
      * Libellé TalkBack d'une ligne — iso `ReplyCell.accessibilityLabel` : « <nom>, réponse. <contenu>.
@@ -80,6 +82,7 @@ object CommentProjection {
         val activeIsOriginal = activeCode == null || activeCode == originalCode
         return CommentPresentation(
             id = comment.id,
+            authorId = comment.author?.id?.takeIf { it.isNotBlank() },
             authorName = (comment.author?.displayName ?: comment.author?.username)
                 ?.takeIf { it.isNotBlank() },
             authorAvatarUrl = comment.author?.avatar

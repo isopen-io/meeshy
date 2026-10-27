@@ -101,7 +101,6 @@ final class ConversationViewModelTests: XCTestCase {
     private func makeTestDependencies() -> ConversationDependencies {
         let pool = try! makeInMemoryPool()
         return ConversationDependencies(
-            dbPool: pool,
             persistence: MessagePersistenceActor(dbWriter: pool)
         )
     }
@@ -358,7 +357,7 @@ final class ConversationViewModelTests: XCTestCase {
             }
         }
 
-        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+        let sut = makeSUT(dependencies: ConversationDependencies(persistence: persistence))
         // #4943 : `start()` n'effectue plus la première lecture — `loadMessages()`
         // est l'unique chemin qui peint la fenêtre depuis GRDB. Les lignes semées
         // par `pool.write` ne notifient personne : sans cet appel, la précondition
@@ -419,7 +418,7 @@ final class ConversationViewModelTests: XCTestCase {
             for record in records { try record.insert(db) }
         }
 
-        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+        let sut = makeSUT(dependencies: ConversationDependencies(persistence: persistence))
         mockMessageService.listAfterResult = .success(makeMessagesResponse())
 
         await sut.loadMessages()
@@ -447,7 +446,7 @@ final class ConversationViewModelTests: XCTestCase {
         let pool = try makeInMemoryPool()
         let persistence = MessagePersistenceActor(dbWriter: pool)
 
-        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+        let sut = makeSUT(dependencies: ConversationDependencies(persistence: persistence))
         mockMessageService.listAfterResult = .success(makeMessagesResponse())
 
         await sut.loadMessages()
@@ -540,7 +539,7 @@ final class ConversationViewModelTests: XCTestCase {
         try await pool.write { db in
             for record in records { try record.insert(db) }
         }
-        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+        let sut = makeSUT(dependencies: ConversationDependencies(persistence: persistence))
         return (sut, base.addingTimeInterval(4))
     }
 
@@ -645,7 +644,7 @@ final class ConversationViewModelTests: XCTestCase {
     func test_sendMessage_success_replacesOptimisticWithServerMessage() async throws {
         let pool = try makeInMemoryPool()
         let persistence = MessagePersistenceActor(dbWriter: pool)
-        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+        let sut = makeSUT(dependencies: ConversationDependencies(persistence: persistence))
 
         let result = await sut.send(outgoingMessage(content: "Hello", conversationId: sut.conversationId)).isAccepted
 
@@ -807,7 +806,7 @@ final class ConversationViewModelTests: XCTestCase {
     func test_insertOptimisticMediaMessage_persistsRecordToGRDB() async throws {
         let pool = try makeInMemoryPool()
         let persistence = MessagePersistenceActor(dbWriter: pool)
-        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+        let sut = makeSUT(dependencies: ConversationDependencies(persistence: persistence))
 
         let imageAttachment = MeeshyMessageAttachment(
             id: "att_image_001",
@@ -855,7 +854,7 @@ final class ConversationViewModelTests: XCTestCase {
     func test_insertOptimisticMediaMessage_replyReference_carriesTheQuotedAuthorAvatar() async throws {
         let pool = try makeInMemoryPool()
         let persistence = MessagePersistenceActor(dbWriter: pool)
-        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+        let sut = makeSUT(dependencies: ConversationDependencies(persistence: persistence))
 
         let quoted = Message(
             id: "msg-quoted-001",
@@ -905,7 +904,7 @@ final class ConversationViewModelTests: XCTestCase {
 
     func test_toggleAttachmentReaction_addsOptimistically_andEmits() throws {
         let pool = try makeInMemoryPool()
-        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: MessagePersistenceActor(dbWriter: pool)))
+        let sut = makeSUT(dependencies: ConversationDependencies(persistence: MessagePersistenceActor(dbWriter: pool)))
         sut.messages = [makeImageMessage()]
 
         sut.toggleAttachmentReaction(attachmentId: "a1", messageId: "m1", emoji: "❤️")
@@ -918,7 +917,7 @@ final class ConversationViewModelTests: XCTestCase {
 
     func test_toggleAttachmentReaction_secondTapSameEmoji_removes() throws {
         let pool = try makeInMemoryPool()
-        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: MessagePersistenceActor(dbWriter: pool)))
+        let sut = makeSUT(dependencies: ConversationDependencies(persistence: MessagePersistenceActor(dbWriter: pool)))
         sut.messages = [makeImageMessage()]
 
         sut.toggleAttachmentReaction(attachmentId: "a1", messageId: "m1", emoji: "❤️")
@@ -932,7 +931,7 @@ final class ConversationViewModelTests: XCTestCase {
 
     func test_toggleAttachmentReaction_differentEmoji_stacksWithPrevious() throws {
         let pool = try makeInMemoryPool()
-        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: MessagePersistenceActor(dbWriter: pool)))
+        let sut = makeSUT(dependencies: ConversationDependencies(persistence: MessagePersistenceActor(dbWriter: pool)))
         sut.messages = [makeImageMessage()]
 
         sut.toggleAttachmentReaction(attachmentId: "a1", messageId: "m1", emoji: "❤️")
@@ -946,7 +945,7 @@ final class ConversationViewModelTests: XCTestCase {
 
     func test_applyAttachmentReactionDelta_replacesSummary() throws {
         let pool = try makeInMemoryPool()
-        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: MessagePersistenceActor(dbWriter: pool)))
+        let sut = makeSUT(dependencies: ConversationDependencies(persistence: MessagePersistenceActor(dbWriter: pool)))
         sut.messages = [makeImageMessage()]
 
         sut.applyAttachmentReactionDelta(attachmentId: "a1", reactionSummary: ["👍": 3])
@@ -968,7 +967,7 @@ final class ConversationViewModelTests: XCTestCase {
     /// cache, et sans cette lecture il serait vert sur le code fautif.
     func test_toggleAttachmentReaction_refreshesTheFullscreenProjection() throws {
         let pool = try makeInMemoryPool()
-        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: MessagePersistenceActor(dbWriter: pool)))
+        let sut = makeSUT(dependencies: ConversationDependencies(persistence: MessagePersistenceActor(dbWriter: pool)))
         sut.messages = [makeImageMessage()]
 
         XCTAssertNil(sut.allVisualAttachments.first?.reactionSummary,
@@ -985,7 +984,7 @@ final class ConversationViewModelTests: XCTestCase {
     /// d'un tiers n'atteindrait jamais le visualiseur ouvert.
     func test_applyAttachmentReactionDelta_refreshesTheFullscreenProjection() throws {
         let pool = try makeInMemoryPool()
-        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: MessagePersistenceActor(dbWriter: pool)))
+        let sut = makeSUT(dependencies: ConversationDependencies(persistence: MessagePersistenceActor(dbWriter: pool)))
         sut.messages = [makeImageMessage()]
 
         XCTAssertNil(sut.allVisualAttachments.first?.reactionSummary)
@@ -1001,7 +1000,7 @@ final class ConversationViewModelTests: XCTestCase {
     func test_toggleAttachmentReaction_persistsReactionSummaryToGRDB() async throws {
         let pool = try makeInMemoryPool()
         let persistence = MessagePersistenceActor(dbWriter: pool)
-        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+        let sut = makeSUT(dependencies: ConversationDependencies(persistence: persistence))
 
         // Seed a delivered message row carrying the image attachment so the row
         // exists for `updateAttachmentsJson` to update and surfaces in the VM.
@@ -1039,7 +1038,7 @@ final class ConversationViewModelTests: XCTestCase {
     func test_insertOptimisticMediaMessage_surfacesBubbleInViewModel() async throws {
         let pool = try makeInMemoryPool()
         let persistence = MessagePersistenceActor(dbWriter: pool)
-        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+        let sut = makeSUT(dependencies: ConversationDependencies(persistence: persistence))
 
         let audioAttachment = MeeshyMessageAttachment(
             id: "att_audio_001",
@@ -1075,7 +1074,7 @@ final class ConversationViewModelTests: XCTestCase {
         // (so we don't store an empty `[]` blob taking disk space).
         let pool = try makeInMemoryPool()
         let persistence = MessagePersistenceActor(dbWriter: pool)
-        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+        let sut = makeSUT(dependencies: ConversationDependencies(persistence: persistence))
 
         let tempId = "temp_\(UUID().uuidString)"
 
@@ -1106,7 +1105,7 @@ final class ConversationViewModelTests: XCTestCase {
     func test_editMessage_optimisticallyUpdatesContent() async throws {
         let pool = try makeInMemoryPool()
         let persistence = MessagePersistenceActor(dbWriter: pool)
-        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+        let sut = makeSUT(dependencies: ConversationDependencies(persistence: persistence))
 
         let record = MessageStoreObservationHelper.makeRecord(
             localId: "msg-edit", conversationId: testConversationId,
@@ -1128,7 +1127,7 @@ final class ConversationViewModelTests: XCTestCase {
     func test_editMessage_emptyContent_doesNothing() async throws {
         let pool = try makeInMemoryPool()
         let persistence = MessagePersistenceActor(dbWriter: pool)
-        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+        let sut = makeSUT(dependencies: ConversationDependencies(persistence: persistence))
 
         let record = MessageStoreObservationHelper.makeRecord(
             localId: "msg-edit", conversationId: testConversationId,
@@ -1150,7 +1149,7 @@ final class ConversationViewModelTests: XCTestCase {
         mockMessageService.editResult = .failure(NSError(domain: "test", code: 500, userInfo: [NSLocalizedDescriptionKey: "Edit failed"]))
         let pool = try makeInMemoryPool()
         let persistence = MessagePersistenceActor(dbWriter: pool)
-        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+        let sut = makeSUT(dependencies: ConversationDependencies(persistence: persistence))
 
         let record = MessageStoreObservationHelper.makeRecord(
             localId: "msg-edit", conversationId: testConversationId,
@@ -1177,7 +1176,7 @@ final class ConversationViewModelTests: XCTestCase {
     func test_deleteMessage_optimisticallyMarksDeleted() async throws {
         let pool = try makeInMemoryPool()
         let persistence = MessagePersistenceActor(dbWriter: pool)
-        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+        let sut = makeSUT(dependencies: ConversationDependencies(persistence: persistence))
 
         let record = MessageStoreObservationHelper.makeRecord(
             localId: "msg-del", conversationId: testConversationId,
@@ -1200,7 +1199,7 @@ final class ConversationViewModelTests: XCTestCase {
         mockMessageService.deleteResult = .failure(NSError(domain: "test", code: 500, userInfo: [NSLocalizedDescriptionKey: "Delete failed"]))
         let pool = try makeInMemoryPool()
         let persistence = MessagePersistenceActor(dbWriter: pool)
-        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+        let sut = makeSUT(dependencies: ConversationDependencies(persistence: persistence))
 
         let record = MessageStoreObservationHelper.makeRecord(
             localId: "msg-del", conversationId: testConversationId,
@@ -1227,7 +1226,7 @@ final class ConversationViewModelTests: XCTestCase {
     func test_deleteMessage_failedMessageNeverReachedServer_purgesLocallyWithoutRestCall() async throws {
         let pool = try makeInMemoryPool()
         let persistence = MessagePersistenceActor(dbWriter: pool)
-        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+        let sut = makeSUT(dependencies: ConversationDependencies(persistence: persistence))
 
         let record = MessageStoreObservationHelper.makeRecord(
             localId: "msg-failed-del", conversationId: testConversationId,
@@ -1269,7 +1268,7 @@ final class ConversationViewModelTests: XCTestCase {
     func test_markOptimisticMediaFailed_flipsRowToFailed() async throws {
         let pool = try makeInMemoryPool()
         let persistence = MessagePersistenceActor(dbWriter: pool)
-        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+        let sut = makeSUT(dependencies: ConversationDependencies(persistence: persistence))
         let record = MessageStoreObservationHelper.makeRecord(
             localId: "media-s7", conversationId: testConversationId,
             senderId: testUserId, content: ""
@@ -1294,7 +1293,7 @@ final class ConversationViewModelTests: XCTestCase {
     func test_toggleReaction_addsReactionOptimistically() async throws {
         let pool = try makeInMemoryPool()
         let persistence = MessagePersistenceActor(dbWriter: pool)
-        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+        let sut = makeSUT(dependencies: ConversationDependencies(persistence: persistence))
 
         let record = MessageStoreObservationHelper.makeRecord(
             localId: "msg-react", conversationId: testConversationId,
@@ -1334,7 +1333,7 @@ final class ConversationViewModelTests: XCTestCase {
     func test_toggleReaction_ownReaction_isHighlightedAsMine() async throws {
         let pool = try makeInMemoryPool()
         let persistence = MessagePersistenceActor(dbWriter: pool)
-        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+        let sut = makeSUT(dependencies: ConversationDependencies(persistence: persistence))
 
         let record = MessageStoreObservationHelper.makeRecord(
             localId: "msg-mine", conversationId: testConversationId,
@@ -1364,7 +1363,7 @@ final class ConversationViewModelTests: XCTestCase {
     func test_toggleReaction_removesExistingReaction() async throws {
         let pool = try makeInMemoryPool()
         let persistence = MessagePersistenceActor(dbWriter: pool)
-        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+        let sut = makeSUT(dependencies: ConversationDependencies(persistence: persistence))
 
         let existingReaction = MeeshyReaction(
             messageId: "msg-react", participantId: testUserId, emoji: "thumbsup"
@@ -1399,7 +1398,7 @@ final class ConversationViewModelTests: XCTestCase {
     func test_toggleReaction_differentEmoji_stacksWithMyPreviousReaction() async throws {
         let pool = try makeInMemoryPool()
         let persistence = MessagePersistenceActor(dbWriter: pool)
-        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+        let sut = makeSUT(dependencies: ConversationDependencies(persistence: persistence))
 
         let myPrevious = MeeshyReaction(
             messageId: "msg-swap", participantId: testUserId, emoji: "heart"
@@ -1443,7 +1442,7 @@ final class ConversationViewModelTests: XCTestCase {
     func test_toggleReaction_systemMessage_isIgnored() async throws {
         let pool = try makeInMemoryPool()
         let persistence = MessagePersistenceActor(dbWriter: pool)
-        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+        let sut = makeSUT(dependencies: ConversationDependencies(persistence: persistence))
 
         let record = MessageStoreObservationHelper.makeRecord(
             localId: "msg-system", conversationId: testConversationId,
@@ -1465,7 +1464,7 @@ final class ConversationViewModelTests: XCTestCase {
     func test_toggleReaction_doesNothingForUnknownMessageId() async throws {
         let pool = try makeInMemoryPool()
         let persistence = MessagePersistenceActor(dbWriter: pool)
-        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+        let sut = makeSUT(dependencies: ConversationDependencies(persistence: persistence))
 
         let record = MessageStoreObservationHelper.makeRecord(
             localId: "msg-1", conversationId: testConversationId,
@@ -1492,7 +1491,7 @@ final class ConversationViewModelTests: XCTestCase {
     func test_togglePin_pinsUnpinnedMessage() async throws {
         let pool = try makeInMemoryPool()
         let persistence = MessagePersistenceActor(dbWriter: pool)
-        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+        let sut = makeSUT(dependencies: ConversationDependencies(persistence: persistence))
 
         let record = MessageStoreObservationHelper.makeRecord(
             localId: "msg-pin", conversationId: testConversationId,
@@ -1515,7 +1514,7 @@ final class ConversationViewModelTests: XCTestCase {
     func test_togglePin_unpinsPinnedMessage() async throws {
         let pool = try makeInMemoryPool()
         let persistence = MessagePersistenceActor(dbWriter: pool)
-        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+        let sut = makeSUT(dependencies: ConversationDependencies(persistence: persistence))
 
         let record = MessageStoreObservationHelper.makeRecord(
             localId: "msg-pin", conversationId: testConversationId,
@@ -1541,7 +1540,7 @@ final class ConversationViewModelTests: XCTestCase {
         mockMessageService.pinResult = .failure(NSError(domain: "test", code: 500, userInfo: [NSLocalizedDescriptionKey: "Pin failed"]))
         let pool = try makeInMemoryPool()
         let persistence = MessagePersistenceActor(dbWriter: pool)
-        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+        let sut = makeSUT(dependencies: ConversationDependencies(persistence: persistence))
 
         let record = MessageStoreObservationHelper.makeRecord(
             localId: "msg-pin", conversationId: testConversationId,
@@ -1565,7 +1564,7 @@ final class ConversationViewModelTests: XCTestCase {
         mockMessageService.unpinResult = .failure(NSError(domain: "test", code: 500, userInfo: [NSLocalizedDescriptionKey: "Unpin failed"]))
         let pool = try makeInMemoryPool()
         let persistence = MessagePersistenceActor(dbWriter: pool)
-        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+        let sut = makeSUT(dependencies: ConversationDependencies(persistence: persistence))
 
         let record = MessageStoreObservationHelper.makeRecord(
             localId: "msg-pin", conversationId: testConversationId,
@@ -1797,7 +1796,7 @@ final class ConversationViewModelTests: XCTestCase {
         ))
 
         let sut = makeSUT(
-            dependencies: ConversationDependencies(dbPool: pool, persistence: persistence)
+            dependencies: ConversationDependencies(persistence: persistence)
         )
         sut.messages = [makeMessage(id: "temp_1", content: "Bonjour", isMe: true)]
         sut.pendingServerIds["temp_1"] = "srv_1"
@@ -2121,7 +2120,7 @@ final class ConversationViewModelTests: XCTestCase {
     func test_removeExpiredMessages_removesExpiredOnly() async throws {
         let pool = try makeInMemoryPool()
         let persistence = MessagePersistenceActor(dbWriter: pool)
-        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+        let sut = makeSUT(dependencies: ConversationDependencies(persistence: persistence))
 
         let pastDate = Date().addingTimeInterval(-3600)
         let futureDate = Date().addingTimeInterval(3600)
@@ -2180,7 +2179,7 @@ final class ConversationViewModelTests: XCTestCase {
     func test_removeFailedMessage_removesOnlyFailedWithMatchingId() async throws {
         let pool = try makeInMemoryPool()
         let persistence = MessagePersistenceActor(dbWriter: pool)
-        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+        let sut = makeSUT(dependencies: ConversationDependencies(persistence: persistence))
 
         try await persistence.insertOptimistic(MessageStoreObservationHelper.makeRecord(
             localId: "good-msg", conversationId: testConversationId,
@@ -2218,7 +2217,7 @@ final class ConversationViewModelTests: XCTestCase {
     func test_removeFailedMessage_doesNotRemoveSentMessage() async throws {
         let pool = try makeInMemoryPool()
         let persistence = MessagePersistenceActor(dbWriter: pool)
-        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+        let sut = makeSUT(dependencies: ConversationDependencies(persistence: persistence))
 
         try await persistence.insertOptimistic(MessageStoreObservationHelper.makeRecord(
             localId: "sent-msg", conversationId: testConversationId,
@@ -2740,7 +2739,7 @@ final class ConversationViewModelTests: XCTestCase {
             conversationService: mockConversationService,
             reactionService: mockReactionService,
             reportService: mockReportService,
-            dependencies: ConversationDependencies(dbPool: pool, persistence: persistence)
+            dependencies: ConversationDependencies(persistence: persistence)
         )
         XCTAssertNotNil(viewModel.messageStore,
             "messageStore must be available immediately after init")
@@ -2756,7 +2755,7 @@ final class ConversationViewModelTests: XCTestCase {
             conversationService: mockConversationService,
             reactionService: mockReactionService,
             reportService: mockReportService,
-            dependencies: ConversationDependencies(dbPool: pool, persistence: persistence)
+            dependencies: ConversationDependencies(persistence: persistence)
         )
         XCTAssertEqual(viewModel.messageStore.conversationId, testConversationId)
     }
@@ -2773,7 +2772,7 @@ final class ConversationViewModelTests: XCTestCase {
         let pool = try makeInMemoryPool()
         let persistence = MessagePersistenceActor(dbWriter: pool)
         let viewModel = makeSUT(
-            dependencies: ConversationDependencies(dbPool: pool, persistence: persistence)
+            dependencies: ConversationDependencies(persistence: persistence)
         )
 
         let record = MessageRecord(
@@ -2866,7 +2865,7 @@ final class ConversationViewModelTests: XCTestCase {
         ))
 
         let viewModel = makeSUT(
-            dependencies: ConversationDependencies(dbPool: pool, persistence: persistence)
+            dependencies: ConversationDependencies(persistence: persistence)
         )
         mockAuthManager.simulateLoggedIn(user: MeeshyUser(
             id: testUserId, username: "testuser", systemLanguage: "fr"
@@ -2922,7 +2921,7 @@ final class ConversationViewModelTests: XCTestCase {
         ))
 
         let viewModel = makeSUT(
-            dependencies: ConversationDependencies(dbPool: pool, persistence: persistence)
+            dependencies: ConversationDependencies(persistence: persistence)
         )
         mockAuthManager.simulateLoggedIn(user: MeeshyUser(
             id: testUserId, username: "testuser", systemLanguage: "fr"
@@ -2968,7 +2967,7 @@ final class ConversationViewModelTests: XCTestCase {
     func test_mergeIntoMessages_afterServerAck_noDuplicateBubble() async throws {
         let pool = try makeInMemoryPool()
         let persistence = MessagePersistenceActor(dbWriter: pool)
-        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+        let sut = makeSUT(dependencies: ConversationDependencies(persistence: persistence))
 
         let tempId = "cid_merge_dedup_test"
         let serverId = "srv_merge_dedup_test"

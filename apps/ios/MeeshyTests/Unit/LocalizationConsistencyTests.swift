@@ -112,7 +112,7 @@ final class LocalizationConsistencyTests: XCTestCase {
         // Lot 4.8 — `StatusComposerView.swift` a quitté cette liste AVEC le
         // fichier, et pas une ligne avant : la remplaçante était déjà là, si
         // bien qu'aucun écran n'est sorti du cliquet entre les deux lots.
-        "apps/ios/Meeshy/Features/Main/Composer/ComposerMoodSurface.swift",
+        "apps/ios/Meeshy/Features/Composer/ComposerMoodSurface.swift",
         // 225i — the registration flow: the first screen a new account ever sees,
         // and the largest single-file gap in the catalog when it was pinned.
         //
@@ -129,7 +129,7 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Auth/Signup/SignupView+Card.swift",
         "apps/ios/Meeshy/Features/Auth/Signup/SignupCountrySheet.swift",
         // 226i — share-link creation, the largest remaining gap after 225i (55 keys).
-        "apps/ios/Meeshy/Features/Main/Views/CreateShareLinkView.swift",
+        "apps/ios/Meeshy/Features/Links/Views/CreateShareLinkView.swift",
         // 263i (#4309) — quarante écrans qui passaient DÉJÀ les deux règles
         // (chaque clé traduite dans les six locales requises ET `defaultValue`
         // inline égal à la valeur du catalogue). Les épingler ne change pas une
@@ -147,7 +147,7 @@ final class LocalizationConsistencyTests: XCTestCase {
         // dans tout le dépôt. `test_pinnedScreenDefaultsMatchCatalog` le refuse
         // à raison : le catalogue est ce qui S'AFFICHE, donc un `defaultValue`
         // divergent est du texte mort qui ment au lecteur (#4308).
-        "apps/ios/Meeshy/Features/Main/Views/SettingsView.swift",  // 87
+        "apps/ios/Meeshy/Features/Settings/Views/SettingsView.swift",  // 87
         "apps/ios/Meeshy/Features/Main/Components/SyncPillLabels.swift",  // 53
         "apps/ios/Meeshy/Features/Main/Components/ConversationInfoSheet.swift",  // 47
         // #8103 — l'aperçu des épinglés a quitté la fiche (extraction de taille),
@@ -159,54 +159,54 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Components/ConversationInfoMemberRow.swift",
         "apps/ios/Meeshy/Features/Main/Components/MediaHub/ConversationMediaHubCopy.swift",
         "apps/ios/Meeshy/Features/Main/Components/MediaHub/ConversationMediaHubView.swift",
-        "apps/ios/Meeshy/Features/Main/Views/ParticipantProfileSheet.swift",  // 43
-        "apps/ios/Meeshy/Features/Main/Views/ProfileView.swift",  // 37
-        "apps/ios/Meeshy/Features/Main/Views/VoiceProfileManageView.swift",  // 34
-        "apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift",  // 32
+        "apps/ios/Meeshy/Features/Profile/Views/ParticipantProfileSheet.swift",  // 43
+        "apps/ios/Meeshy/Features/Profile/Views/ProfileView.swift",  // 37
+        "apps/ios/Meeshy/Features/Settings/Views/VoiceProfileManageView.swift",  // 34
+        "apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Sidebar.swift",  // 32
         // #4084 — l'en-tête du viewer story a QUITTÉ le fichier ci-dessus pour
         // le sien. Le cliquet suit le CODE, pas le chemin : sans cette ligne,
         // les deux tiers des clés épinglées ici seraient sorties de la garde
         // sans qu'une seule assertion rougisse — une extraction fait franchir
         // au code une frontière que les listes de fichiers ne voient pas.
-        "apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Header.swift",
+        "apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Header.swift",
         "apps/ios/Meeshy/Features/Main/Views/NearbyDiscoveryView.swift",  // 31
         "apps/ios/Meeshy/Features/Main/Components/ConversationLockSheet.swift",  // 30
-        "apps/ios/Meeshy/Features/Main/Views/AboutView.swift",  // 28
-        "apps/ios/Meeshy/Features/Main/Views/TrackingLinkDetailView.swift",  // 24
+        "apps/ios/Meeshy/Features/Settings/Views/AboutView.swift",  // 28
+        "apps/ios/Meeshy/Features/Links/Views/TrackingLinkDetailView.swift",  // 24
         "apps/ios/Meeshy/Features/Main/Views/ThemedConversationRow.swift",  // 22
-        "apps/ios/Meeshy/Features/Main/Composer/ComposerDocumentSurface.swift",  // 21
+        "apps/ios/Meeshy/Features/Composer/ComposerDocumentSurface.swift",  // 21
         "apps/ios/Meeshy/Features/Main/Views/ConversationContextMenuView.swift",  // 21
         // #11230 — les libellés du menu d'une rangée ont quitté le menu custom
         // pour le catalogue que les deux chemins d'OS lisent : le cliquet suit.
         "apps/ios/Meeshy/Features/Main/Views/ConversationMenuCatalog.swift",
-        "apps/ios/Meeshy/Features/Main/Views/LoginView.swift",  // 20
-        "apps/ios/Meeshy/Features/Main/Composer/ComposerObjectChipsCopy.swift",  // 19
+        "apps/ios/Meeshy/Features/Auth/Views/LoginView.swift",  // 20
+        "apps/ios/Meeshy/Features/Composer/ComposerObjectChipsCopy.swift",  // 19
         "apps/ios/Meeshy/Features/Main/Components/NearbyDiscoverabilityControl.swift",  // 17
-        "apps/ios/Meeshy/Features/Main/Components/LocationSharingSettingsSection.swift",  // 16
+        "apps/ios/Meeshy/Features/Settings/Components/LocationSharingSettingsSection.swift",  // 16
         // #5218 — `OnboardingView` (le carrousel de cinq pages, 16 clés) est
         // remplacé par `WelcomeView`. Épinglé dès la bascule, pour la même
         // raison qu'au #4084 : un écran qui remplace un écran épinglé n'a
         // aucune raison de sortir du cliquet.
-        "apps/ios/Meeshy/Features/Main/Views/WelcomeView.swift",
-        "apps/ios/Meeshy/Features/Main/Lentille/Row/LentilleConversationRow.swift",  // 14
+        "apps/ios/Meeshy/Features/Auth/Views/WelcomeView.swift",
+        "apps/ios/Meeshy/Features/Lens/Row/LentilleConversationRow.swift",  // 14
         "apps/ios/Meeshy/Features/Main/Views/AudioFullscreenView.swift",  // 14
         // #10383 — la page du plein écran audio a quitté le fichier épinglé :
         // ses clés la suivent, et le cliquet avec elles.
         "apps/ios/Meeshy/Features/Main/Views/AudioFullscreenPage.swift",
         "apps/ios/Meeshy/Features/Main/Views/AudioFullscreenPage+Transcription.swift",
-        "apps/ios/Meeshy/Features/Main/Views/CallBubbleView.swift",  // 14
-        "apps/ios/Meeshy/Features/Main/Focal/Lens/ReadingModeLensSheet.swift",  // 13
-        "apps/ios/Meeshy/Features/Main/Views/ActiveSessionsView.swift",  // 12
+        "apps/ios/Meeshy/Features/Call/Views/CallBubbleView.swift",  // 14
+        "apps/ios/Meeshy/Features/Focal/Lens/ReadingModeLensSheet.swift",  // 13
+        "apps/ios/Meeshy/Features/Settings/Views/ActiveSessionsView.swift",  // 12
         // #9612 — ce que la ligne dit d'une session, et l'avis d'une session
         // fermée par le serveur : épinglés dès leur création.
-        "apps/ios/Meeshy/Features/Main/ViewModels/ActiveSessionsPresentation.swift",
+        "apps/ios/Meeshy/Features/Settings/ViewModels/ActiveSessionsPresentation.swift",
         "apps/ios/Meeshy/Features/Auth/SessionClosedNoticeView.swift",
         "apps/ios/Meeshy/Features/Main/Views/ConversationListQuickActions.swift",  // 12
         "apps/ios/Meeshy/Features/Main/Components/MediaKindLabel.swift",  // 11
-        "apps/ios/Meeshy/Features/Main/Lentille/Mode/LentilleModeLabels.swift",  // 10
-        "apps/ios/Meeshy/Features/Main/Lentille/Row/LentilleBridgeLine.swift",  // 9
+        "apps/ios/Meeshy/Features/Lens/Mode/LentilleModeLabels.swift",  // 10
+        "apps/ios/Meeshy/Features/Lens/Row/LentilleBridgeLine.swift",  // 9
         "apps/ios/Meeshy/Features/Main/Models/ConversationFilterLabel.swift",  // 9
-        "apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift",  // 9
+        "apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel.swift",  // 9
         "apps/ios/Meeshy/Features/Main/Views/ConversationMediaGalleryView.swift",  // 9
         // #6145 — le menu ⋯ a emporté quatre clés hors du fichier épinglé (les
         // deux verbes, la note de marque, le libellé VoiceOver du glyphe). Un
@@ -220,32 +220,32 @@ final class LocalizationConsistencyTests: XCTestCase {
         // La rangée de langues de la légende a quitté le fichier épinglé avec sa clé
         // (`gallery.caption.languages`) : sa destination s'inscrit dans le même commit.
         "apps/ios/Meeshy/Features/Main/Views/ConversationMediaGalleryView+CaptionLanguages.swift",  // 1
-        "apps/ios/Meeshy/Features/Main/Views/StoryExportShareSheet.swift",  // 9
+        "apps/ios/Meeshy/Features/Stories/Views/StoryExportShareSheet.swift",  // 9
         "apps/ios/Meeshy/Features/Contacts/DiscoverViewModel.swift",  // 4
         "apps/ios/Meeshy/Features/Contacts/RequestsViewModel.swift",  // 8
         "apps/ios/Meeshy/Features/Main/Components/MessageDetail/MessageEditsDetailView.swift",  // 8
-        "apps/ios/Meeshy/Features/Main/Focal/Summary/LivingSummaryView.swift",  // 8
+        "apps/ios/Meeshy/Features/Focal/Summary/LivingSummaryView.swift",  // 8
         // 2026-10-02 — `CallManager.swift` découpé par responsabilité : ses clés
         // ont suivi leur code, la liste suit les hôtes (leçon 578).
-        "apps/ios/Meeshy/Features/Main/Services/CallManager+Answer.swift",
-        "apps/ios/Meeshy/Features/Main/Services/CallManager+Connection.swift",
-        "apps/ios/Meeshy/Features/Main/Services/CallManager+Hold.swift",
-        "apps/ios/Meeshy/Features/Main/Services/CallManager+IncomingSignal.swift",
-        "apps/ios/Meeshy/Features/Main/Services/CallManager+MediaControls.swift",
-        "apps/ios/Meeshy/Features/Main/Services/CallManager+Outgoing.swift",
-        "apps/ios/Meeshy/Features/Main/Services/CallManager+RemoteEvents.swift",
-        "apps/ios/Meeshy/Features/Main/Services/CallManager+Signaling.swift",
-        "apps/ios/Meeshy/Features/Main/Services/CallManager+VideoFallback.swift",
-        "apps/ios/Meeshy/Features/Main/Views/CallWaitingBannerView.swift",  // 8
+        "apps/ios/Meeshy/Features/Call/Services/CallManager+Answer.swift",
+        "apps/ios/Meeshy/Features/Call/Services/CallManager+Connection.swift",
+        "apps/ios/Meeshy/Features/Call/Services/CallManager+Hold.swift",
+        "apps/ios/Meeshy/Features/Call/Services/CallManager+IncomingSignal.swift",
+        "apps/ios/Meeshy/Features/Call/Services/CallManager+MediaControls.swift",
+        "apps/ios/Meeshy/Features/Call/Services/CallManager+Outgoing.swift",
+        "apps/ios/Meeshy/Features/Call/Services/CallManager+RemoteEvents.swift",
+        "apps/ios/Meeshy/Features/Call/Services/CallCollaborators/CallSignalingRouter.swift",
+        "apps/ios/Meeshy/Features/Call/Services/CallManager+VideoFallback.swift",
+        "apps/ios/Meeshy/Features/Call/Views/CallWaitingBannerView.swift",  // 8
         "apps/ios/Meeshy/Features/Main/Views/StarredMessagesView.swift",  // 8
-        "apps/ios/Meeshy/Features/Main/Views/StoryTrayActions.swift",  // 8
-        "apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift",  // 8
-        "apps/ios/Meeshy/Features/Main/Composer/ComposerLeadingRail.swift",  // 7
-        "apps/ios/Meeshy/Features/Main/Views/CallEffectsOverlay.swift",  // 7
+        "apps/ios/Meeshy/Features/Stories/Views/StoryTrayActions.swift",  // 8
+        "apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift",  // 8
+        "apps/ios/Meeshy/Features/Composer/ComposerLeadingRail.swift",  // 7
+        "apps/ios/Meeshy/Features/Call/Views/CallEffectsOverlay.swift",  // 7
         "apps/ios/Meeshy/Features/Main/Views/ConversationView+ComposerBanners.swift",  // 7
         "apps/ios/Meeshy/Features/Main/Views/FriendRequestListView.swift",  // 7
         "apps/ios/Meeshy/Features/Main/Components/MiniAudioPlayerBar.swift",  // 6
-        "apps/ios/Meeshy/Features/Main/Composer/StickerLibraryPaste.swift",  // 6
+        "apps/ios/Meeshy/Features/Composer/StickerLibraryPaste.swift",  // 6
         // 267i (#4322) — les 92 écrans restants qui passaient DÉJÀ les deux
         // règles, soit 280 clés. #4309 en avait épinglé 40 sur 132 en disant
         // pourquoi il n'en prenait pas plus : « le risque n'est pas par fichier
@@ -262,62 +262,63 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Views/MessageListViewController+DayOverlays.swift",
         "apps/ios/Meeshy/Features/Main/Views/MessageListViewController+Rows.swift",
         "apps/ios/Meeshy/Features/Main/ViewModels/ConversationViewModel.swift",  // 7
-        "apps/ios/Meeshy/Features/Main/Views/StoryLanguageDetailView.swift",  // 7
-        "apps/ios/Meeshy/Features/Main/Riviere/View/RiverBubbleView.swift",  // 6
-        "apps/ios/Meeshy/Features/Main/ViewModels/VoiceProfileManageViewModel.swift",  // 6
+        "apps/ios/Meeshy/Features/Stories/Views/StoryLanguageDetailView.swift",  // 7
+        "apps/ios/Meeshy/Features/River/View/RiverBubbleView.swift",  // 6
+        "apps/ios/Meeshy/Features/Settings/ViewModels/VoiceProfileManageViewModel.swift",  // 6
         "apps/ios/Meeshy/Features/Main/Views/ConversationListHelpers.swift",  // 6
         "apps/ios/Meeshy/Features/Main/Views/ConversationListView+Rows.swift",  // 6
-        "apps/ios/Meeshy/Features/Main/Views/LicensesView.swift",  // 6
-        "apps/ios/Meeshy/Features/Main/Views/MyStoriesDeleteConfirmation.swift",  // 6
+        "apps/ios/Meeshy/Features/Settings/Views/LicensesView.swift",  // 6
+        "apps/ios/Meeshy/Features/Stories/Views/MyStoriesDeleteConfirmation.swift",  // 6
         "apps/ios/Meeshy/Features/Main/Views/RootMenuLadderEntry.swift",  // 6
-        "apps/ios/Meeshy/Features/Main/Views/ShareLinkIdentitySheet.swift",  // 0 — #7795 : la page vit dans MeeshyUI
-        "apps/ios/Meeshy/Features/Main/Components/CallSignalGlyph.swift",  // 5
+        "apps/ios/Meeshy/Features/Links/Views/ShareLinkIdentitySheet.swift",  // 0 — #7795 : la page vit dans MeeshyUI
+        "apps/ios/Meeshy/Features/Call/Components/CallSignalGlyph.swift",  // 5
         "apps/ios/Meeshy/Features/Main/Components/LanguageFlagChip.swift",  // 5
-        "apps/ios/Meeshy/Features/Main/Composer/ComposerDescriptionLayer.swift",  // 5
-        "apps/ios/Meeshy/Features/Main/Composer/ComposerFormatAvailability.swift",  // 5
-        "apps/ios/Meeshy/Features/Main/Focal/Summary/EpisodeSegmenter.swift",  // 5
-        "apps/ios/Meeshy/Features/Main/Lentille/Chrome/LentilleSectionIdentity.swift",  // 5
+        "apps/ios/Meeshy/Features/Composer/ComposerDescriptionLayer.swift",  // 5
+        "apps/ios/Meeshy/Features/Composer/ComposerFormatAvailability.swift",  // 5
+        "apps/ios/Meeshy/Features/Focal/Summary/EpisodeSegmenter.swift",  // 5
+        "apps/ios/Meeshy/Features/Lens/Chrome/LentilleSectionIdentity.swift",  // 5
         "apps/ios/Meeshy/Features/Main/Services/CrashDiagnosticsManager.swift",  // 5
         "apps/ios/Meeshy/Features/Main/Services/MediaPermissionCoordinator.swift",  // 5
         "apps/ios/Meeshy/Features/Main/ViewModels/ConversationOptionsViewModel.swift",  // 5
-        "apps/ios/Meeshy/Features/Main/ViewModels/TwoFactorViewModel.swift",  // 5
+        "apps/ios/Meeshy/Features/Settings/ViewModels/TwoFactorViewModel.swift",  // 5
         "apps/ios/Meeshy/Features/Main/Views/ConversationView+Selection.swift",  // 5
-        "apps/ios/Meeshy/Features/Main/Views/MyStoryCardPresentation.swift",  // 5
+        "apps/ios/Meeshy/Features/Stories/Views/MyStoryCardPresentation.swift",  // 5
         "apps/ios/Meeshy/Features/Contacts/PeopleDiscoveryView.swift",  // 4
-        "apps/ios/Meeshy/Features/Main/Composer/MediaComposerDoor.swift",  // 4
-        "apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost.swift",  // 4
-        "apps/ios/Meeshy/Features/Main/Composer/UpgradeGateView.swift",  // 4
-        "apps/ios/Meeshy/Features/Main/Lentille/Mode/LentilleFocusCard.swift",  // 4
-        "apps/ios/Meeshy/Features/Main/Services/StoryPhotoSaveService.swift",  // 4
-        "apps/ios/Meeshy/Features/Main/Services/StoryPublishService.swift",  // 4
+        "apps/ios/Meeshy/Features/Composer/MediaComposerDoor.swift",  // 4
+        "apps/ios/Meeshy/Features/Composer/MeeshyComposerHost.swift",  // 4
+        "apps/ios/Meeshy/Features/Composer/UpgradeGateView.swift",  // 4
+        "apps/ios/Meeshy/Features/Lens/Mode/LentilleFocusCard.swift",  // 4
+        "apps/ios/Meeshy/Features/Stories/Services/StoryPhotoSaveService.swift",  // 4
+        "apps/ios/Meeshy/Features/Stories/Services/StoryPublishService.swift",  // 4
         "apps/ios/Meeshy/Features/Main/Views/Cells/PostStatAccessibility.swift",  // 4
         "apps/ios/Meeshy/Features/Main/Views/ConversationHelperViews.swift",  // 4
         "apps/ios/Meeshy/Features/Main/Views/ConversationView+ScrollIndicators.swift",  // 4
-        "apps/ios/Meeshy/Features/Main/Views/MessageListView.swift",  // 4
-        "apps/ios/Meeshy/Features/Main/Views/MyStoriesTab.swift",  // 4
-        "apps/ios/Meeshy/Features/Main/Views/StoryAuthorIdentityCard.swift",  // 4
-        "apps/ios/Meeshy/Features/Main/Views/StoryUploadPresentation.swift",  // 4
+        "apps/ios/Meeshy/Features/Main/Views/BubbleSwipeContainer.swift",  // 2
+        "apps/ios/Meeshy/Features/Main/Views/MessageRowOffer.swift",  // 2
+        "apps/ios/Meeshy/Features/Stories/Views/MyStoriesTab.swift",  // 4
+        "apps/ios/Meeshy/Features/Stories/Views/StoryAuthorIdentityCard.swift",  // 4
+        "apps/ios/Meeshy/Features/Stories/Views/StoryUploadPresentation.swift",  // 4
         "apps/ios/Meeshy/Features/Contacts/BlockedViewModel.swift",  // 3
         "apps/ios/Meeshy/Features/Main/Services/StatusBubbleController.swift",  // 3
-        "apps/ios/Meeshy/Features/Main/ViewModels/ActiveSessionsViewModel.swift",  // 3
+        "apps/ios/Meeshy/Features/Settings/ViewModels/ActiveSessionsViewModel.swift",  // 3
         "apps/ios/Meeshy/Features/Main/ViewModels/GlobalSearchViewModel.swift",  // 3
         "apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleExpandableText.swift",  // 3
         "apps/ios/Meeshy/Features/Main/Views/FeedPostLocationView.swift",  // 3
-        "apps/ios/Meeshy/Features/Main/Views/MyStoryCard.swift",  // 3
-        "apps/ios/Meeshy/Features/Main/Views/StoryCanvasAccessibility.swift",  // 3
-        "apps/ios/Meeshy/Features/Main/Views/StoryTrayView.swift",  // 3
+        "apps/ios/Meeshy/Features/Stories/Views/MyStoryCard.swift",  // 3
+        "apps/ios/Meeshy/Features/Stories/Views/StoryCanvasAccessibility.swift",  // 3
+        "apps/ios/Meeshy/Features/Stories/Views/StoryTrayView.swift",  // 3
         "apps/ios/Meeshy/Features/Main/Views/iPadRootView+Navigation.swift",  // 3
         "apps/ios/Meeshy/Features/Main/Components/BrandSignature.swift",  // 2
         "apps/ios/Meeshy/Features/Main/Components/ReelFeedSoundButton.swift",  // 2
         "apps/ios/Meeshy/Features/Main/Components/ToggleStateAccessibility.swift",  // 2
-        "apps/ios/Meeshy/Features/Main/Focal/Row/FocalIdentityHeader.swift",  // 2
-        "apps/ios/Meeshy/Features/Main/Focal/Summary/EpisodeListView.swift",  // 2
-        "apps/ios/Meeshy/Features/Main/Focal/Summary/FaceRampView.swift",  // 2
-        "apps/ios/Meeshy/Features/Main/Lentille/Mode/LentilleModeMenu.swift",  // 2
+        "apps/ios/Meeshy/Features/Focal/Row/FocalIdentityHeader.swift",  // 2
+        "apps/ios/Meeshy/Features/Focal/Summary/EpisodeListView.swift",  // 2
+        "apps/ios/Meeshy/Features/Focal/Summary/FaceRampView.swift",  // 2
+        "apps/ios/Meeshy/Features/Lens/Mode/LentilleModeMenu.swift",  // 2
         "apps/ios/Meeshy/Features/Main/Models/ConversationFilterComposition.swift",  // 2
         "apps/ios/Meeshy/Features/Main/Services/MessageForwardService.swift",  // 2
-        "apps/ios/Meeshy/Features/Main/ViewModels/UserProfileViewModel.swift",  // 2
-        "apps/ios/Meeshy/Features/Main/ViewModels/VoiceProfileWizardViewModel.swift",  // 2
+        "apps/ios/Meeshy/Features/Profile/ViewModels/UserProfileViewModel.swift",  // 2
+        "apps/ios/Meeshy/Features/Settings/ViewModels/VoiceProfileWizardViewModel.swift",  // 2
         "apps/ios/Meeshy/Features/Main/Views/AudioPostComposerView.swift",  // 2
         // Cohésion de `AudioPostComposerView` : la carte d'état, la zone de rognage et le
         // sélecteur de langue ont quitté l'hôte avec leurs clés ; le cliquet suit le code (leçon 578).
@@ -327,7 +328,7 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleFailedRetryBar.swift",  // 2
         "apps/ios/Meeshy/Features/Main/Views/ConversationMediaViews.swift",
         "apps/ios/Meeshy/Features/Main/Views/DownloadBadgeView.swift",  // 2
-        "apps/ios/Meeshy/Features/Main/Views/StoryLanguageQuickBar.swift",  // 2
+        "apps/ios/Meeshy/Features/Stories/Views/StoryLanguageQuickBar.swift",  // 2
         "apps/ios/Meeshy/Features/Main/Views/iPadRootView.swift",  // 2
         "apps/ios/Meeshy/Features/Stories/Notifications/StoryNotificationOfflineContent.swift",  // 2
         // #6508 — les mots d'un échec d'ouverture ont QUITTÉ l'écran ci-dessus
@@ -349,18 +350,18 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Components/BackgroundSoundBadge.swift",  // 1
         "apps/ios/Meeshy/Features/Main/Components/ComposerMentionStrip.swift",  // 1
         "apps/ios/Meeshy/Features/Main/Components/LocalizedNumber.swift",  // 1
-        "apps/ios/Meeshy/Features/Main/Composer/ComposerTrailingRail.swift",  // 1
-        "apps/ios/Meeshy/Features/Main/Focal/Row/FocalConversationStartRow.swift",  // 1
-        "apps/ios/Meeshy/Features/Main/Focal/Row/FocalMetaRow.swift",  // 1
-        "apps/ios/Meeshy/Features/Main/Navigation/Router+StoryReply.swift",  // 1
-        "apps/ios/Meeshy/Features/Main/Riviere/Core/RiverConversationMapping.swift",  // 1
-        "apps/ios/Meeshy/Features/Main/Riviere/View/RiverLaneHeaderStrip.swift",  // 1
-        "apps/ios/Meeshy/Features/Main/Riviere/View/RiverTimeHandle.swift",  // 1
+        "apps/ios/Meeshy/Features/Composer/ComposerTrailingRail.swift",  // 1
+        "apps/ios/Meeshy/Features/Focal/Row/FocalConversationStartRow.swift",  // 1
+        "apps/ios/Meeshy/Features/Focal/Row/FocalMetaRow.swift",  // 1
+        "apps/ios/Meeshy/Features/Navigation/Router+StoryReply.swift",  // 1
+        "apps/ios/Meeshy/Features/River/Core/RiverConversationMapping.swift",  // 1
+        "apps/ios/Meeshy/Features/River/View/RiverLaneHeaderStrip.swift",  // 1
+        "apps/ios/Meeshy/Features/River/View/RiverTimeHandle.swift",  // 1
         "apps/ios/Meeshy/Features/Main/Services/ContactSyncService.swift",  // 1
         "apps/ios/Meeshy/Features/Main/Services/ConversationCreator.swift",  // 1
         "apps/ios/Meeshy/Features/Main/Services/WidgetDataManager.swift",  // 1
         "apps/ios/Meeshy/Features/Main/ViewModels/NewConversationViewModel.swift",  // 1
-        "apps/ios/Meeshy/Features/Main/ViewModels/StoryExportShareViewModel.swift",  // 1
+        "apps/ios/Meeshy/Features/Stories/ViewModels/StoryExportShareViewModel.swift",  // 1
         // #10654 — le carrousel est devenu une liste : sa clé de rang l'a suivie
         // (leçon 578).
         "apps/ios/Meeshy/Features/Main/Views/Bubble/AudioStackView.swift",  // 1
@@ -370,7 +371,7 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Views/Skeletons/SkeletonLinkRow.swift",  // 1
         "apps/ios/Meeshy/Features/Main/Views/Skeletons/SkeletonProfileHeader.swift",  // 1
         "apps/ios/Meeshy/Features/Main/Views/Skeletons/SkeletonStoryThumb.swift",  // 1
-        "apps/ios/Meeshy/Features/Main/Views/StoryLocationReaderTapOverlay.swift",  // 1
+        "apps/ios/Meeshy/Features/Stories/Views/StoryLocationReaderTapOverlay.swift",  // 1
         // 268i (#4308) — les 105 écrans débloqués par la RÉCONCILIATION des
         // `defaultValue`. Ils ne butaient que sur la règle B : leur littéral
         // inline disait « Reply » là où le catalogue `fr` — celui qui
@@ -382,21 +383,21 @@ final class LocalizationConsistencyTests: XCTestCase {
         // PLURIELLES, donc sans `stringUnit` plat — la règle B compare le
         // littéral à une valeur source qui n'existe pas pour un pluriel, et
         // aucune réconciliation ne peut la satisfaire (suivi ouvert).
-        "apps/ios/Meeshy/Features/Main/Views/MyStoriesView.swift",  // 60
+        "apps/ios/Meeshy/Features/Stories/Views/MyStoriesView.swift",  // 60
         // Cohésion de `MyStoriesView` : le cliquet suit le CODE, pas le chemin (leçon 578). Les
         // alertes de suppression, le menu « ... » et les rangées de la file ont quitté l'hôte
         // avec leurs clés.
-        "apps/ios/Meeshy/Features/Main/Views/MyStoriesDeleteAlerts.swift",
-        "apps/ios/Meeshy/Features/Main/Views/MyStoriesQueueRows.swift",
-        "apps/ios/Meeshy/Features/Main/Views/MyStoryActionMenu.swift",
-        "apps/ios/Meeshy/Features/Main/Views/SecurityView.swift",  // 58
+        "apps/ios/Meeshy/Features/Stories/Views/MyStoriesDeleteAlerts.swift",
+        "apps/ios/Meeshy/Features/Stories/Views/MyStoriesQueueRows.swift",
+        "apps/ios/Meeshy/Features/Stories/Views/MyStoryActionMenu.swift",
+        "apps/ios/Meeshy/Features/Settings/Views/SecurityView.swift",  // 58
         // #8843 — le flux SMS du numéro a quitté l'écran ci-dessus pour être
         // partagé avec la proposition faite avant la recherche de contacts :
         // le cliquet suit les CLÉS jusqu'à leur nouveau fichier (leçon 578),
         // et la proposition naît certifiée.
-        "apps/ios/Meeshy/Features/Main/ViewModels/PhoneChangeFlowModel.swift",  // 2
+        "apps/ios/Meeshy/Features/Settings/ViewModels/PhoneChangeFlowModel.swift",  // 2
         "apps/ios/Meeshy/Features/Contacts/PhonePromptSheet.swift",  // 11
-        "apps/ios/Meeshy/Features/Main/Views/NotificationSettingsView.swift",  // 56
+        "apps/ios/Meeshy/Features/Settings/Views/NotificationSettingsView.swift",  // 56
         "apps/ios/Meeshy/Features/Main/Views/ConversationView.swift",  // 49
         // Cohésion de `ConversationView` : le cliquet suit le CODE, pas le chemin (leçon 578). Les
         // clés ont quitté l'hôte avec leur code — le consentement vocal, la bannière d'erreur, les
@@ -407,7 +408,7 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Views/ConversationView+MessageListLayer.swift",
         "apps/ios/Meeshy/Features/Main/Views/ConversationView+Presentations.swift",
         "apps/ios/Meeshy/Features/Main/Views/ConversationView+Skeleton.swift",
-        "apps/ios/Meeshy/Features/Main/Views/TwoFactorSetupView.swift",  // 41
+        "apps/ios/Meeshy/Features/Settings/Views/TwoFactorSetupView.swift",  // 41
         "apps/ios/Meeshy/Features/Main/Views/GlobalSearchView.swift",  // 40
         "apps/ios/Meeshy/Features/Main/Views/ParticipantsView.swift",  // 38
         "apps/ios/Meeshy/Features/Main/Components/ConversationDashboardView.swift",  // 37
@@ -426,18 +427,18 @@ final class LocalizationConsistencyTests: XCTestCase {
         // Cohésion de `FeedComposerSheet` : la clé de retrait d'une pièce a suivi la rangée.
         "apps/ios/Meeshy/Features/Main/Views/FeedComposerAttachmentsRow.swift",  // 1
         "apps/ios/Meeshy/Features/Main/Components/MessageMoreSheet.swift",  // 29
-        "apps/ios/Meeshy/Features/Main/Views/PrivacySettingsView.swift",  // 29
-        "apps/ios/Meeshy/Features/Main/Views/VoiceProfileWizardView.swift",  // 29
-        "apps/ios/Meeshy/Features/Main/Views/DeleteAccountView.swift",  // 28
+        "apps/ios/Meeshy/Features/Settings/Views/PrivacySettingsView.swift",  // 29
+        "apps/ios/Meeshy/Features/Settings/Views/VoiceProfileWizardView.swift",  // 29
+        "apps/ios/Meeshy/Features/Settings/Views/DeleteAccountView.swift",  // 28
         // #10947 — l'écran de partage unique remplace `SharePickerView` et le
         // sélecteur de transfert : ses mots sont traduits dans les sept langues.
-        "apps/ios/Meeshy/Features/Main/Share/ShareSheetCopy.swift",
-        "apps/ios/Meeshy/Features/Main/Share/ShareContentZone.swift",
-        "apps/ios/Meeshy/Features/Main/Navigation/Router.swift",  // 27
+        "apps/ios/Meeshy/Features/Share/ShareSheetCopy.swift",
+        "apps/ios/Meeshy/Features/Share/ShareContentZone.swift",
+        "apps/ios/Meeshy/Features/Navigation/Router.swift",  // 27
         "apps/ios/Meeshy/Features/Main/Components/EffectsPickerView.swift",  // 24
-        "apps/ios/Meeshy/Features/Main/Views/CreateTrackingLinkView.swift",  // 24
-        "apps/ios/Meeshy/Features/Main/Views/ProfileUserPostsList.swift",  // 10
-        "apps/ios/Meeshy/Features/Main/Views/ProfileUserPostsViewModel.swift",  // 14
+        "apps/ios/Meeshy/Features/Links/Views/CreateTrackingLinkView.swift",  // 24
+        "apps/ios/Meeshy/Features/Profile/Views/ProfileUserPostsList.swift",  // 10
+        "apps/ios/Meeshy/Features/Profile/ViewModels/ProfileUserPostsViewModel.swift",  // 14
         "apps/ios/Meeshy/Features/Main/Views/ReelsPlayerView.swift",  // 5
         // #6693 — le rail d'actions a quitté l'hôte avec ses quatorze clés. Le cliquet
         // suit le CODE, pas le chemin : sa destination s'inscrit dans le même commit.
@@ -449,7 +450,8 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Views/ReelsPlayerView+EmptyState.swift",  // 2
         "apps/ios/Meeshy/Features/Main/Components/EditPostSheet.swift",  // 23
         "apps/ios/Meeshy/Features/Main/Components/ReportMessageSheet.swift",  // 21
-        "apps/ios/Meeshy/Features/Main/Views/FeedView.swift",  // 21
+        "apps/ios/Meeshy/Features/Main/Views/FeedView.swift",  // 12
+        "apps/ios/Meeshy/Features/Main/Views/FeedComposerPlaceholder.swift",  // 9
         "apps/ios/Meeshy/Features/Contacts/DiscoverTab.swift",  // 19
         "apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout.swift",  // 19
         // #4328 — la surface RÉPERTOIRE, en entier. Onze clés absentes du
@@ -485,8 +487,8 @@ final class LocalizationConsistencyTests: XCTestCase {
         // partagé par la carte « Configuration » et le formulaire : le cliquet
         // suit les CLÉS jusqu'à leur nouveau fichier (leçon 578). La page
         // d'invitation (#7795) vit dans MeeshyUI, catalogue du SDK.
-        "apps/ios/Meeshy/Features/Main/Views/ShareLinkDetailView.swift",  // 0
-        "apps/ios/Meeshy/Features/Main/Views/ShareLinkDetailCopy.swift",  // 59
+        "apps/ios/Meeshy/Features/Links/Views/ShareLinkDetailView.swift",  // 0
+        "apps/ios/Meeshy/Features/Links/Views/ShareLinkDetailCopy.swift",  // 59
         "apps/ios/Meeshy/Features/Main/Views/RootView.swift",  // 7
         // Découpe de la racine : le cliquet suit les CLÉS jusqu'à leurs nouveaux fichiers (leçon 578).
         "apps/ios/Meeshy/Features/Main/Views/RootConversationOpener.swift",  // 1
@@ -506,36 +508,36 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/ViewModels/FeedViewModel+Reactions.swift",  // 3
         "apps/ios/Meeshy/Features/Main/ViewModels/FeedViewModel+Posting.swift",  // 2
         "apps/ios/Meeshy/Features/Main/ViewModels/FeedViewModel+Pagination.swift",  // 1
-        "apps/ios/Meeshy/Features/Main/Views/ChangePasswordView.swift",  // 17
+        "apps/ios/Meeshy/Features/Settings/Views/ChangePasswordView.swift",  // 17
         "apps/ios/Meeshy/Features/Main/ViewModels/PostDetailViewModel.swift",  // 15
         // #6600 — l'édition de commentaire a quitté l'hôte avec sa clé.
         "apps/ios/Meeshy/Features/Main/ViewModels/PostDetailViewModel+CommentEdit.swift",  // 1
         // Cohésion de `PostDetailViewModel` : les actions sur le post ont quitté l hôte avec leurs clés (leçon 578).
         "apps/ios/Meeshy/Features/Main/ViewModels/PostDetailViewModel+PostActions.swift",
-        "apps/ios/Meeshy/Features/Main/Views/FloatingCallPillView.swift",  // 16
-        "apps/ios/Meeshy/Features/Main/Views/MagicLinkView.swift",  // 16
+        "apps/ios/Meeshy/Features/Call/Views/FloatingCallPillView.swift",  // 16
+        "apps/ios/Meeshy/Features/Auth/Views/MagicLinkView.swift",  // 16
         "apps/ios/Meeshy/Features/Main/Views/ReportUserView.swift",  // 16
         "apps/ios/Meeshy/Features/Main/Views/VideoFiltersPanel.swift",  // 16
         "apps/ios/Meeshy/Features/Contacts/CallsTab.swift",  // 15
         "apps/ios/Meeshy/Features/Contacts/RequestsTab.swift",  // 15
         "apps/ios/Meeshy/Features/Main/Components/MemberManagementSection.swift",  // 15
         "apps/ios/Meeshy/Features/Main/Views/EmojiPickerSheet.swift",  // 15
-        "apps/ios/Meeshy/Features/Main/Views/IncomingCallView.swift",  // 15
-        "apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift",  // 15
+        "apps/ios/Meeshy/Features/Call/Views/IncomingCallView.swift",  // 15
+        "apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Content.swift",  // 15
         // #9727 — la feuille « Vues » quitte l'hôte ci-dessus et naît certifiée :
         // ce que chaque personne a fait, sept locales, `defaultValue` alignés sur le `fr`.
         "apps/ios/Meeshy/Features/Main/Views/PublicationViewersSheet.swift",  // 23
         // #8582 — la ligne de commentaire de story a QUITTÉ l'hôte ci-dessus
         // avec ses quatre clés : le cliquet suit le code (leçon 578).
-        "apps/ios/Meeshy/Features/Main/Views/StoryCommentRowView.swift",  // 7
+        "apps/ios/Meeshy/Features/Stories/Views/StoryCommentRowView.swift",  // 7
         // #8709 — le menu « … » d'un commentaire (post ET story) naît certifié :
         // ses dix clés, sept locales, `defaultValue` alignés sur le `fr`.
         "apps/ios/Meeshy/Features/Main/Views/CommentMoreMenu.swift",  // 10
-        "apps/ios/Meeshy/Features/Main/Views/StoryViewerView+CommentMenu.swift",  // 1
+        "apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+CommentMenu.swift",  // 1
         "apps/ios/Meeshy/Features/Contacts/KeypadTab.swift",  // 14
         "apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleSystemViews.swift",  // 14
-        "apps/ios/Meeshy/Features/Main/Views/DataExportView.swift",  // 14
-        "apps/ios/Meeshy/Features/Main/Views/LinksHubView.swift",  // 14
+        "apps/ios/Meeshy/Features/Settings/Views/DataExportView.swift",  // 14
+        "apps/ios/Meeshy/Features/Links/Views/LinksHubView.swift",  // 14
         "apps/ios/Meeshy/AppDelegate.swift",  // 13
         "apps/ios/Meeshy/Features/Contacts/CallDetailSheet.swift",  // 13
         "apps/ios/Meeshy/Features/Main/Components/AttachmentLoadingTile.swift",  // 13
@@ -543,49 +545,49 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Components/MessageOverlayMenu.swift",  // 2
         "apps/ios/Meeshy/Features/Main/Components/MessageOverlayPreviewAudioPlayer.swift",  // 6
         "apps/ios/Meeshy/Features/Main/Views/ConversationView+MessageRow.swift",  // 13
-        "apps/ios/Meeshy/Features/Main/Views/AffiliateCreateView.swift",  // 12
+        "apps/ios/Meeshy/Features/Links/Views/AffiliateCreateView.swift",  // 12
         "apps/ios/Meeshy/Features/Main/Views/NewConversationView.swift",  // 12
-        "apps/ios/Meeshy/Features/Main/Views/CommunityLinkDetailView.swift",  // 11
+        "apps/ios/Meeshy/Features/Links/Views/CommunityLinkDetailView.swift",  // 11
         "apps/ios/Meeshy/Features/Main/Components/LocationPickerView.swift",  // 10
         "apps/ios/Meeshy/Features/Main/Components/MessageDetail/MessageTranscriptionDetailView.swift",  // 10
         "apps/ios/Meeshy/Features/Main/ViewModels/ReelsViewModel.swift",  // 10
-        "apps/ios/Meeshy/Features/Main/Views/MediaDownloadSettingsView.swift",  // 10
-        "apps/ios/Meeshy/Features/Main/Views/UserStatsView.swift",  // 10
+        "apps/ios/Meeshy/Features/Settings/Views/MediaDownloadSettingsView.swift",  // 10
+        "apps/ios/Meeshy/Features/Profile/Views/UserStatsView.swift",  // 10
         "apps/ios/Meeshy/Features/Contacts/ContactsListTab.swift",  // 9
         "apps/ios/Meeshy/Features/Main/Components/MessageDetail/MessageReportDetailView.swift",  // 9
         "apps/ios/Meeshy/Features/Main/Views/BookmarksView.swift",  // 9
-        "apps/ios/Meeshy/Features/Main/Views/PrivacyPolicyView.swift",  // 9
-        "apps/ios/Meeshy/Features/Main/Views/TermsOfServiceView.swift",  // 9
+        "apps/ios/Meeshy/Features/Settings/Views/PrivacyPolicyView.swift",  // 9
+        "apps/ios/Meeshy/Features/Settings/Views/TermsOfServiceView.swift",  // 9
         "apps/ios/Meeshy/Features/Contacts/BlockedTab.swift",  // 8
         "apps/ios/Meeshy/Features/Main/Components/MessageDetailSentimentTab.swift",  // 8
         "apps/ios/Meeshy/Features/Main/Components/UniversalComposerBar+Recording.swift",  // 8
         "apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleFooter.swift",  // 8
         "apps/ios/Meeshy/Features/Main/Views/ConversationView+Header.swift",  // 8
         "apps/ios/Meeshy/Features/Main/Views/VideoFilterControlView.swift",  // 8
-        "apps/ios/Meeshy/Features/Main/Focal/Row/FocalQuotedReplyView.swift",  // 6
+        "apps/ios/Meeshy/Features/Focal/Row/FocalQuotedReplyView.swift",  // 6
         "apps/ios/Meeshy/Features/Main/ViewModels/StatusViewModel.swift",  // 7
         "apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleDeliveryCheck.swift",  // 7
         "apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleQuotedReply.swift",  // 7
-        "apps/ios/Meeshy/Features/Main/Views/DataStorageView.swift",  // 7
+        "apps/ios/Meeshy/Features/Settings/Views/DataStorageView.swift",  // 7
         "apps/ios/Meeshy/Features/Main/Views/RootViewComponents.swift",  // 7
-        "apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift",  // 5
+        "apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Canvas.swift",  // 5
         // Cohésion de `StoryViewerView` — le cliquet suit le CODE, pas le chemin : le geste du
         // canvas, l'indicateur de buffering, l'interstitiel d'identité et la liste des
         // commentaires de story sont devenus des types à eux (neuf clés quittent les trois
         // fichiers ci-dessus ; sans ces cinq lignes elles sortiraient de la garde en silence).
-        "apps/ios/Meeshy/Features/Main/Views/StoryGestureOverlayView.swift",
-        "apps/ios/Meeshy/Features/Main/Views/StoryPlaybackStallIndicator.swift",
-        "apps/ios/Meeshy/Features/Main/Views/StoryGroupIntroOverlay.swift",
-        "apps/ios/Meeshy/Features/Main/Views/StoryCommentThread.swift",
-        "apps/ios/Meeshy/Features/Main/Views/StoryCommentsOverlayView.swift",
+        "apps/ios/Meeshy/Features/Stories/Views/StoryGestureOverlayView.swift",
+        "apps/ios/Meeshy/Features/Stories/Views/StoryPlaybackStallIndicator.swift",
+        "apps/ios/Meeshy/Features/Stories/Views/StoryGroupIntroOverlay.swift",
+        "apps/ios/Meeshy/Features/Stories/Views/StoryCommentThread.swift",
+        "apps/ios/Meeshy/Features/Stories/Views/StoryCommentsOverlayView.swift",
         // 2026-09-02 — deux de ses appels (`story.viewer.replyTo`,
         // `story.viewer.reply.cancel`) ont MIGRÉ avec `StoryComposerBarView`
         // vers son propre fichier (dette de taille). Épinglé dès la découpe,
         // sinon les deux cliquets ci-dessous cesseraient de les voir — la
         // dérive silencieuse que #4425 décrit pour `StoryViewModel`.
-        "apps/ios/Meeshy/Features/Main/Views/StoryViewerView+CanvasComposerBar.swift",  // 2
+        "apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+CanvasComposerBar.swift",  // 2
         "apps/ios/Meeshy/Features/Main/Components/MessageDetail/MessageLanguageDetailView.swift",  // 6
-        "apps/ios/Meeshy/Features/Main/Views/StoryViewerContainer.swift",  // 6
+        "apps/ios/Meeshy/Features/Stories/Views/StoryViewerContainer.swift",  // 6
         "apps/ios/Meeshy/Features/Main/Views/iPadRootView+Panels.swift",  // 6
         "apps/ios/Meeshy/MeeshyApp.swift",  // 6
         "apps/ios/Meeshy/Features/Main/Components/ContactCardView.swift",  // 5
@@ -600,28 +602,28 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Views/CommentMediaView.swift",  // 4
         "apps/ios/Meeshy/Features/Main/Components/CrashReportSheet.swift",  // 3
         "apps/ios/Meeshy/Features/Main/Components/UniversalComposerBar+Drop.swift",  // 3
-        "apps/ios/Meeshy/Features/Main/Composer/PasteIntoComposer.swift",  // 3
-        "apps/ios/Meeshy/Features/Main/Views/AchievementBadgeView.swift",  // 3
+        "apps/ios/Meeshy/Features/Composer/PasteIntoComposer.swift",  // 3
+        "apps/ios/Meeshy/Features/Profile/Views/AchievementBadgeView.swift",  // 3
         "apps/ios/Meeshy/Features/Main/Views/WebRTCVideoView.swift",  // 3
         "apps/ios/Meeshy/Features/Contacts/ContactsHubView.swift",  // 2
         "apps/ios/Meeshy/Features/Main/Components/MentionSuggestionPanel.swift",  // 2
-        "apps/ios/Meeshy/Features/Main/Focal/Row/FocalProtectedContent.swift",  // 2
-        "apps/ios/Meeshy/Features/Main/Focal/Row/FocalSystemRows.swift",  // 2
+        "apps/ios/Meeshy/Features/Focal/Row/FocalProtectedContent.swift",  // 2
+        "apps/ios/Meeshy/Features/Focal/Row/FocalSystemRows.swift",  // 2
         "apps/ios/Meeshy/Features/Main/ViewModels/BookmarksViewModel.swift",  // 2
-        "apps/ios/Meeshy/Features/Main/Views/StoryRepostEmbedCell.swift",  // 2
+        "apps/ios/Meeshy/Features/Stories/Views/StoryRepostEmbedCell.swift",  // 2
         "apps/ios/Meeshy/Features/Contacts/AffiliatesViewModel.swift",  // 1
         "apps/ios/Meeshy/Features/Main/Components/CharacterCountLabel.swift",  // 1
-        "apps/ios/Meeshy/Features/Main/Services/VoIPPushManager.swift",  // 1
+        "apps/ios/Meeshy/Features/Call/Services/VoIPPushManager.swift",  // 1
         "apps/ios/Meeshy/Features/Stories/Notifications/StoryNotificationLoadingView.swift",  // 1
         // 270i (#4364) — the four screens the eleven new catalog entries unblock.
         // Each held a key that was ABSENT from the catalog, so its `defaultValue`
         // shipped French to the six other locales; each is now translated in all
         // seven. Three of the four are ACCESSIBILITY surfaces, where the gap was
         // spoken rather than read.
-        "apps/ios/Meeshy/Features/Main/Focal/Preferences/MessageAccessibilityLabelComposer.swift",  // 20
+        "apps/ios/Meeshy/Features/Focal/Preferences/MessageAccessibilityLabelComposer.swift",  // 20
         "apps/ios/Meeshy/Features/Main/Components/AddParticipantSheet.swift",  // 11
         "apps/ios/Meeshy/Features/Main/Components/SyncPill.swift",  // 4
-        "apps/ios/Meeshy/Features/Main/Focal/Lens/ReadingModeChip.swift",  // 4
+        "apps/ios/Meeshy/Features/Focal/Lens/ReadingModeChip.swift",  // 4
         // 270i — the first two sources OUTSIDE the app target ever pinned. They
         // needed no work: both already passed BOTH rules against the widget
         // catalog. What was missing was the map entry telling this suite which
@@ -640,7 +642,7 @@ final class LocalizationConsistencyTests: XCTestCase {
         // en langue source est le plus coûteux : elle ne s'affiche QUE devant
         // quelqu'un qu'on est en train de perdre, et on lui parlait français.
         "packages/MeeshySDK/Sources/MeeshySDK/Networking/MediaDownloadPreferences.swift",  // 4
-        "apps/ios/Meeshy/Features/Main/Views/StorySentinelView.swift",  // 4
+        "apps/ios/Meeshy/Features/Stories/Views/StorySentinelView.swift",  // 4
         // Dédoublonnage audit L3-18 — le switch « type de conversation → libellé »
         // était recopié dans quatre fichiers ; trois d'entre eux étaient épinglés
         // ici (`ConversationInfoSheet.swift`, `GlobalSearchView.swift`,

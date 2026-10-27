@@ -159,3 +159,45 @@ class MessageSummaryKindTest {
             .isEqualTo(MessageSummaryKind.STANDARD)
     }
 }
+
+/** #13110 — un dernier message que l'Android natif ne sait pas ouvrir se dit chiffré, jamais « aucun message ». */
+class EncryptedLastMessageSummaryTest {
+
+    private val now = 1_700_000_000_000L
+    private val labels = LastMessagePreviewLabels(
+        photo = "📷 Photo",
+        video = "🎬 Vidéo",
+        voice = "🎵 Message vocal",
+        file = "📎 Fichier",
+        location = "📍 Localisation",
+        none = "Aucun message",
+        you = "Vous",
+        senderFormat = "%1\$s : %2\$s",
+        draftPrefix = "Brouillon : ",
+        encrypted = "Message chiffré",
+    )
+
+    @Test
+    fun `an encrypted last message classifies as encrypted`() {
+        val message = ApiConversationLastMessage(id = "m1", content = "", isEncrypted = true)
+
+        assertThat(MessageSummaryKind.of(message, nowMillis = now)).isEqualTo(MessageSummaryKind.ENCRYPTED)
+    }
+
+    @Test
+    fun `an expired ephemeral still outranks the encryption`() {
+        val message = ApiConversationLastMessage(id = "m1", content = "", isEncrypted = true, expiresAt = "2023-11-14T22:13:19Z")
+
+        assertThat(MessageSummaryKind.of(message, nowMillis = now)).isEqualTo(MessageSummaryKind.EXPIRED)
+    }
+
+    @Test
+    fun `the row says encrypted message, not no message yet`() {
+        val message = ApiConversationLastMessage(id = "m1", content = "", isEncrypted = true)
+
+        val line = messageSummaryLine(message, currentUserId = "me", showSender = false, labels = labels, nowMillis = now)
+
+        assertThat(line.text).isEqualTo("Message chiffré")
+        assertThat(line.kind).isEqualTo(MessageSummaryKind.ENCRYPTED)
+    }
+}

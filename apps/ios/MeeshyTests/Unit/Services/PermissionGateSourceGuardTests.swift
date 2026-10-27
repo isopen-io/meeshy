@@ -86,7 +86,7 @@ final class PermissionGateSourceGuardTests: XCTestCase {
     /// vide sans jamais comprendre. Le chemin CallKit ne permet aucune demande
     /// en amont, d'où la garde ici.
     func test_answerCall_endsCallWhenMicrophoneMissing() throws {
-        let src = try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        let src = try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
         let fn = try body(from: "func answerCall() {", to: "ringbackPlayer.stop()", in: src)
 
         XCTAssertTrue(fn.contains("MediaPermissionState.microphone.isUsable"),
@@ -104,7 +104,7 @@ final class PermissionGateSourceGuardTests: XCTestCase {
     /// sans toast ni raccroché : miroir exact du bug déjà corrigé sur
     /// `answerCall()`, resté ouvert sur son propre point d'entrée.
     func test_answerCallReady_endsCallWhenMicrophoneMissing() throws {
-        let src = try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        let src = try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
         let fn = try body(from: "func answerCallReady() async {", to: "// MARK: - Reject Call", in: src)
 
         XCTAssertTrue(fn.contains("MediaPermissionState.microphone.isUsable"),
@@ -137,7 +137,7 @@ final class PermissionGateSourceGuardTests: XCTestCase {
     /// silencieux au tap sur « rejoindre » — miroir exact du bug déjà corrigé
     /// sur les deux autres points d'entrée, resté ouvert sur celui-ci.
     func test_rejoinActiveCall_refusesWhenMicrophoneMissing() throws {
-        let src = try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        let src = try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
         let fn = try body(from: "func rejoinActiveCall(callId: String", to: "// MARK: - VoIP Push Incoming Call", in: src)
 
         XCTAssertTrue(fn.contains("MediaPermissionState.microphone.isUsable"),
@@ -172,7 +172,7 @@ final class PermissionGateSourceGuardTests: XCTestCase {
         for path in surfaces {
             let src = try source(path)
             XCTAssertFalse(
-                src.contains("CallManager.shared.startCall("),
+                src.contains("CallManager.shared.startCall(") || src.contains("outgoingDial.startCall("),
                 "\(path) doit composer via requestPermissionsThenStartCall — " +
                 "`startCall` direct ne demande ni micro ni caméra."
             )
@@ -182,7 +182,7 @@ final class PermissionGateSourceGuardTests: XCTestCase {
             )
         }
         XCTAssertFalse(
-            try source("Meeshy/Features/Main/Views/ConversationView+Header.swift").contains("CallManager.shared.startCall("),
+            try source("Meeshy/Features/Main/Views/ConversationView+Header.swift").contains("outgoingDial.startCall("),
             "L'en-tête de conversation ne compose jamais par `startCall` direct."
         )
     }
@@ -190,7 +190,7 @@ final class PermissionGateSourceGuardTests: XCTestCase {
     /// La bannière in-app est le seul chemin où l'on peut demander AVANT que
     /// l'utilisateur accepte — c'est ce que demande le cahier des charges.
     func test_incomingCallView_requestsMicrophoneBeforeAnswering() throws {
-        let src = try source("Meeshy/Features/Main/Views/IncomingCallView.swift")
+        let src = try source("Meeshy/Features/Call/Views/IncomingCallView.swift")
         let fn = try body(from: "private func acceptCall() {", to: "var body: some View", in: src)
 
         XCTAssertTrue(fn.contains("MediaPermissionCoordinator.ensureMicrophone()"),
@@ -243,7 +243,7 @@ final class PermissionGateSourceGuardTests: XCTestCase {
     /// composeur, servi seul en plein écran, porte la même promesse.
     func test_cameraView_rendersDeniedPanelInsteadOfBlackPreview() throws {
         // #9134 — l'aperçu est PARTAGÉ par les deux montages du viseur.
-        let src = try source("Meeshy/Features/Main/Composer/ComposerCaptureViews.swift")
+        let src = try source("Meeshy/Features/Composer/ComposerCaptureViews.swift")
         XCTAssertTrue(src.contains("CameraPermissionPanel()"),
                       "Le viseur doit exposer un panneau de refus.")
         XCTAssertTrue(src.contains("ComposerSceneCameraSurface.shown(stage: session.stage, permission: session.camera.permission)"),
@@ -538,9 +538,9 @@ final class PermissionGateSourceGuardTests: XCTestCase {
     }
 
     func test_storyViewer_submitComment_declaresTheComposerLanguageOnBothPaths() throws {
-        let src = try source("Meeshy/Features/Main/Views/StoryViewerView+Content.swift")
+        let src = try source("Meeshy/Features/Stories/Views/StoryCommentSession.swift")
 
-        let offline = try body(from: "let payload = CreateCommentPayload(",
+        let offline = try body(from: "return CreateCommentPayload(",
                                to: "try await CommentMediaDelivery.entrust(", in: src)
         XCTAssertTrue(offline.contains("originalLanguage: language"),
                       "Le repli hors-ligne d'un commentaire de story doit porter la langue déclarée.")
@@ -549,7 +549,7 @@ final class PermissionGateSourceGuardTests: XCTestCase {
         // ENTIER était satisfaite par le repli qu'on vient de vérifier — la
         // garde restait VERTE sur un chemin direct neutralisé, donc elle
         // n'assurait rien. Une garde de source ne vaut que par sa fenêtre.
-        let direct = try body(from: "let payload = CreateCommentPayload(",
+        let direct = try body(from: "return CreateCommentPayload(",
                               to: "CommentPublisher.live.publish(", in: src)
         XCTAssertTrue(direct.contains("originalLanguage: language,"),
                       "Le chemin direct de la story doit déclarer la même langue que son repli.")
@@ -595,32 +595,32 @@ final class PermissionGateSourceGuardTests: XCTestCase {
         let src = try source("Meeshy/Features/Main/Views/FeedCommentsSheet.swift")
 
         let optimistic = try body(from: "let tempId = ClientMutationId.generate()",
-                                  to: "if let parentId {", in: src)
+                                  to: "thread.deliver(", in: src)
         XCTAssertTrue(optimistic.contains("originalLanguage: lang"),
                       "La ligne optimiste doit porter la langue de la pastille : son auteur la LIT.")
-
-        let served = try body(from: "CommentPublisher.live.publish(payload",
-                              to: "// Swap the optimistic temp", in: src)
-        XCTAssertTrue(served.contains("originalLanguage: apiComment.originalLanguage"),
-                      "La ligne serveur qui remplace l'optimiste doit garder la langue, sinon la pastille clignote.")
     }
 
-    /// Même paire pour la porte MÉDIA du détail de post — celle dont l'insert
-    /// optimiste n'est pas observable (`CommentMediaUploader.upload` précède la
-    /// première frontière testable, et son échec annule l'insert).
+    /// Même exigence pour la porte MÉDIA du détail de post — celle dont l'insert
+    /// optimiste n'est pas observable (la publication précède la première
+    /// frontière testable, et son échec annule l'insert).
     func test_postDetailViewModel_mediaDoor_carriesTheAuthoredLanguage() throws {
-        // #6578 — la porte média a quitté `PostDetailViewModel.swift` pour l'extension d'envoi.
         let src = try source("Meeshy/Features/Main/ViewModels/PostDetailViewModel+CommentSend.swift")
 
         let optimistic = try body(from: "func submitCommentWithMedia(",
-                                  to: "let snapshotComments = comments", in: src)
+                                  to: "commentThreadModel.deliver(", in: src)
         XCTAssertTrue(optimistic.contains("originalLanguage: originalLanguage"),
                       "La ligne optimiste d'un commentaire AVEC MÉDIA doit porter la langue déclarée.")
+    }
 
-        let served = try body(from: "let server = FeedComment(",
-                              to: "if let parentId {", in: src)
-        XCTAssertTrue(served.contains("originalLanguage: apiComment.originalLanguage"),
-                      "La ligne serveur qui la remplace doit garder la langue.")
+    /// La ligne servie qui remplace l'optimiste — un seul site depuis #13133,
+    /// pour la feuille, le détail et la story — garde la langue, sinon la
+    /// pastille clignote.
+    func test_theServedRow_keepsTheAuthoredLanguage() throws {
+        let src = try source("Meeshy/Features/Main/ViewModels/CommentThreadViewModel+Send.swift")
+
+        let served = try body(from: "init(sent api: APIPostComment", to: "quotedMedia: api.quotedCitation", in: src)
+        XCTAssertTrue(served.contains("originalLanguage: api.originalLanguage"),
+                      "La ligne serveur qui remplace l'optimiste doit garder la langue.")
     }
 
     /// Le corollaire d'asymétrie du champ REQUIS : `FeedView` portait une
@@ -648,7 +648,7 @@ final class PermissionGateSourceGuardTests: XCTestCase {
         XCTAssertFalse(bar.contains("onRecordingChange"),
                        "Un rappel jamais invoqué ne doit pas rester déclaré.")
 
-        let host = try source("Meeshy/Features/Main/Views/StoryViewerView+CanvasComposerBar.swift")
+        let host = try source("Meeshy/Features/Stories/Views/StoryViewerView+CanvasComposerBar.swift")
         XCTAssertTrue(host.contains("onHasContentChange:"),
                       "La pause de story reste portée par onHasContentChange.")
     }

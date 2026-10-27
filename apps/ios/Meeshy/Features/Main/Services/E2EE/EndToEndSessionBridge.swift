@@ -2,6 +2,7 @@ import Combine
 import Foundation
 import MeeshyE2EE
 import MeeshySDK
+import os
 
 /// Ce que la session ouverte branche sur l'E2EE libsignal (#3707) : à
 /// l'ouverture, l'installation s'enrôle (une fois par compte et par identité)
@@ -19,37 +20,64 @@ final class EndToEndSessionBridge: EndToEndSessionBridging {
     nonisolated deinit {}
 
     static let shared = EndToEndSessionBridge()
+    /// Le type du push de réveil (`E2EE_WAKE_PUSH_TYPE` de la passerelle).
+    nonisolated static let wakePushType = "e2ee_wake"
 
     private let runtime: EndToEndMessagingRuntime
     private let envelopes: AnyPublisher<E2EEServedEnvelope, Never>
     private let connections: AnyPublisher<Bool, Never>
     private let regimeChanges: AnyPublisher<ConversationEncryptionChangedEvent, Never>
     private let regimeLedger: EndToEndRegimeLedger
+    private let janitor: EndToEndPlaintextJanitor
+    private let diskMigration: EndToEndDiskPlaintextMigration
+    private let unsentRescue: EndToEndUnsentPlaintextRescue
+    private let signals: EndToEndSignalApplier
+    private let storeChanges: AnyPublisher<Void, Never>
     private var subscriptions: Set<AnyCancellable> = []
     /// Les ouvertures et fermetures de session, dans l'ordre où elles sont
     /// demandées : deux tâches libres pouvaient rattraper le nouveau compte
     /// avant d'oublier l'ancien (audit #12769).
     private var lifecycle: Task<Void, Never>?
+    /// L'ouverture de la dernière session demandée, que les gestes hors du fil
+    /// attendent avant de ranger un clair au coffre (#13067).
+    private var opening: Task<Void, Never>?
+    /// Le compte de la session ouverte, que relit un push de réveil (#13142).
+    private var account: String?
 
     init(
         runtime: EndToEndMessagingRuntime = .shared,
         envelopes: AnyPublisher<E2EEServedEnvelope, Never> = E2EEEnvelopeChannel.shared.received.eraseToAnyPublisher(),
         connections: AnyPublisher<Bool, Never> = MessageSocketManager.shared.$isConnected.eraseToAnyPublisher(),
         regimeChanges: AnyPublisher<ConversationEncryptionChangedEvent, Never> = ConversationEncryptionChannel.shared.changed.eraseToAnyPublisher(),
-        regimeLedger: EndToEndRegimeLedger = .shared
+        regimeLedger: EndToEndRegimeLedger = .shared,
+        janitor: EndToEndPlaintextJanitor = .shared,
+        diskMigration: EndToEndDiskPlaintextMigration = EndToEndDiskPlaintextMigration(
+            endToEnd: EndToEndMessagingRuntime.shared, rows: { DependencyContainer.shared.messagePersistence.endToEndRowSealer }
+        ),
+        unsentRescue: EndToEndUnsentPlaintextRescue = .live,
+        signals: EndToEndSignalApplier = .shared,
+        storeChanges: AnyPublisher<Void, Never> = NotificationCenter.default
+            .publisher(for: .messageStoreShouldRefresh).map { _ in () }.eraseToAnyPublisher()
     ) {
         self.runtime = runtime
         self.envelopes = envelopes
         self.connections = connections
         self.regimeChanges = regimeChanges
         self.regimeLedger = regimeLedger
+        self.janitor = janitor
+        self.diskMigration = diskMigration
+        self.unsentRescue = unsentRescue
+        self.signals = signals
+        self.storeChanges = storeChanges
     }
 
     func start(userId: String) {
         stop()
         guard !userId.isEmpty else { return }
         let runtime = runtime
+        account = userId
         enqueue { await runtime.open(session: userId) }
+        opening = lifecycle
         // Réceptions et rattrapages passent par la même file que l'ouverture :
         // une connexion déjà établie publie à l'abonnement, avant même que
         // l'ouverture de la session ait atteint le runtime (audit #12769).
@@ -64,9 +92,64 @@ final class EndToEndSessionBridge: EndToEndSessionBridging {
         // #12522 — chaque bascule du régime est apprise, conversation ouverte ou non.
         regimeLedger.listen(to: regimeChanges).store(in: &subscriptions)
         enqueue { await runtime.catchUp(as: userId) }
+        // #12999 — le clair qu'une version antérieure a écrit hors du coffre s'en va.
+        let diskMigration = diskMigration
+        enqueue { await diskMigration.run(for: userId) }
+        // #13067 — une bulle jamais partie d'une conversation chiffrée rend son clair au coffre.
+        let unsentRescue = unsentRescue
+        enqueue { await unsentRescue.run(for: userId) }
+        // #13142 — les signaux chiffrés gardés par la boîte (reçus avant un arrêt) s'appliquent.
+        let signals = signals
+        enqueue { await signals.drain(as: userId) }
+        // #13001 — un effacement écrit dans la base des messages vide le coffre.
+        let janitor = janitor
+        enqueue { await janitor.drain() }
+        runtime.opened
+            .receive(on: DispatchQueue.main)
+            .compactMap { outcome -> String? in
+                guard case .opened(let message) = outcome else { return nil }
+                return message.messageId
+            }
+            .sink { [weak self] messageId in Task { @MainActor in self?.enqueue { await janitor.reconsider(messageId) } } }
+            .store(in: &subscriptions)
+        // #13142 — chaque signal reçu s'applique ; une rafale (rattrapage) se juge d'un seul passage.
+        runtime.opened
+            .filter { if case .signal = $0 { true } else { false } }
+            .debounce(for: .milliseconds(150), scheduler: DispatchQueue.main)
+            .sink { [weak self] _ in Task { @MainActor in self?.enqueue { await signals.drain(as: userId) } } }
+            .store(in: &subscriptions)
+        storeChanges
+            .debounce(for: .seconds(1), scheduler: DispatchQueue.main)
+            .sink { [weak self] in Task { @MainActor in self?.enqueue { await janitor.drain() } } }
+            .store(in: &subscriptions)
+    }
+
+    /// Rend la main quand la session demandée est ouverte, aussitôt s'il n'y en
+    /// a aucune, et au plus tard après `limit` : la file qui précède l'ouverture
+    /// peut porter un rattrapage réseau, et un geste en arrière-plan a un budget.
+    func awaitOpening(limit: Duration = .seconds(5)) async {
+        guard let opening else { return }
+        await BoundedWait.first(of: opening, orAfter: limit)
+    }
+
+    /// **Un push de réveil e2ee** (`e2ee_wake`, #13142) : le serveur ne dit ni le
+    /// signal, ni la conversation, ni l'expéditeur. L'appareil relit ses
+    /// enveloppes en attente puis applique les signaux reçus, dans la file de la
+    /// session ; il rend la main à la fin, au plus tard après `limit` (le budget
+    /// d'un réveil en arrière-plan). Sans session ouverte, rien.
+    func wake(limit: Duration = .seconds(20)) async {
+        guard let userId = account else { return }
+        let runtime = runtime
+        let signals = signals
+        enqueue { await runtime.catchUp(as: userId) }
+        enqueue { await signals.drain(as: userId) }
+        guard let lifecycle else { return }
+        await BoundedWait.first(of: lifecycle, orAfter: limit)
     }
 
     func stop() {
+        opening = nil
+        account = nil
         subscriptions.removeAll()
         regimeLedger.reset()
         let runtime = runtime
@@ -78,6 +161,37 @@ final class EndToEndSessionBridge: EndToEndSessionBridging {
         lifecycle = Task {
             await previous?.value
             await step()
+        }
+    }
+}
+
+/// L'attente d'une tâche, bornée : rend la main à sa fin ou à l'échéance, la
+/// première des deux, sans annuler la tâche attendue.
+enum BoundedWait {
+    static func first(of task: Task<Void, Never>, orAfter limit: Duration) async {
+        let gate = ResumeOnce()
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            gate.arm(continuation)
+            Task { await task.value; gate.resume() }
+            Task {
+                do { try await Task.sleep(for: limit) } catch { return }
+                gate.resume()
+            }
+        }
+    }
+
+    nonisolated private final class ResumeOnce: @unchecked Sendable {
+        private let state = OSAllocatedUnfairLock<CheckedContinuation<Void, Never>?>(initialState: nil)
+
+        func arm(_ continuation: CheckedContinuation<Void, Never>) {
+            state.withLock { $0 = continuation }
+        }
+
+        func resume() {
+            state.withLock { slot -> CheckedContinuation<Void, Never>? in
+                defer { slot = nil }
+                return slot
+            }?.resume()
         }
     }
 }

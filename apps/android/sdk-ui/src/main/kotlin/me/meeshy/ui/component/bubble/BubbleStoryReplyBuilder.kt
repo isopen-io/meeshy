@@ -28,9 +28,15 @@ internal object BubbleStoryReplyBuilder {
                 return BubbleStoryReply(
                     previewText = target.previewText,
                     moodEmoji = moodEmoji,
+                    postId = target.id.ifBlank { null },
                 )
             }
+            if (target.unavailable) {
+                return BubbleStoryReply(postId = target.id.ifBlank { null }, isUnavailable = true)
+            }
             return BubbleStoryReply(
+                postId = target.id.ifBlank { null },
+                publishedAtIso = target.createdAt,
                 previewText = target.previewText,
                 reactionCount = target.reactionCount,
                 commentCount = target.commentCount,
@@ -41,7 +47,7 @@ internal object BubbleStoryReplyBuilder {
             )
         }
         if (!storyReplyToId.isNullOrBlank()) {
-            return BubbleStoryReply()
+            return BubbleStoryReply(postId = storyReplyToId)
         }
         return null
     }

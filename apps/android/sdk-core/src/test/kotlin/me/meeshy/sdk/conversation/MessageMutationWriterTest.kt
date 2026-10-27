@@ -122,6 +122,70 @@ class MessageMutationWriterTest {
     }
 
     @Test
+    fun `an edit keeps the replaced text as a numbered revision stamped at the clock`() = runHarnessTest { harness ->
+        harness.seedSynced(message())
+        val ledgerWriter = MessageMutationWriter(
+            harness.updater, harness.outbox, harness.clock,
+            EditRevisionLedger(harness.database.editRevisionDao(), harness.clock),
+        )
+
+        ledgerWriter.editOptimistic("m1", "bonjour")
+        harness.clock.now += 1_000
+        ledgerWriter.editOptimistic("m1", "bonsoir")
+
+        val kept = harness.database.editRevisionDao().forMessage("m1")
+        assertThat(kept.map { it.revision to it.content }).containsExactly(1 to "salut", 2 to "bonjour").inOrder()
+        assertThat(kept[1].editedAt - kept[0].editedAt).isEqualTo(1_000)
+    }
+
+    @Test
+    fun `deleting an edited message erases its past versions`() = runHarnessTest { harness ->
+        harness.seedSynced(message())
+        val ledgerWriter = MessageMutationWriter(
+            harness.updater, harness.outbox, harness.clock,
+            EditRevisionLedger(harness.database.editRevisionDao(), harness.clock),
+        )
+        ledgerWriter.editOptimistic("m1", "bonjour")
+
+        ledgerWriter.deleteOptimistic("m1")
+
+        assertThat(harness.database.editRevisionDao().forMessage("m1")).isEmpty()
+    }
+
+    @Test
+    fun `the ledger keeps the thirty most recent versions of a message`() = runHarnessTest { harness ->
+        harness.seedSynced(message())
+        val ledgerWriter = MessageMutationWriter(
+            harness.updater, harness.outbox, harness.clock,
+            EditRevisionLedger(harness.database.editRevisionDao(), harness.clock),
+        )
+
+        (1..32).forEach { n ->
+            harness.clock.now += 1
+            ledgerWriter.editOptimistic("m1", "version $n")
+        }
+
+        val kept = harness.database.editRevisionDao().forMessage("m1")
+        assertThat(kept).hasSize(EditRevisionLedger.MAX_REVISIONS_PER_MESSAGE)
+        assertThat(kept.last().content).isEqualTo("version 31")
+        assertThat(kept.map { it.content }).doesNotContain("salut")
+    }
+
+    @Test
+    fun `the ledger forgets the least recently edited messages beyond two hundred`() = runHarnessTest { harness ->
+        val ledger = EditRevisionLedger(harness.database.editRevisionDao(), harness.clock)
+
+        (0..EditRevisionLedger.MAX_TRACKED_MESSAGES).forEach { n ->
+            harness.clock.now += 1
+            ledger.record("m$n", "avant", "après")
+        }
+
+        assertThat(harness.database.editRevisionDao().forMessage("m0")).isEmpty()
+        assertThat(harness.database.editRevisionDao().forMessage("m1")).hasSize(1)
+        assertThat(harness.database.editRevisionDao().forMessage("m${EditRevisionLedger.MAX_TRACKED_MESSAGES}")).hasSize(1)
+    }
+
+    @Test
     fun `a delete leaves a tombstone stamped at the clock instant and queues DELETE_MESSAGE`() = runHarnessTest { harness ->
         harness.seedSynced(
             message().copy(

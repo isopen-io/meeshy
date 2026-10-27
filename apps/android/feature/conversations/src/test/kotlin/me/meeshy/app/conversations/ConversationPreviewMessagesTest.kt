@@ -205,4 +205,29 @@ class ConversationPreviewMessagesTest {
     fun `an expired message never shows its text in the preview card`() {
         assertThat(linesOf(protected(expiresAt = "2020-01-01T00:00:00Z"))).containsExactly("Message expiré")
     }
+
+    @Test
+    fun `an end-to-end message this device cannot open says it is encrypted, never the literal (#13110)`() {
+        val sealed = LocalMessage(
+            message = ApiMessage(
+                id = "m1",
+                conversationId = "c1",
+                senderId = "other",
+                content = "[Encrypted]",
+                isEncrypted = true,
+                encryptionMode = "e2ee",
+            ),
+            sendState = LocalSendState.SYNCED,
+        )
+
+        val lines = previewLines(
+            listOf(sealed),
+            currentUserId = "me",
+            showSender = false,
+            prefs = null,
+            labels = labels.copy(encrypted = "Message chiffré"),
+        )
+
+        assertThat(lines).containsExactly("Message chiffré")
+    }
 }

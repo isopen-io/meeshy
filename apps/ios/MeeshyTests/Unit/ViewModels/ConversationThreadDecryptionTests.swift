@@ -60,7 +60,7 @@ final class ConversationThreadDecryptionTests: XCTestCase {
             reportService: MockReportService(),
             messageSocket: MockMessageSocket(),
             dependencies: ConversationDependencies(
-                dbPool: pool, persistence: persistence,
+                persistence: persistence,
                 collaborators: ConversationCollaborators(
                     persistence: persistence, syncEngine: ConversationSyncEngine.shared, messageService: messageService
                 )

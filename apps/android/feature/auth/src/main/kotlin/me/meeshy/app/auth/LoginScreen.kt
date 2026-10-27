@@ -23,9 +23,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.systemBarsPadding
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.AutoFixHigh
 import androidx.compose.material.icons.filled.Check
@@ -54,7 +52,10 @@ import me.meeshy.sdk.model.auth.SavedAccount
 import me.meeshy.sdk.model.auth.ServerEnvironment
 import me.meeshy.ui.component.BrandLogo
 import me.meeshy.ui.component.MeeshyAvatar
-import me.meeshy.ui.component.MeeshyPrimaryButton
+import me.meeshy.ui.component.auth.AuthActionButton
+import me.meeshy.ui.component.auth.AuthContentType
+import me.meeshy.ui.component.auth.AuthTextField
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.ui.theme.formColumnWidth
@@ -384,7 +385,7 @@ private fun SelectedAccountForm(
     Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             IconButton(onClick = viewModel::deselectAccount) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.registration_back))
+                Icon(MeeshyIcons.Back, contentDescription = stringResource(R.string.registration_back))
             }
             Spacer(modifier = Modifier.width(MeeshySpacing.sm))
             MeeshyAvatar(name = account.shortName, size = 40.dp, imageUrl = account.avatarUrl)
@@ -411,20 +412,18 @@ private fun SelectedAccountForm(
             modifier = Modifier.fillMaxWidth().padding(top = MeeshySpacing.lg),
         )
 
-        (state.errorRes?.let { stringResource(it) } ?: state.errorMessage)?.let { message ->
-            Text(
-                text = message,
-                color = MeeshyTheme.tokens.error,
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.fillMaxWidth().padding(top = MeeshySpacing.md),
-            )
-        }
+        KeepSignedInToggle(state = state, onChange = viewModel::onKeepSignedInChange)
 
-        MeeshyPrimaryButton(
-            text = stringResource(R.string.login_button),
+        AuthErrorMessage(
+            text = state.errorRes?.let { stringResource(it) } ?: state.errorMessage,
+            modifier = Modifier.padding(top = MeeshySpacing.md),
+        )
+
+        AuthActionButton(
+            title = stringResource(R.string.login_button),
             onClick = viewModel::login,
             enabled = state.canSubmit,
-            loading = state.isSubmitting,
+            isLoading = state.isSubmitting,
             modifier = Modifier.fillMaxWidth().padding(top = MeeshySpacing.xl),
         )
     }
@@ -443,7 +442,7 @@ private fun NormalLoginForm(
             modifier = Modifier.fillMaxWidth().padding(top = MeeshySpacing.xl),
         ) {
             TextButton(onClick = viewModel::backToSavedAccounts) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, tint = MeeshyTheme.tokens.textMuted)
+                Icon(MeeshyIcons.Back, contentDescription = null, tint = MeeshyTheme.tokens.textMuted)
                 Text(
                     text = stringResource(R.string.login_saved_accounts),
                     style = MaterialTheme.typography.bodySmall,
@@ -455,12 +454,13 @@ private fun NormalLoginForm(
         }
     }
 
-    OutlinedTextField(
+    AuthTextField(
         value = state.username,
         onValueChange = viewModel::onUsernameChange,
-        label = { Text(stringResource(R.string.login_username_label)) },
-        singleLine = true,
-        keyboardOptions = KeyboardOptions(autoCorrectEnabled = false, imeAction = ImeAction.Next),
+        title = stringResource(R.string.login_username_label),
+        icon = MeeshyIcons.Person,
+        contentType = AuthContentType.Username,
+        imeAction = ImeAction.Next,
         enabled = !state.isSubmitting,
         modifier = Modifier
             .fillMaxWidth()
@@ -477,23 +477,18 @@ private fun NormalLoginForm(
             .padding(top = MeeshySpacing.md),
     )
 
-    val errorText = state.errorRes?.let { stringResource(it) } ?: state.errorMessage
-    errorText?.let { message ->
-        Text(
-            text = message,
-            color = MeeshyTheme.tokens.error,
-            style = MaterialTheme.typography.bodySmall,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = MeeshySpacing.md),
-        )
-    }
+    KeepSignedInToggle(state = state, onChange = viewModel::onKeepSignedInChange)
 
-    MeeshyPrimaryButton(
-        text = stringResource(R.string.login_button),
+    AuthErrorMessage(
+        text = state.errorRes?.let { stringResource(it) } ?: state.errorMessage,
+        modifier = Modifier.padding(top = MeeshySpacing.md),
+    )
+
+    AuthActionButton(
+        title = stringResource(R.string.login_button),
         onClick = viewModel::login,
         enabled = state.canSubmit,
-        loading = state.isSubmitting,
+        isLoading = state.isSubmitting,
         modifier = Modifier
             .fillMaxWidth()
             .padding(top = MeeshySpacing.xl),

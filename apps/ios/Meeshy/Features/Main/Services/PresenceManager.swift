@@ -459,8 +459,7 @@ final class PresenceManager: ObservableObject {
     }
 
     private nonisolated static func writeToDisk(_ map: [String: UserPresence]) {
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
+        let encoder = MeeshyCoders.encoder(.persistence)
         guard let data = encoder.encodeOrLog(map, field: "presence map", logger: Logger.presence) else { return }
         do {
             try data.write(to: persistURL, options: .atomic)
@@ -479,8 +478,7 @@ final class PresenceManager: ObservableObject {
             Logger.presence.error("Presence snapshot present but unreadable: \(error.localizedDescription, privacy: .public)")
             return [:]
         }
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
+        let decoder = MeeshyCoders.decoder(.persistence)
         guard let map = decoder.decodeOrLog([String: UserPresence].self, from: data, field: "presence map", logger: Logger.presence) else { return [:] }
         // Drop entries older than 24h — claiming someone is online based on
         // day-old data would be actively wrong, but a 15-min gap is fine and

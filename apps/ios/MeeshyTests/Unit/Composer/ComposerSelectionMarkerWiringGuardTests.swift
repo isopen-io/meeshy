@@ -46,7 +46,7 @@ final class ComposerSelectionMarkerWiringGuardTests: XCTestCase {
         var racine = URL(fileURLWithPath: #filePath)
         for _ in 0..<4 { racine = racine.deletingLastPathComponent() }
         let url = racine.appendingPathComponent(
-            "Meeshy/Features/Main/Composer/ComposerSceneSurface.swift")
+            "Meeshy/Features/Composer/ComposerSceneSurface.swift")
         let brut = try String(contentsOf: url, encoding: .utf8)
         XCTAssertTrue(brut.contains("struct ComposerSceneSurface"),
                       "ce n'est pas la surface de scène — la garde lirait à côté")

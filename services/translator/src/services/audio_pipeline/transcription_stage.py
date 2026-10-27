@@ -42,6 +42,7 @@ from ..redis_service import (
     get_audio_cache_service
 )
 from ..segment_serialization import _segment_to_dict
+from services.task_privacy import shown
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -197,7 +198,7 @@ class TranscriptionStage:
             if cached_result:
                 logger.info(
                     f"[TRANSCRIPTION_STAGE] ⚡ Cache hit: "
-                    f"'{cached_result.text[:50]}...' "
+                    f"'{shown(cached_result.text, 50)}...' "
                     f"(lang={cached_result.language})"
                 )
 
@@ -282,7 +283,7 @@ class TranscriptionStage:
         )
 
         if use_cache:
-            await self._cache_transcription(audio_hash, result)
+            await self._cache_transcription(audio_hash, result, attachment_id)
 
             # Log confirmation sauvegarde avec speakers
             if result.speaker_count:
@@ -295,7 +296,7 @@ class TranscriptionStage:
 
         logger.info(
             f"[TRANSCRIPTION_STAGE] ✅ Transcribed: "
-            f"'{result.text[:50]}...' "
+            f"'{shown(result.text, 50)}...' "
             f"(lang={result.language}, source={result.source})"
         )
 
@@ -390,7 +391,8 @@ class TranscriptionStage:
     async def _cache_transcription(
         self,
         audio_hash: str,
-        result: TranscriptionStageResult
+        result: TranscriptionStageResult,
+        attachment_id: Optional[str] = None
     ) -> bool:
         """Store transcription result in cache"""
         try:
@@ -415,7 +417,7 @@ class TranscriptionStage:
                 "speaker_analysis": result.speaker_analysis
             }
 
-            await self.audio_cache.set_transcription_by_hash(audio_hash, cache_data)
+            await self.audio_cache.set_transcription_by_hash(audio_hash, cache_data, attachment_id=attachment_id)
             logger.debug(f"[TRANSCRIPTION_STAGE] Cached transcription: {audio_hash[:8]}...")
             return True
 

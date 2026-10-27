@@ -252,7 +252,16 @@ describe('ROUTE_TABLE (#4278)', () => {
     // les surcharges du registre des packs sans déploiement). Aucun alias.
     // 92 : #3706 ajoute `e2ee` (l'annuaire E2EE par appareil et le relais
     // d'enveloppes sous `/api/v1/e2ee`). `/signal/*` reste monté, inchangé.
-    expect(ROUTE_TABLE.length).toBe(92);
+    // 93 : #10169 (LC) ajoute `packs-capture-frame` — les douze ambiances de
+    // cadres de capture sous `/api/v1/packs/capture-frame`, sur le MÊME moteur
+    // (un montage par domaine). Aucun alias, aucune route retirée ni renommée ;
+    // le manifeste gagne exactement les cinq routes de la fabrique (GET /,
+    // GET /installed, GET /:slug, PUT et DELETE /:slug/install).
+    // 94 : #13142 ajoute `e2ee-signals` — la route unique des signaux chiffrés
+    // d'une conversation e2ee (`POST /api/v1/e2ee/conversations/:id/signals`).
+    // Aucun alias, aucune route retirée ni renommée ; le manifeste gagne
+    // exactement cette route.
+    expect(ROUTE_TABLE.length).toBe(94);
   });
 });
 

@@ -96,7 +96,7 @@ describe('loadAudioAsBinary', () => {
 
     const result = await loadAudioAsBinary('/tmp/exact.wav');
     expect(result).not.toBeNull();
-    expect(result!.size).toBe(THRESHOLD_BYTES);
+    expect(result!.size).toBe(buf.length);
   });
 
   it('returns null when readFile throws', async () => {
@@ -130,7 +130,7 @@ describe('loadAudioAsBinary', () => {
       expect(result).not.toBeNull();
       expect(result!.mimeType).toBe(expectedMimeType);
       expect(result!.buffer).toBe(buf);
-      expect(result!.size).toBe(2048);
+      expect(result!.size).toBe(buf.length);
     });
   });
 

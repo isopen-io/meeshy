@@ -355,7 +355,7 @@ final class ComposerMediaRetractionTests: XCTestCase {
         let dossier = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Composer")
+            .appendingPathComponent("Meeshy/Features/Composer")
         let fichiers = (try? FileManager.default.contentsOfDirectory(at: dossier,
                                                                     includingPropertiesForKeys: nil)) ?? []
         XCTAssertGreaterThan(fichiers.count, 50, "dossier du composer introuvable — garde muette")

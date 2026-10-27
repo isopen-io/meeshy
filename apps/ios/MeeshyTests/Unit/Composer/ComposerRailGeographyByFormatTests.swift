@@ -222,7 +222,7 @@ final class ComposerRailGeographyByFormatTests: XCTestCase {
     /// de PLACE (`ViewThatFits`) et non d'état.
     func test_leRailVertical_defileQuandIlNeTientPas() throws {
         let code = AppSourceGuard.stripComments(
-            try AppSourceGuard.unit("Meeshy/Features/Main/Composer/ComposerLeadingRail.swift"))
+            try AppSourceGuard.unit("Meeshy/Features/Composer/ComposerLeadingRail.swift"))
         let compacte = code.components(separatedBy: .whitespacesAndNewlines).joined()
         XCTAssertGreaterThan(code.count, 500, "source du rail vide — la garde ne garde rien")
         XCTAssertTrue(compacte.contains("ViewThatFits(in:.vertical)"),

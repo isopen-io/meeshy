@@ -27,6 +27,10 @@ import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.post.PostPage
+import me.meeshy.sdk.report.ReportRepository
+import me.meeshy.sdk.model.report.ReportReason
+import me.meeshy.ui.component.FeedbackKind
+import me.meeshy.feature.reels.R
 import me.meeshy.sdk.post.PostRepository
 import me.meeshy.sdk.privacy.InMemoryPrivacyPreferencesStore
 import me.meeshy.sdk.session.SessionRepository
@@ -58,6 +62,7 @@ class ReelsViewModelTest {
     private val repository: PostRepository = mockk(relaxed = true)
     private val session: SessionRepository = mockk(relaxed = true)
     private val socialSocket: SocialSocketManager = mockk(relaxed = true)
+    private val reportRepository: ReportRepository = mockk(relaxed = true)
     private val postLiked = MutableSharedFlow<SocketPostLikedData>(extraBufferCapacity = 64)
     private val postUnliked = MutableSharedFlow<SocketPostUnlikedData>(extraBufferCapacity = 64)
     private val postBookmarked = MutableSharedFlow<SocketPostBookmarkedData>(extraBufferCapacity = 64)
@@ -106,7 +111,7 @@ class ReelsViewModelTest {
         val privacyStore = InMemoryPrivacyPreferencesStore(
             PrivacyPreferences(allowAnalytics = allowAnalytics),
         )
-        return ReelsViewModel(repository, session, socialSocket, config, clock, privacyStore)
+        return ReelsViewModel(repository, session, socialSocket, config, clock, privacyStore, reportRepository)
     }
 
     // MARK: - Post room membership
@@ -769,5 +774,70 @@ class ReelsViewModelTest {
 
         assertThat(vm.state.value.reels.map { it.id }).containsExactly("a")
         assertThat(vm.state.value.loadFailure).isNull()
+    }
+
+    // MARK: - Menu : epingler, supprimer, signaler
+
+    private fun authored(id: String, authorId: String) = reel(id).copy(author = me.meeshy.sdk.model.ApiAuthor(id = authorId))
+
+    @Test
+    fun `supprimer retire le reel tout de suite et le garde retire quand le serveur confirme`() = runTest {
+        coEvery { repository.delete("r2") } returns NetworkResult.Success(Unit)
+        val vm = viewModel(thread = listOf(reel("r1"), reel("r2"), reel("r3")))
+        vm.load()
+
+        vm.delete("r2")
+
+        assertThat(vm.state.value.reels.map { it.id }).containsExactly("r1", "r3").inOrder()
+        coVerify(exactly = 1) { repository.delete("r2") }
+    }
+
+    @Test
+    fun `une suppression refusee remet le reel a sa place et le dit`() = runTest {
+        coEvery { repository.delete("r2") } returns NetworkResult.Failure(ApiError("x"))
+        val vm = viewModel(thread = listOf(reel("r1"), reel("r2"), reel("r3")))
+        vm.load()
+
+        vm.toasts.test {
+            vm.delete("r2")
+            val toast = awaitItem()
+            assertThat(toast.kind).isEqualTo(FeedbackKind.Error)
+            assertThat(toast.messageRes).isEqualTo(R.string.reels_toast_delete_failed)
+        }
+        assertThat(vm.state.value.reels.map { it.id }).containsExactly("r1", "r2", "r3").inOrder()
+    }
+
+    @Test
+    fun `signaler envoie le motif inapproprie et confirme`() = runTest {
+        coEvery { reportRepository.reportPost("r1", ReportReason.INAPPROPRIATE, null) } returns NetworkResult.Success(Unit)
+        val vm = viewModel(thread = listOf(reel("r1")))
+        vm.load()
+
+        vm.toasts.test {
+            vm.report("r1")
+            assertThat(awaitItem().messageRes).isEqualTo(R.string.reels_toast_reported)
+        }
+        coVerify(exactly = 1) { reportRepository.reportPost("r1", ReportReason.INAPPROPRIATE, null) }
+    }
+
+    @Test
+    fun `epingler appelle la passerelle et un echec le dit`() = runTest {
+        coEvery { repository.pinPost("r1") } returns NetworkResult.Failure(ApiError("x"))
+        val vm = viewModel(thread = listOf(reel("r1")))
+        vm.load()
+
+        vm.toasts.test {
+            vm.pin("r1")
+            assertThat(awaitItem().messageRes).isEqualTo(R.string.reels_toast_pin_failed)
+        }
+    }
+
+    @Test
+    fun `un reel est le sien quand son auteur est l utilisateur connecte`() = runTest {
+        val vm = viewModel(thread = listOf(authored("r1", "me"), authored("r2", "autre")), currentUserId = "me")
+        vm.load()
+
+        assertThat(vm.isOwn(vm.state.value.reels[0])).isTrue()
+        assertThat(vm.isOwn(vm.state.value.reels[1])).isFalse()
     }
 }

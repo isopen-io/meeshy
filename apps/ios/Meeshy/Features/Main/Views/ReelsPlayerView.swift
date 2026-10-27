@@ -182,7 +182,7 @@ struct ReelsPlayerView: View {
                 accentColor: reel.authorColor,
                 targetCommentId: pendingCommentTargetId,
                 targetParentCommentId: pendingCommentParentTargetId,
-                onCommentSent: { postId in viewModel.didSendComment(postId: postId) }
+                onCommentSent: { viewModel.didSendComment(postId: $0) }, entity: .reel(reel.id)
             )
         }
         .sheet(item: $shareableLink) { link in

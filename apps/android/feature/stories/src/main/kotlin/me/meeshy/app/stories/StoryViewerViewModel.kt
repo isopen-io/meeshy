@@ -301,6 +301,15 @@ class StoryViewerViewModel @Inject constructor(
     }
 
     /**
+     * Appui long sur la scène (iOS `StoryGestureOverlayView`, spec 2026-07-25) : un TOGGLE.
+     * Le premier fige la story, un second, tenu pendant qu'elle est figée, la reprend — le
+     * relâchement, lui, ne reprend jamais (c'est le toucher suivant qui le fait, sans naviguer).
+     */
+    fun toggleByHold() {
+        if (isHoldPaused) resume() else pauseByHold()
+    }
+
+    /**
      * Toucher simple sur la scène (iOS `StoryGestureDecisions`) : un BORD reprend une story
      * figée sans naviguer, sinon il navigue ; la bande CENTRALE ne fait rien — elle appartient
      * au double toucher.
@@ -534,6 +543,9 @@ class StoryViewerViewModel @Inject constructor(
             isPaused = isHoldPaused,
             isMuted = isMuted,
             authorAvatarUrl = playback.currentGroup?.avatarUrl,
+            groupCount = playback.groups.size,
+            authorUserId = playback.currentGroup?.userId,
+            authorPresence = playback.currentGroup?.authorPresence?.takeUnless { playback.currentGroup?.userId == sessionRepository.currentUserId },
         )
     }
 
@@ -635,6 +647,7 @@ class StoryViewerViewModel @Inject constructor(
             authorName = username,
             slides = stories.map { it.toSlideView(avatarColor, prefs) },
             avatarUrl = resolveServedImageUrl(avatarURL, config.apiBaseUrl),
+            authorPresence = authorPresence,
         )
     }
 

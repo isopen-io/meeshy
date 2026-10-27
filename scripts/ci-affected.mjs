@@ -65,8 +65,11 @@ export const DOMAINES = {
     'apps/web/scripts/lib/fixture-markers.mjs',
   ],
   // Les sources de design des cadres de gloire (lot L2, #10153) : la garde d'empiètement régénère les SVG des
-  // ateliers et mesure Mee et Meo contre la fenêtre photo. Rien d'autre ne lit ces fichiers.
-  glory_frames: ['docs/product/cadres-de-gloire/'],
+  // ateliers et mesure Mee et Meo contre la fenêtre photo. Le job rejoue aussi chaque `window.path` versionné
+  // contre son masque (`lib/window-path-contracts.test.mjs`, #10254) : il LIT donc les contrats et le magasin
+  // où vivent les masques, et une réimportation qui ne touche qu'eux doit le lancer, sinon rien ne compare
+  // le chemin au masque.
+  glory_frames: ['docs/product/cadres-de-gloire/', 'packages/shared/design/glory-frames/', 'services/gateway/assets/packs/'],
   // Les gardes navigateur de `ci.yml` (job `web-navigateur`) : l'application, ce qu'elle importe
   // (`packages/shared`, `packages/design-tokens`), la passerelle dont les gardes lisent les routes et les
   // schémas (zone PRUDENTE : la passerelle entière), et les rares fichiers hors d'`apps/web` que leurs scripts
@@ -143,6 +146,11 @@ const CAS = [
   ['témoin des coques', ['apps/web/scripts/build-shells.test.ts'], { translator: false, shell_android: false, glory_frames: false }],
   ['cadres de gloire', ['docs/product/cadres-de-gloire/generateur/lib/overlap.mjs'], { translator: false, shell_android: false, glory_frames: true }],
   ['autre doc produit', ['docs/product/cadres-de-gloire-old/x.md', 'docs/product/roadmap.md'], { translator: false, shell_android: false, glory_frames: false }],
+  ['contrats des cadres de gloire', ['packages/shared/design/glory-frames/savane.json'], { glory_frames: true }],
+  ['magasin des packs (masques)', ['services/gateway/assets/packs/443cce762c663349.json'], { glory_frames: true }],
+  ['réimportation des cadres', ['packages/shared/design/glory-frames/savane.json', 'services/gateway/assets/packs/443cce762c663349.json', 'packages/shared/design/packs/retained.json'], { glory_frames: true }],
+  ['autre design partagé', ['packages/shared/design/packs/retained.json', 'packages/shared/design/glory-frames-old/x.json'], { glory_frames: false }],
+  ['passerelle hors magasin', ['services/gateway/assets/fonts/x.ttf'], { glory_frames: false }],
 ];
 
 const CAS_NAVIGATEUR = [

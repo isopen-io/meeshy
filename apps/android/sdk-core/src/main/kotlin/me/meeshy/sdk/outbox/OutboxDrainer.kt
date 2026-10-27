@@ -79,6 +79,8 @@ public class OutboxDrainer(
         { _, _, _ -> null },
     private val currentOwner: (() -> String?)? = null,
     private val now: () -> Long = System::currentTimeMillis,
+    /** #12956 — never lets a plaintext row leave for a conversation this device knows end-to-end. */
+    private val plaintextAdmission: OutboxPlaintextAdmission = OutboxPlaintextAdmission.AdmitAll,
 ) {
     public suspend fun drainLane(lane: String): DrainReport {
         var delivered = 0
@@ -120,6 +122,12 @@ public class OutboxDrainer(
             val sender = senders[kind]
             if (sender == null) {
                 outbox.markExhausted(row.cmid, "No sender registered for ${row.kind}")
+                onExhausted(row)
+                exhausted++
+                continue
+            }
+            if (!plaintextAdmission.admits(row)) {
+                outbox.markExhausted(row.cmid, OutboxPlaintextAdmission.REASON_END_TO_END)
                 onExhausted(row)
                 exhausted++
                 continue

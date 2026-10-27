@@ -17,7 +17,6 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -72,6 +71,8 @@ import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.ui.theme.formColumnWidth
+import me.meeshy.ui.component.chrome.leadingNavigationIcon
+import me.meeshy.ui.component.chrome.leadingNavigationLabel
 
 /**
  * La création de compte : UN écran, aucun délai, aucune vérification préalable.
@@ -119,8 +120,8 @@ fun SignupScreen(
                     navigationIcon = {
                         IconButton(onClick = onClose) {
                             Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = stringResource(R.string.signup_back),
+                                imageVector = leadingNavigationIcon(),
+                                contentDescription = leadingNavigationLabel(stringResource(R.string.signup_back)),
                             )
                         }
                     },
@@ -366,21 +367,11 @@ private fun LanguagePill(state: SignupUiState, viewModel: SignupViewModel) {
 @Composable
 private fun GlobalErrorBanner(error: SignupSubmitError?) {
     val text = when (error) {
-        null -> return
+        null, is SignupSubmitError.Field -> null
         SignupSubmitError.Network -> stringResource(R.string.signup_error_network)
         is SignupSubmitError.Global -> error.message ?: stringResource(R.string.signup_error_generic)
-        is SignupSubmitError.Field -> return
     }
-    Text(
-        text = text,
-        style = MaterialTheme.typography.bodySmall,
-        color = MeeshyTheme.tokens.error,
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(MeeshyRadius.sm))
-            .background(MeeshyTheme.tokens.error.copy(alpha = 0.10f))
-            .padding(MeeshySpacing.sm),
-    )
+    AuthErrorMessage(text = text, boxed = true)
 }
 
 /**

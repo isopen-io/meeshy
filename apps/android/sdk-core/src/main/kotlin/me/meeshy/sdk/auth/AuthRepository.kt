@@ -43,6 +43,9 @@ class AuthRepository @Inject constructor(
 ) {
     val isAuthenticated: Boolean get() = tokenStore.isAuthenticated
 
+    /** Of [accountIds], those whose session sleeps on the device: only then is "stay signed in" offered. */
+    fun accountsKeepingASession(accountIds: Collection<String>): Set<String> = tokenStore.accountsWithTokens(accountIds)
+
     /**
      * La connexion par mot de passe, dans TOUTES ses issues : la session, le défi
      * de second facteur, l'adresse à prouver, la confirmation d'un compte

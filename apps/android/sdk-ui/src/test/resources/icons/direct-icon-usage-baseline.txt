@@ -33,7 +33,6 @@ feature/calls/src/main/kotlin/me/meeshy/app/calls/CallPillModel.kt
 feature/calls/src/main/kotlin/me/meeshy/app/calls/CallPillPanel.kt
 feature/calls/src/main/kotlin/me/meeshy/app/calls/CallQualityFeedbackSheet.kt
 feature/calls/src/main/kotlin/me/meeshy/app/calls/CallRemoteVideoSurfaceView.kt
-feature/calls/src/main/kotlin/me/meeshy/app/calls/CallScreen.kt
 feature/calls/src/main/kotlin/me/meeshy/app/calls/CallStage.kt
 feature/calls/src/main/kotlin/me/meeshy/app/calls/CallTypeBadge.kt
 feature/calls/src/main/kotlin/me/meeshy/app/calls/CallWaitingBanner.kt

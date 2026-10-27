@@ -20,7 +20,16 @@ public data class BubbleStoryReply(
     val shareCount: Int = 0,
     val thumbnailUrl: String? = null,
     val moodEmoji: String? = null,
+    /** The quoted post's id — what the citation card opens; `null` when the bubble only knows it was a story. */
+    val postId: String? = null,
+    /** When the story was published (ISO-8601): the citation survives its expiry WITH its date. */
+    val publishedAtIso: String? = null,
+    /** The quoted story was withdrawn (`message:cited-post-withdrawn`): the card says so and opens nothing. */
+    val isUnavailable: Boolean = false,
 ) {
+    /** The tap has a target: an id, and a story still there (iOS `ReplyReference.opensQuotedTarget`). */
+    val opensTarget: Boolean get() = !postId.isNullOrEmpty() && !isUnavailable
+
     /** True when the quoted target is a mood/status rather than a story. */
     val isMood: Boolean get() = moodEmoji != null
 

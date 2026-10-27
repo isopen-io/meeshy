@@ -122,7 +122,7 @@ final class ComposerSceneBackgroundTapPolicyTests: XCTestCase {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Composer/MeeshyComposerHost.swift")
+            .appendingPathComponent("Meeshy/Features/Composer/MeeshyComposerHost.swift")
         let code = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
             .components(separatedBy: .whitespacesAndNewlines).joined()
         guard let debut = code.range(of: "funchandleSceneBackgroundTap(){"),
@@ -236,7 +236,7 @@ final class ComposerSceneBackgroundTapPolicyTests: XCTestCase {
             .deletingLastPathComponent()   // .../apps
             .deletingLastPathComponent()   // racine du dépôt
         return [
-            racine.appendingPathComponent("apps/ios/Meeshy/Features/Main/Composer/ComposerDocumentSurface.swift"),
+            racine.appendingPathComponent("apps/ios/Meeshy/Features/Composer/ComposerDocumentSurface.swift"),
             racine.appendingPathComponent("packages/MeeshySDK/Sources/MeeshyUI/Story/EmbeddedSceneCanvas.swift"),
             racine.appendingPathComponent("packages/MeeshySDK/Sources/MeeshyUI/Story/EmbeddedSceneInspector.swift")
         ]

@@ -149,12 +149,6 @@ nonisolated enum NotificationPlaybackRate {
         Double(rate).formatted(.number.precision(.fractionLength(0...1)).locale(locale)) + "×"
     }
 
-    /// « 0:07 », « 1:05 ». Une valeur négative ou non finie vaut zéro.
-    static func clock(seconds: Double) -> String {
-        let total = seconds.isFinite ? max(0, Int(seconds)) : 0
-        return String(format: "%d:%02d", total / 60, total % 60)
-    }
-
     /// La part écoulée, bornée à [0, 1] ; zéro tant que la durée est inconnue.
     static func progress(elapsed: Double, duration: Double) -> Double {
         guard duration.isFinite, duration > 0, elapsed.isFinite else { return 0 }

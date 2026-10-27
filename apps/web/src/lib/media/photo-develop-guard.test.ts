@@ -33,6 +33,7 @@ const CAPTURE_SITES: readonly string[] = [
   'lib/calls/call-capture.ts',
   'lib/calls/call-capture-live.ts',
   'lib/stories/studio-camera-engine.ts',
+  'routes/story-compose-camera-frames.tsx',
   'components/composer-attachment-panel.tsx',
 ];
 

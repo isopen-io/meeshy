@@ -51,6 +51,8 @@
             android:exported="true"
             android:label="@string/app_name"
             android:launchMode="singleTop"
+            android:supportsPictureInPicture="true"
+            android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation"
             android:windowSoftInputMode="adjustResize"
             android:theme="@style/Theme.Meeshy.Starting">
             <intent-filter>
@@ -132,6 +134,25 @@
                 <data android:scheme="https" android:host="www.meeshy.me" android:pathPrefix="/feeds/post/" />
                 <data android:scheme="https" android:host="meeshy.me" android:pathPrefix="/post/" />
                 <data android:scheme="https" android:host="www.meeshy.me" android:pathPrefix="/post/" />
+            </intent-filter>
+            <!-- App Link : le hub « Mes liens » (iOS LinksHubView, https://meeshy.me/links) ouvre
+                 LinksRoutes.HUB (LinksRoutes.HUB_DEEP_LINKS). meeshy://links passe par le filtre
+                 scheme-only plus haut. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="meeshy.me" android:path="/links" />
+                <data android:scheme="https" android:host="www.meeshy.me" android:path="/links" />
+            </intent-filter>
+            <!-- App Link : l'entree sans compte dans World Wide (https://meeshy.me/world, le QR de la landing)
+                 ouvre Routes.WORLD_ENTRY. meeshy://world passe par le filtre scheme-only plus haut. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="meeshy.me" android:path="/world" />
+                <data android:scheme="https" android:host="www.meeshy.me" android:path="/world" />
             </intent-filter>
         </activity>
 

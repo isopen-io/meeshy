@@ -86,7 +86,7 @@ final class UILanguageOverrideResolutionTests: XCTestCase {
     /// les vues système sans toucher au bundle : le choix des Réglages attend
     /// le relancement, comme l'alerte le dit déjà.
     func test_noScreenRewritesTheLanguageDuringASession() throws {
-        let settings = try code("Meeshy/Features/Main/Views/SettingsView.swift")
+        let settings = try code("Meeshy/Features/Settings/Views/SettingsView.swift")
         XCTAssertFalse(settings.contains("UILanguageOverride.applyIfNeeded()"))
         XCTAssertTrue(settings.contains("UILanguageOverride.explicitChoice = code"))
     }

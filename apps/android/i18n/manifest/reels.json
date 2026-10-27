@@ -107,6 +107,12 @@
           "status": "android-only"
         },
         {
+          "catalog": "app",
+          "iosKey": "a11y.post.unlike",
+          "androidName": "reels_unlike",
+          "status": "adopted"
+        },
+        {
           "catalog": "ui",
           "iosKey": "media.video.unmute",
           "androidName": "reels_unmute",

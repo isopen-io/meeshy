@@ -3,6 +3,8 @@
  * Délègue à UploadProcessor et MetadataManager
  */
 
+import { forgetAtTranslator } from '../translatorForget';
+import { forgetSealing, processAtRestFileAccess, type AtRestFileRecord } from './atRest/atRestFiles';
 import { PrismaClient, Prisma } from '@meeshy/shared/prisma/client';
 import { promises as fs } from 'fs';
 import path from 'path';
@@ -381,10 +383,14 @@ export class AttachmentService {
     if (!attachment) {
       throw new Error('Attachment not found');
     }
+    // #13100 — lues AVANT les effacements, qui retirent les lignes de scellement.
+    const replacing = await this.replacingRecordsOf(attachmentId);
 
     await this.prisma.messageAttachment.delete({
       where: { id: attachmentId },
     });
+    // #13102 — la transcription et les pistes que le translator en avait tirées.
+    await forgetAtTranslator({ attachmentIds: [attachmentId] });
 
     await this.unlinkIfUnreferenced('filePath', attachment.filePath);
 
@@ -394,6 +400,35 @@ export class AttachmentService {
 
     await this.unlinkDerivedFiles(attachment);
     await this.unlinkConventionalDerivedFiles(attachment.filePath);
+    await this.unlinkReplacedClears(replacing);
+  }
+
+  private async replacingRecordsOf(attachmentId: string): Promise<readonly AtRestFileRecord[]> {
+    const access = processAtRestFileAccess();
+    if (!access) return [];
+    const records = await access.store.ofAttachment(attachmentId).catch(() => [] as readonly AtRestFileRecord[]);
+    return records.filter((record) => record.replacedKey !== null);
+  }
+
+  /**
+   * #13100 — les clairs qu'un scellement de cette pièce a remplacés et qui
+   * attendaient leur effacement (une ligne retardataire les désignait, ou la
+   * pièce est brûlée avant la fin du scellement) partent avec elle, sauf si
+   * une ligne désigne encore l'ancien original.
+   */
+  private async unlinkReplacedClears(replacing: readonly AtRestFileRecord[]): Promise<void> {
+    const oldOriginal = replacing.find((record) => record.role === 'original')?.replacedKey;
+    if (!oldOriginal) return;
+    try {
+      if ((await this.prisma.messageAttachment.count({ where: { filePath: oldOriginal } })) > 0) return;
+    } catch (error) {
+      logger.error('Erreur suppression fichiers', error as Error);
+      return;
+    }
+    const clears = [...new Set(replacing.map((record) => record.replacedKey as string))]
+      .map((key) => resolveInsideUploadRoot(this.uploadBasePath, key))
+      .filter((fullPath): fullPath is string => fullPath !== null);
+    await Promise.all(clears.map((fullPath) => fs.unlink(fullPath).catch(() => undefined).then(() => eraseMirroredCopy(fullPath, this.uploadBasePath))));
   }
 
   /**
@@ -508,6 +543,7 @@ export class AttachmentService {
       logger.error('Erreur suppression fichiers', error as Error);
     }
     await eraseMirroredCopy(fullPath, this.uploadBasePath);
+    await forgetSealing(fullPath, this.uploadBasePath);
   }
 
   /**

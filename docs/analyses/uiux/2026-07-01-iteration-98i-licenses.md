@@ -1,7 +1,7 @@
 # Analyse itération 98i (iOS) — `LicensesView` : Dynamic Type + VoiceOver + sélection
 
 ## Surface auditée
-`apps/ios/Meeshy/Features/Main/Views/LicensesView.swift` — écran « Licences » (liste des
+`apps/ios/Meeshy/Features/Settings/Views/LicensesView.swift` — écran « Licences » (liste des
 bibliothèques open-source, atteint depuis Réglages → À propos → Licences). Écran statique,
 auto-contenu, sans ViewModel ni état réseau.
 

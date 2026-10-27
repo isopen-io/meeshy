@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import me.meeshy.feature.feed.R
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.component.rememberPresence
 import me.meeshy.ui.format.RelativeTimeFormat
 import me.meeshy.ui.format.rememberRelativeTimeStrings
 import me.meeshy.ui.format.shortDateTimeLabel
@@ -110,7 +111,7 @@ fun RepostEmbedCell(
         Spacer(Modifier.height(MeeshySpacing.sm))
 
         Row(verticalAlignment = Alignment.CenterVertically) {
-            MeeshyAvatar(name = embed.authorName ?: unknownAuthor, size = 28.dp, imageUrl = embed.authorAvatarUrl)
+            MeeshyAvatar(name = embed.authorName ?: unknownAuthor, size = 28.dp, imageUrl = embed.authorAvatarUrl, presence = rememberPresence(embed.authorId))
             Spacer(Modifier.width(MeeshySpacing.sm))
             Column(Modifier.weight(1f)) {
                 Text(

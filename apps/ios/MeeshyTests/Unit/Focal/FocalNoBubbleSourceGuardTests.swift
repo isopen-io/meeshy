@@ -44,7 +44,7 @@ final class FocalNoBubbleSourceGuardTests: XCTestCase {
             .deletingLastPathComponent()   // .../Unit
             .deletingLastPathComponent()   // .../MeeshyTests
             .deletingLastPathComponent()   // .../apps/ios
-            .appendingPathComponent("Meeshy/Features/Main/Focal")
+            .appendingPathComponent("Meeshy/Features/Focal")
     }
 
     private struct SourceFile {

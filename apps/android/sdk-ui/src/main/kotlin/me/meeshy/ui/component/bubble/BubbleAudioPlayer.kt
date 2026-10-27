@@ -1,5 +1,10 @@
 package me.meeshy.ui.component.bubble
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -21,6 +26,10 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -33,7 +42,10 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import me.meeshy.sdk.model.AudioTranscriptionReveal
 import me.meeshy.ui.R
+import me.meeshy.ui.haptics.rememberMeeshyHaptics
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 
@@ -66,7 +78,10 @@ internal fun AudioBubble(
     onColor: Color,
     onClick: (() -> Unit)?,
     modifier: Modifier = Modifier,
+    autoRevealTranscription: Boolean = true,
 ) {
+    var revealed by remember(audio.attachmentId) { mutableStateOf(false) }
+    val haptics = rememberMeeshyHaptics()
     val actionLabel = stringResource(
         if (playback?.isPlaying == true) R.string.fullscreen_pause else R.string.bubble_audio_play,
     )
@@ -131,14 +146,66 @@ internal fun AudioBubble(
             }
         }
         if (audio.hasTranscription) {
-            Text(
-                text = audio.transcriptionText.orEmpty(),
-                style = MaterialTheme.typography.labelSmall,
-                color = onColor.copy(alpha = 0.75f),
-                maxLines = 3,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(top = MeeshySpacing.xs),
+            val showCta = AudioTranscriptionReveal.shouldShowRevealCta(
+                hasTranscription = true,
+                autoReveal = autoRevealTranscription,
+                manuallyRevealed = revealed,
             )
+            AnimatedContent(
+                targetState = showCta,
+                transitionSpec = { fadeIn(tween(TRANSCRIPT_FADE_MILLIS)) togetherWith fadeOut(tween(TRANSCRIPT_FADE_MILLIS)) },
+                label = "audioTranscriptReveal",
+            ) { cta ->
+                when {
+                    cta -> RevealTranscriptionCta(
+                        onColor = onColor,
+                        onReveal = {
+                            haptics.light()
+                            revealed = true
+                        },
+                    )
+                    else -> Text(
+                        text = audio.transcriptionText.orEmpty(),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = onColor.copy(alpha = 0.75f),
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = MeeshySpacing.xs),
+                    )
+                }
+            }
         }
+    }
+}
+
+private const val TRANSCRIPT_FADE_MILLIS = 180
+
+/**
+ * iOS `AudioPlayerView.transcriptionBlock` : la transcription existe mais son affichage automatique
+ * est coupé sur les messages reçus. Le tap ne fait que la révéler, aucune requête n'est émise.
+ */
+@Composable
+private fun RevealTranscriptionCta(onColor: Color, onReveal: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .padding(top = MeeshySpacing.xs)
+            .clip(RoundedCornerShape(MeeshyRadius.sm))
+            .clickable(role = Role.Button, onClick = onReveal)
+            .padding(vertical = MeeshySpacing.xs),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+    ) {
+        Icon(
+            imageVector = MeeshyIcons.AddToList,
+            contentDescription = null,
+            tint = onColor.copy(alpha = 0.6f),
+            modifier = Modifier.size(14.dp),
+        )
+        Text(
+            text = stringResource(R.string.media_audio_transcribe),
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Medium,
+            color = onColor.copy(alpha = 0.6f),
+        )
     }
 }

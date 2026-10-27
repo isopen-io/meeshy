@@ -125,6 +125,7 @@ import {
 } from './builders/account-security';
 import { sliceCodePoints } from '@meeshy/shared/utils/text-truncate';
 import { guardedInterval } from '../../utils/guarded-timer';
+import { refusesBlockedActorContent } from './blocked-actor-content';
 
 /** Budget APNs — au-delà, la charge est dégradée par étages (cf. `createNotification`). */
 const PUSHED_TRANSLATION_MAX_CHARS = 200;
@@ -777,6 +778,10 @@ export class NotificationService {
           priority: params.priority,
           userId: params.userId,
         });
+        return null;
+      }
+
+      if (await refusesBlockedActorContent(this.prisma, { type: params.type, recipientId: params.userId, actorId: params.actor?.id })) {
         return null;
       }
 

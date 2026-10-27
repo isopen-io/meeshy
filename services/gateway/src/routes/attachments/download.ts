@@ -15,6 +15,7 @@ import {
 } from '../../services/attachments/fileRouteVerdict';
 import { admitUnsignedFile, resolveSignedFileAccess } from '../../services/attachments/readerFileGate';
 import { readSigningKeys, readerFileSignatureEnforced, SIGNED_FILE_ROUTE } from '../../services/attachments/readerFileSignature';
+import { STICKER_PACK_LEGACY_FILE_EVENT, stickerPackLegacyFileFacts } from '../../services/packs/stickerPackLegacyPath';
 import type { Readable } from 'stream';
 import { relative as pathRelative, resolve as pathResolve, sep as pathSep } from 'path';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
@@ -22,7 +23,7 @@ import { enhancedLogger } from '../../utils/logger-enhanced';
 import { ifNoneMatchMatches } from '../../utils/etag';
 import { sendError, sendNotFound, sendForbidden, sendInternalError } from '../../utils/response.js';
 import type { AttachmentParams } from './types';
-import { diskBytes, hasBucket, isBucketUnavailable, locateBucketBytes, locateStoredBytes, uploadRootOf, type StoredBytes, type StoredBytesSource } from './storedBytes';
+import { atRestSealingOf, currentStorageKey, diskBytes, locateCurrentStoredBytes, hasBucket, isBucketUnavailable, locateBucketBytes, locateStoredBytes, uploadRootOf, type StoredBytes, type StoredBytesSource } from './storedBytes';
 
 const log = enhancedLogger.child({ module: 'AttachmentDownload' });
 
@@ -131,7 +132,7 @@ export async function registerDownloadRoutes(
           return sendNotFound(reply, 'File not found');
         }
 
-        const stored = await locateStoredBytes(filePath, bytesSource);
+        const stored = await locateCurrentStoredBytes(filePath, bytesSource);
         if (!stored) {
           return sendNotFound(reply, 'File not found on disk');
         }
@@ -213,7 +214,7 @@ export async function registerDownloadRoutes(
           return sendNotFound(reply, 'Thumbnail not found');
         }
 
-        const thumbnailStored = await locateStoredBytes(thumbnailPath, bytesSource);
+        const thumbnailStored = await locateCurrentStoredBytes(thumbnailPath, bytesSource);
         if (!thumbnailStored) {
           return sendNotFound(reply, 'Thumbnail not found on disk');
         }
@@ -321,6 +322,11 @@ export function registerFileStreamRoute(fastify: FastifyInstance, prisma: FileRo
         }
         if (located.kind === 'hidden') return sendNotFound(reply, 'File not found');
 
+        // #13100 — un fichier scellé au repos ne sort JAMAIS par l'adresse nue :
+        // elle n'a pas de lecteur. Il se lit par l'adresse signée de son
+        // lecteur ou par identifiant, qui le déchiffrent après l'avoir jugé.
+        if ((await atRestSealingOf(located.filePath, bytesSource)).kind === 'sealed') return sendNotFound(reply, 'File not found');
+
         // Un fichier absent du disque n'interroge la base que si un seau peut l'avoir.
         const onDisk = await diskBytes(located.filePath);
         if (!onDisk && !hasBucket(bytesSource)) return sendNotFound(reply, 'File not found');
@@ -348,18 +354,19 @@ export function registerFileStreamRoute(fastify: FastifyInstance, prisma: FileRo
 
         // #9600 — l'adresse NUE d'un fichier dont tous les porteurs vivants
         // disparaissent : comptée pendant la transition, refusée après.
-        const unsigned = admitUnsignedFile({
-          verdict,
-          enforced: readerFileSignatureEnforced(),
-          storageKey,
-          request: {
-            route: request.routeOptions?.url,
-            platformHeader: headerOf(request, 'x-meeshy-platform') ?? headerOf(request, 'x-app-platform'),
-            versionHeader: headerOf(request, 'x-meeshy-version') ?? headerOf(request, 'x-app-version'),
-            userAgent: headerOf(request, 'user-agent'),
-          },
-        });
+        const requestFacts = {
+          route: request.routeOptions?.url,
+          platformHeader: headerOf(request, 'x-meeshy-platform') ?? headerOf(request, 'x-app-platform'),
+          versionHeader: headerOf(request, 'x-meeshy-version') ?? headerOf(request, 'x-app-version'),
+          userAgent: headerOf(request, 'user-agent'),
+        };
+        const unsigned = admitUnsignedFile({ verdict, enforced: readerFileSignatureEnforced(), storageKey, request: requestFacts });
         if (unsigned === 'refuse') return sendNotFound(reply, 'File not found');
+
+        // #10188 — l'ancien chemin des fichiers de packs de stickers : servi
+        // aux clients publiés, compté jusqu'à son retrait (#9223).
+        const legacyPackFile = stickerPackLegacyFileFacts(storageKey, requestFacts);
+        if (legacyPackFile !== null) log.info(STICKER_PACK_LEGACY_FILE_EVENT, legacyPackFile);
 
         // Stable-path files (legacy `avatars/user/<userId>.jpg`) keep the SAME
         // URL when their content changes — a year-long max-age freezes the old
@@ -430,13 +437,18 @@ function registerSignedFileRoute(fastify: FastifyInstance, prisma: PrismaClient,
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
         const params = request.params as { token: string; '*': string };
-        const decodedPath = decodeURIComponent(params['*']);
+        const requestedPath = decodeURIComponent(params['*']);
+        const requested = locateStoredFile(requestedPath, uploadRootOf(bytesSource));
+        if (requested.kind !== 'file') return sendNotFound(reply, 'File not found');
+        // #13100 — une adresse signée avant le scellement sert le scellé qui a remplacé son fichier.
+        const decodedPath = await currentStorageKey(requested.storageKey, bytesSource);
         const located = locateStoredFile(decodedPath, uploadRootOf(bytesSource));
         if (located.kind !== 'file') return sendNotFound(reply, 'File not found');
 
         const access = await resolveSignedFileAccess(prisma, {
           token: params.token,
-          storageKey: located.storageKey,
+          storageKey: requested.storageKey,
+          servedKey: located.storageKey,
           keys: readSigningKeys(),
           now: new Date(),
         });

@@ -117,7 +117,7 @@ final class ComposerSceneQuickCaptureTests: XCTestCase {
 
     /// La nappe du viseur armé câble l'appui long vers la prise vidéo.
     func test_nappeDuViseurArme_cableLAppuiLongVersLaVideo() throws {
-        let chrome = try source("Meeshy/Features/Main/Composer/ComposerCaptureViews.swift")
+        let chrome = try source("Meeshy/Features/Composer/ComposerCaptureViews.swift")
         XCTAssertTrue(chrome.contains("scene(.longPress)"), "l'appui long de la nappe filme, décidé par la table")
         // #9134 — la nappe est celle du chrome PARTAGÉ : sa levée est celle de la machine.
         let tenue = try XCTUnwrap(chrome.range(of: "private var holdGesture: some Gesture {"))
@@ -232,7 +232,7 @@ final class ComposerSceneQuickCaptureTests: XCTestCase {
         let racine = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Composer")
+            .appendingPathComponent("Meeshy/Features/Composer")
         let montage = AppSourceGuard.stripComments(try String(
             contentsOf: racine.appendingPathComponent("ComposerCaptureMount.swift"), encoding: .utf8))
         XCTAssertTrue(montage.contains("ComposerCapturePlacement.size("))
@@ -262,7 +262,7 @@ final class ComposerSceneQuickCaptureTests: XCTestCase {
     // MARK: - Le (x) toujours là
 
     func test_laBarreDuViseur_montreLaCroix_enCarteCommeEnPleinEcran() throws {
-        let barre = try source("Meeshy/Features/Main/Composer/ComposerSceneCameraBar.swift")
+        let barre = try source("Meeshy/Features/Composer/ComposerSceneCameraBar.swift")
         XCTAssertTrue(barre.contains("ComposerSceneCameraCopy.disarmLabel"), "la croix a disparu")
         XCTAssertFalse(barre.contains("showsClose"), "la croix ne dépend plus de la taille")
     }

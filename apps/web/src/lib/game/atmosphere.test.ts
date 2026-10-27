@@ -57,6 +57,7 @@ const summary = (slug: string, installed: boolean): FramePackSummary => ({
   removable: slug !== 'afrique',
   names: {},
   preview: null,
+  previewUrl: null,
   usage: null,
 });
 

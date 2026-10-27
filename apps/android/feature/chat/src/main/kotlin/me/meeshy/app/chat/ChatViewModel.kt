@@ -57,7 +57,6 @@ import me.meeshy.sdk.report.ReportRepository
 import me.meeshy.sdk.session.AnonymousSessionStore
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.MessageSocketManager
-import me.meeshy.sdk.socket.TypingPresenceRelay
 import me.meeshy.sdk.theme.accentHex
 import me.meeshy.sdk.theme.displayTitle
 import me.meeshy.sdk.theme.otherParticipantUserId
@@ -85,7 +84,6 @@ class ChatViewModel @Inject constructor(
     private val locallyHiddenStore: LocallyHiddenMessagesStore,
     private val starredStore: StarredMessagesStore,
     private val messageSocketManager: MessageSocketManager,
-    private val typingPresenceRelay: TypingPresenceRelay,
     private val workManager: WorkManager,
     private val config: MeeshyConfig,
     private val clock: CacheClock,
@@ -306,7 +304,6 @@ class ChatViewModel @Inject constructor(
             }
         }
 
-        observePresence()
 
         viewModelScope.launch {
             conversationRepository.conversationsStream().collect { result ->
@@ -360,6 +357,7 @@ class ChatViewModel @Inject constructor(
                         next.copy(
                             search = next.search.reconciled(next.messages.toSearchable()),
                             isOffline = isOffline,
+                            showReadReceipts = showReadReceipts,
                         )
                     }
                 }
@@ -483,7 +481,7 @@ class ChatViewModel @Inject constructor(
             }
         }
 
-        controllers.attachAll(ChatScreenHost(conversationId, viewModelScope, screenState, latestMessages))
+        controllers.attachAll(ChatScreenHost(conversationId, viewModelScope, screenState, latestMessages, initialUnreadCount))
     }
 
     /**
@@ -498,33 +496,6 @@ class ChatViewModel @Inject constructor(
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
-        }
-    }
-
-    /**
-     * Overlays live `user:status`/`presence:snapshot` frames into
-     * [ChatUiState.presenceByUserId] — feeds the chat header's presence dot
-     * ([ChatUiState.headerPresence]). Mirrors [ConversationListViewModel]'s identically-named
-     * function; started eagerly (not lazily on first header render) since
-     * [MessageSocketManager]'s flows are hot `SharedFlow`s with no replay.
-     */
-    private fun observePresence() {
-        viewModelScope.launch {
-            messageSocketManager.userStatus.collect { event ->
-                _state.update { it.copy(presenceByUserId = it.presenceByUserId + (event.userId to event)) }
-            }
-        }
-        viewModelScope.launch {
-            typingPresenceRelay.forcedOnline.collect { event ->
-                _state.update { it.copy(presenceByUserId = it.presenceByUserId + (event.userId to event)) }
-            }
-        }
-        viewModelScope.launch {
-            messageSocketManager.presenceSnapshot.collect { snapshot ->
-                _state.update {
-                    it.copy(presenceByUserId = it.presenceByUserId + snapshot.users.associateBy { u -> u.userId })
-                }
-            }
         }
     }
 
@@ -563,6 +534,13 @@ class ChatViewModel @Inject constructor(
 
     /** Discards a captured large-paste attachment (the preview chip's remove button). */
     fun removeClipboardContent() = composer.removeClipboardContent()
+
+    /** Le lieu choisi, en attente du prochain envoi (son propre flux : l'état de l'écran est gelé). */
+    val pendingPlace: StateFlow<me.meeshy.sdk.model.SharedPlace?> get() = composer.pendingPlace
+
+    fun setPendingPlace(place: me.meeshy.sdk.model.SharedPlace) = composer.setPendingPlace(place)
+
+    fun clearPendingPlace() = composer.clearPendingPlace()
 
     /** Overrides the composer's source language from the language picker. */
     fun onComposerLanguagePicked(code: String) = composer.onComposerLanguagePicked(code)
@@ -678,6 +656,9 @@ class ChatViewModel @Inject constructor(
     /** A row in the pinned-messages sheet was tapped: scroll to that message and close the sheet. */
     fun onPinnedMessageTap(messageId: String) = replyJump.onPinnedMessageTap(messageId)
 
+    /** The Living Summary asks to land on [messageId] in the thread; inert when it is not loaded. */
+    fun scrollToMessage(messageId: String) = replyJump.scrollToMessage(messageId)
+
     /** The pending reply-jump scroll has been performed by the screen. */
     fun onScrollHandled() = replyJump.onScrollHandled()
 
@@ -712,6 +693,11 @@ class ChatViewModel @Inject constructor(
 
     /** Open the forward-picker sheet for [messageId], closing the long-press action sheet. */
     fun openForward(messageId: String) = forward.open(messageId)
+
+    /** Opens the forward picker for a whole multi-selection ([messageIds] in thread order, #13294). */
+    fun openForwardSelection(messageIds: List<String>) {
+        if (messageIds.isNotEmpty()) forward.open(messageIds)
+    }
 
     fun onForwardQueryChange(query: String) = forward.onQueryChange(query)
 
@@ -831,6 +817,15 @@ class ChatViewModel @Inject constructor(
         _state.update { it.copy(actionMessageId = null) }
         locallyHiddenStore.hide(messageId)
     }
+
+    /** « Pour tous » sur toute une sélection (#13294) : une suppression optimiste par message. */
+    fun deleteSelectionForEveryone(messageIds: List<String>) = messageIds.forEach(::deleteForEveryone)
+
+    /** « Pour moi » sur toute une sélection (#13294) : chaque message est masqué localement. */
+    fun deleteSelectionForMe(messageIds: List<String>) = messageIds.forEach(::deleteForMe)
+
+    /** Étoile (ou désétoile) chaque message de [messageIds] (#13294) ; l'étoile est locale. */
+    fun toggleStars(messageIds: List<String>) = messageIds.forEach(::toggleStar)
 
     /**
      * Pin or unpin a message (iOS `ConversationViewModel.togglePin`): the pin

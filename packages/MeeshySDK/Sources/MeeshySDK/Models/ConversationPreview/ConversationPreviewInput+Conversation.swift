@@ -12,8 +12,9 @@ import Foundation
 /// chiffrée de bout en bout (#12968) : ce qu'il a écrit ou déchiffré, lu dans
 /// son coffre local, avec ce que libsignal a AUTHENTIFIÉ de lui — la
 /// conversation pour laquelle il a été écrit, son auteur, l'instant de sa
-/// composition. Il n'emporte aucune traduction : le serveur ne lit pas ce
-/// message, donc ne le traduit pas.
+/// composition. Il n'emporte aucune traduction du SERVEUR, qui ne lit pas ce
+/// message : seulement celles que l'appareil en a faites (#13002), tenues en
+/// mémoire, que le Prisme de la ligne descend comme celui du fil.
 public struct ConversationPreviewDeviceText: Sendable, Hashable {
     /// L'auteur authentifié, dit comme la ligne le dit : le lecteur (« Vous »,
     /// que la ligne porte sans identifiant) ou un pair nommé.
@@ -22,10 +23,23 @@ public struct ConversationPreviewDeviceText: Sendable, Hashable {
         case peer(userId: String)
     }
 
-    /// L'écart toléré entre la composition authentifiée et l'heure servie du
-    /// dernier message : l'E2EE n'a pas de file hors ligne, un message part à
-    /// sa composition. Au-delà, la ligne pointe un AUTRE message (rejeu).
-    public static let compositionTolerance: TimeInterval = 15 * 60
+    /// De combien la composition authentifiée peut PRÉCÉDER l'heure servie du
+    /// dernier message avant que la ligne ne la tienne pour un AUTRE message,
+    /// plus ancien (rejeu). L'horloge qui date la composition est celle de
+    /// l'appareil de l'AUTEUR, l'heure servie celle du serveur : une borne de
+    /// quinze minutes scellait à tort tout message d'un appareil en retard
+    /// d'un quart d'heure, et tout envoi de cet appareil s'il l'est (#13002,
+    /// mesuré par `ConversationPreviewDeviceTextTests`). Une composition
+    /// POSTÉRIEURE à l'heure servie ne désigne jamais un message plus ancien :
+    /// elle est lue (horloge de l'auteur en avance).
+    ///
+    /// Cette borne garde la cohérence entre l'heure affichée et le texte. Elle
+    /// n'est pas une défense contre un serveur compromis, qui sert l'heure
+    /// qu'il veut avec l'identifiant qu'il veut : la ligne lirait alors un clair
+    /// authentique de la conversation, à une place que le fil, lui, ne lui
+    /// donne pas. La vraie défense est de dériver l'aperçu de la chronologie
+    /// locale (#13063).
+    public static let compositionTolerance: TimeInterval = 24 * 60 * 60
 
     public let messageId: String
     public let conversationId: String
@@ -33,9 +47,12 @@ public struct ConversationPreviewDeviceText: Sendable, Hashable {
     public let composedAt: Date
     public let text: String
     public let language: String?
+    /// `langue → texte`, traduit sur CET appareil. Jamais écrit, jamais envoyé.
+    public let translations: [String: String]
 
     public init(
-        messageId: String, conversationId: String, author: Author, composedAt: Date, text: String, language: String?
+        messageId: String, conversationId: String, author: Author, composedAt: Date, text: String, language: String?,
+        translations: [String: String] = [:]
     ) {
         self.messageId = messageId
         self.conversationId = conversationId
@@ -43,6 +60,15 @@ public struct ConversationPreviewDeviceText: Sendable, Hashable {
         self.composedAt = composedAt
         self.text = text
         self.language = language
+        self.translations = translations
+    }
+
+    /// Le même clair, avec les traductions que l'appareil en a faites.
+    public func translated(_ translations: [String: String]) -> ConversationPreviewDeviceText {
+        ConversationPreviewDeviceText(
+            messageId: messageId, conversationId: conversationId, author: author, composedAt: composedAt,
+            text: text, language: language, translations: translations
+        )
     }
 
     /// Le clair, s'il est à SA place sur cette ligne, telle qu'elle est
@@ -57,7 +83,7 @@ public struct ConversationPreviewDeviceText: Sendable, Hashable {
               let nature = conversation.lastMessageNature, nature.isEncrypted,
               nature.messageType != "system", nature.systemEvent == nil, nature.callSummary == nil,
               speaks(for: conversation),
-              abs(conversation.lastMessageAt.timeIntervalSince(composedAt)) <= Self.compositionTolerance,
+              conversation.lastMessageAt.timeIntervalSince(composedAt) <= Self.compositionTolerance,
               ConversationPreviewComposer.hasText(text)
         else { return nil }
         return self
@@ -97,7 +123,8 @@ public extension ConversationPreviewMessage {
             senderName: conversation.lastMessageSenderName,
             content: device?.text.meeshyPreviewTruncated ?? conversation.lastMessagePreview,
             originalLanguage: device.map { $0.language } ?? conversation.lastMessageOriginalLanguage,
-            translations: device == nil ? conversation.lastMessageTranslations : nil,
+            translations: device.map { $0.translations.isEmpty ? nil : $0.translations.mapValues(\.meeshyPreviewTruncated) }
+                ?? conversation.lastMessageTranslations,
             createdAt: conversation.lastMessageAt,
             messageType: nature?.messageType ?? (place != nil ? "location" : nil),
             effectFlags: nature?.effectFlags,

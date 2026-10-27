@@ -5,7 +5,7 @@ import { HIGH_VELOCITY_THRESHOLD, SUSTAINED_SCROLL_MS } from './metrics';
 
 /**
  * LES LOIS DE L'ÉLECTION DU FIL (#5648) — miroir de
- * `Main/Focal/Core/FocalScrollPerspective.swift` et de son voisin
+ * `Focal/Core/FocalScrollPerspective.swift` et de son voisin
  * `FocalMagnificationLaw`, fonctions PURES, aucune horloge lue en interne
  * (l'horloge est injectée par l'appelant, comme partout ailleurs dans ce
  * chantier — `election.test.ts` §4.1 de la spécification).

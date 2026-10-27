@@ -262,7 +262,7 @@ final class RiverOverlayPreviewTests: XCTestCase {
     }
 
     func test_pressedBubble_travelsFromTheRiverToTheOverlay() throws {
-        let stream = try source("Meeshy/Features/Main/Riviere/View/RiverStreamHost.swift")
+        let stream = try source("Meeshy/Features/River/View/RiverStreamHost.swift")
         XCTAssertTrue(stream.contains("paneFrame: frames[messageId]"), "L'hôte lit le cadre publié de la bulle pressée.")
         XCTAssertTrue(stream.contains("paneInWindow: paneAnchor.frame"), "…et le convertit par l'origine du pane dans la fenêtre.")
         let host = try source("Meeshy/Features/Main/Views/ConversationView.swift")

@@ -24,7 +24,7 @@ final class AnchoredPickerWiringGuardTests: XCTestCase {
         let wired: [(path: String, removed: String)] = [
             ("Meeshy/Features/Main/Views/AudioPostComposerView+Transcription.swift", ".sheet(isPresented: $showLanguagePicker)"),
             ("Meeshy/Features/Main/Components/MessageDetail/MessageReactionsDetailView.swift", ".sheet(isPresented: $showFullEmojiPicker)"),
-            ("Meeshy/Features/Main/Composer/MeeshyComposerHost+Socle.swift", ".sheet(item: $audiencePickerMode)"),
+            ("Meeshy/Features/Composer/MeeshyComposerHost+Socle.swift", ".sheet(item: $audiencePickerMode)"),
         ]
         for site in wired {
             let source = try code(site.path)
@@ -34,7 +34,7 @@ final class AnchoredPickerWiringGuardTests: XCTestCase {
     }
 
     func test_lentilleFilter_staysANativeMenu() {
-        for file in swiftFiles(under: "Meeshy/Features/Main/Lentille/Mode") {
+        for file in swiftFiles(under: "Meeshy/Features/Lens/Mode") {
             let source = AppSourceGuard.stripComments((try? String(contentsOf: file, encoding: .utf8)) ?? "")
             XCTAssertFalse(source.contains(".anchoredPicker("), file.lastPathComponent)
             XCTAssertFalse(source.contains(".popover("), file.lastPathComponent)
@@ -51,7 +51,7 @@ final class AnchoredPickerWiringGuardTests: XCTestCase {
     }
 
     func test_deadPopoverAdaptationTwin_isGone() throws {
-        let source = try code("Meeshy/Features/Main/Views/ProgressionMeeshEntry.swift")
+        let source = try code("Meeshy/Features/Profile/Views/ProgressionMeeshEntry.swift")
         XCTAssertFalse(source.contains("presentationCompactAdaptationPopoverIfAvailable"))
     }
 }

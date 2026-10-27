@@ -29,6 +29,7 @@ public enum class OutboxKind {
     UNBOOKMARK_POST,
     RESPOND_FRIEND_REQUEST,
     REPORT_ATTACHMENT_STATUS,
+    UPDATE_AUDIO_SETTINGS,
 }
 
 /** Lifecycle of an outbox row; a succeeded mutation is deleted, never flagged. */
@@ -116,6 +117,7 @@ public object OutboxLaneMap {
         OutboxKind.UPDATE_PROFILE -> OutboxLaneAssignment.Shared(OutboxLanes.PROFILE)
         OutboxKind.UPDATE_SETTINGS -> OutboxLaneAssignment.Shared(OutboxLanes.SETTINGS)
         OutboxKind.UPDATE_PRIVACY_SETTINGS -> OutboxLaneAssignment.Shared(OutboxLanes.SETTINGS)
+        OutboxKind.UPDATE_AUDIO_SETTINGS -> OutboxLaneAssignment.Shared(OutboxLanes.SETTINGS)
         OutboxKind.PUBLISH_STORY -> OutboxLaneAssignment.Shared(OutboxLanes.STORY)
         OutboxKind.UPLOAD_MEDIA -> OutboxLaneAssignment.Shared(OutboxLanes.MEDIA)
 
@@ -225,9 +227,14 @@ public data class ReactionPayload(val emoji: String)
  * crash. An empty/blank row payload (every row enqueued before this field
  * existed) also decodes as "no context" — see `OutboxFlushWorker`'s `UPLOAD_MEDIA`
  * sender.
+ *
+ * [conversationId] is the chat conversation the upload is destined for (#12956), read by
+ * `EndToEndOutboxAdmission` before the bytes leave: an upload drained before its message
+ * row exists is still withheld from an end-to-end encrypted conversation. `null` for a
+ * story/post/profile upload, and for every row enqueued before this field existed.
  */
 @kotlinx.serialization.Serializable
-public data class MediaUploadPayload(val uploadContext: String? = null)
+public data class MediaUploadPayload(val uploadContext: String? = null, val conversationId: String? = null)
 
 /**
  * Payload of a `PIN_MESSAGE` / `UNPIN_MESSAGE` outbox row. The row's `targetId`
@@ -304,6 +311,13 @@ public data class ConversationPrefsPayload(
      * array the `explicitNulls = false` encoder never drops.
      */
     val tags: List<String>? = null,
+    /**
+     * The reader's personal background + accent (`ConversationAppearance.toWire`); `null` leaves it untouched
+     * server-side. Unlike the other fields it is NOT part of every snapshot: it rides only the snapshot that
+     * changed it (the gateway re-validates a background — pack owned, photo still readable — and a stale one
+     * would refuse an unrelated pin), and [OutboxCoalescer] carries it onto any snapshot that supersedes it.
+     */
+    val appearance: kotlinx.serialization.json.JsonElement? = null,
 )
 
 /**

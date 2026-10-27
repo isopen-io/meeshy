@@ -1,7 +1,7 @@
 # iOS UI/UX — Iteration 222i
 
 **Date** : 2026-07-26
-**Surface** : `apps/ios/Meeshy/Features/Main/Views/AffiliateCreateView.swift`
+**Surface** : `apps/ios/Meeshy/Features/Links/Views/AffiliateCreateView.swift`
 **Axe** : Accessibilité VoiceOver — convergence d'un écran sur son jumeau déjà soldé
 **Base** : `main` HEAD `242a82c5`
 

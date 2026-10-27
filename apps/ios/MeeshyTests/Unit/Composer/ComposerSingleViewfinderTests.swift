@@ -55,8 +55,8 @@ final class ComposerSingleViewfinderTests: XCTestCase {
     /// conversation, qui ne passe plus par la scène.
     func test_lesPortesDeCapture_ouvrentLeViseurDuComposeur() throws {
         for porte in [
-            "Meeshy/Features/Main/Composer/MeeshyComposerHost+DocumentSurface.swift",
-            "Meeshy/Features/Main/Composer/ComposerViewfinder+Provider.swift",
+            "Meeshy/Features/Composer/MeeshyComposerHost+DocumentSurface.swift",
+            "Meeshy/Features/Composer/ComposerViewfinder+Provider.swift",
             "Meeshy/Features/Main/Views/FeedComposerSheet.swift",
             "Meeshy/Features/Main/Views/ConversationLayers/ConversationComposerLayers.swift",
         ] {
@@ -84,12 +84,12 @@ final class ComposerSingleViewfinderTests: XCTestCase {
     /// Le viseur plein écran ne se RÉDUIT pas : il n'a pas de carte où rentrer.
     /// La croix, elle, reste — quitter à tout moment (#8653).
     func test_leViseurPleinEcran_neProposePasDeReduction() throws {
-        let viseur = try code("Meeshy/Features/Main/Composer/ComposerViewfinder.swift")
+        let viseur = try code("Meeshy/Features/Composer/ComposerViewfinder.swift")
         XCTAssertTrue(viseur.contains("size: $size"))
         XCTAssertTrue(viseur.contains("offersSizeToggle: false"))
         XCTAssertTrue(viseur.contains("ComposerCaptureMount(session: capture"),
                       "le montage unique rend le panneau de refus, pas un aperçu noir (#9134, #9351)")
-        let vues = try code("Meeshy/Features/Main/Composer/ComposerCaptureViews.swift")
+        let vues = try code("Meeshy/Features/Composer/ComposerCaptureViews.swift")
         XCTAssertTrue(vues.contains("CameraPermissionPanel()"), "un refus rend le panneau, pas un aperçu noir")
     }
 }
@@ -167,7 +167,7 @@ final class ComposerPhotoLookTests: XCTestCase {
     }
 
     func test_leViseur_neRemetQuUneFois() throws {
-        let viseur = try Self.code("Meeshy/Features/Main/Composer/ComposerViewfinder.swift")
+        let viseur = try Self.code("Meeshy/Features/Composer/ComposerViewfinder.swift")
         XCTAssertTrue(viseur.contains("guard life.settle() else { return }"), "deux validations rapprochées posaient deux pièces")
     }
 
@@ -182,7 +182,7 @@ final class ComposerPhotoLookTests: XCTestCase {
     }
 
     func test_cubeDeLAppel_resteEnSRGBParDefaut() throws {
-        let peintre = try Self.code("Meeshy/Features/Main/Services/CallColorLook.swift")
+        let peintre = try Self.code("Meeshy/Features/Call/Services/CallColorLook.swift")
         XCTAssertTrue(peintre.contains("colorSpace: CGColorSpace = CallColorLook.callColorSpace"),
                       "le flux d'appel (sRGB) garde son cube ; seule la photo passe son espace")
     }
@@ -191,12 +191,12 @@ final class ComposerPhotoLookTests: XCTestCase {
 
     func test_lesBoutonsDuViseur_ontLeReliefLiquidGlass() throws {
         for fichier in ["ComposerSceneCameraBar.swift", "ComposerCaptureRefusedChrome.swift", "ComposerFlashIntensitySlider.swift"] {
-            let code = try Self.code("Meeshy/Features/Main/Composer/\(fichier)")
+            let code = try Self.code("Meeshy/Features/Composer/\(fichier)")
             XCTAssertFalse(code.contains(".adaptiveGlass(in:"),
                            "\(fichier) : un verre plat sous iOS 26 — le relief passe par adaptiveLiquidGlass")
             XCTAssertTrue(code.contains("adaptiveLiquidGlass(in:"), fichier)
         }
-        let barre = try Self.code("Meeshy/Features/Main/Composer/ComposerSceneCameraBar.swift")
+        let barre = try Self.code("Meeshy/Features/Composer/ComposerSceneCameraBar.swift")
         XCTAssertTrue(barre.contains(".adaptiveLiquidGlass(in: Circle(), interactive: true)"),
                       "un bouton du viseur réagit au toucher")
     }
@@ -206,23 +206,23 @@ final class ComposerPhotoLookTests: XCTestCase {
     /// **#9295 → #9351 : la revue photo est partie, la bande la remplace.** Le
     /// viseur monte le montage unique ; la page blanche verse dans une scène.
     func test_leViseur_monteLeMontageUnique_etLaScenePasse() throws {
-        let viseur = try Self.code("Meeshy/Features/Main/Composer/ComposerViewfinder.swift")
+        let viseur = try Self.code("Meeshy/Features/Composer/ComposerViewfinder.swift")
         XCTAssertTrue(viseur.contains("ComposerCaptureMount("), "le viseur monte l'objet unique")
-        let pont = try Self.code("Meeshy/Features/Main/Composer/ComposerViewfinder+Provider.swift")
+        let pont = try Self.code("Meeshy/Features/Composer/ComposerViewfinder+Provider.swift")
         XCTAssertTrue(pont.contains("ComposerViewfinder {"), "la porte de l'atelier monte le même viseur")
     }
 
     func test_laBande_nommeAvecLesMotsDeLAppel() throws {
-        let bande = try Self.code("Meeshy/Features/Main/Composer/ComposerLookStrip.swift")
+        let bande = try Self.code("Meeshy/Features/Composer/ComposerLookStrip.swift")
         for vue in ["CallEffectsCopy.presetName", "CallFrameCopy.choiceName", "CallEffectsCopy.presetSymbol"] {
             XCTAssertTrue(bande.contains(vue), "la bande ne réutilise plus \(vue)")
         }
     }
 
     func test_lePeintre_estCeluiDeLAppel() throws {
-        let loi = try Self.code("Meeshy/Features/Main/Composer/ComposerLiveLook.swift")
+        let loi = try Self.code("Meeshy/Features/Composer/ComposerLiveLook.swift")
         XCTAssertTrue(loi.contains("VideoFilterColorimetry.graded("), "les filtres passent par la colorimétrie du flux")
-        let peintre = try Self.code("Meeshy/Features/Main/Composer/ComposerLookPainter.swift")
+        let peintre = try Self.code("Meeshy/Features/Composer/ComposerLookPainter.swift")
         for jumelle in ["CITemperatureAndTint", "CIColorControls"] {
             XCTAssertFalse(peintre.contains(jumelle) || loi.contains(jumelle), "aucune jumelle de la colorimétrie")
         }

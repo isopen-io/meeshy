@@ -14,13 +14,17 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import java.time.ZoneId
 import java.util.Locale
+import me.meeshy.app.chat.appearance.ConversationAppearanceSheet
+import me.meeshy.app.chat.mediahub.ConversationMediaHubSheet
 import me.meeshy.feature.chat.R
+import me.meeshy.sdk.model.selection.MessageSelectionHost
 import me.meeshy.sdk.model.MessageDeletability
 import me.meeshy.sdk.model.MessageEditability
 import me.meeshy.sdk.model.MessagePinToggle
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.ui.component.EmojiFullPicker
 import me.meeshy.ui.component.viewer.MeeshyImageViewer
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.format.RelativeTimeFormat
 import me.meeshy.ui.format.rememberRelativeTimeStrings
 import me.meeshy.ui.theme.MeeshyTheme
@@ -93,7 +97,7 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
         }
         MessageActionsSheet(
             bubble = actionTarget,
-            canEdit = MessageEditability.canEdit(
+            canEdit = !state.isEndToEnd && MessageEditability.canEdit(
                 isOwn = actionTarget.isOutgoing,
                 createdAtMillis = createdAtMillis,
                 nowMillis = nowMillis,
@@ -125,10 +129,21 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
             onOpenFile = { actions.onFileAttachmentOpen(actionTarget.messageId, null) },
             onShareFile = { actions.onFileAttachmentShare(actionTarget.messageId, null) },
             onDismiss = actions.dismissMessageActions,
-            hostedEntries = HOSTED_DETAIL_ENTRIES,
+            hostedEntries = hostedDetailEntries(state.showReadReceipts),
             onViews = { localRoute.open(MessageDetailRoute.Views(actionTarget.messageId)) },
             onHistory = { localRoute.open(MessageDetailRoute.History(actionTarget.messageId)) },
             onSentiment = { localRoute.open(MessageDetailRoute.Sentiment(actionTarget.messageId)) },
+            onMap = { localRoute.open(MessageDetailRoute.Map(actionTarget.messageId)) },
+            onSelect = {
+                // Un lecteur sans interface de sélection (Résumé, Rivière) rend la main au Script.
+                host.readingMode?.let { reading ->
+                    MessageSelectionHost.landing(reading.state.mode)?.let { landing ->
+                        reading.select(landing)
+                        actions.scrollToMessage(actionTarget.messageId)
+                    }
+                }
+                actions.beginSelection(actionTarget.messageId)
+            },
             canWrite = state.viewerMayWrite,
         )
     }
@@ -142,6 +157,41 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
             else actions.onFileAttachmentShare(download.messageId, attachmentId)
         },
     )
+
+    if (sheets.info) {
+        // Chaque entrée referme la fiche puis ouvre sa feuille : une seule feuille à la fois.
+        fun openFrom(open: () -> Unit): () -> Unit = { sheets.info = false; open() }
+        val entries = buildList {
+            if (state.isGroup) {
+                add(ConversationInfoEntry(MeeshyIcons.Group, stringResource(R.string.conversation_members_open), openFrom { sheets.members = true }))
+            }
+            add(ConversationInfoEntry(MeeshyIcons.ChartBar, stringResource(R.string.conversation_stats_title), openFrom { sheets.stats = true }))
+            add(ConversationInfoEntry(MeeshyIcons.Sparkles, stringResource(R.string.conversation_analysis_title), openFrom { sheets.analysis = true }))
+            add(ConversationInfoEntry(MeeshyIcons.Palette, stringResource(R.string.conversation_appearance_entry_title), openFrom { sheets.appearance = true }))
+            add(ConversationInfoEntry(MeeshyIcons.PhotoLibrary, stringResource(R.string.media_hub_title), openFrom { sheets.media = true }))
+            // Moderator+ viewers of a group get the admin surfaces: the share-link creator
+            // and the conversation-settings sheet (write-role / announcement / slow-mode).
+            if (state.slowModeExempt) {
+                if (state.isGroup) {
+                    add(ConversationInfoEntry(MeeshyIcons.AddLink, stringResource(R.string.context_invite_friends), openFrom(host.navigation.onCreateShareLink)))
+                }
+                add(ConversationInfoEntry(MeeshyIcons.Tune, stringResource(R.string.conversation_settings_title), openFrom { sheets.settings = true }))
+            }
+        }
+        ConversationInfoSheet(
+            title = state.conversationTitle ?: stringResource(R.string.chat_conversation_info_title),
+            subtitle = if (state.isGroup && state.memberCount > 0) {
+                stringResource(R.string.chat_header_members, state.memberCount)
+            } else {
+                null
+            },
+            avatarUrl = host.header.avatarUrl,
+            accentColor = accentColor,
+            peerUserId = state.directPeerUserId.takeUnless { state.isGroup },
+            entries = entries,
+            onDismiss = { sheets.info = false },
+        )
+    }
 
     if (sheets.settings) {
         ConversationSettingsSheet(
@@ -172,6 +222,27 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
         )
     }
 
+    if (sheets.appearance) {
+        ConversationAppearanceSheet(
+            conversationId = state.conversationId,
+            computedAccentHex = state.accentColorHex,
+            onDismiss = { sheets.appearance = false },
+        )
+    }
+
+    if (sheets.media) {
+        ConversationMediaHubSheet(
+            conversationId = state.conversationId,
+            accentColor = accentColor,
+            isEndToEnd = state.isEndToEnd,
+            onGoToMessage = { messageId ->
+                sheets.media = false
+                actions.scrollToMessage(messageId)
+            },
+            onDismiss = { sheets.media = false },
+        )
+    }
+
     if (sheets.analysis) {
         ConversationAnalysisSheet(
             conversationId = state.conversationId,
@@ -193,6 +264,19 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
                 is MessageDetailRoute.Languages -> actions.dismissLanguageExplorer()
                 is MessageDetailRoute.Reactions -> actions.closeReactionDetails()
                 else -> localRoute.close(route)
+            }
+        },
+        extra = { route ->
+            val target = state.messages.firstOrNull { it.messageId == route.messageId }
+            if (target != null) {
+                val sheetModifier = Modifier.navigationBarsPadding()
+                when (route) {
+                    is MessageDetailRoute.Views -> MessageViewsSheet(target, state.conversationId, accentColor, sheetModifier)
+                    is MessageDetailRoute.History -> MessageHistorySheet(target, accentColor, sheetModifier)
+                    is MessageDetailRoute.Sentiment -> MessageSentimentSheet(target, accentColor, sheetModifier)
+                    is MessageDetailRoute.Map -> MessageMapSheet(target, state.accentColorHex, sheetModifier)
+                    else -> Unit
+                }
             }
         },
         reactions = {
@@ -252,7 +336,7 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
                     },
                     onDismiss = actions.dismissEmojiPicker,
                     accentColor = accentColor,
-                    modifier = Modifier.align(androidx.compose.ui.Alignment.BottomCenter),
+                    modifier = Modifier.align(androidx.compose.ui.Alignment.BottomCenter).navigationBarsPadding(),
                 )
             }
         }
@@ -323,4 +407,12 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
 }
 
 /** Detail/selection entries the chat host can serve today; each joins once its fiche renderer exists. */
-private val HOSTED_DETAIL_ENTRIES: Set<MessageAction> = emptySet()
+private val HOSTED_DETAIL_ENTRIES: Set<MessageAction> =
+    setOf(MessageAction.Views, MessageAction.History, MessageAction.Sentiment, MessageAction.Map, MessageAction.Select)
+
+/**
+ * Réciprocité des accusés, comme `MessageActionResolver` iOS : qui a coupé ses accusés de lecture
+ * ne voit pas qui a lu — l'entrée « Vu par » disparaît du menu.
+ */
+internal fun hostedDetailEntries(showReadReceipts: Boolean): Set<MessageAction> =
+    if (showReadReceipts) HOSTED_DETAIL_ENTRIES else HOSTED_DETAIL_ENTRIES - MessageAction.Views

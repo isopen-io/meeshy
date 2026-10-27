@@ -38,6 +38,8 @@ enum class MessageAction {
     History,
     /** Opens the sentiment fiche — only for a message carrying text. */
     Sentiment,
+    /** Opens the map fiche — only for a message carrying a shared place. */
+    Map,
     /** Enters multi-select mode starting from this message. */
     Select,
     /** Exports the message as a shareable card. */
@@ -69,6 +71,8 @@ data class MessageActionContext(
     val isEdited: Boolean = false,
     /** The message carries a non-blank text body (gates sentiment and card export). */
     val hasText: Boolean = false,
+    /** The bubble carries a shared place the map fiche can show. */
+    val hasPlace: Boolean = false,
     /** Which of the detail/selection entries the host can actually serve; inert (empty) by default. */
     val hostedEntries: Set<MessageAction> = emptySet(),
     /** What the message lets out of Meeshy — an exit it refuses is absent from the menu, never greyed out. */
@@ -81,6 +85,8 @@ data class MessageActionContext(
     val isUnconfirmed: Boolean = false,
     /** The reader may write in this conversation (`viewerCanWrite`): replying IS writing. */
     val canWrite: Boolean = true,
+    /** End-to-end encrypted and unopened here (#13110): nothing of it is copied or forwarded. */
+    val isEndToEndSealed: Boolean = false,
 ) {
     /**
      * A message is "actionable" — eligible for reply / forward / star / edit / delete —
@@ -97,7 +103,7 @@ data class MessageActionContext(
 
     /** `forward` of the shared law, its exit verdict aside ([MessageExitOffer]). */
     val offersForward: Boolean
-        get() = offersRelay && exitOffer.offers(MessageExit.FORWARD)
+        get() = offersRelay && !isEndToEndSealed && exitOffer.offers(MessageExit.FORWARD)
 
     private val offersRelay: Boolean
         get() = isActionable && !isNotice && !isUnconfirmed
@@ -116,7 +122,7 @@ object MessageActionMenu {
             add(if (ctx.isShowingOriginal) MessageAction.ShowTranslation else MessageAction.ShowOriginal)
             add(MessageAction.ExploreLanguages)
         }
-        if (!ctx.isDeleted && ctx.exitOffer.offers(MessageExit.COPY)) {
+        if (!ctx.isDeleted && !ctx.isEndToEndSealed && ctx.exitOffer.offers(MessageExit.COPY)) {
             add(MessageAction.Copy)
         }
         if (ctx.hasOpenableFile && ctx.exitOffer.offers(MessageExit.SHARE)) {
@@ -149,6 +155,7 @@ object MessageActionMenu {
             if (MessageAction.Views in ctx.hostedEntries) add(MessageAction.Views)
             if (MessageAction.History in ctx.hostedEntries && ctx.isEdited) add(MessageAction.History)
             if (MessageAction.Sentiment in ctx.hostedEntries && ctx.hasText) add(MessageAction.Sentiment)
+            if (MessageAction.Map in ctx.hostedEntries && ctx.hasPlace) add(MessageAction.Map)
         }
         // Report is a moderation action against *someone else's* content — offered last, and only
         // for an incoming, still-present message. Diverges from iOS (which appends `.report`

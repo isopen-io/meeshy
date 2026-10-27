@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="media_hub_encrypted_notice">Conversation chiffrée : les fichiers restent scellés, leurs aperçus ne peuvent pas s’afficher ici.</string>
+    <string name="media_hub_encrypted_tile">Fichier chiffré</string>
+</resources>

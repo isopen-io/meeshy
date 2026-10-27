@@ -544,129 +544,16 @@ struct FeedView: View {
     }
 
     // MARK: - Composer Placeholder
-    private var composerPlaceholder: some View {
-        HStack(spacing: MeeshySpacing.md) {
-            composerPlaceholderAvatar
-
-            // Text input placeholder
-            Button(action: {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    showComposer = true
-                }
-                HapticFeedback.light()
-            }) {
-                HStack {
-                    Text(String(localized: "feed.compose.subtitle", defaultValue: "Partager quelque chose avec le monde…"))
-                        .font(.subheadline)
-                        .foregroundColor(theme.textMuted)
-                    Spacer()
-                }
-                .padding(.horizontal, MeeshySpacing.lg)
-                .padding(.vertical, MeeshySpacing.md)
-                .background(
-                    RoundedRectangle(cornerRadius: MeeshyRadius.xl)
-                        .fill(theme.inputBackground)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: MeeshyRadius.xl)
-                                .stroke(theme.inputBorder, lineWidth: 1)
-                        )
-                )
-            }
-            .buttonStyle(PlainButtonStyle())
-            .accessibilityLabel(String(localized: "a11y.feed.compose.open", defaultValue: "Partager quelque chose", bundle: .main))
-            .accessibilityHint(String(localized: "a11y.feed.compose.open.hint", defaultValue: "Ouvre l'éditeur de publication", bundle: .main))
-
-            // Add content button (+)
-            Menu {
-                Button {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        showComposer = true
-                    }
-                    HapticFeedback.light()
-                } label: {
-                    Label(
-                        String(localized: "feed.attach.photo-or-video", defaultValue: "Photo ou vidéo"),
-                        systemImage: "photo.fill"
-                    )
-                }
-
-                Button {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        showComposer = true
-                    }
-                    HapticFeedback.light()
-                } label: {
-                    Label(
-                        String(localized: "feed.attach.camera", defaultValue: "Appareil photo"),
-                        systemImage: "camera.fill"
-                    )
-                }
-
-                Button {
-                    showAudioComposer = true
-                    HapticFeedback.light()
-                } label: {
-                    Label(
-                        String(localized: "feed.attach.audio-recording", defaultValue: "Enregistrement audio"),
-                        systemImage: "mic.fill"
-                    )
-                }
-
-                Button {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        showComposer = true
-                    }
-                    HapticFeedback.light()
-                } label: {
-                    Label(
-                        String(localized: "feed.attach.file-short", defaultValue: "Fichier"),
-                        systemImage: "doc.fill"
-                    )
-                }
-
-                Button {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        showComposer = true
-                    }
-                    HapticFeedback.light()
-                } label: {
-                    Label(
-                        String(localized: "feed.attach.location-short", defaultValue: "Position"),
-                        systemImage: "location.fill"
-                    )
-                }
-            } label: {
-                ZStack {
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [MeeshyColors.indigo300, MeeshyColors.info],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(width: 40, height: 40)
-                        .shadow(color: MeeshyColors.indigo300.opacity(0.4), radius: 8, y: 4)
-
-                    Image(systemName: "plus")
-                        // Doctrine 86i : glyphe du FAB dans un cercle de dimension fixe 40×40 → figé
-                        // (l'icône ne doit pas déborder du bouton flottant). Bouton déjà labellisé.
-                        .font(.system(size: 18, weight: .bold))
-                        .foregroundColor(.white)
-                }
-            }
-            .accessibilityLabel(String(localized: "feed.compose.add-content", defaultValue: "Ajouter du contenu"))
+    private func openComposer() {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            showComposer = true
         }
-        .padding(MeeshySpacing.lg)
-        .background(
-            RoundedRectangle(cornerRadius: MeeshyRadius.xl)
-                .fill(theme.surfaceGradient(tint: MeeshyColors.brandPrimaryHex))
-                .overlay(
-                    RoundedRectangle(cornerRadius: MeeshyRadius.xl)
-                        .stroke(theme.border(tint: MeeshyColors.brandPrimaryHex, intensity: 0.25), lineWidth: 1)
-                )
-        )
-        .padding(.horizontal, MeeshySpacing.lg)
+        HapticFeedback.light()
+    }
+
+    private func openAudioComposer() {
+        showAudioComposer = true
+        HapticFeedback.light()
     }
 
     // MARK: - Feed Scroll View
@@ -724,7 +611,7 @@ struct FeedView: View {
                     }
 
                     // Composer placeholder
-                    composerPlaceholder
+                    FeedComposerPlaceholder(onCompose: openComposer, onRecordAudio: openAudioComposer)
                         .padding(.bottom, MeeshySpacing.sm)
 
                     // Error state

@@ -714,7 +714,7 @@ public struct MeeshyAudioEditorView: View {
     // MARK: - Formatting
 
     private func formatTime(_ seconds: Double) -> String {
-        DurationFormat.clock(seconds)
+        MediaFormat.duration(seconds)
     }
 
 }

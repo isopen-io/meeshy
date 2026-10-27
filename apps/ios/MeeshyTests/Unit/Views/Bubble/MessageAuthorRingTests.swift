@@ -81,11 +81,11 @@ final class MessageAuthorRingTests: XCTestCase {
     }
 
     func test_guard_focalAndScriptHeaderPassTheServedRingToTheAvatar() throws {
-        let header = try source("Meeshy/Features/Main/Focal/Row/FocalIdentityHeader.swift")
+        let header = try source("Meeshy/Features/Focal/Row/FocalIdentityHeader.swift")
         XCTAssertTrue(header.contains("ring: senderRing,"))
         XCTAssertFalse(header.contains(".avatarRingWithin("))
-        let row = try source("Meeshy/Features/Main/Focal/Row/FocalRow.swift")
-            + "\n" + source("Meeshy/Features/Main/Focal/Row/FocalFocusChrome.swift")
+        let row = try source("Meeshy/Features/Focal/Row/FocalRow.swift")
+            + "\n" + source("Meeshy/Features/Focal/Row/FocalFocusChrome.swift")
         XCTAssertEqual(row.components(separatedBy: "senderRing: input.senderRing").count - 1, 2, "les deux en-têtes de la rangée plate")
         let rows = try source("Meeshy/Features/Main/Views/MessageListViewController+Rows.swift")
         XCTAssertTrue(rows.contains("senderRing: isMine ? nil : message.senderRing"))
@@ -97,12 +97,12 @@ final class MessageAuthorRingTests: XCTestCase {
     func test_guard_noDecorSurfaceFreezesItsAnimatedLayer() throws {
         let surfaces = [
             "Meeshy/Features/Main/Views/Bubble/BubbleFooter.swift",
-            "Meeshy/Features/Main/Focal/Row/FocalIdentityHeader.swift",
+            "Meeshy/Features/Focal/Row/FocalIdentityHeader.swift",
             "Meeshy/Features/Main/Views/ThemedConversationRow.swift",
-            "Meeshy/Features/Main/Lentille/Row/LentilleConversationRow.swift",
+            "Meeshy/Features/Lens/Row/LentilleConversationRow.swift",
             "Meeshy/Features/Main/Views/ParticipantsView.swift",
             "Meeshy/Features/Main/Components/ConversationInfoSheet.swift",
-            "Meeshy/Features/Main/Views/ProfileDecorSheet.swift",
+            "Meeshy/Features/Profile/Views/ProfileDecorSheet.swift",
         ]
         for path in surfaces {
             let text = try source(path)
@@ -119,34 +119,34 @@ final class MessageAuthorRingTests: XCTestCase {
     /// dépasse jamais celui nommé ici avec sa raison — un registre EXACT : il ne fait que descendre, et une entrée qui ne compte plus rien rougit.
     private static let avatarsWithoutRing: [String: (count: Int, reason: String)] = [
         "Contacts/BlockedTab.swift": (1, "bloqué — ni contour ni présence ne se montrent"),
-        "Main/Views/BlockedUsersView.swift": (1, "bloqué — ni contour ni présence ne se montrent"),
+        "Settings/Views/BlockedUsersView.swift": (1, "bloqué — ni contour ni présence ne se montrent"),
         "Contacts/CallDetailSheet.swift": (2, "journal d'appel — la charge de l'appel ne sert pas le contour (#10957)"),
         "Contacts/CallLinkConfirmation.swift": (1, "lien d'appel — la cible résolue ne sert pas le contour (#10957)"),
         "Contacts/CallsTab.swift": (1, "journal d'appel — la charge de l'appel ne sert pas le contour (#10957)"),
-        "Main/Views/CallControlsViews.swift": (1, "appel — l'invitation qui sonne ne porte pas le contour (#10957)"),
+        "Call/Views/CallControlsViews.swift": (1, "appel — l'invitation qui sonne ne porte pas le contour (#10957)"),
         "Main/Components/ContactCard/ContactCardDetailSheet.swift": (1, "carte de contact — le compte public servi ne porte pas le contour (#10957)"),
         "Main/Components/ContactCardView.swift": (1, "carte de contact — le compte public servi ne porte pas le contour (#10957)"),
         "Main/Components/ConversationCard/ConversationLinkCardBody.swift": (1, "carte de lien — l'invitant servi ne porte pas le contour (#10957)"),
         "Main/Components/MessageDetail/MessageReactionsDetailView.swift": (1, "réactions — la liste des réacteurs ne porte pas le contour (#10957)"),
         "Main/Views/AudioFullscreenPage.swift": (1, "plein écran audio — l'auteur transmis (`ProfileSheetUser`) ne porte pas le contour (#10957)"),
         "Main/Views/GlobalSearchView.swift": (1, "résultat de MESSAGE — l'avatar de la conversation, dont la recherche ne sert ni le type ni le pair (#10957)"),
-        "Main/Views/ShareLinkArrivalsSection.swift": (1, "arrivées par lien — l'entrée servie ne porte pas le contour (#10957)"),
+        "Links/Views/ShareLinkArrivalsSection.swift": (1, "arrivées par lien — l'entrée servie ne porte pas le contour (#10957)"),
         "Main/Views/VisitorContentView.swift": (1, "visiteur — le partageur du lien servi ne porte pas le contour (#10957)"),
         "MeeshyUI/JoinFlow/InviteLanding/InviteInviterHeader.swift": (1, "invitation — le créateur du lien servi ne porte pas le contour (#10957)"),
         "MeeshyUI/Notifications/NotificationRowView.swift": (1, "notification — l'acteur est un instantané écrit sans contour (#10957)"),
         "MeeshyUI/Notifications/NotificationToastView.swift": (1, "notification — l'acteur est un instantané écrit sans contour (#10957)"),
-        "Main/Views/LoginView.swift": (1, "comptes enregistrés sur l'appareil — l'instantané local ne garde pas le contour"),
-        "Main/Views/AccountSwitcherSheet.swift": (1, "comptes enregistrés sur l'appareil — l'instantané local ne garde pas le contour"),
-        "Main/Views/ProfileOwnAvatar.swift": (1, "profil — le contour se pose AUTOUR de l'avatar (`.avatarRing`), comme sur la fiche de profil"),
-        "Main/Views/ProfileDecorSheet.swift": (1, "sélecteur de contour — chaque tuile pose SON contour autour de l'avatar (`.avatarRing`)"),
+        "Auth/Views/LoginView.swift": (1, "comptes enregistrés sur l'appareil — l'instantané local ne garde pas le contour"),
+        "Auth/Views/AccountSwitcherSheet.swift": (1, "comptes enregistrés sur l'appareil — l'instantané local ne garde pas le contour"),
+        "Profile/Views/ProfileOwnAvatar.swift": (1, "profil — le contour se pose AUTOUR de l'avatar (`.avatarRing`), comme sur la fiche de profil"),
+        "Profile/Views/ProfileDecorSheet.swift": (1, "sélecteur de contour — chaque tuile pose SON contour autour de l'avatar (`.avatarRing`)"),
         "MeeshyUI/Profile/UserProfileSheet+Header.swift": (2, "profil — le contour se pose AUTOUR de l'avatar (`.avatarRing`)"),
-        "Main/Share/ShareRecipientRow.swift": (2, "écran de partage unique en cours (#10947/#10948) — son contour est l'affaire de son lot"),
+        "Share/ShareRecipientRow.swift": (2, "écran de partage unique en cours (#10947/#10948) — son contour est l'affaire de son lot"),
         "Main/Views/PublicationViewersSheet.swift": (2, "vues d'une publication — la liste servie ne porte pas le contour (#10957)"),
         "Stories/Notifications/StoryExpiredContent.swift": (1, "notification de story expirée — l'acteur est un instantané sans contour (#10957)"),
         "MeeshyUI/Profile/UserProfileSheet+ConversationsTab.swift": (1, "entité — les conversations d'un profil"),
         "Auth/LinkSignInConfirmationSheet.swift": (1, "soi, avant toute session — aucun profil servi"),
         "Auth/Signup/SignupView+Card.swift": (1, "soi, compte en création — aucun contour équipé"),
-        "Main/Game/Photo/GameAuthorPlateView.swift": (1, "décor, illustration ou son — aucune personne"),
+        "Game/Photo/GameAuthorPlateView.swift": (1, "décor, illustration ou son — aucune personne"),
         "Main/Views/WidgetPreviewView.swift": (1, "décor, illustration ou son — aucune personne"),
         "Onboarding/OnboardingCards.swift": (1, "décor, illustration ou son — aucune personne"),
         "Onboarding/OnboardingIllustrations.swift": (2, "décor, illustration ou son — aucune personne"),

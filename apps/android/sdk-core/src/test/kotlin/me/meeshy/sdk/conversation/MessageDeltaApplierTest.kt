@@ -1,11 +1,14 @@
 package me.meeshy.sdk.conversation
 
 import com.google.common.truth.Truth.assertThat
+import me.meeshy.core.database.entity.EditRevisionEntity
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.ApiTextTranslation
 import me.meeshy.sdk.model.AttachmentReactionUpdateEvent
 import me.meeshy.sdk.model.ConversationRoomAck
+import me.meeshy.sdk.model.ApiPostReplyTarget
+import me.meeshy.sdk.model.MessageCitedPostWithdrawnEvent
 import me.meeshy.sdk.model.MessageConsumedEvent
 import me.meeshy.sdk.model.MessageCountdownStartedEvent
 import me.meeshy.sdk.model.MessageHiddenForMeEvent
@@ -57,6 +60,23 @@ class MessageDeltaApplierTest {
         applier(harness).apply(MessageRemoved("m1", "c1", expired = true), viewerId = "me")
 
         assertThat(harness.database.messageDao().find("m1")).isNull()
+    }
+
+    @Test
+    fun `a deletion and an expiry take the message's past versions with them`() = runHarnessTest { harness ->
+        harness.seedSynced(message("m1"))
+        harness.seedSynced(message("m2"))
+        val revisions = harness.database.editRevisionDao()
+        revisions.upsert(EditRevisionEntity("m1", 1, "ancien texte", 1L))
+        revisions.upsert(EditRevisionEntity("m2", 1, "autre ancien texte", 1L))
+        revisions.upsert(EditRevisionEntity("m3", 1, "intact", 1L))
+
+        applier(harness).apply(MessageRemoved("m1", "c1", "2026-10-24T10:00:00Z"), viewerId = "me")
+        applier(harness).apply(MessageRemoved("m2", "c1", expired = true), viewerId = "me")
+
+        assertThat(revisions.forMessage("m1")).isEmpty()
+        assertThat(revisions.forMessage("m2")).isEmpty()
+        assertThat(revisions.forMessage("m3")).hasSize(1)
     }
 
     @Test
@@ -183,5 +203,19 @@ class MessageDeltaApplierTest {
         val handled = applier(harness).apply(ConversationRoomAck("c1", "me", joined = true), viewerId = "me")
 
         assertThat(handled).isFalse()
+    }
+
+    @Test
+    fun `a withdrawn post turns every citation of it into an unavailable story, in place`() = runHarnessTest { harness ->
+        harness.seedSynced(message("m1").copy(postReplyTo = ApiPostReplyTarget(id = "p1", previewText = "ma story")))
+        harness.seedSynced(message("m2").copy(postReplyTo = ApiPostReplyTarget(id = "p2", previewText = "autre")))
+        harness.seedSynced(message("m3"))
+
+        val handled = applier(harness).apply(MessageCitedPostWithdrawnEvent("c1", "p1"), viewerId = "me")
+
+        assertThat(handled).isTrue()
+        assertThat(harness.cachedMessage("m1").postReplyTo).isEqualTo(ApiPostReplyTarget(id = "p1", unavailable = true))
+        assertThat(harness.cachedMessage("m2").postReplyTo?.previewText).isEqualTo("autre")
+        assertThat(harness.cachedMessage("m3").postReplyTo).isNull()
     }
 }

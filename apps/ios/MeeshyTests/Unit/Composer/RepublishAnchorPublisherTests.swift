@@ -90,7 +90,7 @@ final class RepublishAnchorPublisherTests: XCTestCase {
 
     func test_laPorteDeRepublication_ancreParLePublieurDeRepost() throws {
         let code = AppSourceGuard.stripComments(
-            try AppSourceGuard.unit("Meeshy/Features/Main/Composer/StoryRepublishComposer.swift"))
+            try AppSourceGuard.unit("Meeshy/Features/Composer/StoryRepublishComposer.swift"))
         XCTAssertTrue(
             code.contains("RepostPublisher"),
             "L'ancrage d'une republication passe par `RepostPublisher` — `POST /posts/:id/repost`, "
@@ -110,7 +110,7 @@ final class RepublishAnchorPublisherTests: XCTestCase {
     /// l'endpoint de repost.
     func test_laPorteDuTray_gardeLaFileDurable_carElleNeCiteJamais() throws {
         let code = AppSourceGuard.stripComments(
-            try AppSourceGuard.unit("Meeshy/Features/Main/Views/StoryTrayActions.swift"))
+            try AppSourceGuard.unit("Meeshy/Features/Stories/Views/StoryTrayActions.swift"))
         XCTAssertTrue(
             code.contains("ComposerDocumentDurablePublisher"),
             "La création depuis le tray part d'une ardoise : sa file durable est le bon chemin, "

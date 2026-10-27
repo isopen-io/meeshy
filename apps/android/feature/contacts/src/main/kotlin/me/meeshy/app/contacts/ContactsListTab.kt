@@ -23,7 +23,9 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material.icons.Icons
@@ -59,6 +61,7 @@ import me.meeshy.ui.theme.MeeshyTheme
  * row and search, driven by [ContactsListViewModel]. Cache-first: a skeleton
  * shows only on a cold empty load; a populated roster paints immediately.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ContactsListTab(
     onOpenProfile: (String) -> Unit = {},
@@ -81,12 +84,18 @@ fun ContactsListTab(
         )
         FilterRow(selected = state.filter, counts = state.filterCounts, onSelect = viewModel::setFilter)
 
-        when {
-            state.showSkeleton -> Centered { CircularProgressIndicator() }
-            state.errorMessage != null -> ErrorState(onRetry = viewModel::load)
-            state.isEmpty -> EmptyMessage(stringResource(R.string.contacts_list_empty))
-            state.isFilteredEmpty -> EmptyMessage(stringResource(R.string.contacts_list_filtered_empty))
-            else -> FriendList(state.visibleFriends, moodEmojiFor = state::moodEmojiFor, onOpenProfile = onOpenProfile)
+        PullToRefreshBox(
+            isRefreshing = state.isRefreshing,
+            onRefresh = viewModel::refresh,
+            modifier = Modifier.fillMaxSize(),
+        ) {
+            when {
+                state.showSkeleton -> Centered { CircularProgressIndicator() }
+                state.errorMessage != null -> ErrorState(onRetry = viewModel::load)
+                state.isEmpty -> EmptyMessage(stringResource(R.string.contacts_list_empty))
+                state.isFilteredEmpty -> EmptyMessage(stringResource(R.string.contacts_list_filtered_empty))
+                else -> FriendList(state.visibleFriends, moodEmojiFor = state::moodEmojiFor, onOpenProfile = onOpenProfile)
+            }
         }
     }
     ConnectionFeedbackHost(feedback = connectionViewModel.feedback)
@@ -128,17 +137,27 @@ private fun FriendList(
         contentPadding = PaddingValues(vertical = 8.dp),
     ) {
         items(friends, key = { it.id }) { friend ->
-            FriendRow(friend, moodEmoji = moodEmojiFor(friend.id), onClick = { onOpenProfile(friend.id) })
+            FriendRow(
+                friend,
+                moodEmoji = moodEmojiFor(friend.id),
+                onClick = { onOpenProfile(friend.id) },
+                modifier = Modifier.animateItem(),
+            )
         }
     }
 }
 
 /** A contact row — iOS `ContactRow`: the whole row opens the profile, presence sits ON the avatar. */
 @Composable
-private fun FriendRow(friend: FriendRequestUser, moodEmoji: String?, onClick: () -> Unit) {
+private fun FriendRow(
+    friend: FriendRequestUser,
+    moodEmoji: String?,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val name = friend.resolvedName.ifBlank { friend.username.ifBlank { "?" } }
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clickable(enabled = friend.id.isNotBlank(), role = Role.Button, onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 8.dp),

@@ -283,15 +283,24 @@ class AudioFetcherService:
             return None
 
     def cleanup_temp_file(self, file_path: str):
-        """Supprime un fichier temporaire après utilisation"""
-        try:
-            if file_path and os.path.exists(file_path):
-                # Ne supprimer que si c'est dans notre répertoire temp
-                if str(TEMP_AUDIO_DIR) in file_path:
-                    os.remove(file_path)
-                    logger.debug(f"[AudioFetcher] 🗑️ Fichier temp supprimé: {Path(file_path).name}")
-        except Exception as e:
-            logger.warning(f"[AudioFetcher] Erreur suppression fichier temp: {e}")
+        """
+        Supprime un fichier temporaire après utilisation, ET sa conversion WAV
+        (`<nom>.converted.wav`, `utils.audio_format_converter`) : #13102 — le
+        clair d'un vocal ne reste pas sur le disque du translator une fois la
+        tâche finie. Seulement sous le répertoire temporaire.
+        """
+        if not file_path or str(TEMP_AUDIO_DIR) not in file_path:
+            return
+        from utils.audio_format_converter import _conversion_cache
+        converted = str(Path(file_path).with_suffix('.converted.wav'))
+        _conversion_cache.pop(file_path, None)
+        for path in (file_path, converted):
+            try:
+                if os.path.exists(path):
+                    os.remove(path)
+                    logger.debug(f"[AudioFetcher] 🗑️ Fichier temp supprimé: {Path(path).name}")
+            except Exception as e:
+                logger.warning(f"[AudioFetcher] Erreur suppression fichier temp: {type(e).__name__}")
 
     def cleanup_old_temp_files(self, max_age_hours: int = 24):
         """Nettoie les fichiers temporaires plus vieux que max_age_hours"""

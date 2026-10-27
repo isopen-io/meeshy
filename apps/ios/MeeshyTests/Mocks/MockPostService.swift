@@ -219,6 +219,8 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
     }()
     var getCommentsCallCount = 0
     var lastGetCommentsPostId: String?
+    var lastGetCommentsCursor: String?
+    var lastGetCommentsLimit: Int?
     /// File de pages pour les tests multi-pages (chasse paginée d'un
     /// commentaire notifié) : consommée en priorité, une entrée par appel.
     var getCommentsResultsQueue: [Result<PaginatedAPIResponse<[APIPostComment]>, Error>] = []
@@ -718,6 +720,8 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
     func getComments(postId: String, cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPostComment]> {
         getCommentsCallCount += 1
         lastGetCommentsPostId = postId
+        lastGetCommentsCursor = cursor
+        lastGetCommentsLimit = limit
         if !getCommentsResultsQueue.isEmpty {
             return try getCommentsResultsQueue.removeFirst().get()
         }
@@ -882,6 +886,8 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
 
         getCommentsCallCount = 0
         lastGetCommentsPostId = nil
+        lastGetCommentsCursor = nil
+        lastGetCommentsLimit = nil
 
         recordSocialEventsCallCount = 0
         recordedSocialEventBatches = []

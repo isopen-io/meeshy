@@ -15,7 +15,7 @@
   "face": 0,
   "depth": 0,
   "bbox": null,
-  "windowPx": 138121,
+  "windowPx": 138141,
   "layout": "pied",
   "verdict": "ok"
  },
@@ -50,7 +50,7 @@
   "face": 0,
   "depth": 0,
   "bbox": null,
-  "windowPx": 132255,
+  "windowPx": 132345,
   "layout": "perchés",
   "verdict": "ok"
  },
@@ -60,7 +60,7 @@
   "face": 0,
   "depth": 0,
   "bbox": null,
-  "windowPx": 129463,
+  "windowPx": 129467,
   "layout": "pied",
   "verdict": "ok"
  },
@@ -90,7 +90,7 @@
   "face": 0,
   "depth": 0,
   "bbox": null,
-  "windowPx": 133002,
+  "windowPx": 133037,
   "layout": "pied",
   "verdict": "ok"
  },
@@ -100,7 +100,7 @@
   "face": 0,
   "depth": 0,
   "bbox": null,
-  "windowPx": 132529,
+  "windowPx": 132524,
   "layout": "pied",
   "verdict": "ok"
  },
@@ -150,7 +150,7 @@
   "face": 0,
   "depth": 0,
   "bbox": null,
-  "windowPx": 155311,
+  "windowPx": 155356,
   "layout": "feuilles",
   "verdict": "ok"
  },
@@ -160,7 +160,7 @@
   "face": 0,
   "depth": 0,
   "bbox": null,
-  "windowPx": 137244,
+  "windowPx": 137322,
   "layout": "pied",
   "verdict": "ok"
  },

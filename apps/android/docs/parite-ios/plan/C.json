@@ -5035,7 +5035,7 @@
   "ios_reference_files": [
    "packages/MeeshySDK/Sources/MeeshyUI/Packs/UnifiedShopView.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Packs/PackShopView.swift",
-   "apps/ios/Meeshy/Features/Main/Views/PacksSettingsView.swift",
+   "apps/ios/Meeshy/Features/Settings/Views/PacksSettingsView.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Story/StickerPickerView+Packs.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Story/StickerPackShopView.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Story/StickerSheetPage.swift"
@@ -6599,7 +6599,7 @@
   ],
   "ios_reference_files": [
    "apps/ios/Meeshy/Features/Main/Components/LocationPickerView.swift",
-   "apps/ios/Meeshy/Features/Main/Components/LocationSharingSettingsSection.swift",
+   "apps/ios/Meeshy/Features/Settings/Components/LocationSharingSettingsSection.swift",
    "apps/ios/Meeshy/Features/Main/Views/SendPlaceTileLaw.swift"
   ],
   "feature_keys": [
@@ -6686,7 +6686,7 @@
    "apps/ios/Meeshy/Features/Main/Views/ConversationStickerRendering.swift",
    "apps/ios/Meeshy/Features/Main/Views/ConversationView+StickerSheet.swift",
    "apps/ios/Meeshy/Features/Main/Views/StickerSheetLinks.swift",
-   "apps/ios/Meeshy/Features/Main/Views/PacksSettingsView.swift",
+   "apps/ios/Meeshy/Features/Settings/Views/PacksSettingsView.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Models/StickerPackModels.swift"
   ],
   "feature_keys": [
@@ -7649,7 +7649,7 @@
    "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/ShareLinksReloadLaw.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/ShareLinksView.swift"
+   "apps/ios/Meeshy/Features/Links/Views/ShareLinksView.swift"
   ],
   "feature_keys": [
    "ext-sharelinks-list",
@@ -7792,8 +7792,8 @@
    "apps/android/app/src/test/kotlin/me/meeshy/app/liveactivity/LiveActivityNotifierTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/LiveActivity/LiveActivityBackend.swift",
-   "apps/ios/Meeshy/Features/Main/LiveActivity/LiveActivityHost.swift",
+   "apps/ios/Meeshy/Features/LiveActivity/LiveActivityBackend.swift",
+   "apps/ios/Meeshy/Features/LiveActivity/LiveActivityHost.swift",
    "apps/ios/MeeshyWidgets/CallLiveActivity.swift",
    "apps/ios/MeeshyWidgets/OutboxLiveActivity.swift",
    "apps/ios/MeeshyWidgets/VoicePlaybackLiveActivity.swift",
@@ -8086,7 +8086,7 @@
    "apps/android/app/src/main/kotlin/me/meeshy/app/ongoing/recording/RecordingOngoingController.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/LiveActivity/VoiceRecordingActivityLaw.swift"
+   "apps/ios/Meeshy/Features/LiveActivity/VoiceRecordingActivityLaw.swift"
   ],
   "feature_keys": [
    "ext-ongoing-voice-recording"
@@ -8202,7 +8202,7 @@
    "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/share/ShareRecipientDirectory.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Share/ShareRecipient.swift"
+   "apps/ios/Meeshy/Features/Share/ShareRecipient.swift"
   ],
   "feature_keys": [
    "ext-share-recipients-picker"
@@ -8242,7 +8242,7 @@
    "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/conversation/MessageForwardService.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Share/ShareDispatcher.swift"
+   "apps/ios/Meeshy/Features/Share/ShareDispatcher.swift"
   ],
   "feature_keys": [
    "ext-share-dispatcher-fanout"
@@ -8321,7 +8321,7 @@
    "apps/android/feature/chat/src/main/kotlin/me/meeshy/app/chat/share/ShareActionsZone.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Share/ShareSheetView+Actions.swift"
+   "apps/ios/Meeshy/Features/Share/ShareSheetView+Actions.swift"
   ],
   "feature_keys": [
    "ext-share-actions-zone"
@@ -8360,7 +8360,7 @@
    "apps/android/feature/chat/src/main/kotlin/me/meeshy/app/chat/share/ShareContentZone.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Share/ShareContentZone.swift"
+   "apps/ios/Meeshy/Features/Share/ShareContentZone.swift"
   ],
   "feature_keys": [
    "ext-share-content-zone"
@@ -8397,7 +8397,7 @@
    "apps/android/feature/chat/src/main/kotlin/me/meeshy/app/chat/share/ShareRecipientRow.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Share/ShareRecipientRow.swift"
+   "apps/ios/Meeshy/Features/Share/ShareRecipientRow.swift"
   ],
   "feature_keys": [
    "ext-share-recipients-picker"
@@ -8435,7 +8435,7 @@
    "apps/android/feature/chat/src/main/kotlin/me/meeshy/app/chat/share/ShareSendBar.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Share/ShareSendBar.swift"
+   "apps/ios/Meeshy/Features/Share/ShareSendBar.swift"
   ],
   "feature_keys": [
    "ext-share-send-bar-delivery-states"
@@ -8525,7 +8525,7 @@
    "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/share/ShareRequest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Share/ShareSheetView.swift"
+   "apps/ios/Meeshy/Features/Share/ShareSheetView.swift"
   ],
   "feature_keys": [
    "ext-share-sheet-shell"
@@ -8611,7 +8611,7 @@
    "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/share/ShareRequestHolder.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Share/ShareSheetHost+App.swift"
+   "apps/ios/Meeshy/Features/Share/ShareSheetHost+App.swift"
   ],
   "feature_keys": [
    "ext-share-sheet-shell"
@@ -9088,7 +9088,7 @@
    "apps/android/feature/settings/src/main/res/values-fr/location_sharing_strings.xml"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Components/LocationSharingSettingsSection.swift",
+   "apps/ios/Meeshy/Features/Settings/Components/LocationSharingSettingsSection.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Location/LocationSharingPreferencesStore.swift"
   ],
   "feature_keys": [
@@ -9140,7 +9140,7 @@
    "apps/android/feature/conversations/src/main/res/values-fr/links_hub_strings.xml"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/LinksHubView.swift"
+   "apps/ios/Meeshy/Features/Links/Views/LinksHubView.swift"
   ],
   "feature_keys": [
    "cmp-links-hub"
@@ -10195,7 +10195,7 @@
    "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/ShareLinkArrivalStats.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/ShareLinkArrivalsListView.swift"
+   "apps/ios/Meeshy/Features/Links/Views/ShareLinkArrivalsListView.swift"
   ],
   "feature_keys": [
    "ext-sharelinks-arrivals"
@@ -10321,7 +10321,7 @@
    "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/imagine/ImagineRequestBuilder.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Export/MessageCardExportPresenter.swift"
+   "apps/ios/Meeshy/Features/Export/MessageCardExportPresenter.swift"
   ],
   "feature_keys": [
    "ext-imagine-entry-points",
@@ -10468,7 +10468,7 @@
    "apps/android/app/src/main/kotlin/me/meeshy/app/ongoing/outbox/OutboxOngoingController.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/LiveActivity/OutboxActivityLaw.swift"
+   "apps/ios/Meeshy/Features/LiveActivity/OutboxActivityLaw.swift"
   ],
   "feature_keys": [
    "ext-ongoing-outbox-progress"
@@ -10506,7 +10506,7 @@
    "apps/android/feature/chat/src/main/kotlin/me/meeshy/app/chat/imagine/ImagineExcerptStrip.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Export/MessageCardMediaLoader.swift"
+   "apps/ios/Meeshy/Features/Export/MessageCardMediaLoader.swift"
   ],
   "feature_keys": [
    "ext-imagine-media-excerpt"
@@ -10544,7 +10544,7 @@
    "apps/android/feature/chat/src/main/kotlin/me/meeshy/app/chat/imagine/ImagineTrayPanels.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Export/MessageCardExportTray.swift"
+   "apps/ios/Meeshy/Features/Export/MessageCardExportTray.swift"
   ],
   "feature_keys": [
    "ext-imagine-tray"
@@ -10584,7 +10584,7 @@
    "apps/android/feature/chat/src/main/kotlin/me/meeshy/app/chat/imagine/ImagineViewModel.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Export/MessageCardExportSheet.swift"
+   "apps/ios/Meeshy/Features/Export/MessageCardExportSheet.swift"
   ],
   "feature_keys": [
    "ext-imagine-export-sheet"
@@ -10624,7 +10624,7 @@
    "apps/android/feature/chat/src/main/kotlin/me/meeshy/app/chat/share/ShareSheetViewModel.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Share/ShareRelayHandoff.swift"
+   "apps/ios/Meeshy/Features/Share/ShareRelayHandoff.swift"
   ],
   "feature_keys": [
    "ext-share-relay-signin-e2ee"
@@ -10672,7 +10672,7 @@
    "apps/android/app/src/main/kotlin/me/meeshy/app/share/LazyShareFileProvider.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/ShareableLink.swift"
+   "apps/ios/Meeshy/Features/Links/Views/ShareableLink.swift"
   ],
   "feature_keys": [
    "ext-share-external-post-link",
@@ -10720,7 +10720,7 @@
    "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/MessageCardSource.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Export/MessageCardExportMenu.swift",
+   "apps/ios/Meeshy/Features/Export/MessageCardExportMenu.swift",
    "apps/ios/Meeshy/Features/Main/Views/ConversationView+MessageExport.swift"
   ],
   "feature_keys": [
@@ -10777,7 +10777,7 @@
    "apps/android/feature/chat/src/main/kotlin/me/meeshy/app/chat/MessageCardGallerySheet.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Export/MessageCardExportGallery.swift",
+   "apps/ios/Meeshy/Features/Export/MessageCardExportGallery.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/MessageCard/MessageCardTemplates.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/MessageCard/MessageCardSearch.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/MessageCard/MessageCardFormat.swift"
@@ -10885,7 +10885,7 @@
    "apps/android/feature/chat/src/main/kotlin/me/meeshy/app/chat/MessageCardExportSheet.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Export/MessageCardExportSheet+Output.swift",
+   "apps/ios/Meeshy/Features/Export/MessageCardExportSheet+Output.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/MessageCard/MessageCardLayout+Audio.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/MessageCard/MessageCardMedia.swift"
   ],

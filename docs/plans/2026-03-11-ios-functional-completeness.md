@@ -479,7 +479,7 @@ private func stopHeartbeat() {
 
 **Fichiers exclusifs:**
 - Modify: `packages/MeeshySDK/Sources/MeeshySDK/Auth/AuthService.swift`
-- Modify: `apps/ios/Meeshy/Features/Main/Views/ChangePasswordView.swift`
+- Modify: `apps/ios/Meeshy/Features/Settings/Views/ChangePasswordView.swift`
 
 ### Task 1: Add `changePassword()` to AuthService
 
@@ -503,7 +503,7 @@ func changePassword(currentPassword: String, newPassword: String) async throws {
 
 **Step 2: Refactor ChangePasswordView to use AuthService**
 
-File: `apps/ios/Meeshy/Features/Main/Views/ChangePasswordView.swift`
+File: `apps/ios/Meeshy/Features/Settings/Views/ChangePasswordView.swift`
 
 Replace the inline `URLRequest` / `URLSession` call (around lines 335-350) with:
 
@@ -857,7 +857,7 @@ Add Invite action in `CommunityMembersView`.
 
 **Fichiers exclusifs:**
 - Create: `packages/MeeshySDK/Sources/MeeshySDK/Services/TwoFactorService.swift`
-- Modify: `apps/ios/Meeshy/Features/Main/Views/SecurityView.swift`
+- Modify: `apps/ios/Meeshy/Features/Settings/Views/SecurityView.swift`
 
 ### Task 1: Create TwoFactorService
 
@@ -935,7 +935,7 @@ final class TwoFactorService: TwoFactorServiceProviding, Sendable {
 
 ### Task 2: Add 2FA UI section in SecurityView
 
-File: `apps/ios/Meeshy/Features/Main/Views/SecurityView.swift`
+File: `apps/ios/Meeshy/Features/Settings/Views/SecurityView.swift`
 
 Add a "Two-Factor Authentication" section with:
 - Status indicator (enabled/disabled)
@@ -1166,7 +1166,7 @@ git tag phase-2-optimized
 - Modify: `apps/ios/Meeshy/Features/Main/Views/EditProfileView.swift`
 - Modify: `apps/ios/Meeshy/MeeshyApp.swift` (SplashScreen only)
 - Modify: `apps/ios/Meeshy/Features/Main/Views/NewConversationView.swift`
-- Modify: `apps/ios/Meeshy/Features/Main/Views/SecurityView.swift`
+- Modify: `apps/ios/Meeshy/Features/Settings/Views/SecurityView.swift`
 
 ### Task 1: Replace hardcoded colors
 
@@ -1194,7 +1194,7 @@ Reference: `packages/MeeshySDK/Sources/MeeshySDK/Theme/MeeshyColors.swift`
 
 **Fichiers exclusifs:**
 - Create: `packages/MeeshySDK/Sources/MeeshySDK/Services/SessionService.swift`
-- Create: `apps/ios/Meeshy/Features/Main/Views/ActiveSessionsView.swift`
+- Create: `apps/ios/Meeshy/Features/Settings/Views/ActiveSessionsView.swift`
 
 ### Task 1: Create SessionService
 

@@ -9,6 +9,11 @@ extension APIMessageUpsert {
         let pendingDelete: Bool
         let staleLiveCall: Bool
         let pendingReaction: Bool
+        /// #13142 — la ligne d'une conversation chiffrée de bout en bout : ses
+        /// réactions et sa suppression pour tous voyagent en signaux chiffrés,
+        /// la passerelle n'en sait rien. Une page servie peut au plus masquer
+        /// la ligne (`deletedAt`), jamais la démasquer ni effacer ses réactions.
+        let signalsAreLocal: Bool
     }
 
     static func mergeGuards(
@@ -19,6 +24,9 @@ extension APIMessageUpsert {
     ) -> MergeGuards {
         MergeGuards(
             keepLocalPlaintext: api.isEncrypted == true
+                // #12999 — un message chiffré de bout en bout ne garde jamais son
+                // clair dans cette base : il vit dans le coffre libsignal.
+                && api.encryptionMode != E2EEWire.mode
                 && !existing.isEncrypted
                 && !(existing.content ?? "").isEmpty
                 // Le littéral servi n'est pas un clair local : une ligne née
@@ -26,11 +34,12 @@ extension APIMessageUpsert {
                 && existing.content != E2EEWire.contentPlaceholder,
             pendingEdit: pending.edits.contains(api.id),
             pendingDelete: pending.deletes.contains(api.id),
-            staleLiveCall: MessagePersistenceActor.isStaleLiveCallSnapshot(
+            staleLiveCall: CallSummaryMetadata.isStaleLiveSnapshot(
                 existing: existing.callSummaryJson,
                 incoming: columns.callSummaryJson
             ),
-            pendingReaction: pending.reactions.contains(api.id)
+            pendingReaction: pending.reactions.contains(api.id),
+            signalsAreLocal: existing.encryptionMode == E2EEWire.mode || api.encryptionMode == E2EEWire.mode
         )
     }
 
@@ -75,7 +84,7 @@ extension APIMessageUpsert {
             if api.editAuthorship.servesEditor { next.editedById = api.editAuthorship.servedEditorId }
         }
         if !guards.pendingDelete {
-            next.deletedAt = api.deletedAt
+            next.deletedAt = guards.signalsAreLocal ? (record.deletedAt ?? api.deletedAt) : api.deletedAt
         }
         if !guards.keepLocalPlaintext {
             next.isEncrypted = api.isEncrypted ?? next.isEncrypted
@@ -132,7 +141,7 @@ extension APIMessageUpsert {
     ) -> MessageRecord {
         var next = record
         next.attachmentsJson = columns.attachmentsJson ?? next.attachmentsJson
-        if !guards.pendingReaction {
+        if !guards.pendingReaction && !guards.signalsAreLocal {
             next.reactionsJson = columns.reactionsJson
             next.reactionCount = columns.reactionCount
         }
@@ -167,6 +176,9 @@ extension APIMessageUpsert {
         api: APIMessage,
         in db: Database
     ) throws -> Bool {
+        if api.deletedAt != nil {
+            try MessagePlaintextErasures.confirmDeletion(of: before.localId, in: db)
+        }
         let rowChanged = !upsertMutatedFieldsEqual(updated, before)
             || (api.updatedAt != nil && api.updatedAt != before.updatedAt)
         guard rowChanged else { return false }

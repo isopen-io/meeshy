@@ -1,6 +1,6 @@
 // L'exportateur unique (lot L1, § 5.1 et § 5.3 du prompt) : chaque cadre généré devient un jeu de couches raster
 // WebP rognées à leur boîte, et un export.json BRUT qui décrit ce que l'app peindra elle-même (texte, oiseaux, blason).
-// Usage : node lib/export.mjs [--generate] [--out out] [--plates out-plate] [--export export] [--only savane,neon] [--jobs 3] [--mutate <défaut>]
+// Usage : node lib/export.mjs [--generate] [--out out] [--plates out-plate] [--export export] [--controle ../controle] [--only savane,neon] [--jobs 3] [--mutate <défaut>]
 //   --generate régénère d'abord les SVG de chaque atelier (python3, ou $PYTHON ; poses demande numpy et Pillow), et
 //              les rejoue dans les deux variantes de plaque (CADRES_PLATE=plain|message) sous out-plate/<variante>/
 //   --mutate rejoue un défaut connu pour montrer export-check.mjs ROUGE :
@@ -11,15 +11,26 @@
 //     se voit — c'est la FENÊTRE, sans aucune heuristique de couleur ;
 //   - le décor est rendu sans photo, sans texte, sans oiseaux, sans blason, sans plaque, puis COUPÉ à la fenêtre :
 //     dans la fenêtre son alpha est nul, et ce qu'il y peignait part dans `grade` (normal, ou `screen` séparément) ;
-//   - chaque couche est rognée à sa boîte, encodée par sharp, adressée par son empreinte dans export.json.
+//   - les textes de décor NEUTRES (table du tri, lib/decor-sorts.mjs, #10256) sont rendus AVEC le décor : cuits dans
+//     sa couche, ils quittent les emplacements de texte ; les autres restent des emplacements, traduits ou vivants ;
+//   - chaque couche est rognée à sa boîte, encodée par sharp, adressée par son empreinte dans export.json ;
+//   - Mee et Meo partent en MISES EN PAGE déclarées (#10277) : celles que lib/overlap.mjs a validées et écrites dans
+//     controle/mises-en-page-<collection>.json, chacune avec ses ancres et son verdict `validated` ;
+//   - la fenêtre part aussi en CHEMIN (`window.path`, #10254, lib/window-path.mjs) : le contour rectiligne de ce même
+//     masque, que le peintre découpe sans décoder d'image et qui le rend au pixel près.
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { generateAteliers, PLATE_VARIANTS as VARIANTS } from './ateliers.mjs';
+import { exportedBirds } from './bird-layouts.mjs';
 import { launch } from './launch.mjs';
-import { classify, isFront, read, show } from './layers.mjs';
+import { bakedSlotsOf, DECOR_TEXTS_FILE, frameIdOf, readDecorTexts } from './decor-sorts.mjs';
+import { flatColor, slotsOf, underGlyphContrastOf } from './contrast-rule.mjs';
+import { classify, isFront, markBaked, read, show } from './layers.mjs';
+import { declaredAnchor, loadPoses } from './overlap-measure.mjs';
 import { H, openPage, pool, SCALE, shoot, showSvg, W } from './page.mjs';
 import sharp, { sharpVersion } from './sharp.mjs';
+import { windowPath } from './window-path.mjs';
 
 const HERE = path.dirname(new URL(import.meta.url).pathname);
 const arg = (name, fallback) => {
@@ -32,6 +43,15 @@ const EXPORT = path.resolve(arg('--export', path.join(HERE, '../export')));
 const ONLY = arg('--only') ? new Set(arg('--only').split(',')) : null;
 const JOBS = Number(arg('--jobs', '3'));
 const MUTATE = arg('--mutate', null);
+const DECOR_TEXTS = readDecorTexts(path.resolve(arg('--decor-texts', DECOR_TEXTS_FILE)));
+const CONTROLE = path.resolve(arg('--controle', path.join(HERE, '../../controle')));
+const POSES = loadPoses();
+// Les mises en page de Mee et Meo que la garde a validées (lib/overlap.mjs → controle/mises-en-page-<collection>.json,
+// #10277) : l'export les porte telles quelles, avec leur verdict.
+const declaredOf = (collection) => {
+  const file = path.join(CONTROLE, `mises-en-page-${collection}.json`);
+  return new Map((fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : []).map((record) => [record.frame, record]));
+};
 
 const FW = W * SCALE;
 const FH = H * SCALE;
@@ -88,45 +108,7 @@ async function encode(dir, name, buf, { quality = QUALITY.layer, lossless = fals
   return { src: path.basename(dir) + '/' + name + '.webp', box, bytes: webp.length, sha256: sha256(webp) };
 }
 
-const luminance = (r, g, b) => {
-  const lin = (c) => {
-    const v = c / 255;
-    return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
-  };
-  return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
-};
-const rgbOf = (css) => {
-  const m = /rgba?\(([^)]+)\)/.exec(css ?? '');
-  if (m) return m[1].split(',').slice(0, 3).map((v) => Number.parseFloat(v));
-  const h = /^#([0-9a-f]{6})/i.exec(css ?? '');
-  return h ? [0, 2, 4].map((i) => Number.parseInt(h[1].slice(i, i + 2), 16)) : null;
-};
-const fillColors = (fill) => (fill?.solid ? [rgbOf(fill.solid)] : (fill?.stops ?? []).map((s) => rgbOf(s.color))).filter(Boolean);
-const flatColor = (i) => [20 + (i % 8) * 30, 20 + Math.floor(i / 8) * 30, 200];
-
-function contrastOf(mask, color, bg, main) {
-  const colors = fillColors(main.fill);
-  if (colors.length === 0) return null;
-  const op = main.opacity;
-  const ratios = [];
-  const [bx, by, bw, bh] = main.bbox;
-  const x0 = Math.max(0, bx - 8), x1 = Math.min(FW, bx + bw + 8), y0 = Math.max(0, by - 8), y1 = Math.min(FH, by + bh + 8);
-  for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) {
-    const p = (y * FW + x) * 4;
-    if (mask[p + 3] !== 255 || mask[p] !== color[0] || mask[p + 1] !== color[1] || mask[p + 2] !== color[2]) continue;
-    const a = bg[p + 3] / 255;
-    const back = [bg[p] * a, bg[p + 1] * a, bg[p + 2] * a];
-    const lb = luminance(...back);
-    const worst = Math.min(...colors.map((c) => {
-      const lt = luminance(...c.map((v, k) => v * op + back[k] * (1 - op)));
-      return (Math.max(lt, lb) + 0.05) / (Math.min(lt, lb) + 0.05);
-    }));
-    ratios.push(worst);
-  }
-  if (ratios.length === 0) return null;
-  ratios.sort((x, y) => x - y);
-  return { contrast: Math.round(ratios[Math.floor(ratios.length * 0.05)] * 100) / 100, contrastMin: Math.round(ratios[0] * 100) / 100, glyphPixels: ratios.length };
-}
+const frameImage = (data) => ({ data, width: FW, height: FH });
 
 // Une couche posée sur le décor se lit DANS la scène où Chromium la peint, pas seule : un filtre en linearRGB
 // (l'ombre portée d'une plaque) quantifie les sombres sur 8 bits, et la trame de ce tramage dépend de ce qui est peint
@@ -144,21 +126,6 @@ function inScene(alone, full, without, above) {
     for (let c = 0; c < 3; c++) out[p + c] = Math.max(0, Math.min(255, Math.round((full[p + c] - (1 - k) * without[p + c]) / k)));
   }
   return out;
-}
-
-function slotsOf(texts) {
-  const groups = new Map();
-  texts.forEach((t) => groups.set(t.slot, [...(groups.get(t.slot) ?? []), t]));
-  return [...groups.entries()].map(([slot, members]) => {
-    const plain = members.filter((t) => !t.filter && t.opacity >= 0.5);
-    const main = (plain.length ? plain : members).at(-1);
-    const effects = members.filter((t) => t !== main).map((t) => ({
-      dx: Math.round((t.matrix[4] + t.x - main.matrix[4] - main.x) * 100) / 100,
-      dy: Math.round((t.matrix[5] + t.baseline - main.matrix[5] - main.baseline) * 100) / 100,
-      fill: t.fill, stroke: t.stroke, opacity: t.opacity, filter: t.filter, under: t.index < main.index,
-    }));
-    return { slot, main, effects };
-  });
 }
 
 function stackOf(order, runs) {
@@ -206,7 +173,7 @@ function bandOf(decor, front) {
 }
 
 const frontKinds = (order) => Object.keys(order).filter(isFront).sort((a, b) => order[a] - order[b]);
-const sceneOf = (order, runs) => ['photo', 'photo-bg', 'backdrop', ...runs.map((r) => r.kind), ...frontKinds(order), 'crest', 'plate', 'birds', 'text'];
+const sceneOf = (order, runs, baked = []) => ['photo', 'photo-bg', 'backdrop', ...runs.map((r) => r.kind), ...baked, ...frontKinds(order), 'crest', 'plate', 'birds', 'text'];
 
 async function plateInScene(render, order, scene) {
   const full = await render(scene);
@@ -221,25 +188,27 @@ const PLATE_SLOTS = (slot) => ['kicker', 'title', 'message', 'date'].includes(sl
 // L'AUTRE variante de la plaque (§ 5.1, #10252) : l'atelier rejoué avec CADRES_PLATE (lib/base.py) l'a dessinée
 // dans out-plate/<variante>/ ; on la lit dans SA scène, on vérifie que son décor est celui du cadre au pixel près
 // (`decorDelta`), et on garde la géométrie de ses emplacements (le message déplace la date).
-async function otherPlate(handle, render, { collection, name, variant, decor }) {
+async function otherPlate(handle, render, { collection, name, variant, decor, baked }) {
   const file = path.join(PLATES, variant, collection, name + '.svg');
   if (!fs.existsSync(file)) return { variant, missing: true };
   await showSvg(handle, fs.readFileSync(file, 'utf8'), { fonts: 'exact' });
   const { order, runs } = await handle.page.evaluate(classify);
   if (order.plate === undefined) return { variant, missing: true };
-  const own = await render(['backdrop', ...runs.map((r) => r.kind)]);
+  if (baked.length) await handle.page.evaluate(markBaked, baked);
+  const BAKED = baked.length ? ['baked'] : [];
+  const own = await render(['backdrop', ...runs.map((r) => r.kind), ...BAKED]);
   let decorDelta = 0;
   for (let i = 0; i < own.raw.length; i += 4) if (own.raw.readUInt32LE(i) !== decor.readUInt32LE(i)) decorDelta++;
-  const plate = await plateInScene(render, order, sceneOf(order, runs));
+  const plate = await plateInScene(render, order, sceneOf(order, runs, BAKED));
   const dom = await handle.page.evaluate(read);
-  const text = Object.fromEntries(slotsOf(dom.texts).filter((s) => PLATE_SLOTS(s.slot)).map((s) => {
+  const text = Object.fromEntries(slotsOf(dom.texts.filter((t) => !baked.includes(t.slot))).filter((s) => PLATE_SLOTS(s.slot)).map((s) => {
     const { index, slot, ...main } = s.main;
     return [slot, { ...main, effects: s.effects }];
   }));
   return { variant, plate, decorDelta, text };
 }
 
-async function exportFrame(handle, { collection, name, message }) {
+async function exportFrame(handle, { collection, name, message, declared }) {
   const dir = path.join(EXPORT, collection, name);
   fs.mkdirSync(dir, { recursive: true });
   const svg = fs.readFileSync(path.join(OUT, collection, name + '.svg'), 'utf8');
@@ -253,7 +222,12 @@ async function exportFrame(handle, { collection, name, message }) {
     return { inventory, raw: await decode(await shoot(handle)) };
   };
   const has = (k) => order[k] !== undefined;
-  const decorKinds = [...DECOR_KINDS, ...(MUTATE === 'text-in-decor' ? ['text'] : []), ...(MUTATE === 'birds-in-decor' ? ['birds'] : [])];
+  const samples = new Map(slotsOf(dom.texts).map((s) => [s.slot, s.main.text]));
+  const baked = bakedSlotsOf(DECOR_TEXTS, frameIdOf(collection, name), samples);
+  if (baked.length) await page.evaluate(markBaked, baked);
+  const BAKED = baked.length ? ['baked'] : [];
+  const cleanKinds = [...DECOR_KINDS, ...BAKED];
+  const decorKinds = [...cleanKinds, ...(MUTATE === 'text-in-decor' ? ['text'] : []), ...(MUTATE === 'birds-in-decor' ? ['birds'] : [])];
 
   const probeM = await render(DECOR_KINDS, { probe: '#FF00FF' });
   const probeG = await render(DECOR_KINDS, { probe: '#00FF00' });
@@ -268,11 +242,12 @@ async function exportFrame(handle, { collection, name, message }) {
   const FRONT_KINDS = frontKinds(order);
   const fronts = [];
   for (const kind of FRONT_KINDS) fronts.push({ rank: kind.slice('front:'.length), shot: await render([kind]) });
-  const notext = await render(['photo', 'photo-bg', 'backdrop', ...DECOR_KINDS, ...FRONT_KINDS, 'crest', 'plate', 'birds']);
-  const plate = has('plate') ? await plateInScene(render, order, sceneOf(order, runs)) : null;
-  const decorClean = decorKinds.length === DECOR_KINDS.length ? decorRaw.raw : (await render(['backdrop', ...DECOR_KINDS])).raw;
+  const notext = await render(['photo', 'photo-bg', 'backdrop', ...cleanKinds, ...FRONT_KINDS, 'crest', 'plate', 'birds']);
+  const plate = has('plate') ? await plateInScene(render, order, sceneOf(order, runs, BAKED)) : null;
+  const decorClean = decorKinds.length === cleanKinds.length ? decorRaw.raw : (await render(['backdrop', ...cleanKinds])).raw;
+  const bakedShot = baked.length ? (await render(['baked'])).raw : null;
 
-  const slots = slotsOf(dom.texts);
+  const slots = slotsOf(dom.texts.filter((t) => !baked.includes(t.slot)));
   const flat = slots.map((s, i) => ({ index: s.main.index, color: `rgb(${flatColor(i).join(',')})` }));
   const masks = await render([], { flatSlots: flat });
 
@@ -296,7 +271,7 @@ async function exportFrame(handle, { collection, name, message }) {
   const native = message ? 'message' : 'plain';
   const nativeFile = plate ? await encode(dir, `plate-${native}`, plate.raw) : null;
   const other = nativeFile && MUTATE !== 'one-plate'
-    ? await otherPlate(handle, render, { collection, name, variant: VARIANTS.find((v) => v !== native), decor: decorClean })
+    ? await otherPlate(handle, render, { collection, name, variant: VARIANTS.find((v) => v !== native), decor: decorClean, baked })
     : null;
   const plates = nativeFile ? { [native]: nativeFile } : null;
   if (other?.plate) plates[other.variant] = await encode(dir, `plate-${other.variant}`, other.plate.raw);
@@ -312,13 +287,19 @@ async function exportFrame(handle, { collection, name, message }) {
   fs.writeFileSync(path.join(dir, 'thumb.webp'), thumbBuf);
 
   const text = Object.fromEntries(slots.map((s, i) => {
-    const measured = MUTATE === 'no-contrast' ? null : contrastOf(masks.raw, flatColor(i), notext.raw, s.main);
+    const measured = MUTATE === 'no-contrast' ? null : underGlyphContrastOf({ mask: frameImage(masks.raw), color: flatColor(i), under: frameImage(notext.raw), slot: s.main });
     const { index, slot, ...main } = s.main;
     return [s.slot, { ...main, effects: s.effects, contrast: measured?.contrast ?? null, contrastMin: measured?.contrastMin ?? null, glyphPixels: measured?.glyphPixels ?? 0 }];
   }));
   const veilLayers = [...gradeBufs.filter((g) => g.blend === 'normal').map((g) => g.buf), ...fronts.map((f) => f.shot.raw)];
-  const window = { box: windowFile?.box ?? [0, 0, 0, 0], area: winMask.reduce((a, v) => a + v, 0), mask: windowFile, veilMaxAlpha: 0 };
-  const birds = dom.birds.map(({ href, ...b }) => b);
+  const window = {
+    box: windowFile?.box ?? [0, 0, 0, 0],
+    path: windowPath({ data: winMask, width: FW, height: FH, origin: [0, 0] }),
+    area: winMask.reduce((a, v) => a + v, 0),
+    mask: windowFile,
+    veilMaxAlpha: 0,
+  };
+  const birds = exportedBirds(declared, dom.birds.map(declaredAnchor(POSES)));
   return {
     frame: name,
     size: [FW, FH],
@@ -334,6 +315,8 @@ async function exportFrame(handle, { collection, name, message }) {
     birds,
     art: dom.art,
     text,
+    baked: baked.map((slot) => ({ slot, sample: samples.get(slot) })),
+    bakedInWindow: bakedShot ? winMask.reduce((n, inside, i) => n + (inside && bakedShot[i * 4 + 3] > 0 ? 1 : 0), 0) : 0,
     plateVariant: other ? { variant: other.variant, missing: Boolean(other.missing), decorDelta: other.decorDelta ?? null, text: other.text ?? null } : null,
     inventory: {
       decor: decorRaw.inventory,
@@ -355,7 +338,8 @@ const collections = fs.readdirSync(OUT).filter((d) => fs.statSync(path.join(OUT,
 const jobs = collections.flatMap((collection) => {
   const manifest = JSON.parse(fs.readFileSync(path.join(OUT, collection, 'manifest.json'), 'utf8'));
   const messages = new Map(manifest.map((m) => [m.file.replace(/\.jpg$/, ''), m.message]));
-  return fs.readdirSync(path.join(OUT, collection)).filter((f) => f.endsWith('.svg') && (!ONLY || ONLY.has(collection) || ONLY.has(f.slice(0, -4)))).sort().map((f) => ({ collection, name: f.slice(0, -4), message: messages.get(f.slice(0, -4)) ?? null }));
+  const declared = declaredOf(collection);
+  return fs.readdirSync(path.join(OUT, collection)).filter((f) => f.endsWith('.svg') && (!ONLY || ONLY.has(collection) || ONLY.has(f.slice(0, -4)))).sort().map((f) => ({ collection, name: f.slice(0, -4), message: messages.get(f.slice(0, -4)) ?? null, declared: declared.get(f.slice(0, -4)) }));
 });
 fs.rmSync(EXPORT, { recursive: true, force: true });
 const browser = await launch();

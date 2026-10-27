@@ -28,6 +28,14 @@ class CallPillModelTest {
     }
 
     @Test
+    fun `the flip camera action rides with a live camera only`() {
+        assertThat(CallPillModel.flipItem(state())!!.action).isEqualTo(CallAction.FlipCamera)
+        assertThat(CallPillModel.flipItem(state(camera = false))).isNull()
+        assertThat(CallPillModel.flipItem(state(isVideo = false))).isNull()
+        assertThat(CallPillModel.items(state(), emptyList()).keys).containsAtLeast(CallAction.Camera, CallAction.FlipCamera)
+    }
+
+    @Test
     fun `the camera toggle is active while the camera is on`() {
         assertThat(CallPillModel.cameraItem(state())!!.kind).isEqualTo(CallPillKind.Active)
         assertThat(CallPillModel.cameraItem(state(camera = false))!!.kind).isEqualTo(CallPillKind.Normal)
@@ -46,7 +54,7 @@ class CallPillModelTest {
         val items = CallPillModel.items(state(), offered(CallAction.Captions))
         val set = CallPillModel.available(state(), items) { it == CallAction.Captions }
         val rows = CallPillModel.rows(set, isCompactHeight = false)
-        assertThat(rows.flatMap { it.actions }).containsExactly(CallAction.Camera, CallAction.Captions).inOrder()
+        assertThat(rows.flatMap { it.actions }).containsExactly(CallAction.Camera, CallAction.FlipCamera, CallAction.Captions).inOrder()
         assertThat(CallAction.Journal in set).isFalse()
     }
 
@@ -65,7 +73,7 @@ class CallPillModelTest {
         val rows = CallPillModel.rows(set, isCompactHeight = true)
         assertThat(rows).hasSize(1)
         assertThat(rows.single().family).isNull()
-        assertThat(rows.single().actions).containsExactly(CallAction.Camera, CallAction.Captions).inOrder()
+        assertThat(rows.single().actions).containsExactly(CallAction.Camera, CallAction.FlipCamera, CallAction.Captions).inOrder()
     }
 
     @Test

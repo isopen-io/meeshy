@@ -22,4 +22,6 @@
     <!-- #10005 — la surface de l'ecran (jeton « ios-surface », packages/design-tokens/ios.css) :
          fond de la fenetre, donc des barres systeme tant que la WebView ne les couvre pas. -->
     <color name="surface">#FFFFFF</color>
+    <!-- #13129 — l'accent de la marque (jeton « ios-indigo-500 », packages/design-tokens/ios.css). -->
+    <color name="brand_accent">#6366F1</color>
 </resources>

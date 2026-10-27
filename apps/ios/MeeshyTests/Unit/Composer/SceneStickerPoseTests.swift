@@ -110,7 +110,7 @@ final class SceneStickerPoseTests: XCTestCase {
     /// Le chargement d'un sticker de pack retient le type de son fichier : c'est
     /// lui qui nomme le fichier envoyé et qui part à l'upload.
     func test_packStickerLoading_keepsTheItemMimeType() throws {
-        let code = try appSource("Meeshy/Features/Main/Composer/SceneStickerPose.swift")
+        let code = try appSource("Meeshy/Features/Composer/SceneStickerPose.swift")
         XCTAssertTrue(code.contains("isAnimated:item.isAnimated,mimeType:item.mimeType"),
                       "le chargement doit porter le genre et le type du fichier du pack")
         let envoi = try appSource("Meeshy/Features/Main/Views/ConversationView+StickerSheet.swift")

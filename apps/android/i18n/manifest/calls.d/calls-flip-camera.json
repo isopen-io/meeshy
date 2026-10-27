@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:calls": {
+      "resDir": "feature/calls/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "call.control.flipCamera",
+          "androidName": "call_control_flip_camera",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.control.flipCamera.hint",
+          "androidName": "call_control_flip_camera_hint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.control.flipCamera.caption",
+          "androidName": "call_control_flip_camera_caption",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

@@ -102,7 +102,9 @@ final class NotificationActionLockedConversationTests: XCTestCase {
             openDeepLink: { ledger.deepLinks.append($0) },
             presentNewContact: { ledger.contacts.append($0) },
             conversationLocks: locks ?? DeclaredConversationLocks(lockedConversationIds),
-            notifyRefusedReply: { ledger.refusedReplies.append($0) }
+            notifyRefusedReply: { ledger.refusedReplies.append($0) },
+            destinationGuard: .isolated(),
+            endToEnd: MockEndToEndMessaging()
         )
         return SUT(
             handler: handler, messages: messages, conversations: conversations,

@@ -244,6 +244,25 @@ class SessionTeardownTest {
     }
 
     @Test
+    fun wipe_leavesNoLinkOfTheFirstAccountForTheNext() = runTest {
+        val shareLinks = me.meeshy.sdk.sharelink.ShareLinksCache()
+        val hubLinks = me.meeshy.sdk.link.LinksCache()
+        shareLinks.put(listOf(me.meeshy.sdk.model.MyShareLink(id = "1", linkId = "mshy_first")))
+        hubLinks.putTrackingLinks(listOf(me.meeshy.sdk.model.TrackingLink(id = "2", token = "first")))
+        hubLinks.putAffiliateTokens(listOf(me.meeshy.sdk.model.AffiliateToken(id = "3", token = "t", name = "n")))
+        hubLinks.putCommunityLinks(listOf(me.meeshy.sdk.model.CommunityLink(id = "4")))
+
+        teardown(perAccountCaches = setOf(shareLinks, hubLinks)).wipe()
+
+        assertThat(shareLinks.read()).isNull()
+        assertThat(shareLinks.find("mshy_first")).isNull()
+        assertThat(hubLinks.trackingLinks()).isNull()
+        assertThat(hubLinks.affiliateTokens()).isNull()
+        assertThat(hubLinks.communityLinks()).isNull()
+        assertThat(hubLinks.figures()).isNull()
+    }
+
+    @Test
     fun wipe_isIdempotentForPerAccountCaches() = runTest {
         val cache = RecordingCache()
         val teardown = teardown(perAccountCaches = setOf(cache))

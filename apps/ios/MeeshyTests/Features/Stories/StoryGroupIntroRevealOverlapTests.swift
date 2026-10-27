@@ -1,5 +1,6 @@
 import XCTest
 import MeeshySDK
+import MeeshyUI
 @testable import Meeshy
 
 /// Recouvrement « retrait du voile / apparition du slide » (directive user
@@ -92,11 +93,7 @@ final class StoryGroupIntroRevealOverlapTests: XCTestCase {
             // rétablissent DANS la transaction animée. `.reveal` est la seule
             // grammaire dont le repos est « actif » : son cercle doit finir
             // plein écran.
-            let rest = StoryOpeningEntrance(contentOpacity: 1,
-                                            openingScale: 1.0,
-                                            openingSlideFraction: 0,
-                                            textSlideOffset: 0,
-                                            isRevealActive: opening == .reveal)
+            let rest = StoryOpeningEntrance.rest(after: opening)
 
             XCTAssertNotEqual(armed, rest,
                               "Ouverture \(String(describing: opening)) : l'état armé est déjà " +
@@ -105,6 +102,28 @@ final class StoryGroupIntroRevealOverlapTests: XCTestCase {
                            "Ouverture \(String(describing: opening)) : la story entrante part invisible, " +
                            "c'est l'animation qui la fait exister.")
         }
+    }
+
+    /// Le repos : visible, à l'échelle, sans décalage — et le cercle de
+    /// `.reveal` PLEIN écran, seule grammaire dont le repos est « actif ».
+    func test_theRest_isVisibleAndInPlace_andOnlyARevealEndsOpen() {
+        for opening in [nil] + StoryTransitionEffect.allCases.map({ Optional($0) }) {
+            let rest = StoryOpeningEntrance.rest(after: opening)
+            XCTAssertEqual(rest.contentOpacity, 1)
+            XCTAssertEqual(rest.openingScale, 1)
+            XCTAssertEqual(rest.openingSlideFraction, 0)
+            XCTAssertEqual(rest.textSlideOffset, 0)
+            XCTAssertEqual(rest.isRevealActive, opening == .reveal)
+        }
+    }
+
+    /// Les trois effets NOMMÉS partagent la durée du SDK ; le fondu garde 0,35 s.
+    func test_theNamedEffects_shareTheSDKDuration() {
+        for opening in [StoryTransitionEffect.zoom, .slide, .reveal] {
+            XCTAssertEqual(StoryOpeningEntrance.animation(for: opening).duration, StoryRenderer.slideTransitionDuration)
+        }
+        XCTAssertEqual(StoryOpeningEntrance.animation(for: nil).duration, 0.35)
+        XCTAssertEqual(StoryOpeningEntrance.animation(for: .fade).duration, 0.35)
     }
 
     /// La révélation circulaire s'ARME fermée : le drapeau ne bascule à vrai que
@@ -157,7 +176,7 @@ final class StoryGroupIntroRevealOverlapTests: XCTestCase {
                 .deletingLastPathComponent()   // Features
                 .deletingLastPathComponent()   // MeeshyTests
                 .deletingLastPathComponent()   // ios
-                .appendingPathComponent("Meeshy/Features/Main/Views/StoryViewerView+GroupIntro.swift"),
+                .appendingPathComponent("Meeshy/Features/Stories/Views/StoryViewerView+GroupIntro.swift"),
             encoding: .utf8
         )
 
@@ -173,12 +192,20 @@ final class StoryGroupIntroRevealOverlapTests: XCTestCase {
             "sans ça, le passage d'un groupe à l'autre repose la story d'un bloc."
         )
 
-        guard let taskStart = source.range(of: "groupIntroTask = Task { @MainActor in"),
-              let taskEnd = source.range(of: "prefetchNeighborGroupIntros()",
-                                         range: taskStart.upperBound..<source.endIndex) else {
+        // La Task du timer vit dans `StoryGroupIntroPresenter` (#13135).
+        let presenter = try String(
+            contentsOf: URL(fileURLWithPath: #filePath)
+                .deletingLastPathComponent().deletingLastPathComponent()
+                .deletingLastPathComponent().deletingLastPathComponent()
+                .appendingPathComponent("Meeshy/Features/Stories/Views/StoryGroupIntroPresenter.swift"),
+            encoding: .utf8
+        )
+        guard let taskStart = presenter.range(of: "pending = Task { @MainActor"),
+              let taskEnd = presenter.range(of: "func cancelPending()",
+                                            range: taskStart.upperBound..<presenter.endIndex) else {
             return XCTFail("Task de présentation de l'interlude introuvable")
         }
-        let taskCode = String(source[taskStart.upperBound..<taskEnd.lowerBound])
+        let taskCode = String(presenter[taskStart.upperBound..<taskEnd.lowerBound])
             .split(separator: "\n", omittingEmptySubsequences: false)
             .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
             .joined(separator: "\n")

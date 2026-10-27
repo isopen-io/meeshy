@@ -171,9 +171,7 @@ public nonisolated enum AudioChipDisplay: Equatable, Sendable {
         let cap = minuteDigits >= 2 ? 99 * 60 + 59 : 9 * 60 + 59
         let whole = seconds.isFinite ? max(0, Int(seconds.rounded(.up))) : cap
         let bounded = min(whole, cap)
-        return minuteDigits >= 2
-            ? String(format: "%02d:%02d", bounded / 60, bounded % 60)
-            : String(format: "%d:%02d", bounded / 60, bounded % 60)
+        return MediaFormat.duration(bounded, style: minuteDigits >= 2 ? .paddedClock : .clock)
     }
 }
 

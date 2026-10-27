@@ -1,5 +1,14 @@
 package me.meeshy.app.profile
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.ContentTransform
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -32,6 +41,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
@@ -45,9 +55,11 @@ import me.meeshy.sdk.model.profile.ProfileHeaderMetrics
 import me.meeshy.sdk.model.profile.ProfileLayout
 import me.meeshy.sdk.model.profile.ProfileSheetUser
 import me.meeshy.sdk.model.profile.ProfileTab
+import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.profile.ProfileFullscreenImage
 import me.meeshy.ui.profile.ProfileFullscreenImageViewer
+import me.meeshy.ui.theme.MeeshyMotion
 import me.meeshy.ui.theme.MeeshyOpacity
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -87,6 +99,7 @@ internal fun ProfileSheetLoadedContent(
     val isBlockedByMe = plan?.layout == ProfileLayout.BLOCKED_BY_ME
     val signs = ProfileHeaderSigns.of(live, profile, isBlockedByMe, state.isBlockedByTarget, now)
     val showsTabs = plan?.showsTabs ?: true
+    val reduceMotion = LocalReduceMotion.current
 
     val listState = rememberLazyListState()
     val density = LocalDensity.current
@@ -140,19 +153,27 @@ internal fun ProfileSheetLoadedContent(
                             .padding(top = MeeshySpacing.lg),
                         verticalArrangement = Arrangement.spacedBy(MeeshySpacing.lg),
                     ) {
-                        ProfileSheetTabContent(
-                            tab = tabs.selected,
-                            state = state,
-                            profile = profile,
-                            header = header,
-                            details = details,
-                            accent = accent,
-                            plan = plan,
-                            isOpeningConversation = actionsState.isOpeningConversation,
-                            isInteractionDisabled = isBlockedByMe || state.isBlockedByTarget,
-                            environment = environment,
-                            actions = actions,
-                        )
+                        AnimatedContent(
+                            targetState = tabs.selected,
+                            transitionSpec = { profileTabTransition(initialState, targetState, reduceMotion) },
+                            label = "profile-tab-content",
+                        ) { tab ->
+                            Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.lg)) {
+                                ProfileSheetTabContent(
+                                    tab = tab,
+                                    state = state,
+                                    profile = profile,
+                                    header = header,
+                                    details = details,
+                                    accent = accent,
+                                    plan = plan,
+                                    isOpeningConversation = actionsState.isOpeningConversation,
+                                    isInteractionDisabled = isBlockedByMe || state.isBlockedByTarget,
+                                    environment = environment,
+                                    actions = actions,
+                                )
+                            }
+                        }
                     }
                 }
             } else {
@@ -180,6 +201,16 @@ internal fun ProfileSheetLoadedContent(
     fullscreen?.let { image -> ProfileFullscreenImageViewer(image = image, onDismiss = { fullscreen = null }) }
     val mood = signs.moodEmoji
     if (moodOpen && mood != null) ProfileMoodBubble(emoji = mood, text = live.moodText, onDismiss = { moodOpen = false })
+}
+
+/** Le contenu glisse vers l'onglet choisi (ressort 0,3 / 0,8 d'iOS) ; un simple fondu sec sous « Réduire les animations ». */
+private fun profileTabTransition(from: ProfileTab, to: ProfileTab, reduceMotion: Boolean): ContentTransform {
+    if (reduceMotion) return fadeIn(snap()) togetherWith fadeOut(snap())
+    val direction = if (to.ordinal >= from.ordinal) 1 else -1
+    val slide = spring<IntOffset>(dampingRatio = 0.8f, stiffness = MeeshyMotion.stiffnessForResponse(0.3f))
+    val fade = spring<Float>(dampingRatio = 0.8f, stiffness = MeeshyMotion.stiffnessForResponse(0.3f))
+    return (fadeIn(fade) + slideInHorizontally(slide) { it / 6 * direction }) togetherWith
+        (fadeOut(fade) + slideOutHorizontally(slide) { -it / 6 * direction })
 }
 
 /** L'horloge de présence : l'instant courant, relu toutes les [PRESENCE_TICK_MS]. */

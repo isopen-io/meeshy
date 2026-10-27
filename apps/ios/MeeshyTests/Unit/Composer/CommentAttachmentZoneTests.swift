@@ -272,7 +272,7 @@ final class CommentAttachmentZoneMountingGuardTests: XCTestCase {
         let hosts = [
             "Views/FeedCommentsSheet+Attachments.swift",
             "Views/PostDetailView+CommentComposer.swift",
-            "Views/StoryViewerView+CanvasComposerBar.swift",
+            "../Stories/Views/StoryViewerView+CanvasComposerBar.swift",
         ]
         for host in hosts {
             let code = try source(host)
@@ -292,7 +292,7 @@ final class CommentAttachmentZoneMountingGuardTests: XCTestCase {
             XCTAssertTrue(code.contains("CommentComposerStaging.pendingMedia(in:"), "\(host) n'envoie pas toute la zone.")
             XCTAssertFalse(code.contains("firstPendingMedia"), "\(host) montre plusieurs pièces et n'en envoie qu'une.")
         }
-        let story = try source("Views/StoryViewerView+CanvasComposerBar.swift")
+        let story = try source("../Stories/Views/StoryViewerView+CanvasComposerBar.swift")
         XCTAssertTrue(story.contains("firstPendingMedia"))
         XCTAssertTrue(story.contains("static let mediaLimit = 1"),
                       "La story n'envoie qu'un média : sa zone ne doit en montrer qu'un.")
@@ -545,14 +545,14 @@ final class CommentCameraDoorMountingGuardTests: XCTestCase {
     func test_everyCommentHost_offersTheCamera() throws {
         for host in ["Views/FeedCommentsSheet.swift",
                      "Views/PostDetailView+CommentComposer.swift",
-                     "Views/StoryViewerView+CanvasComposerBar.swift"] {
+                     "../Stories/Views/StoryViewerView+CanvasComposerBar.swift"] {
             XCTAssertTrue(try source(host).contains(".commentCamera(attachments: $commentAttachments"),
                           "\(host) n'offre pas la caméra à son composeur de commentaire.")
         }
     }
 
     func test_theStory_keepsItsSinglePieceCeiling_forACapture() throws {
-        XCTAssertTrue(try source("Views/StoryViewerView+CanvasComposerBar.swift")
+        XCTAssertTrue(try source("../Stories/Views/StoryViewerView+CanvasComposerBar.swift")
             .contains(".commentCamera(attachments: $commentAttachments, limit: Self.mediaLimit"))
     }
 

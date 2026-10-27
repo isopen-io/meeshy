@@ -21,6 +21,7 @@ import { emitServerEvent } from '../serverEmit';
 import { emitConversationActivityUpdate } from '../emitConversationActivityUpdate';
 import { queuedVariantOf, type QueuedPayloadFor } from '../queuedEventContract';
 import { isValidObjectId } from '@meeshy/shared/utils/object-id';
+import { E2eeSignalChannelRequiredError } from '../../services/e2ee/e2ee-signal-channel';
 
 const logger = enhancedLogger.child({ module: 'ReactionHandler' });
 
@@ -206,7 +207,8 @@ export class ReactionHandler {
       logger.error('reaction:add failed', { error });
       const errorResponse: AckResponseOf<'reaction:add'> = {
         success: false,
-        error: error instanceof Error ? error.message : 'Failed to add reaction'
+        error: error instanceof Error ? error.message : 'Failed to add reaction',
+        ...(error instanceof E2eeSignalChannelRequiredError ? { code: error.code } : {})
       };
       if (callback) callback(errorResponse);
     }

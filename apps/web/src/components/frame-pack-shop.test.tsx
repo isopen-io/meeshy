@@ -79,7 +79,7 @@ const asset = async (bytes: Uint8Array<ArrayBuffer>, ext: string): Promise<{ ref
   return { ref: { src: `${sha256.slice(0, 16)}.${ext}`, bytes: bytes.byteLength, sha256 }, bytes };
 };
 
-type PackShape = { readonly slug?: string; readonly removable?: boolean };
+type PackShape = { readonly slug?: string; readonly removable?: boolean; readonly atlas?: string };
 
 const summary = (installed: boolean, shape: PackShape = {}) => ({
   slug: shape.slug ?? 'exemple-savane',
@@ -98,7 +98,9 @@ const summary = (installed: boolean, shape: PackShape = {}) => ({
   downloadBytes: { story: 48_000, square: null },
   removable: shape.removable ?? true,
   names: { fr: { name: 'Savane', description: 'Quatre cadres du rang Ambassadeur' } },
-  preview: null,
+  ...(shape.atlas === undefined
+    ? { preview: null }
+    : { preview: { src: shape.atlas, bytes: 90_000, sha256: shape.atlas.slice(0, 16).padEnd(64, '0') }, previewUrl: `/api/v1/pack-assets/${shape.atlas}` }),
   usage: { kind: 'rank', rank: 'ambassadeur' },
 });
 
@@ -191,6 +193,23 @@ describe('FramePackShop', () => {
 
     await mounter.click(host.querySelector<HTMLElement>('[data-shop-toggle="exemple-savane"]'));
     await until(() => tab(host, 'exemple-savane') === null);
+  });
+
+  test('un pack se montre SANS s’installer : sa rangée porte l’atlas de ses vignettes, une seule image, depuis la passerelle (#10275)', async () => {
+    const host = await mount(await gateway({ pack: { atlas: 'abcdef0123456789.webp' } }));
+    await until(() => host.querySelector('[data-shop-toggle="exemple-savane"]') !== null);
+    const strip = host.querySelector<HTMLElement>('[data-shop-pack="exemple-savane"] [data-frame-pack-preview="exemple-savane"]');
+    const images = strip?.querySelectorAll('img') ?? [];
+    expect(images.length).toBe(1);
+    expect(images[0]?.getAttribute('src')).toBe(`${ORIGIN}/api/v1/pack-assets/abcdef0123456789.webp`);
+    expect(images[0]?.getAttribute('loading')).toBe('lazy');
+    expect(strip?.getAttribute('aria-hidden')).toBe('true');
+  });
+
+  test('sans atlas (ancien serveur, pack sans vignettes), la rangée ne garde que sa couverture', async () => {
+    const host = await mount(await gateway());
+    await until(() => host.querySelector('[data-shop-toggle="exemple-savane"]') !== null);
+    expect(host.querySelector('[data-frame-pack-preview]')).toBe(null);
   });
 
   test('hors d’une conversation (réglages, aucun --accent), « Installer » et l’onglet choisi restent peints : l’accent retombe sur la marque', async () => {

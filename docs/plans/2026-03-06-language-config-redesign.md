@@ -295,7 +295,7 @@ git commit -m "feat(ios): add LanguagePickerSheet component with 60+ languages"
 ### Task 3: iOS — Enhance ProfileView language section
 
 **Files:**
-- Modify: `apps/ios/Meeshy/Features/Main/Views/ProfileView.swift`
+- Modify: `apps/ios/Meeshy/Features/Profile/Views/ProfileView.swift`
 
 **Step 1: Add sheet state variables**
 
@@ -495,7 +495,7 @@ Expected: BUILD SUCCEEDED
 **Step 8: Commit**
 
 ```bash
-git add apps/ios/Meeshy/Features/Main/Views/ProfileView.swift
+git add apps/ios/Meeshy/Features/Profile/Views/ProfileView.swift
 git commit -m "feat(ios): enhance ProfileView language section with full picker and implicit booleans"
 ```
 
@@ -504,7 +504,7 @@ git commit -m "feat(ios): enhance ProfileView language section with full picker 
 ### Task 4: iOS — Reorganize SettingsView (move interface language to Appearance)
 
 **Files:**
-- Modify: `apps/ios/Meeshy/Features/Main/Views/SettingsView.swift`
+- Modify: `apps/ios/Meeshy/Features/Settings/Views/SettingsView.swift`
 
 **Step 1: Remove the languageSection entirely**
 
@@ -548,7 +548,7 @@ Expected: BUILD SUCCEEDED
 **Step 5: Commit**
 
 ```bash
-git add apps/ios/Meeshy/Features/Main/Views/SettingsView.swift
+git add apps/ios/Meeshy/Features/Settings/Views/SettingsView.swift
 git commit -m "feat(ios): move interface language to Appearance section, remove standalone Language section"
 ```
 

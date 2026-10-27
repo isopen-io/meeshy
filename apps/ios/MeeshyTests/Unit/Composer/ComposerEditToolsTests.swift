@@ -99,7 +99,7 @@ final class ComposerEditToolsTests: XCTestCase {
         XCTAssertFalse(ComposerCaptureTapRule.belongsToAnAlert(presented: false, closedAt: maintenant.addingTimeInterval(-1),
                                                                now: maintenant), "un toucher d'après en est un vrai")
         XCTAssertFalse(ComposerCaptureTapRule.belongsToAnAlert(presented: false, closedAt: nil, now: maintenant))
-        let chrome = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerCaptureViews.swift")
+        let chrome = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerCaptureViews.swift")
         XCTAssertTrue(chrome.contains("!session.discardPrompt.swallowsTap(now: Date())"),
                       "le toucher de la nappe consulte la question en cours")
     }
@@ -252,7 +252,7 @@ final class ComposerEditToolsTests: XCTestCase {
     /// partagée, jamais une mécanique jumelle — désarmé en disparaissant,
     /// réarmé en revenant, et une prise qui ne part qu'une fois.
     func test_11352_theViewfinderSharesTheCoverLifeOfTheRetouch() throws {
-        let viseur = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerViewfinder.swift")
+        let viseur = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerViewfinder.swift")
         XCTAssertTrue(viseur.contains("ComposerCaptureCoverLife()"), "le viseur tient la même vie que la retouche")
         XCTAssertTrue(viseur.contains("life.detach()"), "une disparition détache le viseur sans le régler")
         XCTAssertTrue(viseur.contains("life.attach()"), "un rattachement se reconnaît")
@@ -266,9 +266,9 @@ final class ComposerEditToolsTests: XCTestCase {
         XCTAssertTrue(toucher.contains("openPieceRetouch(attachment.id)"), "toucher une pièce ouvre la retouche de la caméra")
         let couches = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Views/ConversationLayers/ConversationComposerLayers.swift")
         XCTAssertTrue(couches.contains("ConversationPieceRetouch(piece: piece"), "la retouche est montée")
-        let porte = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ConversationPieceRetouch.swift")
+        let porte = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ConversationPieceRetouch.swift")
         XCTAssertTrue(porte.contains("ComposerCaptureMount(session: session"), "le même montage que la caméra")
-        let scene = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerCaptureStage.swift")
+        let scene = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerCaptureStage.swift")
         XCTAssertTrue(scene.contains("!session.phase.isEditing\n            && ComposerSceneCameraSurface.shown("),
                       "une retouche se fait même sans accès à la caméra")
     }
@@ -371,8 +371,8 @@ final class ComposerEditToolsTests: XCTestCase {
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
         XCTAssertFalse(FileManager.default.fileExists(
-            atPath: racine.appendingPathComponent("Meeshy/Features/Main/Composer/ConversationImageSceneDoor.swift").path))
-        let retouche = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ConversationPieceRetouch.swift")
+            atPath: racine.appendingPathComponent("Meeshy/Features/Composer/ConversationImageSceneDoor.swift").path))
+        let retouche = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ConversationPieceRetouch.swift")
         XCTAssertFalse(retouche.contains("MeeshyComposerHost("), "la retouche ne monte pas le meuble")
     }
 
@@ -386,7 +386,7 @@ final class ComposerEditToolsTests: XCTestCase {
     }
 
     func test_theTopRow_followsTheLaw_andThePlayback_isAlwaysMountedForAVideo() throws {
-        let chrome = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerCaptureViews.swift")
+        let chrome = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerCaptureViews.swift")
         XCTAssertTrue(chrome.contains("topRow.opacity(showsTopRow ? 1 : 0)"), "(x) et « Terminé » suivent la loi")
         XCTAssertTrue(chrome.contains("ComposerEditTools.showsTopRow(familyOpen: session.openFamily != nil, shownTools: session.shownEditTools)"))
         XCTAssertTrue(chrome.contains("if !finishing, session.offersEditPlayback { editPlayback }"),
@@ -457,7 +457,7 @@ final class ComposerEditToolsTests: XCTestCase {
     }
 
     func test_theBrackets_areMountedBehindTheCropTool() throws {
-        let chrome = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerCaptureViews.swift")
+        let chrome = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerCaptureViews.swift")
         XCTAssertTrue(chrome.contains("session.showsCropBrackets, let aspect = session.editAspect"))
     }
 
@@ -592,7 +592,7 @@ final class ComposerEditToolsTests: XCTestCase {
     }
 
     func test_theSceneTap_isRoutedThroughTheTable_inEditing() throws {
-        let chrome = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerCaptureViews.swift")
+        let chrome = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerCaptureViews.swift")
         XCTAssertTrue(chrome.contains("ComposerCaptureGesture.action(zone: .scene, gesture: .tap, context: context)"),
                       "le toucher de la nappe consulte la table avant de viser")
     }
@@ -649,14 +649,14 @@ final class ComposerEditToolsTests: XCTestCase {
     }
 
     func test_theOverlayChrome_isWired() throws {
-        let chrome = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerCaptureViews.swift")
+        let chrome = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerCaptureViews.swift")
         XCTAssertTrue(chrome.contains("session.revealEditChrome()"))
         XCTAssertTrue(chrome.contains("session.hideEditChrome()"))
         XCTAssertTrue(chrome.contains("ComposerCropPresetBar("), "les formats sont posés sur la scène")
         XCTAssertTrue(chrome.contains("ComposerEditPresetsLayout.frame("))
-        let bas = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerCaptureBottomRow.swift")
+        let bas = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerCaptureBottomRow.swift")
         XCTAssertFalse(bas.contains("ComposerCropPresetBar("), "plus de rangée de formats sous la scène")
-        let montage = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerCaptureMount.swift")
+        let montage = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerCaptureMount.swift")
         XCTAssertTrue(montage.contains("framed: session.editFramesScene"), "l'image ne se réduit qu'au recadrage")
     }
 
@@ -687,10 +687,10 @@ final class ComposerEditToolsTests: XCTestCase {
     }
 
     func test_10356_theMuteButton_leftTheBand_forTheScene() throws {
-        let bas = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerCaptureBottomRow.swift")
+        let bas = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerCaptureBottomRow.swift")
         XCTAssertFalse(bas.contains("ComposerTakeMuteButton("), "plus de bouton muet sur la bande")
         XCTAssertFalse(bas.contains("toggleTakeMute"))
-        let chrome = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerCaptureViews.swift")
+        let chrome = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerCaptureViews.swift")
         XCTAssertTrue(chrome.contains("ComposerEditPlaybackControls("), "lecture et muet sont montés sur la scène")
         XCTAssertTrue(chrome.contains("onTogglePlayback: { session.toggleEditPlayback() }"))
         XCTAssertTrue(chrome.contains("onToggleMute: { session.toggleTakeMute() }"))
@@ -742,13 +742,13 @@ final class ComposerEditToolsTests: XCTestCase {
     }
 
     func test_theFinalRender_carriesTheGain_throughTheSingleRecipe() throws {
-        let edition = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerCaptureSession+Edit.swift")
+        let edition = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerCaptureSession+Edit.swift")
         XCTAssertTrue(edition.contains("let gain = takeSound.effectiveGain"))
         XCTAssertTrue(edition.contains("declaredSpaceName: espace, audioGain: gain, overlay: calque)"),
                       "« Terminé » et ⬇︎ exportent par la même recette, son compris")
         XCTAssertEqual(edition.components(separatedBy: "ComposerLookVideoExporter.export(").count - 1, 1,
                        "une seule recette de rendu vidéo")
-        let export = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerLookVideoExporter.swift")
+        let export = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerLookVideoExporter.swift")
         XCTAssertTrue(export.contains("|| audioGain != 1"), "un son réglé force le rendu")
         XCTAssertTrue(export.contains("audioMix: mixage"), "le gain part dans le fichier (#11849 : par la passe unique)")
         XCTAssertTrue(export.contains("setVolume("))
@@ -842,14 +842,14 @@ final class ComposerEditToolsTests: XCTestCase {
     /// Le niveau vit sur le lecteur, et chaque élément qui joue — boucle
     /// reconstruite, frame sous la règle, filet du tick — porte son tap.
     func test_theLoopPlayer_andTheRender_serveTheSameGainLaw() throws {
-        let boucle = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerEditSources.swift")
+        let boucle = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerEditSources.swift")
         XCTAssertTrue(boucle.contains("player.volume = ComposerTakeGain.volume(gain)"))
         XCTAssertTrue(boucle.contains("boostLevel.boost = ComposerTakeGain.boost(gain)"))
         XCTAssertFalse(boucle.contains("max(0, min(1, gain))"), "l'aperçu ne borne plus le gain à 100 %")
         XCTAssertGreaterThanOrEqual(boucle.components(separatedBy: "attachBoost(to: element)").count - 1, 3,
                                     "la boucle reconstruite, la règle et le filet portent chacun le tap")
         XCTAssertTrue(boucle.contains("level: boostLevel"), "un seul niveau, partagé par tous les éléments")
-        let export = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerLookVideoExporter.swift")
+        let export = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerLookVideoExporter.swift")
         XCTAssertTrue(export.contains("ComposerTakeBoostTap.audioMix("), "le rendu amplifie par le même tap")
         XCTAssertTrue(export.contains("ComposerTakeGain.volume(gain)"))
         XCTAssertFalse(export.contains("max(0, min(1, gain))"))
@@ -883,9 +883,9 @@ final class ComposerEditToolsTests: XCTestCase {
     }
 
     func test_theTrack_scrubsWhileAHandleMoves() throws {
-        let piste = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerTrimTrack.swift")
+        let piste = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerTrimTrack.swift")
         XCTAssertTrue(piste.contains("session.scrubTrim(to: ComposerTrimRule.scrubTime(handle: poignee, range: nouvelle))"))
-        let lecteur = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerEditSources.swift")
+        let lecteur = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerEditSources.swift")
         XCTAssertTrue(lecteur.contains("toleranceBefore: ComposerSeekChase.tolerance"))
         XCTAssertTrue(lecteur.contains("chase.request("), "une recherche à la fois")
     }
@@ -893,13 +893,13 @@ final class ComposerEditToolsTests: XCTestCase {
     // MARK: - Le rail : les outils après les familles, qui rebondissent
 
     func test_theRail_listsTheTakeTools_andEveryEditControlBounces() throws {
-        let bas = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerCaptureBottomRow.swift")
+        let bas = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerCaptureBottomRow.swift")
         XCTAssertTrue(bas.contains("editTools: session.editTools"))
         XCTAssertTrue(bas.contains("ForEach(session.editPanels, id: \\.self)"), "chaque outil actif a son panneau")
         XCTAssertTrue(bas.contains("ComposerSoundTrack("), "le spectre en couleur")
-        let rail = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerLookStrip.swift")
+        let rail = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerLookStrip.swift")
         XCTAssertTrue(rail.contains(".buttonStyle(ComposerBounceButtonStyle())"))
-        let son = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerSoundTrack.swift")
+        let son = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerSoundTrack.swift")
         XCTAssertTrue(son.contains("accessibilityAdjustableAction"), "VoiceOver règle le volume")
         XCTAssertTrue(son.contains(".buttonStyle(ComposerBounceButtonStyle())"), "lecture et muet rebondissent")
     }

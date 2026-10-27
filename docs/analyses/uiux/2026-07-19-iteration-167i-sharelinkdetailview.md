@@ -2,7 +2,7 @@
 
 **Date** : 2026-07-19
 **Piste** : iOS (suffixe `i`).
-**Surface** : `apps/ios/Meeshy/Features/Main/Views/ShareLinkDetailView.swift`
+**Surface** : `apps/ios/Meeshy/Features/Links/Views/ShareLinkDetailView.swift`
 **Base** : `main` HEAD (`efedb69e4`)
 **Branche** : `claude/laughing-thompson-cwu3q5`
 **Gate** : CI `iOS Tests`

@@ -54,6 +54,8 @@ data class MyStoriesUiState(
     val selectedIds: Set<String> = emptySet(),
     val pendingDelete: PendingMyStoryDelete? = null,
     val isRepublishing: Boolean = false,
+    /** Le propriétaire : toucher une story ouvre SON lecteur. */
+    val ownUserId: String? = null,
 )
 
 sealed interface MyStoriesUiEvent {
@@ -98,7 +100,7 @@ class MyStoriesViewModel internal constructor(
         socialSocket: SocialSocketManager,
     ) : this(storyRepository, sessionRepository, socialSocket, System::currentTimeMillis)
 
-    private val _state = MutableStateFlow(MyStoriesUiState())
+    private val _state = MutableStateFlow(MyStoriesUiState(ownUserId = sessionRepository.currentUserId))
     val state: StateFlow<MyStoriesUiState> = _state.asStateFlow()
 
     private val _effects = Channel<MyStoriesUiEffect>(Channel.BUFFERED)

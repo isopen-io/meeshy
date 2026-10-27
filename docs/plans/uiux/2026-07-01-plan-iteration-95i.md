@@ -1,7 +1,7 @@
 # Plan — Itération 95i (iOS)
 
 **Date** : 2026-07-01
-**Cible** : `apps/ios/Meeshy/Features/Main/Views/TwoFactorSetupView.swift`
+**Cible** : `apps/ios/Meeshy/Features/Settings/Views/TwoFactorSetupView.swift`
 **Type** : Accessibilité (VoiceOver) + sélection/copie de contenu — sweep additif
 **Base** : `main` HEAD `e8a3b73`
 

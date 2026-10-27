@@ -139,32 +139,7 @@ final class CommentMenuPolicyTests: XCTestCase {
         XCTAssertEqual(request.subject.reply.text, "Salut")
     }
 
-    // MARK: - Édition en place d'un commentaire de story
-
-    func test_replacingEdited_aRoot_isReplacedInPlace() {
-        let a = Self.comment(id: "a"), b = Self.comment(id: "b")
-        let edited = b.withEditedContent("Nouveau", effectFlags: 0)
-        let result = StoryCommentEditing.replacing(edited, comments: [a, b], replies: [:])
-        XCTAssertEqual(result.comments.map(\.content), ["Bonjour", "Nouveau"])
-        XCTAssertTrue(result.replies.isEmpty)
-    }
-
-    func test_replacingEdited_aReply_isReplacedInItsThread_only() {
-        let root = Self.comment(id: "root")
-        let r1 = Self.comment(id: "r1", parentId: "root"), r2 = Self.comment(id: "r2", parentId: "root")
-        let edited = r2.withEditedContent("Corrigé", effectFlags: 0)
-        let result = StoryCommentEditing.replacing(edited, comments: [root], replies: ["root": [r1, r2]])
-        XCTAssertEqual(result.comments.map(\.content), ["Bonjour"])
-        XCTAssertEqual(result.replies["root"]?.map(\.content), ["Bonjour", "Corrigé"])
-    }
-
-    func test_replacingEdited_anUnknownComment_changesNothing() {
-        let a = Self.comment(id: "a")
-        let ghost = Self.comment(id: "ghost").withEditedContent("X", effectFlags: 0)
-        let result = StoryCommentEditing.replacing(ghost, comments: [a], replies: ["a": [Self.comment(id: "r1", parentId: "a")]])
-        XCTAssertEqual(result.comments.map(\.id), ["a"])
-        XCTAssertEqual(result.replies["a"]?.map(\.content), ["Bonjour"])
-    }
+    // MARK: - Brouillon d'édition d'un commentaire de story
 
     func test_editedDraft_aBlankOrUnchangedDraft_isNotSent() {
         XCTAssertNil(StoryCommentEditing.draftToSend("   ", original: "Bonjour"))
@@ -202,26 +177,6 @@ final class StoryCommentRemovalTests: XCTestCase {
             count: Binding(get: { thread.count }, set: { thread.count = $0 }),
             service: service
         )
-    }
-
-    func test_removing_aRoot_dropsItAndItsReplies_andCountsThemAll() {
-        let root = Self.comment(id: "root", replies: 2), other = Self.comment(id: "b")
-        let result = StoryCommentEditing.removing(
-            root, comments: [root, other],
-            replies: ["root": [Self.comment(id: "r1", parentId: "root"), Self.comment(id: "r2", parentId: "root")]]
-        )
-        XCTAssertEqual(result.comments.map(\.id), ["b"])
-        XCTAssertNil(result.replies["root"])
-        XCTAssertEqual(result.removedCount, 3)
-    }
-
-    func test_removing_aReply_dropsItFromItsThread_andDecrementsItsParent() {
-        let root = Self.comment(id: "root", replies: 2)
-        let r1 = Self.comment(id: "r1", parentId: "root"), r2 = Self.comment(id: "r2", parentId: "root")
-        let result = StoryCommentEditing.removing(r1, comments: [root], replies: ["root": [r1, r2]])
-        XCTAssertEqual(result.replies["root"]?.map(\.id), ["r2"])
-        XCTAssertEqual(result.comments.first?.replies, 1)
-        XCTAssertEqual(result.removedCount, 1)
     }
 
     func test_remove_accepted_sendsTheReason_andKeepsTheCommentOut() async {

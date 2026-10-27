@@ -2,7 +2,7 @@
 
 **Date** : 2026-07-18
 **Piste** : iOS (suffixe `i`).
-**Surface** : `apps/ios/Meeshy/Features/Main/Views/MyStoriesView.swift`
+**Surface** : `apps/ios/Meeshy/Features/Stories/Views/MyStoriesView.swift`
 **Base** : `main` HEAD (`ffaf2de`)
 **Branche** : `claude/laughing-thompson-ruiv50`
 **Gate** : CI `iOS Tests`

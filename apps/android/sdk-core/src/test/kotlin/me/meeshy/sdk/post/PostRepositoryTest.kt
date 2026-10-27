@@ -59,6 +59,18 @@ class PostRepositoryTest {
     }
 
     @Test
+    fun clear_forgetsTheFeedOfThePreviousAccount() = runTest {
+        val repo = seed(ApiPost(id = "p1", content = "hi"))
+        assertThat(repo.cachedPost("p1")).isNotNull()
+
+        repo.clear()
+
+        assertThat(repo.cachedPost("p1")).isNull()
+        assertThat(repo.feedCacheSnapshot).isNull()
+        assertThat(repo.feedHasMore.value).isTrue()
+    }
+
+    @Test
     fun toggleLike_likesOptimistically_andEnqueuesADurableLikeMutation() = runTest {
         val repo = seed(ApiPost(id = "p1", content = "hi", likeCount = 2, isLikedByMe = false))
         val slot = slot<OutboxMutation>()

@@ -39,13 +39,11 @@ final class StarredMessagesStore: ObservableObject {
     private let defaults: UserDefaults
     private let storageKey = "meeshy_starred_messages"
     private let encoder: JSONEncoder = {
-        let e = JSONEncoder()
-        e.dateEncodingStrategy = .iso8601
+        let e = MeeshyCoders.encoder(.persistence)
         return e
     }()
     private let decoder: JSONDecoder = {
-        let d = JSONDecoder()
-        d.dateDecodingStrategy = .iso8601
+        let d = MeeshyCoders.decoder(.persistence)
         return d
     }()
 

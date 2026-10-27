@@ -7,29 +7,29 @@ import XCTest
 /// `WebRTCTypes+…`, donc chacun est nommé explicitement : sans cette liste, une
 /// garde qui cherche un symbole déplacé verdirait en lisant la moitié qui ne le
 /// contient plus.
-private let webRTCTypesPath = "Meeshy/Features/Main/Services/WebRTC/WebRTCTypes.swift"
+private let webRTCTypesPath = "Meeshy/Features/Call/Services/WebRTC/WebRTCTypes.swift"
 private let webRTCTypesCompanions = [
-    "Meeshy/Features/Main/Services/WebRTC/CallReliabilityPolicy.swift",
-    "Meeshy/Features/Main/Services/WebRTC/DegradedLinkTracker.swift",
-    "Meeshy/Features/Main/Services/WebRTC/JitterBitrateCapTracker.swift",
-    "Meeshy/Features/Main/Services/WebRTC/VideoDegradationPreference.swift",
-    "Meeshy/Features/Main/Services/WebRTC/WebRTCClientProviding.swift",
-    "Meeshy/Features/Main/Services/WebRTC/DataChannelControlMessage.swift",
-    "Meeshy/Features/Main/Services/WebRTC/DataChannelTranscriptEntry.swift",
-    "Meeshy/Features/Main/Services/WebRTC/DataChannelTranscriptMessage.swift",
-    "Meeshy/Features/Main/Services/WebRTC/DataChannelInbound.swift",
-    "Meeshy/Features/Main/Services/WebRTC/WebRTCClientDelegate.swift",
-    "Meeshy/Features/Main/Services/WebRTC/CallEndReason.swift",
-    "Meeshy/Features/Main/Services/WebRTC/CallRetryPolicy.swift",
-    "Meeshy/Features/Main/Services/WebRTC/CallDisplayMode.swift",
-    "Meeshy/Features/Main/Services/WebRTC/CallBubbleSizeTier.swift",
-    "Meeshy/Features/Main/Services/WebRTC/QualityThresholds.swift",
-    "Meeshy/Features/Main/Services/WebRTC/VideoQualityLevel.swift",
-    "Meeshy/Features/Main/Services/WebRTC/WebRTCError.swift",
-    "Meeshy/Features/Main/Services/WebRTC/VideoThermalProfile.swift",
-    "Meeshy/Features/Main/Services/WebRTC/VideoConfig.swift",
-    "Meeshy/Features/Main/Services/WebRTC/CameraDeviceOption.swift",
-    "Meeshy/Features/Main/Services/WebRTC/CameraCatalog.swift",
+    "Meeshy/Features/Call/Services/WebRTC/CallReliabilityPolicy.swift",
+    "Meeshy/Features/Call/Services/WebRTC/DegradedLinkTracker.swift",
+    "Meeshy/Features/Call/Services/WebRTC/JitterBitrateCapTracker.swift",
+    "Meeshy/Features/Call/Services/WebRTC/VideoDegradationPreference.swift",
+    "Meeshy/Features/Call/Services/WebRTC/WebRTCClientProviding.swift",
+    "Meeshy/Features/Call/Services/WebRTC/DataChannelControlMessage.swift",
+    "Meeshy/Features/Call/Services/WebRTC/DataChannelTranscriptEntry.swift",
+    "Meeshy/Features/Call/Services/WebRTC/DataChannelTranscriptMessage.swift",
+    "Meeshy/Features/Call/Services/WebRTC/DataChannelInbound.swift",
+    "Meeshy/Features/Call/Services/WebRTC/WebRTCClientDelegate.swift",
+    "Meeshy/Features/Call/Services/WebRTC/CallEndReason.swift",
+    "Meeshy/Features/Call/Services/WebRTC/CallRetryPolicy.swift",
+    "Meeshy/Features/Call/Services/WebRTC/CallDisplayMode.swift",
+    "Meeshy/Features/Call/Services/WebRTC/CallBubbleSizeTier.swift",
+    "Meeshy/Features/Call/Services/WebRTC/QualityThresholds.swift",
+    "Meeshy/Features/Call/Services/WebRTC/VideoQualityLevel.swift",
+    "Meeshy/Features/Call/Services/WebRTC/WebRTCError.swift",
+    "Meeshy/Features/Call/Services/WebRTC/VideoThermalProfile.swift",
+    "Meeshy/Features/Call/Services/WebRTC/VideoConfig.swift",
+    "Meeshy/Features/Call/Services/WebRTC/CameraDeviceOption.swift",
+    "Meeshy/Features/Call/Services/WebRTC/CameraCatalog.swift",
 ]
 
 @MainActor
@@ -38,7 +38,7 @@ final class CallManagerAudioSessionTests: XCTestCase {
     /// `CallManager.swift` et l'extension où `toggleTranscription()` a été
     /// sortie (#8475) : la garde suit la fonction, pas le fichier.
     private func callManagerSource() throws -> String {
-        try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     func test_callManager_sourceCode_doesNotForceAudioSessionActiveBeforeBridge() throws {
@@ -431,11 +431,11 @@ final class CallManagerAudioSessionTests: XCTestCase {
         guard let fnRange = source.range(of: "private func handleAudioRouteChange(") else {
             XCTFail("handleAudioRouteChange not found in CallManager.swift"); return
         }
-        let endIdx = source.index(fnRange.lowerBound, offsetBy: 1500, limitedBy: source.endIndex) ?? source.endIndex
+        let endIdx = source.index(fnRange.lowerBound, offsetBy: 2200, limitedBy: source.endIndex) ?? source.endIndex
         let fnBody = String(source[fnRange.lowerBound ..< endIdx])
 
         XCTAssertTrue(
-            fnBody.contains("guard callState.isActive else { return }"),
+            fnBody.contains("guard let call, call.callState.isActive else { return }"),
             "handleAudioRouteChange must early-return when no call is active — otherwise idle route " +
             "changes (headset plug) corrupt the initial speaker state of the next call."
         )
@@ -471,7 +471,7 @@ final class CallManagerAudioSessionTests: XCTestCase {
         guard let fnRange = source.range(of: "private func handleAudioRouteChange(") else {
             XCTFail("handleAudioRouteChange not found in CallManager.swift"); return
         }
-        let endIdx = source.index(fnRange.lowerBound, offsetBy: 1500, limitedBy: source.endIndex) ?? source.endIndex
+        let endIdx = source.index(fnRange.lowerBound, offsetBy: 2200, limitedBy: source.endIndex) ?? source.endIndex
         let fnBody = String(source[fnRange.lowerBound ..< endIdx])
 
         XCTAssertTrue(
@@ -506,13 +506,13 @@ final class CallManagerAudioSessionTests: XCTestCase {
         guard let fnRange = source.range(of: "private func handleAudioRouteChange(") else {
             XCTFail("handleAudioRouteChange not found in CallManager.swift"); return
         }
-        let endIdx = source.index(fnRange.lowerBound, offsetBy: 1500, limitedBy: source.endIndex) ?? source.endIndex
+        let endIdx = source.index(fnRange.lowerBound, offsetBy: 2200, limitedBy: source.endIndex) ?? source.endIndex
         let fnBody = String(source[fnRange.lowerBound ..< endIdx])
 
         let newDevBody = try newDeviceAvailableCaseBody(in: fnBody)
 
         XCTAssertTrue(
-            newDevBody.contains("if !applySpeakerRoute()"),
+            newDevBody.contains("if !call.applySpeakerRoute()"),
             ".newDeviceAvailable must check applySpeakerRoute()'s result and revert isSpeaker on " +
             "failure — same discipline as toggleSpeaker(), otherwise a route-priority failure leaves " +
             "isSpeaker desynced from the real audio route."
@@ -529,7 +529,7 @@ final class CallManagerAudioSessionTests: XCTestCase {
         guard let fnRange = source.range(of: "private func handleAudioRouteChange(") else {
             XCTFail("handleAudioRouteChange not found in CallManager.swift"); return
         }
-        let endIdx = source.index(fnRange.lowerBound, offsetBy: 1500, limitedBy: source.endIndex) ?? source.endIndex
+        let endIdx = source.index(fnRange.lowerBound, offsetBy: 2200, limitedBy: source.endIndex) ?? source.endIndex
         let fnBody = String(source[fnRange.lowerBound ..< endIdx])
 
         XCTAssertTrue(
@@ -558,7 +558,7 @@ final class CallManagerAudioSessionTests: XCTestCase {
         guard let fnRange = source.range(of: "private func handleAudioRouteChange(") else {
             XCTFail("handleAudioRouteChange not found in CallManager.swift"); return
         }
-        let endIdx = source.index(fnRange.lowerBound, offsetBy: 1500, limitedBy: source.endIndex) ?? source.endIndex
+        let endIdx = source.index(fnRange.lowerBound, offsetBy: 2200, limitedBy: source.endIndex) ?? source.endIndex
         let fnBody = String(source[fnRange.lowerBound ..< endIdx])
 
         XCTAssertTrue(
@@ -568,7 +568,7 @@ final class CallManagerAudioSessionTests: XCTestCase {
         guard let overrideRange = fnBody.range(of: "case .override:") else {
             XCTFail(".override case not found"); return
         }
-        let overrideEnd = fnBody.index(overrideRange.upperBound, offsetBy: 200, limitedBy: fnBody.endIndex) ?? fnBody.endIndex
+        let overrideEnd = fnBody.range(of: "default:", range: overrideRange.upperBound..<fnBody.endIndex)?.lowerBound ?? fnBody.endIndex
         let overrideBody = String(fnBody[overrideRange.lowerBound ..< overrideEnd])
 
         XCTAssertFalse(
@@ -684,7 +684,7 @@ final class CallManagerAudioSessionTests: XCTestCase {
         // that has already moved to a newer epoch.
         let source = try callManagerSource()
 
-        guard let fnRange = source.range(of: "private func emitOfferWithRetry(") else {
+        guard let fnRange = source.range(of: "func emitOfferWithRetry(") else {
             XCTFail("emitOfferWithRetry not found in CallManager.swift"); return
         }
         let endIdx = source.index(fnRange.lowerBound, offsetBy: 1500, limitedBy: source.endIndex) ?? source.endIndex
@@ -757,7 +757,7 @@ final class CallManagerAudioSessionTests: XCTestCase {
         let fnBody = String(source[fnRange.lowerBound ..< endIdx])
 
         XCTAssertTrue(
-            fnBody.contains("negotiationId = 0"),
+            fnBody.contains("sdpSignaler.resetEpoch()"),
             "applyNegotiationRole must reset negotiationId = 0 — CallManager singleton must " +
             "not carry a prior call's epoch into the next call (§3.5)."
         )
@@ -923,7 +923,7 @@ final class CallManagerAudioSessionTests: XCTestCase {
 final class P2PWebRTCClientPerfectNegotiationTests: XCTestCase {
 
     private func p2pClientSource() throws -> String {
-        try AppSourceGuard.unit("Meeshy/Features/Main/Services/WebRTC/P2PWebRTCClient.swift")
+        try AppSourceGuard.unit("Meeshy/Features/Call/Services/WebRTC/P2PWebRTCClient.swift")
     }
 
     func test_p2pClient_makingOffer_flagExists() throws {
@@ -1006,7 +1006,7 @@ final class P2PWebRTCClientPerfectNegotiationTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTC/CallDataProfile.swift")
+            .appendingPathComponent("Meeshy/Features/Call/Services/WebRTC/CallDataProfile.swift")
         let source = try String(contentsOf: url, encoding: .utf8)
         XCTAssertTrue(
             source.contains("opusFmtpMaxAverageBitrate"),
@@ -1435,7 +1435,7 @@ final class CallEffectsOverlayAccessibilityTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Views/CallEffectsOverlay.swift")
+            .appendingPathComponent("Meeshy/Features/Call/Views/CallEffectsOverlay.swift")
         return try String(contentsOf: url, encoding: .utf8)
     }
 
@@ -1539,7 +1539,7 @@ final class CallEffectsOverlayAccessibilityTests: XCTestCase {
 final class CallManagerIdleTimerProximityTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     // MARK: - Idle timer (screen-on during calls)
@@ -1657,7 +1657,7 @@ final class CallManagerIdleTimerProximityTests: XCTestCase {
 final class CallManagerCallKitDTMFTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     private func webRTCTypesSource() throws -> String {
@@ -1721,7 +1721,7 @@ final class CallManagerCallKitDTMFTests: XCTestCase {
 final class CallManagerMediaServicesResetTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     func test_mediaServicesReset_observerIsRegistered() throws {
@@ -1843,7 +1843,7 @@ final class CallViewVoiceOverAnnouncementTests: XCTestCase {
 final class CallManagerBackgroundVideoTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     /// Corps de `applyCameraSuspension(_:cause:)` — le point de passage unique du
@@ -1901,14 +1901,15 @@ final class CallManagerBackgroundVideoTests: XCTestCase {
 
     func test_backgroundObserver_promotesStillRingingCallToCallKit() throws {
         let source = try callManagerSource()
-        guard let bgRange = source.range(of: "didEnterBackgroundNotification") else {
+        // Le corps ÉQUILIBRÉ de l'observateur (#11522) : la fenêtre « de la
+        // première mention jusqu'à foregroundObserver » partait d'un
+        // doc-comment de CallManager.swift et embrassait la DÉFINITION de la
+        // promotion — retirer l'appel la laissait verte.
+        guard let bgBlock = DeclarationBodyScanner.body(
+            containing: "forName: UIApplication.didEnterBackgroundNotification", in: source
+        ) else {
             XCTFail("didEnterBackgroundNotification observer not found in CallManager.swift"); return
         }
-        let afterBg = String(source[bgRange.upperBound...])
-        guard let blockEnd = afterBg.range(of: "foregroundObserver = NotificationCenter")?.lowerBound else {
-            XCTFail("Could not find foregroundObserver boundary"); return
-        }
-        let bgBlock = String(afterBg[..<blockEnd])
         XCTAssertTrue(
             bgBlock.contains("promoteRingingCallToCallKitIfNeeded"),
             "didEnterBackground handler must call promoteRingingCallToCallKitIfNeeded() — a call " +
@@ -1928,11 +1929,11 @@ final class CallManagerBackgroundVideoTests: XCTestCase {
         }
         let fnBody = String(afterFn[..<fnEnd])
         XCTAssertTrue(
-            fnBody.contains("case .ringing(isOutgoing: false) = callState"),
+            fnBody.contains("case .ringing(isOutgoing: false) = call.callState"),
             "must only promote a still-ringing INCOMING call — an outgoing call or an already " +
             "answered/connected call must never be re-reported to CallKit")
         XCTAssertTrue(
-            fnBody.contains("!callUsesCallKit"),
+            fnBody.contains("!call.callUsesCallKit"),
             "must skip promotion when the call already has a CallKit registration — re-reporting " +
             "an already-registered call would be a duplicate CXProvider call")
         XCTAssertTrue(
@@ -1992,7 +1993,7 @@ final class CallManagerBackgroundVideoTests: XCTestCase {
             XCTFail("handleIncomingCallNotification not found in CallManager.swift"); return
         }
         let afterFn = String(source[fnRange.upperBound...])
-        guard let fnEnd = afterFn.range(of: "func performLocalMediaStart")?.lowerBound else {
+        guard let fnEnd = afterFn.range(of: "// MARK: - Call Waiting (§11.15)")?.lowerBound else {
             XCTFail("Could not find handleIncomingCallNotification boundary"); return
         }
         let fnBody = String(afterFn[..<fnEnd])
@@ -2025,8 +2026,10 @@ final class CallManagerBackgroundVideoTests: XCTestCase {
             XCTFail("Could not find reportIncomingVoIPCall boundary"); return
         }
         let fnBody = String(afterFn[..<fnEnd])
+        let pipeline = source.range(of: "private func startRingingPipeline(").map { String(source[$0.lowerBound...]) } ?? ""
         XCTAssertTrue(
-            fnBody.contains("startBackgroundMonitoring()"),
+            fnBody.contains("startRingingPipeline(callId: callId, isVideo: isVideo, iceServers: iceServers, source: .voipPush)")
+                && pipeline.contains("startBackgroundMonitoring()"),
             "reportIncomingVoIPCall must call startBackgroundMonitoring() while the call is still " +
             "ringing, exactly like handleIncomingCallNotification does — otherwise a VoIP-push call " +
             "that backgrounds mid-ring has no observer armed to recover camera suspension or notify " +
@@ -2133,7 +2136,7 @@ final class CallManagerBackgroundVideoTests: XCTestCase {
     func test_foregroundObserver_restoresThroughTheSingleCameraSuspensionFunnel() throws {
         let body = try foregroundObserverBody()
         XCTAssertTrue(
-            body.contains("self.applyCameraSuspension(false, cause: \"foreground\")"),
+            body.contains("call.applyCameraSuspension(false, cause: \"foreground\")"),
             "Le retour en avant-plan doit lever la suspension par applyCameraSuspension(false:) — " +
             "le point de passage unique du signal caméra, qui porte les gardes."
         )
@@ -2190,7 +2193,7 @@ final class CallManagerBackgroundVideoTests: XCTestCase {
 final class CallManagerSocketReconnectVideoTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     func test_socketReconnect_reEmitsVideoStateToResyncPeer() throws {
@@ -2259,7 +2262,7 @@ final class CallManagerSocketReconnectVideoTests: XCTestCase {
 final class CallManagerCameraPermissionTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     func test_cameraPermissionDenied_handledIn_toggleVideo() throws {
@@ -2286,6 +2289,18 @@ final class CallManagerCameraPermissionTests: XCTestCase {
             "a denied camera should not abort the call, only degrade to audio-only")
     }
 
+    /// Les deux chemins entrants démarrent le média par `startRingingPipeline`,
+    /// qui appelle `performLocalMediaStart` : il classe le refus caméra et poursuit en audio.
+    private static func localMediaStartCatchesCameraDenial(in source: String) -> Bool {
+        guard let pipeline = source.range(of: "private func startRingingPipeline("),
+              let start = source.range(of: "func performLocalMediaStart(") else { return false }
+        let pipelineBody = source[pipeline.upperBound...].prefix(4_000)
+        let startBody = source[start.upperBound...].prefix(2_000)
+        return pipelineBody.contains("performLocalMediaStart(")
+            && startBody.contains("CallVideoFallback.classify(error)")
+            && source.contains("case WebRTCError.cameraPermissionDenied: return .cameraPermissionDenied")
+    }
+
     func test_cameraPermissionDenied_handledIn_voipPushIncoming() throws {
         let source = try callManagerSource()
         // VoIP push path enters via reportIncomingVoIPCall (PKPushRegistry delegate → CallKit)
@@ -2294,7 +2309,7 @@ final class CallManagerCameraPermissionTests: XCTestCase {
         }
         let afterVoip = String(source[voipRange.upperBound...])
         XCTAssertTrue(
-            afterVoip.contains("WebRTCError.cameraPermissionDenied"),
+            afterVoip.contains("startRingingPipeline(") && Self.localMediaStartCatchesCameraDenial(in: source),
             "VoIP push incoming call path must catch cameraPermissionDenied — " +
             "a user answering an incoming call without camera permission must still " +
             "connect audio-only, not silently hang or fail")
@@ -2309,7 +2324,7 @@ final class CallManagerCameraPermissionTests: XCTestCase {
         }
         let afterSocket = String(source[socketRange.upperBound...])
         XCTAssertTrue(
-            afterSocket.contains("WebRTCError.cameraPermissionDenied"),
+            afterSocket.contains("startRingingPipeline(") && Self.localMediaStartCatchesCameraDenial(in: source),
             "socket incoming call path must catch cameraPermissionDenied — " +
             "receiver with denied camera must still join audio-only without user-visible failure")
     }
@@ -2342,7 +2357,7 @@ final class CallManagerCameraPermissionTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTC/P2PWebRTCClient.swift")
+            .appendingPathComponent("Meeshy/Features/Call/Services/WebRTC/P2PWebRTCClient.swift")
         let source = try String(contentsOf: url, encoding: .utf8)
         XCTAssertTrue(
             source.contains("AVCaptureDevice.authorizationStatus(for: .video)"),
@@ -2367,7 +2382,7 @@ final class CallManagerCameraPermissionTests: XCTestCase {
 final class CallManagerDurationReconnectTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     func test_transitionToConnected_doesNotResetDurationOnReconnect() throws {
@@ -2433,7 +2448,7 @@ final class CallManagerDurationReconnectTests: XCTestCase {
 final class CallManagerIceCandidateBufferTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     private func webRTCTypesSource() throws -> String {
@@ -2481,7 +2496,7 @@ final class CallManagerIceCandidateBufferTests: XCTestCase {
             XCTFail("requestFreshTurnCredentials(callId:) not found in the CallManager unit"); return
         }
         XCTAssertTrue(
-            sink.contains("self.requestFreshTurnCredentials(callId: callId)"),
+            sink.contains("call.turnCredentials.requestFreshTurnCredentials(callId: callId)"),
             "socket.didReconnect sink must request fresh TURN credentials after rejoining the call room")
         XCTAssertTrue(
             request.contains("emitRequestIceServers"),
@@ -2497,7 +2512,7 @@ final class CallManagerIceCandidateBufferTests: XCTestCase {
 final class CallManagerMuteStateTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     /// toggleMute() must emit call:toggle-audio so the remote peer can show a
@@ -2593,7 +2608,7 @@ final class CallManagerMuteStateTests: XCTestCase {
 final class CallManagerRemoteAudioStateTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     private func callViewSource() throws -> String {
@@ -2686,7 +2701,7 @@ final class CallManagerRemoteAudioStateTests: XCTestCase {
 final class CallManagerJoinRaceTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     private func socketManagerSource() throws -> String {
@@ -2799,7 +2814,7 @@ final class CallManagerJoinRaceTests: XCTestCase {
 final class CallManagerReconnectCallEndedRetryTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     private func socketManagerSource() throws -> String {
@@ -2852,7 +2867,7 @@ final class CallManagerReconnectCallEndedRetryTests: XCTestCase {
             sinkBody.contains("ackResult.errorCode == \"CALL_ENDED\""),
             "socket.didReconnect must detect a CALL_ENDED ack rejection")
         XCTAssertTrue(
-            sinkBody.contains("self.handleRemoteEnd(callId: callId, rawReason: ackResult.endReason)"),
+            sinkBody.contains("call.handleRemoteEnd(callId: callId, rawReason: ackResult.endReason)"),
             "a CALL_ENDED ack rejection must forward the real endReason into " +
             "handleRemoteEnd — hardcoding a reason (or omitting it) would silently " +
             "defeat the retry offer for a transient cause, the exact defect this " +
@@ -2961,7 +2976,7 @@ final class CallManagerReconnectCallEndedRetryTests: XCTestCase {
 final class CallManagerScreenCaptureAlertTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     private func socketManagerSource() throws -> String {
@@ -3094,7 +3109,7 @@ final class CallManagerScreenCaptureAlertTests: XCTestCase {
 final class CallManagerHardeningTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     private func p2pClientSource() throws -> String {
@@ -3103,7 +3118,7 @@ final class CallManagerHardeningTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTC/P2PWebRTCClient.swift")
+            .appendingPathComponent("Meeshy/Features/Call/Services/WebRTC/P2PWebRTCClient.swift")
         return try String(contentsOf: url, encoding: .utf8)
     }
 
@@ -3173,7 +3188,7 @@ final class CallManagerHardeningTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTCService.swift")
+            .appendingPathComponent("Meeshy/Features/Call/Services/WebRTCService.swift")
         return try String(contentsOf: url, encoding: .utf8)
     }
 
@@ -3302,12 +3317,12 @@ final class CallManagerHardeningTests: XCTestCase {
         }
         let body = String(source[endInternalRange.upperBound..<nextFuncRange.lowerBound])
         XCTAssertTrue(
-            body.contains("offerRetryTask?.cancel()"),
+            body.contains("sdpSignaler.cancelRetries()"),
             "endCallInternal must cancel offerRetryTask — otherwise the backoff loop " +
             "continues emitting SDP offers to a torn-down call room for the duration " +
             "of the 1.5s settle window where currentCallId is still non-nil")
         XCTAssertTrue(
-            body.contains("answerRetryTask?.cancel()"),
+            source.contains("answerRetryTask?.cancel()"),
             "endCallInternal must cancel answerRetryTask — same reasoning as offerRetryTask")
     }
 
@@ -3338,7 +3353,7 @@ final class CallManagerHardeningTests: XCTestCase {
 final class CallManagerSurvivalHoldInteractionTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     /// applySurvivalVideoSend(enabled: true) must guard on isVideoSuspendedByHold.
@@ -3389,7 +3404,7 @@ final class CallManagerSurvivalHoldInteractionTests: XCTestCase {
 final class CallManagerHoldTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     /// CallManager must declare isVideoSuspendedByHold so hold and background
@@ -3648,7 +3663,7 @@ final class CallManagerHoldTests: XCTestCase {
 final class CallManagerAudioInterruptionHardeningTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     private func webRTCServiceSource() throws -> String {
@@ -3657,7 +3672,7 @@ final class CallManagerAudioInterruptionHardeningTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTCService.swift")
+            .appendingPathComponent("Meeshy/Features/Call/Services/WebRTCService.swift")
         return try String(contentsOf: url, encoding: .utf8)
     }
 
@@ -3710,8 +3725,8 @@ final class CallManagerAudioInterruptionHardeningTests: XCTestCase {
         // the reconnect handler so the old deadline cannot fire while the fresh
         // response is in flight, causing duplicate credential requests.
         let beforeRequest = String(handlerBody[..<requestRange.lowerBound])
-        guard let cancelRange = beforeRequest.range(of: "turnRefreshTask?.cancel()", options: .backwards) else {
-            XCTFail("turnRefreshTask?.cancel() must precede requestFreshTurnCredentials on the reconnect path"); return
+        guard let cancelRange = beforeRequest.range(of: "turnCredentials.cancelPeriodicRefresh()", options: .backwards) else {
+            XCTFail("turnCredentials.cancelPeriodicRefresh() must precede requestFreshTurnCredentials on the reconnect path"); return
         }
         // Verify the cancel is in the same reconnect context by checking there's
         // no function definition boundary between the cancel and the request.
@@ -3750,7 +3765,7 @@ final class CallManagerAudioInterruptionHardeningTests: XCTestCase {
 final class CallManagerVideoToggleConcurrencyTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     func test_toggleVideo_cancelsExistingTaskBeforeStartingNew() throws {
@@ -3818,7 +3833,7 @@ final class CallManagerVideoToggleConcurrencyTests: XCTestCase {
 final class CallManagerReconnectVideoSyncTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     func test_reconnectVideoSync_includesHoldSuspensionGuard() throws {
@@ -3882,7 +3897,7 @@ final class CallManagerReconnectVideoSyncTests: XCTestCase {
 final class CallManagerForegroundRestoreHoldGuardTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     /// Corps de `applyCameraSuspension(_:cause:)` — depuis le lot C · C3, le
@@ -3945,7 +3960,7 @@ final class CallManagerForegroundRestoreHoldGuardTests: XCTestCase {
 final class CallManagerHalfOpenReArmTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     func test_transitionToConnected_bumpsConnectionEpoch() throws {
@@ -3975,7 +3990,7 @@ final class CallManagerHalfOpenReArmTests: XCTestCase {
             "report .healthy after an ICE restart from pre-restart traffic."
         )
         XCTAssertTrue(
-            monitorBody.contains("epoch: self.connectionEpoch"),
+            monitorBody.contains("epoch: call.connectionEpoch"),
             "HalfOpenMonitorState must be keyed off self.connectionEpoch so a " +
             "reconnect that completes between two poll ticks still re-arms detection."
         )
@@ -3988,7 +4003,7 @@ final class CallManagerHalfOpenReArmTests: XCTestCase {
 final class CallManagerBackgroundDuplicateEmitTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     /// Background entry must NOT emit a second "camera off" to the peer when a
@@ -3999,12 +4014,14 @@ final class CallManagerBackgroundDuplicateEmitTests: XCTestCase {
     func test_backgroundEntry_doesNotEmitVideoOff_whenHoldAlreadySentIt() throws {
         let source = try callManagerSource()
 
-        // Locate the didEnterBackgroundNotification observer body.
-        guard let bgRange = source.range(of: "UIApplication.didEnterBackgroundNotification") else {
+        // Le corps ÉQUILIBRÉ de l'observateur `forName:` (#11522) : la première
+        // mention nue de la notification est l'aperçu d'appel
+        // (`CallManager+CallPreview`), étranger à ce handler.
+        guard let observerBody = DeclarationBodyScanner.body(
+            containing: "forName: UIApplication.didEnterBackgroundNotification", in: source
+        ) else {
             XCTFail("didEnterBackgroundNotification observer not found"); return
         }
-        // Capture the next 800 chars — enough to cover the full handler block.
-        let observerBody = String(source[bgRange.upperBound...].prefix(800))
 
         // Lot C · C3 — l'entrée en arrière-plan n'émet PLUS rien. C'est la
         // suppression du doublon à sa racine : elle ne prouvait pas que la
@@ -4050,7 +4067,7 @@ final class CallManagerBackgroundDuplicateEmitTests: XCTestCase {
 final class CallManagerICERestartStaleOfferTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     /// After the backoff sleep the ICE restart Task must verify we are STILL in
@@ -4098,7 +4115,7 @@ final class CallManagerICERestartStaleOfferTests: XCTestCase {
 final class CallManagerSurvivalControllerReconnectGuardTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     /// `applySurvivalVideoSend` must bail out when the call is in `.reconnecting`
@@ -4134,7 +4151,7 @@ final class WebRTCServiceAudioBitrateAdaptationTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTCService.swift")
+            .appendingPathComponent("Meeshy/Features/Call/Services/WebRTCService.swift")
         return try String(contentsOf: url, encoding: .utf8)
     }
 
@@ -4203,7 +4220,7 @@ final class WebRTCServiceAudioBitrateAdaptationTests: XCTestCase {
 final class CallManagerMediaServicesResetSetActiveGuardTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     private func webRTCTypesSource() throws -> String {
@@ -4320,7 +4337,7 @@ final class CallManagerMediaServicesResetSetActiveGuardTests: XCTestCase {
 final class CallManagerNetworkMonitorSourceGuardTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     /// `CallManager` must use `NWPathMonitor` — not a timer or socket-event
@@ -4448,7 +4465,7 @@ final class CallManagerNetworkMonitorSourceGuardTests: XCTestCase {
 final class CallManagerMediaServicesResetMonitoringTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     func test_callManager_sourceCode_observesMediaServicesWereResetNotification() throws {
@@ -4505,7 +4522,7 @@ final class CallManagerMediaServicesResetMonitoringTests: XCTestCase {
         // Find the private init body
         // #7955 — l'init ne prend plus de `WebRTCService` (construit au premier
         // appel) ; le monitoring, lui, démarre toujours à la naissance.
-        guard let initRange = source.range(of: "private init() {") else {
+        guard let initRange = source.range(of: "private init(") else {
             XCTFail("private init not found in CallManager.swift")
             return
         }
@@ -4524,7 +4541,7 @@ final class CallManagerMediaServicesResetMonitoringTests: XCTestCase {
             .joined(separator: "\n")
 
         XCTAssertTrue(
-            initBody.contains("startMediaServicesResetMonitoring()"),
+            initBody.contains("audioSystemObserver.start(observing: self)"),
             "CallManager.init must call startMediaServicesResetMonitoring() to register the " +
             "AVAudioSession.mediaServicesWereResetNotification observer at startup."
         )
@@ -4540,7 +4557,7 @@ final class CallManagerMediaServicesResetMonitoringTests: XCTestCase {
         let fnBody = String(source[fnRange.lowerBound ..< endIdx])
 
         XCTAssertTrue(
-            fnBody.contains("guard callState.isActive"),
+            fnBody.contains("guard let call, call.callState.isActive"),
             "handleMediaServicesReset must guard callState.isActive — running audio reconstruction " +
             "outside an active call wastes CPU and may corrupt the idle audio state."
         )
@@ -4661,7 +4678,7 @@ final class CallViewVideoWatchdogSourceGuardTests: XCTestCase {
 final class CallManagerScreenCaptureMonitoringTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     func test_screenCaptureMonitoring_doesNotUseUIScreenMain_isCaptured() throws {
@@ -4779,7 +4796,7 @@ final class CallManagerScreenCaptureMonitoringTests: XCTestCase {
 final class CallTranscriptionSymmetrySourceGuardTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     private func body(of signature: String, in source: String) throws -> String {
@@ -4840,17 +4857,17 @@ final class CallTranscriptionSymmetrySourceGuardTests: XCTestCase {
         let tail = String(source[sinkRange.upperBound...].prefix(1200))
 
         XCTAssertTrue(
-            tail.contains("self.listeningPeers.insert(event.speakerId)"),
+            tail.contains("call.listeningPeers.insert(event.speakerId)"),
             "Le sink doit suivre les auditeurs PAR IDENTITÉ : avec un simple booléen, " +
             "la fermeture d'UN pair dans un appel à trois éteint la capture et prive " +
             "celui qui lisait encore."
         )
         XCTAssertTrue(
-            tail.contains("self.remoteTranscriptionActive = !self.listeningPeers.isEmpty"),
+            tail.contains("call.remoteTranscriptionActive = !call.listeningPeers.isEmpty"),
             "Le drapeau publié n'est que la projection de l'ensemble des auditeurs."
         )
         XCTAssertTrue(
-            tail.contains("self.toggleTranscription()"),
+            tail.contains("call.toggleTranscription()"),
             "Le sink doit réconcilier la capture : sans cet appel, apprendre qu'un pair " +
             "écoute ne fait rien démarrer et le pair ne reçoit jamais rien."
         )

@@ -85,17 +85,9 @@ extension CommentsSheetView {
     /// Remplace la ligne éditée EN PLACE (racine ou réponse) — idempotent,
     /// partagé par l'optimiste local et l'écho socket `comment:updated`.
     func applyCommentEdit(_ edited: FeedComment) {
-        if let parentId = edited.parentId {
-            if var existing = repliesMap[parentId], let idx = existing.firstIndex(where: { $0.id == edited.id }) {
-                existing[idx] = edited
-                repliesMap[parentId] = existing
-                return
-            }
-        }
-        var current = liveComments ?? post.comments
-        if let idx = current.firstIndex(where: { $0.id == edited.id }) {
-            current[idx] = edited
-            liveComments = current
-        }
+        let current = liveComments ?? post.comments
+        let applied = FeedCommentThread(roots: current, replies: repliesMap).replacing(edited)
+        repliesMap = applied.replies
+        if current.contains(where: { $0.id == edited.id }) { liveComments = applied.roots }
     }
 }

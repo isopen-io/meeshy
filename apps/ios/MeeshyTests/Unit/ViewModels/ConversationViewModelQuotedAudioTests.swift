@@ -38,7 +38,7 @@ final class ConversationViewModelQuotedAudioTests: XCTestCase {
             reactionService: MockReactionService(),
             reportService: MockReportService(),
             messageSocket: MockMessageSocket(),
-            dependencies: ConversationDependencies(dbPool: pool, persistence: MessagePersistenceActor(dbWriter: pool))
+            dependencies: ConversationDependencies(persistence: MessagePersistenceActor(dbWriter: pool))
         )
         vm.start()
         let engine = MockAudioPlaybackEngine()

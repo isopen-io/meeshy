@@ -218,7 +218,7 @@ export function useThreadChromeSignals(input: {
     scrollButtonVisible: mode !== 'summary' && (!nearBottom || detached),
     scrollButtonUnreadCount: unreadBelow.count,
     scrollButtonSenderName: group ? (lastUnreadMessage?.sender?.displayName ?? null) : null,
-    scrollButtonPreviewText: unreadPreviewText(lastUnreadMessage, lastUnreadServed?.text),
+    scrollButtonPreviewText: unreadPreviewText(lastUnreadMessage, lastUnreadServed?.text, Date.now()),
     onScrollToBottom,
   };
 }

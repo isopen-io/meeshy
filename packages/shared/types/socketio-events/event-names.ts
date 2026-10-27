@@ -20,7 +20,7 @@
 
 import { ADMIN_METRICS_CLIENT_EVENTS, ADMIN_METRICS_SERVER_EVENTS } from './admin-metrics-event-names.js';
 import { CALL_RECORDING_CLIENT_EVENTS, CALL_RECORDING_SERVER_EVENTS } from './call-recording-event-names.js';
-import { E2EE_SERVER_EVENTS } from './e2ee-event-names.js';
+import { E2EE_CLIENT_EVENTS, E2EE_SERVER_EVENTS } from './e2ee-event-names.js';
 import { SESSION_SERVER_EVENTS } from './session-event-names.js';
 import { VIEWING_CLIENT_EVENTS, VIEWING_SERVER_EVENTS } from './viewing-event-names.js';
 
@@ -678,6 +678,7 @@ export const CLIENT_EVENTS = {
   TYPING_STOP: 'typing:stop',
   ...VIEWING_CLIENT_EVENTS,
   ...ADMIN_METRICS_CLIENT_EVENTS,
+  ...E2EE_CLIENT_EVENTS,
   // `USER_STATUS: 'user:status'` a été retiré d'ici (cycle 60) : c'est un
   // événement SERVEUR→client (`SERVER_EVENTS.USER_STATUS`, écouté par
   // `presence.service.ts`, `websocket.service.ts`, iOS `PresenceManager`), et

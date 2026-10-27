@@ -2,6 +2,9 @@
 <resources>
     <string name="audio_fullscreen_dial">Posizione nel messaggio vocale</string>
     <string name="avatar_a11y_mood">umore %s</string>
+    <string name="bubble_story_citation_answer">risposta alla sua storia</string>
+    <string name="bubble_story_citation_open_hint">Apre la storia citata</string>
+    <string name="bubble_story_citation_unavailable">Storia non disponibile</string>
     <string name="common_cancel">Annulla</string>
     <string name="common_clearSearch">Cancella la ricerca</string>
     <string name="common_close">Chiudi</string>
@@ -22,6 +25,13 @@
     <string name="emoji_category_smileys">Faccine</string>
     <string name="emoji_category_symbols">Simboli</string>
     <string name="emoji_category_travel">Viaggi</string>
+    <string name="focal_focus_add_reaction">Aggiungi una reazione</string>
+    <string name="focal_focus_translation_detail">Dettagli della traduzione</string>
+    <string name="focal_row_you">Tu</string>
+    <string name="location_fullscreen_directions">Itinerario</string>
+    <string name="location_fullscreen_mapStyle">Stile mappa</string>
+    <string name="location_fullscreen_sharedPosition">Posizione condivisa</string>
+    <string name="media_audio_transcribe">Trascrivi</string>
     <string name="media_crop_a11y_handle_bottom">Bordo inferiore</string>
     <string name="media_crop_a11y_handle_bottomLeft">Angolo in basso a sinistra</string>
     <string name="media_crop_a11y_handle_bottomRight">Angolo in basso a destra</string>
@@ -40,6 +50,8 @@
     <string name="media_trim_loading">Caricamento dell\'anteprima</string>
     <string name="media_trim_of_total">su %s</string>
     <string name="media_trim_window">Porzione mantenuta</string>
+    <string name="message_long_collapse">Mostra meno</string>
+    <string name="message_long_read_more">Continua a leggere</string>
     <string name="notification_date_ago">%s fa</string>
     <string name="notification_date_hours">%d h</string>
     <string name="notification_date_minutes">%d min</string>

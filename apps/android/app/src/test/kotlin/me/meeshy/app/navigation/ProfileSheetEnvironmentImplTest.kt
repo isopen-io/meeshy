@@ -14,7 +14,7 @@ import me.meeshy.sdk.model.PresenceState
 import me.meeshy.sdk.model.StatusEntry
 import me.meeshy.sdk.model.StoryGroup
 import me.meeshy.sdk.model.StoryItem
-import me.meeshy.sdk.model.UserStatusEvent
+import me.meeshy.sdk.model.UserPresence
 import me.meeshy.ui.component.StoryRingState
 import me.meeshy.ui.component.meeshyPresenceDotColor
 import org.junit.Test
@@ -25,7 +25,7 @@ class ProfileSheetEnvironmentImplTest {
     private fun iso(offsetSeconds: Long): String = Instant.ofEpochMilli(now + offsetSeconds * 1_000L).toString()
 
     private fun impl(
-        presence: Flow<UserStatusEvent> = emptyFlow(),
+        presence: (String) -> Flow<UserPresence?> = { emptyFlow() },
         groups: Flow<List<StoryGroup>> = emptyFlow(),
         moods: List<StatusEntry> = emptyList(),
     ) = ProfileSheetEnvironmentImpl(ProfileLiveSources(presence, groups, { moods }, { now }))
@@ -37,8 +37,7 @@ class ProfileSheetEnvironmentImplTest {
 
     @Test
     fun `la presence temps reel gagne sur le cliche REST`() = runTest {
-        val presence = MutableSharedFlow<UserStatusEvent>(replay = 1)
-        presence.emit(UserStatusEvent(userId = "bob", isOnline = true, lastActiveAt = iso(-5)))
+        val presence = { id: String -> flowOf(UserPresence(isOnline = id == "bob", lastActiveAt = iso(-5))) }
 
         val signs = impl(presence = presence).signsFor("bob").first { it.livePresence != null }
 
@@ -48,7 +47,7 @@ class ProfileSheetEnvironmentImplTest {
 
     @Test
     fun `la presence d'une autre personne ne touche pas la fiche`() = runTest {
-        val presence = flowOf(UserStatusEvent(userId = "eve", isOnline = true, lastActiveAt = iso(0)))
+        val presence = { id: String -> flowOf<UserPresence?>(if (id == "eve") UserPresence(true, iso(0)) else null) }
 
         val all = impl(presence = presence).signsFor("bob").toList()
 
@@ -98,8 +97,7 @@ class ProfileSheetEnvironmentImplTest {
 
     @Test
     fun `une source de stories en panne n'eteint pas la presence`() = runTest {
-        val presence = MutableSharedFlow<UserStatusEvent>(replay = 1)
-        presence.emit(UserStatusEvent(userId = "bob", isOnline = true, lastActiveAt = iso(0)))
+        val presence = { _: String -> flowOf<UserPresence?>(UserPresence(isOnline = true, lastActiveAt = iso(0))) }
         val broken = flow<List<StoryGroup>> { error("room") }
 
         val signs = impl(presence = presence, groups = broken).signsFor("bob").first { it.livePresence != null }

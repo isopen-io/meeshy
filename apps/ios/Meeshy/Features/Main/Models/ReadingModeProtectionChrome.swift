@@ -32,16 +32,16 @@ nonisolated enum ReadingModeProtectionChrome {
         // Focal et Script partagent la rangée plate : un seul fichier, deux
         // modes — c'est déjà le cas pour l'identité, la méta et les badges.
         case .focal, .script:
-            return "Features/Main/Focal/Row/FocalRow.swift"
+            return "Features/Focal/Row/FocalRow.swift"
         case .bubbles:
             return "Features/Main/Views/Bubble/BubbleStandardLayout.swift"
         case .river:
-            return "Features/Main/Riviere/View/RiverBubbleView.swift"
+            return "Features/River/View/RiverBubbleView.swift"
         // Le Résumé ne rend pas de bulle : il ne montre AUCUN texte protégé
         // (le digest est une copie, qu'aucune échéance n'atteint). Il désigne
         // les messages protégés dans leur propre section, avec le même chrome.
         case .summary:
-            return "Features/Main/Focal/Summary/SummaryProtectionsView.swift"
+            return "Features/Focal/Summary/SummaryProtectionsView.swift"
         }
     }
 
@@ -57,13 +57,13 @@ nonisolated enum ReadingModeProtectionChrome {
     static func burnHostPath(for mode: ReadingModeOrchestrator.ConversationReadingMode) -> String {
         switch mode {
         case .focal, .script:
-            return "Features/Main/Focal/Row/FocalRow.swift"
+            return "Features/Focal/Row/FocalRow.swift"
         case .bubbles:
             return "Features/Main/Views/ThemedMessageBubble.swift"
         case .river:
-            return "Features/Main/Riviere/View/RiverBubbleView.swift"
+            return "Features/River/View/RiverBubbleView.swift"
         case .summary:
-            return "Features/Main/Focal/Summary/SummaryProtectionsView.swift"
+            return "Features/Focal/Summary/SummaryProtectionsView.swift"
         }
     }
 }

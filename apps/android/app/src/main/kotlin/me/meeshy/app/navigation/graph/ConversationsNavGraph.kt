@@ -6,6 +6,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.hilt.navigation.compose.hiltViewModel
+import me.meeshy.app.settings.LocationSharingSettingsSheet
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -14,7 +15,7 @@ import androidx.navigation.navArgument
 import androidx.navigation.navDeepLink
 import me.meeshy.app.auth.AuthViewModel
 import me.meeshy.app.calls.CallPillPresenter
-import me.meeshy.app.calls.CallUiState
+import me.meeshy.app.calls.CallStatus
 import me.meeshy.app.chat.ChatScreen
 import me.meeshy.app.chat.ChatViewModel
 import me.meeshy.app.chat.ConversationMembersPresenter
@@ -33,6 +34,9 @@ import me.meeshy.app.navigation.CallRoute
 import me.meeshy.app.navigation.ChatRouteArgs
 import me.meeshy.app.navigation.ReportsConversationViewing
 import me.meeshy.app.navigation.Routes
+import me.meeshy.app.navigation.SheetStyle
+import me.meeshy.app.navigation.rememberProfileOpenerOverSheet
+import me.meeshy.app.navigation.sheetComposable
 import me.meeshy.app.stories.StoriesViewModel
 import me.meeshy.app.stories.StoryTray
 
@@ -40,7 +44,7 @@ import me.meeshy.app.stories.StoryTray
 internal fun NavGraphBuilder.conversationsNavGraph(
     navController: NavHostController,
     authViewModel: AuthViewModel,
-    callState: CallUiState,
+    callStatus: CallStatus,
 ) {
     composable(
         route = Routes.CONVERSATIONS,
@@ -74,6 +78,7 @@ internal fun NavGraphBuilder.conversationsNavGraph(
                 StoryTray(
                     onOpenStory = { userId -> navController.navigate(Routes.story(userId)) },
                     onAddStory = { navController.navigate(Routes.STORY_COMPOSER) },
+                    onManageStories = { navController.navigate(Routes.MY_STORIES) },
                     onShowProfile = { userId -> navController.navigate(Routes.profile(userId)) },
                     viewModel = storiesViewModel,
                 )
@@ -87,27 +92,25 @@ internal fun NavGraphBuilder.conversationsNavGraph(
             onOpenSettings = { navController.navigate(Routes.SETTINGS) },
         )
     }
-    composable(Routes.SHARE_LINK_PICKER) {
+    sheetComposable(Routes.SHARE_LINK_PICKER, navController) { _, dismiss ->
         CreateShareLinkScreen(
-            onBack = { navController.popBackStack() },
-            onCreated = { navController.popBackStack() },
+            onBack = dismiss,
+            onCreated = dismiss,
             onNewConversation = { navController.navigate(Routes.NEW_CONVERSATION) },
         )
     }
-    composable(Routes.GLOBAL_SEARCH) {
+    sheetComposable(Routes.GLOBAL_SEARCH, navController, style = SheetStyle.COVER) { _, dismiss ->
         GlobalSearchScreen(
-            onBack = { navController.popBackStack() },
+            onBack = dismiss,
             onOpenConversation = { conversationId ->
                 navController.navigate(Routes.chat(conversationId))
             },
-            onOpenUser = { userId ->
-                navController.navigate(Routes.profile(userId))
-            },
+            onOpenUser = rememberProfileOpenerOverSheet(navController),
         )
     }
-    composable(Routes.DASHBOARD) {
+    sheetComposable(Routes.DASHBOARD, navController) { _, dismiss ->
         DashboardScreen(
-            onBack = { navController.popBackStack() },
+            onBack = dismiss,
             onOpenConversation = { conversationId ->
                 navController.navigate(Routes.chat(conversationId))
             },
@@ -117,15 +120,16 @@ internal fun NavGraphBuilder.conversationsNavGraph(
             onContacts = { navController.navigate(Routes.CONTACTS) },
         )
     }
-    composable(
+    sheetComposable(
         route = Routes.CREATE_SHARE_LINK,
+        navController = navController,
         arguments = listOf(
             navArgument(CreateShareLinkViewModel.CONVERSATION_ID_ARG) { type = NavType.StringType },
         ),
-    ) {
+    ) { _, dismiss ->
         CreateShareLinkScreen(
-            onBack = { navController.popBackStack() },
-            onCreated = { navController.popBackStack() },
+            onBack = dismiss,
+            onCreated = dismiss,
         )
     }
     composable(Routes.MY_SHARE_LINKS) {
@@ -147,9 +151,9 @@ internal fun NavGraphBuilder.conversationsNavGraph(
             onDeleted = { navController.popBackStack() },
         )
     }
-    composable(Routes.NEW_CONVERSATION) {
+    sheetComposable(Routes.NEW_CONVERSATION, navController) { _, dismiss ->
         NewConversationScreen(
-            onBack = { navController.popBackStack() },
+            onBack = dismiss,
             onConversationCreated = { conversationId ->
                 navController.navigate(Routes.chat(conversationId)) {
                     popUpTo(Routes.CONVERSATIONS)
@@ -201,7 +205,9 @@ internal fun NavGraphBuilder.conversationsNavGraph(
             },
             // A live local call (minimised/floating) suppresses the rejoin
             // pill — don't offer to rejoin the call this device is in.
-            hasLocalLiveCall = CallPillPresenter.isMinimizable(callState.status),
+            hasLocalLiveCall = CallPillPresenter.isMinimizable(callStatus),
+            locationSettingsSheet = { accent, onDismiss -> LocationSharingSettingsSheet(accent = accent, onDismiss = onDismiss) },
+            onOpenCitedPost = { postId -> navController.navigate(Routes.postDetail(postId)) },
         )
     }
     composable(Routes.STARRED) {

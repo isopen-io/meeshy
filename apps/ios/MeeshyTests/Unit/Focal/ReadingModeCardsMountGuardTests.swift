@@ -34,8 +34,8 @@ final class ReadingModeCardsMountGuardTests: XCTestCase {
 
     private let rowHosts = [
         "Views/Bubble/BubbleStandardLayout.swift",
-        "Focal/Row/FocalRow.swift",
-        "Riviere/View/RiverBubbleView.swift",
+        "../Focal/Row/FocalRow.swift",
+        "../River/View/RiverBubbleView.swift",
     ]
 
     func test_rowHosts_everyReadingModeHost_mountsTheLinkEmbed() throws {
@@ -48,7 +48,7 @@ final class ReadingModeCardsMountGuardTests: XCTestCase {
     }
 
     func test_linkEmbed_isTheOnlySiteThatBuildsTheConversationCard() throws {
-        for host in rowHosts + ["Focal/Row/FocalNonMediaBlock.swift"] {
+        for host in rowHosts + ["../Focal/Row/FocalNonMediaBlock.swift"] {
             XCTAssertFalse(
                 try source(host).contains("ConversationLinkCard("),
                 "\(host) ne recopie pas la carte de conversation : elle passe par BubbleLinkEmbed"
@@ -58,8 +58,8 @@ final class ReadingModeCardsMountGuardTests: XCTestCase {
 
     func test_rowHosts_contactCard_goesThroughBubbleAttachmentView() throws {
         XCTAssertTrue(try source("Views/Bubble/BubbleStandardLayout.swift").contains("BubbleAttachmentView("))
-        XCTAssertTrue(try source("Focal/Row/FocalNonMediaBlock.swift").contains("BubbleAttachmentView("))
-        XCTAssertTrue(try source("Focal/Row/FocalRow.swift").contains("FocalNonMediaBlock("))
+        XCTAssertTrue(try source("../Focal/Row/FocalNonMediaBlock.swift").contains("BubbleAttachmentView("))
+        XCTAssertTrue(try source("../Focal/Row/FocalRow.swift").contains("FocalNonMediaBlock("))
         XCTAssertTrue(
             try source("Views/Bubble/BubbleAttachmentView.swift").contains("ContactCardView("),
             "BubbleAttachmentView est le point unique qui aiguille une carte de visite vers ContactCardView"

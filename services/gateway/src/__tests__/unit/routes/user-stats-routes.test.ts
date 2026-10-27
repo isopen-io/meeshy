@@ -66,7 +66,7 @@ function makePrisma(overrides: PrismaOverrides = {}): PrismaClient {
     },
     participant: { findMany: jest.fn(() => Promise.resolve([{ id: "p1" }])), count: jest.fn(() => Promise.resolve(conversationCount)) },
     friendRequest: { count: jest.fn(() => Promise.resolve(friendCount)) },
-    user: { findUnique: jest.fn(() => Promise.resolve(createdAt ? { createdAt } : null)) },
+    user: { findUnique: jest.fn(() => Promise.resolve(createdAt ? { createdAt } : null)), findMany: jest.fn(() => Promise.resolve([])) },
     post: { count: jest.fn(() => Promise.resolve(0)) },
   } as unknown as PrismaClient;
 }
@@ -151,7 +151,7 @@ describe('GET /users/me/stats — error path', () => {
       },
       participant: { findMany: jest.fn(() => Promise.resolve([{ id: "p1" }])), count: jest.fn(() => Promise.reject(new Error('db error'))) },
       friendRequest: { count: jest.fn(() => Promise.reject(new Error('db error'))) },
-      user: { findUnique: jest.fn(() => Promise.reject(new Error('db error'))) },
+      user: { findUnique: jest.fn(() => Promise.reject(new Error("db error"))), findMany: jest.fn(() => Promise.resolve([])) },
       post: { count: jest.fn(() => Promise.reject(new Error('db error'))) },
     } as unknown as PrismaClient;
     app = await buildApp(prisma);
@@ -294,7 +294,7 @@ describe('GET /users/me/stats/achievements — error path', () => {
       },
       participant: { findMany: jest.fn(() => Promise.resolve([{ id: "p1" }])), count: jest.fn(() => Promise.reject(new Error('db error'))) },
       friendRequest: { count: jest.fn(() => Promise.reject(new Error('db error'))) },
-      user: { findUnique: jest.fn(() => Promise.reject(new Error('db error'))) },
+      user: { findUnique: jest.fn(() => Promise.reject(new Error("db error"))), findMany: jest.fn(() => Promise.resolve([])) },
       post: { count: jest.fn(() => Promise.reject(new Error('db error'))) },
     } as unknown as PrismaClient;
     app = await buildApp(prisma);

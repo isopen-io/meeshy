@@ -282,6 +282,7 @@ public class MainActivity extends BridgeActivity {
         // et non la sonnerie ; un appel les rend a la voix (`MeeshyCallPlugin`).
         setVolumeControlStream(VolumeStreamRules.stream(false));
         suivreTailleDuTexte(getResources().getConfiguration());
+        MessageNotificationChannel.ensure(ShellLocale.wrap(this));
         SilentNotificationChannel.ensure(ShellLocale.wrap(this));
         GameNotificationChannel.ensure(ShellLocale.wrap(this));
         photoPicker = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), this::photosPicked);

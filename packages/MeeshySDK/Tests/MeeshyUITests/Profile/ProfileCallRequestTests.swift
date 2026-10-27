@@ -22,6 +22,19 @@ final class ProfileCallRequestTests: XCTestCase {
         XCTAssertEqual(request, ProfileCallRequest(userId: peer, displayName: "Alice", isVideo: true, conversationId: "d1"))
     }
 
+    /// #13006 — deux tête-à-tête avec ce contact : l'appel part du chiffré de
+    /// bout en bout, même s'il n'est pas le plus récent.
+    func test_init_withTwoDirects_dialsTheEndToEndOne() {
+        let readable = MeeshyConversation(id: "readable", identifier: "readable", type: .direct,
+                                          lastMessageAt: Date(timeIntervalSince1970: 900), participantUserId: peer)
+        let sealed = MeeshyConversation(id: "sealed", identifier: "sealed", type: .direct,
+                                        lastMessageAt: Date(timeIntervalSince1970: 100), encryptionMode: "e2ee", participantUserId: peer)
+
+        let request = ProfileCallRequest(userId: peer, displayName: "Alice", isVideo: false, sharedConversations: [readable, sealed])
+
+        XCTAssertEqual(request?.conversationId, "sealed")
+    }
+
     func test_init_withoutDirectConversation_letsTheStarterResolveIt() {
         let request = ProfileCallRequest(
             userId: peer,

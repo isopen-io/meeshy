@@ -15,6 +15,7 @@ struct E2EETestPeer {
     let directory: FakeE2EEDirectoryClient
     let approvals: E2EEOwnDeviceApprovals
     let plaintexts: E2EEPlaintextVault
+    let signals: E2EESignalInbox
     let cipher: E2EESessionCipher
     let sealer: E2EEMessageSealer
     let opener: E2EEEnvelopeOpener
@@ -40,11 +41,14 @@ struct E2EETestPeer {
         let cipher = E2EESessionCipher(local: enrolled.device.address, store: store, vault: vault, lock: lock)
         let approvals = E2EEOwnDeviceApprovals(vault: vault)
         let plaintexts = E2EEPlaintextVault(vault: vault)
+        let signals = E2EESignalInbox(vault: vault)
         return E2EETestPeer(
             userId: userId, enrolled: enrolled, vault: vault, directory: directory, approvals: approvals,
-            plaintexts: plaintexts, cipher: cipher,
+            plaintexts: plaintexts, signals: signals, cipher: cipher,
             sealer: E2EEMessageSealer(local: enrolled.device, cipher: cipher, directory: directory, approvals: approvals),
-            opener: E2EEEnvelopeOpener(local: enrolled.device, cipher: cipher, plaintexts: plaintexts, directory: directory, approvals: approvals)
+            opener: E2EEEnvelopeOpener(
+                local: enrolled.device, cipher: cipher, plaintexts: plaintexts, directory: directory, approvals: approvals, signals: signals
+            )
         )
     }
 

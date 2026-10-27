@@ -24,7 +24,7 @@ final class MessageStickerPersistenceTests: XCTestCase {
                                                 animation: .heartbeat,
                                                 emoji: "❤️")
 
-    /// Le décodeur est celui de la PRODUCTION (`APIClient.makeAPIPayloadDecoder`) :
+    /// Le décodeur est celui de la PRODUCTION (`MeeshyCoders.decoder(.api)`) :
     /// un `.iso8601` nu refuserait les fractions de seconde du gateway.
     private func makeAPIMessage(id: String, conversationId: String, sticker: [String: Any]?) throws -> APIMessage {
         var json: [String: Any] = [
@@ -37,7 +37,7 @@ final class MessageStickerPersistenceTests: XCTestCase {
         ]
         if let sticker { json["sticker"] = sticker }
         let data = try JSONSerialization.data(withJSONObject: json)
-        return try APIClient.makeAPIPayloadDecoder().decode(APIMessage.self, from: data)
+        return try MeeshyCoders.decoder(.api).decode(APIMessage.self, from: data)
     }
 
     func test_upsertFromAPIMessages_persistsTheStickerAndReadsItBack() async throws {

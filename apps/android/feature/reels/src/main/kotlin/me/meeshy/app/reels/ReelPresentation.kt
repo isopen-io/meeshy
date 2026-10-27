@@ -29,6 +29,14 @@ data class ReelPresentation(
     /** The caption in the reader's language (Prisme), or the original when none is preferred. */
     val caption: String?,
     val isCaptionTranslated: Boolean = false,
+    /** La légende d'origine et ses traductions : les drapeaux de langue changent la légende lue. */
+    val captionOriginalLanguage: String? = null,
+    val captionOriginal: String? = null,
+    val captionTranslations: Map<String, String> = emptyMap(),
+    val createdAtIso: String? = null,
+    /** Compteurs de portée : servis par la passerelle à l'auteur seul. */
+    val viewCount: Int = 0,
+    val impressionCount: Int = 0,
     val likeCount: Int,
     val isLiked: Boolean,
     val commentCount: Int,
@@ -77,6 +85,14 @@ object ReelBuilder {
                     authorAvatarUrl = resolveServedImageUrl(post.author?.avatar, mediaBaseUrl),
                     caption = (preferences?.let(post::displayContent) ?: post.content)?.takeIf { it.isNotBlank() },
                     isCaptionTranslated = preferences?.let(post::isTranslated) == true,
+                    captionOriginalLanguage = post.originalLanguage,
+                    captionOriginal = post.content?.takeIf { it.isNotBlank() },
+                    captionTranslations = post.translations.orEmpty()
+                        .mapNotNull { (language, entry) -> entry.text.takeIf { it.isNotBlank() }?.let { language to it } }
+                        .toMap(),
+                    createdAtIso = post.createdAt,
+                    viewCount = post.viewCount ?: 0,
+                    impressionCount = post.impressionCount ?: 0,
                     likeCount = post.likeCount ?: 0,
                     isLiked = post.isLikedByMe == true,
                     commentCount = post.commentCount ?: 0,

@@ -28,7 +28,7 @@ final class APIRequestPipelineTests: XCTestCase {
             statusCode: status, data: data, authKind: authKind, rejectionPolicy: rejection,
             dailyLimit: status == 429 ? DailyGestureLimit.fromBody(data) : nil,
             slowMode: NewcomerSlowMode.fromResponse(response, body: data),
-            decoder: APIClient.makeAPIPayloadDecoder()
+            decoder: MeeshyCoders.decoder(.api)
         )
     }
 
@@ -247,7 +247,7 @@ final class APIRequestPipelineTests: XCTestCase {
     // MARK: - APIRefreshedVerdict
 
     func test_refreshedVerdict() {
-        let decoder = APIClient.makeAPIPayloadDecoder()
+        let decoder = MeeshyCoders.decoder(.api)
         guard case .success = APIRefreshedVerdict.classify(statusCode: 204, data: Data(), decoder: decoder) else {
             return XCTFail("un 2xx est un succès")
         }

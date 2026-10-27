@@ -73,7 +73,7 @@ const makeHandler = (participantRows: Parameters<typeof findFirstIn>[0]) => {
     socketToUser: new Map([[SOCKET_ID, SESSION_TOKEN]]),
     readStatusService: { getUnreadCount: jest.fn<any>().mockResolvedValue(0) } as any,
     presenceViewer: jest.fn<any>().mockImplementation(async (userId: string) => ({ userId, role: 'USER' })),
-    presenceVisibility: { resolveForTargets: jest.fn<any>().mockResolvedValue(new Map()) },
+    presenceVisibility: { resolveForPresenceEvent: jest.fn<any>().mockResolvedValue(new Map()) },
   });
 };
 

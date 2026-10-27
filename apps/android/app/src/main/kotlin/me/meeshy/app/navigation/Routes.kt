@@ -41,6 +41,14 @@ object Routes {
     const val GUEST_JOIN_CHAT_WEB_DEEP_LINK =
         "https://meeshy.me/chat/{${GuestJoinViewModel.IDENTIFIER_ARG}}"
     fun guestJoin(identifier: String): String = "join/$identifier"
+
+    /**
+     * L'entrée SANS COMPTE dans World Wide (#10006) : nom → langue → fil. Elle ne s'atteint que par le QR de
+     * meeshy.me vers `/world` (directive porteur 2026-10-16, #10784) — jamais par un bouton de l'écran de connexion.
+     */
+    const val WORLD_ENTRY = "world"
+    const val WORLD_ENTRY_DEEP_LINK = "meeshy://world"
+    const val WORLD_ENTRY_WEB_DEEP_LINK = "https://meeshy.me/world"
     const val CONVERSATIONS = "conversations"
     const val NEW_CONVERSATION = "conversations/new"
     const val GLOBAL_SEARCH = "search"
@@ -94,6 +102,7 @@ object Routes {
     const val TWO_FACTOR = "settings/two-factor"
     const val ACCOUNT_CONTACT = "settings/account-contact"
     const val SECURITY = "settings/security"
+    const val NOTIFICATION_SETTINGS = "settings/notifications"
     const val MEDIA_DOWNLOAD = "settings/media-download"
     const val MEDIA_CACHE = "settings/media-cache"
     const val PRIVACY = "settings/privacy"
@@ -126,6 +135,9 @@ object Routes {
     const val PROFILE_SHARE_WEB_DEEP_LINK =
         "https://${ProfileShareLink.WEB_HOST}/${ProfileShareLink.USER_SEGMENT}/{userId}"
     const val USER_POSTS = "profile/{userId}/posts"
+    const val HASHTAG_RESULTS = "hashtag/{tag}"
+    const val MY_STORIES = "stories/mine"
+    const val MOOD_SPOTLIGHT = "mood/{statusId}"
     const val REPORT_USER = "report/{${ReportUserViewModel.USER_ID_ARG}}?${ReportUserViewModel.USERNAME_ARG}={${ReportUserViewModel.USERNAME_ARG}}"
     const val STORY_VIEWER = "story/{${StoryViewerViewModel.USER_ID_ARG}}"
     const val STORY_DEEP_LINK = "meeshy://$STORY_VIEWER"
@@ -146,6 +158,8 @@ object Routes {
         ChatRouteArgs.route(conversationId, highlightMessageId)
     fun profile(userId: String): String = "profile/$userId"
     fun userPosts(userId: String): String = "profile/$userId/posts"
+    fun moodSpotlight(statusId: String): String = "mood/$statusId"
+    fun hashtag(tag: String): String = "hashtag/${Uri.encode(tag.removePrefix("#"))}"
     fun reportUser(userId: String, username: String): String =
         "report/$userId?${ReportUserViewModel.USERNAME_ARG}=${Uri.encode(username)}"
     fun story(userId: String): String = "story/$userId"

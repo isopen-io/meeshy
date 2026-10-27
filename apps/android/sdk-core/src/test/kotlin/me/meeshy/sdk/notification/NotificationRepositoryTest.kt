@@ -7,6 +7,7 @@ import io.mockk.coVerify
 import io.mockk.mockk
 import io.mockk.slot
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.runTest
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.model.ApiNotification
@@ -71,6 +72,25 @@ class NotificationRepositoryTest {
             assertThat((fresh as CacheResult.Fresh).value.map { it.id }).containsExactly("n1")
             cancelAndIgnoreRemainingEvents()
         }
+    }
+
+    @Test
+    fun notificationsStream_keepsTheUnreadCountWhenTheListArrivalRestartsTheStream() = runTest {
+        coEvery { api.list(any(), any(), any(), any()) } returns ApiResponse(success = true, data = listOf(notification("n1")))
+        coEvery { api.unreadCount() } coAnswers {
+            delay(50)
+            UnreadCountResponse(success = true, count = 864)
+        }
+        val repo = NotificationRepository(api)
+
+        repo.notificationsStream().test {
+            assertThat(awaitItem()).isEqualTo(CacheResult.Empty)
+            awaitItem()
+            testScheduler.advanceUntilIdle()
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        assertThat(repo.unreadCountStream.value).isEqualTo(864)
     }
 
     @Test

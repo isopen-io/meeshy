@@ -76,7 +76,7 @@ final class ComposerAtelierHandOffTests: XCTestCase {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Composer/MeeshyComposerHost+Surfaces.swift")
+            .appendingPathComponent("Meeshy/Features/Composer/MeeshyComposerHost+Surfaces.swift")
         let code = try String(contentsOf: url, encoding: .utf8)
             .components(separatedBy: .whitespacesAndNewlines).joined()
         guard let relais = code.range(of: "onPublishAllInBackground:{"),

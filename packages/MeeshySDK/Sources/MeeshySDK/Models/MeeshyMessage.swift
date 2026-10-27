@@ -384,7 +384,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         try c.encodeIfPresent(clientMessageId, forKey: .clientMessageId)
         try c.encode(conversationId, forKey: .conversationId)
         try c.encode(senderId, forKey: .senderId)
-        try c.encode(content, forKey: .content)
+        try c.encode(EndToEndDiskPlaintextLaw.persistableContent(of: self), forKey: .content)
         try c.encode(originalLanguage, forKey: .originalLanguage)
         try c.encode(messageType, forKey: .messageType)
         try c.encode(messageSource, forKey: .messageSource)
@@ -435,9 +435,6 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         try c.encodeIfPresent(sticker, forKey: .sticker)
         if !trackedLinkMap.isEmpty {
             try c.encode(trackedLinkMap, forKey: .trackedLinkMap)
-        }
-        if isContentDecryptedOnDevice {
-            try c.encode(contentOrigin, forKey: .contentOrigin)
         }
     }
 

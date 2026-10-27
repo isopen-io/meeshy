@@ -342,7 +342,7 @@ struct MeeshyApp: App {
         guard let mostRecent = reports.first else { return }
 
         for report in reports {
-            let when = report.timestamp.formatted(.iso8601)
+            let when = WireDate.string(from: report.timestamp)
             Logger.crash.error("""
                 [\(report.kind.rawValue, privacy: .public)] \
                 \(when, privacy: .public) — \

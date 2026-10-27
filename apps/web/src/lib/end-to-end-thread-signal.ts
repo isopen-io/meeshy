@@ -8,9 +8,15 @@
  */
 
 import { isEndToEndMode } from '@/lib/end-to-end-regime-ledger';
+import { sharedTranslationServerReadsMessage } from '@meeshy/shared/utils/shared-translation-eligibility';
 
 /** Ce que le signal lit d'un message — tout `unknown` : un `Message` servi comme une ligne brute du cache. */
-type SignalSource = { readonly [K in 'messageType' | 'metadata' | 'systemEvent' | 'encryptionMode' | 'encryptionMetadata' | 'deletedAt']?: unknown };
+type SignalSource = {
+  readonly [K in 'messageType' | 'messageSource' | 'metadata' | 'systemEvent' | 'isEncrypted' | 'encryptionMode' | 'encryptionMetadata' | 'deletedAt' | 'createdAt']?: unknown;
+};
+
+/** Le fil appartient-il à un tête-à-tête ? Inconnu se lit « groupe » : retenir sans apprendre. */
+export type ThreadShape = { readonly isDirect: boolean };
 
 const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> => typeof value === 'object' && value !== null;
 
@@ -43,15 +49,65 @@ export const LIBSIGNAL_PROTOCOL_MARK = 'libsignal-v1';
  * en garde la trace.
  */
 function carriesEndToEnd(message: SignalSource): boolean {
-  if (message.deletedAt !== undefined && message.deletedAt !== null) return false;
+  if (isDeleted(message)) return false;
   const metadata = isRecord(message.encryptionMetadata) ? message.encryptionMetadata : {};
   return isEndToEndMode(textOf(message.encryptionMode)) || metadata.protocol === LIBSIGNAL_PROTOCOL_MARK;
 }
 
+const isSystem = (message: SignalSource): boolean => message.messageType === 'system' || message.messageSource === 'system';
+const isDeleted = (message: SignalSource): boolean => message.deletedAt !== undefined && message.deletedAt !== null;
+
 /**
- * Le fil chargé montre-t-il le bout en bout ? L'avis d'activation, ou un
- * message chiffré de bout en bout (#12986). Un avis de désactivation n'y retire rien.
+ * #13099 — un message chiffré dont le mode ne PROUVE rien : chiffré sans mode,
+ * ou d'un mode inconnu. Seuls `server` et `hybrid`, que le serveur lit, en
+ * sortent. Miroir de `EncryptionSwitchNoticeTrail.ambiguousEncryptedMessageShown` (iOS).
  */
-export function threadShowsEndToEnd(messages: readonly SignalSource[]): boolean {
-  return messages.some((message) => announcesEndToEnd(message) || carriesEndToEnd(message));
+function ambiguouslyEncrypted(message: SignalSource): boolean {
+  if (isSystem(message) || isDeleted(message) || message.isEncrypted !== true || carriesEndToEnd(message)) return false;
+  return !sharedTranslationServerReadsMessage({
+    conversationEncryptionMode: null,
+    messageIsEncrypted: true,
+    messageEncryptionMode: textOf(message.encryptionMode),
+  });
+}
+
+/**
+ * Le fil chargé montre-t-il le bout en bout, de quoi l'APPRENDRE pour toujours ?
+ * L'avis d'activation, partout ; un message chiffré de bout en bout (#12986),
+ * dans un tête-à-tête seulement — dans un groupe, il retient l'envoi sans
+ * s'apprendre (`threadHoldsSend`), comme sur iOS (audit #12985, B2). Un avis
+ * de désactivation n'y retire rien. Sans forme connue : la règle du tête-à-tête.
+ */
+export function threadShowsEndToEnd(messages: readonly SignalSource[], shape: ThreadShape = { isDirect: true }): boolean {
+  return messages.some((message) => announcesEndToEnd(message) || (shape.isDirect && carriesEndToEnd(message)));
+}
+
+/**
+ * #13099 — le fil affiché retient-il l'envoi EN COURS, sans rien apprendre ?
+ * Un message chiffré sans mode ou d'un mode inconnu, partout ; un message e2ee
+ * dans un groupe. Fail-closed : il ne s'écrit jamais dans la mémoire du compte.
+ */
+export function threadHoldsSend(messages: readonly SignalSource[], shape: ThreadShape): boolean {
+  return messages.some((message) => ambiguouslyEncrypted(message) || (!shape.isDirect && carriesEndToEnd(message)));
+}
+
+const instantOf = (value: unknown): number | null => {
+  if (!(value instanceof Date) && typeof value !== 'string' && typeof value !== 'number') return null;
+  const at = new Date(value).getTime();
+  return Number.isFinite(at) ? at : null;
+};
+
+/**
+ * #12992 — la plus ancienne PREUVE datée du bout en bout dans le fil : l'avis
+ * d'activation, ou un message chiffré de bout en bout (l'activation l'a
+ * précédé). `null` sans preuve datée. `withAmbiguous` y compte aussi un
+ * chiffré sans mode ou d'un mode inconnu : l'ère d'un fil qui RETIENT l'envoi
+ * (#13099), pour sceller un clair qui le suit — jamais pour apprendre.
+ */
+export function endToEndShownSince(messages: readonly SignalSource[], options: { readonly withAmbiguous?: boolean } = {}): number | null {
+  const instants = messages
+    .filter((message) => announcesEndToEnd(message) || carriesEndToEnd(message) || (options.withAmbiguous === true && ambiguouslyEncrypted(message)))
+    .map((message) => instantOf(message.createdAt))
+    .filter((at): at is number => at !== null);
+  return instants.length === 0 ? null : Math.min(...instants);
 }

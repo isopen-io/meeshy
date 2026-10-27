@@ -59,6 +59,7 @@ import {
 import { logger, type MessageParams, type MessagesRouteDeps } from './messages-shared';
 import { callerParticipantWhere } from './conversations/utils/access-control';
 import { discoverConversationIdsByMessageIds, withOrphanedSenderRepair } from '../services/messaging/withOrphanedSenderRepair';
+import { messageRefusesPlainErasure, SIGNAL_CHANNEL_REFUSAL } from '../services/e2ee/e2ee-signal-channel';
 
 interface UpdateMessageBody {
   content?: string;
@@ -542,6 +543,11 @@ export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: Mess
 
       if (!canDelete) {
         return sendForbidden(reply, 'Vous n\'êtes pas autorisé à supprimer ce message');
+      }
+      // #13142 — un message scellé au serveur se supprime pour tous par signal
+      // chiffré signé de l'auteur ; un message d'avant l'activation, en clair, ici.
+      if (await messageRefusesPlainErasure(prisma, message)) {
+        return sendError(reply, 409, SIGNAL_CHANNEL_REFUSAL.error, { code: SIGNAL_CHANNEL_REFUSAL.code });
       }
       const moderationReason = byModeration ? moderationReasonOf(request.body) : null;
       if (byModeration && moderationReason === null) {

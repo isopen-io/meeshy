@@ -80,6 +80,8 @@ const arStudioChrome = {
   'story.studio.background.cameraHold': 'اضغط مطولًا: افتح الكاميرا',
   'story.studio.camera.close': 'العودة إلى المشهد',
   'story.studio.camera.flip': 'تبديل الكاميرا',
+  'story.studio.camera.frames': 'إطارات',
+  'story.studio.camera.frames.none': 'بلا إطار',
   'story.studio.camera.flash': 'الفلاش',
   'story.studio.camera.shutter.photo': 'التقاط صورة',
   'story.studio.camera.shutter.start': 'بدء التسجيل',

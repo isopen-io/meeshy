@@ -31,12 +31,14 @@ internal fun BubbleContent.actionContext(
     hasOpenableFile = !isDeleted && files.isNotEmpty(),
     isEdited = isEdited,
     hasText = text.isNotBlank(),
+    hasPlace = !isDeleted && !isEndToEndSealed && locations.any { it.hasCoordinates },
     hostedEntries = hostedEntries,
     exitOffer = exitOffer,
     isNotice = isSystem,
     isViewOnce = isViewOnce,
     isUnconfirmed = ObjectIdGuard.isLocalId(messageId),
     canWrite = canWrite,
+    isEndToEndSealed = isEndToEndSealed,
 )
 
 /** A gesture a message row offers outside the long-press menu. */

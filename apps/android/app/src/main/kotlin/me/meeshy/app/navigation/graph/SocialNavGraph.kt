@@ -9,6 +9,8 @@ import me.meeshy.app.contacts.ContactsScreen
 import me.meeshy.app.feed.UserPostsScreen
 import me.meeshy.app.navigation.ProfileRoutes
 import me.meeshy.app.navigation.Routes
+import me.meeshy.app.navigation.rememberProfileOpenerOverSheet
+import me.meeshy.app.navigation.sheetComposable
 import me.meeshy.app.notifications.NotificationsScreen
 import me.meeshy.app.profile.OwnProfileScreen
 import me.meeshy.app.profile.ReportUserScreen
@@ -31,19 +33,21 @@ internal fun NavGraphBuilder.socialNavGraph(
             onOpenProfile = openProfile,
         )
     }
-    composable(Routes.BLOCKED_USERS) {
+    sheetComposable(Routes.BLOCKED_USERS, navController) { _, dismiss ->
         ContactsScreen(
-            onBack = { navController.popBackStack() },
+            onBack = dismiss,
             initialTab = me.meeshy.app.contacts.ContactsTab.Blocked,
-            onOpenProfile = openProfile,
+            onOpenProfile = rememberProfileOpenerOverSheet(navController),
         )
     }
     composable(Routes.NOTIFICATIONS) {
         NotificationsScreen(
+            onBack = { navController.popBackStack() },
             onOpenConversation = { navController.navigate(Routes.chat(it)) },
             onOpenPost = { navController.navigate(Routes.postDetail(it)) },
             onOpenReel = { navController.navigate(Routes.reels(seed = it)) },
             onOpenStory = { navController.navigate(Routes.story(it)) },
+            onOpenMood = { navController.navigate(Routes.moodSpotlight(it)) },
             onOpenProfile = { navController.navigate(Routes.profile(it)) },
         )
     }
@@ -52,20 +56,23 @@ internal fun NavGraphBuilder.socialNavGraph(
             onBack = { navController.popBackStack() },
             onViewPosts = { userId -> navController.navigate(Routes.userPosts(userId)) },
             onOpenFriendRequests = { navController.navigate(FriendRequestsDestinations.ROUTE) },
+            onOpenProgression = { navController.navigate(GameRoutes.PROGRESSION) },
         )
     }
-    composable(
+    sheetComposable(
         route = Routes.USER_POSTS,
+        navController = navController,
         arguments = listOf(navArgument("userId") { type = NavType.StringType }),
-    ) {
+    ) { _, dismiss ->
         UserPostsScreen(
-            onBack = { navController.popBackStack() },
+            onBack = dismiss,
             onPostClick = { postId -> navController.navigate(Routes.reels(seed = postId)) },
             onOpenPost = { postId -> navController.navigate(Routes.postDetail(postId)) },
         )
     }
-    composable(
+    sheetComposable(
         route = Routes.REPORT_USER,
+        navController = navController,
         arguments = listOf(
             navArgument(ReportUserViewModel.USER_ID_ARG) { type = NavType.StringType },
             navArgument(ReportUserViewModel.USERNAME_ARG) {
@@ -74,7 +81,7 @@ internal fun NavGraphBuilder.socialNavGraph(
                 defaultValue = null
             },
         ),
-    ) {
-        ReportUserScreen(onDone = { navController.popBackStack() })
+    ) { _, dismiss ->
+        ReportUserScreen(onDone = dismiss)
     }
 }

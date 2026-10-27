@@ -42,6 +42,10 @@ import me.meeshy.sdk.model.waveform.VoiceRecordingFile
 import me.meeshy.sdk.model.waveform.VoiceRecordingOutcome
 import me.meeshy.sdk.model.waveform.VoiceRecordingSession
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.model.PermissionNature
+import me.meeshy.ui.component.permission.PermissionFlowHost
+import me.meeshy.ui.component.permission.launchWithCameraAccess
+import me.meeshy.ui.component.permission.rememberPermissionFlow
 import me.meeshy.ui.component.recording.VoiceRecordingPill
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
@@ -75,8 +79,9 @@ import java.io.File
  * [dispatchPicked] pipeline. **Deliberate, documented scope cut vs. iOS**: two system-delegated
  * tiles, no in-composer photo/video toggle ([CameraView]'s combined `.photo`/`.video` case) — iOS
  * opens a single custom AVFoundation capture screen with an in-app mode switch; Android delegates
- * to the system camera app's own `ACTION_IMAGE_CAPTURE`/`ACTION_VIDEO_CAPTURE` intents, so no
- * camera runtime permission is needed here (the system camera app owns that).
+ * to the system camera app's own `ACTION_IMAGE_CAPTURE`/`ACTION_VIDEO_CAPTURE` intents. Because the
+ * manifest declares `CAMERA`, the system refuses those intents unless the permission is granted, so
+ * each capture goes through [launchWithCameraAccess] behind [rememberPermissionFlow] first.
  *
  * Generic file attachment (`onAttachFile`, [MeeshyIcons.AttachFile] tile) mirrors iOS's
  * `doc.fill` button: [ActivityResultContracts.OpenMultipleDocuments] (any MIME type) lets the
@@ -270,12 +275,20 @@ fun FeedComposerSheet(
         },
     )
 
+    val cameraAccess = rememberPermissionFlow()
+    PermissionFlowHost(cameraAccess)
+
     fun launchCapture(capture: () -> Unit) {
         if (FeedMediaPicker.modeFor(draft.remainingMediaSlots) == FeedMediaPickMode.None) {
             onMediaError(mediaLimitMessage)
             return
         }
-        capture()
+        scope.launch {
+            launchWithCameraAccess(
+                ensureAccess = { cameraAccess.ensure(PermissionNature.CAMERA) },
+                launch = capture,
+            )
+        }
     }
 
     // File attachment: unlike PickMultipleVisualMedia, OpenMultipleDocuments has no

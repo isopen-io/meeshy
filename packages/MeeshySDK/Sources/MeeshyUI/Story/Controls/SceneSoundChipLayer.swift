@@ -68,13 +68,15 @@ public struct SceneSoundChipLayer: View {
     /// Le son de la surface entière est coupé : la pastille se montre muette.
     public let isHostMuted: Bool
 
-    @ObservedObject private var muteRegistry = StoryReaderAudioMuteRegistry.shared
+    @ObservedObject private var muteRegistry: StoryReaderAudioMuteRegistry
 
     public init(audios: [StoryAudioPlayerObject],
                 visibleIds: [String]? = nil,
                 slideDuration: TimeInterval? = nil,
                 isInteractive: Bool,
-                isHostMuted: Bool) {
+                isHostMuted: Bool,
+                muteRegistry: StoryReaderAudioMuteRegistry = .shared) {
+        self.muteRegistry = muteRegistry
         self.audios = audios
         self.visibleIds = visibleIds
         self.slideDuration = slideDuration

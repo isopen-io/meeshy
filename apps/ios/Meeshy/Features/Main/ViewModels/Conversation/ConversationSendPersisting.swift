@@ -11,7 +11,7 @@ nonisolated protocol ConversationSendPersisting: Sendable {
         outcome: SendAttemptRecord.Outcome,
         errorMessage: String?
     ) async throws
-    func purgeMessages(ids: [String]) async throws
+    func purgeMessages(ids: [String], origin: PlaintextErasureOrigin) async throws
 }
 
 extension MessagePersistenceActor: ConversationSendPersisting {}

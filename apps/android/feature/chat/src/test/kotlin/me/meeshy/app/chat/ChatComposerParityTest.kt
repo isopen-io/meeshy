@@ -42,14 +42,16 @@ class ChatComposerParityTest {
         draft: String = "",
         onSend: () -> Unit = {},
         canMinimize: Boolean = true,
+        foldable: Boolean = false,
     ) {
         MeeshyTheme(darkTheme = false) {
             ChatComposer(
                 draft = draft, draftRevision = 0, canSend = draft.isNotBlank(), isEditing = false,
-                affordances = affordances, slowMode = slowMode, replyBanner = null, hasEffects = false,
-                clipboardContent = null, sentiment = null, languageCode = "fr", accentColor = Color.Blue,
-                onDraftChange = {}, onPickLanguage = {}, onSend = onSend, onOpenEffects = {}, onCancelEdit = {},
+                affordances = affordances, slowMode = slowMode, replyBanner = null,
+                clipboardContent = null, languageCode = "fr", accentColor = Color.Blue,
+                onDraftChange = {}, onPickLanguage = {}, onSend = onSend, onCancelEdit = {},
                 onCancelReply = {}, onRemoveClipboard = {}, onPickFile = { _, _, _ -> }, canMinimize = canMinimize,
+                foldable = foldable,
             )
         }
     }
@@ -84,5 +86,24 @@ class ChatComposerParityTest {
         compose.onNodeWithContentDescription(string(R.string.chat_send)).performClick()
         assertThat(sent).isEqualTo(1)
     }
-}
 
+    @Test
+    fun `the conversation chevron folds the bar into a bubble that unfolds it back`() {
+        compose.setContent { Composer(foldable = true) }
+        compose.onNodeWithContentDescription(string(R.string.composer_unfold)).assertDoesNotExist()
+        compose.onNodeWithContentDescription(string(R.string.composer_fold)).performClick()
+        compose.waitForIdle()
+        compose.onNodeWithContentDescription(string(R.string.composer_unfold)).assertIsDisplayed()
+        compose.onNode(hasSetTextAction()).assertDoesNotExist()
+        compose.onNodeWithContentDescription(string(R.string.composer_unfold)).performClick()
+        compose.waitForIdle()
+        compose.onNode(hasSetTextAction()).assertIsDisplayed()
+        compose.onNodeWithContentDescription(string(R.string.composer_fold)).assertIsDisplayed()
+    }
+
+    @Test
+    fun `without the fold the toolbar offers no chevron`() {
+        compose.setContent { Composer(foldable = false) }
+        compose.onNodeWithContentDescription(string(R.string.composer_fold)).assertDoesNotExist()
+    }
+}

@@ -42,8 +42,9 @@ class AuthViewModelTest {
     private val dispatcher = StandardTestDispatcher()
 
     private class FakeAuthApi(var response: ApiResponse<AuthSession>) : AuthApi {
+        var loginCalls = 0
         override suspend fun login(body: LoginRequest) = ApiResponse(
-            success = response.success,
+            success = response.success.also { loginCalls++ },
             data = response.data?.let {
                 me.meeshy.sdk.model.auth.LoginResponse(
                     user = it.user,
@@ -132,8 +133,8 @@ class AuthViewModelTest {
         clock: CacheClock = FixedCacheClock(999L),
         config: MeeshyConfig = MeeshyConfig(),
         environmentStore: InMemoryServerEnvironmentStore = InMemoryServerEnvironmentStore(),
+        api: FakeAuthApi = FakeAuthApi(response),
     ): AuthViewModel {
-        val api = FakeAuthApi(response)
         return AuthViewModel(
             AuthRepository(api, store, SessionRepository(api, store), teardown, SyncSeqTracker()),
             coordinator,
@@ -174,6 +175,22 @@ class AuthViewModelTest {
 
         assertThat(vm.state.value.isAuthenticated).isTrue()
         assertThat(vm.state.value.isSubmitting).isFalse()
+    }
+
+    @Test
+    fun login_pressedTwiceBeforeTheServerAnswers_sendsOneRequest() = runTest(dispatcher) {
+        val session = AuthSession(MeeshyUser(id = "u1", username = "atabeth"), token = "jwt")
+        val api = FakeAuthApi(ApiResponse(success = true, data = session))
+        val vm = viewModel(api.response, api = api)
+
+        vm.onUsernameChange("atabeth")
+        vm.onPasswordChange("secret")
+        vm.login()
+        vm.login()
+        advanceUntilIdle()
+
+        assertThat(api.loginCalls).isEqualTo(1)
+        assertThat(vm.state.value.isAuthenticated).isTrue()
     }
 
     @Test

@@ -54,6 +54,28 @@ data class PostPageListState(
         if (posts.none { it.id == postId }) this
         else copy(posts = posts.filterNot { it.id == postId })
 
+    /**
+     * Pose l'état « aimé » de [postId] et ajuste son total d'un cran (jamais sous zéro) —
+     * le geste optimiste ; un retour arrière rejoue l'instantané précédent. Inerte (même
+     * instance) si le post est absent ou déjà dans cet état.
+     */
+    fun liked(postId: String, liked: Boolean): PostPageListState {
+        val target = posts.firstOrNull { it.id == postId } ?: return this
+        if ((target.isLikedByMe == true) == liked) return this
+        val count = ((target.likeCount ?: 0) + if (liked) 1 else -1).coerceAtLeast(0)
+        return copy(posts = posts.map { if (it.id == postId) it.copy(isLikedByMe = liked, likeCount = count) else it })
+    }
+
+    /** Jumeau de [liked] pour l'enregistrement du post (`isBookmarkedByMe`, `bookmarkCount`). */
+    fun bookmarked(postId: String, bookmarked: Boolean): PostPageListState {
+        val target = posts.firstOrNull { it.id == postId } ?: return this
+        if ((target.isBookmarkedByMe == true) == bookmarked) return this
+        val count = ((target.bookmarkCount ?: 0) + if (bookmarked) 1 else -1).coerceAtLeast(0)
+        return copy(
+            posts = posts.map { if (it.id == postId) it.copy(isBookmarkedByMe = bookmarked, bookmarkCount = count) else it },
+        )
+    }
+
     companion object {
         val Empty = PostPageListState()
     }

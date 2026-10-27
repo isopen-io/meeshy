@@ -14,7 +14,7 @@ final class CatalogCompletenessGuardTests: XCTestCase {
         "packages/MeeshySDK/Sources/MeeshyUI/Story/StickerPickerView+Emoji.swift"
     ]
 
-    private static let ownedAppFile = "apps/ios/Meeshy/Features/Main/Views/StoryCommentThread.swift"
+    private static let ownedAppFile = "apps/ios/Meeshy/Features/Stories/Views/StoryCommentThread.swift"
 
     private static let forbiddenVisibleLiterals = [
         #"Text\(\s*"[^"]*\p{L}"#,

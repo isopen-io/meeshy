@@ -768,7 +768,7 @@ MeeshyAvatar(
 )
 ```
 
-#### 6d. `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift:889-896`
+#### 6d. `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Content.swift:889-896`
 
 Replace `CachedAsyncImage` with:
 ```swift
@@ -796,7 +796,7 @@ Check each file for the exact variable names available on the model (notificatio
 git add packages/MeeshySDK/Sources/MeeshyUI/Notifications/NotificationRowView.swift \
        packages/MeeshySDK/Sources/MeeshyUI/Community/CommunityCreateView.swift \
        packages/MeeshySDK/Sources/MeeshyUI/Profile/FullscreenImageView.swift \
-       apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift
+       apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Content.swift
 git commit -m "refactor(sdk,ios): migrate CachedAsyncImage and custom avatars to MeeshyAvatar"
 ```
 

@@ -4,7 +4,7 @@
  * `river`) étape 3.
  *
  * Miroir de `RiverConversationMapping` (Core, `apps/ios/Meeshy/Features/
- * Main/Riviere/Core/RiverConversationMapping.swift`) — fonction par
+ * River/Core/RiverConversationMapping.swift`) — fonction par
  * fonction, mêmes noms en anglais. Zéro pixel, zéro loi réécrite : ce
  * fichier ne fait QUE des conversions de type entre le monde `Message` du
  * web et les entrées pures de `river-lanes.ts`, exactement comme

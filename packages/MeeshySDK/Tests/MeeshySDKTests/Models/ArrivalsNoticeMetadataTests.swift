@@ -91,7 +91,7 @@ struct ArrivalsNoticeMetadataTests {
     func apiMessageAndCacheColumnCarryTheNotice() throws {
         let metadata = Self.metadataJSON(names: ["Tom", "Aïcha"])
         let json = #"{"id":"m-arrivals","conversationId":"c-global","senderId":"u-aicha","content":"Tom et Aïcha viennent d’arriver — dis-leur salut","messageType":"system","messageSource":"system","createdAt":"2026-09-28T09:00:00.000Z","metadata":\#(metadata)}"#
-        let api = try APIClient.makeAPIPayloadDecoder().decode(APIMessage.self, from: Data(json.utf8))
+        let api = try MeeshyCoders.decoder(.api).decode(APIMessage.self, from: Data(json.utf8))
         #expect(api.arrivalsNotice?.count == 2)
         #expect(api.joinNotice == nil)
         #expect(api.captureNotice == nil)

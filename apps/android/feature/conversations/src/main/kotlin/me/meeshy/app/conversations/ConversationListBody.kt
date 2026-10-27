@@ -1,6 +1,9 @@
 package me.meeshy.app.conversations
 
+import me.meeshy.ui.component.chrome.floatingChromeBottomReserve
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
@@ -55,6 +58,7 @@ internal fun ConversationListBody(
         // compose eagerly (few items on a real account).
         val sections = ConversationSections.of(state.conversations, state.categories)
         val nowMillis by rememberMinuteClock()
+        val tailHeight = maxOf(LIST_TAIL_HEIGHT, floatingChromeBottomReserve())
         LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
             if (!ConversationSections.showsHeaders(sections)) {
                 sections.forEach { section ->
@@ -62,6 +66,7 @@ internal fun ConversationListBody(
                         ConversationListRow(state, conversation, viewModel, nowMillis, signals, rowNavigation)
                     }
                 }
+                item(key = "list-tail") { Spacer(Modifier.height(tailHeight)) }
                 return@LazyColumn
             }
             sections.forEach { section ->
@@ -87,9 +92,13 @@ internal fun ConversationListBody(
                     }
                 }
             }
+            item(key = "list-tail") { Spacer(Modifier.height(tailHeight)) }
         }
     }
 }
+
+/** Marge de fin de liste (iOS `Color.clear.frame(height: 60)`), au moins : la derniere rangee passe au-dessus des disques flottants, quelle que soit leur place (#12497). */
+private val LIST_TAIL_HEIGHT = 60.dp
 
 @Composable
 private fun ConversationListRow(

@@ -172,6 +172,9 @@ final class MessageForwardService: MessageForwardServiceProviding {
     private let isOnline: () -> Bool
     private let conversationCreator: ConversationCreating
     private let authManager: AuthManaging
+    /// La loi du fil, appliquée à la cible (#12985) : mémoire du compte, mode
+    /// servi, ligne et fil du cache.
+    private let destinationGuard: EndToEndDestinationGuard
     /// La clé de dédoublonnage d'un transfert (`message→cible`) et l'identifiant
     /// client qu'un nouvel essai doit REJOUER. Retirée à l'envoi et au refus ;
     /// gardée après un échec réseau ou une mise en file hors ligne — c'est
@@ -186,18 +189,34 @@ final class MessageForwardService: MessageForwardServiceProviding {
         queue: OfflineMessageQueueing = OfflineQueue.shared,
         isOnline: @escaping () -> Bool = { NetworkMonitor.shared.isOnline },
         conversationCreator: ConversationCreating = ConversationCreator(),
-        authManager: AuthManaging = AuthManager.shared
+        authManager: AuthManaging = AuthManager.shared,
+        destinationGuard: EndToEndDestinationGuard = EndToEndDestinationGuard()
     ) {
         self.api = api
         self.queue = queue
         self.isOnline = isOnline
         self.conversationCreator = conversationCreator
         self.authManager = authManager
+        self.destinationGuard = destinationGuard
     }
 
     func forward(message: Message, sourceConversationId: String?, to targetConversationId: String, chosenDurationSeconds: Int?, forwardedAttachmentIds: [String]?) async -> ForwardOutcome {
+        await forward(message: message, sourceConversationId: sourceConversationId, to: targetConversationId, served: [],
+                      chosenDurationSeconds: chosenDurationSeconds, forwardedAttachmentIds: forwardedAttachmentIds)
+    }
+
+    /// **Une cible chiffrée de bout en bout ne reçoit jamais de clair** (#12985).
+    /// Un transfert porte sa source (`forwardedFromId`) et son texte : rien
+    /// que l'appareil sache sceller. Vers une cible que la garde dit chiffrée
+    /// — servie telle, ou vue telle par ce compte —, il est refusé avant toute
+    /// requête et ne se met pas en file.
+    private func forward(message: Message, sourceConversationId: String?, to targetConversationId: String, served: [String?],
+                         chosenDurationSeconds: Int?, forwardedAttachmentIds: [String]?) async -> ForwardOutcome {
         if let refusal = ForwardRefusalReason.local(for: message) {
             return .failed(reason: refusal.explanation)
+        }
+        if await destinationGuard.seals(targetConversationId, served: served) {
+            return .failed(reason: ForwardRefusalReason.encryptedDestination.explanation)
         }
         let ephemeralDuration = message.contentExitLaw.forward.requestedDuration(chosen: chosenDurationSeconds)
         let pieces = forwardedAttachmentIds.flatMap { $0.isEmpty ? nil : $0 }
@@ -274,6 +293,7 @@ final class MessageForwardService: MessageForwardServiceProviding {
         }
         if let conversationId = target.conversationId {
             return await forward(message: message, sourceConversationId: sourceConversationId, to: conversationId,
+                                 served: [target.isEncrypted ? E2EEWire.mode : nil],
                                  chosenDurationSeconds: chosenDurationSeconds, forwardedAttachmentIds: forwardedAttachmentIds)
         }
         guard let userId = target.userId else {
@@ -288,6 +308,7 @@ final class MessageForwardService: MessageForwardServiceProviding {
                 currentUserId: authManager.currentUser?.id ?? ""
             )
             return await forward(message: message, sourceConversationId: sourceConversationId, to: conversation.id,
+                                 served: [conversation.encryptionMode],
                                  chosenDurationSeconds: chosenDurationSeconds, forwardedAttachmentIds: forwardedAttachmentIds)
         } catch {
             return .failed(reason: Self.failureReason(for: error))

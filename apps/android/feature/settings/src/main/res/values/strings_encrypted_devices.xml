@@ -22,6 +22,7 @@
     <string name="encrypted_devices_cancel">Cancel</string>
     <string name="encrypted_devices_retire_offline">You’re offline: a device can only be removed once you’re connected.</string>
     <string name="encrypted_devices_retire_failed">The device couldn’t be removed. Try again.</string>
+    <string name="encrypted_devices_retire_session_not_closed">This device’s session couldn’t be closed, so nothing was removed. Try again.</string>
     <string name="encrypted_devices_ok">OK</string>
     <string name="encrypted_devices_unnamed">%1$s device %2$d</string>
     <string name="encrypted_devices_platform_ios">iOS</string>

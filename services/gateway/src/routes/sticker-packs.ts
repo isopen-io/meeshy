@@ -82,6 +82,14 @@ const zoneJsonSchema = {
   },
 } as const;
 
+/** Un fichier dans le magasin adressé, `GET /api/v1/pack-assets/<src>` (#10188) — additif, absent tant que l'empreinte n'est pas gravée. */
+const assetRefJsonSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['src', 'sha256', 'bytes'],
+  properties: { src: { type: 'string' }, sha256: { type: 'string' }, bytes: { type: 'integer' } },
+} as const;
+
 const itemJsonSchema = {
   type: 'object',
   additionalProperties: false,
@@ -91,7 +99,8 @@ const itemJsonSchema = {
     emoji: { type: 'string' },
     kind: { type: 'string', enum: ['static', 'cinematic', 'instant'] },
     mimeType: { type: 'string' },
-    fileUrl: { type: 'string', description: 'Chemin servi par GET /attachments/file/*' },
+    fileUrl: { type: 'string', description: 'Chemin servi par GET /attachments/file/* — l’ancien chemin, gardé pour les clients publiés (#9223)' },
+    asset: { ...assetRefJsonSchema, description: 'Le même fichier, servi par GET /api/v1/pack-assets/<src> (#10188)' },
     width: { type: 'integer' },
     height: { type: 'integer' },
     zones: { type: 'array', items: zoneJsonSchema },
@@ -108,6 +117,7 @@ const summaryProperties = {
   itemCount: { type: 'integer' },
   kinds: { type: 'array', items: { type: 'string' } },
   coverUrl: { type: 'string', nullable: true },
+  cover: { ...assetRefJsonSchema, description: 'La couverture, servie par GET /api/v1/pack-assets/<src> (#10188)' },
   installed: { type: 'boolean' },
   installCount: { type: 'integer' },
 } as const;

@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import me.meeshy.sdk.model.AudioTranscriptionReveal
 import me.meeshy.ui.theme.MeeshySpacing
 
 /**
@@ -22,6 +23,7 @@ internal fun BubbleAttachmentSections(
     audioPlayback: BubbleAudioPlayback?,
 ) {
     if (content.isDeleted) return
+    val autoReveal = AudioTranscriptionReveal.autoReveals(content.isOutgoing, LocalAutoRevealTranscription.current)
     if (content.images.isNotEmpty()) {
         BubbleImageGrid(
             images = content.images,
@@ -52,6 +54,7 @@ internal fun BubbleAttachmentSections(
             audio = audio,
             playback = audioPlayback?.takeIf { it.attachmentId == audio.attachmentId },
             onColor = onColor,
+            autoRevealTranscription = autoReveal,
             onClick = callbacks.onAudioClick?.takeIf { audio.isPlayable }
                 ?.let { { it(audio) } },
             modifier = Modifier.padding(bottom = MeeshySpacing.xs),

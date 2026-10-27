@@ -2,7 +2,7 @@
 
 **Date** : 2026-07-20
 **Piste** : iOS (suffixe `i`)
-**Fichier** : `apps/ios/Meeshy/Features/Main/Views/ChangePasswordView.swift`
+**Fichier** : `apps/ios/Meeshy/Features/Settings/Views/ChangePasswordView.swift`
 **Type** : Accessibilité (VoiceOver) — flux sensible (changement de mot de passe)
 
 ## Contexte

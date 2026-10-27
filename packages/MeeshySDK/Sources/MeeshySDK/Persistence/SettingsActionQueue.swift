@@ -67,8 +67,7 @@ public actor SettingsActionQueue {
     private var failureCounts: [String: Int] = [:]
 
     private let encoder: JSONEncoder = {
-        let e = JSONEncoder()
-        e.dateEncodingStrategy = .iso8601
+        let e = MeeshyCoders.encoder(.persistence)
         return e
     }()
 
@@ -261,8 +260,7 @@ public actor SettingsActionQueue {
 
         do {
             let data = try Data(contentsOf: url)
-            let decoder = JSONDecoder()
-            decoder.dateDecodingStrategy = .iso8601
+            let decoder = MeeshyCoders.decoder(.persistence)
             return try decoder.decode([SettingsAction].self, from: data)
         } catch {
             return []

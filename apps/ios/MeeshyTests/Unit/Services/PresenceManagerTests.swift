@@ -73,7 +73,7 @@ final class PresenceManagerTests: XCTestCase {
             "Meeshy/Features/Main/Views/ConversationView+Header.swift",
             "Meeshy/Features/Main/Views/ConversationView.swift",
             "Meeshy/Features/Main/Views/MessageListViewController+Rows.swift",
-            "Meeshy/Features/Main/Focal/Summary/LivingSummaryAssembly.swift",
+            "Meeshy/Features/Focal/Summary/LivingSummaryAssembly.swift",
             "Meeshy/Features/Main/Components/ConversationInfoSheet.swift",
             "Meeshy/Features/Main/Views/ParticipantsView.swift",
         ]
@@ -94,24 +94,24 @@ final class PresenceManagerTests: XCTestCase {
     private static let avatarsWithoutPresence: [String: String] = [
         "Auth/LinkSignInConfirmationSheet.swift": "soi — l'avatar du compte connecté",
         "Auth/Signup/SignupView+Card.swift": "soi — l'avatar du compte connecté",
-        "Main/Composer/ComposerDocumentSurface.swift": "soi — l'avatar du compte connecté",
-        "Main/Views/AccountSwitcherSheet.swift": "soi — l'avatar du compte connecté",
+        "Composer/ComposerDocumentSurface.swift": "soi — l'avatar du compte connecté",
+        "Auth/Views/AccountSwitcherSheet.swift": "soi — l'avatar du compte connecté",
         "Main/Views/FeedView+Composer.swift": "soi — l'avatar du compte connecté",
-        "Main/Views/LoginView.swift": "soi — l'avatar du compte connecté",
-        "Main/Views/ProfileDecorSheet.swift": "soi — l'avatar du compte connecté",
-        "Main/Views/ProfileOwnAvatar.swift": "soi — l'avatar du compte connecté",
+        "Auth/Views/LoginView.swift": "soi — l'avatar du compte connecté",
+        "Profile/Views/ProfileDecorSheet.swift": "soi — l'avatar du compte connecté",
+        "Profile/Views/ProfileOwnAvatar.swift": "soi — l'avatar du compte connecté",
         "Main/Views/RootFloatingChrome.swift": "soi — l'avatar du compte connecté",
         "Main/Views/RootViewComponents.swift": "soi — l'avatar du compte connecté",
-        "Main/Views/SettingsView.swift": "soi — l'avatar du compte connecté",
+        "Settings/Views/SettingsView.swift": "soi — l'avatar du compte connecté",
         "Main/Views/FeedComposerSheet.swift": "soi — l'avatar du compte connecté",
-        "Main/Views/StoryTrayView.swift": "soi — l'avatar du compte connecté",
+        "Stories/Views/StoryTrayView.swift": "soi — l'avatar du compte connecté",
         "Main/Views/GlobalSearchView.swift": "entité — groupe, communauté, conversation, message sans compte",
         "MeeshyUI/Profile/UserProfileSheet+ConversationsTab.swift": "entité — groupe, communauté, conversation, message sans compte",
         "Main/Components/ContactCard/ContactCardDetailSheet.swift": "contexte qui ne peint aucun point (showsOnlineDot == false) ou carte de présence séparée",
-        "Main/Views/StoryAuthorIdentityCard.swift": "contexte qui ne peint aucun point (showsOnlineDot == false) ou carte de présence séparée",
+        "Stories/Views/StoryAuthorIdentityCard.swift": "contexte qui ne peint aucun point (showsOnlineDot == false) ou carte de présence séparée",
         "Contacts/BlockedTab.swift": "bloqué — aucune présence ne se montre",
-        "Main/Views/BlockedUsersView.swift": "bloqué — aucune présence ne se montre",
-        "Main/Game/Photo/GameAuthorPlateView.swift": "décor, illustration ou son — aucune personne",
+        "Settings/Views/BlockedUsersView.swift": "bloqué — aucune présence ne se montre",
+        "Game/Photo/GameAuthorPlateView.swift": "décor, illustration ou son — aucune personne",
         "Main/Views/WidgetPreviewView.swift": "décor, illustration ou son — aucune personne",
         "Onboarding/OnboardingCards.swift": "décor, illustration ou son — aucune personne",
         "Onboarding/OnboardingIllustrations.swift": "décor, illustration ou son — aucune personne",
@@ -124,7 +124,7 @@ final class PresenceManagerTests: XCTestCase {
         "Main/Views/FriendRequestListView.swift": "la passerelle ne sert aucune présence à cette charge (non-amis, visiteur, auteur de publication)",
         "Main/Components/ContactCardView.swift": "la passerelle ne sert aucune présence à cette charge (non-amis, visiteur, auteur de publication)",
         "Main/Components/ConversationCard/ConversationLinkCardBody.swift": "la passerelle ne sert aucune présence à cette charge (non-amis, visiteur, auteur de publication)",
-        "Main/Views/ShareLinkArrivalsSection.swift": "la passerelle ne sert aucune présence à cette charge (non-amis, visiteur, auteur de publication)",
+        "Links/Views/ShareLinkArrivalsSection.swift": "la passerelle ne sert aucune présence à cette charge (non-amis, visiteur, auteur de publication)",
         "Main/Views/VisitorContentView.swift": "la passerelle ne sert aucune présence à cette charge (non-amis, visiteur, auteur de publication)",
         "MeeshyUI/JoinFlow/InviteLanding/InviteInviterHeader.swift": "la passerelle ne sert aucune présence à cette charge (non-amis, visiteur, auteur de publication)",
         "Stories/Notifications/StoryExpiredContent.swift": "la passerelle ne sert aucune présence à cette charge (non-amis, visiteur, auteur de publication)",
@@ -132,7 +132,7 @@ final class PresenceManagerTests: XCTestCase {
         "Main/Views/AudioFullscreenPage.swift": "la passerelle ne sert aucune présence à cette charge (non-amis, visiteur, auteur de publication)",
         "Main/Components/ForwardPickerSheet.swift": "remplacés par l'écran de partage unique (#10947/#10948)",
         "Main/Views/SharePickerView.swift": "remplacés par l'écran de partage unique (#10947/#10948)",
-        "Main/Share/ShareSheetView.swift": "écran de partage unique en cours (#10947/#10948) — sa présence est l'affaire de son lot",
+        "Share/ShareSheetView.swift": "écran de partage unique en cours (#10947/#10948) — sa présence est l'affaire de son lot",
     ]
 
     func test_everyPeerAvatar_passesTheServedPresence_orIsNamedWithItsReason() throws {
@@ -353,7 +353,7 @@ final class PresenceManagerTests: XCTestCase {
     }
 
     func test_settingsAvatar_neverHardcodesItsOwnPresence() throws {
-        let source = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Views/SettingsView.swift"))
+        let source = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Settings/Views/SettingsView.swift"))
         XCTAssertFalse(source.contains("presenceState: .online"), "les Réglages ne peignent pas la pastille du compte connecté")
     }
 

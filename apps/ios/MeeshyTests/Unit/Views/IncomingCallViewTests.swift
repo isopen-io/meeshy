@@ -12,7 +12,7 @@ final class IncomingCallViewTests: XCTestCase {
             .deletingLastPathComponent()   // Unit/
             .deletingLastPathComponent()   // MeeshyTests/
             .deletingLastPathComponent()   // ios/
-            .appendingPathComponent("Meeshy/Features/Main/Views/IncomingCallView.swift")
+            .appendingPathComponent("Meeshy/Features/Call/Views/IncomingCallView.swift")
         return try String(contentsOf: url, encoding: .utf8)
     }
 

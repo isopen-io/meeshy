@@ -145,7 +145,7 @@ final class ComposerSceneDescriptionPanelTests: XCTestCase {
     /// depuis iOS 15 : le flou ne demande aucune branche de version.
     func test_aucuneBulle_leTexteSeLitSurUnFlouDeLaScene() throws {
         let code = AppSourceGuard.stripComments(try AppSourceGuard.unit(
-            "Meeshy/Features/Main/Composer/ComposerSceneDescriptionPanel.swift"))
+            "Meeshy/Features/Composer/ComposerSceneDescriptionPanel.swift"))
         let compact = code.components(separatedBy: .whitespacesAndNewlines).joined()
         XCTAssertTrue(compact.contains("structComposerSceneDescriptionPanel"), "le fichier lu n'est pas le volet")
         XCTAssertFalse(compact.contains(".adaptiveGlass("),
@@ -167,10 +167,10 @@ final class ComposerSceneDescriptionPanelTests: XCTestCase {
     /// mesurait 2,71:1 sur le rose `FF2E63`.
     func test_laLegende_peintLeVoileEtLEncreQueLeTemoinMesure() throws {
         let volet = AppSourceGuard.stripComments(try AppSourceGuard.unit(
-            "Meeshy/Features/Main/Composer/ComposerSceneDescriptionPanel.swift"))
+            "Meeshy/Features/Composer/ComposerSceneDescriptionPanel.swift"))
             .components(separatedBy: .whitespacesAndNewlines).joined()
         let calque = AppSourceGuard.stripComments(try AppSourceGuard.unit(
-            "Meeshy/Features/Main/Composer/ComposerDescriptionLayer.swift"))
+            "Meeshy/Features/Composer/ComposerDescriptionLayer.swift"))
             .components(separatedBy: .whitespacesAndNewlines).joined()
         XCTAssertTrue(volet.contains("structComposerSceneDescriptionPanel"), "le fichier lu n'est pas le volet")
         XCTAssertTrue(calque.contains("structComposerDescriptionLayer"), "le fichier lu n'est pas le calque")

@@ -1,0 +1,1727 @@
+{
+  "note": "LE TRI DES TEXTES DE DÉCOR des cadres de gloire (#10256, § 5.2 du prompt). Chaque `<text>` hors plaque qu’un atelier dessine sort de l’export en emplacement `decor.<n>` ; cette table, écrite à la main, le range : `baked` (neutre — nombre, unité, symbole, nom propre — cuit dans la couche `decor` à l’export), `translated` (sa clé dans `decor-strings/<langue>.json`, sept langues, portée par le contrat et servie dans les chaînes du pack) ou `live` (une donnée du moment, remplie par le peintre, L14 #10167). `sample` est le texte de l’export : un emplacement renuméroté ne garde pas son tri en silence. Après toute modification : `bun run glory-frames:decor-texts` puis `bun run generate:glory-frames`.",
+  "frames": {
+    "abysses.mythe-c": {
+      "decor.1": {
+        "sample": "1026 m",
+        "sort": "baked"
+      },
+      "decor.2": {
+        "sample": "1021 m",
+        "sort": "baked"
+      },
+      "decor.3": {
+        "sample": "109 m",
+        "sort": "baked"
+      },
+      "decor.4": {
+        "sample": "1 m",
+        "sort": "baked"
+      },
+      "decor.5": {
+        "sample": "10-5 m",
+        "sort": "baked"
+      },
+      "decor.6": {
+        "sample": "10-10 m",
+        "sort": "baked"
+      },
+      "decor.7": {
+        "sample": "10-15 m",
+        "sort": "baked"
+      },
+      "decor.8": {
+        "sample": "10-35 m",
+        "sort": "baked"
+      }
+    },
+    "celeste.oracle-a": {
+      "decor.1": {
+        "sample": "LES TROIS ÉTOILES",
+        "sort": "translated",
+        "key": "game.frame.decor.three-stars"
+      }
+    },
+    "celeste.oracle-c": {
+      "decor.1": {
+        "sample": "GRUS",
+        "sort": "baked"
+      }
+    },
+    "celeste.legende-3": {
+      "decor.1": {
+        "sample": "VÉGA",
+        "sort": "translated",
+        "key": "game.frame.decor.vega"
+      },
+      "decor.2": {
+        "sample": "ALTAÏR",
+        "sort": "translated",
+        "key": "game.frame.decor.altair"
+      }
+    },
+    "celeste.mythe-a": {
+      "decor.1": {
+        "sample": "NOYAU",
+        "sort": "translated",
+        "key": "game.frame.decor.nucleus"
+      },
+      "decor.2": {
+        "sample": "10−14 m",
+        "sort": "baked"
+      },
+      "decor.3": {
+        "sample": "PARTICULES",
+        "sort": "translated",
+        "key": "game.frame.decor.particles"
+      },
+      "decor.4": {
+        "sample": "10−18 m",
+        "sort": "baked"
+      },
+      "decor.5": {
+        "sample": "CORDES",
+        "sort": "translated",
+        "key": "game.frame.decor.strings"
+      },
+      "decor.6": {
+        "sample": "10−35 m",
+        "sort": "baked"
+      },
+      "decor.7": {
+        "sample": "TROU NOIR",
+        "sort": "translated",
+        "key": "game.frame.decor.black-hole"
+      },
+      "decor.8": {
+        "sample": "1013 m",
+        "sort": "baked"
+      },
+      "decor.9": {
+        "sample": "AMAS",
+        "sort": "translated",
+        "key": "game.frame.decor.cluster"
+      },
+      "decor.10": {
+        "sample": "1023 m",
+        "sort": "baked"
+      },
+      "decor.11": {
+        "sample": "TOILE",
+        "sort": "translated",
+        "key": "game.frame.decor.web"
+      },
+      "decor.12": {
+        "sample": "1025 m",
+        "sort": "baked"
+      }
+    },
+    "celeste.mythe-b": {
+      "decor.1": {
+        "sample": "DU QUARK AU QUASAR",
+        "sort": "translated",
+        "key": "game.frame.decor.quark-to-quasar"
+      },
+      "decor.2": {
+        "sample": "CELLULE",
+        "sort": "translated",
+        "key": "game.frame.decor.cell"
+      },
+      "decor.3": {
+        "sample": "10−5 m",
+        "sort": "baked"
+      },
+      "decor.4": {
+        "sample": "ADN",
+        "sort": "translated",
+        "key": "game.frame.decor.dna"
+      },
+      "decor.5": {
+        "sample": "10−9 m",
+        "sort": "baked"
+      },
+      "decor.6": {
+        "sample": "ATOME",
+        "sort": "translated",
+        "key": "game.frame.decor.atom"
+      },
+      "decor.7": {
+        "sample": "10−10 m",
+        "sort": "baked"
+      },
+      "decor.8": {
+        "sample": "NOYAU",
+        "sort": "translated",
+        "key": "game.frame.decor.nucleus"
+      },
+      "decor.9": {
+        "sample": "10−14 m",
+        "sort": "baked"
+      },
+      "decor.10": {
+        "sample": "QUARKS",
+        "sort": "translated",
+        "key": "game.frame.decor.quarks"
+      },
+      "decor.11": {
+        "sample": "10−18 m",
+        "sort": "baked"
+      },
+      "decor.12": {
+        "sample": "CORDES",
+        "sort": "translated",
+        "key": "game.frame.decor.strings"
+      },
+      "decor.13": {
+        "sample": "10−35 m",
+        "sort": "baked"
+      },
+      "decor.14": {
+        "sample": "TERRE",
+        "sort": "translated",
+        "key": "game.frame.decor.earth"
+      },
+      "decor.15": {
+        "sample": "107 m",
+        "sort": "baked"
+      },
+      "decor.16": {
+        "sample": "SOLEIL",
+        "sort": "translated",
+        "key": "game.frame.decor.sun"
+      },
+      "decor.17": {
+        "sample": "109 m",
+        "sort": "baked"
+      },
+      "decor.18": {
+        "sample": "TROU NOIR",
+        "sort": "translated",
+        "key": "game.frame.decor.black-hole"
+      },
+      "decor.19": {
+        "sample": "1013 m",
+        "sort": "baked"
+      },
+      "decor.20": {
+        "sample": "GALAXIE",
+        "sort": "translated",
+        "key": "game.frame.decor.galaxy"
+      },
+      "decor.21": {
+        "sample": "1021 m",
+        "sort": "baked"
+      },
+      "decor.22": {
+        "sample": "AMAS",
+        "sort": "translated",
+        "key": "game.frame.decor.cluster"
+      },
+      "decor.23": {
+        "sample": "1023 m",
+        "sort": "baked"
+      },
+      "decor.24": {
+        "sample": "TOILE COSMIQUE",
+        "sort": "translated",
+        "key": "game.frame.decor.cosmic-web"
+      },
+      "decor.25": {
+        "sample": "1025 m",
+        "sort": "baked"
+      }
+    },
+    "egypte.legende-1": {
+      "decor.1": {
+        "sample": "10⁷ m",
+        "sort": "baked"
+      },
+      "decor.2": {
+        "sample": "10⁹ m",
+        "sort": "baked"
+      },
+      "decor.3": {
+        "sample": "10²¹ m",
+        "sort": "baked"
+      },
+      "decor.4": {
+        "sample": "10²³ m",
+        "sort": "baked"
+      },
+      "decor.5": {
+        "sample": "10²⁶ m",
+        "sort": "baked"
+      },
+      "decor.6": {
+        "sample": "10⁻⁵ m",
+        "sort": "baked"
+      },
+      "decor.7": {
+        "sample": "10⁻⁹ m",
+        "sort": "baked"
+      },
+      "decor.8": {
+        "sample": "10⁻¹⁰ m",
+        "sort": "baked"
+      },
+      "decor.9": {
+        "sample": "10⁻¹⁴ m",
+        "sort": "baked"
+      },
+      "decor.10": {
+        "sample": "10⁻¹⁸ m",
+        "sort": "baked"
+      },
+      "decor.11": {
+        "sample": "10⁰ m",
+        "sort": "baked"
+      }
+    },
+    "egypte.mythe-a": {
+      "decor.1": {
+        "sample": "10²⁶ m · quasar",
+        "sort": "translated",
+        "key": "game.frame.decor.quasar-scale"
+      },
+      "decor.2": {
+        "sample": "quark · 10⁻³⁵ m",
+        "sort": "translated",
+        "key": "game.frame.decor.quark-scale"
+      }
+    },
+    "moments.palier-lueur": {
+      "decor.1": {
+        "sample": "NIVEAU 10 · LUEUR · NIVEAU 10 · LUEUR · ",
+        "sort": "live",
+        "data": "level-ring"
+      },
+      "decor.2": {
+        "sample": "NIVEAU",
+        "sort": "translated",
+        "key": "game.frame.decor.level"
+      },
+      "decor.3": {
+        "sample": "10",
+        "sort": "live",
+        "data": "level"
+      }
+    },
+    "moments.palier-aurore": {
+      "decor.1": {
+        "sample": "NIVEAU 50 · AURORE · NIVEAU 50 · AURORE · ",
+        "sort": "live",
+        "data": "level-ring"
+      },
+      "decor.2": {
+        "sample": "NIVEAU",
+        "sort": "translated",
+        "key": "game.frame.decor.level"
+      },
+      "decor.3": {
+        "sample": "50",
+        "sort": "live",
+        "data": "level"
+      }
+    },
+    "moments.palier-galaxie": {
+      "decor.1": {
+        "sample": "NIVEAU 90 · GALAXIE · NIVEAU 90 · GALAXIE · ",
+        "sort": "live",
+        "data": "level-ring"
+      },
+      "decor.2": {
+        "sample": "NIVEAU",
+        "sort": "translated",
+        "key": "game.frame.decor.level"
+      },
+      "decor.3": {
+        "sample": "90",
+        "sort": "live",
+        "data": "level"
+      }
+    },
+    "moments.palier-nebuleuse": {
+      "decor.1": {
+        "sample": "NIVEAU 101 · NÉBULEUSE · NIVEAU 101 · NÉBULEUSE · ",
+        "sort": "live",
+        "data": "level-ring"
+      },
+      "decor.2": {
+        "sample": "NIVEAU",
+        "sort": "translated",
+        "key": "game.frame.decor.level"
+      },
+      "decor.3": {
+        "sample": "101",
+        "sort": "live",
+        "data": "level"
+      }
+    },
+    "moments.palier-supernova": {
+      "decor.1": {
+        "sample": "6",
+        "sort": "baked"
+      },
+      "decor.2": {
+        "sample": "C",
+        "sort": "baked"
+      },
+      "decor.3": {
+        "sample": "8",
+        "sort": "baked"
+      },
+      "decor.4": {
+        "sample": "O",
+        "sort": "baked"
+      },
+      "decor.5": {
+        "sample": "14",
+        "sort": "baked"
+      },
+      "decor.6": {
+        "sample": "Si",
+        "sort": "baked"
+      },
+      "decor.7": {
+        "sample": "26",
+        "sort": "baked"
+      },
+      "decor.8": {
+        "sample": "Fe",
+        "sort": "baked"
+      },
+      "decor.9": {
+        "sample": "79",
+        "sort": "baked"
+      },
+      "decor.10": {
+        "sample": "Au",
+        "sort": "baked"
+      },
+      "decor.11": {
+        "sample": "10",
+        "sort": "baked"
+      },
+      "decor.12": {
+        "sample": "Ne",
+        "sort": "baked"
+      },
+      "decor.13": {
+        "sample": "20",
+        "sort": "baked"
+      },
+      "decor.14": {
+        "sample": "Ca",
+        "sort": "baked"
+      },
+      "decor.15": {
+        "sample": "NIVEAU 400 · SUPERNOVA · NIVEAU 400 · SUPERNOVA · ",
+        "sort": "live",
+        "data": "level-ring"
+      },
+      "decor.16": {
+        "sample": "NIVEAU",
+        "sort": "translated",
+        "key": "game.frame.decor.level"
+      },
+      "decor.17": {
+        "sample": "400",
+        "sort": "live",
+        "data": "level"
+      }
+    },
+    "moments.palier-singularite": {
+      "decor.1": {
+        "sample": "NIVEAU 1000 · SINGULARITÉ · NIVEAU 1000 · SINGULARITÉ · ",
+        "sort": "live",
+        "data": "level-ring"
+      },
+      "decor.2": {
+        "sample": "NIVEAU",
+        "sort": "translated",
+        "key": "game.frame.decor.level"
+      },
+      "decor.3": {
+        "sample": "1000",
+        "sort": "live",
+        "data": "level"
+      },
+      "decor.4": {
+        "sample": "107 m",
+        "sort": "baked"
+      },
+      "decor.5": {
+        "sample": "109 m",
+        "sort": "baked"
+      },
+      "decor.6": {
+        "sample": "1021 m",
+        "sort": "baked"
+      },
+      "decor.7": {
+        "sample": "1023 m",
+        "sort": "baked"
+      },
+      "decor.8": {
+        "sample": "1026 m",
+        "sort": "baked"
+      },
+      "decor.9": {
+        "sample": "10−5 m",
+        "sort": "baked"
+      },
+      "decor.10": {
+        "sample": "10−9 m",
+        "sort": "baked"
+      },
+      "decor.11": {
+        "sample": "10−10 m",
+        "sort": "baked"
+      },
+      "decor.12": {
+        "sample": "10−14 m",
+        "sort": "baked"
+      },
+      "decor.13": {
+        "sample": "10−18 m",
+        "sort": "baked"
+      },
+      "decor.14": {
+        "sample": "100 m",
+        "sort": "baked"
+      },
+      "decor.15": {
+        "sample": "NOUS",
+        "sort": "translated",
+        "key": "game.frame.decor.us"
+      },
+      "decor.16": {
+        "sample": "1026 m",
+        "sort": "baked"
+      },
+      "decor.17": {
+        "sample": "10−35 m",
+        "sort": "baked"
+      },
+      "decor.18": {
+        "sample": "NOUS",
+        "sort": "translated",
+        "key": "game.frame.decor.us"
+      },
+      "decor.19": {
+        "sample": "L'INFINIMENT GRAND",
+        "sort": "translated",
+        "key": "game.frame.decor.infinitely-large"
+      },
+      "decor.20": {
+        "sample": "L'INFINIMENT PETIT",
+        "sort": "translated",
+        "key": "game.frame.decor.infinitely-small"
+      }
+    },
+    "moments.flamme-7": {
+      "decor.1": {
+        "sample": "7",
+        "sort": "baked"
+      },
+      "decor.2": {
+        "sample": "7",
+        "sort": "baked"
+      },
+      "decor.3": {
+        "sample": "L",
+        "sort": "translated",
+        "key": "game.frame.decor.weekday-mon"
+      },
+      "decor.4": {
+        "sample": "M",
+        "sort": "translated",
+        "key": "game.frame.decor.weekday-tue"
+      },
+      "decor.5": {
+        "sample": "M",
+        "sort": "translated",
+        "key": "game.frame.decor.weekday-wed"
+      },
+      "decor.6": {
+        "sample": "J",
+        "sort": "translated",
+        "key": "game.frame.decor.weekday-thu"
+      },
+      "decor.7": {
+        "sample": "V",
+        "sort": "translated",
+        "key": "game.frame.decor.weekday-fri"
+      },
+      "decor.8": {
+        "sample": "S",
+        "sort": "translated",
+        "key": "game.frame.decor.weekday-sat"
+      },
+      "decor.9": {
+        "sample": "D",
+        "sort": "translated",
+        "key": "game.frame.decor.weekday-sun"
+      }
+    },
+    "moments.flamme-30": {
+      "decor.1": {
+        "sample": "30",
+        "sort": "baked"
+      },
+      "decor.2": {
+        "sample": "JOURS",
+        "sort": "translated",
+        "key": "game.frame.decor.days"
+      }
+    },
+    "moments.flamme-100": {
+      "decor.1": {
+        "sample": "CENT JOURS DE FEU · LE GRAND BRASIER · ",
+        "sort": "translated",
+        "key": "game.frame.decor.hundred-days-ring"
+      },
+      "decor.2": {
+        "sample": "JOURS",
+        "sort": "translated",
+        "key": "game.frame.decor.days"
+      },
+      "decor.3": {
+        "sample": "100",
+        "sort": "baked"
+      }
+    },
+    "moments.flamme-365": {
+      "decor.1": {
+        "sample": "UN AN DE FLAMME · RENAÎTRE CHAQUE JOUR · ",
+        "sort": "translated",
+        "key": "game.frame.decor.year-of-flame-ring"
+      },
+      "decor.2": {
+        "sample": "JOURS",
+        "sort": "translated",
+        "key": "game.frame.decor.days"
+      },
+      "decor.3": {
+        "sample": "365",
+        "sort": "baked"
+      }
+    },
+    "moments.meesh-1": {
+      "decor.1": {
+        "sample": "MEESH Nº 1 · LA PREMIÈRE · OCTOBRE 2026 · ",
+        "sort": "live",
+        "data": "meesh-ring"
+      },
+      "decor.2": {
+        "sample": "Nº 1",
+        "sort": "live",
+        "data": "meesh-number"
+      }
+    },
+    "moments.meesh-10": {
+      "decor.1": {
+        "sample": "MEESH Nº 10 · ARGENT · OCTOBRE 2026 · ",
+        "sort": "live",
+        "data": "meesh-ring"
+      },
+      "decor.2": {
+        "sample": "Nº 10",
+        "sort": "live",
+        "data": "meesh-number"
+      }
+    },
+    "moments.meesh-100": {
+      "decor.1": {
+        "sample": "MEESH Nº 100 · ÉDITION OR · OCTOBRE 2026 · ",
+        "sort": "live",
+        "data": "meesh-ring"
+      },
+      "decor.2": {
+        "sample": "Nº 100",
+        "sort": "live",
+        "data": "meesh-number"
+      }
+    },
+    "moments.meesh-1000": {
+      "decor.1": {
+        "sample": "MEESH Nº 1000 · ÉDITION PRISME · OCTOBRE 2026 · ",
+        "sort": "live",
+        "data": "meesh-ring"
+      },
+      "decor.2": {
+        "sample": "Nº 1000",
+        "sort": "live",
+        "data": "meesh-number"
+      }
+    },
+    "moments.jour-a": {
+      "decor.1": {
+        "sample": "CARNET DE BORD",
+        "sort": "translated",
+        "key": "game.frame.decor.logbook"
+      },
+      "decor.2": {
+        "sample": "10 OCTOBRE 2026",
+        "sort": "live",
+        "data": "date"
+      },
+      "decor.3": {
+        "sample": "JOUR",
+        "sort": "translated",
+        "key": "game.frame.decor.day"
+      },
+      "decor.4": {
+        "sample": "283",
+        "sort": "live",
+        "data": "day"
+      },
+      "decor.5": {
+        "sample": "Missions du jour",
+        "sort": "translated",
+        "key": "game.frame.decor.daily-missions"
+      },
+      "decor.6": {
+        "sample": "Écrire à trois amis",
+        "sort": "live",
+        "data": "mission-1"
+      },
+      "decor.7": {
+        "sample": "Traduire un message",
+        "sort": "live",
+        "data": "mission-2"
+      },
+      "decor.8": {
+        "sample": "Publier une story",
+        "sort": "live",
+        "data": "mission-3"
+      },
+      "decor.9": {
+        "sample": "3 / 3 !",
+        "sort": "live",
+        "data": "missions-done"
+      },
+      "decor.10": {
+        "sample": "nous, ce jour-là",
+        "sort": "translated",
+        "key": "game.frame.decor.us-that-day"
+      }
+    },
+    "moments.jour-b": {
+      "decor.1": {
+        "sample": "N",
+        "sort": "translated",
+        "key": "game.frame.decor.compass-north"
+      },
+      "decor.2": {
+        "sample": "E",
+        "sort": "translated",
+        "key": "game.frame.decor.compass-east"
+      },
+      "decor.3": {
+        "sample": "S",
+        "sort": "translated",
+        "key": "game.frame.decor.compass-south"
+      },
+      "decor.4": {
+        "sample": "O",
+        "sort": "translated",
+        "key": "game.frame.decor.compass-west"
+      },
+      "decor.5": {
+        "sample": "JOUR",
+        "sort": "translated",
+        "key": "game.frame.decor.day"
+      },
+      "decor.6": {
+        "sample": "283",
+        "sort": "live",
+        "data": "day"
+      }
+    },
+    "neon.ambassadeur-4": {
+      "decor.1": {
+        "sample": "NSOROMMA",
+        "sort": "baked"
+      },
+      "decor.2": {
+        "sample": "SANKOFA",
+        "sort": "baked"
+      },
+      "decor.3": {
+        "sample": "AKOMA",
+        "sort": "baked"
+      },
+      "decor.4": {
+        "sample": "DWENNIMMEN",
+        "sort": "baked"
+      },
+      "decor.5": {
+        "sample": "ADINKRAHENE",
+        "sort": "baked"
+      },
+      "decor.6": {
+        "sample": "NKYINKYIM",
+        "sort": "baked"
+      }
+    },
+    "neon.orateur-c": {
+      "decor.1": {
+        "sample": "88",
+        "sort": "baked"
+      },
+      "decor.2": {
+        "sample": "92",
+        "sort": "baked"
+      },
+      "decor.3": {
+        "sample": "96",
+        "sort": "baked"
+      },
+      "decor.4": {
+        "sample": "100",
+        "sort": "baked"
+      },
+      "decor.5": {
+        "sample": "104",
+        "sort": "baked"
+      },
+      "decor.6": {
+        "sample": "108",
+        "sort": "baked"
+      },
+      "decor.7": {
+        "sample": "MHz",
+        "sort": "baked"
+      },
+      "decor.8": {
+        "sample": "ON AIR",
+        "sort": "translated",
+        "key": "game.frame.decor.on-air"
+      },
+      "decor.9": {
+        "sample": "98.6 FM",
+        "sort": "baked"
+      }
+    },
+    "neon.oracle-a": {
+      "decor.1": {
+        "sample": "MEE",
+        "sort": "baked"
+      },
+      "decor.2": {
+        "sample": "MEO",
+        "sort": "baked"
+      },
+      "decor.3": {
+        "sample": "PLÉIADES",
+        "sort": "translated",
+        "key": "game.frame.decor.pleiades"
+      },
+      "decor.4": {
+        "sample": "AR 04h 47m · DÉC +22°",
+        "sort": "translated",
+        "key": "game.frame.decor.pleiades-coordinates"
+      },
+      "decor.5": {
+        "sample": "FLOCON",
+        "sort": "translated",
+        "key": "game.frame.decor.snowflake"
+      },
+      "decor.6": {
+        "sample": "2 mm",
+        "sort": "baked"
+      },
+      "decor.7": {
+        "sample": "QUARTZ",
+        "sort": "translated",
+        "key": "game.frame.decor.quartz"
+      },
+      "decor.8": {
+        "sample": "1 mm",
+        "sort": "baked"
+      }
+    },
+    "neon.oracle-b": {
+      "decor.1": {
+        "sample": "POLLEN",
+        "sort": "translated",
+        "key": "game.frame.decor.pollen"
+      },
+      "decor.2": {
+        "sample": "30 µm",
+        "sort": "baked"
+      },
+      "decor.3": {
+        "sample": "CELLULE",
+        "sort": "translated",
+        "key": "game.frame.decor.cell"
+      },
+      "decor.4": {
+        "sample": "20 µm",
+        "sort": "baked"
+      }
+    },
+    "neon.oracle-c": {
+      "decor.1": {
+        "sample": "SILICIUM",
+        "sort": "translated",
+        "key": "game.frame.decor.silicon"
+      },
+      "decor.2": {
+        "sample": "0,5 nm",
+        "sort": "baked"
+      },
+      "decor.3": {
+        "sample": "TRANSISTOR",
+        "sort": "translated",
+        "key": "game.frame.decor.transistor"
+      },
+      "decor.4": {
+        "sample": "3 nm",
+        "sort": "baked"
+      }
+    },
+    "neon.legende-5": {
+      "decor.1": {
+        "sample": "1021 m",
+        "sort": "baked"
+      },
+      "decor.2": {
+        "sample": "1s",
+        "sort": "baked"
+      },
+      "decor.3": {
+        "sample": "2p",
+        "sort": "baked"
+      },
+      "decor.4": {
+        "sample": "3d",
+        "sort": "baked"
+      },
+      "decor.5": {
+        "sample": "GALAXIE",
+        "sort": "translated",
+        "key": "game.frame.decor.galaxy"
+      },
+      "decor.6": {
+        "sample": "NÉBULEUSE",
+        "sort": "translated",
+        "key": "game.frame.decor.nebula"
+      },
+      "decor.7": {
+        "sample": "AMAS",
+        "sort": "translated",
+        "key": "game.frame.decor.cluster"
+      },
+      "decor.8": {
+        "sample": "10−10 m",
+        "sort": "baked"
+      }
+    },
+    "neon.legende-4": {
+      "decor.1": {
+        "sample": "ADN · 2 nm",
+        "sort": "translated",
+        "key": "game.frame.decor.dna-scale"
+      },
+      "decor.2": {
+        "sample": "ADN · 2 nm",
+        "sort": "translated",
+        "key": "game.frame.decor.dna-scale"
+      },
+      "decor.3": {
+        "sample": "GALAXIE · 100 000 ANNÉES-LUMIÈRE",
+        "sort": "translated",
+        "key": "game.frame.decor.galaxy-scale"
+      }
+    },
+    "neon.legende-3": {
+      "decor.1": {
+        "sample": "NEURONE · 0,1 mm",
+        "sort": "translated",
+        "key": "game.frame.decor.neuron-scale"
+      },
+      "decor.2": {
+        "sample": "SUPERNOVA · 10 ANNÉES-LUMIÈRE",
+        "sort": "translated",
+        "key": "game.frame.decor.supernova-scale"
+      }
+    },
+    "neon.legende-2": {
+      "decor.1": {
+        "sample": "ψ",
+        "sort": "baked"
+      },
+      "decor.2": {
+        "sample": "ψ",
+        "sort": "baked"
+      },
+      "decor.3": {
+        "sample": "1024 m · amas",
+        "sort": "translated",
+        "key": "game.frame.decor.cluster-scale"
+      },
+      "decor.4": {
+        "sample": "SIERPINSKI",
+        "sort": "baked"
+      },
+      "decor.5": {
+        "sample": "KOCH",
+        "sort": "baked"
+      }
+    },
+    "neon.legende-1": {
+      "decor.1": {
+        "sample": "ATOME",
+        "sort": "translated",
+        "key": "game.frame.decor.atom"
+      },
+      "decor.2": {
+        "sample": "0,1 nm",
+        "sort": "baked"
+      },
+      "decor.3": {
+        "sample": "NEURONE",
+        "sort": "translated",
+        "key": "game.frame.decor.neuron"
+      },
+      "decor.4": {
+        "sample": "0,1 mm",
+        "sort": "baked"
+      }
+    },
+    "neon.mythe-a": {
+      "decor.1": {
+        "sample": "1026 m",
+        "sort": "baked"
+      },
+      "decor.2": {
+        "sample": "10−35 m",
+        "sort": "baked"
+      },
+      "decor.3": {
+        "sample": "SINGULARITÉ · HORIZON DES ÉVÉNEMENTS",
+        "sort": "translated",
+        "key": "game.frame.decor.singularity-horizon"
+      }
+    },
+    "neon.mythe-b": {
+      "decor.1": {
+        "sample": "QUASAR",
+        "sort": "translated",
+        "key": "game.frame.decor.quasar"
+      },
+      "decor.2": {
+        "sample": "1026 m",
+        "sort": "baked"
+      },
+      "decor.3": {
+        "sample": "QUARKS",
+        "sort": "translated",
+        "key": "game.frame.decor.quarks"
+      },
+      "decor.4": {
+        "sample": "10−18 m",
+        "sort": "baked"
+      }
+    },
+    "neon.mythe-c": {
+      "decor.1": {
+        "sample": "TOILE",
+        "sort": "translated",
+        "key": "game.frame.decor.web"
+      },
+      "decor.2": {
+        "sample": "1026 m",
+        "sort": "baked"
+      },
+      "decor.3": {
+        "sample": "AMAS",
+        "sort": "translated",
+        "key": "game.frame.decor.cluster"
+      },
+      "decor.4": {
+        "sample": "1023 m",
+        "sort": "baked"
+      },
+      "decor.5": {
+        "sample": "GALAXIE",
+        "sort": "translated",
+        "key": "game.frame.decor.galaxy"
+      },
+      "decor.6": {
+        "sample": "1021 m",
+        "sort": "baked"
+      },
+      "decor.7": {
+        "sample": "ÉTOILE",
+        "sort": "translated",
+        "key": "game.frame.decor.star"
+      },
+      "decor.8": {
+        "sample": "109 m",
+        "sort": "baked"
+      },
+      "decor.9": {
+        "sample": "TERRE",
+        "sort": "translated",
+        "key": "game.frame.decor.earth"
+      },
+      "decor.10": {
+        "sample": "107 m",
+        "sort": "baked"
+      },
+      "decor.11": {
+        "sample": "CELLULE",
+        "sort": "translated",
+        "key": "game.frame.decor.cell"
+      },
+      "decor.12": {
+        "sample": "10−5 m",
+        "sort": "baked"
+      },
+      "decor.13": {
+        "sample": "MOLÉCULE",
+        "sort": "translated",
+        "key": "game.frame.decor.molecule"
+      },
+      "decor.14": {
+        "sample": "10−9 m",
+        "sort": "baked"
+      },
+      "decor.15": {
+        "sample": "ATOME",
+        "sort": "translated",
+        "key": "game.frame.decor.atom"
+      },
+      "decor.16": {
+        "sample": "10−10 m",
+        "sort": "baked"
+      },
+      "decor.17": {
+        "sample": "NOYAU",
+        "sort": "translated",
+        "key": "game.frame.decor.nucleus"
+      },
+      "decor.18": {
+        "sample": "10−15 m",
+        "sort": "baked"
+      },
+      "decor.19": {
+        "sample": "CORDE",
+        "sort": "translated",
+        "key": "game.frame.decor.string"
+      },
+      "decor.20": {
+        "sample": "10−35 m",
+        "sort": "baked"
+      },
+      "decor.21": {
+        "sample": "DU QUARK AU QUASAR · 61 PUISSANCES DE DIX",
+        "sort": "translated",
+        "key": "game.frame.decor.quark-to-quasar-powers"
+      }
+    },
+    "nord.legende-3": {
+      "decor.1": {
+        "sample": "HUGINN",
+        "sort": "baked"
+      },
+      "decor.2": {
+        "sample": "MUNINN",
+        "sort": "baked"
+      }
+    },
+    "nord.mythe-c": {
+      "decor.1": {
+        "sample": "10-18 m",
+        "sort": "baked"
+      },
+      "decor.2": {
+        "sample": "10-15 m",
+        "sort": "baked"
+      },
+      "decor.3": {
+        "sample": "10-10 m",
+        "sort": "baked"
+      },
+      "decor.4": {
+        "sample": "10-9 m",
+        "sort": "baked"
+      },
+      "decor.5": {
+        "sample": "10-8 m",
+        "sort": "baked"
+      },
+      "decor.6": {
+        "sample": "10-5 m",
+        "sort": "baked"
+      },
+      "decor.7": {
+        "sample": "100 m",
+        "sort": "baked"
+      },
+      "decor.8": {
+        "sample": "104 m",
+        "sort": "baked"
+      },
+      "decor.9": {
+        "sample": "107 m",
+        "sort": "baked"
+      },
+      "decor.10": {
+        "sample": "109 m",
+        "sort": "baked"
+      },
+      "decor.11": {
+        "sample": "1021 m",
+        "sort": "baked"
+      },
+      "decor.12": {
+        "sample": "1023 m",
+        "sort": "baked"
+      },
+      "decor.13": {
+        "sample": "1025 m",
+        "sort": "baked"
+      },
+      "decor.14": {
+        "sample": "1026 m",
+        "sort": "baked"
+      }
+    },
+    "olympe.mythe-a": {
+      "decor.1": {
+        "sample": "Nº 42",
+        "sort": "live",
+        "data": "mythe-number"
+      },
+      "decor.2": {
+        "sample": "/ 100",
+        "sort": "live",
+        "data": "mythe-total"
+      }
+    },
+    "olympe.mythe-b": {
+      "decor.1": {
+        "sample": "Nº 42",
+        "sort": "live",
+        "data": "mythe-number"
+      },
+      "decor.2": {
+        "sample": "/ 100",
+        "sort": "live",
+        "data": "mythe-total"
+      }
+    },
+    "olympe.mythe-c": {
+      "decor.1": {
+        "sample": "1026 m",
+        "sort": "baked"
+      },
+      "decor.2": {
+        "sample": "100 m",
+        "sort": "baked"
+      },
+      "decor.3": {
+        "sample": "10−4 m",
+        "sort": "baked"
+      },
+      "decor.4": {
+        "sample": "10−5 m",
+        "sort": "baked"
+      },
+      "decor.5": {
+        "sample": "10−9 m",
+        "sort": "baked"
+      },
+      "decor.6": {
+        "sample": "10−10 m",
+        "sort": "baked"
+      },
+      "decor.7": {
+        "sample": "10−18 m",
+        "sort": "baked"
+      },
+      "decor.8": {
+        "sample": "1023 m",
+        "sort": "baked"
+      },
+      "decor.9": {
+        "sample": "1021 m",
+        "sort": "baked"
+      },
+      "decor.10": {
+        "sample": "1017 m",
+        "sort": "baked"
+      },
+      "decor.11": {
+        "sample": "1013 m",
+        "sort": "baked"
+      },
+      "decor.12": {
+        "sample": "109 m",
+        "sort": "baked"
+      },
+      "decor.13": {
+        "sample": "107 m",
+        "sort": "baked"
+      },
+      "decor.14": {
+        "sample": "10−35 m",
+        "sort": "baked"
+      },
+      "decor.15": {
+        "sample": "Nº 42",
+        "sort": "live",
+        "data": "mythe-number"
+      },
+      "decor.16": {
+        "sample": "/ 100",
+        "sort": "live",
+        "data": "mythe-total"
+      }
+    },
+    "royaumes.mythe-a": {
+      "decor.1": {
+        "sample": "1026 m",
+        "sort": "baked"
+      },
+      "decor.2": {
+        "sample": "1021 m",
+        "sort": "baked"
+      },
+      "decor.3": {
+        "sample": "1013 m",
+        "sort": "baked"
+      },
+      "decor.4": {
+        "sample": "100 m",
+        "sort": "baked"
+      },
+      "decor.5": {
+        "sample": "10-5 m",
+        "sort": "baked"
+      },
+      "decor.6": {
+        "sample": "10-10 m",
+        "sort": "baked"
+      },
+      "decor.7": {
+        "sample": "10-35 m",
+        "sort": "baked"
+      }
+    },
+    "royaumes.mythe-c": {
+      "decor.1": {
+        "sample": "10-5 m",
+        "sort": "baked"
+      },
+      "decor.2": {
+        "sample": "107 m",
+        "sort": "baked"
+      },
+      "decor.3": {
+        "sample": "10-8 m",
+        "sort": "baked"
+      },
+      "decor.4": {
+        "sample": "109 m",
+        "sort": "baked"
+      },
+      "decor.5": {
+        "sample": "10-9 m",
+        "sort": "baked"
+      },
+      "decor.6": {
+        "sample": "1013 m",
+        "sort": "baked"
+      },
+      "decor.7": {
+        "sample": "10-10 m",
+        "sort": "baked"
+      },
+      "decor.8": {
+        "sample": "1017 m",
+        "sort": "baked"
+      },
+      "decor.9": {
+        "sample": "10-15 m",
+        "sort": "baked"
+      },
+      "decor.10": {
+        "sample": "1021 m",
+        "sort": "baked"
+      },
+      "decor.11": {
+        "sample": "10-18 m",
+        "sort": "baked"
+      },
+      "decor.12": {
+        "sample": "1023 m",
+        "sort": "baked"
+      },
+      "decor.13": {
+        "sample": "10-34 m",
+        "sort": "baked"
+      },
+      "decor.14": {
+        "sample": "1025 m",
+        "sort": "baked"
+      },
+      "decor.15": {
+        "sample": "10-35 m",
+        "sort": "baked"
+      },
+      "decor.16": {
+        "sample": "1026 m",
+        "sort": "baked"
+      }
+    },
+    "savane.mythe-a": {
+      "decor.1": {
+        "sample": "10²⁶ m",
+        "sort": "baked"
+      },
+      "decor.2": {
+        "sample": "10⁻³⁵ m",
+        "sort": "baked"
+      }
+    },
+    "savane.mythe-b": {
+      "decor.1": {
+        "sample": "10²⁶ m",
+        "sort": "baked"
+      },
+      "decor.2": {
+        "sample": "10⁻¹⁸ m",
+        "sort": "baked"
+      }
+    },
+    "savane.mythe-c": {
+      "decor.1": {
+        "sample": "TOILE COSMIQUE",
+        "sort": "translated",
+        "key": "game.frame.decor.cosmic-web"
+      },
+      "decor.2": {
+        "sample": "10²⁵ m",
+        "sort": "baked"
+      },
+      "decor.3": {
+        "sample": "GALAXIE",
+        "sort": "translated",
+        "key": "game.frame.decor.galaxy"
+      },
+      "decor.4": {
+        "sample": "10²¹ m",
+        "sort": "baked"
+      },
+      "decor.5": {
+        "sample": "ÉTOILE",
+        "sort": "translated",
+        "key": "game.frame.decor.star"
+      },
+      "decor.6": {
+        "sample": "10⁹ m",
+        "sort": "baked"
+      },
+      "decor.7": {
+        "sample": "TERRE",
+        "sort": "translated",
+        "key": "game.frame.decor.earth"
+      },
+      "decor.8": {
+        "sample": "10⁷ m",
+        "sort": "baked"
+      },
+      "decor.9": {
+        "sample": "CELLULE",
+        "sort": "translated",
+        "key": "game.frame.decor.cell"
+      },
+      "decor.10": {
+        "sample": "10⁻⁵ m",
+        "sort": "baked"
+      },
+      "decor.11": {
+        "sample": "ADN",
+        "sort": "translated",
+        "key": "game.frame.decor.dna"
+      },
+      "decor.12": {
+        "sample": "10⁻⁹ m",
+        "sort": "baked"
+      },
+      "decor.13": {
+        "sample": "ATOME",
+        "sort": "translated",
+        "key": "game.frame.decor.atom"
+      },
+      "decor.14": {
+        "sample": "10⁻¹⁰ m",
+        "sort": "baked"
+      },
+      "decor.15": {
+        "sample": "QUARKS",
+        "sort": "translated",
+        "key": "game.frame.decor.quarks"
+      },
+      "decor.16": {
+        "sample": "10⁻¹⁸ m",
+        "sort": "baked"
+      }
+    },
+    "tresor.bourse-a": {
+      "decor.1": {
+        "sample": "MEESHY",
+        "sort": "baked"
+      },
+      "decor.2": {
+        "sample": "BOURSE",
+        "sort": "translated",
+        "key": "game.frame.decor.purse"
+      }
+    },
+    "tresor.bourse-b": {
+      "decor.1": {
+        "sample": "MEESHY",
+        "sort": "baked"
+      },
+      "decor.2": {
+        "sample": "BOURSE",
+        "sort": "translated",
+        "key": "game.frame.decor.purse"
+      }
+    },
+    "tresor.escarcelle-a": {
+      "decor.1": {
+        "sample": "MEESHY",
+        "sort": "baked"
+      },
+      "decor.2": {
+        "sample": "ESCARCELLE",
+        "sort": "translated",
+        "key": "game.frame.decor.pouch"
+      }
+    },
+    "tresor.escarcelle-b": {
+      "decor.1": {
+        "sample": "MEESHY",
+        "sort": "baked"
+      },
+      "decor.2": {
+        "sample": "ESCARCELLE",
+        "sort": "translated",
+        "key": "game.frame.decor.pouch"
+      }
+    },
+    "tresor.coffret-a": {
+      "decor.1": {
+        "sample": "MEESHY",
+        "sort": "baked"
+      },
+      "decor.2": {
+        "sample": "COFFRET",
+        "sort": "translated",
+        "key": "game.frame.decor.casket"
+      }
+    },
+    "tresor.coffret-b": {
+      "decor.1": {
+        "sample": "MEESHY",
+        "sort": "baked"
+      },
+      "decor.2": {
+        "sample": "COFFRET",
+        "sort": "translated",
+        "key": "game.frame.decor.casket"
+      }
+    },
+    "tresor.coffre-a": {
+      "decor.1": {
+        "sample": "MEESHY",
+        "sort": "baked"
+      },
+      "decor.2": {
+        "sample": "COFFRE",
+        "sort": "translated",
+        "key": "game.frame.decor.chest"
+      }
+    },
+    "tresor.coffre-b": {
+      "decor.1": {
+        "sample": "0",
+        "sort": "baked"
+      },
+      "decor.2": {
+        "sample": "10",
+        "sort": "baked"
+      },
+      "decor.3": {
+        "sample": "20",
+        "sort": "baked"
+      },
+      "decor.4": {
+        "sample": "30",
+        "sort": "baked"
+      },
+      "decor.5": {
+        "sample": "40",
+        "sort": "baked"
+      },
+      "decor.6": {
+        "sample": "50",
+        "sort": "baked"
+      },
+      "decor.7": {
+        "sample": "60",
+        "sort": "baked"
+      },
+      "decor.8": {
+        "sample": "70",
+        "sort": "baked"
+      },
+      "decor.9": {
+        "sample": "80",
+        "sort": "baked"
+      },
+      "decor.10": {
+        "sample": "90",
+        "sort": "baked"
+      },
+      "decor.11": {
+        "sample": "MEESHY",
+        "sort": "baked"
+      },
+      "decor.12": {
+        "sample": "COFFRE",
+        "sort": "translated",
+        "key": "game.frame.decor.chest"
+      }
+    },
+    "tresor.coffre-c": {
+      "decor.1": {
+        "sample": "MEESHY",
+        "sort": "baked"
+      },
+      "decor.2": {
+        "sample": "COFFRE",
+        "sort": "translated",
+        "key": "game.frame.decor.chest"
+      }
+    },
+    "tresor.tresor-a": {
+      "decor.1": {
+        "sample": "MEESHY",
+        "sort": "baked"
+      },
+      "decor.2": {
+        "sample": "TRÉSOR",
+        "sort": "translated",
+        "key": "game.frame.decor.treasure"
+      }
+    },
+    "tresor.tresor-b": {
+      "decor.1": {
+        "sample": "MEESHY",
+        "sort": "baked"
+      },
+      "decor.2": {
+        "sample": "TRÉSOR",
+        "sort": "translated",
+        "key": "game.frame.decor.treasure"
+      }
+    },
+    "tresor.reserve-a": {
+      "decor.1": {
+        "sample": "RÉSERVE MEESHY",
+        "sort": "translated",
+        "key": "game.frame.decor.meeshy-reserve"
+      },
+      "decor.2": {
+        "sample": "RÉSERVE MEESHY",
+        "sort": "translated",
+        "key": "game.frame.decor.meeshy-reserve"
+      },
+      "decor.3": {
+        "sample": "MEESHY",
+        "sort": "baked"
+      },
+      "decor.4": {
+        "sample": "RÉSERVE",
+        "sort": "translated",
+        "key": "game.frame.decor.reserve"
+      }
+    },
+    "tresor.reserve-b": {
+      "decor.1": {
+        "sample": "1024 m",
+        "sort": "baked"
+      },
+      "decor.2": {
+        "sample": "1021 m",
+        "sort": "baked"
+      },
+      "decor.3": {
+        "sample": "1013 m",
+        "sort": "baked"
+      },
+      "decor.4": {
+        "sample": "107 m",
+        "sort": "baked"
+      },
+      "decor.5": {
+        "sample": "Au",
+        "sort": "baked"
+      },
+      "decor.6": {
+        "sample": "10-1 m",
+        "sort": "baked"
+      },
+      "decor.7": {
+        "sample": "10-9 m",
+        "sort": "baked"
+      },
+      "decor.8": {
+        "sample": "10-10 m",
+        "sort": "baked"
+      },
+      "decor.9": {
+        "sample": "10-14 m",
+        "sort": "baked"
+      },
+      "decor.10": {
+        "sample": "MEESHY",
+        "sort": "baked"
+      },
+      "decor.11": {
+        "sample": "RÉSERVE",
+        "sort": "translated",
+        "key": "game.frame.decor.reserve"
+      },
+      "decor.12": {
+        "sample": "RÉSERVE MEESHY",
+        "sort": "translated",
+        "key": "game.frame.decor.meeshy-reserve"
+      },
+      "decor.13": {
+        "sample": "RÉSERVE MEESHY",
+        "sort": "translated",
+        "key": "game.frame.decor.meeshy-reserve"
+      }
+    },
+    "tresor.reserve-c": {
+      "decor.1": {
+        "sample": "MEESHY",
+        "sort": "baked"
+      },
+      "decor.2": {
+        "sample": "RÉSERVE",
+        "sort": "translated",
+        "key": "game.frame.decor.reserve"
+      }
+    }
+  }
+}

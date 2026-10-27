@@ -138,8 +138,22 @@ internal class ConversationListRowActions(
     /** Quitte [id] : aucun retrait local, la purge socket fait tomber la rangee. */
     fun leaveConversation(id: String) = remote { repository.leave(id) }
 
-    /** Masque [id] pour soi seul : la purge socket fait tomber la rangee. */
-    fun deleteConversationForMe(id: String) = remote { repository.deleteForMe(id) }
+    /**
+     * Masque [id] pour soi seul : la rangee tombe tout de suite ([ConversationListUiState.pendingRemovals]),
+     * la purge socket l'efface du cache, un refus de la passerelle la rend.
+     */
+    fun deleteConversationForMe(id: String) {
+        state.update { it.copy(pendingRemovals = it.pendingRemovals + id).withVisible(rawConversations()) }
+        scope.launch {
+            when (val result = repository.deleteForMe(id)) {
+                is NetworkResult.Success -> reportError(null)
+                is NetworkResult.Failure -> state.update {
+                    it.copy(pendingRemovals = it.pendingRemovals - id, errorMessage = result.error.message)
+                        .withVisible(rawConversations())
+                }
+            }
+        }
+    }
 
     /** Termine [id] pour tous : la purge socket `conversation:closed` fait tomber la rangee. */
     fun deleteConversationForAll(id: String) = remote { repository.deleteForAll(id) }

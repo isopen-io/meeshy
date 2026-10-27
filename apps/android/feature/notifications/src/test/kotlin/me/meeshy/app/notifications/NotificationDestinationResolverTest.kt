@@ -37,6 +37,27 @@ class NotificationDestinationResolverTest {
         state = NotificationState(createdAt = "2026-01-01"),
     )
 
+    // --- Relation family (iOS RootNotificationNavigator : profil de l'expéditeur) ---
+
+    @Test
+    fun `every contact lifecycle type opens the actor profile like iOS`() {
+        listOf(
+            "friend_request", "contact_request", "friend_accepted", "contact_accepted",
+            "contact_joined", "contact_recently_active", "STATUS_UPDATE", "FRIEND_REQUEST",
+        ).forEach { type ->
+            val dest = NotificationDestinationResolver.resolve(notification(type, actorId = "u9"))
+
+            assertThat(dest).isEqualTo(NotificationDestination.Profile("u9"))
+        }
+    }
+
+    @Test
+    fun `a contact notification without an actor is a dead end rather than a wrong screen`() {
+        val dest = NotificationDestinationResolver.resolve(notification("contact_recently_active"))
+
+        assertThat(dest).isEqualTo(NotificationDestination.None)
+    }
+
     // --- Conversation family ---
 
     @Test
@@ -160,12 +181,12 @@ class NotificationDestinationResolverTest {
     // `type: PostType.STORY` exclusively — so it falls back to the post detail rather
     // than opening the author's (STORY-only) tray, which the mood is never actually in.
     @Test
-    fun `a fresh mood publication opens the post detail, not its author's story tray`() {
+    fun `a fresh mood publication opens its own mood page, not its author's story tray`() {
         val dest = NotificationDestinationResolver.resolve(
             notification("friend_new_mood", postId = "p1", actorId = "author1", postType = "MOOD"),
         )
 
-        assertThat(dest).isEqualTo(NotificationDestination.Post("p1"))
+        assertThat(dest).isEqualTo(NotificationDestination.Mood("p1"))
     }
 
     @Test
@@ -198,7 +219,7 @@ class NotificationDestinationResolverTest {
     @Test
     fun `the contentType discriminant is read when postType is absent`() {
         val dest = NotificationDestinationResolver.resolve(
-            notification("friend_new_mood", postId = "p1", actorId = "author1", contentType = "MOOD"),
+            notification("story_reaction", postId = "p1", actorId = "author1", contentType = "MOOD"),
         )
 
         assertThat(dest).isEqualTo(NotificationDestination.Post("p1"))
@@ -250,6 +271,21 @@ class NotificationDestinationResolverTest {
         )
 
         assertThat(opened).containsExactly("reel", "p1")
+    }
+
+    @Test
+    fun `dispatch fans a mood destination to onOpenMood only`() {
+        val opened = mutableMapOf<String, String?>()
+        NotificationDestination.Mood("m1").dispatch(
+            onOpenConversation = { opened["conversation"] = it },
+            onOpenPost = { opened["post"] = it },
+            onOpenReel = { opened["reel"] = it },
+            onOpenStory = { opened["story"] = it },
+            onOpenProfile = { opened["profile"] = it },
+            onOpenMood = { opened["mood"] = it },
+        )
+
+        assertThat(opened).containsExactly("mood", "m1")
     }
 
     @Test

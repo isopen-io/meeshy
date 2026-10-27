@@ -25,7 +25,7 @@ final class DependencyContainerTests: XCTestCase {
 
         let pool = try DatabasePool(
             path: dbPath,
-            configuration: DependencyContainer.dbConfig()
+            configuration: MessageStoreDatabase.configuration()
         )
 
         let value = try await Task.detached {
@@ -49,7 +49,7 @@ final class DependencyContainerTests: XCTestCase {
 
         let pool = try DatabasePool(
             path: dbPath,
-            configuration: DependencyContainer.dbConfig()
+            configuration: MessageStoreDatabase.configuration()
         )
 
         let synchronous = try await pool.read { db -> Int in
@@ -71,9 +71,9 @@ final class DependencyContainerTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: dir) }
 
         var diagnostics = DatabaseInitDiagnostics()
-        let pool = DependencyContainer.openWithRecovery(
+        let pool = MessageStoreDatabase.openWithRecovery(
             dbPath: dir.appendingPathComponent("ok.sqlite").path,
-            config: DependencyContainer.dbConfig(),
+            config: MessageStoreDatabase.configuration(),
             diagnostics: &diagnostics
         )
 
@@ -101,9 +101,9 @@ final class DependencyContainerTests: XCTestCase {
         try junk.write(to: URL(fileURLWithPath: dbPath))
 
         var diagnostics = DatabaseInitDiagnostics()
-        let pool = DependencyContainer.openWithRecovery(
+        let pool = MessageStoreDatabase.openWithRecovery(
             dbPath: dbPath,
-            config: DependencyContainer.dbConfig(),
+            config: MessageStoreDatabase.configuration(),
             diagnostics: &diagnostics
         )
 
@@ -145,7 +145,7 @@ final class DependencyContainerTests: XCTestCase {
         try Data("walbytes".utf8).write(to: URL(fileURLWithPath: dbPath + "-wal"))
         try Data("shmbytes".utf8).write(to: URL(fileURLWithPath: dbPath + "-shm"))
 
-        let quarantined = DependencyContainer.quarantineCorruptDatabase(
+        let quarantined = MessageStoreDatabase.quarantineCorruptDatabase(
             at: dbPath,
             clock: { Date(timeIntervalSince1970: 100) }
         )
@@ -171,7 +171,7 @@ final class DependencyContainerTests: XCTestCase {
         // Only a stale WAL is present.
         try Data("walbytes".utf8).write(to: URL(fileURLWithPath: dbPath + "-wal"))
 
-        let quarantined = DependencyContainer.quarantineCorruptDatabase(at: dbPath)
+        let quarantined = MessageStoreDatabase.quarantineCorruptDatabase(at: dbPath)
 
         XCTAssertNil(quarantined)
         XCTAssertFalse(FileManager.default.fileExists(atPath: dbPath + "-wal"))
@@ -204,10 +204,10 @@ final class DependencyContainerTests: XCTestCase {
         let fallbackPath = dir.appendingPathComponent("fallback.sqlite").path
 
         var diagnostics = DatabaseInitDiagnostics()
-        let pool = DependencyContainer.openWithRecovery(
+        let pool = MessageStoreDatabase.openWithRecovery(
             dbPath: primaryPath,
             fallbackPath: fallbackPath,
-            config: DependencyContainer.dbConfig(),
+            config: MessageStoreDatabase.configuration(),
             diagnostics: &diagnostics
         )
 
@@ -253,10 +253,10 @@ final class DependencyContainerTests: XCTestCase {
         }
 
         var diagnostics = DatabaseInitDiagnostics()
-        let pool = DependencyContainer.openWithRecovery(
+        let pool = MessageStoreDatabase.openWithRecovery(
             dbPath: lockedDir.appendingPathComponent("a.sqlite").path,
             fallbackPath: lockedDir.appendingPathComponent("b.sqlite").path,
-            config: DependencyContainer.dbConfig(),
+            config: MessageStoreDatabase.configuration(),
             diagnostics: &diagnostics
         )
 
@@ -321,9 +321,9 @@ final class DependencyContainerTests: XCTestCase {
         let dbPath = dir.appendingPathComponent("busy.sqlite").path
 
         let appPool = try DatabasePool(
-            path: dbPath, configuration: DependencyContainer.dbConfig())
+            path: dbPath, configuration: MessageStoreDatabase.configuration())
         let nsePool = try DatabasePool(
-            path: dbPath, configuration: DependencyContainer.dbConfig())
+            path: dbPath, configuration: MessageStoreDatabase.configuration())
 
         try await appPool.write { db in
             try db.execute(sql: "CREATE TABLE IF NOT EXISTS t (id INTEGER PRIMARY KEY, v TEXT)")
@@ -378,7 +378,7 @@ final class DependencyContainerTests: XCTestCase {
         let dbDir = DependencyContainer.databaseDirectory(groupContainer: dir)
         let key = try XCTUnwrap(MessageStoreAccountKey(userId: "alice", serverOrigin: "https://gate.meeshy.me"))
         let session = MessageStoreSession.open(key: key, directory: dbDir)
-        try session.dbPool.write { db in try db.execute(sql: "CREATE TABLE IF NOT EXISTS t (id INTEGER)") }
+        try session.database.pool.write { db in try db.execute(sql: "CREATE TABLE IF NOT EXISTS t (id INTEGER)") }
         DependencyContainer.applyMessageStoreFileProtection(directoryPath: dbDir.path, databasePath: session.path)
 
         var checkedPaths = [dbDir.path]

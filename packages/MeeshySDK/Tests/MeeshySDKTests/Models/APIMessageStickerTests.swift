@@ -9,13 +9,13 @@ import XCTest
 /// et un sticker vide doit valoir ABSENT. À l'écriture : `SendMessageRequest`
 /// l'encode sous la clé `sticker`, absente quand il n'y en a pas.
 ///
-/// Le décodeur est celui de la PRODUCTION (`APIClient.makeAPIPayloadDecoder`),
+/// Le décodeur est celui de la PRODUCTION (`MeeshyCoders.decoder(.api)`),
 /// comme dans `LocationModelsTests` : un `.iso8601` nu refuserait les
 /// fractions de seconde du gateway et le test rougirait sur son outillage.
 final class APIMessageStickerTests: XCTestCase {
 
     private func decodeMessage(_ json: String) throws -> APIMessage {
-        try APIClient.makeAPIPayloadDecoder().decode(APIMessage.self, from: Data(json.utf8))
+        try MeeshyCoders.decoder(.api).decode(APIMessage.self, from: Data(json.utf8))
     }
 
     private static let head = """
@@ -154,3 +154,29 @@ final class APIMessageStickerTests: XCTestCase {
                        "un `sticker` nil ne doit PAS apparaître dans le corps — ni en valeur, ni en null")
     }
 }
+
+/// #13109 — une durée d'éphémère absurde servie par la passerelle ne fabrique
+/// pas une échéance dans des siècles : elle est ramenée au plafond, et reste
+/// éphémère (plus court protège davantage) ; une durée nulle ou négative ne
+/// déclare rien.
+final class APIMessageEphemeralDurationBoundTests: XCTestCase {
+    private func decode(_ duration: String) throws -> APIMessage {
+        try MeeshyCoders.decoder(.api).decode(APIMessage.self, from: Data("""
+        {"id":"m1","conversationId":"c1","senderId":"u1","content":"x","createdAt":"2026-09-02T10:00:00.000Z","ephemeralDuration":\(duration)}
+        """.utf8))
+    }
+
+    func test_anAbsurdDuration_isBroughtDownToTheCeiling() throws {
+        XCTAssertEqual(try decode("9223372036854775807").ephemeralDuration, APIMessage.maximumEphemeralDuration)
+    }
+
+    func test_aReasonableDuration_isKept() throws {
+        XCTAssertEqual(try decode("3600").ephemeralDuration, 3600)
+    }
+
+    func test_aNonPositiveDuration_declaresNothing() throws {
+        XCTAssertNil(try decode("0").ephemeralDuration)
+        XCTAssertNil(try decode("-5").ephemeralDuration)
+    }
+}
+

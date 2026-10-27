@@ -16,6 +16,7 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.chat.InMemoryConversationDraftStore
+import me.meeshy.sdk.composer.ComposerAffordances
 import me.meeshy.sdk.conversation.LocalMessage
 import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.lang.LanguageIdentification
@@ -26,6 +27,7 @@ import me.meeshy.sdk.mention.MentionSearch
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ConversationDraft
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.SharedPlace
 import me.meeshy.sdk.reaction.InMemoryRecentEmojiStore
 import me.meeshy.sdk.session.InMemoryAnonymousSessionStore
 import me.meeshy.sdk.session.SessionRepository
@@ -74,7 +76,7 @@ class ChatComposerControllerTest {
         val workManager = mockk<WorkManager>(relaxed = true)
         val draftStore = InMemoryConversationDraftStore(drafts)
         val uploads = mockk<MediaUploadQueue>(relaxed = true)
-        coEvery { uploads.enqueue(any()) } returns "upload-cmid"
+        coEvery { uploads.enqueue(any(), any(), any()) } returns "upload-cmid"
         val clock = object : CacheClock {
             override fun nowMillis(): Long = NOW
         }
@@ -203,7 +205,7 @@ class ChatComposerControllerTest {
         r.controller.sendFileAttachment(byteArrayOf(1, 2, 3), " photo.png ", "image/png")
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { r.uploads.enqueue(match<MediaUploadItem> { it.fileName == "photo.png" && it.mimeType == "image/png" }) }
+        coVerify(exactly = 1) { r.uploads.enqueue(match<MediaUploadItem> { it.fileName == "photo.png" && it.mimeType == "image/png" }, any(), "c1") }
         coVerify(exactly = 1) {
             r.repo.sendOptimistic(
                 "c1", "look", any(), me, null, null, null, null, any(), "image", listOf("upload-cmid"), any(),
@@ -471,6 +473,115 @@ class ChatComposerControllerTest {
         r.controller.release()
 
         verify(exactly = 1) { r.socket.emitTypingStop("c1") }
+    }
+
+    // --- end-to-end encryption (#13110) --------------------------------------------------------
+
+    @Test
+    fun `an end-to-end conversation sends no text — nothing leaves the device`() = runTest {
+        val r = rig(initial = ChatUiState(conversationId = "c1", encryptionMode = "e2ee"))
+        r.controller.onDraftChange("le code est 4417")
+
+        r.controller.send()
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { r.repo.sendOptimistic(any(), any(), any(), any(), any()) }
+        verify(exactly = 0) { r.workManager.enqueue(any<androidx.work.OneTimeWorkRequest>()) }
+    }
+
+    @Test
+    fun `an end-to-end conversation uploads no piece — not even before the message`() = runTest {
+        val r = rig(initial = ChatUiState(conversationId = "c1", encryptionMode = " E2EE "))
+
+        r.controller.sendFileAttachment(byteArrayOf(1, 2, 3), "photo.png", "image/png")
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { r.uploads.enqueue(any(), any(), any()) }
+        coVerify(exactly = 0) { r.repo.sendOptimistic(any(), any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `an end-to-end conversation sends no edit either`() = runTest {
+        val r = rig(initial = ChatUiState(conversationId = "c1", encryptionMode = "e2ee", editingMessageId = "m-old"))
+        r.controller.onDraftChange("texte modifié")
+
+        r.controller.send()
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { r.repo.editOptimistic(any(), any()) }
+    }
+
+    @Test
+    fun `an end-to-end conversation offers no writing affordance and no reply`() {
+        val state = ChatUiState(conversationId = "c1", encryptionMode = "e2ee")
+
+        assertThat(state.isEndToEnd).isTrue()
+        assertThat(state.composerAffordances).isEqualTo(ComposerAffordances.CLOSED)
+        assertThat(state.viewerMayWrite).isFalse()
+    }
+
+    @Test
+    fun `a server-encrypted conversation still writes`() {
+        val state = ChatUiState(conversationId = "c1", encryptionMode = "server")
+
+        assertThat(state.isEndToEnd).isFalse()
+        assertThat(state.composerAffordances.canSendText).isTrue()
+        assertThat(state.viewerMayWrite).isTrue()
+    }
+
+    // --- shared place (#13316) -----------------------------------------------------------------
+
+    private val tourEiffel = SharedPlace(48.8584, 2.2945, "Tour Eiffel", "Paris", "landmark")
+
+    @Test
+    fun `a place alone is sendable — empty text, the place rides the request`() = runTest {
+        val r = rig()
+        r.controller.setPendingPlace(tourEiffel)
+
+        r.controller.send()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) {
+            r.repo.sendOptimistic(conversationId = "c1", content = "", originalLanguage = any(), sender = me, location = tourEiffel)
+        }
+        assertThat(r.controller.pendingPlace.value).isNull()
+    }
+
+    @Test
+    fun `a place with text travels on the same message`() = runTest {
+        val r = rig()
+        r.controller.onDraftChange("rendez-vous ici")
+        r.controller.setPendingPlace(tourEiffel)
+
+        r.controller.send()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) {
+            r.repo.sendOptimistic(conversationId = "c1", content = "rendez-vous ici", originalLanguage = any(), sender = me, location = tourEiffel)
+        }
+    }
+
+    @Test
+    fun `removing the pending place leaves nothing to send`() = runTest {
+        val r = rig()
+        r.controller.setPendingPlace(tourEiffel)
+        r.controller.clearPendingPlace()
+
+        r.controller.send()
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { r.repo.sendOptimistic(any(), any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `an end-to-end conversation sends no place — fail closed`() = runTest {
+        val r = rig(initial = ChatUiState(conversationId = "c1", encryptionMode = "e2ee"))
+        r.controller.setPendingPlace(tourEiffel)
+
+        r.controller.send()
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { r.repo.sendOptimistic(any(), any(), any(), any(), any()) }
     }
 
     private companion object {

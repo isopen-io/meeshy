@@ -200,6 +200,8 @@ const SERVICE_SURFACES: Record<string, Classification> = {
   'attachments/attachmentCarrierServerReadable.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   // #9315 — même nature que son voisin : l'état des messages porteurs d'un fichier, sans `sender`.
   'attachments/fileRouteVerdict.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #13100 — le rattrapage du scellement au repos : les seuls identifiants des messages d'une conversation. Jamais `sender`.
+  'attachments/atRest/atRestBackfill.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   // #9646 — les cinq colonnes de protection des porteurs d'une page de pièces
   // (galerie, détail), pour signer celles qui disparaissent. Jamais `sender`.
   'attachments/signServedAttachments.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },

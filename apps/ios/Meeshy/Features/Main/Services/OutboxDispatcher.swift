@@ -22,8 +22,7 @@ struct OutboxDispatcher: OutboxDispatching {
     // extension du même type ailleurs. C'est la frontière invisible que toute
     // extraction franchit, et qui ne se voit qu'à la compilation.
     let decoder: JSONDecoder = {
-        let d = JSONDecoder()
-        d.dateDecodingStrategy = .iso8601
+        let d = MeeshyCoders.decoder(.persistence)
         return d
     }()
 

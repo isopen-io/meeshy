@@ -143,12 +143,12 @@ extension ConversationView {
         originalLanguage: String, currentUserId: String, protection: MessageProtectionIntent
     ) async {
         if await EndToEndPieceGuard.refuses([tempId], on: viewModel, toast: { FeedbackToastManager.shared.showError($0) }) { return }
-        let écrit: StickerSendPipeline.WrittenSticker
+        let written: StickerSendPipeline.WrittenSticker
         do {
             if let original {
-                écrit = try await StickerSendPipeline.prepare(original, id: attachmentId, directory: directory)
+                written = try await StickerSendPipeline.prepare(original, id: attachmentId, directory: directory)
             } else {
-                écrit = try await StickerSendPipeline.prepare(image, id: attachmentId, directory: directory)
+                written = try await StickerSendPipeline.prepare(image, id: attachmentId, directory: directory)
             }
         } catch {
             Logger.messages.error("Sticker temp write failed: \(error.localizedDescription, privacy: .public)")
@@ -159,9 +159,9 @@ extension ConversationView {
         // Le cache DISQUE s'amorce EN PARALLÈLE de l'envoi : l'attendre
         // retarderait l'upload d'une seconde écriture des mêmes octets, alors
         // que la bulle peint déjà depuis le cache mémoire.
-        Task { await CacheCoordinator.shared.images.save(écrit.data, for: localKey) }
+        Task { await CacheCoordinator.shared.images.save(written.data, for: localKey) }
         await uploadAndSendSticker(
-            fileURL: écrit.url, data: écrit.data, mimeType: original?.mimeType ?? StickerSendPipeline.pngMimeType,
+            fileURL: written.url, data: written.data, mimeType: original?.mimeType ?? StickerSendPipeline.pngMimeType,
             image: image, tempId: tempId, sticker: sticker,
             relation: relation,
             originalLanguage: originalLanguage, currentUserId: currentUserId, protection: protection

@@ -41,6 +41,7 @@ jest.mock('../../../utils/logger-enhanced.js', () => ({
 }));
 
 import { AttachmentService } from '../../../services/attachments';
+import { configureAtRestFileAccess, type AtRestFileRecord } from '../../../services/attachments/atRest/atRestFiles';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 
 const ROOT = '/srv/uploads';
@@ -235,3 +236,51 @@ describe('AttachmentService.deleteAttachment — fichiers dérivés', () => {
     expect(unlinkedPaths()).toEqual([`${ROOT}/2024/01/user/file.jpg`]);
   });
 });
+
+describe('AttachmentService.deleteAttachment — le clair qu’un scellement a remplacé (#13100)', () => {
+  const SEALED = '2024/01/user/0123456789abcdef0123456789abcdef.jpg';
+  const SEALED_THUMB = '2024/01/user/0123456789abcdef0123456789abcdef_thumb.webp';
+  const CLEAR = '2024/01/user/passeport_0f8fad5b.jpg';
+  const CLEAR_THUMB = '2024/01/user/passeport_0f8fad5b_thumb.webp';
+  const record = (storageKey: string, role: string, replacedKey: string): AtRestFileRecord => ({
+    storageKey, conversationId: 'd'.repeat(24), attachmentId: ATTACH_ID, keyId: 'k1', role, plaintextSize: 1, format: 'x', segmentSize: 65536, replacedKey,
+  });
+  const records = [record(SEALED, 'original', CLEAR), record(SEALED_THUMB, 'thumbnail', CLEAR_THUMB)];
+  let previousUploadPath: string | undefined;
+
+  beforeEach(() => {
+    previousUploadPath = process.env.UPLOAD_PATH;
+    process.env.UPLOAD_PATH = ROOT;
+    mockFsUnlink.mockReset();
+    mockFsUnlink.mockResolvedValue(undefined);
+    configureAtRestFileAccess({
+      store: {
+        find: async (k) => records.find((r) => r.storageKey === k) ?? null,
+        save: async () => undefined,
+        remove: async () => undefined,
+        ofAttachment: async (id) => records.filter((r) => r.attachmentId === id),
+        replacingSince: async () => [],
+      },
+      keyring: { fileSealingKey: async () => ({ keyId: 'k1', key: Buffer.alloc(32) }), fileOpeningKey: async () => Buffer.alloc(32) },
+    });
+  });
+
+  afterEach(() => {
+    configureAtRestFileAccess(null);
+    if (previousUploadPath === undefined) delete process.env.UPLOAD_PATH;
+    else process.env.UPLOAD_PATH = previousUploadPath;
+  });
+
+  it('une vue unique brûlée après son scellement emporte aussi le clair remplacé, encore en attente d’effacement', async () => {
+    const prisma = makeStore([makeRow({ filePath: SEALED, thumbnailPath: SEALED_THUMB })]);
+    await new AttachmentService(prisma).deleteAttachment(ATTACH_ID);
+    expect(unlinkedPaths()).toEqual(expect.arrayContaining([`${ROOT}/${CLEAR}`, `${ROOT}/${CLEAR_THUMB}`]));
+  });
+
+  it('une ligne qui désigne encore le clair le garde', async () => {
+    const prisma = makeStore([makeRow({ filePath: SEALED, thumbnailPath: SEALED_THUMB }), makeRow({ id: COPY_ID, filePath: CLEAR })]);
+    await new AttachmentService(prisma).deleteAttachment(ATTACH_ID);
+    expect(unlinkedPaths()).not.toContain(`${ROOT}/${CLEAR}`);
+  });
+});
+

@@ -47,4 +47,11 @@ describe('ci.yml — le cliquet des versions des packs de cadres lit la branche 
     expect(STEP).toMatch(/git fetch[^\n]*origin "\$\{?BASE_BRANCH\}?"/);
     expect(STEP.match(/--baseline "origin\/\$\{?BASE_BRANCH\}?"/g) ?? []).toHaveLength(2);
   });
+
+  it('sous mutation, seule la sortie 1 (la preuve tient) passe : un plantage (2) ou une preuve incomplète (0) rougit l’étape', () => {
+    const mutated = STEP.split('\n').find((line) => line.includes('--mutate lower-version')) ?? '';
+    expect(mutated).toMatch(/\|\|\s*status=\$\?\s*$/);
+    expect(STEP).toMatch(/\[\s*"\$status"\s+-ne\s+1\s*\]/);
+    expect(STEP).not.toMatch(/^\s*if [^\n]*--mutate lower-version[^\n]*; then/m);
+  });
 });

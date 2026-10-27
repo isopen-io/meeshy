@@ -478,8 +478,7 @@ extension OutboxUIItem {
     }
 
     private static func decodeOfflineQueueItem(_ data: Data) -> OfflineQueueItem? {
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
+        let decoder = MeeshyCoders.decoder(.persistence)
         return decoder.decodeOrLog(OfflineQueueItem.self, from: data,
                                    field: "queue item (sync pill)", logger: Logger.ui)
     }

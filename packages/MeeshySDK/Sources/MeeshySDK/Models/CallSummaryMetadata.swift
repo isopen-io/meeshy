@@ -160,15 +160,7 @@ public extension CallSummaryMetadata {
     }
 
     static func formatDuration(_ seconds: Int) -> String {
-        let total = max(0, seconds)
-        let hours = total / 3600
-        let minutes = (total % 3600) / 60
-        let secs = total % 60
-        let pad2 = { (v: Int) in v < 10 ? "0\(v)" : "\(v)" }
-        if hours > 0 {
-            return "\(hours):\(pad2(minutes)):\(pad2(secs))"
-        }
-        return "\(pad2(minutes)):\(pad2(secs))"
+        MediaFormat.duration(seconds, style: .paddedClockPromotingHours)
     }
 
     /// Decimal units (1 KB = 1000 B), matching how data plans / WhatsApp /
@@ -197,5 +189,21 @@ public extension CallSummaryMetadata {
             return String(Int(rounded))
         }
         return String(format: "%.1f", rounded)
+    }
+}
+
+extension CallSummaryMetadata {
+    /// `true` when `incoming` decodes as a LIVE call summary (`kind:
+    /// 'call-live'`) for the SAME call whose stored summary is already
+    /// TERMINAL — i.e. a REST snapshot serialized while the call was still
+    /// ongoing that landed AFTER the terminal edit. Applying it would regress
+    /// the bubble to "en cours" forever. Any other combination returns `false`.
+    static func isStaleLiveSnapshot(existing: Data?, incoming: Data?) -> Bool {
+        guard
+            let existing, let incoming,
+            let stored = JSONDecoder().decodeOrLog(CallSummaryMetadata.self, from: existing, field: "callSummaryJson(stored)"),
+            let candidate = JSONDecoder().decodeOrLog(CallSummaryMetadata.self, from: incoming, field: "callSummaryJson(incoming)")
+        else { return false }
+        return candidate.isLive && !stored.isLive && candidate.callId == stored.callId
     }
 }

@@ -29,9 +29,7 @@ struct PostDetailCommentThread: View {
             // ViewModel (miroir de `CommentsSheetView`). L'état est semé depuis
             // `currentUserReactions` au chargement, donc les commentaires déjà
             // likés s'affichent cœur plein et le tap donne un retour instantané.
-            likedIds: viewModel.commentLikedIds,
-            likeDelta: viewModel.commentLikeDelta,
-            heartInFlightIds: viewModel.commentHeartInFlightIds,
+            hearts: viewModel.commentHearts,
             onReply: { target in
                 onReply(target)
             },
@@ -48,13 +46,7 @@ struct PostDetailCommentThread: View {
                 Task { await viewModel.deleteComment(target, reason: reason) }
             },
             onEditComment: { target in onEditComment(target) },
-            onRequestTranslation: { target in
-                let lang = ReaderPrism.resolve(for: AuthManager.shared.currentUser).first?.lowercased() ?? "fr"
-                Task {
-                    try? await PostService.shared.requestCommentTranslation(
-                        postId: postId, commentId: target.id, targetLanguage: lang)
-                }
-            },
+            onRequestTranslation: { CommentSheetRules.requestTranslation(postId: postId, commentId: $0.id) },
             moodEmoji: statusViewModel.statusForUser(userId: comment.authorId)?.moodEmoji,
             storyState: storyViewModel.storyRingState(forUserId: comment.authorId),
             presenceState: PresenceManager.shared.knownPresenceState(for: comment.authorId),

@@ -15,7 +15,6 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import me.meeshy.sdk.model.chrome.CollapsibleHeaderMetrics
 import me.meeshy.ui.R
-import me.meeshy.ui.icons.MeeshyIcons
 
 /**
  * Le retour de l'en-tete : un disque de verre de 40 dp dans une cible de 48 dp (pendant du
@@ -41,8 +40,8 @@ public fun HeaderBackButton(
         ) {
             Box(Modifier.size(CollapsibleHeaderMetrics.ROUND_CHROME_DIAMETER.dp), contentAlignment = Alignment.Center) {
                 Icon(
-                    imageVector = MeeshyIcons.Back,
-                    contentDescription = stringResource(R.string.fullscreen_back),
+                    imageVector = leadingNavigationIcon(),
+                    contentDescription = leadingNavigationLabel(stringResource(R.string.fullscreen_back)),
                     tint = tint,
                     modifier = Modifier.size(arrowSizeDp.dp),
                 )

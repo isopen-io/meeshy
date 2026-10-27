@@ -238,16 +238,14 @@ public final class PushDeliveryReceiptService: PushReceipting, Sendable {
 
 private extension JSONEncoder {
     static let iso8601: JSONEncoder = {
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
+        let encoder = MeeshyCoders.encoder(.persistence)
         return encoder
     }()
 }
 
 private extension JSONDecoder {
     static let iso8601: JSONDecoder = {
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
+        let decoder = MeeshyCoders.decoder(.persistence)
         return decoder
     }()
 }

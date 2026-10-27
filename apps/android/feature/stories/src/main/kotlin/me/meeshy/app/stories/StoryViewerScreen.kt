@@ -12,7 +12,6 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -57,13 +56,18 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -96,6 +100,7 @@ import coil.imageLoader
 import coil.request.ImageRequest
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import me.meeshy.feature.stories.R
 import me.meeshy.sdk.model.EmojiCatalog
 import me.meeshy.sdk.model.StorySlideDuration
@@ -109,12 +114,11 @@ import me.meeshy.ui.component.LanguageQuickStrip
 import me.meeshy.ui.component.audio.AudioTrackSurface
 import me.meeshy.ui.component.media.rememberThumbHashPainter
 import me.meeshy.ui.component.video.ReelVideoSurface
+import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.hexColor
 
-private val SWIPE_HORIZONTAL_THRESHOLD = 64.dp
-private val SWIPE_VERTICAL_THRESHOLD = 120.dp
 
 /**
  * Minimal but real story viewer: segmented progress, tap-to-advance/dismiss,
@@ -126,6 +130,7 @@ private val SWIPE_VERTICAL_THRESHOLD = 120.dp
 fun StoryViewerScreen(
     onClose: () -> Unit,
     onRepost: (String) -> Unit = {},
+    onOpenProfile: (String) -> Unit = {},
     viewModel: StoryViewerViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -167,6 +172,11 @@ fun StoryViewerScreen(
     var flightSerial by remember { mutableIntStateOf(0) }
     var heartBouncePulse by remember { mutableIntStateOf(0) }
     var boxOriginInRoot by remember { mutableStateOf(Offset.Zero) }
+    val scope = rememberCoroutineScope()
+    val meeshyHaptics = rememberMeeshyHaptics()
+    // Le doigt déplace la carte en phase de DESSIN (graphicsLayer) : aucune recomposition
+    // pendant le geste ; seule la prise du doigt fige la lecture.
+    val cardMotion = rememberStoryCardMotion()
     val railOverlayActive = reactionBarVisible || languageBarVisible || scrubKind != null
     val cover = StoryViewerCover(
         sheet = showViewers || showComments || showSendTo,
@@ -334,7 +344,8 @@ fun StoryViewerScreen(
     val lifecycleState by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
     // Une story joue tant qu'elle n'est ni retenue (appui long) ni cachée : app en
     // arrière-plan, appel entrant, écran éteint figent l'horloge et le son (#11040).
-    val playing = !state.isPaused && lifecycleState.isAtLeast(Lifecycle.State.RESUMED)
+    val playing = !state.isPaused && !cardMotion.dragging &&
+        lifecycleState.isAtLeast(Lifecycle.State.RESUMED)
     var progressSlideKey by remember { mutableStateOf<String?>(null) }
 
     androidx.compose.runtime.LaunchedEffect(
@@ -365,19 +376,21 @@ fun StoryViewerScreen(
     }
 
     val overlayActiveState = rememberUpdatedState(railOverlayActive)
+    val hasNextGroupState = rememberUpdatedState(state.hasNextGroup)
+    val hasPreviousGroupState = rememberUpdatedState(state.hasPreviousGroup)
+    StoryCubeEntryOnAuthorChange(cardMotion, authorKey = state.authorUserId, groupIndex = state.groupIndex)
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(hexColor(accent))
-            .onGloballyPositioned { boxOriginInRoot = it.positionInRoot() }
+            .background(Color.Black)
             .pointerInput(state.groupIndex, state.index, state.slides.size) {
                 // Appui long ≥ 200 ms = pause qui tient au relâchement ; le tap suivant
                 // reprend sans naviguer (iOS `StoryGestureOverlayView`).
                 detectStoryCanvasTaps(
                     isDoubleTapZone = { StoryTapZone.of(it.x, size.width.toFloat()) == StoryTapZone.Center },
                     onDoubleTap = { if (!overlayActiveState.value) viewModel.onCanvasDoubleTap() },
-                    onHold = { if (!overlayActiveState.value) viewModel.pauseByHold() },
+                    onHold = { if (!overlayActiveState.value) viewModel.toggleByHold() },
                 ) { offset ->
                     if (overlayActiveState.value) {
                         closeRailBars()
@@ -386,31 +399,23 @@ fun StoryViewerScreen(
                     }
                 }
             }
-            .pointerInput(state.groupIndex, state.index, state.slides.size) {
-                val horizontalThreshold = SWIPE_HORIZONTAL_THRESHOLD.toPx()
-                val verticalThreshold = SWIPE_VERTICAL_THRESHOLD.toPx()
-                var dragX = 0f
-                var dragY = 0f
-                detectDragGestures(
-                    onDragStart = { dragX = 0f; dragY = 0f },
-                    onDragEnd = {
-                        if (overlayActiveState.value) return@detectDragGestures
-                        viewModel.onSwipe(
-                            StorySwipeResolver.resolve(
-                                dragX = dragX,
-                                dragY = dragY,
-                                horizontalThreshold = horizontalThreshold,
-                                verticalThreshold = verticalThreshold,
-                            ),
-                        )
-                    },
-                    onDrag = { change, drag ->
-                        change.consume()
-                        dragX += drag.x
-                        dragY += drag.y
-                    },
-                )
-            },
+            .storyCardDrag(
+                motion = cardMotion,
+                scope = scope,
+                hasNextGroup = hasNextGroupState,
+                hasPreviousGroup = hasPreviousGroupState,
+                overlayActive = overlayActiveState,
+                onOverlayDismiss = ::closeRailBars,
+                onCommit = viewModel::onSwipe,
+                onCommitFeedback = meeshyHaptics::light,
+            ),
+    ) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .storyCardFrame(cardMotion)
+            .background(hexColor(accent))
+            .onGloballyPositioned { boxOriginInRoot = it.positionInRoot() },
     ) {
         when {
             slide?.backgroundVideoUrl != null -> {
@@ -480,54 +485,13 @@ fun StoryViewerScreen(
             }
         }
 
-        val playheadSeconds = progress.value * slideDurationMs / 1000f
-
-        slide?.foregroundMedia?.forEach { foreground ->
-            if (foreground.isVisible(playheadSeconds)) {
-                key(foreground.url) {
-                    StoryForegroundLayer(
-                        media = foreground,
-                        playheadSeconds = playheadSeconds,
-                        playing = playing,
-                        muted = state.isMuted,
-                    )
-                }
-            }
-        }
-
-        slide?.textObjects?.forEach { textObject ->
-            if (textObject.isVisible(playheadSeconds)) {
-                key(textObject.id) {
-                    StoryTextObjectLayer(
-                        textObject = textObject,
-                        playheadSeconds = playheadSeconds,
-                    )
-                }
-            }
-        }
-
-        slide?.stickers?.forEach { sticker ->
-            if (sticker.isVisible(playheadSeconds)) {
-                key(sticker.id) { StoryStickerLayer(sticker = sticker, playheadSeconds = playheadSeconds) }
-            }
-        }
-        slide?.audioChips?.forEach { chip ->
-            if (chip.isVisible(playheadSeconds)) {
-                key(chip.id) { StoryAudioChipLayer(chip = chip) }
-            }
-        }
-
-        // The author's freehand drawing, read-only — a stroke-only slide is publishable
-        // (StorySlideDeck.publishableSlides) but carries no other overlay, so without this
-        // the reader (and the author, re-viewing their own story) would see a bare background.
-        if (slide != null && slide.strokes.isNotEmpty()) {
-            StoryDrawingLayer(
-                strokes = slide.strokes,
-                isCapturing = false,
-                activeColorHex = "#FFFFFF",
-                activeWidthDesign = 0.0,
-                onStrokeCaptured = {},
-                modifier = Modifier.fillMaxSize(),
+        if (slide != null) {
+            StorySceneOverlays(
+                slide = slide,
+                progress = progress,
+                slideDurationMs = slideDurationMs,
+                playing = playing,
+                muted = state.isMuted,
             )
         }
 
@@ -577,7 +541,7 @@ fun StoryViewerScreen(
             SegmentedProgress(
                 count = state.slides.size,
                 index = state.index,
-                currentProgress = progress.value,
+                currentProgress = { progress.value },
             )
             Row(
                 modifier = Modifier
@@ -586,9 +550,17 @@ fun StoryViewerScreen(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 StoryAuthorIdentity(
+                    onClick = state.authorUserId?.let { userId ->
+                        {
+                            meeshyHaptics.light()
+                            onOpenProfile(userId)
+                        }
+                    },
                     name = state.authorName,
                     avatarUrl = state.authorAvatarUrl,
                     accentHex = accent,
+                    authorUserId = state.authorUserId,
+                    authorPresence = state.authorPresence,
                     createdAtMillis = slide?.createdAtMillis,
                     repostAttribution = slide?.repostAttribution,
                     modifier = Modifier
@@ -775,6 +747,7 @@ fun StoryViewerScreen(
             )
         }
     }
+    }
 
     if (showFullEmojiPicker) {
         androidx.compose.ui.window.Dialog(
@@ -830,17 +803,12 @@ fun StoryViewerScreen(
 }
 
 @Composable
-private fun SegmentedProgress(count: Int, index: Int, currentProgress: Float) {
+private fun SegmentedProgress(count: Int, index: Int, currentProgress: () -> Float) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         repeat(count) { i ->
-            val fill = when {
-                i < index -> 1f
-                i == index -> currentProgress
-                else -> 0f
-            }
             Box(
                 modifier = Modifier
                     .weight(1f)
@@ -848,12 +816,26 @@ private fun SegmentedProgress(count: Int, index: Int, currentProgress: Float) {
                     .clip(CircleShape)
                     .background(MeeshyPalette.White.copy(alpha = 0.3f)),
             ) {
+                // Lue en phase de dessin : l'avancement de la barre ne recompose rien.
                 Box(
                     modifier = Modifier
-                        .fillMaxHeight()
-                        .fillMaxWidth(fill)
-                        .clip(CircleShape)
-                        .background(MeeshyPalette.White),
+                        .fillMaxSize()
+                        .drawBehind {
+                            val fill = when {
+                                i < index -> 1f
+                                i == index -> currentProgress().coerceIn(0f, 1f)
+                                else -> 0f
+                            }
+                            if (fill <= 0f) return@drawBehind
+                            val filled = size.width * fill
+                            val left = if (layoutDirection == LayoutDirection.Rtl) size.width - filled else 0f
+                            drawRoundRect(
+                                color = MeeshyPalette.White,
+                                topLeft = Offset(left, 0f),
+                                size = Size(filled, size.height),
+                                cornerRadius = CornerRadius(size.height / 2f),
+                            )
+                        },
                 )
             }
         }
@@ -958,3 +940,4 @@ private fun ReactionFlightOverlay(
             .wrapContentSize(Alignment.Center),
     )
 }
+

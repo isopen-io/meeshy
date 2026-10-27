@@ -10,8 +10,7 @@ import MeeshyUI
 //
 // Membres de l'hôte ouverts (`private` → interne) pour cette extension :
 // `pinnedMessages`, `showAllPinnedMessages`, `appearAnimation`, `theme`,
-// `isDark`, `accent`, `attachmentIcon(_:)`, `attachmentLabel(_:)`,
-// `relativeTime(from:)`.
+// `isDark`, `accent`, `attachmentIcon(_:)`, `attachmentLabel(_:)`.
 
 extension ConversationInfoSheet {
 
@@ -159,7 +158,7 @@ extension ConversationInfoSheet {
                     MetaSeparator()
                         .foregroundColor(theme.textMuted)
 
-                    Text(relativeTime(from: msg.createdAt))
+                    Text(RelativeTimeFormatter.longString(for: msg.createdAt))
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                         .foregroundColor(theme.textMuted)
                 }

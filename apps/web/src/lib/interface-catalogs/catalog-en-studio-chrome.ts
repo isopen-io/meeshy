@@ -80,6 +80,8 @@ const enStudioChrome = {
   'story.studio.background.cameraHold': 'Hold: open the camera',
   'story.studio.camera.close': 'Back to the scene',
   'story.studio.camera.flip': 'Switch camera',
+  'story.studio.camera.frames': 'Frames',
+  'story.studio.camera.frames.none': 'No frame',
   'story.studio.camera.flash': 'Flash',
   'story.studio.camera.shutter.photo': 'Take a photo',
   'story.studio.camera.shutter.start': 'Start recording',

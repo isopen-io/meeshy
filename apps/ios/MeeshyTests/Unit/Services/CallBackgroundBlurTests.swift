@@ -206,7 +206,7 @@ final class TestClock: @unchecked Sendable {
     var now: CFTimeInterval = 100
 }
 
-nonisolated final class InlineVisionExecutor: CallVisionExecuting, @unchecked Sendable {
+nonisolated final class InlineVisionExecutor: CallVisionExecuting {
     nonisolated func execute(_ work: @escaping @Sendable () -> Void) { work() }
 }
 

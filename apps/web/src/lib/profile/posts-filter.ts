@@ -2,7 +2,7 @@ import type { FeedPost } from '@/lib/api/feed-pages';
 
 /**
  * **LE FILTRE DU BANDEAU DE COMPTEURS** (#7083) — miroir de `ProfilePostsFilter`
- * (`apps/ios/Meeshy/Features/Main/Views/ProfileUserPostsList.swift:90-99`).
+ * (`apps/ios/Meeshy/Features/Profile/Views/ProfileUserPostsList.swift:90-99`).
  *
  * Les tuiles « Postes » et « Réels » ne sont pas des étiquettes : elles
  * FILTRENT le listing, et re-toucher celle qui est active rétablit tout

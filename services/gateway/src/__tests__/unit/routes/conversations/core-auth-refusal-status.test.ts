@@ -95,7 +95,7 @@ const PRISMA_MEMBRE_INCONNU = {
       customDestinationLanguage: null,
       isOnline: false,
       lastActiveAt: new Date('2026-09-01'),
-      emailVerifiedAt: null,
+      emailVerifiedAt: new Date('2026-01-02'),
       createdAt: new Date('2026-01-01'),
       updatedAt: new Date('2026-09-01'),
       deviceLocale: null,

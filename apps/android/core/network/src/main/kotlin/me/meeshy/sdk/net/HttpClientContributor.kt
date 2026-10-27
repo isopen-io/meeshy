@@ -37,6 +37,9 @@ private class FunctionContributor(
 object HttpPriority {
     const val URL_GUARD = 100
     const val ENDPOINT_POLICY = 200
+
+    /** Avant la relance et l'authentification : le rejeu d'une action gardée repasse par les jetons. */
+    const val EMAIL_VERIFICATION_GATE = 250
     const val RETRY = 300
     const val PROACTIVE_REFRESH = 900
     const val AUTH = 1_000

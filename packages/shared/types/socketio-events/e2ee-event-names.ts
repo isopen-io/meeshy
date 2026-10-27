@@ -11,3 +11,13 @@
 export const E2EE_SERVER_EVENTS = {
   E2EE_ENVELOPE: 'e2ee:envelope',
 } as const;
+
+/**
+ * L'événement UNIQUE par lequel un appareil remet un signal chiffré (#13142) :
+ * réaction, frappe, accusé, modification, suppression, vue unique, épinglage.
+ * Le type du signal est dans le chiffré ; la charge ne porte que des
+ * enveloppes (`e2eeSignalSocketPayloadSchema`), l'accusé rend `signalId`.
+ */
+export const E2EE_CLIENT_EVENTS = {
+  E2EE_SEND_SIGNAL: 'e2ee:send-signal',
+} as const;

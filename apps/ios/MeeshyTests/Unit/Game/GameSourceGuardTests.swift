@@ -25,7 +25,7 @@ final class GameSourceGuardTests: XCTestCase {
     func test_thePhotoFlowNeverTouchesTheNetwork() throws {
         let forbidden = ["URLSession", "APIClient", "TusUpload", "upload(", "MediaUpload", "StoryUpload", "multipart",
                          "AffiliateService", "CacheCoordinator"]
-        let files = try swiftFiles(under: "Meeshy/Features/Main/Game/Photo")
+        let files = try swiftFiles(under: "Meeshy/Features/Game/Photo")
         XCTAssertGreaterThan(files.count, 6, "le balayage ne voit presque rien : le dossier a bougé")
         for file in files {
             let text = try String(contentsOf: file, encoding: .utf8)
@@ -41,7 +41,7 @@ final class GameSourceGuardTests: XCTestCase {
     /// le tient (`GamePhotoSessionTests`) ; celui-ci tient la SOURCE : ni la vue ni la lecture d'ouverture ne
     /// nomment la création.
     func test_openingThePhotoFlowNeverReachesTheTokenCreation() throws {
-        let photo = iosRoot.appendingPathComponent("Meeshy/Features/Main/Game/Photo")
+        let photo = iosRoot.appendingPathComponent("Meeshy/Features/Game/Photo")
         let session = try String(contentsOf: photo.appendingPathComponent("GamePhotoSession.swift"), encoding: .utf8)
         let opening = try XCTUnwrap(session.components(separatedBy: "func prepareReferral()").dropFirst().first?
             .components(separatedBy: "func prepareShare()").first)
@@ -58,7 +58,7 @@ final class GameSourceGuardTests: XCTestCase {
     /// Directive porteur 2026-10-12 : « le cadre sont les bouton d'enregistrement ». Le déroulé du jeu ne
     /// porte AUCUN cercle d'enregistrement à côté du cadre : la case du cadre déclenche, la scène prend hors cadre.
     func test_thePhotoFlowHasNoRecordCircleBesideTheFrame() throws {
-        let photo = iosRoot.appendingPathComponent("Meeshy/Features/Main/Game/Photo")
+        let photo = iosRoot.appendingPathComponent("Meeshy/Features/Game/Photo")
         let view = try String(contentsOf: photo.appendingPathComponent("GamePhotoFlowView.swift"), encoding: .utf8)
         XCTAssertFalse(view.contains("game.photo.shutter"), "plus de déclencheur rond à côté du cadre")
         XCTAssertFalse(view.contains("session.shutter("), "la prise passe par la table des gestes")
@@ -73,7 +73,7 @@ final class GameSourceGuardTests: XCTestCase {
     /// l'apparence CLAIRE de l'appareil y poserait un texte sombre sur du noir. Le schéma sombre est imposé à
     /// TOUT le déroulé, à sa racine — jamais contrôle par contrôle, qu'un ajout oublierait.
     func test_thePhotoFlowForcesTheDarkAppearanceAtItsRoot() throws {
-        let photo = iosRoot.appendingPathComponent("Meeshy/Features/Main/Game/Photo")
+        let photo = iosRoot.appendingPathComponent("Meeshy/Features/Game/Photo")
         let view = try String(contentsOf: photo.appendingPathComponent("GamePhotoFlowView.swift"), encoding: .utf8)
         let body = try XCTUnwrap(view.components(separatedBy: "var body: some View {").dropFirst().first?
             .components(separatedBy: "private var closeButton").first)
@@ -88,7 +88,7 @@ final class GameSourceGuardTests: XCTestCase {
     /// La note de refus était posée au centre de l'aperçu, PAR-DESSUS le titre et la date du cadre du moment :
     /// les deux textes se chevauchaient. Elle vit désormais HORS du cadre, sous lui, et la scène ne la porte plus.
     func test_theCameraFailureNoteLivesOutsideTheFrame() throws {
-        let photo = iosRoot.appendingPathComponent("Meeshy/Features/Main/Game/Photo")
+        let photo = iosRoot.appendingPathComponent("Meeshy/Features/Game/Photo")
         let view = try String(contentsOf: photo.appendingPathComponent("GamePhotoFlowView.swift"), encoding: .utf8)
         let camera = try XCTUnwrap(view.components(separatedBy: "private func camera(_ phase: PhotoCameraPhase)").dropFirst().first?
             .components(separatedBy: "private func sideGlyph").first)
@@ -114,7 +114,7 @@ final class GameSourceGuardTests: XCTestCase {
     }
 
     func test_theGalleryFallbackNeedsNoLibraryReadPermission() throws {
-        let text = try swiftFiles(under: "Meeshy/Features/Main/Game/Photo")
+        let text = try swiftFiles(under: "Meeshy/Features/Game/Photo")
             .map { try String(contentsOf: $0, encoding: .utf8) }
             .joined()
         XCTAssertTrue(text.contains("PhotosPicker"), "le repli galerie passe par PhotosPicker, hors processus")
@@ -132,20 +132,20 @@ final class GameSourceGuardTests: XCTestCase {
     /// Une chorégraphie se lit par `TimelineView` (qui se suspend hors écran) et se met en
     /// pause (`paused:`) au repos : aucune minuterie, aucun lien d'affichage laissé vivant.
     func test_theChoreographiesLeaveNoTimerNorDisplayLinkRunning() throws {
-        for file in try swiftFiles(under: "Meeshy/Features/Main/Game/Choreography") {
+        for file in try swiftFiles(under: "Meeshy/Features/Game/Choreography") {
             let text = try String(contentsOf: file, encoding: .utf8)
             for word in ["Timer.scheduledTimer", "CADisplayLink", "Timer.publish"] {
                 XCTAssertFalse(text.contains(word), "\(file.lastPathComponent) : « \(word) » tourne hors écran")
             }
         }
-        let clock = try String(contentsOf: iosRoot.appendingPathComponent("Meeshy/Features/Main/Game/Choreography/ChoreographyClock.swift"), encoding: .utf8)
+        let clock = try String(contentsOf: iosRoot.appendingPathComponent("Meeshy/Features/Game/Choreography/ChoreographyClock.swift"), encoding: .utf8)
         XCTAssertTrue(clock.contains("paused: !running"))
     }
 
     /// Les shaders se compilent AVANT la célébration, jamais pendant : la brique du SDK sait
     /// le faire (`GameShaders.precompile`) ; l'app doit l'appeler à l'ouverture de l'écran.
     func test_theShadersArePrecompiledWhenProgressionOpens() throws {
-        let text = try String(contentsOf: iosRoot.appendingPathComponent("Meeshy/Features/Main/Views/ProgressionView.swift"), encoding: .utf8)
+        let text = try String(contentsOf: iosRoot.appendingPathComponent("Meeshy/Features/Profile/Views/ProgressionView.swift"), encoding: .utf8)
         XCTAssertTrue(text.contains("GameShaders.precompile()"))
     }
 
@@ -154,7 +154,7 @@ final class GameSourceGuardTests: XCTestCase {
     /// à son entrée fait planter l'app au premier redémarrage du moteur (services média
     /// réinitialisés). `@Sendable` la détache ; elle ne revient au `MainActor` que par sa tâche.
     func test_theHapticEngineResetHandlerIsNotIsolatedToTheMainActor() throws {
-        let text = try String(contentsOf: iosRoot.appendingPathComponent("Meeshy/Features/Main/Game/Choreography/GameHaptics.swift"), encoding: .utf8)
+        let text = try String(contentsOf: iosRoot.appendingPathComponent("Meeshy/Features/Game/Choreography/GameHaptics.swift"), encoding: .utf8)
         XCTAssertTrue(text.contains("resetHandler = { @Sendable"), "le gestionnaire de réinitialisation tourne hors du fil principal")
     }
 

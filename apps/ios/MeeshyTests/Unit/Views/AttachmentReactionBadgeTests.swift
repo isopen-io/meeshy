@@ -104,7 +104,7 @@ final class AttachmentReactionBadgeTests: XCTestCase {
             // La tuile de la bulle — mode de lecture classique.
             "Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout+Media.swift",
             // La tuile FOCAL — le mode de lecture par DÉFAUT.
-            "Meeshy/Features/Main/Focal/Row/FocalAttachmentBlock.swift",
+            "Meeshy/Features/Focal/Row/FocalAttachmentBlock.swift",
             // Le plateau du plein écran (#6789).
             "Meeshy/Features/Main/Views/ConversationMediaGalleryView+Geometry.swift",
         ]

@@ -23,16 +23,20 @@ internal fun PostCard(
     isOwn: Boolean = false,
     onShare: () -> Unit = {},
     onCopyLink: () -> Unit = {},
+    onCopyText: () -> Unit = {},
+    onOpenProfile: ((String) -> Unit)? = null,
     onRepost: () -> Unit = {},
     onQuote: () -> Unit = {},
     onPin: () -> Unit = {},
     onReport: () -> Unit = {},
     onDelete: () -> Unit = {},
     onComments: () -> Unit = onClick,
+    onOpenHashtag: (String) -> Unit = {},
+    modifier: Modifier = Modifier,
 ) {
     MeeshyGlassSurface(
         shape = RoundedCornerShape(MeeshyRadius.xl),
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
     ) {
@@ -42,6 +46,8 @@ internal fun PostCard(
                 isOwn = isOwn,
                 onShare = onShare,
                 onCopyLink = onCopyLink,
+                onCopyText = onCopyText,
+                onOpenProfile = onOpenProfile,
                 onRepost = onRepost,
                 onQuote = onQuote,
                 onBookmark = onBookmark,
@@ -49,7 +55,7 @@ internal fun PostCard(
                 onReport = onReport,
                 onDelete = onDelete,
             )
-            FeedPostCardBody(post = post, onFlagTap = onFlagTap)
+            FeedPostCardBody(post = post, onFlagTap = onFlagTap, onOpenHashtag = onOpenHashtag)
             FeedPostCardMediaSlot(post = post, onImageTap = onImageTap, onOpenPost = onOpenPost)
             FeedPostCardFooter(
                 post = post,

@@ -144,6 +144,7 @@ import { meStarredMessagesRoutes } from './me/starred-messages';
 import { meStickersRoutes } from './me/stickers';
 import { stickerPacksRoutes } from './sticker-packs';
 import { gloryFramePacksRoutes } from './packs-glory-frame';
+import { captureFramePacksRoutes } from './packs-capture-frame';
 import { lensPacksRoutes } from './packs-lens';
 import { packAssetsRoutes } from './pack-assets';
 import { avatarRingPacksRoutes, bannerFramePacksRoutes, bannerPacksRoutes, wallpaperPacksRoutes } from './packs-appearance';
@@ -163,6 +164,7 @@ import communityPreferencesRoutes from './community-preferences';
 import conversationEncryptionRoutes from './conversation-encryption';
 import signalProtocolRoutes from './signal-protocol';
 import e2eeRoutes from './e2ee';
+import e2eeSignalRoutes from './e2ee-signals';
 import affiliateRoutes from './affiliate';
 import { userStatsRoutes } from './user-stats';
 import { maintenanceRoutes } from './maintenance';
@@ -362,6 +364,10 @@ export const ROUTE_TABLE_BEFORE_ATTACHMENTS: readonly RouteRegistrationEntry[] =
   // stickers, sur la spec `glory-frame` : un montage PAR DOMAINE, jamais un
   // `:domain`. Registre VIDE jusqu'au L3 (boutique `[]`, installation 404).
   { name: 'packs-glory-frame', prefix: `${API_PREFIX}/packs/glory-frame`, module: gloryFramePacksRoutes },
+  // Les packs de cadres de CAPTURE (#10169, LC) — les douze ambiances de l'appel
+  // et du viseur, intégrées, installées d'office et retirables, sur le MÊME
+  // moteur. Installer ne télécharge rien (#10187) ; aucune proposition de tiers.
+  { name: 'packs-capture-frame', prefix: `${API_PREFIX}/packs/capture-frame`, module: captureFramePacksRoutes },
   // La boutique UNIFIÉE (#10632) — trois domaines de plus sur le MÊME moteur
   // (fonds de conversation, contours d'avatar, bannières de profil), chacun
   // avec son achat en Meeshes, et la vitrine qui les agrège. Un montage par
@@ -398,6 +404,7 @@ export const ROUTE_TABLE_BEFORE_ATTACHMENTS: readonly RouteRegistrationEntry[] =
   { name: 'signal-protocol', prefix: API_PREFIX, module: signalProtocolRoutes },
   // L'annuaire E2EE par appareil et le relais d'enveloppes libsignal (#3706).
   { name: 'e2ee', prefix: API_PREFIX, module: e2eeRoutes },
+  { name: 'e2ee-signals', prefix: API_PREFIX, module: e2eeSignalRoutes },
   { name: 'affiliate', prefix: API_PREFIX, module: affiliateRoutes },
   { name: 'user-stats', prefix: API_PREFIX, module: userStatsRoutes },
   { name: 'maintenance', prefix: API_PREFIX, module: maintenanceRoutes },

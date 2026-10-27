@@ -42,6 +42,7 @@ const summary = (slug: string): FramePackSummary => ({
   removable: false,
   names: {},
   preview: null,
+  previewUrl: null,
   usage: null,
 });
 

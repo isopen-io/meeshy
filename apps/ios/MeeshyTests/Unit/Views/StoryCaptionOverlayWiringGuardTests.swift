@@ -9,11 +9,11 @@ import XCTest
 /// la lecture.
 final class StoryCaptionOverlayWiringGuardTests: XCTestCase {
 
-    private static let canvasPath = "Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift"
-    private static let viewerPath = "Meeshy/Features/Main/Views/StoryViewerView.swift"
-    private static let contentPath = "Meeshy/Features/Main/Views/StoryViewerView+Content.swift"
-    private static let holdPath = "Meeshy/Features/Main/Views/StoryViewerView+PlaybackHold.swift"
-    private static let captionLayerPath = "Meeshy/Features/Main/Views/StoryViewerView+CanvasCaption.swift"
+    private static let canvasPath = "Meeshy/Features/Stories/Views/StoryViewerView+Canvas.swift"
+    private static let viewerPath = "Meeshy/Features/Stories/Views/StoryViewerView.swift"
+    private static let contentPath = "Meeshy/Features/Stories/Views/StoryViewerView+Content.swift"
+    private static let holdPath = "Meeshy/Features/Stories/Views/StoryViewerView+PlaybackHold.swift"
+    private static let captionLayerPath = "Meeshy/Features/Stories/Views/StoryViewerView+CanvasCaption.swift"
 
     // MARK: - La couche partagée remplace le cartouche
 
@@ -99,10 +99,16 @@ final class StoryCaptionOverlayWiringGuardTests: XCTestCase {
             }
             let bloc = Self.braceBlock(in: source, from: range.lowerBound)
             XCTAssertTrue(
-                bloc.contains("isCaptionExpanded = false"),
+                bloc.contains("storyPositionDidChange()"),
                 "changer de \(axe) doit replier la légende — sans quoi la lecture gèle sur la story suivante (#4474)"
             )
         }
+        let lifecycle = try Self.strippedSource(at: "Meeshy/Features/Stories/Views/StoryViewerView+Lifecycle.swift")
+        guard let shared = lifecycle.range(of: "func storyPositionDidChange() {") else {
+            throw GuardIsBlind(description: "`storyPositionDidChange()` introuvable")
+        }
+        XCTAssertTrue(Self.braceBlock(in: lifecycle, from: shared.lowerBound).contains("isCaptionExpanded = false"),
+                      "le changement de story replie la légende (#4474)")
     }
 
     /// **La story REFUSE le voile du composant** (directive porteur 2026-09-02).

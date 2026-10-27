@@ -105,7 +105,7 @@ Scope: Main feature ViewModels (conversation, feed, social, story, voice, 2FA, p
 
 **Android-port note**: ViewModel + Room cache; status bubble popover → Compose `Popup`. Mood emoji grid trivial.
 
-## apps/ios/Meeshy/Features/Main/ViewModels/StoryExportShareViewModel.swift
+## apps/ios/Meeshy/Features/Stories/ViewModels/StoryExportShareViewModel.swift
 
 **Purpose**: Author-only "export story to MP4 and share externally" flow — NEVER touches the Meeshy backend.
 
@@ -117,7 +117,7 @@ Scope: Main feature ViewModels (conversation, feed, social, story, voice, 2FA, p
 
 **Android-port note**: MP4 baking → `MediaCodec`/`MediaMuxer` or a render pipeline; external share → `Intent.ACTION_SEND` with a `FileProvider` URI. Keep the strict rule: export output never uploaded to Meeshy.
 
-## apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift
+## apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel.swift
 
 **Purpose**: Story tray + multi-slide story publishing (online + offline-queue), with RAW publish (assets + JSON effects), background upload, retry, real-time.
 
@@ -129,7 +129,7 @@ Scope: Main feature ViewModels (conversation, feed, social, story, voice, 2FA, p
 
 **Android-port note**: TUS resumable upload has an Android client (`tus-java-client` / OkHttp). Background upload → `WorkManager` job (survives process death — replaces both `uploadTask` and the offline queue). RAW publish + per-slide Post creation ports directly. Story tray = Compose horizontal list.
 
-## apps/ios/Meeshy/Features/Main/ViewModels/TwoFactorViewModel.swift
+## apps/ios/Meeshy/Features/Settings/ViewModels/TwoFactorViewModel.swift
 
 **Purpose**: TOTP 2FA setup/enable/disable/recovery-codes management.
 
@@ -141,7 +141,7 @@ Scope: Main feature ViewModels (conversation, feed, social, story, voice, 2FA, p
 
 **Android-port note**: Trivial ViewModel. QR code from `setupData` rendered with a QR lib.
 
-## apps/ios/Meeshy/Features/Main/ViewModels/UserProfileViewModel.swift
+## apps/ios/Meeshy/Features/Profile/ViewModels/UserProfileViewModel.swift
 
 **Purpose**: Other-user profile sheet — full profile, stats, shared conversations, block/unblock.
 
@@ -153,7 +153,7 @@ Scope: Main feature ViewModels (conversation, feed, social, story, voice, 2FA, p
 
 **Android-port note**: ViewModel + Room profile cache; outbox-driven block/unblock ports directly.
 
-## apps/ios/Meeshy/Features/Main/ViewModels/VoiceProfileManageViewModel.swift
+## apps/ios/Meeshy/Features/Settings/ViewModels/VoiceProfileManageViewModel.swift
 
 **Purpose**: Manage an existing voice-clone profile — samples, consent, cloning toggle, deletion.
 
@@ -165,7 +165,7 @@ Scope: Main feature ViewModels (conversation, feed, social, story, voice, 2FA, p
 
 **Android-port note**: ViewModel; audio sample upload via multipart. Duration estimate heuristic ports directly.
 
-## apps/ios/Meeshy/Features/Main/ViewModels/VoiceProfileWizardViewModel.swift
+## apps/ios/Meeshy/Features/Settings/ViewModels/VoiceProfileWizardViewModel.swift
 
 **Purpose**: Onboarding wizard to create a voice-clone profile (consent → recording → processing → complete).
 
@@ -177,7 +177,7 @@ Scope: Main feature ViewModels (conversation, feed, social, story, voice, 2FA, p
 
 **Android-port note**: Multi-step wizard → Compose with a `currentStep` enum in `StateFlow`; date picker for birth date.
 
-## apps/ios/Meeshy/Features/Main/Views/AboutView.swift
+## apps/ios/Meeshy/Features/Settings/Views/AboutView.swift
 
 **Purpose**: Static "About" screen — app version, platform info, description, feature list, external links, copyright.
 
@@ -189,7 +189,7 @@ Scope: Main feature ViewModels (conversation, feed, social, story, voice, 2FA, p
 
 **Android-port note**: Static Compose screen; version from `PackageInfo`/`BuildConfig`; links via `Intent.ACTION_VIEW`.
 
-## apps/ios/Meeshy/Features/Main/Views/AchievementBadgeView.swift
+## apps/ios/Meeshy/Features/Profile/Views/AchievementBadgeView.swift
 
 **Purpose**: Reusable badge component showing an achievement with a circular progress ring.
 
@@ -201,7 +201,7 @@ Scope: Main feature ViewModels (conversation, feed, social, story, voice, 2FA, p
 
 **Android-port note**: Compose component; progress ring via `Canvas`/`drawArc` or `CircularProgressIndicator`. Leaf component — pass primitives.
 
-## apps/ios/Meeshy/Features/Main/Views/ActiveSessionsView.swift
+## apps/ios/Meeshy/Features/Settings/Views/ActiveSessionsView.swift
 
 **Purpose**: Lists active login sessions with revoke-one / revoke-all-others. Includes its `ActiveSessionsViewModel` in-file.
 
@@ -221,7 +221,7 @@ Scope: Main feature ViewModels (conversation, feed, social, story, voice, 2FA, p
 
 **Android-port note**: Equivalent to a `WindowSizeClass`-based root composable (Material3 `calculateWindowSizeClass`) selecting compact vs expanded layouts.
 
-## apps/ios/Meeshy/Features/Main/Views/AffiliateCreateView.swift
+## apps/ios/Meeshy/Features/Links/Views/AffiliateCreateView.swift
 
 **Purpose**: Sheet to create a referral/affiliate link (name + optional max-uses).
 
@@ -233,7 +233,7 @@ Scope: Main feature ViewModels (conversation, feed, social, story, voice, 2FA, p
 
 **Android-port note**: Modal bottom sheet / dialog with a form; callback → result via `StateFlow`/nav result.
 
-## apps/ios/Meeshy/Features/Main/Views/AffiliateView.swift
+## apps/ios/Meeshy/Features/Links/Views/AffiliateView.swift
 
 **Purpose**: Affiliate dashboard — stats overview (links/signups/clicks), list of referral tokens with copy/share/delete. Includes `AffiliateViewModel` in-file.
 

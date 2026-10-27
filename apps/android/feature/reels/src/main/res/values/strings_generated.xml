@@ -1,5 +1,6 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="reels_author_profile">Author\'s profile</string>
     <string name="reels_caption_translated">Translation available</string>
     <string name="reels_close">Close</string>
     <string name="reels_comments">Comments</string>
@@ -12,9 +13,26 @@
     <string name="reels_comments_send">Send</string>
     <string name="reels_comments_title">Comments</string>
     <string name="reels_empty">No reels yet</string>
+    <string name="reels_impressions">Impressions</string>
     <string name="reels_like">Like</string>
+    <string name="reels_menu_copy_text">Copy text</string>
+    <string name="reels_menu_delete">Delete</string>
+    <string name="reels_menu_hint">Opens the actions menu</string>
+    <string name="reels_menu_open">Open</string>
+    <string name="reels_menu_pin">Pin</string>
+    <string name="reels_menu_report">Report</string>
+    <string name="reels_menu_share">Share</string>
     <string name="reels_mute">Mute</string>
     <string name="reels_repost">Repost</string>
+    <string name="reels_scrub">Skip forward or back</string>
     <string name="reels_share">Share</string>
+    <string name="reels_toast_delete_failed">Error deleting post</string>
+    <string name="reels_toast_deleted">Post deleted</string>
+    <string name="reels_toast_pin_failed">Error pinning post</string>
+    <string name="reels_toast_pinned">Post pinned</string>
+    <string name="reels_toast_report_failed">Error reporting post</string>
+    <string name="reels_toast_reported">Post reported</string>
+    <string name="reels_unlike">Unlike</string>
     <string name="reels_unmute">Unmute</string>
+    <string name="reels_views">Views</string>
 </resources>

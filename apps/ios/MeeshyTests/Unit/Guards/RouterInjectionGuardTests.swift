@@ -17,9 +17,9 @@ final class RouterInjectionGuardTests: XCTestCase {
         "Meeshy/Features/Main/Views/RootLayers/RootViewLayers.swift",
         "Meeshy/Features/Main/Views/RootLayers/iPadRootViewLayers.swift",
         "Meeshy/Features/Main/Views/GuestConversationContainer.swift",
-        "Meeshy/Features/Main/Views/StoryTrayActions.swift",
-        "Meeshy/Features/Main/Views/StoryViewerContainer.swift",
-        "Meeshy/Features/Main/Navigation/SceneCommandHosts.swift",
+        "Meeshy/Features/Stories/Views/StoryTrayActions.swift",
+        "Meeshy/Features/Stories/Views/StoryViewerContainer.swift",
+        "Meeshy/Features/Navigation/SceneCommandHosts.swift",
         "Meeshy/Features/Main/Views/AdaptiveRootView.swift",
         "Meeshy/Features/Main/Views/ConversationListView+Presentations.swift"
     ]
@@ -29,17 +29,17 @@ final class RouterInjectionGuardTests: XCTestCase {
         "Meeshy/Features/Contacts/ContactsHubView.swift",
         "Meeshy/Features/Contacts/PeopleDiscoveryView.swift",
         "Meeshy/Features/Contacts/PhonebookListView.swift",
-        "Meeshy/Features/Main/Game/ProgressionConceptPage.swift",
-        "Meeshy/Features/Main/Views/ProgressionHub.swift",
-        "Meeshy/Features/Main/Views/ProgressionView.swift",
-        "Meeshy/Features/Main/Views/CommunityLinksView.swift",
-        "Meeshy/Features/Main/Views/LinksHubView.swift",
-        "Meeshy/Features/Main/Views/SettingsView.swift",
+        "Meeshy/Features/Game/ProgressionConceptPage.swift",
+        "Meeshy/Features/Profile/Views/ProgressionHub.swift",
+        "Meeshy/Features/Profile/Views/ProgressionView.swift",
+        "Meeshy/Features/Links/Views/CommunityLinksView.swift",
+        "Meeshy/Features/Links/Views/LinksHubView.swift",
+        "Meeshy/Features/Settings/Views/SettingsView.swift",
         "Meeshy/Features/Main/Views/GlobalSearchView.swift",
         "Meeshy/Features/Main/Views/ConversationSearchCommunitiesBand.swift",
         "Meeshy/Features/Main/Views/NearbyDiscoveryView.swift",
-        "Meeshy/Features/Main/Views/MyStoriesView.swift",
-        "Meeshy/Features/Main/Views/StoryViewerSheets.swift",
+        "Meeshy/Features/Stories/Views/MyStoriesView.swift",
+        "Meeshy/Features/Stories/Views/StoryViewerSheets.swift",
         "Meeshy/Features/Main/Views/FeedPostRow.swift",
         "Meeshy/Features/Main/Views/PostDetailView.swift",
         "Meeshy/Features/Contacts/ContactsListTab.swift",
@@ -48,7 +48,7 @@ final class RouterInjectionGuardTests: XCTestCase {
         "Meeshy/Features/Main/Views/ConversationListView.swift",
         "Meeshy/Features/Main/Views/ConversationListView+Tail.swift",
         "Meeshy/Features/Main/Views/ConversationView+ReaderLayers.swift",
-        "Meeshy/Features/Main/Views/ProfileView.swift",
+        "Meeshy/Features/Profile/Views/ProfileView.swift",
         "Meeshy/Features/Main/Views/StarredMessagesView.swift",
         "Meeshy/Features/Main/Views/WidgetPreviewView.swift"
     ]
@@ -61,15 +61,15 @@ final class RouterInjectionGuardTests: XCTestCase {
     private static let routerObjectHolders: [(path: String, role: RouterObjectHolder)] = [
         ("Meeshy/Features/Main/Views/ConversationView.swift", .stateReader),
         ("Meeshy/Features/Main/Views/RootViewComponents.swift", .stateReader),
-        ("Meeshy/Features/Main/Composer/StoryEditComposer.swift", .relay),
-        ("Meeshy/Features/Main/Composer/StoryRepublishComposer.swift", .relay),
+        ("Meeshy/Features/Composer/StoryEditComposer.swift", .relay),
+        ("Meeshy/Features/Composer/StoryRepublishComposer.swift", .relay),
         ("Meeshy/Features/Main/Views/BookmarksView.swift", .relay),
         ("Meeshy/Features/Main/Views/ConversationListView+Presentations.swift", .relay),
         ("Meeshy/Features/Main/Views/ConversationView+Presentations.swift", .relay),
         ("Meeshy/Features/Main/Views/ConversationView+StoryCovers.swift", .relay),
         ("Meeshy/Features/Main/Views/FeedView.swift", .relay),
         ("Meeshy/Features/Main/Views/MessageListView.swift", .relay),
-        ("Meeshy/Features/Main/Views/StoryTrayView.swift", .relay)
+        ("Meeshy/Features/Stories/Views/StoryTrayView.swift", .relay)
     ]
 
     private func declaresRouterObject(_ source: String) -> Bool {
@@ -85,7 +85,7 @@ final class RouterInjectionGuardTests: XCTestCase {
     }
 
     func test_sceneNavigation_publishesRouterCommands() throws {
-        let source = try code("Meeshy/Features/Main/Navigation/SceneCommandFocus.swift")
+        let source = try code("Meeshy/Features/Navigation/SceneCommandFocus.swift")
         XCTAssertTrue(source.contains("\\.routerCommands, router.commands"))
     }
 

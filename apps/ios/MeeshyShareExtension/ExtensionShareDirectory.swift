@@ -114,6 +114,6 @@ nonisolated struct ExtensionShareDirectory: ShareRecipientSourcing {
         request.timeoutInterval = 10
         let (data, response) = try await fetch(request)
         guard let status = (response as? HTTPURLResponse)?.statusCode, (200...299).contains(status) else { throw Failure.refused }
-        return try APIClient.makeAPIPayloadDecoder().decode(APIResponse<T>.self, from: data).data
+        return try MeeshyCoders.decoder(.api).decode(APIResponse<T>.self, from: data).data
     }
 }

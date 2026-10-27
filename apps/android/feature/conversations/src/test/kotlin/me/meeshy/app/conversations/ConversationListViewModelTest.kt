@@ -57,7 +57,7 @@ import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.MessageSocketManager
 import me.meeshy.sdk.socket.SocketConnectionState
 import me.meeshy.sdk.socket.SocketManager
-import me.meeshy.sdk.socket.TypingPresenceRelay
+import me.meeshy.sdk.socket.PresenceStore
 import me.meeshy.sdk.status.StatusBarCache
 import me.meeshy.sdk.status.StatusFeedMode
 import org.junit.After
@@ -112,11 +112,12 @@ class ConversationListViewModelTest {
             every { this@mockk.typingStopped } returns typingStopped
         }
 
-    private fun typingPresenceRelay(
-        forcedOnline: MutableSharedFlow<UserStatusEvent> = MutableSharedFlow(),
-    ): TypingPresenceRelay =
-        mockk<TypingPresenceRelay> {
-            every { this@mockk.forcedOnline } returns forcedOnline
+    private fun presenceStore(
+        entries: kotlinx.coroutines.flow.MutableStateFlow<Map<String, me.meeshy.sdk.model.UserPresence>> =
+            kotlinx.coroutines.flow.MutableStateFlow(emptyMap()),
+    ): PresenceStore =
+        mockk<PresenceStore> {
+            every { this@mockk.entries } returns entries
         }
 
     private fun connectionSocket(
@@ -180,7 +181,7 @@ class ConversationListViewModelTest {
         connection: SocketManager = connectionSocket(),
         draftStore: ConversationDraftStore = InMemoryConversationDraftStore(),
         socket: MessageSocketManager = socketManager(),
-        relay: TypingPresenceRelay = typingPresenceRelay(),
+        presence: PresenceStore = presenceStore(),
         starredStore: StarredMessagesStore = InMemoryStarredMessagesStore(),
         categoryRepository: CategoryRepository = categoryRepo(),
         categorySocketManager: me.meeshy.sdk.socket.CategorySocketManager = categorySocket(),
@@ -190,13 +191,15 @@ class ConversationListViewModelTest {
         lockStore: ConversationLockStore = InMemoryConversationLockStore(),
         storyRepository: me.meeshy.sdk.story.StoryRepository = storyRepo(),
         statusBarCache: StatusBarCache = statusBarCache(),
+        loadingDeps: ConversationListLoadingDeps = ConversationListLoadingDeps.detached(),
     ) = ConversationListViewModel(
-        repo, messageRepo, socket, relay, workManager, draftStore, starredStore,
+        repo, messageRepo, socket, presence, workManager, draftStore, starredStore,
         categoryRepository, categorySocketManager, preferencesSocketManager, connection, session, lockStore,
         storyRepository, statusBarCache, io.mockk.mockk(relaxed = true),
         me.meeshy.sdk.network.InMemoryNetworkMonitor(),
         io.mockk.mockk(relaxed = true),
         idleRowSignalsSource(),
+        loadingDeps,
     )
 
     private fun direct(id: String, otherId: String = "other") = ApiConversation(
@@ -338,49 +341,30 @@ class ConversationListViewModelTest {
         }
 
     @Test
-    fun a_live_user_status_event_is_stored_in_presence_by_user_id() = runTest(dispatcher) {
-        val userStatusFlow = MutableSharedFlow<UserStatusEvent>()
+    fun the_session_presence_map_is_mirrored_in_presence_by_user_id() = runTest(dispatcher) {
+        val entries = MutableStateFlow<Map<String, me.meeshy.sdk.model.UserPresence>>(emptyMap())
         val repo = repositoryReturning(flowOf(CacheResult.Empty))
-        val vm = viewModel(repo, socket = socketManager(userStatus = userStatusFlow))
+        val vm = viewModel(repo, presence = presenceStore(entries))
         advanceUntilIdle()
 
-        userStatusFlow.emit(UserStatusEvent(userId = "other", isOnline = true, lastActiveAt = null))
-        advanceUntilIdle()
-
-        assertThat(vm.state.value.presenceByUserId["other"]?.isOnline).isTrue()
-    }
-
-    @Test
-    fun a_forced_online_event_from_a_typing_frame_is_stored_in_presence_by_user_id() = runTest(dispatcher) {
-        val forcedOnlineFlow = MutableSharedFlow<UserStatusEvent>()
-        val repo = repositoryReturning(flowOf(CacheResult.Empty))
-        val vm = viewModel(repo, relay = typingPresenceRelay(forcedOnline = forcedOnlineFlow))
-        advanceUntilIdle()
-
-        forcedOnlineFlow.emit(UserStatusEvent(userId = "other", isOnline = true, lastActiveAt = null))
-        advanceUntilIdle()
-
-        assertThat(vm.state.value.presenceByUserId["other"]?.isOnline).isTrue()
-    }
-
-    @Test
-    fun a_presence_snapshot_populates_every_user_in_one_pass() = runTest(dispatcher) {
-        val presenceSnapshotFlow = MutableSharedFlow<PresenceSnapshotEvent>()
-        val repo = repositoryReturning(flowOf(CacheResult.Empty))
-        val vm = viewModel(repo, socket = socketManager(presenceSnapshot = presenceSnapshotFlow))
-        advanceUntilIdle()
-
-        presenceSnapshotFlow.emit(
-            PresenceSnapshotEvent(
-                users = listOf(
-                    UserStatusEvent(userId = "u1", isOnline = true),
-                    UserStatusEvent(userId = "u2", isOnline = false),
-                ),
-            ),
+        entries.value = mapOf(
+            "u1" to me.meeshy.sdk.model.UserPresence(isOnline = true),
+            "u2" to me.meeshy.sdk.model.UserPresence(isOnline = false),
         )
         advanceUntilIdle()
 
         assertThat(vm.state.value.presenceByUserId.keys).containsExactly("u1", "u2")
+        assertThat(vm.state.value.presenceByUserId["u1"]?.isOnline).isTrue()
+    }
+
+    @Test
+    fun a_list_opened_after_the_snapshot_starts_from_the_map_not_from_empty() = runTest(dispatcher) {
+        val entries = MutableStateFlow(mapOf("u1" to me.meeshy.sdk.model.UserPresence(isOnline = true)))
+        val repo = repositoryReturning(flowOf(CacheResult.Empty))
+        val vm = viewModel(repo, presence = presenceStore(entries))
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.presenceByUserId["u1"]?.isOnline).isTrue()
     }
 
     @Test
@@ -411,15 +395,12 @@ class ConversationListViewModelTest {
 
     @Test
     fun presenceStateFor_resolves_the_other_participants_live_presence() = runTest(dispatcher) {
-        val userStatusFlow = MutableSharedFlow<UserStatusEvent>()
+        val entries = MutableStateFlow(mapOf("other" to me.meeshy.sdk.model.UserPresence(isOnline = true)))
         val conversation = direct(id = "c1", otherId = "other")
         val repo = repositoryReturning(
             flowOf(CacheResult.Fresh(listOf(conversation), ageMillis = 0)),
         )
-        val vm = viewModel(repo, socket = socketManager(userStatus = userStatusFlow), session = session("me"))
-        advanceUntilIdle()
-
-        userStatusFlow.emit(UserStatusEvent(userId = "other", isOnline = true, lastActiveAt = null))
+        val vm = viewModel(repo, presence = presenceStore(entries), session = session("me"))
         advanceUntilIdle()
 
         assertThat(vm.state.value.presenceStateFor(conversation, nowEpochMillis = 0L))
@@ -437,12 +418,9 @@ class ConversationListViewModelTest {
                 ApiParticipant(id = "p-other", userId = "other", displayName = "Contact"),
             ),
         )
-        val userStatusFlow = MutableSharedFlow<UserStatusEvent>()
+        val entries = MutableStateFlow(mapOf("other" to me.meeshy.sdk.model.UserPresence(isOnline = true)))
         val repo = repositoryReturning(flowOf(CacheResult.Fresh(listOf(group), ageMillis = 0)))
-        val vm = viewModel(repo, socket = socketManager(userStatus = userStatusFlow), session = session("me"))
-        advanceUntilIdle()
-
-        userStatusFlow.emit(UserStatusEvent(userId = "other", isOnline = true))
+        val vm = viewModel(repo, presence = presenceStore(entries), session = session("me"))
         advanceUntilIdle()
 
         assertThat(vm.state.value.presenceStateFor(group, nowEpochMillis = 0L)).isNull()
@@ -1334,6 +1312,25 @@ class ConversationListViewModelTest {
 
         coVerify { repo.markUnreadOptimistic("c1") }
         verify { workManager.enqueue(any<androidx.work.WorkRequest>()) }
+    }
+
+    @Test
+    fun mark_read_after_mark_unread_drops_the_explicit_unread_mark() = runTest(dispatcher) {
+        val repo = repositoryReturning(
+            flowOf(CacheResult.Fresh(listOf(ApiConversation(id = "c1")), ageMillis = 0)),
+        )
+        coEvery { repo.markUnreadOptimistic("c1") } returns true
+        coEvery { repo.markReadOptimistic("c1") } returns true
+        val deps = ConversationListLoadingDeps.detached()
+        val vm = viewModel(repo, loadingDeps = deps)
+        advanceUntilIdle()
+
+        vm.markUnread("c1")
+        assertThat(deps.explicitUnreadMarks.snapshot()).containsExactly("c1")
+        vm.markRead("c1")
+        advanceUntilIdle()
+
+        assertThat(deps.explicitUnreadMarks.snapshot()).isEmpty()
     }
 
     @Test

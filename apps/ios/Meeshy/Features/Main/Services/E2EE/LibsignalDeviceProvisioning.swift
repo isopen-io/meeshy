@@ -44,8 +44,8 @@ nonisolated final class LibsignalDeviceProvisioning: EndToEndDeviceProvisioning,
         }
     }
 
-    func plaintexts() throws -> any E2EEPlaintextStoring {
-        E2EEPlaintextVault(vault: try storage().vault)
+    func plaintexts(owner: String) throws -> any E2EEPlaintextStoring {
+        E2EEPlaintextVault(vault: try storage().vault, owner: owner)
     }
 
     func registrar() throws -> any E2EEDeviceRegistering {
@@ -63,15 +63,19 @@ nonisolated final class LibsignalDeviceProvisioning: EndToEndDeviceProvisioning,
         let cipher = E2EESessionCipher(local: enrolled.device.address, store: store, vault: vault, lock: processLock)
         let approvals = E2EEOwnDeviceApprovals(vault: vault)
         let directory = directory
+        let sealer = E2EEMessageSealer(local: enrolled.device, cipher: cipher, directory: directory, approvals: approvals)
+        let inbox = E2EESignalInbox(vault: vault, owner: enrolled.device.userId)
         return EndToEndReadyDevice(
             device: enrolled.device,
-            sealer: E2EEMessageSealer(local: enrolled.device, cipher: cipher, directory: directory, approvals: approvals),
+            sealer: sealer,
             opener: E2EEEnvelopeOpener(
-                local: enrolled.device, cipher: cipher, plaintexts: E2EEPlaintextVault(vault: vault),
-                directory: directory, approvals: approvals
+                local: enrolled.device, cipher: cipher, plaintexts: E2EEPlaintextVault(vault: vault, owner: enrolled.device.userId),
+                directory: directory, approvals: approvals, signals: inbox
             ),
             linking: E2EEOwnDeviceLinking(local: enrolled, cipher: cipher, directory: directory, approvals: approvals),
-            ownDeviceDetails: { try await directory.ownDevices() }
+            ownDeviceDetails: { try await directory.ownDevices() },
+            signalSealer: sealer,
+            signalInbox: inbox
         )
     }
 

@@ -33,7 +33,7 @@ private let timelineExportLogger = MeeshyLog.logger(.storyTimelineExport)
 /// puis prépose l'interlude de marque via `StoryExportIntro.prepend` ».
 ///
 /// Miroir SDK-local de `StoryVideoExportServiceProviding`
-/// (`apps/ios/Meeshy/Features/Main/Services/StoryVideoExportService.swift`) :
+/// (`apps/ios/Meeshy/Features/Stories/Services/StoryVideoExportService.swift`) :
 /// même FORME (protocole `@MainActor`, pas `Sendable` — les doubles de test
 /// restent de simples classes `@MainActor`), jamais la même DÉPENDANCE — le
 /// SDK ne peut pas importer le target app, donc ce protocole vit ici plutôt

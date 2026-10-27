@@ -98,28 +98,28 @@ final class LivePresenceRepaintGuardTests: XCTestCase {
     private static let readsWithoutLivePresence: [String: String] = [
         "Features/Main/Services/PresenceManager.swift": "le manager lui-même",
         "Features/Main/Services/WidgetDataManager.swift": "hors vue — cliché du widget, republié à son rythme",
-        "Features/Main/Navigation/SocialChromeEnvironment.swift": "fournisseur posé à la racine — les vues du SDK se repeignent par MeeshyLivePresence",
+        "Features/Navigation/SocialChromeEnvironment.swift": "fournisseur posé à la racine — les vues du SDK se repeignent par MeeshyLivePresence",
         "Features/Main/Views/RootLayers/RootViewLayers.swift": "fournisseur de UserProfileSheet — l'en-tête se repeint par MeeshyLivePresence",
         "Features/Main/Views/RootLayers/iPadRootViewLayers.swift": "fournisseur de UserProfileSheet — l'en-tête se repeint par MeeshyLivePresence",
         "Features/Main/Views/AdaptiveRootView.swift": "fournisseur de UserProfileSheet — l'en-tête se repeint par MeeshyLivePresence",
         "Features/Main/Views/AudioFullscreenPage+Transcription.swift": "fournisseur de UserProfileSheet — l'en-tête se repeint par MeeshyLivePresence",
         "Features/Main/Views/PostDetailView+Presentations.swift": "fournisseur de UserProfileSheet — l'en-tête se repeint par MeeshyLivePresence",
         "Features/Main/Views/CommentRowView.swift": "reçoit sa présence de ThreadedCommentSection, monté sous LivePresence par ses hôtes",
-        "Features/Main/Views/StoryTrayView+RingCell.swift": "cellule Equatable — ses hôtes la montent sous LivePresence",
+        "Features/Stories/Views/StoryTrayView+RingCell.swift": "cellule Equatable — ses hôtes la montent sous LivePresence",
         "Features/Main/Components/MessageDetail/MessageViewsMemberPresence.swift": "règle sans vue — ses deux hôtes lisent sous LivePresence",
         "Features/Main/Views/ConversationListView+Overlays.swift": "extension de ConversationListView, qui observe presencePulse",
         "Features/Main/Views/ConversationView.swift": "headerPresenceState — l'en-tête replié relit la carte (livePresenceState) ; la barre de frappe, transitoire, reste à convertir (suivi #11412)",
         "Features/Main/Views/ConversationView+ReaderLayers.swift": "fil de messages — repeint par MessageListViewController (refreshSignal)",
         "Features/Main/Views/MessageListViewController+MessageCellInputs.swift": "fil de messages — repeint par MessageListViewController (refreshSignal)",
         "Features/Main/Views/Bubble/BubbleStandardLayout+Attachments.swift": "fil de messages — repeint par MessageListViewController (refreshSignal)",
-        "Features/Main/Focal/Summary/LivingSummaryAssembly.swift": "assemblage du résumé, résolu à sa construction (suivi #11412)",
+        "Features/Focal/Summary/LivingSummaryAssembly.swift": "assemblage du résumé, résolu à sa construction (suivi #11412)",
         "Features/Main/Components/MessageOverlayMenu.swift": "menu transitoire, résolu à l'ouverture",
-        "Features/Main/Views/StoryViewerView.swift": "face voisine du cube, résolue au basculement (directive 2026-07-10)",
-        "Features/Main/Views/StoryViewerView+GroupIntro.swift": "interstitiel, résolu au basculement (directive 2026-07-10)",
+        "Features/Stories/Views/StoryViewerView.swift": "face voisine du cube, résolue au basculement (directive 2026-07-10)",
+        "Features/Stories/Views/StoryViewerView+GroupIntro.swift": "interstitiel, résolu au basculement (directive 2026-07-10)",
         "Features/Contacts/DiscoverTab.swift": "politique des points de Découverte, hors de ce lot",
-        "Features/Main/Share/ShareSheetHost+App.swift": "écran de partage unique (#10947/#10948) — sa présence est l'affaire de son lot",
-        "Features/Main/Share/ShareSheetView.swift": "écran de partage unique (#10947/#10948) — sa présence est l'affaire de son lot",
-        "Features/Main/Share/ShareSheetViewModel.swift": "écran de partage unique (#10947/#10948) — sa présence est l'affaire de son lot",
+        "Features/Share/ShareSheetHost+App.swift": "écran de partage unique (#10947/#10948) — sa présence est l'affaire de son lot",
+        "Features/Share/ShareSheetView.swift": "écran de partage unique (#10947/#10948) — sa présence est l'affaire de son lot",
+        "Features/Share/ShareSheetViewModel.swift": "écran de partage unique (#10947/#10948) — sa présence est l'affaire de son lot",
     ]
 
     private static let presenceRead = #"knownPresenceState\(|presenceState\(for|resolvedState\(|servedPresence\(for|presenceMap\["#
@@ -168,12 +168,13 @@ final class LivePresenceRepaintGuardTests: XCTestCase {
 
     func test_livePresence_observesTheDebouncedSignal_neverTheManager() throws {
         let source = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Components/LivePresence.swift"))
-        XCTAssertTrue(source.contains("@ObservedObject private var presencePulse: PresenceRefreshSignal = PresenceManager.shared.refreshSignal"))
+        XCTAssertTrue(source.contains("@ObservedObject private var presencePulse: PresenceRefreshSignal"))
+        XCTAssertTrue(source.contains("presencePulse: PresenceRefreshSignal = PresenceManager.shared.refreshSignal"))
         XCTAssertFalse(source.contains("@ObservedObject private var presenceManager"))
     }
 
     func test_socialChrome_handsTheHeartbeatToTheSDKViews() throws {
-        let source = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Navigation/SocialChromeEnvironment.swift"))
+        let source = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Navigation/SocialChromeEnvironment.swift"))
         XCTAssertTrue(source.contains("refresh: PresenceManager.shared.refreshPublisher"))
     }
 

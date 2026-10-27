@@ -1,0 +1,461 @@
+package me.meeshy.app.game.gestures
+
+import com.google.common.truth.Truth.assertThat
+import io.mockk.coEvery
+import io.mockk.coVerify
+import io.mockk.mockk
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.setMain
+import me.meeshy.sdk.engagement.EngagementProgressRepository
+import me.meeshy.sdk.game.GameGestureRepository
+import me.meeshy.sdk.game.GameWriteOutcome
+import me.meeshy.sdk.model.game.ChestClaimResponse
+import me.meeshy.sdk.model.game.DailyChest
+import me.meeshy.sdk.model.game.FlameFreezeResponse
+import me.meeshy.sdk.model.game.FlameRelightResponse
+import me.meeshy.sdk.model.game.GameIntentIds
+import me.meeshy.sdk.model.game.GameMintPreview
+import me.meeshy.sdk.model.game.GameMission
+import me.meeshy.sdk.model.game.MeeshEdition
+import me.meeshy.sdk.model.game.MeeshMintResponse
+import me.meeshy.sdk.model.game.MissionDifficulty
+import me.meeshy.sdk.model.game.MissionRerollResponse
+import me.meeshy.sdk.model.game.PrestigeResponse
+import me.meeshy.sdk.model.game.SeasonClaimResponse
+import me.meeshy.sdk.model.game.SeasonRewardBlock
+import me.meeshy.sdk.model.game.SeasonRewardKind
+import me.meeshy.sdk.model.game.SeasonSealResponse
+import me.meeshy.sdk.network.InMemoryNetworkMonitor
+import org.junit.After
+import org.junit.Before
+import org.junit.Test
+
+@OptIn(ExperimentalCoroutinesApi::class)
+class GameGesturesViewModelTest {
+
+    @Before fun setUp() = Dispatchers.setMain(UnconfinedTestDispatcher())
+
+    @After fun tearDown() = Dispatchers.resetMain()
+
+    private val gestures = mockk<GameGestureRepository>()
+    private val progress = mockk<EngagementProgressRepository>(relaxed = true)
+    private val network = InMemoryNetworkMonitor(initialOnline = true)
+
+    private fun viewModel(): GameGesturesViewModel {
+        var next = 0
+        return GameGesturesViewModel(gestures, progress, network, GameIntentIds { "req-${++next}-xxxxxxxx" })
+    }
+
+    private val replacement = GameMission(
+        id = "m-2", templateKey = "send_texts", difficulty = MissionDifficulty.Easy, signal = "s",
+        prism = false, target = 3, progress = 0, reward = 100, glory = 0,
+    )
+    private val rerolled = GameWriteOutcome.Done(MissionRerollResponse(replacement, balance = 4L))
+    private val chest = ChestClaimResponse("claimed", DailyChest(points = 900, fragment = true, freeze = false), score = 4200L)
+
+    @Test
+    fun `le succes relit la progression servie et libere le geste`() = runTest {
+        coEvery { gestures.rerollMission(any(), "m-1") } returns rerolled
+        val vm = viewModel()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect { } }
+
+        vm.reroll("m-1")
+
+        coVerify(exactly = 1) { progress.refresh() }
+        assertThat(vm.state.value.rerollingMissionId).isNull()
+        assertThat(vm.state.value.failures).isEmpty()
+    }
+
+    @Test
+    fun `un refus du serveur se dit par son code et relit l etat`() = runTest {
+        coEvery { gestures.rerollMission(any(), any()) } returns GameWriteOutcome.Refused("MISSION_REROLL_EXHAUSTED", offline = false)
+        val vm = viewModel()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect { } }
+
+        vm.reroll("m-1")
+
+        assertThat(vm.state.value.failures[GameGesture.Reroll]).isEqualTo(GameGestureFailure(offline = false, code = "MISSION_REROLL_EXHAUSTED"))
+        coVerify(exactly = 1) { progress.refresh() }
+        assertThat(vm.state.value.rerollingMissionId).isNull()
+    }
+
+    @Test
+    fun `un double appui n envoie qu une requete`() = runTest {
+        val gate = CompletableDeferred<GameWriteOutcome<MissionRerollResponse>>()
+        coEvery { gestures.rerollMission(any(), "m-1") } coAnswers { gate.await() }
+        val vm = viewModel()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect { } }
+
+        vm.reroll("m-1")
+        vm.reroll("m-1")
+        vm.reroll("m-1")
+        assertThat(vm.state.value.rerollingMissionId).isEqualTo("m-1")
+        gate.complete(rerolled)
+
+        coVerify(exactly = 1) { gestures.rerollMission(any(), any()) }
+    }
+
+    @Test
+    fun `rien ne bouge avant la reponse de la passerelle`() = runTest {
+        val gate = CompletableDeferred<GameWriteOutcome<ChestClaimResponse>>()
+        coEvery { gestures.claimChest(any()) } coAnswers { gate.await() }
+        val vm = viewModel()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect { } }
+
+        vm.claimChest()
+
+        assertThat(vm.state.value.chestOpening).isTrue()
+        assertThat(vm.state.value.chestReward).isNull()
+        coVerify(exactly = 0) { progress.refresh() }
+        gate.complete(GameWriteOutcome.Done(chest))
+        assertThat(vm.state.value.chestOpening).isFalse()
+    }
+
+    @Test
+    fun `le contenu de l Offrande est celui que la passerelle a rendu`() = runTest {
+        coEvery { gestures.claimChest(any()) } returns GameWriteOutcome.Done(chest)
+        val vm = viewModel()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect { } }
+
+        vm.claimChest()
+
+        assertThat(vm.state.value.chestReward).isEqualTo(chest.reward)
+        coVerify(exactly = 1) { progress.refresh() }
+    }
+
+    @Test
+    fun `apres une coupure le reessai rejoue le meme identifiant`() = runTest {
+        val sent = mutableListOf<String>()
+        coEvery { gestures.claimChest(capture(sent)) } returnsMany listOf(
+            GameWriteOutcome.Refused("NETWORK", offline = true),
+            GameWriteOutcome.Done(chest),
+        )
+        val vm = viewModel()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect { } }
+
+        vm.claimChest()
+        assertThat(vm.state.value.failures[GameGesture.Chest]?.offline).isTrue()
+        vm.claimChest()
+
+        assertThat(sent).hasSize(2)
+        assertThat(sent[1]).isEqualTo(sent[0])
+        assertThat(vm.state.value.failures).isEmpty()
+        coVerify(exactly = 1) { progress.refresh() }
+    }
+
+    @Test
+    fun `l identifiant se renouvelle apres un succes`() = runTest {
+        val sent = mutableListOf<String>()
+        coEvery { gestures.claimChest(capture(sent)) } returns GameWriteOutcome.Done(chest)
+        val vm = viewModel()
+
+        vm.claimChest()
+        vm.claimChest()
+
+        assertThat(sent).hasSize(2)
+        assertThat(sent[1]).isNotEqualTo(sent[0])
+    }
+
+    @Test
+    fun `un identifiant deja servi a une autre ecriture est renouvele`() = runTest {
+        val sent = mutableListOf<String>()
+        coEvery { gestures.claimChest(capture(sent)) } returnsMany listOf(
+            GameWriteOutcome.Refused("REQUEST_ID_CONFLICT", offline = false),
+            GameWriteOutcome.Done(chest),
+        )
+        val vm = viewModel()
+
+        vm.claimChest()
+        vm.claimChest()
+
+        assertThat(sent[1]).isNotEqualTo(sent[0])
+    }
+
+    @Test
+    fun `un refus d etat sans reponse du reseau garde l identifiant`() = runTest {
+        val sent = mutableListOf<String>()
+        coEvery { gestures.claimChest(capture(sent)) } returns GameWriteOutcome.Refused("CHEST_NOT_READY", offline = false)
+        val vm = viewModel()
+
+        vm.claimChest()
+        vm.claimChest()
+
+        assertThat(sent[1]).isEqualTo(sent[0])
+    }
+
+    @Test
+    fun `hors ligne rien ne part et rien n est mis en file`() = runTest {
+        network.simulateOffline()
+        val vm = viewModel()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect { } }
+
+        vm.reroll("m-1")
+        vm.claimChest()
+
+        coVerify(exactly = 0) { gestures.rerollMission(any(), any()) }
+        coVerify(exactly = 0) { gestures.claimChest(any()) }
+        assertThat(vm.state.value.online).isFalse()
+        assertThat(vm.state.value.failures[GameGesture.Reroll]).isEqualTo(GameGestureFailure(offline = true, code = null))
+        assertThat(vm.state.value.failures[GameGesture.Chest]?.offline).isTrue()
+        assertThat(vm.state.value.rerollingMissionId).isNull()
+    }
+
+    @Test
+    fun `une coupure pendant le vol ne relit rien`() = runTest {
+        coEvery { gestures.rerollMission(any(), any()) } returns GameWriteOutcome.Refused("NETWORK", offline = true)
+        val vm = viewModel()
+
+        vm.reroll("m-1")
+
+        coVerify(exactly = 0) { progress.refresh() }
+    }
+
+    @Test
+    fun `une Veilleuse prise relit la progression, le nombre affiche est celui du serveur`() = runTest {
+        coEvery { gestures.buyFlameFreeze(any()) } returns GameWriteOutcome.Done(FlameFreezeResponse("bought", freezes = 1, balance = 2L))
+        val vm = viewModel()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect { } }
+
+        vm.buyFreeze()
+
+        coVerify(exactly = 1) { progress.refresh() }
+        assertThat(vm.state.value.buyingFreeze).isFalse()
+        assertThat(vm.state.value.failures).isEmpty()
+    }
+
+    @Test
+    fun `la reserve de Veilleuses pleine est un refus dit par son code et relu`() = runTest {
+        coEvery { gestures.buyFlameFreeze(any()) } returns GameWriteOutcome.Refused("FREEZE_AT_MAXIMUM", offline = false)
+        val vm = viewModel()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect { } }
+
+        vm.buyFreeze()
+
+        assertThat(vm.state.value.failures[GameGesture.Freeze]?.code).isEqualTo("FREEZE_AT_MAXIMUM")
+        coVerify(exactly = 1) { progress.refresh() }
+    }
+
+    @Test
+    fun `un double appui sur rallumer n envoie qu une requete et le meme identifiant sert au reessai`() = runTest {
+        val gate = CompletableDeferred<GameWriteOutcome<FlameRelightResponse>>()
+        val sent = mutableListOf<String>()
+        coEvery { gestures.relightFlame(capture(sent)) } coAnswers { gate.await() }
+        val vm = viewModel()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect { } }
+
+        vm.relight()
+        vm.relight()
+        assertThat(vm.state.value.relighting).isTrue()
+        gate.complete(GameWriteOutcome.Refused("NETWORK", offline = true))
+        coEvery { gestures.relightFlame(capture(sent)) } returns GameWriteOutcome.Done(FlameRelightResponse("relit", streak = 9, balance = 0L))
+        vm.relight()
+
+        assertThat(sent).hasSize(2)
+        assertThat(sent[1]).isEqualTo(sent[0])
+    }
+
+    private val preview = GameMintPreview(
+        number = 92, price = 1221, edition = MeeshEdition.Silver, canMint = true, missingPoints = 0,
+        levelBefore = 9, levelAfter = 8, levelsLost = 1, gloryGained = 1000,
+    )
+
+    @Test
+    fun `la frappe envoie le prix montre et celebre la piece de la reponse`() = runTest {
+        coEvery { gestures.mint(any(), 1221) } returns GameWriteOutcome.Done(
+            MeeshMintResponse(status = "minted", number = 93, edition = MeeshEdition.Gold, balance = 7L),
+        )
+        val vm = viewModel()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect { } }
+
+        vm.mint(preview)
+
+        assertThat(vm.state.value.celebration).isEqualTo(MintCelebration(93, MeeshEdition.Gold, 1))
+        coVerify(exactly = 1) { progress.refresh() }
+        assertThat(vm.state.value.minting).isFalse()
+    }
+
+    @Test
+    fun `une frappe deja faite ne rejoue pas la celebration`() = runTest {
+        coEvery { gestures.mint(any(), any()) } returns GameWriteOutcome.Done(MeeshMintResponse(status = "already-minted"))
+        val vm = viewModel()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect { } }
+
+        vm.mint(preview)
+
+        assertThat(vm.state.value.celebration).isNull()
+        assertThat(vm.state.value.failures).isEmpty()
+    }
+
+    @Test
+    fun `un statut insufficient ne debite rien, ne celebre rien et se dit`() = runTest {
+        coEvery { gestures.mint(any(), any()) } returns GameWriteOutcome.Done(MeeshMintResponse(status = "insufficient"))
+        val vm = viewModel()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect { } }
+
+        vm.mint(preview)
+
+        assertThat(vm.state.value.celebration).isNull()
+        assertThat(vm.state.value.failures[GameGesture.Mint]).isNotNull()
+    }
+
+    @Test
+    fun `le prix qui a change refuse la frappe, relit le prix et ne celebre pas`() = runTest {
+        coEvery { gestures.mint(any(), any()) } returns GameWriteOutcome.Refused("PRICE_CHANGED", offline = false)
+        val vm = viewModel()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect { } }
+
+        vm.mint(preview)
+
+        assertThat(vm.state.value.failures[GameGesture.Mint]?.code).isEqualTo("PRICE_CHANGED")
+        assertThat(vm.state.value.celebration).isNull()
+        coVerify(exactly = 1) { progress.refresh() }
+    }
+
+    @Test
+    fun `un double appui sur frapper ne debite qu une fois`() = runTest {
+        val gate = CompletableDeferred<GameWriteOutcome<MeeshMintResponse>>()
+        coEvery { gestures.mint(any(), any()) } coAnswers { gate.await() }
+        val vm = viewModel()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect { } }
+
+        vm.mint(preview)
+        vm.mint(preview)
+        gate.complete(GameWriteOutcome.Done(MeeshMintResponse(status = "minted", number = 92)))
+
+        coVerify(exactly = 1) { gestures.mint(any(), any()) }
+        assertThat(vm.state.value.celebration?.number).isEqualTo(92)
+    }
+
+    private val claimed = SeasonClaimResponse(
+        status = "claimed", step = 7, reward = SeasonRewardBlock(SeasonRewardKind.Points, 100),
+        seal = null, completed = false, gloryGained = 0, score = 100,
+    )
+
+    @Test
+    fun `reclamer une halte nomme la halte pendant le vol puis relit la progression`() = runTest {
+        val gate = CompletableDeferred<GameWriteOutcome<SeasonClaimResponse>>()
+        coEvery { gestures.claimSeasonStep(any(), 7) } coAnswers { gate.await() }
+        val vm = viewModel()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect { } }
+
+        vm.claimStep(7)
+        vm.claimStep(8)
+        assertThat(vm.state.value.claimingStep).isEqualTo(7)
+        coVerify(exactly = 0) { progress.refresh() }
+        gate.complete(GameWriteOutcome.Done(claimed))
+
+        assertThat(vm.state.value.claimingStep).isNull()
+        coVerify(exactly = 1) { gestures.claimSeasonStep(any(), any()) }
+        coVerify(exactly = 1) { progress.refresh() }
+    }
+
+    @Test
+    fun `une halte deja reclamee est un refus dit et relu`() = runTest {
+        coEvery { gestures.claimSeasonStep(any(), any()) } returns GameWriteOutcome.Refused("SEASON_STEP_ALREADY_CLAIMED", offline = false)
+        val vm = viewModel()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect { } }
+
+        vm.claimStep(7)
+
+        assertThat(vm.state.value.failures[GameGesture.Claim]?.code).isEqualTo("SEASON_STEP_ALREADY_CLAIMED")
+        coVerify(exactly = 1) { progress.refresh() }
+    }
+
+    @Test
+    fun `chaque halte a son identifiant, le meme sert au reessai de la meme halte`() = runTest {
+        val sent = mutableListOf<String>()
+        coEvery { gestures.claimSeasonStep(capture(sent), any()) } returnsMany listOf(
+            GameWriteOutcome.Refused("NETWORK", offline = true),
+            GameWriteOutcome.Refused("NETWORK", offline = true),
+            GameWriteOutcome.Done(claimed),
+        )
+        val vm = viewModel()
+
+        vm.claimStep(7)
+        vm.claimStep(8)
+        vm.claimStep(7)
+
+        assertThat(sent[0]).isNotEqualTo(sent[1])
+        assertThat(sent[2]).isEqualTo(sent[0])
+    }
+
+    @Test
+    fun `le Sceau pris relit la progression et le refus de solde se dit`() = runTest {
+        coEvery { gestures.buySeasonSeal(any()) } returnsMany listOf(
+            GameWriteOutcome.Refused("INSUFFICIENT_MEESHES", offline = false),
+            GameWriteOutcome.Done(SeasonSealResponse("bought", balance = 0)),
+        )
+        val vm = viewModel()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect { } }
+
+        vm.buySeal()
+        assertThat(vm.state.value.failures[GameGesture.Seal]?.code).isEqualTo("INSUFFICIENT_MEESHES")
+        vm.buySeal()
+
+        assertThat(vm.state.value.failures).isEmpty()
+        assertThat(vm.state.value.buyingSeal).isFalse()
+        coVerify(exactly = 2) { progress.refresh() }
+    }
+
+    private val reborn = PrestigeResponse(status = "passed", prestige = 2, score = 0, level = 1, gloryGained = 500, trophyKey = "prestige-2")
+
+    @Test
+    fun `la renaissance enregistree est celle de la reponse et la progression est relue`() = runTest {
+        coEvery { gestures.passPrestige(any()) } returns GameWriteOutcome.Done(reborn)
+        val vm = viewModel()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect { } }
+
+        vm.passPrestige()
+
+        assertThat(vm.state.value.prestigePassed).isEqualTo(2)
+        assertThat(vm.state.value.passingPrestige).isFalse()
+        coVerify(exactly = 1) { progress.refresh() }
+    }
+
+    @Test
+    fun `un niveau trop bas refuse la renaissance sans rien annoncer`() = runTest {
+        coEvery { gestures.passPrestige(any()) } returns GameWriteOutcome.Refused("PRESTIGE_LEVEL_TOO_LOW", offline = false)
+        val vm = viewModel()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect { } }
+
+        vm.passPrestige()
+
+        assertThat(vm.state.value.prestigePassed).isNull()
+        assertThat(vm.state.value.failures[GameGesture.Prestige]?.code).isEqualTo("PRESTIGE_LEVEL_TOO_LOW")
+    }
+
+    @Test
+    fun `un double appui sur renaitre ne passe qu une fois et rien n est annonce avant la reponse`() = runTest {
+        val gate = CompletableDeferred<GameWriteOutcome<PrestigeResponse>>()
+        coEvery { gestures.passPrestige(any()) } coAnswers { gate.await() }
+        val vm = viewModel()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect { } }
+
+        vm.passPrestige()
+        vm.passPrestige()
+        assertThat(vm.state.value.passingPrestige).isTrue()
+        assertThat(vm.state.value.prestigePassed).isNull()
+        coVerify(exactly = 0) { progress.refresh() }
+        gate.complete(GameWriteOutcome.Done(reborn))
+
+        coVerify(exactly = 1) { gestures.passPrestige(any()) }
+    }
+
+    @Test
+    fun `hors ligne la renaissance ne part pas`() = runTest {
+        network.simulateOffline()
+        val vm = viewModel()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect { } }
+
+        vm.passPrestige()
+
+        coVerify(exactly = 0) { gestures.passPrestige(any()) }
+        assertThat(vm.state.value.failures[GameGesture.Prestige]?.offline).isTrue()
+    }
+}

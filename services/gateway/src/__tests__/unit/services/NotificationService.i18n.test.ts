@@ -7,6 +7,7 @@ import {
 function makeService(users: Record<string, any>) {
   const prisma: any = {
     user: {
+      findFirst: async () => null,
       findUnique: async ({ where }: any) =>
         users[where.id] ? { ...users[where.id] } : null,
       findMany: async ({ where }: any) =>
@@ -86,6 +87,7 @@ function makeContentHarness(usersById: Record<string, any>) {
   const created: any[] = [];
   const prisma: any = {
     user: {
+      findFirst: async () => null,
       findUnique: async ({ where }: any) => ({
         id: where.id, username: 'u_' + where.id, displayName: 'User ' + where.id,
         avatar: null, ...(usersById[where.id] ?? {}),
@@ -182,7 +184,7 @@ describe('login new device', () => {
   it('titre localisé selon systemLanguage (de)', async () => {
     const pushed: any[] = [];
     const prisma: any = {
-      user: { findUnique: async () => ({ systemLanguage: 'de' }), findMany: async () => [] },
+      user: { findUnique: async () => ({ systemLanguage: 'de' }), findMany: async () => [], findFirst: async () => null },
       post: { findFirst: async () => ({ authorId: 'post-author', visibility: 'PUBLIC', visibilityUserIds: [] }) },
       userPreferences: { findUnique: async () => null },
       notification: { create: async (a: any) => ({ id: 'n', ...a.data, createdAt: new Date() }), count: async () => 0 },

@@ -24,10 +24,15 @@ import os
 nonisolated protocol EndToEndRegimeMemoryProviding: Sendable {
     func resolve(conversationId: String, served: EndToEndRegime) -> EndToEndRegime
     func bind(account: String?)
+    /// Un compte est-il lié ? Sans lui, la mémoire ne relit rien de ce que
+    /// l'appareil a vu (réveil à froid en arrière-plan, #12985).
+    var isBound: Bool { get }
 }
 
 nonisolated final class EndToEndRegimeMemory: EndToEndRegimeMemoryProviding, @unchecked Sendable {
-    static let shared = EndToEndRegimeMemory(defaults: .standard)
+    static let shared = EndToEndRegimeMemory(
+        defaults: .standard, mirror: UserDefaults(suiteName: EndToEndShareMemory.appGroupIdentifier)
+    )
 
     static let legacyStorageKey = "meeshy.e2ee.regime.v1"
 
@@ -42,12 +47,17 @@ nonisolated final class EndToEndRegimeMemory: EndToEndRegimeMemoryProviding, @un
     }
 
     private let defaults: UserDefaults?
+    /// Le reflet que l'extension de partage lit (`EndToEndShareMemory`, #12985).
+    private let mirror: UserDefaults?
     private let state = OSAllocatedUnfairLock(initialState: State(account: nil, known: [:]))
 
     /// `defaults: nil` : une mémoire du seul processus (tests, aperçus).
-    init(defaults: UserDefaults?) {
+    init(defaults: UserDefaults?, mirror: UserDefaults? = nil) {
         self.defaults = defaults
+        self.mirror = mirror
     }
+
+    var isBound: Bool { state.withLock { $0.account != nil } }
 
     func bind(account: String?) {
         state.withLock { current in
@@ -94,6 +104,15 @@ nonisolated final class EndToEndRegimeMemory: EndToEndRegimeMemoryProviding, @un
     private func persist(_ known: [String: EndToEndRegime], for account: String) {
         guard let data = try? JSONEncoder().encode(known) else { return }
         defaults?.set(data, forKey: Self.storageKey(account: account))
+        reflect(known, for: account)
+    }
+
+    /// Le compte lié dépose, pour l'extension de partage, les conversations
+    /// qu'il a vues chiffrées de bout en bout — des identifiants, rien d'autre.
+    private func reflect(_ known: [String: EndToEndRegime], for account: String) {
+        guard let mirror, let owner = EndToEndShareMemory.ownerUserId(ofAccount: account) else { return }
+        EndToEndShareMemory(ownerUserId: owner, conversationIds: known.filter { $0.value.isEndToEnd }.map(\.key))
+            .write(to: mirror)
     }
 }
 

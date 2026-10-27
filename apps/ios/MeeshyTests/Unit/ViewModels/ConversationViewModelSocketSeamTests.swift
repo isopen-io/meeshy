@@ -42,7 +42,7 @@ final class ConversationViewModelSocketSeamTests: XCTestCase {
             reactionService: MockReactionService(),
             reportService: MockReportService(),
             messageSocket: socket,
-            dependencies: ConversationDependencies(dbPool: pool, persistence: persistence)
+            dependencies: ConversationDependencies(persistence: persistence)
         )
         return (sut, socket, persistence, pool)
     }
@@ -195,7 +195,7 @@ final class ConversationViewModelSocketSeamTests: XCTestCase {
             reactionService: MockReactionService(),
             reportService: MockReportService(),
             messageSocket: socket,
-            dependencies: ConversationDependencies(dbPool: pool, persistence: MessagePersistenceActor(dbWriter: pool)),
+            dependencies: ConversationDependencies(persistence: MessagePersistenceActor(dbWriter: pool)),
             networkMonitor: FakeNetworkMonitor(isOnline: true),
             offlineQueue: FakeOfflineMessageQueue()
         )

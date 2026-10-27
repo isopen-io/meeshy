@@ -3,7 +3,7 @@
 **Date:** 2026-07-20
 **Scope:** iOS only
 **Area:** Accessibility (VoiceOver) — Safety / Blocked-users management
-**File touched:** `apps/ios/Meeshy/Features/Main/Views/BlockedUsersView.swift`
+**File touched:** `apps/ios/Meeshy/Features/Settings/Views/BlockedUsersView.swift`
 (1 file, 0 logic, 0 new test)
 
 ## Component

@@ -41,7 +41,7 @@ final class DependencyContainerSuspensionTests: XCTestCase {
     private func poolDesMessages(_ nom: String = "messages.sqlite") throws -> DatabasePool {
         let pool = try DatabasePool(
             path: dossier.appendingPathComponent(nom).path,
-            configuration: DependencyContainer.dbConfig()
+            configuration: MessageStoreDatabase.configuration()
         )
         try pool.write { db in
             try db.execute(sql: "CREATE TABLE sonde_7160 (id INTEGER PRIMARY KEY)")
@@ -129,10 +129,10 @@ final class DependencyContainerSuspensionTests: XCTestCase {
         try octetsPrecieux.write(to: URL(fileURLWithPath: chemin))
 
         var diagnostics = DatabaseInitDiagnostics()
-        let pool = DependencyContainer.reopenReplacingCorruptFile(
+        let pool = MessageStoreDatabase.reopenReplacingCorruptFile(
             at: chemin,
             after: DatabaseError(resultCode: .SQLITE_INTERRUPT),
-            config: DependencyContainer.dbConfig(),
+            config: MessageStoreDatabase.configuration(),
             fileManager: .default,
             clock: Date.init,
             diagnostics: &diagnostics
@@ -169,10 +169,10 @@ final class DependencyContainerSuspensionTests: XCTestCase {
         try Data("not a sqlite database at all".utf8).write(to: URL(fileURLWithPath: chemin))
 
         var diagnostics = DatabaseInitDiagnostics()
-        let pool = DependencyContainer.reopenReplacingCorruptFile(
+        let pool = MessageStoreDatabase.reopenReplacingCorruptFile(
             at: chemin,
             after: DatabaseError(resultCode: .SQLITE_NOTADB),
-            config: DependencyContainer.dbConfig(),
+            config: MessageStoreDatabase.configuration(),
             fileManager: .default,
             clock: Date.init,
             diagnostics: &diagnostics

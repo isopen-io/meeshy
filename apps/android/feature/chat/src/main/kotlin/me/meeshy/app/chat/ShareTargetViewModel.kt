@@ -122,7 +122,7 @@ class ShareTargetViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 if (attachment != null) {
-                    val uploadCmid = mediaUploadQueue.enqueue(attachment)
+                    val uploadCmid = mediaUploadQueue.enqueue(attachment, conversationId = conversationId)
                     messageRepository.sendOptimistic(
                         conversationId = conversationId,
                         content = sharedText,

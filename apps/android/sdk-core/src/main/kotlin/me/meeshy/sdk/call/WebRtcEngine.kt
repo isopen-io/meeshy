@@ -164,6 +164,11 @@ class WebRtcEngine internal constructor(
 
     fun setVideoEnabled(enabled: Boolean) = media.setVideoEnabled(enabled)
 
+    fun switchCamera(onSwitched: (isFront: Boolean?) -> Unit) = media.switchCamera(onSwitched)
+
+    /** Le zoom de ma caméra (pincement, objectifs, retour à 1×). */
+    val cameraZoom: me.meeshy.sdk.call.camera.CallCameraZoom get() = media.zoom
+
     suspend fun createOffer(): SessionDescription = createSdp(isOffer = true)
 
     suspend fun createAnswer(): SessionDescription = createSdp(isOffer = false)

@@ -75,8 +75,8 @@ class ChatUiStateDefaultsTest {
             slowModeExempt = false,
             lastSelfSentAtMillis = null,
             directPeerUserId = null,
-            presenceByUserId = emptyMap(),
             isOffline = false,
+            showReadReceipts = true,
             composerLanguage = ComposerLanguageState(),
             composerLanguageSeed = ComposerLanguage.DEFAULT,
             fileDownload = null,
@@ -99,7 +99,6 @@ class ChatUiStateDefaultsTest {
         assertThat(fresh.replyThreadOverlay).isNull()
         assertThat(fresh.showEncryptionDisclaimer).isFalse()
         assertThat(fresh.liveLocationBadges).isEmpty()
-        assertThat(fresh.headerPresence(nowEpochMillis = 0L)).isNull()
     }
 
     private companion object {
@@ -148,8 +147,8 @@ class ChatUiStateDefaultsTest {
             "slowModeExempt",
             "lastSelfSentAtMillis",
             "directPeerUserId",
-            "presenceByUserId",
             "isOffline",
+            "showReadReceipts",
             "composerLanguage",
             "composerLanguageSeed",
             "fileDownload",

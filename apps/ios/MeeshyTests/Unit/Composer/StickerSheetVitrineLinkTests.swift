@@ -26,7 +26,7 @@ final class StickerSheetVitrineLinkTests: XCTestCase {
     func test_laConversationOffreLaVitrineEtLaSceneNon() throws {
         let conversation = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Views/ConversationLayers/ConversationComposerLayers.swift"))
         XCTAssertTrue(conversation.contains("StickerSheetDestination(diesCut: true, leadsToVitrine: true)"))
-        let scene = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Composer/MeeshyComposerHost+Pickers.swift"))
+        let scene = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Composer/MeeshyComposerHost+Pickers.swift"))
         XCTAssertTrue(scene.contains("StickerSheetDestination(diesCut: false)"))
         XCTAssertFalse(scene.contains("leadsToVitrine: true"))
     }

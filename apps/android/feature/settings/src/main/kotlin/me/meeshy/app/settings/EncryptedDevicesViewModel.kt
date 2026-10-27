@@ -17,9 +17,10 @@ import javax.inject.Inject
 
 /**
  * Pourquoi la passerelle n'a pas fait ce qu'on attendait : hors ligne se dit autrement qu'une panne,
- * et un appareil qui a changé depuis l'affichage (place reprise, liste vidée) autrement encore.
+ * et un appareil qui a changé depuis l'affichage (place reprise, liste vidée) autrement encore. Une
+ * session que la passerelle n'a pas pu fermer (#13039, 503) ne retire rien : on peut réessayer.
  */
-enum class EncryptedDevicesFailure { OFFLINE, UNAVAILABLE, CHANGED }
+enum class EncryptedDevicesFailure { OFFLINE, UNAVAILABLE, CHANGED, SESSION_NOT_CLOSED }
 
 data class EncryptedDevicesUiState(
     /** `null` tant qu'aucune liste n'a été confirmée pour ce compte (démarrage à froid). */
@@ -127,6 +128,7 @@ class EncryptedDevicesViewModel @Inject constructor(
     private fun failureOf(error: ApiError): EncryptedDevicesFailure = when (error.code) {
         OFFLINE_CODE -> EncryptedDevicesFailure.OFFLINE
         OwnEncryptedDevicesRepository.DEVICE_CHANGED, OwnEncryptedDevicesRepository.UNKNOWN_DEVICE_CODE -> EncryptedDevicesFailure.CHANGED
+        OwnEncryptedDevicesRepository.DEVICE_SESSION_NOT_CLOSED -> EncryptedDevicesFailure.SESSION_NOT_CLOSED
         else -> EncryptedDevicesFailure.UNAVAILABLE
     }
 

@@ -4,6 +4,8 @@
  * GET /attachments/:attachmentId/status-details. Issue #4284. Point d'entrée :
  * messages.ts.
  */
+import { signReaderAttachmentsIn, type ReaderBoundMessage, type SignableAttachment } from '../services/attachments/signedAttachmentUrls';
+import { readerFileUrlSignerFromEnv } from '../services/attachments/readerFileSignature';
 import { withServedEditAttribution } from '@meeshy/shared/utils/message-edit-attribution';
 import { editAttributionReaderOf } from '../services/messaging/editAttributionReader';
 import { AT_REST_MESSAGE_SELECT, lazyKeyring, revealAtRest } from '../services/messaging/serverAtRest';
@@ -226,6 +228,8 @@ export function registerMessagesReadRoutes(fastify: FastifyInstance, deps: Messa
           forwardedFromId: true,
           forwardedFromConversationId: true,
           expiresAt: true,
+          // #13100 — la loi de sortie lit la durée : sans elle, toute pièce se signerait.
+          ephemeralDuration: true,
           isViewOnce: true,
           maxViewOnceCount: true,
           viewOnceCount: true,
@@ -401,6 +405,12 @@ export function registerMessagesReadRoutes(fastify: FastifyInstance, deps: Messa
         // #10286 — un invité anonyme ne sert jamais sa carte de liens suivis.
         metadata: servedLinkMetadata(citedMessage.metadata, message.sender),
         sender: gatedSender,
+        // #13100 — une pièce scellée au repos (ou protégée) sort sous l'adresse signée de CE lecteur.
+        attachments: signReaderAttachmentsIn(citedMessage.attachments as SignableAttachment[] | undefined, {
+          message: message as ReaderBoundMessage,
+          readerParticipantId,
+          signer: readerFileUrlSignerFromEnv(new Date()),
+        }),
         // `Message.translations` est une CARTE Mongo (`langue → {text, …}`),
         // jamais un tableau — le contrat, lui, déclare un TABLEAU d'objets
         // `{targetLanguage, translatedContent, …}`, et c'est ce que décodent

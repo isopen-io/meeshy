@@ -34,7 +34,7 @@ final class ConversationTranslationE2EEGuardTests: XCTestCase {
             reportService: MockReportService(),
             messageSocket: MockMessageSocket(),
             dependencies: ConversationDependencies(
-                dbPool: pool, persistence: MessagePersistenceActor(dbWriter: pool), encryptedEra: ConversationEncryptedEra(memory: regimeMemory)
+                persistence: MessagePersistenceActor(dbWriter: pool), encryptedEra: ConversationEncryptedEra(memory: regimeMemory)
             ),
             translationService: translation,
             attachmentTranslationService: audio

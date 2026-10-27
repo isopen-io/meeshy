@@ -1,6 +1,12 @@
 package me.meeshy.sdk.call
 
 import android.content.Context
+import me.meeshy.sdk.call.camera.CallCameraZoom
+import me.meeshy.sdk.call.camera.CameraLensDiscovery
+import me.meeshy.sdk.call.camera.CameraZoomActuator
+import me.meeshy.sdk.call.camera.ZoomCropObserver
+import me.meeshy.sdk.model.call.camera.CameraLensClassifier
+import me.meeshy.sdk.model.call.camera.CameraLensProbe
 import org.webrtc.AudioSource
 import org.webrtc.AudioTrack
 import org.webrtc.Camera2Enumerator
@@ -28,6 +34,21 @@ internal class CallMediaSources(
     private var videoCapturer: CameraVideoCapturer? = null
     private var videoSource: VideoSource? = null
     private var surfaceTextureHelper: SurfaceTextureHelper? = null
+    private var zoomObserver: ZoomCropObserver? = null
+    private var openCameraName: String? = null
+    private var lensProbes: List<CameraLensProbe> = emptyList()
+    private val enumerator: CameraEnumerator by lazy { Camera2Enumerator(appContext) }
+
+    /** Le zoom de MA caméra : pincement, pastilles d'objectifs, retour à 1×. Il écrit ici, jamais ailleurs. */
+    val zoom: CallCameraZoom = CallCameraZoom(object : CameraZoomActuator {
+        override fun setCrop(zoom: Float, rampRate: Float?) {
+            zoomObserver?.setCrop(zoom, rampRate)
+        }
+
+        override fun openLens(lensId: String) {
+            reopen(lensId)
+        }
+    })
 
     /** La piste d'aperçu caméra, présente seulement pendant une capture vidéo. */
     var localVideoTrack: VideoTrack? = null
@@ -48,16 +69,43 @@ internal class CallMediaSources(
     /** Démarre la caméra et crée sa piste, SANS la poser sur un pair. Sans caméra : appel audio seul. */
     fun prepareVideo() {
         if (localVideoTrack != null) return
-        val capturer = createCameraCapturer() ?: return
+        val names = enumerator.deviceNames.toList()
+        lensProbes = CameraLensDiscovery.probes(appContext, names)
+        val name = flipTarget(front = true) ?: flipTarget(front = false) ?: return
+        val capturer = enumerator.createCapturer(name, null) ?: return
         val current = stack.value
         val helper = SurfaceTextureHelper.create("MeeshyCapture", current.eglBase.eglBaseContext)
         val source = current.factory.createVideoSource(false)
-        capturer.initialize(helper, appContext, source.capturerObserver)
+        val observer = ZoomCropObserver(source.capturerObserver)
+        capturer.initialize(helper, appContext, observer)
         capturer.startCapture(CAPTURE_WIDTH, CAPTURE_HEIGHT, CAPTURE_FPS)
         videoCapturer = capturer
         videoSource = source
         surfaceTextureHelper = helper
+        zoomObserver = observer
+        openCameraName = name
         localVideoTrack = current.factory.createVideoTrack(VIDEO_TRACK_ID, source)
+        attachZoom(name)
+    }
+
+    private fun attachZoom(name: String) {
+        val isFront = enumerator.isFrontFacing(name)
+        zoom.attach(CameraLensClassifier.profile(lensProbes, isFront), activeLensId = name)
+    }
+
+    /** Rouvre la capture sur la caméra [name], sur la même source : la piste, l'encodeur et le recadrage restent. */
+    private fun reopen(name: String, onDone: (Boolean) -> Unit = {}) {
+        val helper = surfaceTextureHelper
+        val observer = zoomObserver
+        if (helper == null || observer == null || name == openCameraName) return onDone(false)
+        val replacement = runCatching { enumerator.createCapturer(name, null) }.getOrNull() ?: return onDone(false)
+        runCatching { videoCapturer?.stopCapture() }
+        videoCapturer?.dispose()
+        replacement.initialize(helper, appContext, observer)
+        val started = runCatching { replacement.startCapture(CAPTURE_WIDTH, CAPTURE_HEIGHT, CAPTURE_FPS) }.isSuccess
+        videoCapturer = replacement
+        openCameraName = name
+        onDone(started)
     }
 
     /**
@@ -112,13 +160,6 @@ internal class CallMediaSources(
             .forEach { optional.add(MediaConstraints.KeyValuePair(it, "true")) }
     }
 
-    private fun createCameraCapturer(): CameraVideoCapturer? {
-        val enumerator: CameraEnumerator = Camera2Enumerator(appContext)
-        val names = enumerator.deviceNames
-        return names.firstOrNull { enumerator.isFrontFacing(it) }?.let { enumerator.createCapturer(it, null) }
-            ?: names.firstOrNull()?.let { enumerator.createCapturer(it, null) }
-    }
-
     fun setAudioEnabled(enabled: Boolean) {
         localAudioTrack?.setEnabled(enabled)
     }
@@ -131,6 +172,30 @@ internal class CallMediaSources(
         }
     }
 
+    /**
+     * Bascule entre la caméra avant et arrière (iOS `switchCamera`). Elle choisit la face OPPOSÉE (à
+     * l'arrière, le grand-angle) : le `switchCamera` de WebRTC passe à la caméra SUIVANTE de la liste,
+     * qui serait un autre objectif arrière sur un appareil à plusieurs. [onSwitched] reçoit la face
+     * désormais active, ou `null` si la bascule n'a pas eu lieu (aucune capture, une seule caméra,
+     * erreur du capteur). Le zoom repart à 1× sur la nouvelle face.
+     */
+    fun switchCamera(onSwitched: (isFront: Boolean?) -> Unit) {
+        val current = openCameraName ?: return onSwitched(null)
+        val goingFront = !enumerator.isFrontFacing(current)
+        val target = flipTarget(goingFront) ?: return onSwitched(null)
+        reopen(target) { done ->
+            if (!done) return@reopen onSwitched(null)
+            attachZoom(target)
+            onSwitched(goingFront)
+        }
+    }
+
+    private fun flipTarget(front: Boolean): String? {
+        val names = enumerator.deviceNames.filter { enumerator.isFrontFacing(it) == front }
+        val main = CameraLensClassifier.profile(lensProbes, front)?.lenses?.firstOrNull { it.ratio == 1f }?.id
+        return main?.takeIf { it in names } ?: names.firstOrNull()
+    }
+
     /** Arrête la capture et dispose les sources ; à appeler AVANT de disposer le `PeerConnection`. */
     fun releaseVideo() {
         runCatching { videoCapturer?.stopCapture() }
@@ -138,8 +203,11 @@ internal class CallMediaSources(
         surfaceTextureHelper?.dispose()
         localVideoTrack?.dispose()
         videoSource?.dispose()
+        zoom.detach()
         videoCapturer = null
         surfaceTextureHelper = null
+        zoomObserver = null
+        openCameraName = null
         localVideoTrack = null
         videoSource = null
         videoAttached = false

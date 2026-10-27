@@ -24,6 +24,10 @@ import me.meeshy.sdk.model.auth.SessionOrigin
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.SessionTransitionFlags
+import me.meeshy.sdk.session.SessionRepository
+import kotlinx.coroutines.flow.MutableStateFlow
+import me.meeshy.sdk.model.auth.LinkSignInAccount
+import me.meeshy.sdk.model.auth.LinkSignInIntent
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -56,12 +60,16 @@ class MagicLinkValidateViewModelTest {
         port: FakePort = FakePort(),
         flags: SessionTransitionFlags = SessionTransitionFlags(),
         gate: SessionOpeningGate = SessionOpeningGate(),
+        repository: AuthRepository = mockk<AuthRepository>(relaxed = true).also {
+            every { it.isAuthenticated } returns false
+            coEvery { it.verifyMagicLink(any()) } returns outcome
+        },
+        signedIn: MeeshyUser? = null,
     ): MagicLinkValidateViewModel {
-        val repository = mockk<AuthRepository>(relaxed = true)
-        every { repository.isAuthenticated } returns false
-        coEvery { repository.verifyMagicLink(any()) } returns outcome
         val opener = ProvenSessionOpener(port, flags, this, System::currentTimeMillis)
-        return MagicLinkValidateViewModel(repository, opener, gate, SavedStateHandle(mapOf("token" to "tok")))
+        val sessionRepository = mockk<SessionRepository>(relaxed = true)
+        every { sessionRepository.currentUser } returns MutableStateFlow(signedIn)
+        return MagicLinkValidateViewModel(repository, opener, gate, sessionRepository, SavedStateHandle(mapOf("token" to "tok")))
     }
 
     @Test
@@ -125,5 +133,123 @@ class MagicLinkValidateViewModelTest {
         assertThat(port.installed).isEmpty()
         assertThat(vm.state.value.isAuthenticated).isFalse()
         assertThat(vm.state.value.isValidating).isFalse()
+    }
+
+    private val question = LoginOutcome.LinkConfirmationRequired(
+        account = LinkSignInAccount(id = "u1", username = "alice", displayName = "Alice"),
+        intent = LinkSignInIntent.CLAIM_EMAIL,
+        maskedEmail = "a***@mail.com",
+    )
+
+    private fun askingRepository(signedIn: Boolean = false, onConfirmed: NetworkResult<LoginOutcome>): AuthRepository =
+        mockk<AuthRepository>(relaxed = true).also {
+            every { it.isAuthenticated } returns signedIn
+            coEvery { it.verifyMagicLink("tok", confirmed = false) } returns NetworkResult.Success(question)
+            coEvery { it.verifyMagicLink("tok", confirmed = true) } returns onConfirmed
+        }
+
+    @Test
+    fun `un lien non demande pose la question et n'ouvre rien tant qu'il n'y a pas de oui`() = runTest(dispatcher) {
+        val port = FakePort()
+        val repository = askingRepository(onConfirmed = NetworkResult.Success(LoginOutcome.Authenticated(session)))
+        val vm = viewModel(NetworkResult.Success(question), port, repository = repository)
+
+        advanceUntilIdle()
+
+        val asked = vm.state.value.confirmation
+        assertThat(asked?.handle).isEqualTo("@alice")
+        assertThat(asked?.claimsEmail).isTrue()
+        assertThat(asked?.maskedEmail).isEqualTo("a***@mail.com")
+        assertThat(vm.state.value.isValidating).isFalse()
+        assertThat(port.installed).isEmpty()
+        coVerify(exactly = 0) { repository.verifyMagicLink("tok", confirmed = true) }
+    }
+
+    @Test
+    fun `le oui rejoue la preuve confirmee une seule fois puis ouvre la session`() = runTest(dispatcher) {
+        val port = FakePort()
+        val repository = askingRepository(onConfirmed = NetworkResult.Success(LoginOutcome.Authenticated(session)))
+        val vm = viewModel(NetworkResult.Success(question), port, repository = repository)
+        advanceUntilIdle()
+
+        vm.answerConfirmation(true)
+        vm.answerConfirmation(true)
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { repository.verifyMagicLink("tok", confirmed = true) }
+        assertThat(port.installed).containsExactly(session)
+        assertThat(vm.state.value.isAuthenticated).isTrue()
+        assertThat(vm.state.value.confirmation).isNull()
+    }
+
+    @Test
+    fun `le non ne consomme pas le jeton et ne deconnecte personne`() = runTest(dispatcher) {
+        val port = FakePort()
+        val repository = askingRepository(signedIn = true, onConfirmed = NetworkResult.Success(LoginOutcome.Authenticated(session)))
+        val vm = viewModel(
+            NetworkResult.Success(question),
+            port,
+            repository = repository,
+            signedIn = MeeshyUser(id = "u9", username = "carol"),
+        )
+        advanceUntilIdle()
+        assertThat(vm.state.value.confirmation?.currentLabel).isEqualTo("@carol")
+
+        vm.answerConfirmation(false)
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.declined).isTrue()
+        assertThat(vm.state.value.confirmation).isNull()
+        coVerify(exactly = 0) { repository.verifyMagicLink("tok", confirmed = true) }
+        coVerify(exactly = 0) { repository.logout() }
+        assertThat(port.installed).isEmpty()
+    }
+
+    @Test
+    fun `le meme compte que celui qui est ouvert se confirme seul`() = runTest(dispatcher) {
+        val port = FakePort()
+        val repository = askingRepository(signedIn = true, onConfirmed = NetworkResult.Success(LoginOutcome.Authenticated(session)))
+        val vm = viewModel(
+            NetworkResult.Success(question),
+            port,
+            repository = repository,
+            signedIn = MeeshyUser(id = "u1", username = "alice"),
+        )
+
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.confirmation).isNull()
+        coVerify(exactly = 1) { repository.verifyMagicLink("tok", confirmed = true) }
+    }
+
+    @Test
+    fun `un autre compte ouvert n'est referme qu'apres la preuve du lien`() = runTest(dispatcher) {
+        val repository = askingRepository(signedIn = true, onConfirmed = NetworkResult.Success(LoginOutcome.Authenticated(session)))
+        val vm = viewModel(
+            NetworkResult.Success(question),
+            repository = repository,
+            signedIn = MeeshyUser(id = "u9", username = "carol"),
+        )
+        advanceUntilIdle()
+        coVerify(exactly = 0) { repository.logout() }
+
+        vm.answerConfirmation(true)
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { repository.logout() }
+    }
+
+    @Test
+    fun `une confirmation qui revient apres un oui est un echec et non une boucle`() = runTest(dispatcher) {
+        val repository = askingRepository(onConfirmed = NetworkResult.Success(question))
+        val vm = viewModel(NetworkResult.Success(question), repository = repository)
+        advanceUntilIdle()
+
+        vm.answerConfirmation(true)
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.confirmation).isNull()
+        assertThat(vm.state.value.isConfirming).isFalse()
+        assertThat(vm.state.value.isAuthenticated).isFalse()
     }
 }

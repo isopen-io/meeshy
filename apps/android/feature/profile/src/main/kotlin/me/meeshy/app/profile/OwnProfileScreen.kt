@@ -4,7 +4,9 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.togetherWith
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -329,12 +331,24 @@ private fun OwnProfileTrailing(
             onClick = onShare,
         )
     }
-    TextButton(onClick = { onEvent(if (state.isEditing) OwnProfileUiEvent.Save else OwnProfileUiEvent.StartEditing) }) {
-        Text(
-            text = stringResource(if (state.isEditing) R.string.profile_save else R.string.profile_edit),
-            color = MeeshyPalette.Indigo500,
-            fontWeight = FontWeight.SemiBold,
-        )
+    val haptics = rememberMeeshyHaptics()
+    TextButton(
+        onClick = {
+            haptics.light()
+            onEvent(if (state.isEditing) OwnProfileUiEvent.Save else OwnProfileUiEvent.StartEditing)
+        },
+    ) {
+        AnimatedContent(
+            targetState = state.isEditing,
+            transitionSpec = { fadeIn() togetherWith fadeOut() },
+            label = "profile-edit-save",
+        ) { editing ->
+            Text(
+                text = stringResource(if (editing) R.string.profile_save else R.string.profile_edit),
+                color = MeeshyPalette.Indigo500,
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
     }
 }
 

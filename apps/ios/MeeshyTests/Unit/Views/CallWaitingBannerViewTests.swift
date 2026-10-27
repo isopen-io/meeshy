@@ -33,7 +33,7 @@ final class CallWaitingBannerViewTests: XCTestCase {
             .deletingLastPathComponent()   // Unit/
             .deletingLastPathComponent()   // MeeshyTests/
             .deletingLastPathComponent()   // ios/
-            .appendingPathComponent("Meeshy/Features/Main/Views/CallWaitingBannerView.swift")
+            .appendingPathComponent("Meeshy/Features/Call/Views/CallWaitingBannerView.swift")
         return try String(contentsOf: url, encoding: .utf8)
     }
 

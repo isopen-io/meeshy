@@ -94,7 +94,7 @@ final class CommentSwipeToReplyTests: XCTestCase {
 final class CommentSwipeToReplyWiringGuardTests: XCTestCase {
 
     private func source(_ path: String) throws -> String {
-        try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Main/Views/" + path)
+        try MyStoriesSourceCorpus.text(of: AppSourceGuard.featureViewPath(path))
     }
 
     private static let commentRows = [
@@ -137,7 +137,7 @@ final class CommentSwipeToReplyWiringGuardTests: XCTestCase {
     }
 
     func test_theBubble_readsTheSharedTrack_insteadOfItsOwnConstants() throws {
-        let bubble = try source("MessageListView.swift")
+        let bubble = try source("BubbleSwipeContainer.swift")
         XCTAssertTrue(bubble.contains("BubbleSwipeResistance.trackedOffset(translation:"))
         XCTAssertTrue(bubble.contains("BubbleSwipeResistance.commits(offset:"))
         XCTAssertFalse(bubble.contains("let zone: CGFloat = 72"),

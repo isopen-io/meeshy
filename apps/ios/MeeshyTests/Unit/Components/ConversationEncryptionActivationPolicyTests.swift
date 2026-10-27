@@ -179,6 +179,8 @@ final class ConversationEncryptionActivationPolicyTests: XCTestCase {
         XCTAssertNil(ReadableDirectOpening.destination(opened: "c-e2ee", from: "c-e2ee", openedIsEndToEnd: false),
                      "une passerelle antérieure rend le tête-à-tête d'où l'on part")
         XCTAssertNil(ReadableDirectOpening.destination(opened: "c-other", from: "c-e2ee", openedIsEndToEnd: true))
+        XCTAssertTrue(ReadableDirectOpening.returnsTheServedGap(opened: "c-e2ee", from: "c-e2ee"))
+        XCTAssertFalse(ReadableDirectOpening.returnsTheServedGap(opened: "c-other", from: "c-e2ee"))
         XCTAssertNil(ReadableDirectOpening.destination(opened: "", from: "c-e2ee", openedIsEndToEnd: false))
     }
 }

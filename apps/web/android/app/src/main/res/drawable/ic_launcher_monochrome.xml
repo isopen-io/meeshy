@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- #13188 — le calque monochrome de l'icone adaptative (icones a theme,
+     Android 13+). Le systeme n'en lit que l'alpha et le teint lui-meme. Le
+     glyphe est celui de l'AppIcon iOS teintee, les trois traits de
+     ic_stat_meeshy.xml, poses dans la zone sure de 66 dp. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:pathData="M31.588,42.525 H76.412"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="7.082"
+        android:strokeLineCap="round" />
+    <path
+        android:pathData="M31.588,54 H67.447"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="7.082"
+        android:strokeLineCap="round" />
+    <path
+        android:pathData="M31.588,65.475 H58.483"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="7.082"
+        android:strokeLineCap="round" />
+</vector>

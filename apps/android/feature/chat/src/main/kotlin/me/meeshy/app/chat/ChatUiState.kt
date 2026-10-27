@@ -9,13 +9,11 @@ import me.meeshy.sdk.model.ActiveLiveLocation
 import me.meeshy.sdk.model.ComposerLanguage
 import me.meeshy.sdk.model.ComposerLanguageState
 import me.meeshy.sdk.model.EmojiCatalog
+import me.meeshy.sdk.model.EndToEndRegime
 import me.meeshy.sdk.model.LiveLocationEventFold
 import me.meeshy.sdk.model.LiveLocationSessions
 import me.meeshy.sdk.model.MessageEffects
 import me.meeshy.sdk.model.ParticipantPermissions
-import me.meeshy.sdk.model.PresenceState
-import me.meeshy.sdk.model.UserPresence
-import me.meeshy.sdk.model.UserStatusEvent
 import me.meeshy.sdk.model.call.ActiveCallSession
 import me.meeshy.ui.component.bubble.BubbleContent
 import me.meeshy.ui.component.bubble.MessageLanguageExplorer
@@ -106,18 +104,17 @@ data class ChatUiState(
      * or `null` if not this session. Advances the slow-mode cooldown. */
     val lastSelfSentAtMillis: Long? = null,
     /** The other participant's userId in a direct conversation (`null` for a group,
-     * or before the conversation has loaded) — the key [headerPresence] resolves
-     * against [presenceByUserId]. Port of iOS `ConversationView.headerPresenceState`'s
+     * or before the conversation has loaded) — the key the header resolves
+     * its presence dot from (`rememberPresence`). Port of iOS `ConversationView.headerPresenceState`'s
      * `conversation?.participantUserId` guard. */
     val directPeerUserId: String? = null,
-    /** Live `user:status`/`presence:snapshot` frames, keyed by userId — mirrors
-     * `ConversationListUiState.presenceByUserId`. */
-    val presenceByUserId: Map<String, UserStatusEvent> = emptyMap(),
     /** Mirrors the same `networkConditionMonitor` reading already threaded into
      * `toBubbles` (the per-message hourglass) — feeds the scroll-to-bottom control's
      * offline indicator ([ScrollControlContent.of]'s `isOffline`), port of iOS
      * `ConversationScrollControlsView.isOffline`. */
     val isOffline: Boolean = false,
+    /** Réciprocité des accusés (`privacy.showReadReceipts`) : qui cache les siens n'ouvre pas « Vu par ». */
+    val showReadReceipts: Boolean = true,
     /** The composer's live source-language state — the "smart context zone" pill.
      * Follows on-device detection as the viewer types, freezes at the 10-word lock,
      * and honours a manual pick from the language picker ([ComposerLanguageState]). */
@@ -148,11 +145,27 @@ data class ChatUiState(
      * member (null permissions) gets every affordance; a share-link guest is gated
      * to the capabilities the join hardened. */
     val composerAffordances: ComposerAffordances
-        get() = ComposerAttachmentPolicy.affordances(composerPermissions)
+        get() = if (isEndToEnd) ComposerAffordances.CLOSED else ComposerAttachmentPolicy.affordances(composerPermissions)
+
+    /**
+     * La conversation est servie chiffrée de bout en bout (#13110). L'Android natif ne
+     * sait ni chiffrer ni lire l'e2ee (#13015) : rien n'en part du fil — chaque porte
+     * d'envoi du composeur lit [composerAffordances] fermé, AVANT tout octet émis
+     * (texte, pièce, vocal, édition) —, et le composeur dit où elle s'écrit. Le
+     * transfert, le partage et les stories l'excluent par `mayCurrentUserWrite`.
+     *
+     * #12956 — le mode vient de la ligne Room, que `ConversationCacheSource` ne rétrograde
+     * jamais pour une conversation vue e2ee et que `conversation:encryption-changed` ferme à
+     * l'instant (`EndToEndRegimeKeeper`). Et un fil qui MONTRE un message scellé (e2ee, chiffré
+     * sans mode, pièce chiffrée) retient l'envoi tant qu'il le montre, même servi sans mode
+     * (#13099) : `EndToEndRegimeController` n'en apprend que ce qui prouve le régime.
+     */
+    val isEndToEnd: Boolean
+        get() = EndToEndRegime.isEndToEnd(encryptionMode) || messages.any { it.isEndToEndSealed || it.holdsEndToEndSend }
 
     /** Whether the reader may write here — what the message law reads before offering « Répondre ». */
     val viewerMayWrite: Boolean
-        get() = composerPermissions?.canSendMessages != false
+        get() = !isEndToEnd && composerPermissions?.canSendMessages != false
     val isEditing: Boolean get() = editingMessageId != null
 
     /** Whether the end-to-end-encryption notice sits at the top of the list — the
@@ -192,19 +205,6 @@ data class ChatUiState(
      */
     val replyThreadOverlay: ReplyThreadOverlayModel? get() =
         replyThreadParentId?.let { ReplyThreadOverlay.of(it, messages.map { m -> m.toThreadMessage() }) }
-
-    /**
-     * The chat header's live presence dot, or `null` for a group conversation or before any
-     * presence data has arrived for the peer — mirrors
-     * `ConversationListUiState.presenceStateFor`. Port of iOS
-     * `ConversationView.headerPresenceState`; unlike iOS the Android header has no avatar to
-     * dot, so this drives a small standalone indicator instead (see `ChatScreen`).
-     */
-    fun headerPresence(nowEpochMillis: Long): PresenceState? {
-        val id = directPeerUserId ?: return null
-        val event = presenceByUserId[id] ?: return null
-        return UserPresence(isOnline = event.isOnline, lastActiveAt = event.lastActiveAt).state(nowEpochMillis)
-    }
 }
 
 /**
@@ -216,6 +216,8 @@ data class ChatUiState(
  */
 data class ForwardUiState(
     val sourceMessageId: String,
+    /** The rest of a multi-selection forward (#13294), in thread order; they travel with the source. */
+    val additionalSourceMessageIds: List<String> = emptyList(),
     val query: String = "",
     val targets: List<ForwardTarget> = emptyList(),
     val sendingConversationId: String? = null,

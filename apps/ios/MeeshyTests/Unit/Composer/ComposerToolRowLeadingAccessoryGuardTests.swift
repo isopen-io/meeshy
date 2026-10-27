@@ -39,7 +39,7 @@ final class ComposerToolRowLeadingAccessoryGuardTests: XCTestCase {
             .deletingLastPathComponent()   // .../Unit
             .deletingLastPathComponent()   // .../MeeshyTests
             .deletingLastPathComponent()   // .../apps/ios
-            .appendingPathComponent("Meeshy/Features/Main/Composer")
+            .appendingPathComponent("Meeshy/Features/Composer")
     }
 
     /// Le corps d'une déclaration par appariement d'accolades — même patron que

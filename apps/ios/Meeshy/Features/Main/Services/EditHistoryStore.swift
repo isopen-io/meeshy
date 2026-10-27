@@ -49,8 +49,7 @@ final class EditHistoryStore: @unchecked Sendable {
     /// historiques dont la dernière révision est la plus ancienne sortent.
     private let maxTrackedMessages = 200
     private let encoder: JSONEncoder = {
-        let e = JSONEncoder()
-        e.dateEncodingStrategy = .iso8601
+        let e = MeeshyCoders.encoder(.persistence)
         return e
     }()
 
@@ -144,8 +143,7 @@ final class EditHistoryStore: @unchecked Sendable {
 
 private extension JSONDecoder {
     static let iso8601: JSONDecoder = {
-        let d = JSONDecoder()
-        d.dateDecodingStrategy = .iso8601
+        let d = MeeshyCoders.decoder(.persistence)
         return d
     }()
 }

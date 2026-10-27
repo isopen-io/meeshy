@@ -32,6 +32,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import me.meeshy.ui.component.chrome.floatingChromeLateralReserve
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
@@ -71,6 +72,7 @@ public fun CollapsibleSection(
     Column(modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
+                .floatingChromeLateralReserve()
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(MeeshyRadius.md))
                 .clickable { expanded = !expanded }

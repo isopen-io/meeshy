@@ -143,11 +143,11 @@ describe('le message reçu EN DIRECT garde son mode (#12983, audit B1)', () => {
 
 describe('le bouton « revenir en bas » (#12983, audit M2)', () => {
   test('se tait sur un message scellé, jamais le littéral', () => {
-    expect(unreadPreviewText(SEALED, '[Encrypted]')).toBeNull();
+    expect(unreadPreviewText(SEALED, '[Encrypted]', Date.now())).toBeNull();
   });
 
   test('montre le texte servi d’un message lisible', () => {
-    expect(unreadPreviewText(variant({ encryptionMode: 'server' }), 'Bonjour')).toBe('Bonjour');
+    expect(unreadPreviewText(variant({ encryptionMode: 'server' }), 'Bonjour', Date.now())).toBe('Bonjour');
   });
 });
 

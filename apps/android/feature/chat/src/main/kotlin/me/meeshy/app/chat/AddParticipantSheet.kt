@@ -36,6 +36,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.chat.R
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.sdk.model.UserPresence
+import me.meeshy.ui.component.rememberPresence
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 
@@ -153,7 +155,7 @@ private fun AddParticipantRowView(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
     ) {
-        MeeshyAvatar(name = row.name, size = 40.dp, containerColor = accentColor, imageUrl = row.avatarUrl)
+        MeeshyAvatar(name = row.name, size = 40.dp, containerColor = accentColor, imageUrl = row.avatarUrl, presence = rememberPresence(row.id, UserPresence.served(row.isOnline, null)))
 
         Column(modifier = Modifier.weight(1f)) {
             Text(

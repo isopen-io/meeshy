@@ -8,12 +8,19 @@ import androidx.navigation.navArgument
 import androidx.navigation.navDeepLink
 import me.meeshy.app.feed.BookmarksScreen
 import me.meeshy.app.feed.FeedScreen
+import me.meeshy.app.feed.HashtagResultsScreen
+import me.meeshy.app.feed.HashtagResultsViewModel
+import me.meeshy.app.feed.MoodSpotlightScreen
+import me.meeshy.app.feed.MoodSpotlightViewModel
 import me.meeshy.app.feed.NearbyScreen
 import me.meeshy.app.feed.PostDetailScreen
 import me.meeshy.app.feed.PostDetailViewModel
 import me.meeshy.app.navigation.Routes
+import me.meeshy.app.navigation.sheetComposable
 import me.meeshy.app.reels.ReelsScreen
+import me.meeshy.app.stories.MyStoriesScreen
 import me.meeshy.app.stories.StoryComposerScreen
+import me.meeshy.app.stories.StoryViewersSheet
 import me.meeshy.app.stories.StoryViewerScreen
 import me.meeshy.app.stories.StoryViewerViewModel
 
@@ -27,6 +34,33 @@ internal fun NavGraphBuilder.feedNavGraph(
             onOpenPost = { postId -> navController.navigate(Routes.postDetail(postId)) },
             onOpenReels = { navController.navigate(Routes.reels()) },
             onOpenNearby = { navController.navigate(Routes.NEARBY_DISCOVERY) },
+            onOpenProfile = { userId -> navController.navigate(Routes.profile(userId)) },
+            onOpenHashtag = { tag -> navController.navigate(Routes.hashtag(tag)) },
+        )
+    }
+    composable(
+        route = Routes.HASHTAG_RESULTS,
+        arguments = listOf(navArgument(HashtagResultsViewModel.TAG_ARG) { type = NavType.StringType }),
+    ) {
+        HashtagResultsScreen(
+            onBack = { navController.popBackStack() },
+            onPostClick = { postId -> navController.navigate(Routes.reels(seed = postId)) },
+            onOpenPost = { postId -> navController.navigate(Routes.postDetail(postId)) },
+            onOpenProfile = { userId -> navController.navigate(Routes.profile(userId)) },
+            onOpenHashtag = { tag -> navController.navigate(Routes.hashtag(tag)) },
+        )
+    }
+    composable(
+        route = Routes.MOOD_SPOTLIGHT,
+        arguments = listOf(navArgument(MoodSpotlightViewModel.STATUS_ID_ARG) { type = NavType.StringType }),
+    ) {
+        MoodSpotlightScreen(onClose = { navController.popBackStack() })
+    }
+    sheetComposable(Routes.MY_STORIES, navController) { _, dismiss ->
+        MyStoriesScreen(
+            onBack = dismiss,
+            onCreateStory = { navController.navigate(Routes.STORY_COMPOSER) },
+            onOpenStory = { userId -> navController.navigate(Routes.story(userId)) },
         )
     }
     composable(Routes.SAVED_POSTS) {
@@ -34,6 +68,7 @@ internal fun NavGraphBuilder.feedNavGraph(
             onBack = { navController.popBackStack() },
             onPostClick = { postId -> navController.navigate(Routes.reels(seed = postId)) },
             onOpenPost = { postId -> navController.navigate(Routes.postDetail(postId)) },
+            onOpenProfile = { userId -> navController.navigate(Routes.profile(userId)) },
         )
     }
     composable(Routes.NEARBY_DISCOVERY) {
@@ -41,6 +76,7 @@ internal fun NavGraphBuilder.feedNavGraph(
             onBack = { navController.popBackStack() },
             onPostClick = { postId -> navController.navigate(Routes.reels(seed = postId)) },
             onOpenPost = { postId -> navController.navigate(Routes.postDetail(postId)) },
+            onOpenProfile = { userId -> navController.navigate(Routes.profile(userId)) },
         )
     }
     composable(
@@ -53,6 +89,11 @@ internal fun NavGraphBuilder.feedNavGraph(
         PostDetailScreen(
             onBack = { navController.popBackStack() },
             onOpenPost = { postId -> navController.navigate(Routes.postDetail(postId)) },
+            onOpenProfile = { userId -> navController.navigate(Routes.profile(userId)) },
+            onOpenHashtag = { tag -> navController.navigate(Routes.hashtag(tag)) },
+            viewersSheet = { postId, onDismiss ->
+                StoryViewersSheet(storyId = postId, accentHex = "6366F1", onDismiss = onDismiss)
+            },
         )
     }
     composable(
@@ -78,6 +119,7 @@ internal fun NavGraphBuilder.feedNavGraph(
         StoryViewerScreen(
             onClose = { navController.popBackStack() },
             onRepost = { storyId -> navController.navigate(Routes.storyComposerRepost(storyId)) },
+            onOpenProfile = { userId -> navController.navigate(Routes.profile(userId)) },
         )
     }
     composable(

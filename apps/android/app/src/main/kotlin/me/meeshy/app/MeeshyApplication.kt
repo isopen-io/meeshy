@@ -15,6 +15,7 @@ import me.meeshy.app.settings.CrashDiagnosticsRecorder
 import me.meeshy.app.startup.AppInitializerRunner
 import me.meeshy.sdk.socket.AppStatePresenceReporter
 import me.meeshy.sdk.socket.CallSignalManager
+import me.meeshy.sdk.socket.PresenceStore
 import me.meeshy.sdk.socket.SocketManager
 import timber.log.Timber
 import javax.inject.Inject
@@ -30,6 +31,9 @@ class MeeshyApplication : Application(), Configuration.Provider {
 
     @Inject
     lateinit var socketManager: SocketManager
+
+    @Inject
+    lateinit var presenceStore: PresenceStore
 
     @Inject
     lateinit var callSignalManager: CallSignalManager
@@ -62,6 +66,8 @@ class MeeshyApplication : Application(), Configuration.Provider {
         // so a channel only ever created there would still be missing exactly when it's
         // needed most. See NotificationChannelIds for the full gateway-drift rationale.
         notificationChannelInstaller.install()
+        // La carte de présence s'abonne AVANT toute connexion : les flux socket sont chauds sans rejeu.
+        presenceStore.start()
         installAppStatePresence()
         appInitializerRunner.runAll()
     }

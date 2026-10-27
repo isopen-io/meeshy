@@ -36,7 +36,7 @@ import {
 /**
  * LE MAPPING MESSAGES → LOI, prouvé par les 61 vecteurs partagés — #5696,
  * étape 3 (§4.1 de la spécification). Miroir de `RiverConversationMapping`
- * (Core, `apps/ios/Meeshy/Features/Main/Riviere/Core/
+ * (Core, `apps/ios/Meeshy/Features/River/Core/
  * RiverConversationMapping.swift`).
  */
 

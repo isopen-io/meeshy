@@ -2,7 +2,6 @@ package me.meeshy.app.stories
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -65,6 +64,7 @@ fun StoryTray(
     onOpenStory: (String) -> Unit,
     modifier: Modifier = Modifier,
     onAddStory: () -> Unit = {},
+    onManageStories: () -> Unit = {},
     onShowProfile: ((String) -> Unit)? = null,
     moodEmojiOf: (String) -> String? = { null },
     viewModel: StoriesViewModel = hiltViewModel(),
@@ -107,12 +107,13 @@ fun StoryTray(
                             onOpen = { onOpenStory(selfRing.userId) },
                             onShowProfile = onShowProfile?.let { open -> { open(selfRing.userId) } },
                             onAdd = onAddStory,
+                            onManage = onManageStories,
                             onAppeared = impressions::onRingAppeared,
                         )
                     }
                 } else {
                     item(key = "add", contentType = ADD_CONTENT_TYPE) {
-                        AddStoryItem(onClick = onAddStory)
+                        AddStoryItem(onClick = onAddStory, onManage = onManageStories)
                     }
                 }
                 itemsIndexed(tray.others, key = { _, ring -> ring.userId }, contentType = { _, _ -> RING_CONTENT_TYPE }) { index, ring ->
@@ -256,15 +257,26 @@ private fun StoryTraySkeleton(modifier: Modifier = Modifier) {
 private const val SKELETON_PLACEHOLDER_COUNT = 4
 
 @Composable
-private fun AddStoryItem(onClick: () -> Unit) {
+@OptIn(ExperimentalFoundationApi::class)
+private fun AddStoryItem(onClick: () -> Unit, onManage: () -> Unit) {
     val addLabel = stringResource(R.string.stories_my_story)
+    var menuOpen by remember { mutableStateOf(false) }
     Column(
         modifier = Modifier
             .width(StoryEntryMetrics.labelWidth)
-            .clickable(onClick = onClick)
+            .combinedClickable(onClick = onClick, onLongClick = { menuOpen = true })
             .semantics { role = Role.Button; contentDescription = addLabel },
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
+        StoryRingMenu(
+            expanded = menuOpen,
+            onDismiss = { menuOpen = false },
+            onViewStories = { menuOpen = false },
+            onShowProfile = null,
+            selfActions = StoryTraySelfMenu.actions(null),
+            onAdd = { menuOpen = false; onClick() },
+            onManage = { menuOpen = false; onManage() },
+        )
         Box(
             modifier = Modifier
                 .size(StoryEntryMetrics.ring)

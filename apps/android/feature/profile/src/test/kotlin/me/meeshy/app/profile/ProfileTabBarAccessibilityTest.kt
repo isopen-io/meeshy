@@ -16,6 +16,8 @@ import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
 import com.google.common.truth.Truth.assertThat
@@ -45,9 +47,9 @@ class ProfileTabBarAccessibilityTest {
     private val details = context.getString(R.string.profile_tab_details)
     private val selections = mutableListOf<ProfileTab>()
 
-    private fun tabBar() = compose.setContent {
+    private fun tabBar(width: androidx.compose.ui.unit.Dp = 420.dp) = compose.setContent {
         MeeshyTheme(darkTheme = false) {
-            Box(Modifier.requiredWidth(420.dp)) {
+            Box(Modifier.requiredWidth(width)) {
                 var selected by remember { mutableStateOf(ProfileTab.DEFAULT) }
                 ProfileTabBar(
                     selected = selected,
@@ -88,6 +90,24 @@ class ProfileTabBarAccessibilityTest {
 
         listOf(posts, conversations, details).forEach { title ->
             compose.onNodeWithText(title).assertHeightIsAtLeast(48.dp)
+        }
+    }
+
+    @Test
+    fun `a 360 dp l'onglet choisi garde son soulignement sur toute sa largeur et chaque libelle tient sur une ligne`() {
+        tabBar(width = 360.dp)
+
+        val underline = compose.onNodeWithTag("$PROFILE_TAB_UNDERLINE_TAG-${ProfileTab.DETAILS.name}", useUnmergedTree = true)
+            .getBoundsInRoot()
+        val tab = compose.onNodeWithText(details).getBoundsInRoot()
+        assertThat((underline.right - underline.left).value).isWithin(0.5f).of((tab.right - tab.left).value)
+        listOf(posts, conversations, details).forEach { title ->
+            val layouts = mutableListOf<androidx.compose.ui.text.TextLayoutResult>()
+            compose.onNodeWithText(title, useUnmergedTree = true).fetchSemanticsNode()
+                .config[androidx.compose.ui.semantics.SemanticsActions.GetTextLayoutResult].action?.invoke(layouts)
+            assertThat(layouts.single().lineCount).isEqualTo(1)
+            val layout = layouts.single()
+            assertThat(layout.isLineEllipsized(layout.lineCount - 1)).isFalse()
         }
     }
 }

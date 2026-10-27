@@ -1,6 +1,23 @@
 package me.meeshy.app.calls
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.Icon
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import me.meeshy.ui.icons.MeeshyIcons
+import me.meeshy.ui.motion.pressable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -43,12 +60,15 @@ internal fun IncomingCallScreen(
     onAccept: () -> Unit,
     onDecline: () -> Unit,
     modifier: Modifier = Modifier,
+    onDeclineWithMessage: ((String) -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val haptics = LocalHapticFeedback.current
     val announce = rememberCallAnnouncer()
     val title = callPeerTitle(state.peerName)
     val typeLabel = stringResource(if (state.isVideoCall) R.string.call_incoming_video else R.string.call_incoming_audio)
+
+    var declineSheetOpen by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         announce(context.getString(R.string.call_incoming_a11y, typeLabel, title))
@@ -83,6 +103,15 @@ internal fun IncomingCallScreen(
             ),
         )
         Spacer(Modifier.weight(1f))
+        if (onDeclineWithMessage != null) {
+            DeclineWithMessageButton(
+                onClick = {
+                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    declineSheetOpen = true
+                },
+            )
+            Spacer(Modifier.height(MeeshySpacing.xl))
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(60.dp), verticalAlignment = Alignment.Top) {
             IncomingAction(
                 icon = Icons.Filled.CallEnd,
@@ -107,6 +136,46 @@ internal fun IncomingCallScreen(
                 },
             )
         }
+    }
+
+    if (declineSheetOpen && onDeclineWithMessage != null) {
+        CallDeclineSheet(
+            reduceMotion = reduceMotion,
+            onSend = { text ->
+                declineSheetOpen = false
+                onDeclineWithMessage(text)
+            },
+            onDismiss = { declineSheetOpen = false },
+        )
+    }
+}
+
+/** « Message » : la capsule de verre qui ouvre les réponses rapides (iOS `declineWithMessageButton`). */
+@Composable
+private fun DeclineWithMessageButton(onClick: () -> Unit) {
+    val label = stringResource(R.string.call_decline_open)
+    val description = stringResource(R.string.call_decline_open_label)
+    val hint = stringResource(R.string.call_decline_open_hint)
+    Row(
+        modifier = Modifier
+            .pressable()
+            .defaultMinSize(minHeight = 48.dp)
+            .clip(CircleShape)
+            .background(Color.White.copy(alpha = 0.16f))
+            .clickable(onClickLabel = hint, role = Role.Button, onClick = onClick)
+            .semantics { contentDescription = description }
+            .padding(horizontal = MeeshySpacing.xl),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
+    ) {
+        Icon(MeeshyIcons.MessageFilled, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Medium,
+            color = Color.White,
+            modifier = Modifier.clearAndSetSemantics { },
+        )
     }
 }
 

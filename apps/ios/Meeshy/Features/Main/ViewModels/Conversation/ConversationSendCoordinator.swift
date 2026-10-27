@@ -186,7 +186,7 @@ final class ConversationSendCoordinator: ConversationSendCoordinatorProviding {
     func withdraw(localId: String) async {
         let store = persistence
         await bestEffort("send.withdraw", category: .messages, recorder: recorder) {
-            try await store.purgeMessages(ids: [localId])
+            try await store.purgeMessages(ids: [localId], origin: .authenticated)
         }
     }
 

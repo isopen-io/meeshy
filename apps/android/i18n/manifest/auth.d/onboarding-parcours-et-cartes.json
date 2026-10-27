@@ -1,0 +1,475 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:auth": {
+      "resDir": "feature/auth/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.later",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.languages.title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.languages.body",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.languages.confirm",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.languages.primary",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.languages.primary.a11y",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.languages.secondary",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.languages.change",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.languages.failed",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.email.title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.email.body",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.email.address",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.email.resend",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.email.sent",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.email.failed",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.email.waiting",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.age.title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.age.body",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.age.confirm",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.age.skip",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.age.picker",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.age.picker.hint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.age.invalid",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.age.failed",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.age.refused.title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.age.refused.body",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.age.refused.signOut",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.global.title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.global.body",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.global.send",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.global.retry",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.global.placeholder",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.global.hint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.global.failed",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.global.sent",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.global.editor.a11y",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.story.title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.story.body",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.story.create",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.story.published",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.story.audience.friends",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.story.audience.public",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.story.verify",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.story.verify.detail",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.friends.title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.friends.body",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.friends.add",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.friends.add.a11y",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.friends.added",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.friends.added.a11y",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.friends.more",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.friends.pending",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.friends.failed",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.friends.row.a11y",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.contacts.offer.title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.contacts.offer.body",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.contacts.offer.find",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.contacts.offer.promise",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.contacts.found.title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.contacts.found.body",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.contacts.none.title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.contacts.none.body",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.contacts.invite",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.contacts.invite.message",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.contacts.failed",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.contacts.settings",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.notifications.title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.notifications.body",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.notifications.yes",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.notifications.no",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.recap.title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.recap.body",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.recap.empty",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.recap.tomorrow",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.recap.explore",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.recap.done",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.recap.points",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.recap.level",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.recap.streak",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.recap.badges",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.recap.game",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.greeting.1",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.greeting.2",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.greeting.3",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.greeting.4",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.greeting.5",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.greeting.6",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.greeting.7",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.greeting.8",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.global.reward",
+          "status": "adopted",
+          "kind": "plurals",
+          "fillMissingQuantities": true
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.story.reward",
+          "status": "adopted",
+          "kind": "plurals",
+          "fillMissingQuantities": true
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.continue",
+          "androidName": "onboarding_card_continue",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

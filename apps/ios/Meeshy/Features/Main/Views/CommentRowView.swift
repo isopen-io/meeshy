@@ -111,7 +111,6 @@ struct CommentRowView: View, Equatable {
     }
 
     private var theme: ThemeManager { ThemeManager.shared }
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.meeshyMoodEmojiResolver) private var moodEmojiResolver
     @Environment(\.meeshyMoodTapResolver) private var moodTapResolver
     @State private var selectedProfileUser: ProfileSheetUser?
@@ -123,16 +122,39 @@ struct CommentRowView: View, Equatable {
     @State private var translationRequested = false
 
     private var avatarContext: AvatarContext { .postComment }
+    private var readerLanguages: [String] { ReaderPrism.resolve(for: AuthManager.shared.currentUser) }
     private var contentFont: CGFloat { isReply ? 14 : 15 }
     private var authorFont: CGFloat { isReply ? 13 : 14 }
 
-    private var hasTranslation: Bool {
-        comment.translatedContent != nil && comment.originalLanguage != nil
+    private var effectiveCommentContent: String { comment.shownText(showOriginal: showOriginal) }
+
+    private var likeLook: CommentLikeButton.Look {
+        let heartColor: Color = isLiked ? MeeshyColors.error : (likeCount > 0 ? Color(hex: accentColor) : theme.textMuted)
+        return CommentLikeButton.Look(
+            accentHex: accentColor, inactiveTint: heartColor, countColor: heartColor,
+            countFont: MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium),
+            glyphSize: isReply ? 12 : 14, likedScale: 1.1, spacing: MeeshySpacing.xs,
+            filledWhenInactive: likeCount > 0)
     }
 
-    private var effectiveCommentContent: String {
-        if showOriginal { return comment.content }
-        return comment.displayContent
+    /// Pas encore de traduction vers la langue préférée : « Traduire » à la
+    /// demande (langues hors des 5 pré-générées comprises) — le résultat
+    /// remplit la ligne via `comment:translation-updated`.
+    @ViewBuilder private var translationRequestButton: some View {
+        if let onRequestTranslation, comment.offersTranslationRequest(readerLanguages: readerLanguages) {
+            Button {
+                guard !translationRequested else { return }
+                translationRequested = true
+                onRequestTranslation()
+                HapticFeedback.light()
+            } label: {
+                Image(systemName: translationRequested ? "hourglass" : "translate")
+                    .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .medium))
+                    .foregroundColor(MeeshyColors.indigo400.opacity(translationRequested ? 0.5 : 1))
+            }
+            .accessibilityLabel(String(localized: "feed.comments.translate", defaultValue: "Traduire", bundle: .main))
+            .meeshyTapTarget(MeeshyControlSize.tapTarget)
+        }
     }
 
     var body: some View {
@@ -156,7 +178,15 @@ struct CommentRowView: View, Equatable {
             .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: isReply ? 4 : 6) {
-                HStack(spacing: MeeshySpacing.xs) {
+                CommentAuthorHeader(
+                    comment: comment, readerLanguages: readerLanguages, showOriginal: $showOriginal,
+                    metrics: .standard, spacing: MeeshySpacing.xs,
+                    separatorFont: MeeshyFont.relative(MeeshyFont.smallSize), separatorColor: theme.textMuted,
+                    time: Text(RelativeTimeFormatter.shortString(for: comment.timestamp))
+                        .font(MeeshyFont.relative(MeeshyFont.smallSize))
+                        .foregroundColor(theme.textMuted)
+                        .accessibilityHidden(true)
+                ) {
                     Text(comment.author)
                         .font(MeeshyFont.relative(authorFont, weight: .semibold))
                         .foregroundColor(Color(hex: comment.authorColor))
@@ -167,53 +197,8 @@ struct CommentRowView: View, Equatable {
                         .accessibilityAddTraits(.isButton)
                         .accessibilityLabel(String(format: String(localized: "a11y.comment.author_profile", defaultValue: "Profil de %@", bundle: .main), comment.author))
                         .accessibilityHint(String(localized: "a11y.comment.author_profile.hint", defaultValue: "Ouvre le profil de l'auteur", bundle: .main))
-
-                    if hasTranslation {
-                        MetaSeparator().font(MeeshyFont.relative(MeeshyFont.smallSize)).foregroundColor(theme.textMuted)
-
-                        LanguageFlagChip(code: comment.originalLanguage ?? "", isActive: showOriginal) {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                showOriginal = true
-                            }
-                        }
-
-                        let userLangs = ReaderPrism.resolve(for: AuthManager.shared.currentUser)
-                        let targetLang = comment.servedLanguage(preferredLanguages: userLangs)?.lowercased() ?? userLangs.first?.lowercased() ?? "fr"
-                        LanguageFlagChip(code: targetLang, isActive: !showOriginal) {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                showOriginal = false
-                            }
-                        }
-
-                        TranslationsBadge()
-                    } else if let onRequestTranslation,
-                              comment.originalLanguage != nil,
-                              comment.originalLanguage?.lowercased()
-                                != (ReaderPrism.resolve(for: AuthManager.shared.currentUser).first?.lowercased() ?? "fr") {
-                        // Pas encore de traduction vers la langue préférée :
-                        // « Traduire » à la demande (langues hors des 5
-                        // pré-générées comprises) — le résultat remplit la
-                        // ligne via `comment:translation-updated`.
-                        Button {
-                            guard !translationRequested else { return }
-                            translationRequested = true
-                            onRequestTranslation()
-                            HapticFeedback.light()
-                        } label: {
-                            Image(systemName: translationRequested ? "hourglass" : "translate")
-                                .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .medium))
-                                .foregroundColor(MeeshyColors.indigo400.opacity(translationRequested ? 0.5 : 1))
-                        }
-                        .accessibilityLabel(String(localized: "feed.comments.translate", defaultValue: "Traduire", bundle: .main))
-                        .meeshyTapTarget(MeeshyControlSize.tapTarget)
-                    }
-
-                    MetaSeparator().font(MeeshyFont.relative(MeeshyFont.smallSize)).foregroundColor(theme.textMuted)
-
-                    Text(RelativeTimeFormatter.shortString(for: comment.timestamp))
-                        .font(MeeshyFont.relative(MeeshyFont.smallSize))
-                        .foregroundColor(theme.textMuted)
-                        .accessibilityHidden(true)
+                } translationOffer: {
+                    translationRequestButton
                 }
 
                 // **Le CORPS du commentaire** — texte, citation, média — porte ses
@@ -289,48 +274,13 @@ struct CommentRowView: View, Equatable {
                 }
 
                 HStack(spacing: MeeshySpacing.xl) {
-                    Button {
-                        withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.6)) {
-                            onLikeComment?()
-                        }
+                    // Le contour d'accent — « c'est MOI qui ai liké » ;
+                    // `filledWhenInactive` garde le cœur plein dès qu'il existe
+                    // des likes, sans revendiquer les miens.
+                    CommentLikeButton(isLiked: isLiked, likeCount: likeCount, isInFlight: isInFlight, look: likeLook) {
+                        onLikeComment?()
                         HapticFeedback.light()
-                    } label: {
-                        HStack(spacing: MeeshySpacing.xs) {
-                            let heartColor: Color = isLiked ? MeeshyColors.error : (likeCount > 0 ? Color(hex: accentColor) : theme.textMuted)
-                            // Le contour d'accent — « c'est MOI qui ai liké » —
-                            // manquait ici alors que le fil des posts le porte
-                            // depuis toujours : un commentaire que j'avais aimé
-                            // ne se distinguait que par sa teinte, la même que
-                            // celle d'un commentaire simplement aimé par
-                            // d'autres. `filledWhenInactive` garde le cœur plein
-                            // dès qu'il existe des likes, sans revendiquer les
-                            // miens.
-                            EngagementGlyph(
-                                outline: "heart",
-                                filled: "heart.fill",
-                                participated: isLiked,
-                                accentHex: accentColor,
-                                activeTint: MeeshyColors.error,
-                                inactiveTint: heartColor,
-                                filledWhenInactive: likeCount > 0,
-                                size: isReply ? 12 : 14
-                            )
-                            .scaleEffect(isLiked ? 1.1 : 1.0)
-
-                            Text("\(likeCount)")
-                                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
-                                .foregroundColor(heartColor)
-                        }
                     }
-                    .disabled(isInFlight)
-                    .frame(minHeight: 44)
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityAddTraits(.isButton)
-                    .accessibilityLabel(isLiked
-                        ? String(localized: "a11y.comment.unlike", defaultValue: "Je n'aime plus", bundle: .main)
-                        : String(localized: "a11y.comment.like", defaultValue: "J'aime", bundle: .main))
-                    .accessibilityValue(LocalizedNumber.exact(likeCount))
-                    .accessibilityHint(String(localized: "a11y.comment.like.hint", defaultValue: "Aimer ce commentaire", bundle: .main))
 
                     // Réponses plates à 2 niveaux : on peut répondre à un commentaire
                     // racine OU à une réponse, mais une réponse-de-réponse reste affichée

@@ -22,6 +22,7 @@ class MessageActionMenuTest {
         hasOpenableFile: Boolean = false,
         isEdited: Boolean = false,
         hasText: Boolean = true,
+        hasPlace: Boolean = false,
         hostedEntries: Set<MessageAction> = emptySet(),
         exitOffer: MessageExitOffer = MessageExitOffer.Unrestricted,
     ) = MessageActionContext(
@@ -38,6 +39,7 @@ class MessageActionMenuTest {
         hasOpenableFile = hasOpenableFile,
         isEdited = isEdited,
         hasText = hasText,
+        hasPlace = hasPlace,
         hostedEntries = hostedEntries,
         exitOffer = exitOffer,
     )
@@ -353,6 +355,15 @@ class MessageActionMenuTest {
 
     // MARK: - detail / selection entries
 
+    @Test
+    fun a_message_with_a_place_offers_the_map_fiche_once_hosted() {
+        val hosted = setOf(MessageAction.Map)
+        assertThat(MessageActionMenu.actions(ctx(hasPlace = true, hostedEntries = hosted))).contains(MessageAction.Map)
+        assertThat(MessageActionMenu.actions(ctx(hasPlace = false, hostedEntries = hosted))).doesNotContain(MessageAction.Map)
+        assertThat(MessageActionMenu.actions(ctx(hasPlace = true))).doesNotContain(MessageAction.Map)
+        assertThat(hostedDetailEntries(showReadReceipts = false)).contains(MessageAction.Map)
+    }
+
     private val allHosted = setOf(
         MessageAction.Views, MessageAction.History, MessageAction.Sentiment,
         MessageAction.Select, MessageAction.ExportCard,
@@ -420,5 +431,13 @@ class MessageActionMenuTest {
         val actions = MessageActionMenu.actions(ctx(isOutgoing = true, hostedEntries = allHosted))
         assertThat(actions).containsAtLeast(MessageAction.Views, MessageAction.Sentiment)
         assertThat(actions).doesNotContain(MessageAction.Report)
+    }
+
+    @Test
+    fun `an end-to-end message this device cannot open is neither copied nor forwarded (#13110)`() {
+        val actions = MessageActionMenu.actions(ctx().copy(isEndToEndSealed = true))
+
+        assertThat(actions).doesNotContain(MessageAction.Copy)
+        assertThat(actions).doesNotContain(MessageAction.Forward)
     }
 }

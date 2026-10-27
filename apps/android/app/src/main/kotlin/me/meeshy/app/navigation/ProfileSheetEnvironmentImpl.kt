@@ -7,12 +7,9 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapNotNull
-import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.onStart
-import kotlinx.coroutines.flow.transform
 import me.meeshy.app.conversations.ConversationStoryRing
 import me.meeshy.app.profile.ProfileLiveSigns
 import me.meeshy.app.profile.ProfileSheetEnvironment
@@ -20,10 +17,9 @@ import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.cache.valueOrNull
 import me.meeshy.sdk.model.StatusEntry
 import me.meeshy.sdk.model.StoryGroup
-import me.meeshy.sdk.model.UserStatusEvent
+import me.meeshy.sdk.model.UserPresence
 import me.meeshy.sdk.session.SessionRepository
-import me.meeshy.sdk.socket.MessageSocketManager
-import me.meeshy.sdk.socket.TypingPresenceRelay
+import me.meeshy.sdk.socket.PresenceStore
 import me.meeshy.sdk.status.StatusBarCache
 import me.meeshy.sdk.status.StatusFeedMode
 import me.meeshy.sdk.status.statusForUser
@@ -37,7 +33,7 @@ import me.meeshy.ui.component.StoryRingState
  * humeurs en cache et l'horloge.
  */
 internal class ProfileLiveSources(
-    val presence: Flow<UserStatusEvent>,
+    val presence: (userId: String) -> Flow<UserPresence?>,
     val storyGroups: Flow<List<StoryGroup>>,
     val moods: () -> List<StatusEntry>,
     val nowMillis: () -> Long,
@@ -47,8 +43,8 @@ internal class ProfileLiveSources(
  * Le [ProfileSheetEnvironment] réel, construit par `:app` (miroir des closures `presenceProvider`,
  * `storyRingState`, `moodEmoji` et `onViewStory` que la racine iOS passe à `UserProfileSheet`) :
  * les sorties de la feuille deviennent des navigations différées, et ses signes en direct viennent
- * des MÊMES sources que la liste de conversations — `user:status`, `presence:snapshot` et
- * `typing:start` forcé au vert pour la présence, le plateau de stories pour l'anneau, la barre
+ * de la MÊME carte de présence que toutes les surfaces ([PresenceStore] : `user:status`,
+ * `presence:snapshot` et frappe) pour la présence, le plateau de stories pour l'anneau, la barre
  * d'humeurs pour l'humeur. Aucune présence n'est fabriquée : sans entrée, la fiche retombe sur le
  * cliché REST du profil.
  */
@@ -56,19 +52,14 @@ class ProfileSheetEnvironmentImpl internal constructor(private val sources: Prof
 
     @Inject
     constructor(
-        messageSocketManager: MessageSocketManager,
-        typingPresenceRelay: TypingPresenceRelay,
+        presenceStore: PresenceStore,
         storyRepository: StoryRepository,
         statusBarCache: StatusBarCache,
         sessionRepository: SessionRepository,
         clock: CacheClock,
     ) : this(
         ProfileLiveSources(
-            presence = merge(
-                messageSocketManager.userStatus,
-                typingPresenceRelay.forcedOnline,
-                messageSocketManager.presenceSnapshot.transform { snapshot -> snapshot.users.forEach { emit(it) } },
-            ),
+            presence = presenceStore::entryOf,
             storyGroups = storyRepository.storiesStream()
                 .mapNotNull { it.valueOrNull }
                 .map { posts -> posts.toStoryGroups(currentUserId = sessionRepository.currentUserId, nowMillis = clock.nowMillis()) },
@@ -83,9 +74,7 @@ class ProfileSheetEnvironmentImpl internal constructor(private val sources: Prof
      * humeur. Une source en panne n'éteint pas les autres.
      */
     fun signsFor(userId: String): Flow<ProfileLiveSigns> {
-        val presence: Flow<UserStatusEvent?> = sources.presence
-            .filter { it.userId == userId }
-            .map<UserStatusEvent, UserStatusEvent?> { it }
+        val presence: Flow<UserPresence?> = sources.presence(userId)
             .onStart { emit(null) }
             .catch { emit(null) }
         val ring: Flow<StoryRingState> = sources.storyGroups

@@ -19,6 +19,12 @@ interface TokenStore {
     var userId: String?
     val isAuthenticated: Boolean
     fun clear()
+
+    /**
+     * Of [candidates], the accounts whose session sleeps in the vault — what makes "stay signed in"
+     * worth offering (iOS `hasPreservedSession`). A store without a per-account vault holds none.
+     */
+    fun accountsWithTokens(candidates: Collection<String>): Set<String> = emptySet()
 }
 
 /** Volatile token store — for tests and previews. */

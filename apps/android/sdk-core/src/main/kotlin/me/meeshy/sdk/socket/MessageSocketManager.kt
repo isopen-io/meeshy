@@ -28,6 +28,7 @@ import me.meeshy.sdk.model.MessagePinnedEvent
 import me.meeshy.sdk.model.MessageUnpinnedEvent
 import me.meeshy.sdk.model.AudioTranslationEvent
 import me.meeshy.sdk.model.AttachmentUpdatedEvent
+import me.meeshy.sdk.model.ConversationEncryptionChangedSocketEvent
 import me.meeshy.sdk.model.ConversationUpdatedSocketEvent
 import me.meeshy.sdk.model.PresenceSnapshotEvent
 import me.meeshy.sdk.model.ParticipantJoinedEvent
@@ -87,6 +88,7 @@ class MessageSocketManager @Inject constructor(
     private val _audioTranslationReady = SocketInboundRoute.subject<AudioTranslationEvent>()
     private val _attachmentUpdated = SocketInboundRoute.subject<AttachmentUpdatedEvent>()
     private val _conversationUpdated = SocketInboundRoute.subject<ConversationUpdatedSocketEvent>()
+    private val _encryptionChanged = SocketInboundRoute.subject<ConversationEncryptionChangedSocketEvent>()
     private val _conversationDeleted = SocketInboundRoute.subject<ConversationDeletedSocketEvent>()
     private val _conversationRestored = SocketInboundRoute.subject<ConversationRestoredSocketEvent>()
     private val _conversationClosed = SocketInboundRoute.subject<ConversationClosedSocketEvent>()
@@ -142,6 +144,8 @@ class MessageSocketManager @Inject constructor(
     val audioTranslationReady: SharedFlow<AudioTranslationEvent> = _audioTranslationReady.asSharedFlow()
     val attachmentUpdated: SharedFlow<AttachmentUpdatedEvent> = _attachmentUpdated.asSharedFlow()
     val conversationUpdated: SharedFlow<ConversationUpdatedSocketEvent> = _conversationUpdated.asSharedFlow()
+    /** `conversation:encryption-changed` (#12956) — `EndToEndRegimeBinding` en retient l'activation e2ee. */
+    val encryptionChanged: SharedFlow<ConversationEncryptionChangedSocketEvent> = _encryptionChanged.asSharedFlow()
     val conversationDeleted: SharedFlow<ConversationDeletedSocketEvent> = _conversationDeleted.asSharedFlow()
     val conversationRestored: SharedFlow<ConversationRestoredSocketEvent> = _conversationRestored.asSharedFlow()
     val conversationClosed: SharedFlow<ConversationClosedSocketEvent> = _conversationClosed.asSharedFlow()
@@ -219,6 +223,7 @@ class MessageSocketManager @Inject constructor(
         route(SocketEventNames.AUDIO_TRANSLATION_READY, _audioTranslationReady)
         route(SocketEventNames.MESSAGE_ATTACHMENT_UPDATED, _attachmentUpdated)
         route(SocketEventNames.CONVERSATION_UPDATED, _conversationUpdated)
+        route(SocketEventNames.CONVERSATION_ENCRYPTION_CHANGED, _encryptionChanged)
         route(SocketEventNames.CONVERSATION_DELETED, _conversationDeleted)
         route(SocketEventNames.CONVERSATION_RESTORED, _conversationRestored)
         route(SocketEventNames.CONVERSATION_CLOSED, _conversationClosed)

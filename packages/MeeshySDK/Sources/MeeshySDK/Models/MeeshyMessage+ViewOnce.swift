@@ -18,7 +18,7 @@ public extension MeeshyMessage {
     /// message : sa légende, elle, est le contenu du message, et se protège
     /// avec la photo.
     var holdsViewOnce: Bool {
-        isViewOnce || viewOnceOpenedAt != nil || attachments.contains { $0.isViewOnce }
+        isViewOnce || viewOnceOpenedAt != nil || attachments.contains { $0.declaresViewOnce }
     }
 
     /// CE lecteur l'a-t-il déjà ouverte (#7579) ? Permanent, et par personne :
@@ -66,9 +66,23 @@ public extension MeeshyMessage {
     /// Les drapeaux qui décident du chrome de protection : ceux du message,
     /// complétés par la vue unique d'une pièce.
     var protectionFlags: MessageEffectFlags {
-        guard !effects.flags.contains(.viewOnce), attachments.contains(where: { $0.isViewOnce }) else {
+        guard !effects.flags.contains(.viewOnce), attachments.contains(where: { $0.declaresViewOnce }) else {
             return effects.flags
         }
         return effects.flags.union(.viewOnce)
+    }
+}
+
+public extension MeeshyMessageAttachment {
+    /// La pièce est-elle à vue unique, par son champ OU par ses seuls
+    /// `effectFlags` (#13109) ? Une charge qui ne pose que les drapeaux reste
+    /// protégée.
+    var declaresViewOnce: Bool {
+        isViewOnce || MessageEffectFlags(rawValue: effectFlags ?? 0).contains(.viewOnce)
+    }
+
+    /// La pièce est-elle floutée, par son champ OU par ses seuls `effectFlags` ?
+    var declaresBlur: Bool {
+        isBlurred || MessageEffectFlags(rawValue: effectFlags ?? 0).contains(.blurred)
     }
 }

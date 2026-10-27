@@ -40,7 +40,8 @@ final class ExtensionShareDispatcherTests: XCTestCase {
             createDirect: { userId, _ in
                 log.created.append(userId)
                 return ExtensionShareDispatcher.CreatedDirect(id: "direct-\(userId)", isEncrypted: directIsEncrypted)
-            }
+            },
+            remembersEndToEnd: { _ in false }
         )
         return (sut, log)
     }

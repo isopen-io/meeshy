@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:settings": {
+      "resDir": "feature/settings/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "settings.section.transcription",
+          "androidName": "settings_section_transcription",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.transcription.auto",
+          "androidName": "settings_transcription_auto",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.transcription.engine",
+          "androidName": "settings_transcription_engine",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.transcription.engine.a11y",
+          "androidName": "settings_transcription_engine_a11y",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

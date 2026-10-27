@@ -62,7 +62,7 @@ final class GameSparkPairsTests: XCTestCase {
         XCTAssertEqual(try catalogValue("game.sparks.levelRecord.line", "fr"), "Ta plus haute lumière : niveau %@")
         let format = try catalogValue("game.sparks.levelRecord.line", Self.runningLanguage)
         XCTAssertEqual(GameSparksCopy.levelRecordLine(40), format.replacingOccurrences(of: "%@", with: GameCopy.formatCount(40)))
-        let row = try AppSourceGuard.unit("Meeshy/Features/Main/Game/GameSparkPairs.swift")
+        let row = try AppSourceGuard.unit("Meeshy/Features/Game/GameSparkPairs.swift")
         XCTAssertTrue(row.contains("small: GameSparksCopy.levelRecordLine(pairs.levelMax)"), "la paire du niveau dit son record")
     }
 
@@ -110,7 +110,7 @@ final class GameSparkPairsTests: XCTestCase {
     }
 
     func test_theHero_showsBothPairs() throws {
-        let hero = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Game/GameHeroView.swift"))
+        let hero = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Game/GameHeroView.swift"))
         XCTAssertTrue(hero.contains("GameSparkPairsRow(pairs: GameSparkPairs(game.level))"))
     }
 }

@@ -4,6 +4,7 @@ import androidx.compose.runtime.Immutable
 import me.meeshy.sdk.model.BlurRevealLifecycle
 import me.meeshy.sdk.model.MessageEffects
 import me.meeshy.sdk.model.MessageExitOffer
+import me.meeshy.sdk.model.profile.ProfileSheetUser
 
 @Immutable
 sealed class DeliveryStatus {
@@ -34,7 +35,25 @@ public data class BubbleContent(
     val originalText: String?,
     val languageStrip: List<LanguageChip> = emptyList(),
     val senderName: String?,
+    /**
+     * Vrai sur la bulle qui porte l'IDENTITÉ de l'auteur dans son pied (avatar, nom, @pseudo) :
+     * la DERNIÈRE d'une suite reçue, en groupe seulement (iOS `showIdentityBar =
+     * !isDirect && isLastInGroup && !isMe`).
+     */
     val showSenderName: Boolean,
+    /** Identifiant de participant de l'auteur (`senderId`). */
+    val senderId: String? = null,
+    /** La fiche de l'auteur ouverte depuis l'avatar du pied d'identité (iOS `ProfileSheetUser.from(message)`). */
+    val senderProfile: ProfileSheetUser? = null,
+    /** Pseudo de l'auteur, lu « @pseudo » sous son nom dans le pied d'identité. */
+    val senderUsername: String? = null,
+    /** Photo de l'auteur, telle que servie (résolue par `MeeshyAvatar`). */
+    val senderAvatarUrl: String? = null,
+    /**
+     * Couleur déterministe de l'auteur (`DynamicColorGenerator.colorForName(senderName)`) : elle
+     * teinte le fond et le contour de la bulle reçue, et l'avatar de repli (iOS `senderColor`).
+     */
+    val senderColorHex: String? = null,
     val isEdited: Boolean,
     val isDeleted: Boolean,
     val createdAtIso: String?,
@@ -65,6 +84,8 @@ public data class BubbleContent(
      */
     val forwardedFromName: String? = null,
     val isStarred: Boolean = false,
+    /** Le DERNIER message reçu du fil : lui seul porte le smiley d'ajout de réaction (iOS). */
+    val isLastReceivedMessage: Boolean = false,
     val isFirstInGroup: Boolean = true,
     val isLastInGroup: Boolean = true,
     val blurReveal: BubbleBlurRevealSpec? = null,
@@ -102,6 +123,16 @@ public data class BubbleContent(
     val isSlowSend: Boolean = false,
     /** What this message lets out of Meeshy (forward, copy, save, share…) — read by every exit instead of a raw flag. */
     val exitOffer: MessageExitOffer = MessageExitOffer.Unrestricted,
+    /**
+     * End-to-end encrypted, and this device cannot open it (#13110): the bubble says
+     * where it reads — never the gateway's `[Encrypted]` literal, never a piece.
+     */
+    val isEndToEndSealed: Boolean = false,
+    /**
+     * Shown, this message holds the send of its thread (#13099): end-to-end encrypted, or
+     * encrypted with no mode or an unknown one — `EndToEndRegimeMemory.messageHoldsSend`.
+     */
+    val holdsEndToEndSend: Boolean = false,
 )
 
 /**

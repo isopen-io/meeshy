@@ -274,7 +274,7 @@ public struct MeeshyVideoThumbnail: View {
     // MARK: - Duration formatting
 
     private static func formatDuration(milliseconds: Int) -> String {
-        DurationFormat.clock(wholeSeconds: milliseconds / 1000)
+        MediaFormat.duration(milliseconds / 1000)
     }
 }
 

@@ -125,12 +125,17 @@ private fun List<LocalMessage>.toBubbles(
     // #5189 — drop cache entries for messages no longer in the visible window
     // (hidden, or paged out) before they'd otherwise sit unused forever.
     bubbleMemo.retain(visible.mapTo(mutableSetOf()) { it.message.id })
+    val lastReceivedId = visible.lastOrNull { local ->
+        !local.message.isSystemMessage && local.message.deletedAt == null &&
+            (currentUser?.id == null || local.message.senderId != currentUser.id)
+    }?.message?.id
     return visible.map { local ->
         val position = groupPositions[local.message.id] ?: STANDALONE_GROUP_POSITION
         bubbleMemo.build(
             local = local,
             currentUser = currentUser,
-            showSenderName = position.isFirstInGroup,
+            // iOS : l'identité de l'auteur ferme la suite (pied de la DERNIÈRE bulle).
+            showSenderName = position.isLastInGroup,
             ownReactions = ownReactions[local.message.id] ?: emptySet(),
             recipientCount = recipientCount,
             showOriginal = local.message.id in showingOriginal,
@@ -142,6 +147,7 @@ private fun List<LocalMessage>.toBubbles(
             isStarred = local.message.id in starredIds,
             isFirstInGroup = position.isFirstInGroup,
             isLastInGroup = position.isLastInGroup,
+            isLastReceivedMessage = local.message.id == lastReceivedId,
         )
     }
 }

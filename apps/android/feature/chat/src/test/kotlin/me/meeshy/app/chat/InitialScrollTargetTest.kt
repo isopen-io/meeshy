@@ -42,7 +42,7 @@ class InitialScrollTargetTest {
     fun `the unread separator wins over the bottom`() {
         val items = listOf(
             row("m1"),
-            ChatListItem.UnreadSeparator,
+            ChatListItem.UnreadSeparator(),
             row("m2"),
             row("m3"),
         )
@@ -56,7 +56,7 @@ class InitialScrollTargetTest {
             ChatListItem.DayHeader(dayMillis = 1_000L),
             row("m1"),
             ChatListItem.DayHeader(dayMillis = 2_000L),
-            ChatListItem.UnreadSeparator,
+            ChatListItem.UnreadSeparator(),
             row("m2"),
         )
 
@@ -66,7 +66,7 @@ class InitialScrollTargetTest {
     @Test
     fun `a leading separator targets the very top`() {
         val items = listOf(
-            ChatListItem.UnreadSeparator,
+            ChatListItem.UnreadSeparator(),
             row("m1"),
             row("m2"),
         )
@@ -95,7 +95,7 @@ class InitialScrollTargetTest {
     @Test
     fun `BottomUp -- the unread separator still wins, found at its own position in the reversed list`() {
         // reversed: [m3, m2, UnreadSeparator, m1]
-        val items = listOf(row("m3"), row("m2"), ChatListItem.UnreadSeparator, row("m1"))
+        val items = listOf(row("m3"), row("m2"), ChatListItem.UnreadSeparator(), row("m1"))
 
         assertThat(InitialScrollTarget.of(items, ChatListOrientation.BottomUp)).isEqualTo(2)
     }

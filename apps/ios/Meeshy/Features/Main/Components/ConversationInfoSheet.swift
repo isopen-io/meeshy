@@ -770,10 +770,6 @@ struct ConversationInfoSheet: View {
         MediaKindLabel.name(MediaKindLabel.kind(for: type))
     }
 
-    func relativeTime(from date: Date) -> String {
-        RelativeTimeFormatter.longString(for: date)
-    }
-
     // MARK: - Block Button
 
     private var blockUserButton: some View {

@@ -103,7 +103,7 @@ final class ComposerSlideRailTests: XCTestCase {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerSlideRail.swift")
+            .appendingPathComponent("Meeshy/Features/Composer/ComposerSlideRail.swift")
         let code = try String(contentsOf: url, encoding: .utf8)
         let tuile = try XCTUnwrap(code.range(of: "private func tuile("))
         XCTAssertTrue(code[tuile.lowerBound...].contains(".contentShape(RoundedRectangle(cornerRadius: MeeshyRadius.xxs))"))
@@ -192,7 +192,7 @@ final class ComposerSlideRailTests: XCTestCase {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerSlideRail.swift")
+            .appendingPathComponent("Meeshy/Features/Composer/ComposerSlideRail.swift")
         let code = try String(contentsOf: url, encoding: .utf8)
         XCTAssertFalse(code.contains("SlideMiniPreview("))
         XCTAssertTrue(code.contains("SceneThumbnailRenderer.thumbnail("))
@@ -210,13 +210,13 @@ final class ComposerSlideRailTests: XCTestCase {
             AppSourceGuard.stripComments(
                 try String(contentsOf: racine.appendingPathComponent(chemin), encoding: .utf8))
         }
-        let couches = try code("Meeshy/Features/Main/Composer/MeeshyComposerHost+Layers.swift")
+        let couches = try code("Meeshy/Features/Composer/MeeshyComposerHost+Layers.swift")
         XCTAssertTrue(couches.contains(".feedbackToastOverlay()"),
                       "le meuble doit monter l'hôte des toasts sur son chrome")
         for porte in ["DocumentComposerDoor", "MediaComposerDoor", "ShareComposeDoor",
                       "StoryEditComposer", "StoryRepublishComposer",
                       "ComposerMoodSurface", "MoodComposerDoor"] {
-            XCTAssertFalse(try code("Meeshy/Features/Main/Composer/\(porte).swift").contains(".feedbackToastOverlay()"),
+            XCTAssertFalse(try code("Meeshy/Features/Composer/\(porte).swift").contains(".feedbackToastOverlay()"),
                            "\(porte) repose l'hôte des toasts : chaque toast paraîtrait deux fois")
         }
     }

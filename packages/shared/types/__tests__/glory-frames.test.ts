@@ -8,6 +8,8 @@ import {
   type GloryFrame,
 } from '../glory-frames';
 import { parseGloryFramePackContract } from '../glory-frame-pack';
+import { GLORY_FRAME_WINDOW_PATH_MAX_LENGTH, GLORY_FRAME_WINDOW_PATH_PATTERN, gloryFrameFormatAssets, gloryFramePainterAssets } from '../glory-frame-format';
+import { WINDOW_PATH_PATTERN as GENERATOR_WINDOW_PATH_PATTERN } from '../../../../docs/product/cadres-de-gloire/generateur/lib/window-path.mjs';
 
 const sha = (prefix: string): string => prefix.padEnd(64, '0');
 const ref = (prefix: string) => ({ src: `${prefix}.webp`, bytes: 1_000, sha256: sha(prefix) });
@@ -171,5 +173,48 @@ describe('le manifeste NORMALISÉ d’une collection', () => {
     expect(parseGloryFrameCollection({ schema: 1, collection: 'moments', atmosphere: null, frames: [] })?.collection.atmosphere).toBeNull();
     expect(parseGloryFrameCollection({ schema: 1, collection: 'savane', atmosphere: 'atlantide', frames: [] })).toBeNull();
     expect(parseGloryFrameCollection({ schema: 2, collection: 'savane', atmosphere: 'afrique', frames: [] })).toBeNull();
+  });
+});
+
+describe('la fenêtre photo est un CHEMIN vectoriel (#10254, § 5.2) — rétrocompatible', () => {
+  const windowOf = (path?: unknown) => ({
+    box: [198, 538, 684, 924],
+    ...(path === undefined ? {} : { path }),
+    mask: layer('a000000000000001', [198, 538, 684, 924]),
+    veilMaxAlpha: 0,
+  });
+  const withWindow = (path?: unknown) => frame({ formats: { story: story({ window: windowOf(path) }), square: null } });
+
+  it('un cadre porte le chemin de sa fenêtre, lu tel quel, à côté de son masque', () => {
+    const [only] = frames([withWindow('M198 538h684v924h-684Z')]);
+    expect(only?.formats.story.window.path).toBe('M198 538h684v924h-684Z');
+    expect(only?.formats.story.window.mask.src).toBe('a000000000000001.webp');
+  });
+
+  it('un contrat SANS chemin (avant #10254) se lit toujours : le peintre garde le rectangle et le masque', () => {
+    const [only] = frames([withWindow()]);
+    expect(only?.formats.story.window.path).toBeUndefined();
+    expect(only?.formats.story.window.box).toEqual([198, 538, 684, 924]);
+  });
+
+  it('un chemin hors de la grammaire FERMÉE fait tomber le cadre — jamais un tracé SVG arbitraire', () => {
+    const tooLong = `M0 0${'h1v1'.repeat(GLORY_FRAME_WINDOW_PATH_MAX_LENGTH / 4)}Z`;
+    const broken = ['M0 0L5 5Z', 'M0 0h2v2h-2', 'M0 0c1 1 2 2 3 3Z', 'M0.5 0h2v2h-2Z', '', tooLong, 42].map(withWindow);
+    expect(frames([...broken, withWindow('M0 0h2v2h-2ZM5 5h1v1h-1Z')])).toHaveLength(1);
+  });
+
+  it('le pack sert toujours le masque (un ancien client le lit) ; un peintre qui découpe au chemin ne le demande pas', () => {
+    const [withPath] = frames([withWindow('M198 538h684v924h-684Z')]);
+    const [withoutPath] = frames([withWindow()]);
+    if (withPath === undefined || withoutPath === undefined) throw new Error('cadre illisible');
+    const srcs = (refs: readonly { readonly src: string }[]) => refs.map((ref) => ref.src);
+    expect(srcs(gloryFrameFormatAssets(withPath.formats.story))).toContain('a000000000000001.webp');
+    expect(srcs(gloryFramePainterAssets(withPath.formats.story))).not.toContain('a000000000000001.webp');
+    expect(srcs(gloryFramePainterAssets(withPath.formats.story))).toEqual(srcs(gloryFrameFormatAssets(withPath.formats.story)).slice(1));
+    expect(gloryFramePainterAssets(withoutPath.formats.story)).toEqual(gloryFrameFormatAssets(withoutPath.formats.story));
+  });
+
+  it('la grammaire du contrat est celle que le générateur écrit (lib/window-path.mjs) : une seule forme, deux lecteurs', () => {
+    expect(GLORY_FRAME_WINDOW_PATH_PATTERN.source).toBe(GENERATOR_WINDOW_PATH_PATTERN.source);
   });
 });

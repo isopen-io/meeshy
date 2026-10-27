@@ -4,14 +4,19 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import me.meeshy.sdk.friend.BlockCache
+import me.meeshy.sdk.friend.BlockRepository
 import me.meeshy.sdk.friend.FriendRepository
 import me.meeshy.sdk.friend.FriendRequestListRepository
 import me.meeshy.sdk.friend.FriendshipCache
@@ -27,6 +32,7 @@ data class ContactsUiState(
     val receivedRequests: List<FriendRequest> = emptyList(),
     val sentRequests: List<FriendRequest> = emptyList(),
     val isLoadingRequests: Boolean = false,
+    val isRefreshing: Boolean = false,
     val pendingActionIds: Set<String> = emptySet(),
     val errorMessage: String? = null,
 )
@@ -36,6 +42,8 @@ class ContactsViewModel @Inject constructor(
     private val friendRepository: FriendRepository,
     private val friendRequestListRepository: FriendRequestListRepository,
     private val friendshipCache: FriendshipCache = FriendshipCache(),
+    private val blockCache: BlockCache = BlockCache(),
+    private val blockRepository: BlockRepository? = null,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ContactsUiState())
@@ -46,7 +54,14 @@ class ContactsViewModel @Inject constructor(
     /** One-shot outcome of an accept / decline / cancel (toast + haptic), as on iOS. */
     val feedback: SharedFlow<ConnectionFeedback> = _feedback.asSharedFlow()
 
+    private var lastReconciledGraph: PendingGraph = friendshipCache.pendingGraph()
+    private var revalidating = false
+    private var changedWhileBusy = false
+    private var applyingOwnChange = false
+    private val busy: Boolean get() = revalidating || _state.value.pendingActionIds.isNotEmpty()
+
     init {
+        observeFriendshipCache()
         loadRequests()
     }
 
@@ -83,12 +98,88 @@ class ContactsViewModel @Inject constructor(
         }
     }
 
-    private suspend fun revalidateRequests() {
+    /**
+     * A request received or accepted live (the notification socket patches [FriendshipCache]) or
+     * answered from another surface changes the pending sets under this tab: one silent refetch
+     * repaints both lists. Our own optimistic actions and revalidations reconcile the graph the
+     * moment they move the cache, so only an EXTERNAL change reaches here. One that lands while a
+     * fetch or an answer is in flight is deferred, never dropped: the fetch may have been served
+     * before the server knew it, and its hydrate would erase the live patch.
+     */
+    private fun observeFriendshipCache() {
+        viewModelScope.launch {
+            friendshipCache.version.drop(1).collect {
+                if (applyingOwnChange) return@collect
+                val graph = friendshipCache.pendingGraph()
+                if (graph == lastReconciledGraph) return@collect
+                lastReconciledGraph = graph
+                if (busy) changedWhileBusy = true else loadRequests()
+            }
+        }
+    }
+
+    /**
+     * Runs one of our own cache mutations and reconciles the graph right after it — a collector
+     * resumed inline by the emission (Main.immediate) sees the guard, a deferred one sees the
+     * reconciled graph; neither mistakes it for an external change.
+     */
+    private inline fun ownCacheChange(mutation: () -> Unit) {
+        applyingOwnChange = true
         try {
-            val received = friendRepository.receivedRequests()
-            val sent = friendRepository.sentRequests()
+            mutation()
+        } finally {
+            applyingOwnChange = false
+            absorbOwnCacheChange()
+        }
+    }
+
+    private fun absorbOwnCacheChange() {
+        lastReconciledGraph = friendshipCache.pendingGraph()
+    }
+
+    private fun replayDeferredChange() {
+        if (!changedWhileBusy || busy) return
+        changedWhileBusy = false
+        loadRequests()
+    }
+
+    /** Pull-to-refresh: always asks the network, never gated by the cache. */
+    fun refresh() {
+        viewModelScope.launch {
+            _state.update { it.copy(isRefreshing = true) }
+            try {
+                revalidateRequests()
+            } finally {
+                _state.update { it.copy(isRefreshing = false) }
+            }
+        }
+    }
+
+    private suspend fun revalidateRequests() {
+        revalidating = true
+        try {
+            fetchAndPublishRequests()
+        } finally {
+            absorbOwnCacheChange()
+            revalidating = false
+            replayDeferredChange()
+        }
+    }
+
+    private suspend fun fetchAndPublishRequests() {
+        try {
+            val (servedReceived, servedSent) = coroutineScope {
+                val blocks = async { blockRepository?.listBlocked() }
+                val receivedCall = async { friendRepository.receivedRequests() }
+                val sentCall = async { friendRepository.sentRequests() }
+                blocks.await()
+                receivedCall.await() to sentCall.await()
+            }
+            val blockedIds = blockCache.currentBlockedIds
+            val received = servedReceived.map { BlockedExclusion.requests(it, blockedIds) }
+            val sent = servedSent.map { BlockedExclusion.requests(it, blockedIds) }
             if (received is NetworkResult.Success && sent is NetworkResult.Success) {
-                friendshipCache.hydrate(sent = sent.data, received = received.data)
+                ownCacheChange { friendshipCache.hydrate(sent = sent.data, received = received.data) }
             }
             val bothSucceeded = received is NetworkResult.Success && sent is NetworkResult.Success
             _state.update { current ->
@@ -158,7 +249,7 @@ class ContactsViewModel @Inject constructor(
                 errorMessage = null,
             )
         }
-        if (removed.receiverId.isNotBlank()) friendshipCache.didCancelRequest(removed.receiverId)
+        if (removed.receiverId.isNotBlank()) ownCacheChange { friendshipCache.didCancelRequest(removed.receiverId) }
         persistSentAsync(updated)
         viewModelScope.launch {
             val result = runCatching { friendRepository.deleteRequest(requestId) }
@@ -169,7 +260,7 @@ class ContactsViewModel @Inject constructor(
             finishAction(requestId) {
                 if (result is NetworkResult.Failure) {
                     if (removed.receiverId.isNotBlank()) {
-                        friendshipCache.didSendRequest(removed.receiverId, removed.id)
+                        ownCacheChange { friendshipCache.didSendRequest(removed.receiverId, removed.id) }
                     }
                     val restored = restore(it.sentRequests, snapshot, removed)
                     persistSentAsync(restored)
@@ -192,15 +283,19 @@ class ContactsViewModel @Inject constructor(
 
     private fun applyRespondToCache(senderId: String, accepted: Boolean) {
         if (senderId.isBlank()) return
-        if (accepted) friendshipCache.didAcceptRequest(senderId) else friendshipCache.didRejectRequest(senderId)
+        ownCacheChange {
+            if (accepted) friendshipCache.didAcceptRequest(senderId) else friendshipCache.didRejectRequest(senderId)
+        }
     }
 
     private fun rollbackRespondCache(senderId: String, requestId: String, accepted: Boolean) {
         if (senderId.isBlank()) return
-        if (accepted) {
-            friendshipCache.rollbackAccept(senderId, requestId)
-        } else {
-            friendshipCache.rollbackReject(senderId, requestId)
+        ownCacheChange {
+            if (accepted) {
+                friendshipCache.rollbackAccept(senderId, requestId)
+            } else {
+                friendshipCache.rollbackReject(senderId, requestId)
+            }
         }
     }
 
@@ -215,6 +310,7 @@ class ContactsViewModel @Inject constructor(
 
     private fun finishAction(requestId: String, transform: (ContactsUiState) -> ContactsUiState) {
         _state.update { transform(it).copy(pendingActionIds = it.pendingActionIds - requestId) }
+        replayDeferredChange()
     }
 
     private fun restore(
@@ -232,3 +328,8 @@ class ContactsViewModel @Inject constructor(
 
     private fun toError(t: Throwable) = me.meeshy.sdk.net.ApiError(t.message ?: "Unknown error")
 }
+
+private data class PendingGraph(val received: Set<String>, val sent: Set<String>)
+
+private fun FriendshipCache.pendingGraph() =
+    PendingGraph(received = currentReceivedPendingSenderIds, sent = currentSentPendingReceiverIds)

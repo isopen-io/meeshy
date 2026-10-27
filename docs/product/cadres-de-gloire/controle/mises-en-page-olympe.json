@@ -1,0 +1,3378 @@
+[
+ {
+  "frame": "olympe-ambassadeur-1",
+  "drawn": "pied",
+  "default": "pied",
+  "layouts": {
+   "pied": {
+    "birds": [
+     {
+      "pose": "mee-fete",
+      "box": [
+       52,
+       1392,
+       264,
+       264
+      ],
+      "rotate": -6,
+      "flip": false,
+      "opacity": 1,
+      "art": [
+       0.0219,
+       0,
+       0.9562,
+       1
+      ]
+     },
+     {
+      "pose": "meo-roi",
+      "box": [
+       764,
+       1412,
+       264,
+       264
+      ],
+      "rotate": 6,
+      "flip": true,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0125,
+       1,
+       0.975
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 36,
+     "depth": 4,
+     "face": 0
+    }
+   },
+   "perches": {
+    "birds": [
+     {
+      "pose": "mee-fete",
+      "box": [
+       116,
+       64,
+       240,
+       240
+      ],
+      "rotate": -10,
+      "flip": false,
+      "opacity": 1,
+      "art": [
+       0.0219,
+       0,
+       0.9562,
+       1
+      ]
+     },
+     {
+      "pose": "meo-roi",
+      "box": [
+       724,
+       64,
+       240,
+       240
+      ],
+      "rotate": 10,
+      "flip": true,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0125,
+       1,
+       0.975
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 0,
+     "depth": 0,
+     "face": 0
+    }
+   },
+   "cotes": {
+    "birds": [
+     {
+      "pose": "mee-fete",
+      "box": [
+       -41.2,
+       732.8,
+       246.4,
+       246.4
+      ],
+      "rotate": 18,
+      "flip": false,
+      "opacity": 1,
+      "art": [
+       0.0219,
+       0,
+       0.9562,
+       1
+      ]
+     },
+     {
+      "pose": "meo-roi",
+      "box": [
+       874.8,
+       812.8,
+       246.4,
+       246.4
+      ],
+      "rotate": 342,
+      "flip": true,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0125,
+       1,
+       0.975
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 26,
+     "depth": 3,
+     "face": 0
+    }
+   },
+   "duo": {
+    "birds": [
+     {
+      "pose": "duo-coucou",
+      "box": [
+       424,
+       1400,
+       232,
+       232
+      ],
+      "rotate": 0,
+      "flip": false,
+      "opacity": 1,
+      "art": [
+       0,
+       0.14,
+       1,
+       0.72
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 29,
+     "depth": 4,
+     "face": 0
+    }
+   },
+   "selfie": {
+    "birds": [
+     {
+      "pose": "meo-selfie",
+      "box": [
+       650,
+       1090,
+       380,
+       380
+      ],
+      "rotate": 0,
+      "flip": true,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0375,
+       1,
+       0.9251
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 9881,
+     "depth": 111,
+     "face": 0
+    }
+   }
+  },
+  "rejected": {}
+ },
+ {
+  "frame": "olympe-ambassadeur-2",
+  "drawn": "ruban",
+  "default": "ruban",
+  "layouts": {
+   "ruban": {
+    "birds": [
+     {
+      "pose": "mee-lettre",
+      "box": [
+       30,
+       1402,
+       236,
+       236
+      ],
+      "rotate": -4,
+      "flip": false,
+      "opacity": 1,
+      "art": [
+       0,
+       0.025,
+       1,
+       0.95
+      ]
+     },
+     {
+      "pose": "meo-bravo",
+      "box": [
+       814,
+       1410,
+       236,
+       236
+      ],
+      "rotate": 4,
+      "flip": true,
+      "opacity": 1,
+      "art": [
+       0.0325,
+       0,
+       0.9349,
+       1
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 53,
+     "depth": 4,
+     "face": 0
+    }
+   }
+  },
+  "rejected": {}
+ },
+ {
+  "frame": "olympe-ambassadeur-3",
+  "drawn": "perches",
+  "default": "perches",
+  "layouts": {
+   "pied": {
+    "birds": [
+     {
+      "pose": "mee-bravo",
+      "box": [
+       29,
+       1267,
+       300,
+       300
+      ],
+      "rotate": -6,
+      "flip": false,
+      "opacity": 1,
+      "art": [
+       0.0411,
+       0,
+       0.9179,
+       1
+      ]
+     },
+     {
+      "pose": "meo-trophee",
+      "box": [
+       768,
+       1284,
+       300,
+       300
+      ],
+      "rotate": 6,
+      "flip": true,
+      "opacity": 1,
+      "art": [
+       0,
+       0.033,
+       1,
+       0.934
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 55,
+     "depth": 4,
+     "face": 0
+    }
+   },
+   "perches": {
+    "birds": [
+     {
+      "pose": "mee-bravo",
+      "box": [
+       116,
+       64,
+       240,
+       240
+      ],
+      "rotate": -10,
+      "flip": false,
+      "opacity": 1,
+      "art": [
+       0.0411,
+       0,
+       0.9179,
+       1
+      ]
+     },
+     {
+      "pose": "meo-trophee",
+      "box": [
+       724,
+       64,
+       240,
+       240
+      ],
+      "rotate": 10,
+      "flip": true,
+      "opacity": 1,
+      "art": [
+       0,
+       0.033,
+       1,
+       0.934
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 0,
+     "depth": 0,
+     "face": 0
+    }
+   },
+   "cotes": {
+    "birds": [
+     {
+      "pose": "mee-bravo",
+      "box": [
+       -44.6,
+       714.4,
+       263.2,
+       263.2
+      ],
+      "rotate": 18,
+      "flip": false,
+      "opacity": 1,
+      "art": [
+       0.0411,
+       0,
+       0.9179,
+       1
+      ]
+     },
+     {
+      "pose": "meo-trophee",
+      "box": [
+       885.2,
+       805.2,
+       229.6,
+       229.6
+      ],
+      "rotate": 342,
+      "flip": true,
+      "opacity": 1,
+      "art": [
+       0,
+       0.033,
+       1,
+       0.934
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 54,
+     "depth": 5,
+     "face": 0
+    }
+   },
+   "duo": {
+    "birds": [
+     {
+      "pose": "duo-coucou",
+      "box": [
+       555,
+       1307,
+       400,
+       400
+      ],
+      "rotate": 0,
+      "flip": false,
+      "opacity": 1,
+      "art": [
+       0,
+       0.14,
+       1,
+       0.72
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 12,
+     "depth": 3,
+     "face": 0
+    }
+   },
+   "selfie": {
+    "birds": [
+     {
+      "pose": "meo-selfie",
+      "box": [
+       630,
+       1070,
+       380,
+       380
+      ],
+      "rotate": 0,
+      "flip": true,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0375,
+       1,
+       0.9251
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 6899,
+     "depth": 117,
+     "face": 0
+    }
+   }
+  },
+  "rejected": {}
+ },
+ {
+  "frame": "olympe-ambassadeur-4",
+  "drawn": "cotes",
+  "default": "cotes",
+  "layouts": {
+   "pied": {
+    "birds": [
+     {
+      "pose": "mee-sourire",
+      "box": [
+       14,
+       1449,
+       210,
+       210
+      ],
+      "rotate": -6,
+      "flip": false,
+      "opacity": 1,
+      "art": [
+       0,
+       0.025,
+       1,
+       0.95
+      ]
+     },
+     {
+      "pose": "meo-cool",
+      "box": [
+       840,
+       1426,
+       228,
+       228
+      ],
+      "rotate": 6,
+      "flip": true,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0104,
+       1,
+       0.9792
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 31,
+     "depth": 2,
+     "face": 0
+    }
+   },
+   "perches": {
+    "birds": [
+     {
+      "pose": "mee-sourire",
+      "box": [
+       116,
+       64,
+       240,
+       240
+      ],
+      "rotate": -10,
+      "flip": false,
+      "opacity": 1,
+      "art": [
+       0,
+       0.025,
+       1,
+       0.95
+      ]
+     },
+     {
+      "pose": "meo-cool",
+      "box": [
+       724,
+       64,
+       240,
+       240
+      ],
+      "rotate": 10,
+      "flip": true,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0104,
+       1,
+       0.9792
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 0,
+     "depth": 0,
+     "face": 0
+    }
+   },
+   "cotes": {
+    "birds": [
+     {
+      "pose": "mee-sourire",
+      "box": [
+       -38,
+       762,
+       196,
+       196
+      ],
+      "rotate": 18,
+      "flip": false,
+      "opacity": 1,
+      "art": [
+       0,
+       0.025,
+       1,
+       0.95
+      ]
+     },
+     {
+      "pose": "meo-cool",
+      "box": [
+       922,
+       842,
+       196,
+       196
+      ],
+      "rotate": 342,
+      "flip": true,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0104,
+       1,
+       0.9792
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 84,
+     "depth": 4,
+     "face": 0
+    }
+   },
+   "selfie": {
+    "birds": [
+     {
+      "pose": "meo-selfie",
+      "box": [
+       650,
+       1090,
+       380,
+       380
+      ],
+      "rotate": 0,
+      "flip": true,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0375,
+       1,
+       0.9251
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 13280,
+     "depth": 135,
+     "face": 0
+    }
+   }
+  },
+  "rejected": {
+   "duo": "sans-place"
+  }
+ },
+ {
+  "frame": "olympe-ambassadeur-5",
+  "drawn": "perches",
+  "default": "perches",
+  "layouts": {
+   "pied": {
+    "birds": [
+     {
+      "pose": "mee-coucou",
+      "box": [
+       46,
+       1362,
+       300,
+       300
+      ],
+      "rotate": -6,
+      "flip": false,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0865,
+       1,
+       0.827
+      ]
+     },
+     {
+      "pose": "meo-salut",
+      "box": [
+       768,
+       1318,
+       300,
+       300
+      ],
+      "rotate": 6,
+      "flip": true,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0104,
+       1,
+       0.9792
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 89,
+     "depth": 4,
+     "face": 0
+    }
+   },
+   "perches": {
+    "birds": [
+     {
+      "pose": "mee-coucou",
+      "box": [
+       116,
+       64,
+       240,
+       240
+      ],
+      "rotate": -10,
+      "flip": false,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0865,
+       1,
+       0.827
+      ]
+     },
+     {
+      "pose": "meo-salut",
+      "box": [
+       724,
+       64,
+       240,
+       240
+      ],
+      "rotate": 10,
+      "flip": true,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0104,
+       1,
+       0.9792
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 0,
+     "depth": 0,
+     "face": 0
+    }
+   },
+   "cotes": {
+    "birds": [
+     {
+      "pose": "mee-coucou",
+      "box": [
+       -26.4,
+       753.6,
+       212.8,
+       212.8
+      ],
+      "rotate": 18,
+      "flip": false,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0865,
+       1,
+       0.827
+      ]
+     },
+     {
+      "pose": "meo-salut",
+      "box": [
+       893.6,
+       833.6,
+       212.8,
+       212.8
+      ],
+      "rotate": 342,
+      "flip": true,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0104,
+       1,
+       0.9792
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 86,
+     "depth": 5,
+     "face": 0
+    }
+   },
+   "duo": {
+    "birds": [
+     {
+      "pose": "duo-coucou",
+      "box": [
+       376,
+       1336,
+       328,
+       328
+      ],
+      "rotate": 0,
+      "flip": false,
+      "opacity": 1,
+      "art": [
+       0,
+       0.14,
+       1,
+       0.72
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 30,
+     "depth": 3,
+     "face": 0
+    }
+   },
+   "selfie": {
+    "birds": [
+     {
+      "pose": "meo-selfie",
+      "box": [
+       650,
+       1090,
+       380,
+       380
+      ],
+      "rotate": 0,
+      "flip": true,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0375,
+       1,
+       0.9251
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 10746,
+     "depth": 122,
+     "face": 0
+    }
+   }
+  },
+  "rejected": {}
+ },
+ {
+  "frame": "olympe-legende-1",
+  "drawn": "ruban",
+  "default": "ruban",
+  "layouts": {
+   "ruban": {
+    "birds": [
+     {
+      "pose": "mee-montee-au-ciel",
+      "box": [
+       10,
+       1402,
+       236,
+       236
+      ],
+      "rotate": -4,
+      "flip": false,
+      "opacity": 1,
+      "art": [
+       0.0105,
+       0,
+       0.9789,
+       1
+      ]
+     },
+     {
+      "pose": "meo-roi",
+      "box": [
+       814,
+       1402,
+       236,
+       236
+      ],
+      "rotate": 4,
+      "flip": true,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0125,
+       1,
+       0.975
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 33,
+     "depth": 4,
+     "face": 0
+    }
+   }
+  },
+  "rejected": {}
+ },
+ {
+  "frame": "olympe-legende-2",
+  "drawn": "cotes",
+  "default": "cotes",
+  "layouts": {
+   "pied": {
+    "birds": [
+     {
+      "pose": "mee-bisou-vole",
+      "box": [
+       42,
+       1250,
+       300,
+       300
+      ],
+      "rotate": -6,
+      "flip": false,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0824,
+       1,
+       0.8352
+      ]
+     },
+     {
+      "pose": "meo-muscles",
+      "box": [
+       734,
+       1250,
+       300,
+       300
+      ],
+      "rotate": 6,
+      "flip": true,
+      "opacity": 1,
+      "art": [
+       0.073,
+       0,
+       0.8541,
+       1
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 14,
+     "depth": 4,
+     "face": 0
+    }
+   },
+   "perches": {
+    "birds": [
+     {
+      "pose": "mee-bisou-vole",
+      "box": [
+       116,
+       64,
+       240,
+       240
+      ],
+      "rotate": -10,
+      "flip": false,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0824,
+       1,
+       0.8352
+      ]
+     },
+     {
+      "pose": "meo-muscles",
+      "box": [
+       724,
+       64,
+       240,
+       240
+      ],
+      "rotate": 10,
+      "flip": true,
+      "opacity": 1,
+      "art": [
+       0.073,
+       0,
+       0.8541,
+       1
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 0,
+     "depth": 0,
+     "face": 0
+    }
+   },
+   "cotes": {
+    "birds": [
+     {
+      "pose": "mee-bisou-vole",
+      "box": [
+       -60,
+       720,
+       280,
+       280
+      ],
+      "rotate": 18,
+      "flip": false,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0824,
+       1,
+       0.8352
+      ]
+     },
+     {
+      "pose": "meo-muscles",
+      "box": [
+       860,
+       800,
+       280,
+       280
+      ],
+      "rotate": 342,
+      "flip": true,
+      "opacity": 1,
+      "art": [
+       0.073,
+       0,
+       0.8541,
+       1
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 0,
+     "depth": 0,
+     "face": 0
+    }
+   },
+   "duo": {
+    "birds": [
+     {
+      "pose": "duo-coucou",
+      "box": [
+       548,
+       1304,
+       400,
+       400
+      ],
+      "rotate": 0,
+      "flip": false,
+      "opacity": 1,
+      "art": [
+       0,
+       0.14,
+       1,
+       0.72
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 8,
+     "depth": 3,
+     "face": 0
+    }
+   },
+   "selfie": {
+    "birds": [
+     {
+      "pose": "meo-selfie",
+      "box": [
+       622,
+       1062,
+       380,
+       380
+      ],
+      "rotate": 0,
+      "flip": true,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0375,
+       1,
+       0.9251
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 6814,
+     "depth": 114,
+     "face": 0
+    }
+   }
+  },
+  "rejected": {}
+ },
+ {
+  "frame": "olympe-legende-3",
+  "drawn": "selfie",
+  "default": "pied",
+  "layouts": {
+   "pied": {
+    "birds": [
+     {
+      "pose": "mee-coucou",
+      "box": [
+       46,
+       1418,
+       300,
+       300
+      ],
+      "rotate": -6,
+      "flip": false,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0865,
+       1,
+       0.827
+      ]
+     },
+     {
+      "pose": "meo-salut",
+      "box": [
+       734,
+       1374,
+       300,
+       300
+      ],
+      "rotate": 6,
+      "flip": true,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0104,
+       1,
+       0.9792
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 70,
+     "depth": 4,
+     "face": 0
+    }
+   },
+   "perches": {
+    "birds": [
+     {
+      "pose": "mee-coucou",
+      "box": [
+       116,
+       64,
+       240,
+       240
+      ],
+      "rotate": -10,
+      "flip": false,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0865,
+       1,
+       0.827
+      ]
+     },
+     {
+      "pose": "meo-salut",
+      "box": [
+       724,
+       64,
+       240,
+       240
+      ],
+      "rotate": 10,
+      "flip": true,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0104,
+       1,
+       0.9792
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 0,
+     "depth": 0,
+     "face": 0
+    }
+   },
+   "cotes": {
+    "birds": [
+     {
+      "pose": "mee-coucou",
+      "box": [
+       -43.6,
+       728.4,
+       263.2,
+       263.2
+      ],
+      "rotate": 18,
+      "flip": false,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0865,
+       1,
+       0.827
+      ]
+     },
+     {
+      "pose": "meo-salut",
+      "box": [
+       860.4,
+       808.4,
+       263.2,
+       263.2
+      ],
+      "rotate": 342,
+      "flip": true,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0104,
+       1,
+       0.9792
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 82,
+     "depth": 4,
+     "face": 0
+    }
+   },
+   "duo": {
+    "birds": [
+     {
+      "pose": "duo-coucou",
+      "box": [
+       412,
+       1400,
+       256,
+       256
+      ],
+      "rotate": 0,
+      "flip": false,
+      "opacity": 1,
+      "art": [
+       0,
+       0.14,
+       1,
+       0.72
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 40,
+     "depth": 5,
+     "face": 0
+    }
+   },
+   "selfie": {
+    "birds": [
+     {
+      "pose": "meo-selfie",
+      "box": [
+       650,
+       1090,
+       380,
+       380
+      ],
+      "rotate": 0,
+      "flip": true,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0375,
+       1,
+       0.9251
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 9179,
+     "depth": 105,
+     "face": 0
+    }
+   }
+  },
+  "rejected": {}
+ },
+ {
+  "frame": "olympe-legende-4",
+  "drawn": "pied",
+  "default": "pied",
+  "layouts": {
+   "pied": {
+    "birds": [
+     {
+      "pose": "mee-amoureuse",
+      "box": [
+       46,
+       1430,
+       300,
+       300
+      ],
+      "rotate": -6,
+      "flip": false,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0789,
+       1,
+       0.8421
+      ]
+     },
+     {
+      "pose": "meo-trophee",
+      "box": [
+       734,
+       1442,
+       300,
+       300
+      ],
+      "rotate": 6,
+      "flip": true,
+      "opacity": 1,
+      "art": [
+       0,
+       0.033,
+       1,
+       0.934
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 105,
+     "depth": 4,
+     "face": 0
+    }
+   },
+   "perches": {
+    "birds": [
+     {
+      "pose": "mee-amoureuse",
+      "box": [
+       116,
+       64,
+       240,
+       240
+      ],
+      "rotate": -10,
+      "flip": false,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0789,
+       1,
+       0.8421
+      ]
+     },
+     {
+      "pose": "meo-trophee",
+      "box": [
+       724,
+       64,
+       240,
+       240
+      ],
+      "rotate": 10,
+      "flip": true,
+      "opacity": 1,
+      "art": [
+       0,
+       0.033,
+       1,
+       0.934
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 0,
+     "depth": 0,
+     "face": 0
+    }
+   },
+   "cotes": {
+    "birds": [
+     {
+      "pose": "mee-amoureuse",
+      "box": [
+       -26.4,
+       753.6,
+       212.8,
+       212.8
+      ],
+      "rotate": 18,
+      "flip": false,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0789,
+       1,
+       0.8421
+      ]
+     },
+     {
+      "pose": "meo-trophee",
+      "box": [
+       893.6,
+       833.6,
+       212.8,
+       212.8
+      ],
+      "rotate": 342,
+      "flip": true,
+      "opacity": 1,
+      "art": [
+       0,
+       0.033,
+       1,
+       0.934
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 27,
+     "depth": 3,
+     "face": 0
+    }
+   },
+   "duo": {
+    "birds": [
+     {
+      "pose": "duo-coucou",
+      "box": [
+       412,
+       1404,
+       256,
+       256
+      ],
+      "rotate": 0,
+      "flip": false,
+      "opacity": 1,
+      "art": [
+       0,
+       0.14,
+       1,
+       0.72
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 39,
+     "depth": 5,
+     "face": 0
+    }
+   },
+   "selfie": {
+    "birds": [
+     {
+      "pose": "meo-selfie",
+      "box": [
+       650,
+       1090,
+       380,
+       380
+      ],
+      "rotate": 0,
+      "flip": true,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0375,
+       1,
+       0.9251
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 9986,
+     "depth": 111,
+     "face": 0
+    }
+   }
+  },
+  "rejected": {}
+ },
+ {
+  "frame": "olympe-legende-5",
+  "drawn": "libre",
+  "default": "libre",
+  "layouts": {
+   "pied": {
+    "birds": [
+     {
+      "pose": "mee-jackpot",
+      "box": [
+       46,
+       1390,
+       300,
+       300
+      ],
+      "rotate": -6,
+      "flip": false,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0746,
+       1,
+       0.8507
+      ]
+     },
+     {
+      "pose": "meo-champagne",
+      "box": [
+       734,
+       1382,
+       300,
+       300
+      ],
+      "rotate": 6,
+      "flip": true,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0758,
+       1,
+       0.8484
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 64,
+     "depth": 4,
+     "face": 0
+    }
+   },
+   "perches": {
+    "birds": [
+     {
+      "pose": "mee-jackpot",
+      "box": [
+       116,
+       64,
+       240,
+       240
+      ],
+      "rotate": -10,
+      "flip": false,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0746,
+       1,
+       0.8507
+      ]
+     },
+     {
+      "pose": "meo-champagne",
+      "box": [
+       724,
+       64,
+       240,
+       240
+      ],
+      "rotate": 10,
+      "flip": true,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0758,
+       1,
+       0.8484
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 0,
+     "depth": 0,
+     "face": 0
+    }
+   },
+   "cotes": {
+    "birds": [
+     {
+      "pose": "mee-jackpot",
+      "box": [
+       -41.2,
+       732.8,
+       246.4,
+       246.4
+      ],
+      "rotate": 18,
+      "flip": false,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0746,
+       1,
+       0.8507
+      ]
+     },
+     {
+      "pose": "meo-champagne",
+      "box": [
+       874.8,
+       812.8,
+       246.4,
+       246.4
+      ],
+      "rotate": 342,
+      "flip": true,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0758,
+       1,
+       0.8484
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 37,
+     "depth": 3,
+     "face": 0
+    }
+   },
+   "duo": {
+    "birds": [
+     {
+      "pose": "duo-coucou",
+      "box": [
+       400,
+       1396,
+       280,
+       280
+      ],
+      "rotate": 0,
+      "flip": false,
+      "opacity": 1,
+      "art": [
+       0,
+       0.14,
+       1,
+       0.72
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 44,
+     "depth": 5,
+     "face": 0
+    }
+   },
+   "libre": {
+    "birds": [
+     {
+      "pose": "mee-jackpot",
+      "box": [
+       20,
+       328,
+       200,
+       200
+      ],
+      "rotate": -8,
+      "flip": false,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0746,
+       1,
+       0.8507
+      ]
+     },
+     {
+      "pose": "meo-champagne",
+      "box": [
+       864,
+       328,
+       200,
+       200
+      ],
+      "rotate": 8,
+      "flip": true,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0758,
+       1,
+       0.8484
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 0,
+     "depth": 0,
+     "face": 0
+    }
+   },
+   "selfie": {
+    "birds": [
+     {
+      "pose": "meo-selfie",
+      "box": [
+       650,
+       1090,
+       380,
+       380
+      ],
+      "rotate": 0,
+      "flip": true,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0375,
+       1,
+       0.9251
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 9678,
+     "depth": 109,
+     "face": 0
+    }
+   }
+  },
+  "rejected": {}
+ },
+ {
+  "frame": "olympe-mythe-a",
+  "drawn": "pied",
+  "default": "pied",
+  "layouts": {
+   "pied": {
+    "birds": [
+     {
+      "pose": "mee-montee-au-ciel",
+      "box": [
+       46,
+       1442,
+       300,
+       300
+      ],
+      "rotate": -6,
+      "flip": false,
+      "opacity": 1,
+      "art": [
+       0.0105,
+       0,
+       0.9789,
+       1
+      ]
+     },
+     {
+      "pose": "meo-feu-artifice",
+      "box": [
+       734,
+       1418,
+       300,
+       300
+      ],
+      "rotate": 6,
+      "flip": true,
+      "opacity": 1,
+      "art": [
+       0.0567,
+       0,
+       0.8867,
+       1
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 73,
+     "depth": 4,
+     "face": 0
+    }
+   },
+   "perches": {
+    "birds": [
+     {
+      "pose": "mee-montee-au-ciel",
+      "box": [
+       116,
+       64,
+       240,
+       240
+      ],
+      "rotate": -10,
+      "flip": false,
+      "opacity": 1,
+      "art": [
+       0.0105,
+       0,
+       0.9789,
+       1
+      ]
+     },
+     {
+      "pose": "meo-feu-artifice",
+      "box": [
+       724,
+       64,
+       240,
+       240
+      ],
+      "rotate": 10,
+      "flip": true,
+      "opacity": 1,
+      "art": [
+       0.0567,
+       0,
+       0.8867,
+       1
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 0,
+     "depth": 0,
+     "face": 0
+    }
+   },
+   "cotes": {
+    "birds": [
+     {
+      "pose": "mee-montee-au-ciel",
+      "box": [
+       -41.2,
+       732.8,
+       246.4,
+       246.4
+      ],
+      "rotate": 18,
+      "flip": false,
+      "opacity": 1,
+      "art": [
+       0.0105,
+       0,
+       0.9789,
+       1
+      ]
+     },
+     {
+      "pose": "meo-feu-artifice",
+      "box": [
+       874.8,
+       812.8,
+       246.4,
+       246.4
+      ],
+      "rotate": 342,
+      "flip": true,
+      "opacity": 1,
+      "art": [
+       0.0567,
+       0,
+       0.8867,
+       1
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 16,
+     "depth": 2,
+     "face": 0
+    }
+   },
+   "duo": {
+    "birds": [
+     {
+      "pose": "duo-coucou",
+      "box": [
+       400,
+       1392,
+       280,
+       280
+      ],
+      "rotate": 0,
+      "flip": false,
+      "opacity": 1,
+      "art": [
+       0,
+       0.14,
+       1,
+       0.72
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 44,
+     "depth": 5,
+     "face": 0
+    }
+   },
+   "selfie": {
+    "birds": [
+     {
+      "pose": "meo-selfie",
+      "box": [
+       650,
+       1090,
+       380,
+       380
+      ],
+      "rotate": 0,
+      "flip": true,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0375,
+       1,
+       0.9251
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 9052,
+     "depth": 105,
+     "face": 0
+    }
+   }
+  },
+  "rejected": {}
+ },
+ {
+  "frame": "olympe-mythe-b",
+  "drawn": "cotes",
+  "default": "cotes",
+  "layouts": {
+   "pied": {
+    "birds": [
+     {
+      "pose": "mee-jackpot",
+      "box": [
+       46,
+       1382,
+       300,
+       300
+      ],
+      "rotate": -6,
+      "flip": false,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0746,
+       1,
+       0.8507
+      ]
+     },
+     {
+      "pose": "meo-champagne",
+      "box": [
+       734,
+       1378,
+       300,
+       300
+      ],
+      "rotate": 6,
+      "flip": true,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0758,
+       1,
+       0.8484
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 72,
+     "depth": 4,
+     "face": 0
+    }
+   },
+   "perches": {
+    "birds": [
+     {
+      "pose": "mee-jackpot",
+      "box": [
+       116,
+       64,
+       240,
+       240
+      ],
+      "rotate": -10,
+      "flip": false,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0746,
+       1,
+       0.8507
+      ]
+     },
+     {
+      "pose": "meo-champagne",
+      "box": [
+       724,
+       64,
+       240,
+       240
+      ],
+      "rotate": 10,
+      "flip": true,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0758,
+       1,
+       0.8484
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 0,
+     "depth": 0,
+     "face": 0
+    }
+   },
+   "cotes": {
+    "birds": [
+     {
+      "pose": "mee-jackpot",
+      "box": [
+       -51.6,
+       728.4,
+       263.2,
+       263.2
+      ],
+      "rotate": 18,
+      "flip": false,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0746,
+       1,
+       0.8507
+      ]
+     },
+     {
+      "pose": "meo-champagne",
+      "box": [
+       860,
+       800,
+       280,
+       280
+      ],
+      "rotate": 342,
+      "flip": true,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0758,
+       1,
+       0.8484
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 36,
+     "depth": 3,
+     "face": 0
+    }
+   },
+   "duo": {
+    "birds": [
+     {
+      "pose": "duo-coucou",
+      "box": [
+       400,
+       1392,
+       280,
+       280
+      ],
+      "rotate": 0,
+      "flip": false,
+      "opacity": 1,
+      "art": [
+       0,
+       0.14,
+       1,
+       0.72
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 44,
+     "depth": 5,
+     "face": 0
+    }
+   },
+   "selfie": {
+    "birds": [
+     {
+      "pose": "meo-selfie",
+      "box": [
+       650,
+       1090,
+       380,
+       380
+      ],
+      "rotate": 0,
+      "flip": true,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0375,
+       1,
+       0.9251
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 9052,
+     "depth": 105,
+     "face": 0
+    }
+   }
+  },
+  "rejected": {}
+ },
+ {
+  "frame": "olympe-mythe-c",
+  "drawn": "perches",
+  "default": "perches",
+  "layouts": {
+   "pied": {
+    "birds": [
+     {
+      "pose": "mee-wow",
+      "box": [
+       46,
+       1430,
+       300,
+       300
+      ],
+      "rotate": -6,
+      "flip": false,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0564,
+       1,
+       0.8872
+      ]
+     },
+     {
+      "pose": "meo-trophee",
+      "box": [
+       734,
+       1434,
+       300,
+       300
+      ],
+      "rotate": 6,
+      "flip": true,
+      "opacity": 1,
+      "art": [
+       0,
+       0.033,
+       1,
+       0.934
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 80,
+     "depth": 4,
+     "face": 0
+    }
+   },
+   "perches": {
+    "birds": [
+     {
+      "pose": "mee-wow",
+      "box": [
+       116,
+       64,
+       240,
+       240
+      ],
+      "rotate": -10,
+      "flip": false,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0564,
+       1,
+       0.8872
+      ]
+     },
+     {
+      "pose": "meo-trophee",
+      "box": [
+       724,
+       64,
+       240,
+       240
+      ],
+      "rotate": 10,
+      "flip": true,
+      "opacity": 1,
+      "art": [
+       0,
+       0.033,
+       1,
+       0.934
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 0,
+     "depth": 0,
+     "face": 0
+    }
+   },
+   "cotes": {
+    "birds": [
+     {
+      "pose": "mee-wow",
+      "box": [
+       -41.2,
+       732.8,
+       246.4,
+       246.4
+      ],
+      "rotate": 18,
+      "flip": false,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0564,
+       1,
+       0.8872
+      ]
+     },
+     {
+      "pose": "meo-trophee",
+      "box": [
+       874.8,
+       812.8,
+       246.4,
+       246.4
+      ],
+      "rotate": 342,
+      "flip": true,
+      "opacity": 1,
+      "art": [
+       0,
+       0.033,
+       1,
+       0.934
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 48,
+     "depth": 3,
+     "face": 0
+    }
+   },
+   "duo": {
+    "birds": [
+     {
+      "pose": "duo-coucou",
+      "box": [
+       388,
+       1388,
+       304,
+       304
+      ],
+      "rotate": 0,
+      "flip": false,
+      "opacity": 1,
+      "art": [
+       0,
+       0.14,
+       1,
+       0.72
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 47,
+     "depth": 5,
+     "face": 0
+    }
+   },
+   "selfie": {
+    "birds": [
+     {
+      "pose": "meo-selfie",
+      "box": [
+       650,
+       1090,
+       380,
+       380
+      ],
+      "rotate": 0,
+      "flip": true,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0375,
+       1,
+       0.9251
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 8445,
+     "depth": 101,
+     "face": 0
+    }
+   }
+  },
+  "rejected": {}
+ },
+ {
+  "frame": "olympe-oracle-a",
+  "drawn": "cotes",
+  "default": "cotes",
+  "layouts": {
+   "pied": {
+    "birds": [
+     {
+      "pose": "mee-montee-au-ciel",
+      "box": [
+       46,
+       1442,
+       300,
+       300
+      ],
+      "rotate": -6,
+      "flip": false,
+      "opacity": 1,
+      "art": [
+       0.0105,
+       0,
+       0.9789,
+       1
+      ]
+     },
+     {
+      "pose": "meo-love",
+      "box": [
+       734,
+       1438,
+       300,
+       300
+      ],
+      "rotate": 6,
+      "flip": true,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0192,
+       1,
+       0.9617
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 98,
+     "depth": 4,
+     "face": 0
+    }
+   },
+   "perches": {
+    "birds": [
+     {
+      "pose": "mee-montee-au-ciel",
+      "box": [
+       116,
+       64,
+       240,
+       240
+      ],
+      "rotate": -10,
+      "flip": false,
+      "opacity": 1,
+      "art": [
+       0.0105,
+       0,
+       0.9789,
+       1
+      ]
+     },
+     {
+      "pose": "meo-love",
+      "box": [
+       724,
+       64,
+       240,
+       240
+      ],
+      "rotate": 10,
+      "flip": true,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0192,
+       1,
+       0.9617
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 0,
+     "depth": 0,
+     "face": 0
+    }
+   },
+   "cotes": {
+    "birds": [
+     {
+      "pose": "mee-montee-au-ciel",
+      "box": [
+       -47.2,
+       736.8,
+       246.4,
+       246.4
+      ],
+      "rotate": 18,
+      "flip": false,
+      "opacity": 1,
+      "art": [
+       0.0105,
+       0,
+       0.9789,
+       1
+      ]
+     },
+     {
+      "pose": "meo-love",
+      "box": [
+       889.2,
+       825.2,
+       229.6,
+       229.6
+      ],
+      "rotate": 342,
+      "flip": true,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0192,
+       1,
+       0.9617
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 65,
+     "depth": 4,
+     "face": 0
+    }
+   },
+   "duo": {
+    "birds": [
+     {
+      "pose": "duo-coucou",
+      "box": [
+       388,
+       1388,
+       304,
+       304
+      ],
+      "rotate": 0,
+      "flip": false,
+      "opacity": 1,
+      "art": [
+       0,
+       0.14,
+       1,
+       0.72
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 34,
+     "depth": 4,
+     "face": 0
+    }
+   },
+   "selfie": {
+    "birds": [
+     {
+      "pose": "meo-selfie",
+      "box": [
+       650,
+       1090,
+       380,
+       380
+      ],
+      "rotate": 0,
+      "flip": true,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0375,
+       1,
+       0.9251
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 9675,
+     "depth": 109,
+     "face": 0
+    }
+   }
+  },
+  "rejected": {}
+ },
+ {
+  "frame": "olympe-oracle-b",
+  "drawn": "ruban",
+  "default": "ruban",
+  "layouts": {
+   "ruban": {
+    "birds": [
+     {
+      "pose": "mee-wow",
+      "box": [
+       30,
+       1402,
+       236,
+       236
+      ],
+      "rotate": -4,
+      "flip": false,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0564,
+       1,
+       0.8872
+      ]
+     },
+     {
+      "pose": "meo-cool",
+      "box": [
+       814,
+       1402,
+       236,
+       236
+      ],
+      "rotate": 4,
+      "flip": true,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0104,
+       1,
+       0.9792
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 0,
+     "depth": 0,
+     "face": 0
+    }
+   }
+  },
+  "rejected": {}
+ },
+ {
+  "frame": "olympe-oracle-c",
+  "drawn": "cotes",
+  "default": "cotes",
+  "layouts": {
+   "pied": {
+    "birds": [
+     {
+      "pose": "mee-bisou-vole",
+      "box": [
+       46,
+       1362,
+       300,
+       300
+      ],
+      "rotate": -6,
+      "flip": false,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0824,
+       1,
+       0.8352
+      ]
+     },
+     {
+      "pose": "meo-feu-artifice",
+      "box": [
+       734,
+       1418,
+       300,
+       300
+      ],
+      "rotate": 6,
+      "flip": true,
+      "opacity": 1,
+      "art": [
+       0.0567,
+       0,
+       0.8867,
+       1
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 111,
+     "depth": 3,
+     "face": 0
+    }
+   },
+   "perches": {
+    "birds": [
+     {
+      "pose": "mee-bisou-vole",
+      "box": [
+       116,
+       64,
+       240,
+       240
+      ],
+      "rotate": -10,
+      "flip": false,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0824,
+       1,
+       0.8352
+      ]
+     },
+     {
+      "pose": "meo-feu-artifice",
+      "box": [
+       724,
+       64,
+       240,
+       240
+      ],
+      "rotate": 10,
+      "flip": true,
+      "opacity": 1,
+      "art": [
+       0.0567,
+       0,
+       0.8867,
+       1
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 0,
+     "depth": 0,
+     "face": 0
+    }
+   },
+   "cotes": {
+    "birds": [
+     {
+      "pose": "mee-bisou-vole",
+      "box": [
+       -28,
+       820,
+       240,
+       240
+      ],
+      "rotate": 14,
+      "flip": false,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0824,
+       1,
+       0.8352
+      ]
+     },
+     {
+      "pose": "meo-feu-artifice",
+      "box": [
+       872,
+       920,
+       240,
+       240
+      ],
+      "rotate": 346,
+      "flip": true,
+      "opacity": 1,
+      "art": [
+       0.0567,
+       0,
+       0.8867,
+       1
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 8,
+     "depth": 2,
+     "face": 0
+    }
+   },
+   "duo": {
+    "birds": [
+     {
+      "pose": "duo-coucou",
+      "box": [
+       412,
+       1396,
+       256,
+       256
+      ],
+      "rotate": 0,
+      "flip": false,
+      "opacity": 1,
+      "art": [
+       0,
+       0.14,
+       1,
+       0.72
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 40,
+     "depth": 5,
+     "face": 0
+    }
+   },
+   "selfie": {
+    "birds": [
+     {
+      "pose": "meo-selfie",
+      "box": [
+       650,
+       1090,
+       380,
+       380
+      ],
+      "rotate": 0,
+      "flip": true,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0375,
+       1,
+       0.9251
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 9053,
+     "depth": 105,
+     "face": 0
+    }
+   }
+  },
+  "rejected": {}
+ },
+ {
+  "frame": "olympe-orateur-a",
+  "drawn": "pied",
+  "default": "pied",
+  "layouts": {
+   "pied": {
+    "birds": [
+     {
+      "pose": "mee-danse",
+      "box": [
+       46,
+       1430,
+       300,
+       300
+      ],
+      "rotate": -6,
+      "flip": false,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0583,
+       1,
+       0.8833
+      ]
+     },
+     {
+      "pose": "meo-serenade",
+      "box": [
+       791.2,
+       1364.4,
+       300,
+       300
+      ],
+      "rotate": 6,
+      "flip": true,
+      "opacity": 1,
+      "art": [
+       0.075,
+       0,
+       0.85,
+       1
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 55,
+     "depth": 4,
+     "face": 0
+    }
+   },
+   "perches": {
+    "birds": [
+     {
+      "pose": "mee-danse",
+      "box": [
+       116,
+       64,
+       240,
+       240
+      ],
+      "rotate": -10,
+      "flip": false,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0583,
+       1,
+       0.8833
+      ]
+     },
+     {
+      "pose": "meo-serenade",
+      "box": [
+       724,
+       64,
+       240,
+       240
+      ],
+      "rotate": 10,
+      "flip": true,
+      "opacity": 1,
+      "art": [
+       0.075,
+       0,
+       0.85,
+       1
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 0,
+     "depth": 0,
+     "face": 0
+    }
+   },
+   "cotes": {
+    "birds": [
+     {
+      "pose": "mee-danse",
+      "box": [
+       -41.2,
+       732.8,
+       246.4,
+       246.4
+      ],
+      "rotate": 18,
+      "flip": false,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0583,
+       1,
+       0.8833
+      ]
+     },
+     {
+      "pose": "meo-serenade",
+      "box": [
+       860.4,
+       808.4,
+       263.2,
+       263.2
+      ],
+      "rotate": 342,
+      "flip": true,
+      "opacity": 1,
+      "art": [
+       0.075,
+       0,
+       0.85,
+       1
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 29,
+     "depth": 4,
+     "face": 0
+    }
+   },
+   "duo": {
+    "birds": [
+     {
+      "pose": "duo-coucou",
+      "box": [
+       412,
+       1400,
+       256,
+       256
+      ],
+      "rotate": 0,
+      "flip": false,
+      "opacity": 1,
+      "art": [
+       0,
+       0.14,
+       1,
+       0.72
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 33,
+     "depth": 4,
+     "face": 0
+    }
+   },
+   "selfie": {
+    "birds": [
+     {
+      "pose": "meo-selfie",
+      "box": [
+       650,
+       1090,
+       380,
+       380
+      ],
+      "rotate": 0,
+      "flip": true,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0375,
+       1,
+       0.9251
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 8599,
+     "depth": 105,
+     "face": 0
+    }
+   }
+  },
+  "rejected": {}
+ },
+ {
+  "frame": "olympe-orateur-b",
+  "drawn": "libre",
+  "default": "libre",
+  "layouts": {
+   "pied": {
+    "birds": [
+     {
+      "pose": "mee-coucou",
+      "box": [
+       46,
+       1414,
+       300,
+       300
+      ],
+      "rotate": -6,
+      "flip": false,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0865,
+       1,
+       0.827
+      ]
+     },
+     {
+      "pose": "meo-salut",
+      "box": [
+       734,
+       1366,
+       300,
+       300
+      ],
+      "rotate": 6,
+      "flip": true,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0104,
+       1,
+       0.9792
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 113,
+     "depth": 4,
+     "face": 0
+    }
+   },
+   "perches": {
+    "birds": [
+     {
+      "pose": "mee-coucou",
+      "box": [
+       116,
+       64,
+       240,
+       240
+      ],
+      "rotate": -10,
+      "flip": false,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0865,
+       1,
+       0.827
+      ]
+     },
+     {
+      "pose": "meo-salut",
+      "box": [
+       724,
+       64,
+       240,
+       240
+      ],
+      "rotate": 10,
+      "flip": true,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0104,
+       1,
+       0.9792
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 0,
+     "depth": 0,
+     "face": 0
+    }
+   },
+   "cotes": {
+    "birds": [
+     {
+      "pose": "mee-coucou",
+      "box": [
+       -48,
+       720,
+       280,
+       280
+      ],
+      "rotate": 18,
+      "flip": false,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0865,
+       1,
+       0.827
+      ]
+     },
+     {
+      "pose": "meo-salut",
+      "box": [
+       860.4,
+       808.4,
+       263.2,
+       263.2
+      ],
+      "rotate": 342,
+      "flip": true,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0104,
+       1,
+       0.9792
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 53,
+     "depth": 5,
+     "face": 0
+    }
+   },
+   "duo": {
+    "birds": [
+     {
+      "pose": "duo-coucou",
+      "box": [
+       451,
+       1386,
+       328,
+       328
+      ],
+      "rotate": 0,
+      "flip": false,
+      "opacity": 1,
+      "art": [
+       0,
+       0.14,
+       1,
+       0.72
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 37,
+     "depth": 4,
+     "face": 0
+    }
+   },
+   "libre": {
+    "birds": [
+     {
+      "pose": "mee-coucou",
+      "box": [
+       16,
+       1472,
+       200,
+       200
+      ],
+      "rotate": -6,
+      "flip": false,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0865,
+       1,
+       0.827
+      ]
+     },
+     {
+      "pose": "meo-salut",
+      "box": [
+       896,
+       716,
+       184,
+       184
+      ],
+      "rotate": 4,
+      "flip": true,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0104,
+       1,
+       0.9792
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 0,
+     "depth": 0,
+     "face": 0
+    }
+   },
+   "selfie": {
+    "birds": [
+     {
+      "pose": "meo-selfie",
+      "box": [
+       650,
+       1090,
+       380,
+       380
+      ],
+      "rotate": 0,
+      "flip": true,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0375,
+       1,
+       0.9251
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 8444,
+     "depth": 101,
+     "face": 0
+    }
+   }
+  },
+  "rejected": {}
+ },
+ {
+  "frame": "olympe-orateur-c",
+  "drawn": "pied",
+  "default": "pied",
+  "layouts": {
+   "pied": {
+    "birds": [
+     {
+      "pose": "mee-bravo",
+      "box": [
+       46,
+       1406,
+       300,
+       300
+      ],
+      "rotate": -6,
+      "flip": false,
+      "opacity": 1,
+      "art": [
+       0.0411,
+       0,
+       0.9179,
+       1
+      ]
+     },
+     {
+      "pose": "meo-yo",
+      "box": [
+       734,
+       1382,
+       300,
+       300
+      ],
+      "rotate": 6,
+      "flip": true,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0789,
+       1,
+       0.8423
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 70,
+     "depth": 4,
+     "face": 0
+    }
+   },
+   "perches": {
+    "birds": [
+     {
+      "pose": "mee-bravo",
+      "box": [
+       116,
+       64,
+       240,
+       240
+      ],
+      "rotate": -10,
+      "flip": false,
+      "opacity": 1,
+      "art": [
+       0.0411,
+       0,
+       0.9179,
+       1
+      ]
+     },
+     {
+      "pose": "meo-yo",
+      "box": [
+       724,
+       64,
+       240,
+       240
+      ],
+      "rotate": 10,
+      "flip": true,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0789,
+       1,
+       0.8423
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 0,
+     "depth": 0,
+     "face": 0
+    }
+   },
+   "cotes": {
+    "birds": [
+     {
+      "pose": "mee-bravo",
+      "box": [
+       -41.2,
+       732.8,
+       246.4,
+       246.4
+      ],
+      "rotate": 18,
+      "flip": false,
+      "opacity": 1,
+      "art": [
+       0.0411,
+       0,
+       0.9179,
+       1
+      ]
+     },
+     {
+      "pose": "meo-yo",
+      "box": [
+       874.8,
+       812.8,
+       246.4,
+       246.4
+      ],
+      "rotate": 342,
+      "flip": true,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0789,
+       1,
+       0.8423
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 0,
+     "depth": 0,
+     "face": 0
+    }
+   },
+   "duo": {
+    "birds": [
+     {
+      "pose": "duo-coucou",
+      "box": [
+       388,
+       1364,
+       304,
+       304
+      ],
+      "rotate": 0,
+      "flip": false,
+      "opacity": 1,
+      "art": [
+       0,
+       0.14,
+       1,
+       0.72
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 38,
+     "depth": 4,
+     "face": 0
+    }
+   },
+   "selfie": {
+    "birds": [
+     {
+      "pose": "meo-selfie",
+      "box": [
+       650,
+       1090,
+       380,
+       380
+      ],
+      "rotate": 0,
+      "flip": true,
+      "opacity": 1,
+      "art": [
+       0,
+       0.0375,
+       1,
+       0.9251
+      ]
+     }
+    ],
+    "validated": {
+     "overlap": 9244,
+     "depth": 107,
+     "face": 0
+    }
+   }
+  },
+  "rejected": {}
+ }
+]

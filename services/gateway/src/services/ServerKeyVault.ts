@@ -10,7 +10,7 @@ let masterKeyAbsenceLogged = false;
 type WrappedKeyRow = { readonly encryptedKey: string; readonly iv: string; readonly authTag: string };
 
 /** Désenveloppe une clé de données ; `null` quand la clé maîtresse n'est pas la sienne. */
-function unwrapDataKey(masterKey: Buffer, row: WrappedKeyRow): Buffer | null {
+export function unwrapDataKey(masterKey: Buffer, row: WrappedKeyRow): Buffer | null {
   try {
     const decipher = crypto.createDecipheriv('aes-256-gcm', masterKey, Buffer.from(row.iv, 'base64'));
     decipher.setAuthTag(Buffer.from(row.authTag, 'base64'));

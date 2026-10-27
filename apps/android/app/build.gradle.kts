@@ -65,6 +65,7 @@ dependencies {
     implementation(project(":feature:notifications"))
     implementation(project(":feature:settings"))
     implementation(project(":feature:contacts"))
+    implementation(project(":feature:community"))
     implementation(project(":feature:stories"))
     implementation(project(":feature:calls"))
     implementation(project(":feature:reels"))

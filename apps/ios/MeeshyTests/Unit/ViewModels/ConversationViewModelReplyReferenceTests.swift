@@ -75,7 +75,6 @@ final class ConversationViewModelReplyReferenceTests: XCTestCase {
             reportService: MockReportService(),
             messageSocket: MockMessageSocket(),
             dependencies: ConversationDependencies(
-                dbPool: pool,
                 persistence: MessagePersistenceActor(dbWriter: pool)
             )
         )

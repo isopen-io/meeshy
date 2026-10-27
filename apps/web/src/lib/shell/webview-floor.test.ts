@@ -67,12 +67,52 @@ describe('redirectBelowWebViewFloor — le contrôle au démarrage', () => {
 });
 
 describe('l’écran de mise à jour', () => {
+  const PLAY_STORE = 'https://play.google.com/store/apps/details?id=com.google.android.webview';
   const page = readFileSync(fileURLToPath(new URL(`../../../public/${WEBVIEW_UPDATE_PAGE}`, import.meta.url)), 'utf8');
   const script = page.slice(page.indexOf('<script>'), page.indexOf('</script>'));
 
   test('il parle les sept langues et mène à la fiche Play Store de la WebView', () => {
     for (const lang of ['fr', 'en', 'es', 'pt', 'it', 'de', 'ar']) expect(script).toContain(`${lang}: {`);
     expect(page).toContain('https://play.google.com/store/apps/details?id=com.google.android.webview');
+  });
+
+  type Rendered = { readonly title: string; readonly action: string; readonly href: string; readonly actionHidden: boolean };
+
+  function render(userAgent: string): Rendered {
+    const element = () => ({ textContent: '', hidden: false, href: PLAY_STORE });
+    const nodes = { title: element(), body: element(), action: element() };
+    const document = {
+      documentElement: { lang: '', dir: '' },
+      title: '',
+      getElementById: (id: keyof typeof nodes) => nodes[id],
+    };
+    const navigator = { userAgent, languages: ['fr-FR'], language: 'fr-FR' };
+    new Function('navigator', 'document', script.slice('<script>'.length))(navigator, document);
+    return { title: nodes.title.textContent, action: nodes.action.textContent, href: nodes.action.href, actionHidden: nodes.action.hidden };
+  }
+
+  test('sous le plancher, il demande la mise à jour et ouvre le Play Store', () => {
+    expect(render(webView(MIN_ANDROID_WEBVIEW_MAJOR - 1))).toEqual({
+      title: 'Mettez à jour Android System WebView',
+      action: 'Ouvrir le Play Store',
+      href: PLAY_STORE,
+      actionHidden: false,
+    });
+  });
+
+  test('une WebView à jour qui échoue à charger la page ne se fait pas dire trop ancienne (#13159)', () => {
+    for (const major of [MIN_ANDROID_WEBVIEW_MAJOR, 130]) {
+      expect(render(webView(major)).title).toBe('Meeshy n’a pas pu s’ouvrir');
+    }
+  });
+
+  test('l’échec de chargement offre de réessayer, comme le bouton Actualiser du navigateur : la coque n’a pas d’autre sortie (#13184)', () => {
+    expect(render(webView(130))).toEqual({
+      title: 'Meeshy n’a pas pu s’ouvrir',
+      action: 'Réessayer',
+      href: '/',
+      actionHidden: false,
+    });
   });
 
   test('son script se lit sur une WebView ancienne : ES5, aucun module', () => {

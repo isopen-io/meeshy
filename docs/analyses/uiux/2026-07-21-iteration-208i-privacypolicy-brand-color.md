@@ -2,7 +2,7 @@
 
 **Date**: 2026-07-21
 **Track**: iOS UI/UX (suffix `i`)
-**Scope**: `apps/ios/Meeshy/Features/Main/Views/PrivacyPolicyView.swift` (1 file)
+**Scope**: `apps/ios/Meeshy/Features/Settings/Views/PrivacyPolicyView.swift` (1 file)
 **Type**: Design-system consolidation — 0 logic / 0 visual change / 0 i18n / 0 test
 
 ## Context

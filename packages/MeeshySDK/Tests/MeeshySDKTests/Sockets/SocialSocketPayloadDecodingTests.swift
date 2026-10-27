@@ -39,7 +39,7 @@ final class SocialSocketPayloadDecodingTests: XCTestCase {
     }
 
     func test_socketPayloadDecoder_decodesStoryUpdated_withISODatesAndEngagementReset() throws {
-        let decoder = SocialSocketManager.makeSocketPayloadDecoder()
+        let decoder = MeeshyCoders.decoder(.socket)
 
         let decoded = try decoder.decode(SocketStoryUpdatedData.self, from: makeStoryJSON(engagementReset: true))
 
@@ -54,13 +54,13 @@ final class SocialSocketPayloadDecodingTests: XCTestCase {
     }
 
     func test_socketPayloadDecoder_decodesStoryUpdated_withoutFlag() throws {
-        let decoder = SocialSocketManager.makeSocketPayloadDecoder()
+        let decoder = MeeshyCoders.decoder(.socket)
         let decoded = try decoder.decode(SocketStoryUpdatedData.self, from: makeStoryJSON(engagementReset: nil))
         XCTAssertNil(decoded.engagementReset)
     }
 
     func test_socketPayloadDecoder_decodesBasicISODate_withoutFractionalSeconds() throws {
-        let decoder = SocialSocketManager.makeSocketPayloadDecoder()
+        let decoder = MeeshyCoders.decoder(.socket)
         let json = Data("""
         {"story": {"id": "s1", "type": "STORY", "createdAt": "2026-07-29T18:06:22Z",
                    "author": {"id": "a1", "username": "meeshy", "displayName": "Meeshy"}}}
@@ -81,8 +81,8 @@ final class SocialSocketPayloadDecodingTests: XCTestCase {
             .appendingPathComponent("Sources/MeeshySDK/Sockets/SocialSocketManager.swift")
         let source = try String(contentsOf: url, encoding: .utf8)
         XCTAssertTrue(
-            source.contains("static let offMainDecoder: JSONDecoder = makeSocketPayloadDecoder()"),
-            "offMainDecoder doit venir de makeSocketPayloadDecoder() — un JSONDecoder() nu perd les dates ISO"
+            source.contains("static let offMainDecoder: JSONDecoder = MeeshyCoders.decoder(.socket)"),
+            "offMainDecoder doit venir de MeeshyCoders.decoder(.socket) — un JSONDecoder() nu perd les dates ISO"
         )
         XCTAssertFalse(
             source.contains("offMainDecoder = JSONDecoder()"),

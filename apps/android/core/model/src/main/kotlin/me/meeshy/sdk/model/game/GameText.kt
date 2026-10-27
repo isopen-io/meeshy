@@ -12,6 +12,12 @@ public sealed interface GameTextArg {
     /** Un nombre écrit en compact par la locale (« 8,7 k » dès 10 000). */
     public data class Compact(val value: Int) : GameTextArg
 
+    /** Un jour civil `AAAA-MM-JJ`, écrit par la locale (« 1 nov. 2026 »). */
+    public data class Day(val isoDay: String) : GameTextArg
+
+    /** Un nombre décimal écrit par la locale, deux décimales au plus (« 1,25 »). */
+    public data class Decimal(val value: Double) : GameTextArg
+
     /** Un texte déjà prêt (un nom propre venu du serveur, une heure). */
     public data class Verbatim(val value: String) : GameTextArg
 

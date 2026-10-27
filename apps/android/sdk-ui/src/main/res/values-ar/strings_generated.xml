@@ -2,6 +2,9 @@
 <resources>
     <string name="audio_fullscreen_dial">الموضع في الرسالة الصوتية</string>
     <string name="avatar_a11y_mood">المزاج %s</string>
+    <string name="bubble_story_citation_answer">رد على القصة</string>
+    <string name="bubble_story_citation_open_hint">يفتح القصة المقتبسة</string>
+    <string name="bubble_story_citation_unavailable">القصة غير متاحة</string>
     <string name="common_cancel">إلغاء</string>
     <string name="common_clearSearch">مسح البحث</string>
     <string name="common_close">إغلاق</string>
@@ -22,6 +25,13 @@
     <string name="emoji_category_smileys">الوجوه</string>
     <string name="emoji_category_symbols">الرموز</string>
     <string name="emoji_category_travel">السفر</string>
+    <string name="focal_focus_add_reaction">إضافة تفاعل</string>
+    <string name="focal_focus_translation_detail">تفاصيل الترجمة</string>
+    <string name="focal_row_you">أنت</string>
+    <string name="location_fullscreen_directions">المسار</string>
+    <string name="location_fullscreen_mapStyle">نمط الخريطة</string>
+    <string name="location_fullscreen_sharedPosition">موقع مشارَك</string>
+    <string name="media_audio_transcribe">نسخ نصي</string>
     <string name="media_crop_a11y_handle_bottom">الحافة السفلية</string>
     <string name="media_crop_a11y_handle_bottomLeft">الزاوية السفلية اليسرى</string>
     <string name="media_crop_a11y_handle_bottomRight">الزاوية السفلية اليمنى</string>
@@ -40,6 +50,8 @@
     <string name="media_trim_loading">جارٍ تحميل المعاينة</string>
     <string name="media_trim_of_total">من %s</string>
     <string name="media_trim_window">الجزء المحتفظ به</string>
+    <string name="message_long_collapse">عرض أقل</string>
+    <string name="message_long_read_more">اقرأ المزيد</string>
     <string name="notification_date_ago">قبل %s</string>
     <string name="notification_date_hours">%d س</string>
     <string name="notification_date_minutes">%d د</string>

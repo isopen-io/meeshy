@@ -8,7 +8,7 @@ les PR en vol.
 ## Changements
 
 ### Dynamic Type — `.system(size:)` figé → `MeeshyFont.relative(...)`
-`apps/ios/Meeshy/Features/Main/Views/TwoFactorSetupView.swift`
+`apps/ios/Meeshy/Features/Settings/Views/TwoFactorSetupView.swift`
 - **30 conversions** : tout `Text`/`TextField`/`SecureField` + petites icônes inline (12–13 pt)
   → `MeeshyFont.relative(size, weight:, design:)` (préserve weight + design, dont `.monospaced`
   pour le champ code 28 pt et les codes de secours 14 pt).

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Libellés courts des glissements de rangée, repris des clés iOS swipe.* (marquées « stale » dans le catalogue, donc ignorées par le générateur). -->
+<resources>
+    <string name="swipe_pin">Fijar</string>
+    <string name="swipe_unpin">Desfijar</string>
+    <string name="swipe_mute">Silenciar</string>
+    <string name="swipe_unmute">Sonido</string>
+    <string name="swipe_archive">Archivar</string>
+    <string name="swipe_unarchive">Desarchivar</string>
+    <string name="swipe_mark_read">Leído</string>
+    <string name="swipe_mark_unread">No leído</string>
+    <string name="swipe_hide">Ocultar</string>
+</resources>

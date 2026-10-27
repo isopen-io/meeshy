@@ -225,13 +225,19 @@ final class ConversationStateOutboxTests: XCTestCase {
 
     // MARK: - Backoff
 
-    func test_backoff_isExponentialCappedAt60s() {
-        XCTAssertEqual(OutboxBackoff.nextDelay(forAttempts: 0), 5)
-        XCTAssertEqual(OutboxBackoff.nextDelay(forAttempts: 1), 10)
-        XCTAssertEqual(OutboxBackoff.nextDelay(forAttempts: 2), 20)
-        XCTAssertEqual(OutboxBackoff.nextDelay(forAttempts: 3), 40)
-        XCTAssertEqual(OutboxBackoff.nextDelay(forAttempts: 4), 60, "Capped at 60s")
-        XCTAssertEqual(OutboxBackoff.nextDelay(forAttempts: 10), 60, "Stays capped")
+    func test_markFailedTransient_schedulesExponentialRetryCappedAt60s() async throws {
+        let now = Date(timeIntervalSince1970: 0)
+        let outbox = makeOutbox(now: now)
+        let enqueued = await outbox.enqueue(.setPinned(true), for: "conv-1")
+        let task = try XCTUnwrap(enqueued)
+        var delays: [TimeInterval] = []
+        for _ in 0..<5 {
+            await outbox.markFailedTransient(task.id, reason: "offline")
+            let pending = await outbox.allPending()
+            let retryAt = try XCTUnwrap(pending.first?.nextRetryAt)
+            delays.append(retryAt.timeIntervalSince(now))
+        }
+        XCTAssertEqual(delays, [10, 20, 40, 60, 60])
     }
 
     // MARK: - Persistence across instances (simulates app kill)

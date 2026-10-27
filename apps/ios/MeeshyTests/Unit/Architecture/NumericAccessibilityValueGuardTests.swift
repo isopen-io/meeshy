@@ -110,8 +110,9 @@ final class NumericAccessibilityValueGuardTests: XCTestCase {
     func test_convertedHostsNameTheSingleSource() {
         let hosts = [
             // #6578 — la ligne de commentaire et son compteur de likes ont quitté
-            // `FeedCommentsSheet.swift` pour leur propre fichier : la liste SUIT l'hôte.
-            "Features/Main/Views/CommentRowView.swift",
+            // `FeedCommentsSheet.swift` pour leur propre fichier, puis (#13133) pour
+            // le « j'aime » partagé du post et de la story : la liste SUIT l'hôte.
+            "Features/Main/Views/CommentRowParts.swift",
             "Features/Main/Views/PostDetailView.swift",
             // #7625 — la barre de lecture d'un réel (sa valeur en pourcentage)
             // a quitté `ReelsPlayerView.swift` pour `ReelPageChrome.swift`.
@@ -215,8 +216,8 @@ final class NumericAccessibilityValueGuardTests: XCTestCase {
             offenders.isEmpty,
             "Ces sites composent une horloge à la main. `String(format:)` sans locale "
             + "grave les chiffres latins : une durée MONTRÉE passe par "
-            + "`LocalizedNumber.duration`, une durée DITE par "
-            + "`LocalizedNumber.spokenDuration` :\n"
+            + "`MediaFormat.duration`, une durée DITE par "
+            + "`MediaFormat.duration(_:style: .spoken)` :\n"
             + offenders.sorted().joined(separator: "\n")
         )
     }
@@ -235,7 +236,7 @@ final class NumericAccessibilityValueGuardTests: XCTestCase {
         let hosts = [
             // #9125 — la minuterie de la caméra a SUIVI la capture : l'ancienne
             // vue a quitté le dépôt, le viseur du composeur la porte.
-            "Features/Main/Composer/ComposerSceneCameraBar.swift",
+            "Features/Composer/ComposerSceneCameraBar.swift",
             "Features/Main/Components/MediaKindLabel.swift",
             // #7005 — la minuterie de l'aperçu d'appui long a DÉMÉNAGÉ, elle
             // n'a pas disparu : `OverlayAudioPlayer` a quitté
@@ -249,9 +250,9 @@ final class NumericAccessibilityValueGuardTests: XCTestCase {
             "Features/Main/Components/MessageDetail/MessageViewsConsumptionCard.swift",
             // La durée d'appel a quitté `CallManager.swift` avec son découpage
             // (2026-10-02) : la liste suit l'hôte.
-            "Features/Main/Services/CallManager+Duration.swift",
+            "Features/Call/Services/CallManager+Duration.swift",
             "Features/Main/Views/AudioPostComposerView.swift",
-            "Features/Main/Views/MagicLinkView.swift",
+            "Features/Auth/Views/MagicLinkView.swift",
             // #7548 — la minuterie de la ligne de liste a DÉMÉNAGÉ : la ligne
             // visible rend l'horloge du composeur commun (SDK), la ligne DITE
             // la convertit ici. La liste suit l'hôte, comme au 248i.
@@ -261,9 +262,8 @@ final class NumericAccessibilityValueGuardTests: XCTestCase {
             let url = appRoot.appendingPathComponent(host)
             let text = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
             XCTAssertTrue(
-                text.contains("LocalizedNumber.duration")
-                || text.contains("LocalizedNumber.spokenDuration")
-                || text.contains("LocalizedNumber.wholeSeconds"),
+                text.contains("MediaFormat.duration")
+                || text.contains("MediaFormat.wholeSeconds"),
                 "\(host) ne nomme plus la source des durées — soit la minuterie a disparu "
                 + "(mettre la liste à jour), soit la règle a été réécrite sur place."
             )
@@ -277,12 +277,12 @@ final class NumericAccessibilityValueGuardTests: XCTestCase {
     func test_timerHostsSpeakTheirDurationInWords() {
         let hosts = [
             // #8276 — la minuterie de l'écran d'appel a suivi le découpage.
-            "Features/Main/Views/CallView+Connected.swift",
-            "Features/Main/Views/CallView+Header.swift",
-            "Features/Main/Views/FloatingCallPillView.swift",
-            "Features/Main/Views/MagicLinkView.swift",
+            "Features/Call/Views/CallView+Connected.swift",
+            "Features/Call/Views/CallView+Header.swift",
+            "Features/Call/Views/FloatingCallPillView.swift",
+            "Features/Auth/Views/MagicLinkView.swift",
             "Features/Main/Views/AudioPostComposerView.swift",
-            "Features/Main/Composer/ComposerSceneCameraBar.swift",
+            "Features/Composer/ComposerSceneCameraBar.swift",
             "Features/Main/Components/UniversalComposerBar+Recording.swift",
         ]
         for host in hosts {
@@ -291,7 +291,8 @@ final class NumericAccessibilityValueGuardTests: XCTestCase {
                 (try? String(contentsOf: url, encoding: .utf8)) ?? ""
             )
             XCTAssertTrue(
-                text.contains("spokenDuration") || text.contains("spokenCountdown"),
+                text.contains("spokenDuration") || text.contains("spokenCountdown")
+                || text.contains("style: .spoken"),
                 "\(host) rend une minuterie sans jamais nommer sa forme parlée : "
                 + "sa valeur d'accessibilité annonce donc une heure."
             )
@@ -316,8 +317,8 @@ final class NumericAccessibilityValueGuardTests: XCTestCase {
     /// dépôt, sans quoi il enverrait corriger ce qui ne l'est pas (leçon 238i).
     func test_theClockExtractorSparesEverythingElse() {
         let innocent = #"""
-        LocalizedNumber.duration(seconds: total)
-        LocalizedNumber.spokenDuration(seconds: total)
+        MediaFormat.duration(total)
+        MediaFormat.duration(total, style: .spoken)
         String(format: String(localized: "a11y.transcription.confidence"), pct)
         String(format: "%.1f MB", megabytes)
         """#

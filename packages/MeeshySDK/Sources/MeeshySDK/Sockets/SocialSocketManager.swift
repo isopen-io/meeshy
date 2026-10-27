@@ -53,7 +53,7 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
 
     private var manager: SocketManager?
     private var socket: SocketIOClient?
-    private let decoder = JSONDecoder()
+    private let decoder = MeeshyCoders.decoder(.socket)
     private var reconnectAttempt: Int = 0
     private var backoff = SocketReconnectBackoff()
     private var reconnectTask: Task<Void, Never>?
@@ -73,28 +73,7 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
     public let didReconnect = PassthroughSubject<Void, Never>()
     private var lifecycleCancellables = Set<AnyCancellable>()
 
-    /// Factory UNIQUE des décodeurs de payloads socket. La gateway émet ses
-    /// dates en ISO 8601 (avec ou sans fractions) — un `JSONDecoder()` nu
-    /// (stratégie par défaut = Double epoch) fait échouer TOUT payload
-    /// porteur d'un post complet (`story:updated`, `story:created`,
-    /// `post:created`, `status:*`) en `typeMismatch(Double)` : l'événement
-    /// temps réel est silencieusement perdu et l'UI attend le prochain
-    /// refresh REST. Bug prouvé en prod le 2026-07-29 (logs simulateur).
-    /// `internal` (pas `private`) pour être verrouillé par
-    /// `SocialSocketPayloadDecodingTests`.
-    nonisolated static func makeSocketPayloadDecoder() -> JSONDecoder {
-        let d = JSONDecoder()
-        d.dateDecodingStrategy = .custom { decoder in
-            let container = try decoder.singleValueContainer()
-            let dateStr = try container.decode(String.self)
-            if let date = WireDate.date(from: dateStr) { return date }
-            throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid date: \(dateStr)")
-        }
-        return d
-    }
-
     private init() {
-        decoder.dateDecodingStrategy = Self.makeSocketPayloadDecoder().dateDecodingStrategy
         observeNetworkRecovery()
     }
 
@@ -660,7 +639,7 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
     /// queue preserves arrival order; the handler still lands on main. (The small
     /// reaction handlers keep using `decoder` on main — separate instance, no
     /// cross-queue sharing.)
-    private static let offMainDecoder: JSONDecoder = makeSocketPayloadDecoder()
+    private static let offMainDecoder: JSONDecoder = MeeshyCoders.decoder(.socket)
     private static let decodeQueue = DispatchQueue(label: "me.meeshy.social-socket.decode", qos: .userInitiated)
     private static let deliveryLane = MainActorDeliveryLane()
 

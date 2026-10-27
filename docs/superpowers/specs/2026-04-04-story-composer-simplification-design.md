@@ -93,7 +93,7 @@ Si `viaUsername` est present, afficher "Republier le status de @username" dans l
 
 #### 4d. Modifications reshareStory → reshareStatus
 
-**Fichier** : `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift`
+**Fichier** : `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Content.swift`
 
 `reshareStory()` pour les status :
 - Au lieu d'appeler `/posts/{id}/repost`
@@ -120,7 +120,7 @@ Style : `.font(.system(size: 11))`, `.foregroundColor(theme.textMuted)`
 | `apps/ios/Meeshy/Features/Main/Views/StatusComposerView.swift` | Params initiaux + viaUsername |
 | `apps/ios/Meeshy/Features/Main/ViewModels/StatusViewModel.swift` | viaUsername dans setStatus() |
 | `packages/MeeshySDK/Sources/MeeshySDK/Services/StatusService.swift` | viaUsername dans create() |
-| `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift` | reshareStory → StatusComposer |
+| `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Content.swift` | reshareStory → StatusComposer |
 | `apps/ios/Meeshy/Features/Main/Views/StatusBarView.swift` | Afficher "via @username" |
 | `apps/ios/Meeshy/Features/Main/Components/StatusBubbleOverlay.swift` | Afficher "via @username" |
 

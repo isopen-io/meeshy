@@ -7,16 +7,7 @@ enum SocketPayloadDecoder {
     /// Shared, pre-configured decoder. Used ONLY on `decodeQueue` (serial), so a
     /// single reused instance is race-free and avoids allocating a decoder plus
     /// wiring its date strategy on every realtime event.
-    private static let socketDecoder: JSONDecoder = {
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .custom { decoder in
-            let container = try decoder.singleValueContainer()
-            let dateStr = try container.decode(String.self)
-            if let date = WireDate.date(from: dateStr) { return date }
-            throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid date: \(dateStr)")
-        }
-        return decoder
-    }()
+    private static let socketDecoder: JSONDecoder = MeeshyCoders.decoder(.socket)
 
     /// Serial so payloads decode in arrival order, off the main thread.
     private static let decodeQueue = DispatchQueue(label: "me.meeshy.socket.decode", qos: .userInitiated)

@@ -92,7 +92,7 @@ final class ComposerSheetHeaderTests: XCTestCase {
 
     private var cheminEntete: String { "packages/MeeshySDK/Sources/MeeshyUI/Theme/MeeshySheetHeader.swift" }
     private var cheminMention: String { "packages/MeeshySDK/Sources/MeeshyUI/Story/MentionSuggestions.swift" }
-    private var cheminHashtag: String { "apps/ios/Meeshy/Features/Main/Composer/ComposerHashtagSheet.swift" }
+    private var cheminHashtag: String { "apps/ios/Meeshy/Features/Composer/ComposerHashtagSheet.swift" }
 
     private func compact(_ s: String) -> String { s.filter { !$0.isWhitespace } }
 

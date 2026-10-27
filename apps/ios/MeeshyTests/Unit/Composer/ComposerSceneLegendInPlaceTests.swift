@@ -41,12 +41,12 @@ final class ComposerSceneLegendInPlaceTests: XCTestCase {
 
     private func panelCode() throws -> String {
         AppSourceGuard.stripComments(
-            try AppSourceGuard.unit("Meeshy/Features/Main/Composer/ComposerSceneDescriptionPanel.swift"))
+            try AppSourceGuard.unit("Meeshy/Features/Composer/ComposerSceneDescriptionPanel.swift"))
     }
 
     private func layerCode() throws -> String {
         AppSourceGuard.stripComments(
-            try AppSourceGuard.unit("Meeshy/Features/Main/Composer/ComposerDescriptionLayer.swift"))
+            try AppSourceGuard.unit("Meeshy/Features/Composer/ComposerDescriptionLayer.swift"))
     }
 
     /// Sans blancs : les gardes ci-dessous cherchent des littéraux

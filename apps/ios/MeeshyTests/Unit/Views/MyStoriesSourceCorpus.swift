@@ -20,20 +20,20 @@ enum MyStoriesSourceCorpus {
     /// en silence : la liste anticipe la décomposition à venir, et une garde ne
     /// doit pas échouer parce qu'un fichier n'existe pas ENCORE.
     static let relativePaths = [
-        "Meeshy/Features/Main/Views/MyStoriesView.swift",
-        "Meeshy/Features/Main/Views/MyStoriesPublishedTab.swift",
-        "Meeshy/Features/Main/Views/MyStoriesDraftsTab.swift",
-        "Meeshy/Features/Main/Views/MyStoryCard.swift",
-        "Meeshy/Features/Main/Views/MyStoryActionBar.swift",
-        "Meeshy/Features/Main/Views/MyStoryThumbnail.swift",
-        "Meeshy/Features/Main/Views/MyStoryCardPresentation.swift",
-        "Meeshy/Features/Main/Views/MyStoriesDeleteConfirmation.swift",
-        "Meeshy/Features/Main/Views/MyStoriesDeleteAlerts.swift",
-        "Meeshy/Features/Main/Views/MyStoriesQueueRows.swift",
-        "Meeshy/Features/Main/Views/MyStoriesSheetTargets.swift",
-        "Meeshy/Features/Main/Views/MyStoryActionMenu.swift",
-        "Meeshy/Features/Main/Views/MyStoryCardModelRules.swift",
-        "Meeshy/Features/Main/Views/StoryVisibilityMenuResolver.swift",
+        "Meeshy/Features/Stories/Views/MyStoriesView.swift",
+        "Meeshy/Features/Stories/Views/MyStoriesPublishedTab.swift",
+        "Meeshy/Features/Stories/Views/MyStoriesDraftsTab.swift",
+        "Meeshy/Features/Stories/Views/MyStoryCard.swift",
+        "Meeshy/Features/Stories/Views/MyStoryActionBar.swift",
+        "Meeshy/Features/Stories/Views/MyStoryThumbnail.swift",
+        "Meeshy/Features/Stories/Views/MyStoryCardPresentation.swift",
+        "Meeshy/Features/Stories/Views/MyStoriesDeleteConfirmation.swift",
+        "Meeshy/Features/Stories/Views/MyStoriesDeleteAlerts.swift",
+        "Meeshy/Features/Stories/Views/MyStoriesQueueRows.swift",
+        "Meeshy/Features/Stories/Views/MyStoriesSheetTargets.swift",
+        "Meeshy/Features/Stories/Views/MyStoryActionMenu.swift",
+        "Meeshy/Features/Stories/Views/MyStoryCardModelRules.swift",
+        "Meeshy/Features/Stories/Views/StoryVisibilityMenuResolver.swift",
     ]
 
     /// Racine `apps/ios/`, dérivée du chemin du fichier APPELANT.
@@ -144,13 +144,14 @@ enum MyStoriesSourceCorpus {
 /// en silence sur la moitié qui a changé de nom. Cette liste est l'adresse de cette moitié.
 enum StoryViewerSources {
 
-    static let views = "Meeshy/Features/Main/Views/"
+    static let views = "Meeshy/Features/Stories/Views/"
 
     /// Les types sortis des trois fichiers, par nom de fichier.
     static let companionFiles = [
         "PrefetcherHostView.swift",
         "RenderableSlideCache.swift",
         "RevealCircleShape.swift",
+        "StoryCommentSession.swift",
         "StoryCommentThread.swift",
         "StoryCommentsOverlayView.swift",
         "StoryDraft.swift",

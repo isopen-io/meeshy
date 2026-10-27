@@ -106,13 +106,13 @@ struct AudioPostTrimZone: View {
 
     /// « 0:03 → 0:41 » — l'intervalle MONTRÉ.
     ///
-    /// `LocalizedNumber.duration` et non un `String(format:)` : un format sans
+    /// `MediaFormat.duration` et non un `String(format:)` : un format sans
     /// locale grave les chiffres LATINS, et un lecteur arabophone y lirait des
     /// chiffres qui ne sont pas les siens. VoiceOver, lui, lit la valeur PARLÉE
     /// que portent les poignées du composant — jamais cette horloge.
     private static func rangeLabel(_ range: ClosedRange<TimeInterval>) -> String {
-        let debut = LocalizedNumber.duration(seconds: range.lowerBound)
-        let fin = LocalizedNumber.duration(seconds: range.upperBound)
+        let debut = MediaFormat.duration(range.lowerBound)
+        let fin = MediaFormat.duration(range.upperBound)
         return "\(debut) → \(fin)"
     }
 }

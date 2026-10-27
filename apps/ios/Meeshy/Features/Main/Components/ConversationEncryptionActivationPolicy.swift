@@ -91,6 +91,13 @@ enum ReadableDirectOpening {
         guard !opened.isEmpty, opened != current, !openedIsEndToEnd else { return nil }
         return opened
     }
+
+    /// La passerelle rend comme « lisible » le fil d'où l'on part : elle le sert
+    /// déjà sans bout en bout alors que cet appareil l'a vu chiffré (#12987). Il
+    /// faut d'abord y rétablir le chiffrement ; l'échec le dit.
+    static func returnsTheServedGap(opened: String, from current: String) -> Bool {
+        !opened.isEmpty && opened == current
+    }
 }
 
 /// Ce que le fil OUVERT dit quand le bout en bout s'active sous ses yeux

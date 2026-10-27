@@ -4,11 +4,23 @@ import android.content.ContentResolver
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
-import androidx.compose.foundation.layout.padding
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.graphics.graphicsLayer
+import me.meeshy.sdk.model.reading.focal.FocalMetrics
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.Alignment
+import me.meeshy.ui.theme.MeeshySpacing
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -17,6 +29,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.sdk.model.call.ActiveCallSession
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.hexColor
+import me.meeshy.app.chat.appearance.rememberConversationAppearance
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import me.meeshy.sdk.model.composer.ComposerAttachmentLimits
@@ -36,6 +49,10 @@ fun ChatScreen(
      * « Rejoindre » pill so a minimised call viewing its own chat isn't offered
      * to rejoin the call it's already in. */
     hasLocalLiveCall: Boolean = false,
+    /** Ouvre le post (story) cité par un message : le toucher de la carte de citation (#13296). */
+    onOpenCitedPost: (postId: String) -> Unit = {},
+    /** La feuille de réglages du partage de position, fournie par l'application (voir [ChatNavigationActions]). */
+    locationSettingsSheet: @Composable (accent: Color, onDismiss: () -> Unit) -> Unit = { _, _ -> },
     viewModel: ChatViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -49,13 +66,34 @@ fun ChatScreen(
         onPauseOrDispose { }
     }
 
-    val accentColor = state.accentColorHex
+    val appearance = rememberConversationAppearance(state.conversationId, state.accentColorHex)
+    val accentColor = appearance.accentHex
         ?.let { hexColor(it) }
         ?.takeIf { it != Color.Unspecified }
         ?: MeeshyPalette.Indigo500
     val actions = remember(viewModel) { viewModel.hostActions() }
+    val pendingPlace by viewModel.pendingPlace.collectAsStateWithLifecycle()
     val pendingTray = remember(viewModel) { viewModel.controllers.find<ComposerTrayController>() }
     val pending by (pendingTray?.state ?: NO_PENDING).collectAsStateWithLifecycle()
+    val headerController = remember(viewModel) { viewModel.controllers.find<ChatHeaderController>() }
+    val header by (headerController?.state ?: NO_HEADER).collectAsStateWithLifecycle()
+    val selectionController = remember(viewModel) { viewModel.controllers.find<MessageSelectionController>() }
+    val selection by (selectionController?.selection ?: NO_SELECTION).collectAsStateWithLifecycle()
+    BackHandler(enabled = selection.isActive, onBack = actions.endSelection)
+    val readingModeController = remember(viewModel) { viewModel.controllers.find<ReadingModeController>() }
+    val readingModeState by (readingModeController?.state ?: NO_READING_MODE).collectAsStateWithLifecycle()
+    val summaryController = remember(viewModel) { viewModel.controllers.find<LivingSummaryController>() }
+    val summaryBinding = remember(summaryController) {
+        summaryController?.let { LivingSummaryBinding(it.agent, it.viewer, it::refreshAgent) } ?: LivingSummaryBinding.NONE
+    }
+    val readingMode = readingModeState?.let { modeState ->
+        ChatReadingModeBinding(
+            state = modeState,
+            select = { readingModeController?.select(it) },
+            resetToAuto = { readingModeController?.resetToAuto() },
+            summary = summaryBinding,
+        )
+    }
     val host = rememberChatHostContext(
         state = state,
         composerText = viewModel.composerText,
@@ -68,17 +106,61 @@ fun ChatScreen(
             onRejoinCall = onRejoinCall,
             onCreateShareLink = onCreateShareLink,
             hasLocalLiveCall = hasLocalLiveCall,
+            onOpenCitedPost = onOpenCitedPost,
             callEntry = callEntry,
+            locationSettingsSheet = locationSettingsSheet,
         ),
+        header = header,
+        readingMode = readingMode,
+        pendingPlace = pendingPlace,
+        selection = selection,
     )
 
-    ChatBackgroundHost {
-        Scaffold(
-            containerColor = Color.Transparent,
-            topBar = { ChatHeaderHost(host) },
-            bottomBar = { ChatBottomBarHost(host) },
-        ) { padding ->
-            ChatListHost(host, Modifier.padding(padding))
+    ChatBackgroundHost(appearance) {
+        // L'en-tête est une bande FLOTTANTE posée au-dessus du fil (iOS : ZStack, zIndex 100) :
+        // sa hauteur mesurée décale le haut du fil (`bandHeight`), et les bulles passent dessous.
+        var headerHeightPx by remember { mutableIntStateOf(0) }
+        val headerHeight = with(LocalDensity.current) { headerHeightPx.toDp() }
+        // La barre de composition FLOTTE aussi (iOS : `ConversationComposerDock` superposé au fil) :
+        // sa hauteur mesurée, clavier compris, devient la réserve basse du fil, et les bulles
+        // défilent sous le verre.
+        var composerHeightPx by remember { mutableIntStateOf(0) }
+        val composerHeight = with(LocalDensity.current) { composerHeightPx.toDp() }
+        Scaffold(containerColor = Color.Transparent) { _ ->
+            Box(Modifier.fillMaxSize()) {
+                ChatListHost(
+                    host,
+                    topInset = headerHeight,
+                    bottomInset = composerHeight + MeeshySpacing.sm,
+                )
+                // Rangée plate (Script) : pendant un défilement du doigt, l'en-tête ET le composeur
+                // s'effacent par opacité — aucun inset ne bouge — et reviennent à l'arrêt ; sauf
+                // recherche ouverte ou suggestions de mention (iOS `FocalChromeReturn`).
+                val chromeHidden = host.readingMode?.state?.mode?.usesFlatRow == true &&
+                    host.chrome.isUserScrolling &&
+                    !state.search.isActive &&
+                    !state.mention.isActive
+                val chromeAlpha by animateFloatAsState(
+                    targetValue = if (chromeHidden) 0f else 1f,
+                    animationSpec = tween((FocalMetrics.HiddenChrome.EASE_OUT_SECONDS * 1000).toInt()),
+                    label = "flat-chrome",
+                )
+                Box(
+                    Modifier
+                        .onSizeChanged { headerHeightPx = it.height }
+                        .graphicsLayer { alpha = chromeAlpha },
+                ) {
+                    ChatHeaderHost(host)
+                }
+                Box(
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .onSizeChanged { composerHeightPx = it.height }
+                        .graphicsLayer { alpha = chromeAlpha },
+                ) {
+                    ChatBottomBarHost(host)
+                }
+            }
         }
         ChatSheetsHost(host)
     }

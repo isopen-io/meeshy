@@ -6442,7 +6442,7 @@
 > **The gap, re-proved by reading source (scout + independent verify)**: iOS renders a per-row story
 > ring on the direct-conversation avatar (`ConversationListView+Rows.swift:275,296` pipe `storyRingState`
 > into the row's `AvatarContext`), sourced from `StoryViewModel.storyRingState(forUserId:)`
-> (`apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift:1351`) via
+> (`apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel.swift:1351`) via
 > `ConversationListView.storyRingState(for:)` (`apps/ios/Meeshy/Features/Main/Views/ConversationListView.swift:690`).
 > Android's `ConversationListScreen.kt:637` called `MeeshyAvatar(name, containerColor, presence)`
 > WITHOUT a `storyRing` argument — the `MeeshyAvatar` parameter existed

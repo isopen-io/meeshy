@@ -47,6 +47,7 @@ const PUBLICS = ['postsCount', 'reelsCount', 'storiesCount', 'memberDays', 'achi
 function buildApp() {
   const prisma = {
     user: {
+      findMany: jest.fn(async () => []),
       findFirst: jest.fn<any>(async () => ({
         id: PROPRIETAIRE,
         username: 'cible',

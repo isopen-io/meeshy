@@ -12,6 +12,7 @@ import me.meeshy.sdk.model.Pagination
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.HashtagApi
 import me.meeshy.sdk.net.api.PostApi
+import me.meeshy.sdk.session.DefaultSessionTeardown
 import org.junit.Test
 
 class PostHashtagRepositoryTest {
@@ -34,6 +35,56 @@ class PostHashtagRepositoryTest {
         assertThat(page.posts.map { it.id }).containsExactly("a", "b").inOrder()
         assertThat(page.nextCursor).isEqualTo("c2")
         assertThat(page.hasMore).isTrue()
+    }
+
+    @Test
+    fun `la premiere page vue est gardee pour ouvrir l ecran sans attente`() = runTest {
+        coEvery { postApi.getByHashtag("paris", null, 20) } returns ApiResponse(
+            success = true,
+            data = listOf(ApiPost(id = "a")),
+            pagination = Pagination(hasMore = true, nextCursor = "c2"),
+        )
+        assertThat(repository.cachedFirstPage("#Paris")).isNull()
+
+        repository.posts("paris")
+
+        assertThat(repository.cachedFirstPage("PARIS")?.posts?.map { it.id }).containsExactly("a")
+    }
+
+    @Test
+    fun `la deconnexion oublie les premieres pages du compte precedent`() = runTest {
+        coEvery { postApi.getByHashtag("paris", null, 20) } returns ApiResponse(
+            success = true,
+            data = listOf(ApiPost(id = "a")),
+        )
+        repository.posts("paris")
+
+        val teardown = DefaultSessionTeardown(
+            database = mockk(relaxed = true),
+            categorySnapshotStore = mockk(relaxed = true),
+            conversationDraftStore = mockk(relaxed = true),
+            conversationLockStore = mockk(relaxed = true),
+            storyComposerDraftStore = mockk(relaxed = true),
+            friendshipCache = mockk(relaxed = true),
+            notificationRepository = mockk(relaxed = true),
+            blockCache = mockk(relaxed = true),
+            perAccountCaches = setOf(repository),
+        )
+        teardown.wipe()
+
+        assertThat(repository.cachedFirstPage("paris")).isNull()
+    }
+
+    @Test
+    fun `une page suivante ne remplace pas la premiere en cache`() = runTest {
+        coEvery { postApi.getByHashtag("paris", "c2", 20) } returns ApiResponse(
+            success = true,
+            data = listOf(ApiPost(id = "z")),
+        )
+
+        repository.posts("paris", cursor = "c2")
+
+        assertThat(repository.cachedFirstPage("paris")).isNull()
     }
 
     @Test

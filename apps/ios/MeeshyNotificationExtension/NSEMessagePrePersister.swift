@@ -1,5 +1,4 @@
 import Foundation
-import GRDB
 import MeeshySDK
 
 /// Pré-enregistrement GRDB de la bulle d'un message qui arrive (extrait de
@@ -18,25 +17,17 @@ enum NSEMessagePrePersister {
     /// commune : l'extension survit d'un push à l'autre, et un changement de
     /// compte entre deux pushes doit la faire écrire ailleurs. Personne de
     /// connecté ⇒ aucune base, aucune écriture.
-    private static let pools = Locked(uncheckedState: [String: DatabasePool]())
+    private static let stores = Locked(uncheckedState: [String: MessageStoreDatabase]())
 
-    private static func recipientPool() -> DatabasePool? {
+    /// Same file and same message migrations as the app (`MessageStoreDatabase`, whose tests prove either
+    /// process may open it first); a failure means no pre-persist, never a crash.
+    private static func recipientStore() -> MessageStoreDatabase? {
         guard let path = recipientDatabasePath() else { return nil }
-        return pools.mutateUnchecked { pools in
-            if let pool = pools[path] { return pool }
-            do {
-                // N1 — mirror of `DependencyContainer.dbConfig()`'s busy timeout:
-                // the main app holds its own pool on this same file, and GRDB's
-                // default `.immediateError` busy mode would turn a cross-process
-                // write collision into an SQLITE_BUSY swallowed by the catch
-                // below (pre-persisted bubble silently lost).
-                var config = Configuration()
-                config.busyMode = .timeout(5)
-                let pool = try DatabasePool(path: path, configuration: config)
-                try MessageDatabaseMigrations.runAll(on: pool)
-                pools[path] = pool
-                return pool
-            } catch { return nil }
+        return stores.mutateUnchecked { stores in
+            if let store = stores[path] { return store }
+            guard let store = try? MessageStoreDatabase.openForNotificationExtension(path: path) else { return nil }
+            stores[path] = store
+            return store
         }
     }
 
@@ -83,7 +74,7 @@ enum NSEMessagePrePersister {
         // désormais dans `prePersistedMessagePlan` — pur, donc gardé par des
         // témoins.
         // #7168 — LE FILTRE DE TYPE D'ABORD. Une clause de `guard` s'évalue
-        // dans l'ordre, et `Self.sharedPool` est une `static let` paresseuse
+        // dans l'ordre, et `Self.recipientStore()` est paresseuse
         // qui ouvre `DatabasePool` PUIS rejoue toutes les migrations, avec un
         // `busyMode` qui bloque jusqu'à cinq secondes sur collision avec l'app
         // principale. L'évaluer en premier faisait payer cette ouverture à
@@ -100,7 +91,7 @@ enum NSEMessagePrePersister {
                   userInfo: userInfo,
                   now: Date()
               ),
-              let pool = recipientPool()
+              let store = recipientStore()
         else { return }
 
         do {
@@ -162,10 +153,7 @@ enum NSEMessagePrePersister {
             // INSERT, jamais UPSERT (verrou 2 ci-dessus) : un placeholder ne
             // remplace pas une ligne canonique. `save()` écrasait TOUTES les
             // colonnes de la ligne existante.
-            try pool.write { db in
-                guard try MessageRecord.fetchOne(db, key: plan.messageId) == nil else { return }
-                try record.insert(db)
-            }
+            try store.insertIfAbsent(record)
         } catch {
             // Silent fail — the app will fetch the message from the API on launch.
         }

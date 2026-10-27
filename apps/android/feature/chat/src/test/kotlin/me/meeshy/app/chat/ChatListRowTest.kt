@@ -77,7 +77,7 @@ class ChatListRowTest {
 
     @Test
     fun `the unread boundary draws its pill`() {
-        show(ChatListItem.UnreadSeparator)
+        show(ChatListItem.UnreadSeparator())
 
         compose.onNodeWithText("Unread messages").assertExists()
     }
@@ -97,7 +97,7 @@ class ChatListRowTest {
     }
 
     @Test
-    fun `a message that has replies draws its thread pill from the reply threads`() {
+    fun `a message that has replies draws no thread pill, like iOS`() {
         val threads = ReplyThreads.of(
             listOf(
                 ReplyLink("m1", null, false),
@@ -107,7 +107,8 @@ class ChatListRowTest {
 
         show(ChatListItem.Message(bubble(id = "m1", text = "Bonjour la famille")), replyThreads = threads)
 
-        compose.onNodeWithText("1 reply").assertExists()
+        // iOS a retiré la pastille « N réponses » : le fil s'ouvre par l'appui long → Plus → Fil.
+        compose.onNodeWithText("1 reply").assertDoesNotExist()
     }
 
     @Test

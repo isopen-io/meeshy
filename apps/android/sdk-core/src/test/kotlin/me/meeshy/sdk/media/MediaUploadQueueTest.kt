@@ -93,6 +93,16 @@ class MediaUploadQueueTest {
     }
 
     @Test
+    fun `a chat attachment names its destination conversation, and keeps the legacy upload path`() = runTest {
+        queue.enqueue(item(), conversationId = "c-1")
+
+        val row = outbox.deliverable(OutboxLanes.MEDIA).single()
+        val payload = Json.decodeFromString<MediaUploadPayload>(row.payload)
+        assertThat(payload.conversationId).isEqualTo("c-1")
+        assertThat(payload.uploadContext).isNull()
+    }
+
+    @Test
     fun `independent enqueues produce distinct rows and blobs`() = runTest {
         val first = queue.enqueue(item(bytes = byteArrayOf(1), fileName = "a.jpg"))
         val second = queue.enqueue(item(bytes = byteArrayOf(2), fileName = "b.jpg"))

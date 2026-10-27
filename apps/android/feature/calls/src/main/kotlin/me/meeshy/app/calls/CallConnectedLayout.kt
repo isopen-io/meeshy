@@ -4,12 +4,12 @@ import android.content.Context
 import android.view.accessibility.AccessibilityManager
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -40,6 +40,7 @@ import me.meeshy.sdk.model.call.CallChromeElement
 import me.meeshy.sdk.model.call.CallChromeInteraction
 import me.meeshy.sdk.model.call.CallChromeVisibility
 import me.meeshy.sdk.model.call.CallGroupStageSizing
+import me.meeshy.sdk.model.call.CallHeaderLaw
 import me.meeshy.sdk.model.call.CallScreenMode
 import me.meeshy.sdk.model.call.CallScreenPanel
 import me.meeshy.ui.theme.MeeshySpacing
@@ -132,16 +133,18 @@ internal fun CallConnectedColumn(
     videoStage: Boolean,
     peer: CallPeerVisual,
     modifier: Modifier = Modifier,
+    inPip: Boolean = false,
 ) {
     val extensions = viewModel.extensions
     val dispatcher = extensions.actions
     val explore = rememberCallTouchExploration()
     val chromeState by chrome.state.collectAsState()
     val visibility = chrome.visibility(callIsVideoStage(state), explore)
-    val controlsVisible = visibility.isVisible(CallChromeElement.Controls)
+    val controlsVisible = visibility.isVisible(CallChromeElement.Controls) && !inPip
     val isVideoStage = callIsVideoStage(state)
 
     val recordingViewModel: CallRecordingViewModel = hiltViewModel()
+    val reactionsViewModel: CallReactionsViewModel = hiltViewModel()
     val recording by recordingViewModel.state.collectAsStateWithLifecycle()
     val offered = remember(state, recording) { dispatcher.offered(state) }
     val items = remember(state, offered) { CallPillModel.items(state, offered) }
@@ -157,16 +160,14 @@ internal fun CallConnectedColumn(
         val stopsRecording = action == CallAction.Recording && recording.phase.isActive
         CallScreenPanel.entries.firstOrNull { it.action == action && !stopsRecording }?.let(chrome::open)
         CallScreenMode.entries.firstOrNull { it.action == action }?.let(chrome::enter)
-        if (action == CallAction.Camera) viewModel.toggleCamera() else dispatcher.dispatch(action)
+        when (action) {
+            CallAction.Camera -> viewModel.toggleCamera()
+            CallAction.FlipCamera -> viewModel.flipCamera()
+            else -> dispatcher.dispatch(action)
+        }
     }
 
-    BoxWithConstraints(
-        modifier.pointerInput(isVideoStage, explore) {
-            if (CallChromeVisibility.mayToggleByTap(isVideoStage, explore)) {
-                detectTapGestures(onTap = { chrome.onSceneTap(isVideoStage, explore) })
-            }
-        },
-    ) {
+    BoxWithConstraints(modifier) {
         val rows = CallPillModel.rows(available, CallGroupStageSizing.isCompactHeight(maxHeight.value))
         Column(
             modifier = Modifier.matchParentSize().padding(MeeshySpacing.xl),
@@ -175,8 +176,10 @@ internal fun CallConnectedColumn(
         ) {
             Spacer(Modifier.height(MeeshySpacing.xl))
 
-            if (videoStage) {
-                CallPeerBlock(state = state, accent = accent, videoStage = true)
+            if (!CallHeaderLaw.centersPeerBlock(videoStage)) {
+                // L'image est le pair : ni nom, ni chrono, ni barres au centre. Le temps et le signal
+                // vivent dans la puce de l'en-tête (CallHeaderBar) ; ne reste que ce que le pair fait SUBIR.
+                CallVideoPeerNotices(state = state, modifier = Modifier.weight(1f).fillMaxWidth())
             } else {
                 CallAudioStage(state = state, peer = peer)
             }
@@ -207,13 +210,15 @@ internal fun CallConnectedColumn(
                         onBackToMenu = chrome::backToMenu,
                         onClosePanel = chrome::close,
                         panelContent = { panel ->
-                            if (panel == CallScreenPanel.Record) {
-                                CallRecordingKindPanel(
+                            when (panel) {
+                                CallScreenPanel.Record -> CallRecordingKindPanel(
                                     onPick = { kind ->
                                         recordingViewModel.onEvent(CallRecordingUiEvent.Pick(kind))
                                         chrome.close()
                                     },
                                 )
+                                CallScreenPanel.React -> CallReactionsPanel(onReact = reactionsViewModel::react)
+                                else -> Unit
                             }
                         },
                     )

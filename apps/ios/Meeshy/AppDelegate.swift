@@ -166,6 +166,21 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     /// us a deterministic place to emit the delivery receipt (double-check
     /// cursor) so the sender sees their message as "received" even when the
     /// recipient never foregrounds the app.
+    /// #13142 — le réveil d'un signal chiffré de bout en bout : un push opaque, le
+    /// même pour tout signal, qui ne nomme ni le signal ni la conversation.
+    /// L'appareil relit ses enveloppes et applique les signaux reçus.
+    private static func handledEndToEndWake(
+        _ userInfo: [AnyHashable: Any], completionHandler: @escaping (UIBackgroundFetchResult) -> Void
+    ) -> Bool {
+        guard (userInfo["type"] as? String) == EndToEndSessionBridge.wakePushType else { return false }
+        Task { @MainActor in
+            primeAPITokenFromSession()
+            await EndToEndSessionBridge.shared.wake()
+            completionHandler(.newData)
+        }
+        return true
+    }
+
     func application(
         _ application: UIApplication,
         didReceiveRemoteNotification userInfo: [AnyHashable: Any],
@@ -180,12 +195,12 @@ class AppDelegate: NSObject, UIApplicationDelegate {
            let cancelCallId = userInfo["callId"] as? String, !cancelCallId.isEmpty {
             Logger.network.info("call_cancel silent push received (callId=\(cancelCallId, privacy: .public))")
             Task { @MainActor in
-                CallManager.shared.endRingingFromCancellation(callId: cancelCallId)
+                CallManager.shared.incomingRing.endRingingFromCancellation(callId: cancelCallId)
                 completionHandler(.noData)
             }
             return
         }
-
+        if Self.handledEndToEndWake(userInfo, completionHandler: completionHandler) { return }
         // Multi-device : un autre appareil du compte a décroché — pendant
         // socketless de `call:already-answered` (voir sendCallCancellationPushes
         // côté gateway pour le rationale réseau). Le device qui a décroché
@@ -194,7 +209,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
            let answeredCallId = userInfo["callId"] as? String, !answeredCallId.isEmpty {
             Logger.network.info("call_answered_elsewhere silent push received (callId=\(answeredCallId, privacy: .public))")
             Task { @MainActor in
-                CallManager.shared.endRingingAnsweredElsewhere(callId: answeredCallId)
+                CallManager.shared.incomingRing.endRingingAnsweredElsewhere(callId: answeredCallId)
                 completionHandler(.noData)
             }
             return

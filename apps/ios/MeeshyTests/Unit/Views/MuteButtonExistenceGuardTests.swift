@@ -549,7 +549,7 @@ final class MuteButtonExistenceGuardTests: XCTestCase {
     // MARK: - Rail du viewer story — NON-régression (déjà son propre muet, hors périmètre)
 
     func test_storyViewerSidebar_muteRail_noRegression() throws {
-        let text = try source("Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift")
+        let text = try source("Meeshy/Features/Stories/Views/StoryViewerView+Sidebar.swift")
         XCTAssertTrue(
             text.contains("railPlan.showsSound"),
             "Le rail garde sa propre condition d'existence (piste audible) — non touchée par E2."

@@ -14,8 +14,8 @@ import MeeshyUI
 /// mêmes timings que les rangées de liste, Reduce Motion système ET in-app.
 ///
 /// **`internal`, pas `private` (2026-08-25, constat L2b/2b-7).** La Rivière
-/// monte la MÊME vue en tenue plate (la peau de `Riviere/View/`) : `private` étant à
-/// portée de FICHIER, elle était invisible depuis `Riviere/View/` et la seule
+/// monte la MÊME vue en tenue plate (la peau de `River/View/`) : `private` étant à
+/// portée de FICHIER, elle était invisible depuis `River/View/` et la seule
 /// façon d'y rendre la frappe aurait été d'en déclarer une SECONDE — deux
 /// vues qui divergeraient sur les timings, le libellé et l'accessibilité, et
 /// la frappe n'aurait pas le même visage selon le mode de lecture.

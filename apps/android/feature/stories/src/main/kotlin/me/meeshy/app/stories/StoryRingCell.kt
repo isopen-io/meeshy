@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Collections
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.DropdownMenu
@@ -50,6 +51,7 @@ import kotlinx.coroutines.delay
 import me.meeshy.feature.stories.R
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.meeshyPresenceDotColor
+import me.meeshy.ui.component.rememberPresence
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyTheme
@@ -73,6 +75,7 @@ internal fun StoryRingCell(
     onShowProfile: (() -> Unit)?,
     onAppeared: (String?) -> Unit,
     onAdd: (() -> Unit)? = null,
+    onManage: (() -> Unit)? = null,
 ) {
     val haptics = rememberMeeshyHaptics()
     var menuOpen by remember { mutableStateOf(false) }
@@ -122,6 +125,7 @@ internal fun StoryRingCell(
                 onShowProfile = onShowProfile?.let { open -> { menuOpen = false; open() } },
                 selfActions = if (onAdd != null) StoryTraySelfMenu.actions(ring) else null,
                 onAdd = { menuOpen = false; onAdd?.invoke() },
+                onManage = { menuOpen = false; onManage?.invoke() },
             )
         }
         StoryCountDotsRow(
@@ -135,13 +139,14 @@ internal fun StoryRingCell(
 }
 
 @Composable
-private fun StoryRingMenu(
+internal fun StoryRingMenu(
     expanded: Boolean,
     onDismiss: () -> Unit,
     onViewStories: () -> Unit,
     onShowProfile: (() -> Unit)?,
     selfActions: List<StoryTraySelfAction>? = null,
     onAdd: () -> Unit = {},
+    onManage: () -> Unit = {},
 ) {
     DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
         if (selfActions != null) {
@@ -151,6 +156,11 @@ private fun StoryRingMenu(
                         text = { Text(stringResource(R.string.stories_tray_view_my_story)) },
                         leadingIcon = { Icon(Icons.Filled.PlayArrow, contentDescription = null) },
                         onClick = onViewStories,
+                    )
+                    StoryTraySelfAction.ManageStories -> DropdownMenuItem(
+                        text = { Text(stringResource(R.string.stories_tray_manage)) },
+                        leadingIcon = { Icon(Icons.Filled.Collections, contentDescription = null) },
+                        onClick = onManage,
                     )
                     StoryTraySelfAction.AddStory -> DropdownMenuItem(
                         text = { Text(stringResource(R.string.stories_tray_add_story)) },
@@ -224,7 +234,8 @@ private fun BoxScope.MoodBadge(emoji: String) {
 
 @Composable
 private fun BoxScope.PresenceDot(ring: StoryRing) {
-    val color = meeshyPresenceDotColor(ring.presence) ?: return
+    val presence = rememberPresence(ring.userId.takeUnless { ring.isMine }, ring.servedPresence)
+    val color = meeshyPresenceDotColor(presence) ?: return
     Box(
         modifier = Modifier
             .align(Alignment.BottomEnd)

@@ -132,7 +132,7 @@ final class StoryLanguageReselectTests: XCTestCase {
     /// le glissé capturait celui de la liste.
     func test_theFullLanguageList_scrolls_onlyTheHandleDragsTheSheet() throws {
         let detail = AppSourceGuard.stripComments(
-            try AppSourceGuard.unit("Meeshy/Features/Main/Views/StoryLanguageDetailView.swift"))
+            try AppSourceGuard.unit("Meeshy/Features/Stories/Views/StoryLanguageDetailView.swift"))
         XCTAssertEqual(detail.components(separatedBy: ".gesture(sheetDragGesture)").count - 1, 1)
         let handle = try XCTUnwrap(detail.range(of: "handle\n"))
         let afterHandle = detail[handle.upperBound...].prefix(160)
@@ -143,7 +143,7 @@ final class StoryLanguageReselectTests: XCTestCase {
     /// barre de réactions — sinon le lecteur change de groupe.
     func test_theQuickBar_claimsItsHorizontalDrag() throws {
         let rail = AppSourceGuard.stripComments(
-            try AppSourceGuard.unit("Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift"))
+            try AppSourceGuard.unit("Meeshy/Features/Stories/Views/StoryViewerView+Sidebar.swift"))
         let bar = try XCTUnwrap(rail.range(of: "StoryLanguageQuickBar("))
         XCTAssertTrue(rail[bar.upperBound...].prefix(1800).contains(".simultaneousGesture(reactionStripDragGesture)"))
         XCTAssertTrue(rail.contains("StoryLanguageQuickBar.override(afterTapping: lang, current: activeLanguageCode)"))

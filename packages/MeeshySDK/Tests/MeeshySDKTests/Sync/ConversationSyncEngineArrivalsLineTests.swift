@@ -225,7 +225,7 @@ final class ConversationSyncEngineArrivalsLineTests: XCTestCase {
         let json = #"{"id":"m","conversationId":"c","senderId":"u","content":"x","createdAt":"2026-09-28T09:00:00.000Z"}"#
         // Le décodeur de la PRODUCTION : un `.iso8601` local refuse les fractions
         // de seconde sur le runtime iOS 18 de la CI (iOS 26 les accepte).
-        let message = try APIClient.makeAPIPayloadDecoder().decode(APIMessage.self, from: Data(json.utf8))
+        let message = try MeeshyCoders.decoder(.api).decode(APIMessage.self, from: Data(json.utf8))
 
         XCTAssertNil(message.systemEvent)
     }

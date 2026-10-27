@@ -131,7 +131,7 @@ final class ComposerSoundDestinationWiringGuardTests: XCTestCase {
                 .deletingLastPathComponent()   // .../Unit
                 .deletingLastPathComponent()   // .../MeeshyTests
                 .deletingLastPathComponent()   // .../apps/ios
-                .appendingPathComponent("Meeshy/Features/Main/Composer/MeeshyComposerHost+Sound.swift")
+                .appendingPathComponent("Meeshy/Features/Composer/MeeshyComposerHost+Sound.swift")
             return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
         }
     }

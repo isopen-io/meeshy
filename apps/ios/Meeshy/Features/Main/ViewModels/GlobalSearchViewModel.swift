@@ -1,6 +1,5 @@
 import Foundation
 import Combine
-import GRDB
 import MeeshySDK
 import MeeshyUI
 
@@ -231,7 +230,7 @@ final class GlobalSearchViewModel: ObservableObject {
         self.userService = userService
         self.authManager = authManager
         self.searchService = searchService ?? MessageSearchService(
-            reader: DependencyContainer.shared.dbPool
+            reader: DependencyContainer.shared.database.pool
         )
         self.messageSocket = messageSocket
         self.socialSocket = socialSocket

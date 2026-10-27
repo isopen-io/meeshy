@@ -168,7 +168,7 @@ git commit -m "feat(sdk): propage visibilityUserIds dans la création de story (
 ### Task 2: App — `StoryViewModel` propage `visibilityUserIds` (online + offline + drain)
 
 **Files:**
-- Modify: `apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift` — `StoryUploadState` (200-229), `executeQueuedPublish` (119-135), `publishStoryInBackground` (600-655), `enqueueStoryForOfflinePublish` (671-748), `runStoryUpload` createStory (957-964)
+- Modify: `apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel.swift` — `StoryUploadState` (200-229), `executeQueuedPublish` (119-135), `publishStoryInBackground` (600-655), `enqueueStoryForOfflinePublish` (671-748), `runStoryUpload` createStory (957-964)
 
 **Interfaces:**
 - Consumes (Task 1): `PostService.createStory(..., visibilityUserIds:)`, `StoryPublishQueueItem(..., visibilityUserIds:)`, `StoryPublishQueueItem.visibilityUserIds: [String]?`.
@@ -257,8 +257,8 @@ Expected: BUILD SUCCEEDED. (Pure pass-through plumbing — behaviour covered by 
 
 ```bash
 cd /Users/smpceo/Documents/v2_meeshy
-git add apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift
-git commit -m "feat(ios/story): StoryViewModel propage visibilityUserIds (online/offline/drain)" -- apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift
+git add apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel.swift
+git commit -m "feat(ios/story): StoryViewModel propage visibilityUserIds (online/offline/drain)" -- apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel.swift
 ```
 
 ---
@@ -633,8 +633,8 @@ git commit -m "feat(ios): AudienceUserPickerView réutilisable (recherche + mult
 **Files:**
 - Modify: `packages/MeeshySDK/Sources/MeeshyUI/Story/StoryComposerView.swift` — state (213), callback type (233-241), both inits (247, 267), `visibilityMenu` (779-802), invocation (2127), + a `.sheet`
 - Modify: `packages/MeeshySDK/Sources/MeeshyUI/Story/UnifiedPostComposer.swift:221`
-- Modify: `apps/ios/Meeshy/Features/Main/Views/StoryTrayView.swift:66`
-- Modify: `apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift:568`
+- Modify: `apps/ios/Meeshy/Features/Stories/Views/StoryTrayView.swift:66`
+- Modify: `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift:568`
 
 **Interfaces:**
 - Consumes (Task 2): `StoryViewModel.publishStoryInBackground(..., visibilityUserIds:)`. (Task 3): `PostVisibility: Identifiable`, `.requiresUserSelection`. (Task 4): `AudienceUserPickerView`.
@@ -761,8 +761,8 @@ Expected: BUILD SUCCEEDED.
 
 ```bash
 cd /Users/smpceo/Documents/v2_meeshy
-git add packages/MeeshySDK/Sources/MeeshyUI/Story/StoryComposerView.swift packages/MeeshySDK/Sources/MeeshyUI/Story/UnifiedPostComposer.swift apps/ios/Meeshy/Features/Main/Views/StoryTrayView.swift apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift
-git commit -m "feat(ios/story): picker EXCEPT/ONLY dans le header composer + plomberie visibilityUserIds" -- packages/MeeshySDK/Sources/MeeshyUI/Story/StoryComposerView.swift packages/MeeshySDK/Sources/MeeshyUI/Story/UnifiedPostComposer.swift apps/ios/Meeshy/Features/Main/Views/StoryTrayView.swift apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift
+git add packages/MeeshySDK/Sources/MeeshyUI/Story/StoryComposerView.swift packages/MeeshySDK/Sources/MeeshyUI/Story/UnifiedPostComposer.swift apps/ios/Meeshy/Features/Stories/Views/StoryTrayView.swift apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift
+git commit -m "feat(ios/story): picker EXCEPT/ONLY dans le header composer + plomberie visibilityUserIds" -- packages/MeeshySDK/Sources/MeeshyUI/Story/StoryComposerView.swift packages/MeeshySDK/Sources/MeeshyUI/Story/UnifiedPostComposer.swift apps/ios/Meeshy/Features/Stories/Views/StoryTrayView.swift apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift
 ```
 
 ---

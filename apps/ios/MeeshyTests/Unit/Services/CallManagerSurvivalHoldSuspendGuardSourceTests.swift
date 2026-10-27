@@ -34,12 +34,12 @@ import XCTest
 final class CallManagerSurvivalHoldSuspendGuardSourceTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     /// Bounds the pre-flight guard in `applySurvivalVideoSend(enabled:)`,
     /// between the `.reconnecting` guard right above it (unique anchor — the
-    /// only other early-return in the function) and the `let previousToggle`
+    /// only other early-return in the function) and the `let inFlight`
     /// that starts building the serialized Task right after — semantically,
     /// not by a character count (Vague 167's lesson).
     func test_applySurvivalVideoSend_preflightGuard_blocksSuspendAndResumeDuringHoldOrInterruption() throws {
@@ -50,7 +50,7 @@ final class CallManagerSurvivalHoldSuspendGuardSourceTests: XCTestCase {
             XCTFail("Expected the .reconnecting pre-flight guard in applySurvivalVideoSend — file structure changed"); return
         }
         guard let endRange = source.range(
-            of: "let previousToggle = videoToggleTask",
+            of: "let inFlight = videoTransitionsInFlight()",
             range: reconnectingRange.upperBound..<source.endIndex
         ) else {
             XCTFail("Could not bound the pre-flight guard block"); return

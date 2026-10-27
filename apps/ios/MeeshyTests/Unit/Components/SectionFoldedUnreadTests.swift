@@ -111,7 +111,7 @@ final class SectionFoldedUnreadTests: XCTestCase {
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
         for path in [
-            "Meeshy/Features/Main/Lentille/Chrome/LentilleSticker.swift",
+            "Meeshy/Features/Lens/Chrome/LentilleSticker.swift",
             "Meeshy/Features/Main/Views/ConversationListHelpers.swift",
         ] {
             let code = AppSourceGuard.stripComments(

@@ -44,7 +44,11 @@ const writesOf = (calls: readonly Call[]) => calls.filter((call) => WRITE_METHOD
 const ENV = {
   READER_KEY_HMAC_SECRET: 's'.repeat(48),
   RAW_READING_RETENTION_DAYS: '760',
+  ATTACHMENT_URL_SIGNING_KEY: Buffer.alloc(32, 7).toString('base64'),
 } as const;
+
+/** Le retour arrière du scellement (#13100) ne s'applique que scellement suspendu. */
+const envOf = (name: string) => (name.endsWith('-unseal') ? { ...ENV, AT_REST_FILE_SEALING: 'off' } : ENV);
 
 const silent = () => undefined;
 
@@ -54,7 +58,7 @@ describe('migrations nommées de la passerelle — exécuteur embarqué dans l�
     async (name) => {
       const calls: Call[] = [];
       const lines: string[] = [];
-      await runNamedMigration({ name, apply: false, db: fakeDb(calls), env: ENV, log: (line) => lines.push(line) });
+      await runNamedMigration({ name, apply: false, db: fakeDb(calls), env: envOf(name), log: (line) => lines.push(line) });
       expect(writesOf(calls)).toEqual([]);
       expect(lines.join('\n')).toContain('À BLANC');
     },
@@ -64,7 +68,7 @@ describe('migrations nommées de la passerelle — exécuteur embarqué dans l�
     'avec --apply, %s écrit',
     async (name) => {
       const calls: Call[] = [];
-      await runNamedMigration({ name, apply: true, db: fakeDb(calls), env: ENV, log: silent });
+      await runNamedMigration({ name, apply: true, db: fakeDb(calls), env: envOf(name), log: silent });
       expect(writesOf(calls).length).toBeGreaterThan(0);
     },
   );

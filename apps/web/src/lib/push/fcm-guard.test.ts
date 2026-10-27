@@ -27,9 +27,6 @@ function recordingPlugin() {
     unregister: async () => {
       calls.push('unregister');
     },
-    createChannel: async () => {
-      calls.push('createChannel');
-    },
     addListener: (async () => {
       calls.push('addListener');
       return { remove: async () => undefined };
@@ -75,8 +72,7 @@ describe('withFcmGuard', () => {
     await guarded.checkPermissions();
     await guarded.requestPermissions();
     await guarded.unregister();
-    await guarded.createChannel({ id: 'c', name: 'c' });
     await guarded.addListener('registration', () => undefined);
-    expect(calls).toEqual(['checkPermissions', 'requestPermissions', 'unregister', 'createChannel', 'addListener']);
+    expect(calls).toEqual(['checkPermissions', 'requestPermissions', 'unregister', 'addListener']);
   });
 });

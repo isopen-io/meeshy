@@ -28,7 +28,6 @@ export function withFcmGuard(plugin: ShellPushPlugin, isConfigured: () => Promis
       if (await configured()) await plugin.register();
     },
     unregister: () => plugin.unregister(),
-    createChannel: (channel) => plugin.createChannel(channel),
     addListener: ((eventName: never, listener: never) => plugin.addListener(eventName, listener)) as ShellPushPlugin['addListener'],
   };
 }

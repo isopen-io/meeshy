@@ -35,7 +35,7 @@ final class ConversationSyncEngineFullViaSyncTests: XCTestCase {
             case .inchange: return .inchange
             case let .refuse(statut, code): return .refuse(statut: statut, code: code)
             case let .delta(json):
-                let delta = try! APIClient.makeAPIPayloadDecoder().decode(SyncDelta<Row>.self, from: Data(json.utf8))
+                let delta = try! MeeshyCoders.decoder(.api).decode(SyncDelta<Row>.self, from: Data(json.utf8))
                 return .delta(delta, validateur: nil)
             }
         }
@@ -72,7 +72,7 @@ final class ConversationSyncEngineFullViaSyncTests: XCTestCase {
     /// La fabrique du fichier voisin est `fileprivate` — la ligne se DÉCODE
     /// ici, par le décodeur maison, comme les pages du mock.
     private func conversationAPI(id: String) -> APIConversation {
-        try! APIClient.makeAPIPayloadDecoder().decode(
+        try! MeeshyCoders.decoder(.api).decode(
             APIConversation.self,
             from: Data(ligneJSON(id: id).utf8)
         )

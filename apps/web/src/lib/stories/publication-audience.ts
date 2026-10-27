@@ -73,7 +73,7 @@ export function audienceAvailability(visibility: PostVisibility): AudienceAvaila
 /**
  * **JAMAIS `EXCEPT`/`ONLY` EN MÉMOIRE** — miroir de
  * `StoryVisibilityPreferenceStore.isRememberable`
- * (`apps/ios/Meeshy/Features/Main/Services/StoryVisibilityPreferenceStore.swift:23-26`) :
+ * (`apps/ios/Meeshy/Features/Stories/Services/StoryVisibilityPreferenceStore.swift:23-26`) :
  * leur portée est une liste que le studio ne peut pas reproduire au prochain
  * écran, et les proposer à nouveau élargirait silencieusement l'audience.
  * `false` sur toute valeur qui n'est pas l'une des six (donnée corrompue).

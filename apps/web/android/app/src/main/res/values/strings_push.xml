@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- #13212 — le canal par défaut des messages (MessageNotificationChannel). -->
+    <string name="push_channel_messages_name">Messages and activity</string>
+    <string name="push_channel_messages_description">New messages, mentions, replies and activity on your account</string>
     <!-- #8678 — le canal des bannières sans son (SilentNotificationChannel). -->
     <string name="push_channel_silent_name">Silent notifications</string>
     <string name="push_channel_silent_description">Notifications shown without sound, when sound is turned off in Meeshy</string>

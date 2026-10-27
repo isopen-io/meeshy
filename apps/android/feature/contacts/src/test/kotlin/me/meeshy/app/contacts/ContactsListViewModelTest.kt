@@ -22,12 +22,13 @@ import me.meeshy.sdk.model.FriendRequest
 import me.meeshy.sdk.model.FriendRequestUser
 import me.meeshy.sdk.model.PresenceSnapshotEvent
 import me.meeshy.sdk.model.StatusEntry
+import me.meeshy.sdk.model.UserPresence
 import me.meeshy.sdk.model.UserStatusEvent
 import me.meeshy.sdk.model.friend.ContactFilter
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.session.SessionRepository
-import me.meeshy.sdk.socket.MessageSocketManager
+import me.meeshy.sdk.socket.PresenceStore
 import me.meeshy.sdk.status.StatusBarCache
 import me.meeshy.sdk.status.StatusFeedMode
 import org.junit.After
@@ -68,12 +69,10 @@ class ContactsListViewModelTest {
     private fun session(id: String? = "me"): SessionRepository =
         mockk<SessionRepository> { every { currentUserId } returns id }
 
-    private val userStatusFlow = MutableSharedFlow<UserStatusEvent>()
-    private val presenceSnapshotFlow = MutableSharedFlow<PresenceSnapshotEvent>()
+    private val presenceEntries = kotlinx.coroutines.flow.MutableStateFlow<Map<String, UserPresence>>(emptyMap())
 
-    private fun socketManager(): MessageSocketManager = mockk<MessageSocketManager> {
-        every { userStatus } returns userStatusFlow
-        every { presenceSnapshot } returns presenceSnapshotFlow
+    private fun socketManager(): PresenceStore = mockk<PresenceStore> {
+        every { entries } returns presenceEntries
     }
 
     private fun user(
@@ -110,7 +109,7 @@ class ContactsListViewModelTest {
         session: SessionRepository = session(),
         cached: List<FriendRequestUser>? = null,
         statuses: StatusBarCache = statusBarCache(),
-        socket: MessageSocketManager = socketManager(),
+        socket: PresenceStore = socketManager(),
     ): ContactsListViewModel {
         coEvery { repository.friendshipGraph(any()) } returns
             NetworkResult.Success(FriendshipPages(sent = sent, received = received))
@@ -119,11 +118,11 @@ class ContactsListViewModelTest {
     }
 
     @Test
-    fun `a live user status event updates the friend's presence without a full reload`() = runTest {
+    fun `a live presence entry updates the friend's presence without a full reload`() = runTest {
         val vm = viewModel(received = listOf(accepted("r1", sender = user("alice", isOnline = false))))
         assertThat(vm.state.value.friends.single().isOnline).isFalse()
 
-        userStatusFlow.emit(UserStatusEvent(userId = "alice", isOnline = true, lastActiveAt = "2026-08-11T20:00:00.000Z"))
+        presenceEntries.value = mapOf("alice" to UserPresence(true, "2026-08-11T20:00:00.000Z"))
 
         assertThat(vm.state.value.friends.single().isOnline).isTrue()
         assertThat(vm.state.value.friends.single().lastActiveAt).isEqualTo("2026-08-11T20:00:00.000Z")
@@ -131,22 +130,35 @@ class ContactsListViewModelTest {
     }
 
     @Test
-    fun `a presence snapshot updates matching friends without a full reload`() = runTest {
+    fun `a roster loaded AFTER the snapshot already carries the live presence`() = runTest {
+        presenceEntries.value = mapOf("alice" to UserPresence(true, null))
+
         val vm = viewModel(received = listOf(accepted("r1", sender = user("alice", isOnline = false))))
 
-        presenceSnapshotFlow.emit(PresenceSnapshotEvent(users = listOf(UserStatusEvent(userId = "alice", isOnline = true))))
-
         assertThat(vm.state.value.friends.single().isOnline).isTrue()
-        coVerify(exactly = 1) { repository.friendshipGraph(any()) }
     }
 
     @Test
-    fun `a status event for a user not in the roster is a no-op`() = runTest {
+    fun `an entry for a user not in the roster is a no-op`() = runTest {
         val vm = viewModel(received = listOf(accepted("r1", sender = user("alice", isOnline = false))))
 
-        userStatusFlow.emit(UserStatusEvent(userId = "ghost", isOnline = true))
+        presenceEntries.value = mapOf("ghost" to UserPresence(true, null))
 
         assertThat(vm.state.value.friends.single().isOnline).isFalse()
+    }
+
+    @Test
+    fun `pull to refresh re-reads the friend graph from the network and settles`() = runTest {
+        val vm = viewModel(received = listOf(accepted("r1", sender = user("alice"))))
+        coEvery { repository.friendshipGraph(any()) } returns NetworkResult.Success(
+            FriendshipPages(sent = emptyList(), received = listOf(accepted("r1", sender = user("alice")), accepted("r2", sender = user("bob")))),
+        )
+
+        vm.refresh()
+
+        assertThat(vm.state.value.friends.map { it.id }).containsExactly("alice", "bob")
+        assertThat(vm.state.value.isRefreshing).isFalse()
+        coVerify(exactly = 2) { repository.friendshipGraph(any()) }
     }
 
     @Test

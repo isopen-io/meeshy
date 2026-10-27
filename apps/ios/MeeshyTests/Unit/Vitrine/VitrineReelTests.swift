@@ -298,14 +298,14 @@ final class VitrineReelTests: XCTestCase {
         XCTAssertTrue(envoi.contains("#else\n            let uploader = TusUploadManager(baseURL: baseURL)\n            #endif"))
         XCTAssertTrue(envoi.contains("try await VitrineReel.creerSiInstallee(body, televerses:"))
         XCTAssertTrue(envoi.contains("let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.requestWithHeaders("))
-        let story = try source("apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel+PublicationUpload.swift")
+        let story = try source("apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel+PublicationUpload.swift")
         XCTAssertFalse(story.contains("Vitrine"), "le réel ne passe pas par le canal de la scène : aucun crochet n'y vit")
     }
 
     /// La flèche publie comme l'auteur : le choix armé au chevron (`chooseArmedPublish`), puis « Publier »
     /// (`requestSoclePublish`) ; le fil se révèle comme par l'accès rapide.
     func test_reel_publishesThroughTheComposerArrow_andTheFeedRevealsLikeTheQuickAccess() throws {
-        let pickers = try source("apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost+Pickers.swift")
+        let pickers = try source("apps/ios/Meeshy/Features/Composer/MeeshyComposerHost+Pickers.swift")
         XCTAssertTrue(pickers.contains("armer: { chooseArmedPublish($0) }"))
         XCTAssertTrue(pickers.contains("publier: { requestSoclePublish($0) }"))
         XCTAssertTrue(pickers.contains("declaredMimeType: media.mimeType"))

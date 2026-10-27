@@ -71,11 +71,12 @@ nonisolated enum EndToEndThreadPlaintexts {
     static func resolve(
         _ messages: inout [MeeshyMessage],
         from endToEnd: any EndToEndMessagingProviding,
-        conversationId: String
+        conversationId: String,
+        account: String
     ) async -> [String: E2EEPlaintextEntry] {
         let keys = lookupKeys(of: messages)
         guard !keys.isEmpty else { return [:] }
-        return apply(await endToEnd.plaintexts(for: keys), to: &messages, conversationId: conversationId)
+        return apply(await endToEnd.plaintexts(for: keys, as: account), to: &messages, conversationId: conversationId)
     }
 
     /// Chaque enveloppe ouverte de CETTE conversation, sur le fil principal.

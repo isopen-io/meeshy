@@ -56,4 +56,22 @@ object PinnedDayHeader {
         }
         return null
     }
+
+    /** Une rangée visible du fil, en coordonnées de l'écran du fil (haut vers le bas). */
+    data class Row(val isDayHeader: Boolean, val minY: Float, val maxY: Float)
+
+    /**
+     * Port d'iOS `MessageDayStickyLaw` (#4602) — **jamais deux pastilles de date visibles en même
+     * temps**. La pastille flottante nomme la rangée RÉELLEMENT en haut du fil : la plus haute dont
+     * le bas dépasse la [readingLine] (le haut de la pastille, sous la bande d'en-tête) ; elle se
+     * tait dès qu'une pastille de section est visible entre cette ligne et [viewportBottom]
+     * (barre de composition transparente comprise : une pastille qui y affleure se voit).
+     *
+     * Rend l'indice, dans [rows], de la rangée dont le jour est nommé ; `null` : la pastille se tait.
+     */
+    fun stickyRow(rows: List<Row>, readingLine: Float, viewportBottom: Float): Int? {
+        val visible = rows.indices.filter { rows[it].maxY > readingLine && rows[it].minY < viewportBottom }
+        if (visible.any { rows[it].isDayHeader }) return null
+        return visible.minByOrNull { rows[it].minY }
+    }
 }

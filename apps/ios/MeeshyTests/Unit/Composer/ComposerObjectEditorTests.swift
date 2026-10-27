@@ -26,7 +26,7 @@ final class ComposerObjectEditorTests: XCTestCase {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Composer/\(nom)")
+            .appendingPathComponent("Meeshy/Features/Composer/\(nom)")
         return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
     }
 
@@ -423,11 +423,11 @@ final class ComposerObjectEditorTests: XCTestCase {
     /// gauche, et c'est précisément la divergence qu'on veut interdire.
     func test_lesDeuxCouloirs_portentLaMemeCarte() throws {
         let editeur = try AppSourceGuard.unit(
-            "Meeshy/Features/Main/Composer/ComposerObjectEditorView.swift")
+            "Meeshy/Features/Composer/ComposerObjectEditorView.swift")
         let trailing = try AppSourceGuard.unit(
-            "Meeshy/Features/Main/Composer/ComposerTrailingRail.swift")
+            "Meeshy/Features/Composer/ComposerTrailingRail.swift")
         let leading = try AppSourceGuard.unit(
-            "Meeshy/Features/Main/Composer/ComposerLeadingRail.swift")
+            "Meeshy/Features/Composer/ComposerLeadingRail.swift")
 
         // **Les rails FLOTTENT sur la scène depuis #8370** : leur carte est un
         // verre (Liquid Glass sur iOS 26, matériau translucide avant), TEINTÉ du
@@ -449,7 +449,7 @@ final class ComposerObjectEditorTests: XCTestCase {
         // **Depuis #10364, le couloir d'OUTILS de l'éditeur aussi** : son
         // glyphe porte le même relief, et plus aucun disque de verre.
         let verre = AppSourceGuard.stripComments(try AppSourceGuard.unit(
-            "Meeshy/Features/Main/Composer/ComposerRailGlass.swift"))
+            "Meeshy/Features/Composer/ComposerRailGlass.swift"))
             .replacingOccurrences(of: " ", with: "")
             .replacingOccurrences(of: "\n", with: "")
         XCTAssertTrue(verre.contains(".adaptiveLiquidGlass(in:RoundedRectangle(cornerRadius:ComposerRailGeometry.railWidth/2,style:.continuous),tint:plateauTint.opacity(0.55))"),
@@ -489,9 +489,9 @@ final class ComposerObjectEditorTests: XCTestCase {
     /// au vert en mesurant zéro fichier.
     func test_leTemoinDeLaCarte_litBienDeuxRails() throws {
         let editeur = try AppSourceGuard.unit(
-            "Meeshy/Features/Main/Composer/ComposerObjectEditorView.swift")
+            "Meeshy/Features/Composer/ComposerObjectEditorView.swift")
         let trailing = try AppSourceGuard.unit(
-            "Meeshy/Features/Main/Composer/ComposerTrailingRail.swift")
+            "Meeshy/Features/Composer/ComposerTrailingRail.swift")
         XCTAssertTrue(editeur.contains("private var toolRail"),
                       "l'éditeur doit bien porter le rail d'outils que le témoin mesure")
         XCTAssertTrue(trailing.contains("struct ComposerTrailingRail"),
@@ -521,7 +521,7 @@ final class ComposerObjectEditorTests: XCTestCase {
         // **La grille vit dans `ComposerMediaFilterGrid`** (#9138) : l'éditeur
         // d'objet ET l'édition en place la montent — une seule expression.
         let editeur = try AppSourceGuard.unit(
-            "Meeshy/Features/Main/Composer/ComposerMediaControls.swift")
+            "Meeshy/Features/Composer/ComposerMediaControls.swift")
         let nu = AppSourceGuard.stripComments(editeur)
             .replacingOccurrences(of: " ", with: "")
             .replacingOccurrences(of: "\n", with: "")
@@ -551,14 +551,14 @@ final class ComposerObjectEditorTests: XCTestCase {
     /// serait alors vraie pour la pire des raisons.
     func test_leTemoinDuFiltre_litBienLEditeur() throws {
         let editeur = try AppSourceGuard.unit(
-            "Meeshy/Features/Main/Composer/ComposerObjectEditorView.swift")
+            "Meeshy/Features/Composer/ComposerObjectEditorView.swift")
         XCTAssertTrue(editeur.contains("struct ComposerObjectEditorView"))
         XCTAssertTrue(editeur.contains("var mediaOptions"),
                       "les options média — l'unité inclut l'extension `+Media`")
         XCTAssertTrue(AppSourceGuard.stripComments(editeur)
                         .contains("ComposerMediaFilterGrid(viewModel: viewModel, media: media,"),
                       "l'éditeur monte LA grille partagée")
-        let panneau = try AppSourceGuard.unit("Meeshy/Features/Main/Composer/ComposerInlineToolPanel.swift")
+        let panneau = try AppSourceGuard.unit("Meeshy/Features/Composer/ComposerInlineToolPanel.swift")
         XCTAssertTrue(panneau.contains("ComposerMediaFilterGrid(viewModel: viewModel, media: media,"),
                       "l'édition en place monte LA MÊME grille")
     }

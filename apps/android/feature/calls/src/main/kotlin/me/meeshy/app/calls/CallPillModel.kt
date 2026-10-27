@@ -11,6 +11,7 @@ import me.meeshy.sdk.model.call.CallActionContext
 import me.meeshy.sdk.model.call.CallActionSet
 import me.meeshy.sdk.model.call.CallGroupStageSizing
 import me.meeshy.sdk.model.call.CallPillRowContent
+import me.meeshy.ui.icons.MeeshyIcons
 
 /** One drawable action of the unfolded rows. [captionRes] defaults to the label when `null`. */
 internal data class CallPillItem(
@@ -61,6 +62,19 @@ internal object CallPillModel {
         )
     }
 
+    /** « Basculer la caméra » : offerte tant que la caméra émet (iOS `.flipCamera`). */
+    fun flipItem(state: CallUiState): CallPillItem? {
+        if (!state.isVideoCall || !state.isCameraOn) return null
+        return CallPillItem(
+            action = CallAction.FlipCamera,
+            icon = MeeshyIcons.FlipCamera,
+            labelRes = R.string.call_control_flip_camera,
+            kind = CallPillKind.Normal,
+            captionRes = R.string.call_control_flip_camera_caption,
+            hintRes = R.string.call_control_flip_camera_hint,
+        )
+    }
+
     /** What the capabilities offer, plus the built-in camera toggle, keyed by action. */
     fun items(state: CallUiState, offered: List<OfferedCallAction>): Map<CallAction, CallPillItem> {
         val fromHandlers = offered.associate { entry ->
@@ -73,7 +87,8 @@ internal object CallPillModel {
             )
         }
         val camera = cameraItem(state)?.let { mapOf(CallAction.Camera to it) }.orEmpty()
-        return fromHandlers + camera
+        val flip = flipItem(state)?.let { mapOf(CallAction.FlipCamera to it) }.orEmpty()
+        return fromHandlers + camera + flip
     }
 
     /** The law's actions that this call can actually offer right now (a handler, or the built-in camera). */

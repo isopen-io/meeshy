@@ -35,13 +35,13 @@ enum PostGalleryCommentSource {
     /// alors ce qu'elle a, embarqué ou en cache — un média qui manque vaut mieux
     /// qu'une pellicule qui se vide.
     ///
-    /// Le mapping est celui de `StoryViewerView.storyComment(from:)`, le seul
+    /// Le mapping est celui de `StoryCommentSession.comment(from:)`, le seul
     /// site NOMMÉ du dépôt qui transporte les médias d'un commentaire ; en écrire
     /// un de plus ferait un sixième exemplaire à tenir d'accord.
     static func fetched(postId: String, preferredLanguages: [String]) async -> [FeedComment]? {
         guard let response = try? await PostService.shared.getComments(postId: postId, cursor: nil, limit: 20)
         else { return nil }
-        return response.data.map { StoryViewerView.storyComment(from: $0, preferredLanguages: preferredLanguages) }
+        return response.data.map { StoryCommentSession.comment(from: $0, preferredLanguages: preferredLanguages) }
     }
 
     /// Les réponses ne se chargent pas ici : seules celles que le cache porte

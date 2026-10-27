@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshySDK
 
 /// Transport row shared by Quick & Pro containers. Strict primitive `let` API
 /// — no @ObservedObject — so SwiftUI can skip body re-evaluation when nothing
@@ -81,10 +82,8 @@ public struct TransportBar: View {
     /// - >=60s : `"1:05"`   (no decimal)
     public static func formatTimeCompact(seconds: Float) -> String {
         let total = max(0, seconds)
-        let minutes = Int(total) / 60
-        if minutes >= 1 {
-            let secs = Int(total.rounded()) - minutes * 60
-            return String(format: "%d:%02d", minutes, secs)
+        if total >= 60 {
+            return MediaFormat.duration(TimeInterval(total), rounding: .toNearestOrAwayFromZero)
         }
         return String(format: "0:%04.1f", total)
     }

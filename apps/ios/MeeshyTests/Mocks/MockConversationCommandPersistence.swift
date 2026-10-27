@@ -33,6 +33,18 @@ actor MockConversationCommandPersistence: ConversationCommandPersisting {
         calls.append(.markUndeleted(localId: localId))
     }
 
+    func markDeletedAwaitingConfirmation(localId: String, deletedAt: Date) async throws {
+        calls.append(.markDeleted(localId: localId))
+        awaitingConfirmation.append(localId)
+    }
+
+    private(set) var awaitingConfirmation: [String] = []
+    private(set) var confirmedDeletions: [String] = []
+
+    func confirmDeletion(localId: String) async throws {
+        confirmedDeletions.append(localId)
+    }
+
     func updatePinned(localId: String, pinnedAt: Date?, pinnedBy: String?) async throws {
         calls.append(.updatePinned(localId: localId, pinnedAt: pinnedAt, pinnedBy: pinnedBy))
     }
@@ -72,7 +84,7 @@ actor MockConversationCommandPersistence: ConversationCommandPersisting {
         calls.append(.updateViewOnceCount(localId: localId, count: count))
     }
 
-    func purgeMessages(ids: [String]) async throws {
+    func purgeMessages(ids: [String], origin: PlaintextErasureOrigin) async throws {
         calls.append(.purgeMessages(ids: ids))
     }
 }

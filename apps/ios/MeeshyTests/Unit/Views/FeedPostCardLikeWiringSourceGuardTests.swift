@@ -34,7 +34,7 @@ final class FeedPostCardLikeWiringSourceGuardTests: XCTestCase {
             .deletingLastPathComponent()  // Unit
             .deletingLastPathComponent()  // MeeshyTests
             .deletingLastPathComponent()  // ios
-            .appendingPathComponent("Meeshy/Features/Main")
+            .appendingPathComponent("Meeshy/Features")
     }
 
     /// Un montage : le fichier, la ligne, le type englobant, et ses arguments.
@@ -118,6 +118,15 @@ final class FeedPostCardLikeWiringSourceGuardTests: XCTestCase {
         // rendrait la garde VERTE PAR OMISSION — elle ne mesurerait rien.
         XCTAssertGreaterThanOrEqual(try mountings().count, 5,
             "Le relevé ne trouve plus les montages de FeedPostCard : chemin ou dépouillement cassé.")
+    }
+
+    func test_leReleve_balaieChaqueDomaine_pasSeulementMain() throws {
+        // #13139 : les vues se rangent par domaine. La liste de publications du
+        // PROFIL monte la carte du fil et a quitté `Features/Main` : un relevé
+        // borné à `Main` la perdrait EN SILENCE, et la garde resterait verte.
+        let files = Set(try mountings().map(\.file))
+        XCTAssertTrue(files.contains("ProfileUserPostsList.swift"),
+            "Le relevé ne voit plus les montages hors de Features/Main : un domaine échappe à la loi.")
     }
 
     func test_leReleve_neCompteAucunCommentaire() throws {

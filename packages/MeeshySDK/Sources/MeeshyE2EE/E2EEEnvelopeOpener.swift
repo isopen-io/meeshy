@@ -37,12 +37,16 @@ public enum E2EEOpenOutcome: Equatable, Sendable {
     /// libsignal l'a refusée (rejeu, session inconnue, version future) : la
     /// ligne locale le dit, rien ne repart en clair, aucun renvoi n'est demandé.
     case undecryptable(messageId: String, conversationId: String)
+    /// Un SIGNAL authentifié (#13142), rangé dans la boîte des signaux : l'app
+    /// l'applique selon `E2EESignalAuthority`, puis le règle. Réglé, il revient
+    /// tel quel (une copie croisée de la même enveloppe) et ne se rejoue pas.
+    case signal(E2EEReceivedSignal)
 
     public var messageId: String? {
         switch self {
         case .opened(let message): message.messageId
         case .undecryptable(let messageId, _): messageId
-        case .notForThisDevice, .deferred: nil
+        case .notForThisDevice, .deferred, .signal: nil
         }
     }
 
@@ -50,6 +54,7 @@ public enum E2EEOpenOutcome: Equatable, Sendable {
         switch self {
         case .opened(let message): message.conversationId
         case .undecryptable(_, let conversationId): conversationId
+        case .signal(let received): received.conversationId
         case .notForThisDevice, .deferred: nil
         }
     }
@@ -77,27 +82,38 @@ public final class E2EEEnvelopeOpener: E2EEEnvelopeOpening {
     private let plaintexts: any E2EEPlaintextStoring
     private let directory: any E2EEDirectoryClientProviding
     private let approvals: any E2EEOwnDeviceApprovalProviding
+    private let signals: (any E2EESignalInboxProviding)?
     private let logger = MeeshyLog.logger(.e2ee, subsystem: .sdk)
 
+    /// `signals` : la boîte des signaux, que l'ouvreur relit avant de
+    /// déchiffrer une enveloppe déjà ouverte (#13142). Sans elle, un signal
+    /// s'ouvre et se range quand même ; seule sa copie croisée se juge illisible.
     public init(
         local: E2EELocalDevice,
         cipher: any E2EESessionCipherProviding,
         plaintexts: any E2EEPlaintextStoring,
         directory: any E2EEDirectoryClientProviding,
-        approvals: any E2EEOwnDeviceApprovalProviding
+        approvals: any E2EEOwnDeviceApprovalProviding,
+        signals: (any E2EESignalInboxProviding)? = nil
     ) {
         self.local = local
         self.cipher = cipher
         self.plaintexts = plaintexts
         self.directory = directory
         self.approvals = approvals
+        self.signals = signals
+    }
+
+    /// Ce que l'appareil sait déjà de cette enveloppe : un message rangé, ou un signal reçu.
+    private func known(_ envelope: E2EEServedEnvelope) -> E2EEOpenOutcome? {
+        if let entry = try? plaintexts.entry(for: envelope.messageId) { return outcome(of: entry, envelope) }
+        if let received = try? signals?.entry(for: envelope.messageId) { return .signal(received) }
+        return nil
     }
 
     public func open(_ envelope: E2EEServedEnvelope) -> E2EEOpenOutcome {
         guard envelope.isAddressed(to: local.registrationId) else { return .notForThisDevice(envelopeId: envelope.id) }
-        if let known = try? plaintexts.entry(for: envelope.messageId) {
-            return outcome(of: known, envelope)
-        }
+        if let known = known(envelope) { return known }
         let sender = E2EEDeviceAddress(userId: envelope.senderUserId, deviceId: envelope.senderDeviceId)
         // Un de mes appareils que je n'ai pas (encore) approuvé : l'enveloppe
         // reste au serveur, NON déchiffrée (le ratchet n'avance pas), et
@@ -109,7 +125,7 @@ public final class E2EEEnvelopeOpener: E2EEEnvelopeOpening {
         }
         do {
             guard let body = Data(base64Encoded: envelope.body) else { throw E2EESessionCipherError.unknownMessageType(envelope.type) }
-            let content = try cipher.decrypt(E2EECiphertext(type: envelope.type, body: body), from: sender) { plaintext, transaction in
+            let opened = try cipher.decrypt(E2EECiphertext(type: envelope.type, body: body), from: sender) { plaintext, transaction -> Opened in
                 // L'épingle se relit DANS la transaction : une révocation ou une
                 // réapprobation concurrente ne s'intercale pas. Une clé qui n'est
                 // pas l'épinglée annule la transaction (le ratchet n'avance pas) et
@@ -121,20 +137,26 @@ public final class E2EEEnvelopeOpener: E2EEEnvelopeOpening {
                         throw E2EEOpenError.unapprovedOwnDevice
                     }
                 }
+                if E2EEPayloadKind.of(plaintext) == .signal {
+                    return .signal(try Self.receivedSignal(plaintext, in: envelope, transaction: transaction))
+                }
                 let content = try E2EEContent.decoded(from: plaintext)
                 guard content.belongs(to: envelope.conversationId) else { throw E2EEContentError.misattributed }
                 guard content.isAuthored(by: envelope.senderUserId, deviceId: envelope.senderDeviceId) else {
                     throw E2EEContentError.misattributedAuthor
                 }
                 try E2EEPlaintextRecords.save(.readable(content, senderUserId: envelope.senderUserId), for: envelope.messageId, in: transaction)
-                return content
+                return .message(content)
             }
-            return outcome(of: .readable(content, senderUserId: envelope.senderUserId), envelope)
+            switch opened {
+            case .message(let content): return outcome(of: .readable(content, senderUserId: envelope.senderUserId), envelope)
+            case .signal(let received): return .signal(received)
+            }
         } catch {
             // La socket et le rattrapage peuvent ouvrir la même enveloppe en même
             // temps : le verrou les sérialise, et le second échoue (clé de message
             // consommée) APRÈS que le premier a rangé le clair. Il le relit.
-            if let known = try? plaintexts.entry(for: envelope.messageId) { return outcome(of: known, envelope) }
+            if let known = known(envelope) { return known }
             if error as? E2EEOpenError == .unapprovedOwnDevice { return .deferred(envelopeId: envelope.id) }
             guard Self.isVerdict(error) else {
                 logger.warning("e2ee envelope deferred id=\(envelope.id, privacy: .public): storage refused")
@@ -146,13 +168,36 @@ public final class E2EEEnvelopeOpener: E2EEEnvelopeOpening {
         }
     }
 
+    private enum Opened {
+        case message(E2EEContent)
+        case signal(E2EEReceivedSignal)
+    }
+
+    /// Un signal ne se range que s'il est à SA place : la conversation de
+    /// l'enveloppe, et l'appareil que libsignal vient d'authentifier comme auteur.
+    private static func receivedSignal(
+        _ plaintext: Data, in envelope: E2EEServedEnvelope, transaction: any E2EERecordTransaction
+    ) throws -> E2EEReceivedSignal {
+        let signal = try E2EESignal.decoded(from: plaintext)
+        guard signal.belongs(to: envelope.conversationId) else { throw E2EEContentError.misattributed }
+        guard signal.isAuthored(by: envelope.senderUserId, deviceId: envelope.senderDeviceId) else {
+            throw E2EEContentError.misattributedAuthor
+        }
+        let received = E2EEReceivedSignal(
+            signalId: envelope.messageId, conversationId: envelope.conversationId,
+            senderUserId: envelope.senderUserId, senderDeviceId: envelope.senderDeviceId, signal: signal
+        )
+        try E2EESignalRecords.save(received, in: transaction)
+        return received
+    }
+
     /// Une erreur qui JUGE l'enveloppe (libsignal la refuse, son contenu est
     /// illisible ou mal placé) — par opposition à la base ou au verrou qui
     /// refusent « pas maintenant ». Seul un verdict efface l'enveloppe : un
     /// refus de stockage acquitté perdrait le message à jamais.
     static func isVerdict(_ error: any Error) -> Bool {
         switch error {
-        case is SignalError, is E2EEContentError, is E2EEOpenError, is E2EESessionCipherError, is DecodingError: true
+        case is SignalError, is E2EEContentError, is E2EESignalError, is E2EEOpenError, is E2EESessionCipherError, is DecodingError: true
         default: false
         }
     }
@@ -182,7 +227,7 @@ public final class E2EEEnvelopeOpener: E2EEEnvelopeOpening {
         let ids = opened.compactMap { envelope, outcome -> String? in
             switch outcome {
             case .notForThisDevice, .deferred: nil
-            case .opened, .undecryptable: envelope.id
+            case .opened, .undecryptable, .signal: envelope.id
             }
         }
         guard !ids.isEmpty else { return }

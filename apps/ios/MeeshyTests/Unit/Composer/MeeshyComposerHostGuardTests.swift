@@ -304,7 +304,7 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
                 + "jamais par un composant maison (loi 6 — un troisième chemin de rendu mentirait tôt ou tard)."
         )
         let lecteur = AppSourceGuard.stripComments(
-            try AppSourceGuard.unit("Meeshy/Features/Main/Views/StoryViewerContainer.swift")
+            try AppSourceGuard.unit("Meeshy/Features/Stories/Views/StoryViewerContainer.swift")
         ).components(separatedBy: .whitespacesAndNewlines).joined()
         XCTAssertTrue(
             lecteur.contains("StoryViewerView(") && lecteur.contains("isPreviewMode:true"),
@@ -761,7 +761,7 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
                 .deletingLastPathComponent()
                 .deletingLastPathComponent()
                 .deletingLastPathComponent()
-                .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerMoodSurface.swift"),
+                .appendingPathComponent("Meeshy/Features/Composer/ComposerMoodSurface.swift"),
             encoding: .utf8
         ))
         // L'ancre porte son TYPE, et ce n'est pas du zèle : `audiencePickerMode`
@@ -1782,7 +1782,7 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
         )
 
         let porte = compact(AppSourceGuard.stripComments(
-            try AppSourceGuard.unit("Meeshy/Features/Main/Views/StoryTrayActions.swift")))
+            try AppSourceGuard.unit("Meeshy/Features/Stories/Views/StoryTrayActions.swift")))
 
         XCTAssertFalse(
             porte.contains(compact("onPublishDocument: { _ in")),

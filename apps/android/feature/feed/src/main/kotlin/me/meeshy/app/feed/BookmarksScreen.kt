@@ -1,5 +1,6 @@
 package me.meeshy.app.feed
 
+import me.meeshy.ui.icons.MeeshyIcons
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -21,7 +22,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material3.CircularProgressIndicator
@@ -56,6 +56,7 @@ import coil.compose.AsyncImage
 import me.meeshy.feature.feed.R
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.MeeshySkeletonBox
+import me.meeshy.ui.component.rememberPresence
 import me.meeshy.ui.component.chrome.MeeshyBackground
 import me.meeshy.ui.component.chrome.MeeshyGlassSurface
 import me.meeshy.ui.theme.MeeshyPalette
@@ -75,6 +76,7 @@ fun BookmarksScreen(
     onBack: () -> Unit = {},
     onPostClick: (String) -> Unit = {},
     onOpenPost: (String) -> Unit = {},
+    onOpenProfile: ((String) -> Unit)? = null,
     viewModel: BookmarksViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -100,7 +102,7 @@ fun BookmarksScreen(
                     navigationIcon = {
                         IconButton(onClick = onBack) {
                             Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                imageVector = MeeshyIcons.Back,
                                 contentDescription = stringResource(R.string.bookmarks_back),
                                 tint = MeeshyTheme.tokens.textPrimary,
                             )
@@ -140,6 +142,8 @@ fun BookmarksScreen(
                                 viewModel.loadMoreIfNeeded(post.id)
                             }
                             SavedPostCard(
+                                modifier = Modifier.animateItem(),
+                                onOpenProfile = onOpenProfile,
                                 post = post,
                                 onRemove = { viewModel.removeBookmark(post.id) },
                                 onClick = { if (post.isReel) onPostClick(post.id) else onOpenPost(post.id) },
@@ -171,6 +175,8 @@ fun BookmarksScreen(
 
 @Composable
 private fun SavedPostCard(
+    modifier: Modifier = Modifier,
+    onOpenProfile: ((String) -> Unit)? = null,
     post: FeedPostPresentation,
     onRemove: () -> Unit,
     onClick: () -> Unit,
@@ -179,13 +185,20 @@ private fun SavedPostCard(
     val unknownAuthor = stringResource(R.string.feed_unknown_author)
     MeeshyGlassSurface(
         shape = RoundedCornerShape(MeeshyRadius.xl),
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
     ) {
         Column(Modifier.padding(MeeshySpacing.lg)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                MeeshyAvatar(name = post.authorName ?: unknownAuthor, size = 40.dp, imageUrl = post.authorAvatarUrl)
+                val profileTap = Modifier.opensAuthorProfile(post.authorId, onOpenProfile)
+                MeeshyAvatar(
+                    name = post.authorName ?: unknownAuthor,
+                    size = 40.dp,
+                    imageUrl = post.authorAvatarUrl,
+                    presence = rememberPresence(post.authorId),
+                    modifier = profileTap,
+                )
                 Spacer(Modifier.width(MeeshySpacing.md))
                 Column(Modifier.weight(1f)) {
                     Text(
@@ -193,6 +206,7 @@ private fun SavedPostCard(
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.SemiBold,
                         color = MeeshyTheme.tokens.textPrimary,
+                        modifier = profileTap,
                     )
                 }
                 IconButton(onClick = onRemove) {

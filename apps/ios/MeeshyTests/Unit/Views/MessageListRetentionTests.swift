@@ -168,7 +168,7 @@ final class MessageListRetentionTests: XCTestCase {
             reportService: MockReportService(),
             syncEngine: syncEngine.map { $0 as ConversationSyncEngineProviding } ?? ConversationSyncEngine.shared,
             messageSocket: MockMessageSocket(),
-            dependencies: ConversationDependencies(dbPool: pool, persistence: persistence)
+            dependencies: ConversationDependencies(persistence: persistence)
         )
     }
 }

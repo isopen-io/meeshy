@@ -32,7 +32,7 @@ Spec de référence : `docs/superpowers/specs/2026-08-09-location-picker-precisi
 |---|---|
 | `packages/MeeshySDK/Sources/MeeshySDK/Models/LocationSharingPreferences.swift` | `LocationPrecision`, `SharedMapStyle`, `PlaceCoarseNames`, `LocationSharingPreferences`, moteur `coarsen` |
 | `packages/MeeshySDK/Sources/MeeshyUI/Location/LocationSharingPreferencesStore.swift` | Persistance UserDefaults + publication Combine |
-| `apps/ios/Meeshy/Features/Main/Components/LocationSharingSettingsSection.swift` | Vue de réglages partagée (2 sections radio) + la feuille qui l'enveloppe |
+| `apps/ios/Meeshy/Features/Settings/Components/LocationSharingSettingsSection.swift` | Vue de réglages partagée (2 sections radio) + la feuille qui l'enveloppe |
 | `packages/MeeshySDK/Tests/MeeshySDKTests/Models/LocationPrecisionTests.swift` | Tests du moteur d'arrondi |
 | `packages/MeeshySDK/Tests/MeeshyUITests/Location/LocationSharingPreferencesStoreTests.swift` | Tests de persistance |
 | `apps/ios/MeeshyTests/Unit/Views/LocationPickerModelTests.swift` | Tests de `sharedPlace(at:)` |
@@ -44,7 +44,7 @@ Spec de référence : `docs/superpowers/specs/2026-08-09-location-picker-precisi
 |---|---|
 | `packages/MeeshySDK/Sources/MeeshyUI/Compatibility/AdaptiveMap.swift` | `style:` + `defaultControls:` sur `AdaptiveInteractiveMap` |
 | `apps/ios/Meeshy/Features/Main/Components/LocationPickerView.swift` | Couleurs, layout, colonne de contrôles, feuille, coarsening, composants du placemark |
-| `apps/ios/Meeshy/Features/Main/Views/PrivacySettingsView.swift` | Section « Position » |
+| `apps/ios/Meeshy/Features/Settings/Views/PrivacySettingsView.swift` | Section « Position » |
 | `apps/ios/Meeshy/Localizable.xcstrings` | Clés neuves × 7 langues |
 
 **Ordre :** Task 1 (modèle SDK) → Task 2 (store SDK) → Task 3 (carte SDK) → Task 4 (picker app) → Task 5 (vue de réglages + feuille) → Task 6 (Réglages > Confidentialité) → Task 7 (catalogue + build final).
@@ -1012,7 +1012,7 @@ git commit -m "feat(ios/location): composants geocodes separes et lieu partage a
 ## Task 5 : Vue de réglages partagée et feuille (i)
 
 **Files:**
-- Create: `apps/ios/Meeshy/Features/Main/Components/LocationSharingSettingsSection.swift`
+- Create: `apps/ios/Meeshy/Features/Settings/Components/LocationSharingSettingsSection.swift`
 - Modify: `apps/ios/Meeshy/Localizable.xcstrings`
 
 **Interfaces:**
@@ -1024,7 +1024,7 @@ git commit -m "feat(ios/location): composants geocodes separes et lieu partage a
 
 - [ ] **Step 1 : Écrire le fichier de vue**
 
-Créer `apps/ios/Meeshy/Features/Main/Components/LocationSharingSettingsSection.swift` :
+Créer `apps/ios/Meeshy/Features/Settings/Components/LocationSharingSettingsSection.swift` :
 
 ```swift
 import SwiftUI
@@ -1267,7 +1267,7 @@ Attendu : **BUILD SUCCEEDED**.
 
 ```bash
 cd /Users/smpceo/Documents/v2_meeshy && git add \
-  apps/ios/Meeshy/Features/Main/Components/LocationSharingSettingsSection.swift && \
+  apps/ios/Meeshy/Features/Settings/Components/LocationSharingSettingsSection.swift && \
 git commit -m "feat(ios/location): section de reglages partagee precision + type de carte"
 ```
 
@@ -1692,7 +1692,7 @@ git commit -m "feat(ios/location): couleurs de conversation, controles flottants
 ## Task 7 : Section « Position » dans Réglages > Confidentialité
 
 **Files:**
-- Modify: `apps/ios/Meeshy/Features/Main/Views/PrivacySettingsView.swift`
+- Modify: `apps/ios/Meeshy/Features/Settings/Views/PrivacySettingsView.swift`
 
 **Interfaces:**
 - Consumes: `LocationSharingSettingsSection` (Task 5).
@@ -1749,7 +1749,7 @@ Attendu : **BUILD SUCCEEDED**.
 
 ```bash
 cd /Users/smpceo/Documents/v2_meeshy && git add \
-  apps/ios/Meeshy/Features/Main/Views/PrivacySettingsView.swift && \
+  apps/ios/Meeshy/Features/Settings/Views/PrivacySettingsView.swift && \
 git commit -m "feat(ios/settings): section Position dans Confidentialite"
 ```
 

@@ -82,6 +82,7 @@ function makePrisma(friendIds: string[] = [FRIEND_ID_1, FRIEND_ID_2]): PrismaCli
     friendRequest: {
       findMany: jest.fn<any>().mockResolvedValue(friendships),
     },
+    user: { findMany: jest.fn<any>().mockResolvedValue([]), findUnique: jest.fn<any>().mockResolvedValue(null) },
   } as unknown as PrismaClient;
 }
 
@@ -232,6 +233,7 @@ describe('SocialEventsHandler', () => {
             { senderId: AUTHOR_ID, receiverId: FRIEND_ID_2 },
           ]),
         },
+        user: { findMany: jest.fn<any>().mockResolvedValue([]), findUnique: jest.fn<any>().mockResolvedValue(null) },
       } as unknown as PrismaClient;
       const { handler, io } = buildHandler({ prisma });
 

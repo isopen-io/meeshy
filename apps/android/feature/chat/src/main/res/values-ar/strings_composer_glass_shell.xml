@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="composer_shell_minimized_write">كتابة رسالة</string>
-    <string name="composer_shell_minimized_mic">تسجيل رسالة صوتية</string>
+    <string name="composer_fold">تصغير شريط الرسائل</string>
+    <string name="composer_unfold">إظهار شريط الرسائل</string>
 </resources>

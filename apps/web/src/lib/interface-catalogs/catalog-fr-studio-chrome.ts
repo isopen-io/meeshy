@@ -84,6 +84,8 @@ const frStudioChrome = {
   'story.studio.background.cameraHold': 'Maintenir : ouvrir la caméra',
   'story.studio.camera.close': 'Revenir à la scène',
   'story.studio.camera.flip': 'Changer d’objectif',
+  'story.studio.camera.frames': 'Cadres',
+  'story.studio.camera.frames.none': 'Aucun cadre',
   'story.studio.camera.flash': 'Flash',
   'story.studio.camera.shutter.photo': 'Prendre une photo',
   'story.studio.camera.shutter.start': 'Démarrer l’enregistrement',

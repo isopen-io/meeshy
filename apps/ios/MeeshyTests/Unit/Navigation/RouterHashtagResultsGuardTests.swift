@@ -14,7 +14,7 @@ final class RouterHashtagResultsGuardTests: XCTestCase {
     }
 
     func test_route_hasHashtagResultsCase() throws {
-        let source = try sourceWithoutComments("Meeshy/Features/Main/Navigation/Router.swift")
+        let source = try sourceWithoutComments("Meeshy/Features/Navigation/Router.swift")
         XCTAssertTrue(source.contains("case hashtagResults(tag: String)"))
     }
 

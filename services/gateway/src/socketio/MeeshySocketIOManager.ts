@@ -30,6 +30,7 @@ import { MessageHandler } from './handlers/MessageHandler';
 import { StatusHandler } from './handlers/StatusHandler';
 import { ConversationViewingHandler } from './handlers/ConversationViewingHandler';
 import { captureNoticeDelivery, listenContentCapture } from './handlers/ContentCaptureHandler';
+import { e2eeSignalHandlerDeps, listenE2EESignals } from './handlers/E2EESignalHandler';
 import { ReactionHandler } from './handlers/ReactionHandler';
 import { AttachmentReactionHandler } from './handlers/AttachmentReactionHandler';
 import { AttachmentReactionService } from '../services/AttachmentReactionService';
@@ -1387,8 +1388,8 @@ export class MeeshySocketIOManager {
   /**
    * Applique la visibilité de présence de CHAQUE contact pour CE lecteur —
    * amitié acceptée, rôle du lecteur, blocage bidirectionnel et préférences,
-   * tenus ensemble par `PresenceVisibilityService.resolveForTargets`, la même
-   * porte que `GET /users/presence`.
+   * tenus ensemble par `PresenceVisibilityService.resolveForPresenceEvent` (porte
+   * de `GET /users/presence` + blocage plus fort que le privilège ADMIN, #13298).
    *
    * Directive produit (2026-08-25) : partager une conversation n'autorise plus
    * rien. Le prédécesseur (`_applyPresencePrefs`) n'appliquait que les
@@ -1411,7 +1412,7 @@ export class MeeshySocketIOManager {
     users: { userId: string; username: string; isOnline: boolean; lastActiveAt: Date | null }[],
   ): Promise<{ userId: string; username: string; isOnline: boolean; lastActiveAt: Date | null }[]> {
     if (users.length === 0) return users;
-    const visibility = await this.presenceVisibilityService.resolveForTargets(
+    const visibility = await this.presenceVisibilityService.resolveForPresenceEvent(
       viewer,
       users.map(u => u.userId),
     );
@@ -1858,6 +1859,8 @@ export class MeeshySocketIOManager {
       this.conversationViewingHandler.listen(socket);
       // #9617 — une capture d'écran d'un contenu qui disparaît, annoncée au fil.
       listenContentCapture(socket, { prisma: this.prisma, socketToUser: this.socketToUser, connectedUsers: this.connectedUsers, deliver: captureNoticeDelivery({ io: this.io, prisma: this.prisma, readStatusService: this.readStatusService, bridgeService: this.bridgeService }) });
+      // #13142 — la porte unique des signaux chiffrés d'une conversation e2ee.
+      listenE2EESignals(socket, e2eeSignalHandlerDeps({ prisma: this.prisma, socketToUser: this.socketToUser, connectedUsers: this.connectedUsers }));
 
       this.callEventsHandler.setupCallEvents(
         socket,
@@ -2809,10 +2812,14 @@ export class MeeshySocketIOManager {
       // amis, ni les ADMIN, ni ses autres appareils ne reçoivent la transition.
       if (user.deactivatedAt) return;
 
+      // La relation de blocage est lue UNE fois (#13350) : elle retire les
+      // bloqués de l'audience AMIS et, plus bas, leurs sockets par `.except()`.
+      const blockedUserIds = await getBlockRelatedUserIds(this.prisma, user.id);
+
       // La requête d'amitiés n'est même pas lancée quand elle ne peut servir
       // personne : `showOnlineStatus = false` retire tout le sous-ensemble AMIS.
       const friendIds = privacyPrefs.showOnlineStatus
-        ? [...await this.presenceVisibilityService.acceptedFriendIds(user.id)]
+        ? [...await this.presenceVisibilityService.acceptedFriendIds(user.id, { blockRelated: blockedUserIds })]
         : [];
 
       const emissions = presenceStatusEmissions({
@@ -2842,7 +2849,6 @@ export class MeeshySocketIOManager {
       // socket vivant n'apporte rien à `.except()`. `userSockets` est vidé à la
       // déconnexion (`AuthHandler.handleDisconnection`), donc l'intersection se
       // fait ici, en mémoire, au lieu d'en base.
-      const blockedUserIds = await getBlockRelatedUserIds(this.prisma, user.id);
       const blockedSocketIds = [...blockedUserIds].flatMap(
         id => [...(this.userSockets.get(id) ?? [])],
       );

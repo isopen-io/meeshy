@@ -7,7 +7,9 @@ import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import me.meeshy.sdk.model.ApiCommunityMember
 import me.meeshy.sdk.model.ApiResponse
+import me.meeshy.sdk.model.ApiCommunity
 import me.meeshy.sdk.model.CommunityMini
+import me.meeshy.sdk.model.Pagination
 import me.meeshy.sdk.model.InviteMemberRequest
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.CommunityApi
@@ -82,5 +84,33 @@ class CommunityRepositoryTest {
 
         assertThat(result).isInstanceOf(NetworkResult.Failure::class.java)
         assertThat((result as NetworkResult.Failure).error.httpStatus).isEqualTo(403)
+    }
+
+    @Test
+    fun `listPaged garde le bloc pagination et passe la recherche`() = runTest {
+        coEvery { api.list(20, 20, "club") } returns ApiResponse(
+            success = true,
+            data = listOf(ApiCommunity(id = "c1")),
+            pagination = Pagination(hasMore = true),
+        )
+
+        val result = repository.listPaged(search = "club", offset = 20, limit = 20)
+
+        val page = (result as NetworkResult.Success).data
+        assertThat(page.data.map { it.id }).containsExactly("c1")
+        assertThat(page.pagination?.hasMore).isTrue()
+    }
+
+    @Test
+    fun `getMembersPaged garde le bloc pagination`() = runTest {
+        coEvery { api.getMembers("c1", 0, 30) } returns ApiResponse(
+            success = true,
+            data = listOf(ApiCommunityMember(id = "m1", userId = "u1")),
+            pagination = Pagination(hasMore = false),
+        )
+
+        val page = (repository.getMembersPaged("c1", 0, 30) as NetworkResult.Success).data
+
+        assertThat(page.pagination?.hasMore).isFalse()
     }
 }

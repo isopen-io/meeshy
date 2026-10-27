@@ -6,6 +6,7 @@ import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.ImageVariantPicker
 import me.meeshy.sdk.model.MessageEffectFlags
 import me.meeshy.sdk.model.MessageEffects
+import me.meeshy.sdk.model.isEndToEndBlob
 import me.meeshy.sdk.model.isProtected
 import me.meeshy.sdk.util.resolveMediaUrl
 
@@ -32,6 +33,18 @@ internal object BubbleAttachmentBuilder {
     private const val GRID_IMAGE_CELL_WIDTH_DP = 124
 
     fun build(
+        visibleAttachments: List<ApiMessageAttachment>,
+        effects: MessageEffects,
+        preferences: LanguageResolver.ContentLanguagePreferences,
+        mediaBaseUrl: String?,
+        displayDensity: Float,
+    ): BubbleAttachments {
+        // #13106 — un blob chiffré de bout en bout n'est aucun genre de pièce : ni nom, ni lien.
+        val openable = visibleAttachments.filterNot { it.isEndToEndBlob }
+        return project(openable, effects, preferences, mediaBaseUrl, displayDensity)
+    }
+
+    private fun project(
         visibleAttachments: List<ApiMessageAttachment>,
         effects: MessageEffects,
         preferences: LanguageResolver.ContentLanguagePreferences,

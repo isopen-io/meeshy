@@ -335,6 +335,8 @@ public enum MessageTextRenderer {
         options: []
     )
 
+    private typealias DisplayNameRules = [(regex: NSRegularExpression, kind: RuleKind)]
+
     /// Thread-safe memo of compiled display-name mention rules, keyed by the
     /// `username → displayName` map. `parse` rebuilds these on every render call,
     /// and the map is constant for the lifetime of a conversation — so without
@@ -343,20 +345,13 @@ public enum MessageTextRenderer {
     /// renderer runs per message). The map is stable, so this hits on every
     /// subsequent message/render. Lock-guarded: the renderer also runs off the
     /// main thread (UIKit cell-diffing path).
-    private final class DisplayNameRulesCache: @unchecked Sendable {
-    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
-    // défaut) → double-free `pointer being freed was not allocated` (abrt)
-    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
-    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
-    nonisolated deinit {}
-        private let lock = NSLock()
-        private var cache: [[String: String]: [(regex: NSRegularExpression, kind: RuleKind)]] = [:]
-        func rules(
-            for key: [String: String],
-            build: () -> [(regex: NSRegularExpression, kind: RuleKind)]
-        ) -> [(regex: NSRegularExpression, kind: RuleKind)] {
-            lock.lock()
-            defer { lock.unlock() }
+    private static let displayNameRulesCache = Locked<[[String: String]: DisplayNameRules]>(uncheckedState: [:])
+
+    private static func memoizedDisplayNameRules(
+        for key: [String: String],
+        build: () -> DisplayNameRules
+    ) -> DisplayNameRules {
+        displayNameRulesCache.mutateUnchecked { cache in
             if let cached = cache[key] { return cached }
             // Bound growth across many distinct conversations; rebuilding on the
             // rare miss is cheap next to a scroll's worth of cache hits.
@@ -366,13 +361,12 @@ public enum MessageTextRenderer {
             return built
         }
     }
-    private static let displayNameRulesCache = DisplayNameRulesCache()
 
     /// Build display-name mention rules for known `username → displayName` pairs.
     /// Sorted by display name length descending to avoid partial matches.
-    /// Memoized by `mentionDisplayNames` (see `DisplayNameRulesCache`).
+    /// Memoized by `mentionDisplayNames` (see `displayNameRulesCache`).
     private static func displayNameRules(from mentionDisplayNames: [String: String]) -> [(regex: NSRegularExpression, kind: RuleKind)] {
-        displayNameRulesCache.rules(for: mentionDisplayNames) {
+        memoizedDisplayNameRules(for: mentionDisplayNames) {
             mentionDisplayNames
                 .sorted { $0.value.count > $1.value.count }
                 .compactMap { (username, displayName) -> (NSRegularExpression, RuleKind)? in

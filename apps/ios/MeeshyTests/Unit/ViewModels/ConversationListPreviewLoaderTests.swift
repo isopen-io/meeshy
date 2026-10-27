@@ -586,16 +586,17 @@ final class ConversationListPreviewLoaderTests: XCTestCase {
         XCTAssertEqual(sut.state(for: conversationId).messages.map(\.content), ["Salut en clair"])
     }
 
-    /// Le registre des déchiffrements vivait en mémoire : après un démarrage à
-    /// froid, tous les messages E2EE de l'aperçu étaient scellés. La provenance
-    /// voyage dans le cache (#11382).
-    func test_encryptedCache_coldStart_servesWhatTheDeviceDecrypted() async throws {
+    /// #12999 — le cache n'est pas le coffre : un clair déchiffré n'y survit
+    /// pas à un démarrage à froid. L'aperçu le relit dans le coffre
+    /// (`ConversationListPreviewDecryptionTests`), jamais dans le cache.
+    func test_encryptedCache_coldStart_keepsNoClear_theVaultServesIt() async throws {
         let cached = try persisted(makeMessage(content: "Salut en clair", isEncrypted: true, decryptedOnDevice: true))
+        XCTAssertEqual(cached.content, E2EEWire.contentPlaceholder)
         let (sut, _, _) = makeSUT(cache: .stale([cached], age: 4_000))
 
         await sut.load(for: conversationId, intent: .prefetch)
 
-        XCTAssertEqual(sut.state(for: conversationId).messages.map(\.content), ["Salut en clair"])
+        XCTAssertFalse(sut.state(for: conversationId).messages.map(\.content).contains("Salut en clair"))
     }
 
     /// Le faux positif de l'heuristique base64 : un clair réel qui est du

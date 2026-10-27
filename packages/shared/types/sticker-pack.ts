@@ -32,6 +32,7 @@ import {
   PACK_STATUSES,
   isPackInstalled,
   isReservedPackSlug,
+  type PackAssetRef,
   type PackLanguage,
   type PackNames,
   type PackRegistries,
@@ -339,8 +340,13 @@ export type StickerPackItem = {
   readonly emoji: string;
   readonly kind: StickerKind;
   readonly mimeType: string;
-  /** Chemin servi par `GET /attachments/file/*`. */
+  /** Chemin servi par `GET /attachments/file/*` — l'ancien chemin, gardé pour les clients publiés (#9223). */
   readonly fileUrl: string;
+  /**
+   * Le même fichier dans le magasin adressé, `GET /api/v1/pack-assets/<src>` (#10188, additif) :
+   * public, immuable, ETag = empreinte. Absent ⇒ le client lit `fileUrl`.
+   */
+  readonly asset?: PackAssetRef;
   readonly width: number;
   readonly height: number;
   readonly zones: readonly StickerTextZone[];
@@ -363,6 +369,8 @@ export type StickerPackSummary = PackSummaryBase & {
    * `stickerPackText`, qui retombe sur le catalogue partagé puis sur `name`.
    */
   readonly names?: PackNames;
+  /** La couverture (le premier sticker) dans le magasin adressé (#10188, additif) ; absente ⇒ `coverUrl`. */
+  readonly cover?: PackAssetRef;
 };
 
 export type StickerPackDetail = StickerPackSummary & {

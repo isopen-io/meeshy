@@ -5,7 +5,7 @@ import XCTest
 /// appelée au premier affichage — pas à 5 s de la fin de la slide.
 final class StoryNeighborWindowSourceGuardTests: XCTestCase {
 
-    private static let viewsDirectory = "apps/ios/Meeshy/Features/Main/Views/"
+    private static let viewsDirectory = "apps/ios/Meeshy/Features/Stories/Views/"
 
     private static var repoRoot: URL {
         URL(fileURLWithPath: #filePath)

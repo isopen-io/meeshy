@@ -4,7 +4,7 @@ package me.meeshy.sdk.model.deeplink
  * Where a `https://meeshy.me/...` or `meeshy://...` link leads. Every link
  * produces exactly one destination; anything that is not a Meeshy route is
  * [External]. Mirror of iOS `DeepLinkDestination`
- * (apps/ios/Meeshy/Features/Main/Navigation/DeepLinkRouter.swift).
+ * (apps/ios/Meeshy/Features/Navigation/DeepLinkRouter.swift).
  */
 sealed interface DeepLinkDestination {
     data object OwnProfile : DeepLinkDestination

@@ -3,10 +3,16 @@ package me.meeshy.sdk.sharelink
 import java.util.concurrent.atomic.AtomicReference
 import javax.inject.Inject
 import javax.inject.Singleton
+import dagger.Binds
+import dagger.Module
+import dagger.hilt.InstallIn
+import dagger.hilt.components.SingletonComponent
+import dagger.multibindings.IntoSet
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.cache.CachePolicy
 import me.meeshy.sdk.cache.SystemCacheClock
 import me.meeshy.sdk.model.MyShareLink
+import me.meeshy.sdk.session.PerAccountCache
 
 /** La liste « Mes liens » telle que la dernière lecture l'a rendue, et son âge. */
 public data class CachedShareLinks(val links: List<MyShareLink>, val ageMillis: Long, val isFresh: Boolean)
@@ -16,13 +22,14 @@ public data class CachedShareLinks(val links: List<MyShareLink>, val ageMillis: 
  * la liste ET la fiche d'un lien se peignent d'abord d'ici, le réseau n'est appelé que si la
  * loi de rechargement l'exige. La liste survit à l'écran qui l'a lue (singleton) ; la fiche y
  * écrit sa valeur optimiste pour que revenir à la liste montre le lien tel qu'il vient d'être
- * modifié. Un échec réseau n'écrase jamais ce cache.
+ * modifié. Un échec réseau n'écrase jamais ce cache. Vidé à la déconnexion ([PerAccountCache]) :
+ * un second compte n'ouvre jamais « Mes liens » sur les liens du premier.
  */
 @Singleton
 public class ShareLinksCache(
     private val clock: CacheClock,
     private val policy: CachePolicy,
-) {
+) : PerAccountCache {
     @Inject
     public constructor() : this(SystemCacheClock, CachePolicy.Default)
 
@@ -61,4 +68,16 @@ public class ShareLinksCache(
     public fun remove(linkId: String) {
         entry.updateAndGet { current -> current?.copy(links = current.links.filterNot { it.linkId == linkId }) }
     }
+
+    override suspend fun clear() {
+        entry.set(null)
+    }
+}
+
+@Module
+@InstallIn(SingletonComponent::class)
+internal abstract class ShareLinksCacheModule {
+    @Binds
+    @IntoSet
+    abstract fun bindAccountCache(cache: ShareLinksCache): PerAccountCache
 }

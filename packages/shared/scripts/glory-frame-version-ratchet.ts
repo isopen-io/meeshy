@@ -20,10 +20,13 @@
  *
  * `--mutate lower-version` abaisse chaque version de 1 avant de vérifier : la
  * CI s'en sert pour prouver que le cliquet rougit, et la preuve exige que
- * CHAQUE pack tombe, nommé, à sa version abaissée (`lowerVersionProofHolds`) —
- * une réutilisation nommée en plus (un pack monté a sa version quittée dans
- * `retained.json`) ne la défait pas. Sortie 1 sur violation (ou preuve tenue
- * sous mutation), 2 sur base illisible — jamais lue comme vide.
+ * CHAQUE pack tombe, nommé, à sa version abaissée (`lowerVersionProofHolds`),
+ * sous la référence qui la connaît : la base quand il est à son numéro ou un
+ * cran au-dessus, `retained.json` quand la branche l'a monté de plusieurs.
+ * Sortie 1 sur violation (ou preuve tenue sous mutation, et seulement alors :
+ * une preuve incomplète sort 0), 2 sur base illisible — jamais lue comme vide —
+ * et sur toute erreur inattendue, que la CI ne prend donc jamais pour une
+ * preuve (elle exige la sortie 1 sous mutation).
  */
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -90,9 +93,12 @@ export const lowerVersions = (registry: readonly RegistryEntry[]): readonly Regi
 
 /**
  * La preuve de ROUGE tient si CHAQUE pack du registre (non muté) QUI A UNE BASE
- * tombe, nommé, sous `below-baseline` à sa version abaissée de 1 — quelles que
- * soient les autres violations que la mutation produit (un pack monté a sa
- * version quittée dans `retained.json`, et l'abaisser la réutilise aussi).
+ * tombe, nommé, à sa version abaissée de 1 — sous `below-baseline` quand il est
+ * au numéro de la base, sous `reuses-baseline` quand la branche l'a monté d'un
+ * cran au-dessus d'elle (#10254 : le premier lot qui monte un pack), sous
+ * `reuses-retained` quand elle l'a monté de plusieurs (une promotion dev → main
+ * après deux montées : seul `retained.json` connaît la version abaissée) —
+ * quelles que soient les autres violations que la mutation produit.
  * Un pack NÉ sur la branche n'a pas de base sous laquelle redescendre : la
  * mutation ne peut rien prouver sur lui, et il ne défait pas la preuve. Sans
  * base, ou sans aucun pack commun avec elle, rien n'est prouvé.
@@ -107,13 +113,25 @@ export const lowerVersionProofHolds = ({
   readonly baseline: readonly RegistryEntry[] | null;
 }): boolean => {
   if (baseline === null) return false;
-  const based = registry.filter((entry) => baseline.some((candidate) => candidate.slug === entry.slug));
-  return (
-    based.length > 0 &&
-    based.every((entry) =>
-      violations.some((violation) => violation.kind === 'below-baseline' && violation.slug === entry.slug && violation.version === versionOf(entry) - 1 && violation.baseline === versionOf(entry)),
-    )
-  );
+  const based = registry.flatMap((entry) => {
+    const base = baseline.find((candidate) => candidate.slug === entry.slug);
+    return base === undefined ? [] : [{ entry, baseVersion: versionOf(base) }];
+  });
+  return based.length > 0 && based.every(({ entry, baseVersion }) => violations.some((violation) => fallsAtLoweredVersion(violation, entry, baseVersion)));
+};
+
+/**
+ * Un pack tombe, abaissé, sous la référence qui CONNAÎT sa version abaissée : SOUS la base, la base (`below-baseline`) ;
+ * AU numéro de la base, la base s'il porte une autre empreinte (`reuses-baseline`), `retained.json` si sa version a sauté
+ * sans changer d'empreinte ; AU-DESSUS de la base, `retained.json` seul (`reuses-retained`) — une version que la branche a
+ * montée puis quittée n'est connue que de lui. C'est le rouge que la mutation doit voir, quel que soit le nombre de crans.
+ */
+const fallsAtLoweredVersion = (violation: VersionViolation, entry: RegistryEntry, baseVersion: number): boolean => {
+  const lowered = versionOf(entry) - 1;
+  if (violation.slug !== entry.slug || violation.version !== lowered) return false;
+  if (violation.kind === 'below-baseline') return violation.baseline === baseVersion && lowered < baseVersion;
+  if (violation.kind === 'reuses-baseline') return lowered === baseVersion;
+  return lowered >= baseVersion;
 };
 
 export const describeViolation = (violation: VersionViolation): string => {
@@ -147,4 +165,13 @@ function main(): void {
   process.exit(proven ? 1 : 0);
 }
 
-if (process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main();
+function run(): void {
+  try {
+    main();
+  } catch (error) {
+    process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+    process.exit(2);
+  }
+}
+
+if (process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) run();

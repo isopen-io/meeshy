@@ -4,7 +4,7 @@ Scope: 19 files from `apps/ios/Meeshy/Features/Main/Views/` — auth (login, mag
 
 ---
 
-## apps/ios/Meeshy/Features/Main/Views/LinksHubView.swift
+## apps/ios/Meeshy/Features/Links/Views/LinksHubView.swift
 
 - **Purpose**: Hub screen synthesizing every "link" type the platform offers (share, tracking, community, affiliate). Deep link `meeshy.me/links`.
 - **Public API**: `struct LinksHubView: View`.
@@ -15,7 +15,7 @@ Scope: 19 files from `apps/ios/Meeshy/Features/Main/Views/` — auth (login, mag
 - **Dependencies**: `Router`, `ConversationListViewModel` (env), `ThemeManager`, `HapticFeedback`.
 - **Android-port note**: Compose screen with collapsible `TopAppBar` (`enterAlwaysScrollBehavior`) + `LazyColumn`. Cards = clickable `Card` rows routing through a NavController. Quick-create launches a `ModalBottomSheet`.
 
-## apps/ios/Meeshy/Features/Main/Views/LoginView.swift
+## apps/ios/Meeshy/Features/Auth/Views/LoginView.swift
 
 - **Purpose**: Primary authentication screen — supports saved-account picker, manual username/password login, and environment selection (dev/staging/prod/custom).
 - **Public API**: `struct LoginView: View`. Internal `Field` focus enum.
@@ -29,7 +29,7 @@ Scope: 19 files from `apps/ios/Meeshy/Features/Main/Views/` — auth (login, mag
 - **Dependencies**: `AuthManager` (env), `ThemeManager`, `MeeshyConfig`, `SavedAccount`, `MeeshyAvatar`, `AnimatedLogoView`.
 - **Android-port note**: Compose screen; `AuthViewModel` exposing `savedAccounts`, `isLoading`, `errorMessage`. Saved accounts persisted in encrypted DataStore/Room. Environment selector → segmented buttons + config singleton. Keep simulator prefill out of release builds (`BuildConfig.DEBUG` + emulator check).
 
-## apps/ios/Meeshy/Features/Main/Views/MagicLinkView.swift
+## apps/ios/Meeshy/Features/Auth/Views/MagicLinkView.swift
 
 - **Purpose**: Passwordless login — sends an email magic link, then shows a waiting screen with a countdown.
 - **Public API**: `struct MagicLinkView: View`. Internal `Step` enum (`.emailInput`, `.waiting`).
@@ -40,7 +40,7 @@ Scope: 19 files from `apps/ios/Meeshy/Features/Main/Views/` — auth (login, mag
 - **Dependencies**: `AuthManager` (env), `AuthService`, `APIError`, `os.Logger`.
 - **Android-port note**: Compose 2-step screen; coroutine countdown in ViewModel (cancel on leave). `AuthService.requestMagicLink` → Retrofit call returning expiry. Magic link deep-link handled by app's intent filter.
 
-## apps/ios/Meeshy/Features/Main/Views/MediaDownloadSettingsView.swift
+## apps/ios/Meeshy/Features/Settings/Views/MediaDownloadSettingsView.swift
 
 - **Purpose**: Settings for auto-downloading media by type (image/audio/video) over Wi-Fi vs cellular.
 - **Public API**: `struct MediaDownloadPreferences: Codable, Equatable, Sendable` (6 bools); `struct MediaDownloadSettingsView: View`.
@@ -89,7 +89,7 @@ Scope: 19 files from `apps/ios/Meeshy/Features/Main/Views/` — auth (login, mag
 - **Dependencies**: `APIClient`, `AuthManager`, `StatusViewModel` (env), `Router`, `MeeshyAvatar`, `DynamicColorGenerator`.
 - **Android-port note**: `NewConversationViewModel` with debounced search (`Flow.debounce(350)`). Notification → use a shared event bus / `SharedFlow` rather than `NotificationCenter`. `SearchedUser` = Kotlin data class with Moshi/kotlinx.serialization.
 
-## apps/ios/Meeshy/Features/Main/Views/NotificationSettingsView.swift
+## apps/ios/Meeshy/Features/Settings/Views/NotificationSettingsView.swift
 
 - **Purpose**: Comprehensive notification preferences (7 sections: General, Messages, Conversations, Contacts/Groups, Feed, Display, Do-Not-Disturb).
 - **Public API**: `struct NotificationSettingsView: View`.
@@ -158,14 +158,14 @@ Scope: 19 files from `apps/ios/Meeshy/Features/Main/Views/` — auth (login, mag
 - **Dependencies**: `FeedPost`, `PostTranslation`, `PostService`, `AuthManager`, `LanguageDisplay`, `ToastManager`.
 - **Android-port note**: `ModalBottomSheet` with sectioned list. Request translation = ViewModel call with per-language loading state map.
 
-## apps/ios/Meeshy/Features/Main/Views/PrivacyPolicyView.swift
+## apps/ios/Meeshy/Features/Settings/Views/PrivacyPolicyView.swift
 
 - **Purpose**: Static privacy policy document with fr/en language toggle.
 - **Public API**: `struct PrivacyPolicyView: View`. Hardcoded `sections` dictionary (fr/en, 7 sections each).
 - **Key behaviors**: Segmented picker switches language; numbered policy section cards; "last updated" line. Pure static content.
 - **Android-port note**: Static screen; store the policy text in string resources (`values/`, `values-en/`) instead of an inline dictionary, or fetch from a remote/bundled markdown. Segmented toggle → `SegmentedButton`.
 
-## apps/ios/Meeshy/Features/Main/Views/PrivacySettingsView.swift
+## apps/ios/Meeshy/Features/Settings/Views/PrivacySettingsView.swift
 
 - **Purpose**: Privacy preferences (4 sections: Visibility, Contacts/Groups, Media/Data, Encryption).
 - **Public API**: `struct PrivacySettingsView: View`.
@@ -177,7 +177,7 @@ Scope: 19 files from `apps/ios/Meeshy/Features/Main/Views/` — auth (login, mag
 - **Dependencies**: `UserPreferencesManager`, `PrivacyPreferences`, `EncryptionPreference`, `AnalyticsManager`.
 - **Android-port note**: Same DataStore-backed prefs repository. Analytics toggle must gate the analytics SDK collection at runtime (Firebase `setAnalyticsCollectionEnabled`). `blockScreenshots` → `FLAG_SECURE` on the window.
 
-## apps/ios/Meeshy/Features/Main/Views/ProfileView.swift
+## apps/ios/Meeshy/Features/Profile/Views/ProfileView.swift
 
 - **Purpose**: Current-user profile screen — view/edit identity, contact, languages, stats, friend requests, member-since; avatar/banner upload.
 - **Public API**: `struct ProfileView: View`. Private extension `MeeshyUser.applyingProfileEdits(...)` (optimistic copy builder).

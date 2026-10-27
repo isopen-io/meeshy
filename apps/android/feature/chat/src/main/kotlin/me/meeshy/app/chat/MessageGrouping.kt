@@ -1,6 +1,7 @@
 package me.meeshy.app.chat
 
-import kotlin.math.abs
+import java.time.Instant
+import java.time.ZoneId
 
 /**
  * The minimal projection of a message needed to decide consecutive-sender
@@ -54,40 +55,37 @@ data class MessageGroupPosition(
  *    incoming messages match only on equal, non-null [MessageGroupInput.senderId].
  *    An incoming message with a null sender id never groups (it can't be proven to
  *    share an author), and an outgoing/incoming pair never groups.
- *  - **Within the time gap.** Their send times differ by at most [gapMillis]
- *    (compared on the absolute delta, so an out-of-order pair is judged by
- *    proximity, not sign). When either timestamp is missing the time test is
- *    skipped — a message with no timestamp rides with the previous same-author
- *    message rather than opening a spurious new run.
+ *  - **Same calendar day.** Comme iOS (`MessageDayGrouping.continues`), une
+ *    suite ne traverse jamais minuit dans le fuseau [zone] — sans fenêtre de
+ *    temps : deux messages du même auteur le même jour forment une seule suite,
+ *    même à une heure d'écart. Quand l'une des dates manque, le test est sauté :
+ *    le message suit la suite précédente au lieu d'en ouvrir une fausse.
  *
- * The consumer derives `showSenderName` from [MessageGroupPosition.isFirstInGroup]
- * and the inter-bubble spacing from first/last, so the header and the visual run
- * can never disagree.
+ * Le consommateur pose l'identité de l'auteur (avatar, nom, @pseudo) dans le pied de la
+ * DERNIÈRE bulle ([MessageGroupPosition.isLastInGroup], iOS `showIdentityBar`) et
+ * l'espacement sur premier/dernier : l'identité et la suite visuelle ne divergent jamais.
  */
 object MessageGrouping {
 
-    /** Default same-author window before a new run starts: five minutes. */
-    const val DEFAULT_GAP_MILLIS: Long = 5 * 60 * 1000L
-
     fun positions(
         messages: List<MessageGroupInput>,
-        gapMillis: Long = DEFAULT_GAP_MILLIS,
+        zone: ZoneId = ZoneId.systemDefault(),
     ): Map<String, MessageGroupPosition> {
         if (messages.isEmpty()) return emptyMap()
         return messages.mapIndexed { index, message ->
             val previous = messages.getOrNull(index - 1)
             val next = messages.getOrNull(index + 1)
             message.id to MessageGroupPosition(
-                isFirstInGroup = !continuous(previous, message, gapMillis),
-                isLastInGroup = !continuous(message, next, gapMillis),
+                isFirstInGroup = !continuous(previous, message, zone),
+                isLastInGroup = !continuous(message, next, zone),
             )
         }.toMap()
     }
 
-    private fun continuous(earlier: MessageGroupInput?, later: MessageGroupInput?, gapMillis: Long): Boolean {
+    private fun continuous(earlier: MessageGroupInput?, later: MessageGroupInput?, zone: ZoneId): Boolean {
         if (earlier == null || later == null) return false
         if (earlier.isSystem || later.isSystem) return false
-        return sameAuthor(earlier, later) && withinGap(earlier, later, gapMillis)
+        return sameAuthor(earlier, later) && sameLocalDay(earlier, later, zone)
     }
 
     private fun sameAuthor(a: MessageGroupInput, b: MessageGroupInput): Boolean {
@@ -97,9 +95,10 @@ object MessageGrouping {
         return senderId == b.senderId
     }
 
-    private fun withinGap(a: MessageGroupInput, b: MessageGroupInput, gapMillis: Long): Boolean {
-        val earlierMillis = a.createdAtMillis ?: return true
-        val laterMillis = b.createdAtMillis ?: return true
-        return abs(laterMillis - earlierMillis) <= gapMillis
+    private fun sameLocalDay(a: MessageGroupInput, b: MessageGroupInput, zone: ZoneId): Boolean {
+        val aMillis = a.createdAtMillis ?: return true
+        val bMillis = b.createdAtMillis ?: return true
+        return Instant.ofEpochMilli(aMillis).atZone(zone).toLocalDate() ==
+            Instant.ofEpochMilli(bMillis).atZone(zone).toLocalDate()
     }
 }

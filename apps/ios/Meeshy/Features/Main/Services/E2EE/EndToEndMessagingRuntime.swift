@@ -20,11 +20,27 @@ nonisolated protocol EndToEndMessagingProviding: Sendable {
     ) async throws -> T
     /// Range le clair d'un message que J'AI écrit : l'enveloppe ne revient pas
     /// à l'appareil émetteur, et l'écho du serveur ne porte que le littéral.
-    func remember(_ content: E2EEContent, from senderUserId: String, as messageIds: [String]) async
-    /// Ce que cet appareil sait de ces messages chiffrés.
-    func plaintexts(for messageIds: [String]) async -> [String: E2EEPlaintextEntry]
+    /// `false` quand il n'a pas pu être rangé : l'envoi chiffré ne part pas.
+    @discardableResult
+    func remember(_ content: E2EEContent, from senderUserId: String, as messageIds: [String]) async -> Bool
+    /// Ce que cet appareil sait de ces messages chiffrés, pour `account`, que
+    /// l'appelant affirme (#13000) : rien si ce n'est pas le compte de la
+    /// session ouverte, ou si le coffre n'est pas enrôlé pour lui. L'appelant
+    /// le dit parce que la session se ferme derrière une file : une interface
+    /// déjà basculée vers un autre compte ne lit jamais le coffre du précédent.
+    func plaintexts(for messageIds: [String], as account: String) async -> [String: E2EEPlaintextEntry]
+    /// Retire du coffre de `account` le clair de ces messages, effacés sur cet
+    /// appareil (#13001). `false` quand le coffre n'est pas le sien ou que sa
+    /// session n'est pas ouverte : rien n'est retiré, l'effacement attend.
+    func erase(_ messageIds: [String], as account: String) async -> Bool
+    /// Les messages dont le coffre de `account` tient le clair ; `nil` si ce
+    /// coffre n'est pas le sien.
+    func storedMessageIds(as account: String) async -> [String]?
     /// Chaque enveloppe ouverte, par la socket ou le rattrapage.
     var opened: AnyPublisher<E2EEOpenOutcome, Never> { get }
+    /// Le compte de chaque session qui s'ouvre (`nil` à la fermeture) : ce qui
+    /// a lu le coffre avant elle le relit (#13000).
+    var sessions: AnyPublisher<String?, Never> { get }
 }
 
 /// Une installation prête à chiffrer : enrôlée, et ses outils construits sur
@@ -37,20 +53,28 @@ nonisolated struct EndToEndReadyDevice: Sendable {
     let linking: any E2EEOwnDeviceLinkingProviding
     /// Les métadonnées de mes appareils (`GET /e2ee/devices`) : elles nomment,
     /// elles n'approuvent jamais.
-    let ownDeviceDetails: @Sendable () async throws -> [E2EEOwnDeviceDetails]
+    let ownDeviceDetails: @concurrent @Sendable () async throws -> [E2EEOwnDeviceDetails]
+    /// Le scellement des SIGNAUX (#13142) : mêmes appareils et même remplissage qu'un message.
+    let signalSealer: (any E2EESignalSealing)?
+    /// La boîte des signaux reçus, rangés avec leur déchiffrement (#13142).
+    let signalInbox: (any E2EESignalInboxProviding)?
 
     init(
         device: E2EELocalDevice,
         sealer: any E2EEMessageSealing,
         opener: any E2EEEnvelopeOpening,
         linking: any E2EEOwnDeviceLinkingProviding = UnavailableOwnDeviceLinking(),
-        ownDeviceDetails: @escaping @Sendable () async throws -> [E2EEOwnDeviceDetails] = { [] }
+        ownDeviceDetails: @escaping @concurrent @Sendable () async throws -> [E2EEOwnDeviceDetails] = { [] },
+        signalSealer: (any E2EESignalSealing)? = nil,
+        signalInbox: (any E2EESignalInboxProviding)? = nil
     ) {
         self.device = device
         self.sealer = sealer
         self.opener = opener
         self.linking = linking
         self.ownDeviceDetails = ownDeviceDetails
+        self.signalSealer = signalSealer
+        self.signalInbox = signalInbox
     }
 }
 
@@ -58,7 +82,8 @@ nonisolated struct EndToEndReadyDevice: Sendable {
 /// trousseau, au groupe d'apps et à l'annuaire.
 nonisolated protocol EndToEndDeviceProvisioning: Sendable {
     func ready(for userId: String) async throws -> EndToEndReadyDevice
-    func plaintexts() throws -> any E2EEPlaintextStoring
+    /// Le coffre des clairs, servi au seul compte dont l'installation est enrôlée.
+    func plaintexts(owner: String) throws -> any E2EEPlaintextStoring
     func registrar() throws -> any E2EEDeviceRegistering
 }
 
@@ -66,7 +91,8 @@ nonisolated protocol EndToEndDeviceProvisioning: Sendable {
 /// est plein (`E2EE_DEVICE_LIMIT_REACHED`).
 nonisolated protocol EndToEndDeviceManaging: Sendable {
     func ownDevices(of userId: String) async throws -> [E2EEDeviceListing]
-    func retire(deviceId: UInt32) async throws
+    /// La génération lue est nommée : une place reprise depuis n'est pas retirée (#13036).
+    func retire(deviceId: UInt32, registrationId: UInt32) async throws
     /// Après un retrait : cet appareil retente de s'enrôler.
     func enroll(_ userId: String) async throws
 }
@@ -94,6 +120,13 @@ actor EndToEndMessagingRuntime: EndToEndMessagingProviding, EndToEndDeviceManagi
         case open(String)
         case closed
 
+        /// Le compte que la session sert ; aucun avant la première ouverture
+        /// ni après la fermeture : le coffre ne se lit pour personne.
+        var account: String? {
+            guard case .open(let current) = self else { return nil }
+            return current
+        }
+
         func admits(_ userId: String) -> Bool {
             switch self {
             case .unbound: true
@@ -110,11 +143,19 @@ actor EndToEndMessagingRuntime: EndToEndMessagingProviding, EndToEndDeviceManagi
         let task: Task<EndToEndReadyDevice, any Error>
     }
 
-    init(provisioning: any EndToEndDeviceProvisioning) {
+    /// La route unique des signaux chiffrés (#13142).
+    let signalTransport: any E2EESignalTransporting
+
+    init(provisioning: any EndToEndDeviceProvisioning, signalTransport: any E2EESignalTransporting = E2EESignalClient()) {
         self.provisioning = provisioning
+        self.signalTransport = signalTransport
     }
 
+    /// Le compte de la session ouverte ; aucun avant la première ouverture ni après la fermeture.
+    var openAccount: String? { session.account }
+
     nonisolated var opened: AnyPublisher<E2EEOpenOutcome, Never> { relay.publisher }
+    nonisolated var sessions: AnyPublisher<String?, Never> { relay.sessions }
 
     /// L'installation de ce compte, enrôlée une fois ; une préparation en cours
     /// pour CE compte est partagée. Celle d'un autre compte est annulée et
@@ -171,12 +212,14 @@ actor EndToEndMessagingRuntime: EndToEndMessagingProviding, EndToEndDeviceManagi
     func open(session userId: String) {
         if session != .open(userId) { forget() }
         session = .open(userId)
+        relay.announce(userId)
     }
 
     /// La fermeture de la session : plus aucun compte n'est servi jusqu'à la suivante.
     func close() {
         session = .closed
         forget()
+        relay.announce(nil)
     }
 
     /// La passerelle dit cet appareil délié pour CE compte : seul son appareil
@@ -201,23 +244,51 @@ actor EndToEndMessagingRuntime: EndToEndMessagingProviding, EndToEndDeviceManagi
         }
     }
 
-    func remember(_ content: E2EEContent, from senderUserId: String, as messageIds: [String]) async {
+    @discardableResult
+    func remember(_ content: E2EEContent, from senderUserId: String, as messageIds: [String]) async -> Bool {
+        guard let owner = session.account, owner == senderUserId else {
+            Logger.e2ee.warning("e2ee own plaintext not stored: no open session for its author")
+            return false
+        }
         do {
-            let store = try provisioning.plaintexts()
+            let store = try provisioning.plaintexts(owner: owner)
+            // Un premier envoi peut précéder l'enrôlement de la session : il l'attend.
+            if try !store.servesItsOwner() { _ = try await ready(for: owner) }
             try messageIds.forEach { id in try store.save(.readable(content, senderUserId: senderUserId), for: id) }
+            return true
         } catch {
             Logger.e2ee.error("e2ee own plaintext not stored count=\(messageIds.count, privacy: .public): \(String(describing: type(of: error)), privacy: .public)")
+            return false
         }
     }
 
-    func plaintexts(for messageIds: [String]) async -> [String: E2EEPlaintextEntry] {
-        guard !messageIds.isEmpty else { return [:] }
+    func plaintexts(for messageIds: [String], as account: String) async -> [String: E2EEPlaintextEntry] {
+        guard !messageIds.isEmpty, let owner = session.account, owner == account else { return [:] }
         do {
-            return try provisioning.plaintexts().entries(for: messageIds)
+            return try provisioning.plaintexts(owner: owner).entries(for: messageIds)
         } catch {
             Logger.e2ee.error("e2ee plaintexts unreadable count=\(messageIds.count, privacy: .public): \(String(describing: type(of: error)), privacy: .public)")
             return [:]
         }
+    }
+
+    func erase(_ messageIds: [String], as account: String) async -> Bool {
+        guard let owner = session.account, owner == account else { return false }
+        guard !messageIds.isEmpty else { return true }
+        do {
+            try provisioning.plaintexts(owner: owner).remove(messageIds)
+            return true
+        } catch {
+            Logger.e2ee.warning("e2ee plaintexts not erased count=\(messageIds.count, privacy: .public): \(String(describing: type(of: error)), privacy: .public)")
+            return false
+        }
+    }
+
+    func storedMessageIds(as account: String) async -> [String]? {
+        guard let owner = session.account, owner == account,
+              let store = try? provisioning.plaintexts(owner: owner),
+              let ids = try? store.storedMessageIds(), (try? store.servesItsOwner()) == true else { return nil }
+        return ids
     }
 
     /// Une enveloppe poussée par la socket de cet appareil.
@@ -240,8 +311,8 @@ actor EndToEndMessagingRuntime: EndToEndMessagingProviding, EndToEndDeviceManagi
         try await provisioning.registrar().ownDevices(userId: userId)
     }
 
-    func retire(deviceId: UInt32) async throws {
-        try await provisioning.registrar().retire(deviceId: deviceId)
+    func retire(deviceId: UInt32, registrationId: UInt32) async throws {
+        try await provisioning.registrar().retire(deviceId: deviceId, registrationId: registrationId)
     }
 
     func enroll(_ userId: String) async throws {
@@ -260,6 +331,8 @@ actor EndToEndMessagingRuntime: EndToEndMessagingProviding, EndToEndDeviceManagi
             Logger.e2ee.info("e2ee envelope for another device id=\(envelopeId, privacy: .public)")
         case .deferred(let envelopeId):
             Logger.e2ee.warning("e2ee envelope deferred id=\(envelopeId, privacy: .public)")
+        case .signal(let received):
+            Logger.e2ee.info("e2ee signal received id=\(received.signalId, privacy: .public)")
         }
         relay.send(outcome)
     }
@@ -267,9 +340,12 @@ actor EndToEndMessagingRuntime: EndToEndMessagingProviding, EndToEndDeviceManagi
 
 /// Le relais des enveloppes ouvertes, lisible hors de l'acteur. Il n'est
 /// alimenté QUE par l'acteur, donc jamais par deux fils à la fois.
-/// unchecked: `PassthroughSubject` sérialise déjà ses envois, et `subject` n'est jamais réassigné après l'init.
+/// unchecked: `PassthroughSubject` sérialise déjà ses envois, et aucun des deux sujets n'est réassigné après l'init.
 nonisolated final class OutcomeRelay: @unchecked Sendable {
     private let subject = PassthroughSubject<E2EEOpenOutcome, Never>()
+    private let sessionSubject = PassthroughSubject<String?, Never>()
     var publisher: AnyPublisher<E2EEOpenOutcome, Never> { subject.eraseToAnyPublisher() }
+    var sessions: AnyPublisher<String?, Never> { sessionSubject.eraseToAnyPublisher() }
     func send(_ outcome: E2EEOpenOutcome) { subject.send(outcome) }
+    func announce(_ account: String?) { sessionSubject.send(account) }
 }

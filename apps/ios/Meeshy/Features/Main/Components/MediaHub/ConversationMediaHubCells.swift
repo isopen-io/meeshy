@@ -74,7 +74,7 @@ struct MediaHubVisualTile: View, Equatable {
     }
 
     static func durationLabel(milliseconds: Int) -> String {
-        LocalizedNumber.duration(seconds: max(0, milliseconds / 1000))
+        MediaFormat.duration(max(0, milliseconds / 1000))
     }
 }
 

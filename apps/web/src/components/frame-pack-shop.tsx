@@ -107,6 +107,8 @@ const weightOf = (language: InterfaceLanguage, bytes: number): string => {
 /** La couverture d'un pack de cadres : une vignette 9:16, à la hauteur d'une rangée de boutique. */
 const COVER_BOX = { width: 45, height: 80 } as const;
 const THUMB_BOX = { aspectRatio: '9 / 16' } as const;
+/** L’atlas d’un pack (#10275) : une bande de vignettes 9:16 à hauteur fixe, rognée à la largeur de la rangée — décorative (le nombre de cadres est dans la rangée), jamais défilable, donc jamais un arrêt de focus caché ; aucun saut de mise en page. */
+const PREVIEW_STRIP = { height: 72, backgroundColor: 'var(--color-ios-fill)' } as const;
 
 const writeInstalled = (queryClient: QueryClient, pack: FramePackSummary, installed: boolean) =>
   queryClient.setQueryData<readonly FramePackSummary[]>(FRAME_KEYS.installed, (list) => {
@@ -157,6 +159,12 @@ export const frameShopAdapter = (language: InterfaceLanguage, deps: Conversation
         className="block shrink-0 rounded-xl object-cover"
         style={COVER_BOX}
       />
+    ),
+  preview: (pack) =>
+    pack.previewUrl === null ? null : (
+      <div data-frame-pack-preview={pack.slug} aria-hidden="true" className="overflow-hidden rounded-xl" style={PREVIEW_STRIP}>
+        <img src={onOrigin(pack.previewUrl, origin)} alt="" loading="lazy" decoding="async" crossOrigin="anonymous" className="block h-full w-auto max-w-none" />
+      </div>
     ),
 });
 

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="notifications_unread_count">
+        <item quantity="one">%1$d ungelesen</item>
+        <item quantity="other">%1$d ungelesen</item>
+    </plurals>
+</resources>

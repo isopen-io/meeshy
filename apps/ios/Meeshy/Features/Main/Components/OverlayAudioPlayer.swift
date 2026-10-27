@@ -262,7 +262,7 @@ final class OverlayAudioPlayer: ObservableObject, AudiblyPlayingPlayer, Interrup
     /// heures. Un indice se lit une fois, après le libellé : la POSITION
     /// courante n'y a rien à faire, seule la durée totale renseigne.
     func spokenTotalDuration(attachmentDurationMs: Int?) -> String {
-        LocalizedNumber.spokenDuration(seconds: totalSeconds(attachmentDurationMs: attachmentDurationMs))
+        MediaFormat.duration(totalSeconds(attachmentDurationMs: attachmentDurationMs), style: .spoken)
     }
 
     /// La durée MESURÉE de la piste chargée, sinon celle de la pièce jointe — en
@@ -273,7 +273,7 @@ final class OverlayAudioPlayer: ObservableObject, AudiblyPlayingPlayer, Interrup
     }
 
     private func formatTime(_ seconds: TimeInterval) -> String {
-        LocalizedNumber.duration(seconds: seconds)
+        MediaFormat.duration(seconds)
     }
 
     private func setupTimeObserver() {

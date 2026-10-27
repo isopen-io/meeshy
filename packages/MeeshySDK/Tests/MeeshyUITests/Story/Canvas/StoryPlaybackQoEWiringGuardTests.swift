@@ -49,7 +49,7 @@ final class StoryPlaybackQoEWiringGuardTests: XCTestCase {
     /// Seul le lecteur des stories PUBLIÉES déclare la surface ; l'aperçu du
     /// composer, monté dans le même fichier, ne la déclare pas.
     func test_onlyThePublishedStoryViewer_declaresTheSurface() throws {
-        let src = try source("../../apps/ios/Meeshy/Features/Main/Views/StoryViewerContainer.swift")
+        let src = try source("../../apps/ios/Meeshy/Features/Stories/Views/StoryViewerContainer.swift")
         XCTAssertEqual(src.components(separatedBy: ".environment(\\.readsPublishedStories, true)").count - 1, 1)
         let preview = try XCTUnwrap(src.range(of: "struct StoryPreviewReader"))
         XCTAssertFalse(src[preview.lowerBound...].contains("readsPublishedStories"))

@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshySDK
 
 public struct RulerView: View, Equatable {
 
@@ -92,9 +93,7 @@ public struct RulerView: View, Equatable {
             }
             return String(format: "%.1fs", rounded)
         } else {
-            let m = Int(seconds) / 60
-            let s = Int(seconds) % 60
-            return String(format: "%d:%02d", m, s)
+            return MediaFormat.duration(seconds)
         }
     }
 

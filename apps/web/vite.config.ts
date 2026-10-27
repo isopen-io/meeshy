@@ -686,6 +686,16 @@ export default defineConfig({
              * mesuré, la première peinture passait de ~85 à 137 Ko.
              */
             if (id.includes('/lottie-web/') || id.includes('/fflate/')) return undefined;
+            /**
+             * LE RUNTIME CAPACITOR (#13115) — `@capacitor/core` et
+             * `@capacitor/push-notifications` n'ont qu'un importeur,
+             * `lib/push/shell-push-runtime.ts`, chargé par `import()` après
+             * la première peinture de la coque (les autres ponts lisent
+             * `window.Capacitor`). Rangés dans `core`, ils y entraient
+             * malgré l'import dynamique : mesuré, +7,8 Ko bruts à la
+             * première peinture de la coque (`check-shell-dist.mjs` le garde).
+             */
+            if (id.includes('/@capacitor/')) return undefined;
             return 'core';
           }
           /**

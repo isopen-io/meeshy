@@ -26,6 +26,18 @@ object ConversationEventDeltas {
         )
     }
 
+    /**
+     * Le post cité par ce message a été retiré (`message:cited-post-withdrawn`, #7969) : sa citation
+     * devient « indisponible » — l'identifiant seul survit, ni aperçu, ni vignette, ni humeur (iOS
+     * `ReplyReference.unavailableStory`). Un message qui cite un AUTRE post, ou aucun, est rendu tel quel.
+     */
+    fun citedPostWithdrawn(message: ApiMessage, postId: String): ApiMessage {
+        if (postId.isEmpty()) return message
+        val cited = message.postReplyTo?.id == postId || (message.postReplyTo == null && message.storyReplyToId == postId)
+        if (!cited || message.postReplyTo?.unavailable == true) return message
+        return message.copy(postReplyTo = ApiPostReplyTarget(id = postId, unavailable = true))
+    }
+
     /** Épingle posée ([pinnedAtIso], [pinnedBy]) ou retirée (`null`, `null`). */
     fun pinned(message: ApiMessage, pinnedAtIso: String?, pinnedBy: String?): ApiMessage {
         if (message.pinnedAt == pinnedAtIso && message.pinnedBy == pinnedBy) return message

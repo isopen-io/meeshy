@@ -20,6 +20,7 @@ import me.meeshy.sdk.model.call.HeaderCallEntry
 import me.meeshy.sdk.model.composer.PendingAttachment
 import me.meeshy.sdk.model.composer.PendingAttachmentsState
 import me.meeshy.sdk.model.report.ReportReason
+import me.meeshy.sdk.model.selection.MessageSelection
 
 /**
  * Navigation-level callbacks the screen receives from its host (the nav graph): leaving the
@@ -31,8 +32,15 @@ internal class ChatNavigationActions(
     val onRejoinCall: (call: ActiveCallSession, peerName: String) -> Unit,
     val onCreateShareLink: () -> Unit,
     val hasLocalLiveCall: Boolean,
+    /** Ouvre le post (story) cité par un message : la carte de citation du fil (#13296). */
+    val onOpenCitedPost: (postId: String) -> Unit = {},
     /** [ChatViewModel.callEntry]: which call buttons the header may show. */
     val callEntry: HeaderCallEntry? = null,
+    /**
+     * La feuille « Partage de position » ouverte par le (i) du sélecteur de lieu. Elle vit dans
+     * `:feature:settings`, que `:feature:chat` ne voit pas : l'application la fournit.
+     */
+    val locationSettingsSheet: @Composable (accent: androidx.compose.ui.graphics.Color, onDismiss: () -> Unit) -> Unit = { _, _ -> },
 )
 
 /**
@@ -45,6 +53,32 @@ internal class ChatSheetVisibility {
     var members by mutableStateOf(false)
     var stats by mutableStateOf(false)
     var analysis by mutableStateOf(false)
+
+    /** La fiche Conversation, ouverte par l'avatar de l'en-tête (parité iOS `ConversationInfoSheet`). */
+    var info by mutableStateOf(false)
+
+    /** L'écran « Médias, liens et documents », ouvert depuis la fiche Conversation. */
+    var media by mutableStateOf(false)
+
+    /** « Fond et accent » : le choix personnel du fond de la conversation. */
+    var appearance by mutableStateOf(false)
+}
+
+/**
+ * L'état du chrome partagé entre la liste et l'en-tête : la liste dit qu'elle défile, l'en-tête
+ * efface alors sa grappe d'actions (iOS `hiddenWhileScrolling`).
+ */
+@Stable
+internal class ChatChromeState {
+    var isScrolling by mutableStateOf(false)
+    /**
+     * Un défilement parti du DOIGT est en cours (glissé puis son élan) — jamais un saut
+     * programmé (nouveau message, recherche). En rangée plate il efface l'en-tête et le
+     * composeur par opacité (iOS `FocalChromeReturn`).
+     */
+    var isUserScrolling by mutableStateOf(false)
+    /** L'en-tête est déplié : la pastille de jour flottante se retire (iOS `isHeaderExpanded`). */
+    var isHeaderExpanded by mutableStateOf(false)
 }
 
 /**
@@ -64,7 +98,36 @@ internal class ChatHostContext(
     val navigation: ChatNavigationActions,
     val sheets: ChatSheetVisibility,
     val bubbleFrames: MutableMap<String, Rect>,
+    /** Ce que l'en-tête montre en plus de [state] : avatar, pair, non-lus des autres conversations. */
+    val header: ChatHeaderState = ChatHeaderState(),
+    val chrome: ChatChromeState = ChatChromeState(),
+    /** Le mode de lecture et ses deux gestes (chip de l'en-tête) ; `null` tant qu'il n'est pas résolu. */
+    val readingMode: ChatReadingModeBinding? = null,
+    /** Le lieu choisi dans le sélecteur, en attente du prochain envoi. */
+    val pendingPlace: me.meeshy.sdk.model.SharedPlace? = null,
+    /** Le mode sélection multiple (#13294) : inactif tant qu'aucun appui long n'a choisi « Sélectionner ». */
+    val selection: MessageSelection = MessageSelection.Inactive,
 )
+
+/** Le mode de lecture résolu à l'ouverture et les écritures du chip. */
+internal class ChatReadingModeBinding(
+    val state: ReadingModeUiState,
+    val select: (me.meeshy.sdk.model.reading.mode.ConversationReadingMode) -> Unit,
+    val resetToAuto: () -> Unit,
+    /** Le Résumé vivant : l'enrichissement de l'agent, l'identité du lecteur, sa relance. */
+    val summary: LivingSummaryBinding = LivingSummaryBinding.NONE,
+)
+
+/** Ce que le Résumé vivant lit du contrôleur, sans connaître le contrôleur. */
+internal class LivingSummaryBinding(
+    val agent: StateFlow<LivingSummaryAgentState>,
+    val viewer: StateFlow<SummaryViewer?>,
+    val refreshAgent: () -> Unit,
+) {
+    companion object {
+        val NONE = LivingSummaryBinding(NO_SUMMARY_AGENT, NO_SUMMARY_VIEWER) {}
+    }
+}
 
 @Composable
 internal fun rememberChatHostContext(
@@ -74,18 +137,24 @@ internal fun rememberChatHostContext(
     accentColor: Color,
     actions: ChatHostActions,
     navigation: ChatNavigationActions,
+    header: ChatHeaderState = ChatHeaderState(),
+    readingMode: ChatReadingModeBinding? = null,
+    pendingPlace: me.meeshy.sdk.model.SharedPlace? = null,
+    selection: MessageSelection = MessageSelection.Inactive,
 ): ChatHostContext {
     val sheets = remember { ChatSheetVisibility() }
     // A plain map, not snapshot state: written from onGloballyPositioned without forcing
     // recomposition, read only when the overlay opens.
     val bubbleFrames = remember { mutableMapOf<String, Rect>() }
-    return ChatHostContext(state, composerText, pending, accentColor, actions, navigation, sheets, bubbleFrames)
+    val chrome = remember { ChatChromeState() }
+    return ChatHostContext(state, composerText, pending, accentColor, actions, navigation, sheets, bubbleFrames, header, chrome, readingMode, pendingPlace, selection)
 }
 
 /** The ViewModel's user-intent entry points, as plain callbacks. */
 internal class ChatHostActions(
     val refreshActiveCall: () -> Unit,
     val onScrollHandled: () -> Unit,
+    val scrollToMessage: (String) -> Unit = {},
     val loadOlder: () -> Unit,
     val refresh: () -> Unit,
     val openSearch: () -> Unit,
@@ -115,6 +184,8 @@ internal class ChatHostActions(
     val cancelEdit: () -> Unit,
     val cancelReply: () -> Unit,
     val removeClipboardContent: () -> Unit,
+    val setPendingPlace: (me.meeshy.sdk.model.SharedPlace) -> Unit,
+    val clearPendingPlace: () -> Unit,
     val pickFile: (ByteArray, String, String?) -> Unit,
     val removePendingAttachment: (String) -> Unit,
     val stagePendingUris: (List<Uri>) -> Unit,
@@ -164,11 +235,22 @@ internal class ChatHostActions(
     /** L'auteur que les cadres de la retouche écrivent (#12734). */
     val selfAuthor: () -> me.meeshy.sdk.model.composer.look.ComposerLookPerson? = { null },
     val trayNotices: Flow<String> = emptyFlow(),
+    /** « Sélectionner » du menu d'appui long : entre dans le mode en semant ce message. */
+    val beginSelection: (String) -> Unit = {},
+    /** Coche ou décoche un message ; le verdict dit si le plafond de 100 est atteint. */
+    val toggleSelection: (String) -> MessageSelection.Toggle = { MessageSelection.Toggle.Ignored },
+    val endSelection: () -> Unit = {},
+    /** Transférer la sélection (ids dans l'ordre du fil). */
+    val forwardSelection: (List<String>) -> Unit = {},
+    val deleteSelectionForEveryone: (List<String>) -> Unit = {},
+    val deleteSelectionForMe: (List<String>) -> Unit = {},
+    val toggleStars: (List<String>) -> Unit = {},
 )
 
 internal fun ChatViewModel.hostActions(): ChatHostActions = ChatHostActions(
     refreshActiveCall = this::refreshActiveCall,
     onScrollHandled = this::onScrollHandled,
+    scrollToMessage = this::scrollToMessage,
     loadOlder = this::loadOlder,
     refresh = this::refresh,
     openSearch = this::openSearch,
@@ -198,6 +280,8 @@ internal fun ChatViewModel.hostActions(): ChatHostActions = ChatHostActions(
     cancelEdit = this::cancelEdit,
     cancelReply = this::cancelReply,
     removeClipboardContent = this::removeClipboardContent,
+    setPendingPlace = this::setPendingPlace,
+    clearPendingPlace = this::clearPendingPlace,
     pickFile = this::onPickFile,
     removePendingAttachment = { id -> controllers.find<ComposerTrayController>()?.remove(id) },
     stagePendingUris = { uris -> controllers.find<ComposerTrayController>()?.stageUris(uris) },
@@ -244,4 +328,11 @@ internal fun ChatViewModel.hostActions(): ChatHostActions = ChatHostActions(
     closeForward = this::closeForward,
     onForwardQueryChange = this::onForwardQueryChange,
     forwardTo = this::forwardTo,
+    beginSelection = { id -> controllers.find<MessageSelectionController>()?.begin(id) },
+    toggleSelection = { id -> controllers.find<MessageSelectionController>()?.toggle(id) ?: MessageSelection.Toggle.Ignored },
+    endSelection = { controllers.find<MessageSelectionController>()?.end() },
+    forwardSelection = this::openForwardSelection,
+    deleteSelectionForEveryone = this::deleteSelectionForEveryone,
+    deleteSelectionForMe = this::deleteSelectionForMe,
+    toggleStars = this::toggleStars,
 )

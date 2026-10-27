@@ -87,6 +87,30 @@ class StoryViewerHoldTest {
     }
 
     @Test
+    fun `a second long press on a frozen story resumes it like iOS`() = runTest(dispatcher) {
+        val vm = viewer()
+        vm.toggleByHold()
+        assertThat(vm.state.value.isPaused).isTrue()
+
+        vm.toggleByHold()
+
+        assertThat(vm.state.value.isPaused).isFalse()
+        assertThat(vm.state.value.current?.id).isEqualTo("b1")
+    }
+
+    @Test
+    fun `after a resuming tap the next edge tap navigates again`() = runTest(dispatcher) {
+        val vm = viewer()
+        vm.pauseByHold()
+        vm.onCanvasTap(StoryTapZone.Previous)
+
+        vm.onCanvasTap(StoryTapZone.Next)
+
+        assertThat(vm.state.value.isPaused).isFalse()
+        assertThat(vm.state.value.current?.id).isEqualTo("b2")
+    }
+
+    @Test
     fun `a tap on an edge of a frozen story resumes it without navigating`() = runTest(dispatcher) {
         val vm = viewer()
         vm.pauseByHold()

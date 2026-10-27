@@ -77,7 +77,7 @@ internal fun FeedErrorState(onRetry: () -> Unit, modifier: Modifier = Modifier) 
 }
 
 @Composable
-private fun FeedStatePane(
+internal fun FeedStatePane(
     icon: @Composable () -> Unit,
     title: String,
     subtitle: String?,

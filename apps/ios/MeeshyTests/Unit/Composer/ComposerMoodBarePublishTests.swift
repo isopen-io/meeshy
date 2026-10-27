@@ -87,7 +87,7 @@ final class ComposerMoodBarePublishTests: XCTestCase {
     }
 
     func test_laQuestion_offreSesDeuxReponses_enUnGeste() throws {
-        let code = compact(try source("Meeshy/Features/Main/Composer/ComposerMoodBarePublish.swift"))
+        let code = compact(try source("Meeshy/Features/Composer/ComposerMoodBarePublish.swift"))
         XCTAssertTrue(code.contains(".alert(ComposerMoodBareCopy.question,isPresented:$isAsking)"))
         XCTAssertTrue(code.contains("Button(ComposerMoodBareCopy.addWord){returnToWord()}"))
         XCTAssertTrue(code.contains("Button(ComposerMoodBareCopy.publishAnyway){publish()}"))
@@ -95,14 +95,14 @@ final class ComposerMoodBarePublishTests: XCTestCase {
     }
 
     func test_laSurface_ouvreLaFeuilleDuDepot_etRendLeFocusAuMot() throws {
-        let surface = compact(try source("Meeshy/Features/Main/Composer/ComposerMoodSurface.swift"))
+        let surface = compact(try source("Meeshy/Features/Composer/ComposerMoodSurface.swift"))
         XCTAssertTrue(surface.contains("ComposerMoodMoreEmojiCell(side:Self.cellSide)"), "La grille porte la porte vers les autres emojis.")
         XCTAssertTrue(surface.contains("ComposerMoodEmojiSheet(offered:StatusViewModel.moodOptions)"))
         XCTAssertTrue(surface.contains("emoji=picked"), "L'emoji choisi devient celui de l'humeur.")
         XCTAssertTrue(surface.contains(".focused($isWordFocused)"))
         XCTAssertTrue(surface.contains(".environment(\\.composerMoodWordFocus,ComposerMoodWordFocus{isWordFocused=true})"))
 
-        let lot = compact(try source("Meeshy/Features/Main/Composer/ComposerMoodBarePublish.swift"))
+        let lot = compact(try source("Meeshy/Features/Composer/ComposerMoodBarePublish.swift"))
         XCTAssertTrue(lot.contains("EmojiPickerSheet("), "La feuille est celle du dépôt, jamais une seconde.")
         XCTAssertFalse(lot.contains("LazyVGrid"), "Ce lot n'écrit aucune grille d'emojis.")
         XCTAssertTrue(lot.contains(".accessibilityLabel(Text(ComposerMoodBareCopy.moreEmojis))"), "L'icône est nommée pour VoiceOver.")

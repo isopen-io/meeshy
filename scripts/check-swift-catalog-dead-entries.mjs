@@ -550,7 +550,12 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // lecteur). La passerelle la sert depuis la fusion de #12375 ; le lecteur vidéo iOS la lira dans #9275. Entrée
 // PRÉMATURÉE, pas un faux mort (#5427). Valeur MESURÉE le 2026-10-23 en CI (Quality, run 39943089605) et en local
 // sur origin/dev : une seule entrée nouvelle.
-const BASELINE_DEAD_ENTRIES = 325;
+// 325 -> 329 (#10169, 2026-10-25) : `PacksEndpoint.captureFrame`, `captureFrameBySlug`,
+// `captureFrameBySlugInstall` et `captureFrameInstalled` (`/api/v1/packs/capture-frame…`, l'étagère des douze
+// ambiances de capture, que l'on installe et retire comme des packs). Le web les appelle ; iOS les lira dans
+// #13092 (PackStore apprend le domaine capture-frame). Entrées PRÉMATURÉES, pas des faux morts (#5427). Valeur
+// MESURÉE le 2026-10-25 en CI (Gardes iOS, run 40238145750) et en local : exactement ces quatre entrées nouvelles.
+const BASELINE_DEAD_ENTRIES = 329;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de

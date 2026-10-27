@@ -718,6 +718,204 @@
           "catalog": "app",
           "iosKey": "story.mine.save.photosDenied",
           "status": "disabled"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "story.mine.title",
+          "androidName": "my_stories_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "story.mine.tab.published",
+          "androidName": "my_stories_tab_published",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "story.mine.tab.archive",
+          "androidName": "my_stories_tab_archive",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "story.mine.empty.title",
+          "androidName": "my_stories_empty_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "story.mine.empty.subtitle",
+          "androidName": "my_stories_empty_subtitle",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "story.mine.archive.empty.title",
+          "androidName": "my_stories_archive_empty_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "story.mine.archive.empty.subtitle",
+          "androidName": "my_stories_archive_empty_subtitle",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "story.mine.select",
+          "androidName": "my_stories_select",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "story.mine.select.cancel",
+          "androidName": "my_stories_select_cancel",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "story.mine.create",
+          "androidName": "my_stories_create",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "story.mine.delete.title",
+          "androidName": "my_stories_delete_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "story.mine.delete.message",
+          "androidName": "my_stories_delete_message",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "story.mine.delete.selected",
+          "androidName": "my_stories_delete_selected",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "story.mine.delete.selected.title",
+          "androidName": "my_stories_delete_selected_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "story.mine.delete.selected.message",
+          "androidName": "my_stories_delete_selected_message",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "story.mine.delete.success",
+          "androidName": "my_stories_delete_success",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "story.mine.delete.error",
+          "androidName": "my_stories_delete_error",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "story.mine.delete.selected.success",
+          "androidName": "my_stories_delete_selected_success",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "story.mine.delete.selected.error",
+          "androidName": "my_stories_delete_selected_error",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "story.mine.repost",
+          "androidName": "my_stories_repost",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "story.mine.repost.success",
+          "androidName": "my_stories_repost_success",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "story.mine.repost.error",
+          "androidName": "my_stories_repost_error",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "story.mine.viewers",
+          "androidName": "my_stories_viewers",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "story.mine.card.expired",
+          "androidName": "my_stories_card_expired",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "story.mine.glyph.more",
+          "androidName": "my_stories_more",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "story.mine.glyph.views",
+          "androidName": "my_stories_glyph_views",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "story.mine.glyph.comments",
+          "androidName": "my_stories_glyph_comments",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "story.mine.glyph.reactions",
+          "androidName": "my_stories_glyph_reactions",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "story.mine.open",
+          "androidName": "my_stories_open",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "common.cancel",
+          "androidName": "my_stories_cancel",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "common.delete",
+          "androidName": "my_stories_delete",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "a11y.back",
+          "androidName": "my_stories_back",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "story.tray.menu.manage",
+          "androidName": "stories_tray_manage",
+          "status": "adopted"
         }
       ]
     }

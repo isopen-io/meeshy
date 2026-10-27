@@ -8,11 +8,13 @@
  *   l'éditeur web) et un fichier par élément. Chaque fichier passe par
  *   `normalizeAsset`, seule porte d'entrée des octets (type lu dans les
  *   octets, ré-encodage) ; le GENRE déclaré est confronté à l'animation
- *   RÉELLE. Le pack naît `pending` ;
+ *   RÉELLE. L'empreinte des octets GARDÉS (`sha256`) est gravée avec eux :
+ *   c'est l'adresse du fichier dans le magasin `/pack-assets` (#10188). Le
+ *   pack naît `pending` ;
  * - **modérer** — `approved` le publie, `rejected` le renvoie à son auteur
  *   avec un mot, et l'auteur peut reproposer sous le même slug.
  */
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
 import {
   STICKER_PACK_LIMITS,
@@ -111,6 +113,7 @@ export class PackSubmissions {
               kind: item.kind,
               mimeType: image.mimeType,
               filePath,
+              sha256: createHash('sha256').update(image.bytes).digest('hex'),
               width: image.width,
               height: image.height,
               sizeBytes: image.bytes.length,

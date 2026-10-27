@@ -2,6 +2,8 @@ package me.meeshy.ui.component.bubble
 
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiMessage
+import me.meeshy.sdk.model.isEndToEndBlob
+import me.meeshy.sdk.model.EndToEndRegimeMemory
 import me.meeshy.sdk.model.BlurRevealLifecycle
 import me.meeshy.sdk.model.DeliveryStatusResolver
 import me.meeshy.sdk.model.ForwardBadgePolicy
@@ -14,6 +16,9 @@ import me.meeshy.sdk.model.SendLifecycle
 import me.meeshy.sdk.model.SendLifecycleResolver
 import me.meeshy.sdk.model.exitOffer
 import me.meeshy.sdk.model.isProtected
+import me.meeshy.sdk.model.profile.ProfileSheetUser
+import me.meeshy.sdk.model.profile.from
+import me.meeshy.sdk.theme.DynamicColorGenerator
 
 public object BubbleContentBuilder {
 
@@ -41,6 +46,8 @@ public object BubbleContentBuilder {
         isSlowSend: Boolean = false,
     ): BubbleContent {
         val isDeleted = message.deletedAt != null
+        // #13106 — un blob chiffré de bout en bout scelle la bulle entière, même servie en clair.
+        val isEndToEndSealed = !isDeleted && (message.isEndToEndSealed || message.attachments.any { it.isEndToEndBlob })
         val isOutgoing = currentUserId != null && message.senderId == currentUserId
         val isTranslated = !isDeleted && message.isTranslated(preferences)
         // The active display language. A flag-tap `activeLanguageCode` override wins
@@ -82,7 +89,7 @@ public object BubbleContentBuilder {
             message.replyTo != null -> null
             else -> BubbleStoryReplyBuilder.build(message.postReplyTo, message.storyReplyToId, mediaBaseUrl)
         }
-        val visibleAttachments = if (isDeleted) emptyList() else message.attachments
+        val visibleAttachments = if (isDeleted || isEndToEndSealed) emptyList() else message.attachments
         val attachments = BubbleAttachmentBuilder.build(
             visibleAttachments = visibleAttachments,
             effects = message.effects,
@@ -90,9 +97,12 @@ public object BubbleContentBuilder {
             mediaBaseUrl = mediaBaseUrl,
             displayDensity = displayDensity,
         )
+        val messagePlace = message.location
+            ?.takeUnless { isDeleted || isEndToEndSealed }
+            ?.let { BubbleLocation.fromPlace(message.id, it) }
         val files = attachments.files
         val text = when {
-            isDeleted -> ""
+            isDeleted || isEndToEndSealed -> ""
             activeIsOriginal -> message.content
             else -> message.translations
                 .firstOrNull {
@@ -113,6 +123,8 @@ public object BubbleContentBuilder {
                 includeTranslatable = true,
             )
         }
+        val senderName = (message.sender?.displayName ?: message.sender?.username)
+            ?.takeIf { it.isNotBlank() }
         return BubbleContent(
             messageId = message.id,
             text = text,
@@ -121,11 +133,18 @@ public object BubbleContentBuilder {
             isShowingOriginal = isShowingOriginal,
             originalText = if (isTranslated && !isShowingOriginal) message.content else null,
             languageStrip = languageStrip,
-            senderName = (message.sender?.displayName ?: message.sender?.username)
-                ?.takeIf { it.isNotBlank() },
+            senderName = senderName,
             showSenderName = showSenderName && !isOutgoing,
+            senderId = message.senderId,
+            senderProfile = if (isOutgoing || message.isSystemMessage) null else ProfileSheetUser.from(message),
+            senderUsername = (message.sender?.username ?: message.sender?.user?.username)
+                ?.takeIf { it.isNotBlank() },
+            senderAvatarUrl = message.sender?.resolvedAvatar,
+            senderColorHex = (senderName ?: message.senderId)?.let(DynamicColorGenerator::colorForName),
             isEdited = message.isEdited,
             isDeleted = isDeleted,
+            isEndToEndSealed = isEndToEndSealed,
+            holdsEndToEndSend = isEndToEndSealed || EndToEndRegimeMemory.messageHoldsSend(message),
             createdAtIso = message.createdAt,
             deliveryStatus = deliveryStatus,
             reactions = reactions,
@@ -140,7 +159,7 @@ public object BubbleContentBuilder {
             clientMessageId = message.clientMessageId,
             images = attachments.images,
             files = files,
-            locations = attachments.locations,
+            locations = listOfNotNull(messagePlace) + attachments.locations,
             audios = attachments.audios,
             emojiOnlyCount = if (visibleAttachments.isEmpty()) {
                 EmojiDetector.emojiOnlyCount(text)

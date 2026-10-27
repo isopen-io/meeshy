@@ -40,8 +40,26 @@ class RouteManifestRatchetTest {
          * régime de chiffrement), servie par la passerelle et sans interface Retrofit encore côté Android.
          * 262 : moins `DELETE /e2ee/devices/:deviceId`, que porte `E2eeDeviceApi` (#13014, « Mes appareils
          * chiffrés ») ; `GET /e2ee/devices`, servie dans le même lot, y naît déjà implémentée.
+         * 266 : plus quatre routes de l'étagère des ambiances de capture (#10169 : catalogue, détail,
+         * installation et retrait), servies par la passerelle ; Android les portera avec ses ambiances
+         * (#13093). `GET /packs/capture-frame/installed` naît implémentée par `packs/{domain}/installed`.
+         * 267 : plus `POST /e2ee/conversations/:conversationId/signals` (#13142 : la route unique des
+         * signaux chiffrés d'une conversation e2ee), servie par la passerelle et appelée par iOS ;
+         * Android la portera avec ses signaux chiffrés (#13202).
+         * 265 : moins `GET /me/onboarding` et `PATCH /me/onboarding` (#13268 : le parcours d'accueil),
+         * que porte `OnboardingApi.kt` depuis 76d43a11aa.
+         * 264 : moins `GET /me/preferences/audio` (#13240 : la transcription automatique des vocaux
+         * entrants), que porte `PreferencesApi.getAudio`.
+         * 258 : moins `GET /me/game/league/week`, `GET /me/game/league/friends`, `GET /me/game/privacy`,
+         * `POST /me/game/league/consent` et `PUT /me/game/privacy` (#13326 : les pages Joute et Réglages du jeu),
+         * que porte `GameApi.kt`.
+         * 257 : moins `PUT /me/game/visibility` (#13326 : « Jeu masqué » ferme les quatre visibilités à « moi seul »,
+         * comme iOS `closeEverything`), que porte `GameApi.setVisibility`.
+         * 250 : moins les sept ÉCRITURES du jeu qui touchent un solde (#13325, #13346) — `POST /me/game/missions/:missionId/reroll`,
+         * `chest/claim`, `flame/freezes`, `flame/relight`, `season/steps/:step/claim`, `season/seal` et `prestige` —
+         * que porte `GameApi.kt`, chacune avec son identifiant d'idempotence.
          */
-        const val TO_PORT_CEILING = 262
+        const val TO_PORT_CEILING = 250
         val VERB_STATUSES = setOf("hors-perimetre-mobile", "ops-only", "a-porter", "implementee-par-url-serveur")
     }
 

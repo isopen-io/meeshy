@@ -117,10 +117,10 @@ Transposition Android : LazyVStack(pinnedViews: .sectionHeaders) -> LazyColumn a
 
 <details><summary>Sources iOS (6)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Lentille/Chrome/LentilleSectionIdentity.swift`
-- `apps/ios/Meeshy/Features/Main/Lentille/Chrome/LentilleSticker.swift`
+- `apps/ios/Meeshy/Features/Lens/Chrome/LentilleSectionIdentity.swift`
+- `apps/ios/Meeshy/Features/Lens/Chrome/LentilleSticker.swift`
 - `apps/ios/Meeshy/Features/Main/Views/ConversationListView+StickyHeaderInset.swift`
-- `apps/ios/Meeshy/Features/Main/Lentille/Core/LentilleMetrics.swift`
+- `apps/ios/Meeshy/Features/Lens/Core/LentilleMetrics.swift`
 - `apps/ios/Meeshy/Features/Main/Views/ConversationListView+SectionRules.swift`
 - `apps/ios/Meeshy/Features/Main/Views/ConversationListView+SectionHeader.swift`
 
@@ -146,10 +146,10 @@ Transposition Android : Foundation Calendar -> java.time ; algorithmes purs test
 
 <details><summary>Sources iOS (4)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Focal/Summary/DeterministicDigestBuilder.swift`
-- `apps/ios/Meeshy/Features/Main/Focal/Summary/EpisodeSegmenter.swift`
-- `apps/ios/Meeshy/Features/Main/Focal/Summary/FaceRampRanking.swift`
-- `apps/ios/Meeshy/Features/Main/Focal/Summary/LivingSummaryAssembly.swift`
+- `apps/ios/Meeshy/Features/Focal/Summary/DeterministicDigestBuilder.swift`
+- `apps/ios/Meeshy/Features/Focal/Summary/EpisodeSegmenter.swift`
+- `apps/ios/Meeshy/Features/Focal/Summary/FaceRampRanking.swift`
+- `apps/ios/Meeshy/Features/Focal/Summary/LivingSummaryAssembly.swift`
 
 </details>
 
@@ -173,13 +173,13 @@ Transposition Android : StateObject -> ViewModel Hilt ; ScrollView + bouton flot
 
 <details><summary>Sources iOS (7)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Focal/Summary/LivingSummaryView.swift`
-- `apps/ios/Meeshy/Features/Main/Focal/Summary/LivingSummaryHost.swift`
-- `apps/ios/Meeshy/Features/Main/Focal/Summary/LivingSummaryViewModel.swift`
-- `apps/ios/Meeshy/Features/Main/Focal/Summary/FaceRampView.swift`
-- `apps/ios/Meeshy/Features/Main/Focal/Summary/EpisodeListView.swift`
-- `apps/ios/Meeshy/Features/Main/Focal/Summary/SummaryProtectionsView.swift`
-- `apps/ios/Meeshy/Features/Main/Focal/Summary/ConversationAnalysisProviding.swift`
+- `apps/ios/Meeshy/Features/Focal/Summary/LivingSummaryView.swift`
+- `apps/ios/Meeshy/Features/Focal/Summary/LivingSummaryHost.swift`
+- `apps/ios/Meeshy/Features/Focal/Summary/LivingSummaryViewModel.swift`
+- `apps/ios/Meeshy/Features/Focal/Summary/FaceRampView.swift`
+- `apps/ios/Meeshy/Features/Focal/Summary/EpisodeListView.swift`
+- `apps/ios/Meeshy/Features/Focal/Summary/SummaryProtectionsView.swift`
+- `apps/ios/Meeshy/Features/Focal/Summary/ConversationAnalysisProviding.swift`
 
 </details>
 
@@ -205,11 +205,11 @@ Transposition Android : UserDefaults -> DataStore ; Menu contextuel -> DropdownM
 
 <details><summary>Sources iOS (5)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Focal/Lens/ReadingModeChip.swift`
-- `apps/ios/Meeshy/Features/Main/Focal/Lens/ReadingModeLensSheet.swift`
-- `apps/ios/Meeshy/Features/Main/Focal/Preferences/ReadingModeController.swift`
-- `apps/ios/Meeshy/Features/Main/Focal/Preferences/ReadingModePreferenceStore.swift`
-- `apps/ios/Meeshy/Features/Main/Focal/Preferences/MeeshyFeatureFlags.swift`
+- `apps/ios/Meeshy/Features/Focal/Lens/ReadingModeChip.swift`
+- `apps/ios/Meeshy/Features/Focal/Lens/ReadingModeLensSheet.swift`
+- `apps/ios/Meeshy/Features/Focal/Preferences/ReadingModeController.swift`
+- `apps/ios/Meeshy/Features/Focal/Preferences/ReadingModePreferenceStore.swift`
+- `apps/ios/Meeshy/Features/Focal/Preferences/MeeshyFeatureFlags.swift`
 
 </details>
 
@@ -285,7 +285,7 @@ Transposition Android : UIView.animate sur la hauteur de cellule -> animateConte
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Focal/Core/LongMessageExpansionLaw.swift`
+- `apps/ios/Meeshy/Features/Focal/Core/LongMessageExpansionLaw.swift`
 
 </details>
 
@@ -309,7 +309,7 @@ Transposition Android : TimelineView(.periodic) -> LaunchedEffect + delay(60 s) 
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Lentille/Row/LentilleConversationRow.swift`
+- `apps/ios/Meeshy/Features/Lens/Row/LentilleConversationRow.swift`
 
 </details>
 
@@ -433,8 +433,8 @@ Transposition Android : UserDefaults/ProcessInfo drapeaux -> DataStore + BuildCo
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Focal/Core/ReadingModeOrchestrator.swift`
-- `apps/ios/Meeshy/Features/Main/Lentille/Mode/LentilleReadingModeContext.swift`
+- `apps/ios/Meeshy/Features/Focal/Core/ReadingModeOrchestrator.swift`
+- `apps/ios/Meeshy/Features/Lens/Mode/LentilleReadingModeContext.swift`
 
 </details>
 
@@ -600,8 +600,8 @@ Transposition Android : UserDefaults + ProcessInfo -> DataStore Preferences + Bu
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Lentille/Core/LentilleFeatureFlag.swift`
-- `apps/ios/Meeshy/Features/Main/Focal/Preferences/MeeshyFeatureFlags.swift`
+- `apps/ios/Meeshy/Features/Lens/Core/LentilleFeatureFlag.swift`
+- `apps/ios/Meeshy/Features/Focal/Preferences/MeeshyFeatureFlags.swift`
 
 </details>
 
@@ -625,7 +625,7 @@ Transposition Android : lentillePerspective -> Modifier.graphicsLayer ; scroll o
 
 <details><summary>Sources iOS (5)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Lentille/Core/LentilleMetrics.swift`
+- `apps/ios/Meeshy/Features/Lens/Core/LentilleMetrics.swift`
 - `apps/ios/Meeshy/Features/Main/Views/ConversationListView+ScrollChrome.swift`
 - `apps/ios/Meeshy/Features/Main/Views/ConversationListView+SectionRows.swift`
 - `apps/ios/Meeshy/Features/Main/Views/ConversationListView+ReaderAnonymity.swift`
@@ -654,9 +654,9 @@ Transposition Android : Protocols Swift -> interfaces Kotlin injectées par Hilt
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Lentille/Core/LentilleProviders.swift`
-- `apps/ios/Meeshy/Features/Main/Lentille/Core/LentilleBridgeFormatter.swift`
-- `apps/ios/Meeshy/Features/Main/Lentille/Core/GatewayBridgeProvider.swift`
+- `apps/ios/Meeshy/Features/Lens/Core/LentilleProviders.swift`
+- `apps/ios/Meeshy/Features/Lens/Core/LentilleBridgeFormatter.swift`
+- `apps/ios/Meeshy/Features/Lens/Core/GatewayBridgeProvider.swift`
 
 </details>
 
@@ -724,11 +724,11 @@ Transposition Android : Canvas SwiftUI -> Canvas/DrawScope Compose ; PreferenceK
 
 <details><summary>Sources iOS (5)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Riviere/View/RiverBubbleView.swift`
-- `apps/ios/Meeshy/Features/Main/Riviere/View/RiverLaneCanvas.swift`
-- `apps/ios/Meeshy/Features/Main/Riviere/View/RiverQuotedMediaFace.swift`
-- `apps/ios/Meeshy/Features/Main/Riviere/View/RiverRendering.swift`
-- `apps/ios/Meeshy/Features/Main/Riviere/View/RiverCoordinateSpace.swift`
+- `apps/ios/Meeshy/Features/River/View/RiverBubbleView.swift`
+- `apps/ios/Meeshy/Features/River/View/RiverLaneCanvas.swift`
+- `apps/ios/Meeshy/Features/River/View/RiverQuotedMediaFace.swift`
+- `apps/ios/Meeshy/Features/River/View/RiverRendering.swift`
+- `apps/ios/Meeshy/Features/River/View/RiverCoordinateSpace.swift`
 
 </details>
 
@@ -754,13 +754,13 @@ Transposition Android : Calendar/Locale -> java.time + DateTimeFormatter ; Obser
 
 <details><summary>Sources iOS (7)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Riviere/Core/RiverConversationMapping.swift`
-- `apps/ios/Meeshy/Features/Main/Riviere/Core/RiverColumnPacking.swift`
-- `apps/ios/Meeshy/Features/Main/Riviere/Core/RiverColumnLayout.swift`
-- `apps/ios/Meeshy/Features/Main/Riviere/Core/RiverTimeScale.swift`
-- `apps/ios/Meeshy/Features/Main/Riviere/Core/RiverNavigationController.swift`
-- `apps/ios/Meeshy/Features/Main/Riviere/Core/RiverModeGate.swift`
-- `apps/ios/Meeshy/Features/Main/Riviere/Core/RiverMetrics.swift`
+- `apps/ios/Meeshy/Features/River/Core/RiverConversationMapping.swift`
+- `apps/ios/Meeshy/Features/River/Core/RiverColumnPacking.swift`
+- `apps/ios/Meeshy/Features/River/Core/RiverColumnLayout.swift`
+- `apps/ios/Meeshy/Features/River/Core/RiverTimeScale.swift`
+- `apps/ios/Meeshy/Features/River/Core/RiverNavigationController.swift`
+- `apps/ios/Meeshy/Features/River/Core/RiverModeGate.swift`
+- `apps/ios/Meeshy/Features/River/Core/RiverMetrics.swift`
 
 </details>
 
@@ -784,10 +784,10 @@ Transposition Android : ScrollView([.horizontal,.vertical]) -> LazyColumn imbriq
 
 <details><summary>Sources iOS (4)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Riviere/View/RiverStreamHost.swift`
-- `apps/ios/Meeshy/Features/Main/Riviere/View/RiverConversationHost.swift`
-- `apps/ios/Meeshy/Features/Main/Riviere/View/RiverLaneHeaderStrip.swift`
-- `apps/ios/Meeshy/Features/Main/Riviere/View/RiverTimeHandle.swift`
+- `apps/ios/Meeshy/Features/River/View/RiverStreamHost.swift`
+- `apps/ios/Meeshy/Features/River/View/RiverConversationHost.swift`
+- `apps/ios/Meeshy/Features/River/View/RiverLaneHeaderStrip.swift`
+- `apps/ios/Meeshy/Features/River/View/RiverTimeHandle.swift`
 
 </details>
 
@@ -857,9 +857,9 @@ Transposition Android : StrokeStyle(dash:) -> drawBehind avec PathEffect.dashPat
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Focal/Agent/AgentAuthoredStyle.swift`
-- `apps/ios/Meeshy/Features/Main/Focal/Core/AgentAssistContracts.swift`
-- `apps/ios/Meeshy/Features/Main/Focal/Agent/NullAgentAssistProvider.swift`
+- `apps/ios/Meeshy/Features/Focal/Agent/AgentAuthoredStyle.swift`
+- `apps/ios/Meeshy/Features/Focal/Core/AgentAssistContracts.swift`
+- `apps/ios/Meeshy/Features/Focal/Agent/NullAgentAssistProvider.swift`
 
 </details>
 
@@ -884,9 +884,9 @@ Transposition Android : adaptiveLiquidGlass -> MeeshyGlassSurface (Material blur
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Focal/Row/FocalFocusChrome.swift`
-- `apps/ios/Meeshy/Features/Main/Focal/Row/FocalGlassBlock.swift`
-- `apps/ios/Meeshy/Features/Main/Focal/Core/FocalFocusTimestamp.swift`
+- `apps/ios/Meeshy/Features/Focal/Row/FocalFocusChrome.swift`
+- `apps/ios/Meeshy/Features/Focal/Row/FocalGlassBlock.swift`
+- `apps/ios/Meeshy/Features/Focal/Core/FocalFocusTimestamp.swift`
 
 </details>
 
@@ -911,9 +911,9 @@ Transposition Android : CALayer.transform/opacity par cellule UIKit -> Modifier.
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Focal/Core/FocalScrollPerspective.swift`
-- `apps/ios/Meeshy/Features/Main/Focal/Core/FocalFocusCurve.swift`
-- `apps/ios/Meeshy/Features/Main/Focal/Core/FocalFocusDetailsMotionLaw.swift`
+- `apps/ios/Meeshy/Features/Focal/Core/FocalScrollPerspective.swift`
+- `apps/ios/Meeshy/Features/Focal/Core/FocalFocusCurve.swift`
+- `apps/ios/Meeshy/Features/Focal/Core/FocalFocusDetailsMotionLaw.swift`
 
 </details>
 
@@ -936,7 +936,7 @@ Transposition Android : LentilleBridgeTranslator -> stringResource formatés ; p
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Lentille/Row/LentilleBridgeLine.swift`
+- `apps/ios/Meeshy/Features/Lens/Row/LentilleBridgeLine.swift`
 
 </details>
 
@@ -958,9 +958,9 @@ Transposition Android : GeometryReader/onGeometryChange -> onGloballyPositioned 
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Lentille/Perspective/LentilleFocusElection.swift`
-- `apps/ios/Meeshy/Features/Main/Lentille/Perspective/LentilleFocusElectionHost.swift`
-- `apps/ios/Meeshy/Features/Main/Focal/Core/FocalFocusCurve.swift`
+- `apps/ios/Meeshy/Features/Lens/Perspective/LentilleFocusElection.swift`
+- `apps/ios/Meeshy/Features/Lens/Perspective/LentilleFocusElectionHost.swift`
+- `apps/ios/Meeshy/Features/Focal/Core/FocalFocusCurve.swift`
 
 </details>
 
@@ -984,10 +984,10 @@ Transposition Android : Menu SwiftUI -> DropdownMenu ancré à la puce ; visualE
 
 <details><summary>Sources iOS (4)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Lentille/Mode/LentilleMagnification.swift`
-- `apps/ios/Meeshy/Features/Main/Lentille/Mode/LentilleFocusCard.swift`
-- `apps/ios/Meeshy/Features/Main/Lentille/Mode/LentilleFocusBreathing.swift`
-- `apps/ios/Meeshy/Features/Main/Lentille/Row/LentilleWholeChipsLine.swift`
+- `apps/ios/Meeshy/Features/Lens/Mode/LentilleMagnification.swift`
+- `apps/ios/Meeshy/Features/Lens/Mode/LentilleFocusCard.swift`
+- `apps/ios/Meeshy/Features/Lens/Mode/LentilleFocusBreathing.swift`
+- `apps/ios/Meeshy/Features/Lens/Row/LentilleWholeChipsLine.swift`
 
 </details>
 
@@ -1010,7 +1010,7 @@ Transposition Android : ObservableObject partagé -> StateFlow dans un holder in
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Lentille/Perspective/LentilleSceneActivity.swift`
+- `apps/ios/Meeshy/Features/Lens/Perspective/LentilleSceneActivity.swift`
 
 </details>
 
@@ -1033,9 +1033,9 @@ Transposition Android : visualEffect + ScrollOffsetRelay -> Modifier.graphicsLay
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Lentille/Perspective/LentillePerspective.swift`
-- `apps/ios/Meeshy/Features/Main/Lentille/Perspective/LentilleSceneActivity.swift`
-- `apps/ios/Meeshy/Features/Main/Focal/Core/FocalFocusCurve.swift`
+- `apps/ios/Meeshy/Features/Lens/Perspective/LentillePerspective.swift`
+- `apps/ios/Meeshy/Features/Lens/Perspective/LentilleSceneActivity.swift`
+- `apps/ios/Meeshy/Features/Focal/Core/FocalFocusCurve.swift`
 
 </details>
 
@@ -1057,9 +1057,9 @@ Transposition Android : Menu SwiftUI -> DropdownMenu/ModalBottomSheet ; UserDefa
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Lentille/Mode/LentilleModeMenu.swift`
-- `apps/ios/Meeshy/Features/Main/Lentille/Mode/LentilleModeLabels.swift`
-- `apps/ios/Meeshy/Features/Main/Lentille/Mode/LentilleReadingModeContext.swift`
+- `apps/ios/Meeshy/Features/Lens/Mode/LentilleModeMenu.swift`
+- `apps/ios/Meeshy/Features/Lens/Mode/LentilleModeLabels.swift`
+- `apps/ios/Meeshy/Features/Lens/Mode/LentilleReadingModeContext.swift`
 
 </details>
 
@@ -1103,7 +1103,7 @@ Transposition Android : struct Equatable/Sendable -> data class immuables (kotli
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Focal/Core/LivingSummaryModels.swift`
+- `apps/ios/Meeshy/Features/Focal/Core/LivingSummaryModels.swift`
 
 </details>
 
@@ -1222,14 +1222,14 @@ Transposition Android : UICollectionView/SwiftUI hybrid avec cellules rangées -
 
 <details><summary>Sources iOS (8)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Focal/Row/FocalRow.swift`
-- `apps/ios/Meeshy/Features/Main/Focal/Core/FocalRowInput.swift`
-- `apps/ios/Meeshy/Features/Main/Focal/Core/FocalMetrics.swift`
-- `apps/ios/Meeshy/Features/Main/Focal/Row/FocalIdentityHeader.swift`
-- `apps/ios/Meeshy/Features/Main/Focal/Row/FocalMetaColumn.swift`
-- `apps/ios/Meeshy/Features/Main/Focal/Row/FocalMetaRow.swift`
-- `apps/ios/Meeshy/Features/Main/Focal/Row/FocalConversationStartRow.swift`
-- `apps/ios/Meeshy/Features/Main/Focal/Row/EquatableFocalRow.swift`
+- `apps/ios/Meeshy/Features/Focal/Row/FocalRow.swift`
+- `apps/ios/Meeshy/Features/Focal/Core/FocalRowInput.swift`
+- `apps/ios/Meeshy/Features/Focal/Core/FocalMetrics.swift`
+- `apps/ios/Meeshy/Features/Focal/Row/FocalIdentityHeader.swift`
+- `apps/ios/Meeshy/Features/Focal/Row/FocalMetaColumn.swift`
+- `apps/ios/Meeshy/Features/Focal/Row/FocalMetaRow.swift`
+- `apps/ios/Meeshy/Features/Focal/Row/FocalConversationStartRow.swift`
+- `apps/ios/Meeshy/Features/Focal/Row/EquatableFocalRow.swift`
 
 </details>
 
@@ -1257,7 +1257,7 @@ Transposition Android : Equatable + .equatable() -> @Stable/@Immutable + clés L
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Lentille/Row/LentilleConversationRow.swift`
+- `apps/ios/Meeshy/Features/Lens/Row/LentilleConversationRow.swift`
 
 </details>
 
@@ -1312,10 +1312,10 @@ Transposition Android : Material blur/scrim pour ultraThinMaterial ; ScrollActiv
 
 <details><summary>Sources iOS (4)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Focal/Chrome/ScrollTimePillOverlay.swift`
-- `apps/ios/Meeshy/Features/Main/Focal/Chrome/ScrollTimePillState.swift`
-- `apps/ios/Meeshy/Features/Main/Focal/Core/ScrollTimePillLaw.swift`
-- `apps/ios/Meeshy/Features/Main/Focal/Chrome/FocalTimestampRevealState.swift`
+- `apps/ios/Meeshy/Features/Focal/Chrome/ScrollTimePillOverlay.swift`
+- `apps/ios/Meeshy/Features/Focal/Chrome/ScrollTimePillState.swift`
+- `apps/ios/Meeshy/Features/Focal/Core/ScrollTimePillLaw.swift`
+- `apps/ios/Meeshy/Features/Focal/Chrome/FocalTimestampRevealState.swift`
 
 </details>
 
@@ -1774,7 +1774,7 @@ Transposition Android : VoiceOver label -> semantics { contentDescription } (cle
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Focal/Preferences/MessageAccessibilityLabelComposer.swift`
+- `apps/ios/Meeshy/Features/Focal/Preferences/MessageAccessibilityLabelComposer.swift`
 
 </details>
 
@@ -1928,8 +1928,8 @@ Transposition Android : BubbleGridCell -> composable de case réutilisant Mosaic
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Focal/Row/FocalAttachmentBlock.swift`
-- `apps/ios/Meeshy/Features/Main/Focal/Row/FocalNonMediaBlock.swift`
+- `apps/ios/Meeshy/Features/Focal/Row/FocalAttachmentBlock.swift`
+- `apps/ios/Meeshy/Features/Focal/Row/FocalNonMediaBlock.swift`
 
 </details>
 
@@ -1952,7 +1952,7 @@ Transposition Android : AudioItem -> pistes Media3 existantes (AudioTrackSurface
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Focal/Row/FocalAudioBlock.swift`
+- `apps/ios/Meeshy/Features/Focal/Row/FocalAudioBlock.swift`
 
 </details>
 
@@ -1975,7 +1975,7 @@ Transposition Android : blur(radius) -> Modifier.blur (API 31+) avec repli opaqu
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Focal/Row/FocalProtectedContent.swift`
+- `apps/ios/Meeshy/Features/Focal/Row/FocalProtectedContent.swift`
 
 </details>
 
@@ -1999,8 +1999,8 @@ Transposition Android : Text concaténé inline -> AnnotatedString avec inline c
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Focal/Row/FocalQuotedReplyView.swift`
-- `apps/ios/Meeshy/Features/Main/Focal/Row/FocalQuoteRail.swift`
+- `apps/ios/Meeshy/Features/Focal/Row/FocalQuotedReplyView.swift`
+- `apps/ios/Meeshy/Features/Focal/Row/FocalQuoteRail.swift`
 
 </details>
 
@@ -2023,7 +2023,7 @@ Transposition Android : Switch sur content.kind -> when sur BubbleRenderKind.Kin
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Focal/Row/FocalSystemRows.swift`
+- `apps/ios/Meeshy/Features/Focal/Row/FocalSystemRows.swift`
 
 </details>
 
@@ -2048,7 +2048,7 @@ Transposition Android : AvatarContextMenuItem -> DropdownMenu ancré à l'avatar
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Lentille/Row/LentilleConversationRow.swift`
+- `apps/ios/Meeshy/Features/Lens/Row/LentilleConversationRow.swift`
 
 </details>
 
@@ -2070,7 +2070,7 @@ Transposition Android : redacted(reason: .placeholder) -> MeeshySkeletonBox / Mo
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Lentille/Row/LentilleSkeletonRow.swift`
+- `apps/ios/Meeshy/Features/Lens/Row/LentilleSkeletonRow.swift`
 
 </details>
 
@@ -2398,9 +2398,9 @@ Transposition Android : keyboardWillShow/Hide -> WindowInsets.isImeVisible ; nes
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Focal/Chrome/EdgeHiddenChrome.swift`
-- `apps/ios/Meeshy/Features/Main/Focal/Core/FocalChromeReturn.swift`
-- `apps/ios/Meeshy/Features/Main/Focal/Core/KeyboardFirstScroll.swift`
+- `apps/ios/Meeshy/Features/Focal/Chrome/EdgeHiddenChrome.swift`
+- `apps/ios/Meeshy/Features/Focal/Core/FocalChromeReturn.swift`
+- `apps/ios/Meeshy/Features/Focal/Core/KeyboardFirstScroll.swift`
 
 </details>
 

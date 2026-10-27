@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:notifications": {
+      "resDir": "feature/notifications/src/main/res",
+      "entries": [
+        {"androidName": "notifications_delete_failed", "status": "android-only"},
+        {"androidName": "notifications_empty_calls", "status": "android-only"},
+        {"androidName": "notifications_empty_contacts", "status": "android-only"},
+        {"androidName": "notifications_empty_engagement", "status": "android-only"},
+        {"androidName": "notifications_empty_groups", "status": "android-only"},
+        {"androidName": "notifications_empty_mentions", "status": "android-only"},
+        {"androidName": "notifications_empty_messages", "status": "android-only"},
+        {"androidName": "notifications_empty_reactions", "status": "android-only"},
+        {"androidName": "notifications_empty_social", "status": "android-only"},
+        {"androidName": "notifications_empty_subtitle", "status": "android-only"},
+        {"androidName": "notifications_empty_system", "status": "android-only"},
+        {"androidName": "notifications_empty_translations", "status": "android-only"},
+        {"androidName": "notifications_empty_unread", "status": "android-only"},
+        {"androidName": "notifications_error_retry", "status": "android-only"},
+        {"androidName": "notifications_error_subtitle", "status": "android-only"},
+        {"androidName": "notifications_error_title", "status": "android-only"},
+        {"androidName": "notifications_footer_mood", "status": "android-only"},
+        {"androidName": "notifications_footer_post", "status": "android-only"},
+        {"androidName": "notifications_footer_reel", "status": "android-only"},
+        {"androidName": "notifications_footer_story", "status": "android-only"},
+        {"androidName": "notifications_loading", "status": "android-only"},
+        {"androidName": "notifications_mark_all_read_failed", "status": "android-only"},
+        {"androidName": "notifications_mark_read_failed", "status": "android-only"},
+        {"androidName": "notifications_quick_connect", "status": "android-only"},
+        {"androidName": "notifications_quick_connect_failed", "status": "android-only"},
+        {"androidName": "notifications_quick_connect_sent", "status": "android-only"},
+        {"androidName": "notifications_quick_write", "status": "android-only"},
+        {"androidName": "notifications_quick_write_failed", "status": "android-only"},
+        {"androidName": "notifications_reply_to_comment", "status": "android-only"},
+        {"androidName": "notifications_unread_prefix", "status": "android-only"},
+        {"androidName": "notifications_unread_count", "kind": "plurals", "status": "android-only"}
+      ]
+    }
+  }
+}

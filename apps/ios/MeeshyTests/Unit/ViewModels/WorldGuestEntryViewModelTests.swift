@@ -259,7 +259,7 @@ final class WorldGuestEntryViewModelTests: XCTestCase {
             .deletingLastPathComponent()   // MeeshyTests
             .deletingLastPathComponent()   // apps/ios
         let source = try String(
-            contentsOf: appRoot.appendingPathComponent("Meeshy/Features/Main/Views/LoginView.swift"),
+            contentsOf: appRoot.appendingPathComponent("Meeshy/Features/Auth/Views/LoginView.swift"),
             encoding: .utf8
         )
         XCTAssertFalse(source.contains("WorldEntryLoginCard"))

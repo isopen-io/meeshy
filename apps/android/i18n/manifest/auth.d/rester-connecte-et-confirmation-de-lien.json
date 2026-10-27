@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:auth": {
+      "resDir": "feature/auth/src/main/res",
+      "entries": [
+        {"catalog": "app", "iosKey": "accounts.keep_signed_in", "androidName": "login_keep_signed_in", "status": "adopted"},
+        {"catalog": "app", "iosKey": "signInLink.deviceConfirm.title", "androidName": "link_signin_title", "status": "adopted"},
+        {"catalog": "app", "iosKey": "signInLink.deviceConfirm.message", "androidName": "link_signin_message", "status": "adopted"},
+        {"catalog": "app", "iosKey": "signInLink.deviceConfirm.messageReplacing", "androidName": "link_signin_message_replacing", "status": "adopted"},
+        {"catalog": "app", "iosKey": "signInLink.deviceConfirm.claim", "androidName": "link_signin_claim", "status": "adopted"},
+        {"catalog": "app", "iosKey": "signInLink.deviceConfirm.confirm", "androidName": "link_signin_confirm", "status": "adopted"},
+        {"catalog": "app", "iosKey": "signInLink.deviceConfirm.confirmClaim", "androidName": "link_signin_confirm_claim", "status": "adopted"},
+        {"catalog": "app", "iosKey": "common.cancel", "androidName": "link_signin_cancel", "status": "adopted"}
+      ]
+    }
+  }
+}

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_live_frame_answer_accepted">%1$s hat deinen Rahmen übernommen</string>
+    <string name="call_live_frame_answer_declined">%1$s behält die eigene Ansicht</string>
+    <string name="call_live_frame_proposal_anonymous">Dein Gegenüber schlägt dir den Rahmen „%1$s“ vor</string>
+    <string name="call_live_frame_surface">Rahmen %1$s um beide Videos</string>
+    <string name="call_zoom_lens">Zoom %1$s</string>
+</resources>

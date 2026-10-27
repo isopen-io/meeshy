@@ -28,7 +28,7 @@ final class ConversationSyncEngineDeltaViaSyncTests: XCTestCase {
             case let .delta(json, validateur):
                 // Le mock DÉCODE l'enveloppe réelle plutôt que de fabriquer des
                 // valeurs : la forme opposée est celle que `routes/sync` sert.
-                let delta = try! APIClient.makeAPIPayloadDecoder().decode(SyncDelta<Row>.self, from: Data(json.utf8))
+                let delta = try! MeeshyCoders.decoder(.api).decode(SyncDelta<Row>.self, from: Data(json.utf8))
                 return .delta(delta, validateur: validateur)
             }
         }

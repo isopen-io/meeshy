@@ -254,8 +254,7 @@ extension JSONDecoder {
     /// Dates en ISO 8601 des DEUX côtés — un encodage par défaut traverserait
     /// sans erreur et se relirait faux le jour où l'un des miroirs changerait.
     nonisolated static var meeshyShareCompose: JSONDecoder {
-        let decodeur = JSONDecoder()
-        decodeur.dateDecodingStrategy = .iso8601
+        let decodeur = MeeshyCoders.decoder(.persistence)
         return decodeur
     }
 }

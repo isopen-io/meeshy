@@ -1,7 +1,7 @@
 package me.meeshy.app.stories
 
 /** Une entrée du menu de l'anneau « Ma story ». */
-enum class StoryTraySelfAction { ViewMyStory, AddStory }
+enum class StoryTraySelfAction { ViewMyStory, ManageStories, AddStory }
 
 /**
  * Ce que l'anneau « Ma story » propose à l'appui long — iOS `StoryTrayView` : voir sa story
@@ -10,6 +10,7 @@ enum class StoryTraySelfAction { ViewMyStory, AddStory }
 object StoryTraySelfMenu {
     fun actions(self: StoryRing?): List<StoryTraySelfAction> = listOfNotNull(
         StoryTraySelfAction.ViewMyStory.takeIf { self != null && self.storyCount > 0 },
+        StoryTraySelfAction.ManageStories,
         StoryTraySelfAction.AddStory,
     )
 }

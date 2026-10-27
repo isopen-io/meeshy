@@ -69,7 +69,13 @@ struct CommentQuotationChip: View {
     let postId: String
     let accentColor: String
 
-    @ObservedObject private var store = CommentQuotationStore.shared
+    @ObservedObject private var store: CommentQuotationStore
+
+    init(postId: String, accentColor: String, store: CommentQuotationStore = .shared) {
+        self.postId = postId
+        self.accentColor = accentColor
+        self.store = store
+    }
 
     private var theme: ThemeManager { ThemeManager.shared }
 

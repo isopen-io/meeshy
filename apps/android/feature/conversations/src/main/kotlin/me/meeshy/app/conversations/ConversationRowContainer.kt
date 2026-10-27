@@ -1,5 +1,6 @@
 package me.meeshy.app.conversations
 
+import me.meeshy.ui.component.chrome.floatingChromeLateralReserve
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -117,6 +118,7 @@ internal fun ConversationRowContainer(
     Box {
         Box(
             modifier = Modifier
+                .floatingChromeLateralReserve()
                 .fillMaxWidth()
                 .padding(
                     horizontal = LentilleMetrics.Row.marginHorizontal,

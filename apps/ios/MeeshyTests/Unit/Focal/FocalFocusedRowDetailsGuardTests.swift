@@ -30,8 +30,8 @@ final class FocalFocusedRowDetailsGuardTests: XCTestCase {
     /// `FocalRow.swift` pour la cohésion) se lisent comme UNE unité : une garde
     /// ne doit ni rougir ni verdir parce que du code a changé de fichier.
     private func normalizedRowUnit() throws -> String {
-        try normalized("Meeshy/Features/Main/Focal/Row/FocalRow.swift") + " "
-            + normalized("Meeshy/Features/Main/Focal/Row/FocalFocusChrome.swift")
+        try normalized("Meeshy/Features/Focal/Row/FocalRow.swift") + " "
+            + normalized("Meeshy/Features/Focal/Row/FocalFocusChrome.swift")
     }
 
     private func normalized(_ relativePath: String) throws -> String {
@@ -96,7 +96,7 @@ final class FocalFocusedRowDetailsGuardTests: XCTestCase {
     /// Garde NÉGATIVE — l'en-tête d'identité ne redevient jamais porteur de
     /// l'heure ni des coches. Contre-épreuve dans le test suivant.
     func test_identityHeader_carriesNoTimeAndNoChecks() throws {
-        let header = try normalized("Meeshy/Features/Main/Focal/Row/FocalIdentityHeader.swift")
+        let header = try normalized("Meeshy/Features/Focal/Row/FocalIdentityHeader.swift")
         XCTAssertFalse(header.contains("BubbleDeliveryCheck"), "aucune coche dans l'en-tête")
         XCTAssertFalse(header.contains("FocalRevealedTime"), "aucun horodatage dans l'en-tête")
         XCTAssertFalse(header.contains("timeString"), "l'en-tête ne reçoit même plus l'heure")
@@ -149,7 +149,7 @@ final class FocalFocusedRowDetailsGuardTests: XCTestCase {
         XCTAssertTrue(controller.contains("focalDetailsSyncScheduled = true DispatchQueue.main.async"), "différée au prochain tour")
         XCTAssertTrue(controller.contains("if focalReconfigureInFlight { focalDetailsPendingAfterApply = true return }"), "un seul apply en vol")
         XCTAssertTrue(controller.contains("focusTimestamp: self.focalDetailedLocalId == localId ? self.focalFocusTimestamp(for: message.createdAt) : nil"))
-        let input = try normalized("Meeshy/Features/Main/Focal/Core/FocalRowInput.swift")
+        let input = try normalized("Meeshy/Features/Focal/Core/FocalRowInput.swift")
         XCTAssertTrue(input.contains("let focusTimestamp: String?"))
     }
 
@@ -164,7 +164,7 @@ final class FocalFocusedRowDetailsGuardTests: XCTestCase {
         XCTAssertTrue(row.contains("actions.onShowTranslationDetail?(content.messageId)"), "l'icône de traduction du mode bulle")
         XCTAssertTrue(row.contains("actions.onOpenReactPicker?(content.messageId)"), "le (+) emoji, toujours")
         XCTAssertTrue(row.contains("onShowReadStatus: actions.onShowReadStatus.map"), "les coches ouvrent les détails de lecture")
-        _ = try normalized("Meeshy/Features/Main/Focal/Row/FocalMetaRow.swift")
+        _ = try normalized("Meeshy/Features/Focal/Row/FocalMetaRow.swift")
         // Ordre (directive 2026-08-22) : traduction → drapeaux → (+) → réactions.
         let strip = try XCTUnwrap(row.range(of: "private var focusStrip: some View {"))
         let tail = row[strip.lowerBound...]
@@ -178,7 +178,7 @@ final class FocalFocusedRowDetailsGuardTests: XCTestCase {
         let controller = try normalizedController()
         XCTAssertTrue(controller.contains("cell.clipsToBounds = false"))
         XCTAssertTrue(controller.contains("cell.layer.zPosition = isFocusedCell ? 1 : 0"))
-        let meta = try normalized("Meeshy/Features/Main/Focal/Row/FocalMetaRow.swift")
+        let meta = try normalized("Meeshy/Features/Focal/Row/FocalMetaRow.swift")
         XCTAssertTrue(meta.contains("Button(action: onShowReadStatus)"), "les coches du bas sont un bouton quand la rangée sait ouvrir les détails")
     }
 
@@ -199,7 +199,7 @@ final class FocalFocusedRowDetailsGuardTests: XCTestCase {
     /// c'est ELLE qui distingue le message en focus (heure toujours lisible)
     /// des autres (révélée au défilement).
     func test_metaRow_rendersAPermanentTime_whenAskedTo_andTheRevealedOneOtherwise() throws {
-        let meta = try normalized("Meeshy/Features/Main/Focal/Row/FocalMetaRow.swift")
+        let meta = try normalized("Meeshy/Features/Focal/Row/FocalMetaRow.swift")
         XCTAssertTrue(
             meta.contains("FocalRevealedTime(timeString: timeString, tint: metaTint)"),
             "Hors focus, la règle commune reste le révélé de défilement."
@@ -215,7 +215,7 @@ final class FocalFocusedRowDetailsGuardTests: XCTestCase {
     /// réception — la règle « au repos, rien » n'était vraie que pour une
     /// des deux informations.
     func test_theChecks_followTheSameRevealAsTheTime_notOnlyTheTime() throws {
-        let meta = try normalized("Meeshy/Features/Main/Focal/Row/FocalMetaRow.swift")
+        let meta = try normalized("Meeshy/Features/Focal/Row/FocalMetaRow.swift")
         XCTAssertTrue(
             meta.contains("FocalRevealedDetail { deliveryChecks(deliveryStatus) }"),
             "les coches passent par le MÊME révélé que l'heure"
@@ -227,7 +227,7 @@ final class FocalFocusedRowDetailsGuardTests: XCTestCase {
     /// un bouton INVISIBLE mais tappable au milieu du fil : appuyer dans le
     /// vide ouvrirait les détails de lecture d'un message qu'on ne voit pas.
     func test_theReveal_alsoCutsTheTouch_notJustTheOpacity() throws {
-        let reveal = try normalized("Meeshy/Features/Main/Focal/Chrome/FocalTimestampRevealState.swift")
+        let reveal = try normalized("Meeshy/Features/Focal/Chrome/FocalTimestampRevealState.swift")
         XCTAssertTrue(reveal.contains(".allowsHitTesting(reveal.isRevealed)"), "invisible ⇒ intouchable")
         XCTAssertTrue(reveal.contains("struct FocalRevealedDetail"), "un seul enrobage, deux consommateurs")
     }
@@ -249,7 +249,7 @@ final class FocalFocusedRowDetailsGuardTests: XCTestCase {
         // #8506 (directive porteur 2026-09-28) : la MÊME matière que le panneau
         // de la barre de composition — le vrai verre d'iOS 26, sans teinte ni
         // filet d'accent (le filet à `glassRimOpacity` en faisait une carte bordée).
-        let glass = try normalized("Meeshy/Features/Main/Focal/Row/FocalGlassBlock.swift")
+        let glass = try normalized("Meeshy/Features/Focal/Row/FocalGlassBlock.swift")
         let composer = try normalized("Meeshy/Features/Main/Components/UniversalComposerBar+Layout.swift")
         XCTAssertTrue(composer.contains(".adaptiveLiquidGlass(in: Self.panelShape"), "référence : le panneau du composer")
         XCTAssertTrue(glass.contains(".adaptiveLiquidGlass(in: Self.shape)"), "même atome, même verre non teinté")
@@ -257,7 +257,7 @@ final class FocalFocusedRowDetailsGuardTests: XCTestCase {
         XCTAssertFalse(glass.contains("glassRimOpacity"), "le filet d'accent a disparu")
         XCTAssertFalse(glass.contains("Color.clear .adaptiveLiquidGlass"), "le verre se pose sur une forme remplie, pas sur un Color.clear nu")
         XCTAssertFalse(row.contains("focusCardFillOpacity"), "plus aucun aplat opaque sous le message élu")
-        let perspective = try normalized("Meeshy/Features/Main/Focal/Core/FocalScrollPerspective.swift")
+        let perspective = try normalized("Meeshy/Features/Focal/Core/FocalScrollPerspective.swift")
         XCTAssertFalse(perspective.contains("focusCardBorderOpacity"), "la teinte du cadre n'a plus de porteur")
         XCTAssertFalse(perspective.contains("focusChipRingOpacity"), "ni l'anneau des chips")
         XCTAssertFalse(perspective.contains("borderWidth"), "la carte UIKit résiduelle n'en trace pas non plus")
@@ -268,7 +268,7 @@ final class FocalFocusedRowDetailsGuardTests: XCTestCase {
     func test_theActiveChip_isMarkedByItsFill_sinceTheRingIsGone() throws {
         let row = try normalizedRowUnit()
         XCTAssertTrue(row.contains("FocalScrollPerspective.focusChipFillOpacity(isDark: input.isDark, isActive: isActive)"), "l'état actif se lit au fond")
-        let perspective = try normalized("Meeshy/Features/Main/Focal/Core/FocalScrollPerspective.swift")
+        let perspective = try normalized("Meeshy/Features/Focal/Core/FocalScrollPerspective.swift")
         XCTAssertTrue(perspective.contains("static func focusChipFillOpacity(isDark: Bool, isActive: Bool)"), "une seule loi de teinte, dans Core")
     }
 
@@ -341,7 +341,7 @@ final class FocalFocusedRowDetailsGuardTests: XCTestCase {
     /// L'en-tête reste utilisable là où il vivait : hors focus, il remplit sa
     /// ligne et ouvre le profil. Les deux emplois ne doivent pas se confondre.
     func test_theHeader_keepsItsRowBehaviour_whereItAlreadyLived() throws {
-        let header = try normalized("Meeshy/Features/Main/Focal/Row/FocalIdentityHeader.swift")
+        let header = try normalized("Meeshy/Features/Focal/Row/FocalIdentityHeader.swift")
         XCTAssertTrue(header.contains("var fillsWidth: Bool = true"), "par défaut il remplit sa ligne")
         XCTAssertTrue(header.contains("if let onTap { onTap() } else { onOpenProfile?(profileUser) }"),
                       "sans destination explicite, le routage de l'hôte tient")
@@ -622,7 +622,7 @@ final class FocalFocusedRowDetailsGuardTests: XCTestCase {
         // #8147 : la carte UIKit OPAQUE n'existe plus — le bloc de verre est
         // le fond SwiftUI de la rangée. Une cellule recyclée arrive à plat.
         XCTAssertTrue(host.contains("FocalScrollPerspective.reset(cell.contentView.layer)"), "registration : une cellule recyclée arrive à plat")
-        let perspective = try normalized("Meeshy/Features/Main/Focal/Core/FocalScrollPerspective.swift")
+        let perspective = try normalized("Meeshy/Features/Focal/Core/FocalScrollPerspective.swift")
         XCTAssertFalse(perspective.contains("FocusCardView"), "aucune carte UIKit opaque ne revient sous le message élu")
         XCTAssertFalse(host.contains("hideFocusCard"), "rien à démonter : il n'y a plus de carte UIKit")
     }

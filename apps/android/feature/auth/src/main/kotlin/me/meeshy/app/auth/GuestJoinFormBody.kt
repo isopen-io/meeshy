@@ -136,14 +136,7 @@ internal fun GuestJoinFormBody(state: GuestJoinUiState, viewModel: GuestJoinView
     }
     LanguageDropdown(form.language, viewModel::onLanguageChange, enabled)
 
-    state.submitError?.let { error ->
-        Text(
-            text = guestJoinErrorText(error),
-            style = MaterialTheme.typography.bodySmall,
-            color = MeeshyPalette.Error,
-            fontWeight = FontWeight.Medium,
-        )
-    }
+    AuthErrorMessage(text = state.submitError?.let { guestJoinErrorText(it) })
 
     MeeshyPrimaryButton(
         text = stringResource(if (state.isSubmitting) R.string.guest_join_joining else R.string.guest_join_submit),

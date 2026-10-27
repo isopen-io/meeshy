@@ -8,12 +8,14 @@ import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
 import android.os.Looper
+import android.os.SystemClock
 import androidx.core.content.ContextCompat
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import me.meeshy.sdk.model.LiveLocationFix
+import me.meeshy.sdk.model.location.DeviceFixPolicy
 import javax.inject.Inject
 
 /** Positions de l'appareil via `LocationManager` (aucune dépendance Play Services). */
@@ -33,18 +35,18 @@ class LiveLocationDeviceSource @Inject constructor(
 
     override fun updates(intervalMillis: Long): Flow<LiveLocationFix> = callbackFlow {
         val manager = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
-        val provider = when {
-            manager == null || !isGranted() -> null
-            manager.isProviderEnabled(LocationManager.GPS_PROVIDER) -> LocationManager.GPS_PROVIDER
-            manager.isProviderEnabled(LocationManager.NETWORK_PROVIDER) -> LocationManager.NETWORK_PROVIDER
-            else -> null
-        }
-        if (manager == null || provider == null) {
+        val providers = if (manager == null || !isGranted()) emptyList() else manager.enabledFixProviders()
+        if (manager == null || providers.isEmpty()) {
             close()
             return@callbackFlow
         }
+        var lastGpsAtMillis: Long? = null
         val listener = object : LocationListener {
             override fun onLocationChanged(location: Location) {
+                val now = SystemClock.elapsedRealtime()
+                val fromGps = location.provider == LocationManager.GPS_PROVIDER
+                if (!DeviceFixPolicy.streamKeeps(fromGps, lastGpsAtMillis, now)) return
+                if (fromGps) lastGpsAtMillis = now
                 trySend(location.toFix())
             }
             @Deprecated("Deprecated in Java")
@@ -52,7 +54,14 @@ class LiveLocationDeviceSource @Inject constructor(
             override fun onProviderEnabled(provider: String) {}
             override fun onProviderDisabled(provider: String) {}
         }
-        manager.requestLocationUpdates(provider, intervalMillis, 0f, listener, Looper.getMainLooper())
+        val listening = providers.count { provider ->
+            runCatching { manager.requestLocationUpdates(provider, intervalMillis, 0f, listener, Looper.getMainLooper()) }.isSuccess
+        }
+        if (listening == 0) {
+            manager.removeUpdates(listener)
+            close()
+            return@callbackFlow
+        }
         awaitClose { manager.removeUpdates(listener) }
     }
 

@@ -90,8 +90,7 @@ public enum SocialInteractionEvents {
     /// son envoi réussi, datée de son enfilement (le geste de l'utilisateur).
     /// `nil` : la mutation n'est pas une interaction avec un contenu.
     public static func event(forDelivered record: OutboxRecord) -> SocialEventV2? {
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
+        let decoder = MeeshyCoders.decoder(.persistence)
         switch record.kind {
         case .toggleLikePost:
             guard let payload = try? decoder.decode(ToggleLikePostPayload.self, from: record.payload) else { return nil }

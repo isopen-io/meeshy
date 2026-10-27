@@ -4,7 +4,7 @@ import me.meeshy.sdk.model.ApiNotification
 
 /**
  * Where tapping a notification row leads — port of iOS `NotificationContentRouter` +
- * `RootView.navigateFromNotification` (`apps/ios/Meeshy/Features/Main/Navigation/
+ * `RootView.navigateFromNotification` (`apps/ios/Meeshy/Features/Navigation/
  * NotificationContentRouter.swift`, `Views/RootView.swift`), scoped to the destinations Android
  * can actually reach today.
  *
@@ -21,7 +21,8 @@ import me.meeshy.sdk.model.ApiNotification
  * [NotificationDestinationResolver.OWNED_CONTENT_TYPES]): the story tray endpoint
  * (`GET posts/feed/stories`) only ever serves `type: PostType.STORY`, so a fresh MOOD/STATUS
  * publication is never actually in the tray it would open — [Post] is the only destination that
- * resolves a mood's own id (`GET /posts/:postId`, unfiltered by type).
+ * resolves a mood's own id (`GET /posts/:postId`, unfiltered by type). A NEW mood now opens its
+ * own full-screen page ([Mood]); a reaction or comment on a mood keeps the [Post] detail.
  */
 public sealed interface NotificationDestination {
     public data class Conversation(val conversationId: String) : NotificationDestination
@@ -29,6 +30,9 @@ public sealed interface NotificationDestination {
     public data class Reel(val postId: String) : NotificationDestination
     public data class Story(val userId: String) : NotificationDestination
     public data class Profile(val userId: String) : NotificationDestination
+
+    /** Une NOUVELLE humeur ouvre sa page plein écran (iOS `Route.moodSpotlight`, #10814). */
+    public data class Mood(val statusId: String) : NotificationDestination
     public data object None : NotificationDestination
 }
 
@@ -62,6 +66,7 @@ public object NotificationDestinationResolver {
     /** Friend/contact lifecycle — opens the actor's profile, mirroring iOS's profile sheet. */
     private val RELATION_TYPES = setOf(
         "friend_request", "contact_request", "friend_accepted", "contact_accepted", "status_update",
+        "contact_joined", "contact_recently_active",
     )
 
     /**
@@ -102,6 +107,8 @@ public object NotificationDestinationResolver {
         type: String,
         postId: String,
     ): NotificationDestination {
+        if (type == "friend_new_mood") return NotificationDestination.Mood(postId)
+
         val entity = (notification.metadata?.postType ?: notification.metadata?.contentType)?.uppercase()
 
         if (entity == "REEL") return NotificationDestination.Reel(postId)
@@ -128,6 +135,7 @@ internal fun NotificationDestination.dispatch(
     onOpenReel: (String) -> Unit,
     onOpenStory: (String) -> Unit,
     onOpenProfile: (String) -> Unit,
+    onOpenMood: (String) -> Unit = onOpenPost,
 ) {
     when (this) {
         is NotificationDestination.Conversation -> onOpenConversation(conversationId)
@@ -135,6 +143,7 @@ internal fun NotificationDestination.dispatch(
         is NotificationDestination.Reel -> onOpenReel(postId)
         is NotificationDestination.Story -> onOpenStory(userId)
         is NotificationDestination.Profile -> onOpenProfile(userId)
+        is NotificationDestination.Mood -> onOpenMood(statusId)
         NotificationDestination.None -> Unit
     }
 }

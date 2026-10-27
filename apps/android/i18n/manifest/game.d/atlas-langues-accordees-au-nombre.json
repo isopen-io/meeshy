@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:game": {
+      "resDir": "feature/game/src/main/res",
+      "entries": [
+        {
+          "androidName": "game_atlas_languages",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

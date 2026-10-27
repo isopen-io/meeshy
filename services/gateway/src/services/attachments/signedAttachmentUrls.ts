@@ -35,6 +35,7 @@ import { contentExitLawOfSource, type ContentExitProjection } from '@meeshy/shar
 import { STORAGE_KEY_SHAPE } from './mediaUrlNormalization';
 import { storageKeyFromMediaUrl } from './mediaStorageKey';
 import type { ReaderFileUrlSigner } from './readerFileSignature';
+import { isSealedStorageKey } from './atRest/atRestFiles';
 
 type MessageProtection = Omit<ContentExitProjection, 'attachments'>;
 
@@ -75,8 +76,22 @@ const signableKeyOf = (url: string): string | null => {
   return key !== null && isSignableStorageKey(key) ? key : null;
 };
 
-/** Le fichier de CETTE pièce se lit-il par lecteur ? Vrai sur toute nature non ordinaire. */
+/**
+ * #13100 — une pièce scellée au repos (`server` / `hybrid`) se lit par lecteur :
+ * l'adresse nue de ses fichiers est refusée, seule l'adresse signée la
+ * déchiffre. Reconnue à la forme opaque de ses clés, que seul le scellement
+ * produit (`SEALED_STORAGE_KEY_SHAPE`) — sans colonne de plus dans les `select`.
+ */
+export function carriesSealedFile(attachment: Pick<SignableAttachment, 'fileUrl' | 'thumbnailUrl'>): boolean {
+  return [attachment.fileUrl, attachment.thumbnailUrl].some((url) => {
+    const key = typeof url === 'string' ? storageKeyFromMediaUrl(url) : null;
+    return key !== null && isSealedStorageKey(key);
+  });
+}
+
+/** Le fichier de CETTE pièce se lit-il par lecteur ? Vrai sur toute nature non ordinaire, et sur toute pièce scellée. */
 export function attachmentIsReaderBound(message: ReaderBoundMessage, attachment: SignableAttachment): boolean {
+  if (carriesSealedFile(attachment)) return true;
   // Une colonne non chargée reste `undefined` à l'exécution : la loi la lit
   // comme une preuve manquante et ferme. L'assertion ne fait que la laisser
   // passer jusqu'à elle — c'est `contentExitLawOfSource` qui juge.

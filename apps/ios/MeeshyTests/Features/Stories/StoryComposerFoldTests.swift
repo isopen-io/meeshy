@@ -90,7 +90,7 @@ final class StoryComposerFoldTests: XCTestCase {
         let views = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Views")
+            .appendingPathComponent("Meeshy/Features/Stories/Views")
         let bar = try String(contentsOf: views.appendingPathComponent("StoryViewerView+CanvasComposerBar.swift"), encoding: .utf8)
         XCTAssertTrue(bar.contains("mode: .comment"))
         XCTAssertTrue(bar.contains("isBlurEnabled: $commentBlurEnabled"), "Le flou reste offert au commentaire de story.")
@@ -153,7 +153,7 @@ final class StoryComposerFoldTests: XCTestCase {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
-        let views = root.appendingPathComponent("Meeshy/Features/Main/Views")
+        let views = root.appendingPathComponent("Meeshy/Features/Stories/Views")
         let components = root.appendingPathComponent("Meeshy/Features/Main/Components")
 
         let layer = AppSourceGuard.stripComments(try String(
@@ -217,9 +217,12 @@ final class StoryComposerFoldTests: XCTestCase {
         let views = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Views")
-        let content = try AppSourceGuard.unit("Meeshy/Features/Main/Views/StoryViewerView+Content.swift")
-        XCTAssertTrue(content.contains("!composerOwnsDrag"), "Le drag du lecteur doit céder au composeur.")
+            .appendingPathComponent("Meeshy/Features/Stories/Views")
+        let content = try AppSourceGuard.unit("Meeshy/Features/Stories/Views/StoryViewerView+Content.swift")
+        XCTAssertTrue(content.contains("!drag.isClaimedElsewhere"), "Le drag du lecteur doit céder au composeur.")
+        var tracker = StoryReaderDragTracker()
+        tracker.composerOwnsDrag = true
+        XCTAssertTrue(tracker.isClaimedElsewhere, "Le glissé né sur le composeur appartient au composeur.")
         let layer = try String(contentsOf: views.appendingPathComponent("StoryViewerView+CanvasComposerLayer.swift"), encoding: .utf8)
         XCTAssertTrue(layer.contains("StoryComposerGesture.owner("))
         XCTAssertTrue(layer.contains("StoryComposerGesture.folds("))

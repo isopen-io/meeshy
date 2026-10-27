@@ -115,6 +115,23 @@ enum AppSourceGuard {
             .deletingLastPathComponent()   // apps/ios
     }
 
+    /// **Une vue se trouve par son nom, quel que soit son domaine** (#13139).
+    ///
+    /// `Features/Main/Views` se range par domaine (`Features/Stories/Views`,
+    /// `Features/Settings/Views`…). Une garde qui lit une vue par son nom ne
+    /// doit pas rougir parce qu'elle a changé de dossier : ce chemin la cherche
+    /// dans les `Views/` de chaque domaine, et rend celui de `Main` quand elle
+    /// n'existe nulle part — l'erreur « fichier introuvable » reste bruyante.
+    static func featureViewPath(_ relativeToViews: String) -> String {
+        let features = appRoot.appendingPathComponent("Meeshy/Features")
+        let domains = (try? FileManager.default.contentsOfDirectory(atPath: features.path)) ?? []
+        let found = domains.sorted().first { domain in
+            FileManager.default.fileExists(
+                atPath: features.appendingPathComponent("\(domain)/Views/\(relativeToViews)").path)
+        }
+        return "Meeshy/Features/\(found ?? "Main")/Views/\(relativeToViews)"
+    }
+
     /// **Un type découpé garde UNE adresse.**
     ///
     /// `Type.swift` scindé en `Type+Rôle.swift` reste une seule source aux yeux
@@ -149,11 +166,19 @@ enum AppSourceGuard {
 
     /// Les couches nominales de l'écran de conversation vivent dans
     /// `ConversationLayers/` (LOT-10) : elles font partie de l'unité
-    /// `ConversationView`, comme ses extensions.
+    /// `ConversationView`, comme ses extensions. Les collaborateurs de
+    /// `CallManager` vivent dans `CallCollaborators/` (#11522) : les gardes de
+    /// l'appel les balaient avec lui, sans quoi chaque extraction éteindrait en
+    /// silence les gardes négatives de l'unité.
+    private static let layerFolders = [
+        "ConversationView": "ConversationLayers",
+        "CallManager": "CallCollaborators",
+    ]
+
     private static func layerURLs(of base: String, in dossier: URL) -> [URL] {
-        guard base == "ConversationView" else { return [] }
+        guard let folder = layerFolders[base] else { return [] }
         let couches = (try? FileManager.default.contentsOfDirectory(
-            at: dossier.appendingPathComponent("ConversationLayers"), includingPropertiesForKeys: nil)) ?? []
+            at: dossier.appendingPathComponent(folder), includingPropertiesForKeys: nil)) ?? []
         return couches
             .filter { $0.pathExtension == "swift" }
             .sorted { $0.lastPathComponent < $1.lastPathComponent }
@@ -212,14 +237,14 @@ enum AppSourceGuard {
 
     /// L'unité du meuble du composer : le type, ses trois extensions, et les
     /// règles pures qui en sont sorties au #4102.
-    static let composerHostPath = "Meeshy/Features/Main/Composer/MeeshyComposerHost.swift"
+    static let composerHostPath = "Meeshy/Features/Composer/MeeshyComposerHost.swift"
     static let composerHostCompanions = [
-        "Meeshy/Features/Main/Composer/ComposerHostRules.swift",
+        "Meeshy/Features/Composer/ComposerHostRules.swift",
         // Sortie de `ComposerHostRules` quand l'inspecteur a cessé de ne
         // connaître que le texte (#4073). Elle reste DANS l'unité du meuble :
         // une règle qui déménage sans emmener son adresse éteint en silence
         // toutes les gardes négatives qui la balayaient.
-        "Meeshy/Features/Main/Composer/ComposerObjectChips.swift",
+        "Meeshy/Features/Composer/ComposerObjectChips.swift",
         // **Le relevé du rail (#4994), entré dans l'unité au #5007.** Il vivait
         // hors d'elle, et `test_lesBalises_neSontDeriveesQuUneFois` — qui
         // interdit une seconde dérivation des hashtags — ne le balayait donc
@@ -230,7 +255,7 @@ enum AppSourceGuard {
         // > les gardes qui protègent cet hôte. C'est le miroir de « une règle
         // > qui déménage sans emmener son adresse les éteint en silence » :
         // > même angle mort, à la création plutôt qu'au déplacement.
-        "Meeshy/Features/Main/Composer/ComposerRailDoorBadge.swift",
+        "Meeshy/Features/Composer/ComposerRailDoorBadge.swift",
         // **Le retrait d'un média, sorti du meuble au #6577.** La règle pure et
         // le relevé du canvas vivent ici ; le store porte les huit `@State`
         // devenus valeurs, et donc les déclarations que plusieurs gardes du
@@ -238,17 +263,17 @@ enum AppSourceGuard {
         // deux adresses, toutes les gardes NÉGATIVES du meuble cesseraient de
         // balayer le code qui retire — le mode d'oubli que ce fichier nomme
         // trois lignes plus haut, à la création plutôt qu'au déplacement.
-        "Meeshy/Features/Main/Composer/ComposerMediaRetraction.swift",
-        "Meeshy/Features/Main/Composer/ComposerMediaPorterStore.swift",
+        "Meeshy/Features/Composer/ComposerMediaRetraction.swift",
+        "Meeshy/Features/Composer/ComposerMediaPorterStore.swift",
         // **Les poses de la feuille de stickers, sorties du meuble au #9189** :
         // la feuille est devenue UNE pour la conversation et la scène, et ce
         // que la scène fait d'un choix vit dans cette règle. Sans son adresse,
         // les gardes qui lisent « la feuille POSE par le viewmodel » liraient
         // un meuble qui ne pose plus rien lui-même.
-        "Meeshy/Features/Main/Composer/SceneStickerPose.swift",
+        "Meeshy/Features/Composer/SceneStickerPose.swift",
         // Le voile de progression d'export, sorti du meuble au #10988 : il reste
         // dans l'unité pour que les gardes négatives du meuble le balaient.
-        "Meeshy/Features/Main/Composer/ComposerExportProgressVeil.swift",
+        "Meeshy/Features/Composer/ComposerExportProgressVeil.swift",
     ]
 
     static func composerHostURLs() -> [URL] {
@@ -279,14 +304,14 @@ enum AppSourceGuard {
     /// `ComposerDocumentRules`). Même raison que pour le meuble : sans l'unité,
     /// toute garde négative dont l'interdit a suivi les règles passerait au vert
     /// en lisant la moitié qui ne le contient plus.
-    static let composerSurfacePath = "Meeshy/Features/Main/Composer/ComposerDocumentSurface.swift"
+    static let composerSurfacePath = "Meeshy/Features/Composer/ComposerDocumentSurface.swift"
     static let composerSurfaceCompanions = [
-        "Meeshy/Features/Main/Composer/ComposerSurfaceRules.swift",
-        "Meeshy/Features/Main/Composer/ComposerDocumentRules.swift",
+        "Meeshy/Features/Composer/ComposerSurfaceRules.swift",
+        "Meeshy/Features/Composer/ComposerDocumentRules.swift",
         // **La géométrie de la rangée, extraite le 2026-08-31** — même raison
         // que les deux ci-dessous : le nom ne porte pas celui du type hôte,
         // donc le glob ne la voit pas.
-        "Meeshy/Features/Main/Composer/ComposerDocumentToolRow.swift",
+        "Meeshy/Features/Composer/ComposerDocumentToolRow.swift",
         // **Les deux types extraits le 2026-08-30**, quand le fichier a franchi
         // le plafond de 1 100 lignes. Ils ne portent PAS le nom du type, donc le
         // glob `ComposerDocumentSurface+*.swift` ne les voit pas — c'est
@@ -297,7 +322,7 @@ enum AppSourceGuard {
         // en silence. Un découpage n'est pas fini quand le fichier passe sous le
         // budget : il l'est quand les gardes qui le nommaient pointent l'unité
         // (leçon 347).
-        "Meeshy/Features/Main/Composer/DocumentComposerDoor.swift",
+        "Meeshy/Features/Composer/DocumentComposerDoor.swift",
         // `ComposerMediaThumbnail.swift` vivait ici : il est SUPPRIMÉ au #6577,
         // faute d'appelant de production depuis que le rail de scènes a remplacé
         // la bande de médias (#5599). Une adresse qui survit à son fichier ne
@@ -314,7 +339,7 @@ enum AppSourceGuard {
         // cherchaient `enum ComposerDocumentSendPlan` dans une unité qui ne le
         // contenait plus, et rendaient « bloc introuvable — la garde ne
         // mesurerait RIEN ».
-        "Meeshy/Features/Main/Composer/ComposerDocumentSendRules.swift"
+        "Meeshy/Features/Composer/ComposerDocumentSendRules.swift"
     ]
 
     static func composerSurfaceURLs() -> [URL] {
@@ -334,8 +359,8 @@ enum AppSourceGuard {
     /// le préfixe `StoryViewModel+…`, donc le glob ne l'attrape pas, et sans
     /// lui toute garde négative dont l'interdit a suivi les règles pures
     /// passerait au vert en lisant la moitié qui ne les contient plus.
-    static let storyViewModelPath = "Meeshy/Features/Main/ViewModels/StoryViewModel.swift"
-    static let storyViewModelCompanions = ["Meeshy/Features/Main/ViewModels/StoryViewModelRules.swift"]
+    static let storyViewModelPath = "Meeshy/Features/Stories/ViewModels/StoryViewModel.swift"
+    static let storyViewModelCompanions = ["Meeshy/Features/Stories/ViewModels/StoryViewModelRules.swift"]
 
     static func storyViewModelURLs() -> [URL] {
         unitURLs(storyViewModelPath, alsoIncluding: storyViewModelCompanions)
@@ -349,10 +374,10 @@ enum AppSourceGuard {
     /// `CallView+*.swift` (en-tête, états, appel établi, vignette perso,
     /// sous-titres, pilule…), et les vues feuilles de la pilule et des
     /// sous-titres sorties au #8394/#8396, qui ne portent pas le préfixe.
-    static let callViewPath = "Meeshy/Features/Main/Views/CallView.swift"
+    static let callViewPath = "Meeshy/Features/Call/Views/CallView.swift"
     static let callViewCompanions = [
-        "Meeshy/Features/Main/Views/CallDeviceControls.swift",
-        "Meeshy/Features/Main/Views/CallCaptionsViews.swift",
+        "Meeshy/Features/Call/Views/CallDeviceControls.swift",
+        "Meeshy/Features/Call/Views/CallCaptionsViews.swift",
     ]
 
     static func callViewSource() throws -> String {

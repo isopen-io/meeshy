@@ -63,9 +63,9 @@ final class ComposerProgressiveDisclosureGuardTests: XCTestCase {
     /// condition, ce qu'aucun test ne signalerait autrement.
     func test_chaqueChromeOptionnel_resteDerriereSaCondition() throws {
         let surfaces = try AppSourceGuard.unit(
-            "Meeshy/Features/Main/Composer/MeeshyComposerHost.swift")
+            "Meeshy/Features/Composer/MeeshyComposerHost.swift")
         let rail = try AppSourceGuard.unit(
-            "Meeshy/Features/Main/Composer/ComposerTrailingRail.swift")
+            "Meeshy/Features/Composer/ComposerTrailingRail.swift")
 
         // Le `⋯` — le cas du porteur, sur ses DEUX sites de montage.
         XCTAssertEqual(
@@ -117,7 +117,7 @@ final class ComposerProgressiveDisclosureGuardTests: XCTestCase {
     /// prévu.
     func test_laLectureDeSourceVoitBienLeMeuble() throws {
         let surfaces = try AppSourceGuard.unit(
-            "Meeshy/Features/Main/Composer/MeeshyComposerHost.swift")
+            "Meeshy/Features/Composer/MeeshyComposerHost.swift")
         XCTAssertGreaterThan(surfaces.count, 20_000,
                              "l'unité du meuble doit être lue en entier — \(surfaces.count) caractères lus")
         XCTAssertTrue(surfaces.contains("struct MeeshyComposerHost"),

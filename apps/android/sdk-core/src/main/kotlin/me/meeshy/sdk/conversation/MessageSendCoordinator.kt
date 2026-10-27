@@ -12,6 +12,7 @@ import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.ApiMessageSender
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.MessageEffects
+import me.meeshy.sdk.model.SharedPlace
 import me.meeshy.sdk.model.MessageEffectsEncoder
 import me.meeshy.sdk.model.SendMessageRequest
 import me.meeshy.sdk.net.MeeshyApi
@@ -63,6 +64,7 @@ internal class MessageSendCoordinator(
         messageType: String = "text",
         attachmentUploadCmids: List<String> = emptyList(),
         attachments: List<ApiMessageAttachment> = emptyList(),
+        location: SharedPlace? = null,
     ): String {
         val cid = OutboxIds.cid()
         val now = clock.nowMillis()
@@ -89,6 +91,7 @@ internal class MessageSendCoordinator(
             ),
             clientMessageId = cid,
             attachments = attachments,
+            location = location,
             forwardedFromId = forwardedFromId,
             forwardedFromConversationId = forwardedFromConversationId,
             effectFlags = wire.effectFlags,
@@ -112,6 +115,7 @@ internal class MessageSendCoordinator(
             ephemeralDuration = wire.ephemeralDuration,
             expiresAt = wire.expiresAt,
             maxViewOnceCount = wire.maxViewOnceCount,
+            location = location,
         )
         database.withTransaction {
             messageDao.upsertAll(listOf(MessageEntityFactory.local(optimistic, now, LocalSendState.SENDING)))
@@ -176,6 +180,7 @@ internal class MessageSendCoordinator(
                         isBlurred = message.isBlurred,
                         isViewOnce = message.isViewOnce,
                         expiresAt = message.expiresAt,
+                        location = message.location,
                     ),
                 ),
                 cmid = cmid,

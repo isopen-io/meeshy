@@ -91,8 +91,7 @@ struct GRDBCacheL2<Value>: Sendable where Value: CacheIdentifiable & Codable {
     }
 
     func writeToL2(_ items: [Value], for keyStr: String, fetchedAt: Date) throws {
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
+        let encoder = MeeshyCoders.encoder(.persistence)
         // .sortedKeys : l'empreinte contentHash exige des octets DÉTERMINISTES
         // pour un même payload — sans ordre de clés garanti, deux encodes du
         // même item peuvent différer et le skip ne fire jamais (réécriture
@@ -132,8 +131,7 @@ struct GRDBCacheL2<Value>: Sendable where Value: CacheIdentifiable & Codable {
     /// (préservé depuis la métadonnée existante ; repli sur now pour une clé
     /// neuve). Curseur de pagination préservé lui aussi.
     func writeToL2PreservingFreshness(_ items: [Value], for keyStr: String) throws -> Date {
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
+        let encoder = MeeshyCoders.encoder(.persistence)
         // .sortedKeys : l'empreinte contentHash exige des octets DÉTERMINISTES
         // pour un même payload — sans ordre de clés garanti, deux encodes du
         // même item peuvent différer et le skip ne fire jamais (réécriture
@@ -165,8 +163,7 @@ struct GRDBCacheL2<Value>: Sendable where Value: CacheIdentifiable & Codable {
     }
 
     func readFromL2(for keyStr: String) -> (items: [Value], lastFetchedAt: Date)? {
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
+        let decoder = MeeshyCoders.decoder(.persistence)
         let encrypt = encrypted
         let encryption = self.encryption
         let logger = self.logger
@@ -352,8 +349,7 @@ struct GRDBCacheL2<Value>: Sendable where Value: CacheIdentifiable & Codable {
     }
 
     func flushKeyToL2(keyStr: String, items: [Value]) -> Bool {
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
+        let encoder = MeeshyCoders.encoder(.persistence)
         // .sortedKeys : l'empreinte contentHash exige des octets DÉTERMINISTES
         // pour un même payload — sans ordre de clés garanti, deux encodes du
         // même item peuvent différer et le skip ne fire jamais (réécriture
@@ -456,8 +452,7 @@ struct GRDBCacheL2<Value>: Sendable where Value: CacheIdentifiable & Codable {
     /// alors qu'on sait parfaitement à qui ils appartiennent.
     func allValues() async -> [Value] {
         let prefix = namespace.isEmpty ? "" : "\(namespace):"
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
+        let decoder = MeeshyCoders.decoder(.persistence)
         let encrypt = encrypted
         let encryption = self.encryption
         var seenItemIds = Set<String>()

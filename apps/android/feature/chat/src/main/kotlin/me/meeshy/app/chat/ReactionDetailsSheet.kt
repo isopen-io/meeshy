@@ -43,6 +43,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.chat.R
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.component.rememberPresence
 import me.meeshy.ui.component.MeeshySkeletonBox
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.theme.MeeshyRadius
@@ -172,7 +173,13 @@ private fun ReactionReactorRow(reactor: ReactionReactor, accentColor: Color) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
     ) {
-        MeeshyAvatar(name = reactor.displayName ?: reactor.userId, size = 36.dp, containerColor = accentColor, imageUrl = reactor.avatarUrl)
+        MeeshyAvatar(
+            name = reactor.displayName ?: reactor.userId,
+            size = 36.dp,
+            containerColor = accentColor,
+            imageUrl = reactor.avatarUrl,
+            presence = rememberPresence(reactor.userId.takeUnless { reactor.isSelf }),
+        )
         Text(
             text = when {
                 reactor.isSelf -> stringResource(R.string.chat_reactions_you)

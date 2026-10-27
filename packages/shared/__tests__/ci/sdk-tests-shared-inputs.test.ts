@@ -85,6 +85,16 @@ describe('sdk-tests.yml rejoue les miroirs Swift quand le fichier partagé qu’
     expect(inputs.filter((input) => !paths.some((glob) => covers(glob, input)))).toEqual([]);
   });
 
+  it.each(['push', 'pull_request'])('le filtre %s couvre chaque vecteur de packs que le SDK rejoue (lois d’usage des cadres, #10146)', (trigger) => {
+    const paths = pathsOf(trigger);
+    const swift = swiftFiles(SDK_TESTS).map((file) => readFileSync(file, 'utf8')).join('\n');
+    const replayed = readdirSync(join(REPO, 'packages/shared/design/packs'))
+      .filter((name) => name.endsWith('-vectors.json') && swift.includes(`design/packs/${name}`))
+      .map((name) => `packages/shared/design/packs/${name}`);
+    expect(replayed).toContain('packages/shared/design/packs/frame-usage-vectors.json');
+    expect(replayed.filter((input) => !paths.some((glob) => covers(glob, input)))).toEqual([]);
+  });
+
   it('push et pull_request filtrent sur les mêmes chemins', () => {
     expect([...pathsOf('pull_request')].sort()).toEqual([...pathsOf('push')].sort());
   });

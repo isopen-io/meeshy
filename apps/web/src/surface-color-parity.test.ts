@@ -35,6 +35,14 @@ function themeColors(html: string): Readonly<Record<string, string>> {
   return Object.fromEntries(metas.map((meta) => [meta[2] ?? '', (meta[1] ?? '').toLowerCase()]));
 }
 
+function brand(): { readonly dark: string; readonly light: string } {
+  const tokens = read('../../packages/design-tokens/ios.css');
+  const token = (name: string) => tokens.match(new RegExp(`--ios-${name}:\\s*(#[0-9a-fA-F]{3,8})\\s*;`))?.[1]?.toLowerCase();
+  const [dark, light] = [token('indigo-400'), token('indigo-500')];
+  if (dark === undefined || light === undefined) throw new Error('--ios-indigo-400/500 introuvables dans packages/design-tokens/ios.css');
+  return { dark, light };
+}
+
 const surface = surfaces();
 
 describe('theme-color = surface (#10005)', () => {
@@ -71,5 +79,20 @@ describe('theme-color = surface (#10005)', () => {
     const styles = read('android/app/src/main/res/values/styles.xml');
     const theme = styles.match(/<style name="AppTheme\.NoActionBar"[\s\S]*?<\/style>/)?.[0] ?? '';
     expect(theme).toContain('<item name="android:windowBackground">@color/surface</item>');
+  });
+});
+
+describe("l'accent des contrôles natifs de la coque Android = la marque (#13129)", () => {
+  test("le thème de l'activité déclare l'accent, que la WebView prête au calendrier et aux listes déroulantes", () => {
+    const styles = read('android/app/src/main/res/values/styles.xml');
+    const theme = styles.match(/<style name="AppTheme\.NoActionBar"[\s\S]*?<\/style>/)?.[0] ?? '';
+    expect(theme).toContain('<item name="colorAccent">@color/brand_accent</item>');
+  });
+
+  test("l'accent est l'indigo d'iOS, 500 en clair et 400 en sombre", () => {
+    const light = read('android/app/src/main/res/values/colors.xml');
+    const dark = read('android/app/src/main/res/values-night/colors.xml');
+    const accent = (xml: string) => xml.match(/<color name="brand_accent">([^<]+)<\/color>/)?.[1]?.toLowerCase();
+    expect({ light: accent(light), dark: accent(dark) }).toEqual(brand());
   });
 });

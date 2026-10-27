@@ -381,6 +381,18 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
       "aucun contenu servi, et la route ne connaît pas le lecteur dont l'historique serait masqué.",
   },
   /**
+   * #13100 — le rattrapage du scellement au repos lit les IDENTIFIANTS des
+   * messages d'une conversation `server`/`hybrid` pour en sceller les pièces.
+   * Il ne sert rien à aucun lecteur : c'est une migration, pas une surface.
+   */
+  'attachments/atRest/atRestBackfill.ts': {
+    kind: 'exempt',
+    reads: 1,
+    why:
+      "Lit seulement les identifiants des messages d'une conversation chiffrée au repos pour en sceller " +
+      'les pièces sur le disque ; aucun lecteur, aucun contenu servi.',
+  },
+  /**
    * #9646 — relit la protection (cinq colonnes) des messages porteurs de pièces
    * DÉJÀ choisies et filtrées par l'appelant (galerie, détail — plancher et
    * masquage appliqués là), pour signer les adresses de celles qui

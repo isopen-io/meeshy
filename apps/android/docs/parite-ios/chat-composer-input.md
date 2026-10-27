@@ -217,7 +217,7 @@ Transposition Android : CollapsibleHeaderPage => TopAppBar a collapse (LargeTopA
 
 - `packages/MeeshySDK/Sources/MeeshyUI/Packs/PackShopView.swift`
 - `packages/MeeshySDK/Sources/MeeshyUI/Packs/UnifiedShopView.swift`
-- `apps/ios/Meeshy/Features/Main/Views/PacksSettingsView.swift`
+- `apps/ios/Meeshy/Features/Settings/Views/PacksSettingsView.swift`
 
 </details>
 
@@ -458,7 +458,7 @@ Transposition Android : UserDefaults JSON => DataStore Preferences/Proto; Sectio
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Components/LocationSharingSettingsSection.swift`
+- `apps/ios/Meeshy/Features/Settings/Components/LocationSharingSettingsSection.swift`
 - `packages/MeeshySDK/Sources/MeeshyUI/Location/LocationSharingPreferencesStore.swift`
 
 </details>
@@ -891,7 +891,7 @@ Transposition Android : FloatingCallPillView => overlay Compose dans MeeshyApp (
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/FloatingCallPillView.swift`
+- `apps/ios/Meeshy/Features/Call/Views/FloatingCallPillView.swift`
 
 </details>
 
@@ -1210,7 +1210,7 @@ Transposition Android : CollapsibleHeader => LargeTopAppBar a collapse; deep lin
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/LinksHubView.swift`
+- `apps/ios/Meeshy/Features/Links/Views/LinksHubView.swift`
 
 </details>
 

@@ -537,7 +537,8 @@ final class ConversationViewingReporterTests: XCTestCase {
         XCTAssertTrue(storyCovers.contains("StoryReaderCover(") && storyCovers.contains("coversConversation: true"),
                       "le lecteur de stories de la conversation la couvre")
         let reader = AppSourceGuard.stripComments(try String(
-            contentsOf: views.appendingPathComponent("StoryViewerContainer.swift"), encoding: .utf8))
+            contentsOf: views.deletingLastPathComponent().deletingLastPathComponent()
+                .appendingPathComponent("Stories/Views/StoryViewerContainer.swift"), encoding: .utf8))
         XCTAssertTrue(reader.contains("if coversConversation {\n            content.conversationCover(item: $request)"),
                       "le couvercle partagé passe par .conversationCover quand il couvre une conversation")
         // 13 → 12 (#9126, ca74b0279d) : la retouche d'une image en attente et
@@ -558,7 +559,7 @@ final class ConversationViewingReporterTests: XCTestCase {
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent("Meeshy/Features/Main")
-        for row in ["Views/ThemedConversationRow.swift", "Lentille/Row/LentilleConversationRow.swift"] {
+        for row in ["Views/ThemedConversationRow.swift", "../Lens/Row/LentilleConversationRow.swift"] {
             let source = AppSourceGuard.stripComments(try String(contentsOf: main.appendingPathComponent(row), encoding: .utf8))
             XCTAssertFalse(source.contains("moodStatus == nil"), "\(row) retire la présence sous un mood")
         }

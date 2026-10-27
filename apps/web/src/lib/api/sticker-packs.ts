@@ -12,6 +12,7 @@ import {
   type StickerPackSummary,
 } from '@meeshy/shared/types/sticker-pack';
 import * as stickerPacksEndpoints from '@meeshy/shared/api/endpoints/sticker-packs';
+import { isStickerPackAssetRef } from '@meeshy/shared/types/sticker-pack-asset';
 
 import type { ConversationsDeps } from './conversations';
 import type { ApiResult } from './http';
@@ -62,6 +63,7 @@ const WireItem = z.object({
   width: z.number(),
   height: z.number(),
   zones: z.optional(z.array(WireZone)),
+  asset: z.optional(z.unknown()),
 });
 
 const WireSummary = z.object({
@@ -79,6 +81,7 @@ const WireSummary = z.object({
   price: z.optional(z.nullable(z.number())),
   owned: z.optional(z.boolean()),
   names: z.optional(z.record(z.string(), z.unknown())),
+  cover: z.optional(z.unknown()),
 });
 
 const WireDetail = z.extend(WireSummary, {
@@ -88,10 +91,14 @@ const WireDetail = z.extend(WireSummary, {
 
 type WireSummaryData = z.infer<typeof WireSummary>;
 
-/** `price`, `owned` et `names` sont additifs : absents du fil, ils restent absents du résumé (jamais `undefined` posé). */
-const summaryOf = ({ price, owned, names, coverUrl, ...rest }: WireSummaryData): StickerPackSummary => ({
+/**
+ * `price`, `owned`, `names` et `cover` sont additifs : absents du fil, ils restent absents du résumé (jamais `undefined` posé).
+ * `cover` et `asset` (#10188) : une référence malformée tombe seule, et le fichier garde son ancien chemin.
+ */
+const summaryOf = ({ price, owned, names, coverUrl, cover, ...rest }: WireSummaryData): StickerPackSummary => ({
   ...rest,
   coverUrl: coverUrl ?? null,
+  ...(isStickerPackAssetRef(cover) ? { cover } : {}),
   ...(price === undefined ? {} : { price }),
   ...(owned === undefined ? {} : { owned }),
   ...(names === undefined ? {} : { names: decodePackNames(names) }),
@@ -109,7 +116,7 @@ export function decodePackDetail(raw: unknown): StickerPackDetail | null {
   const { reviewNote, items, ...wire } = parsed.data;
   return {
     ...summaryOf(wire),
-    items: (items ?? []).map((item) => ({ ...item, zones: item.zones ?? [] })),
+    items: (items ?? []).map(({ asset, ...item }) => ({ ...item, zones: item.zones ?? [], ...(isStickerPackAssetRef(asset) ? { asset } : {}) })),
     ...(reviewNote !== undefined ? { reviewNote } : {}),
   };
 }

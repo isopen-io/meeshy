@@ -83,7 +83,6 @@ final class FullscreenMediaReplyTests: XCTestCase {
             reportService: MockReportService(),
             messageSocket: messageSocket,
             dependencies: ConversationDependencies(
-                dbPool: pool,
                 persistence: MessagePersistenceActor(dbWriter: pool)
             ),
             networkMonitor: FullscreenReplyNetworkMonitor(isOnline: isOnline),

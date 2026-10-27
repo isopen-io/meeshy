@@ -99,11 +99,23 @@ const OVERRIDES_LAGGING_BEHIND_THEIR_MANIFESTS = ['dompurify', 'uuid'];
 const isRecord = (value) =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
+// bun.lock nest un override `nom@portée` (la syntaxe qui cible une MAJEURE
+// précise, ex. `form-data@2`) sous sa condition d'export par défaut — un
+// objet `{ ".": "<portée>" }` — plutôt que la chaîne nue que porte tout
+// override de nom simple. Un override de nom simple reste une chaîne ; seule
+// cette forme imbriquée, à une seule clé `.`, en est le dépliage.
+const rangeOf = (value) =>
+  typeof value === 'string'
+    ? value
+    : isRecord(value) && typeof value['.'] === 'string' && Object.keys(value).length === 1
+      ? value['.']
+      : undefined;
+
 const rangesAt = (document, field) =>
   Object.fromEntries(
-    Object.entries(isRecord(document?.[field]) ? document[field] : {}).filter(
-      ([, range]) => typeof range === 'string',
-    ),
+    Object.entries(isRecord(document?.[field]) ? document[field] : {})
+      .map(([name, value]) => [name, rangeOf(value)])
+      .filter(([, range]) => range !== undefined),
   );
 
 const JSON_STRING = /("(?:\\.|[^"\\])*")/;

@@ -139,7 +139,7 @@ extension Message {
     /// Le message est-il FLOUTÉ, au niveau du message ou d'une de ses pièces
     /// (#8009) ? Son appui long ne laisse sortir aucun contenu : ni copie, ni
     /// traduction, ni transfert, ni enregistrement, et son aperçu reste flou.
-    nonisolated var holdsBlur: Bool { isBlurred || attachments.contains { $0.isBlurred } }
+    nonisolated var holdsBlur: Bool { isBlurred || attachments.contains { $0.declaresBlur } }
 }
 
 // MARK: - Ce qu'un aperçu dit d'un message HORS de sa conversation (#9622)

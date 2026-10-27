@@ -102,7 +102,15 @@ struct ConversationEngagementBadge: View {
     let conversationId: String
     let seed: ConversationEngagementSnapshot?
     let accentColor: String
-    @ObservedObject var store: ConversationEngagementStore = .shared
+    @ObservedObject var store: ConversationEngagementStore
+
+    init(conversationId: String, seed: ConversationEngagementSnapshot?, accentColor: String,
+         store: ConversationEngagementStore = .shared) {
+        self.conversationId = conversationId
+        self.seed = seed
+        self.accentColor = accentColor
+        self.store = store
+    }
 
     var body: some View {
         Group {
@@ -163,8 +171,16 @@ struct ConversationStreakMark: View, Equatable {
 struct ConversationStreakMarkHost: View {
     let conversationId: String
     let seed: ConversationEngagementSnapshot?
-    var isDark: Bool = false
-    @ObservedObject var store: ConversationEngagementStore = .shared
+    var isDark: Bool
+    @ObservedObject var store: ConversationEngagementStore
+
+    init(conversationId: String, seed: ConversationEngagementSnapshot?, isDark: Bool = false,
+         store: ConversationEngagementStore = .shared) {
+        self.conversationId = conversationId
+        self.seed = seed
+        self.isDark = isDark
+        self.store = store
+    }
 
     var body: some View {
         if let mark = ConversationStreakMark(snapshot: store.displayed(for: conversationId, seed: seed, at: Date()),

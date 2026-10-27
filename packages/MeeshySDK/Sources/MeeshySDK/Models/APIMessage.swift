@@ -128,6 +128,18 @@ public struct APIMessage: Sendable {
     public var trackedLinkMap: [String: String] { (trackingLinks ?? []).trackedLinkMap }
 }
 
+extension APIMessage {
+    /// Le plafond d'une durée d'éphémère servie : un an (#13109). Au-delà, la
+    /// charge est absurde (passerelle compromise, donnée corrompue) ; la ramener
+    /// au plafond garde le message éphémère, et plus court protège davantage.
+    public static let maximumEphemeralDuration = 365 * 24 * 3600
+
+    static func boundedEphemeralDuration(_ served: Int?) -> Int? {
+        guard let served, served > 0 else { return nil }
+        return min(served, maximumEphemeralDuration)
+    }
+}
+
 extension APIMessage: Decodable {
     private enum CodingKeys: String, CodingKey {
         case id, clientMessageId, conversationId, senderId, content, originalLanguage
@@ -210,7 +222,7 @@ extension APIMessage: Decodable {
         isViewOnce = try c.decodeIfPresent(Bool.self, forKey: .isViewOnce)
         isBlurred = try c.decodeIfPresent(Bool.self, forKey: .isBlurred)
         expiresAt = try c.decodeIfPresent(Date.self, forKey: .expiresAt)
-        ephemeralDuration = try c.decodeIfPresent(Int.self, forKey: .ephemeralDuration)
+        ephemeralDuration = Self.boundedEphemeralDuration(try c.decodeIfPresent(Int.self, forKey: .ephemeralDuration))
         consumedByMe = try c.decodeIfPresent(Bool.self, forKey: .consumedByMe)
         location = try c.decodeIfPresent(SharedPlace.self, forKey: .location)
         sticker = Self.servedSticker(in: c)

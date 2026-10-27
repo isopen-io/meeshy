@@ -20,7 +20,7 @@ final class LoginServerPickerTests: XCTestCase {
             .deletingLastPathComponent()   // Views/
             .deletingLastPathComponent()   // Unit/
             .deletingLastPathComponent()   // MeeshyTests/
-            .appendingPathComponent("Meeshy/Features/Main/Views/LoginView.swift")
+            .appendingPathComponent("Meeshy/Features/Auth/Views/LoginView.swift")
         return try String(contentsOf: url, encoding: .utf8)
     }
 

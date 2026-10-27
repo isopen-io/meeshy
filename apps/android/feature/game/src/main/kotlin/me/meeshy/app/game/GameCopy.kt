@@ -5,7 +5,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import java.text.NumberFormat
+import java.util.regex.Matcher
 import java.time.Instant
+import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -39,7 +42,7 @@ object GameCopy {
         GameTextForm.Join -> text.args.joinToString(SEPARATOR) { argument(resources, it, locale) }
         GameTextForm.Plain -> plain(resources, text.key.androidName, text.args, locale)
         GameTextForm.Agreement -> agreed(resources, text, locale)
-        GameTextForm.Plural -> plural(resources, text)
+        GameTextForm.Plural -> plural(resources, text, locale)
     }
 
     private fun plain(resources: Resources, name: String, args: List<GameTextArg>, locale: Locale): String {
@@ -53,18 +56,33 @@ object GameCopy {
         return plain(resources, "${text.key.androidName}_$form", text.args, locale)
     }
 
-    private fun plural(resources: Resources, text: GameText): String {
+    private val countPlaceholder = Regex("%(?:1\\$)?d")
+
+    /** `%d` écrirait « 103571 » : le gabarit pluriel est choisi par la catégorie, le nombre y entre formaté par la locale. */
+    private fun plural(resources: Resources, text: GameText, locale: Locale): String {
         val count = text.args.filterIsInstance<GameTextArg.Count>().firstOrNull()?.value ?: 0
         val id = GameStringIds.plural(text.key.androidName) ?: return ""
-        return resources.getQuantityString(id, count, count)
+        val grouped = Matcher.quoteReplacement(GameNumberFormat.formatCount(count, locale))
+        return resources.getQuantityText(id, count).toString().replace(countPlaceholder, grouped)
     }
 
     private fun argument(resources: Resources, argument: GameTextArg, locale: Locale): String = when (argument) {
         is GameTextArg.Count -> GameNumberFormat.formatCount(argument.value, locale)
         is GameTextArg.Compact -> GameNumberFormat.tightCount(argument.value, locale)
         is GameTextArg.Verbatim -> argument.value
+        is GameTextArg.Day -> day(argument.isoDay, locale)
+        is GameTextArg.Decimal -> decimal(argument.value, locale)
         is GameTextArg.Nested -> resolve(resources, argument.text, locale)
     }
+
+    /** Un jour civil `AAAA-MM-JJ`, écrit par la locale ; une clé illisible se dit telle quelle, jamais une exception. */
+    fun day(isoDay: String, locale: Locale): String = runCatching {
+        DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(locale).format(LocalDate.parse(isoDay))
+    }.getOrDefault(isoDay)
+
+    /** Deux décimales au plus, dans la locale (« 1,25 »). */
+    fun decimal(value: Double, locale: Locale): String =
+        NumberFormat.getNumberInstance(locale).apply { minimumFractionDigits = 0; maximumFractionDigits = 2 }.format(value)
 
     /** « 14:00 – 16:00 », écrit par la locale (12 h ou 24 h de l'appareil), jamais à la main. */
     fun windowRange(startMillis: Long, endMillis: Long, locale: Locale, zone: ZoneId = ZoneId.systemDefault()): String {

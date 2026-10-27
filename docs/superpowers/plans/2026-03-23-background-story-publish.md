@@ -15,7 +15,7 @@
 ### Task 1: Add StoryUploadState model to StoryViewModel
 
 **Files:**
-- Modify: `apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift`
+- Modify: `apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel.swift`
 - Test: `apps/ios/MeeshyTests/Unit/ViewModels/StoryViewModelTests.swift`
 
 - [ ] **Step 1: Add StoryUploadState struct and properties**
@@ -71,7 +71,7 @@ feat(ios): add StoryUploadState model for background publishing
 ### Task 2: Implement publishStoryInBackground, retryUpload, cancelUpload
 
 **Files:**
-- Modify: `apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift`
+- Modify: `apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel.swift`
 - Test: `apps/ios/MeeshyTests/Unit/ViewModels/StoryViewModelTests.swift`
 
 - [ ] **Step 1: Write failing tests**
@@ -390,7 +390,7 @@ No commit yet — continue to Task 4.
 ### Task 4: Wire StoryTrayView to use background publishing
 
 **Files:**
-- Modify: `apps/ios/Meeshy/Features/Main/Views/StoryTrayView.swift`
+- Modify: `apps/ios/Meeshy/Features/Stories/Views/StoryTrayView.swift`
 
 - [ ] **Step 1: Update StoryComposerView instantiation in StoryTrayView**
 
@@ -437,7 +437,7 @@ feat(ios): wire background publishing through StoryComposerView callback
 ### Task 5: Add StoryUploadOverlay to MyStoryButton
 
 **Files:**
-- Modify: `apps/ios/Meeshy/Features/Main/Views/StoryTrayView.swift`
+- Modify: `apps/ios/Meeshy/Features/Stories/Views/StoryTrayView.swift`
 
 - [ ] **Step 1: Create StoryUploadOverlay view**
 
@@ -544,7 +544,7 @@ feat(ios): add upload progress overlay on story tray avatar
 ### Task 6: Update context menu — always show both options
 
 **Files:**
-- Modify: `apps/ios/Meeshy/Features/Main/Views/StoryTrayView.swift`
+- Modify: `apps/ios/Meeshy/Features/Stories/Views/StoryTrayView.swift`
 
 - [ ] **Step 1: Replace ternary context menu with both options**
 

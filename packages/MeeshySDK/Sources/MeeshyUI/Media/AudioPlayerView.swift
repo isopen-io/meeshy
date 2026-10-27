@@ -861,11 +861,11 @@ public struct AudioPlayerView: View {
     /// `rightChipsColumn` (capsules empilées à droite du widget).
     private var timeRow: some View {
         HStack(spacing: 0) {
-            Text(formatMediaDuration(displayedProgress.elapsed))
+            Text(MediaFormat.duration(displayedProgress.elapsed))
                 .font(.system(size: context.isCompact ? 9 : 10, weight: .semibold, design: .monospaced))
                 .foregroundColor(isDark ? .white.opacity(0.5) : .black.opacity(0.4))
             Spacer()
-            Text(formatMediaDuration(estimatedDuration))
+            Text(MediaFormat.duration(estimatedDuration))
                 .font(.system(size: context.isCompact ? 9 : 10, weight: .semibold, design: .monospaced))
                 .foregroundColor(isDark ? .white.opacity(0.3) : .black.opacity(0.25))
         }

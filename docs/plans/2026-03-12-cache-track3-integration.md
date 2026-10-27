@@ -891,7 +891,7 @@ git commit -m "refactor(ios): migrate participant views to ParticipantService ba
 ### Task 6: Migrate UserProfileViewModel
 
 **Files:**
-- Modify: `apps/ios/Meeshy/Features/Main/ViewModels/UserProfileViewModel.swift`
+- Modify: `apps/ios/Meeshy/Features/Profile/ViewModels/UserProfileViewModel.swift`
 - Modify: `apps/ios/Meeshy/Features/Main/Views/EditProfileView.swift`
 
 **Step 1: Replace usage**
@@ -925,7 +925,7 @@ await CacheCoordinator.shared.profiles.invalidate(for: userId)
 **Step 3: Commit**
 
 ```bash
-git add apps/ios/Meeshy/Features/Main/ViewModels/UserProfileViewModel.swift \
+git add apps/ios/Meeshy/Features/Profile/ViewModels/UserProfileViewModel.swift \
        apps/ios/Meeshy/Features/Main/Views/EditProfileView.swift
 git commit -m "refactor(ios): migrate UserProfileViewModel to CacheCoordinator"
 ```
@@ -942,10 +942,10 @@ git commit -m "refactor(ios): migrate UserProfileViewModel to CacheCoordinator"
 - `apps/ios/Meeshy/Features/Main/Views/ConversationView+AttachmentHandlers.swift`
 - `apps/ios/Meeshy/Features/Main/Views/ThemedMessageBubble+Media.swift`
 - `apps/ios/Meeshy/Features/Main/Views/AudioFullscreenView.swift`
-- `apps/ios/Meeshy/Features/Main/Views/DataStorageView.swift`
+- `apps/ios/Meeshy/Features/Settings/Views/DataStorageView.swift`
 - `apps/ios/Meeshy/Features/Main/Views/ConversationMediaGalleryView.swift`
 - `apps/ios/Meeshy/Features/Main/Views/ConversationMediaViews.swift`
-- `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Content.swift`
 
 **Step 1: Determine which DiskCacheStore to use per context**
 

@@ -22,7 +22,7 @@ depuis le MONTAGE des écrans, pas depuis le dossier de la feature. D-7 et D-9
 appelaient cela « écart assumé avec iOS ». Ce n'était pas la cible.
 
 iOS porte trois drapeaux indépendants (`lentille_list`, `reading_modes`,
-`riviere_mode` — `Lentille/Core/LentilleFeatureFlag.swift`) qu'un seul
+`riviere_mode` — `Lens/Core/LentilleFeatureFlag.swift`) qu'un seul
 interrupteur allume, Réglages › Bêta (`meeshy.pref.beta_features_enabled`), et
 qu'une installation neuve a ÉTEINTS. **La v3.1 n'a ni drapeau ni programme
 bêta** : la Lentille EST la liste, le fil S'OUVRE en Focal, l'utilisateur
@@ -270,7 +270,7 @@ son propre suivi (#5718) plutôt que par ce fichier.
    rediscute pas.
 2. Une capture n'est une cible que drapeaux ON, prouvée par `settings.beta`.
    Recapturer seulement si `git log --since=2026-09-08 --
-   apps/ios/Meeshy/Features/Main/{Lentille,Focal,Riviere,Views/Bubble}` montre
+   apps/ios/Meeshy/Features/Main/{Lentille,Focal,Views/Bubble}` et `apps/ios/Meeshy/Features/River` montre
    du mouvement.
 3. Un chiffre vient d'une cote citée (`LentilleMetrics.swift`,
    `FocalMetrics.swift`, `packages/shared/design/lentille-tokens.json`), jamais

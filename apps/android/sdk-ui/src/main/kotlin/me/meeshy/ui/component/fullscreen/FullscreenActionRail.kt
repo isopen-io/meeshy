@@ -106,7 +106,7 @@ public fun FullscreenActionButton(
     outlineTint: Color? = null,
     handlesTapViaGesture: Boolean = false,
 ) {
-    val semanticsModifier = Modifier.semantics {
+    val semanticsModifier = Modifier.semantics(mergeDescendants = true) {
         contentDescription = label
         if (accessibilityValue != null) stateDescription = accessibilityValue
         if (isActive) selected = true

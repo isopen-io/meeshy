@@ -165,7 +165,6 @@ struct MessageCardImagineTests {
         #expect(first != MessageCardMedia.syntheticSamples(seed: "a2", count: 48))
         #expect(first.allSatisfy { $0 > 0 && $0 <= 1 })
         #expect(MessageCardMedia.resample([0, 1, 0, 1], count: 2) == [0.5, 0.5])
-        #expect(MessageCardMedia.clock(65) == "1:05")
     }
 
     // MARK: - Temporel

@@ -480,21 +480,23 @@ final class ShareSheetViewModelTests: XCTestCase {
         XCTAssertEqual(request?.subject.incomingMediaIds, ["f0", "f1"])
     }
 
-    func test_incomingBeyondTwentyFiles_theSendWaits_untilTheLastOnesAreRemoved() {
-        let (sut, _, _) = makeSUT(subject: incoming(22))
+    // Plafonds de D10 révisés par décision du porteur du 2026-10-25 (#12974) :
+    // 100 fichiers et 5 Go, contre 20 et 500 Mo.
+    func test_incomingBeyondAHundredFiles_theSendWaits_untilTheLastOnesAreRemoved() {
+        let (sut, _, _) = makeSUT(subject: incoming(ShareLimits.maxFiles + 2))
         sut.toggle(person("ana"))
         XCTAssertEqual(sut.plan.limits.trimCount, 2)
         XCTAssertFalse(sut.plan.canSend)
 
         sut.trimOverflow()
 
-        XCTAssertEqual(sut.subject.incomingMediaIds, (0..<20).map { "f\($0)" })
+        XCTAssertEqual(sut.subject.incomingMediaIds, (0..<ShareLimits.maxFiles).map { "f\($0)" })
         XCTAssertEqual(sut.plan.limits.trimCount, 0)
         XCTAssertTrue(sut.plan.canSend)
     }
 
-    func test_incomingBeyondFiveHundredMegabytes_trimsUntilItFits() {
-        let (sut, _, _) = makeSUT(subject: incoming(3, bytes: 200 * 1024 * 1024))
+    func test_incomingBeyondFiveGigabytes_trimsUntilItFits() {
+        let (sut, _, _) = makeSUT(subject: incoming(3, bytes: 2 * 1024 * 1024 * 1024))
         XCTAssertEqual(sut.plan.limits.trimCount, 1)
         sut.trimOverflow()
         XCTAssertEqual(sut.subject.incomingMediaIds, ["f0", "f1"])

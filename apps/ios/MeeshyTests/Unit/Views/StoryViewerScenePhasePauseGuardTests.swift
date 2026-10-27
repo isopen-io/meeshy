@@ -36,7 +36,7 @@ final class StoryViewerScenePhasePauseGuardTests: XCTestCase {
     /// fermeture correspondante) pour ne pas matcher `scenePhase`/`isPaused`
     /// ailleurs dans le fichier.
     private func shouldPauseTimerBody() throws -> String {
-        let contentSource = try source("Meeshy/Features/Main/Views/StoryViewerView+PlaybackHold.swift")
+        let contentSource = try source("Meeshy/Features/Stories/Views/StoryViewerView+PlaybackHold.swift")
         guard let declRange = contentSource.range(of: "var playbackCauses: StoryPlaybackCauses {") else {
             XCTFail("playbackCauses introuvable dans StoryViewerView+PlaybackHold.swift")
             return ""
@@ -86,7 +86,7 @@ final class StoryViewerScenePhasePauseGuardTests: XCTestCase {
     /// `apps/ios/CLAUDE.md` § « Piège accès cross-file » (précédent :
     /// `composerFocusTrigger`). Ce test catch l'erreur AVANT le build.
     func test_scenePhase_isNotPrivate() throws {
-        let viewerSource = try source("Meeshy/Features/Main/Views/StoryViewerView.swift")
+        let viewerSource = try source("Meeshy/Features/Stories/Views/StoryViewerView.swift")
         XCTAssertFalse(
             viewerSource.contains("private var scenePhase"),
             "@Environment(\\.scenePhase) ne doit pas être `private` — il est lu " +

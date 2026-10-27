@@ -1,5 +1,6 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="reels_author_profile">Profil de l\'auteur</string>
     <string name="reels_caption_translated">Traduction disponible</string>
     <string name="reels_close">Fermer</string>
     <string name="reels_comments">Commentaires</string>
@@ -13,9 +14,26 @@
     <string name="reels_comments_send">Envoyer</string>
     <string name="reels_comments_title">Commentaires</string>
     <string name="reels_empty">Aucun réel pour le moment</string>
+    <string name="reels_impressions">Impressions</string>
     <string name="reels_like">J\'aime</string>
+    <string name="reels_menu_copy_text">Copier le texte</string>
+    <string name="reels_menu_delete">Supprimer</string>
+    <string name="reels_menu_hint">Ouvre le menu des actions</string>
+    <string name="reels_menu_open">Ouvrir</string>
+    <string name="reels_menu_pin">Épingler</string>
+    <string name="reels_menu_report">Signaler</string>
+    <string name="reels_menu_share">Partager</string>
     <string name="reels_mute">Muet</string>
     <string name="reels_repost">Republier</string>
+    <string name="reels_scrub">Avancer ou reculer</string>
     <string name="reels_share">Partager</string>
+    <string name="reels_toast_delete_failed">Erreur lors de la suppression</string>
+    <string name="reels_toast_deleted">Publication supprimée</string>
+    <string name="reels_toast_pin_failed">Erreur lors de l\'épinglage</string>
+    <string name="reels_toast_pinned">Publication épinglée</string>
+    <string name="reels_toast_report_failed">Erreur lors du signalement</string>
+    <string name="reels_toast_reported">Publication signalée</string>
+    <string name="reels_unlike">Je n\'aime plus</string>
     <string name="reels_unmute">Réactiver le son</string>
+    <string name="reels_views">Vues</string>
 </resources>

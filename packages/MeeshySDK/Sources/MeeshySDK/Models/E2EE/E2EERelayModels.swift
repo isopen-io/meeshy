@@ -36,8 +36,23 @@ public enum E2EEErrorCode {
     public static let directAlreadyEndToEnd = "E2EE_DIRECT_ALREADY_END_TO_END"
     /// Le tête-à-tête n'a pas exactement deux membres inscrits (#12966).
     public static let directNotAPair = "E2EE_DIRECT_NOT_A_PAIR"
+    /// Seul un membre actif de la conversation y envoie un signal chiffré (#13142).
+    public static let signalForbidden = "E2EE_SIGNAL_FORBIDDEN"
+    /// Une route de signal en clair (réaction, frappe, accusé, modification,
+    /// suppression, vue unique, épinglage) refusée dans une conversation e2ee :
+    /// le signal part chiffré par la route unique (#13142).
+    public static let signalChannelRequired = "E2EE_SIGNAL_CHANNEL_REQUIRED"
     public static let identityRevoked = "E2EE_IDENTITY_REVOKED"
     public static let prekeyStockFull = "E2EE_PREKEY_STOCK_FULL"
+    /// La place a changé d'occupant depuis la liste lue (409, #13033) : rien
+    /// n'a été retiré, la liste se relit.
+    public static let deviceChanged = "E2EE_DEVICE_CHANGED"
+    /// La session de l'appareil à retirer n'a pas pu être fermée (503, #13013) :
+    /// rien n'a été retiré, réessayer.
+    public static let deviceSessionNotClosed = "E2EE_DEVICE_SESSION_NOT_CLOSED"
+    /// Cette session a vu son appareil retiré par le propriétaire (403, #13013) :
+    /// elle n'enrôle plus rien, il faut une nouvelle connexion.
+    public static let sessionRetired = "E2EE_SESSION_RETIRED"
 
     /// Les codes que la passerelle sert sur l'ENVOI d'un message : ils se
     /// lisent sur toute adresse, comme le refus d'un clair (#11379).

@@ -69,12 +69,12 @@ L'application iOS Meeshy présente une **enveloppe technique impressionnante** (
 | # | Fichier | Lignes |
 |---|---------|--------|
 | 1 | `apps/ios/Meeshy/Features/Main/ViewModels/ConversationViewModel.swift` | **3 028** |
-| 2 | `apps/ios/Meeshy/Features/Main/Models/StoryModels.swift` | 2 845 |
+| 2 | `apps/ios/Meeshy/Features/Stories/Models/StoryModels.swift` | 2 845 |
 | 3 | `apps/ios/Meeshy/Features/Stories/StoryCanvasUIView.swift` | 2 682 |
 | 4 | `apps/ios/Meeshy/Features/Main/Views/MessageDetailSheet.swift` | **2 565** |
 | 5 | `packages/MeeshySDK/Sources/MeeshySDK/Sockets/MessageSocketManager.swift` | **2 228** |
 | 6 | `apps/ios/Meeshy/Features/Main/Services/CallManager.swift` | **2 108** |
-| 7 | `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift` | 2 000 |
+| 7 | `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Content.swift` | 2 000 |
 | 8 | `packages/MeeshySDK/Sources/MeeshySDK/Persistence/OfflineQueue.swift` | 1 687 |
 | 9 | `apps/ios/Meeshy/Features/Main/ViewModels/ConversationListViewModel.swift` | **1 595** |
 | 10 | `apps/ios/Meeshy/Features/Main/Views/ConversationView.swift` | **1 445** |
@@ -88,7 +88,7 @@ L'application iOS Meeshy présente une **enveloppe technique impressionnante** (
 - `apps/ios/Meeshy/Features/Main/Views/NewConversationView.swift:338, 342, 377` — `APIClient.shared.request(...)` puis `APIClient.shared.post(...)` invoqués directement.
 - `apps/ios/Meeshy/Features/Main/Views/SharePickerView.swift:343, 378` — pagination + POST messages dans la vue.
 - `apps/ios/Meeshy/Features/Main/Views/ThreadView.swift:237` — pagination thread.
-- `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift:958` — `try? await APIClient.shared.post(...)` qui swallow l'erreur.
+- `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Canvas.swift:958` — `try? await APIClient.shared.post(...)` qui swallow l'erreur.
 - `apps/ios/Meeshy/Features/Main/Views/ConversationView.swift:699` — `MessageSocketManager.shared.connect()` dans `.task` (side-effect métier).
 
 **Conséquence** : pas de cache-first, pas d'offline queue, pas de logique de retry → exactement les principes mandatés par `apps/ios/CLAUDE.md` qui sont violés.

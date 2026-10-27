@@ -50,14 +50,37 @@ final class LocationPrecisionTests: XCTestCase {
 
     // MARK: - Autour (~100 m)
 
-    func test_coarsen_around_arrondiATroisDecimalesEtConserveLIdentite() {
+    /// #13320 — une rue, un nom de commerce ou une catégorie situent le point
+    /// à quelques mètres : les garder à ~100 m annulerait l'arrondi.
+    func test_coarsen_around_arrondiATroisDecimalesEtNeLaissePartirNiNomNiRueNiCategorie() {
         let result = LocationPrecision.around.coarsen(makePlace(), names: makeNames())
 
         XCTAssertEqual(result.latitude, 48.858, accuracy: 1e-9)
         XCTAssertEqual(result.longitude, 2.294, accuracy: 1e-9)
-        XCTAssertEqual(result.name, "Tour Eiffel")
-        XCTAssertEqual(result.address, "Champ de Mars, 75007 Paris")
-        XCTAssertEqual(result.category, "landmark")
+        XCTAssertEqual(result.name, "Gros-Caillou")
+        XCTAssertEqual(result.address, "Paris, France")
+        XCTAssertNil(result.category)
+    }
+
+    func test_coarsen_around_sansAucunComposant_neGardeQueLesCoordonnees() {
+        let result = LocationPrecision.around.coarsen(makePlace(), names: .empty)
+
+        XCTAssertEqual(result.latitude, 48.858, accuracy: 1e-9)
+        XCTAssertEqual(result.longitude, 2.294, accuracy: 1e-9)
+        XCTAssertNil(result.name)
+        XCTAssertNil(result.address)
+        XCTAssertNil(result.category)
+    }
+
+    /// Parité avec le témoin Kotlin `LocationPrecisionTest`.
+    func test_coarsen_seulExactTransmetLaRueLeNomEtLaCategorieDuPointChoisi() {
+        let place = makePlace()
+        for precision in LocationPrecision.allCases where precision != .exact {
+            let result = precision.coarsen(place, names: makeNames())
+            XCTAssertNotEqual(result.name, place.name, "\(precision)")
+            XCTAssertNotEqual(result.address, place.address, "\(precision)")
+            XCTAssertNil(result.category, "\(precision)")
+        }
     }
 
     // MARK: - Quartier (~1 km)

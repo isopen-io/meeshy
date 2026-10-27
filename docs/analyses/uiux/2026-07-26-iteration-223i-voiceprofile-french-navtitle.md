@@ -1,7 +1,7 @@
 # iOS UI/UX — Iteration 223i
 
 **Date** : 2026-07-26
-**Surface** : `apps/ios/Meeshy/Features/Main/Views/VoiceProfileManageView.swift`,
+**Surface** : `apps/ios/Meeshy/Features/Settings/Views/VoiceProfileManageView.swift`,
 `VoiceProfileWizardView.swift`, `Meeshy/Localizable.xcstrings`
 **Axes** : localisation / typographie française · intégration plateforme (HIG)
 **Base** : `main` HEAD `ccb4ad974` · Branche `claude/quirky-curie-2pvzn1`

@@ -33,7 +33,7 @@ final class ComposerBackgroundSoundRemovalTests: XCTestCase {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Composer/\(chemin)")
+            .appendingPathComponent("Meeshy/Features/Composer/\(chemin)")
         return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
     }
 
@@ -127,7 +127,7 @@ final class ComposerBackgroundSoundRemovalTests: XCTestCase {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerSoundActionsMenu.swift")
+            .appendingPathComponent("Meeshy/Features/Composer/ComposerSoundActionsMenu.swift")
         let code = try String(contentsOf: url, encoding: .utf8)
         XCTAssertTrue(code.contains("struct ComposerSoundActionsMenu"))
         XCTAssertFalse(code.contains("private struct ComposerSoundActionsMenu"),

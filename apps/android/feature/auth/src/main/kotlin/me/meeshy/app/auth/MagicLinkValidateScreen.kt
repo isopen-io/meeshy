@@ -34,19 +34,34 @@ import me.meeshy.ui.theme.formColumnWidth
 /**
  * Atterrissage du deep link magic link (`meeshy://auth/magic-link?token=` /
  * `https://meeshy.me/auth/magic-link?token=`) : valide le token aupres du
- * gateway et ouvre la session. Trois etats, rien d'autre : validation en cours,
- * connecte (bascule automatique), lien invalide/expire (retour au login).
+ * gateway et ouvre la session. Quatre etats : validation en cours, question
+ * « Se connecter en tant que @x ? » quand l'appareil n'a pas demande le lien
+ * ([LinkSignInConfirmationSheet] ; un refus appelle [onDeclined]), connecte
+ * (bascule automatique), lien invalide/expire (retour au login).
  */
 @Composable
 fun MagicLinkValidateScreen(
     onAuthenticated: () -> Unit,
     onBackToLogin: () -> Unit,
+    onDeclined: () -> Unit = onBackToLogin,
     viewModel: MagicLinkValidateViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
 
     LaunchedEffect(state.isAuthenticated) {
         if (state.isAuthenticated) onAuthenticated()
+    }
+
+    LaunchedEffect(state.declined) {
+        if (state.declined) onDeclined()
+    }
+
+    state.confirmation?.let { question ->
+        LinkSignInConfirmationSheet(
+            content = question,
+            isBusy = state.isConfirming,
+            onAnswer = viewModel::answerConfirmation,
+        )
     }
 
     MeeshyBackground {

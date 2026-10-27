@@ -24,7 +24,8 @@ import type {
   AudioProcessRequest,
   TranscriptionOnlyRequest,
   VoiceAPIRequest,
-  VoiceProfileRequest
+  VoiceProfileRequest,
+  CacheForgetRequest
 } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { guardedInterval, guardedTimeout } from '../../utils/guarded-timer';
@@ -457,6 +458,10 @@ export class ZmqTranslationClient extends EventEmitter {
     });
 
     // Story text object translation events
+    this.messageHandler.on('cacheForgetDone', (event) => {
+      this.emit('cacheForgetDone', event);
+    });
+
     this.messageHandler.on('storyTextObjectTranslationCompleted', (event) => {
       this.emit('storyTextObjectTranslationCompleted', event);
     });
@@ -747,6 +752,11 @@ export class ZmqTranslationClient extends EventEmitter {
     };
 
     return await this.sendTranslationRequest(request);
+  }
+
+  /** #13102 — demande au translator d'oublier des pièces ou des messages effacés. */
+  sendCacheForget(request: CacheForgetRequest): Promise<void> {
+    return this.requestSender.sendCacheForgetRequest(request);
   }
 
   /**

@@ -522,7 +522,7 @@ git commit -m "feat(ios): collapsible header on ConversationListView"
 ### Task 6: Apply CollapsibleHeader to ProfileView
 
 **Files:**
-- Modify: `apps/ios/Meeshy/Features/Main/Views/ProfileView.swift`
+- Modify: `apps/ios/Meeshy/Features/Profile/Views/ProfileView.swift`
 
 - [ ] **Step 1: Replace static header with CollapsibleHeader**
 
@@ -539,7 +539,7 @@ Run: `./apps/ios/meeshy.sh build`
 - [ ] **Step 3: Commit**
 
 ```bash
-git add apps/ios/Meeshy/Features/Main/Views/ProfileView.swift
+git add apps/ios/Meeshy/Features/Profile/Views/ProfileView.swift
 git commit -m "feat(ios): collapsible header on ProfileView"
 ```
 
@@ -548,7 +548,7 @@ git commit -m "feat(ios): collapsible header on ProfileView"
 ### Task 7: Apply CollapsibleHeader to SettingsView
 
 **Files:**
-- Modify: `apps/ios/Meeshy/Features/Main/Views/SettingsView.swift`
+- Modify: `apps/ios/Meeshy/Features/Settings/Views/SettingsView.swift`
 
 - [ ] **Step 1: Replace static header with CollapsibleHeader**
 
@@ -561,7 +561,7 @@ Run: `./apps/ios/meeshy.sh build`
 - [ ] **Step 3: Commit**
 
 ```bash
-git add apps/ios/Meeshy/Features/Main/Views/SettingsView.swift
+git add apps/ios/Meeshy/Features/Settings/Views/SettingsView.swift
 git commit -m "feat(ios): collapsible header on SettingsView"
 ```
 
@@ -592,7 +592,7 @@ git commit -m "feat(ios): collapsible header on CommunityListView"
 ### Task 9: Apply CollapsibleHeader to LinksHubView & NotificationListView
 
 **Files:**
-- Modify: `apps/ios/Meeshy/Features/Main/Views/LinksHubView.swift`
+- Modify: `apps/ios/Meeshy/Features/Links/Views/LinksHubView.swift`
 - Modify: `apps/ios/Meeshy/Features/Main/Views/NotificationListView.swift`
 
 - [ ] **Step 1: Replace static headers with CollapsibleHeader**
@@ -607,7 +607,7 @@ Run: `./apps/ios/meeshy.sh build`
 - [ ] **Step 3: Commit**
 
 ```bash
-git add apps/ios/Meeshy/Features/Main/Views/LinksHubView.swift apps/ios/Meeshy/Features/Main/Views/NotificationListView.swift
+git add apps/ios/Meeshy/Features/Links/Views/LinksHubView.swift apps/ios/Meeshy/Features/Main/Views/NotificationListView.swift
 git commit -m "feat(ios): collapsible header on LinksHubView and NotificationListView"
 ```
 

@@ -10,7 +10,7 @@ import {
 } from '@meeshy/shared/types/api-schemas';
 import type { AuthenticatedRequest, UserIdParams } from './types';
 import { validatePagination } from '../../utils/pagination';
-import { INCLUDE_PARTIES, servirParties } from '../directory/friend-requests-core';
+import { INCLUDE_PARTIES, servirParties, clauseHorsBlocage } from '../directory/friend-requests-core';
 
 /**
  * Bloc `pagination` de la réponse de `GET /users/friend-requests`.
@@ -100,7 +100,8 @@ export async function getFriendRequests(fastify: FastifyInstance) {
           { senderId: userId },
           { receiverId: userId }
         ],
-        ...(status ? { status } : {})
+        ...(status ? { status } : {}),
+        ...(await clauseHorsBlocage(fastify, userId))
       };
 
       const [friendRequests, totalCount] = await Promise.all([

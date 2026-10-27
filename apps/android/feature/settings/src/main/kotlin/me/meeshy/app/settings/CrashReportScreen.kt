@@ -19,7 +19,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Share
@@ -62,6 +61,8 @@ import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 import java.text.DateFormat
 import java.util.Date
+import me.meeshy.ui.component.chrome.leadingNavigationIcon
+import me.meeshy.ui.component.chrome.leadingNavigationLabel
 
 /**
  * Crash-diagnostics viewer (feature-parity §L) — the Android port of the iOS `CrashReportSheet`.
@@ -95,8 +96,8 @@ fun CrashReportScreen(
                     navigationIcon = {
                         IconButton(onClick = onBack) {
                             Icon(
-                                Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = stringResource(R.string.settings_back),
+                                leadingNavigationIcon(),
+                                contentDescription = leadingNavigationLabel(stringResource(R.string.settings_back)),
                             )
                         }
                     },

@@ -35,7 +35,7 @@ import XCTest
 final class CallManagerToggleVideoSurvivalResetSourceTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     /// Bounded from the `ensureCamera` pre-flight check up to the `do {` that
@@ -48,7 +48,7 @@ final class CallManagerToggleVideoSurvivalResetSourceTests: XCTestCase {
             XCTFail("Camera permission pre-flight check not found in toggleVideo — file structure changed"); return
         }
         guard let endRange = source.range(
-            of: "let needsRenegotiation: Bool",
+            of: "return true",
             range: startRange.upperBound..<source.endIndex
         ) else {
             XCTFail("Could not bound the permission pre-flight block"); return

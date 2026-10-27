@@ -2,9 +2,9 @@
 
 **Date** : 2026-07-26
 **Surfaces** :
-- `apps/ios/Meeshy/Features/Main/Views/ShareLinkDetailView.swift`
-- `apps/ios/Meeshy/Features/Main/Views/AffiliateView.swift`
-- `apps/ios/Meeshy/Features/Main/Views/TrackingLinkDetailView.swift`
+- `apps/ios/Meeshy/Features/Links/Views/ShareLinkDetailView.swift`
+- `apps/ios/Meeshy/Features/Links/Views/AffiliateView.swift`
+- `apps/ios/Meeshy/Features/Links/Views/TrackingLinkDetailView.swift`
 
 **Axe** : Intégration native / HIG — `ShareLink` first-party, compatibilité iPad
 & multitâche, affordance morte

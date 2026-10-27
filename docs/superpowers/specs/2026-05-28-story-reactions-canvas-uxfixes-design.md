@@ -77,7 +77,7 @@ Le `DispatchQueue.asyncAfter(0.5) { showEmojiStrip = false }` ligne 1028 est **c
 **À auditer pendant l'impl** : vérifier que `EmojiFullPickerSheet.selectEmoji` (Primitives/EmojiReactionPicker.swift:417) déclenche bien `onReact?(emoji)`. Si le `Button` est intercepté par un gesture parent, corriger côté SDK.
 
 **Fichiers touchés** :
-- `apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift` (triggerStoryReaction)
+- `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift` (triggerStoryReaction)
 - (optionnel) `packages/MeeshySDK/Sources/MeeshyUI/Primitives/EmojiReactionPicker.swift` (selectEmoji si rupture confirmée)
 
 **Tests** :
@@ -119,7 +119,7 @@ Note : la `FeedComment` SDK est consommée par d'autres vues (feed, postes). L'a
 
 **Fichiers touchés** :
 - `packages/MeeshySDK/Sources/MeeshySDK/Models/FeedModels.swift` (`FeedComment` struct + Codable manuel)
-- `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift` (`applyCommentReactionEvent`, `loadStoryCommentsAsync`, `fetchStoryCommentsFromNetwork`, mapping ligne 1398, overload `computeLikedIds(fromCachedComments:)`)
+- `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Content.swift` (`applyCommentReactionEvent`, `loadStoryCommentsAsync`, `fetchStoryCommentsFromNetwork`, mapping ligne 1398, overload `computeLikedIds(fromCachedComments:)`)
 - `apps/ios/MeeshyTests/Features/Stories/StoryViewerCommentReactionTests.swift` (étendre)
 - `packages/MeeshySDK/Tests/MeeshySDKTests/Models/FeedCommentCodableTests.swift` (créer ou étendre)
 

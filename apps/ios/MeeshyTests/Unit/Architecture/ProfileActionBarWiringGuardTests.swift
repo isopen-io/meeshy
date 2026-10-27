@@ -45,7 +45,7 @@ final class ProfileActionBarWiringGuardTests: XCTestCase {
 
     func test_profileList_reelCommentButton_opensCommentsSheet_notTheViewer() throws {
         let code = AppSourceGuard.stripComments(
-            try source("apps/ios/Meeshy/Features/Main/Views/ProfileUserPostsList.swift"))
+            try source("apps/ios/Meeshy/Features/Profile/Views/ProfileUserPostsList.swift"))
 
         XCTAssertFalse(
             code.contains("onComment: { _ in openReel(post) }"),

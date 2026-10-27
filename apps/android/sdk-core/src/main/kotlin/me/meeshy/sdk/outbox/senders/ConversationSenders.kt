@@ -54,6 +54,7 @@ public class UpdateConversationPrefsHandler @Inject constructor(
                 customName = prefs.customName,
                 reaction = prefs.reaction,
                 tags = prefs.tags,
+                appearance = prefs.appearance,
             )
             apiCall { conversationApi.updatePreferences(row.targetId, body) }.toSendResult()
         }

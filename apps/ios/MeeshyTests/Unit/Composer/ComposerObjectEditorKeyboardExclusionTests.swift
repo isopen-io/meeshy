@@ -139,7 +139,7 @@ final class ComposerObjectEditorKeyboardExclusionTests: XCTestCase {
     /// **Une règle juste que personne n'appelle ne corrige rien.** Les deux
     /// sites d'appel sont la seule chose qui relie le prédicat à l'écran.
     func test_lesDeuxSensSontBranches() throws {
-        let code = compact(try source("Meeshy/Features/Main/Composer/ComposerObjectEditorView.swift"))
+        let code = compact(try source("Meeshy/Features/Composer/ComposerObjectEditorView.swift"))
         XCTAssertTrue(code.contains("ComposerObjectEditorRail.dismissesKeyboard(afterTapping:entree)"),
                       "Le rail doit CONSULTER la règle avant d'ouvrir un panneau (#6156).")
         XCTAssertTrue(code.contains(".excludingOptionsWhileTyping("),
@@ -152,10 +152,10 @@ final class ComposerObjectEditorKeyboardExclusionTests: XCTestCase {
     /// demande à `panelState(keyboardRises:…)` ; les gestes explicites
     /// (rail, glissement bas) effacent le souvenir par `panelState(explicitlyCollapsed:)`.
     func test_laReciproqueEstBranchee() throws {
-        let clavier = compact(try source("Meeshy/Features/Main/Composer/ComposerObjectEditorView+Keyboard.swift"))
+        let clavier = compact(try source("Meeshy/Features/Composer/ComposerObjectEditorView+Keyboard.swift"))
         XCTAssertTrue(clavier.contains("ComposerObjectEditorRail.panelState(keyboardRises:"),
                       "Le modifieur doit consulter la règle à la montée ET à la descente (#6132).")
-        let vue = compact(try source("Meeshy/Features/Main/Composer/ComposerObjectEditorView.swift"))
+        let vue = compact(try source("Meeshy/Features/Composer/ComposerObjectEditorView.swift"))
         XCTAssertEqual(vue.components(separatedBy: "ComposerObjectEditorRail.panelState(explicitlyCollapsed:").count - 1, 2,
                        "Le rail ET le glissement bas effacent le souvenir du clavier.")
         XCTAssertTrue(vue.contains("panel:$panel"),
@@ -166,14 +166,14 @@ final class ComposerObjectEditorKeyboardExclusionTests: XCTestCase {
     /// inline dans `yieldScreenToScene` ; l'extraire sans le rebrancher aurait
     /// laissé le rail muet.
     func test_rendreLeClavier_aDeuxAppelants() throws {
-        let code = try source("Meeshy/Features/Main/Composer/ComposerObjectEditorView.swift")
+        let code = try source("Meeshy/Features/Composer/ComposerObjectEditorView.swift")
         XCTAssertEqual(AppSourceGuard.occurrences(ofIdentifier: "yieldKeyboard", in: code), 3,
                        "Sa déclaration et ses DEUX appelants — le rail et le geste qui rend l'écran.")
     }
 
     /// Sans elle, les gardes de source ci-dessus sont vertes par omission.
     func test_lesGardesLisentUneSourceNonVide() throws {
-        XCTAssertGreaterThan(try source("Meeshy/Features/Main/Composer/ComposerObjectEditorView.swift").count,
+        XCTAssertGreaterThan(try source("Meeshy/Features/Composer/ComposerObjectEditorView.swift").count,
                              5000, "La source de l'éditeur est vide ou introuvable.")
     }
 }

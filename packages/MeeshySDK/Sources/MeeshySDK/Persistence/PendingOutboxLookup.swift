@@ -28,8 +28,7 @@ enum PendingOutboxLookup {
             )
             return []
         }
-        let payloadDecoder = JSONDecoder()
-        payloadDecoder.dateDecodingStrategy = .iso8601
+        let payloadDecoder = MeeshyCoders.decoder(.persistence)
         var ids = Set<String>()
         for row in rows {
             guard let decoded = payloadDecoder.decodeOrLog(

@@ -42,6 +42,7 @@
               744,
               912
             ],
+            "path": "M509 540h61v1h12v1h10v1h8v1h8v1h6v1h6v1h6v1h5v1h4v1h5v1h5v1h4v1h4v1h4v1h4v1h3v1h3v1h3v1h4v1h3v1h3v1h3v1h3v1h3v1h3v1h3v1h2v1h3v1h3v1h2v1h3v1h2v1h3v1h2v1h2v1h3v1h2v1h2v1h2v1h3v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h1v1h2v1h2v1h2v1h1v1h2v1h2v1h2v1h1v1h2v1h2v1h1v1h2v1h1v1h2v1h1v1h2v1h1v1h2v1h1v1h2v1h1v1h2v1h1v1h2v1h1v1h1v1h2v1h1v1h1v1h2v1h1v1h1v1h2v1h1v1h1v1h2v1h1v1h1v1h1v1h1v1h2v1h1v1h1v1h1v1h1v1h2v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h2v1h1v2h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v2h1v1h1v1h1v1h1v1h1v1h1v1h1v2h1v1h1v1h1v2h1v1h1v1h1v1h1v2h1v1h1v1h1v2h1v1h1v2h1v1h1v2h1v1h1v1h1v2h1v1h1v2h1v2h1v1h1v2h1v1h1v2h1v2h1v1h1v2h1v2h1v2h1v2h1v2h1v2h1v2h1v2h1v2h1v2h1v2h1v2h1v2h1v3h1v2h1v3h1v2h1v3h1v2h1v3h1v3h1v3h1v3h1v4h1v3h1v3h1v4h1v4h1v5h1v5h1v6h1v7h1v10h1v614h-1v4h-1v2h-1v2h-1v2h-1v2h-1v1h-1v1h-1v1h-1v1h-2v1h-1v1h-1v1h-3v1h-2v1h-5v1h-698v-1h-5v-1h-2v-1h-3v-1h-1v-1h-2v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-2h-1v-2h-1v-2h-1v-2h-1v-4h-1v-615h1v-9h1v-7h1v-6h1v-5h1v-5h1v-4h1v-4h1v-3h1v-4h1v-3h1v-3h1v-3h1v-3h1v-3h1v-2h1v-3h1v-2h1v-3h1v-2h1v-3h1v-2h1v-2h1v-2h1v-2h1v-2h1v-2h1v-2h1v-2h1v-2h1v-2h1v-2h1v-2h1v-2h1v-1h1v-2h1v-2h1v-1h1v-2h1v-1h1v-2h1v-2h1v-1h1v-2h1v-1h1v-1h1v-2h1v-1h1v-2h1v-1h1v-2h1v-1h1v-1h1v-2h1v-1h1v-1h1v-1h1v-2h1v-1h1v-1h1v-2h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-2h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-2h1v-1h2v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h2v-1h1v-1h1v-1h1v-1h1v-1h2v-1h1v-1h1v-1h1v-1h1v-1h2v-1h1v-1h1v-1h2v-1h1v-1h1v-1h1v-1h2v-1h1v-1h1v-1h2v-1h1v-1h2v-1h1v-1h2v-1h1v-1h2v-1h1v-1h1v-1h2v-1h1v-1h2v-1h2v-1h1v-1h2v-1h1v-1h2v-1h2v-1h1v-1h2v-1h2v-1h1v-1h2v-1h2v-1h2v-1h2v-1h1v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h3v-1h2v-1h2v-1h2v-1h3v-1h2v-1h2v-1h3v-1h2v-1h3v-1h2v-1h3v-1h3v-1h2v-1h3v-1h3v-1h3v-1h3v-1h3v-1h3v-1h3v-1h4v-1h3v-1h4v-1h3v-1h4v-1h4v-1h4v-1h4v-1h5v-1h4v-1h5v-1h6v-1h5v-1h6v-1h7v-1h7v-1h8v-1h10v-1h10Z",
             "mask": {
               "src": "dc760f36e419a9d2.webp",
               "bytes": 792,
@@ -185,7 +186,8 @@
                 232
               ],
               "contrast": 2,
-              "sample": "NIVEAU 10 · LUEUR · NIVEAU 10 · LUEUR · "
+              "sample": "NIVEAU 10 · LUEUR · NIVEAU 10 · LUEUR · ",
+              "live": "level-ring"
             },
             "decor.2": {
               "x": 540,
@@ -213,7 +215,8 @@
                 20
               ],
               "contrast": 10.11,
-              "sample": "NIVEAU"
+              "sample": "NIVEAU",
+              "i18n": "game.frame.decor.level"
             },
             "decor.3": {
               "x": 540,
@@ -306,7 +309,8 @@
                 147
               ],
               "contrast": 1.13,
-              "sample": "10"
+              "sample": "10",
+              "live": "level"
             },
             "kicker": {
               "x": 540,
@@ -458,27 +462,157 @@
                 "mee": {
                   "sticker": "mee-montee-au-ciel",
                   "box": [
-                    46,
-                    1250,
-                    300,
-                    300
+                    73,
+                    1469,
+                    246,
+                    246
                   ],
                   "rotate": -6,
                   "flip": false,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0.0105,
+                    0,
+                    0.9789,
+                    1
+                  ]
                 },
                 "meo": {
                   "sticker": "meo-salut",
                   "box": [
-                    734,
-                    1250,
-                    300,
-                    300
+                    743,
+                    1387,
+                    282,
+                    282
                   ],
                   "rotate": 6,
                   "flip": true,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0104,
+                    1,
+                    0.9792
+                  ]
                 }
+              },
+              "perches": {
+                "mee": {
+                  "sticker": "mee-montee-au-ciel",
+                  "box": [
+                    116,
+                    64,
+                    240,
+                    240
+                  ],
+                  "rotate": -10,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0.0105,
+                    0,
+                    0.9789,
+                    1
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-salut",
+                  "box": [
+                    724,
+                    64,
+                    240,
+                    240
+                  ],
+                  "rotate": 10,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0104,
+                    1,
+                    0.9792
+                  ]
+                }
+              },
+              "cotes": {
+                "mee": {
+                  "sticker": "mee-montee-au-ciel",
+                  "box": [
+                    -34.8,
+                    709.2,
+                    229.6,
+                    229.6
+                  ],
+                  "rotate": 18,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0.0105,
+                    0,
+                    0.9789,
+                    1
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-salut",
+                  "box": [
+                    893.6,
+                    833.6,
+                    212.8,
+                    212.8
+                  ],
+                  "rotate": 342,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0104,
+                    1,
+                    0.9792
+                  ]
+                }
+              },
+              "selfie": {
+                "meo": {
+                  "sticker": "meo-selfie",
+                  "box": [
+                    650,
+                    1090,
+                    380,
+                    380
+                  ],
+                  "rotate": 0,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0375,
+                    1,
+                    0.9251
+                  ]
+                }
+              }
+            },
+            "validated": {
+              "pied": {
+                "overlap": 21,
+                "depth": 3,
+                "face": 0
+              },
+              "perches": {
+                "overlap": 0,
+                "depth": 0,
+                "face": 0
+              },
+              "cotes": {
+                "overlap": 72,
+                "depth": 4,
+                "face": 0
+              },
+              "selfie": {
+                "overlap": 11048,
+                "depth": 120,
+                "face": 0
               }
             }
           },
@@ -532,6 +666,7 @@
               744,
               912
             ],
+            "path": "M215 536h650v1h7v1h5v1h3v1h3v1h3v1h2v1h2v1h1v1h2v1h1v1h1v1h2v1h1v1h1v1h1v2h1v1h1v1h1v2h1v1h1v2h1v2h1v3h1v2h1v4h1v5h1v7h1v818h-1v7h-1v5h-1v4h-1v2h-1v3h-1v2h-1v2h-1v1h-1v2h-1v1h-1v1h-1v1h-1v2h-1v1h-2v1h-1v1h-1v1h-1v1h-2v1h-1v1h-2v1h-2v1h-3v1h-3v1h-3v1h-5v1h-8v1h-648v-1h-8v-1h-5v-1h-3v-1h-3v-1h-3v-1h-2v-1h-2v-1h-1v-1h-2v-1h-1v-1h-1v-1h-2v-1h-1v-1h-1v-1h-1v-2h-1v-1h-1v-1h-1v-2h-1v-1h-1v-2h-1v-2h-1v-3h-1v-2h-1v-4h-1v-5h-1v-7h-1v-818h1v-7h1v-5h1v-4h1v-2h1v-3h1v-2h1v-2h1v-1h1v-2h1v-1h1v-1h1v-2h1v-1h1v-1h1v-1h2v-1h1v-1h1v-1h2v-1h1v-1h2v-1h2v-1h3v-1h3v-1h3v-1h5v-1h7Z",
             "mask": {
               "src": "f0b07986faad5f58.webp",
               "bytes": 286,
@@ -675,7 +810,8 @@
                 246
               ],
               "contrast": 2.16,
-              "sample": "NIVEAU 50 · AURORE · NIVEAU 50 · AURORE · "
+              "sample": "NIVEAU 50 · AURORE · NIVEAU 50 · AURORE · ",
+              "live": "level-ring"
             },
             "decor.2": {
               "x": 540,
@@ -703,7 +839,8 @@
                 21
               ],
               "contrast": 9.21,
-              "sample": "NIVEAU"
+              "sample": "NIVEAU",
+              "i18n": "game.frame.decor.level"
             },
             "decor.3": {
               "x": 540,
@@ -796,7 +933,8 @@
                 147
               ],
               "contrast": 1.05,
-              "sample": "50"
+              "sample": "50",
+              "live": "level"
             },
             "kicker": {
               "x": 540,
@@ -916,6 +1054,44 @@
           "birds": {
             "default": "perches",
             "layouts": {
+              "pied": {
+                "mee": {
+                  "sticker": "mee-coucou",
+                  "box": [
+                    64,
+                    1420,
+                    264,
+                    264
+                  ],
+                  "rotate": -6,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0865,
+                    1,
+                    0.827
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-cool",
+                  "box": [
+                    807,
+                    1379,
+                    264,
+                    264
+                  ],
+                  "rotate": 6,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0104,
+                    1,
+                    0.9792
+                  ]
+                }
+              },
               "perches": {
                 "mee": {
                   "sticker": "mee-coucou",
@@ -927,7 +1103,13 @@
                   ],
                   "rotate": -10,
                   "flip": false,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0865,
+                    1,
+                    0.827
+                  ]
                 },
                 "meo": {
                   "sticker": "meo-cool",
@@ -939,8 +1121,94 @@
                   ],
                   "rotate": 10,
                   "flip": true,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0104,
+                    1,
+                    0.9792
+                  ]
                 }
+              },
+              "cotes": {
+                "mee": {
+                  "sticker": "mee-coucou",
+                  "box": [
+                    -26.4,
+                    753.6,
+                    212.8,
+                    212.8
+                  ],
+                  "rotate": 18,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0865,
+                    1,
+                    0.827
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-cool",
+                  "box": [
+                    893.6,
+                    833.6,
+                    212.8,
+                    212.8
+                  ],
+                  "rotate": 342,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0104,
+                    1,
+                    0.9792
+                  ]
+                }
+              },
+              "selfie": {
+                "meo": {
+                  "sticker": "meo-selfie",
+                  "box": [
+                    650,
+                    1090,
+                    380,
+                    380
+                  ],
+                  "rotate": 0,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0375,
+                    1,
+                    0.9251
+                  ]
+                }
+              }
+            },
+            "validated": {
+              "pied": {
+                "overlap": 48,
+                "depth": 3,
+                "face": 0
+              },
+              "perches": {
+                "overlap": 0,
+                "depth": 0,
+                "face": 0
+              },
+              "cotes": {
+                "overlap": 61,
+                "depth": 4,
+                "face": 0
+              },
+              "selfie": {
+                "overlap": 11406,
+                "depth": 121,
+                "face": 0
               }
             }
           },
@@ -994,6 +1262,7 @@
               758,
               918
             ],
+            "path": "M516 529h47v1h12v1h7v1h7v1h7v1h5v1h5v1h4v1h4v1h4v1h4v1h4v1h4v1h3v1h3v1h3v1h3v1h3v1h3v1h2v1h3v1h3v1h2v1h3v1h2v1h3v1h2v1h2v1h2v1h3v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h1v1h2v1h2v1h2v1h1v1h2v1h2v1h2v1h1v1h2v1h1v1h2v1h1v1h2v1h2v1h1v1h2v1h1v1h1v1h2v1h1v1h2v1h1v1h2v1h1v1h1v1h2v1h1v1h1v1h2v1h1v1h1v1h2v1h1v1h1v1h1v1h2v1h1v1h1v1h1v1h1v1h2v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h2v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v2h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v2h1v1h1v1h1v1h1v1h1v1h1v2h1v1h1v1h1v1h1v2h1v1h1v1h1v1h1v2h1v1h1v1h1v2h1v1h1v1h1v2h1v1h1v1h1v2h1v1h1v2h1v1h1v1h1v2h1v1h1v2h1v1h1v2h1v1h1v2h1v1h1v2h1v1h1v2h1v2h1v1h1v2h1v1h1v2h1v2h1v1h1v2h1v2h1v2h1v1h1v2h1v2h1v2h1v1h1v2h1v2h1v2h1v2h1v2h1v2h1v2h1v2h1v2h1v2h1v2h1v2h1v2h1v2h1v3h1v2h1v2h1v2h1v2h1v3h1v2h1v3h1v2h1v3h1v2h1v3h1v2h1v2h1v3h1v3h1v3h1v3h1v3h1v2h1v3h1v3h1v3h1v3h1v4h1v3h1v3h1v4h1v3h1v4h1v4h1v4h1v3h1v4h1v5h1v4h1v5h1v4h1v6h1v5h1v6h1v5h1v7h1v7h1v8h1v10h1v10h1v15h1v62h-1v15h-1v10h-1v10h-1v7h-1v8h-1v6h-1v6h-1v6h-1v5h-1v5h-1v5h-1v4h-1v5h-1v5h-1v4h-1v3h-1v4h-1v4h-1v4h-1v3h-1v4h-1v3h-1v3h-1v3h-1v4h-1v3h-1v3h-1v3h-1v3h-1v2h-1v3h-1v3h-1v3h-1v2h-1v3h-1v2h-1v3h-1v3h-1v2h-1v2h-1v3h-1v2h-1v2h-1v3h-1v2h-1v2h-1v2h-1v3h-1v2h-1v2h-1v2h-1v2h-1v2h-1v2h-1v2h-1v2h-1v2h-1v2h-1v2h-1v2h-1v2h-1v1h-1v2h-1v2h-1v2h-1v2h-1v1h-1v2h-1v2h-1v1h-1v2h-1v2h-1v2h-1v1h-1v2h-1v1h-1v2h-1v1h-1v2h-1v1h-1v2h-1v2h-1v1h-1v2h-1v1h-1v2h-1v1h-1v1h-1v2h-1v1h-1v2h-1v1h-1v1h-1v2h-1v1h-1v2h-1v1h-1v1h-1v2h-1v1h-1v1h-1v1h-1v2h-1v1h-1v1h-1v1h-1v2h-1v1h-1v1h-1v2h-1v1h-1v1h-1v1h-1v1h-1v1h-1v2h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v2h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-2v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-2v1h-1v1h-1v1h-1v1h-1v1h-1v1h-2v1h-1v1h-1v1h-1v1h-2v1h-1v1h-1v1h-2v1h-1v1h-1v1h-2v1h-1v1h-1v1h-2v1h-1v1h-2v1h-1v1h-1v1h-2v1h-1v1h-2v1h-1v1h-2v1h-1v1h-2v1h-1v1h-2v1h-2v1h-1v1h-2v1h-1v1h-2v1h-2v1h-2v1h-1v1h-2v1h-2v1h-2v1h-2v1h-1v1h-2v1h-2v1h-2v1h-2v1h-2v1h-2v1h-2v1h-2v1h-2v1h-3v1h-2v1h-2v1h-2v1h-3v1h-2v1h-3v1h-2v1h-3v1h-2v1h-3v1h-3v1h-3v1h-3v1h-3v1h-3v1h-3v1h-3v1h-4v1h-4v1h-4v1h-4v1h-5v1h-5v1h-5v1h-5v1h-8v1h-7v1h-13v1h-47v-1h-13v-1h-6v-1h-7v-1h-6v-1h-5v-1h-5v-1h-4v-1h-5v-1h-4v-1h-3v-1h-4v-1h-4v-1h-3v-1h-3v-1h-3v-1h-3v-1h-4v-1h-2v-1h-3v-1h-2v-1h-3v-1h-2v-1h-3v-1h-3v-1h-2v-1h-2v-1h-2v-1h-3v-1h-2v-1h-2v-1h-2v-1h-2v-1h-2v-1h-2v-1h-2v-1h-2v-1h-2v-1h-2v-1h-2v-1h-2v-1h-2v-1h-1v-1h-2v-1h-2v-1h-1v-1h-2v-1h-2v-1h-2v-1h-1v-1h-2v-1h-1v-1h-2v-1h-1v-1h-2v-1h-1v-1h-2v-1h-1v-1h-2v-1h-1v-1h-2v-1h-1v-1h-2v-1h-1v-1h-2v-1h-1v-1h-1v-1h-2v-1h-1v-1h-1v-1h-2v-1h-1v-1h-1v-1h-2v-1h-1v-1h-1v-1h-1v-1h-2v-1h-1v-1h-1v-1h-1v-1h-1v-1h-2v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-2v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-2v-1h-1v-2h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-2h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-2h-1v-1h-1v-1h-1v-1h-1v-1h-1v-2h-1v-1h-1v-1h-1v-1h-1v-2h-1v-1h-1v-1h-1v-1h-1v-2h-1v-1h-1v-1h-1v-2h-1v-1h-1v-1h-1v-2h-1v-1h-1v-1h-1v-2h-1v-1h-1v-2h-1v-1h-1v-2h-1v-1h-1v-1h-1v-2h-1v-1h-1v-2h-1v-1h-1v-2h-1v-1h-1v-2h-1v-1h-1v-2h-1v-2h-1v-1h-1v-2h-1v-1h-1v-2h-1v-2h-1v-1h-1v-2h-1v-2h-1v-2h-1v-1h-1v-2h-1v-2h-1v-2h-1v-1h-1v-2h-1v-2h-1v-2h-1v-2h-1v-2h-1v-2h-1v-2h-1v-2h-1v-2h-1v-2h-1v-2h-1v-2h-1v-2h-1v-2h-1v-2h-1v-3h-1v-2h-1v-2h-1v-2h-1v-3h-1v-2h-1v-2h-1v-3h-1v-2h-1v-3h-1v-2h-1v-3h-1v-3h-1v-2h-1v-3h-1v-3h-1v-3h-1v-2h-1v-3h-1v-3h-1v-3h-1v-3h-1v-3h-1v-4h-1v-3h-1v-3h-1v-3h-1v-4h-1v-4h-1v-4h-1v-4h-1v-3h-1v-4h-1v-5h-1v-4h-1v-5h-1v-4h-1v-6h-1v-5h-1v-6h-1v-5h-1v-7h-1v-7h-1v-8h-1v-9h-1v-11h-1v-15h-1v-62h1v-15h1v-11h1v-9h1v-8h1v-7h1v-7h1v-5h1v-6h1v-6h1v-5h1v-4h1v-5h1v-4h1v-5h1v-4h1v-3h1v-4h1v-4h1v-4h1v-3h1v-4h1v-3h1v-3h1v-4h1v-3h1v-3h1v-3h1v-3h1v-2h1v-3h1v-3h1v-3h1v-3h1v-3h1v-2h1v-2h1v-3h1v-2h1v-3h1v-2h1v-3h1v-2h1v-3h1v-2h1v-2h1v-2h1v-2h1v-3h1v-2h1v-2h1v-2h1v-2h1v-2h1v-2h1v-2h1v-2h1v-2h1v-2h1v-2h1v-2h1v-2h1v-2h1v-1h1v-2h1v-2h1v-2h1v-1h1v-2h1v-2h1v-2h1v-1h1v-2h1v-2h1v-1h1v-2h1v-1h1v-2h1v-2h1v-1h1v-2h1v-1h1v-2h1v-1h1v-2h1v-1h1v-2h1v-1h1v-2h1v-1h1v-2h1v-1h1v-1h1v-2h1v-1h1v-1h1v-2h1v-1h1v-1h1v-2h1v-1h1v-1h1v-2h1v-1h1v-1h1v-1h1v-2h1v-1h1v-1h1v-1h1v-2h1v-1h1v-1h1v-1h1v-1h1v-1h1v-2h1v-1h1v-1h1v-1h1v-1h1v-1h1v-2h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h2v-1h1v-1h1v-1h1v-1h1v-1h2v-1h1v-1h1v-1h1v-1h1v-1h1v-1h2v-1h1v-1h1v-1h1v-1h2v-1h1v-1h1v-1h2v-1h1v-1h1v-1h2v-1h1v-1h1v-1h2v-1h1v-1h2v-1h1v-1h2v-1h1v-1h2v-1h1v-1h2v-1h1v-1h2v-1h1v-1h2v-1h1v-1h2v-1h2v-1h1v-1h2v-1h2v-1h1v-1h2v-1h2v-1h2v-1h1v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h3v-1h2v-1h2v-1h2v-1h3v-1h2v-1h3v-1h2v-1h3v-1h3v-1h2v-1h3v-1h3v-1h3v-1h3v-1h3v-1h3v-1h4v-1h4v-1h3v-1h4v-1h5v-1h4v-1h5v-1h5v-1h7v-1h6v-1h8v-1h11Z",
             "mask": {
               "src": "cc9b097df9991586.webp",
               "bytes": 1790,
@@ -1137,7 +1406,8 @@
                 254
               ],
               "contrast": 2.02,
-              "sample": "NIVEAU 90 · GALAXIE · NIVEAU 90 · GALAXIE · "
+              "sample": "NIVEAU 90 · GALAXIE · NIVEAU 90 · GALAXIE · ",
+              "live": "level-ring"
             },
             "decor.2": {
               "x": 540,
@@ -1165,7 +1435,8 @@
                 21
               ],
               "contrast": 7.94,
-              "sample": "NIVEAU"
+              "sample": "NIVEAU",
+              "i18n": "game.frame.decor.level"
             },
             "decor.3": {
               "x": 540,
@@ -1258,7 +1529,8 @@
                 147
               ],
               "contrast": 1.02,
-              "sample": "90"
+              "sample": "90",
+              "live": "level"
             },
             "kicker": {
               "x": 540,
@@ -1406,6 +1678,140 @@
           "birds": {
             "default": "libre",
             "layouts": {
+              "pied": {
+                "mee": {
+                  "sticker": "mee-wow",
+                  "box": [
+                    6,
+                    1290,
+                    300,
+                    300
+                  ],
+                  "rotate": -6,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0564,
+                    1,
+                    0.8872
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-bravo",
+                  "box": [
+                    751,
+                    1267,
+                    300,
+                    300
+                  ],
+                  "rotate": 6,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0.0325,
+                    0,
+                    0.9349,
+                    1
+                  ]
+                }
+              },
+              "perches": {
+                "mee": {
+                  "sticker": "mee-wow",
+                  "box": [
+                    116,
+                    64,
+                    240,
+                    240
+                  ],
+                  "rotate": -10,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0564,
+                    1,
+                    0.8872
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-bravo",
+                  "box": [
+                    724,
+                    64,
+                    240,
+                    240
+                  ],
+                  "rotate": 10,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0.0325,
+                    0,
+                    0.9349,
+                    1
+                  ]
+                }
+              },
+              "cotes": {
+                "mee": {
+                  "sticker": "mee-wow",
+                  "box": [
+                    -34.8,
+                    745.2,
+                    229.6,
+                    229.6
+                  ],
+                  "rotate": 18,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0564,
+                    1,
+                    0.8872
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-bravo",
+                  "box": [
+                    885.2,
+                    785.2,
+                    229.6,
+                    229.6
+                  ],
+                  "rotate": 342,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0.0325,
+                    0,
+                    0.9349,
+                    1
+                  ]
+                }
+              },
+              "duo": {
+                "pair": {
+                  "sticker": "duo-coucou",
+                  "box": [
+                    668,
+                    1212,
+                    376,
+                    376
+                  ],
+                  "rotate": 0,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.14,
+                    1,
+                    0.72
+                  ]
+                }
+              },
               "libre": {
                 "mee": {
                   "sticker": "mee-wow",
@@ -1417,20 +1823,84 @@
                   ],
                   "rotate": -8,
                   "flip": false,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0564,
+                    1,
+                    0.8872
+                  ]
                 },
                 "meo": {
                   "sticker": "meo-bravo",
                   "box": [
-                    784,
-                    1224,
+                    789.6,
+                    1229.6,
                     256,
                     256
                   ],
                   "rotate": 6,
                   "flip": true,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0.0325,
+                    0,
+                    0.9349,
+                    1
+                  ]
                 }
+              },
+              "selfie": {
+                "meo": {
+                  "sticker": "meo-selfie",
+                  "box": [
+                    634,
+                    1090,
+                    380,
+                    380
+                  ],
+                  "rotate": 0,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0375,
+                    1,
+                    0.9251
+                  ]
+                }
+              }
+            },
+            "validated": {
+              "pied": {
+                "overlap": 42,
+                "depth": 5,
+                "face": 0
+              },
+              "perches": {
+                "overlap": 0,
+                "depth": 0,
+                "face": 0
+              },
+              "cotes": {
+                "overlap": 75,
+                "depth": 5,
+                "face": 0
+              },
+              "duo": {
+                "overlap": 41,
+                "depth": 4,
+                "face": 0
+              },
+              "libre": {
+                "overlap": 35,
+                "depth": 5,
+                "face": 0
+              },
+              "selfie": {
+                "overlap": 6861,
+                "depth": 123,
+                "face": 0
               }
             }
           },
@@ -1484,6 +1954,7 @@
               734,
               938
             ],
+            "path": "M539 513h2v1h1v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h3v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h3v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h3v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h3v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h1v1h2v1h2v1h2v1h2v1h2v1h1v1h2v1h2v1h2v1h2v1h1v1h2v1h2v1h2v1h1v1h2v1h2v1h1v1h2v1h2v1h2v1h1v1h2v1h2v1h1v1h2v1h2v1h1v1h2v1h2v1h1v1h2v1h1v1h2v1h1v1h2v1h1v1h2v1h1v1h2v1h1v1h2v1h1v1h2v1h1v1h2v1h1v1h2v1h1v1h2v1h1v1h2v1h1v1h1v1h2v1h1v1h1v1h2v1h1v1h2v1h1v1h1v1h2v1h1v1h1v1h1v1h2v1h1v1h1v1h1v1h2v1h1v1h1v1h1v1h2v1h1v1h1v1h1v1h1v1h1v1h2v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h2v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v2h1v1h1v1h1v1h1v1h1v1h1v2h1v1h1v1h1v1h1v1h1v1h1v2h1v1h1v1h1v2h1v1h1v1h1v2h1v1h1v1h1v2h1v1h1v2h1v1h1v2h1v1h1v2h1v2h1v1h1v2h1v2h1v1h1v2h1v2h1v2h1v2h1v2h1v2h1v2h1v2h1v2h1v2h1v3h1v3h1v2h1v3h1v3h1v3h1v4h1v3h1v5h1v4h1v6h1v8h1v617h-1v5h-1v2h-1v2h-1v2h-1v1h-1v2h-1v1h-1v1h-1v1h-2v1h-1v1h-3v1h-2v1h-5v1h-690v-1h-5v-1h-3v-1h-2v-1h-1v-1h-2v-1h-1v-1h-1v-1h-1v-1h-1v-2h-1v-1h-1v-3h-1v-2h-1v-5h-1v-617h1v-8h1v-5h1v-5h1v-5h1v-3h1v-4h1v-3h1v-3h1v-3h1v-2h1v-3h1v-3h1v-2h1v-2h1v-2h1v-2h1v-2h1v-2h1v-2h1v-2h1v-2h1v-2h1v-1h1v-2h1v-2h1v-1h1v-2h1v-2h1v-1h1v-2h1v-1h1v-2h1v-1h1v-2h1v-1h1v-1h1v-2h1v-1h1v-1h1v-2h1v-1h1v-1h1v-2h1v-1h1v-1h1v-1h1v-1h1v-1h1v-2h1v-1h1v-1h1v-1h1v-1h1v-1h1v-2h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h2v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h2v-1h1v-1h1v-1h1v-1h1v-1h1v-1h2v-1h1v-1h1v-1h1v-1h2v-1h1v-1h1v-1h1v-1h2v-1h1v-1h1v-1h2v-1h1v-1h1v-1h2v-1h1v-1h1v-1h2v-1h1v-1h1v-1h2v-1h1v-1h2v-1h1v-1h1v-1h2v-1h1v-1h2v-1h1v-1h2v-1h1v-1h2v-1h1v-1h2v-1h1v-1h2v-1h1v-1h2v-1h1v-1h2v-1h2v-1h1v-1h2v-1h1v-1h2v-1h2v-1h1v-1h2v-1h1v-1h2v-1h2v-1h1v-1h2v-1h2v-1h2v-1h1v-1h2v-1h2v-1h1v-1h2v-1h2v-1h2v-1h2v-1h1v-1h2v-1h2v-1h2v-1h2v-1h1v-1h2v-1h2v-1h2v-1h2v-1h2v-1h1v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h3v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h3v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h3v-1h2v-1h2v-1h2v-1h2v-1h2v-1h3v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h1v-1h2Z",
             "mask": {
               "src": "bd1630cf3463e9db.webp",
               "bytes": 1000,
@@ -1627,7 +2098,8 @@
                 254
               ],
               "contrast": 2.08,
-              "sample": "NIVEAU 101 · NÉBULEUSE · NIVEAU 101 · NÉBULEUSE · "
+              "sample": "NIVEAU 101 · NÉBULEUSE · NIVEAU 101 · NÉBULEUSE · ",
+              "live": "level-ring"
             },
             "decor.2": {
               "x": 540,
@@ -1655,7 +2127,8 @@
                 21
               ],
               "contrast": 4.49,
-              "sample": "NIVEAU"
+              "sample": "NIVEAU",
+              "i18n": "game.frame.decor.level"
             },
             "decor.3": {
               "x": 540,
@@ -1748,7 +2221,8 @@
                 119
               ],
               "contrast": 1.09,
-              "sample": "101"
+              "sample": "101",
+              "live": "level"
             },
             "kicker": {
               "x": 540,
@@ -1907,7 +2381,13 @@
                   ],
                   "rotate": -6,
                   "flip": false,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0789,
+                    1,
+                    0.8421
+                  ]
                 },
                 "meo": {
                   "sticker": "meo-love",
@@ -1919,8 +2399,21 @@
                   ],
                   "rotate": 6,
                   "flip": true,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0192,
+                    1,
+                    0.9617
+                  ]
                 }
+              }
+            },
+            "validated": {
+              "ruban": {
+                "overlap": 0,
+                "depth": 0,
+                "face": 0
               }
             }
           },
@@ -1974,6 +2467,7 @@
               750,
               902
             ],
+            "path": "M217 545h646v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v798h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-646v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-798h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1ZM905 796v1h-2v1h-1v5h1v1h1v1h5v-1h1v-6h-1v-1h-2v-1Z",
             "mask": {
               "src": "ab3b600e46c0784e.webp",
               "bytes": 446,
@@ -2621,7 +3115,8 @@
                 254
               ],
               "contrast": 4.63,
-              "sample": "NIVEAU 400 · SUPERNOVA · NIVEAU 400 · SUPERNOVA · "
+              "sample": "NIVEAU 400 · SUPERNOVA · NIVEAU 400 · SUPERNOVA · ",
+              "live": "level-ring"
             },
             "decor.16": {
               "x": 540,
@@ -2649,7 +3144,8 @@
                 21
               ],
               "contrast": 4.46,
-              "sample": "NIVEAU"
+              "sample": "NIVEAU",
+              "i18n": "game.frame.decor.level"
             },
             "decor.17": {
               "x": 540,
@@ -2738,7 +3234,8 @@
                 119
               ],
               "contrast": 1.8,
-              "sample": "400"
+              "sample": "400",
+              "live": "level"
             },
             "kicker": {
               "x": 540,
@@ -2856,8 +3353,122 @@
             }
           },
           "birds": {
-            "default": "selfie",
+            "default": "pied",
             "layouts": {
+              "pied": {
+                "mee": {
+                  "sticker": "mee-coucou",
+                  "box": [
+                    12,
+                    1399,
+                    246,
+                    246
+                  ],
+                  "rotate": -6,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0865,
+                    1,
+                    0.827
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-feu-artifice",
+                  "box": [
+                    822,
+                    1408,
+                    264,
+                    264
+                  ],
+                  "rotate": 6,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0.0567,
+                    0,
+                    0.8867,
+                    1
+                  ]
+                }
+              },
+              "perches": {
+                "mee": {
+                  "sticker": "mee-coucou",
+                  "box": [
+                    116,
+                    64,
+                    240,
+                    240
+                  ],
+                  "rotate": -10,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0865,
+                    1,
+                    0.827
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-feu-artifice",
+                  "box": [
+                    724,
+                    64,
+                    240,
+                    240
+                  ],
+                  "rotate": 10,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0.0567,
+                    0,
+                    0.8867,
+                    1
+                  ]
+                }
+              },
+              "cotes": {
+                "mee": {
+                  "sticker": "mee-coucou",
+                  "box": [
+                    -26.4,
+                    753.6,
+                    212.8,
+                    212.8
+                  ],
+                  "rotate": 18,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0865,
+                    1,
+                    0.827
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-feu-artifice",
+                  "box": [
+                    897.6,
+                    833.6,
+                    212.8,
+                    212.8
+                  ],
+                  "rotate": 342,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0.0567,
+                    0,
+                    0.8867,
+                    1
+                  ]
+                }
+              },
               "selfie": {
                 "meo": {
                   "sticker": "meo-feu-artifice",
@@ -2869,8 +3480,36 @@
                   ],
                   "rotate": 0,
                   "flip": true,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0.0567,
+                    0,
+                    0.8867,
+                    1
+                  ]
                 }
+              }
+            },
+            "validated": {
+              "pied": {
+                "overlap": 35,
+                "depth": 5,
+                "face": 0
+              },
+              "perches": {
+                "overlap": 0,
+                "depth": 0,
+                "face": 0
+              },
+              "cotes": {
+                "overlap": 76,
+                "depth": 4,
+                "face": 0
+              },
+              "selfie": {
+                "overlap": 6755,
+                "depth": 85,
+                "face": 0
               }
             }
           },
@@ -2924,6 +3563,7 @@
               736,
               876
             ],
+            "path": "M524 576h36v1h17v1h11v1h9v1h7v1h8v1h5v1h6v1h5v1h5v1h5v1h5v1h4v1h4v1h4v1h4v1h3v1h4v1h3v1h4v1h3v1h3v1h3v1h3v1h3v1h3v1h3v1h3v1h2v1h3v1h3v1h2v1h3v1h2v1h2v1h3v1h2v1h3v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h1v1h2v1h2v1h2v1h2v1h1v1h2v1h1v1h2v1h2v1h1v1h2v1h1v1h2v1h1v1h2v1h1v1h2v1h1v1h2v1h1v1h2v1h1v1h1v1h2v1h1v1h1v1h2v1h1v1h2v1h1v1h1v1h2v1h1v1h1v1h1v1h1v1h2v1h1v1h1v1h1v1h1v1h2v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h2v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v2h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v2h1v1h1v1h1v1h1v1h1v2h1v1h1v1h1v1h1v2h1v1h1v1h1v1h1v2h1v1h1v2h1v1h1v1h1v2h1v1h1v2h1v1h1v2h1v1h1v2h1v2h1v1h1v2h1v2h1v1h1v2h1v2h1v2h1v1h1v2h1v2h1v2h1v2h1v2h1v2h1v2h1v2h1v3h1v2h1v2h1v3h1v2h1v3h1v2h1v3h1v3h1v3h1v3h1v3h1v4h1v4h1v3h1v5h1v5h1v5h1v6h1v8h1v12h1v575h-1v6h-1v3h-1v2h-1v2h-1v2h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-2v1h-2v1h-2v1h-3v1h-6v1h-229v-2h-1v-4h-1v-2h-1v-2h-1v-1h-1v-2h-1v-1h-1v-1h-1v-1h-2v-1h-1v-1h-2v-1h-2v-1h-3v-1h-190v1h-3v1h-2v1h-2v1h-1v1h-2v1h-1v1h-1v1h-1v2h-1v1h-1v2h-1v2h-1v3h-1v3h-229v-1h-6v-1h-3v-1h-2v-1h-2v-1h-2v-1h-1v-1h-1v-1h-2v-2h-1v-1h-1v-1h-1v-3h-1v-2h-1v-3h-1v-5h-1v-577h1v-11h1v-8h1v-6h1v-5h1v-5h1v-5h1v-3h1v-4h1v-4h1v-3h1v-3h1v-3h1v-3h1v-3h1v-2h1v-3h1v-2h1v-3h1v-2h1v-2h1v-3h1v-2h1v-2h1v-2h1v-2h1v-2h1v-2h1v-2h1v-2h1v-1h1v-2h1v-2h1v-2h1v-2h1v-1h1v-2h1v-1h1v-2h1v-2h1v-1h1v-2h1v-1h1v-2h1v-1h1v-2h1v-1h1v-1h1v-2h1v-1h1v-2h1v-1h1v-1h1v-1h1v-2h1v-1h1v-1h1v-1h1v-2h1v-1h1v-1h1v-1h1v-1h1v-2h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-2h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h2v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h2v-1h1v-1h1v-1h1v-1h1v-1h2v-1h1v-1h1v-1h1v-1h1v-1h2v-1h1v-1h1v-1h2v-1h1v-1h1v-1h2v-1h1v-1h1v-1h2v-1h1v-1h2v-1h1v-1h2v-1h1v-1h2v-1h1v-1h1v-1h2v-1h1v-1h2v-1h2v-1h1v-1h2v-1h2v-1h1v-1h2v-1h2v-1h1v-1h2v-1h2v-1h2v-1h1v-1h2v-1h2v-1h2v-1h2v-1h1v-1h3v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h3v-1h2v-1h2v-1h3v-1h2v-1h2v-1h3v-1h2v-1h3v-1h3v-1h2v-1h3v-1h3v-1h3v-1h3v-1h3v-1h3v-1h3v-1h3v-1h4v-1h3v-1h4v-1h3v-1h4v-1h4v-1h4v-1h4v-1h5v-1h5v-1h4v-1h6v-1h6v-1h5v-1h8v-1h7v-1h9v-1h10v-1h22Z",
             "mask": {
               "src": "166e61bee45b384d.webp",
               "bytes": 868,
@@ -3080,7 +3720,8 @@
                 234
               ],
               "contrast": 1.24,
-              "sample": "NIVEAU 1000 · SINGULARITÉ · NIVEAU 1000 · SINGULARITÉ · "
+              "sample": "NIVEAU 1000 · SINGULARITÉ · NIVEAU 1000 · SINGULARITÉ · ",
+              "live": "level-ring"
             },
             "decor.2": {
               "x": 540,
@@ -3108,7 +3749,8 @@
                 21
               ],
               "contrast": 9.46,
-              "sample": "NIVEAU"
+              "sample": "NIVEAU",
+              "i18n": "game.frame.decor.level"
             },
             "decor.3": {
               "x": 540,
@@ -3209,7 +3851,8 @@
                 93
               ],
               "contrast": 6.43,
-              "sample": "1000"
+              "sample": "1000",
+              "live": "level"
             },
             "decor.4": {
               "x": 92,
@@ -3545,7 +4188,8 @@
                 26
               ],
               "contrast": 16.02,
-              "sample": "NOUS"
+              "sample": "NOUS",
+              "i18n": "game.frame.decor.us"
             },
             "kicker": {
               "x": 540,
@@ -3771,7 +4415,8 @@
                 20
               ],
               "contrast": 15.36,
-              "sample": "NOUS"
+              "sample": "NOUS",
+              "i18n": "game.frame.decor.us"
             },
             "decor.19": {
               "x": 140,
@@ -3799,7 +4444,8 @@
                 18
               ],
               "contrast": 7.7,
-              "sample": "L'INFINIMENT GRAND"
+              "sample": "L'INFINIMENT GRAND",
+              "i18n": "game.frame.decor.infinitely-large"
             },
             "decor.20": {
               "x": 940,
@@ -3827,25 +4473,193 @@
                 18
               ],
               "contrast": 7.59,
-              "sample": "L'INFINIMENT PETIT"
+              "sample": "L'INFINIMENT PETIT",
+              "i18n": "game.frame.decor.infinitely-small"
             }
           },
           "birds": {
             "default": "duo",
             "layouts": {
+              "pied": {
+                "mee": {
+                  "sticker": "mee-coucou",
+                  "box": [
+                    5,
+                    1386,
+                    264,
+                    264
+                  ],
+                  "rotate": -6,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0865,
+                    1,
+                    0.827
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-salut",
+                  "box": [
+                    793,
+                    1359,
+                    282,
+                    282
+                  ],
+                  "rotate": 6,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0104,
+                    1,
+                    0.9792
+                  ]
+                }
+              },
+              "perches": {
+                "mee": {
+                  "sticker": "mee-coucou",
+                  "box": [
+                    116,
+                    64,
+                    240,
+                    240
+                  ],
+                  "rotate": -10,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0865,
+                    1,
+                    0.827
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-salut",
+                  "box": [
+                    724,
+                    64,
+                    240,
+                    240
+                  ],
+                  "rotate": 10,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0104,
+                    1,
+                    0.9792
+                  ]
+                }
+              },
+              "cotes": {
+                "mee": {
+                  "sticker": "mee-coucou",
+                  "box": [
+                    -41.2,
+                    732.8,
+                    246.4,
+                    246.4
+                  ],
+                  "rotate": 18,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0865,
+                    1,
+                    0.827
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-salut",
+                  "box": [
+                    885.2,
+                    825.2,
+                    229.6,
+                    229.6
+                  ],
+                  "rotate": 342,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0104,
+                    1,
+                    0.9792
+                  ]
+                }
+              },
               "duo": {
                 "pair": {
                   "sticker": "duo-meo-trinquer",
                   "box": [
-                    124,
-                    1224,
-                    352,
-                    352
+                    155.68,
+                    1355.68,
+                    288.64,
+                    288.64
                   ],
                   "rotate": -4,
                   "flip": false,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.2367,
+                    1,
+                    0.5267
+                  ]
                 }
+              },
+              "selfie": {
+                "meo": {
+                  "sticker": "meo-selfie",
+                  "box": [
+                    650,
+                    1090,
+                    380,
+                    380
+                  ],
+                  "rotate": 0,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0375,
+                    1,
+                    0.9251
+                  ]
+                }
+              }
+            },
+            "validated": {
+              "pied": {
+                "overlap": 55,
+                "depth": 4,
+                "face": 0
+              },
+              "perches": {
+                "overlap": 0,
+                "depth": 0,
+                "face": 0
+              },
+              "cotes": {
+                "overlap": 54,
+                "depth": 5,
+                "face": 0
+              },
+              "duo": {
+                "overlap": 71,
+                "depth": 4,
+                "face": 0
+              },
+              "selfie": {
+                "overlap": 10240,
+                "depth": 114,
+                "face": 0
               }
             }
           },
@@ -3897,6 +4711,7 @@
               744,
               880
             ],
+            "path": "M211 568h658v1h7v1h4v1h3v1h3v1h2v1h2v1h2v1h2v1h1v1h1v1h1v1h2v1h1v1h1v2h1v1h1v1h1v2h1v2h1v2h1v2h1v3h1v3h1v4h1v7h1v793h-1v8h-1v4h-1v4h-1v2h-1v2h-1v2h-1v2h-1v2h-1v1h-1v1h-1v1h-1v2h-1v1h-2v1h-1v1h-1v1h-1v1h-2v1h-2v1h-2v1h-2v1h-3v1h-3v1h-4v1h-8v1h-657v-1h-7v-1h-4v-1h-3v-1h-3v-1h-2v-1h-2v-1h-2v-1h-2v-1h-1v-1h-1v-1h-2v-1h-1v-1h-1v-1h-1v-2h-1v-1h-1v-1h-1v-2h-1v-2h-1v-2h-1v-2h-1v-2h-1v-4h-1v-4h-1v-7h-1v-794h1v-7h1v-4h1v-4h1v-2h1v-2h1v-2h1v-2h1v-2h1v-1h1v-1h1v-2h1v-1h1v-1h1v-1h2v-1h1v-1h1v-1h2v-1h2v-1h2v-1h2v-1h3v-1h3v-1h4v-1h7Z",
             "mask": {
               "src": "cd2eb8b15969f103.webp",
               "bytes": 270,
@@ -4103,7 +4918,8 @@
                 24
               ],
               "contrast": 10.72,
-              "sample": "L"
+              "sample": "L",
+              "i18n": "game.frame.decor.weekday-mon"
             },
             "decor.4": {
               "x": 404,
@@ -4131,7 +4947,8 @@
                 24
               ],
               "contrast": 9.84,
-              "sample": "M"
+              "sample": "M",
+              "i18n": "game.frame.decor.weekday-tue"
             },
             "decor.5": {
               "x": 472,
@@ -4159,7 +4976,8 @@
                 24
               ],
               "contrast": 9.23,
-              "sample": "M"
+              "sample": "M",
+              "i18n": "game.frame.decor.weekday-wed"
             },
             "decor.6": {
               "x": 540,
@@ -4187,7 +5005,8 @@
                 24
               ],
               "contrast": 8.33,
-              "sample": "J"
+              "sample": "J",
+              "i18n": "game.frame.decor.weekday-thu"
             },
             "decor.7": {
               "x": 608,
@@ -4215,7 +5034,8 @@
                 24
               ],
               "contrast": 9.23,
-              "sample": "V"
+              "sample": "V",
+              "i18n": "game.frame.decor.weekday-fri"
             },
             "decor.8": {
               "x": 676,
@@ -4243,7 +5063,8 @@
                 24
               ],
               "contrast": 9.88,
-              "sample": "S"
+              "sample": "S",
+              "i18n": "game.frame.decor.weekday-sat"
             },
             "decor.9": {
               "x": 744,
@@ -4271,7 +5092,8 @@
                 24
               ],
               "contrast": 10.75,
-              "sample": "D"
+              "sample": "D",
+              "i18n": "game.frame.decor.weekday-sun"
             },
             "kicker": {
               "x": 540,
@@ -4396,26 +5218,181 @@
                   "sticker": "mee-sourire",
                   "box": [
                     46,
-                    1250,
+                    1414,
                     300,
                     300
                   ],
                   "rotate": -6,
                   "flip": false,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.025,
+                    1,
+                    0.95
+                  ]
                 },
                 "meo": {
                   "sticker": "meo-yo",
                   "box": [
                     734,
-                    1250,
+                    1382,
                     300,
                     300
                   ],
                   "rotate": 6,
                   "flip": true,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0789,
+                    1,
+                    0.8423
+                  ]
                 }
+              },
+              "perches": {
+                "mee": {
+                  "sticker": "mee-sourire",
+                  "box": [
+                    116,
+                    64,
+                    240,
+                    240
+                  ],
+                  "rotate": -10,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.025,
+                    1,
+                    0.95
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-yo",
+                  "box": [
+                    724,
+                    64,
+                    240,
+                    240
+                  ],
+                  "rotate": 10,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0789,
+                    1,
+                    0.8423
+                  ]
+                }
+              },
+              "cotes": {
+                "mee": {
+                  "sticker": "mee-sourire",
+                  "box": [
+                    -26.4,
+                    753.6,
+                    212.8,
+                    212.8
+                  ],
+                  "rotate": 18,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.025,
+                    1,
+                    0.95
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-yo",
+                  "box": [
+                    893.6,
+                    833.6,
+                    212.8,
+                    212.8
+                  ],
+                  "rotate": 342,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0789,
+                    1,
+                    0.8423
+                  ]
+                }
+              },
+              "duo": {
+                "pair": {
+                  "sticker": "duo-coucou",
+                  "box": [
+                    671,
+                    1389,
+                    304,
+                    304
+                  ],
+                  "rotate": 0,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.14,
+                    1,
+                    0.72
+                  ]
+                }
+              },
+              "selfie": {
+                "meo": {
+                  "sticker": "meo-selfie",
+                  "box": [
+                    650,
+                    1090,
+                    380,
+                    380
+                  ],
+                  "rotate": 0,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0375,
+                    1,
+                    0.9251
+                  ]
+                }
+              }
+            },
+            "validated": {
+              "pied": {
+                "overlap": 46,
+                "depth": 4,
+                "face": 0
+              },
+              "perches": {
+                "overlap": 0,
+                "depth": 0,
+                "face": 0
+              },
+              "cotes": {
+                "overlap": 56,
+                "depth": 4,
+                "face": 0
+              },
+              "duo": {
+                "overlap": 0,
+                "depth": 0,
+                "face": 0
+              },
+              "selfie": {
+                "overlap": 11046,
+                "depth": 119,
+                "face": 0
               }
             }
           },
@@ -4467,6 +5444,7 @@
               726,
               902
             ],
+            "path": "M539 545h2v1h1v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h3v1h2v1h2v1h2v1h2v1h2v1h2v1h3v1h2v1h2v1h2v1h2v1h2v1h3v1h2v1h2v1h2v1h3v1h2v1h2v1h2v1h2v1h3v1h2v1h2v1h2v1h3v1h2v1h2v1h2v1h3v1h2v1h2v1h2v1h3v1h2v1h2v1h2v1h2v1h2v1h3v1h2v1h2v1h2v1h2v1h2v1h3v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h3v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h1v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h1v1h2v1h2v1h2v1h2v1h2v1h1v1h2v1h2v1h2v1h1v1h2v1h2v1h2v1h1v1h2v1h2v1h1v1h2v1h2v1h1v1h2v1h2v1h1v1h2v1h1v1h2v1h2v1h1v1h2v1h1v1h2v1h1v1h2v1h1v1h2v1h1v1h2v1h1v1h2v1h1v1h2v1h1v1h1v1h2v1h1v1h1v1h2v1h1v1h1v1h2v1h1v1h1v1h2v1h1v1h1v1h1v1h2v1h1v1h1v1h1v1h1v1h2v1h1v1h1v1h1v1h1v1h2v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h2v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v2h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v2h1v1h1v1h1v1h1v2h1v1h1v1h1v1h1v2h1v1h1v1h1v2h1v1h1v2h1v1h1v1h1v2h1v1h1v2h1v1h1v2h1v2h1v1h1v2h1v2h1v2h1v1h1v2h1v2h1v2h1v2h1v2h1v2h1v2h1v3h1v2h1v2h1v2h1v3h1v3h1v3h1v3h1v3h1v3h1v4h1v4h1v5h1v5h1v7h1v7h1v570h-1v5h-1v4h-1v3h-1v2h-1v2h-1v2h-1v1h-1v1h-1v2h-1v1h-1v1h-1v1h-1v1h-1v1h-2v1h-1v1h-2v1h-2v1h-2v1h-3v1h-3v1h-6v1h-656v-1h-6v-1h-3v-1h-3v-1h-2v-1h-2v-1h-2v-1h-1v-1h-2v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-2h-1v-1h-1v-2h-1v-2h-1v-2h-1v-3h-1v-4h-1v-5h-1v-570h1v-7h1v-7h1v-5h1v-5h1v-4h1v-4h1v-3h1v-3h1v-3h1v-3h1v-3h1v-3h1v-2h1v-2h1v-2h1v-3h1v-2h1v-2h1v-2h1v-2h1v-2h1v-2h1v-2h1v-1h1v-2h1v-2h1v-2h1v-1h1v-2h1v-2h1v-1h1v-2h1v-1h1v-2h1v-1h1v-1h1v-2h1v-1h1v-2h1v-1h1v-1h1v-2h1v-1h1v-1h1v-1h1v-2h1v-1h1v-1h1v-1h1v-2h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-2h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h2v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h2v-1h1v-1h1v-1h1v-1h1v-1h1v-1h2v-1h1v-1h1v-1h1v-1h2v-1h1v-1h1v-1h1v-1h2v-1h1v-1h1v-1h2v-1h1v-1h1v-1h2v-1h1v-1h1v-1h2v-1h1v-1h2v-1h1v-1h1v-1h2v-1h1v-1h2v-1h1v-1h2v-1h1v-1h2v-1h1v-1h2v-1h1v-1h2v-1h1v-1h2v-1h1v-1h2v-1h2v-1h1v-1h2v-1h2v-1h1v-1h2v-1h2v-1h1v-1h2v-1h2v-1h1v-1h2v-1h2v-1h1v-1h2v-1h2v-1h2v-1h1v-1h2v-1h2v-1h2v-1h2v-1h2v-1h1v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h1v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h3v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h3v-1h2v-1h2v-1h2v-1h2v-1h2v-1h3v-1h2v-1h2v-1h2v-1h2v-1h2v-1h3v-1h2v-1h2v-1h2v-1h3v-1h2v-1h2v-1h2v-1h3v-1h2v-1h2v-1h2v-1h3v-1h2v-1h2v-1h2v-1h2v-1h3v-1h2v-1h2v-1h2v-1h3v-1h2v-1h2v-1h2v-1h2v-1h2v-1h3v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h3v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h1Z",
             "mask": {
               "src": "34c048dccc100d32.webp",
               "bytes": 1016,
@@ -4684,7 +5662,8 @@
                 25
               ],
               "contrast": 3.33,
-              "sample": "JOURS"
+              "sample": "JOURS",
+              "i18n": "game.frame.decor.days"
             },
             "kicker": {
               "x": 540,
@@ -4832,6 +5811,44 @@
           "birds": {
             "default": "perches",
             "layouts": {
+              "pied": {
+                "mee": {
+                  "sticker": "mee-fete",
+                  "box": [
+                    3,
+                    1336,
+                    300,
+                    300
+                  ],
+                  "rotate": -6,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0.0219,
+                    0,
+                    0.9562,
+                    1
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-feu-artifice",
+                  "box": [
+                    734,
+                    1398,
+                    300,
+                    300
+                  ],
+                  "rotate": 6,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0.0567,
+                    0,
+                    0.8867,
+                    1
+                  ]
+                }
+              },
               "perches": {
                 "mee": {
                   "sticker": "mee-fete",
@@ -4843,7 +5860,13 @@
                   ],
                   "rotate": -10,
                   "flip": false,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0.0219,
+                    0,
+                    0.9562,
+                    1
+                  ]
                 },
                 "meo": {
                   "sticker": "meo-feu-artifice",
@@ -4855,8 +5878,94 @@
                   ],
                   "rotate": 10,
                   "flip": true,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0.0567,
+                    0,
+                    0.8867,
+                    1
+                  ]
                 }
+              },
+              "cotes": {
+                "mee": {
+                  "sticker": "mee-fete",
+                  "box": [
+                    -43.6,
+                    728.4,
+                    263.2,
+                    263.2
+                  ],
+                  "rotate": 18,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0.0219,
+                    0,
+                    0.9562,
+                    1
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-feu-artifice",
+                  "box": [
+                    874.8,
+                    812.8,
+                    246.4,
+                    246.4
+                  ],
+                  "rotate": 342,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0.0567,
+                    0,
+                    0.8867,
+                    1
+                  ]
+                }
+              },
+              "selfie": {
+                "meo": {
+                  "sticker": "meo-selfie",
+                  "box": [
+                    650,
+                    1090,
+                    380,
+                    380
+                  ],
+                  "rotate": 0,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0375,
+                    1,
+                    0.9251
+                  ]
+                }
+              }
+            },
+            "validated": {
+              "pied": {
+                "overlap": 83,
+                "depth": 4,
+                "face": 0
+              },
+              "perches": {
+                "overlap": 0,
+                "depth": 0,
+                "face": 0
+              },
+              "cotes": {
+                "overlap": 87,
+                "depth": 5,
+                "face": 0
+              },
+              "selfie": {
+                "overlap": 9462,
+                "depth": 109,
+                "face": 0
               }
             }
           },
@@ -4908,6 +6017,7 @@
               748,
               868
             ],
+            "path": "M217 578h645v1h7v1h4v1h4v1h2v1h3v1h2v1h2v1h2v1h2v1h1v1h2v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v2h1v1h1v2h1v2h1v2h1v2h1v3h1v2h1v4h1v5h1v6h1v764h-1v7h-1v4h-1v4h-1v2h-1v3h-1v2h-1v2h-1v2h-1v2h-1v1h-1v2h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-2v1h-1v1h-2v1h-2v1h-2v1h-2v1h-3v1h-2v1h-4v1h-4v1h-6v1h-646v-1h-6v-1h-4v-1h-4v-1h-3v-1h-2v-1h-2v-1h-2v-1h-2v-1h-2v-1h-1v-1h-2v-1h-1v-1h-1v-1h-1v-1h-2v-2h-1v-1h-1v-1h-1v-1h-1v-1h-1v-2h-1v-1h-1v-2h-1v-2h-1v-2h-1v-2h-1v-3h-1v-2h-1v-4h-1v-4h-1v-6h-1v-765h1v-6h1v-5h1v-4h1v-2h1v-3h1v-2h1v-2h1v-2h1v-2h1v-1h1v-2h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h2v-1h1v-1h2v-1h2v-1h2v-1h2v-1h3v-1h2v-1h4v-1h4v-1h6Z",
             "mask": {
               "src": "809ec34ea8d0ac15.webp",
               "bytes": 324,
@@ -5064,7 +6174,8 @@
                 248
               ],
               "contrast": 3.11,
-              "sample": "CENT JOURS DE FEU · LE GRAND BRASIER · "
+              "sample": "CENT JOURS DE FEU · LE GRAND BRASIER · ",
+              "i18n": "game.frame.decor.hundred-days-ring"
             },
             "decor.2": {
               "x": 540,
@@ -5092,7 +6203,8 @@
                 21
               ],
               "contrast": 10.04,
-              "sample": "JOURS"
+              "sample": "JOURS",
+              "i18n": "game.frame.decor.days"
             },
             "decor.3": {
               "x": 540,
@@ -5305,31 +6417,161 @@
           "birds": {
             "default": "cotes",
             "layouts": {
-              "cotes": {
+              "pied": {
                 "mee": {
                   "sticker": "mee-wow",
                   "box": [
-                    6,
-                    770,
-                    252,
-                    252
+                    46,
+                    1406,
+                    300,
+                    300
                   ],
-                  "rotate": 14,
+                  "rotate": -6,
                   "flip": false,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0564,
+                    1,
+                    0.8872
+                  ]
                 },
                 "meo": {
                   "sticker": "meo-cool",
                   "box": [
-                    822,
-                    846,
-                    252,
-                    252
+                    734,
+                    1346,
+                    300,
+                    300
+                  ],
+                  "rotate": 6,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0104,
+                    1,
+                    0.9792
+                  ]
+                }
+              },
+              "perches": {
+                "mee": {
+                  "sticker": "mee-wow",
+                  "box": [
+                    116,
+                    64,
+                    240,
+                    240
+                  ],
+                  "rotate": -10,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0564,
+                    1,
+                    0.8872
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-cool",
+                  "box": [
+                    724,
+                    64,
+                    240,
+                    240
+                  ],
+                  "rotate": 10,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0104,
+                    1,
+                    0.9792
+                  ]
+                }
+              },
+              "cotes": {
+                "mee": {
+                  "sticker": "mee-wow",
+                  "box": [
+                    11.8,
+                    807.8,
+                    176.4,
+                    176.4
+                  ],
+                  "rotate": 14,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0564,
+                    1,
+                    0.8872
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-cool",
+                  "box": [
+                    880.24,
+                    876.24,
+                    191.52,
+                    191.52
                   ],
                   "rotate": 346,
                   "flip": true,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0104,
+                    1,
+                    0.9792
+                  ]
                 }
+              },
+              "selfie": {
+                "meo": {
+                  "sticker": "meo-selfie",
+                  "box": [
+                    650,
+                    1090,
+                    380,
+                    380
+                  ],
+                  "rotate": 0,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0375,
+                    1,
+                    0.9251
+                  ]
+                }
+              }
+            },
+            "validated": {
+              "pied": {
+                "overlap": 132,
+                "depth": 4,
+                "face": 0
+              },
+              "perches": {
+                "overlap": 0,
+                "depth": 0,
+                "face": 0
+              },
+              "cotes": {
+                "overlap": 79,
+                "depth": 4,
+                "face": 0
+              },
+              "selfie": {
+                "overlap": 10093,
+                "depth": 114,
+                "face": 0
               }
             }
           },
@@ -5381,6 +6623,7 @@
               734,
               842
             ],
+            "path": "M511 605h58v1h12v1h10v1h8v1h7v1h7v1h6v1h6v1h5v1h5v1h4v1h5v1h4v1h4v1h4v1h3v1h4v1h3v1h3v1h4v1h3v1h3v1h3v1h3v1h3v1h3v1h3v1h2v1h3v1h2v1h3v1h2v1h3v1h2v1h2v1h3v1h2v1h2v1h2v1h3v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h1v1h2v1h2v1h2v1h2v1h1v1h2v1h2v1h1v1h2v1h2v1h1v1h2v1h1v1h2v1h2v1h1v1h1v1h2v1h1v1h2v1h1v1h2v1h1v1h2v1h1v1h1v1h2v1h1v1h1v1h2v1h1v1h1v1h1v1h2v1h1v1h1v1h1v1h2v1h1v1h1v1h1v1h1v1h2v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h2v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v2h1v1h1v1h1v1h1v1h1v1h1v2h1v1h1v1h1v1h1v1h1v2h1v1h1v1h1v1h1v2h1v1h1v1h1v2h1v1h1v1h1v2h1v1h1v2h1v1h1v2h1v1h1v1h1v2h1v1h1v2h1v2h1v1h1v2h1v2h1v1h1v2h1v2h1v2h1v2h1v1h1v2h1v2h1v2h1v2h1v2h1v2h1v2h1v3h1v2h1v2h1v3h1v2h1v2h1v3h1v3h1v2h1v4h1v3h1v3h1v3h1v3h1v4h1v4h1v4h1v5h1v5h1v6h1v7h1v10h1v545h-1v5h-1v2h-1v2h-1v2h-1v1h-1v2h-1v1h-1v1h-1v1h-2v1h-1v1h-3v1h-2v1h-5v1h-690v-1h-5v-1h-3v-1h-2v-1h-1v-1h-2v-1h-1v-1h-1v-1h-1v-1h-1v-2h-1v-1h-1v-3h-1v-2h-1v-5h-1v-545h1v-10h1v-7h1v-6h1v-5h1v-5h1v-4h1v-4h1v-3h1v-4h1v-3h1v-4h1v-3h1v-3h1v-2h1v-3h1v-3h1v-2h1v-3h1v-2h1v-2h1v-2h1v-3h1v-2h1v-2h1v-2h1v-2h1v-2h1v-2h1v-2h1v-1h1v-2h1v-2h1v-2h1v-2h1v-1h1v-2h1v-2h1v-1h1v-2h1v-2h1v-1h1v-2h1v-1h1v-1h1v-2h1v-1h1v-2h1v-1h1v-2h1v-1h1v-1h1v-2h1v-1h1v-1h1v-2h1v-1h1v-1h1v-1h1v-2h1v-1h1v-1h1v-1h1v-1h1v-2h1v-1h1v-1h1v-1h1v-1h1v-1h1v-2h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h2v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h2v-1h1v-1h1v-1h1v-1h1v-1h2v-1h1v-1h1v-1h1v-1h2v-1h1v-1h1v-1h2v-1h1v-1h1v-1h1v-1h2v-1h1v-1h1v-1h2v-1h1v-1h2v-1h1v-1h2v-1h1v-1h2v-1h1v-1h2v-1h1v-1h2v-1h1v-1h2v-1h2v-1h1v-1h2v-1h1v-1h2v-1h2v-1h2v-1h1v-1h2v-1h2v-1h2v-1h1v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h3v-1h2v-1h2v-1h2v-1h3v-1h2v-1h2v-1h3v-1h2v-1h3v-1h2v-1h3v-1h3v-1h2v-1h3v-1h3v-1h3v-1h3v-1h3v-1h3v-1h4v-1h3v-1h3v-1h4v-1h4v-1h4v-1h3v-1h4v-1h5v-1h5v-1h4v-1h5v-1h6v-1h6v-1h6v-1h8v-1h8v-1h9v-1h13Z",
             "mask": {
               "src": "a63694991e228d28.webp",
               "bytes": 836,
@@ -5524,7 +6767,8 @@
                 219
               ],
               "contrast": 3.67,
-              "sample": "UN AN DE FLAMME · RENAÎTRE CHAQUE JOUR · "
+              "sample": "UN AN DE FLAMME · RENAÎTRE CHAQUE JOUR · ",
+              "i18n": "game.frame.decor.year-of-flame-ring"
             },
             "decor.2": {
               "x": 540,
@@ -5552,7 +6796,8 @@
                 21
               ],
               "contrast": 9.57,
-              "sample": "JOURS"
+              "sample": "JOURS",
+              "i18n": "game.frame.decor.days"
             },
             "decor.3": {
               "x": 540,
@@ -5800,7 +7045,13 @@
                   ],
                   "rotate": -6,
                   "flip": false,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0824,
+                    1,
+                    0.8352
+                  ]
                 },
                 "meo": {
                   "sticker": "meo-trophee",
@@ -5812,8 +7063,21 @@
                   ],
                   "rotate": 6,
                   "flip": true,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.033,
+                    1,
+                    0.934
+                  ]
                 }
+              }
+            },
+            "validated": {
+              "ruban": {
+                "overlap": 0,
+                "depth": 0,
+                "face": 0
               }
             }
           },
@@ -5865,6 +7129,7 @@
               734,
               838
             ],
+            "path": "M513 609h54v1h1v3h1v3h1v2h1v3h1v3h1v3h1v3h1v3h1v3h1v3h1v3h1v3h2v-3h1v-3h1v-3h1v-3h1v-3h1v-3h1v-3h3v1h1v1h2v1h2v1h1v1h2v1h2v1h1v1h2v1h2v1h1v1h1v-1h-1v-2h-1v-2h-1v-3h-1v-2h-1v-2h-1v-2h-1v-2h-1v-2h-1v-2h-1v-2h-1v-1h5v1h7v1h7v1h6v1h6v1h4v1h5v1h5v1h4v1h4v1h4v1h5v1h3v1h4v1h3v1h4v1h3v1h3v1h3v1h4v1h3v1h3v1h2v1h3v1h3v1h3v1h2v1h3v1h2v1h3v1h2v1h3v1h2v1h2v1h3v1h2v1h2v1h2v1h2v1h3v1h2v1h1v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h1v1h2v1h2v1h2v1h1v1h2v1h1v1h2v1h2v1h1v1h2v1h1v1h2v1h1v1h2v1h1v1h2v1h1v1h2v1h1v1h2v1h1v1h1v1h2v1h1v1h2v1h1v1h1v1h2v1h1v1h1v1h1v1h2v1h1v1h1v1h1v1h2v1h1v1h1v1h1v1h1v1h2v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h2v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v2h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v2h1v1h1v1h1v1h1v1h1v2h1v1h1v1h1v1h1v2h1v1h1v1h1v2h1v1h1v1h1v2h1v1h1v2h1v1h1v1h1v2h1v1h1v2h1v2h1v1h1v2h1v2h1v1h1v2h1v2h1v1h1v2h1v2h1v2h1v2h1v1h1v2h1v3h1v2h1v2h1v2h1v2h1v2h1v3h1v2h1v3h1v2h1v3h1v3h1v3h1v3h1v3h1v3h1v4h1v3h1v4h1v5h1v5h1v6h1v6h1v10h1v552h-1v5h-1v2h-1v3h-1v1h-1v1h-1v2h-1v1h-1v1h-1v1h-2v1h-1v1h-3v1h-2v1h-5v1h-690v-1h-5v-1h-3v-1h-2v-1h-1v-1h-2v-1h-1v-1h-1v-1h-1v-1h-1v-2h-1v-1h-1v-3h-1v-2h-1v-5h-1v-552h1v-10h1v-6h1v-7h1v-4h1v-5h1v-4h1v-3h1v-4h1v-4h1v-3h1v-2h1v-3h1v-3h1v-3h1v-2h1v-3h1v-2h1v-3h1v-2h1v-2h1v-2h1v-2h1v-2h1v-3h1v-2h1v-1h1v-2h1v-2h1v-2h1v-2h1v-1h1v-2h1v-2h1v-1h1v-2h1v-2h1v-1h1v-2h1v-2h1v-1h1v-2h1v-1h1v-1h1v-2h1v-1h1v-2h1v-1h1v-1h1v-2h1v-1h1v-1h1v-2h1v-1h1v-1h1v-1h1v-2h1v-1h1v-1h1v-1h1v-1h1v-2h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-2h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h2v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h2v-1h1v-1h1v-1h1v-1h1v-1h2v-1h1v-1h1v-1h1v-1h2v-1h1v-1h1v-1h1v-1h2v-1h1v-1h1v-1h2v-1h1v-1h1v-1h2v-1h1v-1h2v-1h1v-1h1v-1h2v-1h1v-1h2v-1h1v-1h2v-1h1v-1h2v-1h1v-1h2v-1h2v-1h1v-1h2v-1h2v-1h1v-1h2v-1h2v-1h1v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h1v-1h2v-1h2v-1h2v-1h3v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h3v-1h2v-1h2v-1h3v-1h2v-1h2v-1h3v-1h3v-1h2v-1h3v-1h3v-1h2v-1h3v-1h3v-1h4v-1h3v-1h3v-1h3v-1h3v-1h4v-1h3v-1h4v-1h3v-1h4v-1h4v-1h4v-1h5v-1h5v-1h5v-1h4v-1h6v-1h6v-1h7v-1h7v-1h5v1h-1v2h-1v2h-1v2h-1v2h-1v2h-1v2h-1v2h-1v3h-1v2h-1v2h-1v1h1v-1h1v-1h2v-1h2v-1h1v-1h2v-1h2v-1h1v-1h2v-1h2v-1h1v-1h3v3h1v3h1v3h1v3h1v3h1v3h1v3h2v-3h1v-4h1v-3h1v-3h1v-3h1v-2h1v-3h1v-3h1v-3h1v-3h1v-2h1v-3h1Z",
             "mask": {
               "src": "d48a3f56a220410f.webp",
               "bytes": 938,
@@ -6008,7 +7273,8 @@
                 320
               ],
               "contrast": 1.17,
-              "sample": "MEESH Nº 1 · LA PREMIÈRE · OCTOBRE 2026 · "
+              "sample": "MEESH Nº 1 · LA PREMIÈRE · OCTOBRE 2026 · ",
+              "live": "meesh-ring"
             },
             "decor.2": {
               "x": 540,
@@ -6056,7 +7322,8 @@
                 48
               ],
               "contrast": 2.13,
-              "sample": "Nº 1"
+              "sample": "Nº 1",
+              "live": "meesh-number"
             },
             "kicker": {
               "x": 540,
@@ -6208,27 +7475,157 @@
                 "mee": {
                   "sticker": "mee-lettre",
                   "box": [
-                    46,
-                    1250,
-                    300,
-                    300
+                    8.6,
+                    1379,
+                    264,
+                    264
                   ],
                   "rotate": -6,
                   "flip": false,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.025,
+                    1,
+                    0.95
+                  ]
                 },
                 "meo": {
                   "sticker": "meo-serenade",
                   "box": [
                     734,
-                    1250,
+                    1410,
                     300,
                     300
                   ],
                   "rotate": 6,
                   "flip": true,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0.075,
+                    0,
+                    0.85,
+                    1
+                  ]
                 }
+              },
+              "perches": {
+                "mee": {
+                  "sticker": "mee-lettre",
+                  "box": [
+                    116,
+                    64,
+                    240,
+                    240
+                  ],
+                  "rotate": -10,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.025,
+                    1,
+                    0.95
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-serenade",
+                  "box": [
+                    724,
+                    64,
+                    240,
+                    240
+                  ],
+                  "rotate": 10,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0.075,
+                    0,
+                    0.85,
+                    1
+                  ]
+                }
+              },
+              "cotes": {
+                "mee": {
+                  "sticker": "mee-lettre",
+                  "box": [
+                    -34.8,
+                    745.2,
+                    229.6,
+                    229.6
+                  ],
+                  "rotate": 18,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.025,
+                    1,
+                    0.95
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-serenade",
+                  "box": [
+                    885.2,
+                    825.2,
+                    229.6,
+                    229.6
+                  ],
+                  "rotate": 342,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0.075,
+                    0,
+                    0.85,
+                    1
+                  ]
+                }
+              },
+              "selfie": {
+                "meo": {
+                  "sticker": "meo-selfie",
+                  "box": [
+                    650,
+                    1090,
+                    380,
+                    380
+                  ],
+                  "rotate": 0,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0375,
+                    1,
+                    0.9251
+                  ]
+                }
+              }
+            },
+            "validated": {
+              "pied": {
+                "overlap": 49,
+                "depth": 4,
+                "face": 0
+              },
+              "perches": {
+                "overlap": 0,
+                "depth": 0,
+                "face": 0
+              },
+              "cotes": {
+                "overlap": 62,
+                "depth": 4,
+                "face": 0
+              },
+              "selfie": {
+                "overlap": 11105,
+                "depth": 119,
+                "face": 0
               }
             }
           },
@@ -6280,6 +7677,7 @@
               734,
               862
             ],
+            "path": "M202 585h676v1h5v1h3v1h3v1h1v1h3v1h1v1h1v1h1v1h2v1h1v1h1v2h1v1h1v2h1v3h1v1h1v5h1v3h1v806h-1v4h-1v3h-1v2h-1v3h-1v2h-1v1h-1v2h-1v1h-1v1h-2v2h-2v1h-1v1h-2v1h-2v1h-3v1h-2v1h-5v1h-678v-1h-5v-1h-2v-1h-3v-1h-2v-1h-2v-1h-1v-1h-2v-2h-2v-1h-1v-1h-1v-2h-1v-1h-1v-2h-1v-3h-1v-1h-1v-4h-1v-4h-1v-806h1v-3h1v-1h-1v-1h1v-3h1v-1h1v-3h1v-2h1v-1h1v-2h1v-1h1v-1h2v-1h1v-1h1v-1h1v-1h2v-1h2v-1h3v-1h3v-1h5Z",
             "mask": {
               "src": "a34d28002b8dbce4.webp",
               "bytes": 224,
@@ -6423,7 +7821,8 @@
                 340
               ],
               "contrast": 1.13,
-              "sample": "MEESH Nº 10 · ARGENT · OCTOBRE 2026 · "
+              "sample": "MEESH Nº 10 · ARGENT · OCTOBRE 2026 · ",
+              "live": "meesh-ring"
             },
             "decor.2": {
               "x": 540,
@@ -6471,7 +7870,8 @@
                 50
               ],
               "contrast": 2.14,
-              "sample": "Nº 10"
+              "sample": "Nº 10",
+              "live": "meesh-number"
             },
             "kicker": {
               "x": 540,
@@ -6591,31 +7991,161 @@
           "birds": {
             "default": "cotes",
             "layouts": {
-              "cotes": {
+              "pied": {
                 "mee": {
                   "sticker": "mee-bravo",
                   "box": [
-                    6,
-                    762,
-                    252,
-                    252
+                    46,
+                    1410,
+                    300,
+                    300
                   ],
-                  "rotate": 14,
+                  "rotate": -6,
                   "flip": false,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0.0411,
+                    0,
+                    0.9179,
+                    1
+                  ]
                 },
                 "meo": {
                   "sticker": "meo-muscles",
                   "box": [
-                    822,
-                    846,
-                    252,
-                    252
+                    800,
+                    1382,
+                    300,
+                    300
+                  ],
+                  "rotate": 6,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0.073,
+                    0,
+                    0.8541,
+                    1
+                  ]
+                }
+              },
+              "perches": {
+                "mee": {
+                  "sticker": "mee-bravo",
+                  "box": [
+                    116,
+                    64,
+                    240,
+                    240
+                  ],
+                  "rotate": -10,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0.0411,
+                    0,
+                    0.9179,
+                    1
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-muscles",
+                  "box": [
+                    724,
+                    64,
+                    240,
+                    240
+                  ],
+                  "rotate": 10,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0.073,
+                    0,
+                    0.8541,
+                    1
+                  ]
+                }
+              },
+              "cotes": {
+                "mee": {
+                  "sticker": "mee-bravo",
+                  "box": [
+                    0.24,
+                    792.24,
+                    191.52,
+                    191.52
+                  ],
+                  "rotate": 14,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0.0411,
+                    0,
+                    0.9179,
+                    1
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-muscles",
+                  "box": [
+                    869.12,
+                    861.12,
+                    221.76,
+                    221.76
                   ],
                   "rotate": 346,
                   "flip": true,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0.073,
+                    0,
+                    0.8541,
+                    1
+                  ]
                 }
+              },
+              "selfie": {
+                "meo": {
+                  "sticker": "meo-selfie",
+                  "box": [
+                    650,
+                    1090,
+                    380,
+                    380
+                  ],
+                  "rotate": 0,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0375,
+                    1,
+                    0.9251
+                  ]
+                }
+              }
+            },
+            "validated": {
+              "pied": {
+                "overlap": 123,
+                "depth": 3,
+                "face": 0
+              },
+              "perches": {
+                "overlap": 0,
+                "depth": 0,
+                "face": 0
+              },
+              "cotes": {
+                "overlap": 73,
+                "depth": 4,
+                "face": 0
+              },
+              "selfie": {
+                "overlap": 11057,
+                "depth": 119,
+                "face": 0
               }
             }
           },
@@ -6667,6 +8197,7 @@
               742,
               850
             ],
+            "path": "M233 597h614v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v722h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-614v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-722h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1Z",
             "mask": {
               "src": "5cff304fba01da44.webp",
               "bytes": 504,
@@ -6810,7 +8341,8 @@
                 326
               ],
               "contrast": 1.19,
-              "sample": "MEESH Nº 100 · ÉDITION OR · OCTOBRE 2026 · "
+              "sample": "MEESH Nº 100 · ÉDITION OR · OCTOBRE 2026 · ",
+              "live": "meesh-ring"
             },
             "decor.2": {
               "x": 540,
@@ -6858,7 +8390,8 @@
                 50
               ],
               "contrast": 2.04,
-              "sample": "Nº 100"
+              "sample": "Nº 100",
+              "live": "meesh-number"
             },
             "kicker": {
               "x": 540,
@@ -7017,7 +8550,13 @@
                   ],
                   "rotate": -6,
                   "flip": false,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0746,
+                    1,
+                    0.8507
+                  ]
                 },
                 "meo": {
                   "sticker": "meo-champagne",
@@ -7029,8 +8568,21 @@
                   ],
                   "rotate": 6,
                   "flip": true,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0758,
+                    1,
+                    0.8484
+                  ]
                 }
+              }
+            },
+            "validated": {
+              "ruban": {
+                "overlap": 0,
+                "depth": 0,
+                "face": 0
               }
             }
           },
@@ -7084,6 +8636,7 @@
               744,
               844
             ],
+            "path": "M245 604h180v2h-1v3h-1v1h1v-1h1v-2h1v-2h1v-1h80v4h-1v3h2v-7h183v2h1v2h1v1h1v2h1v2h1v2h1v2h1v2h1v2h1v2h1v1h1v-3h-1v-2h-1v-2h-1v-2h-1v-2h-1v-2h-1v-2h-1v-2h-1v-3h141v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v690h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-590v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-690h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1Z",
             "mask": {
               "src": "c9d33c87ff6dfc99.webp",
               "bytes": 636,
@@ -7227,7 +8780,8 @@
                 340
               ],
               "contrast": 1.01,
-              "sample": "MEESH Nº 1000 · ÉDITION PRISME · OCTOBRE 2026 · "
+              "sample": "MEESH Nº 1000 · ÉDITION PRISME · OCTOBRE 2026 · ",
+              "live": "meesh-ring"
             },
             "decor.2": {
               "x": 540,
@@ -7275,7 +8829,8 @@
                 50
               ],
               "contrast": 2.41,
-              "sample": "Nº 1000"
+              "sample": "Nº 1000",
+              "live": "meesh-number"
             },
             "kicker": {
               "x": 540,
@@ -7421,8 +8976,122 @@
             }
           },
           "birds": {
-            "default": "selfie",
+            "default": "pied",
             "layouts": {
+              "pied": {
+                "mee": {
+                  "sticker": "mee-coucou",
+                  "box": [
+                    12,
+                    1372,
+                    264,
+                    264
+                  ],
+                  "rotate": -6,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0865,
+                    1,
+                    0.827
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-salut",
+                  "box": [
+                    793,
+                    1359,
+                    282,
+                    282
+                  ],
+                  "rotate": 6,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0104,
+                    1,
+                    0.9792
+                  ]
+                }
+              },
+              "perches": {
+                "mee": {
+                  "sticker": "mee-coucou",
+                  "box": [
+                    116,
+                    64,
+                    240,
+                    240
+                  ],
+                  "rotate": -10,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0865,
+                    1,
+                    0.827
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-salut",
+                  "box": [
+                    724,
+                    64,
+                    240,
+                    240
+                  ],
+                  "rotate": 10,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0104,
+                    1,
+                    0.9792
+                  ]
+                }
+              },
+              "cotes": {
+                "mee": {
+                  "sticker": "mee-coucou",
+                  "box": [
+                    -34.8,
+                    745.2,
+                    229.6,
+                    229.6
+                  ],
+                  "rotate": 18,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0865,
+                    1,
+                    0.827
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-salut",
+                  "box": [
+                    885.2,
+                    825.2,
+                    229.6,
+                    229.6
+                  ],
+                  "rotate": 342,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0104,
+                    1,
+                    0.9792
+                  ]
+                }
+              },
               "selfie": {
                 "meo": {
                   "sticker": "meo-selfie",
@@ -7434,8 +9103,36 @@
                   ],
                   "rotate": 0,
                   "flip": true,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0375,
+                    1,
+                    0.9251
+                  ]
                 }
+              }
+            },
+            "validated": {
+              "pied": {
+                "overlap": 30,
+                "depth": 3,
+                "face": 0
+              },
+              "perches": {
+                "overlap": 0,
+                "depth": 0,
+                "face": 0
+              },
+              "cotes": {
+                "overlap": 91,
+                "depth": 5,
+                "face": 0
+              },
+              "selfie": {
+                "overlap": 10573,
+                "depth": 118,
+                "face": 0
               }
             }
           },
@@ -7486,6 +9183,7 @@
               1080,
               1920
             ],
+            "path": "M45 0h10v1h-10ZM1025 0h10v1h-10ZM41 1h4v1h-3v1h-4v-1h3ZM1035 1h4v1h3v1h-4v-1h-3ZM35 3h3v1h-3ZM1042 3h3v1h-3ZM32 4h3v1h-2v1h-2v1h-2v1h-2v-1h1v-1h2v-1h2ZM1045 4h3v1h1v1h-2v-1h-2ZM1049 6h3v1h1v1h-2v-1h-2ZM25 8h2v1h-1v1h-2v-1h1ZM1053 8h2v1h1v1h-2v-1h-1ZM22 10h2v1h-1v1h-1v1h-2v-1h1v-1h1ZM1056 10h2v1h1v1h1v1h-2v-1h-1v-1h-1ZM19 13h1v1h-1ZM1060 13h1v1h-1ZM18 14h1v1h-1ZM1061 14h1v1h-1ZM17 15h1v1h-1ZM1062 15h1v1h-1ZM15 16h2v1h-1v1h-1ZM1063 16h2v2h-1v-1h-1ZM14 18h1v1h-1ZM1065 18h1v1h-1ZM13 19h1v1h-1ZM1066 19h1v1h1v1h1v1h1v2h-1v-1h-1v-1h-1v-1h-1ZM12 20h1v2h-1v1h-1v1h-1v-2h1v-1h1ZM9 24h1v2h-1v2h-1v1h-1v-2h1v-2h1ZM1070 24h1v1h1v2h1v2h-1v-1h-1v-2h-1ZM6 29h1v2h-1v2h-1v-3h1ZM1073 29h1v1h1v3h-1v-2h-1ZM4 33h1v2h-1ZM1075 33h1v2h-1ZM3 35h1v3h-1ZM1076 35h1v3h-1ZM2 38h1v3h-1ZM1077 38h1v3h-1ZM1 41h1v4h-1ZM1078 41h1v4h-1ZM0 45h1v11h-1ZM1079 45h1v11h-1ZM864 589h19v19h1v25h1v32h1v32h1v32h1v32h1v32h1v32h1v32h1v32h1v32h1v32h1v32h1v32h1v32h1v32h1v32h1v32h1v32h1v32h1v32h1v32h1v32h1v32h1v32h1v32h1v20h-21v1h-31v1h-32v1h-31v1h-31v1h-31v1h-32v1h-32v1h-32v1h-32v1h-32v1h-31v1h-32v1h-31v1h-32v1h-32v1h-32v1h-32v1h-32v1h-31v1h-32v1h-31v1h-27v-12h-1v-32h-1v-32h-1v-32h-1v-32h-1v-32h-1v-32h-1v-32h-1v-32h-1v-32h-1v-32h-1v-32h-1v-32h-1v-32h-1v-32h-1v-32h-1v-32h-1v-32h-1v-32h-1v-32h-1v-32h-1v-31h-1v-32h-1v-32h-1v-32h-1v-40h-1v-12h1v-1h27v-1h30v-1h26v-1h32v-1h31v-1h32v-1h32v-1h32v-1h32v-1h32v-1h31v-1h32v-1h31v-1h32v-1h32v-1h32v-1h32v-1h32v-1h31v-1h31v-1h32v-1h38ZM0 1864h1v11h-1ZM1079 1864h1v11h-1ZM1 1875h1v4h-1ZM1078 1875h1v4h-1v3h-1v-4h1ZM2 1879h1v3h-1ZM3 1882h1v3h-1ZM1076 1882h1v3h-1ZM4 1885h1v2h1v2h1v2h-1v-1h-1v-2h-1ZM1075 1885h1v2h-1ZM1074 1887h1v3h-1v1h-1v-2h1ZM7 1891h1v2h-1ZM1072 1891h1v2h-1ZM8 1893h1v1h1v2h-1v-1h-1ZM1071 1893h1v2h-1v1h-1v-2h1ZM10 1896h1v1h1v1h1v2h-1v-1h-1v-1h-1ZM1069 1896h1v2h-1v1h-1v1h-1v-2h1v-1h1ZM13 1900h1v1h-1ZM1066 1900h1v1h-1ZM14 1901h1v1h-1ZM1065 1901h1v1h-1ZM15 1902h1v1h1v1h-2ZM1064 1902h1v1h-1ZM1063 1903h1v1h-1ZM17 1904h1v1h-1ZM1062 1904h1v1h-1ZM18 1905h1v1h-1ZM1061 1905h1v1h-1ZM19 1906h2v1h1v1h1v1h-2v-1h-1v-1h-1ZM1059 1906h2v1h-1v1h-1v1h-2v-1h1v-1h1ZM23 1909h2v1h1v1h2v1h1v1h-2v-1h-2v-1h-1v-1h-1ZM1056 1909h1v1h-1ZM1054 1910h2v1h-1v1h-2v1h-2v-1h1v-1h2ZM29 1913h2v1h-2ZM1049 1913h2v1h-2ZM31 1914h2v1h-2ZM1047 1914h2v1h-2ZM33 1915h2v1h-2ZM1045 1915h2v1h-2ZM35 1916h3v1h-3ZM1042 1916h3v1h-3ZM38 1917h4v1h3v1h-4v-1h-3ZM1038 1917h4v1h-3v1h-4v-1h3ZM45 1919h10v1h-10ZM1025 1919h10v1h-10Z",
             "mask": {
               "src": "2d8298a4f5523dcb.webp",
               "bytes": 734,
@@ -7636,7 +9334,8 @@
                 162
               ],
               "contrast": 3.78,
-              "sample": "CARNET DE BORD"
+              "sample": "CARNET DE BORD",
+              "i18n": "game.frame.decor.logbook"
             },
             "decor.2": {
               "x": 0,
@@ -7712,7 +9411,8 @@
                 122
               ],
               "contrast": 3.77,
-              "sample": "10 OCTOBRE 2026"
+              "sample": "10 OCTOBRE 2026",
+              "live": "date"
             },
             "decor.3": {
               "x": 284,
@@ -7785,7 +9485,8 @@
                 43
               ],
               "contrast": 3.45,
-              "sample": "JOUR"
+              "sample": "JOUR",
+              "i18n": "game.frame.decor.day"
             },
             "decor.4": {
               "x": 284,
@@ -7858,7 +9559,8 @@
                 114
               ],
               "contrast": 3.88,
-              "sample": "283"
+              "sample": "283",
+              "live": "day"
             },
             "decor.5": {
               "x": 524,
@@ -7903,7 +9605,8 @@
                 68
               ],
               "contrast": 7.7,
-              "sample": "Missions du jour"
+              "sample": "Missions du jour",
+              "i18n": "game.frame.decor.daily-missions"
             },
             "decor.6": {
               "x": 576,
@@ -7948,7 +9651,8 @@
                 56
               ],
               "contrast": 8.96,
-              "sample": "Écrire à trois amis"
+              "sample": "Écrire à trois amis",
+              "live": "mission-1"
             },
             "decor.7": {
               "x": 576,
@@ -7993,7 +9697,8 @@
                 56
               ],
               "contrast": 7.79,
-              "sample": "Traduire un message"
+              "sample": "Traduire un message",
+              "live": "mission-2"
             },
             "decor.8": {
               "x": 576,
@@ -8038,7 +9743,8 @@
                 56
               ],
               "contrast": 9.4,
-              "sample": "Publier une story"
+              "sample": "Publier une story",
+              "live": "mission-3"
             },
             "decor.9": {
               "x": 876,
@@ -8091,7 +9797,8 @@
                 79
               ],
               "contrast": 3.91,
-              "sample": "3 / 3 !"
+              "sample": "3 / 3 !",
+              "live": "missions-done"
             },
             "decor.10": {
               "x": 520,
@@ -8144,7 +9851,8 @@
                 69
               ],
               "contrast": 7.94,
-              "sample": "nous, ce jour-là"
+              "sample": "nous, ce jour-là",
+              "i18n": "game.frame.decor.us-that-day"
             },
             "plate.1": {
               "x": 540,
@@ -8298,27 +10006,157 @@
                 "mee": {
                   "sticker": "mee-coucou",
                   "box": [
-                    46,
-                    1250,
-                    300,
-                    300
+                    73,
+                    1413,
+                    246,
+                    246
                   ],
                   "rotate": -6,
                   "flip": false,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0865,
+                    1,
+                    0.827
+                  ]
                 },
                 "meo": {
                   "sticker": "meo-bravo",
                   "box": [
-                    734,
-                    1250,
-                    300,
-                    300
+                    796.6,
+                    1366.4,
+                    282,
+                    282
                   ],
                   "rotate": 6,
                   "flip": true,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0.0325,
+                    0,
+                    0.9349,
+                    1
+                  ]
                 }
+              },
+              "perches": {
+                "mee": {
+                  "sticker": "mee-coucou",
+                  "box": [
+                    116,
+                    64,
+                    240,
+                    240
+                  ],
+                  "rotate": -10,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0865,
+                    1,
+                    0.827
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-bravo",
+                  "box": [
+                    724,
+                    64,
+                    240,
+                    240
+                  ],
+                  "rotate": 10,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0.0325,
+                    0,
+                    0.9349,
+                    1
+                  ]
+                }
+              },
+              "cotes": {
+                "mee": {
+                  "sticker": "mee-coucou",
+                  "box": [
+                    -36.8,
+                    741.2,
+                    229.6,
+                    229.6
+                  ],
+                  "rotate": 18,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0865,
+                    1,
+                    0.827
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-bravo",
+                  "box": [
+                    885.2,
+                    825.2,
+                    229.6,
+                    229.6
+                  ],
+                  "rotate": 342,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0.0325,
+                    0,
+                    0.9349,
+                    1
+                  ]
+                }
+              },
+              "selfie": {
+                "meo": {
+                  "sticker": "meo-selfie",
+                  "box": [
+                    650,
+                    1090,
+                    380,
+                    380
+                  ],
+                  "rotate": 0,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0375,
+                    1,
+                    0.9251
+                  ]
+                }
+              }
+            },
+            "validated": {
+              "pied": {
+                "overlap": 79,
+                "depth": 5,
+                "face": 0
+              },
+              "perches": {
+                "overlap": 0,
+                "depth": 0,
+                "face": 0
+              },
+              "cotes": {
+                "overlap": 47,
+                "depth": 4,
+                "face": 0
+              },
+              "selfie": {
+                "overlap": 11217,
+                "depth": 119,
+                "face": 0
               }
             }
           },
@@ -8369,6 +10207,7 @@
               736,
               852
             ],
+            "path": "M190 596h700v1h4v1h3v1h2v1h1v1h2v1h1v2h1v1h1v2h1v2h1v5h1v367h-8v1h-3v1h-2v1h-1v1h-2v1h-1v1h-2v1h-1v1h-1v1h-2v1h-3v1h-2v1h-3v1h-3v1h-3v1h-2v1h-2v1h-2v1h-1v1h-1v1h-1v2h-1v1h-1v2h-1v2h-1v2h-1v3h-1v2h-1v3h-1v3h-1v3h-1v5h-1v5h-1v16h1v7h1v3h1v4h1v3h1v3h1v2h1v2h1v2h1v2h1v1h1v1h1v1h1v1h1v1h1v1h2v1h2v1h3v1h3v1h3v1h3v1h3v1h2v1h2v1h1v1h2v1h2v1h3v1h2v1h10v332h-1v5h-1v2h-1v2h-1v1h-1v2h-1v1h-2v1h-1v1h-2v1h-3v1h-5v1h-698v-1h-5v-1h-3v-1h-2v-1h-1v-1h-2v-1h-1v-2h-1v-1h-1v-2h-1v-2h-1v-5h-1v-113h1v-1h12v1h14v-1h3v-1h1v-1h2v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-2h1v-1h1v-1h1v-1h1v-2h1v-1h1v-1h1v-2h1v-1h1v-1h1v-2h1v-1h1v-2h1v-2h1v-2h1v-2h1v-4h1v-9h1v-13h-1v-4h-1v-3h-1v-2h-1v-2h-1v-4h-1v-3h-1v-2h-1v-1h-1v-1h-1v-2h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-2h-1v-1h-1v-2h-1v-1h-1v-3h-1v-2h-1v-2h-1v-2h-1v-1h-1v-2h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-2v-1h-1v-1h-2v-1h-2v-1h-2v-1h-2v-1h-4v-1h-8v1h-1v-316h5v-1h4v-1h3v-1h2v-1h3v-1h2v-1h2v-1h2v-1h2v-1h3v-1h2v-1h3v-1h3v-1h2v-1h2v-1h2v-1h2v-1h1v-1h1v-1h1v-1h1v-2h1v-2h1v-2h1v-4h1v-4h1v-5h1v-5h1v-10h1v-10h1v-5h1v-6h1v-8h-1v-4h-1v-3h-1v-2h-1v-2h-1v-2h-1v-2h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-2v-1h-2v-1h-6v-1h-9v-1h-3v-1h-2v-1h-1v-1h-1v-2h-1v-1h-1v-1h-2v-1h-2v-1h-1v-1h-1v-1h-1v-1h-1v-1h-2v-1h-1v-1h-2v-1h-3v-1h-3v-142h1v-5h1v-2h1v-2h1v-1h1v-2h1v-1h2v-1h1v-1h2v-1h3v-1h4Z",
             "mask": {
               "src": "37683cbc01481a1a.webp",
               "bytes": 524,
@@ -8497,7 +10336,8 @@
                 32
               ],
               "contrast": 4.2,
-              "sample": "N"
+              "sample": "N",
+              "i18n": "game.frame.decor.compass-north"
             },
             "decor.2": {
               "x": 639,
@@ -8525,7 +10365,8 @@
                 32
               ],
               "contrast": 9.64,
-              "sample": "E"
+              "sample": "E",
+              "i18n": "game.frame.decor.compass-east"
             },
             "decor.3": {
               "x": 540,
@@ -8553,7 +10394,8 @@
                 32
               ],
               "contrast": 9.37,
-              "sample": "S"
+              "sample": "S",
+              "i18n": "game.frame.decor.compass-south"
             },
             "decor.4": {
               "x": 441,
@@ -8581,7 +10423,8 @@
                 32
               ],
               "contrast": 10.1,
-              "sample": "O"
+              "sample": "O",
+              "i18n": "game.frame.decor.compass-west"
             },
             "decor.5": {
               "x": 540,
@@ -8609,7 +10452,8 @@
                 22
               ],
               "contrast": 12.53,
-              "sample": "JOUR"
+              "sample": "JOUR",
+              "i18n": "game.frame.decor.day"
             },
             "decor.6": {
               "x": 540,
@@ -8656,7 +10500,8 @@
                 66
               ],
               "contrast": 5.75,
-              "sample": "283"
+              "sample": "283",
+              "live": "day"
             },
             "kicker": {
               "x": 540,
@@ -8776,6 +10621,44 @@
           "birds": {
             "default": "perches",
             "layouts": {
+              "pied": {
+                "mee": {
+                  "sticker": "mee-danse",
+                  "box": [
+                    5,
+                    1243,
+                    246,
+                    246
+                  ],
+                  "rotate": -6,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0583,
+                    1,
+                    0.8833
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-roi",
+                  "box": [
+                    806,
+                    1375,
+                    264,
+                    264
+                  ],
+                  "rotate": 6,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0125,
+                    1,
+                    0.975
+                  ]
+                }
+              },
               "perches": {
                 "mee": {
                   "sticker": "mee-danse",
@@ -8787,7 +10670,13 @@
                   ],
                   "rotate": -10,
                   "flip": false,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0583,
+                    1,
+                    0.8833
+                  ]
                 },
                 "meo": {
                   "sticker": "meo-roi",
@@ -8799,8 +10688,94 @@
                   ],
                   "rotate": 10,
                   "flip": true,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0125,
+                    1,
+                    0.975
+                  ]
                 }
+              },
+              "cotes": {
+                "mee": {
+                  "sticker": "mee-danse",
+                  "box": [
+                    -43.6,
+                    728.4,
+                    263.2,
+                    263.2
+                  ],
+                  "rotate": 18,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0583,
+                    1,
+                    0.8833
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-roi",
+                  "box": [
+                    885.2,
+                    825.2,
+                    229.6,
+                    229.6
+                  ],
+                  "rotate": 342,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0125,
+                    1,
+                    0.975
+                  ]
+                }
+              },
+              "selfie": {
+                "meo": {
+                  "sticker": "meo-selfie",
+                  "box": [
+                    650,
+                    1090,
+                    380,
+                    380
+                  ],
+                  "rotate": 0,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0375,
+                    1,
+                    0.9251
+                  ]
+                }
+              }
+            },
+            "validated": {
+              "pied": {
+                "overlap": 105,
+                "depth": 4,
+                "face": 0
+              },
+              "perches": {
+                "overlap": 0,
+                "depth": 0,
+                "face": 0
+              },
+              "cotes": {
+                "overlap": 63,
+                "depth": 5,
+                "face": 0
+              },
+              "selfie": {
+                "overlap": 10936,
+                "depth": 118,
+                "face": 0
               }
             }
           },

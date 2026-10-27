@@ -1,7 +1,6 @@
 import Foundation
 import Combine
 import UIKit
-import GRDB
 import MeeshySDK
 import MeeshyUI
 import os
@@ -158,8 +157,6 @@ extension ConversationViewModel {
         Logger.messages.info("perf:ios.send.ack clientMessageId=\(tempId, privacy: .public) serverId=\(serverId, privacy: .public) transport=\(transport, privacy: .public) durationMs=\(ackElapsedMs, privacy: .public)")
 
         let convId = conversationId
-        let msgContent = text
-        let msgTime = serverCreatedAt
 
         // Persist server-id mapping so a cold-start REST fetch reconciles without
         // duplicate temp_…/server-id pairs.
@@ -170,9 +167,8 @@ extension ConversationViewModel {
         // les effets réellement envoyés. Recomposer une facette « texte nu » ici
         // effacerait de la liste la photo qu'on vient d'envoyer, une seconde
         // après que l'insert optimiste l'y a mise.
-        let ackedFacet = messages.first(where: { $0.id == tempId }).map {
-            LastMessageFacet(message: $0, preview: msgContent, id: serverId, at: msgTime)
-        } ?? LastMessageFacet.sent(id: serverId, text: msgContent, at: msgTime)
+        let ackedFacet = LastMessageFacet.acknowledged(messages.first(where: { $0.id == tempId }),
+                                                       text: text, id: serverId, at: serverCreatedAt, sealed: endToEndSealer.requiresSeal)
         Task {
             await ConversationSyncEngine.shared.updateConversationAfterSend(
                 ackedFacet, conversationId: convId, replacing: [tempId]
@@ -229,8 +225,9 @@ extension ConversationViewModel {
         }
 
         let context = makeSendContext(outgoing, intent: intent)
-        await stageOptimistic(outgoing, context: context)
         let sealer = endToEndSealer
+        if let failure = await sealer.keepBeforeStaging(outgoing, context: context, coordinator: sendCoordinator) { return .failure(failure) }
+        await stageOptimistic(outgoing, context: context)
         guard !sealer.requiresSeal else { return await sendSealed(outgoing, context: context, sealer: sealer) }
         let payload = prepareUpload(outgoing, context: context)
         markDeparture()
@@ -283,14 +280,15 @@ extension ConversationViewModel {
     /// si la conversation est chiffrée (l'outbox ne garde que du clair, #11379),
     /// la bulle passe en `.failed` : l'utilisateur peut renvoyer.
     func stageOffline(_ outgoing: OutgoingMessage, intent: MessageProtectionIntent) async -> Result<SentMessageReceipt, SendFailure> {
-        let clientMessageId = outgoing.reusedClientMessageId ?? MessageID(ClientMessageId.generate())
+        let context = makeSendContext(outgoing, intent: intent), clientMessageId = context.clientMessageId, sealer = endToEndSealer
+        if let failure = await sealer.keepBeforeStaging(outgoing, context: context, coordinator: sendCoordinator) { return .failure(failure) }
         _ = await collaborators.stager.stageOffline(
             outgoing, clientMessageId: clientMessageId, intent: intent, author: optimisticAuthor,
-            conversationId: conversationId, language: composedLanguage(of: outgoing),
+            conversationId: conversationId, language: context.language,
             effectFlags: optimisticEffectFlags(intent).rawValue
         )
-        if let refusal = endToEndSealer.offlineRefusal(for: outgoing) {
-            return .failure(await endToEndSealer.refuse(refusal, localId: clientMessageId.rawValue, coordinator: sendCoordinator))
+        if let refusal = sealer.offlineRefusal(for: outgoing) {
+            return .failure(await sealer.refuse(refusal, localId: clientMessageId.rawValue, coordinator: sendCoordinator))
         }
         markDeparture()
         return await sendCoordinator.enqueueOffline(outgoing, clientMessageId: clientMessageId, intent: intent)
@@ -315,7 +313,7 @@ extension ConversationViewModel {
     }
 
     private var optimisticAuthor: OptimisticAuthor {
-        OptimisticAuthor(senderId: currentUserId, sender: authManager.currentUser)
+        OptimisticAuthor(senderId: currentUserId, sender: authManager.currentUser, writesEndToEnd: endToEndSealer.requiresSeal)
     }
 
     /// Le corps d'un envoi d'une conversation qui n'est PAS chiffrée (#11379) :
@@ -424,6 +422,7 @@ extension ConversationViewModel {
         guard let idx = messageIndex(for: messageId) else { return }
         let failedMsg = messages[idx]
         guard failedMsg.deliveryStatus == .failed else { return }
+        if await endToEndSealer.refusesReplay(of: failedMsg, coordinator: sendCoordinator) { return }
 
         guard failedMsg.attachments.isEmpty else {
             if let refusal = endToEndPieceRefusal {
@@ -470,7 +469,7 @@ extension ConversationViewModel {
             guard let self else { return }
             let persistence = messagePersistence
             await bestEffort("send.removeFailed", category: .messages) {
-                try await persistence.markDeleted(localId: messageId, deletedAt: Date())
+                try await persistence.markDeleted(localId: messageId, deletedAt: Date(), origin: .authenticated)
             }
         }
     }

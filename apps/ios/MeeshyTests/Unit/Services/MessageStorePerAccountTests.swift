@@ -218,7 +218,7 @@ final class MessageStorePerAccountTests: XCTestCase {
 
         let nseKey = try XCTUnwrap(MessageStoreAccountKey.activeAccount(appGroupDefaults: defaults, serverOrigin: Self.production))
         let nsePool = try DatabasePool(path: dir.appendingPathComponent(nseKey.databaseFileName).path,
-                                       configuration: DependencyContainer.dbConfig())
+                                       configuration: MessageStoreDatabase.configuration())
         try MessageDatabaseMigrations.runAll(on: nsePool)
         let pushed = record(id: "m-push", senderId: "carol", content: "pré-enregistré")
         try await nsePool.write { db in

@@ -318,6 +318,31 @@ struct TranslationsBadge: View {
 /// ainsi que les copies 9 et 10 ont divergé (252i, #4260) : elles disaient
 /// « Français » là où la source unique dit « Afficher en Français », et ne
 /// disaient rien du tout de l'état actif.
+
+/// **The original / translated chip pair of a comment** — one control for the
+/// post rows and the story rows (#13133); the surface only picks its metrics.
+struct CommentTranslationToggle: View {
+    let comment: FeedComment
+    let readerLanguages: [String]
+    @Binding var showOriginal: Bool
+    var metrics: LanguageFlagChip.Metrics = .standard
+
+    var body: some View {
+        LanguageFlagChip(code: comment.originalLanguage ?? "", isActive: showOriginal, metrics: metrics) {
+            select(original: true)
+        }
+        LanguageFlagChip(code: comment.translatedChipLanguage(readerLanguages: readerLanguages),
+                         isActive: !showOriginal, metrics: metrics) {
+            select(original: false)
+        }
+        TranslationsBadge(metrics: metrics)
+    }
+
+    private func select(original: Bool) {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showOriginal = original }
+    }
+}
+
 extension View {
     func languageFlagAccessibility(code: String, isActive: Bool) -> some View {
         self

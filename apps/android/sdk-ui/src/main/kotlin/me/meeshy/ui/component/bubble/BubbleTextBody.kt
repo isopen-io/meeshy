@@ -61,6 +61,13 @@ internal fun ColumnScope.BubbleTextBody(
             fontStyle = FontStyle.Italic,
             color = onColor.copy(alpha = 0.6f),
         )
+    } else if (content.isEndToEndSealed) {
+        Text(
+            text = stringResource(R.string.bubble_message_end_to_end),
+            style = MaterialTheme.typography.bodyMedium,
+            fontStyle = FontStyle.Italic,
+            color = onColor.copy(alpha = 0.6f),
+        )
     } else if (content.text.isNotBlank() || !content.hasRenderedAttachments) {
         val emojiFontSize = EmojiDetector.fontSizeSp(content.emojiOnlyCount)
         if (emojiFontSize != null) {

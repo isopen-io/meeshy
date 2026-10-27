@@ -552,9 +552,9 @@ describe('#6164 — la pièce NOMMÉE d’une citation', () => {
     it('le site UNIQUE de composition range l’instantané sous metadata — jamais une clé posée à la main', () => {
       const compose = clientDeclaredMetadata({
         attachmentReplyTo: { attachmentId: TROISIEME, kind: 'image' },
-      });
+      }, { endToEnd: false });
       expect(compose.attachmentReplyTo).toEqual({ attachmentId: TROISIEME, kind: 'image' });
-      expect(clientDeclaredMetadata({}).attachmentReplyTo).toBeUndefined();
+      expect(clientDeclaredMetadata({}, { endToEnd: false }).attachmentReplyTo).toBeUndefined();
     });
   });
 });

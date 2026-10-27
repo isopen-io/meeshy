@@ -1,0 +1,763 @@
+{
+ "mood": "signature",
+ "motifs": [
+  {
+   "id": "signature.aurore",
+   "mood": "signature",
+   "name": "Aurore",
+   "surfaces": [
+    "capture",
+    "live"
+   ],
+   "base": {
+    "layout": {
+     "arrangement": "grid",
+     "margin": 0.07,
+     "gap": 0.03,
+     "top": 0.17,
+     "bottom": 0.1
+    },
+    "slot": {
+     "shape": "circle",
+     "stroke": {
+      "color": "#FFFFFF",
+      "width": 0.012
+     },
+     "glow": "#FF7AB6AA",
+     "shadow": true,
+     "tilt": "none",
+     "tone": "color"
+    },
+    "background": {
+     "kind": "accent"
+    },
+    "pattern": {
+     "kind": "stars",
+     "color": "#FFFFFF",
+     "opacity": 0.18
+    },
+    "ornaments": [
+     {
+      "kind": "lightleak",
+      "color": "#FF5FA2",
+      "density": "mid",
+      "layer": "back",
+      "motion": "loop"
+     },
+     {
+      "kind": "bokeh",
+      "color": "#FFD3E8",
+      "density": "mid",
+      "layer": "back",
+      "motion": "loop"
+     },
+     {
+      "kind": "sparkles",
+      "color": "#FFFFFF",
+      "density": "low",
+      "layer": "front",
+      "motion": "loop"
+     }
+    ],
+    "brand": {
+     "mark": "both",
+     "place": "bottom",
+     "color": "#FFFFFF",
+     "size": "m",
+     "font": "bubble"
+    },
+    "names": {
+     "show": "handle",
+     "style": "badge",
+     "font": "bubble",
+     "color": "#FFFFFF",
+     "fill": "#2A0E5CCC"
+    },
+    "title": {
+     "source": "group",
+     "font": "bubble",
+     "color": "#FFFFFF",
+     "place": "top",
+     "size": "l",
+     "effect": "glow"
+    }
+   },
+   "variants": {
+    "duo": {
+     "layout": {
+      "arrangement": "split",
+      "margin": 0.07,
+      "gap": 0.035,
+      "top": 0.15,
+      "bottom": 0.1
+     },
+     "slot": {
+      "shape": "round",
+      "radius": 0.12,
+      "stroke": {
+       "color": "#FFFFFF",
+       "width": 0.012
+      },
+      "glow": "#FF7AB6AA",
+      "shadow": true,
+      "tilt": "none",
+      "tone": "color"
+     },
+     "title": {
+      "source": "names",
+      "font": "bubble",
+      "color": "#FFFFFF",
+      "place": "top",
+      "size": "l",
+      "effect": "glow"
+     },
+     "subtitle": {
+      "source": "date",
+      "font": "bubble",
+      "color": "#FFD3E8",
+      "place": "top",
+      "size": "s"
+     }
+    },
+    "comite": {},
+    "groupe": {
+     "layout": {
+      "arrangement": "honeycomb",
+      "margin": 0.05,
+      "gap": 0.02,
+      "top": 0.15,
+      "bottom": 0.1
+     },
+     "slot": {
+      "shape": "hex",
+      "stroke": {
+       "color": "#FFFFFF",
+       "width": 0.01
+      },
+      "glow": "#FF7AB6AA",
+      "tilt": "none",
+      "tone": "color"
+     },
+     "names": {
+      "show": "handle",
+      "style": "badge",
+      "font": "bubble",
+      "color": "#FFFFFF",
+      "fill": "#2A0E5CCC"
+     }
+    },
+    "tablee": {
+     "layout": {
+      "arrangement": "grid",
+      "margin": 0.05,
+      "gap": 0.02,
+      "top": 0.13,
+      "bottom": 0.09
+     },
+     "slot": {
+      "shape": "round",
+      "radius": 0.18,
+      "stroke": {
+       "color": "#FFFFFF",
+       "width": 0.008
+      },
+      "glow": "#FF7AB688",
+      "tilt": "none",
+      "tone": "color"
+     },
+     "names": {
+      "show": "handle",
+      "style": "list",
+      "font": "bubble",
+      "color": "#FFFFFF"
+     }
+    }
+   },
+   "styles": [
+    {
+     "id": "relief",
+     "name": "Relief",
+     "look": {
+      "pattern": {
+       "kind": "stars",
+       "color": "#FFFFFF",
+       "opacity": 0.1
+      },
+      "ornaments": [
+       {
+        "kind": "bokeh",
+        "color": "#FFFFFF",
+        "density": "low",
+        "layer": "back",
+        "motion": "loop"
+       },
+       {
+        "kind": "sparkles",
+        "color": "#FFFFFF",
+        "density": "low",
+        "layer": "front",
+        "motion": "loop"
+       }
+      ],
+      "title": {
+       "source": "group",
+       "font": "bubble",
+       "color": "#FFFFFF",
+       "place": "top",
+       "size": "l",
+       "effect": "glow"
+      },
+      "scene": [
+       {
+        "id": "matiere",
+        "kind": "image",
+        "depth": "back",
+        "src": "assets/call-frames/signature_aurore_back.webp",
+        "amount": 0.55
+       },
+       {
+        "id": "moulure",
+        "kind": "image",
+        "depth": "front",
+        "src": "assets/call-frames/signature_aurore_front.webp",
+        "slice": 0.16
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "signature.prisme",
+   "mood": "signature",
+   "name": "Prisme",
+   "surfaces": [
+    "capture",
+    "live"
+   ],
+   "base": {
+    "layout": {
+     "arrangement": "cascade",
+     "margin": 0.07,
+     "gap": 0.03,
+     "top": 0.17,
+     "bottom": 0.1
+    },
+    "slot": {
+     "shape": "round",
+     "radius": 0.08,
+     "stroke": {
+      "color": "#FFFFFF",
+      "width": 0.014
+     },
+     "double": true,
+     "shadow": true,
+     "tilt": "gentle",
+     "tone": "color"
+    },
+    "background": {
+     "kind": "linear",
+     "colors": [
+      "#BDEBFF",
+      "#E2D4FF",
+      "#FFD1EA",
+      "#FFF1BF"
+     ],
+     "angle": 135
+    },
+    "pattern": {
+     "kind": "sunburst",
+     "color": "#FFFFFF",
+     "opacity": 0.22
+    },
+    "ornaments": [
+     {
+      "kind": "rays",
+      "color": "#FFFFFF",
+      "density": "mid",
+      "layer": "back",
+      "motion": "loop"
+     },
+     {
+      "kind": "sparkles",
+      "color": "#8B5CF6",
+      "density": "mid",
+      "layer": "front",
+      "motion": "loop"
+     },
+     {
+      "kind": "stars",
+      "color": "#38BDF8",
+      "density": "low",
+      "layer": "front",
+      "motion": "loop"
+     }
+    ],
+    "brand": {
+     "mark": "both",
+     "place": "bottom",
+     "color": "#4C1D95",
+     "size": "m",
+     "font": "futuristic"
+    },
+    "names": {
+     "show": "handle",
+     "style": "plate",
+     "font": "futuristic",
+     "color": "#FFFFFF",
+     "fill": "#4C1D95D9"
+    },
+    "title": {
+     "source": "group",
+     "font": "futuristic",
+     "color": "#4C1D95",
+     "place": "top",
+     "size": "l",
+     "effect": "outline",
+     "case": "upper"
+    }
+   },
+   "variants": {
+    "duo": {
+     "layout": {
+      "arrangement": "diagonal",
+      "margin": 0.07,
+      "gap": 0.03,
+      "top": 0.16,
+      "bottom": 0.1
+     },
+     "slot": {
+      "shape": "round",
+      "radius": 0.1,
+      "stroke": {
+       "color": "#FFFFFF",
+       "width": 0.016
+      },
+      "double": true,
+      "shadow": true,
+      "tilt": "gentle",
+      "tone": "color"
+     },
+     "title": {
+      "source": "names",
+      "font": "futuristic",
+      "color": "#4C1D95",
+      "place": "top",
+      "size": "l",
+      "effect": "outline",
+      "case": "upper"
+     }
+    },
+    "comite": {},
+    "groupe": {
+     "layout": {
+      "arrangement": "mosaic",
+      "margin": 0.06,
+      "gap": 0.025,
+      "top": 0.15,
+      "bottom": 0.1
+     },
+     "slot": {
+      "shape": "round",
+      "radius": 0.08,
+      "stroke": {
+       "color": "#FFFFFF",
+       "width": 0.012
+      },
+      "double": true,
+      "shadow": true,
+      "tilt": "none",
+      "tone": "color"
+     }
+    },
+    "tablee": {
+     "layout": {
+      "arrangement": "grid",
+      "margin": 0.05,
+      "gap": 0.02,
+      "top": 0.13,
+      "bottom": 0.12
+     },
+     "slot": {
+      "shape": "round",
+      "radius": 0.1,
+      "stroke": {
+       "color": "#FFFFFF",
+       "width": 0.01
+      },
+      "shadow": true,
+      "tilt": "none",
+      "tone": "color"
+     },
+     "names": {
+      "show": "handle",
+      "style": "list",
+      "font": "futuristic",
+      "color": "#4C1D95"
+     },
+     "subtitle": {
+      "source": "date",
+      "font": "futuristic",
+      "color": "#7C3AED",
+      "place": "bottom",
+      "size": "s",
+      "case": "upper"
+     }
+    }
+   },
+   "styles": [
+    {
+     "id": "relief",
+     "name": "Relief",
+     "look": {
+      "background": {
+       "kind": "linear",
+       "colors": [
+        "#E6F6FF",
+        "#F3E9FF",
+        "#FFE6F3"
+       ],
+       "angle": 135
+      },
+      "slot": {
+       "shape": "round",
+       "radius": 0.08,
+       "stroke": {
+        "color": "#FFFFFF",
+        "width": 0.012
+       },
+       "double": true,
+       "shadow": true,
+       "tilt": "gentle",
+       "tone": "color"
+      },
+      "ornaments": [
+       {
+        "kind": "sparkles",
+        "color": "#FFFFFF",
+        "density": "low",
+        "layer": "front",
+        "motion": "loop"
+       },
+       {
+        "kind": "stars",
+        "color": "#FFFFFF",
+        "density": "low",
+        "layer": "front",
+        "motion": "loop"
+       }
+      ],
+      "title": {
+       "source": "group",
+       "font": "futuristic",
+       "color": "#3B1A7A",
+       "place": "top",
+       "size": "l",
+       "effect": "outline",
+       "case": "upper"
+      },
+      "scene": [
+       {
+        "id": "matiere",
+        "kind": "image",
+        "depth": "back",
+        "src": "assets/call-frames/signature_prisme_back.webp"
+       },
+       {
+        "id": "moulure",
+        "kind": "image",
+        "depth": "front",
+        "src": "assets/call-frames/signature_prisme_front.webp",
+        "slice": 0.16
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "signature.bulle",
+   "mood": "signature",
+   "name": "Bulle",
+   "surfaces": [
+    "capture",
+    "live"
+   ],
+   "base": {
+    "layout": {
+     "arrangement": "orbit",
+     "margin": 0.07,
+     "gap": 0.03,
+     "top": 0.16,
+     "bottom": 0.1
+    },
+    "slot": {
+     "shape": "circle",
+     "stroke": {
+      "color": "#FFFFFF",
+      "width": 0.022
+     },
+     "shadow": true,
+     "tilt": "gentle",
+     "tone": "color"
+    },
+    "background": {
+     "kind": "radial",
+     "colors": [
+      "#FFB3DE",
+      "#FF6FB5",
+      "#B5179E"
+     ]
+    },
+    "pattern": {
+     "kind": "dots",
+     "color": "#FFFFFF",
+     "opacity": 0.2
+    },
+    "ornaments": [
+     {
+      "kind": "bubbles",
+      "color": "#FFFFFF",
+      "density": "high",
+      "layer": "back",
+      "motion": "loop"
+     },
+     {
+      "kind": "hearts",
+      "color": "#FFE3F1",
+      "density": "low",
+      "layer": "front",
+      "motion": "loop"
+     }
+    ],
+    "brand": {
+     "mark": "both",
+     "place": "bottom",
+     "color": "#FFFFFF",
+     "size": "m",
+     "font": "bubble"
+    },
+    "names": {
+     "show": "name",
+     "style": "bubble",
+     "font": "bubble",
+     "color": "#B5179E",
+     "fill": "#FFFFFF"
+    },
+    "title": {
+     "source": "group",
+     "font": "bubble",
+     "color": "#FFFFFF",
+     "place": "top",
+     "size": "l",
+     "effect": "shadow"
+    }
+   },
+   "variants": {
+    "duo": {
+     "layout": {
+      "arrangement": "row",
+      "margin": 0.07,
+      "gap": 0.04,
+      "top": 0.16,
+      "bottom": 0.1
+     },
+     "names": {
+      "show": "name",
+      "style": "bubble",
+      "font": "bubble",
+      "color": "#B5179E",
+      "fill": "#FFFFFF"
+     },
+     "title": {
+      "source": "names",
+      "font": "bubble",
+      "color": "#FFFFFF",
+      "place": "top",
+      "size": "l",
+      "effect": "shadow"
+     },
+     "subtitle": {
+      "source": "date",
+      "font": "bubble",
+      "color": "#FFE3F1",
+      "place": "top",
+      "size": "s"
+     }
+    },
+    "comite": {},
+    "groupe": {
+     "layout": {
+      "arrangement": "scatter",
+      "margin": 0.06,
+      "gap": 0.03,
+      "top": 0.15,
+      "bottom": 0.1
+     },
+     "slot": {
+      "shape": "circle",
+      "stroke": {
+       "color": "#FFFFFF",
+       "width": 0.016
+      },
+      "shadow": true,
+      "tilt": "gentle",
+      "tone": "color"
+     }
+    }
+   },
+   "styles": [
+    {
+     "id": "relief",
+     "name": "Relief",
+     "look": {
+      "background": {
+       "kind": "radial",
+       "colors": [
+        "#6E4BFF",
+        "#3B2A8C",
+        "#1A1240"
+       ]
+      },
+      "slot": {
+       "shape": "circle",
+       "stroke": {
+        "color": "#FFFFFF",
+        "width": 0.02
+       },
+       "glow": "#B59CFFAA",
+       "shadow": true,
+       "tilt": "gentle",
+       "tone": "color"
+      },
+      "ornaments": [
+       {
+        "kind": "bubbles",
+        "color": "#FFFFFF",
+        "density": "low",
+        "layer": "back",
+        "motion": "loop"
+       },
+       {
+        "kind": "hearts",
+        "color": "#FFB3E6",
+        "density": "low",
+        "layer": "front",
+        "motion": "loop"
+       }
+      ],
+      "title": {
+       "source": "group",
+       "font": "bubble",
+       "color": "#FFFFFF",
+       "place": "top",
+       "size": "l",
+       "effect": "glow"
+      },
+      "names": {
+       "show": "name",
+       "style": "bubble",
+       "font": "bubble",
+       "color": "#4C2BB5",
+       "fill": "#FFFFFF"
+      },
+      "scene": [
+       {
+        "id": "matiere",
+        "kind": "image",
+        "depth": "back",
+        "src": "assets/call-frames/signature_bulle_back.webp"
+       },
+       {
+        "id": "moulure",
+        "kind": "image",
+        "depth": "front",
+        "src": "assets/call-frames/signature_bulle_front.webp",
+        "slice": 0.16
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "signature.echo",
+   "mood": "signature",
+   "name": "Écho",
+   "surfaces": [
+    "capture",
+    "live"
+   ],
+   "base": {
+    "layout": {
+     "arrangement": "column",
+     "margin": 0.08,
+     "gap": 0.05,
+     "top": 0.2,
+     "bottom": 0.16
+    },
+    "slot": {
+     "shape": "circle",
+     "stroke": {
+      "color": "#C7D2FE",
+      "width": 0.006
+     },
+     "glow": "#818CF8CC",
+     "tilt": "none",
+     "tone": "color"
+    },
+    "background": {
+     "kind": "radial",
+     "colors": [
+      "#4338CA",
+      "#1E1B4B",
+      "#0F0D2E"
+     ]
+    },
+    "pattern": {
+     "kind": "waves",
+     "color": "#818CF8",
+     "opacity": 0.14
+    },
+    "ornaments": [
+     {
+      "kind": "orbits",
+      "color": "#A5B4FC55",
+      "density": "low",
+      "layer": "back"
+     }
+    ],
+    "brand": {
+     "mark": "both",
+     "place": "watermark",
+     "color": "#FFFFFF1F",
+     "size": "m"
+    },
+    "names": {
+     "show": "name",
+     "style": "caption",
+     "font": "bold",
+     "color": "#E0E7FF"
+    },
+    "title": {
+     "source": "brand",
+     "font": "bubble",
+     "color": "#FFFFFF",
+     "place": "top",
+     "size": "l",
+     "effect": "glow"
+    },
+    "subtitle": {
+     "source": "date",
+     "font": "bubble",
+     "color": "#C7D2FECC",
+     "place": "top",
+     "size": "s"
+    }
+   },
+   "variants": {
+    "duo": {}
+   }
+  }
+ ]
+}

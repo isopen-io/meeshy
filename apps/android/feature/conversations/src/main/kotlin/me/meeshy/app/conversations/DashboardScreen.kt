@@ -19,7 +19,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.AddLink
 import androidx.compose.material.icons.filled.ManageSearch
@@ -52,6 +51,8 @@ import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
+import me.meeshy.ui.component.chrome.leadingNavigationIcon
+import me.meeshy.ui.component.chrome.leadingNavigationLabel
 
 /** Les conversations les plus recentes montrees sur le tableau de bord. */
 internal const val DASHBOARD_RECENT_COUNT: Int = 3
@@ -103,8 +104,8 @@ fun DashboardScreen(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onBack) {
                     Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = stringResource(R.string.global_search_back),
+                        imageVector = leadingNavigationIcon(),
+                        contentDescription = leadingNavigationLabel(stringResource(R.string.global_search_back)),
                         tint = MeeshyTheme.tokens.textPrimary,
                     )
                 }

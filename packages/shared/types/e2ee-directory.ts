@@ -92,6 +92,14 @@ export const E2EE_ERROR_CODES = {
   /** Une session dont l'appareil a été retiré n'enrôle plus rien : il faut une nouvelle connexion (#13013). */
   SESSION_RETIRED: 'E2EE_SESSION_RETIRED',
   IDENTITY_KEY_INVALID: 'E2EE_IDENTITY_KEY_INVALID',
+  /** Un signal chiffré n'est relayé que pour un membre actif de la conversation (#13142). */
+  SIGNAL_FORBIDDEN: 'E2EE_SIGNAL_FORBIDDEN',
+  /**
+   * Dans une conversation e2ee, une réaction, la frappe, un accusé, une modification, une
+   * suppression pour tous, une vue unique ou un épinglage ne passe plus par sa route en clair :
+   * seulement par le relais des signaux chiffrés (#13142, #13060).
+   */
+  SIGNAL_CHANNEL_REQUIRED: 'E2EE_SIGNAL_CHANNEL_REQUIRED',
 } as const;
 
 export type E2EEErrorCode = (typeof E2EE_ERROR_CODES)[keyof typeof E2EE_ERROR_CODES];
@@ -99,6 +107,16 @@ export type E2EEErrorCode = (typeof E2EE_ERROR_CODES)[keyof typeof E2EE_ERROR_CO
 /** Le texte lisible servi à un client qui ne parle pas libsignal (#9223 : rien ne se perd en silence). */
 export const E2EE_CLIENT_OUTDATED_MESSAGE =
   'Cette conversation est chiffrée de bout en bout : mettez à jour Meeshy pour y écrire';
+
+/**
+ * Le texte servi avec `E2EE_SIGNAL_CHANNEL_REQUIRED` (#13142) : un client qui
+ * appelle encore la route en clair d'une réaction, de la frappe, d'une
+ * suppression pour tous, d'une vue unique ou d'un épinglage dans une
+ * conversation chiffrée de bout en bout l'affiche tel quel — rien ne se perd en
+ * silence (#9223).
+ */
+export const E2EE_SIGNAL_CHANNEL_REQUIRED_MESSAGE =
+  'Cette conversation est chiffrée de bout en bout : mettez à jour Meeshy pour réagir, épingler, supprimer ou ouvrir une vue unique';
 
 /**
  * Le texte servi avec `E2EE_IRREVERSIBLE` (#12949) : un ancien client qui

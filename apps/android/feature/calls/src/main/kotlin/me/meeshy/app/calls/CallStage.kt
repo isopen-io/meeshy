@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -23,6 +24,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -38,6 +40,7 @@ import org.webrtc.VideoTrack
 
 private const val PAUSED_SCRIM_ALPHA = 0.85f
 private val MUTED_BADGE_TOP = 52.dp
+private val ZOOM_INDICATOR_BOTTOM = 220.dp
 
 /**
  * La scène vidéo du duo (miroir de iOS `videoCallLayout` + `duoOverlays`). Connecté : la vidéo du
@@ -57,18 +60,21 @@ internal fun CallDuoVideoStage(
     reduceMotion: Boolean,
     modifier: Modifier = Modifier,
     selfTileMemory: CallSelfTileMemory = CallSelfTileMemories.shared,
+    onSceneTap: (() -> Unit)? = null,
+    selfCamera: CallSelfCameraActions? = null,
+    controlsVisible: Boolean = true,
 ) {
     Box(modifier.fillMaxSize()) {
         if (!connected) {
             localTrack?.let { local ->
-                VideoRenderer(track = local, eglContext = eglContext, modifier = Modifier.fillMaxSize(), mirror = true)
+                VideoRenderer(track = local, eglContext = eglContext, modifier = Modifier.fillMaxSize(), mirror = state.isFrontCamera)
             }
         } else {
             var swapped by remember(callKey) { mutableStateOf(false) }
-            val featuresLocal = swapped && localTrack != null
+            val featuresLocal = swapped && localTrack != null && state.isCameraOn
             val fit = rememberCallVideoFit()
             if (featuresLocal && localTrack != null) {
-                VideoRenderer(track = localTrack, eglContext = eglContext, modifier = Modifier.fillMaxSize(), mirror = true, fit = fit)
+                VideoRenderer(track = localTrack, eglContext = eglContext, modifier = Modifier.fillMaxSize(), mirror = state.isFrontCamera, fit = fit)
             } else {
                 CallRemoteVideoStage(
                     callKey = callKey,
@@ -83,19 +89,47 @@ internal fun CallDuoVideoStage(
                     fit = fit,
                 )
             }
+            // Le toucher de la scène vit ICI, SOUS la vignette : un détecteur posé sur la colonne du
+            // chrome, au-dessus, avalait tous les touchers et la vignette ne glissait ni ne permutait plus.
+            // Ma propre image en plein écran se pince (zoom de la caméra envoyée) ; zoomée, un double toucher
+            // revient à 1×.
+            val pinchZoom = if (featuresLocal) selfCamera?.zoom else null
+            if (onSceneTap != null || pinchZoom != null) {
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .let { if (pinchZoom != null) it.callCameraPinch(enabled = true, zoom = pinchZoom) else it }
+                        .pointerInput(onSceneTap, pinchZoom) {
+                            detectTapGestures(
+                                onDoubleTap = pinchZoom?.let { zoom ->
+                                    { if (zoom.state.value.displayFactor != zoom.state.value.profile?.baselineDisplay) zoom.resetToBaseline() }
+                                },
+                                onTap = { onSceneTap?.invoke() },
+                            )
+                        },
+                )
+            }
+            if (pinchZoom != null) {
+                CallZoomIndicator(pinchZoom, Modifier.align(Alignment.BottomCenter).padding(bottom = ZOOM_INDICATOR_BOTTOM))
+            }
             if (state.isPeerMuted && !featuresLocal) {
                 CallPeerMutedBadge(
                     compact = false,
                     modifier = Modifier.align(Alignment.TopCenter).systemBarsPadding().padding(top = MUTED_BADGE_TOP),
                 )
             }
-            if (state.isCameraOn && (localTrack != null || state.isVideoAutoPaused)) {
+            val showsSelfTile = !state.isCameraOn || localTrack != null || state.isVideoAutoPaused
+            if (showsSelfTile) {
+                val controlCount = rememberSelfCameraControlCount(selfCamera, state.isCameraOn)
                 CallSelfTile(
                     callKey = callKey,
                     memory = selfTileMemory,
-                    paused = state.isVideoAutoPaused,
+                    paused = state.isVideoAutoPaused && state.isCameraOn,
                     reduceMotion = reduceMotion,
-                    onSwap = { if (localTrack != null) swapped = !swapped },
+                    onSwap = { if (localTrack != null && state.isCameraOn) swapped = !swapped },
+                    controlCount = controlCount,
+                    controlsVisible = controlsVisible,
+                    controls = { selfCamera?.let { CallSelfTileControlsRow(it, state.isCameraOn) } },
                     modifier = Modifier.fillMaxSize(),
                     overlay = {
                         if (state.isPeerMuted && featuresLocal) {
@@ -107,6 +141,7 @@ internal fun CallDuoVideoStage(
                     },
                 ) {
                     when {
+                        !state.isCameraOn -> CallSelfCameraOffBody()
                         state.isVideoAutoPaused && !featuresLocal -> CallVideoPausedTileBody()
                         featuresLocal -> CallRemoteVideoStage(
                             callKey = callKey,
@@ -125,7 +160,7 @@ internal fun CallDuoVideoStage(
                             track = localTrack,
                             eglContext = eglContext,
                             modifier = Modifier.fillMaxSize(),
-                            mirror = true,
+                            mirror = state.isFrontCamera,
                             overlay = true,
                         )
                         else -> Unit

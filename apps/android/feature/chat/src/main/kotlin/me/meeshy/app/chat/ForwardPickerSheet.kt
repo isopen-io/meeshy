@@ -33,6 +33,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.chat.R
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.component.rememberPresence
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -110,6 +111,7 @@ internal fun ForwardPickerSheet(
                         size = 40.dp,
                         containerColor = hexColor(target.accentHex).takeIf { it != Color.Unspecified } ?: accentColor,
                         imageUrl = target.avatar,
+                        presence = rememberPresence(target.peerUserId),
                     )
                     Column(modifier = Modifier.weight(1f)) {
                         Text(

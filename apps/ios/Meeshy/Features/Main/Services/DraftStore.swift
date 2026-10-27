@@ -209,13 +209,11 @@ final class DraftStore: @unchecked Sendable {
     /// (la migration n'a pas de user-cible).
     private let userIdProvider: () -> String?
     private let encoder: JSONEncoder = {
-        let e = JSONEncoder()
-        e.dateEncodingStrategy = .iso8601
+        let e = MeeshyCoders.encoder(.persistence)
         return e
     }()
     private let decoder: JSONDecoder = {
-        let d = JSONDecoder()
-        d.dateDecodingStrategy = .iso8601
+        let d = MeeshyCoders.decoder(.persistence)
         return d
     }()
 

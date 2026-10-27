@@ -57,7 +57,6 @@ final class ConversationViewModelAudioTests: XCTestCase {
 
         let pool = try! Self.makeInMemoryPool()
         let deps = ConversationDependencies(
-            dbPool: pool,
             persistence: MessagePersistenceActor(dbWriter: pool)
         )
         let vm = ConversationViewModel(
@@ -105,7 +104,6 @@ final class ConversationViewModelAudioTests: XCTestCase {
 
         let pool = try! Self.makeInMemoryPool()
         let deps = ConversationDependencies(
-            dbPool: pool,
             persistence: MessagePersistenceActor(dbWriter: pool)
         )
         let vm = ConversationViewModel(

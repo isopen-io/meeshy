@@ -878,7 +878,7 @@ struct GalleryVideoPage: View, Equatable {
                     .font(.system(size: MeeshyIconSize.xl, weight: .bold))
                     .foregroundStyle(MeeshyColors.mediaChromeForeground)
                 if attachment.fileSize > 0 {
-                    Text(AttachmentDownloader.fmt(Int64(attachment.fileSize)))
+                    Text(MediaFormat.bytes(Int64(attachment.fileSize)))
                         .font(.system(size: 10, weight: .semibold, design: .monospaced))
                         .foregroundStyle(MeeshyColors.mediaChromeSecondary)
                 }

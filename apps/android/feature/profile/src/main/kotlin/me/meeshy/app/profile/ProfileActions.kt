@@ -1,5 +1,15 @@
 package me.meeshy.app.profile
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.ContentTransform
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.FiniteAnimationSpec
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -28,6 +38,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -37,12 +48,18 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.profile.R
 import me.meeshy.sdk.model.profile.ProfileActionPlan
 import me.meeshy.sdk.model.profile.ProfileConnectionAction
 import me.meeshy.sdk.model.profile.ProfileContextBanner
 import me.meeshy.sdk.model.profile.ProfileLayout
+import me.meeshy.ui.accessibility.LocalReduceMotion
+import me.meeshy.ui.haptics.rememberMeeshyHaptics
+import me.meeshy.ui.icons.MeeshyIcons
+import me.meeshy.ui.motion.pressable
+import me.meeshy.ui.theme.MeeshyMotion
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -58,6 +75,7 @@ internal data class ProfileActionCallbacks(
     val onBlock: () -> Unit,
     val onUnblock: () -> Unit,
     val onReport: () -> Unit,
+    val onCall: ((isVideo: Boolean) -> Unit)? = null,
 )
 
 /**
@@ -77,14 +95,30 @@ internal fun ProfileActionsSection(
         return
     }
     if (plan.layout == ProfileLayout.CLOSED) return
+    val reduceMotion = LocalReduceMotion.current
+    val sizeSpec: FiniteAnimationSpec<IntSize> =
+        if (reduceMotion) snap() else spring(dampingRatio = 0.85f, stiffness = MeeshyMotion.stiffnessForResponse(0.35f))
+    val connection = remember(plan.contextBanner, plan.connectionActions, plan.showsConnectedBanner) {
+        ConnectionGroup(plan.contextBanner, plan.connectionActions, plan.showsConnectedBanner)
+    }
     Column(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().animateContentSize(sizeSpec),
         verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
     ) {
         if (plan.canMessage) SendMessageButton(isOpening = isOpeningConversation, onClick = callbacks.onSendMessage)
-        plan.contextBanner?.let { ConnectionContextRow(banner = it, name = displayName) }
-        plan.connectionActions.forEach { ConnectionActionButton(action = it, callbacks = callbacks) }
-        if (plan.showsConnectedBanner) ConnectedPill()
+        val onCall = callbacks.onCall
+        if (plan.offersCall && onCall != null) CallButtons(enabled = !isOpeningConversation, onCall = onCall)
+        AnimatedContent(
+            targetState = connection,
+            transitionSpec = { connectionTransition(reduceMotion) },
+            label = "profile-connection",
+        ) { group ->
+            Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm)) {
+                group.banner?.let { ConnectionContextRow(banner = it, name = displayName) }
+                group.actions.forEach { ConnectionActionButton(action = it, callbacks = callbacks) }
+                if (group.showsConnected) ConnectedPill()
+            }
+        }
         if (plan.canBlock) {
             ProfileActionButton(
                 icon = Icons.Filled.Block,
@@ -101,6 +135,42 @@ internal fun ProfileActionsSection(
                 onClick = callbacks.onReport,
             )
         }
+    }
+}
+
+/** L'état de la relation tel que la fiche le peint : sa clé d'animation, une transition par changement. */
+private data class ConnectionGroup(
+    val banner: ProfileContextBanner?,
+    val actions: List<ProfileConnectionAction>,
+    val showsConnected: Boolean,
+)
+
+private fun connectionTransition(reduceMotion: Boolean): ContentTransform {
+    if (reduceMotion) return fadeIn(snap()) togetherWith fadeOut(snap())
+    val spec = spring<Float>(dampingRatio = 0.85f, stiffness = MeeshyMotion.stiffnessForResponse(0.35f))
+    return (fadeIn(spec) + scaleIn(spec, initialScale = 0.96f)) togetherWith fadeOut(spec)
+}
+
+/** Appel vocal et appel vidéo côte à côte (miroir de `callButtons` iOS). */
+@Composable
+private fun CallButtons(enabled: Boolean, onCall: (isVideo: Boolean) -> Unit) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.smPlus)) {
+        ProfileActionButton(
+            icon = MeeshyIcons.Call,
+            label = stringResource(R.string.profile_action_call_audio),
+            color = MeeshyPalette.Indigo500,
+            enabled = enabled,
+            modifier = Modifier.weight(1f),
+            onClick = { onCall(false) },
+        )
+        ProfileActionButton(
+            icon = MeeshyIcons.Video,
+            label = stringResource(R.string.profile_action_call_video),
+            color = MeeshyPalette.Indigo500,
+            enabled = enabled,
+            modifier = Modifier.weight(1f),
+            onClick = { onCall(true) },
+        )
     }
 }
 
@@ -129,13 +199,18 @@ private fun ConnectionActionButton(action: ProfileConnectionAction, callbacks: P
 @Composable
 private fun SendMessageButton(isOpening: Boolean, onClick: () -> Unit) {
     val shape = RoundedCornerShape(14.dp)
+    val haptics = rememberMeeshyHaptics()
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .pressable()
             .heightIn(min = 48.dp)
             .clip(shape)
             .background(Brush.horizontalGradient(listOf(MeeshyPalette.Indigo500, MeeshyPalette.Indigo400)))
-            .clickable(enabled = !isOpening, role = Role.Button, onClick = onClick)
+            .clickable(enabled = !isOpening, role = Role.Button) {
+                haptics.medium()
+                onClick()
+            }
             .padding(vertical = MeeshySpacing.md),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
@@ -156,16 +231,28 @@ private fun SendMessageButton(isOpening: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-private fun ProfileActionButton(icon: ImageVector, label: String, color: Color, onClick: () -> Unit) {
+private fun ProfileActionButton(
+    icon: ImageVector,
+    label: String,
+    color: Color,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+) {
     val shape = RoundedCornerShape(12.dp)
+    val haptics = rememberMeeshyHaptics()
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
+            .pressable()
             .heightIn(min = 44.dp)
             .clip(shape)
             .background(color.copy(alpha = 0.10f))
             .border(1.dp, color.copy(alpha = 0.25f), shape)
-            .clickable(role = Role.Button, onClick = onClick)
+            .clickable(enabled = enabled, role = Role.Button) {
+                haptics.medium()
+                onClick()
+            }
             .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.md),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
@@ -230,15 +317,20 @@ private fun BlockedByMeCard(onUnblock: () -> Unit) {
             style = MaterialTheme.typography.bodyMedium,
             color = MeeshyTheme.tokens.textSecondary,
         )
+        val haptics = rememberMeeshyHaptics()
         Text(
             text = stringResource(R.string.profile_blocked_unblock),
             color = Color.White,
             fontWeight = FontWeight.SemiBold,
             style = MaterialTheme.typography.bodyMedium,
             modifier = Modifier
+                .pressable()
                 .clip(CircleShape)
                 .background(MeeshyPalette.Success)
-                .clickable(role = Role.Button, onClick = onUnblock)
+                .clickable(role = Role.Button) {
+                    haptics.light()
+                    onUnblock()
+                }
                 .heightIn(min = 44.dp)
                 .padding(horizontal = MeeshySpacing.xxl, vertical = MeeshySpacing.md),
         )

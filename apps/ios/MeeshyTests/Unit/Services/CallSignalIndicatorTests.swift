@@ -203,7 +203,7 @@ final class CallHangupFastPathTests: XCTestCase {
     }
 
     func test_endCall_sendsInBandBye_beforeLocalTeardown() throws {
-        let manager = try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        let manager = try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
         guard let endCallRange = manager.range(of: "func endCall()") else {
             XCTFail("CallManager must define endCall()")
             return
@@ -226,7 +226,7 @@ final class CallHangupFastPathTests: XCTestCase {
     }
 
     func test_createOffer_createsControlChannel_beforeTheOffer() throws {
-        let service = try source("Meeshy/Features/Main/Services/WebRTCService.swift")
+        let service = try source("Meeshy/Features/Call/Services/WebRTCService.swift")
         guard let offerRange = service.range(of: "func createOffer()") else {
             XCTFail("WebRTCService must define createOffer()")
             return
@@ -242,7 +242,7 @@ final class CallHangupFastPathTests: XCTestCase {
     }
 
     func test_dataChannelCreation_isIdempotent_acrossRenegotiations() throws {
-        let client = try source("Meeshy/Features/Main/Services/WebRTC/P2PWebRTCClient.swift")
+        let client = try source("Meeshy/Features/Call/Services/WebRTC/P2PWebRTCClient.swift")
         guard let range = client.range(of: "func createDataChannel(label: String) -> Bool {") else {
             XCTFail("P2PWebRTCClient must define createDataChannel")
             return
@@ -514,7 +514,7 @@ final class CallHangupFastPathTests: XCTestCase {
     /// l'appel.
     func test_captionLine_showsCaptureWallClockTime_neverASRRelativeOffsets() throws {
         let view = try AppSourceGuard.callViewSource()
-        let line = try source("Meeshy/Features/Main/Models/CallCaptionLine.swift")
+        let line = try source("Meeshy/Features/Call/Models/CallCaptionLine.swift")
         XCTAssertTrue(
             line.contains("capturedAt: segment.capturedAt"),
             "Une ligne est datée par `segment.capturedAt` — l'horloge murale estampillée par " +
@@ -574,8 +574,9 @@ final class CallHangupFastPathTests: XCTestCase {
             "now gated on the panel being visible, so nothing can arrive while it is hidden."
         )
 
-        let manager = try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
-        let gate = "guard self.transcriptionService.isShowingOverlay else { return }"
+        let manager = try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
+        let gate = "guard call.transcriptionService.isShowingOverlay else { return }"
+        let channelGate = "guard self.transcriptionService.isShowingOverlay else { return }"
 
         guard let socketRange = manager.range(of: "socket.callTranslatedSegmentReceived") else {
             XCTFail("CallManager must subscribe to socket.callTranslatedSegmentReceived")
@@ -592,7 +593,7 @@ final class CallHangupFastPathTests: XCTestCase {
         )
 
         // #9085 — le canal de données vit dans `CallManager+DataChannel.swift`.
-        let dataChannel = try source("Meeshy/Features/Main/Services/CallManager+DataChannel.swift")
+        let dataChannel = try source("Meeshy/Features/Call/Services/CallManager+DataChannel.swift")
         guard let channelRange = dataChannel.range(of: "case .transcriptEntry(let entry):") else {
             XCTFail("CallManager must route the data channel's .transcriptEntry case")
             return
@@ -601,7 +602,7 @@ final class CallHangupFastPathTests: XCTestCase {
             .lowerBound ?? dataChannel.endIndex
         let channelRoute = String(dataChannel[channelRange.lowerBound ..< channelEnd])
         XCTAssertTrue(
-            channelRoute.contains(gate),
+            channelRoute.contains(channelGate),
             "The P2P (data channel) reception path must carry the SAME panel gate as the socket " +
             "sink — gating only one transport leaves the peer's words flowing in over the other."
         )
@@ -624,7 +625,7 @@ final class CallSignalGlyphReduceMotionTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Components/CallSignalGlyph.swift")
+            .appendingPathComponent("Meeshy/Features/Call/Components/CallSignalGlyph.swift")
         return try String(contentsOf: url, encoding: .utf8)
     }
 

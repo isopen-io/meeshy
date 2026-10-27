@@ -350,7 +350,7 @@ public struct VoiceRecordingView<Recorder: AudioRecordingProviding>: View {
     }
 
     private func formattedDuration(_ duration: TimeInterval) -> String {
-        DurationFormat.clock(duration)
+        MediaFormat.duration(duration)
     }
 }
 

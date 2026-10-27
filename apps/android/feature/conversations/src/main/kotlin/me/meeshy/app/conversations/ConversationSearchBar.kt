@@ -40,6 +40,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.conversations.R
 import me.meeshy.ui.component.chrome.MeeshyGlassSurface
@@ -98,7 +99,10 @@ internal fun ConversationSearchBar(
     }
     MeeshyGlassSurface(
         shape = shape,
+        // Edge-to-edge : la pilule se pose au-dessus de la barre de navigation
+        // Android et du clavier, jamais dessous.
         modifier = modifier
+            .windowInsetsPadding(WindowInsets.navigationBars.union(WindowInsets.ime))
             .fillMaxWidth()
             .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.sm)
             .scale(bounce)
@@ -149,6 +153,8 @@ internal fun ConversationSearchBar(
                                 text = stringResource(R.string.conversations_search_hint),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MeeshyTheme.tokens.textMuted,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
                             )
                         }
                         inner()

@@ -1,11 +1,12 @@
 package me.meeshy.app.chat
 
 import com.google.common.truth.Truth.assertThat
+import java.time.ZoneOffset
 import org.junit.Test
 
 class MessageGroupingTest {
 
-    private val gap = MessageGrouping.DEFAULT_GAP_MILLIS
+    private val hour = 60 * 60 * 1000L
 
     private fun msg(
         id: String,
@@ -22,7 +23,7 @@ class MessageGroupingTest {
     )
 
     private fun positionsFor(vararg messages: MessageGroupInput) =
-        MessageGrouping.positions(messages.toList())
+        MessageGrouping.positions(messages.toList(), ZoneOffset.UTC)
 
     @Test
     fun an_empty_list_produces_no_positions() {
@@ -55,10 +56,10 @@ class MessageGroupingTest {
     }
 
     @Test
-    fun same_sender_beyond_the_gap_starts_a_new_group() {
+    fun same_sender_across_midnight_starts_a_new_group() {
         val positions = positionsFor(
-            msg("m1", senderId = "u1", at = 0L),
-            msg("m2", senderId = "u1", at = gap + 1L),
+            msg("m1", senderId = "u1", at = 23 * hour),
+            msg("m2", senderId = "u1", at = 25 * hour),
         )
 
         assertThat(positions.getValue("m1").isStandalone).isTrue()
@@ -66,10 +67,11 @@ class MessageGroupingTest {
     }
 
     @Test
-    fun a_gap_exactly_on_the_threshold_still_groups() {
+    fun same_sender_hours_apart_on_the_same_day_still_groups() {
+        // iOS n'a pas de fenêtre de 5 min : seul le jour calendaire coupe une suite.
         val positions = positionsFor(
-            msg("m1", senderId = "u1", at = 0L),
-            msg("m2", senderId = "u1", at = gap),
+            msg("m1", senderId = "u1", at = 1 * hour),
+            msg("m2", senderId = "u1", at = 20 * hour),
         )
 
         assertThat(positions.getValue("m1").isLastInGroup).isFalse()
@@ -166,22 +168,22 @@ class MessageGroupingTest {
     }
 
     @Test
-    fun a_custom_gap_overrides_the_default() {
-        val tightGap = 500L
+    fun the_day_boundary_follows_the_given_zone() {
+        // 23 h et 01 h UTC tombent le même jour à UTC-3 (20 h et 22 h).
         val positions = MessageGrouping.positions(
             listOf(
-                msg("m1", senderId = "u1", at = 0L),
-                msg("m2", senderId = "u1", at = 1_000L),
+                msg("m1", senderId = "u1", at = 23 * hour),
+                msg("m2", senderId = "u1", at = 25 * hour),
             ),
-            gapMillis = tightGap,
+            ZoneOffset.ofHours(-3),
         )
 
-        assertThat(positions.getValue("m1").isStandalone).isTrue()
-        assertThat(positions.getValue("m2").isStandalone).isTrue()
+        assertThat(positions.getValue("m1").isLastInGroup).isFalse()
+        assertThat(positions.getValue("m2").isFirstInGroup).isFalse()
     }
 
     @Test
-    fun an_out_of_order_timestamp_uses_the_absolute_delta() {
+    fun an_out_of_order_timestamp_on_the_same_day_still_groups() {
         val positions = positionsFor(
             msg("m1", senderId = "u1", at = 5_000L),
             msg("m2", senderId = "u1", at = 4_000L),

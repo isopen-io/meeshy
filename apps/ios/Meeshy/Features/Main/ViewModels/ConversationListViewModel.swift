@@ -13,7 +13,7 @@ class ConversationListViewModel: ObservableObject {
         didSet {
             _convIdIndex = nil
             // G-124 — point de composition de `GatewayBridgeProvider`
-            // (`ConversationBridgeProviding`, LWS-2bis/M-048, `Lentille/Core/
+            // (`ConversationBridgeProviding`, LWS-2bis/M-048, `Lens/Core/
             // GatewayBridgeProvider.swift`). `didSet` est le SEUL endroit où
             // convergent le chargement REST initial (`setConversations`) et
             // les rechargements déclenchés par le socket
@@ -108,11 +108,9 @@ class ConversationListViewModel: ObservableObject {
     /// synchronisation son `@pseudo`. Une divergence entre les deux se lirait
     /// comme deux personnes en train d'écrire.
     @Published var typingUsers: [String: String] = [:]
-    /// #12968 — le clair local du dernier message scellé, en mémoire seulement.
-    lazy var endToEndTexts = ConversationListEndToEndTextStore(
-        rows: $conversations.eraseToAnyPublisher(), viewerId: { [weak self] in self?.authManager.currentUser?.id },
-        willChange: { [weak self] in self?.objectWillChange.send() }
-    )
+    /// #12968 — le clair local du dernier message scellé, en mémoire seulement, lu dès l'`init` (#13002).
+    lazy var endToEndTexts = ConversationListEndToEndTextStore(rows: $conversations.eraseToAnyPublisher(),
+        viewerId: { [weak self] in self?.authManager.currentUser?.id }, willChange: { [weak self] in self?.objectWillChange.send() })
     /// Qui écrit où (état par membre, échéances 15 s, abonnements) : voir
     /// `ConversationListTypingTracker`, qui réaligne `typingUsernames` et
     /// `typingUsers` par `applyTypingSelection`.
@@ -508,6 +506,7 @@ class ConversationListViewModel: ObservableObject {
         subscribeToSocketEvents()
         subscribeToPushNotifications()
         subscribeToDrafts()
+        _ = endToEndTexts
         syncBadgeOnUnreadChange()
         setupBackgroundProcessing()
         observeMarkAsRead()

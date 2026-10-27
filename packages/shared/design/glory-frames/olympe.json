@@ -41,6 +41,7 @@
               1080,
               1920
             ],
+            "path": "M45 0h10v1h-10ZM1025 0h10v1h-10ZM41 1h4v1h-3v1h-4v-1h3ZM1035 1h4v1h3v1h-4v-1h-3ZM35 3h3v1h-3ZM1042 3h3v1h-3ZM32 4h3v1h-2v1h-2v1h-2v1h-2v-1h1v-1h2v-1h2ZM1045 4h3v1h1v1h-2v-1h-2ZM1049 6h3v1h1v1h-2v-1h-2ZM25 8h2v1h-1v1h-2v-1h1ZM1053 8h2v1h1v1h-2v-1h-1ZM22 10h2v1h-1v1h-1v1h-2v-1h1v-1h1ZM1056 10h2v1h1v1h1v1h-2v-1h-1v-1h-1ZM19 13h1v1h-1ZM1060 13h1v1h-1ZM18 14h1v1h-1ZM1061 14h1v1h-1ZM17 15h1v1h-1ZM1062 15h1v1h-1ZM15 16h2v1h-1v1h-1ZM1063 16h2v2h-1v-1h-1ZM14 18h1v1h-1ZM1065 18h1v1h-1ZM13 19h1v1h-1ZM1066 19h1v1h1v1h1v1h1v2h-1v-1h-1v-1h-1v-1h-1ZM12 20h1v2h-1v1h-1v1h-1v-2h1v-1h1ZM9 24h1v2h-1v2h-1v1h-1v-2h1v-2h1ZM1070 24h1v1h1v2h1v2h-1v-1h-1v-2h-1ZM6 29h1v2h-1v2h-1v-3h1ZM1073 29h1v1h1v3h-1v-2h-1ZM4 33h1v2h-1ZM1075 33h1v2h-1ZM3 35h1v3h-1ZM1076 35h1v3h-1ZM2 38h1v3h-1ZM1077 38h1v3h-1ZM1 41h1v4h-1ZM1078 41h1v4h-1ZM0 45h1v11h-1ZM1079 45h1v11h-1ZM180 546h720v1h3v1h2v1h1v1h1v1h1v2h1v3h1v832h-1v3h-1v2h-1v1h-1v1h-1v1h-2v1h-3v1h-720v-1h-3v-1h-2v-1h-1v-1h-1v-1h-1v-2h-1v-3h-1v-832h1v-3h1v-2h1v-1h1v-1h1v-1h2v-1h3ZM0 1864h1v11h-1ZM1079 1864h1v11h-1ZM1 1875h1v4h-1ZM1078 1875h1v4h-1v3h-1v-4h1ZM2 1879h1v3h-1ZM3 1882h1v3h-1ZM1076 1882h1v3h-1ZM4 1885h1v2h1v2h1v2h-1v-1h-1v-2h-1ZM1075 1885h1v2h-1ZM1074 1887h1v3h-1v1h-1v-2h1ZM7 1891h1v2h-1ZM1072 1891h1v2h-1ZM8 1893h1v1h1v2h-1v-1h-1ZM1071 1893h1v2h-1v1h-1v-2h1ZM10 1896h1v1h1v1h1v2h-1v-1h-1v-1h-1ZM1069 1896h1v2h-1v1h-1v1h-1v-2h1v-1h1ZM13 1900h1v1h-1ZM1066 1900h1v1h-1ZM14 1901h1v1h-1ZM1065 1901h1v1h-1ZM15 1902h1v1h1v1h-2ZM1064 1902h1v1h-1ZM1063 1903h1v1h-1ZM17 1904h1v1h-1ZM1062 1904h1v1h-1ZM18 1905h1v1h-1ZM1061 1905h1v1h-1ZM19 1906h2v1h1v1h1v1h-2v-1h-1v-1h-1ZM1059 1906h2v1h-1v1h-1v1h-2v-1h1v-1h1ZM23 1909h2v1h1v1h2v1h1v1h-2v-1h-2v-1h-1v-1h-1ZM1056 1909h1v1h-1ZM1054 1910h2v1h-1v1h-2v1h-2v-1h1v-1h2ZM29 1913h2v1h-2ZM1049 1913h2v1h-2ZM31 1914h2v1h-2ZM1047 1914h2v1h-2ZM33 1915h2v1h-2ZM1045 1915h2v1h-2ZM35 1916h3v1h-3ZM1042 1916h3v1h-3ZM38 1917h4v1h3v1h-4v-1h-3ZM1038 1917h4v1h-3v1h-4v-1h3ZM45 1919h10v1h-10ZM1025 1919h10v1h-10Z",
             "mask": {
               "src": "f9ec97a3378d1b99.webp",
               "bytes": 548,
@@ -214,6 +215,44 @@
           "birds": {
             "default": "perches",
             "layouts": {
+              "pied": {
+                "mee": {
+                  "sticker": "mee-coucou",
+                  "box": [
+                    46,
+                    1362,
+                    300,
+                    300
+                  ],
+                  "rotate": -6,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0865,
+                    1,
+                    0.827
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-salut",
+                  "box": [
+                    768,
+                    1318,
+                    300,
+                    300
+                  ],
+                  "rotate": 6,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0104,
+                    1,
+                    0.9792
+                  ]
+                }
+              },
               "perches": {
                 "mee": {
                   "sticker": "mee-coucou",
@@ -225,7 +264,13 @@
                   ],
                   "rotate": -10,
                   "flip": false,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0865,
+                    1,
+                    0.827
+                  ]
                 },
                 "meo": {
                   "sticker": "meo-salut",
@@ -237,8 +282,119 @@
                   ],
                   "rotate": 10,
                   "flip": true,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0104,
+                    1,
+                    0.9792
+                  ]
                 }
+              },
+              "cotes": {
+                "mee": {
+                  "sticker": "mee-coucou",
+                  "box": [
+                    -26.4,
+                    753.6,
+                    212.8,
+                    212.8
+                  ],
+                  "rotate": 18,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0865,
+                    1,
+                    0.827
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-salut",
+                  "box": [
+                    893.6,
+                    833.6,
+                    212.8,
+                    212.8
+                  ],
+                  "rotate": 342,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0104,
+                    1,
+                    0.9792
+                  ]
+                }
+              },
+              "duo": {
+                "pair": {
+                  "sticker": "duo-coucou",
+                  "box": [
+                    376,
+                    1336,
+                    328,
+                    328
+                  ],
+                  "rotate": 0,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.14,
+                    1,
+                    0.72
+                  ]
+                }
+              },
+              "selfie": {
+                "meo": {
+                  "sticker": "meo-selfie",
+                  "box": [
+                    650,
+                    1090,
+                    380,
+                    380
+                  ],
+                  "rotate": 0,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0375,
+                    1,
+                    0.9251
+                  ]
+                }
+              }
+            },
+            "validated": {
+              "pied": {
+                "overlap": 89,
+                "depth": 4,
+                "face": 0
+              },
+              "perches": {
+                "overlap": 0,
+                "depth": 0,
+                "face": 0
+              },
+              "cotes": {
+                "overlap": 86,
+                "depth": 5,
+                "face": 0
+              },
+              "duo": {
+                "overlap": 30,
+                "depth": 3,
+                "face": 0
+              },
+              "selfie": {
+                "overlap": 10746,
+                "depth": 122,
+                "face": 0
               }
             }
           },
@@ -291,6 +447,7 @@
               1080,
               1920
             ],
+            "path": "M45 0h10v1h-10ZM1025 0h10v1h-10ZM41 1h4v1h-3v1h-4v-1h3ZM1035 1h4v1h3v1h-4v-1h-3ZM35 3h3v1h-3ZM1042 3h3v1h-3ZM32 4h3v1h-2v1h-2v1h-2v1h-2v-1h1v-1h2v-1h2ZM1045 4h3v1h1v1h-2v-1h-2ZM1049 6h3v1h1v1h-2v-1h-2ZM25 8h2v1h-1v1h-2v-1h1ZM1053 8h2v1h1v1h-2v-1h-1ZM22 10h2v1h-1v1h-1v1h-2v-1h1v-1h1ZM1056 10h2v1h1v1h1v1h-2v-1h-1v-1h-1ZM19 13h1v1h-1ZM1060 13h1v1h-1ZM18 14h1v1h-1ZM1061 14h1v1h-1ZM17 15h1v1h-1ZM1062 15h1v1h-1ZM15 16h2v1h-1v1h-1ZM1063 16h2v2h-1v-1h-1ZM14 18h1v1h-1ZM1065 18h1v1h-1ZM13 19h1v1h-1ZM1066 19h1v1h1v1h1v1h1v2h-1v-1h-1v-1h-1v-1h-1ZM12 20h1v2h-1v1h-1v1h-1v-2h1v-1h1ZM9 24h1v2h-1v2h-1v1h-1v-2h1v-2h1ZM1070 24h1v1h1v2h1v2h-1v-1h-1v-2h-1ZM6 29h1v2h-1v2h-1v-3h1ZM1073 29h1v1h1v3h-1v-2h-1ZM4 33h1v2h-1ZM1075 33h1v2h-1ZM3 35h1v3h-1ZM1076 35h1v3h-1ZM2 38h1v3h-1ZM1077 38h1v3h-1ZM1 41h1v4h-1ZM1078 41h1v4h-1ZM0 45h1v11h-1ZM1079 45h1v11h-1ZM491 526h89v1h28v1h15v1h14v1h10v1h10v1h9v1h8v1h7v1h8v1h7v1h6v1h6v1h5v1h5v1h5v1h5v1h5v1h5v1h4v1h4v1h3v1h4v1h4v1h4v1h4v1h3v1h4v1h3v1h3v1h3v1h3v1h3v1h3v1h3v1h2v1h3v1h3v1h2v1h2v1h3v1h2v1h2v1h3v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h1v1h2v1h2v1h1v1h2v1h2v1h1v1h2v1h1v1h2v1h1v1h2v1h1v1h1v1h2v1h1v1h2v1h1v1h1v1h1v1h2v1h1v1h1v1h1v1h1v1h2v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v2h1v1h1v1h1v1h1v2h1v1h1v1h1v1h1v2h1v1h1v2h1v1h1v2h1v1h1v2h1v1h1v2h1v2h1v2h1v1h1v2h1v2h1v2h1v2h1v2h1v3h1v2h1v2h1v3h1v2h1v4h1v3h1v3h1v3h1v4h1v5h1v4h1v5h1v8h1v9h1v744h-1v3h-1v3h-1v2h-1v1h-1v2h-1v1h-1v1h-2v1h-1v1h-2v1h-3v1h-4v1h-750v-1h-4v-1h-3v-1h-2v-1h-1v-1h-2v-1h-1v-1h-1v-2h-1v-1h-1v-2h-1v-3h-1v-4h-1v-742h1v-11h1v-6h1v-6h1v-5h1v-4h1v-4h1v-3h1v-3h1v-3h1v-3h1v-3h1v-3h1v-2h1v-2h1v-3h1v-2h1v-2h1v-2h1v-2h1v-2h1v-2h1v-1h1v-2h1v-2h1v-1h1v-2h1v-1h1v-2h1v-1h1v-2h1v-1h1v-2h1v-1h1v-1h1v-2h1v-1h1v-1h1v-1h1v-1h1v-2h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h2v-1h1v-1h1v-1h1v-1h2v-1h1v-1h1v-1h2v-1h1v-1h1v-1h1v-1h2v-1h1v-1h2v-1h1v-1h2v-1h1v-1h2v-1h1v-1h2v-1h2v-1h1v-1h2v-1h2v-1h1v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h3v-1h2v-1h2v-1h3v-1h2v-1h3v-1h3v-1h2v-1h3v-1h3v-1h3v-1h3v-1h3v-1h3v-1h3v-1h3v-1h4v-1h3v-1h4v-1h4v-1h3v-1h4v-1h5v-1h4v-1h5v-1h4v-1h5v-1h5v-1h5v-1h6v-1h6v-1h6v-1h6v-1h7v-1h8v-1h7v-1h10v-1h10v-1h11v-1h12v-1h15v-1h21ZM0 1870h1v5h-1ZM1079 1870h1v5h-1ZM1 1876h1v3h-1ZM1078 1876h1v3h-1ZM2 1880h1v2h-1ZM1077 1880h1v2h-1ZM3 1883h1v2h-1ZM1076 1883h1v2h-1ZM4 1886h1v2h-1ZM1075 1886h1v1h-1ZM5 1888h1v2h-1ZM1074 1888h1v2h-1ZM6 1890h1v1h-1ZM1073 1890h1v1h-1ZM7 1892h1v1h-1ZM1072 1892h1v1h-1ZM8 1893h1v2h-1ZM1071 1893h1v2h-1ZM9 1895h1v1h-1ZM1070 1895h1v1h-1ZM10 1896h1v2h-1ZM1069 1896h1v2h-1ZM11 1898h1v1h-1ZM1068 1898h1v1h-1ZM12 1899h1v1h-1ZM1067 1899h1v1h-1ZM13 1900h1v1h-1ZM1066 1900h1v1h-1ZM14 1901h1v1h-1ZM1065 1901h1v1h-1ZM15 1902h1v1h1v1h-2ZM1064 1902h1v1h-1ZM1063 1903h1v1h-1ZM17 1904h1v1h-1ZM1062 1904h1v1h-1ZM18 1905h1v1h-1ZM1061 1905h1v1h-1ZM19 1906h1v1h-1ZM1060 1906h1v1h-1ZM20 1907h1v1h-1ZM1059 1907h1v1h-1ZM21 1908h2v1h-2ZM1057 1908h2v1h-2ZM23 1909h1v1h-1ZM1056 1909h1v1h-1ZM24 1910h1v1h-1ZM1055 1910h1v1h-1ZM25 1911h2v1h-2ZM1053 1911h2v1h-2ZM27 1912h2v1h-2ZM1051 1912h2v1h-2ZM29 1913h2v1h-2ZM1049 1913h2v1h-2ZM31 1914h1v1h-1ZM1048 1914h1v1h-1ZM33 1915h1v1h-1ZM1046 1915h1v1h-1ZM35 1916h2v1h-2ZM1043 1916h2v1h-2ZM38 1917h2v1h-2ZM1040 1917h2v1h-2ZM41 1918h3v1h-3ZM1036 1918h3v1h-3ZM45 1919h5v1h-5ZM1030 1919h5v1h-5Z",
             "mask": {
               "src": "892e097209a73a4e.webp",
               "bytes": 1054,
@@ -536,31 +693,161 @@
           "birds": {
             "default": "cotes",
             "layouts": {
-              "cotes": {
+              "pied": {
                 "mee": {
                   "sticker": "mee-sourire",
                   "box": [
-                    -60,
-                    720,
-                    280,
-                    280
+                    14,
+                    1449,
+                    210,
+                    210
                   ],
-                  "rotate": 18,
+                  "rotate": -6,
                   "flip": false,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.025,
+                    1,
+                    0.95
+                  ]
                 },
                 "meo": {
                   "sticker": "meo-cool",
                   "box": [
-                    860,
-                    800,
-                    280,
-                    280
+                    840,
+                    1426,
+                    228,
+                    228
+                  ],
+                  "rotate": 6,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0104,
+                    1,
+                    0.9792
+                  ]
+                }
+              },
+              "perches": {
+                "mee": {
+                  "sticker": "mee-sourire",
+                  "box": [
+                    116,
+                    64,
+                    240,
+                    240
+                  ],
+                  "rotate": -10,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.025,
+                    1,
+                    0.95
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-cool",
+                  "box": [
+                    724,
+                    64,
+                    240,
+                    240
+                  ],
+                  "rotate": 10,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0104,
+                    1,
+                    0.9792
+                  ]
+                }
+              },
+              "cotes": {
+                "mee": {
+                  "sticker": "mee-sourire",
+                  "box": [
+                    -38,
+                    762,
+                    196,
+                    196
+                  ],
+                  "rotate": 18,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.025,
+                    1,
+                    0.95
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-cool",
+                  "box": [
+                    922,
+                    842,
+                    196,
+                    196
                   ],
                   "rotate": 342,
                   "flip": true,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0104,
+                    1,
+                    0.9792
+                  ]
                 }
+              },
+              "selfie": {
+                "meo": {
+                  "sticker": "meo-selfie",
+                  "box": [
+                    650,
+                    1090,
+                    380,
+                    380
+                  ],
+                  "rotate": 0,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0375,
+                    1,
+                    0.9251
+                  ]
+                }
+              }
+            },
+            "validated": {
+              "pied": {
+                "overlap": 31,
+                "depth": 2,
+                "face": 0
+              },
+              "perches": {
+                "overlap": 0,
+                "depth": 0,
+                "face": 0
+              },
+              "cotes": {
+                "overlap": 84,
+                "depth": 4,
+                "face": 0
+              },
+              "selfie": {
+                "overlap": 13280,
+                "depth": 135,
+                "face": 0
               }
             }
           },
@@ -615,6 +902,7 @@
               1080,
               1920
             ],
+            "path": "M45 0h10v1h-10ZM1025 0h10v1h-10ZM41 1h4v1h-3v1h-4v-1h3ZM1035 1h4v1h3v1h-4v-1h-3ZM35 3h3v1h-3ZM1042 3h3v1h-3ZM32 4h3v1h-2v1h-2v1h-2v1h-2v-1h1v-1h2v-1h2ZM1045 4h3v1h1v1h-2v-1h-2ZM1049 6h3v1h1v1h-2v-1h-2ZM25 8h2v1h-1v1h-2v-1h1ZM1053 8h2v1h1v1h-2v-1h-1ZM22 10h2v1h-1v1h-1v1h-2v-1h1v-1h1ZM1056 10h2v1h1v1h1v1h-2v-1h-1v-1h-1ZM19 13h1v1h-1ZM1060 13h1v1h-1ZM18 14h1v1h-1ZM1061 14h1v1h-1ZM17 15h1v1h-1ZM1062 15h1v1h-1ZM15 16h2v1h-1v1h-1ZM1063 16h2v2h-1v-1h-1ZM14 18h1v1h-1ZM1065 18h1v1h-1ZM13 19h1v1h-1ZM1066 19h1v1h1v1h1v1h1v2h-1v-1h-1v-1h-1v-1h-1ZM12 20h1v2h-1v1h-1v1h-1v-2h1v-1h1ZM9 24h1v2h-1v2h-1v1h-1v-2h1v-2h1ZM1070 24h1v1h1v2h1v2h-1v-1h-1v-2h-1ZM6 29h1v2h-1v2h-1v-3h1ZM1073 29h1v1h1v3h-1v-2h-1ZM4 33h1v2h-1ZM1075 33h1v2h-1ZM3 35h1v3h-1ZM1076 35h1v3h-1ZM2 38h1v3h-1ZM1077 38h1v3h-1ZM1 41h1v4h-1ZM1078 41h1v4h-1ZM0 45h1v11h-1ZM1079 45h1v11h-1ZM534 502h12v1h19v1h10v1h6v1h7v1h5v1h5v1h3v1h5v1h4v1h4v1h3v1h3v1h3v1h4v1h3v1h3v1h2v1h3v1h2v1h3v1h2v1h3v1h2v1h3v1h2v1h2v1h2v1h2v1h2v1h2v1h3v1h2v1h2v1h2v1h1v1h2v1h2v1h2v1h2v1h1v1h2v1h2v1h1v1h2v1h2v1h1v1h2v1h1v1h2v1h1v1h2v1h1v1h2v1h1v1h2v1h1v1h-1v1h1v1h2v1h3v1h2v1h1v1h2v1h1v1h1v1h2v1h1v1h1v1h2v1h1v1h1v1h1v1h2v1h1v1h1v1h1v1h1v1h1v1h1v1h2v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h2v1h1v1h1v1h1v1h1v1h1v1h1v1h1v3h1v1h1v1h1v1h2v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v2h1v1h1v1h1v1h1v1h1v1h1v1h1v2h1v1h1v1h1v1h1v2h1v1h1v1h1v1h1v2h1v1h1v1h1v1h1v2h1v1h1v1h1v2h1v1h1v1h1v2h1v1h1v2h1v1h-1v9h1v2h1v2h2v1h1v1h7v1h1v2h1v1h1v2h1v1h1v2h1v2h1v1h1v2h1v1h1v2h1v2h1v2h1v1h1v2h1v2h1v2h1v1h1v2h1v2h1v2h1v2h1v2h1v1h1v2h1v2h1v2h1v2h1v1h-1v1h-2v1h1v1h1v2h1v1h1v1h1v1h1v1h1v1h1v2h1v2h1v2h1v2h1v2h1v3h1v2h1v2h1v2h1v3h-1v6h1v3h1v2h1v1h1v1h1v1h2v1h1v3h1v2h1v3h1v3h1v2h1v3h1v3h1v3h1v3h1v3h1v3h1v4h1v3h1v3h1v3h1v3h1v4h1v4h1v3h1v4h1v4h1v4h1v4h1v4h1v4h1v5h1v5h1v3h-1v6h1v4h1v1h1v2h1v5h1v6h1v6h1v7h1v8h1v8h1v10h1v11h1v4h-1v-1h-1v4h1v5h1v5h1v26h-1v2h-3v1h1v6h1v4h1v3h1v22h-2v11h1v10h-1v12h-1v7h-2v-1h-1v18h1v1h-1v6h-1v7h-1v3h-1v2h-1v2h-1v3h-1v-1h-2v-1h-1v2h-1v6h1v8h1v5h1v2h-1v5h-1v5h-1v4h-1v-1h-2v-1h-1v5h-1v16h-1v4h-1v3h-1v4h-1v3h-1v3h-1v3h-1v-1h-1v-1h-1v-1h-2v-1h-1v3h-1v8h-1v3h1v12h-1v2h-1v3h-2v1h-1v1h-1v1h-1v1h-1v2h-1v2h-1v-1h-1v-1h-1v-1h-2v-1h-1v3h-1v6h-1v10h1v11h-1v3h-1v2h-1v2h-1v2h-1v1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v1h-1v3h-1v4h-1v22h-1v2h-1v2h-1v2h-1v1h-1v-2h-1v-1h-1v-1h-1v-1h-1v-2h-2v2h-1v2h-1v3h-1v3h-1v4h-1v9h-1v6h-4v1h-3v1h-1v1h-1v1h-1v1h-1v3h-1v9h-1v3h-1v2h-1v1h-1v1h-1v2h-1v1h-1v2h-1v1h-1v-2h-1v-1h-1v1h-1v1h-1v1h-1v2h-1v1h-1v2h-1v1h-1v2h-1v2h-1v2h-1v1h-1v3h-1v2h-1v2h-1v1h-1v2h-1v1h-1v1h-1v1h-1v1h-2v-2h-1v-3h-2v1h-1v1h-1v1h-1v1h-1v1h-1v2h-1v1h-1v2h-1v1h-1v2h-1v2h-1v2h-1v3h-1v2h-1v2h-1v2h-1v1h-1v1h-1v1h-2v-1h-1v-1h-1v-2h-1v-3h-1v-1h-1v1h-1v1h-1v1h-1v2h-2v2h-1v1h-1v1h-1v2h-1v1h-1v2h-1v2h-1v2h-1v2h-1v3h-1v2h-1v2h-1v-4h-1v-2h-1v1h-1v1h-1v1h-2v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v2h-1v1h-1v1h-1v2h-1v1h-1v2h-1v2h-1v1h-1v2h-1v1h-2v1h-1v1h-2v-7h-1v-7h-1v1h-1v1h-2v1h-1v1h-1v1h-1v1h-1v1h-2v1h-1v1h-1v2h-1v1h-1v1h-1v1h-1v1h-1v2h-1v1h-1v2h-1v2h-1v2h-1v2h-1v1h-1v-11h-2v1h-2v1h-1v1h-2v1h-1v1h-2v1h-3v1h-2v1h-1v1h-1v2h-1v3h-1v1h-1v1h-1v1h-1v2h-1v1h-1v2h-1v1h-1v1h-1v2h-1v1h-1v1h-3v1h-2v1h-3v1h-3v1h-3v1h-2v1h-3v1h-3v1h-4v1h-3v1h-4v1h-3v1h-4v1h-4v1h-5v1h-4v1h-5v1h-7v1h-8v1h-9v1h-18v1h-11v-1h-18v-1h-10v-1h-8v-1h-6v-1h-6v-1h-5v-1h-4v-1h-4v-1h-4v-1h-4v-1h-3v-1h-4v-1h-3v-1h-3v-1h-3v-1h-3v-1h-3v-1h-2v-1h-3v-1h-2v-1h-3v-2h-1v-1h-1v-2h-1v-1h-1v-2h-1v-1h-1v-2h-1v-1h-1v-1h-1v-2h-1v-1h-1v-1h-1v-2h-1v-1h-1v-1h-2v-1h-1v-1h-2v-1h-1v-1h-1v-1h-2v-1h-1v-1h-2v-1h-2v15h-1v-1h-2v-1h-2v-1h-1v-2h-1v-1h-1v-1h-1v-1h-1v-2h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-2v-1h-1v-1h-2v-1h-1v-1h-2v-1h-2v2h-1v-2h-1v-1h-1v-2h-1v-2h-1v-1h-1v-2h-1v-1h-1v-2h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-2v2h-1v6h-1v3h-1v-1h-1v-2h-1v-3h-1v-3h-1v-2h-1v-3h-1v-2h-1v-2h-1v-1h-1v-2h-1v-2h-1v-1h-1v-1h-1v-2h-1v-1h-1v-1h-1v-1h-1v-1h-2v3h-1v2h-1v1h-2v1h-1v1h-2v-3h-1v-4h-1v-4h-1v-3h-1v-2h-1v-2h-1v-2h-1v-2h-1v-2h-1v-1h-1v-2h-1v-1h-1v-1h-1v-1h-2v2h-1v3h-1v3h-1v2h-2v-2h-1v-1h-1v-1h-1v-4h-1v-6h-1v-4h-1v-3h-1v-3h-1v-2h-1v-2h-1v-2h-1v-2h-1v-1h-1v-1h-2v1h-1v2h-1v3h-1v2h-1v1h-1v-1h-1v-1h-1v-1h-1v-2h-1v-1h-1v-2h-1v-1h-1v-2h-1v-3h-1v-4h-1v-4h-1v-2h-1v-3h-1v-2h-1v-2h-1v-2h-1v-1h-1v-2h-2v1h-5v-1h-1v-2h-1v-9h-1v-5h-1v-4h-1v-3h-1v-3h-1v-2h-1v-2h-1v2h-1v1h-1v1h-1v2h-1v1h-2v-2h-1v-2h-1v-2h-1v-2h-1v-2h-1v-2h-1v-9h-1v-6h-1v-3h-1v-4h-1v-2h-1v-1h-1v1h-1v1h-1v1h-1v1h-1v-1h-1v-2h-1v-3h-1v-2h-1v-2h-1v-2h-1v-3h-1v-2h-1v-6h-1v-5h-1v-6h-1v-2h-1v-2h-2v-1h-1v-1h-2v-3h-1v-2h-1v-10h1v-6h-1v-8h-1v-2h-1v1h-2v1h-1v1h-1v1h-1v-3h-1v-2h-1v-4h-1v-3h-1v-4h-1v-4h-1v-4h-1v-12h-1v-5h-2v1h-1v-3h-1v-5h-1v-5h-1v-2h1v-5h1v-7h1v-7h-1v-2h-1v1h-2v1h-1v-3h-1v-2h-1v-2h-1v-3h-1v-6h-1v-7h-1v-4h1v-15h-2v1h-1v-7h-1v-11h-1v-16h-1v-37h1v-7h-1v-25h1v-3h1v-4h1v-7h-1v1h-1v-5h1v-11h1v-9h1v-3h1v-2h1v-4h1v-4h1v-1h-3v-4h1v-6h1v-6h1v-5h1v-2h1v-2h1v-2h1v-2h1v-2h1v-2h1v-3h-2v-4h-1v-3h1v-5h1v-4h1v-5h1v-4h1v-4h1v-4h1v-2h1v-3h1v-3h1v-1h-1v-2h1v-4h1v-4h1v-3h1v-3h1v-3h1v-3h1v-3h1v-2h1v-1h1v-2h1v-2h1v-3h-1v-3h1v-3h1v-3h1v-2h1v-3h1v-3h1v-2h1v-2h1v-1h1v-1h1v-1h1v-1h1v-1h1v-2h1v-2h1v-2h1v-1h-1v-4h-1v-3h1v-2h1v-2h1v-2h1v-3h1v-2h1v-2h1v-2h1v-2h1v-2h1v-3h1v-2h1v-2h1v-2h1v-2h1v-2h1v-2h1v-2h1v-2h1v-2h1v-1h1v-2h1v-2h1v-2h1v-1h1v-2h1v-2h1v-2h1v-2h1v-1h1v-2h1v-2h1v-1h1v-2h1v-2h1v-1h1v-2h1v-1h1v-2h1v-2h1v-1h1v-2h1v-1h7v-1h1v-1h2v-2h1v-2h1v-9h-1v-1h1v-2h1v-1h1v-1h1v-2h1v-1h1v-2h1v-1h1v-1h1v-1h1v-2h1v-1h1v-1h1v-1h1v-2h1v-1h1v-1h1v-2h1v-1h1v-1h1v-1h1v-1h1v-2h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-2h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-2h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h2v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h2v-1h1v-1h1v-1h1v-1h1v-1h1v-1h2v-1h1v-1h1v-1h1v-1h2v-1h1v-1h1v-1h1v-1h1v-1h2v-1h1v-1h2v-1h1v-1h1v-1h2v-1h1v-1h1v-1h2v-1h1v-1h1v-1h2v-1h2v-1h1v-1h2v-1h1v-1h2v-1h1v-1h2v-1h2v-1h1v-1h2v-1h2v-1h2v-1h3v-1h1v-2h2v-1h2v-1h2v-1h1v-1h2v-1h2v-1h2v-1h3v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h3v-1h2v-1h3v-1h2v-1h3v-1h2v-1h3v-1h2v-1h3v-1h3v-1h4v-1h3v-1h3v-1h3v-1h4v-1h4v-1h5v-1h4v-1h4v-1h6v-1h7v-1h7v-1h9v-1h18ZM0 1864h1v11h-1ZM1079 1864h1v11h-1ZM1 1875h1v4h-1ZM1078 1875h1v4h-1v3h-1v-4h1ZM2 1879h1v3h-1ZM3 1882h1v3h-1ZM1076 1882h1v3h-1ZM4 1885h1v2h1v2h1v2h-1v-1h-1v-2h-1ZM1075 1885h1v2h-1ZM1074 1887h1v3h-1v1h-1v-2h1ZM7 1891h1v2h-1ZM1072 1891h1v2h-1ZM8 1893h1v1h1v2h-1v-1h-1ZM1071 1893h1v2h-1v1h-1v-2h1ZM10 1896h1v1h1v1h1v2h-1v-1h-1v-1h-1ZM1069 1896h1v2h-1v1h-1v1h-1v-2h1v-1h1ZM13 1900h1v1h-1ZM1066 1900h1v1h-1ZM14 1901h1v1h-1ZM1065 1901h1v1h-1ZM15 1902h1v1h1v1h-2ZM1064 1902h1v1h-1ZM1063 1903h1v1h-1ZM17 1904h1v1h-1ZM1062 1904h1v1h-1ZM18 1905h1v1h-1ZM1061 1905h1v1h-1ZM19 1906h2v1h1v1h1v1h-2v-1h-1v-1h-1ZM1059 1906h2v1h-1v1h-1v1h-2v-1h1v-1h1ZM23 1909h2v1h1v1h2v1h1v1h-2v-1h-2v-1h-1v-1h-1ZM1056 1909h1v1h-1ZM1054 1910h2v1h-1v1h-2v1h-2v-1h1v-1h2ZM29 1913h2v1h-2ZM1049 1913h2v1h-2ZM31 1914h2v1h-2ZM1047 1914h2v1h-2ZM33 1915h2v1h-2ZM1045 1915h2v1h-2ZM35 1916h3v1h-3ZM1042 1916h3v1h-3ZM38 1917h4v1h3v1h-4v-1h-3ZM1038 1917h4v1h-3v1h-4v-1h3ZM45 1919h10v1h-10ZM1025 1919h10v1h-10Z",
             "mask": {
               "src": "911fd5bf80846af3.webp",
               "bytes": 2364,
@@ -860,6 +1148,44 @@
           "birds": {
             "default": "perches",
             "layouts": {
+              "pied": {
+                "mee": {
+                  "sticker": "mee-bravo",
+                  "box": [
+                    29,
+                    1267,
+                    300,
+                    300
+                  ],
+                  "rotate": -6,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0.0411,
+                    0,
+                    0.9179,
+                    1
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-trophee",
+                  "box": [
+                    768,
+                    1284,
+                    300,
+                    300
+                  ],
+                  "rotate": 6,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.033,
+                    1,
+                    0.934
+                  ]
+                }
+              },
               "perches": {
                 "mee": {
                   "sticker": "mee-bravo",
@@ -871,7 +1197,13 @@
                   ],
                   "rotate": -10,
                   "flip": false,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0.0411,
+                    0,
+                    0.9179,
+                    1
+                  ]
                 },
                 "meo": {
                   "sticker": "meo-trophee",
@@ -883,8 +1215,119 @@
                   ],
                   "rotate": 10,
                   "flip": true,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.033,
+                    1,
+                    0.934
+                  ]
                 }
+              },
+              "cotes": {
+                "mee": {
+                  "sticker": "mee-bravo",
+                  "box": [
+                    -44.6,
+                    714.4,
+                    263.2,
+                    263.2
+                  ],
+                  "rotate": 18,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0.0411,
+                    0,
+                    0.9179,
+                    1
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-trophee",
+                  "box": [
+                    885.2,
+                    805.2,
+                    229.6,
+                    229.6
+                  ],
+                  "rotate": 342,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.033,
+                    1,
+                    0.934
+                  ]
+                }
+              },
+              "duo": {
+                "pair": {
+                  "sticker": "duo-coucou",
+                  "box": [
+                    555,
+                    1307,
+                    400,
+                    400
+                  ],
+                  "rotate": 0,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.14,
+                    1,
+                    0.72
+                  ]
+                }
+              },
+              "selfie": {
+                "meo": {
+                  "sticker": "meo-selfie",
+                  "box": [
+                    630,
+                    1070,
+                    380,
+                    380
+                  ],
+                  "rotate": 0,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0375,
+                    1,
+                    0.9251
+                  ]
+                }
+              }
+            },
+            "validated": {
+              "pied": {
+                "overlap": 55,
+                "depth": 4,
+                "face": 0
+              },
+              "perches": {
+                "overlap": 0,
+                "depth": 0,
+                "face": 0
+              },
+              "cotes": {
+                "overlap": 54,
+                "depth": 5,
+                "face": 0
+              },
+              "duo": {
+                "overlap": 12,
+                "depth": 3,
+                "face": 0
+              },
+              "selfie": {
+                "overlap": 6899,
+                "depth": 117,
+                "face": 0
               }
             }
           },
@@ -940,6 +1383,7 @@
               1080,
               1920
             ],
+            "path": "M45 0h10v1h-10ZM1025 0h10v1h-10ZM41 1h4v1h-3v1h-4v-1h3ZM1035 1h4v1h3v1h-4v-1h-3ZM35 3h3v1h-3ZM1042 3h3v1h-3ZM32 4h3v1h-2v1h-2v1h-2v1h-2v-1h1v-1h2v-1h2ZM1045 4h3v1h1v1h-2v-1h-2ZM1049 6h3v1h1v1h-2v-1h-2ZM25 8h2v1h-1v1h-2v-1h1ZM1053 8h2v1h1v1h-2v-1h-1ZM22 10h2v1h-1v1h-1v1h-2v-1h1v-1h1ZM1056 10h2v1h1v1h1v1h-2v-1h-1v-1h-1ZM19 13h1v1h-1ZM1060 13h1v1h-1ZM18 14h1v1h-1ZM1061 14h1v1h-1ZM17 15h1v1h-1ZM1062 15h1v1h-1ZM15 16h2v1h-1v1h-1ZM1063 16h2v2h-1v-1h-1ZM14 18h1v1h-1ZM1065 18h1v1h-1ZM13 19h1v1h-1ZM1066 19h1v1h1v1h1v1h1v2h-1v-1h-1v-1h-1v-1h-1ZM12 20h1v2h-1v1h-1v1h-1v-2h1v-1h1ZM9 24h1v2h-1v2h-1v1h-1v-2h1v-2h1ZM1070 24h1v1h1v2h1v2h-1v-1h-1v-2h-1ZM6 29h1v2h-1v2h-1v-3h1ZM1073 29h1v1h1v3h-1v-2h-1ZM4 33h1v2h-1ZM1075 33h1v2h-1ZM3 35h1v3h-1ZM1076 35h1v3h-1ZM2 38h1v3h-1ZM1077 38h1v3h-1ZM1 41h1v4h-1ZM1078 41h1v4h-1ZM0 45h1v11h-1ZM1079 45h1v11h-1ZM191 610h158v1h-1v7h-1v-1h-2v-1h-3v-1h-2v1h-1v-1h-2v1h-2v2h-2v1h-1v1h-1v3h-1v3h-1v-1h-3v-1h-1v-1h-2v1h-1v-1h-2v1h-3v1h-1v1h-1v2h-1v1h-1v1h1v1h-1v1h-1v-1h-2v-1h-1v-1h-1v1h-1v-1h-6v1h-2v1h-1v1h-1v2h-1v1h-2v-1h-2v-1h-2v-1h-3v1h-1v-1h-2v2h-1v-1h-1v1h-1v1h-1v1h-1v1h-2v-1h-2v-1h-2v-2h-1v1h-4v-1h-1v2h-2v1h-2v1h-2v-1h-1v-1h-1v-1h-1v-1h-1v1h-1v-2h-1v1h-2v-1h-3v1h-2v1h-2v1h-2v-1h-1v-2h-1v-1h-1v-1h-2v-1h-6v1h-1v-1h-1v1h-1v1h-2v1h-1v-1h-1v-1h1v-1h-1v-1h-1v-2h-1v-1h-1v-1h-3v-1h-2v1h-1v-1h-2v1h-1v1h-3v1h-1v-3h-1v-2h-1v-2h-1v-1h-1v-1h-1v-1h-2v-1h-2v1h-1v-1h-2v1h-3v1h-2v1h-1v-7h-1ZM397 610h4v1h9v-1h260v1h9v-1h4v2h1v1h-1v6h1v2h1v2h1v1h1v1h2v1h5v2h-1v1h-1v4h1v2h1v2h3v1h3v-1h3v-2h1v1h1v1h1v1h1v1h2v1h6v-1h3v-1h2v-1h2v7h1v1h1v3h1v1h2v1h2v1h1v-1h2v1h3v-1h2v-1h2v-1h2v4h1v3h1v1h1v1h1v1h1v1h3v2h-1v5h1v2h1v1h3v1h3v-1h2v-1h1v-1h1v-3h1v-1h-1v-3h-1v-1h-1v-1h-1v-1h2v-1h1v1h1v3h1v1h1v2h2v1h1v1h2v1h4v-1h3v-1h2v-1h1v-1h1v-1h1v1h1v2h1v2h1v1h1v1h2v1h3v1h3v-1h1v-1h1v1h1v-1h1v-1h1v-1h1v-1h1v-1h1v1h1v1h1v1h1v1h1v1h1v2h-1v6h1v1h1v1h1v1h6v-1h1v-1h1v-1h1v-6h-1v-2h1v-1h1v-1h1v-1h1v-1h1v-1h1v1h1v1h1v1h1v1h1v1h1v-1h1v1h1v1h3v-1h3v-1h2v-1h1v-1h1v-2h1v-2h1v-1h1v1h1v1h1v1h2v1h3v1h4v-1h2v-1h1v-1h2v-2h1v-1h1v-3h1v-1h1v1h2v1h-1v1h-1v1h-1v3h-1v1h1v3h1v1h1v1h2v1h3v-1h3v-1h1v-2h1v-5h-1v-2h3v-1h1v-1h1v-1h1v-1h1v-3h1v-4h2v1h2v1h2v1h6v-1h2v-1h2v-1h1v-1h1v-3h1v-7h2v1h1v1h1v820h-1v3h-1v1h-1v1h-1v1h-2v1h-712v-1h-2v-1h-1v-1h-1v-1h-1v-3h-1v-820h1v-1h1v-1h2v7h1v3h1v1h1v1h2v1h2v1h6v-1h2v-1h2v-1h2v4h1v3h1v1h1v1h1v1h1v1h3v2h-1v5h1v2h1v1h3v1h3v-1h2v-1h1v-1h1v-3h1v-1h-1v-3h-1v-1h-1v-1h-1v-1h2v-1h1v1h1v3h1v1h1v2h2v1h1v1h2v1h4v-1h3v-1h2v-1h1v-1h1v-1h1v1h1v2h1v2h1v1h1v1h2v1h3v1h3v-1h1v-1h1v1h1v-1h1v-1h1v-1h1v-1h1v-1h1v1h1v1h1v1h1v1h1v1h1v2h-1v6h1v1h1v1h1v1h6v-1h1v-1h1v-1h1v-6h-1v-2h1v-1h1v-1h1v-1h1v-1h1v-1h1v1h1v1h1v1h1v1h1v1h1v-1h1v1h1v1h3v-1h3v-1h2v-1h1v-1h1v-2h1v-2h1v-1h1v1h1v1h1v1h2v1h3v1h4v-1h2v-1h1v-1h2v-2h1v-1h1v-3h1v-1h1v1h2v1h-1v1h-1v1h-1v3h-1v1h1v3h1v1h1v1h2v1h3v-1h3v-2h1v-1h1v-5h-1v-2h3v-1h1v-1h1v-1h1v-1h1v-3h1v-4h2v1h2v1h2v1h3v-1h2v1h1v-1h2v-1h2v-1h1v-2h1v-2h1v-7h2v1h2v1h3v1h6v-1h2v-1h1v-1h1v-1h1v-1h1v2h3v1h3v-1h2v-1h1v-1h1v-2h1v-3h-1v-2h-1v-2h5v-1h2v-1h1v-1h1v-2h1v-3h1v-5h-1v-1h1ZM731 610h158v1h-1v7h-1v-1h-2v-1h-3v-1h-2v1h-1v-1h-2v1h-2v1h-1v1h-1v1h-1v1h-1v3h-1v3h-1v-1h-3v-1h-1v-1h-2v1h-1v-1h-2v1h-3v1h-1v1h-1v2h-1v1h-1v1h1v1h-1v1h-1v-1h-2v-1h-1v-1h-1v1h-1v-1h-6v1h-2v1h-1v1h-1v2h-1v1h-2v-1h-2v-1h-2v-1h-3v1h-1v-1h-2v2h-1v-1h-1v1h-1v1h-1v1h-1v1h-2v-1h-2v-1h-2v-2h-1v1h-4v-1h-1v2h-2v1h-2v1h-2v-1h-1v-1h-1v-1h-1v-1h-1v1h-1v-2h-2v1h-1v-1h-3v1h-2v1h-2v1h-2v-1h-1v-2h-1v-1h-1v-1h-2v-1h-6v1h-1v-1h-1v1h-1v1h-2v1h-1v-1h-1v-1h1v-1h-1v-1h-1v-2h-1v-1h-1v-1h-3v-1h-2v1h-1v-1h-2v1h-1v1h-3v1h-1v-3h-1v-2h-1v-2h-1v-1h-2v-2h-2v-1h-2v1h-2v-1h-1v1h-3v1h-2v1h-1v-7h-1ZM377 623h1v1h1v2h-2ZM702 623h1v3h-2v-1h-1v-1h2ZM0 1868h1v7h-1ZM1079 1868h1v7h-1ZM1 1875h1v4h-1ZM1078 1875h1v4h-1ZM2 1879h1v3h-1ZM1077 1879h1v3h-1ZM3 1882h1v3h-1ZM1076 1882h1v3h-1ZM4 1885h1v2h1v3h-1v-2h-1ZM1075 1885h1v2h-1ZM1074 1887h1v3h-1ZM6 1890h1v1h-1ZM1073 1890h1v1h-1ZM7 1891h1v2h-1ZM1072 1891h1v2h-1ZM8 1893h1v2h-1ZM1071 1893h1v2h-1ZM9 1895h1v1h-1ZM1070 1895h1v1h-1ZM10 1896h1v1h1v2h-1v-1h-1ZM1069 1896h1v2h-1v1h-1v-2h1ZM12 1899h1v1h-1ZM1067 1899h1v1h-1ZM13 1900h1v1h-1ZM1066 1900h1v1h-1ZM14 1901h1v1h-1ZM1065 1901h1v1h-1ZM15 1902h1v1h1v1h-2ZM1064 1902h1v1h-1ZM1063 1903h1v1h-1ZM17 1904h1v1h-1ZM1062 1904h1v1h-1ZM18 1905h1v1h-1ZM1061 1905h1v1h-1ZM19 1906h1v1h-1ZM1060 1906h1v1h-1ZM20 1907h1v1h-1ZM1059 1907h1v1h-1ZM21 1908h2v1h-2ZM1057 1908h2v1h-2ZM23 1909h1v1h-1ZM1056 1909h1v1h-1ZM24 1910h2v1h1v1h-2v-1h-1ZM1054 1910h2v1h-1v1h-2v-1h1ZM27 1912h2v1h-2ZM1051 1912h2v1h-2ZM29 1913h2v1h-2ZM1049 1913h2v1h-2ZM31 1914h2v1h-2ZM1047 1914h2v1h-2ZM33 1915h2v1h-2ZM1045 1915h2v1h-2ZM35 1916h3v1h-3ZM1042 1916h3v1h-3ZM38 1917h3v1h-3ZM1039 1917h3v1h-3ZM41 1918h3v1h-3ZM1035 1918h4v1h-4ZM45 1919h7v1h-7ZM1027 1919h8v1h-8Z",
             "mask": {
               "src": "8811d9763075ca35.webp",
               "bytes": 1200,
@@ -1196,20 +1640,39 @@
                   ],
                   "rotate": -4,
                   "flip": false,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.025,
+                    1,
+                    0.95
+                  ]
                 },
                 "meo": {
                   "sticker": "meo-bravo",
                   "box": [
                     814,
-                    1402,
+                    1410,
                     236,
                     236
                   ],
                   "rotate": 4,
                   "flip": true,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0.0325,
+                    0,
+                    0.9349,
+                    1
+                  ]
                 }
+              }
+            },
+            "validated": {
+              "ruban": {
+                "overlap": 53,
+                "depth": 4,
+                "face": 0
               }
             }
           },
@@ -1264,6 +1727,7 @@
               1080,
               1920
             ],
+            "path": "M45 0h10v1h-10ZM1025 0h10v1h-10ZM41 1h4v1h-3v1h-4v-1h3ZM1035 1h4v1h3v1h-4v-1h-3ZM35 3h3v1h-3ZM1042 3h3v1h-3ZM32 4h3v1h-2v1h-2v1h-2v1h-2v-1h1v-1h2v-1h2ZM1045 4h3v1h1v1h-2v-1h-2ZM1049 6h3v1h1v1h-2v-1h-2ZM25 8h2v1h-1v1h-2v-1h1ZM1053 8h2v1h1v1h-2v-1h-1ZM22 10h2v1h-1v1h-1v1h-2v-1h1v-1h1ZM1056 10h2v1h1v1h1v1h-2v-1h-1v-1h-1ZM19 13h1v1h-1ZM1060 13h1v1h-1ZM18 14h1v1h-1ZM1061 14h1v1h-1ZM17 15h1v1h-1ZM1062 15h1v1h-1ZM15 16h2v1h-1v1h-1ZM1063 16h2v2h-1v-1h-1ZM14 18h1v1h-1ZM1065 18h1v1h-1ZM13 19h1v1h-1ZM1066 19h1v1h1v1h1v1h1v2h-1v-1h-1v-1h-1v-1h-1ZM12 20h1v2h-1v1h-1v1h-1v-2h1v-1h1ZM9 24h1v2h-1v2h-1v1h-1v-2h1v-2h1ZM1070 24h1v1h1v2h1v2h-1v-1h-1v-2h-1ZM6 29h1v2h-1v2h-1v-3h1ZM1073 29h1v1h1v3h-1v-2h-1ZM4 33h1v2h-1ZM1075 33h1v2h-1ZM3 35h1v3h-1ZM1076 35h1v3h-1ZM2 38h1v3h-1ZM1077 38h1v3h-1ZM1 41h1v4h-1ZM1078 41h1v4h-1ZM0 45h1v11h-1ZM1079 45h1v11h-1ZM195 586h187v1h1v-1h1v4h-1v2h-1v3h3v-1h3v-1h2v-1h1v-1h2v7h1v7h-1v7h-1v30h1v7h1v4h1v-2h1v-1h1v-1h1v-1h1v-1h1v-1h1v-2h1v-1h1v-1h1v-1h1v-1h2v1h2v1h1v1h1v1h1v1h1v1h2v1h1v1h1v-4h-1v-6h-1v-6h-1v-4h-1v-5h-1v-4h-1v-5h-1v-4h-1v-3h-1v-4h-1v-4h-1v-3h-1v-3h-1v-3h-1v-3h2v-1h269v1h3v4h-1v4h-1v4h-1v6h-1v7h-1v30h1v7h1v4h1v-2h1v-1h1v-1h1v-1h1v-1h1v-1h1v-2h1v-1h1v-1h1v-1h1v-1h2v1h2v1h1v1h1v1h1v1h1v1h2v1h1v1h1v-4h-1v-6h-1v-6h-1v-4h-1v-5h-1v-4h-1v-5h-1v-4h-1v-3h-1v-4h-1v-4h-1v-1h1v-7h2v1h1v1h2v1h3v1h3v-3h-1v-2h-1v-4h189v1h4v1h2v1h1v2h1v3h-1v1h-2v1h-1v1h-1v1h2v1h2v1h1v6h-3v-1h-4v-1h-8v1h-5v1h-2v1h-2v1h-2v1h-1v2h2v1h2v1h3v1h3v1h2v1h-1v1h-1v1h-1v1h-1v-1h-2v-1h-2v-1h-3v-1h-11v1h-5v1h-2v1h-2v1h-2v1h-1v1h-13v-1h-9v1h-3v-1h-5v-1h-7v-1h-1v1h-8v1h-24v1h-4v-1h1v-1h1v-1h1v-1h-2v-1h-2v-1h-3v-1h-4v-1h-9v1h-4v1h-3v1h-2v1h-1v1h-3v-1h-1v-1h-1v-1h1v-1h4v-1h3v-1h2v-1h2v-2h-1v-1h-2v-1h-2v-1h-3v-1h-4v-1h-8v1h-4v1h-2v1h-2v1h-2v-1h-1v-2h-1v-2h7v-1h2v-1h-1v-1h-1v-1h-1v-1h-1v-1h-2v-1h-2v-1h-2v-1h-4v-1h-8v1h-3v1h-2v1h-1v3h-1v8h1v3h1v3h1v2h1v1h1v2h1v1h1v1h1v1h3v-12h2v1h2v1h2v4h1v1h1v1h2v1h1v3h1v3h1v2h1v1h1v1h1v2h1v1h1v1h1v1h2v1h1v1h2v1h2v-8h-1v-3h3v1h2v4h1v3h1v2h1v2h1v2h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h2v1h2v1h2v-9h-1v-3h4v1h1v2h1v2h1v2h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h2v1h1v1h2v1h3v1h3v1h1v-4h-1v-4h-1v-2h-1v-2h-1v-2h1v1h1v2h1v2h1v2h1v1h1v3h-1v2h1v1h7v1h1v1h2v1h2v1h2v1h3v1h2v-4h-1v-4h-1v-2h2v-1h2v-1h3v1h1v1h1v1h-1v3h-1v3h2v-1h5v-1h2v-1h5v1h8v-3h-1v-1h-1v-4h1v-1h1v-1h1v-1h1v-2h1v-1h1v-1h3v2h-1v2h-1v2h-1v4h-1v4h4v-1h2v-1h2v-1h1v-1h2v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-2h1v-1h1v-2h1v-2h1v-3h3v3h-1v4h-1v5h3v-1h2v-1h2v-1h1v-1h2v-1h1v-1h1v-1h1v-1h1v-2h1v-1h1v-1h1v-2h1v-3h1v-2h3v-1h1v-1h1v-2h1v-1h2v-1h1v5h-1v7h1v3h2v-1h1v-1h1v-1h1v-1h1v-1h2v2h1v1h-1v2h1v1h-1v1h1v804h-1v5h-1v2h-2v1h-1v1h-4v1h-690v-1h-4v-1h-1v-1h-1v-1h-1v-1h-1v-5h-1v-812h1v-4h1v1h1v1h1v1h1v1h1v1h1v1h2v1h1v1h2v1h1v-9h-1v-3h3v1h2v4h1v3h1v2h1v2h1v2h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h2v1h2v1h2v-9h-1v-3h4v1h1v2h1v2h1v2h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h2v1h1v1h2v1h3v1h3v1h1v-4h-1v-4h-1v-2h-1v-2h-1v-2h1v1h1v2h1v2h1v2h1v1h1v3h-1v2h1v1h6v1h2v1h2v1h1v1h3v1h4v1h1v-4h-1v-4h-1v-2h2v-1h2v-1h3v1h1v1h1v1h-1v3h-1v3h2v-1h5v-1h2v-1h5v1h8v-3h-1v-1h-1v-4h1v-1h1v-1h1v-1h1v-2h1v-1h1v-1h3v2h-1v2h-1v2h-1v4h-1v4h4v-1h2v-1h2v-1h1v-1h2v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-2h1v-1h1v-2h1v-2h1v-3h3v3h-1v4h-1v5h3v-1h2v-1h2v-1h1v-1h2v-1h1v-1h1v-1h1v-1h1v-2h1v-1h1v-1h1v-2h1v-3h1v-2h3v-1h1v-1h1v-2h1v-1h2v-1h1v6h-1v6h1v3h2v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-2h1v-1h1v-2h1v-3h1v-4h1v-8h3v-1h2v-1h2v-1h2v11h1v2h1v-1h1v-1h1v-1h1v-1h1v-1h1v-2h1v-2h1v-2h1v-3h1v-9h-1v-3h-1v-1h-1v-1h-1v-1h-2v-1h-4v-1h-7v1h-4v1h-3v1h-2v1h-2v1h-1v1h-1v1h2v1h2v1h4v1h5v1h-1v1h-1v1h-1v1h-1v2h-1v2h-1v-1h-1v-1h-2v-1h-2v-1h-4v-1h-8v1h-4v1h-3v1h-2v1h-2v1h-1v2h2v1h2v1h3v1h3v1h2v1h-1v1h-1v1h-1v1h-1v-1h-2v-1h-2v-1h-3v-1h-11v1h-5v1h-2v1h-2v1h-2v1h-1v1h-13v-1h-9v1h-3v-1h-5v-1h-7v-1h-1v1h-8v1h-24v1h-4v-1h1v-1h1v-1h1v-1h-2v-1h-2v-1h-3v-1h-4v-1h-9v1h-4v1h-3v1h-2v1h-1v1h-3v-1h-1v-1h-1v-1h2v-1h3v-1h3v-1h2v-1h2v-2h-1v-1h-2v-1h-2v-1h-2v-1h-5v-1h-8v1h-4v1h-3v-3h2v-1h2v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-2h1v-4h1v-2h1v-1h2v-1h4ZM232 621h2v1h-2ZM768 621h2v1h-2ZM230 622h1v1h-1ZM766 622h1v1h-1ZM227 623h3v1h-2v1h-1v1h-2v-1h-1v-1h3ZM763 623h3v1h-2v1h-1v1h-2v-1h-1v-1h3ZM323 635h1v1h-1ZM859 635h1v1h-1ZM0 1870h1v5h-1ZM1079 1870h1v5h-1ZM1 1876h1v3h-1ZM1078 1876h1v3h-1ZM2 1879h1v3h-1ZM1077 1879h1v3h-1ZM3 1882h1v3h-1ZM1076 1882h1v3h-1ZM4 1885h1v2h1v3h-1v-2h-1ZM1075 1885h1v2h-1ZM1074 1887h1v3h-1ZM6 1890h1v1h-1ZM1073 1890h1v1h-1ZM7 1891h1v2h-1ZM1072 1891h1v2h-1ZM8 1893h1v2h-1ZM1071 1893h1v2h-1ZM9 1895h1v1h-1ZM1070 1895h1v1h-1ZM10 1896h1v1h1v2h-1v-1h-1ZM1069 1896h1v2h-1v1h-1v-2h1ZM12 1899h1v1h-1ZM1067 1899h1v1h-1ZM13 1900h1v1h-1ZM1066 1900h1v1h-1ZM14 1901h1v1h-1ZM1065 1901h1v1h-1ZM15 1902h1v1h1v1h-2ZM1064 1902h1v1h-1ZM1063 1903h1v1h-1ZM17 1904h1v1h-1ZM1062 1904h1v1h-1ZM18 1905h1v1h-1ZM1061 1905h1v1h-1ZM19 1906h1v1h-1ZM1060 1906h1v1h-1ZM20 1907h1v1h-1ZM1059 1907h1v1h-1ZM21 1908h2v1h-2ZM1057 1908h2v1h-2ZM23 1909h1v1h-1ZM1056 1909h1v1h-1ZM24 1910h2v1h1v1h-2v-1h-1ZM1054 1910h2v1h-1v1h-2v-1h1ZM27 1912h2v1h-2ZM1051 1912h2v1h-2ZM29 1913h2v1h-2ZM1049 1913h2v1h-2ZM31 1914h2v1h-2ZM1047 1914h2v1h-2ZM33 1915h2v1h-2ZM1045 1915h2v1h-2ZM35 1916h3v1h-3ZM1042 1916h3v1h-3ZM38 1917h3v1h-3ZM1039 1917h3v1h-3ZM41 1918h4v1h-4ZM1035 1918h4v1h-4ZM45 1919h8v1h-8ZM1027 1919h8v1h-8Z",
             "mask": {
               "src": "79f1eec2b5743445.webp",
               "bytes": 1498,
@@ -1470,26 +1934,181 @@
                   "sticker": "mee-fete",
                   "box": [
                     52,
-                    1248,
+                    1392,
                     264,
                     264
                   ],
                   "rotate": -6,
                   "flip": false,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0.0219,
+                    0,
+                    0.9562,
+                    1
+                  ]
                 },
                 "meo": {
                   "sticker": "meo-roi",
                   "box": [
                     764,
-                    1248,
+                    1412,
                     264,
                     264
                   ],
                   "rotate": 6,
                   "flip": true,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0125,
+                    1,
+                    0.975
+                  ]
                 }
+              },
+              "perches": {
+                "mee": {
+                  "sticker": "mee-fete",
+                  "box": [
+                    116,
+                    64,
+                    240,
+                    240
+                  ],
+                  "rotate": -10,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0.0219,
+                    0,
+                    0.9562,
+                    1
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-roi",
+                  "box": [
+                    724,
+                    64,
+                    240,
+                    240
+                  ],
+                  "rotate": 10,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0125,
+                    1,
+                    0.975
+                  ]
+                }
+              },
+              "cotes": {
+                "mee": {
+                  "sticker": "mee-fete",
+                  "box": [
+                    -41.2,
+                    732.8,
+                    246.4,
+                    246.4
+                  ],
+                  "rotate": 18,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0.0219,
+                    0,
+                    0.9562,
+                    1
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-roi",
+                  "box": [
+                    874.8,
+                    812.8,
+                    246.4,
+                    246.4
+                  ],
+                  "rotate": 342,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0125,
+                    1,
+                    0.975
+                  ]
+                }
+              },
+              "duo": {
+                "pair": {
+                  "sticker": "duo-coucou",
+                  "box": [
+                    424,
+                    1400,
+                    232,
+                    232
+                  ],
+                  "rotate": 0,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.14,
+                    1,
+                    0.72
+                  ]
+                }
+              },
+              "selfie": {
+                "meo": {
+                  "sticker": "meo-selfie",
+                  "box": [
+                    650,
+                    1090,
+                    380,
+                    380
+                  ],
+                  "rotate": 0,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0375,
+                    1,
+                    0.9251
+                  ]
+                }
+              }
+            },
+            "validated": {
+              "pied": {
+                "overlap": 36,
+                "depth": 4,
+                "face": 0
+              },
+              "perches": {
+                "overlap": 0,
+                "depth": 0,
+                "face": 0
+              },
+              "cotes": {
+                "overlap": 26,
+                "depth": 3,
+                "face": 0
+              },
+              "duo": {
+                "overlap": 29,
+                "depth": 4,
+                "face": 0
+              },
+              "selfie": {
+                "overlap": 9881,
+                "depth": 111,
+                "face": 0
               }
             }
           },
@@ -1544,6 +2163,7 @@
               1080,
               1920
             ],
+            "path": "M45 0h10v1h-10ZM1025 0h10v1h-10ZM41 1h4v1h-3v1h-4v-1h3ZM1035 1h4v1h3v1h-4v-1h-3ZM35 3h3v1h-3ZM1042 3h3v1h-3ZM32 4h3v1h-2v1h-2v1h-2v1h-2v-1h1v-1h2v-1h2ZM1045 4h3v1h1v1h-2v-1h-2ZM1049 6h3v1h1v1h-2v-1h-2ZM25 8h2v1h-1v1h-2v-1h1ZM1053 8h2v1h1v1h-2v-1h-1ZM22 10h2v1h-1v1h-1v1h-2v-1h1v-1h1ZM1056 10h2v1h1v1h1v1h-2v-1h-1v-1h-1ZM19 13h1v1h-1ZM1060 13h1v1h-1ZM18 14h1v1h-1ZM1061 14h1v1h-1ZM17 15h1v1h-1ZM1062 15h1v1h-1ZM15 16h2v1h-1v1h-1ZM1063 16h2v2h-1v-1h-1ZM14 18h1v1h-1ZM1065 18h1v1h-1ZM13 19h1v1h-1ZM1066 19h1v1h1v1h1v1h1v2h-1v-1h-1v-1h-1v-1h-1ZM12 20h1v2h-1v1h-1v1h-1v-2h1v-1h1ZM9 24h1v2h-1v2h-1v1h-1v-2h1v-2h1ZM1070 24h1v1h1v2h1v2h-1v-1h-1v-2h-1ZM6 29h1v2h-1v2h-1v-3h1ZM1073 29h1v1h1v3h-1v-2h-1ZM4 33h1v2h-1ZM1075 33h1v2h-1ZM3 35h1v3h-1ZM1076 35h1v3h-1ZM2 38h1v3h-1ZM1077 38h1v3h-1ZM1 41h1v4h-1ZM1078 41h1v4h-1ZM0 45h1v11h-1ZM1079 45h1v11h-1ZM231 526h619v3h1v5h1v5h1v5h1v4h1v4h1v4h1v3h1v4h1v3h1v4h1v3h1v3h1v3h1v3h1v2h1v3h1v3h1v3h1v3h1v2h1v3h1v3h1v3h1v2h1v3h1v3h1v3h1v2h1v4h1v3h1v4h1v702h-1v2h-1v3h-1v2h-1v2h-1v3h-1v2h-1v2h-1v2h-1v2h-1v2h-1v2h-1v2h-1v2h-1v2h-1v2h-1v2h-1v2h-1v2h-1v2h-1v2h-1v2h-1v2h-1v2h-1v2h-1v2h-1v1h-1v2h-1v2h-1v2h-1v1h-1v2h-1v2h-1v1h-1v2h-1v2h-1v2h-1v1h-1v2h-1v2h-1v2h-1v1h-1v2h-1v2h-1v1h-1v2h-1v1h-1v2h-1v1h-1v2h-1v2h-1v1h-1v2h-1v1h-1v2h-1v1h-1v2h-1v1h-1v2h-1v1h-1v2h-1v1h-1v2h-1v1h-1v2h-1v1h-1v1h-1v2h-1v1h-1v2h-1v1h-1v1h-1v1h-540v-1h-1v-1h-1v-1h-1v-2h-1v-1h-1v-1h-1v-2h-1v-1h-1v-2h-1v-1h-1v-2h-1v-1h-1v-2h-1v-1h-1v-2h-1v-1h-1v-2h-1v-1h-1v-2h-1v-1h-1v-2h-1v-1h-1v-2h-1v-1h-1v-2h-1v-2h-1v-1h-1v-2h-1v-2h-1v-1h-1v-2h-1v-1h-1v-2h-1v-2h-1v-1h-1v-2h-1v-2h-1v-2h-1v-1h-1v-2h-1v-2h-1v-2h-1v-1h-1v-2h-1v-2h-1v-2h-1v-2h-1v-1h-1v-2h-1v-2h-1v-2h-1v-2h-1v-2h-1v-2h-1v-2h-1v-2h-1v-2h-1v-2h-1v-2h-1v-2h-1v-2h-1v-2h-1v-2h-1v-2h-1v-2h-1v-2h-1v-2h-1v-3h-1v-2h-1v-2h-1v-3h-1v-2h-1v-702h1v-4h1v-3h1v-3h1v-3h1v-3h1v-3h1v-3h1v-2h1v-3h1v-3h1v-3h1v-2h1v-3h1v-3h1v-3h1v-2h1v-3h1v-3h1v-3h1v-3h1v-3h1v-4h1v-3h1v-4h1v-3h1v-4h1v-4h1v-4h1v-5h1v-5h1v-5h1v-2h1ZM0 1864h1v11h-1ZM1079 1864h1v11h-1ZM1 1875h1v4h-1ZM1078 1875h1v4h-1v3h-1v-4h1ZM2 1879h1v3h-1ZM3 1882h1v3h-1ZM1076 1882h1v3h-1ZM4 1885h1v2h1v2h1v2h-1v-1h-1v-2h-1ZM1075 1885h1v2h-1ZM1074 1887h1v3h-1v1h-1v-2h1ZM7 1891h1v2h-1ZM1072 1891h1v2h-1ZM8 1893h1v1h1v2h-1v-1h-1ZM1071 1893h1v2h-1v1h-1v-2h1ZM10 1896h1v1h1v1h1v2h-1v-1h-1v-1h-1ZM1069 1896h1v2h-1v1h-1v1h-1v-2h1v-1h1ZM13 1900h1v1h-1ZM1066 1900h1v1h-1ZM14 1901h1v1h-1ZM1065 1901h1v1h-1ZM15 1902h1v1h1v1h-2ZM1064 1902h1v1h-1ZM1063 1903h1v1h-1ZM17 1904h1v1h-1ZM1062 1904h1v1h-1ZM18 1905h1v1h-1ZM1061 1905h1v1h-1ZM19 1906h2v1h1v1h1v1h-2v-1h-1v-1h-1ZM1059 1906h2v1h-1v1h-1v1h-2v-1h1v-1h1ZM23 1909h2v1h1v1h2v1h1v1h-2v-1h-2v-1h-1v-1h-1ZM1056 1909h1v1h-1ZM1054 1910h2v1h-1v1h-2v1h-2v-1h1v-1h2ZM29 1913h2v1h-2ZM1049 1913h2v1h-2ZM31 1914h2v1h-2ZM1047 1914h2v1h-2ZM33 1915h2v1h-2ZM1045 1915h2v1h-2ZM35 1916h3v1h-3ZM1042 1916h3v1h-3ZM38 1917h4v1h3v1h-4v-1h-3ZM1038 1917h4v1h-3v1h-4v-1h3ZM45 1919h10v1h-10ZM1025 1919h10v1h-10Z",
             "mask": {
               "src": "a3fc64ff93da76ce.webp",
               "bytes": 908,
@@ -1794,26 +2414,181 @@
                   "sticker": "mee-danse",
                   "box": [
                     46,
-                    1250,
+                    1430,
                     300,
                     300
                   ],
                   "rotate": -6,
                   "flip": false,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0583,
+                    1,
+                    0.8833
+                  ]
                 },
                 "meo": {
                   "sticker": "meo-serenade",
                   "box": [
-                    734,
-                    1250,
+                    791.2,
+                    1364.4,
                     300,
                     300
                   ],
                   "rotate": 6,
                   "flip": true,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0.075,
+                    0,
+                    0.85,
+                    1
+                  ]
                 }
+              },
+              "perches": {
+                "mee": {
+                  "sticker": "mee-danse",
+                  "box": [
+                    116,
+                    64,
+                    240,
+                    240
+                  ],
+                  "rotate": -10,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0583,
+                    1,
+                    0.8833
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-serenade",
+                  "box": [
+                    724,
+                    64,
+                    240,
+                    240
+                  ],
+                  "rotate": 10,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0.075,
+                    0,
+                    0.85,
+                    1
+                  ]
+                }
+              },
+              "cotes": {
+                "mee": {
+                  "sticker": "mee-danse",
+                  "box": [
+                    -41.2,
+                    732.8,
+                    246.4,
+                    246.4
+                  ],
+                  "rotate": 18,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0583,
+                    1,
+                    0.8833
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-serenade",
+                  "box": [
+                    860.4,
+                    808.4,
+                    263.2,
+                    263.2
+                  ],
+                  "rotate": 342,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0.075,
+                    0,
+                    0.85,
+                    1
+                  ]
+                }
+              },
+              "duo": {
+                "pair": {
+                  "sticker": "duo-coucou",
+                  "box": [
+                    412,
+                    1400,
+                    256,
+                    256
+                  ],
+                  "rotate": 0,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.14,
+                    1,
+                    0.72
+                  ]
+                }
+              },
+              "selfie": {
+                "meo": {
+                  "sticker": "meo-selfie",
+                  "box": [
+                    650,
+                    1090,
+                    380,
+                    380
+                  ],
+                  "rotate": 0,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0375,
+                    1,
+                    0.9251
+                  ]
+                }
+              }
+            },
+            "validated": {
+              "pied": {
+                "overlap": 55,
+                "depth": 4,
+                "face": 0
+              },
+              "perches": {
+                "overlap": 0,
+                "depth": 0,
+                "face": 0
+              },
+              "cotes": {
+                "overlap": 29,
+                "depth": 4,
+                "face": 0
+              },
+              "duo": {
+                "overlap": 33,
+                "depth": 4,
+                "face": 0
+              },
+              "selfie": {
+                "overlap": 8599,
+                "depth": 105,
+                "face": 0
               }
             }
           },
@@ -1869,6 +2644,7 @@
               1080,
               1920
             ],
+            "path": "M45 0h10v1h-10ZM1025 0h10v1h-10ZM41 1h4v1h-3v1h-4v-1h3ZM1035 1h4v1h3v1h-4v-1h-3ZM35 3h3v1h-3ZM1042 3h3v1h-3ZM32 4h3v1h-2v1h-2v1h-2v1h-2v-1h1v-1h2v-1h2ZM1045 4h3v1h1v1h-2v-1h-2ZM1049 6h3v1h1v1h-2v-1h-2ZM25 8h2v1h-1v1h-2v-1h1ZM1053 8h2v1h1v1h-2v-1h-1ZM22 10h2v1h-1v1h-1v1h-2v-1h1v-1h1ZM1056 10h2v1h1v1h1v1h-2v-1h-1v-1h-1ZM19 13h1v1h-1ZM1060 13h1v1h-1ZM18 14h1v1h-1ZM1061 14h1v1h-1ZM17 15h1v1h-1ZM1062 15h1v1h-1ZM15 16h2v1h-1v1h-1ZM1063 16h2v2h-1v-1h-1ZM14 18h1v1h-1ZM1065 18h1v1h-1ZM13 19h1v1h-1ZM1066 19h1v1h1v1h1v1h1v2h-1v-1h-1v-1h-1v-1h-1ZM12 20h1v2h-1v1h-1v1h-1v-2h1v-1h1ZM9 24h1v2h-1v2h-1v1h-1v-2h1v-2h1ZM1070 24h1v1h1v2h1v2h-1v-1h-1v-2h-1ZM6 29h1v2h-1v2h-1v-3h1ZM1073 29h1v1h1v3h-1v-2h-1ZM4 33h1v2h-1ZM1075 33h1v2h-1ZM3 35h1v3h-1ZM1076 35h1v3h-1ZM2 38h1v3h-1ZM1077 38h1v3h-1ZM1 41h1v4h-1ZM1078 41h1v4h-1ZM0 45h1v11h-1ZM1079 45h1v11h-1ZM230 506h620v1h8v1h4v1h2v1h2v1h2v1h1v1h1v1h1v1h1v2h1v1h1v2h1v3h1v3h1v7h1v898h-1v7h-1v4h-1v2h-1v2h-1v1h-1v2h-1v1h-1v1h-1v1h-2v1h-1v1h-2v1h-2v1h-3v1h-8v1h-622v-1h-8v-1h-3v-1h-2v-1h-2v-1h-1v-1h-2v-1h-1v-1h-1v-1h-1v-2h-1v-1h-1v-2h-1v-2h-1v-4h-1v-7h-1v-900h1v-6h1v-3h1v-2h1v-2h1v-1h1v-2h1v-1h1v-1h1v-1h1v-1h2v-1h2v-1h2v-1h4v-1h8ZM0 1868h1v7h-1ZM1079 1868h1v7h-1ZM1 1875h1v4h-1ZM1078 1875h1v4h-1ZM2 1879h1v3h-1ZM1077 1879h1v3h-1ZM3 1882h1v3h-1ZM1076 1882h1v3h-1ZM4 1885h1v2h1v3h-1v-2h-1ZM1075 1885h1v2h-1ZM1074 1887h1v3h-1ZM6 1890h1v1h-1ZM1073 1890h1v1h-1ZM7 1891h1v2h-1ZM1072 1891h1v2h-1ZM8 1893h1v2h-1ZM1071 1893h1v2h-1ZM9 1895h1v1h-1ZM1070 1895h1v1h-1ZM10 1896h1v1h1v2h-1v-1h-1ZM1069 1896h1v2h-1v1h-1v-2h1ZM12 1899h1v1h-1ZM1067 1899h1v1h-1ZM13 1900h1v1h-1ZM1066 1900h1v1h-1ZM14 1901h1v1h-1ZM1065 1901h1v1h-1ZM15 1902h1v1h1v1h-2ZM1064 1902h1v1h-1ZM1063 1903h1v1h-1ZM17 1904h1v1h-1ZM1062 1904h1v1h-1ZM18 1905h1v1h-1ZM1061 1905h1v1h-1ZM19 1906h1v1h-1ZM1060 1906h1v1h-1ZM20 1907h1v1h-1ZM1059 1907h1v1h-1ZM21 1908h2v1h-2ZM1057 1908h2v1h-2ZM23 1909h1v1h-1ZM1056 1909h1v1h-1ZM24 1910h2v1h1v1h-2v-1h-1ZM1054 1910h2v1h-1v1h-2v-1h1ZM27 1912h2v1h-2ZM1051 1912h2v1h-2ZM29 1913h2v1h-2ZM1049 1913h2v1h-2ZM31 1914h2v1h-2ZM1047 1914h2v1h-2ZM33 1915h2v1h-2ZM1045 1915h2v1h-2ZM35 1916h3v1h-3ZM1042 1916h3v1h-3ZM38 1917h3v1h-3ZM1039 1917h3v1h-3ZM41 1918h3v1h-3ZM1035 1918h4v1h-4ZM45 1919h7v1h-7ZM1027 1919h8v1h-8Z",
             "mask": {
               "src": "49766e2b1cdc1125.webp",
               "bytes": 604,
@@ -2075,6 +2851,140 @@
           "birds": {
             "default": "libre",
             "layouts": {
+              "pied": {
+                "mee": {
+                  "sticker": "mee-coucou",
+                  "box": [
+                    46,
+                    1414,
+                    300,
+                    300
+                  ],
+                  "rotate": -6,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0865,
+                    1,
+                    0.827
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-salut",
+                  "box": [
+                    734,
+                    1366,
+                    300,
+                    300
+                  ],
+                  "rotate": 6,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0104,
+                    1,
+                    0.9792
+                  ]
+                }
+              },
+              "perches": {
+                "mee": {
+                  "sticker": "mee-coucou",
+                  "box": [
+                    116,
+                    64,
+                    240,
+                    240
+                  ],
+                  "rotate": -10,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0865,
+                    1,
+                    0.827
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-salut",
+                  "box": [
+                    724,
+                    64,
+                    240,
+                    240
+                  ],
+                  "rotate": 10,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0104,
+                    1,
+                    0.9792
+                  ]
+                }
+              },
+              "cotes": {
+                "mee": {
+                  "sticker": "mee-coucou",
+                  "box": [
+                    -48,
+                    720,
+                    280,
+                    280
+                  ],
+                  "rotate": 18,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0865,
+                    1,
+                    0.827
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-salut",
+                  "box": [
+                    860.4,
+                    808.4,
+                    263.2,
+                    263.2
+                  ],
+                  "rotate": 342,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0104,
+                    1,
+                    0.9792
+                  ]
+                }
+              },
+              "duo": {
+                "pair": {
+                  "sticker": "duo-coucou",
+                  "box": [
+                    451,
+                    1386,
+                    328,
+                    328
+                  ],
+                  "rotate": 0,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.14,
+                    1,
+                    0.72
+                  ]
+                }
+              },
               "libre": {
                 "mee": {
                   "sticker": "mee-coucou",
@@ -2086,7 +2996,13 @@
                   ],
                   "rotate": -6,
                   "flip": false,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0865,
+                    1,
+                    0.827
+                  ]
                 },
                 "meo": {
                   "sticker": "meo-salut",
@@ -2098,8 +3014,66 @@
                   ],
                   "rotate": 4,
                   "flip": true,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0104,
+                    1,
+                    0.9792
+                  ]
                 }
+              },
+              "selfie": {
+                "meo": {
+                  "sticker": "meo-selfie",
+                  "box": [
+                    650,
+                    1090,
+                    380,
+                    380
+                  ],
+                  "rotate": 0,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0375,
+                    1,
+                    0.9251
+                  ]
+                }
+              }
+            },
+            "validated": {
+              "pied": {
+                "overlap": 113,
+                "depth": 4,
+                "face": 0
+              },
+              "perches": {
+                "overlap": 0,
+                "depth": 0,
+                "face": 0
+              },
+              "cotes": {
+                "overlap": 53,
+                "depth": 5,
+                "face": 0
+              },
+              "duo": {
+                "overlap": 37,
+                "depth": 4,
+                "face": 0
+              },
+              "libre": {
+                "overlap": 0,
+                "depth": 0,
+                "face": 0
+              },
+              "selfie": {
+                "overlap": 8444,
+                "depth": 101,
+                "face": 0
               }
             }
           },
@@ -2154,6 +3128,7 @@
               1080,
               1920
             ],
+            "path": "M45 0h10v1h-10ZM1025 0h10v1h-10ZM41 1h4v1h-3v1h-4v-1h3ZM1035 1h4v1h3v1h-4v-1h-3ZM35 3h3v1h-3ZM1042 3h3v1h-3ZM32 4h3v1h-2v1h-2v1h-2v1h-2v-1h1v-1h2v-1h2ZM1045 4h3v1h1v1h-2v-1h-2ZM1049 6h3v1h1v1h-2v-1h-2ZM25 8h2v1h-1v1h-2v-1h1ZM1053 8h2v1h1v1h-2v-1h-1ZM22 10h2v1h-1v1h-1v1h-2v-1h1v-1h1ZM1056 10h2v1h1v1h1v1h-2v-1h-1v-1h-1ZM19 13h1v1h-1ZM1060 13h1v1h-1ZM18 14h1v1h-1ZM1061 14h1v1h-1ZM17 15h1v1h-1ZM1062 15h1v1h-1ZM15 16h2v1h-1v1h-1ZM1063 16h2v2h-1v-1h-1ZM14 18h1v1h-1ZM1065 18h1v1h-1ZM13 19h1v1h-1ZM1066 19h1v1h-1ZM12 20h1v2h-1v1h-1v1h-1v-2h1v-1h1ZM1067 20h1v1h1v1h1v2h-1v-1h-1v-1h-1ZM9 24h1v2h-1v1h-1v-2h1ZM1070 24h1v1h1v2h1v2h-1v-1h-1v-2h-1ZM7 27h1v2h-1ZM6 29h1v2h-1v2h-1v-3h1ZM1073 29h1v1h1v3h-1v-2h-1ZM4 33h1v2h-1ZM1075 33h1v2h-1ZM3 35h1v3h-1ZM1076 35h1v3h-1ZM2 38h1v3h-1ZM1077 38h1v3h-1ZM1 41h1v4h-1ZM1078 41h1v4h-1ZM0 45h1v10h-1ZM1079 45h1v10h-1ZM213 522h654v1h6v1h2v1h2v1h2v1h1v1h1v1h1v2h1v2h1v2h1v6h1v890h-1v6h-1v2h-1v2h-1v2h-1v1h-1v1h-1v1h-2v1h-1v1h-3v1h-6v1h-186v-1h-7v-1h-4v-1h-2v-1h-3v-1h-2v-1h-3v-1h-3v-1h-3v-1h-2v-1h-3v-1h-3v-1h-3v-1h-4v-1h-3v-1h-3v-1h-4v-1h-4v-1h-3v-1h-4v-1h-5v-1h-4v-1h-5v-1h-6v-1h-6v-1h-6v-1h-9v-1h-11v-1h-24v-1h-4v1h-24v1h-10v1h-8v1h-8v1h-5v1h-6v1h-5v1h-5v1h-5v1h-4v1h-3v1h-4v1h-4v1h-3v1h-4v1h-3v1h-3v1h-3v1h-3v1h-2v1h-3v1h-3v1h-3v1h-2v1h-3v1h-2v1h-4v1h-7v1h-186v-1h-6v-1h-3v-1h-1v-1h-2v-1h-1v-1h-1v-1h-1v-2h-1v-2h-1v-2h-1v-5h-1v-891h1v-6h1v-2h1v-2h1v-2h1v-1h1v-1h1v-1h2v-1h2v-1h2v-1h6ZM0 1865h1v10h-1ZM1079 1865h1v10h-1ZM1 1875h1v4h-1ZM1078 1875h1v4h-1ZM2 1879h1v3h-1ZM1077 1879h1v3h-1ZM3 1882h1v3h-1ZM1076 1882h1v3h-1ZM4 1885h1v2h1v2h1v2h-1v-1h-1v-2h-1ZM1075 1885h1v2h-1ZM1074 1887h1v3h-1v1h-1v-2h1ZM7 1891h1v2h-1ZM1072 1891h1v2h-1ZM8 1893h1v1h1v2h-1v-1h-1ZM1071 1893h1v2h-1v1h-1v-2h1ZM10 1896h1v1h1v2h-1v-1h-1ZM1069 1896h1v2h-1v1h-1v-2h1ZM12 1899h1v1h-1ZM1067 1899h1v1h-1ZM13 1900h1v1h-1ZM1066 1900h1v1h-1ZM14 1901h1v1h-1ZM1065 1901h1v1h-1ZM15 1902h1v1h1v1h-2ZM1064 1902h1v1h-1ZM1063 1903h1v1h-1ZM17 1904h1v1h-1ZM1062 1904h1v1h-1ZM18 1905h1v1h-1ZM1061 1905h1v1h-1ZM19 1906h1v1h-1ZM1060 1906h1v1h-1ZM20 1907h2v1h1v1h-2v-1h-1ZM1058 1907h2v1h-1v1h-2v-1h1ZM23 1909h1v1h-1ZM1056 1909h1v1h-1ZM24 1910h2v1h2v1h1v1h-2v-1h-2v-1h-1ZM1054 1910h2v1h-1v1h-2v1h-2v-1h1v-1h2ZM29 1913h2v1h-2ZM1049 1913h2v1h-2ZM31 1914h2v1h-2ZM1047 1914h2v1h-2ZM33 1915h2v1h-2ZM1045 1915h2v1h-2ZM35 1916h3v1h-3ZM1042 1916h3v1h-3ZM38 1917h3v1h-3ZM1039 1917h3v1h-3ZM41 1918h4v1h-4ZM1035 1918h4v1h-4ZM45 1919h9v1h-9ZM1025 1919h10v1h-10Z",
             "mask": {
               "src": "bf0702c6528dec3f.webp",
               "bytes": 696,
@@ -2404,26 +3379,181 @@
                   "sticker": "mee-bravo",
                   "box": [
                     46,
-                    1250,
+                    1406,
                     300,
                     300
                   ],
                   "rotate": -6,
                   "flip": false,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0.0411,
+                    0,
+                    0.9179,
+                    1
+                  ]
                 },
                 "meo": {
                   "sticker": "meo-yo",
                   "box": [
                     734,
-                    1250,
+                    1382,
                     300,
                     300
                   ],
                   "rotate": 6,
                   "flip": true,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0789,
+                    1,
+                    0.8423
+                  ]
                 }
+              },
+              "perches": {
+                "mee": {
+                  "sticker": "mee-bravo",
+                  "box": [
+                    116,
+                    64,
+                    240,
+                    240
+                  ],
+                  "rotate": -10,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0.0411,
+                    0,
+                    0.9179,
+                    1
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-yo",
+                  "box": [
+                    724,
+                    64,
+                    240,
+                    240
+                  ],
+                  "rotate": 10,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0789,
+                    1,
+                    0.8423
+                  ]
+                }
+              },
+              "cotes": {
+                "mee": {
+                  "sticker": "mee-bravo",
+                  "box": [
+                    -41.2,
+                    732.8,
+                    246.4,
+                    246.4
+                  ],
+                  "rotate": 18,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0.0411,
+                    0,
+                    0.9179,
+                    1
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-yo",
+                  "box": [
+                    874.8,
+                    812.8,
+                    246.4,
+                    246.4
+                  ],
+                  "rotate": 342,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0789,
+                    1,
+                    0.8423
+                  ]
+                }
+              },
+              "duo": {
+                "pair": {
+                  "sticker": "duo-coucou",
+                  "box": [
+                    388,
+                    1364,
+                    304,
+                    304
+                  ],
+                  "rotate": 0,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.14,
+                    1,
+                    0.72
+                  ]
+                }
+              },
+              "selfie": {
+                "meo": {
+                  "sticker": "meo-selfie",
+                  "box": [
+                    650,
+                    1090,
+                    380,
+                    380
+                  ],
+                  "rotate": 0,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0375,
+                    1,
+                    0.9251
+                  ]
+                }
+              }
+            },
+            "validated": {
+              "pied": {
+                "overlap": 70,
+                "depth": 4,
+                "face": 0
+              },
+              "perches": {
+                "overlap": 0,
+                "depth": 0,
+                "face": 0
+              },
+              "cotes": {
+                "overlap": 0,
+                "depth": 0,
+                "face": 0
+              },
+              "duo": {
+                "overlap": 38,
+                "depth": 4,
+                "face": 0
+              },
+              "selfie": {
+                "overlap": 9244,
+                "depth": 107,
+                "face": 0
               }
             }
           },
@@ -2478,6 +3608,7 @@
               1080,
               1920
             ],
+            "path": "M45 0h10v1h-10ZM1025 0h10v1h-10ZM41 1h4v1h-3v1h-4v-1h3ZM1035 1h4v1h3v1h-4v-1h-3ZM35 3h3v1h-3ZM1042 3h3v1h-3ZM32 4h3v1h-2v1h-2v1h-2v1h-2v-1h1v-1h2v-1h2ZM1045 4h3v1h1v1h-2v-1h-2ZM1049 6h3v1h1v1h-2v-1h-2ZM25 8h2v1h-1v1h-2v-1h1ZM1053 8h2v1h1v1h-2v-1h-1ZM22 10h2v1h-1v1h-1v1h-2v-1h1v-1h1ZM1056 10h2v1h1v1h1v1h-2v-1h-1v-1h-1ZM19 13h1v1h-1ZM1060 13h1v1h-1ZM18 14h1v1h-1ZM1061 14h1v1h-1ZM17 15h1v1h-1ZM1062 15h1v1h-1ZM15 16h2v1h-1v1h-1ZM1063 16h2v2h-1v-1h-1ZM14 18h1v1h-1ZM1065 18h1v1h-1ZM13 19h1v1h-1ZM1066 19h1v1h1v1h1v1h1v2h-1v-1h-1v-1h-1v-1h-1ZM12 20h1v2h-1v1h-1v1h-1v-2h1v-1h1ZM9 24h1v2h-1v2h-1v1h-1v-2h1v-2h1ZM1070 24h1v1h1v2h1v2h-1v-1h-1v-2h-1ZM6 29h1v2h-1v2h-1v-3h1ZM1073 29h1v1h1v3h-1v-2h-1ZM4 33h1v2h-1ZM1075 33h1v2h-1ZM3 35h1v3h-1ZM1076 35h1v3h-1ZM2 38h1v3h-1ZM1077 38h1v3h-1ZM1 41h1v4h-1ZM1078 41h1v4h-1ZM0 45h1v11h-1ZM1079 45h1v11h-1ZM506 530h61v1h30v1h16v1h13v1h12v1h10v1h9v1h8v1h7v1h7v1h6v1h6v1h5v1h6v1h4v1h5v1h5v1h4v1h4v1h5v1h3v1h4v1h4v1h3v1h3v1h4v1h3v1h3v1h3v1h3v1h3v1h3v1h2v1h3v1h3v1h2v1h3v1h2v1h2v1h2v1h3v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h1v1h2v1h2v1h1v1h2v1h2v1h1v1h2v1h2v1h1v1h1v1h2v1h1v1h2v1h1v1h2v1h1v1h1v1h1v1h2v1h1v1h1v1h1v1h1v1h2v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v2h1v1h1v1h1v1h1v1h1v2h1v1h1v1h1v2h1v1h1v1h1v2h1v1h1v2h1v2h1v1h1v2h1v2h1v1h1v3h1v2h1v2h1v2h1v2h1v2h1v3h1v2h1v3h1v3h1v3h1v4h1v3h1v4h1v5h1v5h1v8h1v11h1v730h-1v4h-1v3h-1v2h-1v2h-1v1h-1v1h-1v1h-1v1h-1v1h-2v1h-2v1h-3v1h-4v1h-668v-1h-4v-1h-3v-1h-2v-1h-2v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-2h-1v-2h-1v-3h-1v-5h-1v-161h2v-1h-2v-99h1v-6h1v-4h-1v2h-1v-63h1v2h1v-4h-1v-6h-1v-390h1v-11h1v-7h1v-5h1v-5h1v-4h1v-4h1v-3h1v-3h1v-3h1v-3h1v-2h1v-3h1v-2h1v-2h1v-2h1v-3h1v-2h1v-1h1v-2h1v-2h1v-2h1v-1h1v-2h1v-2h1v-1h1v-2h1v-1h1v-1h1v-2h1v-1h1v-1h1v-2h1v-1h1v-1h1v-1h1v-1h1v-2h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h2v-1h1v-1h1v-1h1v-1h2v-1h1v-1h1v-1h2v-1h1v-1h1v-1h2v-1h1v-1h2v-1h1v-1h2v-1h1v-1h2v-1h1v-1h2v-1h2v-1h1v-1h2v-1h2v-1h2v-1h1v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h3v-1h2v-1h2v-1h2v-1h3v-1h2v-1h2v-1h3v-1h3v-1h2v-1h3v-1h3v-1h3v-1h3v-1h3v-1h3v-1h3v-1h4v-1h3v-1h3v-1h4v-1h4v-1h4v-1h4v-1h5v-1h5v-1h4v-1h5v-1h5v-1h6v-1h6v-1h6v-1h7v-1h7v-1h8v-1h9v-1h9v-1h11v-1h14v-1h16v-1h24ZM196 1127v2h-1v1h1v2h3v-1h1v-2h-1v-1h-1v-1ZM194 1154v1h-1v2h1v1h3v-1h1v-1h-1v-2ZM0 1868h1v7h-1ZM1079 1868h1v7h-1ZM1 1875h1v4h-1ZM1078 1875h1v4h-1ZM2 1879h1v3h-1ZM1077 1879h1v3h-1ZM3 1882h1v3h-1ZM1076 1882h1v3h-1ZM4 1885h1v2h1v3h-1v-2h-1ZM1075 1885h1v2h-1ZM1074 1887h1v3h-1ZM6 1890h1v1h-1ZM1073 1890h1v1h-1ZM7 1891h1v2h-1ZM1072 1891h1v2h-1ZM8 1893h1v2h-1ZM1071 1893h1v2h-1ZM9 1895h1v1h-1ZM1070 1895h1v1h-1ZM10 1896h1v1h1v2h-1v-1h-1ZM1069 1896h1v2h-1v1h-1v-2h1ZM12 1899h1v1h-1ZM1067 1899h1v1h-1ZM13 1900h1v1h-1ZM1066 1900h1v1h-1ZM14 1901h1v1h-1ZM1065 1901h1v1h-1ZM15 1902h1v1h1v1h-2ZM1064 1902h1v1h-1ZM1063 1903h1v1h-1ZM17 1904h1v1h-1ZM1062 1904h1v1h-1ZM18 1905h1v1h-1ZM1061 1905h1v1h-1ZM19 1906h1v1h-1ZM1060 1906h1v1h-1ZM20 1907h1v1h-1ZM1059 1907h1v1h-1ZM21 1908h2v1h-2ZM1057 1908h2v1h-2ZM23 1909h1v1h-1ZM1056 1909h1v1h-1ZM24 1910h2v1h1v1h-2v-1h-1ZM1054 1910h2v1h-1v1h-2v-1h1ZM27 1912h2v1h-2ZM1051 1912h2v1h-2ZM29 1913h2v1h-2ZM1049 1913h2v1h-2ZM31 1914h2v1h-2ZM1047 1914h2v1h-2ZM33 1915h2v1h-2ZM1045 1915h2v1h-2ZM35 1916h3v1h-3ZM1042 1916h3v1h-3ZM38 1917h3v1h-3ZM1039 1917h3v1h-3ZM41 1918h4v1h-4ZM1036 1918h3v1h-3ZM45 1919h8v1h-8ZM1027 1919h8v1h-8Z",
             "mask": {
               "src": "e4d658ae7d922f3c.webp",
               "bytes": 1086,
@@ -2684,31 +3815,186 @@
           "birds": {
             "default": "cotes",
             "layouts": {
-              "cotes": {
+              "pied": {
                 "mee": {
                   "sticker": "mee-montee-au-ciel",
                   "box": [
-                    -60,
-                    720,
-                    280,
-                    280
+                    46,
+                    1442,
+                    300,
+                    300
                   ],
-                  "rotate": 18,
+                  "rotate": -6,
                   "flip": false,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0.0105,
+                    0,
+                    0.9789,
+                    1
+                  ]
                 },
                 "meo": {
                   "sticker": "meo-love",
                   "box": [
-                    860,
-                    800,
-                    280,
-                    280
+                    734,
+                    1438,
+                    300,
+                    300
+                  ],
+                  "rotate": 6,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0192,
+                    1,
+                    0.9617
+                  ]
+                }
+              },
+              "perches": {
+                "mee": {
+                  "sticker": "mee-montee-au-ciel",
+                  "box": [
+                    116,
+                    64,
+                    240,
+                    240
+                  ],
+                  "rotate": -10,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0.0105,
+                    0,
+                    0.9789,
+                    1
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-love",
+                  "box": [
+                    724,
+                    64,
+                    240,
+                    240
+                  ],
+                  "rotate": 10,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0192,
+                    1,
+                    0.9617
+                  ]
+                }
+              },
+              "cotes": {
+                "mee": {
+                  "sticker": "mee-montee-au-ciel",
+                  "box": [
+                    -47.2,
+                    736.8,
+                    246.4,
+                    246.4
+                  ],
+                  "rotate": 18,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0.0105,
+                    0,
+                    0.9789,
+                    1
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-love",
+                  "box": [
+                    889.2,
+                    825.2,
+                    229.6,
+                    229.6
                   ],
                   "rotate": 342,
                   "flip": true,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0192,
+                    1,
+                    0.9617
+                  ]
                 }
+              },
+              "duo": {
+                "pair": {
+                  "sticker": "duo-coucou",
+                  "box": [
+                    388,
+                    1388,
+                    304,
+                    304
+                  ],
+                  "rotate": 0,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.14,
+                    1,
+                    0.72
+                  ]
+                }
+              },
+              "selfie": {
+                "meo": {
+                  "sticker": "meo-selfie",
+                  "box": [
+                    650,
+                    1090,
+                    380,
+                    380
+                  ],
+                  "rotate": 0,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0375,
+                    1,
+                    0.9251
+                  ]
+                }
+              }
+            },
+            "validated": {
+              "pied": {
+                "overlap": 98,
+                "depth": 4,
+                "face": 0
+              },
+              "perches": {
+                "overlap": 0,
+                "depth": 0,
+                "face": 0
+              },
+              "cotes": {
+                "overlap": 65,
+                "depth": 4,
+                "face": 0
+              },
+              "duo": {
+                "overlap": 34,
+                "depth": 4,
+                "face": 0
+              },
+              "selfie": {
+                "overlap": 9675,
+                "depth": 109,
+                "face": 0
               }
             }
           },
@@ -2763,6 +4049,7 @@
               1080,
               1920
             ],
+            "path": "M45 0h10v1h-10ZM1025 0h10v1h-10ZM41 1h4v1h-3v1h-4v-1h3ZM1035 1h4v1h3v1h-4v-1h-3ZM35 3h3v1h-3ZM1042 3h3v1h-3ZM32 4h3v1h-2v1h-2v1h-2v1h-2v-1h1v-1h2v-1h2ZM1045 4h3v1h1v1h-2v-1h-2ZM1049 6h3v1h1v1h-2v-1h-2ZM25 8h2v1h-1v1h-2v-1h1ZM1053 8h2v1h1v1h-2v-1h-1ZM22 10h2v1h-1v1h-1v1h-2v-1h1v-1h1ZM1056 10h2v1h1v1h1v1h-2v-1h-1v-1h-1ZM19 13h1v1h-1ZM1060 13h1v1h-1ZM18 14h1v1h-1ZM1061 14h1v1h-1ZM17 15h1v1h-1ZM1062 15h1v1h-1ZM15 16h2v1h-1v1h-1ZM1063 16h2v2h-1v-1h-1ZM14 18h1v1h-1ZM1065 18h1v1h-1ZM13 19h1v1h-1ZM1066 19h1v1h1v1h1v1h1v2h-1v-1h-1v-1h-1v-1h-1ZM12 20h1v2h-1v1h-1v1h-1v-2h1v-1h1ZM9 24h1v2h-1v2h-1v1h-1v-2h1v-2h1ZM1070 24h1v1h1v2h1v2h-1v-1h-1v-2h-1ZM6 29h1v2h-1v2h-1v-3h1ZM1073 29h1v1h1v3h-1v-2h-1ZM4 33h1v2h-1ZM1075 33h1v2h-1ZM3 35h1v3h-1ZM1076 35h1v3h-1ZM2 38h1v3h-1ZM1077 38h1v3h-1ZM1 41h1v4h-1ZM1078 41h1v4h-1ZM0 45h1v11h-1ZM1079 45h1v11h-1ZM536 530h8v1h20v1h10v1h7v1h6v1h5v1h5v1h4v1h5v1h4v1h3v1h3v1h4v1h3v1h3v1h3v1h3v1h2v1h3v1h3v1h2v1h3v1h2v1h2v1h3v1h2v1h2v1h2v1h2v1h2v1h3v1h2v1h2v1h2v1h1v1h2v1h2v1h2v1h2v1h1v1h2v1h2v1h1v1h2v1h2v1h1v1h2v1h2v1h1v1h2v1h1v1h2v1h1v1h1v1h2v1h1v1h2v1h1v1h2v1h1v1h1v1h2v1h1v1h1v1h2v1h1v1h1v1h1v1h2v1h1v1h1v1h1v1h1v1h2v1h1v1h1v1h1v1h1v1h1v1h2v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v3h1v4h1v4h1v3h1v3h1v2h1v3h1v2h1v2h1v2h1v2h1v1h1v2h1v1h1v2h1v1h1v1h1v2h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h2v1h1v1h1v1h2v1h1v1h2v1h1v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h1v1h1v2h1v2h1v1h1v2h1v1h1v2h1v2h1v1h1v2h1v1h1v2h1v2h1v1h1v2h1v2h1v1h1v2h1v2h1v2h1v2h1v2h1v2h1v1h1v2h1v2h1v2h1v2h1v2h1v2h1v2h1v2h1v2h1v2h1v3h1v2h1v2h1v2h1v2h1v2h1v3h1v2h1v2h1v3h1v2h1v2h1v3h1v3h1v2h1v3h1v2h1v3h1v3h1v3h1v2h1v3h1v3h1v3h1v3h1v3h1v4h1v3h1v3h1v3h1v4h1v4h1v3h1v4h1v3h1v4h1v5h1v4h1v4h1v4h1v5h1v5h1v5h1v5h1v6h1v6h1v6h1v6h1v8h1v8h1v10h1v10h1v8h-1v2h-1v6h1v3h1v1h1v19h1v1h-1v2h1v26h-1v22h-1v14h-1v11h-1v9h-1v8h-1v5h-1v9h-1v6h-1v5h-2v2h-1v1h-1v9h1v5h-1v5h-1v5h-1v3h-1v5h-1v4h-1v4h-1v5h-1v3h-1v4h-1v3h-1v4h-1v4h-1v3h-1v3h-1v3h-1v2h-1v-1h-1v3h-1v8h-1v3h-1v3h-1v3h-1v3h-1v3h-1v2h-1v3h-1v3h-1v2h-1v3h-1v2h-1v3h-3v3h-1v4h-1v4h-1v3h-1v2h-1v2h-1v1h-5v1h-1v1h-1v2h-1v7h1v5h-1v2h-1v2h-1v2h-1v2h-1v-1h-1v1h-1v2h-1v2h-1v4h-1v3h-1v2h-1v1h-1v2h-1v2h-1v2h-1v1h-1v2h-1v2h-1v1h-1v2h-1v2h-1v1h-1v2h-1v2h-1v1h-1v2h-1v-1h-1v1h-1v2h-1v2h-1v2h-1v2h-1v2h-1v2h-1v1h-1v1h-1v2h-1v1h-1v2h-1v1h-1v1h-1v2h-1v1h-1v1h-1v2h-1v1h-1v1h-1v2h-1v1h-1v1h-1v1h-1v2h-1v1h-1v-2h-2v1h-1v1h-1v2h-1v1h-1v2h-1v2h-1v2h-1v3h-1v1h-1v1h-1v1h-1v1h-1v1h-1v-1h-1v-1h-1v-1h-1v-1h-5v1h-1v1h-1v2h-1v7h1v3h1v1h-1v1h-1v1h-1v2h-2v-1h-1v-3h-1v1h-1v1h-1v1h-1v1h-1v2h-1v1h-1v2h-1v2h-1v1h-1v2h-1v3h-1v1h-1v1h-1v1h-2v1h-1v1h-1v1h-1v1h-1v1h-1v1h-2v1h-1v1h-1v1h-1v1h-1v1h-2v1h-1v1h-1v1h-1v-1h-1v-4h-1v-3h-2v1h-1v1h-1v1h-1v2h-1v1h-1v1h-1v2h-1v2h-1v2h-1v2h-1v2h-1v2h-1v1h-1v1h-1v1h-2v1h-1v1h-2v1h-1v1h-2v1h-1v-2h-2v1h-1v1h-2v1h-2v1h-1v1h-1v1h-2v1h-1v1h-1v1h-1v1h-1v1h-1v1h-2v1h-2v1h-1v1h-2v1h-3v1h-2v-5h-1v-2h-1v-1h-1v-1h-1v-1h-4v1h-1v1h-1v1h-1v2h-1v6h1v2h1v1h1v1h-1v1h-3v-9h-2v1h-2v1h-1v1h-2v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v2h-1v1h-1v1h-1v1h-1v1h-2v1h-3v1h-3v1h-3v1h-3v1h-4v1h-3v1h-4v1h-5v1h-4v1h-4v1h-6v1h-6v1h-7v1h-9v1h-21v1h-12v-1h-17v-1h-9v-1h-7v-1h-6v-1h-6v-1h-5v-1h-4v-1h-4v-1h-4v-1h-3v-1h-4v-1h-3v-1h-3v-1h-3v-1h-3v-1h-3v-1h-2v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-2v-1h-1v-1h-1v-1h-2v-1h-2v-1h-1v-1h-1v-4h-1v-2h-1v-1h-1v-1h-1v-1h-4v1h-1v1h-1v1h-1v2h-1v5h-3v-1h-2v-1h-1v-1h-1v-1h-1v-1h-1v-2h-1v-1h-1v-1h-1v-1h-1v-2h-1v-1h-1v-1h-1v-1h-2v-1h-1v-1h-1v-1h-2v-1h-1v-1h-1v7h-1v-1h-2v-1h-2v-1h-1v-1h-2v-1h-1v-1h-2v-1h-1v-1h-2v-1h-1v-1h-2v-1h-1v-1h-2v-1h-1v-1h-1v-1h-2v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-2v-1h-1v-1h-1v1h-1v-1h-1v-1h-1v-1h-1v-1h-2v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-2h-1v-2h-1v-3h-1v-2h-1v-2h-1v-2h-1v-1h-1v-2h-1v-1h-1v-1h-2v3h-1v2h-2v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h1v-3h1v-7h-1v-2h-1v-1h-2v-1h-4v1h-1v1h-1v1h-1v1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-2h-1v-1h-1v-2h-1v-1h-1v-2h-1v-1h-1v-2h-1v-1h-1v-1h-2v-1h-1v-1h-1v-1h-1v-2h-1v-1h-1v-1h-1v-1h-1v-2h-1v-1h-1v-2h-1v-1h-1v-1h-1v-2h-1v-1h-1v-2h-1v-1h-1v-2h-1v-2h-1v-3h-1v-2h-1v-2h-1v-1h-1v-2h-1v1h-2v-2h-1v-1h-1v-2h-1v-2h-1v-1h-1v-2h-1v-1h-1v-2h-1v-2h-1v-1h-1v-2h-1v-2h-1v-2h-1v-2h-1v-1h-1v-2h-1v-2h-1v-3h-1v-3h-1v-2h-1v-2h-2v-1h-1v-2h-1v-2h-1v-2h-1v-5h1v-7h-1v-2h-1v-1h-1v-1h-5v-1h-1v-2h-1v-2h-1v-3h-1v-2h-1v-2h-1v-2h-1v-3h-1v-2h-1v-2h-1v-3h-1v-3h-1v-2h-1v-3h-1v-3h-1v-2h-1v-3h-1v-3h-1v-3h-1v-3h-1v-3h-1v-9h-1v-2h-1v1h-1v-2h-1v-3h-1v-3h-1v-3h-1v-4h-1v-3h-1v-4h-1v-4h-1v-3h-1v-5h-1v-4h-1v-4h-1v-7h-1v-1h-1v-5h-1v-5h-1v-5h1v-9h-1v-1h-1v-2h-2v-4h-1v-6h-1v-7h-1v-7h-1v-8h-1v-10h-1v-10h-1v-14h-1v-22h-1v-32h1v-17h1v-1h1v-3h1v-6h-1v-2h-1v-8h1v-11h1v-9h1v-8h1v-8h1v-6h1v-6h1v-6h1v-6h1v-5h1v-5h1v-5h1v-5h1v-4h1v-4h1v-4h1v-5h1v-3h1v-4h1v-4h1v-3h1v-4h1v-4h1v-3h1v-3h1v-3h1v-4h1v-3h1v-3h1v-3h1v-3h1v-3h1v-3h1v-2h1v-3h1v-3h1v-2h1v-3h1v-3h1v-2h1v-3h1v-2h1v-2h1v-3h1v-2h1v-3h1v-2h1v-2h1v-2h1v-2h1v-2h1v-2h1v-3h1v-2h1v-2h1v-2h1v-2h1v-2h1v-2h1v-2h1v-2h1v-2h1v-2h1v-1h1v-2h1v-2h1v-2h1v-2h1v-2h1v-1h1v-2h1v-2h1v-2h1v-1h1v-2h1v-2h1v-1h1v-2h1v-1h1v-2h1v-2h1v-1h1v-2h1v-1h1v-2h1v-1h1v-2h1v-1h1v-2h1v-1h1v-2h1v-1h1v-2h1v-1h1v-2h1v-1h1v-1h1v-2h1v-1h1v-2h1v-1h1v-1h1v-2h1v-1h1v-1h1v-2h1v-1h1v-1h1v-1h1v-2h1v-1h1v-1h1v-1h1v-2h1v-1h1v-1h1v-1h1v-1h1v-2h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-2h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-2h1v-1h2v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h2v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h2v-1h1v-1h1v-1h1v-1h1v-1h2v-1h1v-1h1v-1h2v-1h1v-1h1v-1h2v-1h4v-1h4v-2h-1v-1h-1v-1h2v-1h1v-1h1v-1h2v-1h1v-1h2v-1h2v-1h1v-1h2v-1h1v-1h2v-1h1v-1h2v-1h1v-1h2v-1h2v-1h2v-1h2v-1h1v-1h2v-1h2v-1h2v-1h1v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h3v-1h2v-1h2v-1h2v-1h3v-1h2v-1h3v-1h2v-1h3v-1h3v-1h2v-1h3v-1h3v-1h3v-1h4v-1h3v-1h4v-1h4v-1h4v-1h4v-1h5v-1h5v-1h6v-1h7v-1h11v-1h20ZM425 1443h1v1h-1ZM0 1864h1v11h-1ZM1079 1864h1v11h-1ZM1 1875h1v4h-1ZM1078 1875h1v4h-1v3h-1v-4h1ZM2 1879h1v3h-1ZM3 1882h1v3h-1ZM1076 1882h1v3h-1ZM4 1885h1v2h1v2h1v2h-1v-1h-1v-2h-1ZM1075 1885h1v2h-1ZM1074 1887h1v3h-1v1h-1v-2h1ZM7 1891h1v2h-1ZM1072 1891h1v2h-1ZM8 1893h1v1h1v2h-1v-1h-1ZM1071 1893h1v2h-1v1h-1v-2h1ZM10 1896h1v1h1v1h1v2h-1v-1h-1v-1h-1ZM1069 1896h1v2h-1v1h-1v1h-1v-2h1v-1h1ZM13 1900h1v1h-1ZM1066 1900h1v1h-1ZM14 1901h1v1h-1ZM1065 1901h1v1h-1ZM15 1902h1v1h1v1h-2ZM1064 1902h1v1h-1ZM1063 1903h1v1h-1ZM17 1904h1v1h-1ZM1062 1904h1v1h-1ZM18 1905h1v1h-1ZM1061 1905h1v1h-1ZM19 1906h2v1h1v1h1v1h-2v-1h-1v-1h-1ZM1059 1906h2v1h-1v1h-1v1h-2v-1h1v-1h1ZM23 1909h2v1h1v1h2v1h1v1h-2v-1h-2v-1h-1v-1h-1ZM1056 1909h1v1h-1ZM1054 1910h2v1h-1v1h-2v1h-2v-1h1v-1h2ZM29 1913h2v1h-2ZM1049 1913h2v1h-2ZM31 1914h2v1h-2ZM1047 1914h2v1h-2ZM33 1915h2v1h-2ZM1045 1915h2v1h-2ZM35 1916h3v1h-3ZM1042 1916h3v1h-3ZM38 1917h4v1h3v1h-4v-1h-3ZM1038 1917h4v1h-3v1h-4v-1h3ZM45 1919h10v1h-10ZM1025 1919h10v1h-10Z",
             "mask": {
               "src": "76c488b32622eeae.webp",
               "bytes": 2242,
@@ -3019,7 +4306,13 @@
                   ],
                   "rotate": -4,
                   "flip": false,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0564,
+                    1,
+                    0.8872
+                  ]
                 },
                 "meo": {
                   "sticker": "meo-cool",
@@ -3031,8 +4324,21 @@
                   ],
                   "rotate": 4,
                   "flip": true,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0104,
+                    1,
+                    0.9792
+                  ]
                 }
+              }
+            },
+            "validated": {
+              "ruban": {
+                "overlap": 0,
+                "depth": 0,
+                "face": 0
               }
             }
           },
@@ -3087,6 +4393,7 @@
               1080,
               1920
             ],
+            "path": "M45 0h10v1h-10ZM1025 0h10v1h-10ZM41 1h4v1h-3v1h-4v-1h3ZM1035 1h4v1h3v1h-4v-1h-3ZM35 3h3v1h-3ZM1042 3h3v1h-3ZM32 4h3v1h-2v1h-2v1h-2v1h-2v-1h1v-1h2v-1h2ZM1045 4h3v1h1v1h-2v-1h-2ZM1049 6h3v1h1v1h-2v-1h-2ZM25 8h2v1h-1v1h-2v-1h1ZM1053 8h2v1h1v1h-2v-1h-1ZM22 10h2v1h-1v1h-1v1h-2v-1h1v-1h1ZM1056 10h2v1h1v1h1v1h-2v-1h-1v-1h-1ZM19 13h1v1h-1ZM1060 13h1v1h-1ZM18 14h1v1h-1ZM1061 14h1v1h-1ZM17 15h1v1h-1ZM1062 15h1v1h-1ZM15 16h2v1h-1v1h-1ZM1063 16h2v2h-1v-1h-1ZM14 18h1v1h-1ZM1065 18h1v1h-1ZM13 19h1v1h-1ZM1066 19h1v1h1v1h1v1h1v2h-1v-1h-1v-1h-1v-1h-1ZM12 20h1v2h-1v1h-1v1h-1v-2h1v-1h1ZM9 24h1v2h-1v2h-1v1h-1v-2h1v-2h1ZM1070 24h1v1h1v2h1v2h-1v-1h-1v-2h-1ZM6 29h1v2h-1v2h-1v-3h1ZM1073 29h1v1h1v3h-1v-2h-1ZM4 33h1v2h-1ZM1075 33h1v2h-1ZM3 35h1v3h-1ZM1076 35h1v3h-1ZM2 38h1v3h-1ZM1077 38h1v3h-1ZM1 41h1v4h-1ZM1078 41h1v4h-1ZM0 45h1v11h-1ZM1079 45h1v11h-1ZM219 518h642v1h8v1h3v1h3v1h1v1h2v1h1v1h1v1h1v2h1v1h1v2h1v4h1v6h1v596h-1v1h1v297h-1v6h-1v3h-1v3h-1v1h-1v2h-1v1h-1v1h-1v1h-2v1h-1v1h-2v1h-3v1h-8v1h-644v-1h-8v-1h-3v-1h-2v-1h-1v-1h-2v-1h-1v-1h-1v-1h-1v-1h-1v-2h-1v-3h-1v-2h-1v-7h-1v-894h1v-7h1v-3h1v-2h1v-1h1v-2h1v-1h1v-1h1v-1h2v-1h1v-1h3v-1h3v-1h8ZM0 1864h1v11h-1ZM1079 1864h1v11h-1ZM1 1875h1v4h-1ZM1078 1875h1v4h-1v3h-1v-4h1ZM2 1879h1v3h-1ZM3 1882h1v3h-1ZM1076 1882h1v3h-1ZM4 1885h1v2h1v2h1v2h-1v-1h-1v-2h-1ZM1075 1885h1v2h-1ZM1074 1887h1v3h-1v1h-1v-2h1ZM7 1891h1v2h-1ZM1072 1891h1v2h-1ZM8 1893h1v1h1v2h-1v-1h-1ZM1071 1893h1v2h-1v1h-1v-2h1ZM10 1896h1v1h1v1h1v2h-1v-1h-1v-1h-1ZM1069 1896h1v2h-1v1h-1v1h-1v-2h1v-1h1ZM13 1900h1v1h-1ZM1066 1900h1v1h-1ZM14 1901h1v1h-1ZM1065 1901h1v1h-1ZM15 1902h1v1h1v1h-2ZM1064 1902h1v1h-1ZM1063 1903h1v1h-1ZM17 1904h1v1h-1ZM1062 1904h1v1h-1ZM18 1905h1v1h-1ZM1061 1905h1v1h-1ZM19 1906h2v1h1v1h1v1h-2v-1h-1v-1h-1ZM1059 1906h2v1h-1v1h-1v1h-2v-1h1v-1h1ZM23 1909h2v1h1v1h2v1h1v1h-2v-1h-2v-1h-1v-1h-1ZM1056 1909h1v1h-1ZM1054 1910h2v1h-1v1h-2v1h-2v-1h1v-1h2ZM29 1913h2v1h-2ZM1049 1913h2v1h-2ZM31 1914h2v1h-2ZM1047 1914h2v1h-2ZM33 1915h2v1h-2ZM1045 1915h2v1h-2ZM35 1916h3v1h-3ZM1042 1916h3v1h-3ZM38 1917h4v1h3v1h-4v-1h-3ZM1038 1917h4v1h-3v1h-4v-1h3ZM45 1919h10v1h-10ZM1025 1919h10v1h-10Z",
             "mask": {
               "src": "b66e6ae7d22209fb.webp",
               "bytes": 602,
@@ -3293,6 +4600,82 @@
           "birds": {
             "default": "cotes",
             "layouts": {
+              "pied": {
+                "mee": {
+                  "sticker": "mee-bisou-vole",
+                  "box": [
+                    46,
+                    1362,
+                    300,
+                    300
+                  ],
+                  "rotate": -6,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0824,
+                    1,
+                    0.8352
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-feu-artifice",
+                  "box": [
+                    734,
+                    1418,
+                    300,
+                    300
+                  ],
+                  "rotate": 6,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0.0567,
+                    0,
+                    0.8867,
+                    1
+                  ]
+                }
+              },
+              "perches": {
+                "mee": {
+                  "sticker": "mee-bisou-vole",
+                  "box": [
+                    116,
+                    64,
+                    240,
+                    240
+                  ],
+                  "rotate": -10,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0824,
+                    1,
+                    0.8352
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-feu-artifice",
+                  "box": [
+                    724,
+                    64,
+                    240,
+                    240
+                  ],
+                  "rotate": 10,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0.0567,
+                    0,
+                    0.8867,
+                    1
+                  ]
+                }
+              },
               "cotes": {
                 "mee": {
                   "sticker": "mee-bisou-vole",
@@ -3304,7 +4687,13 @@
                   ],
                   "rotate": 14,
                   "flip": false,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0824,
+                    1,
+                    0.8352
+                  ]
                 },
                 "meo": {
                   "sticker": "meo-feu-artifice",
@@ -3316,8 +4705,81 @@
                   ],
                   "rotate": 346,
                   "flip": true,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0.0567,
+                    0,
+                    0.8867,
+                    1
+                  ]
                 }
+              },
+              "duo": {
+                "pair": {
+                  "sticker": "duo-coucou",
+                  "box": [
+                    412,
+                    1396,
+                    256,
+                    256
+                  ],
+                  "rotate": 0,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.14,
+                    1,
+                    0.72
+                  ]
+                }
+              },
+              "selfie": {
+                "meo": {
+                  "sticker": "meo-selfie",
+                  "box": [
+                    650,
+                    1090,
+                    380,
+                    380
+                  ],
+                  "rotate": 0,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0375,
+                    1,
+                    0.9251
+                  ]
+                }
+              }
+            },
+            "validated": {
+              "pied": {
+                "overlap": 111,
+                "depth": 3,
+                "face": 0
+              },
+              "perches": {
+                "overlap": 0,
+                "depth": 0,
+                "face": 0
+              },
+              "cotes": {
+                "overlap": 8,
+                "depth": 2,
+                "face": 0
+              },
+              "duo": {
+                "overlap": 40,
+                "depth": 5,
+                "face": 0
+              },
+              "selfie": {
+                "overlap": 9053,
+                "depth": 105,
+                "face": 0
               }
             }
           },
@@ -3372,6 +4834,7 @@
               1080,
               1920
             ],
+            "path": "M45 0h10v1h-10ZM1025 0h10v1h-10ZM41 1h4v1h-3v1h-4v-1h3ZM1035 1h4v1h3v1h-4v-1h-3ZM35 3h3v1h-3ZM1042 3h3v1h-3ZM32 4h3v1h-2v1h-2v1h-2v1h-2v-1h1v-1h2v-1h2ZM1045 4h3v1h1v1h-2v-1h-2ZM1049 6h3v1h1v1h-2v-1h-2ZM25 8h2v1h-1v1h-2v-1h1ZM1053 8h2v1h1v1h-2v-1h-1ZM22 10h2v1h-1v1h-1v1h-2v-1h1v-1h1ZM1056 10h2v1h1v1h1v1h-2v-1h-1v-1h-1ZM19 13h1v1h-1ZM1060 13h1v1h-1ZM18 14h1v1h-1ZM1061 14h1v1h-1ZM17 15h1v1h-1ZM1062 15h1v1h-1ZM15 16h2v1h-1v1h-1ZM1063 16h2v2h-1v-1h-1ZM14 18h1v1h-1ZM1065 18h1v1h-1ZM13 19h1v1h-1ZM1066 19h1v1h1v1h1v1h1v2h-1v-1h-1v-1h-1v-1h-1ZM12 20h1v2h-1v1h-1v1h-1v-2h1v-1h1ZM9 24h1v2h-1v2h-1v1h-1v-2h1v-2h1ZM1070 24h1v1h1v2h1v2h-1v-1h-1v-2h-1ZM6 29h1v2h-1v2h-1v-3h1ZM1073 29h1v1h1v3h-1v-2h-1ZM4 33h1v2h-1ZM1075 33h1v2h-1ZM3 35h1v3h-1ZM1076 35h1v3h-1ZM2 38h1v3h-1ZM1077 38h1v3h-1ZM1 41h1v4h-1ZM1078 41h1v4h-1ZM0 45h1v11h-1ZM1079 45h1v11h-1ZM213 538h632v1h1v-1h20v1h8v1h4v1h2v1h2v1h1v1h2v1h1v1h1v1h1v1h1v2h1v2h1v2h1v3h1v6h1v875h-1v5h-1v3h-1v2h-1v2h-1v2h-1v1h-1v1h-1v1h-1v1h-1v1h-2v1h-1v1h-3v1h-3v1h-6v1h-658v-1h-6v-1h-3v-1h-3v-1h-1v-1h-2v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-2h-1v-2h-1v-2h-1v-3h-1v-5h-1v-874h1v-6h1v-4h1v-2h1v-2h1v-2h1v-1h1v-1h1v-1h1v-1h2v-1h1v-1h2v-1h2v-1h4v-1h7ZM0 1864h1v11h-1ZM1079 1864h1v11h-1ZM1 1875h1v4h-1ZM1078 1875h1v4h-1v3h-1v-4h1ZM2 1879h1v3h-1ZM3 1882h1v3h-1ZM1076 1882h1v3h-1ZM4 1885h1v2h1v2h1v2h-1v-1h-1v-2h-1ZM1075 1885h1v2h-1ZM1074 1887h1v3h-1v1h-1v-2h1ZM7 1891h1v2h-1ZM1072 1891h1v2h-1ZM8 1893h1v1h1v2h-1v-1h-1ZM1071 1893h1v2h-1v1h-1v-2h1ZM10 1896h1v1h1v1h1v2h-1v-1h-1v-1h-1ZM1069 1896h1v2h-1v1h-1v1h-1v-2h1v-1h1ZM13 1900h1v1h-1ZM1066 1900h1v1h-1ZM14 1901h1v1h-1ZM1065 1901h1v1h-1ZM15 1902h1v1h1v1h-2ZM1064 1902h1v1h-1ZM1063 1903h1v1h-1ZM17 1904h1v1h-1ZM1062 1904h1v1h-1ZM18 1905h1v1h-1ZM1061 1905h1v1h-1ZM19 1906h2v1h1v1h1v1h-2v-1h-1v-1h-1ZM1059 1906h2v1h-1v1h-1v1h-2v-1h1v-1h1ZM23 1909h2v1h1v1h2v1h1v1h-2v-1h-2v-1h-1v-1h-1ZM1056 1909h1v1h-1ZM1054 1910h2v1h-1v1h-2v1h-2v-1h1v-1h2ZM29 1913h2v1h-2ZM1049 1913h2v1h-2ZM31 1914h2v1h-2ZM1047 1914h2v1h-2ZM33 1915h2v1h-2ZM1045 1915h2v1h-2ZM35 1916h3v1h-3ZM1042 1916h3v1h-3ZM38 1917h4v1h3v1h-4v-1h-3ZM1038 1917h4v1h-3v1h-4v-1h3ZM45 1919h10v1h-10ZM1025 1919h10v1h-10Z",
             "mask": {
               "src": "1b36eddf157ec346.webp",
               "bytes": 616,
@@ -3578,6 +5041,140 @@
           "birds": {
             "default": "libre",
             "layouts": {
+              "pied": {
+                "mee": {
+                  "sticker": "mee-jackpot",
+                  "box": [
+                    46,
+                    1390,
+                    300,
+                    300
+                  ],
+                  "rotate": -6,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0746,
+                    1,
+                    0.8507
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-champagne",
+                  "box": [
+                    734,
+                    1382,
+                    300,
+                    300
+                  ],
+                  "rotate": 6,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0758,
+                    1,
+                    0.8484
+                  ]
+                }
+              },
+              "perches": {
+                "mee": {
+                  "sticker": "mee-jackpot",
+                  "box": [
+                    116,
+                    64,
+                    240,
+                    240
+                  ],
+                  "rotate": -10,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0746,
+                    1,
+                    0.8507
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-champagne",
+                  "box": [
+                    724,
+                    64,
+                    240,
+                    240
+                  ],
+                  "rotate": 10,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0758,
+                    1,
+                    0.8484
+                  ]
+                }
+              },
+              "cotes": {
+                "mee": {
+                  "sticker": "mee-jackpot",
+                  "box": [
+                    -41.2,
+                    732.8,
+                    246.4,
+                    246.4
+                  ],
+                  "rotate": 18,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0746,
+                    1,
+                    0.8507
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-champagne",
+                  "box": [
+                    874.8,
+                    812.8,
+                    246.4,
+                    246.4
+                  ],
+                  "rotate": 342,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0758,
+                    1,
+                    0.8484
+                  ]
+                }
+              },
+              "duo": {
+                "pair": {
+                  "sticker": "duo-coucou",
+                  "box": [
+                    400,
+                    1396,
+                    280,
+                    280
+                  ],
+                  "rotate": 0,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.14,
+                    1,
+                    0.72
+                  ]
+                }
+              },
               "libre": {
                 "mee": {
                   "sticker": "mee-jackpot",
@@ -3589,7 +5186,13 @@
                   ],
                   "rotate": -8,
                   "flip": false,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0746,
+                    1,
+                    0.8507
+                  ]
                 },
                 "meo": {
                   "sticker": "meo-champagne",
@@ -3601,8 +5204,66 @@
                   ],
                   "rotate": 8,
                   "flip": true,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0758,
+                    1,
+                    0.8484
+                  ]
                 }
+              },
+              "selfie": {
+                "meo": {
+                  "sticker": "meo-selfie",
+                  "box": [
+                    650,
+                    1090,
+                    380,
+                    380
+                  ],
+                  "rotate": 0,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0375,
+                    1,
+                    0.9251
+                  ]
+                }
+              }
+            },
+            "validated": {
+              "pied": {
+                "overlap": 64,
+                "depth": 4,
+                "face": 0
+              },
+              "perches": {
+                "overlap": 0,
+                "depth": 0,
+                "face": 0
+              },
+              "cotes": {
+                "overlap": 37,
+                "depth": 3,
+                "face": 0
+              },
+              "duo": {
+                "overlap": 44,
+                "depth": 5,
+                "face": 0
+              },
+              "libre": {
+                "overlap": 0,
+                "depth": 0,
+                "face": 0
+              },
+              "selfie": {
+                "overlap": 9678,
+                "depth": 109,
+                "face": 0
               }
             }
           },
@@ -3657,6 +5318,7 @@
               1080,
               1920
             ],
+            "path": "M45 0h10v1h-10ZM1025 0h10v1h-10ZM41 1h4v1h-3v1h-4v-1h3ZM1035 1h4v1h3v1h-4v-1h-3ZM35 3h3v1h-3ZM1042 3h3v1h-3ZM32 4h3v1h-2v1h-2v1h-2v1h-2v-1h1v-1h2v-1h2ZM1045 4h3v1h1v1h-2v-1h-2ZM1049 6h3v1h1v1h-2v-1h-2ZM25 8h2v1h-1v1h-2v-1h1ZM1053 8h2v1h1v1h-2v-1h-1ZM22 10h2v1h-1v1h-1v1h-2v-1h1v-1h1ZM1056 10h2v1h1v1h1v1h-2v-1h-1v-1h-1ZM19 13h1v1h-1ZM1060 13h1v1h-1ZM18 14h1v1h-1ZM1061 14h1v1h-1ZM17 15h1v1h-1ZM1062 15h1v1h-1ZM15 16h2v1h-1v1h-1ZM1063 16h2v2h-1v-1h-1ZM14 18h1v1h-1ZM1065 18h1v1h-1ZM13 19h1v1h-1ZM1066 19h1v1h1v1h1v1h1v2h-1v-1h-1v-1h-1v-1h-1ZM12 20h1v2h-1v1h-1v1h-1v-2h1v-1h1ZM9 24h1v2h-1v2h-1v1h-1v-2h1v-2h1ZM1070 24h1v1h1v2h1v2h-1v-1h-1v-2h-1ZM6 29h1v2h-1v2h-1v-3h1ZM1073 29h1v1h1v3h-1v-2h-1ZM4 33h1v2h-1ZM1075 33h1v2h-1ZM3 35h1v3h-1ZM1076 35h1v3h-1ZM2 38h1v3h-1ZM1077 38h1v3h-1ZM1 41h1v4h-1ZM1078 41h1v4h-1ZM0 45h1v11h-1ZM1079 45h1v11h-1ZM185 562h710v1h1v2h1v3h1v888h-1v3h-1v2h-1v1h-1v1h-1v1h-2v1h-3v1h-696v-1h-3v-1h-2v-1h-1v-1h-1v-1h-1v-2h-1v-3h-1v-888h1v-3h1v-2h1ZM0 1868h1v7h-1ZM1079 1868h1v7h-1ZM1 1875h1v4h-1ZM1078 1875h1v4h-1ZM2 1879h1v3h-1ZM1077 1879h1v3h-1ZM3 1882h1v3h-1ZM1076 1882h1v3h-1ZM4 1885h1v2h1v3h-1v-2h-1ZM1075 1885h1v2h-1ZM1074 1887h1v3h-1ZM6 1890h1v1h-1ZM1073 1890h1v1h-1ZM7 1891h1v2h-1ZM1072 1891h1v2h-1ZM8 1893h1v2h-1ZM1071 1893h1v2h-1ZM9 1895h1v1h-1ZM1070 1895h1v1h-1ZM10 1896h1v1h1v2h-1v-1h-1ZM1069 1896h1v2h-1v1h-1v-2h1ZM12 1899h1v1h-1ZM1067 1899h1v1h-1ZM13 1900h1v1h-1ZM1066 1900h1v1h-1ZM14 1901h1v1h-1ZM1065 1901h1v1h-1ZM15 1902h1v1h1v1h-2ZM1064 1902h1v1h-1ZM1063 1903h1v1h-1ZM17 1904h1v1h-1ZM1062 1904h1v1h-1ZM18 1905h1v1h-1ZM1061 1905h1v1h-1ZM19 1906h1v1h-1ZM1060 1906h1v1h-1ZM20 1907h1v1h-1ZM1059 1907h1v1h-1ZM21 1908h2v1h-2ZM1057 1908h2v1h-2ZM23 1909h1v1h-1ZM1056 1909h1v1h-1ZM24 1910h2v1h1v1h-2v-1h-1ZM1054 1910h2v1h-1v1h-2v-1h1ZM27 1912h2v1h-2ZM1051 1912h2v1h-2ZM29 1913h2v1h-2ZM1049 1913h2v1h-2ZM31 1914h2v1h-2ZM1047 1914h2v1h-2ZM33 1915h2v1h-2ZM1045 1915h2v1h-2ZM35 1916h3v1h-3ZM1042 1916h3v1h-3ZM38 1917h3v1h-3ZM1039 1917h3v1h-3ZM41 1918h3v1h-3ZM1035 1918h4v1h-4ZM45 1919h7v1h-7ZM1028 1919h7v1h-7Z",
             "mask": {
               "src": "2e25aa6f4b8beb54.webp",
               "bytes": 518,
@@ -3868,26 +5530,181 @@
                   "sticker": "mee-amoureuse",
                   "box": [
                     46,
-                    1250,
+                    1430,
                     300,
                     300
                   ],
                   "rotate": -6,
                   "flip": false,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0789,
+                    1,
+                    0.8421
+                  ]
                 },
                 "meo": {
                   "sticker": "meo-trophee",
                   "box": [
                     734,
-                    1250,
+                    1442,
                     300,
                     300
                   ],
                   "rotate": 6,
                   "flip": true,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.033,
+                    1,
+                    0.934
+                  ]
                 }
+              },
+              "perches": {
+                "mee": {
+                  "sticker": "mee-amoureuse",
+                  "box": [
+                    116,
+                    64,
+                    240,
+                    240
+                  ],
+                  "rotate": -10,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0789,
+                    1,
+                    0.8421
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-trophee",
+                  "box": [
+                    724,
+                    64,
+                    240,
+                    240
+                  ],
+                  "rotate": 10,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.033,
+                    1,
+                    0.934
+                  ]
+                }
+              },
+              "cotes": {
+                "mee": {
+                  "sticker": "mee-amoureuse",
+                  "box": [
+                    -26.4,
+                    753.6,
+                    212.8,
+                    212.8
+                  ],
+                  "rotate": 18,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0789,
+                    1,
+                    0.8421
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-trophee",
+                  "box": [
+                    893.6,
+                    833.6,
+                    212.8,
+                    212.8
+                  ],
+                  "rotate": 342,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.033,
+                    1,
+                    0.934
+                  ]
+                }
+              },
+              "duo": {
+                "pair": {
+                  "sticker": "duo-coucou",
+                  "box": [
+                    412,
+                    1404,
+                    256,
+                    256
+                  ],
+                  "rotate": 0,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.14,
+                    1,
+                    0.72
+                  ]
+                }
+              },
+              "selfie": {
+                "meo": {
+                  "sticker": "meo-selfie",
+                  "box": [
+                    650,
+                    1090,
+                    380,
+                    380
+                  ],
+                  "rotate": 0,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0375,
+                    1,
+                    0.9251
+                  ]
+                }
+              }
+            },
+            "validated": {
+              "pied": {
+                "overlap": 105,
+                "depth": 4,
+                "face": 0
+              },
+              "perches": {
+                "overlap": 0,
+                "depth": 0,
+                "face": 0
+              },
+              "cotes": {
+                "overlap": 27,
+                "depth": 3,
+                "face": 0
+              },
+              "duo": {
+                "overlap": 39,
+                "depth": 5,
+                "face": 0
+              },
+              "selfie": {
+                "overlap": 9986,
+                "depth": 111,
+                "face": 0
               }
             }
           },
@@ -3942,6 +5759,7 @@
               1080,
               1920
             ],
+            "path": "M45 0h10v1h-10ZM1025 0h10v1h-10ZM41 1h4v1h-3v1h-4v-1h3ZM1035 1h4v1h3v1h-4v-1h-3ZM35 3h3v1h-3ZM1042 3h3v1h-3ZM32 4h3v1h-2v1h-2v1h-2v1h-2v-1h1v-1h2v-1h2ZM1045 4h3v1h1v1h-2v-1h-2ZM1049 6h3v1h1v1h-2v-1h-2ZM25 8h2v1h-1v1h-2v-1h1ZM1053 8h2v1h1v1h-2v-1h-1ZM22 10h2v1h-1v1h-1v1h-2v-1h1v-1h1ZM1056 10h2v1h1v1h1v1h-2v-1h-1v-1h-1ZM19 13h1v1h-1ZM1060 13h1v1h-1ZM18 14h1v1h-1ZM1061 14h1v1h-1ZM17 15h1v1h-1ZM1062 15h1v1h-1ZM15 16h2v1h-1v1h-1ZM1063 16h2v2h-1v-1h-1ZM14 18h1v1h-1ZM1065 18h1v1h-1ZM13 19h1v1h-1ZM1066 19h1v1h1v1h1v1h1v2h-1v-1h-1v-1h-1v-1h-1ZM12 20h1v2h-1v1h-1v1h-1v-2h1v-1h1ZM9 24h1v2h-1v2h-1v1h-1v-2h1v-2h1ZM1070 24h1v1h1v2h1v2h-1v-1h-1v-2h-1ZM6 29h1v2h-1v2h-1v-3h1ZM1073 29h1v1h1v3h-1v-2h-1ZM4 33h1v2h-1ZM1075 33h1v2h-1ZM3 35h1v3h-1ZM1076 35h1v3h-1ZM2 38h1v3h-1ZM1077 38h1v3h-1ZM1 41h1v4h-1ZM1078 41h1v4h-1ZM0 45h1v11h-1ZM1079 45h1v11h-1ZM222 542h636v1h6v1h4v1h2v1h2v1h1v1h2v1h1v1h1v1h1v1h1v1h1v2h1v1h1v3h1v2h1v4h1v5h1v864h-1v6h-1v4h-1v2h-1v2h-1v2h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-2v1h-1v1h-2v1h-3v1h-3v1h-6v1h-636v-1h-6v-1h-3v-1h-3v-1h-2v-1h-1v-1h-2v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-2h-1v-2h-1v-2h-1v-4h-1v-6h-1v-864h1v-6h1v-3h1v-2h1v-3h1v-1h1v-2h1v-1h1v-1h1v-1h1v-1h1v-1h2v-1h1v-1h2v-1h2v-1h4v-1h6ZM0 1864h1v11h-1ZM1079 1864h1v11h-1ZM1 1875h1v4h-1ZM1078 1875h1v4h-1v3h-1v-4h1ZM2 1879h1v3h-1ZM3 1882h1v3h-1ZM1076 1882h1v3h-1ZM4 1885h1v2h1v2h1v2h-1v-1h-1v-2h-1ZM1075 1885h1v2h-1ZM1074 1887h1v3h-1v1h-1v-2h1ZM7 1891h1v2h-1ZM1072 1891h1v2h-1ZM8 1893h1v1h1v2h-1v-1h-1ZM1071 1893h1v2h-1v1h-1v-2h1ZM10 1896h1v1h1v1h1v2h-1v-1h-1v-1h-1ZM1069 1896h1v2h-1v1h-1v1h-1v-2h1v-1h1ZM13 1900h1v1h-1ZM1066 1900h1v1h-1ZM14 1901h1v1h-1ZM1065 1901h1v1h-1ZM15 1902h1v1h1v1h-2ZM1064 1902h1v1h-1ZM1063 1903h1v1h-1ZM17 1904h1v1h-1ZM1062 1904h1v1h-1ZM18 1905h1v1h-1ZM1061 1905h1v1h-1ZM19 1906h2v1h1v1h1v1h-2v-1h-1v-1h-1ZM1059 1906h2v1h-1v1h-1v1h-2v-1h1v-1h1ZM23 1909h2v1h1v1h2v1h1v1h-2v-1h-2v-1h-1v-1h-1ZM1056 1909h1v1h-1ZM1054 1910h2v1h-1v1h-2v1h-2v-1h1v-1h2ZM29 1913h2v1h-2ZM1049 1913h2v1h-2ZM31 1914h2v1h-2ZM1047 1914h2v1h-2ZM33 1915h2v1h-2ZM1045 1915h2v1h-2ZM35 1916h3v1h-3ZM1042 1916h3v1h-3ZM38 1917h4v1h3v1h-4v-1h-3ZM1038 1917h4v1h-3v1h-4v-1h3ZM45 1919h10v1h-10ZM1025 1919h10v1h-10Z",
             "mask": {
               "src": "50660fc59c61a223.webp",
               "bytes": 628,
@@ -4185,8 +6003,142 @@
             }
           },
           "birds": {
-            "default": "selfie",
+            "default": "pied",
             "layouts": {
+              "pied": {
+                "mee": {
+                  "sticker": "mee-coucou",
+                  "box": [
+                    46,
+                    1418,
+                    300,
+                    300
+                  ],
+                  "rotate": -6,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0865,
+                    1,
+                    0.827
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-salut",
+                  "box": [
+                    734,
+                    1374,
+                    300,
+                    300
+                  ],
+                  "rotate": 6,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0104,
+                    1,
+                    0.9792
+                  ]
+                }
+              },
+              "perches": {
+                "mee": {
+                  "sticker": "mee-coucou",
+                  "box": [
+                    116,
+                    64,
+                    240,
+                    240
+                  ],
+                  "rotate": -10,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0865,
+                    1,
+                    0.827
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-salut",
+                  "box": [
+                    724,
+                    64,
+                    240,
+                    240
+                  ],
+                  "rotate": 10,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0104,
+                    1,
+                    0.9792
+                  ]
+                }
+              },
+              "cotes": {
+                "mee": {
+                  "sticker": "mee-coucou",
+                  "box": [
+                    -43.6,
+                    728.4,
+                    263.2,
+                    263.2
+                  ],
+                  "rotate": 18,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0865,
+                    1,
+                    0.827
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-salut",
+                  "box": [
+                    860.4,
+                    808.4,
+                    263.2,
+                    263.2
+                  ],
+                  "rotate": 342,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0104,
+                    1,
+                    0.9792
+                  ]
+                }
+              },
+              "duo": {
+                "pair": {
+                  "sticker": "duo-coucou",
+                  "box": [
+                    412,
+                    1400,
+                    256,
+                    256
+                  ],
+                  "rotate": 0,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.14,
+                    1,
+                    0.72
+                  ]
+                }
+              },
               "selfie": {
                 "meo": {
                   "sticker": "meo-selfie",
@@ -4198,8 +6150,41 @@
                   ],
                   "rotate": 0,
                   "flip": true,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0375,
+                    1,
+                    0.9251
+                  ]
                 }
+              }
+            },
+            "validated": {
+              "pied": {
+                "overlap": 70,
+                "depth": 4,
+                "face": 0
+              },
+              "perches": {
+                "overlap": 0,
+                "depth": 0,
+                "face": 0
+              },
+              "cotes": {
+                "overlap": 82,
+                "depth": 4,
+                "face": 0
+              },
+              "duo": {
+                "overlap": 40,
+                "depth": 5,
+                "face": 0
+              },
+              "selfie": {
+                "overlap": 9179,
+                "depth": 105,
+                "face": 0
               }
             }
           },
@@ -4254,6 +6239,7 @@
               1080,
               1920
             ],
+            "path": "M45 0h10v1h-10ZM1025 0h10v1h-10ZM41 1h4v1h-3v1h-4v-1h3ZM1035 1h4v1h3v1h-4v-1h-3ZM35 3h3v1h-3ZM1042 3h3v1h-3ZM32 4h3v1h-2v1h-2v1h-2v1h-2v-1h1v-1h2v-1h2ZM1045 4h3v1h1v1h-2v-1h-2ZM1049 6h3v1h1v1h-2v-1h-2ZM25 8h2v1h-1v1h-2v-1h1ZM1053 8h2v1h1v1h-2v-1h-1ZM22 10h2v1h-1v1h-1v1h-2v-1h1v-1h1ZM1056 10h2v1h1v1h1v1h-2v-1h-1v-1h-1ZM19 13h1v1h-1ZM1060 13h1v1h-1ZM18 14h1v1h-1ZM1061 14h1v1h-1ZM17 15h1v1h-1ZM1062 15h1v1h-1ZM15 16h2v1h-1v1h-1ZM1063 16h2v2h-1v-1h-1ZM14 18h1v1h-1ZM1065 18h1v1h-1ZM13 19h1v1h-1ZM1066 19h1v1h1v1h1v1h1v2h-1v-1h-1v-1h-1v-1h-1ZM12 20h1v2h-1v1h-1v1h-1v-2h1v-1h1ZM9 24h1v2h-1v2h-1v1h-1v-2h1v-2h1ZM1070 24h1v1h1v2h1v2h-1v-1h-1v-2h-1ZM6 29h1v2h-1v2h-1v-3h1ZM1073 29h1v1h1v3h-1v-2h-1ZM4 33h1v2h-1ZM1075 33h1v2h-1ZM3 35h1v3h-1ZM1076 35h1v3h-1ZM2 38h1v3h-1ZM1077 38h1v3h-1ZM1 41h1v4h-1ZM1078 41h1v4h-1ZM0 45h1v11h-1ZM1079 45h1v11h-1ZM536 542h8v1h19v1h10v1h7v1h6v1h6v1h4v1h5v1h4v1h4v1h3v1h4v1h3v1h3v1h3v1h3v1h3v1h2v1h3v1h3v1h2v1h2v1h3v1h2v1h3v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h1v1h2v1h2v1h2v1h2v1h1v1h2v1h1v1h2v1h2v1h1v1h2v1h1v1h2v1h1v1h2v1h1v1h1v1h2v1h1v1h2v1h1v1h1v1h2v1h1v1h1v1h2v1h1v1h1v1h2v1h1v1h1v1h1v1h1v1h2v1h1v1h1v1h1v1h1v1h2v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h2v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v2h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v2h1v1h1v1h1v1h1v1h1v2h1v1h1v1h1v1h1v1h1v2h1v1h1v1h1v1h1v2h1v1h1v1h1v1h1v2h1v1h1v1h1v2h1v1h1v2h1v1h1v1h1v2h1v1h1v2h1v1h1v2h1v1h1v1h1v2h1v1h1v2h1v1h1v2h1v2h1v1h1v2h1v1h1v2h1v2h1v1h1v2h1v1h1v2h1v2h1v2h1v1h1v2h1v2h1v2h1v2h1v1h1v2h1v2h1v2h1v2h1v2h1v2h1v2h1v2h1v2h1v2h1v2h1v2h1v2h1v2h1v2h1v3h1v2h1v2h1v2h1v3h1v2h1v2h1v3h1v2h1v3h1v2h1v3h1v2h1v3h1v3h1v3h1v3h1v2h1v3h1v3h1v3h1v3h1v4h1v3h1v3h1v3h1v4h1v3h1v4h1v4h1v3h1v4h1v4h1v4h1v5h1v4h1v4h1v5h1v5h1v5h1v6h1v6h1v6h1v6h1v8h1v8h1v8h1v11h1v14h1v25h1v29h-1v22h-1v15h-1v9h-1v10h-1v8h-1v7h-1v7h-1v6h-1v5h-1v6h-1v5h-1v5h-1v5h-1v4h-1v5h-1v4h-1v4h-1v4h-1v4h-1v4h-1v3h-1v4h-1v3h-1v4h-1v3h-1v3h-1v3h-1v3h-1v3h-1v3h-1v3h-1v4h-1v3h-1v2h-1v3h-1v2h-1v3h-1v3h-1v2h-1v3h-1v2h-1v3h-1v3h-1v2h-1v2h-1v2h-1v3h-1v2h-1v2h-1v2h-1v3h-1v2h-1v2h-1v2h-1v2h-1v2h-1v2h-1v2h-1v2h-1v2h-1v2h-1v2h-1v2h-1v2h-1v2h-1v2h-1v1h-1v2h-1v2h-1v2h-1v1h-1v2h-1v2h-1v2h-1v1h-1v2h-1v1h-1v2h-1v2h-1v1h-1v2h-1v2h-1v1h-1v2h-1v1h-1v2h-1v1h-1v2h-1v1h-1v2h-1v1h-1v2h-1v1h-1v1h-1v2h-1v1h-1v1h-1v2h-1v1h-1v2h-1v1h-1v1h-1v1h-1v2h-1v1h-1v1h-1v2h-1v1h-1v1h-1v1h-1v2h-1v1h-1v1h-1v1h-1v1h-1v2h-1v1h-1v1h-1v1h-1v1h-1v1h-1v2h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v2h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-2v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-2v1h-1v1h-1v1h-1v1h-1v1h-2v1h-1v1h-1v1h-1v1h-1v1h-2v1h-1v1h-1v1h-2v1h-1v1h-1v1h-2v1h-1v1h-1v1h-2v1h-1v1h-2v1h-1v1h-2v1h-1v1h-1v1h-2v1h-1v1h-2v1h-2v1h-1v1h-2v1h-1v1h-2v1h-2v1h-1v1h-2v1h-2v1h-2v1h-1v1h-2v1h-2v1h-2v1h-2v1h-2v1h-2v1h-2v1h-2v1h-2v1h-2v1h-2v1h-3v1h-2v1h-2v1h-3v1h-2v1h-2v1h-3v1h-3v1h-3v1h-3v1h-2v1h-4v1h-3v1h-4v1h-3v1h-4v1h-3v1h-5v1h-5v1h-5v1h-6v1h-7v1h-8v1h-16v1h-18v-1h-1v1h-1v-1h-16v-1h-8v-1h-7v-1h-6v-1h-6v-1h-4v-1h-4v-1h-5v-1h-3v-1h-4v-1h-3v-1h-4v-1h-3v-1h-2v-1h-3v-1h-3v-1h-3v-1h-2v-1h-3v-1h-3v-1h-2v-1h-2v-1h-2v-1h-3v-1h-2v-1h-2v-1h-2v-1h-2v-1h-2v-1h-2v-1h-2v-1h-2v-1h-2v-1h-2v-1h-2v-1h-1v-1h-2v-1h-2v-1h-2v-1h-1v-1h-2v-1h-2v-1h-1v-1h-2v-1h-1v-1h-2v-1h-1v-1h-2v-1h-2v-1h-1v-1h-2v-1h-1v-1h-1v-1h-2v-1h-1v-1h-2v-1h-1v-1h-1v-1h-2v-1h-1v-1h-1v-1h-2v-1h-1v-1h-1v-1h-1v-1h-2v-1h-1v-1h-1v-1h-1v-1h-1v-1h-2v-1h-1v-1h-1v-1h-1v-1h-2v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-2v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-2h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-2h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-2h-1v-1h-1v-1h-1v-1h-1v-2h-1v-1h-1v-1h-1v-1h-1v-2h-1v-1h-1v-1h-1v-1h-1v-2h-1v-1h-1v-1h-1v-2h-1v-1h-1v-2h-1v-1h-1v-1h-1v-2h-1v-1h-1v-1h-1v-2h-1v-1h-1v-2h-1v-1h-1v-2h-1v-1h-1v-2h-1v-1h-1v-2h-1v-1h-1v-2h-1v-2h-1v-1h-1v-2h-1v-1h-1v-2h-1v-2h-1v-1h-1v-2h-1v-2h-1v-2h-1v-1h-1v-2h-1v-2h-1v-2h-1v-1h-1v-2h-1v-2h-1v-2h-1v-2h-1v-2h-1v-2h-1v-2h-1v-2h-1v-2h-1v-2h-1v-2h-1v-2h-1v-2h-1v-2h-1v-2h-1v-2h-1v-3h-1v-2h-1v-2h-1v-3h-1v-2h-1v-2h-1v-3h-1v-2h-1v-2h-1v-3h-1v-3h-1v-2h-1v-3h-1v-3h-1v-2h-1v-3h-1v-2h-1v-3h-1v-3h-1v-3h-1v-3h-1v-4h-1v-3h-1v-3h-1v-3h-1v-3h-1v-3h-1v-4h-1v-4h-1v-3h-1v-4h-1v-4h-1v-4h-1v-4h-1v-4h-1v-4h-1v-5h-1v-5h-1v-5h-1v-5h-1v-6h-1v-5h-1v-6h-1v-7h-1v-8h-1v-7h-1v-9h-1v-10h-1v-14h-1v-22h-1v-32h1v-23h1v-14h1v-11h1v-9h1v-7h1v-8h1v-6h1v-6h1v-7h1v-5h1v-5h1v-5h1v-5h1v-4h1v-5h1v-4h1v-4h1v-4h1v-4h1v-4h1v-3h1v-4h1v-3h1v-4h1v-3h1v-3h1v-3h1v-4h1v-3h1v-3h1v-3h1v-3h1v-2h1v-3h1v-3h1v-3h1v-3h1v-2h1v-3h1v-2h1v-3h1v-2h1v-3h1v-2h1v-2h1v-3h1v-2h1v-2h1v-2h1v-3h1v-2h1v-2h1v-2h1v-2h1v-2h1v-2h1v-2h1v-2h1v-2h1v-2h1v-2h1v-2h1v-2h1v-2h1v-2h1v-2h1v-1h1v-2h1v-2h1v-2h1v-1h1v-2h1v-2h1v-2h1v-1h1v-2h1v-2h1v-1h1v-2h1v-1h1v-2h1v-2h1v-1h1v-2h1v-1h1v-2h1v-1h1v-2h1v-1h1v-2h1v-1h1v-1h1v-2h1v-1h1v-2h1v-1h1v-1h1v-2h1v-1h1v-2h1v-1h1v-1h1v-1h1v-2h1v-1h1v-1h1v-2h1v-1h1v-1h1v-1h1v-2h1v-1h1v-1h1v-1h1v-2h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-2h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-2h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h2v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h2v-1h1v-1h1v-1h1v-1h1v-1h2v-1h1v-1h1v-1h1v-1h2v-1h1v-1h1v-1h1v-1h2v-1h1v-1h1v-1h2v-1h1v-1h1v-1h2v-1h1v-1h2v-1h1v-1h1v-1h2v-1h1v-1h2v-1h1v-1h2v-1h2v-1h1v-1h2v-1h1v-1h2v-1h2v-1h1v-1h2v-1h2v-1h2v-1h1v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h3v-1h2v-1h2v-1h3v-1h2v-1h3v-1h2v-1h4v-1h2v-1h3v-1h3v-1h4v-1h3v-1h3v-1h4v-1h4v-1h5v-1h4v-1h6v-1h5v-1h7v-1h10v-1h21ZM0 1864h1v11h-1ZM1079 1864h1v11h-1ZM1 1875h1v4h-1ZM1078 1875h1v4h-1v3h-1v-4h1ZM2 1879h1v3h-1ZM3 1882h1v3h-1ZM1076 1882h1v3h-1ZM4 1885h1v2h1v2h1v2h-1v-1h-1v-2h-1ZM1075 1885h1v2h-1ZM1074 1887h1v3h-1v1h-1v-2h1ZM7 1891h1v2h-1ZM1072 1891h1v2h-1ZM8 1893h1v1h1v2h-1v-1h-1ZM1071 1893h1v2h-1v1h-1v-2h1ZM10 1896h1v1h1v1h1v2h-1v-1h-1v-1h-1ZM1069 1896h1v2h-1v1h-1v1h-1v-2h1v-1h1ZM13 1900h1v1h-1ZM1066 1900h1v1h-1ZM14 1901h1v1h-1ZM1065 1901h1v1h-1ZM15 1902h1v1h1v1h-2ZM1064 1902h1v1h-1ZM1063 1903h1v1h-1ZM17 1904h1v1h-1ZM1062 1904h1v1h-1ZM18 1905h1v1h-1ZM1061 1905h1v1h-1ZM19 1906h2v1h1v1h1v1h-2v-1h-1v-1h-1ZM1059 1906h2v1h-1v1h-1v1h-2v-1h1v-1h1ZM23 1909h2v1h1v1h2v1h1v1h-2v-1h-2v-1h-1v-1h-1ZM1056 1909h1v1h-1ZM1054 1910h2v1h-1v1h-2v1h-2v-1h1v-1h2ZM29 1913h2v1h-2ZM1049 1913h2v1h-2ZM31 1914h2v1h-2ZM1047 1914h2v1h-2ZM33 1915h2v1h-2ZM1045 1915h2v1h-2ZM35 1916h3v1h-3ZM1042 1916h3v1h-3ZM38 1917h4v1h3v1h-4v-1h-3ZM1038 1917h4v1h-3v1h-4v-1h3ZM45 1919h10v1h-10ZM1025 1919h10v1h-10Z",
             "mask": {
               "src": "85ddc5292d7870a6.webp",
               "bytes": 2078,
@@ -4460,6 +6446,82 @@
           "birds": {
             "default": "cotes",
             "layouts": {
+              "pied": {
+                "mee": {
+                  "sticker": "mee-bisou-vole",
+                  "box": [
+                    42,
+                    1250,
+                    300,
+                    300
+                  ],
+                  "rotate": -6,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0824,
+                    1,
+                    0.8352
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-muscles",
+                  "box": [
+                    734,
+                    1250,
+                    300,
+                    300
+                  ],
+                  "rotate": 6,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0.073,
+                    0,
+                    0.8541,
+                    1
+                  ]
+                }
+              },
+              "perches": {
+                "mee": {
+                  "sticker": "mee-bisou-vole",
+                  "box": [
+                    116,
+                    64,
+                    240,
+                    240
+                  ],
+                  "rotate": -10,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0824,
+                    1,
+                    0.8352
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-muscles",
+                  "box": [
+                    724,
+                    64,
+                    240,
+                    240
+                  ],
+                  "rotate": 10,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0.073,
+                    0,
+                    0.8541,
+                    1
+                  ]
+                }
+              },
               "cotes": {
                 "mee": {
                   "sticker": "mee-bisou-vole",
@@ -4471,7 +6533,13 @@
                   ],
                   "rotate": 18,
                   "flip": false,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0824,
+                    1,
+                    0.8352
+                  ]
                 },
                 "meo": {
                   "sticker": "meo-muscles",
@@ -4483,8 +6551,81 @@
                   ],
                   "rotate": 342,
                   "flip": true,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0.073,
+                    0,
+                    0.8541,
+                    1
+                  ]
                 }
+              },
+              "duo": {
+                "pair": {
+                  "sticker": "duo-coucou",
+                  "box": [
+                    548,
+                    1304,
+                    400,
+                    400
+                  ],
+                  "rotate": 0,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.14,
+                    1,
+                    0.72
+                  ]
+                }
+              },
+              "selfie": {
+                "meo": {
+                  "sticker": "meo-selfie",
+                  "box": [
+                    622,
+                    1062,
+                    380,
+                    380
+                  ],
+                  "rotate": 0,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0375,
+                    1,
+                    0.9251
+                  ]
+                }
+              }
+            },
+            "validated": {
+              "pied": {
+                "overlap": 14,
+                "depth": 4,
+                "face": 0
+              },
+              "perches": {
+                "overlap": 0,
+                "depth": 0,
+                "face": 0
+              },
+              "cotes": {
+                "overlap": 0,
+                "depth": 0,
+                "face": 0
+              },
+              "duo": {
+                "overlap": 8,
+                "depth": 3,
+                "face": 0
+              },
+              "selfie": {
+                "overlap": 6814,
+                "depth": 114,
+                "face": 0
               }
             }
           },
@@ -4539,6 +6680,7 @@
               1080,
               1920
             ],
+            "path": "M45 0h10v1h-10ZM1025 0h10v1h-10ZM41 1h4v1h-3v1h-4v-1h3ZM1035 1h4v1h3v1h-4v-1h-3ZM35 3h3v1h-3ZM1042 3h3v1h-3ZM32 4h3v1h-2v1h-2v1h-2v1h-2v-1h1v-1h2v-1h2ZM1045 4h3v1h1v1h-2v-1h-2ZM1049 6h3v1h1v1h-2v-1h-2ZM25 8h2v1h-1v1h-2v-1h1ZM1053 8h2v1h1v1h-2v-1h-1ZM22 10h2v1h-1v1h-1v1h-2v-1h1v-1h1ZM1056 10h2v1h1v1h1v1h-2v-1h-1v-1h-1ZM19 13h1v1h-1ZM1060 13h1v1h-1ZM18 14h1v1h-1ZM1061 14h1v1h-1ZM17 15h1v1h-1ZM1062 15h1v1h-1ZM15 16h2v1h-1v1h-1ZM1063 16h2v2h-1v-1h-1ZM14 18h1v1h-1ZM1065 18h1v1h-1ZM13 19h1v1h-1ZM1066 19h1v1h1v1h1v1h1v2h-1v-1h-1v-1h-1v-1h-1ZM12 20h1v2h-1v1h-1v1h-1v-2h1v-1h1ZM9 24h1v2h-1v2h-1v1h-1v-2h1v-2h1ZM1070 24h1v1h1v2h1v2h-1v-1h-1v-2h-1ZM6 29h1v2h-1v2h-1v-3h1ZM1073 29h1v1h1v3h-1v-2h-1ZM4 33h1v2h-1ZM1075 33h1v2h-1ZM3 35h1v3h-1ZM1076 35h1v3h-1ZM2 38h1v3h-1ZM1077 38h1v3h-1ZM1 41h1v4h-1ZM1078 41h1v4h-1ZM0 45h1v11h-1ZM1079 45h1v11h-1ZM219 542h30v1h154v-1h458v1h8v1h3v1h3v1h1v1h2v1h1v1h1v1h1v2h1v1h1v2h1v4h1v6h1v866h-1v6h-1v3h-1v3h-1v1h-1v2h-1v1h-1v1h-1v1h-2v1h-1v1h-2v1h-3v1h-8v1h-644v-1h-8v-1h-3v-1h-2v-1h-1v-1h-2v-1h-1v-1h-1v-1h-1v-1h-1v-2h-1v-3h-1v-2h-1v-7h-1v-737h1v-1h-1v-80h1v-1h-1v-47h1v-7h1v-3h1v-2h1v-1h1v-2h1v-1h1v-1h1v-1h2v-1h1v-1h3v-1h3v-1h8ZM0 1864h1v11h-1ZM1079 1864h1v11h-1ZM1 1875h1v4h-1ZM1078 1875h1v4h-1v3h-1v-4h1ZM2 1879h1v3h-1ZM3 1882h1v3h-1ZM1076 1882h1v3h-1ZM4 1885h1v2h1v2h1v2h-1v-1h-1v-2h-1ZM1075 1885h1v2h-1ZM1074 1887h1v3h-1v1h-1v-2h1ZM7 1891h1v2h-1ZM1072 1891h1v2h-1ZM8 1893h1v1h1v2h-1v-1h-1ZM1071 1893h1v2h-1v1h-1v-2h1ZM10 1896h1v1h1v1h1v2h-1v-1h-1v-1h-1ZM1069 1896h1v2h-1v1h-1v1h-1v-2h1v-1h1ZM13 1900h1v1h-1ZM1066 1900h1v1h-1ZM14 1901h1v1h-1ZM1065 1901h1v1h-1ZM15 1902h1v1h1v1h-2ZM1064 1902h1v1h-1ZM1063 1903h1v1h-1ZM17 1904h1v1h-1ZM1062 1904h1v1h-1ZM18 1905h1v1h-1ZM1061 1905h1v1h-1ZM19 1906h2v1h1v1h1v1h-2v-1h-1v-1h-1ZM1059 1906h2v1h-1v1h-1v1h-2v-1h1v-1h1ZM23 1909h2v1h1v1h2v1h1v1h-2v-1h-2v-1h-1v-1h-1ZM1056 1909h1v1h-1ZM1054 1910h2v1h-1v1h-2v1h-2v-1h1v-1h2ZM29 1913h2v1h-2ZM1049 1913h2v1h-2ZM31 1914h2v1h-2ZM1047 1914h2v1h-2ZM33 1915h2v1h-2ZM1045 1915h2v1h-2ZM35 1916h3v1h-3ZM1042 1916h3v1h-3ZM38 1917h4v1h3v1h-4v-1h-3ZM1038 1917h4v1h-3v1h-4v-1h3ZM45 1919h10v1h-10ZM1025 1919h10v1h-10Z",
             "mask": {
               "src": "b032f91b8157d040.webp",
               "bytes": 616,
@@ -4788,14 +6930,20 @@
                 "mee": {
                   "sticker": "mee-montee-au-ciel",
                   "box": [
-                    30,
+                    10,
                     1402,
                     236,
                     236
                   ],
                   "rotate": -4,
                   "flip": false,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0.0105,
+                    0,
+                    0.9789,
+                    1
+                  ]
                 },
                 "meo": {
                   "sticker": "meo-roi",
@@ -4807,8 +6955,21 @@
                   ],
                   "rotate": 4,
                   "flip": true,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0125,
+                    1,
+                    0.975
+                  ]
                 }
+              }
+            },
+            "validated": {
+              "ruban": {
+                "overlap": 33,
+                "depth": 4,
+                "face": 0
               }
             }
           },
@@ -4863,6 +7024,7 @@
               1080,
               1920
             ],
+            "path": "M45 0h10v1h-10ZM1025 0h10v1h-10ZM41 1h4v1h-3v1h-4v-1h3ZM1035 1h4v1h3v1h-4v-1h-3ZM35 3h3v1h-3ZM1042 3h3v1h-3ZM32 4h3v1h-2v1h-2v1h-2v1h-2v-1h1v-1h2v-1h2ZM1045 4h3v1h1v1h-2v-1h-2ZM1049 6h3v1h1v1h-2v-1h-2ZM25 8h2v1h-1v1h-2v-1h1ZM1053 8h2v1h1v1h-2v-1h-1ZM22 10h2v1h-1v1h-1v1h-2v-1h1v-1h1ZM1056 10h2v1h1v1h1v1h-2v-1h-1v-1h-1ZM19 13h1v1h-1ZM1060 13h1v1h-1ZM18 14h1v1h-1ZM1061 14h1v1h-1ZM17 15h1v1h-1ZM1062 15h1v1h-1ZM15 16h2v1h-1v1h-1ZM1063 16h2v2h-1v-1h-1ZM14 18h1v1h-1ZM1065 18h1v1h-1ZM13 19h1v1h-1ZM1066 19h1v1h1v1h1v1h1v2h-1v-1h-1v-1h-1v-1h-1ZM12 20h1v2h-1v1h-1v1h-1v-2h1v-1h1ZM9 24h1v2h-1v2h-1v1h-1v-2h1v-2h1ZM1070 24h1v1h1v2h1v2h-1v-1h-1v-2h-1ZM6 29h1v2h-1v2h-1v-3h1ZM1073 29h1v1h1v3h-1v-2h-1ZM4 33h1v2h-1ZM1075 33h1v2h-1ZM3 35h1v3h-1ZM1076 35h1v3h-1ZM2 38h1v3h-1ZM1077 38h1v3h-1ZM1 41h1v4h-1ZM1078 41h1v4h-1ZM0 45h1v11h-1ZM1079 45h1v11h-1ZM218 554h644v1h5v1h3v1h3v1h2v1h1v1h1v1h1v1h1v1h1v1h1v2h1v2h1v2h1v3h1v6h1v169h-1v3h-1v-1h-1v4h-1v3h1v2h2v5h1v669h-1v6h-1v3h-1v2h-1v2h-1v2h-1v1h-1v1h-1v1h-1v1h-1v1h-2v1h-2v1h-2v1h-2v1h-6v1h-644v-1h-6v-1h-2v-1h-2v-1h-2v-1h-2v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-2h-1v-2h-1v-2h-1v-3h-1v-6h-1v-854h1v-6h1v-3h1v-2h1v-2h1v-2h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h2v-1h3v-1h3v-1h5ZM859 588v1h-1v1h-1v5h1v4h1v-1h1v-2h3v-1h1v-1h1v-1h6v-1h-1v-1h-6v-2h-2v-1ZM833 666v2h-1v1h-3v1h-1v5h1v1h4v1h2v-7h-1v-4ZM0 1864h1v11h-1ZM1079 1864h1v11h-1ZM1 1875h1v4h-1ZM1078 1875h1v4h-1v3h-1v-4h1ZM2 1879h1v3h-1ZM3 1882h1v3h-1ZM1076 1882h1v3h-1ZM4 1885h1v2h1v2h1v2h-1v-1h-1v-2h-1ZM1075 1885h1v2h-1ZM1074 1887h1v3h-1v1h-1v-2h1ZM7 1891h1v2h-1ZM1072 1891h1v2h-1ZM8 1893h1v1h1v2h-1v-1h-1ZM1071 1893h1v2h-1v1h-1v-2h1ZM10 1896h1v1h1v1h1v2h-1v-1h-1v-1h-1ZM1069 1896h1v2h-1v1h-1v1h-1v-2h1v-1h1ZM13 1900h1v1h-1ZM1066 1900h1v1h-1ZM14 1901h1v1h-1ZM1065 1901h1v1h-1ZM15 1902h1v1h1v1h-2ZM1064 1902h1v1h-1ZM1063 1903h1v1h-1ZM17 1904h1v1h-1ZM1062 1904h1v1h-1ZM18 1905h1v1h-1ZM1061 1905h1v1h-1ZM19 1906h2v1h1v1h1v1h-2v-1h-1v-1h-1ZM1059 1906h2v1h-1v1h-1v1h-2v-1h1v-1h1ZM23 1909h2v1h1v1h2v1h1v1h-2v-1h-2v-1h-1v-1h-1ZM1056 1909h1v1h-1ZM1054 1910h2v1h-1v1h-2v1h-2v-1h1v-1h2ZM29 1913h2v1h-2ZM1049 1913h2v1h-2ZM31 1914h2v1h-2ZM1047 1914h2v1h-2ZM33 1915h2v1h-2ZM1045 1915h2v1h-2ZM35 1916h3v1h-3ZM1042 1916h3v1h-3ZM38 1917h4v1h3v1h-4v-1h-3ZM1038 1917h4v1h-3v1h-4v-1h3ZM45 1919h10v1h-10ZM1025 1919h10v1h-10Z",
             "mask": {
               "src": "98f95a9af93b5921.webp",
               "bytes": 680,
@@ -5102,7 +7264,8 @@
                 36
               ],
               "contrast": 16.95,
-              "sample": "Nº 42"
+              "sample": "Nº 42",
+              "live": "mythe-number"
             },
             "decor.2": {
               "x": 876,
@@ -5141,7 +7304,8 @@
                 26
               ],
               "contrast": 13.17,
-              "sample": "/ 100"
+              "sample": "/ 100",
+              "live": "mythe-total"
             }
           },
           "birds": {
@@ -5152,26 +7316,181 @@
                   "sticker": "mee-montee-au-ciel",
                   "box": [
                     46,
-                    1250,
+                    1442,
                     300,
                     300
                   ],
                   "rotate": -6,
                   "flip": false,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0.0105,
+                    0,
+                    0.9789,
+                    1
+                  ]
                 },
                 "meo": {
                   "sticker": "meo-feu-artifice",
                   "box": [
                     734,
-                    1250,
+                    1418,
                     300,
                     300
                   ],
                   "rotate": 6,
                   "flip": true,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0.0567,
+                    0,
+                    0.8867,
+                    1
+                  ]
                 }
+              },
+              "perches": {
+                "mee": {
+                  "sticker": "mee-montee-au-ciel",
+                  "box": [
+                    116,
+                    64,
+                    240,
+                    240
+                  ],
+                  "rotate": -10,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0.0105,
+                    0,
+                    0.9789,
+                    1
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-feu-artifice",
+                  "box": [
+                    724,
+                    64,
+                    240,
+                    240
+                  ],
+                  "rotate": 10,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0.0567,
+                    0,
+                    0.8867,
+                    1
+                  ]
+                }
+              },
+              "cotes": {
+                "mee": {
+                  "sticker": "mee-montee-au-ciel",
+                  "box": [
+                    -41.2,
+                    732.8,
+                    246.4,
+                    246.4
+                  ],
+                  "rotate": 18,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0.0105,
+                    0,
+                    0.9789,
+                    1
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-feu-artifice",
+                  "box": [
+                    874.8,
+                    812.8,
+                    246.4,
+                    246.4
+                  ],
+                  "rotate": 342,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0.0567,
+                    0,
+                    0.8867,
+                    1
+                  ]
+                }
+              },
+              "duo": {
+                "pair": {
+                  "sticker": "duo-coucou",
+                  "box": [
+                    400,
+                    1392,
+                    280,
+                    280
+                  ],
+                  "rotate": 0,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.14,
+                    1,
+                    0.72
+                  ]
+                }
+              },
+              "selfie": {
+                "meo": {
+                  "sticker": "meo-selfie",
+                  "box": [
+                    650,
+                    1090,
+                    380,
+                    380
+                  ],
+                  "rotate": 0,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0375,
+                    1,
+                    0.9251
+                  ]
+                }
+              }
+            },
+            "validated": {
+              "pied": {
+                "overlap": 73,
+                "depth": 4,
+                "face": 0
+              },
+              "perches": {
+                "overlap": 0,
+                "depth": 0,
+                "face": 0
+              },
+              "cotes": {
+                "overlap": 16,
+                "depth": 2,
+                "face": 0
+              },
+              "duo": {
+                "overlap": 44,
+                "depth": 5,
+                "face": 0
+              },
+              "selfie": {
+                "overlap": 9052,
+                "depth": 105,
+                "face": 0
               }
             }
           },
@@ -5226,6 +7545,7 @@
               1080,
               1920
             ],
+            "path": "M45 0h10v1h-10ZM1025 0h10v1h-10ZM41 1h4v1h-3v1h-4v-1h3ZM1035 1h4v1h3v1h-4v-1h-3ZM35 3h3v1h-3ZM1042 3h3v1h-3ZM32 4h3v1h-2v1h-2v1h-2v1h-2v-1h1v-1h2v-1h2ZM1045 4h3v1h1v1h-2v-1h-2ZM1049 6h3v1h1v1h-2v-1h-2ZM25 8h2v1h-1v1h-2v-1h1ZM1053 8h2v1h1v1h-2v-1h-1ZM22 10h2v1h-1v1h-1v1h-2v-1h1v-1h1ZM1056 10h2v1h1v1h1v1h-2v-1h-1v-1h-1ZM19 13h1v1h-1ZM1060 13h1v1h-1ZM18 14h1v1h-1ZM1061 14h1v1h-1ZM17 15h1v1h-1ZM1062 15h1v1h-1ZM15 16h2v1h-1v1h-1ZM1063 16h2v2h-1v-1h-1ZM14 18h1v1h-1ZM1065 18h1v1h-1ZM13 19h1v1h-1ZM1066 19h1v1h1v1h1v1h1v2h-1v-1h-1v-1h-1v-1h-1ZM12 20h1v2h-1v1h-1v1h-1v-2h1v-1h1ZM9 24h1v2h-1v2h-1v1h-1v-2h1v-2h1ZM1070 24h1v1h1v2h1v2h-1v-1h-1v-2h-1ZM6 29h1v2h-1v2h-1v-3h1ZM1073 29h1v1h1v3h-1v-2h-1ZM4 33h1v2h-1ZM1075 33h1v2h-1ZM3 35h1v3h-1ZM1076 35h1v3h-1ZM2 38h1v3h-1ZM1077 38h1v3h-1ZM1 41h1v4h-1ZM1078 41h1v4h-1ZM0 45h1v11h-1ZM1079 45h1v11h-1ZM218 550h644v1h5v1h3v1h3v1h2v1h1v1h1v1h1v1h1v1h1v1h1v2h1v2h1v2h1v3h1v6h1v858h-1v6h-1v3h-1v2h-1v2h-1v2h-1v1h-1v1h-1v1h-1v1h-1v1h-2v1h-2v1h-2v1h-2v1h-6v1h-644v-1h-6v-1h-2v-1h-2v-1h-2v-1h-2v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-2h-1v-2h-1v-2h-1v-3h-1v-6h-1v-858h1v-6h1v-3h1v-2h1v-2h1v-2h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h2v-1h3v-1h3v-1h5ZM863 621v1h-1v2h1v1h3v-1h1v-2h-1v-1ZM0 1864h1v11h-1ZM1079 1864h1v11h-1ZM1 1875h1v4h-1ZM1078 1875h1v4h-1v3h-1v-4h1ZM2 1879h1v3h-1ZM3 1882h1v3h-1ZM1076 1882h1v3h-1ZM4 1885h1v2h1v2h1v2h-1v-1h-1v-2h-1ZM1075 1885h1v2h-1ZM1074 1887h1v3h-1v1h-1v-2h1ZM7 1891h1v2h-1ZM1072 1891h1v2h-1ZM8 1893h1v1h1v2h-1v-1h-1ZM1071 1893h1v2h-1v1h-1v-2h1ZM10 1896h1v1h1v1h1v2h-1v-1h-1v-1h-1ZM1069 1896h1v2h-1v1h-1v1h-1v-2h1v-1h1ZM13 1900h1v1h-1ZM1066 1900h1v1h-1ZM14 1901h1v1h-1ZM1065 1901h1v1h-1ZM15 1902h1v1h1v1h-2ZM1064 1902h1v1h-1ZM1063 1903h1v1h-1ZM17 1904h1v1h-1ZM1062 1904h1v1h-1ZM18 1905h1v1h-1ZM1061 1905h1v1h-1ZM19 1906h2v1h1v1h1v1h-2v-1h-1v-1h-1ZM1059 1906h2v1h-1v1h-1v1h-2v-1h1v-1h1ZM23 1909h2v1h1v1h2v1h1v1h-2v-1h-2v-1h-1v-1h-1ZM1056 1909h1v1h-1ZM1054 1910h2v1h-1v1h-2v1h-2v-1h1v-1h2ZM29 1913h2v1h-2ZM1049 1913h2v1h-2ZM31 1914h2v1h-2ZM1047 1914h2v1h-2ZM33 1915h2v1h-2ZM1045 1915h2v1h-2ZM35 1916h3v1h-3ZM1042 1916h3v1h-3ZM38 1917h4v1h3v1h-4v-1h-3ZM1038 1917h4v1h-3v1h-4v-1h3ZM45 1919h10v1h-10ZM1025 1919h10v1h-10Z",
             "mask": {
               "src": "0ac845f77b52d8f4.webp",
               "bytes": 628,
@@ -5504,7 +7824,8 @@
                 36
               ],
               "contrast": 16.95,
-              "sample": "Nº 42"
+              "sample": "Nº 42",
+              "live": "mythe-number"
             },
             "decor.2": {
               "x": 876,
@@ -5543,24 +7864,107 @@
                 26
               ],
               "contrast": 13.17,
-              "sample": "/ 100"
+              "sample": "/ 100",
+              "live": "mythe-total"
             }
           },
           "birds": {
             "default": "cotes",
             "layouts": {
+              "pied": {
+                "mee": {
+                  "sticker": "mee-jackpot",
+                  "box": [
+                    46,
+                    1382,
+                    300,
+                    300
+                  ],
+                  "rotate": -6,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0746,
+                    1,
+                    0.8507
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-champagne",
+                  "box": [
+                    734,
+                    1378,
+                    300,
+                    300
+                  ],
+                  "rotate": 6,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0758,
+                    1,
+                    0.8484
+                  ]
+                }
+              },
+              "perches": {
+                "mee": {
+                  "sticker": "mee-jackpot",
+                  "box": [
+                    116,
+                    64,
+                    240,
+                    240
+                  ],
+                  "rotate": -10,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0746,
+                    1,
+                    0.8507
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-champagne",
+                  "box": [
+                    724,
+                    64,
+                    240,
+                    240
+                  ],
+                  "rotate": 10,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0758,
+                    1,
+                    0.8484
+                  ]
+                }
+              },
               "cotes": {
                 "mee": {
                   "sticker": "mee-jackpot",
                   "box": [
-                    -60,
-                    720,
-                    280,
-                    280
+                    -51.6,
+                    728.4,
+                    263.2,
+                    263.2
                   ],
                   "rotate": 18,
                   "flip": false,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0746,
+                    1,
+                    0.8507
+                  ]
                 },
                 "meo": {
                   "sticker": "meo-champagne",
@@ -5572,8 +7976,81 @@
                   ],
                   "rotate": 342,
                   "flip": true,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0758,
+                    1,
+                    0.8484
+                  ]
                 }
+              },
+              "duo": {
+                "pair": {
+                  "sticker": "duo-coucou",
+                  "box": [
+                    400,
+                    1392,
+                    280,
+                    280
+                  ],
+                  "rotate": 0,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.14,
+                    1,
+                    0.72
+                  ]
+                }
+              },
+              "selfie": {
+                "meo": {
+                  "sticker": "meo-selfie",
+                  "box": [
+                    650,
+                    1090,
+                    380,
+                    380
+                  ],
+                  "rotate": 0,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0375,
+                    1,
+                    0.9251
+                  ]
+                }
+              }
+            },
+            "validated": {
+              "pied": {
+                "overlap": 72,
+                "depth": 4,
+                "face": 0
+              },
+              "perches": {
+                "overlap": 0,
+                "depth": 0,
+                "face": 0
+              },
+              "cotes": {
+                "overlap": 36,
+                "depth": 3,
+                "face": 0
+              },
+              "duo": {
+                "overlap": 44,
+                "depth": 5,
+                "face": 0
+              },
+              "selfie": {
+                "overlap": 9052,
+                "depth": 105,
+                "face": 0
               }
             }
           },
@@ -5628,6 +8105,7 @@
               1080,
               1920
             ],
+            "path": "M45 0h10v1h-10ZM1025 0h10v1h-10ZM41 1h4v1h-3v1h-4v-1h3ZM1035 1h4v1h3v1h-4v-1h-3ZM35 3h3v1h-3ZM1042 3h3v1h-3ZM32 4h3v1h-2v1h-2v1h-2v1h-2v-1h1v-1h2v-1h2ZM1045 4h3v1h1v1h-2v-1h-2ZM1049 6h3v1h1v1h-2v-1h-2ZM25 8h2v1h-1v1h-2v-1h1ZM1053 8h2v1h1v1h-2v-1h-1ZM22 10h2v1h-1v1h-1v1h-2v-1h1v-1h1ZM1056 10h2v1h1v1h1v1h-2v-1h-1v-1h-1ZM19 13h1v1h-1ZM1060 13h1v1h-1ZM18 14h1v1h-1ZM1061 14h1v1h-1ZM17 15h1v1h-1ZM1062 15h1v1h-1ZM15 16h2v1h-1v1h-1ZM1063 16h2v2h-1v-1h-1ZM14 18h1v1h-1ZM1065 18h1v1h-1ZM13 19h1v1h-1ZM1066 19h1v1h1v1h1v1h1v2h-1v-1h-1v-1h-1v-1h-1ZM12 20h1v2h-1v1h-1v1h-1v-2h1v-1h1ZM9 24h1v2h-1v2h-1v1h-1v-2h1v-2h1ZM1070 24h1v1h1v2h1v2h-1v-1h-1v-2h-1ZM6 29h1v2h-1v2h-1v-3h1ZM1073 29h1v1h1v3h-1v-2h-1ZM4 33h1v2h-1ZM1075 33h1v2h-1ZM3 35h1v3h-1ZM1076 35h1v3h-1ZM2 38h1v3h-1ZM1077 38h1v3h-1ZM1 41h1v4h-1ZM1078 41h1v4h-1ZM0 45h1v11h-1ZM1079 45h1v11h-1ZM223 566h634v1h6v1h2v1h2v1h2v1h1v1h1v1h1v1h1v1h1v2h1v2h1v3h1v5h1v850h-1v5h-1v3h-1v2h-1v1h-1v2h-1v1h-1v1h-1v1h-1v1h-2v1h-2v1h-3v1h-5v1h-634v-1h-5v-1h-3v-1h-2v-1h-2v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-2h-1v-2h-1v-3h-1v-5h-1v-850h1v-5h1v-3h1v-2h1v-2h1v-1h1v-1h1v-1h1v-1h1v-1h2v-1h2v-1h2v-1h6ZM0 1867h1v8h-1ZM1079 1868h1v7h-1ZM1 1875h1v4h-1ZM1078 1875h1v4h-1ZM2 1879h1v3h-1ZM1077 1879h1v3h-1ZM3 1882h1v3h-1ZM1076 1882h1v3h-1ZM4 1885h1v2h1v3h-1v-2h-1ZM1075 1885h1v2h-1ZM1074 1887h1v3h-1ZM6 1890h1v1h-1ZM1073 1890h1v1h-1ZM7 1891h1v2h-1ZM1072 1891h1v2h-1ZM8 1893h1v2h-1ZM1071 1893h1v2h-1ZM9 1895h1v1h-1ZM1070 1895h1v1h-1ZM10 1896h1v1h1v2h-1v-1h-1ZM1069 1896h1v2h-1v1h-1v-2h1ZM12 1899h1v1h-1ZM1067 1899h1v1h-1ZM13 1900h1v1h-1ZM1066 1900h1v1h-1ZM14 1901h1v1h-1ZM1065 1901h1v1h-1ZM15 1902h1v1h1v1h-2ZM1064 1902h1v1h-1ZM1063 1903h1v1h-1ZM17 1904h1v1h-1ZM1062 1904h1v1h-1ZM18 1905h1v1h-1ZM1061 1905h1v1h-1ZM19 1906h1v1h-1ZM1060 1906h1v1h-1ZM20 1907h1v1h-1ZM1059 1907h1v1h-1ZM21 1908h2v1h-2ZM1057 1908h2v1h-2ZM23 1909h1v1h-1ZM1056 1909h1v1h-1ZM24 1910h2v1h1v1h-2v-1h-1ZM1054 1910h2v1h-1v1h-2v-1h1ZM27 1912h2v1h-2ZM1051 1912h2v1h-2ZM29 1913h2v1h-2ZM1049 1913h2v1h-2ZM31 1914h2v1h-2ZM1047 1914h2v1h-2ZM33 1915h2v1h-2ZM1045 1915h2v1h-2ZM35 1916h3v1h-3ZM1042 1916h3v1h-3ZM38 1917h3v1h-3ZM1039 1917h3v1h-3ZM41 1918h4v1h-4ZM1036 1918h3v1h-3ZM45 1919h8v1h-8ZM1027 1919h8v1h-8Z",
             "mask": {
               "src": "3578084a2aa5265c.webp",
               "bytes": 586,
@@ -6298,7 +8776,8 @@
                 36
               ],
               "contrast": 16.95,
-              "sample": "Nº 42"
+              "sample": "Nº 42",
+              "live": "mythe-number"
             },
             "decor.16": {
               "x": 876,
@@ -6337,12 +8816,51 @@
                 26
               ],
               "contrast": 13.17,
-              "sample": "/ 100"
+              "sample": "/ 100",
+              "live": "mythe-total"
             }
           },
           "birds": {
             "default": "perches",
             "layouts": {
+              "pied": {
+                "mee": {
+                  "sticker": "mee-wow",
+                  "box": [
+                    46,
+                    1430,
+                    300,
+                    300
+                  ],
+                  "rotate": -6,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0564,
+                    1,
+                    0.8872
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-trophee",
+                  "box": [
+                    734,
+                    1434,
+                    300,
+                    300
+                  ],
+                  "rotate": 6,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.033,
+                    1,
+                    0.934
+                  ]
+                }
+              },
               "perches": {
                 "mee": {
                   "sticker": "mee-wow",
@@ -6354,7 +8872,13 @@
                   ],
                   "rotate": -10,
                   "flip": false,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0564,
+                    1,
+                    0.8872
+                  ]
                 },
                 "meo": {
                   "sticker": "meo-trophee",
@@ -6366,8 +8890,119 @@
                   ],
                   "rotate": 10,
                   "flip": true,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.033,
+                    1,
+                    0.934
+                  ]
                 }
+              },
+              "cotes": {
+                "mee": {
+                  "sticker": "mee-wow",
+                  "box": [
+                    -41.2,
+                    732.8,
+                    246.4,
+                    246.4
+                  ],
+                  "rotate": 18,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0564,
+                    1,
+                    0.8872
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-trophee",
+                  "box": [
+                    874.8,
+                    812.8,
+                    246.4,
+                    246.4
+                  ],
+                  "rotate": 342,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.033,
+                    1,
+                    0.934
+                  ]
+                }
+              },
+              "duo": {
+                "pair": {
+                  "sticker": "duo-coucou",
+                  "box": [
+                    388,
+                    1388,
+                    304,
+                    304
+                  ],
+                  "rotate": 0,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.14,
+                    1,
+                    0.72
+                  ]
+                }
+              },
+              "selfie": {
+                "meo": {
+                  "sticker": "meo-selfie",
+                  "box": [
+                    650,
+                    1090,
+                    380,
+                    380
+                  ],
+                  "rotate": 0,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0375,
+                    1,
+                    0.9251
+                  ]
+                }
+              }
+            },
+            "validated": {
+              "pied": {
+                "overlap": 80,
+                "depth": 4,
+                "face": 0
+              },
+              "perches": {
+                "overlap": 0,
+                "depth": 0,
+                "face": 0
+              },
+              "cotes": {
+                "overlap": 48,
+                "depth": 3,
+                "face": 0
+              },
+              "duo": {
+                "overlap": 47,
+                "depth": 5,
+                "face": 0
+              },
+              "selfie": {
+                "overlap": 8445,
+                "depth": 101,
+                "face": 0
               }
             }
           },

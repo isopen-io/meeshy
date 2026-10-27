@@ -11,7 +11,6 @@ import type { SessionState } from '@/lib/api/session';
 import { pushTapTarget, type PushTapTarget } from '@/lib/notifications/target';
 
 import {
-  SHELL_PUSH_CHANNEL_ID,
   shellPushTargetInput,
   startShellPush,
   type ShellPushPermission,
@@ -29,8 +28,6 @@ type Handlers = Record<string, (event: never) => void>;
 function fakePlugin(options: { readonly permission?: ShellPushPermission; readonly afterRequest?: ShellPushPermission } = {}) {
   const handlers: Handlers = {};
   const calls: string[] = [];
-  const channels: string[] = [];
-  const channelOptions: Parameters<ShellPushPlugin['createChannel']>[0][] = [];
   let tokenSeq = 0;
   const plugin: ShellPushPlugin = {
     checkPermissions: async () => ({ receive: options.permission ?? 'granted' }),
@@ -46,17 +43,13 @@ function fakePlugin(options: { readonly permission?: ShellPushPermission; readon
     unregister: async () => {
       calls.push('unregister');
     },
-    createChannel: async (channel) => {
-      channels.push(channel.id);
-      channelOptions.push(channel);
-    },
     addListener: (async (eventName: string, listener: (event: never) => void) => {
       handlers[eventName] = listener;
       return { remove: async () => undefined };
     }) as ShellPushPlugin['addListener'],
   };
   const fire = (eventName: string, event: unknown): void => handlers[eventName]?.(event as never);
-  return { plugin, calls, channels, channelOptions, fire };
+  return { plugin, calls, fire };
 }
 
 const authenticated = (id: string): SessionState => ({
@@ -100,19 +93,6 @@ function harness(
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 describe('startShellPush — le jeton FCM de la coque part sous le compte courant (#7307)', () => {
-  test('crée le canal que la passerelle nomme, sans quoi Android jette la bannière en silence', async () => {
-    const h = harness(anonymous);
-    await h.start();
-    expect(h.channels).toEqual([SHELL_PUSH_CHANNEL_ID]);
-    expect(SHELL_PUSH_CHANNEL_ID).toBe('meeshy_notifications');
-  });
-
-  test('le canal des messages vibre, comme une bannière web sur Android et iOS en mode vibreur (#12566)', async () => {
-    const h = harness(anonymous);
-    await h.start();
-    expect(h.channelOptions.map((channel) => channel.vibration)).toEqual([true]);
-  });
-
   test('une session enregistrée enregistre le jeton par le port d’iOS, en android/fcm', async () => {
     const h = harness(authenticated('u1'));
     await h.start();

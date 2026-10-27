@@ -43,7 +43,7 @@ final class LiveShareDispatcherTests: XCTestCase {
         let dispatcher = LiveShareDispatcher(
             forwardService: forward, api: api, queue: queue, isOnline: { online },
             conversationCreator: creator, postService: MockPostService(),
-            currentUserId: { "me" }
+            currentUserId: { "me" }, destinationGuard: .isolated()
         )
         return SUT(dispatcher: dispatcher, api: api, queue: queue, creator: creator, forward: forward)
     }

@@ -24,6 +24,9 @@ public enum E2EERecordKind: String, CaseIterable, Sendable {
     case approvedOwnDevice
     /// L'enrôlement de cette installation auprès de l'annuaire (compte, numéro).
     case localEnrollment
+    /// Un SIGNAL reçu (#13142), par identifiant de signal : rangé avec le
+    /// déchiffrement, appliqué puis réglé par l'app (`E2EESignalInbox`).
+    case signal
 }
 
 /// Une transaction sur les enregistrements : c'est elle que libsignal reçoit
@@ -42,6 +45,13 @@ public protocol E2EERecordTransaction: StoreContext {
 public protocol E2EERecordVaultProviding: Sendable {
     func write<T>(_ body: (any E2EERecordTransaction) throws -> T) throws -> T
     func read<T>(_ body: (any E2EERecordTransaction) throws -> T) throws -> T
+    /// Reporte le journal dans la base et le tronque : une ligne retirée ne
+    /// survit pas dans une trame du WAL (#13001).
+    func compact() throws
+}
+
+public extension E2EERecordVaultProviding {
+    func compact() throws {}
 }
 
 public enum E2EERecordVaultError: Error, Equatable {
@@ -84,10 +94,21 @@ public final class E2EEGRDBRecordVault: E2EERecordVaultProviding {
     private let writer: any DatabaseWriter
     private let sealer: E2EERowSealer
 
+    /// `secure_delete` met à zéro les octets d'une ligne retirée, dans la base
+    /// comme dans le journal (#13001) : le connecteur d'écriture est le seul qui
+    /// retire.
     public init(writer: any DatabaseWriter, sealingKey: SymmetricKey) throws {
         self.writer = writer
         self.sealer = E2EERowSealer(key: sealingKey)
         try Self.migrator.migrate(writer)
+        try writer.writeWithoutTransaction { try $0.execute(sql: "PRAGMA secure_delete = ON") }
+    }
+
+    public func compact() throws {
+        try writer.writeWithoutTransaction { db in
+            guard try String.fetchOne(db, sql: "PRAGMA journal_mode") == "wal" else { return }
+            try db.checkpoint(.truncate)
+        }
     }
 
     /// La base partagée de l'app et de la NSE : `e2ee.sqlite` du groupe d'apps.

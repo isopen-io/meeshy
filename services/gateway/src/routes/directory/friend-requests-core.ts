@@ -15,6 +15,7 @@ import {
 } from '../../utils/cursor-pagination';
 import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
+import { getBlockRelatedUserIds } from '../../utils/blocking';
 import { presenceMissingEntryPolicy, viewerFromRequest } from '../users/presence-gate';
 import { EngagementService } from '../../services/engagement/EngagementService';
 import { FOUNDING_MEMBER_PERMISSIONS } from '../../services/participantRights';
@@ -122,6 +123,33 @@ export async function servirParties<T extends Record<string, unknown>>(
     }
     return servie as T;
   });
+}
+
+export type ClauseHorsBlocage = {
+  readonly senderId?: { notIn: string[] };
+  readonly receiverId?: { notIn: string[] };
+};
+
+/**
+ * La clause qui retire d'une liste de demandes toute ligne dont l'AUTRE partie
+ * est en relation de blocage avec `acteurId`, dans un sens ou dans l'autre
+ * (#13298). Le blocage ne touche pas la `FriendRequest` en base (rompre
+ * l'amitié est une décision produit ouverte) : c'est la LECTURE qui le rejoue,
+ * et c'est la seule loi des quatre listes (`listerDemandes`, les deux alias de
+ * `routes/friends.ts`, `GET /users/friend-requests`).
+ *
+ * Posée dans le `where`, jamais après la lecture : la page, son curseur et son
+ * `total` comptent ce qui est SERVI. Le coût est borné par la relation de
+ * blocage elle-même (`getBlockRelatedUserIds`), vide pour presque tout le
+ * monde — auquel cas la clause est vide. L'acteur n'est jamais dans
+ * l'ensemble, donc borner les DEUX colonnes ne retire que l'autre partie.
+ */
+export async function clauseHorsBlocage(
+  fastify: FastifyInstance,
+  acteurId: string
+): Promise<ClauseHorsBlocage> {
+  const lies = [...(await getBlockRelatedUserIds(fastify.prisma, acteurId))];
+  return lies.length === 0 ? {} : { senderId: { notIn: lies }, receiverId: { notIn: lies } };
 }
 
 export type Refus = { code: number; message: string; codeMetier?: string };
@@ -683,10 +711,13 @@ export async function listerDemandes(
     ? [{ OR: [...keysetWhere(point.ordre, point.position).OR] }]
     : [];
 
+  const horsBlocage = await clauseHorsBlocage(fastify, params.acteurId);
+
   const lignes = await fastify.prisma.friendRequest.findMany({
     where: {
       AND: [
         identite,
+        horsBlocage,
         params.status ? { status: params.status } : {},
         filtreTexte,
         ...reprise,

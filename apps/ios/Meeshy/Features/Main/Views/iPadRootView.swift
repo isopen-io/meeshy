@@ -70,7 +70,7 @@ struct iPadRootView: View {
     /// Ne publie que `launch` — une ouverture/fermeture de lecteur de réels,
     /// pas un flux. L'observer ne rejoue donc pas le churn que `CallManager`
     /// imposait ici (cf. watchdog 0x8BADF00D juste au-dessus).
-    @ObservedObject var reelsPresenter = ReelsPresenter.shared
+    @ObservedObject var reelsPresenter: ReelsPresenter
     @EnvironmentObject var deepLinkRouter: DeepLinkRouter
 
     @State var activeConversation: Conversation?
@@ -110,12 +110,13 @@ struct iPadRootView: View {
     /// jour — les deux racines ne partagent pas une ligne.
     @ObservedObject var upgradeGate: UpgradeGateController
 
-    init(scope: RootScopeModels) {
+    init(scope: RootScopeModels, reelsPresenter: ReelsPresenter = .shared) {
         _storyViewModel = ObservedObject(wrappedValue: scope.story)
         _statusViewModel = ObservedObject(wrappedValue: scope.status)
         conversationVMOwner = scope.conversations
         _notifications = ObservedObject(wrappedValue: scope.notifications)
         _upgradeGate = ObservedObject(wrappedValue: scope.upgradeGate)
+        _reelsPresenter = ObservedObject(wrappedValue: reelsPresenter)
     }
 
     private var isConversationOpen: Bool {

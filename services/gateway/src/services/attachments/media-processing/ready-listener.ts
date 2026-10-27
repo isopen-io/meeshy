@@ -24,6 +24,9 @@ import { MEDIA_QUEUE_NAME, mediaJobRef } from './jobs';
 import { mediaQueueConnection } from './queue';
 import { handleMediaReady, readMediaReadyNotice, type MediaReadyNotice, type MediaReadyPorts } from './ready-notifier';
 import { listenerLease, type LeaseClient } from './listener-lease';
+import { processAtRestFileAccess } from '../atRest/atRestFiles';
+import { sealAttachmentIfAtRest } from '../atRest/sealAttachmentFiles';
+import { gatewaySealDeps } from '../../messaging/sealMessageAttachments';
 
 const logger = enhancedLogger.child({ module: 'media-ready-listener' });
 
@@ -80,6 +83,15 @@ export function mediaReadyPorts(deps: MediaReadyListenerDeps): MediaReadyPorts {
       deps.io.to(ROOMS.user(userId)).emit(event, payload);
     },
     serialize: (row) => ('uploaderId' in row ? row : serializeAttachmentForSocket(row as unknown as SocketAttachmentRow)),
+    sealAtRest: async (id) => {
+      const access = processAtRestFileAccess();
+      if (!access) return;
+      await sealAttachmentIfAtRest(gatewaySealDeps(deps.prisma, access), id).catch((error: unknown) =>
+        logger.error('pièce jointe non scellée au repos après son rendu : la migration de rattrapage la reprendra', undefined, {
+          code: 'SERVER_AT_REST_FILE_SEAL_FAILED', attachmentId: id, reason: error instanceof Error ? error.name : 'unknown',
+        })
+      );
+    },
   };
 }
 

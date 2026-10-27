@@ -157,7 +157,7 @@ struct ConversationPreviewLine: View {
             guard case .label(let text) = segment, let seconds = clockSeconds(text) else {
                 return MessageTextRenderer.plainText(segment.text)
             }
-            return LocalizedNumber.spokenDuration(seconds: seconds, locale: locale)
+            return MediaFormat.duration(seconds, style: .spoken, locale: locale)
         }.joined(separator: ", ")
         guard let author = preview.author else { return spoken }
         return strings(.lineAuthor, ["author": author.label, "line": spoken])

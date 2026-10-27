@@ -54,7 +54,7 @@ final class BubbleEmojiReplyRoutingTests: XCTestCase {
     }
 
     func test_focalRow_routesEmojiThroughTheSharedPredicate() throws {
-        let row = try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Main/Focal/Row/FocalRow.swift")
+        let row = try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Focal/Row/FocalRow.swift")
         XCTAssertTrue(row.contains("} else if content.flatRowRendersLargeEmoji {"),
                       "la rangée plate décide l'emoji en grand par le prédicat partagé, jamais par une condition locale.")
         XCTAssertFalse(row.contains("content.reply == nil"),

@@ -99,6 +99,12 @@ data class ApiPostReplyTarget(
     val thumbnailUrl: String? = null,
     val previewText: String = "",
     val moodEmoji: String? = null,
+    /**
+     * Le post cité a été retiré (`message:cited-post-withdrawn`, #7969) : la citation ne garde que son
+     * identifiant et se dit « Story indisponible ». Marqueur LOCAL, jamais servi — miroir de
+     * `ReplyReference.storyUnavailable` (iOS).
+     */
+    val unavailable: Boolean = false,
 )
 
 /** A pre-loaded text translation — port of APITextTranslation (MessageModels.swift). */
@@ -289,6 +295,14 @@ data class ApiMessage(
     /** Le contenu est un cryptogramme : il ne se rend jamais en clair. */
     val isCiphertext: Boolean get() = isEncrypted == true
 
+    /**
+     * Un message chiffré de bout en bout que CET appareil ne sait pas lire (#13110) :
+     * l'Android natif n'a pas encore de pile libsignal (#13015), la passerelle ne sert
+     * que le littéral `[Encrypted]`. Il ne se rend ni en texte ni en pièce.
+     */
+    val isEndToEndSealed: Boolean
+        get() = isCiphertext && (EndToEndRegime.isEndToEnd(encryptionMode) || content == EndToEndRegime.CONTENT_PLACEHOLDER)
+
     /** `consumedByMe` nul est traité comme non ouvert. */
     val isViewOnceOpenedByMe: Boolean get() = consumedByMe == true
 
@@ -358,6 +372,8 @@ data class SendMessageRequest(
     val ephemeralDuration: Int? = null,
     val expiresAt: String? = null,
     val maxViewOnceCount: Int? = null,
+    /** Lieu partagé : champ dédié que la passerelle valide (`parseSharedPlace`) et écrit dans `metadata.location`. */
+    val location: SharedPlace? = null,
 )
 
 internal object TolerantPostReplyTargetSerializer :

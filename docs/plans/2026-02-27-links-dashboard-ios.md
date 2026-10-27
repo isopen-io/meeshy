@@ -13,7 +13,7 @@
 ## Contexte important
 
 - **Dashboard iOS** : `apps/ios/Meeshy/Features/Main/Views/WidgetPreviewView.swift`
-- **AffiliateView existante** : `apps/ios/Meeshy/Features/Main/Views/AffiliateView.swift` (modèle de référence)
+- **AffiliateView existante** : `apps/ios/Meeshy/Features/Links/Views/AffiliateView.swift` (modèle de référence)
 - **Router** : `apps/ios/Meeshy/Features/Main/Navigation/Router.swift`
 - **SDK Models** : `packages/MeeshySDK/Sources/MeeshySDK/Models/`
 - **SDK Services** : `packages/MeeshySDK/Sources/MeeshySDK/Services/`
@@ -750,9 +750,9 @@ Idem pour `ShareLinksView` et `CommunityLinksView`. Le build doit alors passer.
 ```bash
 git add apps/ios/Meeshy/Features/Main/Navigation/Router.swift \
         apps/ios/Meeshy/Features/Main/Views/RootView.swift \
-        apps/ios/Meeshy/Features/Main/Views/TrackingLinksView.swift \
-        apps/ios/Meeshy/Features/Main/Views/ShareLinksView.swift \
-        apps/ios/Meeshy/Features/Main/Views/CommunityLinksView.swift
+        apps/ios/Meeshy/Features/Links/Views/TrackingLinksView.swift \
+        apps/ios/Meeshy/Features/Links/Views/ShareLinksView.swift \
+        apps/ios/Meeshy/Features/Links/Views/CommunityLinksView.swift
 git commit -m "feat(ios): add router routes for trackingLinks, shareLinks, communityLinks"
 ```
 
@@ -1032,7 +1032,7 @@ git commit -m "feat(ios): links overview section + updated quick actions in dash
 ### Task 8 : AffiliateView — distinction clics vs inscrits
 
 **Files:**
-- Modify: `apps/ios/Meeshy/Features/Main/Views/AffiliateView.swift`
+- Modify: `apps/ios/Meeshy/Features/Links/Views/AffiliateView.swift`
 
 **Step 1: Mettre à jour statsOverview**
 
@@ -1111,7 +1111,7 @@ Attendu : `Build succeeded`
 **Step 5: Commit**
 
 ```bash
-git add apps/ios/Meeshy/Features/Main/Views/AffiliateView.swift
+git add apps/ios/Meeshy/Features/Links/Views/AffiliateView.swift
 git commit -m "feat(ios): distinguish clicks vs registrations in AffiliateView, add share button"
 ```
 
@@ -1120,7 +1120,7 @@ git commit -m "feat(ios): distinguish clicks vs registrations in AffiliateView, 
 ### Task 9 : ShareLinksView.swift — listing + création
 
 **Files:**
-- Modify: `apps/ios/Meeshy/Features/Main/Views/ShareLinksView.swift` (remplace le stub)
+- Modify: `apps/ios/Meeshy/Features/Links/Views/ShareLinksView.swift` (remplace le stub)
 
 **Step 1: Remplacer le stub par l'implémentation complète**
 
@@ -1347,7 +1347,7 @@ class ShareLinksViewModel: ObservableObject {
 **Step 3: Commit**
 
 ```bash
-git add apps/ios/Meeshy/Features/Main/Views/ShareLinksView.swift
+git add apps/ios/Meeshy/Features/Links/Views/ShareLinksView.swift
 git commit -m "feat(ios): ShareLinksView — listing + stats"
 ```
 
@@ -1356,7 +1356,7 @@ git commit -m "feat(ios): ShareLinksView — listing + stats"
 ### Task 10 : CreateShareLinkView.swift — sheet avec choix de conversation
 
 **Files:**
-- Create: `apps/ios/Meeshy/Features/Main/Views/CreateShareLinkView.swift`
+- Create: `apps/ios/Meeshy/Features/Links/Views/CreateShareLinkView.swift`
 
 **Step 1: Créer la vue**
 
@@ -1578,7 +1578,7 @@ struct CreateShareLinkView: View {
 **Step 3: Commit**
 
 ```bash
-git add apps/ios/Meeshy/Features/Main/Views/CreateShareLinkView.swift
+git add apps/ios/Meeshy/Features/Links/Views/CreateShareLinkView.swift
 git commit -m "feat(ios): CreateShareLinkView with conversation picker"
 ```
 
@@ -1587,8 +1587,8 @@ git commit -m "feat(ios): CreateShareLinkView with conversation picker"
 ### Task 11 : TrackingLinksView.swift — listing + création
 
 **Files:**
-- Modify: `apps/ios/Meeshy/Features/Main/Views/TrackingLinksView.swift` (remplace le stub)
-- Create: `apps/ios/Meeshy/Features/Main/Views/CreateTrackingLinkView.swift`
+- Modify: `apps/ios/Meeshy/Features/Links/Views/TrackingLinksView.swift` (remplace le stub)
+- Create: `apps/ios/Meeshy/Features/Links/Views/CreateTrackingLinkView.swift`
 
 **Step 1: TrackingLinksView**
 
@@ -1945,8 +1945,8 @@ struct CreateTrackingLinkView: View {
 **Step 4: Commit**
 
 ```bash
-git add apps/ios/Meeshy/Features/Main/Views/TrackingLinksView.swift \
-        apps/ios/Meeshy/Features/Main/Views/CreateTrackingLinkView.swift
+git add apps/ios/Meeshy/Features/Links/Views/TrackingLinksView.swift \
+        apps/ios/Meeshy/Features/Links/Views/CreateTrackingLinkView.swift
 git commit -m "feat(ios): TrackingLinksView + CreateTrackingLinkView"
 ```
 
@@ -1955,7 +1955,7 @@ git commit -m "feat(ios): TrackingLinksView + CreateTrackingLinkView"
 ### Task 12 : CommunityLinksView.swift
 
 **Files:**
-- Modify: `apps/ios/Meeshy/Features/Main/Views/CommunityLinksView.swift` (remplace le stub)
+- Modify: `apps/ios/Meeshy/Features/Links/Views/CommunityLinksView.swift` (remplace le stub)
 
 **Step 1: Remplacer le stub**
 
@@ -2094,7 +2094,7 @@ class CommunityLinksViewModel: ObservableObject {
 **Step 3: Commit**
 
 ```bash
-git add apps/ios/Meeshy/Features/Main/Views/CommunityLinksView.swift
+git add apps/ios/Meeshy/Features/Links/Views/CommunityLinksView.swift
 git commit -m "feat(ios): CommunityLinksView — community join links listing"
 ```
 
@@ -2105,7 +2105,7 @@ git commit -m "feat(ios): CommunityLinksView — community join links listing"
 ### Task 13 : ShareLinkDetailView.swift
 
 **Files:**
-- Create: `apps/ios/Meeshy/Features/Main/Views/ShareLinkDetailView.swift`
+- Create: `apps/ios/Meeshy/Features/Links/Views/ShareLinkDetailView.swift`
 
 **Step 1: Créer la vue**
 
@@ -2348,7 +2348,7 @@ struct ShareLinkDetailView: View {
 
 ```bash
 ./apps/ios/meeshy.sh build
-git add apps/ios/Meeshy/Features/Main/Views/ShareLinkDetailView.swift
+git add apps/ios/Meeshy/Features/Links/Views/ShareLinkDetailView.swift
 git commit -m "feat(ios): ShareLinkDetailView — stats, copy, share, toggle, delete"
 ```
 
@@ -2359,7 +2359,7 @@ git commit -m "feat(ios): ShareLinkDetailView — stats, copy, share, toggle, de
 C'est la page la plus complète — elle affiche les clics individuels avec géo, device, browser, OS, source sociale, et une barre de répartition.
 
 **Files:**
-- Create: `apps/ios/Meeshy/Features/Main/Views/TrackingLinkDetailView.swift`
+- Create: `apps/ios/Meeshy/Features/Links/Views/TrackingLinkDetailView.swift`
 
 **Step 1: Créer la vue**
 
@@ -2782,7 +2782,7 @@ class TrackingDetailViewModel: ObservableObject {
 **Step 3: Commit**
 
 ```bash
-git add apps/ios/Meeshy/Features/Main/Views/TrackingLinkDetailView.swift
+git add apps/ios/Meeshy/Features/Links/Views/TrackingLinkDetailView.swift
 git commit -m "feat(ios): TrackingLinkDetailView — rich stats, geo, device, QR, clicks timeline"
 ```
 
@@ -2791,7 +2791,7 @@ git commit -m "feat(ios): TrackingLinkDetailView — rich stats, geo, device, QR
 ### Task 15 : CommunityLinkDetailView.swift
 
 **Files:**
-- Create: `apps/ios/Meeshy/Features/Main/Views/CommunityLinkDetailView.swift`
+- Create: `apps/ios/Meeshy/Features/Links/Views/CommunityLinkDetailView.swift`
 
 **Step 1: Créer la vue**
 
@@ -2936,7 +2936,7 @@ Attendu : `Build succeeded` sans erreurs.
 **Step 3: Commit final**
 
 ```bash
-git add apps/ios/Meeshy/Features/Main/Views/CommunityLinkDetailView.swift
+git add apps/ios/Meeshy/Features/Links/Views/CommunityLinkDetailView.swift
 git commit -m "feat(ios): CommunityLinkDetailView — copy, share, info"
 ```
 

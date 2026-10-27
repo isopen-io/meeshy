@@ -832,7 +832,7 @@ cd ../v2_meeshy-fix-story-timeline && ./apps/ios/meeshy.sh build
 **Files touched:**
 - `packages/MeeshySDK/Sources/MeeshySDK/Models/StoryModels.swift`
 - `packages/MeeshySDK/Sources/MeeshyUI/Story/StoryComposerView.swift`
-- `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Content.swift`
 
 ### Task 14: Add `slideDuration` to StoryEffects (T5)
 
@@ -905,7 +905,7 @@ git commit -m "fix(story): serialize slide duration at publish time"
 ### Task 16: Use serialized duration in viewer (T5)
 
 **Files:**
-- Modify: `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift`
+- Modify: `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Content.swift`
 
 **Step 1: Update `updateStoryDuration()` to prefer `slideDuration`**
 
@@ -929,7 +929,7 @@ cd ../v2_meeshy-fix-story-duration && ./apps/ios/meeshy.sh build
 **Step 3: Commit**
 
 ```bash
-git add apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift
+git add apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Content.swift
 git commit -m "fix(story): viewer uses composer's authoritative slide duration"
 ```
 

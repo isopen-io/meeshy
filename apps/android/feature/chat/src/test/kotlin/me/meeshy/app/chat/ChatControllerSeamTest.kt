@@ -40,7 +40,6 @@ import me.meeshy.sdk.report.ReportRepository
 import me.meeshy.sdk.session.InMemoryAnonymousSessionStore
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.MessageSocketManager
-import me.meeshy.sdk.socket.TypingPresenceRelay
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -194,7 +193,6 @@ class ChatControllerSeamTest {
             justRun { emitTypingStart(any()) }
             justRun { emitTypingStop(any()) }
         }
-        val relay = mockk<TypingPresenceRelay> { every { forcedOnline } returns MutableSharedFlow() }
         val fileDownloader = mockk<FileAttachmentDownloader>(relaxed = true)
         every { fileDownloader.download(any(), any(), any()) } returns emptyFlow()
         val clock = object : CacheClock {
@@ -209,7 +207,6 @@ class ChatControllerSeamTest {
             InMemoryLocallyHiddenMessagesStore(),
             InMemoryStarredMessagesStore(),
             socket,
-            relay,
             mockk<WorkManager>(relaxed = true),
             MeeshyConfig(),
             clock,

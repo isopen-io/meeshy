@@ -153,8 +153,7 @@ final class WidgetDataManager: NotificationWidgetSink {
     private var contentLockObservation: AnyCancellable?
 
     private let encoder: JSONEncoder = {
-        let enc = JSONEncoder()
-        enc.dateEncodingStrategy = .iso8601
+        let enc = MeeshyCoders.encoder(.persistence)
         return enc
     }()
 

@@ -98,6 +98,7 @@ function buildPrisma(overrides: StatsPrismaOverrides = {}): PrismaClient {
       }),
     },
     user: {
+      findMany: jest.fn(async () => []),
       findUnique: jest.fn(() =>
         Promise.resolve(createdAt ? { createdAt } : null)
       ),

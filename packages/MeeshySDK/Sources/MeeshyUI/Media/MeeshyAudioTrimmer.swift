@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshySDK
 import UIKit
 
 /// **Le rognage d'un son — bande défilante, curseur au centre, poignées
@@ -56,41 +57,6 @@ public struct MeeshyAudioTrimmer: View {
     @State private var chargementFait = false
 
     private enum Handle { case start, end }
-
-    /// **La durée se DIT, elle ne se lit pas.** « 0:12 » est une horloge pour
-    /// l'œil ; VoiceOver y annonce « zéro deux-points douze ». Les poignées
-    /// portent donc une valeur parlée, pas la chaîne montrée.
-    ///
-    /// Écrite ici plutôt qu'importée : `LocalizedNumber` vit dans l'APP, et le
-    /// SDK ne remonte jamais vers elle — une dépendance inverse rendrait ce
-    /// composant inutilisable hors de Meeshy, ce qui est exactement ce qu'un
-    /// atome ne doit pas être.
-    nonisolated static func spokenDuration(_ seconds: TimeInterval, locale: Locale = .current) -> String {
-        let total = max(0, Int(seconds.rounded()))
-        var composants = DateComponents()
-        composants.minute = total / 60
-        composants.second = total % 60
-        return formateurParle(locale: locale).string(from: composants) ?? "\(total)"
-    }
-
-    /// Un formateur par locale, construit une fois : la valeur parlée est
-    /// recalculée à CHAQUE image de la tête de lecture (60 Hz, deux poignées,
-    /// plus le lecteur de transcription), et un `DateComponentsFormatter` neuf
-    /// par appel coûtait une allocation et un `Calendar` à chaque rendu.
-    /// `NSCache` est thread-safe ; un formateur qu'on ne mute plus aussi.
-    private nonisolated(unsafe) static let formateursParles = NSCache<NSString, DateComponentsFormatter>()
-
-    private nonisolated static func formateurParle(locale: Locale) -> DateComponentsFormatter {
-        let cle = locale.identifier as NSString
-        if let formateur = formateursParles.object(forKey: cle) { return formateur }
-        let formateur = DateComponentsFormatter()
-        formateur.allowedUnits = [.minute, .second]
-        formateur.unitsStyle = .spellOut
-        formateur.calendar = Calendar(identifier: .gregorian)
-        formateur.calendar?.locale = locale
-        formateursParles.setObject(formateur, forKey: cle)
-        return formateur
-    }
 
     public init(
         url: URL,
@@ -211,7 +177,7 @@ public struct MeeshyAudioTrimmer: View {
             .accessibilityLabel(which == .start
                 ? String(localized: "audio.trim.handle.start", defaultValue: "Début de la sélection", bundle: .module)
                 : String(localized: "audio.trim.handle.end", defaultValue: "Fin de la sélection", bundle: .module))
-            .accessibilityValue(Self.spokenDuration(instant))
+            .accessibilityValue(MediaFormat.duration(instant, style: .spelledOut, rounding: .toNearestOrAwayFromZero))
     }
 
     // MARK: - Le dessin

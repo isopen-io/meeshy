@@ -110,6 +110,7 @@ internal fun MessageActionsSheet(
     onViews: () -> Unit = {},
     onHistory: () -> Unit = {},
     onSentiment: () -> Unit = {},
+    onMap: () -> Unit = {},
     onSelect: () -> Unit = {},
     onExportCard: () -> Unit = {},
     canWrite: Boolean = true,
@@ -286,6 +287,11 @@ internal fun MessageActionsSheet(
                         icon = Icons.Filled.Mood,
                         label = stringResource(R.string.chat_action_sentiment),
                         onClick = { onSentiment(); onDismiss() },
+                    )
+                    MessageAction.Map -> SheetAction(
+                        icon = me.meeshy.ui.icons.MeeshyIcons.Map,
+                        label = stringResource(R.string.chat_action_map),
+                        onClick = { onMap(); onDismiss() },
                     )
                     MessageAction.Select -> SheetAction(
                         icon = Icons.Filled.CheckCircle,

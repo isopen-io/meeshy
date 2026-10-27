@@ -198,7 +198,7 @@ Source de verite : `BubbleContent.swift` (value model), `BubbleContentBuilder.sw
 - **Hybrid NavigationStack + ZStack** pattern
 - NavigationStack for hierarchical flows (conversation list → conversation detail)
 - ZStack for overlays (feed, menu ladder, floating buttons)
-- Router.swift (`Features/Main/Navigation/Router.swift`) manages NavigationPath
+- Router.swift (`Features/Navigation/Router.swift`) manages NavigationPath
 - `@Environment(\.dismiss)` for back navigation (replaces custom `onBack` callbacks)
 - Native iOS swipe-to-back gesture (replaces custom DragGesture)
 

@@ -1,5 +1,7 @@
 package me.meeshy.app.calls
 
+import androidx.compose.foundation.layout.PaddingValues
+import me.meeshy.ui.component.chrome.floatingChromeBottomReserve
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,9 +16,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -42,6 +45,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.calls.R
 import me.meeshy.sdk.model.call.CallRecord
 import me.meeshy.ui.component.MeeshySkeletonBox
+import me.meeshy.ui.component.chrome.MeeshyBackButton
 import me.meeshy.ui.component.chrome.MeeshyBackground
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -56,11 +60,14 @@ import me.meeshy.ui.theme.MeeshyTheme
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CallHistoryScreen(
+    onBack: () -> Unit,
     onRedial: (record: CallRecord, isVideo: Boolean) -> Unit,
     viewModel: CallHistoryViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     var detail by remember { mutableStateOf<CallRecord?>(null) }
+    var confirmsClearAll by remember { mutableStateOf(false) }
+    val haptics = LocalHapticFeedback.current
 
     MeeshyBackground {
     Scaffold(
@@ -72,33 +79,47 @@ fun CallHistoryScreen(
                     scrolledContainerColor = Color.Transparent,
                     titleContentColor = MeeshyTheme.tokens.textPrimary,
                 ),
+                navigationIcon = { MeeshyBackButton(onClick = onBack) },
                 title = { Text(stringResource(R.string.call_history_title)) },
-                actions = {
-                    CallHistoryFilters(
-                        missedOnly = state.missedOnly,
-                        onSelect = viewModel::setMissedOnly,
-                    )
-                    Spacer(Modifier.width(MeeshySpacing.sm))
-                },
             )
         },
     ) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding)) {
+        Column(Modifier.fillMaxSize().padding(padding)) {
+            CallHistorySearchField(
+                query = state.searchQuery,
+                onChange = viewModel::setSearchQuery,
+                modifier = Modifier.padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.sm),
+            )
+            CallHistoryFilterRow(
+                missedOnly = state.missedOnly,
+                videoOnly = state.videoOnly,
+                canClear = state.records.isNotEmpty(),
+                onMissed = viewModel::setMissedOnly,
+                onVideo = viewModel::setVideoOnly,
+                onClearAll = { confirmsClearAll = true },
+            )
+            CallHistoryEraseFailedBanner(visible = state.eraseFailed, onDismiss = viewModel::dismissEraseFailure)
+        Box(Modifier.fillMaxSize()) {
             when (CallHistoryContent.of(state)) {
                 CallHistoryContent.SKELETON -> CallHistorySkeleton()
                 CallHistoryContent.ERROR -> CallHistoryError(onRetry = viewModel::retry)
-                CallHistoryContent.EMPTY -> CallHistoryEmpty(missedOnly = state.missedOnly)
+                CallHistoryContent.EMPTY -> CallHistoryEmpty(state)
                 CallHistoryContent.LIST -> PullToRefreshBox(
                     isRefreshing = state.isUserRefreshing,
                     onRefresh = viewModel::refresh,
                     modifier = Modifier.fillMaxSize(),
                 ) {
-                    LazyColumn(Modifier.fillMaxSize()) {
+                    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = floatingChromeBottomReserve())) {
                         items(state.records, key = { it.callId }) { record ->
                             CallHistoryRow(
                                 record = record,
                                 onOpen = { detail = record },
                                 onRedial = { video -> onRedial(record, video) },
+                                onHide = {
+                                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    viewModel.hide(record.callId)
+                                },
+                                modifier = Modifier.animateItem(),
                             )
                             viewModel.loadMoreIfNeeded(record.callId)
                         }
@@ -115,7 +136,19 @@ fun CallHistoryScreen(
                 }
             }
         }
+        }
     }
+    }
+
+    if (confirmsClearAll) {
+        CallHistoryClearAllDialog(
+            onConfirm = {
+                confirmsClearAll = false
+                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                viewModel.clearAll()
+            },
+            onDismiss = { confirmsClearAll = false },
+        )
     }
 
     detail?.let { record ->
@@ -126,23 +159,6 @@ fun CallHistoryScreen(
                 onRedial(record, video)
             },
             onDismiss = { detail = null },
-        )
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun CallHistoryFilters(missedOnly: Boolean, onSelect: (Boolean) -> Unit) {
-    Row(horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs)) {
-        FilterChip(
-            selected = !missedOnly,
-            onClick = { onSelect(false) },
-            label = { Text(stringResource(R.string.call_history_filter_all)) },
-        )
-        FilterChip(
-            selected = missedOnly,
-            onClick = { onSelect(true) },
-            label = { Text(stringResource(R.string.call_history_filter_missed)) },
         )
     }
 }
@@ -168,11 +184,17 @@ private fun CallHistorySkeleton() {
 }
 
 @Composable
-private fun CallHistoryEmpty(missedOnly: Boolean) {
+private fun CallHistoryEmpty(state: CallHistoryUiState) {
+    if (state.isSearching) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            CallHistorySearchEmpty(query = state.searchQuery)
+        }
+        return
+    }
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Text(
             text = stringResource(
-                if (missedOnly) R.string.call_history_empty_missed else R.string.call_history_empty,
+                if (state.missedOnly) R.string.call_history_empty_missed else R.string.call_history_empty,
             ),
             style = MaterialTheme.typography.bodyLarge,
             color = MeeshyTheme.tokens.textSecondary,

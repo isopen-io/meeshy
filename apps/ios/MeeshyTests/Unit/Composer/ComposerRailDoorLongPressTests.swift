@@ -133,7 +133,7 @@ final class ComposerRailDoorLongPressTests: XCTestCase {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Composer/\(name)")
+            .appendingPathComponent("Meeshy/Features/Composer/\(name)")
         return try String(contentsOf: url, encoding: .utf8)
     }
 }

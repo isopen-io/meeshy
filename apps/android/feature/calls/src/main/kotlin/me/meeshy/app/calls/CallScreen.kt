@@ -9,27 +9,27 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
-import me.meeshy.feature.calls.R
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import androidx.compose.runtime.CompositionLocalProvider
 import me.meeshy.sdk.theme.DynamicColorGenerator
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.sdk.model.call.CallChromeElement
 import me.meeshy.sdk.model.call.CallChromeInteraction
+import me.meeshy.sdk.model.call.CallChromeVisibility
+import me.meeshy.sdk.model.call.CallScreenMode
 import me.meeshy.sdk.model.call.CallStatusLabelLaw
 import me.meeshy.sdk.model.call.IncomingCallAnswer
 import me.meeshy.ui.theme.hexColor
@@ -54,8 +54,20 @@ fun CallScreen(
     autoAnswer: Boolean = false,
     viewModel: CallViewModel = hiltViewModel(),
 ) {
-    val state by viewModel.state.collectAsStateWithLifecycle()
+    // L'écran voit un état à chrono GELÉ : un tic de 1 Hz ne le recompose pas. Le temps vivant
+    // voyage en `State` (LocalCallLiveSeconds) et n'est lu que par les feuilles qui l'affichent.
+    val state by remember(viewModel) { viewModel.state.map(CallUiState::withFrozenClock).distinctUntilChanged() }
+        .collectAsStateWithLifecycle(initialValue = viewModel.state.value.withFrozenClock())
+    val liveSeconds = remember(viewModel) { viewModel.state.map { it.durationSeconds }.distinctUntilChanged() }
+        .collectAsStateWithLifecycle(initialValue = viewModel.state.value.durationSeconds)
     val permissionGate = rememberCallPermissionGate(config.isVideo)
+    val declineReply: CallDeclineReplyViewModel = hiltViewModel()
+    val pipViewModel: CallPictureInPictureViewModel = hiltViewModel()
+    val inPip by pipViewModel.inPip.collectAsStateWithLifecycle()
+    DisposableEffect(pipViewModel) {
+        pipViewModel.callScreenShown(true)
+        onDispose { pipViewModel.callScreenShown(false) }
+    }
 
     LaunchedEffect(config.peerId, config.isOutgoing, config.isVideo) {
         if (config.isOutgoing) {
@@ -109,10 +121,13 @@ fun CallScreen(
             CallBackAction.Close -> close()
         }
     }
+    val chromeState by chrome.state.collectAsStateWithLifecycle()
+    BackHandler(enabled = chromeState.layer.activeMode != null) { chrome.exitMode() }
 
     // L'écran d'appel est blanc sur un fond sombre ÉPINGLÉ, en thème clair comme en thème sombre :
     // on épingle aussi le thème pour que les jetons de texte et de surface des enfants restent clairs.
     MeeshyTheme(darkTheme = true) {
+        CompositionLocalProvider(LocalCallLiveSeconds provides liveSeconds) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -126,6 +141,18 @@ fun CallScreen(
 
             // Un pair qui escalade l'audio en vidéo s'affiche même si l'appel est né audio.
             val videoStage = state.isVideoCall || remoteVideo != null
+            val touchExploration = rememberCallTouchExploration()
+            val videoScene = callIsVideoStage(state)
+            val sceneTap = remember(chrome, videoScene, touchExploration) {
+                if (CallChromeVisibility.mayToggleByTap(videoScene, touchExploration)) {
+                    { chrome.onSceneTap(videoScene, touchExploration) }
+                } else {
+                    null
+                }
+            }
+            val selfCamera = remember(viewModel) {
+                CallSelfCameraActions(viewModel.cameraZoom, onFlip = viewModel::flipCamera, onToggleCamera = viewModel::toggleCamera)
+            }
             if (videoStage) {
                 CallDuoVideoStage(
                     state = state,
@@ -136,6 +163,9 @@ fun CallScreen(
                     peerAvatarUrl = avatarUrl,
                     connected = state.showsConnectedLayout,
                     reduceMotion = reduceMotion,
+                    onSceneTap = sceneTap,
+                    selfCamera = selfCamera,
+                    controlsVisible = chromeVisibility.isVisible(CallChromeElement.Controls) && !inPip,
                 )
             }
 
@@ -154,6 +184,7 @@ fun CallScreen(
                     videoStage = videoStage,
                     peer = peer,
                     modifier = content,
+                    inPip = inPip,
                 )
                 state.status == CallStatus.INCOMING -> IncomingCallScreen(
                     state = state,
@@ -165,6 +196,12 @@ fun CallScreen(
                     },
                     onDecline = viewModel::decline,
                     modifier = content,
+                    onDeclineWithMessage = config.peerId.takeIf { it.isNotBlank() }?.let { peerId ->
+                        { text ->
+                            declineReply.send(peerId, config.conversationId, text)
+                            viewModel.decline()
+                        }
+                    },
                 )
                 state.status == CallStatus.OUTGOING_RINGING -> CallOutgoingRingingScreen(
                     state = state,
@@ -210,30 +247,43 @@ fun CallScreen(
                 )
             }
 
-            // Minimise affordance — parity with iOS's collapse-to-pill: offered only for a live,
-            // non-incoming call; the Activity-scoped CallViewModel keeps the call alive.
+            // En-tête (miroir de iOS `topChrome`) : Réduire · Conversation à gauche, puce durée · signal à
+            // droite en vidéo établie. Il s'efface avec la pilule d'un toucher sur la scène.
             if (CallPillPresenter.isMinimizable(state.status)) {
                 CallChromeFade(
-                    isVisible = chromeVisibility.isVisible(CallChromeElement.Header),
+                    isVisible = chromeVisibility.isVisible(CallChromeElement.Header) && !inPip,
                     onRevive = { chrome.onInteraction(CallChromeInteraction.Revive) },
-                    modifier = Modifier.align(Alignment.TopStart).systemBarsPadding().padding(MeeshySpacing.sm),
+                    modifier = Modifier.align(Alignment.TopStart).systemBarsPadding().padding(horizontal = MeeshySpacing.lg),
                 ) {
-                    IconButton(onClick = onMinimize) {
-                        Icon(
-                            imageVector = Icons.Filled.KeyboardArrowDown,
-                            contentDescription = stringResource(R.string.call_action_minimize),
-                            tint = CallPalette.Ink,
-                        )
-                    }
+                    CallHeaderBar(
+                        state = state,
+                        conversationId = config.conversationId.ifBlank { viewModel.activeConfig.conversationId },
+                        showsMinimize = true,
+                        onMinimize = onMinimize,
+                        modifier = Modifier.padding(top = MeeshySpacing.xs),
+                        isVideoStage = videoStage,
+                    )
                 }
             }
 
             CallOverlaySlotHost(extensions.overlays, CallOverlaySlot.Fullscreen, overlayContext, Modifier.fillMaxSize())
 
+            // Le mode « Capturer l'appel » : le choix du cadre en direct, qui libère l'écran de son chrome.
+            if (chromeState.layer.activeMode == CallScreenMode.Montage) {
+                val frameViewModel: CallLiveFrameViewModel = hiltViewModel()
+                CallLiveFramePicker(
+                    controller = frameViewModel.controller,
+                    peerName = state.peerName,
+                    onClose = chrome::exitMode,
+                    modifier = Modifier.align(Alignment.BottomCenter).systemBarsPadding(),
+                )
+            }
+
             CallToastHost(
                 toasts = extensions.toasts.toasts,
                 modifier = Modifier.align(Alignment.TopCenter).systemBarsPadding(),
             )
+        }
         }
     }
 }

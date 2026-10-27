@@ -21,7 +21,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -55,12 +54,15 @@ import coil.compose.AsyncImage
 import me.meeshy.feature.feed.R
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.MeeshySkeletonBox
+import me.meeshy.ui.component.rememberPresence
 import me.meeshy.ui.component.chrome.MeeshyBackground
 import me.meeshy.ui.component.chrome.MeeshyGlassSurface
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
+import me.meeshy.ui.component.chrome.leadingNavigationIcon
+import me.meeshy.ui.component.chrome.leadingNavigationLabel
 
 /**
  * A single user's authored-posts feed — reached from a profile's "Publications" row.
@@ -99,8 +101,8 @@ fun UserPostsScreen(
                     navigationIcon = {
                         IconButton(onClick = onBack) {
                             Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = stringResource(R.string.user_posts_back),
+                                imageVector = leadingNavigationIcon(),
+                                contentDescription = leadingNavigationLabel(stringResource(R.string.user_posts_back)),
                                 tint = MeeshyTheme.tokens.textPrimary,
                             )
                         }
@@ -139,6 +141,7 @@ fun UserPostsScreen(
                                 viewModel.loadMoreIfNeeded(post.id)
                             }
                             UserPostCard(
+                                modifier = Modifier.animateItem(),
                                 post = post,
                                 onClick = { if (post.isReel) onPostClick(post.id) else onOpenPost(post.id) },
                                 onOpenPost = onOpenPost,
@@ -169,6 +172,7 @@ fun UserPostsScreen(
 
 @Composable
 private fun UserPostCard(
+    modifier: Modifier = Modifier,
     post: FeedPostPresentation,
     onClick: () -> Unit,
     onOpenPost: (String) -> Unit,
@@ -176,13 +180,13 @@ private fun UserPostCard(
     val unknownAuthor = stringResource(R.string.feed_unknown_author)
     MeeshyGlassSurface(
         shape = RoundedCornerShape(MeeshyRadius.xl),
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
     ) {
         Column(Modifier.padding(MeeshySpacing.lg)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                MeeshyAvatar(name = post.authorName ?: unknownAuthor, size = 40.dp, imageUrl = post.authorAvatarUrl)
+                MeeshyAvatar(name = post.authorName ?: unknownAuthor, size = 40.dp, imageUrl = post.authorAvatarUrl, presence = rememberPresence(post.authorId))
                 Spacer(Modifier.width(MeeshySpacing.md))
                 Column(Modifier.weight(1f)) {
                     Text(

@@ -44,6 +44,18 @@
         },
         {
           "catalog": "ui",
+          "iosKey": "profile.action.call.audio",
+          "androidName": "profile_action_call_audio",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "profile.action.call.video",
+          "androidName": "profile_action_call_video",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
           "iosKey": "profile.action.report",
           "androidName": "profile_action_report",
           "status": "adopted"
@@ -106,6 +118,12 @@
           "catalog": "ui",
           "iosKey": "profile.blocked.unblock",
           "androidName": "profile_blocked_unblock",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.dial.notConnected",
+          "androidName": "profile_call_not_placed",
           "status": "adopted"
         },
         {

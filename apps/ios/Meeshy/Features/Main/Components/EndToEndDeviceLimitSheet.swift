@@ -24,6 +24,9 @@ final class EndToEndDeviceLimitViewModel: ObservableObject {
 
     @Published private(set) var state: EndToEndDeviceLimitState = .loading
     @Published private(set) var retiringDeviceId: UInt32?
+    /// La place visée a changé d'occupant depuis la liste lue (409
+    /// `E2EE_DEVICE_CHANGED`, #13036) : rien n'a été retiré, la liste relue le dit.
+    @Published private(set) var listChangedSinceReading = false
 
     private let devices: any EndToEndDeviceManaging
     private let userId: @MainActor () -> String?
@@ -49,14 +52,18 @@ final class EndToEndDeviceLimitViewModel: ObservableObject {
         }
     }
 
-    func retire(_ deviceId: UInt32) async {
+    func retire(_ device: E2EEDeviceListing) async {
         guard let userId = userId() else { return }
-        retiringDeviceId = deviceId
+        retiringDeviceId = device.deviceId
+        listChangedSinceReading = false
         defer { retiringDeviceId = nil }
         do {
-            try await devices.retire(deviceId: deviceId)
+            try await devices.retire(deviceId: device.deviceId, registrationId: device.registrationId)
             try await devices.enroll(userId)
             state = .enrolled
+        } catch E2EEDeviceRetirementError.deviceChanged {
+            await load()
+            listChangedSinceReading = true
         } catch {
             await load()
         }
@@ -66,7 +73,7 @@ final class EndToEndDeviceLimitViewModel: ObservableObject {
 struct EndToEndDeviceLimitSheet: View {
     @StateObject private var model: EndToEndDeviceLimitViewModel
     @Environment(\.dismiss) private var dismiss
-    @State private var pendingRetirement: UInt32?
+    @State private var pendingRetirement: E2EEDeviceListing?
     @State private var showsMyDevices = false
 
     init(model: @autoclosure @escaping () -> EndToEndDeviceLimitViewModel = EndToEndDeviceLimitViewModel()) {
@@ -103,8 +110,8 @@ struct EndToEndDeviceLimitSheet: View {
                 titleVisibility: .visible
             ) {
                 Button(String(localized: "e2ee.deviceLimit.retire", defaultValue: "Retirer", bundle: .main), role: .destructive) {
-                    guard let deviceId = pendingRetirement else { return }
-                    Task { await model.retire(deviceId) }
+                    guard let device = pendingRetirement else { return }
+                    Task { await model.retire(device) }
                 }
             }
             .task { await model.load() }
@@ -127,6 +134,12 @@ struct EndToEndDeviceLimitSheet: View {
         case .loaded(let devices):
             Section {
                 ForEach(devices, id: \.deviceId) { device in row(device) }
+            } header: {
+                if model.listChangedSinceReading {
+                    Text(String(localized: "e2ee.devices.notice.deviceChanged.message",
+                                defaultValue: "Un autre appareil a pris cette place depuis l’affichage de la liste. Rien n’a été retiré. Vérifiez la liste à jour avant de retirer un appareil.",
+                                bundle: .main))
+                }
             }
         case .enrolled:
             Section {
@@ -146,7 +159,7 @@ struct EndToEndDeviceLimitSheet: View {
                 ProgressView()
             } else {
                 Button(String(localized: "e2ee.deviceLimit.retire", defaultValue: "Retirer", bundle: .main), role: .destructive) {
-                    pendingRetirement = device.deviceId
+                    pendingRetirement = device
                 }
                 .disabled(model.retiringDeviceId != nil)
             }

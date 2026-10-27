@@ -2,7 +2,7 @@
 
 **Date** : 2026-07-18
 **Piste** : iOS (suffixe `i`).
-**Surface** : `apps/ios/Meeshy/Features/Main/Views/StatsTimelineChart.swift`
+**Surface** : `apps/ios/Meeshy/Features/Profile/Views/StatsTimelineChart.swift`
 **Base** : `main` HEAD (`b36ffd7`)
 **Branche** : `claude/laughing-thompson-wnteas`
 **Gate** : CI `iOS Tests`

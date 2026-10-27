@@ -211,3 +211,47 @@ class ChatListItemsTest {
         assertThat(items.filterIsInstance<ChatListItem.UnreadSeparator>()).hasSize(1)
     }
 }
+
+class LayoutKeysTest {
+
+    private fun message(id: String, cmid: String? = null) =
+        ChatListItem.Message(bubble(id, "2026-10-27T10:00:00Z").copy(clientMessageId = cmid))
+
+    @Test
+    fun `a sent bubble keeps its layout key when the ack rekeys its id`() {
+        val pending = layoutKeys(listOf(message("cid_1", cmid = "cid_1")))
+        val acked = layoutKeys(listOf(message("srv9", cmid = "cid_1")))
+        assertThat(acked).isEqualTo(pending)
+    }
+
+    @Test
+    fun `a received bubble is keyed by its message id`() {
+        assertThat(layoutKeys(listOf(message("srv1")))).containsExactly("m-srv1")
+    }
+
+    @Test
+    fun `a repeated key is made unique so the lazy list never crashes`() {
+        val keys = layoutKeys(listOf(message("a", "c"), message("b", "c"), message("c")))
+        assertThat(keys.toSet()).hasSize(3)
+    }
+}
+
+class FocalCellsTest {
+
+    private class Row(
+        override val index: Int,
+        override val key: Any,
+        override val offset: Int = 0,
+        override val size: Int = 100,
+    ) : androidx.compose.foundation.lazy.LazyListItemInfo
+
+    @Test
+    fun `a focal cell is named by the message id the passage compares, not by its layout key`() {
+        val rendered = listOf(ChatListItem.Message(bubble("srv9", "2026-10-27T10:00:00Z").copy(clientMessageId = "cid_1")))
+        val visible = listOf(Row(index = 0, key = layoutKeys(rendered).single()))
+
+        val cells = focalCells(visible, rendered, viewportHeight = 1000.0, beforePadding = 0.0, density = 1.0)
+
+        assertThat(cells.map { it.id }).containsExactly(rendered.single().key)
+    }
+}

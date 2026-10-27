@@ -160,7 +160,7 @@ class PreferencesSyncCoordinator(
         }
     }
 
-    private suspend fun refreshNotification() {
+    internal suspend fun refreshNotification() {
         if (owesServerAWrite(OutboxKind.UPDATE_SETTINGS)) return
         when (val result = apiCall { preferencesApi.getNotification() }) {
             is NetworkResult.Success ->
@@ -172,7 +172,7 @@ class PreferencesSyncCoordinator(
         }
     }
 
-    private suspend fun refreshPrivacy() {
+    internal suspend fun refreshPrivacy() {
         if (owesServerAWrite(OutboxKind.UPDATE_PRIVACY_SETTINGS)) return
         when (val result = apiCall { preferencesApi.getPrivacy() }) {
             is NetworkResult.Success ->

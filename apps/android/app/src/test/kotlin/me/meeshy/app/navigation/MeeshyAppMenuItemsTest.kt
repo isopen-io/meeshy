@@ -8,11 +8,8 @@ import org.junit.Test
  *
  * La liste est extraite de [rememberMenuLadderItems] (qui est @Composable, donc
  * hors de portee d'un test JVM) pour que la regle soit verifiable. Parite iOS
- * stricte : 6 barreaux, Communautes differee (aucune destination Android),
- * Reels retire (appui long seul). Contacts (`menu_contacts`) est le SEUL
- * barreau retenu qui n'a pas d'equivalent iOS direct — il porte le nominal
- * a un geste vers l'onglet Contacts par defaut depuis que People a quitte
- * le TopAppBar de l'ecran Conversations.
+ * stricte : 6 barreaux, Communautes a sa place iOS (l'ecran existe), Reels retire
+ * (appui long seul). Contacts n'a plus de barreau : il reste a un geste par Decouvrir.
  */
 class MeeshyAppMenuItemsTest {
 
@@ -24,7 +21,7 @@ class MeeshyAppMenuItemsTest {
                 "menu_notifications",
                 "tab_calls",
                 "menu_discover",
-                "menu_contacts",
+                "menu_communities",
                 "menu_settings",
             )
             .inOrder()
@@ -51,13 +48,9 @@ class MeeshyAppMenuItemsTest {
     }
 
     @Test
-    fun `the ladder offers Contacts — the nominal one-gesture path since People left the header`() {
-        assertThat(menuLadderLabelKeys()).contains("menu_contacts")
-    }
-
-    @Test
-    fun `the ladder does not yet offer Communities`() {
-        assertThat(menuLadderLabelKeys()).doesNotContain("menu_communities")
+    fun `the ladder gives Communities the rung Contacts held while the screen did not exist`() {
+        assertThat(menuLadderLabelKeys()).doesNotContain("menu_contacts")
+        assertThat(menuLadderLabelKeys()).contains("menu_communities")
     }
 
     @Test

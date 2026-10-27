@@ -36,6 +36,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.SemanticsPropertyKey
 import androidx.compose.ui.semantics.SemanticsPropertyReceiver
 import androidx.compose.ui.semantics.error
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
@@ -62,6 +63,7 @@ import me.meeshy.ui.theme.MeeshyTheme
 public enum class AuthContentType(
     internal val autofillTypes: List<AutofillType>,
     internal val keyboardType: KeyboardType,
+    internal val capitalization: KeyboardCapitalization = KeyboardCapitalization.None,
 ) {
     None(emptyList(), KeyboardType.Text),
     Username(listOf(AutofillType.Username), KeyboardType.Text),
@@ -69,6 +71,9 @@ public enum class AuthContentType(
     OneTimeCode(listOf(AutofillType.SmsOtpCode), KeyboardType.Number),
     Password(listOf(AutofillType.Password), KeyboardType.Password),
     NewPassword(listOf(AutofillType.NewPassword), KeyboardType.Password),
+
+    /** Un prénom ou un nom d'usage : initiale en majuscule à chaque mot (iOS `.textContentType(.name)`). */
+    PersonName(listOf(AutofillType.PersonFullName), KeyboardType.Text, KeyboardCapitalization.Words),
 }
 
 /** Le liseré courant d'un champ, lisible par les témoins de test (jamais par l'accessibilité). */
@@ -76,6 +81,9 @@ internal val AuthFieldBorderKey: SemanticsPropertyKey<AuthFieldBorder> =
     SemanticsPropertyKey(name = "AuthFieldBorder")
 
 private var SemanticsPropertyReceiver.authFieldBorder: AuthFieldBorder by AuthFieldBorderKey
+
+/** Le cadre d'un champ d'accès (icône + saisie), pour les témoins de géométrie. */
+public const val AUTH_TEXT_FIELD_FRAME_TAG: String = "auth.textField.frame"
 
 private val ICON_SIZE = 18.dp
 private val FIELD_MIN_HEIGHT = 52.dp
@@ -130,6 +138,7 @@ public fun AuthTextField(
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(min = FIELD_MIN_HEIGHT)
+                .testTag(AUTH_TEXT_FIELD_FRAME_TAG)
                 .background(tokens.inputBackground, shape)
                 .border(BorderStroke(1.dp, borderColor), shape)
                 .padding(horizontal = MeeshySpacing.lg)
@@ -215,7 +224,7 @@ private fun AuthInput(
         textStyle = authInputTextStyle(),
         cursorBrush = SolidColor(MeeshyPalette.Indigo500),
         keyboardOptions = KeyboardOptions(
-            capitalization = KeyboardCapitalization.None,
+            capitalization = contentType.capitalization,
             autoCorrectEnabled = false,
             keyboardType = contentType.keyboardType,
             imeAction = imeAction,

@@ -23,9 +23,9 @@ enum StickerOptimisticAttachment {
             uploadedBy: uploadedBy,
             thumbnailColor: color
         )
-        guard let texte = sticker.flatMap(StickerAltText.describe) else { return attachment }
-        attachment.alt = texte
-        attachment.caption = texte
+        guard let text = sticker.flatMap(StickerAltText.describe) else { return attachment }
+        attachment.alt = text
+        attachment.caption = text
         return attachment
     }
 }

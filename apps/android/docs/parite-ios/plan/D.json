@@ -921,7 +921,7 @@
    "apps/ios/Meeshy/Features/Main/Services/AudioPlaybackEngineDriving.swift",
    "apps/ios/Meeshy/Features/Main/Services/AudioQueueBuilder.swift",
    "apps/ios/Meeshy/Features/Main/Services/ConversationAudioCoordinator.swift",
-   "apps/ios/Meeshy/Features/Main/LiveActivity/VoicePlaybackLiveActivityCoordinator.swift"
+   "apps/ios/Meeshy/Features/LiveActivity/VoicePlaybackLiveActivityCoordinator.swift"
   ],
   "feature_keys": [
    "mav-audio-shared-engine-queue",
@@ -2187,7 +2187,7 @@
    "packages/MeeshySDK/Sources/MeeshyUI/Profile/FullscreenImageView.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Profile/ProfileImageCopy.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Profile/ProfileGameSection.swift",
-   "apps/ios/Meeshy/Features/Main/Views/ProfileOwnAvatar.swift"
+   "apps/ios/Meeshy/Features/Profile/Views/ProfileOwnAvatar.swift"
   ],
   "feature_keys": [
    "profile-banner-avatar-fullscreen"
@@ -2247,13 +2247,13 @@
    "apps/android/feature/stories/src/test/kotlin/me/meeshy/app/stories/MyStoriesViewModelTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/MyStoriesTab.swift",
-   "apps/ios/Meeshy/Features/Main/Views/MyStoryCardModelRules.swift",
-   "apps/ios/Meeshy/Features/Main/Views/MyStoryCardPresentation.swift",
-   "apps/ios/Meeshy/Features/Main/Views/MyStoriesDeleteConfirmation.swift",
-   "apps/ios/Meeshy/Features/Main/Views/MyStoriesSheetTargets.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/MyStoriesTab.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/MyStoryCardModelRules.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/MyStoryCardPresentation.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/MyStoriesDeleteConfirmation.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/MyStoriesSheetTargets.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Services/StoryService.swift",
-   "apps/ios/Meeshy/Features/Main/Views/MyStoryThumbnailResolver.swift"
+   "apps/ios/Meeshy/Features/Stories/Views/MyStoryThumbnailResolver.swift"
   ],
   "feature_keys": [
    "profile-mystories-shell-tabs",
@@ -2750,7 +2750,7 @@
    "apps/android/app/src/test/kotlin/me/meeshy/app/navigation/ProfileRoutesTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/ProfileView.swift"
+   "apps/ios/Meeshy/Features/Profile/Views/ProfileView.swift"
   ],
   "feature_keys": [
    "profile-own-page"
@@ -2968,15 +2968,15 @@
    "apps/android/feature/stories/src/main/res/values/strings_story_my_stories.xml"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/MyStoriesView.swift",
-   "apps/ios/Meeshy/Features/Main/Views/MyStoryCard.swift",
-   "apps/ios/Meeshy/Features/Main/Views/MyStoryActionBar.swift",
-   "apps/ios/Meeshy/Features/Main/Views/MyStoriesTab.swift",
-   "apps/ios/Meeshy/Features/Main/Views/MyStoryCardPresentation.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryTrayActions.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryVisibilityMenuResolver.swift",
-   "apps/ios/Meeshy/Features/Main/Services/StoryVisibilityPreferenceStore.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StorySelectionResolver.swift"
+   "apps/ios/Meeshy/Features/Stories/Views/MyStoriesView.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/MyStoryCard.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/MyStoryActionBar.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/MyStoriesTab.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/MyStoryCardPresentation.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryTrayActions.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryVisibilityMenuResolver.swift",
+   "apps/ios/Meeshy/Features/Stories/Services/StoryVisibilityPreferenceStore.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StorySelectionResolver.swift"
   ],
   "feature_keys": [
    "profile-mystories-shell-tabs",
@@ -3665,7 +3665,7 @@
    "packages/MeeshySDK/Sources/MeeshyUI/Profile/ProfileSheetLoader.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Profile/ProfileLoading.swift",
    "apps/ios/Meeshy/Features/Profile/LiveProfileLoading.swift",
-   "apps/ios/Meeshy/Features/Main/ViewModels/UserProfileViewModel.swift",
+   "apps/ios/Meeshy/Features/Profile/ViewModels/UserProfileViewModel.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Store/ConversationStoreSocketBridge.swift"
   ],
   "feature_keys": [
@@ -3995,8 +3995,8 @@
    "packages/MeeshySDK/Sources/MeeshySDK/Persistence/OfflineQueue+Audio.swift",
    "apps/ios/Meeshy/Features/Main/Services/OutboxDispatcher+Comments.swift",
    "apps/ios/Meeshy/Features/Main/Services/OutboxDispatcher.swift",
-   "apps/ios/Meeshy/Features/Main/Composer/ComposerDocumentDurablePublisher.swift",
-   "apps/ios/Meeshy/Features/Main/Composer/DocumentComposerDoor.swift"
+   "apps/ios/Meeshy/Features/Composer/ComposerDocumentDurablePublisher.swift",
+   "apps/ios/Meeshy/Features/Composer/DocumentComposerDoor.swift"
   ],
   "feature_keys": [
    "rfp-feed-offline-publish-outbox",
@@ -4594,7 +4594,7 @@
    "packages/MeeshySDK/Sources/MeeshyUI/Profile/UserProfileSheet+DetailsTab.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Profile/ConnectionActionView.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Profile/UserProfileSheet.swift",
-   "apps/ios/Meeshy/Features/Main/ViewModels/UserProfileViewModel.swift"
+   "apps/ios/Meeshy/Features/Profile/ViewModels/UserProfileViewModel.swift"
   ],
   "feature_keys": [
    "profile-connection-request-actions",
@@ -4925,7 +4925,7 @@
   "ios_reference_files": [
    "packages/MeeshySDK/Sources/MeeshySDK/Services/EdgeTranscriptionService.swift",
    "apps/ios/Meeshy/Features/Main/Models/TranscriptionError.swift",
-   "apps/ios/Meeshy/Features/Main/Models/TranscriptionPermission.swift",
+   "apps/ios/Meeshy/Features/Call/Models/TranscriptionPermission.swift",
    "apps/ios/Meeshy/Features/Main/Services/AudioTapFormatReadiness.swift"
   ],
   "feature_keys": [
@@ -5281,7 +5281,7 @@
    "apps/ios/Meeshy/Features/Main/Services/ConversationAudioCoordinator+NowPlaying.swift",
    "apps/ios/Meeshy/Features/Main/Services/NowPlayingArtwork.swift",
    "apps/ios/Meeshy/Features/Main/Services/MediaBackgroundPolicy.swift",
-   "apps/ios/Meeshy/Features/Main/LiveActivity/VoicePlaybackActivityLaw.swift"
+   "apps/ios/Meeshy/Features/LiveActivity/VoicePlaybackActivityLaw.swift"
   ],
   "feature_keys": [
    "mav-audio-now-playing-system",
@@ -5533,7 +5533,7 @@
    "apps/ios/Meeshy/Features/Main/Services/ConversationAudioCoordinator.swift",
    "apps/ios/Meeshy/Features/Main/Views/Bubble/CoordinatedAudioPlayer.swift",
    "apps/ios/Meeshy/Features/Main/Views/Bubble/AudioBubbleRouter.swift",
-   "apps/ios/Meeshy/Features/Main/Navigation/NowPlayingReturnNavigation.swift",
+   "apps/ios/Meeshy/Features/Navigation/NowPlayingReturnNavigation.swift",
    "apps/ios/Meeshy/Features/Main/Views/RootLayers/RootViewLayers.swift"
   ],
   "feature_keys": [
@@ -5586,7 +5586,7 @@
   ],
   "ios_reference_files": [
    "packages/MeeshySDK/Sources/MeeshyUI/VoiceProfile/VoiceProfileWizardView.swift",
-   "apps/ios/Meeshy/Features/Main/Views/VoiceProfileWizardView.swift",
+   "apps/ios/Meeshy/Features/Settings/Views/VoiceProfileWizardView.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Models/VoiceProfileModels.swift"
   ],
   "feature_keys": [
@@ -5635,7 +5635,7 @@
    "apps/android/feature/settings/src/main/res/values/strings_voice_manage.xml"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/VoiceProfileManageView.swift",
+   "apps/ios/Meeshy/Features/Settings/Views/VoiceProfileManageView.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Services/VoiceProfileService.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Models/VoiceProfileModels.swift"
   ],
@@ -5865,7 +5865,7 @@
    "apps/ios/Meeshy/Features/Main/Services/MediaSaveCoordinator.swift",
    "apps/ios/Meeshy/Features/Main/Components/MediaSaveFlowHost.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Media/PhotoAlbumSaveFeedback.swift",
-   "apps/ios/Meeshy/Features/Main/Views/MediaDownloadSettingsView.swift",
+   "apps/ios/Meeshy/Features/Settings/Views/MediaDownloadSettingsView.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Cache/PhotoLibraryManager.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Cache/PhotoLibraryDeduplicator.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Cache/PhotoLibraryImageWrite.swift",
@@ -6264,7 +6264,7 @@
    "apps/android/feature/conversations/src/main/res/values-pt/strings.xml"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/CreateShareLinkView.swift"
+   "apps/ios/Meeshy/Features/Links/Views/CreateShareLinkView.swift"
   ],
   "feature_keys": [
    "gcom-share-link-create"
@@ -6826,7 +6826,7 @@
    "apps/android/feature/profile/src/main/kotlin/me/meeshy/app/profile/ProfileViewModel.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/ProfileView.swift",
+   "apps/ios/Meeshy/Features/Profile/Views/ProfileView.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Services/UserService.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Auth/MeeshyUser+ProfileMutation.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Auth/AuthManager+ProfileDecor.swift",
@@ -6896,8 +6896,8 @@
    "apps/android/feature/profile/src/test/kotlin/me/meeshy/app/profile/OwnProfileMoodTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/ProfileView.swift",
-   "apps/ios/Meeshy/Features/Main/Views/ProfileOwnAvatar.swift"
+   "apps/ios/Meeshy/Features/Profile/Views/ProfileView.swift",
+   "apps/ios/Meeshy/Features/Profile/Views/ProfileOwnAvatar.swift"
   ],
   "feature_keys": [
    "profile-own-page",
@@ -7111,8 +7111,8 @@
    "apps/android/feature/profile/src/test/kotlin/me/meeshy/app/profile/StatsTimelineBuilderTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/UserStatsView.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StatsTimelineChart.swift",
+   "apps/ios/Meeshy/Features/Profile/Views/UserStatsView.swift",
+   "apps/ios/Meeshy/Features/Profile/Views/StatsTimelineChart.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Services/StatsService.swift"
   ],
   "feature_keys": [
@@ -7701,7 +7701,7 @@
    "packages/MeeshySDK/Sources/MeeshyUI/JoinFlow/InviteLanding/InviteCardSurface.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/JoinFlow/InviteLanding/LanguageShareBar.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/JoinFlow/InviteLanding/InviteGroupFacts.swift",
-   "apps/ios/Meeshy/Features/Main/Views/ShareLinkIdentitySheet.swift"
+   "apps/ios/Meeshy/Features/Links/Views/ShareLinkIdentitySheet.swift"
   ],
   "feature_keys": [
    "gcom-join-invite-landing",
@@ -7841,8 +7841,8 @@
    "apps/android/feature/chat/src/main/kotlin/me/meeshy/app/chat/ConversationMembersSheet.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/ParticipantProfileSheet.swift",
-   "apps/ios/Meeshy/Features/Main/Views/ParticipantProfileLoader.swift",
+   "apps/ios/Meeshy/Features/Profile/Views/ParticipantProfileSheet.swift",
+   "apps/ios/Meeshy/Features/Profile/Views/ParticipantProfileLoader.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Models/ConversationParticipantProfile.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Models/ParticipantModels.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Models/MemberRole.swift"
@@ -7955,7 +7955,7 @@
    "apps/android/core/model/src/test/kotlin/me/meeshy/sdk/model/ImageUploadValidatorTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/ProfileView.swift",
+   "apps/ios/Meeshy/Features/Profile/Views/ProfileView.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Media/MeeshyImageEditorView.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Utilities/ImageCompressor.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Services/UserService.swift"
@@ -8544,7 +8544,7 @@
   "ios_reference_files": [
    "apps/ios/Meeshy/Features/Main/Services/BlockActionCoordinator.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Services/BlockService.swift",
-   "apps/ios/Meeshy/Features/Main/Views/ProfileView.swift"
+   "apps/ios/Meeshy/Features/Profile/Views/ProfileView.swift"
   ],
   "feature_keys": [
    "cf-block-action"
@@ -8593,7 +8593,7 @@
   "ios_reference_files": [
    "apps/ios/Meeshy/Features/Contacts/BlockedTab.swift",
    "apps/ios/Meeshy/Features/Contacts/BlockedViewModel.swift",
-   "apps/ios/Meeshy/Features/Main/Views/BlockedUsersView.swift"
+   "apps/ios/Meeshy/Features/Settings/Views/BlockedUsersView.swift"
   ],
   "feature_keys": [
    "cf-blocked-users-list"
@@ -9032,9 +9032,9 @@
    "apps/android/feature/stories/src/test/kotlin/me/meeshy/app/stories/MyStoriesQueueViewModelTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/MyStoriesQueueRows.swift",
-   "apps/ios/Meeshy/Features/Main/Views/MyStoriesView.swift",
-   "apps/ios/Meeshy/Features/Main/Views/MyStoryCardPresentation.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/MyStoriesQueueRows.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/MyStoriesView.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/MyStoryCardPresentation.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Services/StoryService.swift"
   ],
   "feature_keys": [
@@ -9105,8 +9105,8 @@
   ],
   "ios_reference_files": [
    "packages/MeeshySDK/Sources/MeeshyUI/Profile/UserProfileSheet+PostsTab.swift",
-   "apps/ios/Meeshy/Features/Main/Views/ProfileUserPostsList.swift",
-   "apps/ios/Meeshy/Features/Main/Views/ProfileUserPostsViewModel.swift"
+   "apps/ios/Meeshy/Features/Profile/Views/ProfileUserPostsList.swift",
+   "apps/ios/Meeshy/Features/Profile/ViewModels/ProfileUserPostsViewModel.swift"
   ],
   "feature_keys": [
    "profile-posts-tab-list",
@@ -9617,11 +9617,11 @@
    "apps/android/feature/stories/src/test/kotlin/me/meeshy/app/stories/MyStoryExportTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/MyStoryActionMenu.swift",
-   "apps/ios/Meeshy/Features/Main/Views/MyStoriesDeleteAlerts.swift",
-   "apps/ios/Meeshy/Features/Main/Views/MyStoriesDeleteConfirmation.swift",
-   "apps/ios/Meeshy/Features/Main/Views/MyStoriesView.swift",
-   "apps/ios/Meeshy/Features/Main/Views/MyStoriesSheetTargets.swift"
+   "apps/ios/Meeshy/Features/Stories/Views/MyStoryActionMenu.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/MyStoriesDeleteAlerts.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/MyStoriesDeleteConfirmation.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/MyStoriesView.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/MyStoriesSheetTargets.swift"
   ],
   "feature_keys": [
    "profile-mystories-actions-delete"
@@ -9678,9 +9678,9 @@
    "apps/android/feature/feed/src/test/kotlin/me/meeshy/app/feed/ProfilePostOpeningTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/ProfileUserPostsViewModel.swift",
-   "apps/ios/Meeshy/Features/Main/Views/ProfileUserPostsList.swift",
-   "apps/ios/Meeshy/Features/Main/Views/ProfilePostOpening.swift",
+   "apps/ios/Meeshy/Features/Profile/ViewModels/ProfileUserPostsViewModel.swift",
+   "apps/ios/Meeshy/Features/Profile/Views/ProfileUserPostsList.swift",
+   "apps/ios/Meeshy/Features/Profile/Views/ProfilePostOpening.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Profile/UserProfileSheet+PostsTab.swift"
   ],
   "feature_keys": [
@@ -10745,7 +10745,7 @@
   "ios_reference_files": [
    "apps/ios/Meeshy/Features/Contacts/PhonePromptPolicy.swift",
    "apps/ios/Meeshy/Features/Contacts/PhonePromptSheet.swift",
-   "apps/ios/Meeshy/Features/Main/ViewModels/PhoneChangeFlowModel.swift"
+   "apps/ios/Meeshy/Features/Settings/ViewModels/PhoneChangeFlowModel.swift"
   ],
   "feature_keys": [
    "cf-phone-prompt"
@@ -10865,8 +10865,8 @@
    "apps/android/feature/contacts/src/main/kotlin/me/meeshy/app/contacts/ContactsListViewModel.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/AffiliateView.swift",
-   "apps/ios/Meeshy/Features/Main/Views/AffiliateCreateView.swift",
+   "apps/ios/Meeshy/Features/Links/Views/AffiliateView.swift",
+   "apps/ios/Meeshy/Features/Links/Views/AffiliateCreateView.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Services/AffiliateService.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Networking/Endpoints/AffiliateEndpoint.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Models/AffiliateModels.swift"
@@ -10979,8 +10979,8 @@
    "apps/android/app/src/main/kotlin/me/meeshy/app/navigation/MeeshyApp.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/CommunityLinksView.swift",
-   "apps/ios/Meeshy/Features/Main/Views/CommunityLinkDetailView.swift",
+   "apps/ios/Meeshy/Features/Links/Views/CommunityLinksView.swift",
+   "apps/ios/Meeshy/Features/Links/Views/CommunityLinkDetailView.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Services/CommunityLinkService.swift"
   ],
   "feature_keys": [
@@ -11332,7 +11332,7 @@
    "apps/android/sdk-ui/src/test/kotlin/me/meeshy/ui/profile/decor/ProfileDecorLayersPolicyTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/ProfileDecorSheet.swift",
+   "apps/ios/Meeshy/Features/Profile/Views/ProfileDecorSheet.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Appearance/ProfileDecor.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Appearance/AvatarRingView.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Appearance/BannerDesignView.swift",

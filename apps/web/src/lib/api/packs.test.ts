@@ -70,6 +70,15 @@ describe('le décodeur des packs de cadres', () => {
     expect('price' in (decodeFramePackSummary(frameSummary('a')) ?? {})).toBe(false);
   });
 
+  test('l’atlas des vignettes se lit avec son adresse ; un ancien serveur ou un atlas démesuré ne montre que la couverture (#10275)', () => {
+    const atlas = { ...ref('webp'), bytes: 120_000 };
+    const url = `/api/v1/pack-assets/${atlas.src}`;
+    expect(decodeFramePackSummary(frameSummary('a', { preview: atlas, previewUrl: url }))).toMatchObject({ preview: atlas, previewUrl: url });
+    expect(decodeFramePackSummary(frameSummary('a', { preview: atlas }))).toMatchObject({ preview: atlas, previewUrl: null });
+    expect(decodeFramePackSummary(frameSummary('a'))).toMatchObject({ preview: null, previewUrl: null });
+    expect(decodeFramePackSummary(frameSummary('a', { preview: { ...atlas, bytes: 262_145 }, previewUrl: url }))).toMatchObject({ preview: null, previewUrl: null });
+  });
+
   test('un résumé lisible se lit, son usage et ses noms par langue compris', () => {
     const pack = decodeFramePackSummary(frameSummary('exemple-savane'));
     expect(pack?.slug).toBe('exemple-savane');

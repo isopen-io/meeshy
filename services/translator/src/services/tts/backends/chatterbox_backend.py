@@ -25,6 +25,7 @@ from ..synth_watchdog import DEFAULT_TTS_SAVE_TIMEOUT_S, with_synth_watchdog
 from config.settings import get_settings
 from services.voice_analyzer_service import VoiceAnalyzerService, VoiceCharacteristics
 from ...model_manager import TTSBackend as TTSBackendEnum
+from services.task_privacy import shown
 
 logger = logging.getLogger(__name__)
 
@@ -603,11 +604,11 @@ class ChatterboxBackend(BaseTTSBackend):
             error_msg = str(e)
             if "max(): Expected reduction dim 1 to have non-zero size" in error_msg:
                 logger.error(
-                    f"[CHATTERBOX] ❌ Texte trop court pour Chatterbox ('{text[:50]}...'). "
+                    f"[CHATTERBOX] ❌ Texte trop court pour Chatterbox ('{shown(text, 50)}...'). "
                     f"Le texte doit contenir au moins 10 caractères significatifs."
                 )
                 raise RuntimeError(
-                    f"Texte trop court pour la synthèse TTS: '{text}' "
+                    f"Texte trop court pour la synthèse TTS: '{shown(text)}' "
                     f"(minimum 10 caractères requis)"
                 )
             else:

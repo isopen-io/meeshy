@@ -72,6 +72,7 @@ class PatternRules(unittest.TestCase):
         ("autocapitalization", ".autocapitalization(.none)\n.autocapitalization(.words)\n", ".textInputAutocapitalization(.never)\n"),
         ("disable-autocorrection", ".disableAutocorrection(true)\n.disableAutocorrection(false)\n", ".autocorrectionDisabled(true)\n"),
         ("onchange-single", ".onChange(of: x) { v in\n.onChange(of: x) { _ in f() }\n", ".onChange(of: x) { _, v in\n.onChange(of: x, initial: true) { old, new in\n.adaptiveOnChange(of: x) { _, v in\n"),
+        ("coder-strategy", "d.dateDecodingStrategy = .iso8601\ne.keyEncodingStrategy = .convertToSnakeCase\n", "if d.dateDecodingStrategy == .deferredToDate {}\nlet d = MeeshyCoders.decoder(.api)\n"),
         ("onchange-single", ".onChange(of: order) { memory.order = $0 }\n.onChange(of: x, perform: f)\n", ".onChange(of: x) { _, v in\n"),
     )
 
@@ -106,6 +107,24 @@ class UncheckedSendable(unittest.TestCase):
             with self.subTest(lock=lock):
                 self.assertEqual(count("unchecked-sendable", self.BARE + "let l = " + lock + "\n"), 0)
 
+    def test_locked_state_in_file_clears_it(self):
+        for decl in ("Locked<Int>(0)", "Locked(State())"):
+            with self.subTest(decl=decl):
+                self.assertEqual(count("unchecked-sendable", self.BARE + "let s = " + decl + "\n"), 0)
+
+    def test_locked_lookalike_does_not_clear_it(self):
+        self.assertEqual(count("unchecked-sendable", self.BARE + "let s = isLocked(0)\n"), 1)
+
+
+class UncheckedSendableTotal(unittest.TestCase):
+    def test_counts_every_declaration_whatever_its_justification_or_lock(self):
+        src = (
+            "final class A: @unchecked Sendable {} // unchecked: verrou\n"
+            "final class B: @unchecked  Sendable { let l = NSLock() }\n"
+            "// final class C: @unchecked Sendable {}\n"
+        )
+        self.assertEqual(count("unchecked-sendable-total", src), 2)
+
 
 class AvailableFloor(unittest.TestCase):
     WIDGET = "apps/ios/MeeshyWidgets/Sample.swift"
@@ -137,7 +156,7 @@ class AvailableFloor(unittest.TestCase):
 
 class Exclusions(unittest.TestCase):
     def test_designated_files_are_exempt(self):
-        logger = "packages/MeeshySDK/Sources/MeeshySDK/Logging/MeeshyLog.swift"
+        logger = "packages/MeeshySDK/Sources/MeeshyCore/Logging/MeeshyLog.swift"
         reporter = "apps/ios/Meeshy/Features/Main/Services/SocialEventsV2Reporter.swift"
         self.assertEqual(count("logger-subsystem", 'Logger(subsystem: "a", category: "b")\n', logger), 0)
         self.assertEqual(count("idiom", "UIDevice.current.userInterfaceIdiom\n", reporter), 0)
@@ -411,6 +430,93 @@ class EnvironmentRouter(unittest.TestCase):
         for src in self.MISSES:
             with self.subTest(src=src):
                 self.assertEqual(count("environment-router", src), 0)
+
+
+class ObservedSingletonRule(unittest.TestCase):
+    HITS = (
+        "@ObservedObject private var security = SecurityManager.shared\n",
+        "@StateObject var store = PrivacyStore.shared\n",
+        "@ObservedObject private var auth: AuthManager = .shared\n",
+        "@ObservedObject\n    private var theme = ThemeManager.shared\n",
+        "@ObservedObject private var player = Audio.Player.shared\n",
+    )
+    MISSES = (
+        "@ObservedObject var security: SecurityManager\n",
+        "init(security: SecurityManager = .shared) { self.security = security }\n",
+        "let m = SecurityManager.shared.isLocked\n",
+        "@State private var shared = false\n",
+        "@ObservedObject var vm = FooViewModel()\n",
+        "// @ObservedObject private var s = SecurityManager.shared\n",
+    )
+
+    def test_each_observing_form_counts_once(self):
+        for src in self.HITS:
+            with self.subTest(src=src):
+                self.assertEqual(count("observed-singleton", src), 1)
+
+    def test_injected_and_lookalike_forms_do_not_count(self):
+        for src in self.MISSES:
+            with self.subTest(src=src):
+                self.assertEqual(count("observed-singleton", src), 0)
+
+    def test_app_entry_point_is_exempt(self):
+        src = self.HITS[0]
+        self.assertEqual(count("observed-singleton", src, "apps/ios/Meeshy/MeeshyApp.swift"), 0)
+
+
+class AppGRDBImportRule(unittest.TestCase):
+    def test_counts_each_app_file_importing_grdb(self):
+        for src in ("import GRDB\n", "@preconcurrency import GRDB\n", "import Foundation\nimport GRDB\n"):
+            with self.subTest(src=src):
+                self.assertEqual(count("app-grdb-import", src), 1)
+
+    def test_lookalikes_do_not_count(self):
+        for src in ("import GRDBQuery\n", "// import GRDB\n", "let s = \"import GRDB\"\n", "import MeeshySDK\n"):
+            with self.subTest(src=src):
+                self.assertEqual(count("app-grdb-import", src), 0)
+
+    def test_extensions_open_the_store_through_the_sdk_too(self):
+        for rel in (
+            "apps/ios/MeeshyNotificationExtension/X.swift",
+            "apps/ios/MeeshyNotificationContentExtension/X.swift",
+            "apps/ios/MeeshyShareExtension/X.swift",
+            "apps/ios/MeeshyBroadcastExtension/X.swift",
+            "apps/ios/MeeshyWidgets/X.swift",
+        ):
+            with self.subTest(rel=rel):
+                self.assertEqual(count("app-grdb-import", "import GRDB\n", rel), 1)
+
+    def test_sdk_and_tests_are_out_of_the_app_measure(self):
+        for rel in (
+            "packages/MeeshySDK/Sources/MeeshySDK/Persistence/X.swift",
+            "apps/ios/MeeshyTests/Unit/X.swift",
+            "apps/ios/MeeshyUIDeviceTests/X.swift",
+        ):
+            with self.subTest(rel=rel):
+                self.assertEqual(count("app-grdb-import", "import GRDB\n", rel), 0)
+
+
+class NotificationExtensionFullSDKImportRule(unittest.TestCase):
+    NSE = "apps/ios/MeeshyNotificationExtension/X.swift"
+
+    def test_counts_each_extension_file_importing_the_whole_sdk(self):
+        for src in ("import MeeshySDK\n", "@preconcurrency import MeeshySDK\n", "import Foundation\nimport MeeshySDK\n"):
+            with self.subTest(src=src):
+                self.assertEqual(count("nse-full-sdk-import", src, self.NSE), 1)
+
+    def test_the_light_core_and_lookalikes_do_not_count(self):
+        for src in ("import MeeshyCore\n", "import MeeshySDKTesting\n", "// import MeeshySDK\n", "let s = \"import MeeshySDK\"\n"):
+            with self.subTest(src=src):
+                self.assertEqual(count("nse-full-sdk-import", src, self.NSE), 0)
+
+    def test_only_the_notification_service_extension_is_measured(self):
+        for rel in (
+            "apps/ios/Meeshy/X.swift",
+            "apps/ios/MeeshyShareExtension/X.swift",
+            "packages/MeeshySDK/Sources/MeeshyUI/X.swift",
+        ):
+            with self.subTest(rel=rel):
+                self.assertEqual(count("nse-full-sdk-import", "import MeeshySDK\n", rel), 0)
 
 
 class CommittedBaseline(unittest.TestCase):

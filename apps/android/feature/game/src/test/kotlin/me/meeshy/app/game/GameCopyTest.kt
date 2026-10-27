@@ -13,6 +13,7 @@ import me.meeshy.sdk.model.game.GameTextKey
 import me.meeshy.sdk.model.game.GloryRank
 import me.meeshy.sdk.model.game.LevelTierKey
 import me.meeshy.sdk.model.game.TreasuryTierKey
+import me.meeshy.sdk.model.game.GameNumberFormat
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -65,6 +66,14 @@ class GameCopyTest {
         assertThat(GameCopy.resolve(resourcesIn("fr"), GameCopyLaws.points(0))).isEqualTo("0 étincelle")
         assertThat(GameCopy.resolve(resourcesIn("fr"), GameCopyLaws.points(2))).isEqualTo("2 étincelles")
         assertThat(GameCopy.resolve(resourcesIn("en"), GameCopyLaws.points(1))).contains("1 spark")
+    }
+
+    @Test
+    fun `les etincelles d un grand nombre portent le separateur de milliers de la langue`() {
+        val french = Locale.forLanguageTag("fr")
+        val grouped = GameNumberFormat.formatCount(103_571, french)
+        assertThat(grouped).isNotEqualTo("103571")
+        assertThat(GameCopy.resolve(resourcesIn("fr"), GameCopyLaws.points(103_571))).isEqualTo("$grouped étincelles")
     }
 
     @Test
@@ -122,5 +131,21 @@ class GameCopyTest {
                 }
             }
         }
+    }
+
+    @Test
+    fun `un jour et un decimal s ecrivent par la locale`() {
+        assertThat(GameCopy.day("2026-11-01", Locale.FRANCE)).contains("2026")
+        assertThat(GameCopy.day("pas-un-jour", Locale.FRANCE)).isEqualTo("pas-un-jour")
+        assertThat(GameCopy.decimal(1.25, Locale.FRANCE)).isEqualTo("1,25")
+        assertThat(GameCopy.decimal(2.0, Locale.US)).isEqualTo("2")
+    }
+
+    @Test
+    fun `une serie se dit au pluriel de la locale et la carte du Voyage date son ouverture`() {
+        val record = GameText.of(GameTextKey.StreakRecord, GameTextArg.Count(12))
+        assertThat(GameCopy.resolve(resourcesIn("fr"), record)).contains("12")
+        val upcoming = GameText.of(GameTextKey.DoorSeasonUpcoming, GameTextArg.Day("2026-11-01"))
+        assertThat(GameCopy.resolve(resourcesIn("fr"), upcoming)).contains("2026")
     }
 }

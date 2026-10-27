@@ -1,6 +1,7 @@
 package me.meeshy.app.chat
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,57 +22,54 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import java.time.ZoneId
 import java.util.Locale
 import me.meeshy.feature.chat.R
+import me.meeshy.ui.theme.MeeshyFontSize
+import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 
 @Composable
 internal fun DaySeparator(dayMillis: Long, modifier: Modifier = Modifier) {
-    val label = MessageDayLabel.label(
-        dayMillis = dayMillis,
-        nowMillis = System.currentTimeMillis(),
-        zone = ZoneId.systemDefault(),
-        locale = Locale.getDefault(),
-        today = stringResource(R.string.chat_date_today),
-        yesterday = stringResource(R.string.chat_date_yesterday),
-        dayBeforeYesterday = stringResource(R.string.chat_date_day_before_yesterday),
-    )
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .padding(vertical = MeeshySpacing.sm),
+            .padding(vertical = MeeshySpacing.xsPlus),
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelMedium,
-            color = MeeshyTheme.tokens.textSecondary,
-            modifier = Modifier
-                .clip(RoundedCornerShape(MeeshyRadius.pill))
-                .background(MeeshyTheme.tokens.backgroundTertiary.copy(alpha = 0.7f))
-                .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.xs),
-        )
+        DayPill(dayMillis)
     }
 }
 
 /**
- * The floating "sticky" day pill (WhatsApp-style) that hovers at the top of the
- * message list, naming the day of the topmost visible content. Which day it shows
- * is decided by [PinnedDayHeader.governingDayMillis]; this only draws it. It reuses
- * the same label + pill treatment as [DaySeparator] with a soft shadow so it reads
- * as floating above the scrolling content.
+ * The floating "sticky" day pill that hovers at the top of the message list, naming the day of
+ * the topmost visible content. Which day it shows is decided by
+ * [PinnedDayHeader.governingDayMillis]; it is the very same pill as [DaySeparator] (iOS
+ * `MessageDayStickyOverlay` reuses `MessageDaySeparator`, sans ombre).
  */
 @Composable
 internal fun PinnedDayHeaderPill(dayMillis: Long, modifier: Modifier = Modifier) {
+    DayPill(dayMillis, modifier)
+}
+
+/**
+ * La capsule de jour, port d'iOS `MessageDaySeparator` : fond translucide, trait fin indigo 200
+ * (clair) / 900 (sombre), libellé 12 sp semi-gras indigo 700 / 200, 12 × 4 de marge ; lue comme
+ * un titre par TalkBack.
+ */
+@Composable
+private fun DayPill(dayMillis: Long, modifier: Modifier = Modifier) {
     val label = MessageDayLabel.label(
         dayMillis = dayMillis,
         nowMillis = System.currentTimeMillis(),
@@ -81,43 +79,53 @@ internal fun PinnedDayHeaderPill(dayMillis: Long, modifier: Modifier = Modifier)
         yesterday = stringResource(R.string.chat_date_yesterday),
         dayBeforeYesterday = stringResource(R.string.chat_date_day_before_yesterday),
     )
+    val isDark = MeeshyTheme.isDark
+    val shape = RoundedCornerShape(MeeshyRadius.pill)
     Text(
         text = label,
-        style = MaterialTheme.typography.labelMedium,
-        color = MeeshyTheme.tokens.textSecondary,
+        fontSize = MeeshyFontSize.small,
+        fontWeight = FontWeight.SemiBold,
+        color = if (isDark) MeeshyPalette.Indigo200 else MeeshyPalette.Indigo700,
         modifier = modifier
-            .shadow(elevation = 2.dp, shape = RoundedCornerShape(MeeshyRadius.pill))
-            .clip(RoundedCornerShape(MeeshyRadius.pill))
-            .background(MeeshyTheme.tokens.backgroundTertiary.copy(alpha = 0.95f))
+            .semantics { heading() }
+            .clip(shape)
+            .background(MeeshyTheme.tokens.backgroundPrimary.copy(alpha = 0.85f))
+            .border(0.5.dp, if (isDark) MeeshyPalette.Indigo900 else MeeshyPalette.Indigo200, shape)
             .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.xs),
     )
 }
 
 /**
- * The "new messages" boundary drawn directly above the first unread message
- * (port of iOS's unread separator). Accent-coherent: a thin accent rule on each
- * side of a centered accent-tinted "Nouveaux messages" pill.
+ * The "new messages" boundary drawn directly above the first unread message — port of iOS
+ * `FirstUnreadSeparatorRow`: two 1 dp rules in the text colour at 30 % (light) / 45 % (dark)
+ * around « N messages non lus » in 12 sp semi-bold brand indigo (500 light / 300 dark). No pill,
+ * no conversation accent; read as a heading.
  */
 @Composable
-internal fun UnreadSeparatorRow(accentColor: Color, modifier: Modifier = Modifier) {
+internal fun UnreadSeparatorRow(count: Int, modifier: Modifier = Modifier) {
+    val isDark = MeeshyTheme.isDark
+    val ruleColor = MeeshyTheme.tokens.textPrimary.copy(alpha = if (isDark) 0.45f else 0.30f)
+    val label = if (count > 0) {
+        pluralStringResource(R.plurals.chat_unread_separator_count, count, count)
+    } else {
+        stringResource(R.string.chat_unread_separator)
+    }
     Row(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.sm),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.smPlus),
     ) {
-        HorizontalDivider(modifier = Modifier.weight(1f), color = accentColor.copy(alpha = 0.4f))
+        HorizontalDivider(modifier = Modifier.weight(1f), thickness = 1.dp, color = ruleColor)
         Text(
-            text = stringResource(R.string.chat_unread_separator),
-            style = MaterialTheme.typography.labelMedium,
-            color = accentColor,
-            modifier = Modifier
-                .clip(RoundedCornerShape(MeeshyRadius.pill))
-                .background(accentColor.copy(alpha = 0.12f))
-                .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.xs),
+            text = label,
+            fontSize = MeeshyFontSize.small,
+            fontWeight = FontWeight.SemiBold,
+            color = if (isDark) MeeshyPalette.Indigo300 else MeeshyPalette.Indigo500,
+            modifier = Modifier.semantics { heading() },
         )
-        HorizontalDivider(modifier = Modifier.weight(1f), color = accentColor.copy(alpha = 0.4f))
+        HorizontalDivider(modifier = Modifier.weight(1f), thickness = 1.dp, color = ruleColor)
     }
 }
 

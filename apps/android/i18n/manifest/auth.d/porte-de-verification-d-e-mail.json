@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:auth": {
+      "resDir": "feature/auth/src/main/res",
+      "entries": [
+        {"catalog": "app", "iosKey": "activation.gate.title", "androidName": "email_gate_title", "status": "adopted"},
+        {"catalog": "app", "iosKey": "activation.gate.publish", "androidName": "email_gate_publish", "status": "adopted"},
+        {"catalog": "app", "iosKey": "activation.gate.invite", "androidName": "email_gate_invite", "status": "adopted"},
+        {"catalog": "app", "iosKey": "activation.gate.link", "androidName": "email_gate_link", "status": "adopted"},
+        {"catalog": "app", "iosKey": "activation.gate.moreLinks", "androidName": "email_gate_more_links", "status": "adopted"},
+        {"catalog": "app", "iosKey": "activation.later", "androidName": "email_gate_later", "status": "adopted"},
+        {"catalog": "app", "iosKey": "activation.email.label", "androidName": "email_gate_label", "status": "adopted"},
+        {"catalog": "app", "iosKey": "activation.email.sent", "androidName": "email_gate_sent", "status": "adopted"},
+        {"catalog": "app", "iosKey": "activation.email.send", "androidName": "email_gate_send", "status": "adopted"},
+        {"catalog": "app", "iosKey": "activation.email.sending", "androidName": "email_gate_sending", "status": "adopted"}
+      ]
+    }
+  }
+}

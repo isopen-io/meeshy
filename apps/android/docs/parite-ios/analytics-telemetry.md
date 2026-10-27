@@ -247,7 +247,7 @@ Transposition Android : Compose `ModalBottomSheet`/dialogue plein écran, `Keybo
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/CreateTrackingLinkView.swift`
+- `apps/ios/Meeshy/Features/Links/Views/CreateTrackingLinkView.swift`
 
 </details>
 
@@ -273,7 +273,7 @@ Transposition Android : ShareLink/UIActivityViewController => `Intent.ACTION_SEN
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/TrackingLinkDetailView.swift`
+- `apps/ios/Meeshy/Features/Links/Views/TrackingLinkDetailView.swift`
 
 </details>
 
@@ -299,7 +299,7 @@ Transposition Android : Compose Material 3 `PullToRefreshBox`, `LazyColumn`, `Cl
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/TrackingLinksView.swift`
+- `apps/ios/Meeshy/Features/Links/Views/TrackingLinksView.swift`
 
 </details>
 

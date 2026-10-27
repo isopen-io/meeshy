@@ -158,16 +158,16 @@ final class ComposerLiveLookTests: XCTestCase {
     }
 
     func test_coupeSansReencodage_laPisteLeDit_etLExportCopie() throws {
-        let piste = try Self.code("Meeshy/Features/Main/Composer/ComposerTrimTrack.swift")
+        let piste = try Self.code("Meeshy/Features/Composer/ComposerTrimTrack.swift")
         XCTAssertTrue(piste.contains("if cutsOnKeyframe { keyframeNote }"), "l'interface dit la précision de la coupe")
-        let export = try Self.code("Meeshy/Features/Main/Composer/ComposerLookVideoExporter.swift")
+        let export = try Self.code("Meeshy/Features/Composer/ComposerLookVideoExporter.swift")
         XCTAssertTrue(export.contains("presetName: AVAssetExportPresetPassthrough"), "la découpe seule copie les échantillons")
     }
 
     // MARK: - Une retouche ne passe qu'une fois par un encodeur (#11849)
 
     func test_rendu_uneRetouche_sEncodeUneFois_auBudgetDesPublications() throws {
-        let export = try Self.code("Meeshy/Features/Main/Composer/ComposerLookVideoExporter.swift")
+        let export = try Self.code("Meeshy/Features/Composer/ComposerLookVideoExporter.swift")
         XCTAssertTrue(export.contains("VideoEncodePass.render("), "le rendu écrit lui-même, au débit cible")
         XCTAssertFalse(export.contains("AVAssetExportPresetHighestQuality"),
                        "plus de rendu intermédiaire que compressVideo ré-encoderait")
@@ -199,7 +199,7 @@ final class ComposerLiveLookTests: XCTestCase {
     }
 
     func test_finir_demandeLaGalerieEtLEnvoi_laFlecheSeulementLaGalerie() throws {
-        let edition = try Self.code("Meeshy/Features/Main/Composer/ComposerCaptureSession+Edit.swift")
+        let edition = try Self.code("Meeshy/Features/Composer/ComposerCaptureSession+Edit.swift")
         XCTAssertTrue(edition.contains("videoRender(url, uses: enregistre ? [.gallery, .delivery] : .delivery)"),
                       "« Terminé » envoie le rendu d'envoi et garde en galerie celui de pleine définition")
         XCTAssertTrue(edition.contains("videoRender(url, uses: .gallery)"), "⬇︎ n'écrit que la copie de l'utilisateur")
@@ -264,37 +264,37 @@ final class ComposerLiveLookTests: XCTestCase {
     }
 
     func test_leRendu_seDit_etSAnnuleALaFermeture() throws {
-        let session = try Self.code("Meeshy/Features/Main/Composer/ComposerCaptureSession.swift")
+        let session = try Self.code("Meeshy/Features/Composer/ComposerCaptureSession.swift")
         XCTAssertTrue(session.contains("guard generation == renderGeneration else"),
                       "un assemblage lancé avant la fermeture n'ouvre rien dans un viseur fermé")
-        let prises = try Self.code("Meeshy/Features/Main/Composer/ComposerCaptureSession+Takes.swift")
+        let prises = try Self.code("Meeshy/Features/Composer/ComposerCaptureSession+Takes.swift")
         XCTAssertTrue(prises.contains("declaredSpaceName: espace"), "la vidéo se lit dans l'espace de l'aperçu")
-        let retouche = try Self.code("Meeshy/Features/Main/Composer/ComposerCaptureSession+Edit.swift")
+        let retouche = try Self.code("Meeshy/Features/Composer/ComposerCaptureSession+Edit.swift")
         XCTAssertTrue(retouche.contains("declaredSpace: camera.liveFeed.declaredSpace"),
                       "la boucle de la retouche lit la vidéo dans l'espace de l'aperçu, comme l'export (#9352)")
-        let vues = try Self.code("Meeshy/Features/Main/Composer/ComposerCaptureViews.swift")
+        let vues = try Self.code("Meeshy/Features/Composer/ComposerCaptureViews.swift")
         XCTAssertTrue(vues.contains("if session.isRenderingLook"), "le ✓ attend, et le dit")
-        let export = try Self.code("Meeshy/Features/Main/Composer/ComposerLookVideoExporter.swift")
+        let export = try Self.code("Meeshy/Features/Composer/ComposerLookVideoExporter.swift")
         XCTAssertTrue(export.contains("@concurrent"), "l'export ne se monte jamais sur le fil principal")
     }
 
     // MARK: - Le câblage : les pièces de l'appel, un seul viseur
 
     func test_lAperçuPartage_poseLeLookEnDirect() throws {
-        let vues = try Self.code("Meeshy/Features/Main/Composer/ComposerCaptureViews.swift")
+        let vues = try Self.code("Meeshy/Features/Composer/ComposerCaptureViews.swift")
         XCTAssertTrue(vues.contains("ComposerLiveLookSurface("), "l'aperçu des DEUX montages montre le look")
-        let bas = try Self.code("Meeshy/Features/Main/Composer/ComposerCaptureBottomRow.swift")
+        let bas = try Self.code("Meeshy/Features/Composer/ComposerCaptureBottomRow.swift")
         XCTAssertTrue(bas.contains("ComposerLookRail("), "le rail des DEUX montages ouvre les filtres et les cadres")
     }
 
     func test_laSurface_composeAvecLesPiecesDeLAppel() throws {
-        let surface = try Self.code("Meeshy/Features/Main/Composer/ComposerLiveLookSurface.swift")
+        let surface = try Self.code("Meeshy/Features/Composer/ComposerLiveLookSurface.swift")
         XCTAssertTrue(surface.contains("ComposerLookPainter.paint("), "l'aperçu passe par le peintre unique")
-        let peintre = try Self.code("Meeshy/Features/Main/Composer/ComposerLookPainter.swift")
+        let peintre = try Self.code("Meeshy/Features/Composer/ComposerLookPainter.swift")
         XCTAssertTrue(peintre.contains("CallLiveFrameCompositor()"), "le cadre se pose par le compositeur de l'appel")
         XCTAssertTrue(peintre.contains("compositor.compose("))
         XCTAssertTrue(peintre.contains("ComposerLiveLookRule.graded("))
-        let loi = try Self.code("Meeshy/Features/Main/Composer/ComposerLiveLook.swift")
+        let loi = try Self.code("Meeshy/Features/Composer/ComposerLiveLook.swift")
         XCTAssertTrue(loi.contains("VideoFilterColorimetry.graded("), "la teinte est celle du flux d'appel")
         for jumelle in ["CITemperatureAndTint", "CIColorControls", "CIColorCube"] {
             XCTAssertFalse(surface.contains(jumelle) || loi.contains(jumelle) || peintre.contains(jumelle),
@@ -308,17 +308,17 @@ final class ComposerLiveLookTests: XCTestCase {
                       "le guet se branche sur la file de la session (#9464)")
         XCTAssertTrue(camera.contains("liveFeed.setPosition(installe.position)"),
                       "l'objectif qui change redresse autrement — publié APRÈS le commit (#9464)")
-        let feed = try Self.code("Meeshy/Features/Main/Composer/ComposerCameraFeed.swift")
+        let feed = try Self.code("Meeshy/Features/Composer/ComposerCameraFeed.swift")
         XCTAssertTrue(feed.contains("connection.inputPorts.first?.input as? AVCaptureDeviceInput"),
                       "chaque trame se redresse selon l'objectif qui l'a prise")
     }
 
     func test_laPrise_partAvecLeLook_photoCommeVideo_dansLesDeuxMontages() throws {
-        let session = try Self.code("Meeshy/Features/Main/Composer/ComposerCaptureSession.swift")
+        let session = try Self.code("Meeshy/Features/Composer/ComposerCaptureSession.swift")
         XCTAssertTrue(session.contains("await beginEditing(video: url)"),
                       "le ✓ des deux montages assemble et ouvre la retouche : la vidéo n'y part plus sans elle (#9352)")
         XCTAssertFalse(session.contains("ComposerLookVideoExporter.export("), "le ✓ ne rend plus rien lui-même")
-        let prises = try Self.code("Meeshy/Features/Main/Composer/ComposerCaptureSession+Takes.swift")
+        let prises = try Self.code("Meeshy/Features/Composer/ComposerCaptureSession+Takes.swift")
         XCTAssertTrue(prises.contains("ComposerLookVideoExporter.export("), "la vidéo de la galerie part avec son look")
         XCTAssertTrue(prises.contains("beginEditing(photo: image, data: camera.capturedPhotoData)"),
                       "toute photo de la scène s'ouvre en édition avec son look, conversation comprise (#9352)")

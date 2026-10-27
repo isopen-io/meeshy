@@ -3,12 +3,6 @@
 import Foundation
 import Combine
 import os
-// `@preconcurrency` relaxes Swift 6 strict concurrency interop checks for the
-// GRDB module. Without it, the runtime injects `_swift_task_checkIsolatedSwift`
-// at the invocation of @Sendable closures we pass to GRDB observation APIs,
-// which then aborts because GRDB calls the closure from its own reader/writer
-// dispatch queue (not from any actor's executor).
-@preconcurrency import GRDB
 import MeeshySDK
 
 /// Sendable weak-reference box. Used to capture a weak reference to the
@@ -41,135 +35,6 @@ private final class WeakBox: @unchecked Sendable {
 // `packages/MeeshySDK/Sources/MeeshySDK/Persistence/PersistenceNotifications.swift`
 // so both MessageStore (iOS app) and MessagePersistenceActor (SDK) can use it.
 
-/// Fetches the message window from GRDB based on `WindowMode`. Declared at
-/// file scope so the closure(s) passed to `reader.read` don't inherit any
-/// actor isolation context (which would trigger Swift 6 strict concurrency
-/// runtime checks at GRDB invocation).
-/// `nonisolated` EXPLICITE : la cible compile sous
-/// `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` (SE-0466), qui isolerait
-/// sinon cette fonction libre au MainActor — or elle est désormais appelée
-/// depuis la lecture DÉTACHÉE de `refreshFromDB`/`loadInitialSnapshot`
-/// (audit fluidité 2026-08-26), hors de toute isolation.
-/// `anchoredRowCap` — plafond de la lecture `.latest` ANCRÉE, en nombre de
-/// lignes comptées depuis la PLUS RÉCENTE. `nil` ⇒ aucun plafond (lecture de
-/// toute la profondeur paginée). Une lecture plafonnée ne se sert qu'aux
-/// appelants qui FUSIONNENT en mémoire (`mergeInMemory: true`) : la queue
-/// tronquée y est préservée par la fusion protectrice de `publish`, alors
-/// qu'un REMPLACEMENT sec (transition de fenêtre) amputerait le fil de tout
-/// ce que l'utilisateur a remonté.
-private nonisolated func fetchMessageWindow(
-    reader: any DatabaseWriter,
-    convId: String,
-    mode: WindowMode,
-    anchor: Date?,
-    initialWindowSize: Int,
-    anchoredRowCap: Int? = nil,
-    newerEdge: JumpedWindowNewerEdge = .halfWindow
-) throws -> [MessageRecord] {
-    switch mode {
-    case .search(let ids):
-        // Filtered-conversation search: show ONLY the matched messages
-        // (chronological), regardless of how far back they are. Matches are
-        // identified by their SERVER id (the search API works server-side);
-        // offline messages without a serverId are intentionally excluded.
-        guard !ids.isEmpty else { return [] }
-        return try reader.read { db in
-            // SQLite caps `IN (…)` at ~999 bound variables. Chunk to stay safe
-            // on very large match sets (deep search pagination), then re-sort
-            // the union chronologically. The common case (≤ a page of results)
-            // is a single query + a trivial sort.
-            let chunks = MessageStore.searchIdChunks(ids)
-            var collected: [MessageRecord] = []
-            for chunk in chunks {
-                let rows = try MessageRecord
-                    .filter(Column("conversationId") == convId)
-                    .filter(chunk.contains(Column("serverId")))
-                    .fetchAll(db)
-                collected.append(contentsOf: rows)
-            }
-            return collected.sorted { $0.createdAt < $1.createdAt }
-        }
-    case .around(let centerDate):
-        return try reader.read { db in
-        let half = initialWindowSize / 2
-            let before = try MessageRecord
-                .filter(Column("conversationId") == convId)
-                .filter(Column("createdAt") <= centerDate)
-                .order(Column("createdAt").desc)
-                .limit(half)
-                .fetchAll(db)
-            let newer = MessageRecord
-                .filter(Column("conversationId") == convId)
-                .filter(Column("createdAt") > centerDate)
-                .order(Column("createdAt").asc)
-            let after: [MessageRecord]
-            switch newerEdge {
-            case .halfWindow:
-                after = try newer.limit(half).fetchAll(db)
-            case .through(let edge):
-                after = try newer.filter(Column("createdAt") <= edge).fetchAll(db)
-            case .present:
-                after = try newer.fetchAll(db)
-            }
-            return Array(before.reversed()) + after
-        }
-    case .latest:
-        if let anchor {
-            if let anchoredRowCap {
-                // Relecture temps réel d'une fenêtre PROFONDE : on ne relit
-                // que les `anchoredRowCap` lignes les plus RÉCENTES au-dessus
-                // de l'ancre — là où tombent les messages entrants, les
-                // accusés et les réactions. Ce qui est plus ancien est
-                // préservé par la fusion en mémoire, donc rien ne disparaît
-                // de l'écran ; seule l'E/S SQLite cesse de croître avec la
-                // profondeur remontée.
-                return try reader.read { db in
-                    try Array(MessageRecord
-                        .filter(Column("conversationId") == convId)
-                        .filter(Column("createdAt") >= anchor)
-                        .order(Column("createdAt").desc)
-                        .limit(anchoredRowCap)
-                        .fetchAll(db)
-                        .reversed())
-                }
-            }
-            // Dynamic window: when the user has scrolled up, load ALL
-            // messages from the anchor to the newest. No cap — the window
-            // grows as the user paginates deeper into history.
-            return try reader.read { db in
-                try MessageRecord
-                    .filter(Column("conversationId") == convId)
-                    .filter(Column("createdAt") >= anchor)
-                    .order(Column("createdAt").asc)
-                    .fetchAll(db)
-            }
-        } else {
-            // Initial load: fetch the most recent N messages.
-            return try reader.read { db in
-                try Array(MessageRecord
-                    .filter(Column("conversationId") == convId)
-                    .order(Column("createdAt").desc)
-                    .limit(initialWindowSize)
-                    .fetchAll(db)
-                    .reversed())
-            }
-        }
-    }
-}
-
-/// Bord RÉCENT d'une fenêtre sautée (#9304). Le serveur sert la fenêtre
-/// `around` puis ses pages `after` d'un seul tenant ; GRDB peut porter, plus
-/// haut, les messages récents d'une session antérieure, séparés d'elle par un
-/// trou. Le bord dit jusqu'où la fenêtre est CONTINUE :
-/// - `halfWindow` — l'ancien comportement : la moitié de la fenêtre initiale ;
-/// - `through(date)` — jusqu'au plus récent message servi, inclus ;
-/// - `present` — la fenêtre a rejoint le présent : tout ce qui suit.
-nonisolated enum JumpedWindowNewerEdge: Equatable, Sendable {
-    case halfWindow
-    case through(Date)
-    case present
-}
-
 /// Holds cancellation tokens that must be accessible from `nonisolated deinit`.
 /// Explicitly non-isolated so its methods can be called from any context.
 private final class ObservationTokens: @unchecked Sendable {
@@ -178,25 +43,11 @@ private final class ObservationTokens: @unchecked Sendable {
     // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
     // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
     nonisolated deinit {}
-    nonisolated(unsafe) var regionCancellable: AnyDatabaseCancellable?
+    nonisolated(unsafe) var regionCancellable: AnyCancellable?
 
     nonisolated func cancelAll() {
         regionCancellable?.cancel()
     }
-}
-
-/// Describes which slice of the conversation the store is currently displaying.
-public enum WindowMode: Equatable, Sendable {
-    /// Latest window — show the most recent N messages.
-    case latest
-    /// Jumped window — show messages centered around a specific date.
-    case around(date: Date)
-    /// Search filter — show ONLY the messages whose `serverId` is in `ids`,
-    /// in chronological order, independent of any time window. Drives the
-    /// in-situ filtered-conversation search UX. `ids` are server message IDs;
-    /// the caller must have persisted the matches in GRDB beforehand (e.g.
-    /// via `upsertFromAPIMessages`).
-    case search(ids: [String])
 }
 
 @MainActor
@@ -344,9 +195,9 @@ public final class MessageStore: ObservableObject {
                 store.requestRealtimeRefresh()
             }
         }
-        // Wrap the NotificationCenter observer in an AnyDatabaseCancellable so
+        // Wrap the NotificationCenter observer in an AnyCancellable so
         // stopObserving() cleans it up via the same `regionCancellable` slot.
-        tokens.regionCancellable = AnyDatabaseCancellable {
+        tokens.regionCancellable = AnyCancellable {
             NotificationCenter.default.removeObserver(observer)
         }
     }
@@ -372,7 +223,7 @@ public final class MessageStore: ObservableObject {
         let mode = windowMode
         let anchor = windowAnchor
         let initialWindowSize = Self.initialWindowSize
-        let reader = persistence.reader
+        let repository = MessageRepository(persistence: persistence)
 
         // La lecture de fenêtre part HORS du MainActor (audit fluidité
         // 2026-08-26). En `.latest` ancré elle était SANS PLAFOND — après une
@@ -384,7 +235,7 @@ public final class MessageStore: ObservableObject {
         // elle-même. Elle est désormais BORNÉE sur le chemin temps réel
         // (`realtimeAnchoredWindowCap`, #4943). Même patron détaché éprouvé
         // que `loadOlder(before:)` —
-        // `fetchMessageWindow` est une fonction libre nonisolated, aucun état
+        // `messageWindow` (SDK) est nonisolated, aucun état
         // isolé ne traverse la fermeture (le crash historique Task.detached +
         // reader.read venait de fermetures HÉRITANT une isolation d'acteur).
         //
@@ -401,8 +252,8 @@ public final class MessageStore: ObservableObject {
         let generation = refreshGeneration
         let fetched: Result<[MessageRecord], any Error> = await Task.detached(priority: .userInitiated) {
             Result {
-                try fetchMessageWindow(
-                    reader: reader, convId: convId, mode: mode,
+                try repository.messageWindow(
+                    conversationId: convId, mode: mode,
                     anchor: anchor, initialWindowSize: initialWindowSize,
                     anchoredRowCap: anchoredRowCap, newerEdge: newerEdge
                 )
@@ -678,21 +529,6 @@ public final class MessageStore: ObservableObject {
     /// identity and the send flow's cid tracking survive — matching the
     /// successful-reconcile outcome. Rows without a serverId (un-acked) are
     /// distinct messages and never merged; survivor order is preserved.
-    /// Les ids d'une recherche filtrée, sans doublon, par paquets de `size` (plafond SQLite des `IN`).
-    ///
-    /// Les pages de recherche se recouvrent quand de nouveaux résultats arrivent entre deux curseurs :
-    /// un même id tombé dans DEUX paquets ramenait la même ligne deux fois — même `localId` — et
-    /// `MessageListSnapshotPrep.baseline` comme l'`apply` du diffable plantaient sur l'identifiant
-    /// dupliqué.
-    nonisolated static func searchIdChunks(_ ids: [String], size: Int = 900) -> [[String]] {
-        var seen = Set<String>()
-        let unique = ids.filter { seen.insert($0).inserted }
-        let step = Swift.max(1, size)
-        return stride(from: 0, to: unique.count, by: step).map {
-            Array(unique[$0 ..< Swift.min($0 + step, unique.count)])
-        }
-    }
-
     static func collapsingDuplicateServerIds(_ records: [MessageRecord]) -> [MessageRecord] {
         // Fast path: bail out unless a serverId actually repeats.
         var seen = Set<String>()
@@ -752,7 +588,7 @@ public final class MessageStore: ObservableObject {
         let anchor = windowAnchor
         let initialWindow = Self.initialWindowSize
         let newerEdge = jumpedNewerEdge
-        let reader = persistence.reader
+        let repository = MessageRepository(persistence: persistence)
 
         // Même lecture détachée que `refreshFromDB` : l'ouverture d'une
         // conversation ne matérialise plus sa fenêtre SQLite sur la boucle
@@ -760,8 +596,8 @@ public final class MessageStore: ObservableObject {
         // réouverture ancrée relit toute la profondeur déjà paginée).
         let fetched: Result<[MessageRecord], any Error> = await Task.detached(priority: .userInitiated) {
             Result {
-                try fetchMessageWindow(
-                    reader: reader, convId: convId, mode: mode,
+                try repository.messageWindow(
+                    conversationId: convId, mode: mode,
                     anchor: anchor, initialWindowSize: initialWindow,
                     newerEdge: newerEdge
                 )
@@ -822,17 +658,10 @@ public final class MessageStore: ObservableObject {
         // an explicit set of matched IDs, not an extensible chronological slice.
         if case .search = windowMode { return false }
         let convId = conversationId
-        let reader = persistence.reader
+        let persistence = persistence
 
         let older = await Task.detached(priority: .userInitiated) {
-            try? reader.read { db in
-                try MessageRecord
-                    .filter(Column("conversationId") == convId)
-                    .filter(Column("createdAt") < before)
-                    .order(Column("createdAt").desc)
-                    .limit(50)
-                    .fetchAll(db)
-            }
+            try? persistence.messages(for: convId, before: before, limit: 50)
         }.value
 
         guard let older, !older.isEmpty else { return false }

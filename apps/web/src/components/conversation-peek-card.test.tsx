@@ -292,6 +292,16 @@ describe('ConversationPeekCard — le cache d’abord', () => {
     expect([...card().querySelectorAll<HTMLElement>('[data-message]')].map((node) => node.dataset.message)).toEqual(['m-3', 'm-4', 'm-5', 'm-6', 'm-7']);
   });
 
+  test('#12992 — dans une conversation e2ee, un clair forgé après l’activation se dit chiffré, jamais son texte', () => {
+    mount({
+      conversation: conversationOf({ encryptionMode: 'e2ee', encryptionEnabledAt: new Date('2026-01-01T00:00:00.000Z') } as Partial<Conversation>),
+      messages: [messageOf(1, { isEncrypted: true, encryptionMode: 'e2ee', content: '[Encrypted]' } as Partial<Message>), messageOf(2, { content: 'clair-forgé', createdAt: new Date('2026-06-01T00:00:00.000Z') })],
+      sticky: 'bubbles',
+    });
+    expect(card().textContent).not.toContain('clair-forgé');
+    expect(card().querySelectorAll('[data-peek-encrypted]').length).toBe(2);
+  });
+
   test('un message chiffré donne un placeholder, jamais son contenu', () => {
     mount({ messages: [messageOf(1), messageOf(2, { isEncrypted: true, content: 'secret-chiffré' })], sticky: 'bubbles' });
     expect(card().querySelector('[data-peek-encrypted]')?.textContent).toContain('Message chiffré');

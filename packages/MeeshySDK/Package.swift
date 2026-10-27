@@ -32,6 +32,9 @@ let package = Package(
     defaultLocalization: "fr",
     platforms: [.iOS(.v16)],
     products: [
+        // #13137 — le noyau LÉGER : ce que l'extension de notification lie,
+        // sans Socket.IO ni WebRTC. MeeshySDK le ré-exporte.
+        .library(name: "MeeshyCore", targets: ["MeeshyCore"]),
         .library(name: "MeeshySDK", targets: ["MeeshySDK"]),
         .library(name: "MeeshyUI", targets: ["MeeshyUI"]),
         // #12536 — l'E2EE libsignal (AGPL-3.0, avis juridique #11548 avant la
@@ -52,8 +55,13 @@ let package = Package(
     ],
     targets: [
         .target(
+            name: "MeeshyCore",
+            swiftSettings: coreSwiftSettings
+        ),
+        .target(
             name: "MeeshySDK",
             dependencies: [
+                "MeeshyCore",
                 .product(name: "SocketIO", package: "socket.io-client-swift"),
                 .product(name: "GRDB", package: "GRDB.swift"),
                 .product(name: "WebRTC", package: "WebRTC"),

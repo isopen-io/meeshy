@@ -6,7 +6,6 @@ import { PACK_DOMAINS, type PackDomain } from '@meeshy/shared/types/content-pack
 
 import type { ConversationsDeps } from '@/lib/api/conversations';
 import { apiDeps } from '@/lib/api/deps';
-import { attachmentSrc } from '@/lib/api/media-url';
 import { packQueryKeys } from '@/lib/api/pack-query-keys';
 import { loadShop, purchasePack, setShopPackInstalled, shopPackText, type ShopPack } from '@/lib/api/packs-shop';
 import type { GloryRankKey } from '@meeshy/shared/utils/game/glory';
@@ -14,6 +13,7 @@ import type { GloryRankKey } from '@meeshy/shared/utils/game/glory';
 import { loadGameCatalogParts, translateGame } from '@/lib/i18n-game-catalog';
 import { translateStickerPacks } from '@/lib/i18n-sticker-packs-catalog';
 import { packIsLocked, packUnlockLine } from '@/lib/packs/unlock-line';
+import { stickerPackCoverSrc } from '@/lib/sticker-packs/src';
 import type { PlainStickerPacksKey } from '@/lib/i18n-sticker-packs-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 
@@ -123,14 +123,15 @@ export const unifiedShopAdapter = (
     ...(pack.author === '' ? [] : [translateStickerPacks(language, 'stickerPacks.by', { author: pack.author })]),
     translateStickerPacks(language, DOMAIN_KEYS[pack.domain]),
   ],
-  cover: (pack) =>
-    pack.domain === 'sticker' && pack.builtin === true && isMeeBuiltinPack(pack.rawSlug) ? (
-      <MeePackCover slug={pack.rawSlug} />
-    ) : pack.coverUrl === null ? (
+  cover: (pack) => {
+    if (pack.domain === 'sticker' && pack.builtin === true && isMeeBuiltinPack(pack.rawSlug)) return <MeePackCover slug={pack.rawSlug} />;
+    const cover = stickerPackCoverSrc(pack);
+    return cover === null ? (
       <span aria-hidden className="block h-14 w-14 shrink-0 rounded-xl" style={{ backgroundColor: 'var(--color-ios-fill)' }} />
     ) : (
-      <img src={attachmentSrc(pack.coverUrl)} alt="" loading="lazy" decoding="async" className="block h-14 w-14 shrink-0 rounded-xl object-cover" />
-    ),
+      <img src={cover} alt="" loading="lazy" decoding="async" className="block h-14 w-14 shrink-0 rounded-xl object-cover" />
+    );
+  },
   unlock: (pack) =>
     pack.requirementPreview === undefined ? null : packUnlockLine({ preview: pack.requirementPreview, language, ...(rankName !== undefined ? { rankName } : {}) }),
   locked: (pack) => packIsLocked(pack.requirementPreview),

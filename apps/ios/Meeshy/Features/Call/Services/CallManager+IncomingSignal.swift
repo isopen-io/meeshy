@@ -1,0 +1,162 @@
+import Foundation
+import AVFoundation
+@preconcurrency import CallKit
+import Combine
+import Network
+import UIKit
+import MeeshySDK
+import MeeshyUI
+@preconcurrency import WebRTC
+import os
+
+/// Le côté appelé de la négociation : démarrage des médias locaux, offre SDP
+/// de l'appelant après l'auto-jonction, et `call:join` fiable.
+
+extension CallManager {
+
+    // MARK: - Local Media Start Helper
+
+    @MainActor
+    func performLocalMediaStart(isVideo: Bool, callId: String) async {
+        do {
+            try await startLocalMediaKeepingMute(isVideo: isVideo, callId: callId)
+            guard currentCallId == callId else { return }
+            if isVideo { hasLocalVideoTrack = true }
+        } catch is CancellationError {
+            return
+        } catch {
+            // #8788 — pas de caméra (simulateur, Mac sans caméra) ou caméra
+            // refusée : l'appel continue en audio, il ne se termine pas.
+            if let fallback = CallVideoFallback.classify(error) {
+                await continueAudioOnly(after: fallback, callId: callId)
+                return
+            }
+            Logger.calls.error("startLocalMedia failed: \(error.localizedDescription)")
+            if currentCallId == callId {
+                failCall(String(localized: "call.error.media"))
+            }
+        }
+    }
+
+    // MARK: - Signal Offer (real SDP from caller after auto-join)
+
+    func handleSignalOffer(callId: String, sdp: SessionDescription, generation: Int = 0) {
+        guard currentCallId == callId else {
+            Logger.calls.warning("Signal offer for unknown call: \(callId)")
+            return
+        }
+        // §3.5 — drop offers from an older negotiation epoch (churned socket /
+        // replayed buffer). The newest generation always wins.
+        guard acceptIncomingNegotiation(generation, isOffer: true) else { return }
+        guard let userId = remoteUserId else { return }
+
+        switch callState {
+        case .ringing:
+            // User hasn't accepted yet — buffer the offer
+            pendingRemoteOffer = sdp
+            Logger.calls.info("SDP offer buffered for call: \(callId), waiting for user to accept")
+
+        case .connecting:
+            // User already accepted but SDP arrived late — create answer immediately.
+            // L'offre est là : le minuteur d'offre n'a plus d'objet, et laissé armé il
+            // coupait à 30 s une liaison ICE simplement lente.
+            sdpOfferTimeoutTask?.cancel()
+            sdpOfferTimeoutTask = nil
+            let inFlight = videoTransitionsInFlight()
+            signalOfferAnswerTask = Task { [weak self] in
+                // Serialize with every other in-flight video-transition/renegotiation
+                // path — see the doc-comment on `survivalVideoTask`.
+                await inFlight.settle()
+                guard let self,
+                      await self.answerBufferedOffer(sdp, callId: callId, userId: userId, path: .lateOffer)
+                else { return }
+                Logger.calls.info("SDP answer created from late offer for call: \(callId)")
+            }
+
+        case .connected, .reconnecting:
+            // §4.2 — mid-call renegotiation (the peer's A/V switch, or an ICE
+            // restart it initiated). Previously this fell into `default` and was
+            // DROPPED, leaving the peer's newly-enabled video one-way. Apply the
+            // offer in place and answer it; the perfect-negotiation glare guard
+            // in the client handles a simultaneous local offer.
+            //
+            // Audit finding — this used to call createAnswer() directly here,
+            // unserialized against videoToggleTask/holdVideoTask/survivalVideoTask/
+            // iceRestartTask: a peer offer landing while a local hold/toggle/ICE
+            // restart is mid-createOffer() could run createAnswer() concurrently on
+            // the same RTCPeerConnection. Chained onto `signalOfferAnswerTask` — see
+            // the doc-comment on `survivalVideoTask`.
+            let inFlight = videoTransitionsInFlight()
+            signalOfferAnswerTask = Task { [weak self] in
+                await inFlight.settle()
+                guard let self else { return }
+                guard let answer = await self.webRTCService.createAnswer(from: sdp) else {
+                    guard self.currentCallId == callId else { return }
+                    Logger.calls.error("Failed to answer mid-call renegotiation offer for call: \(callId)")
+                    return
+                }
+                guard self.currentCallId == callId else {
+                    Logger.calls.info("[CALL] renegotiation answer discarded: call ended during createAnswer")
+                    return
+                }
+                await self.emitCallAnswer(callId: callId, toUserId: userId, sdp: answer)
+                Logger.calls.info("Renegotiation answer sent for call: \(callId)")
+            }
+
+        default:
+            Logger.calls.warning("Signal offer received in unexpected state: \(String(describing: self.callState))")
+        }
+    }
+
+    // MARK: - Reliable call:join (incoming paths)
+
+    /// [Fix 2026-07-02] Reliable `call:join` — replaces the fire-and-forget
+    /// `emitCallJoin` on BOTH incoming-call paths.
+    ///
+    /// On a VoIP-push cold start (locked phone, answer from the CallKit lock
+    /// screen) no view is mounted, so `connect()` — only triggered by
+    /// RootView/ConversationView appearing in the foreground — has never run:
+    /// the socket is nil and `socket?.emit("call:join")` vanishes. The gateway
+    /// never creates our CallParticipant, then rejects every `call:signal` we
+    /// send ("Sender not a participant") and the caller times out to `missed`
+    /// even though the user answered (observed in prod, callIds
+    /// 6a461091/6a46110c, 2026-07-02). The P1-30 rejoin net doesn't cover this:
+    /// the FIRST connection never fires `didReconnect` (`hadPreviousConnection`).
+    ///
+    /// Strategy: force `connect()` when needed, wait for `isConnected`
+    /// (200 ms poll, 30 s budget — under the 45 s ring), then ACK-aware
+    /// `call:join` with one retry. Gateway-side joinCall is idempotent, so a
+    /// duplicate join from the foreground path is harmless.
+    func joinCallRoomReliably(callId: String) {
+        callJoinTask?.cancel()
+        callJoinTask = Task { @MainActor [weak self] in
+            let socket = MessageSocketManager.shared
+            if !socket.isConnected {
+                Logger.calls.warning("[CALL_JOIN] socket not connected — forcing connect() (callId=\(callId))")
+                socket.connect()
+            }
+            var waitedNs: UInt64 = 0
+            while !socket.isConnected && waitedNs < 30_000_000_000 && !Task.isCancelled {
+                _ = await cancellableSleep(for: .milliseconds(200))
+                waitedNs += 200_000_000
+            }
+            guard let self, !Task.isCancelled else { return }
+            guard self.currentCallId == callId, self.callState.isActive else { return }
+            guard socket.isConnected else {
+                Logger.calls.error("[CALL_JOIN] socket still not connected after 30s — join impossible (callId=\(callId))")
+                return
+            }
+            var joined = await socket.emitCallJoinWithAck(callId: callId)
+            if !joined, !Task.isCancelled, self.currentCallId == callId, self.callState.isActive {
+                Logger.calls.warning("[CALL_JOIN] call:join ACK failed — retrying once (callId=\(callId))")
+                joined = await socket.emitCallJoinWithAck(callId: callId)
+            }
+            Logger.calls.info("[CALL_JOIN] call:join \(joined ? "ACKed" : "NOT ACKed") (callId=\(callId))")
+        }
+    }
+
+}
+
+private extension Logger {
+    nonisolated static let calls = MeeshyLog.logger(.calls)
+}

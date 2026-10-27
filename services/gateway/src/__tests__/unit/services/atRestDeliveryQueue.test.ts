@@ -85,11 +85,15 @@ const fakeRedis = () => {
   return { stored, cacheStore: { getNativeClient: () => client } as unknown as CacheStore };
 };
 
+// Une heure avant l'exécution, jamais une date fixe : une entrée de plus de
+// 48 h n'est plus remise en file, et le témoin vieillissait avec le calendrier.
+const ENQUEUED_AT = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+
 const entry = (overrides: Partial<QueuedMessagePayload> = {}): QueuedMessagePayload => ({
   messageId: MSG,
   conversationId: CONV,
   payload: { id: MSG, conversationId: CONV, content: SECRET, encryptionMode: 'server' },
-  enqueuedAt: new Date('2026-10-24T10:00:00Z').toISOString(),
+  enqueuedAt: ENQUEUED_AT,
   eventType: 'new',
   ...overrides,
 });

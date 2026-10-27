@@ -47,6 +47,8 @@ fun FeedScreen(
     onOpenPost: (String) -> Unit = {},
     onOpenReels: () -> Unit = {},
     onOpenNearby: () -> Unit = {},
+    onOpenProfile: ((String) -> Unit)? = null,
+    onOpenHashtag: (String) -> Unit = {},
     viewModel: FeedViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -172,12 +174,16 @@ fun FeedScreen(
                                 clipboard.setText(AnnotatedString(PostShareLink.webLink(post.id)))
                                 scope.launch { snackbar.showSnackbar(linkCopied) }
                             },
+                            onCopyText = { clipboard.setText(AnnotatedString(post.content)) },
+                            onOpenProfile = onOpenProfile,
+                            onOpenHashtag = onOpenHashtag,
                             onRepost = { viewModel.repost(post.id) },
                             onQuote = { viewModel.beginQuote(post.id) },
                             onPin = { viewModel.pinPost(post.id) },
                             onReport = { reportPostId = post.id },
                             onDelete = { deletePostId = post.id },
                             onComments = { onOpenPost(post.id) },
+                            modifier = Modifier.animateItem(),
                         )
                     }
                     if (state.isLoadingMore) {

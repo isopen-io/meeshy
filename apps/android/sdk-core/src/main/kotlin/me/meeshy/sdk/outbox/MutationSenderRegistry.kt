@@ -13,6 +13,7 @@ import javax.inject.Inject
 public class MutationSenderRegistry @Inject constructor(
     private val handlers: Map<OutboxKind, @JvmSuppressWildcards OutboxKindHandler>,
     private val ownerSource: OutboxOwnerSource? = null,
+    private val plaintextAdmission: OutboxPlaintextAdmission? = null,
 ) {
     /** The kinds that have a registered handler. */
     public val registeredKinds: Set<OutboxKind> get() = handlers.keys
@@ -42,6 +43,7 @@ public class MutationSenderRegistry @Inject constructor(
             graftProducedId = OutboxPayloadGrafts.firstOf(
                 *handlers.values.mapNotNull { it.payloadGraft }.toTypedArray(),
             ),
+            plaintextAdmission = plaintextAdmission ?: OutboxPlaintextAdmission.AdmitAll,
         )
 
     /**

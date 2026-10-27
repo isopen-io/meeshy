@@ -16,8 +16,8 @@ final class StoryPublishSourceGuardTests: XCTestCase {
 
     func test_noProductionCodeGuardsCreationOnActiveUpload() throws {
         var scannedEntries = 0
-        for file in ["Features/Main/Views/StoryTrayView.swift",
-                     "Features/Main/Views/MyStoriesView.swift"] {
+        for file in ["Features/Stories/Views/StoryTrayView.swift",
+                     "Features/Stories/Views/MyStoriesView.swift"] {
             let lines = try Self.strippedLines(of: file)
             let entries = lines.indices.filter { lines[$0].contains(Self.creationEntryAnchor) }
             scannedEntries += entries.count
@@ -54,7 +54,7 @@ final class StoryPublishSourceGuardTests: XCTestCase {
     /// Non observable de l'extérieur — la fonction n'expose aucun point
     /// intermédiaire — d'où l'ancrage sur l'ordre des appels.
     func test_offlinePublish_insertsOptimisticRowsBeforeAwaitingThumbHashes() throws {
-        let source = try Self.strippedLines(of: "Features/Main/ViewModels/StoryViewModel.swift")
+        let source = try Self.strippedLines(of: "Features/Stories/ViewModels/StoryViewModel.swift")
             .joined(separator: "\n")
         guard let start = source.range(of: "func enqueueStoryForOfflinePublish("),
               let rows = source.range(of: "insertOptimisticOfflineStories(", range: start.upperBound..<source.endIndex),
@@ -76,7 +76,7 @@ final class StoryPublishSourceGuardTests: XCTestCase {
     /// `PostVisibility.friends`. Deux défauts dupliqués divergent dès que le
     /// défaut produit bouge.
     func test_storyViewModel_hasNoDuplicatedFriendsLiteral() throws {
-        let source = try Self.strippedLines(of: "Features/Main/ViewModels/StoryViewModel.swift")
+        let source = try Self.strippedLines(of: "Features/Stories/ViewModels/StoryViewModel.swift")
             .joined(separator: "\n")
         // Garde-fou de la garde : une source vide ferait passer l'assertion
         // négative ci-dessous au vert sans rien avoir vérifié.

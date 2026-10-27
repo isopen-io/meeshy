@@ -278,6 +278,12 @@
    "reason": "Icons.Outlined.BookmarkBorder"
   },
   {
+   "symbol": "bookmark.fill",
+   "status": "mapped",
+   "role": "BookmarkFilled",
+   "reason": "Icons.Filled.Bookmark; variante .fill rendue en Filled"
+  },
+  {
    "symbol": "bubble.left.and.bubble.right",
    "status": "mapped",
    "role": "Forum",
@@ -512,6 +518,12 @@
    "status": "mapped",
    "role": "Article",
    "reason": "Icons.AutoMirrored.Filled.Article (rôle directionnel, miroité en RTL); variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "dollarsign.circle.fill",
+   "status": "mapped",
+   "role": "MonetizationOn",
+   "reason": "Icons.Filled.MonetizationOn; variante .fill rendue en Filled (carte « Liens affiliés » de LinksHubView, symbole passé en paramètre)"
   },
   {
    "symbol": "dot.radiowaves.left.and.right",
@@ -1309,6 +1321,18 @@
    "reason": "Icons.Filled.PushPin; variante .fill rendue en Filled"
   },
   {
+   "symbol": "pip.enter",
+   "status": "mapped",
+   "role": "PictureInPicture",
+   "reason": "Icons.Outlined.PictureInPictureAlt"
+  },
+  {
+   "symbol": "pip.exit",
+   "status": "mapped",
+   "role": "PictureInPicture",
+   "reason": "Icons.Outlined.PictureInPictureAlt"
+  },
+  {
    "symbol": "play.circle",
    "status": "mapped",
    "role": "PlayCircle",
@@ -2026,6 +2050,10 @@
    "origin": "material",
    "directional": false
   },
+  "BookmarkFilled": {
+   "origin": "material",
+   "directional": false
+  },
   "Brightness": {
    "origin": "material",
    "directional": false
@@ -2474,6 +2502,10 @@
    "origin": "material",
    "directional": false
   },
+  "MonetizationOn": {
+   "origin": "material",
+   "directional": false
+  },
   "MoreHorizontal": {
    "origin": "material",
    "directional": false
@@ -2547,6 +2579,10 @@
    "directional": false
   },
   "PhotoLibrary": {
+   "origin": "material",
+   "directional": false
+  },
+  "PictureInPicture": {
    "origin": "material",
    "directional": false
   },

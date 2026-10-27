@@ -119,10 +119,26 @@ struct ConversationPreviewDeviceTextTests {
         #expect(compose(sealedRow(), readOnDevice: late).segments == [.text("Bien reçu", language: nil)])
     }
 
-    @Test func compositionJustBeyondTheTolerance_staysLabelled() {
-        let late = text("Bien reçu", composedAt: sentAt.addingTimeInterval(-16 * 60))
+    /// #13002 — mesure : l'auteur dont l'horloge retarde de 40 min (ou cet
+    /// appareil, pour ses propres envois) voyait son message scellé à tort.
+    @Test func anAuthorClockBehindByMinutes_isStillRead() {
+        let skewed = text("Bien reçu", composedAt: sentAt.addingTimeInterval(-40 * 60))
 
-        #expect(isLabelled(compose(sealedRow(), readOnDevice: late)))
+        #expect(compose(sealedRow(), readOnDevice: skewed).segments == [.text("Bien reçu", language: nil)])
+    }
+
+    /// #13002 — mesure : une horloge en avance ne désigne jamais un message
+    /// plus ancien ; elle scellait aussi à tort.
+    @Test func anAuthorClockAhead_isRead() {
+        let ahead = text("Bien reçu", composedAt: sentAt.addingTimeInterval(2 * 3_600))
+
+        #expect(compose(sealedRow(), readOnDevice: ahead).segments == [.text("Bien reçu", language: nil)])
+    }
+
+    @Test func compositionMoreThanADayBeforeTheServedHour_staysLabelled() {
+        let old = text("Bien reçu", composedAt: sentAt.addingTimeInterval(-25 * 3_600))
+
+        #expect(isLabelled(compose(sealedRow(), readOnDevice: old)))
     }
 
     @Test func rowTheServerDoesNotSeal_keepsWhatItServes() {
@@ -143,6 +159,28 @@ struct ConversationPreviewDeviceTextTests {
         }
 
         let preview = compose(row, readOnDevice: text("See you at 6", language: "en"))
+
+        #expect(preview.segments == [.text("See you at 6", language: nil)])
+    }
+
+    /// #13002 — la ligne sert la traduction faite sur l'appareil, descendue
+    /// par le Prisme du lecteur comme dans le fil ; jamais celle du serveur.
+    @Test func deviceTranslation_isServedInTheReadersLanguage() {
+        let row = sealedRow { $0.lastMessageTranslations = ["fr": "Traduction servie"] }
+        let read = text("See you at 6", language: "en").translated(["fr": "On se voit à 18 h"])
+
+        let preview = compose(row, readOnDevice: read)
+
+        #expect(preview.segments.contains { segment in
+            if case .text(let body, _) = segment { return body == "On se voit à 18 h" }
+            return false
+        })
+    }
+
+    @Test func deviceTranslation_intoALanguageOutOfThePrism_servesTheOriginal() {
+        let read = text("See you at 6", language: "en").translated(["de": "Bis um 6"])
+
+        let preview = compose(sealedRow(), readOnDevice: read)
 
         #expect(preview.segments == [.text("See you at 6", language: nil)])
     }

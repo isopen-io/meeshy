@@ -289,7 +289,7 @@ nonisolated enum ComposableAttachment {
     /// qu'un MASQUE DE RENDU, jamais une transformation du blob : matérialiser
     /// une pièce floutée rend le fichier d'origine, EN CLAIR.
     static func isProtected(_ attachment: MessageAttachment) -> Bool {
-        attachment.isViewOnce || attachment.isBlurred || attachment.isEncrypted
+        attachment.declaresViewOnce || attachment.declaresBlur || attachment.isEncrypted
     }
 
     /// **LA règle d'offre de « Composer » — un site, trois lecteurs.**

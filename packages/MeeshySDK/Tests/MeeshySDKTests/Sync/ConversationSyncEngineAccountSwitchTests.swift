@@ -54,7 +54,7 @@ final class ConversationSyncEngineAccountSwitchTests: XCTestCase {
             "unreadCount": 0
         ]
         let data = try! JSONSerialization.data(withJSONObject: json)
-        return try! APIClient.makeAPIPayloadDecoder().decode(APIConversation.self, from: data)
+        return try! MeeshyCoders.decoder(.api).decode(APIConversation.self, from: data)
     }
 
     func test_fullSync_whenTheAccountChangesDuringTheRequest_writesNothingAndReportsFailure() async throws {

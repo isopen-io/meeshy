@@ -70,17 +70,3 @@ extension View {
         ))
     }
 }
-
-extension FeedView {
-    /// Son propre visage devant « Quoi de neuf ? », avec son contour équipé (#10946). Hors de
-    /// `FeedView.swift`, qui dépasse le budget de taille : on n'y ajoute rien.
-    var composerPlaceholderAvatar: some View {
-        MeeshyAvatar(
-            name: getUserDisplayName(AuthManager.shared.currentUser, fallback: "M"),
-            context: .custom(40),
-            avatarURL: AuthManager.shared.currentUser?.avatar,
-            ring: AuthManager.shared.currentUser?.profileDecor?.avatarRing
-        )
-        .accessibilityHidden(true)
-    }
-}

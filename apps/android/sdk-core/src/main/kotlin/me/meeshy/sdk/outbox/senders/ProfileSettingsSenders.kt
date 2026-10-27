@@ -1,12 +1,15 @@
 package me.meeshy.sdk.outbox.senders
 
 import dagger.Binds
+import dagger.Lazy
 import dagger.Module
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import dagger.multibindings.IntoMap
 import kotlinx.serialization.json.Json
 import me.meeshy.core.database.entity.OutboxEntity
+import me.meeshy.sdk.audio.AudioPreferencesSyncRepository
+import me.meeshy.sdk.model.AudioPreferenceSyncBody
 import me.meeshy.sdk.model.NotificationPreferenceSyncBody
 import me.meeshy.sdk.model.PrivacyPreferenceSyncBody
 import me.meeshy.sdk.model.UpdateProfileRequest
@@ -17,8 +20,8 @@ import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.OutboxKindHandler
 import me.meeshy.sdk.outbox.OutboxKindKey
 import me.meeshy.sdk.outbox.SendResult
-import me.meeshy.sdk.outbox.toSendResult
 import me.meeshy.sdk.outbox.withPayload
+import me.meeshy.sdk.preferences.PreferencesSyncCoordinator
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.user.UserRepository
 import javax.inject.Inject
@@ -66,28 +69,81 @@ public class UpdateProfileHandler @Inject constructor(
     }
 }
 
-/** `UPDATE_SETTINGS`: syncs the notification preference block. */
+/**
+ * `UPDATE_SETTINGS`: syncs the notification preference block. The toggle was painted on the local
+ * store before the row was queued; a 4xx refusal can never succeed on retry, so it fails
+ * permanently instead of stalling the settings lane, and an exhausted row returns the block to the
+ * server's truth (unless a newer toggle is still on its way) rather than leaving the screen showing
+ * a setting the gateway does not hold — the reconciliation iOS `UserPreferencesManager` gets from
+ * its next backend read.
+ */
 public class UpdateSettingsHandler @Inject constructor(
     private val preferencesApi: PreferencesApi,
     private val json: Json,
+    private val preferencesSync: Lazy<PreferencesSyncCoordinator>,
 ) : OutboxKindHandler {
 
     override suspend fun send(row: OutboxEntity): SendResult =
         json.withPayload<NotificationPreferenceSyncBody>(row) { body ->
-            apiCall { preferencesApi.updateNotification(body) }.toSendResult()
+            apiCall { preferencesApi.updateNotification(body) }.toPreferenceSendResult("Notification")
         }
+
+    override suspend fun onExhausted(row: OutboxEntity) {
+        preferencesSync.get().refreshNotification()
+    }
 }
 
-/** `UPDATE_PRIVACY_SETTINGS`: syncs the privacy preference block. */
+/** `UPDATE_PRIVACY_SETTINGS`: syncs the privacy preference block, with the same refusal rule. */
 public class UpdatePrivacySettingsHandler @Inject constructor(
     private val preferencesApi: PreferencesApi,
     private val json: Json,
+    private val preferencesSync: Lazy<PreferencesSyncCoordinator>,
 ) : OutboxKindHandler {
 
     override suspend fun send(row: OutboxEntity): SendResult =
         json.withPayload<PrivacyPreferenceSyncBody>(row) { body ->
-            apiCall { preferencesApi.updatePrivacy(body) }.toSendResult()
+            apiCall { preferencesApi.updatePrivacy(body) }.toPreferenceSendResult("Privacy")
         }
+
+    override suspend fun onExhausted(row: OutboxEntity) {
+        preferencesSync.get().refreshPrivacy()
+    }
+}
+
+/**
+ * `UPDATE_AUDIO_SETTINGS` : synchronise le bloc audio, même règle de refus. Un envoi épuisé replace
+ * le bloc sur la vérité de la passerelle (sauf si un choix plus récent attend) plutôt que de laisser
+ * l'écran montrer un réglage que la passerelle ne tient pas.
+ */
+public class UpdateAudioSettingsHandler @Inject constructor(
+    private val preferencesApi: PreferencesApi,
+    private val json: Json,
+    private val audioSync: Lazy<AudioPreferencesSyncRepository>,
+) : OutboxKindHandler {
+
+    override suspend fun send(row: OutboxEntity): SendResult =
+        json.withPayload<AudioPreferenceSyncBody>(row) { body ->
+            apiCall { preferencesApi.updateAudio(body) }.toPreferenceSendResult("Audio")
+        }
+
+    override suspend fun onExhausted(row: OutboxEntity) {
+        audioSync.get().refresh()
+    }
+}
+
+private val PREFERENCE_RETRYABLE = setOf(401, 408, 429)
+private val PREFERENCE_CLIENT_ERRORS = 400..499
+
+private fun NetworkResult<*>.toPreferenceSendResult(block: String): SendResult = when (this) {
+    is NetworkResult.Success -> SendResult.Success
+    is NetworkResult.Failure -> {
+        val status = error.httpStatus
+        when {
+            status == null || status in PREFERENCE_RETRYABLE -> SendResult.TransientFailure
+            status in PREFERENCE_CLIENT_ERRORS -> SendResult.PermanentFailure("$block preferences refused: HTTP $status")
+            else -> SendResult.TransientFailure
+        }
+    }
 }
 
 @Module
@@ -108,4 +164,9 @@ public interface ProfileSettingsSendersModule {
     @IntoMap
     @OutboxKindKey(OutboxKind.UPDATE_PRIVACY_SETTINGS)
     public fun updatePrivacySettings(handler: UpdatePrivacySettingsHandler): OutboxKindHandler
+
+    @Binds
+    @IntoMap
+    @OutboxKindKey(OutboxKind.UPDATE_AUDIO_SETTINGS)
+    public fun updateAudioSettings(handler: UpdateAudioSettingsHandler): OutboxKindHandler
 }

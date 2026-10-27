@@ -47,8 +47,8 @@ final class StoryViewerAnchorGlyphGuardTests: XCTestCase {
     /// une garde qui ne compte plus qu'une des deux moitiés serait un VERT
     /// bien pire : elle ne pourrait plus voir la collision qu'elle existe pour
     /// interdire.
-    private static let sidebarFile = "Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift"
-    private static let headerFile = "Meeshy/Features/Main/Views/StoryViewerView+Header.swift"
+    private static let sidebarFile = "Meeshy/Features/Stories/Views/StoryViewerView+Sidebar.swift"
+    private static let headerFile = "Meeshy/Features/Stories/Views/StoryViewerView+Header.swift"
 
     private func source() throws -> String {
         try MyStoriesSourceCorpus.text(of: Self.sidebarFile)
@@ -105,7 +105,7 @@ final class StoryViewerAnchorGlyphGuardTests: XCTestCase {
     /// L'ANCRAGE : le glyphe de la pastille « Post » de la feuille Meeshy
     /// (`ShareSheetView.symbol(for:)`), qui republie la story en post (#12644).
     private func anchorGlyph() throws -> String {
-        let actions = try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Main/Share/ShareSheetView+Actions.swift")
+        let actions = try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Share/ShareSheetView+Actions.swift")
         let start = try XCTUnwrap(actions.range(of: "private static func symbol(for target: PublicationTarget) -> String {"),
                                   "La table des glyphes de publication a disparu de la feuille.")
         let line = try XCTUnwrap(actions[start.upperBound...].range(of: "case .post: return \""),

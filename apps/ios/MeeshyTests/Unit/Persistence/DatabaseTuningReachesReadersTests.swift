@@ -19,7 +19,7 @@ import GRDB
 ///    d'app, avec `busyMode = .timeout(5)`. Ouvrir l'app depuis une
 ///    notification pendant que la NSE écrit pouvait bloquer cinq secondes.
 ///
-/// Le dépôt connaissait déjà le bon geste : `DependencyContainer.dbConfig()`
+/// Le dépôt connaissait déjà le bon geste : `MessageStoreDatabase.configuration()`
 /// pose trois AUTRES pragmas dans `config.prepareDatabase`, qui court sur
 /// CHAQUE connexion. Ces trois-ci n'y avaient simplement pas été portés.
 final class DatabaseTuningReachesReadersTests: XCTestCase {

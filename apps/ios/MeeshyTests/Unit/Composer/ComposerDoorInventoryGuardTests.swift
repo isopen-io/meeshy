@@ -93,7 +93,7 @@ final class ComposerDoorInventoryGuardTests: XCTestCase {
         .deletingLastPathComponent()   // MeeshyTests
         .deletingLastPathComponent()   // apps/ios
 
-    private static let declaration = "Meeshy/Features/Main/Composer/ComposerIntent.swift"
+    private static let declaration = "Meeshy/Features/Composer/ComposerIntent.swift"
 
     private func sourceDeLaDeclaration(commentairesGardes: Bool = false) throws -> String {
         let brut = try String(contentsOf: Self.racine.appendingPathComponent(Self.declaration),

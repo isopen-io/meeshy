@@ -80,6 +80,25 @@ interface MessageApi {
         @Query("limit") limit: Int? = null,
     ): MessagesApiResponse
 
+    /**
+     * L'index d'un genre pour l'écran « Médias, liens et documents » : `view=media` (la passerelle ne sert que les
+     * messages porteurs du genre demandé), paginé par `before`. [kinds] est absent pour le visuel (défaut serveur,
+     * compris aussi d'une passerelle antérieure à #8098) ; [query] n'est envoyé qu'à partir de deux caractères.
+     * Comme [listAfter], rend [MessagesApiResponse] : `hasMore`/`nextCursor` vivent sous `cursorPagination`.
+     */
+    @GET("conversations/{cid}/messages")
+    suspend fun listMedia(
+        @Path("cid") conversationId: String,
+        @Query("view") view: String,
+        @Query("limit") limit: Int,
+        @Query("include_replies") includeReplies: Boolean,
+        @Query("include_translations") includeTranslations: Boolean,
+        @Query("kinds") kinds: String?,
+        @Query("q") query: String?,
+        @Query("before") before: String?,
+        @Query("languages") languages: String?,
+    ): MessagesApiResponse
+
     @POST("conversations/{cid}/messages")
     suspend fun send(
         @Path("cid") conversationId: String,

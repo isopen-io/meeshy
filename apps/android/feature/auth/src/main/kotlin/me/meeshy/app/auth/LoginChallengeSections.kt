@@ -5,15 +5,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.MarkEmailUnread
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -32,17 +29,15 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import me.meeshy.feature.auth.R
-import me.meeshy.sdk.model.auth.PasswordReveal
 import me.meeshy.sdk.model.auth.PendingEmailVerification
-import me.meeshy.ui.component.MeeshyPrimaryButton
-import me.meeshy.ui.component.auth.PasswordEyeButton
+import me.meeshy.ui.component.auth.AuthActionButton
+import me.meeshy.ui.component.auth.AuthContentType
+import me.meeshy.ui.component.auth.AuthTextField
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -62,23 +57,15 @@ internal fun LoginPasswordField(
     onGo: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var reveal by remember { mutableStateOf(PasswordReveal()) }
-    OutlinedTextField(
+    AuthTextField(
         value = value,
         onValueChange = onValueChange,
-        label = { Text(stringResource(R.string.login_password_label)) },
-        singleLine = true,
-        visualTransformation = if (reveal.isRevealed) VisualTransformation.None else PasswordVisualTransformation(),
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Go),
-        keyboardActions = KeyboardActions(onGo = { onGo() }),
-        trailingIcon = {
-            PasswordEyeButton(
-                reveal = reveal,
-                tint = MeeshyTheme.tokens.textMuted,
-                enabled = enabled,
-                onToggle = { reveal = reveal.toggled() },
-            )
-        },
+        title = stringResource(R.string.login_password_label),
+        icon = MeeshyIcons.Lock,
+        isSecure = true,
+        contentType = AuthContentType.Password,
+        imeAction = ImeAction.Go,
+        onImeAction = onGo,
         enabled = enabled,
         modifier = modifier,
     )
@@ -105,14 +92,14 @@ internal fun TwoFactorSection(
         description = stringResource(R.string.auth_login_two_factor_description),
         modifier = modifier,
     ) {
-        OutlinedTextField(
+        AuthTextField(
             value = state.twoFactorCode,
             onValueChange = onCodeChange,
-            placeholder = { Text(stringResource(R.string.auth_login_two_factor_placeholder)) },
-            leadingIcon = { Icon(Icons.Filled.Key, contentDescription = null, tint = MeeshyPalette.Indigo500) },
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword, imeAction = ImeAction.Go),
-            keyboardActions = KeyboardActions(onGo = { onSubmit() }),
+            title = stringResource(R.string.auth_login_two_factor_placeholder),
+            icon = MeeshyIcons.Key,
+            contentType = AuthContentType.OneTimeCode,
+            imeAction = ImeAction.Go,
+            onImeAction = onSubmit,
             enabled = !state.isSubmitting,
             modifier = Modifier
                 .fillMaxWidth()
@@ -120,11 +107,11 @@ internal fun TwoFactorSection(
                 .semantics { contentDescription = fieldLabel },
         )
         ChallengeError(state)
-        MeeshyPrimaryButton(
-            text = stringResource(R.string.login_button),
+        AuthActionButton(
+            title = stringResource(R.string.login_button),
             onClick = onSubmit,
             enabled = state.canSubmitTwoFactor,
-            loading = state.isSubmitting,
+            isLoading = state.isSubmitting,
             modifier = Modifier.fillMaxWidth().padding(top = MeeshySpacing.md),
         )
         TextButton(onClick = onCancel, enabled = !state.isSubmitting, modifier = Modifier.fillMaxWidth()) {
@@ -174,13 +161,14 @@ internal fun EmailVerificationSection(
             textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth(),
         )
-        OutlinedTextField(
+        AuthTextField(
             value = state.verificationCode,
             onValueChange = onCodeChange,
-            placeholder = { Text(stringResource(R.string.email_verification_code_placeholder)) },
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword, imeAction = ImeAction.Go),
-            keyboardActions = KeyboardActions(onGo = { onSubmit() }),
+            title = stringResource(R.string.email_verification_code_placeholder),
+            icon = MeeshyIcons.Mail,
+            contentType = AuthContentType.OneTimeCode,
+            imeAction = ImeAction.Go,
+            onImeAction = onSubmit,
             enabled = !state.isSubmitting,
             modifier = Modifier
                 .fillMaxWidth()
@@ -189,11 +177,11 @@ internal fun EmailVerificationSection(
                 .semantics { contentDescription = fieldLabel },
         )
         ChallengeError(state)
-        MeeshyPrimaryButton(
-            text = stringResource(R.string.email_verification_verify_button),
+        AuthActionButton(
+            title = stringResource(R.string.email_verification_verify_button),
             onClick = onSubmit,
             enabled = state.canSubmitVerification,
-            loading = state.isSubmitting,
+            isLoading = state.isSubmitting,
             modifier = Modifier.fillMaxWidth().padding(top = MeeshySpacing.md),
         )
         Text(
@@ -257,11 +245,5 @@ private fun ChallengeColumn(
 
 @Composable
 private fun ChallengeError(state: AuthUiState) {
-    val text = state.errorRes?.let { stringResource(it) } ?: state.errorMessage ?: return
-    Text(
-        text = text,
-        color = MeeshyTheme.tokens.error,
-        style = MaterialTheme.typography.bodySmall,
-        modifier = Modifier.fillMaxWidth(),
-    )
+    AuthErrorMessage(text = state.errorRes?.let { stringResource(it) } ?: state.errorMessage)
 }

@@ -65,6 +65,7 @@ export * from './playback-qoe.js';
 export * from './message-sticker.js';
 export * from './sticker-definition.js';
 export * from './sticker-pack.js';
+export * from './sticker-pack-asset.js';
 
 // Favori de message (#7377) — étoile personnelle, liste et paramètres
 export * from './message-star.js';
@@ -88,6 +89,7 @@ export * from './glory-atmospheres.js';
 export * from './content-pack.js';
 export * from './content-pack-index.js';
 export * from './glory-frame-pack.js';
+export * from './glory-frame-atlas.js';
 export * from './pack-ownership.js';
 export * from './pack-availability.js';
 export * from './pack-unlock.js';

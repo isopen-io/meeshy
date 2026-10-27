@@ -415,13 +415,13 @@ struct AudioPostComposerView: View {
     }
 
     private var formattedDuration: String {
-        LocalizedNumber.duration(seconds: elapsedSeconds)
+        MediaFormat.duration(elapsedSeconds)
     }
 
     /// Ce que VoiceOver ENTEND — « 34 secondes », jamais l'horloge « 0:34 »,
     /// que le synthétiseur lirait comme une heure.
     private var spokenDuration: String {
-        LocalizedNumber.spokenDuration(seconds: elapsedSeconds)
+        MediaFormat.duration(elapsedSeconds, style: .spoken)
     }
 
     /// Entrée UNIQUE des fichiers audio propres — enregistrement (feuille

@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:chat": {
+      "resDir": "feature/chat/src/main/res",
+      "entries": [
+        { "catalog": "app", "iosKey": "message-detail.edits.current", "status": "adopted" },
+        { "catalog": "app", "iosKey": "message-detail.edits.empty", "status": "adopted" },
+        { "catalog": "app", "iosKey": "message-detail.edits.history-title", "status": "adopted" },
+        { "catalog": "app", "iosKey": "message-detail.edits.none-detail", "status": "adopted" },
+        { "catalog": "app", "iosKey": "message-detail.edits.none-title", "status": "adopted" },
+        { "catalog": "app", "iosKey": "message-detail.edits.previous-one", "status": "adopted" },
+        { "catalog": "app", "iosKey": "message-detail.edits.previous-other", "status": "adopted" },
+        { "catalog": "app", "iosKey": "message-detail.edits.version-n", "status": "adopted" },
+        { "catalog": "app", "iosKey": "message-detail.views.sent", "status": "adopted" },
+        { "catalog": "app", "iosKey": "message-detail.views.delivered", "status": "adopted" },
+        { "catalog": "app", "iosKey": "message-detail.views.read", "status": "adopted" },
+        { "catalog": "app", "iosKey": "message-detail.views.not-seen", "status": "adopted" },
+        { "catalog": "app", "iosKey": "message-detail.views.delivered.all", "status": "adopted" },
+        { "catalog": "app", "iosKey": "message-detail.views.read.all", "status": "adopted" },
+        { "catalog": "app", "iosKey": "message-detail.views.delivered.empty", "status": "adopted" },
+        { "catalog": "app", "iosKey": "message-detail.views.read.empty", "status": "adopted" },
+        { "catalog": "app", "iosKey": "message-detail.views.not-seen.empty", "status": "adopted" },
+        { "catalog": "app", "iosKey": "message-detail.views.not-seen.title", "status": "adopted" },
+        { "catalog": "app", "iosKey": "message-detail.error.server", "status": "adopted" },
+        { "catalog": "app", "iosKey": "message-detail.error.connection", "status": "adopted" },
+        { "catalog": "app", "iosKey": "message-detail.sentiment.score", "status": "adopted" },
+        { "catalog": "app", "iosKey": "message-detail.sentiment.a11y-label", "status": "adopted" },
+        { "catalog": "app", "iosKey": "message-detail.sentiment.a11y-value", "status": "adopted" },
+        { "catalog": "app", "iosKey": "sentiment.very-negative", "status": "adopted" },
+        { "catalog": "app", "iosKey": "sentiment.very-positive", "status": "adopted" }
+      ]
+    }
+  }
+}

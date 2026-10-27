@@ -21,6 +21,7 @@ import java.util.Locale
 import me.meeshy.feature.feed.R
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.component.rememberPresence
 import me.meeshy.ui.format.RelativeTimeFormat
 import me.meeshy.ui.format.rememberRelativeTimeStrings
 import me.meeshy.ui.format.shortDateTimeLabel
@@ -36,6 +37,8 @@ internal fun FeedPostCardHeader(
     isOwn: Boolean,
     onShare: () -> Unit,
     onCopyLink: () -> Unit,
+    onCopyText: () -> Unit,
+    onOpenProfile: ((String) -> Unit)? = null,
     onRepost: () -> Unit,
     onQuote: () -> Unit,
     onBookmark: () -> Unit,
@@ -45,7 +48,14 @@ internal fun FeedPostCardHeader(
 ) {
     val unknownAuthor = stringResource(R.string.feed_unknown_author)
     Row(verticalAlignment = Alignment.CenterVertically) {
-        MeeshyAvatar(name = post.authorName ?: unknownAuthor, size = 40.dp, imageUrl = post.authorAvatarUrl)
+        val profileTap = Modifier.opensAuthorProfile(post.authorId, onOpenProfile)
+        MeeshyAvatar(
+            name = post.authorName ?: unknownAuthor,
+            size = 40.dp,
+            imageUrl = post.authorAvatarUrl,
+            presence = rememberPresence(post.authorId),
+            modifier = profileTap,
+        )
         Spacer(Modifier.width(MeeshySpacing.md))
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -54,6 +64,7 @@ internal fun FeedPostCardHeader(
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.SemiBold,
                     color = MeeshyTheme.tokens.textPrimary,
+                    modifier = profileTap,
                 )
                 if (post.moodEmoji != null) {
                     Text(
@@ -73,8 +84,10 @@ internal fun FeedPostCardHeader(
         PostOptionsButton(
             isOwn = isOwn,
             isBookmarked = post.isBookmarked,
+            hasText = post.content.isNotBlank(),
             onShare = onShare,
             onCopyLink = onCopyLink,
+            onCopyText = onCopyText,
             onRepost = onRepost,
             onQuote = onQuote,
             onBookmarkToggle = onBookmark,

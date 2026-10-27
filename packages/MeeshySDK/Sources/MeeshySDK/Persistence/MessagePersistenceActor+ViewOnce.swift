@@ -49,11 +49,20 @@ extension MessagePersistenceActor {
     /// redémarrage et à toute revalidation REST (`upsertFromAPIMessages`
     /// respecte la colonne).
     public func markViewOnceOpened(localId: String, at date: Date = Date()) throws {
+        try markViewOnceOpened(localId: localId, at: date, origin: .announced)
+    }
+
+    /// `.announced` (`consumedByMe`, écho d'un autre appareil) garde le clair E2EE au coffre (#13060).
+    public func markViewOnceOpened(localId: String, at date: Date = Date(), origin: PlaintextErasureOrigin) throws {
         var affectedConversationId: String?
         try dbWriter.write { db in
             guard var record = try MessageRecord
                 .filter(Column("localId") == localId || Column("serverId") == localId)
-                .fetchOne(db) else { return }
+                .fetchOne(db) else {
+                try MessagePlaintextErasures.record(localId, cause: .viewOnceOpened, in: db)
+                try MessagePlaintextErasures.settle(localId, cause: .viewOnceOpened, origin: origin, in: db)
+                return
+            }
             affectedConversationId = record.conversationId
             record.sealAsOpenedViewOnce(at: date)
             record.updatedAt = Date()
@@ -63,6 +72,7 @@ extension MessagePersistenceActor {
                 .filter(Column("messageLocalId") == record.localId
                         || Column("messageServerId") == (record.serverId ?? record.localId))
                 .deleteAll(db)
+            try MessagePlaintextErasures.settle(localId, cause: .viewOnceOpened, origin: origin, in: db)
         }
         if let convId = affectedConversationId {
             postMessageStoreRefresh(conversationIds: [convId])

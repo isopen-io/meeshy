@@ -10,7 +10,7 @@
    445,
    492
   ],
-  "windowPx": 142261,
+  "windowPx": 142264,
   "layout": "côtés",
   "verdict": "ok"
  },
@@ -20,7 +20,7 @@
   "face": 0,
   "depth": 0,
   "bbox": null,
-  "windowPx": 130400,
+  "windowPx": 130470,
   "layout": "perchés",
   "verdict": "ok"
  },
@@ -30,13 +30,13 @@
   "face": 0,
   "depth": 0,
   "bbox": null,
-  "windowPx": 134892,
+  "windowPx": 134921,
   "layout": "ruban",
   "verdict": "ok"
  },
  {
   "file": "moments-flamme-7",
-  "overlap": 44,
+  "overlap": 46,
   "face": 0,
   "depth": 4,
   "bbox": [
@@ -45,7 +45,7 @@
    401,
    719
   ],
-  "windowPx": 154205,
+  "windowPx": 154313,
   "layout": "pied",
   "verdict": "ok"
  },
@@ -70,7 +70,7 @@
   "face": 0,
   "depth": 0,
   "bbox": null,
-  "windowPx": 144727,
+  "windowPx": 144856,
   "layout": "perchés",
   "verdict": "ok"
  },
@@ -85,7 +85,7 @@
    126,
    723
   ],
-  "windowPx": 137049,
+  "windowPx": 137071,
   "layout": "pied",
   "verdict": "ok"
  },
@@ -100,7 +100,7 @@
    450,
    500
   ],
-  "windowPx": 151271,
+  "windowPx": 151285,
   "layout": "côtés",
   "verdict": "ok"
  },
@@ -110,13 +110,13 @@
   "face": 0,
   "depth": 0,
   "bbox": null,
-  "windowPx": 148392,
+  "windowPx": 148397,
   "layout": "ruban",
   "verdict": "ok"
  },
  {
   "file": "moments-meesh-1000",
-  "overlap": 10571,
+  "overlap": 10573,
   "face": 0,
   "depth": 118,
   "bbox": [
@@ -125,7 +125,7 @@
    449,
    712
   ],
-  "windowPx": 142560,
+  "windowPx": 142639,
   "layout": "selfie",
   "verdict": "ok"
  },
@@ -135,13 +135,13 @@
   "face": 0,
   "depth": 0,
   "bbox": null,
-  "windowPx": 162736,
+  "windowPx": 162774,
   "layout": "perchés",
   "verdict": "ok"
  },
  {
   "file": "moments-palier-galaxie",
-  "overlap": 33,
+  "overlap": 35,
   "face": 0,
   "depth": 5,
   "bbox": [
@@ -150,13 +150,13 @@
    414,
    648
   ],
-  "windowPx": 130017,
+  "windowPx": 130073,
   "layout": "coins",
   "verdict": "ok"
  },
  {
   "file": "moments-palier-lueur",
-  "overlap": 20,
+  "overlap": 21,
   "face": 0,
   "depth": 3,
   "bbox": [
@@ -165,7 +165,7 @@
    447,
    713
   ],
-  "windowPx": 148797,
+  "windowPx": 148866,
   "layout": "pied",
   "verdict": "ok"
  },
@@ -175,13 +175,13 @@
   "face": 0,
   "depth": 0,
   "bbox": null,
-  "windowPx": 143787,
+  "windowPx": 143815,
   "layout": "ruban",
   "verdict": "ok"
  },
  {
   "file": "moments-palier-singularite",
-  "overlap": 67,
+  "overlap": 71,
   "face": 0,
   "depth": 4,
   "bbox": [
@@ -190,13 +190,13 @@
    189,
    717
   ],
-  "windowPx": 135984,
+  "windowPx": 136056,
   "layout": "duo",
   "verdict": "ok"
  },
  {
   "file": "moments-palier-supernova",
-  "overlap": 6759,
+  "overlap": 6755,
   "face": 0,
   "depth": 85,
   "bbox": [
@@ -205,7 +205,7 @@
    454,
    719
   ],
-  "windowPx": 160347,
+  "windowPx": 160398,
   "layout": "selfie",
   "verdict": "ok"
  }

@@ -63,6 +63,7 @@ import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.mention.MentionAutocompleteState
 import me.meeshy.sdk.model.MentionCandidate
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.component.rememberPresence
 import me.meeshy.ui.component.bubble.LanguageChip
 import me.meeshy.ui.component.bubble.RichMessageText
 import me.meeshy.ui.theme.MeeshyPalette
@@ -199,7 +200,7 @@ private fun CommentRow(
             .fillMaxWidth()
             .alpha(if (comment.isPending) 0.5f else 1f),
     ) {
-        MeeshyAvatar(name = comment.authorName ?: unknownAuthor, size = 32.dp, imageUrl = comment.authorAvatarUrl)
+        MeeshyAvatar(name = comment.authorName ?: unknownAuthor, size = 32.dp, imageUrl = comment.authorAvatarUrl, presence = rememberPresence(comment.authorId.takeUnless { comment.isOwn }))
         Spacer(Modifier.width(MeeshySpacing.sm))
         Column(Modifier.weight(1f)) {
             Column(textBlockSemantics) {
@@ -561,7 +562,7 @@ private fun CommentMentionStrip(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
                 ) {
-                    MeeshyAvatar(name = candidate.displayName, size = 32.dp, imageUrl = candidate.avatarURL)
+                    MeeshyAvatar(name = candidate.displayName, size = 32.dp, imageUrl = candidate.avatarURL, presence = rememberPresence(candidate.id))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = candidate.displayName,

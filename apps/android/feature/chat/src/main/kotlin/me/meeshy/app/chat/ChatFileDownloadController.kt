@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.conversation.LocalMessage
 import me.meeshy.sdk.model.ApiMessageAttachment
+import me.meeshy.sdk.model.isEndToEndBlob
 import me.meeshy.sdk.model.MimeTypeResolver
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.util.resolveMediaUrl
@@ -118,8 +119,10 @@ internal class ChatFileDownloadController(
      * non-image/location/audio attachment, preserving the sheet's existing behaviour.
      */
     private fun firstFileAttachment(messageId: String, attachmentId: String?): ApiMessageAttachment? {
+        // #13106 — un blob chiffré de bout en bout ne se télécharge jamais : l'Android natif ne l'ouvre pas.
         val attachments = messages.value.firstOrNull { it.message.id == messageId }
             ?.message?.attachments
+            ?.filterNot { it.isEndToEndBlob }
             ?: return null
         if (attachmentId != null) {
             return attachments.firstOrNull { it.id == attachmentId }

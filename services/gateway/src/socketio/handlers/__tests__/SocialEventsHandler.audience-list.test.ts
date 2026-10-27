@@ -64,6 +64,7 @@ function monter() {
         { senderId: EXCLU, receiverId: AUTEUR },
       ]),
     },
+    user: { findMany: jest.fn(async () => []), findUnique: jest.fn(async () => null) },
   } as unknown as PrismaClient;
   const { io, emissions } = fauxIo();
   return { handler: new SocialEventsHandler({ io: io as any, prisma }), emissions };

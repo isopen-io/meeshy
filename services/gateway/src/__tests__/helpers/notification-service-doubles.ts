@@ -48,7 +48,7 @@ const PRISMA_SURFACE: Readonly<Record<string, readonly string[]>> = {
   postMedia: ['findFirst'],
   postReaction: ['findMany'],
   pushToken: ['deleteMany', 'findMany', 'findUnique', 'update'],
-  user: ['findMany', 'findUnique'],
+  user: ['findFirst', 'findMany', 'findUnique'],
   userConversationPreferences: ['findMany'],
   userEventSeq: ['findUnique', 'upsert'],
   userPreferences: ['findUnique'],

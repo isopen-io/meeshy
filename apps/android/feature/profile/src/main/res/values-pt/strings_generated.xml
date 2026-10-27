@@ -4,6 +4,8 @@
     <string name="common_retry">Tentar novamente</string>
     <string name="profile_action_accept_connection">Aceitar conexão</string>
     <string name="profile_action_block_user">Bloquear este usuário</string>
+    <string name="profile_action_call_audio">Chamada de voz</string>
+    <string name="profile_action_call_video">Chamada de vídeo</string>
     <string name="profile_action_cancel_request">Cancelar solicitação</string>
     <string name="profile_action_connection_request">Solicitação de conexão</string>
     <string name="profile_action_decline_connection">Recusar conexão</string>
@@ -18,6 +20,7 @@
     <string name="profile_bio_placeholder">Fale sobre você...</string>
     <string name="profile_blocked_by_me">Você bloqueou este usuário</string>
     <string name="profile_blocked_unblock">Desbloquear</string>
+    <string name="profile_call_not_placed">Sem conexão: a chamada não foi feita</string>
     <string name="profile_close_hint">Fecha o perfil</string>
     <string name="profile_connection_context_received">%s quer se conectar com você. Aceite para trocar mensagens.</string>
     <string name="profile_connection_context_sent">Você enviou um pedido de conexão para %s. Aguardando a resposta.</string>

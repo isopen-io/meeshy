@@ -408,7 +408,7 @@ extension ConversationView {
         // #7499 — une vue unique s'OUVRE au toucher et se consomme à la
         // FERMETURE. On arme ici, la galerie consomme en se refermant : c'est
         // le seul endroit qui voie les deux.
-        if attachment.isViewOnce {
+        if attachment.declaresViewOnce {
             scrollState.pendingViewOnceConsumption.arm(attachment.messageId)
         }
         scrollState.galleryStartAttachment = attachment

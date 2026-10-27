@@ -9,13 +9,17 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
@@ -55,6 +59,7 @@ import me.meeshy.ui.theme.MeeshyTheme
 internal val PROFILE_SHEET_TABS: List<ProfileTab> = ProfileTab.entries.toList()
 
 internal const val PROFILE_TAB_BAR_TAG = "profile-tab-bar"
+internal const val PROFILE_TAB_UNDERLINE_TAG = "profile-tab-underline"
 
 /**
  * L'onglet choisi de la fiche (miroir de `@State selectedTab = .details` iOS) : Détails par défaut,
@@ -106,23 +111,28 @@ internal fun ProfileTabBar(
     val haptics = rememberMeeshyHaptics()
     Column(modifier.fillMaxWidth().padding(top = topInset)) {
         Column(Modifier.fillMaxWidth().background(MeeshyTheme.tokens.backgroundPrimary).testTag(PROFILE_TAB_BAR_TAG)) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = MeeshySpacing.xl)
-                    .padding(top = MeeshySpacing.md)
-                    .selectableGroup(),
-            ) {
-                PROFILE_SHEET_TABS.forEach { tab ->
-                    ProfileTabButton(
-                        tab = tab,
-                        isSelected = tab == selected,
-                        accent = accent,
-                        onClick = {
-                            haptics.light()
-                            onSelect(tab)
-                        },
-                    )
+            BoxWithConstraints(Modifier.fillMaxWidth().padding(horizontal = MeeshySpacing.xl)) {
+                // Un tiers de la largeur au minimum, la largeur du libelle au besoin : jamais de coupure
+                // dans un mot ; si la somme depasse l'ecran (police agrandie), la barre defile.
+                val minTabWidth = maxWidth / PROFILE_SHEET_TABS.size
+                Row(
+                    modifier = Modifier
+                        .horizontalScroll(rememberScrollState())
+                        .padding(top = MeeshySpacing.md)
+                        .selectableGroup(),
+                ) {
+                    PROFILE_SHEET_TABS.forEach { tab ->
+                        ProfileTabButton(
+                            tab = tab,
+                            isSelected = tab == selected,
+                            accent = accent,
+                            minWidth = minTabWidth,
+                            onClick = {
+                                haptics.light()
+                                onSelect(tab)
+                            },
+                        )
+                    }
                 }
             }
             HorizontalDivider(color = MeeshyTheme.tokens.textMuted.copy(alpha = MeeshyOpacity.medium))
@@ -131,7 +141,7 @@ internal fun ProfileTabBar(
 }
 
 @Composable
-private fun RowScope.ProfileTabButton(tab: ProfileTab, isSelected: Boolean, accent: Color, onClick: () -> Unit) {
+private fun ProfileTabButton(tab: ProfileTab, isSelected: Boolean, accent: Color, minWidth: Dp, onClick: () -> Unit) {
     val reduceMotion = LocalReduceMotion.current
     val spec: AnimationSpec<Color> =
         if (reduceMotion) snap() else spring(dampingRatio = 0.8f, stiffness = MeeshyMotion.stiffnessForResponse(0.3f))
@@ -139,14 +149,17 @@ private fun RowScope.ProfileTabButton(tab: ProfileTab, isSelected: Boolean, acce
     val underline by animateColorAsState(if (isSelected) accent else Color.Transparent, spec, label = "profile-tab-underline")
     Column(
         modifier = Modifier
-            .weight(1f)
+            .widthIn(min = minWidth)
+            // Sous un defilement horizontal la largeur max est infinie : sans largeur intrinseque, le
+            // soulignement (`fillMaxWidth`) retomberait a 0 et l'onglet choisi ne serait plus marque.
+            .width(IntrinsicSize.Max)
             .heightIn(min = MeeshyMinTapTarget)
             .selectable(selected = isSelected, role = Role.Tab, onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Bottom,
     ) {
         Row(
-            modifier = Modifier.padding(vertical = MeeshySpacing.smPlus),
+            modifier = Modifier.padding(vertical = MeeshySpacing.smPlus, horizontal = MeeshySpacing.md),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(imageVector = tab.icon(), contentDescription = null, tint = content, modifier = Modifier.size(14.dp))
@@ -156,9 +169,11 @@ private fun RowScope.ProfileTabButton(tab: ProfileTab, isSelected: Boolean, acce
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
                 color = content,
+                maxLines = 1,
+                softWrap = false,
             )
         }
-        Box(Modifier.fillMaxWidth().height(2.dp).background(underline))
+        Box(Modifier.fillMaxWidth().height(2.dp).background(underline).testTag("$PROFILE_TAB_UNDERLINE_TAG-${tab.name}"))
     }
 }
 

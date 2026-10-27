@@ -19,7 +19,7 @@ final class ComposerForegroundSoundMountGuardTests: XCTestCase {
     /// et une garde qui ne sait pas y aller ne peut pas mesurer ce que la
     /// feuille rend — or c'est là que la description se rédige.
     private func source(_ chemin: String,
-                        dossier: String = "Meeshy/Features/Main/Composer") throws -> String {
+                        dossier: String = "Meeshy/Features/Composer") throws -> String {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()   // .../Unit/Composer
             .deletingLastPathComponent()   // .../Unit
@@ -540,7 +540,7 @@ final class ComposerContentSoundIsNotSceneAudioGuardTests: XCTestCase {
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent(
-                "Meeshy/Features/Main/Composer/MeeshyComposerHost+Intake.swift")
+                "Meeshy/Features/Composer/MeeshyComposerHost+Intake.swift")
         return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
     }
 

@@ -17,7 +17,7 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
 import { CaptureFlash, CaptureHint, CaptureStatus, KeyboardRecord, RecordingStop, useCaptureStudio, type StudioVideo } from './call-capture-studio';
 import { CallModeBar, ModeCarousel, ModeOption, type CarouselItem } from './call-mode-carousel';
 import { MoodChips } from './call-montage-moods';
-import { browserCircle, montageChrome, paintFramed, useMontageFrames, type CircleOf, type FrameStudioLoader } from './use-montage-frames';
+import { browserCircle, browserShelf, montageChrome, paintFramed, useMontageFrames, type CircleOf, type FrameStudioLoader, type ShelfLoader } from './use-montage-frames';
 
 /**
  * **LE MODE MONTAGE** (#8552, #8578, #8580) — « Capturer » (rangée L'appel)
@@ -90,6 +90,8 @@ type ModeProps = {
   /** L'atelier des cadres, dans son chunk — sans lui, les classiques seuls. */
   readonly loadFrames?: FrameStudioLoader;
   readonly circleOf?: CircleOf;
+  /** Les ambiances installées (#10169) : seules leurs puces se proposent. */
+  readonly loadShelf?: ShelfLoader;
 };
 
 const NO_AUDIO = (): readonly MediaStream[] => [];
@@ -123,10 +125,10 @@ const facesGlyph = (
   </svg>
 );
 
-export function CallMontageMode({ language, quitGlyph, onExit, stage, onWheel, audio = NO_AUDIO, env, save = saveCaptures, clipEnv, viewport = windowViewport, call, loadFrames, circleOf = browserCircle }: ModeProps) {
+export function CallMontageMode({ language, quitGlyph, onExit, stage, onWheel, audio = NO_AUDIO, env, save = saveCaptures, clipEnv, viewport = windowViewport, call, loadFrames, circleOf = browserCircle, loadShelf = browserShelf }: ModeProps) {
   const [style, setStyle] = useState<MontageStyle>('grid');
   const [frameId, setFrameId] = useState<string | null>(null);
-  const { studio: frames, circle } = useMontageFrames({ loadFrames, call, circleOf, language });
+  const { studio: frames, circle } = useMontageFrames({ loadFrames, call, circleOf, language, loadShelf });
   const people = circle?.people.length ?? 0;
   const frame = frames === null || frameId === null ? null : frames.reconcile(frameId, people);
   const shelf: Shelf = frame?.mood ?? CLASSICS;

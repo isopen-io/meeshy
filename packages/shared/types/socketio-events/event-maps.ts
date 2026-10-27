@@ -10,6 +10,7 @@
  */
 
 import type { E2EEServedEnvelope } from '../e2ee-directory.js';
+import type { E2EESignalAck, E2EESignalSocketPayload } from '../e2ee-signals.js';
 import type { AdminMetricsSubscribeAck, HostMetricsSample } from '../admin-ops.js';
 import type { ConversationEngagementSnapshot, PostEngagementSnapshot } from '../engagement-scale.js';
 import type { GameUpdatedEventData } from '../game-sync.js';
@@ -479,6 +480,7 @@ export interface ClientToServerEvents {
   [CLIENT_EVENTS.MESSAGE_EDIT]: (data: MessageEditData, callback?: (response: SocketIOResponse) => void) => void;
   [CLIENT_EVENTS.MESSAGE_DELETE]: (data: MessageDeleteData, callback?: (response: SocketIOResponse) => void) => void;
   [CLIENT_EVENTS.MESSAGE_CAPTURE_DETECTED]: (data: ContentCaptureReportInput, callback?: (response: ContentCaptureAck) => void) => void;
+  [CLIENT_EVENTS.E2EE_SEND_SIGNAL]: (data: E2EESignalSocketPayload, callback?: (response: E2EESignalAck) => void) => void;
   [CLIENT_EVENTS.CONVERSATION_JOIN]: (data: ConversationActionData) => void;
   [CLIENT_EVENTS.CONVERSATION_LEAVE]: (data: ConversationActionData) => void;
   [CLIENT_EVENTS.TYPING_START]: (data: TypingActionData) => void;

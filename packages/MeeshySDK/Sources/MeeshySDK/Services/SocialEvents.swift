@@ -199,8 +199,7 @@ struct SocialEventsBody: Encodable {
     let context: Context
 
     static func encoded(_ events: [StampedSocialEvent], sentAt: Date, consent: SocialEventContext.Consent? = nil) throws -> Data {
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
+        let encoder = MeeshyCoders.encoder(.api)
         return try encoder.encode(SocialEventsBody(events: events, context: Context(sentAt: WireDate.string(from: sentAt), consent: consent)))
     }
 }

@@ -118,9 +118,9 @@ Transposition Android : ActivityKit (Live Activity + Dynamic Island) -> notifica
 
 <details><summary>Sources iOS (5)</summary>
 
-- `apps/ios/Meeshy/Features/Main/LiveActivity/LiveActivityBackend.swift`
-- `apps/ios/Meeshy/Features/Main/LiveActivity/LiveActivityHost.swift`
-- `apps/ios/Meeshy/Features/Main/LiveActivity/LiveActivityCommandBinding.swift`
+- `apps/ios/Meeshy/Features/LiveActivity/LiveActivityBackend.swift`
+- `apps/ios/Meeshy/Features/LiveActivity/LiveActivityHost.swift`
+- `apps/ios/Meeshy/Features/LiveActivity/LiveActivityCommandBinding.swift`
 - `apps/ios/MeeshyWidgets/LiveActivityCommandIntent.swift`
 - `apps/ios/MeeshyWidgets/LiveActivityStyle.swift`
 
@@ -201,7 +201,7 @@ Transposition Android : Code pur multiplateforme : réimplémenter en Kotlin pur
 
 - `packages/MeeshySDK/Sources/MeeshySDK/Share/SharePlan.swift`
 - `packages/MeeshySDK/Sources/MeeshySDK/Share/SharePlan+Message.swift`
-- `apps/ios/Meeshy/Features/Main/Share/ShareDurationRow.swift`
+- `apps/ios/Meeshy/Features/Share/ShareDurationRow.swift`
 
 </details>
 
@@ -227,8 +227,8 @@ Transposition Android : Live Activity de lecture + Now Playing -> MediaSession +
 
 <details><summary>Sources iOS (4)</summary>
 
-- `apps/ios/Meeshy/Features/Main/LiveActivity/VoicePlaybackActivityLaw.swift`
-- `apps/ios/Meeshy/Features/Main/LiveActivity/VoicePlaybackLiveActivityCoordinator.swift`
+- `apps/ios/Meeshy/Features/LiveActivity/VoicePlaybackActivityLaw.swift`
+- `apps/ios/Meeshy/Features/LiveActivity/VoicePlaybackLiveActivityCoordinator.swift`
 - `apps/ios/MeeshyWidgets/VoicePlaybackActivityAttributes.swift`
 - `apps/ios/MeeshyWidgets/VoicePlaybackLiveActivity.swift`
 
@@ -255,8 +255,8 @@ Transposition Android : Live Activity d'enregistrement -> service de premier pla
 
 <details><summary>Sources iOS (4)</summary>
 
-- `apps/ios/Meeshy/Features/Main/LiveActivity/VoiceRecordingActivityLaw.swift`
-- `apps/ios/Meeshy/Features/Main/LiveActivity/VoiceRecordingLiveActivityCoordinator.swift`
+- `apps/ios/Meeshy/Features/LiveActivity/VoiceRecordingActivityLaw.swift`
+- `apps/ios/Meeshy/Features/LiveActivity/VoiceRecordingLiveActivityCoordinator.swift`
 - `apps/ios/MeeshyWidgets/VoiceRecordingActivityAttributes.swift`
 - `apps/ios/MeeshyWidgets/VoiceRecordingLiveActivity.swift`
 
@@ -392,7 +392,7 @@ Transposition Android : ShareLink SwiftUI -> Intent.createChooser(ACTION_SEND) ;
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Share/ShareSheetView+Actions.swift`
+- `apps/ios/Meeshy/Features/Share/ShareSheetView+Actions.swift`
 
 </details>
 
@@ -419,9 +419,9 @@ Transposition Android : LazyVStack + animations spring SwiftUI -> LazyColumn ave
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Share/ShareContentZone.swift`
-- `apps/ios/Meeshy/Features/Main/Share/ShareIncomingStrip.swift`
-- `apps/ios/Meeshy/Features/Main/Share/ShareSubject.swift`
+- `apps/ios/Meeshy/Features/Share/ShareContentZone.swift`
+- `apps/ios/Meeshy/Features/Share/ShareIncomingStrip.swift`
+- `apps/ios/Meeshy/Features/Share/ShareSubject.swift`
 
 </details>
 
@@ -445,7 +445,7 @@ Transposition Android : Cliché App Group + INSendMessageIntent -> Sharing Short
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Share/ShareDirectorySnapshot.swift`
+- `apps/ios/Meeshy/Features/Share/ShareDirectorySnapshot.swift`
 - `apps/ios/MeeshyShareExtension/ShareConversationStore.swift`
 
 </details>
@@ -495,7 +495,7 @@ Transposition Android : Pur Swift -> Kotlin pur dans :core:model ou feature:chat
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Export/MessageCardDiscussion.swift`
+- `apps/ios/Meeshy/Features/Export/MessageCardDiscussion.swift`
 
 </details>
 
@@ -518,8 +518,8 @@ Transposition Android : Menus contextuels iOS -> entrée de MessageActionMenu / 
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Export/MessageCardExportMenu.swift`
-- `apps/ios/Meeshy/Features/Main/Export/MessageCardExportPresenter.swift`
+- `apps/ios/Meeshy/Features/Export/MessageCardExportMenu.swift`
+- `apps/ios/Meeshy/Features/Export/MessageCardExportPresenter.swift`
 
 </details>
 
@@ -544,8 +544,8 @@ Transposition Android : SwiftUI + Liquid Glass -> Compose Canvas / Bitmap rendu 
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Export/MessageCardExportSheet.swift`
-- `apps/ios/Meeshy/Features/Main/Export/MessageCardExportSheet+Stage.swift`
+- `apps/ios/Meeshy/Features/Export/MessageCardExportSheet.swift`
+- `apps/ios/Meeshy/Features/Export/MessageCardExportSheet+Stage.swift`
 
 </details>
 
@@ -568,8 +568,8 @@ Transposition Android : LazyVGrid + NSCache -> LazyVerticalGrid + LruCache/Coil 
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Export/MessageCardExportGallery.swift`
-- `apps/ios/Meeshy/Features/Main/Export/MessageCardThumbnails.swift`
+- `apps/ios/Meeshy/Features/Export/MessageCardExportGallery.swift`
+- `apps/ios/Meeshy/Features/Export/MessageCardThumbnails.swift`
 
 </details>
 
@@ -592,8 +592,8 @@ Transposition Android : AVAsset/AVAudioFile -> MediaMetadataRetriever + décodag
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Export/MessageCardMediaLoader.swift`
-- `apps/ios/Meeshy/Features/Main/Export/MessageCardExcerptStrip.swift`
+- `apps/ios/Meeshy/Features/Export/MessageCardMediaLoader.swift`
+- `apps/ios/Meeshy/Features/Export/MessageCardExcerptStrip.swift`
 
 </details>
 
@@ -618,9 +618,9 @@ Transposition Android : AVAssetWriter / ImageIO -> MediaCodec + MediaMuxer / enc
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Export/MessageCardExportSheet+Output.swift`
-- `apps/ios/Meeshy/Features/Main/Export/MessageCardSharePayload.swift`
-- `apps/ios/Meeshy/Features/Main/Export/MessageCardMotionExporter.swift`
+- `apps/ios/Meeshy/Features/Export/MessageCardExportSheet+Output.swift`
+- `apps/ios/Meeshy/Features/Export/MessageCardSharePayload.swift`
+- `apps/ios/Meeshy/Features/Export/MessageCardMotionExporter.swift`
 
 </details>
 
@@ -644,9 +644,9 @@ Transposition Android : Plateau Liquid Glass -> BottomSheet Compose non modal av
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Export/MessageCardExportTray.swift`
-- `apps/ios/Meeshy/Features/Main/Export/MessageCardExportTray+Imagine.swift`
-- `apps/ios/Meeshy/Features/Main/Export/MessageCardExportText.swift`
+- `apps/ios/Meeshy/Features/Export/MessageCardExportTray.swift`
+- `apps/ios/Meeshy/Features/Export/MessageCardExportTray+Imagine.swift`
+- `apps/ios/Meeshy/Features/Export/MessageCardExportText.swift`
 
 </details>
 
@@ -696,8 +696,8 @@ Transposition Android : Live Activity d'envoi -> ForegroundInfo du OutboxFlushWo
 
 <details><summary>Sources iOS (4)</summary>
 
-- `apps/ios/Meeshy/Features/Main/LiveActivity/OutboxActivityLaw.swift`
-- `apps/ios/Meeshy/Features/Main/LiveActivity/OutboxLiveActivityCoordinator.swift`
+- `apps/ios/Meeshy/Features/LiveActivity/OutboxActivityLaw.swift`
+- `apps/ios/Meeshy/Features/LiveActivity/OutboxLiveActivityCoordinator.swift`
 - `apps/ios/MeeshyWidgets/OutboxActivityAttributes.swift`
 - `apps/ios/MeeshyWidgets/OutboxLiveActivity.swift`
 
@@ -777,7 +777,7 @@ Transposition Android : Fiche App Group + lien meeshy://compose-share -> Intent 
 - `apps/ios/MeeshyShareExtension/ShareComposeHandoff.swift`
 - `apps/ios/Meeshy/Features/Main/Services/ShareComposeHandoffConsumer.swift`
 - `apps/ios/Meeshy/Features/Main/Services/ShareComposeLink.swift`
-- `apps/ios/Meeshy/Features/Main/Composer/ShareComposeDoor.swift`
+- `apps/ios/Meeshy/Features/Composer/ShareComposeDoor.swift`
 
 </details>
 
@@ -802,9 +802,9 @@ Transposition Android : onAppear près de la fin -> LazyColumn avec détection d
 
 <details><summary>Sources iOS (5)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/ShareLinkArrivalsListView.swift`
-- `apps/ios/Meeshy/Features/Main/Views/ShareLinkArrivalsSection.swift`
-- `apps/ios/Meeshy/Features/Main/ViewModels/ShareLinkArrivalsListViewModel.swift`
+- `apps/ios/Meeshy/Features/Links/Views/ShareLinkArrivalsListView.swift`
+- `apps/ios/Meeshy/Features/Links/Views/ShareLinkArrivalsSection.swift`
+- `apps/ios/Meeshy/Features/Links/ViewModels/ShareLinkArrivalsListViewModel.swift`
 - `packages/MeeshySDK/Sources/MeeshySDK/Models/ShareLinkArrivalStats.swift`
 - `packages/MeeshySDK/Sources/MeeshySDK/Models/ShareLinkArrivalsPage.swift`
 
@@ -883,9 +883,9 @@ Transposition Android : Live Activity d'appel + CallKit/PushKit -> notification 
 
 <details><summary>Sources iOS (6)</summary>
 
-- `apps/ios/Meeshy/Features/Main/LiveActivity/CallActivityLaw.swift`
-- `apps/ios/Meeshy/Features/Main/LiveActivity/CallLiveActivityCoordinator.swift`
-- `apps/ios/Meeshy/Features/Main/LiveActivity/CallActivityAvatarPublisher.swift`
+- `apps/ios/Meeshy/Features/LiveActivity/CallActivityLaw.swift`
+- `apps/ios/Meeshy/Features/LiveActivity/CallLiveActivityCoordinator.swift`
+- `apps/ios/Meeshy/Features/LiveActivity/CallActivityAvatarPublisher.swift`
 - `apps/ios/MeeshyWidgets/CallActivityAttributes.swift`
 - `apps/ios/MeeshyWidgets/CallLiveActivity.swift`
 - `apps/ios/MeeshyWidgets/LiveActivityAvatarStore.swift`
@@ -1004,7 +1004,7 @@ Transposition Android : OfflineQueue GRDB -> OutboxRepository Room + OutboxFlush
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Share/ShareDispatcher.swift`
+- `apps/ios/Meeshy/Features/Share/ShareDispatcher.swift`
 - `apps/ios/Meeshy/Features/Main/Services/ShareFanoutOriginResolver.swift`
 
 </details>
@@ -1065,11 +1065,11 @@ Transposition Android : Sous-vues Equatable SwiftUI -> composables stables (reme
 
 <details><summary>Sources iOS (5)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Share/ShareRecipient.swift`
-- `apps/ios/Meeshy/Features/Main/Share/ShareRecipientDirectory.swift`
-- `apps/ios/Meeshy/Features/Main/Share/ShareRecipientRow.swift`
-- `apps/ios/Meeshy/Features/Main/Share/ShareSourcing.swift`
-- `apps/ios/Meeshy/Features/Main/Share/ShareSheetViewModel.swift`
+- `apps/ios/Meeshy/Features/Share/ShareRecipient.swift`
+- `apps/ios/Meeshy/Features/Share/ShareRecipientDirectory.swift`
+- `apps/ios/Meeshy/Features/Share/ShareRecipientRow.swift`
+- `apps/ios/Meeshy/Features/Share/ShareSourcing.swift`
+- `apps/ios/Meeshy/Features/Share/ShareSheetViewModel.swift`
 
 </details>
 
@@ -1095,7 +1095,7 @@ Transposition Android : safeAreaInset(.bottom) + ultraThinMaterial -> Scaffold b
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Share/ShareSendBar.swift`
+- `apps/ios/Meeshy/Features/Share/ShareSendBar.swift`
 
 </details>
 
@@ -1122,11 +1122,11 @@ Transposition Android : NavigationStack plein écran iOS -> écran Compose Mater
 
 <details><summary>Sources iOS (5)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Share/ShareSheetView.swift`
-- `apps/ios/Meeshy/Features/Main/Share/ShareSheetViewModel.swift`
-- `apps/ios/Meeshy/Features/Main/Share/ShareSheetCopy.swift`
-- `apps/ios/Meeshy/Features/Main/Share/ShareStringsBundle.swift`
-- `apps/ios/Meeshy/Features/Main/Share/ShareSheetHost+App.swift`
+- `apps/ios/Meeshy/Features/Share/ShareSheetView.swift`
+- `apps/ios/Meeshy/Features/Share/ShareSheetViewModel.swift`
+- `apps/ios/Meeshy/Features/Share/ShareSheetCopy.swift`
+- `apps/ios/Meeshy/Features/Share/ShareStringsBundle.swift`
+- `apps/ios/Meeshy/Features/Share/ShareSheetHost+App.swift`
 
 </details>
 
@@ -1153,11 +1153,11 @@ Transposition Android : Formulaire SwiftUI -> écran Compose avec états de brou
 
 <details><summary>Sources iOS (8)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/ShareLinkDetailView.swift`
-- `apps/ios/Meeshy/Features/Main/Views/ShareLinkEditForm.swift`
-- `apps/ios/Meeshy/Features/Main/Views/ShareLinkConfigurationCard.swift`
-- `apps/ios/Meeshy/Features/Main/Views/ShareLinkDetailCopy.swift`
-- `apps/ios/Meeshy/Features/Main/ViewModels/ShareLinkDetailViewModel.swift`
+- `apps/ios/Meeshy/Features/Links/Views/ShareLinkDetailView.swift`
+- `apps/ios/Meeshy/Features/Links/Views/ShareLinkEditForm.swift`
+- `apps/ios/Meeshy/Features/Links/Views/ShareLinkConfigurationCard.swift`
+- `apps/ios/Meeshy/Features/Links/Views/ShareLinkDetailCopy.swift`
+- `apps/ios/Meeshy/Features/Links/ViewModels/ShareLinkDetailViewModel.swift`
 - `packages/MeeshySDK/Sources/MeeshySDK/Models/ShareLinkSettings.swift`
 - `packages/MeeshySDK/Sources/MeeshySDK/Models/ShareLinkDateFormat.swift`
 - `packages/MeeshySDK/Sources/MeeshySDK/Services/ShareLinkService.swift`
@@ -1318,7 +1318,7 @@ Transposition Android : UIActivityItemProvider paresseux -> Intent ACTION_SEND a
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/ShareableLink.swift`
+- `apps/ios/Meeshy/Features/Links/Views/ShareableLink.swift`
 - `packages/MeeshySDK/Sources/MeeshyUI/Media/ShareFilePlaceholder.swift`
 
 </details>
@@ -1344,7 +1344,7 @@ Transposition Android : extensionContext.open + App Group -> même activité/pro
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Share/ShareRelayHandoff.swift`
+- `apps/ios/Meeshy/Features/Share/ShareRelayHandoff.swift`
 - `apps/ios/Meeshy/Features/Main/Services/ShareRelayConsumer.swift`
 
 </details>
@@ -1370,7 +1370,7 @@ Transposition Android : Sheet SwiftUI -> ModalBottomSheet ou écran Compose plei
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/ShareLinkIdentitySheet.swift`
+- `apps/ios/Meeshy/Features/Links/Views/ShareLinkIdentitySheet.swift`
 - `packages/MeeshySDK/Sources/MeeshySDK/Models/ShareLinkInvitationTerms.swift`
 - `packages/MeeshySDK/Sources/MeeshySDK/Services/ShareLinkEntryPolicy.swift`
 
@@ -1397,7 +1397,7 @@ Transposition Android : refreshable SwiftUI -> pullToRefresh Material 3.
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/ShareLinksView.swift`
+- `apps/ios/Meeshy/Features/Links/Views/ShareLinksView.swift`
 - `packages/MeeshySDK/Sources/MeeshySDK/Models/ShareLinkModels.swift`
 
 </details>

@@ -273,7 +273,9 @@ struct ConversationEncryptionDetailSheet: View {
         ledger.learn(served, for: opened)
         guard let destination = ReadableDirectOpening.destination(
             opened: opened, from: conversationId, openedIsEndToEnd: ledger.remembersEndToEnd(opened)
-        ) else { return failOpeningReadableDirect() }
+        ) else {
+            return failOpeningReadableDirect(servedGap: ReadableDirectOpening.returnsTheServedGap(opened: opened, from: conversationId))
+        }
         dismiss()
         onOpenConversation(destination)
     }
@@ -295,10 +297,14 @@ struct ConversationEncryptionDetailSheet: View {
         onOpenConversation(pairId)
     }
 
-    private func failOpeningReadableDirect() {
-        errorMessage = String(localized: "conversation.encryption.detail.plaintextDirectFailed",
-                              defaultValue: "La conversation non chiffrée n’a pas pu être ouverte. Réessayez.",
-                              bundle: .main)
+    private func failOpeningReadableDirect(servedGap: Bool = false) {
+        errorMessage = servedGap
+            ? String(localized: "conversation.encryption.detail.plaintextDirectServedGap",
+                     defaultValue: "Le serveur présente déjà ce tête-à-tête sans chiffrement : rétablissez d’abord le chiffrement de bout en bout ici, puis ouvrez la conversation non chiffrée à côté.",
+                     bundle: .main)
+            : String(localized: "conversation.encryption.detail.plaintextDirectFailed",
+                     defaultValue: "La conversation non chiffrée n’a pas pu être ouverte. Réessayez.",
+                     bundle: .main)
         HapticFeedback.error()
     }
 

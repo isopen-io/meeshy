@@ -103,7 +103,7 @@ final class CallTranscriptJournalTests: XCTestCase {
         XCTAssertTrue(code.contains("CallJournalList(segments: segments"), "La feuille du journal monte la liste commune")
         XCTAssertTrue(code.contains("CallJournalList(\n            segments: transcriptionService.displayedSegments"), "Le panneau audio aussi")
         XCTAssertTrue(code.contains("transcriptionService.displayedSegments.suffix(2).map(captionLine)"))
-        let service = try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallTranscriptionService.swift")
+        let service = try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallTranscriptionService.swift")
         XCTAssertFalse(service.contains("segmentRetentionLimit"), "Plus de plafond de 50 phrases sur le journal")
     }
 }

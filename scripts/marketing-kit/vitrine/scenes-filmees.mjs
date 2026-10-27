@@ -15,7 +15,7 @@
 //               { type: 'tap', x, y } · { type: 'swipe', de: [x, y], a: [x, y], dureeS }
 //               { type: 'attendre', ms } · { type: 'fichier', nom } (dépose un fichier dans Documents/vitrine)
 //
-// Les durées du jeu sont celles de `GameTimeline` (apps/ios/Meeshy/Features/Main/Game/Choreography). Les scènes du jeu
+// Les durées du jeu sont celles de `GameTimeline` (apps/ios/Meeshy/Features/Game/Choreography). Les scènes du jeu
 // s'ancrent sur leur PREMIER MOUVEMENT (étape virtuelle « mouvement », lue dans le film) : la célébration part quand
 // l'état servi est rendu, et ce rendu tarde avec la charge de la machine.
 //

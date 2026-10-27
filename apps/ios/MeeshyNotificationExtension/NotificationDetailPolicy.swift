@@ -1,5 +1,5 @@
 import Foundation
-import MeeshySDK
+import MeeshyCore
 
 /// **Ce que l'extension de notification — et les actions de la bannière — ont
 /// le droit de tirer du DÉTAIL d'un message** (#8858, sous-lot iOS de #8856).

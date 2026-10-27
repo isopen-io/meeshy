@@ -354,9 +354,9 @@ Transposition Android : Génération à l'arrivée des modules ; les chaînes co
 <details><summary>Sources iOS (4)</summary>
 
 - `apps/ios/Meeshy/Localizable.xcstrings (préfixes composer., focal., lentille.)`
-- `apps/ios/Meeshy/Features/Main/Composer`
-- `apps/ios/Meeshy/Features/Main/Focal`
-- `apps/ios/Meeshy/Features/Main/Lentille`
+- `apps/ios/Meeshy/Features/Composer`
+- `apps/ios/Meeshy/Features/Focal`
+- `apps/ios/Meeshy/Features/Lens`
 
 </details>
 
@@ -378,7 +378,7 @@ Transposition Android : Création d'un module :feature:game ; ses chaînes sont 
 <details><summary>Sources iOS (2)</summary>
 
 - `apps/ios/Meeshy/Localizable.xcstrings (préfixes game., game2., progression., achievement.)`
-- `apps/ios/Meeshy/Features/Main/Game`
+- `apps/ios/Meeshy/Features/Game`
 
 </details>
 
@@ -845,7 +845,7 @@ Transposition Android : Génération ; les libellés iOS-only (Siri, Live Activi
 <details><summary>Sources iOS (2)</summary>
 
 - `apps/ios/Meeshy/Localizable.xcstrings (préfixes settings., export., a11y., accessibility., sessions., about., tracking., sync.)`
-- `apps/ios/Meeshy/Features/Main/Views/AboutView.swift`
+- `apps/ios/Meeshy/Features/Settings/Views/AboutView.swift`
 
 </details>
 
@@ -1008,8 +1008,8 @@ Transposition Android : legal.xml reste un fichier non généré ; sa date et so
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/TermsOfServiceView.swift`
-- `apps/ios/Meeshy/Features/Main/Views/PrivacyPolicyView.swift`
+- `apps/ios/Meeshy/Features/Settings/Views/TermsOfServiceView.swift`
+- `apps/ios/Meeshy/Features/Settings/Views/PrivacyPolicyView.swift`
 - `apps/ios/Meeshy/Localizable.xcstrings (legal.*)`
 
 </details>
