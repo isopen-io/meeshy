@@ -155,6 +155,14 @@
     <string name="reading_mode_summary_title">Summary</string>
     <string name="recentMedia_resolveFailed">This media couldn\'t be prepared — use the full photo library</string>
     <string name="recentMedia_resolveFailed_multiple">%d media items couldn\'t be prepared — use the full photo library</string>
+    <string name="riviere_bubble_actions">More options</string>
+    <string name="riviere_bubble_open_in_thread">Open in the thread</string>
+    <string name="riviere_bubble_reply_hint">Opens the quoted message</string>
+    <string name="riviere_bubble_reply_to">replying to %s</string>
+    <string name="riviere_header_offscreen_left">%d voices to the left</string>
+    <string name="riviere_header_offscreen_right">%d voices to the right</string>
+    <string name="riviere_header_you">You</string>
+    <string name="riviere_time_handle_label">Time axis</string>
     <string name="sentiment_very_negative">Very negative</string>
     <string name="sentiment_very_positive">Very positive</string>
     <string name="share_target_cancel">Cancel</string>

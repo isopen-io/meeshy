@@ -156,6 +156,14 @@
     <string name="reading_mode_summary_title">Resumo</string>
     <string name="recentMedia_resolveFailed">Não foi possível preparar esta mídia — use a biblioteca de fotos completa</string>
     <string name="recentMedia_resolveFailed_multiple">Não foi possível preparar %d mídias — use toda a fototeca</string>
+    <string name="riviere_bubble_actions">Mais opções</string>
+    <string name="riviere_bubble_open_in_thread">Abrir no fio</string>
+    <string name="riviere_bubble_reply_hint">Abre a mensagem citada</string>
+    <string name="riviere_bubble_reply_to">em resposta a %s</string>
+    <string name="riviere_header_offscreen_left">%d vozes à esquerda</string>
+    <string name="riviere_header_offscreen_right">%d vozes à direita</string>
+    <string name="riviere_header_you">Você</string>
+    <string name="riviere_time_handle_label">Eixo do tempo</string>
     <string name="sentiment_very_negative">Muito negativo</string>
     <string name="sentiment_very_positive">Muito positivo</string>
     <string name="share_target_cancel">Cancelar</string>
