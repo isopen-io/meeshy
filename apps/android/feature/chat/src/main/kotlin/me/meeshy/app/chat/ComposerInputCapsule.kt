@@ -43,6 +43,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import me.meeshy.feature.chat.R
@@ -56,6 +57,7 @@ import me.meeshy.ui.theme.MeeshyMotion
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
+import me.meeshy.ui.theme.boundedScale
 
 /**
  * Le champ de saisie, capsule de VERRE (iOS `textInputField`) : rayon 22, 44 dp au minimum, 1 à 5
@@ -81,7 +83,11 @@ internal fun ComposerInputCapsule(
     val reduceMotion = LocalReduceMotion.current
     val border = ComposerFocusBorderPolicy.resolve(focused)
     val shape = RoundedCornerShape(MeeshyRadius.xlPlus)
-    val textStyle = TextStyle(fontSize = 16.sp, lineHeight = 21.sp, color = MeeshyTheme.tokens.textPrimary)
+    val textStyle = TextStyle(
+        fontSize = 16.sp.boundedScale(),
+        lineHeight = 21.sp.boundedScale(),
+        color = MeeshyTheme.tokens.textPrimary,
+    )
     val scale by animateFloatAsState(
         targetValue = if (focused && !reduceMotion) 1.02f else 1f,
         animationSpec = spring(dampingRatio = 0.55f, stiffness = MeeshyMotion.stiffnessForResponse(0.35f)),
@@ -160,6 +166,7 @@ internal fun ComposerInputCapsule(
                             style = textStyle,
                             color = MeeshyTheme.tokens.textMuted,
                             maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                         )
                     }
                     inner()
