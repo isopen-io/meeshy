@@ -1,5 +1,6 @@
 import Foundation
 import GRDB
+import os
 
 /// **Une publication que le serveur n'a pas encore confirmée** (#13415) — lue
 /// depuis sa ligne `.createPost`, pour la liste « Publications non envoyées ».
