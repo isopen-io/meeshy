@@ -18,6 +18,11 @@
         <item quantity="many">Eliminare %d messaggi?</item>
         <item quantity="other">Eliminare %d messaggi?</item>
     </plurals>
+    <string name="chat_engagement_a11y_streak">%1$s · Scintille: %2$d · Oggi: %3$d</string>
+    <string name="chat_engagement_a11y_streak_days_one">%d giorno</string>
+    <string name="chat_engagement_a11y_streak_days_other">%d giorni</string>
+    <string name="chat_engagement_a11y_total_one">%s scintilla guadagnata in questa conversazione</string>
+    <string name="chat_engagement_a11y_total_other">%s scintille guadagnate in questa conversazione</string>
     <string name="chat_exit_blocked_after_read">Scompare dopo la lettura: non si inoltra, non si salva e non si condivide.</string>
     <string name="chat_exit_blocked_attachment_not_in_source">Questo elemento non fa più parte del messaggio.</string>
     <string name="chat_exit_blocked_encrypted_source">Questo contenuto cifrato viene copiato da questo dispositivo.</string>
@@ -25,6 +30,7 @@
     <string name="chat_exit_blocked_title">Questo messaggio resta su Meeshy</string>
     <string name="chat_exit_blocked_understood">Ho capito</string>
     <string name="chat_exit_blocked_view_once">È a visualizzazione singola: non si inoltra, non si salva e non si condivide. Resta nella conversazione finché non viene vista.</string>
+    <string name="chat_header_flame_hint">Nasconde la fiamma fino alla prossima apertura dell\'intestazione</string>
     <string name="chat_selection_cap_reached">Massimo 100 messaggi</string>
     <string name="chat_selection_count">%d selezionati</string>
     <string name="chat_selection_toggle_message">Messaggio</string>

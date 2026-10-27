@@ -40,8 +40,20 @@ internal class ChatHeaderMemory(context: Context) {
         prefs.edit().putStringSet(EXPANDED_KEY, ids).apply()
     }
 
+    /** La Flamme masquée d'un toucher (#13297) : elle revient au prochain dépliement de l'en-tête. */
+    fun isFlameDismissed(conversationId: String): Boolean =
+        conversationId in prefs.getStringSet(FLAME_DISMISSED_KEY, emptySet()).orEmpty()
+
+    fun setFlameDismissed(dismissed: Boolean, conversationId: String) {
+        if (conversationId.isEmpty()) return
+        val ids = prefs.getStringSet(FLAME_DISMISSED_KEY, emptySet()).orEmpty().toMutableSet()
+        if (dismissed) ids += conversationId else ids -= conversationId
+        prefs.edit().putStringSet(FLAME_DISMISSED_KEY, ids).apply()
+    }
+
     private companion object {
         const val PREFS = "meeshy.conversationHeader"
         const val EXPANDED_KEY = "meeshy.conversationHeader.expanded"
+        const val FLAME_DISMISSED_KEY = "meeshy.conversationHeader.flameDismissed"
     }
 }
