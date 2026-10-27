@@ -10,6 +10,7 @@ import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.MessageEffectFlags
 import me.meeshy.sdk.model.MessageEffects
 import me.meeshy.sdk.model.SendMessageRequest
+import me.meeshy.sdk.model.SharedPlace
 import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.outbox.OutboxDependencyKey
 import me.meeshy.sdk.outbox.OutboxKind
@@ -74,6 +75,28 @@ class MessageSendCoordinatorTest {
         assertThat(queued.kindEnum).isEqualTo(OutboxKind.SEND_MESSAGE)
         assertThat(queued.targetId).isEqualTo("c1")
         assertThat(harness.outbox.deliverable("message:c2")).isEmpty()
+    }
+
+    @Test
+    fun `a shared place travels on the bubble and on the request, and survives a retry`() = runHarnessTest { harness ->
+        val place = SharedPlace(48.8566, 2.3522, name = "Tour Eiffel", address = "Paris", category = "landmark")
+        val coordinator = coordinator(harness)
+        val cid = coordinator.sendOptimistic("c1", "", "fr", sender, location = place)
+
+        assertThat(harness.cachedMessage(cid).location).isEqualTo(place)
+        assertThat(harness.queuedRequest().location).isEqualTo(place)
+        assertThat(harness.queuedRequest().content).isEmpty()
+
+        coordinator.markSendFailed(cid)
+        harness.outbox.discard(cid)
+        coordinator.retrySend(cid)
+        assertThat(harness.queuedRequest().location).isEqualTo(place)
+    }
+
+    @Test
+    fun `a text send carries no place`() = runHarnessTest { harness ->
+        coordinator(harness).sendOptimistic("c1", "salut", "fr", sender)
+        assertThat(harness.queuedRequest().location).isNull()
     }
 
     @Test

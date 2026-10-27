@@ -1,5 +1,6 @@
 package me.meeshy.sdk.model.location
 
+import me.meeshy.sdk.model.SharedMapStyle
 import kotlin.math.PI
 import kotlin.math.atan
 import kotlin.math.floor
@@ -12,7 +13,7 @@ data class GeoPoint(val latitude: Double, val longitude: Double)
 
 /** Une tuile à poser dans la fenêtre : son index monde et son décalage en pixels depuis le coin haut-gauche. */
 data class TilePlacement(val x: Int, val y: Int, val zoom: Int, val offsetX: Int, val offsetY: Int) {
-    val url: String get() = SlippyMap.tileUrl(x, y, zoom)
+    fun url(style: SharedMapStyle = SharedMapStyle.STANDARD): String = SlippyMap.tileUrl(x, y, zoom, style)
 }
 
 /**
@@ -26,16 +27,30 @@ object SlippyMap {
     const val MAX_ZOOM: Int = 19
     const val MAX_LATITUDE: Double = 85.0511287798
 
-    fun tileUrl(x: Int, y: Int, zoom: Int): String = "https://tile.openstreetmap.org/$zoom/$x/$y.png"
+    /**
+     * Plan = OpenStreetMap. Hybride et satellite = imagerie Esri (le plan à étiquettes de l'un ne
+     * se superpose pas sans SDK : l'hybride sert donc l'imagerie, écart consigné en issue).
+     */
+    fun tileUrl(x: Int, y: Int, zoom: Int, style: SharedMapStyle = SharedMapStyle.STANDARD): String = when (style) {
+        SharedMapStyle.STANDARD -> "https://tile.openstreetmap.org/$zoom/$x/$y.png"
+        SharedMapStyle.HYBRID, SharedMapStyle.IMAGERY ->
+            "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/$zoom/$y/$x"
+    }
+
+    /** Mention d'attribution exigée par les fournisseurs de tuiles — un nom propre, pas un libellé traduit. */
+    fun attribution(style: SharedMapStyle): String = when (style) {
+        SharedMapStyle.STANDARD -> "© OpenStreetMap"
+        SharedMapStyle.HYBRID, SharedMapStyle.IMAGERY -> "© Esri, Maxar"
+    }
 
     fun clampZoom(zoom: Int): Int = zoom.coerceIn(MIN_ZOOM, MAX_ZOOM)
 
-    private fun worldSize(zoom: Int): Double = TILE_SIZE * 2.0.pow(zoom)
+    private fun worldSize(zoom: Int, tileSize: Int): Double = tileSize * 2.0.pow(zoom)
 
     /** Position du point sur le monde projeté à ce zoom, en pixels. */
-    fun worldPixel(point: GeoPoint, zoom: Int): Pair<Double, Double> {
+    fun worldPixel(point: GeoPoint, zoom: Int, tileSize: Int = TILE_SIZE): Pair<Double, Double> {
         val lat = point.latitude.coerceIn(-MAX_LATITUDE, MAX_LATITUDE)
-        val size = worldSize(zoom)
+        val size = worldSize(zoom, tileSize)
         val x = (point.longitude + 180.0) / 360.0 * size
         val sinLat = kotlin.math.sin(Math.toRadians(lat))
         val y = (0.5 - ln((1 + sinLat) / (1 - sinLat)) / (4 * PI)) * size
@@ -43,8 +58,8 @@ object SlippyMap {
     }
 
     /** Inverse de [worldPixel]. */
-    fun point(worldX: Double, worldY: Double, zoom: Int): GeoPoint {
-        val size = worldSize(zoom)
+    fun point(worldX: Double, worldY: Double, zoom: Int, tileSize: Int = TILE_SIZE): GeoPoint {
+        val size = worldSize(zoom, tileSize)
         val lon = worldX / size * 360.0 - 180.0
         val n = PI - 2 * PI * worldY / size
         val lat = Math.toDegrees(atan(sinh(n)))
@@ -52,23 +67,23 @@ object SlippyMap {
     }
 
     /** Le point sous le doigt qui a glissé de ([dx], [dy]) pixels : la carte suit le doigt, le centre part en sens inverse. */
-    fun panned(center: GeoPoint, dx: Double, dy: Double, zoom: Int): GeoPoint {
-        val (wx, wy) = worldPixel(center, zoom)
-        val size = worldSize(zoom)
-        return point(wx - dx, (wy - dy).coerceIn(0.0, size), zoom)
+    fun panned(center: GeoPoint, dx: Double, dy: Double, zoom: Int, tileSize: Int = TILE_SIZE): GeoPoint {
+        val (wx, wy) = worldPixel(center, zoom, tileSize)
+        val size = worldSize(zoom, tileSize)
+        return point(wx - dx, (wy - dy).coerceIn(0.0, size), zoom, tileSize)
     }
 
     /** Les tuiles qui couvrent une fenêtre de [widthPx] x [heightPx] centrée sur [center]. */
-    fun tilesCovering(center: GeoPoint, zoom: Int, widthPx: Int, heightPx: Int): List<TilePlacement> {
+    fun tilesCovering(center: GeoPoint, zoom: Int, widthPx: Int, heightPx: Int, tileSize: Int = TILE_SIZE): List<TilePlacement> {
         if (widthPx <= 0 || heightPx <= 0) return emptyList()
-        val (cx, cy) = worldPixel(center, zoom)
+        val (cx, cy) = worldPixel(center, zoom, tileSize)
         val left = cx - widthPx / 2.0
         val top = cy - heightPx / 2.0
         val perAxis = 1 shl zoom
-        val firstX = floor(left / TILE_SIZE).toInt()
-        val lastX = floor((left + widthPx - 1) / TILE_SIZE).toInt()
-        val firstY = floor(top / TILE_SIZE).toInt()
-        val lastY = floor((top + heightPx - 1) / TILE_SIZE).toInt()
+        val firstX = floor(left / tileSize).toInt()
+        val lastX = floor((left + widthPx - 1) / tileSize).toInt()
+        val firstY = floor(top / tileSize).toInt()
+        val lastY = floor((top + heightPx - 1) / tileSize).toInt()
         return buildList {
             for (ty in firstY..lastY) {
                 if (ty < 0 || ty >= perAxis) continue
@@ -79,8 +94,8 @@ object SlippyMap {
                             x = wrapped,
                             y = ty,
                             zoom = zoom,
-                            offsetX = (tx * TILE_SIZE - left).toInt(),
-                            offsetY = (ty * TILE_SIZE - top).toInt(),
+                            offsetX = floor(tx * tileSize - left).toInt(),
+                            offsetY = floor(ty * tileSize - top).toInt(),
                         ),
                     )
                 }

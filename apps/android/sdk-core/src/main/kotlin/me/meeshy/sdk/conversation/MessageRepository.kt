@@ -13,6 +13,7 @@ import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.MessageEffects
+import me.meeshy.sdk.model.SharedPlace
 import me.meeshy.sdk.net.api.MessageApi
 import me.meeshy.sdk.net.api.TranslationApi
 import me.meeshy.sdk.outbox.OutboxRepository
@@ -109,6 +110,7 @@ class MessageRepository internal constructor(
         messageType: String = "text",
         attachmentUploadCmids: List<String> = emptyList(),
         attachments: List<ApiMessageAttachment> = emptyList(),
+        location: SharedPlace? = null,
     ): String = sends.sendOptimistic(
         conversationId = conversationId,
         content = content,
@@ -122,6 +124,7 @@ class MessageRepository internal constructor(
         messageType = messageType,
         attachmentUploadCmids = attachmentUploadCmids,
         attachments = attachments,
+        location = location,
     )
 
     /**

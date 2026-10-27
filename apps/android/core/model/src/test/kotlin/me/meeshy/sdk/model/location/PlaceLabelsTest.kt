@@ -35,6 +35,13 @@ class PlaceLabelsTest {
     }
 
     @Test
+    fun `sans application de cartes le web prend le relais`() {
+        val p = SharedPlace(1.5, -2.5)
+        assertThat(PlaceLabels.webMapsUri(p)).isEqualTo("https://www.google.com/maps/search/?api=1&query=1.5,-2.5")
+        assertThat(PlaceLabels.webDirectionsUri(p)).isEqualTo("https://www.google.com/maps/dir/?api=1&destination=1.5,-2.5")
+    }
+
+    @Test
     fun `l'adresse copiable prefere le nom puis l'adresse puis les coordonnees`() {
         assertThat(PlaceLabels.copyableAddress(SharedPlace(1.0, 2.0, "N", "A"))).isEqualTo("N")
         assertThat(PlaceLabels.copyableAddress(SharedPlace(1.0, 2.0, null, "A"))).isEqualTo("A")

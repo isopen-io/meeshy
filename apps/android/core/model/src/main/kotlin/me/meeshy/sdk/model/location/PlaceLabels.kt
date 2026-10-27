@@ -47,6 +47,13 @@ object PlaceLabels {
         return "$base(${label.replace("(", "").replace(")", "")})"
     }
 
+    /** Repli sans application de cartes installée : la page web de Google Maps, ouverte par le navigateur. */
+    fun webMapsUri(place: SharedPlace): String =
+        "https://www.google.com/maps/search/?api=1&query=${place.latitude},${place.longitude}"
+
+    fun webDirectionsUri(place: SharedPlace): String =
+        "https://www.google.com/maps/dir/?api=1&destination=${place.latitude},${place.longitude}"
+
     /** Itinéraire pas à pas (Google Maps et compatibles) vers le lieu. */
     fun navigationUri(place: SharedPlace): String = "google.navigation:q=${place.latitude},${place.longitude}"
 }

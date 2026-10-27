@@ -1,6 +1,7 @@
 package me.meeshy.sdk.model.location
 
 import com.google.common.truth.Truth.assertThat
+import me.meeshy.sdk.model.SharedMapStyle
 import org.junit.Test
 
 class SlippyMapTest {
@@ -70,6 +71,27 @@ class SlippyMapTest {
     @Test
     fun `l'URL de tuile est celle d'OpenStreetMap`() {
         assertThat(SlippyMap.tileUrl(1, 2, 3)).isEqualTo("https://tile.openstreetmap.org/3/1/2.png")
+    }
+
+    @Test
+    fun `l'imagerie sert les tuiles Esri avec y avant x`() {
+        assertThat(SlippyMap.tileUrl(1, 2, 3, SharedMapStyle.IMAGERY)).endsWith("/tile/3/2/1")
+        assertThat(SlippyMap.tileUrl(1, 2, 3, SharedMapStyle.HYBRID)).isEqualTo(SlippyMap.tileUrl(1, 2, 3, SharedMapStyle.IMAGERY))
+    }
+
+    @Test
+    fun `chaque fournisseur est credite`() {
+        assertThat(SlippyMap.attribution(SharedMapStyle.STANDARD)).contains("OpenStreetMap")
+        assertThat(SlippyMap.attribution(SharedMapStyle.IMAGERY)).contains("Esri")
+    }
+
+    @Test
+    fun `une tuile logique de 128 un niveau plus haut couvre le meme monde`() {
+        val paris = GeoPoint(48.8566, 2.3522)
+        val (x256, y256) = SlippyMap.worldPixel(paris, 10, 256)
+        val (x128, y128) = SlippyMap.worldPixel(paris, 11, 128)
+        assertThat(x128).isWithin(1e-6).of(x256)
+        assertThat(y128).isWithin(1e-6).of(y256)
     }
 
     @Test
