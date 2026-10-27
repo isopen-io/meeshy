@@ -222,6 +222,10 @@ class OutboxRepository @Inject constructor(
             .map { it.toSet() }
             .distinctUntilChanged()
 
+    /** La file vue par la notification d'envoi : types et prérequis seulement, sans les `payload`. */
+    fun observeActivityItems(): Flow<List<me.meeshy.sdk.model.ongoing.OutboxActivityItem>> =
+        outboxDao.observeAll().map(OutboxActivityProjection::project).distinctUntilChanged()
+
     /** Rows the "Synchronisation…" indicator counts, live. */
     fun observeSyncIndicatorCount(): Flow<Int> =
         outboxDao.observeActiveCount(OutboxKindCatalog.syncIndicatorExcludedDiskValues)
