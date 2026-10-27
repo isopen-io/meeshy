@@ -179,6 +179,17 @@
     <string name="game2_visibility_saving">Salvataggio…</string>
     <string name="game_actions_one">%s azione</string>
     <string name="game_actions_other">%s azioni</string>
+    <string name="game_chest_claimed">Una nuova Offerta ti aspetta alla fine del prossimo sogno.</string>
+    <string name="game_chest_locked">Compi i tre atti del sogno per farla apparire.</string>
+    <string name="game_chest_open">Apri l’Offerta</string>
+    <string name="game_chest_opening">Apertura in corso…</string>
+    <string name="game_chest_reward_bonus_fifth">Premio: +%s, un quinto di Meesh</string>
+    <string name="game_chest_reward_bonus_whole">Premio: +%s, il prezzo di una Meesh</string>
+    <string name="game_chest_reward_fragment">Un frammento di stella</string>
+    <string name="game_chest_reward_freeze">Una Lucerna per la tua Fiamma</string>
+    <string name="game_chest_reward_glory">+%s di gloria</string>
+    <string name="game_chest_reward_points">+%s</string>
+    <string name="game_chest_title">L’Offerta</string>
     <string name="game_concept_atlas_how">Invia un messaggio e ricevine uno in una lingua: il timbro si posa.</string>
     <string name="game_concept_atlas_name">L’Atlante</string>
     <string name="game_concept_atlas_tip_1">Scrivi a qualcuno in una lingua diversa dalla tua.</string>
@@ -224,6 +235,9 @@
     <string name="game_concept_elans_use">Guarda quali famiglie sono attive, poi fai un gesto in una famiglia che manca. Finché lo slancio regge, ogni gesto fa scaturire più scintille.</string>
     <string name="game_concept_elans_what">Uno slancio è un moltiplicatore di scintille. Si accende quando sei attivo in più famiglie di gesti in questi giorni.</string>
     <string name="game_concept_elans_why">Uno slancio moltiplica le scintille dei tuoi prossimi gesti.</string>
+    <string name="game_concept_fact_balance">Hai</string>
+    <string name="game_concept_fact_cost">Serve</string>
+    <string name="game_concept_fact_done">Completate</string>
     <string name="game_concept_flame_how">Un gesto al giorno la alimenta; una Lucerna la custodisce per un giorno.</string>
     <string name="game_concept_flame_name">La Fiamma</string>
     <string name="game_concept_flame_tip_1">Fai almeno un gesto ogni giorno.</string>
@@ -293,6 +307,7 @@
     <string name="game_concept_season_use">Avanza di qualche passo, poi riscatta ogni sosta raggiunta: scintille, un frammento di stella, una Lucerna. Il viaggio compiuto dà la coppa del viaggio. Il Sigillo del viaggio è un oggetto da collezione, preso con le Meesh.</string>
     <string name="game_concept_season_what">Un viaggio dura otto settimane, in una terra di lingua, con quaranta soste e i loro doni gratuiti.</string>
     <string name="game_concept_season_why">Il viaggio dura otto settimane in terra di lingua, e finisce in coppa.</string>
+    <string name="game_concept_section_act">Tocca a te</string>
     <string name="game_concept_showcase_how">Ogni coppa ci arriva da sola. Tu scegli l’ordine e chi la vede.</string>
     <string name="game_concept_showcase_name">Trofei</string>
     <string name="game_concept_showcase_tip_1">Finisci in cima al tuo torneo per vincere una coppa.</string>
@@ -402,6 +417,7 @@
     <string name="game_mission_create_invite_link_other">Creare %s link d’invito</string>
     <string name="game_mission_cross_language_chat_one">Parlare con qualcuno che parla un’altra lingua</string>
     <string name="game_mission_cross_language_chat_other">Parlare con %s persone che parlano un’altra lingua</string>
+    <string name="game_mission_done">Compiuto</string>
     <string name="game_mission_finished">Terminata</string>
     <string name="game_mission_generic">Un atto del sogno</string>
     <string name="game_mission_gold_replies_received">Ricevi risposte da %s persone diverse</string>
@@ -414,9 +430,12 @@
     <string name="game_mission_long_chat">Invia %s messaggi</string>
     <string name="game_mission_missed">Mancata</string>
     <string name="game_mission_personal">Per te</string>
+    <string name="game_mission_prism">Prisma</string>
     <string name="game_mission_prism_foreign_exchange">Scrivi %s messaggi in una lingua diversa dalla tua</string>
     <string name="game_mission_prism_foreign_messages_one">Scrivi un messaggio in una lingua diversa dalla tua</string>
     <string name="game_mission_prism_foreign_messages_other">Scrivi %s messaggi in una lingua diversa dalla tua</string>
+    <string name="game_mission_progress">%1$s / %2$s · %3$s</string>
+    <string name="game_mission_progress_glory">%1$s / %2$s · %3$s · +%4$s di gloria</string>
     <string name="game_mission_publish_post_one">Pubblica un post</string>
     <string name="game_mission_publish_post_other">Pubblica %s post</string>
     <string name="game_mission_publish_reel_one">Pubblica un reel</string>
@@ -432,6 +451,8 @@
     <string name="game_mission_reply_story_other">Rispondere a %s storie</string>
     <string name="game_mission_reply_their_language_one">Rispondere a qualcuno nella sua lingua</string>
     <string name="game_mission_reply_their_language_other">Rispondere %s volte a qualcuno nella sua lingua</string>
+    <string name="game_mission_reroll">Cambia · %s</string>
+    <string name="game_mission_reroll_a11y">Cambia l’atto «%1$s» per %2$s</string>
     <string name="game_mission_send_attachments_one">Invia un allegato</string>
     <string name="game_mission_send_attachments_other">Invia %s allegati</string>
     <string name="game_mission_send_texts_one">Invia %s messaggio</string>
@@ -453,6 +474,9 @@
     <string name="game_mission_write_someone_new_one">Scrivere a qualcuno per la prima volta</string>
     <string name="game_mission_write_someone_new_other">Scrivere a %s persone per la prima volta</string>
     <string name="game_missions_locked">Al livello 5, i tuoi antenati ti mandano ogni notte un sogno in tre atti, e un’Offerta. Sei al livello %s.</string>
+    <string name="game_missions_offline">Offline: cambiare un atto o aprire l’Offerta riprenderà online.</string>
+    <string name="game_missions_prism_day">Giorno del Prisma: uno degli atti si gioca in una lingua diversa dalla tua.</string>
+    <string name="game_missions_title">Il sogno di stanotte</string>
     <string name="game_progression_empty">Nessuna attività per ora. Invia un messaggio, pubblica una storia… la tua prima medaglia si accende al primo gesto.</string>
     <string name="game_progression_load_error">Impossibile caricare i progressi</string>
     <string name="game_progression_loading">Caricamento dei progressi</string>
@@ -484,6 +508,9 @@
         <item quantity="other">%d scintille</item>
     </plurals>
     <string name="game_sparks_debt">Un’ombra su %s scintille</string>
+    <string name="game_spend_missing_reroll">Mancano %s per cambiare questo atto.</string>
+    <string name="game_starFragments_one">%s frammento di stella</string>
+    <string name="game_starFragments_other">%s frammenti di stella</string>
     <plurals name="game_streak_record">
         <item quantity="one">La tua Fiamma più lunga: %d giorno</item>
         <item quantity="many">La tua Fiamma più lunga: %d giorni</item>

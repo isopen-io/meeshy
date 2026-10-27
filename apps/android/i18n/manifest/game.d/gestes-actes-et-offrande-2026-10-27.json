@@ -1,0 +1,145 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:game": {
+      "resDir": "feature/game/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.section.act",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.missions.title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.missions.prism_day",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.missions.offline",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.mission.reroll",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.mission.reroll.a11y",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.mission.prism",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.mission.done",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.mission.progress",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.mission.progress_glory",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.spend.missing.reroll",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.fact.balance",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.fact.cost",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.fact.done",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.chest.title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.chest.locked",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.chest.opening",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.chest.open",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.chest.claimed",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.chest.reward.points",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.chest.reward.glory",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.chest.reward.fragment",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.chest.reward.freeze",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.chest.reward.bonus.whole",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.chest.reward.bonus.fifth",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.starFragments.one",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.starFragments.other",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

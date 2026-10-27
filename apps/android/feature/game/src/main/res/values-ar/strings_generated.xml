@@ -179,6 +179,17 @@
     <string name="game2_visibility_saving">جارٍ الحفظ…</string>
     <string name="game_actions_one">%s إجراء</string>
     <string name="game_actions_other">%s إجراءً</string>
+    <string name="game_chest_claimed">عطيّة جديدة تنتظرك في نهاية الحلم القادم.</string>
+    <string name="game_chest_locked">حقّق فصول الحلم الثلاثة لتظهر.</string>
+    <string name="game_chest_open">افتح العطيّة</string>
+    <string name="game_chest_opening">جارٍ الفتح…</string>
+    <string name="game_chest_reward_bonus_fifth">مكافأة: ‎+%s، خُمس Meesh</string>
+    <string name="game_chest_reward_bonus_whole">مكافأة:  ⁦+%s⁩، بقدر Meesh كاملة</string>
+    <string name="game_chest_reward_fragment">شظية نجم</string>
+    <string name="game_chest_reward_freeze">قنديل للهبك</string>
+    <string name="game_chest_reward_glory">⁦+%s⁩ من المجد</string>
+    <string name="game_chest_reward_points">+%s</string>
+    <string name="game_chest_title">العطيّة</string>
     <string name="game_concept_atlas_how">أرسل رسالة واستقبل أخرى بلغة ما: فيوضع الختم.</string>
     <string name="game_concept_atlas_name">الأطلس</string>
     <string name="game_concept_atlas_tip_1">اكتب لشخص بلغة غير لغتك.</string>
@@ -224,6 +235,9 @@
     <string name="game_concept_elans_use">انظر أي الفئات نشطة، ثم قم بإجراء في فئة ناقصة. ما دام الزخم قائمًا، يُطلق كل إجراء شرارات أكثر.</string>
     <string name="game_concept_elans_what">الزخم مضاعِف للشرارات. يشتغل حين تكون نشطًا في عدة فئات من الإجراءات هذه الأيام.</string>
     <string name="game_concept_elans_why">الزخم يضاعف شرارات إجراءاتك القادمة.</string>
+    <string name="game_concept_fact_balance">لديك</string>
+    <string name="game_concept_fact_cost">المطلوب</string>
+    <string name="game_concept_fact_done">المنجزة</string>
     <string name="game_concept_flame_how">إجراء واحد في اليوم يُبقيه متّقدًا؛ والقنديل يحرسه يومًا.</string>
     <string name="game_concept_flame_name">اللهب</string>
     <string name="game_concept_flame_tip_1">قم بإجراء واحد على الأقل كل يوم.</string>
@@ -293,6 +307,7 @@
     <string name="game_concept_season_use">تقدّم بضع خطوات، ثم استلم كل محطة بلغتها: شرارات، أو شظية نجم، أو قنديل. والرحلة المكتملة تمنح كأس الرحلة. وخاتم الرحلة قطعة للجمع تُؤخذ بعملات Meesh.</string>
     <string name="game_concept_season_what">تدوم الرحلة ثمانية أسابيع، في أرض لغة، فيها أربعون محطة وهداياها المجانية.</string>
     <string name="game_concept_season_why">تدوم الرحلة ثمانية أسابيع في أرض لغة، وفي نهايتها كأس.</string>
+    <string name="game_concept_section_act">دورك الآن</string>
     <string name="game_concept_showcase_how">كل كأس يأخذ مكانه وحده. أنت تختار الترتيب ومن يراها.</string>
     <string name="game_concept_showcase_name">الكؤوس</string>
     <string name="game_concept_showcase_tip_1">أنهِ في قمة مبارزتك لتفوز بكأس.</string>
@@ -402,6 +417,7 @@
     <string name="game_mission_create_invite_link_other">أنشئ %s روابط دعوة</string>
     <string name="game_mission_cross_language_chat_one">تحدّث مع شخص يتكلم لغة أخرى</string>
     <string name="game_mission_cross_language_chat_other">تحدّث مع %s أشخاص يتكلمون لغة أخرى</string>
+    <string name="game_mission_done">تحقّق</string>
     <string name="game_mission_finished">انتهت</string>
     <string name="game_mission_generic">فصل من الحلم</string>
     <string name="game_mission_gold_replies_received">احصل على ردود من %s أشخاص مختلفين</string>
@@ -414,9 +430,12 @@
     <string name="game_mission_long_chat">أرسل %s رسائل</string>
     <string name="game_mission_missed">فاتتك</string>
     <string name="game_mission_personal">لك</string>
+    <string name="game_mission_prism">المنشور</string>
     <string name="game_mission_prism_foreign_exchange">اكتب %s رسائل بلغة غير لغتك</string>
     <string name="game_mission_prism_foreign_messages_one">اكتب رسالة بلغة غير لغتك</string>
     <string name="game_mission_prism_foreign_messages_other">اكتب %s رسائل بلغة غير لغتك</string>
+    <string name="game_mission_progress">%1$s / %2$s · %3$s</string>
+    <string name="game_mission_progress_glory">%1$s / %2$s · %3$s · ⁦+%4$s⁩ من المجد</string>
     <string name="game_mission_publish_post_one">انشر منشورًا</string>
     <string name="game_mission_publish_post_other">انشر %s منشورات</string>
     <string name="game_mission_publish_reel_one">انشر ريلز</string>
@@ -432,6 +451,8 @@
     <string name="game_mission_reply_story_other">ردّ على %s قصص</string>
     <string name="game_mission_reply_their_language_one">ردّ على شخص بلغته</string>
     <string name="game_mission_reply_their_language_other">ردّ %s مرات على شخص بلغته</string>
+    <string name="game_mission_reroll">غيّر · %s</string>
+    <string name="game_mission_reroll_a11y">بدّل الفصل «%1$s» مقابل %2$s</string>
     <string name="game_mission_send_attachments_one">أرسل مرفقًا</string>
     <string name="game_mission_send_attachments_other">أرسل %s مرفقات</string>
     <string name="game_mission_send_texts_one">أرسل %s رسالة</string>
@@ -453,6 +474,9 @@
     <string name="game_mission_write_someone_new_one">راسل شخصًا لأول مرة</string>
     <string name="game_mission_write_someone_new_other">راسل %s أشخاص لأول مرة</string>
     <string name="game_missions_locked">عند المستوى 5، يرسل إليك أجدادك كل ليلة حلمًا من ثلاثة فصول، وعطيّة. أنت في المستوى %s.</string>
+    <string name="game_missions_offline">بلا اتصال: سيعود تبديل الفصل وفتح العطيّة مع عودة الاتصال.</string>
+    <string name="game_missions_prism_day">يوم المنشور: أحد الفصول يُؤدّى بلغة غير لغتك.</string>
+    <string name="game_missions_title">حلم هذه الليلة</string>
     <string name="game_progression_empty">لا نشاط بعد. أرسل رسالة، انشر قصة… يضيء وسامك الأول مع أول إجراء.</string>
     <string name="game_progression_load_error">تعذّر تحميل التقدّم</string>
     <string name="game_progression_loading">جارٍ تحميل التقدّم</string>
@@ -490,6 +514,9 @@
         <item quantity="other">%d شرارة</item>
     </plurals>
     <string name="game_sparks_debt">ظلّ على ⁦%s⁩ شرارة</string>
+    <string name="game_spend_missing_reroll">ينقصك %s لتبديل هذا الفصل.</string>
+    <string name="game_starFragments_one">%s شظية نجم</string>
+    <string name="game_starFragments_other">%s شظايا نجم</string>
     <plurals name="game_streak_record">
         <item quantity="zero">أطول اشتعال للهبك: %d يوم</item>
         <item quantity="one">أطول اشتعال للهبك: يوم واحد</item>

@@ -179,6 +179,17 @@
     <string name="game2_visibility_saving">Enregistrement…</string>
     <string name="game_actions_one">%s action</string>
     <string name="game_actions_other">%s actions</string>
+    <string name="game_chest_claimed">Une nouvelle Offrande t’attend au bout du prochain rêve.</string>
+    <string name="game_chest_locked">Réalise les trois actes du rêve pour la faire apparaître.</string>
+    <string name="game_chest_open">Ouvrir l’Offrande</string>
+    <string name="game_chest_opening">Ouverture en cours…</string>
+    <string name="game_chest_reward_bonus_fifth">Prime : +%s, un cinquième de Meesh</string>
+    <string name="game_chest_reward_bonus_whole">Prime : +%s, le prix d’une Meesh</string>
+    <string name="game_chest_reward_fragment">Un fragment d’étoile</string>
+    <string name="game_chest_reward_freeze">Une Veilleuse pour ta Flamme</string>
+    <string name="game_chest_reward_glory">+%s de gloire</string>
+    <string name="game_chest_reward_points">+%s</string>
+    <string name="game_chest_title">L’Offrande</string>
     <string name="game_concept_atlas_how">Envoie un message et reçois-en un dans une langue : le tampon se pose.</string>
     <string name="game_concept_atlas_name">L’Atlas</string>
     <string name="game_concept_atlas_tip_1">Écris à quelqu’un dans une autre langue que la tienne.</string>
@@ -224,6 +235,9 @@
     <string name="game_concept_elans_use">Regarde quelles familles sont actives, puis fais un geste dans une famille qui manque. Tant que l’élan tient, chaque geste fait jaillir plus d’étincelles.</string>
     <string name="game_concept_elans_what">Un élan est un multiplicateur d’étincelles. Il s’allume quand tu es actif dans plusieurs familles de gestes ces jours-ci.</string>
     <string name="game_concept_elans_why">Un élan multiplie les étincelles de tes prochains gestes.</string>
+    <string name="game_concept_fact_balance">Tu as</string>
+    <string name="game_concept_fact_cost">Il faut</string>
+    <string name="game_concept_fact_done">Terminées</string>
     <string name="game_concept_flame_how">Un geste par jour l’entretient ; une Veilleuse la garde un jour.</string>
     <string name="game_concept_flame_name">La Flamme</string>
     <string name="game_concept_flame_tip_1">Fais au moins un geste chaque jour.</string>
@@ -293,6 +307,7 @@
     <string name="game_concept_season_use">Avance de quelques pas, puis réclame chaque halte atteinte : des étincelles, un fragment d’étoile, une Veilleuse. Le voyage fini donne la coupe du voyage. Le Sceau du voyage est un objet à collectionner, pris avec des Meeshes.</string>
     <string name="game_concept_season_what">Un voyage dure huit semaines, dans une terre de langue, avec quarante haltes et leurs présents gratuits.</string>
     <string name="game_concept_season_why">Le voyage dure huit semaines en terre de langue, avec une coupe au bout.</string>
+    <string name="game_concept_section_act">À toi de jouer</string>
     <string name="game_concept_showcase_how">Chaque coupe s’y range toute seule. Tu choisis l’ordre et qui la voit.</string>
     <string name="game_concept_showcase_name">Trophées</string>
     <string name="game_concept_showcase_tip_1">Finis en haut de ta joute pour gagner une coupe.</string>
@@ -402,6 +417,7 @@
     <string name="game_mission_create_invite_link_other">Créer %s liens d’invitation</string>
     <string name="game_mission_cross_language_chat_one">Échanger avec quelqu’un qui parle une autre langue</string>
     <string name="game_mission_cross_language_chat_other">Échanger avec %s personnes qui parlent une autre langue</string>
+    <string name="game_mission_done">Réalisé</string>
     <string name="game_mission_finished">Terminée</string>
     <string name="game_mission_generic">Un acte du rêve</string>
     <string name="game_mission_gold_replies_received">Recevoir des réponses de %s personnes différentes</string>
@@ -414,9 +430,12 @@
     <string name="game_mission_long_chat">Envoyer %s messages</string>
     <string name="game_mission_missed">Manquée</string>
     <string name="game_mission_personal">Pour toi</string>
+    <string name="game_mission_prism">Prisme</string>
     <string name="game_mission_prism_foreign_exchange">Écrire %s messages dans une autre langue que la tienne</string>
     <string name="game_mission_prism_foreign_messages_one">Écrire un message dans une autre langue que la tienne</string>
     <string name="game_mission_prism_foreign_messages_other">Écrire %s messages dans une autre langue que la tienne</string>
+    <string name="game_mission_progress">%1$s / %2$s · %3$s</string>
+    <string name="game_mission_progress_glory">%1$s / %2$s · %3$s · +%4$s de gloire</string>
     <string name="game_mission_publish_post_one">Publier un post</string>
     <string name="game_mission_publish_post_other">Publier %s posts</string>
     <string name="game_mission_publish_reel_one">Publier un réel</string>
@@ -432,6 +451,8 @@
     <string name="game_mission_reply_story_other">Répondre à %s stories</string>
     <string name="game_mission_reply_their_language_one">Répondre à quelqu’un dans sa langue</string>
     <string name="game_mission_reply_their_language_other">Répondre %s fois à quelqu’un dans sa langue</string>
+    <string name="game_mission_reroll">Changer · %s</string>
+    <string name="game_mission_reroll_a11y">Changer l’acte « %1$s » contre %2$s</string>
     <string name="game_mission_send_attachments_one">Envoyer une pièce jointe</string>
     <string name="game_mission_send_attachments_other">Envoyer %s pièces jointes</string>
     <string name="game_mission_send_texts_one">Envoyer %s message</string>
@@ -453,6 +474,9 @@
     <string name="game_mission_write_someone_new_one">Écrire à quelqu’un pour la première fois</string>
     <string name="game_mission_write_someone_new_other">Écrire à %s personnes pour la première fois</string>
     <string name="game_missions_locked">Au niveau 5, tes aïeux t’envoient chaque nuit un rêve en trois actes, et une Offrande. Tu es au niveau %s.</string>
+    <string name="game_missions_offline">Hors ligne : changer un acte ou ouvrir l’Offrande reprendra en ligne.</string>
+    <string name="game_missions_prism_day">Jour du Prisme : un des actes se joue dans une autre langue que la tienne.</string>
+    <string name="game_missions_title">Le rêve de cette nuit</string>
     <string name="game_progression_empty">Aucune activité pour l’instant. Envoie un message, publie une story… ta première médaille s’allume dès le premier geste.</string>
     <string name="game_progression_load_error">Impossible de charger la progression</string>
     <string name="game_progression_loading">Progression en cours de chargement</string>
@@ -484,6 +508,9 @@
         <item quantity="other">%d étincelles</item>
     </plurals>
     <string name="game_sparks_debt">Une ombre sur %s étincelles</string>
+    <string name="game_spend_missing_reroll">Il manque %s pour changer cet acte.</string>
+    <string name="game_starFragments_one">%s fragment d’étoile</string>
+    <string name="game_starFragments_other">%s fragments d’étoile</string>
     <plurals name="game_streak_record">
         <item quantity="one">Ta plus longue Flamme : %d jour</item>
         <item quantity="many">Ta plus longue Flamme : %d jours</item>

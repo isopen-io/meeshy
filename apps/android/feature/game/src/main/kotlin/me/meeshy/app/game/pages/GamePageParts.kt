@@ -7,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -15,6 +16,7 @@ import androidx.compose.foundation.lazy.LazyItemScope
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -32,6 +34,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.game.R
 import me.meeshy.ui.accessibility.LocalReduceMotion
@@ -140,7 +143,11 @@ internal fun GameProgressBar(value: Float, tint: Color, label: String, modifier:
     }
 }
 
-/** Le bouton plein d'un geste principal : 44 dp au moins, rebond et haptique, grisé en vol ou hors ligne. */
+/**
+ * Le bouton plein d'un geste principal : 44 dp au moins, rebond et haptique, grisé en vol ou hors ligne. [busyTitle]
+ * remplace le titre pendant le vol (un anneau tourne alors à côté) ; [detail] dit en petit, DANS le bouton, ce que le
+ * geste rapporte ; [ink] est l'encre du bouton (sombre sur l'ambre, où le blanc tombe sous le seuil de lisibilité).
+ */
 @Composable
 internal fun GameActionButton(
     title: String,
@@ -149,6 +156,9 @@ internal fun GameActionButton(
     busy: Boolean = false,
     enabled: Boolean = true,
     tint: Color = MeeshyPalette.Indigo500,
+    busyTitle: String? = null,
+    detail: String? = null,
+    ink: Color = Color.White,
 ) {
     val usable = enabled && !busy
     GameBounceButton(onClick = { if (usable) onClick() }, modifier = modifier.fillMaxWidth()) {
@@ -157,11 +167,31 @@ internal fun GameActionButton(
                 .fillMaxWidth()
                 .heightIn(min = 44.dp)
                 .clip(RoundedCornerShape(MeeshyRadius.md))
-                .background(tint.copy(alpha = if (usable) 1f else DISABLED_ALPHA))
-                .padding(horizontal = MeeshySpacing.lg),
+                .background(tint.copy(alpha = if (usable || busy) 1f else DISABLED_ALPHA))
+                .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.xs),
             contentAlignment = Alignment.Center,
         ) {
-            Text(title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, color = Color.White)
+            Row(horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm), verticalAlignment = Alignment.CenterVertically) {
+                if (busy) CircularProgressIndicator(Modifier.size(18.dp), color = ink, strokeWidth = 2.dp)
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        if (busy) busyTitle ?: title else title,
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        color = ink,
+                        textAlign = TextAlign.Center,
+                    )
+                    if (detail != null) {
+                        Text(
+                            detail,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = ink.copy(alpha = DETAIL_ALPHA),
+                            textAlign = TextAlign.Center,
+                        )
+                    }
+                }
+            }
         }
     }
 }
@@ -209,6 +239,7 @@ internal fun GameChip(text: String, modifier: Modifier = Modifier, tint: Color =
 
 private const val BAR_MILLIS = 600
 private const val DISABLED_ALPHA = 0.4f
+private const val DETAIL_ALPHA = 0.8f
 private const val TRACK_ALPHA = 0.2f
 private const val CHIP_ALPHA = 0.14f
 private const val TINT_CARD_ALPHA = 0.08f
