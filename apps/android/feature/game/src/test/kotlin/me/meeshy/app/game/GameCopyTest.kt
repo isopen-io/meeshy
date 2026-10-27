@@ -13,6 +13,7 @@ import me.meeshy.sdk.model.game.GameTextKey
 import me.meeshy.sdk.model.game.GloryRank
 import me.meeshy.sdk.model.game.LevelTierKey
 import me.meeshy.sdk.model.game.TreasuryTierKey
+import me.meeshy.sdk.model.game.GameNumberFormat
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -65,6 +66,14 @@ class GameCopyTest {
         assertThat(GameCopy.resolve(resourcesIn("fr"), GameCopyLaws.points(0))).isEqualTo("0 étincelle")
         assertThat(GameCopy.resolve(resourcesIn("fr"), GameCopyLaws.points(2))).isEqualTo("2 étincelles")
         assertThat(GameCopy.resolve(resourcesIn("en"), GameCopyLaws.points(1))).contains("1 spark")
+    }
+
+    @Test
+    fun `les etincelles d un grand nombre portent le separateur de milliers de la langue`() {
+        val french = Locale.forLanguageTag("fr")
+        val grouped = GameNumberFormat.formatCount(103_571, french)
+        assertThat(grouped).isNotEqualTo("103571")
+        assertThat(GameCopy.resolve(resourcesIn("fr"), GameCopyLaws.points(103_571))).isEqualTo("$grouped étincelles")
     }
 
     @Test
