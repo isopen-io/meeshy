@@ -447,6 +447,8 @@ private class CountingConversationDao(private val delegate: ConversationDao) : C
         return delegate.recentByUpdatedAt(limit)
     }
 
+    override fun observeRecentByUpdatedAt(limit: Int): Flow<List<ConversationEntity>> =
+        delegate.observeRecentByUpdatedAt(limit)
     override fun observeById(id: String): Flow<ConversationEntity?> = delegate.observeById(id)
     override suspend fun find(id: String): ConversationEntity? = delegate.find(id)
     override suspend fun payloadsContaining(needle: String): List<ConversationEntity> =
