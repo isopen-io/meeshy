@@ -16,6 +16,7 @@ import me.meeshy.app.feed.NearbyScreen
 import me.meeshy.app.feed.PostDetailScreen
 import me.meeshy.app.feed.PostDetailViewModel
 import me.meeshy.app.navigation.Routes
+import me.meeshy.app.navigation.sheetComposable
 import me.meeshy.app.reels.ReelsScreen
 import me.meeshy.app.stories.MyStoriesScreen
 import me.meeshy.app.stories.StoryComposerScreen
@@ -55,9 +56,9 @@ internal fun NavGraphBuilder.feedNavGraph(
     ) {
         MoodSpotlightScreen(onClose = { navController.popBackStack() })
     }
-    composable(Routes.MY_STORIES) {
+    sheetComposable(Routes.MY_STORIES, navController) { _, dismiss ->
         MyStoriesScreen(
-            onBack = { navController.popBackStack() },
+            onBack = dismiss,
             onCreateStory = { navController.navigate(Routes.STORY_COMPOSER) },
             onOpenStory = { userId -> navController.navigate(Routes.story(userId)) },
         )

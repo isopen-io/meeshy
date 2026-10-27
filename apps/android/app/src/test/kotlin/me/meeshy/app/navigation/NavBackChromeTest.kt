@@ -172,8 +172,7 @@ class NavBackChromeTest {
         /** #13369 — feuilles sur iOS, encore écrans empilés sur Android. Ne fait que rétrécir. */
         val PENDING_SHEET = setOf(
             "Routes.FORGOT_PASSWORD", "Routes.MAGIC_LINK", "Routes.REGISTRATION", "Routes.GUEST_JOIN", "Routes.WORLD_ENTRY",
-            "Routes.SHARE_LINK_PICKER", "Routes.GLOBAL_SEARCH", "Routes.DASHBOARD", "Routes.CREATE_SHARE_LINK",
-            "Routes.NEW_CONVERSATION", "Routes.MY_STORIES", "Routes.PROFILE_USER", "Routes.USER_POSTS",
+            "Routes.PROFILE_USER", "Routes.USER_POSTS",
         )
     }
 }
