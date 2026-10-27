@@ -140,7 +140,9 @@ private fun SelectionCircle(
 /**
  * La barre d'action du mode sélection (#13294, iOS `selectionToolbar`) : Annuler, Supprimer, le
  * compteur (à partir de 2), puis les sorties que la loi des actions offre ([SelectionOffer]).
- * Elle REMPLACE le composeur tant que la sélection est ouverte.
+ * Elle REMPLACE le composeur tant que la sélection est ouverte. [bottomClearance] relève la barre
+ * au-dessus de la barre de navigation système (boutons Android 9) et des portes flottantes : sans
+ * lui elle se dessinait dessous, sans toucher (#13376).
  */
 @Composable
 internal fun SelectionBar(
@@ -153,8 +155,9 @@ internal fun SelectionBar(
     onStar: () -> Unit,
     onForward: () -> Unit,
     modifier: Modifier = Modifier,
+    bottomClearance: Dp = 0.dp,
 ) {
-    ComposerGlassPlate(modifier = modifier) {
+    ComposerGlassPlate(modifier = modifier.padding(bottom = bottomClearance)) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
