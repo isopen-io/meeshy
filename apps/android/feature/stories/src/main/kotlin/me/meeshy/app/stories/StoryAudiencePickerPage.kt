@@ -13,10 +13,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.RadioButtonUnchecked
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -44,6 +40,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.stories.R
 import me.meeshy.sdk.model.composer.AudienceCandidate
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
@@ -91,7 +88,7 @@ internal fun StoryAudiencePickerPage(
             value = state.query,
             onValueChange = viewModel::onQueryChange,
             singleLine = true,
-            leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+            leadingIcon = { Icon(MeeshyIcons.Search, contentDescription = null) },
             trailingIcon = {
                 if (state.isSearching) CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
             },
@@ -160,7 +157,7 @@ private fun PersonRow(person: AudienceCandidate, checked: Boolean, single: Boole
         }
         if (!single) {
             Icon(
-                imageVector = if (checked) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked,
+                imageVector = if (checked) MeeshyIcons.CheckCircleFilled else MeeshyIcons.RadioUnchecked,
                 contentDescription = null,
                 tint = if (checked) MeeshyPalette.Indigo500 else MaterialTheme.colorScheme.outline,
             )

@@ -215,6 +215,10 @@
           "status": "android-only"
         },
         {
+          "androidName": "stories_audience_mention_remove",
+          "status": "android-only"
+        },
+        {
           "androidName": "stories_media_undescribed",
           "status": "android-only"
         }

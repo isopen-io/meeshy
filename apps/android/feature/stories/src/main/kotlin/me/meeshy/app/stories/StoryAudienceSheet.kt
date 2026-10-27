@@ -18,10 +18,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -59,6 +55,7 @@ import me.meeshy.sdk.model.composer.AudienceCandidate
 import me.meeshy.sdk.model.composer.ComposerAudienceReach
 import me.meeshy.sdk.model.composer.ComposerAudienceSelection
 import me.meeshy.sdk.model.composer.ComposerAudienceSubtitle
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 
@@ -161,7 +158,7 @@ private fun AudiencePage(
                 modifier = Modifier.weight(1f),
             )
             IconButton(onClick = onClose) {
-                Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.stories_audience_picker_cancel))
+                Icon(MeeshyIcons.Close, contentDescription = stringResource(R.string.stories_audience_picker_cancel))
             }
         }
         HorizontalDivider()
@@ -219,7 +216,7 @@ private fun AudienceRow(
             )
         }
         if (selected) {
-            Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = MeeshyPalette.Indigo500)
+            Icon(MeeshyIcons.CheckCircleFilled, contentDescription = null, tint = MeeshyPalette.Indigo500)
         }
     }
     HorizontalDivider()
@@ -268,10 +265,10 @@ private fun MentionsSection(
                 )
                 Spacer(modifier = Modifier.weight(1f))
                 if (reach.warns) {
-                    Icon(Icons.Filled.Warning, contentDescription = null, tint = WarningTint, modifier = Modifier.size(18.dp))
+                    Icon(MeeshyIcons.WarningFilled, contentDescription = null, tint = WarningTint, modifier = Modifier.size(18.dp))
                 }
                 IconButton(onClick = { onRemove(handle) }) {
-                    Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.composer_audience_hashtag_remove))
+                    Icon(MeeshyIcons.Close, contentDescription = stringResource(R.string.stories_audience_mention_remove))
                 }
             }
             if (reach.warns) {
@@ -312,7 +309,7 @@ private fun HashtagsSection(hashtags: List<String>, onRemove: (String) -> Unit) 
                 horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
             ) {
                 Text("#$tag", style = MaterialTheme.typography.bodyMedium, color = MeeshyPalette.Indigo400)
-                Icon(Icons.Filled.Close, contentDescription = null, modifier = Modifier.size(14.dp))
+                Icon(MeeshyIcons.Close, contentDescription = null, modifier = Modifier.size(14.dp))
             }
         }
     }
