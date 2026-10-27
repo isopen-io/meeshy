@@ -12,6 +12,12 @@ enum class StoryVisibility(val wire: String) {
 
     /** EXCEPT / ONLY exigent une sélection d'utilisateurs : la passerelle rejette un envoi sans. */
     val requiresUserSelection: Boolean get() = this == EXCEPT || this == ONLY
+
+    companion object {
+        /** Le mode dont la chaîne de fil est [value], ou [PUBLIC] : une valeur périmée décroît sans jeter. */
+        fun fromWire(value: String): StoryVisibility =
+            entries.firstOrNull { it.wire == value.uppercase() } ?: PUBLIC
+    }
 }
 
 /** Ce que déclenche un tap sur une entrée du sous-menu « Modifier la visibilité ». */
