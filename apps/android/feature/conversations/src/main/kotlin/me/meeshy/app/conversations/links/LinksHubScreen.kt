@@ -1,5 +1,7 @@
 package me.meeshy.app.conversations.links
 
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -50,6 +52,7 @@ fun LinksHubScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val bannerAccent = linkAccent(LinksHubEntry.COMMUNITY.accentHex)
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.refresh() }
 
     LinksPage(
         title = stringResource(R.string.links_hub_title),

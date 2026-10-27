@@ -45,6 +45,7 @@ class LinkStatsRepositoryTest {
         val gate: Rendezvous? = null,
         val trackingFails: Boolean = false,
         val affiliateFails: Boolean = false,
+        val tokens: List<AffiliateToken> = emptyList(),
         val shareFails: Boolean = false,
         val communityFails: Boolean = false,
     ) {
@@ -60,7 +61,7 @@ class LinkStatsRepositoryTest {
             override suspend fun create(body: CreateTrackingLinkRequest) = ApiResponse<CreatedTrackingLinkPayload>()
         }
         val affiliate = object : AffiliateApi {
-            override suspend fun listTokens(offset: Int, limit: Int) = serve(false, emptyList<AffiliateToken>())
+            override suspend fun listTokens(offset: Int, limit: Int) = serve(affiliateFails, tokens)
             override suspend fun stats() = serve(affiliateFails, AffiliateStats(totalReferrals = 5))
         }
         val links = object : LinkApi {
@@ -101,6 +102,14 @@ class LinkStatsRepositoryTest {
         assertThat(snapshot.community).isEqualTo(
             LinkStatsCard.Loaded(CommunityLinkStats(totalCommunities = 2, totalMembers = 14, activeCommunities = 1)),
         )
+    }
+
+    @Test
+    fun `la carte affiliee compte les liens de la liste des jetons, comme l'ecran Parrainage`() = runTest {
+        val snapshot = Sources(tokens = listOf(AffiliateToken(id = "t1", token = "a", name = "Invitation Meeshy"))).repository().load()
+
+        assertThat(snapshot.affiliate.valueOrNull?.totalTokens).isEqualTo(1)
+        assertThat(snapshot.affiliate.valueOrNull?.totalReferrals).isEqualTo(5)
     }
 
     @Test
