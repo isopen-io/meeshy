@@ -63,10 +63,17 @@ object MediaUpload {
 @Singleton
 class MediaRepository @Inject constructor(
     private val mediaApi: MediaApi,
+    private val sanitizer: OutgoingMediaSanitizer,
 ) {
     suspend fun upload(items: List<MediaUploadItem>): NetworkResult<List<UploadedMedia>> {
         if (items.isEmpty()) return NetworkResult.Success(emptyList())
-        val parts = items.map { MediaUpload.formPart(it) }
+        val clean = items.map { item ->
+            when (val result = sanitizer.sanitize(item)) {
+                is NetworkResult.Failure -> return result
+                is NetworkResult.Success -> result.data
+            }
+        }
+        val parts = clean.map { MediaUpload.formPart(it) }
         return apiCall { mediaApi.upload(parts) }
             .map { response -> response.attachments.mapNotNull { it.toUploadedMedia() } }
     }
