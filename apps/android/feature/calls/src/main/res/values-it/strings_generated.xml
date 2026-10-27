@@ -1,5 +1,8 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="call_control_capture">Cattura la chiamata</string>
+    <string name="call_control_capture_caption">Cattura</string>
+    <string name="call_control_capture_hint">Libera lo schermo per scegliere un montaggio e catturare la chiamata</string>
     <string name="call_control_flip_camera">Passa dalla fotocamera anteriore a quella posteriore</string>
     <string name="call_control_flip_camera_caption">Gira</string>
     <string name="call_control_flip_camera_hint">Passa dalla fotocamera anteriore a quella posteriore</string>
@@ -18,6 +21,18 @@
     <string name="call_decline_reply_meeting">Sono in riunione.</string>
     <string name="call_decline_reply_write_me">Scrivimi, ti rispondo subito.</string>
     <string name="call_decline_title">Rifiuta con un messaggio</string>
+    <string name="call_frames_mood_corporate">Aziendale</string>
+    <string name="call_frames_mood_deconnecte">Staccato</string>
+    <string name="call_frames_mood_distingue">Raffinato</string>
+    <string name="call_frames_mood_elegant">Elegante</string>
+    <string name="call_frames_mood_fantastique">Fantastico</string>
+    <string name="call_frames_mood_feerique">Fiabesco</string>
+    <string name="call_frames_mood_futuriste">Futuristico</string>
+    <string name="call_frames_mood_glauque">Cupo</string>
+    <string name="call_frames_mood_hors_norme">Fuori dal comune</string>
+    <string name="call_frames_mood_jovial">Gioioso</string>
+    <string name="call_frames_mood_morbide">Macabro</string>
+    <string name="call_frames_mood_signature">Firma</string>
     <string name="call_journal_cancel">Annulla</string>
     <string name="call_journal_clear_action">Elimina</string>
     <string name="call_journal_clear_all">Elimina tutto</string>
@@ -30,6 +45,20 @@
     <string name="call_journal_search_empty">Nessuna chiamata corrisponde a «%s»</string>
     <string name="call_journal_search_empty_hint">Il registro copre gli ultimi tre mesi.</string>
     <string name="call_journal_search_placeholder">Cerca una chiamata</string>
+    <string name="call_live_frame_accept">Applica</string>
+    <string name="call_live_frame_answer_accepted">%s ha applicato la tua cornice</string>
+    <string name="call_live_frame_answer_accepted_anonymous">L\'altra persona ha applicato la tua cornice</string>
+    <string name="call_live_frame_answer_declined">%s mantiene la propria vista</string>
+    <string name="call_live_frame_answer_declined_anonymous">L\'altra persona mantiene la propria vista</string>
+    <string name="call_live_frame_caption">Cornice</string>
+    <string name="call_live_frame_decline">No, grazie</string>
+    <string name="call_live_frame_hold_hint">Mantiene questa cornice attorno ai due video per tutta la chiamata e la propone all\'altra persona</string>
+    <string name="call_live_frame_label">Cornice dal vivo</string>
+    <string name="call_live_frame_none">Nessuna cornice</string>
+    <string name="call_live_frame_not_proposed">La cornice è applicata da te, ma non è stato possibile proporla</string>
+    <string name="call_live_frame_proposal">%1$s ti propone la cornice «%2$s»</string>
+    <string name="call_live_frame_proposal_anonymous">L\'altra persona ti propone la cornice «%s»</string>
+    <string name="call_live_frame_surface">Cornice %s intorno ai due video</string>
     <string name="call_open_conversation">Conversazione</string>
     <string name="call_open_conversation_hint">Apre la conversazione mantenendo la chiamata attiva</string>
     <string name="call_recording_accept">Accetta</string>

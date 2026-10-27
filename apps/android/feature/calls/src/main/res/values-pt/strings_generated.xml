@@ -1,5 +1,8 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="call_control_capture">Capturar a chamada</string>
+    <string name="call_control_capture_caption">Captura</string>
+    <string name="call_control_capture_hint">Libera a tela para escolher uma montagem e capturar a chamada</string>
     <string name="call_control_flip_camera">Alternar câmera frontal/traseira</string>
     <string name="call_control_flip_camera_caption">Virar</string>
     <string name="call_control_flip_camera_hint">Alterna entre a câmera frontal e traseira</string>
@@ -18,6 +21,18 @@
     <string name="call_decline_reply_meeting">Estou em uma reunião.</string>
     <string name="call_decline_reply_write_me">Me escreve, respondo logo.</string>
     <string name="call_decline_title">Recusar com uma mensagem</string>
+    <string name="call_frames_mood_corporate">Corporativo</string>
+    <string name="call_frames_mood_deconnecte">Desconectado</string>
+    <string name="call_frames_mood_distingue">Distinto</string>
+    <string name="call_frames_mood_elegant">Elegante</string>
+    <string name="call_frames_mood_fantastique">Fantástico</string>
+    <string name="call_frames_mood_feerique">Encantado</string>
+    <string name="call_frames_mood_futuriste">Futurista</string>
+    <string name="call_frames_mood_glauque">Sombrio</string>
+    <string name="call_frames_mood_hors_norme">Fora do comum</string>
+    <string name="call_frames_mood_jovial">Alegre</string>
+    <string name="call_frames_mood_morbide">Mórbido</string>
+    <string name="call_frames_mood_signature">Assinatura</string>
     <string name="call_journal_cancel">Cancelar</string>
     <string name="call_journal_clear_action">Apagar</string>
     <string name="call_journal_clear_all">Apagar tudo</string>
@@ -30,6 +45,20 @@
     <string name="call_journal_search_empty">Nenhuma chamada corresponde a “%s”</string>
     <string name="call_journal_search_empty_hint">O histórico cobre os últimos três meses.</string>
     <string name="call_journal_search_placeholder">Pesquisar uma chamada</string>
+    <string name="call_live_frame_accept">Aplicar</string>
+    <string name="call_live_frame_answer_accepted">%s aplicou sua moldura</string>
+    <string name="call_live_frame_answer_accepted_anonymous">A outra pessoa aplicou sua moldura</string>
+    <string name="call_live_frame_answer_declined">%s mantém a própria visualização</string>
+    <string name="call_live_frame_answer_declined_anonymous">A outra pessoa mantém a própria visualização</string>
+    <string name="call_live_frame_caption">Moldura</string>
+    <string name="call_live_frame_decline">Não, obrigado</string>
+    <string name="call_live_frame_hold_hint">Mantém esta moldura em volta dos dois vídeos durante toda a chamada e a propõe à outra pessoa</string>
+    <string name="call_live_frame_label">Moldura ao vivo</string>
+    <string name="call_live_frame_none">Sem moldura</string>
+    <string name="call_live_frame_not_proposed">A moldura está aplicada para você, mas não pôde ser proposta</string>
+    <string name="call_live_frame_proposal">%1$s sugere a moldura “%2$s”</string>
+    <string name="call_live_frame_proposal_anonymous">A outra pessoa sugere a moldura “%s”</string>
+    <string name="call_live_frame_surface">Moldura %s ao redor dos dois vídeos</string>
     <string name="call_open_conversation">Conversa</string>
     <string name="call_open_conversation_hint">Abre a conversa mantendo a chamada ativa</string>
     <string name="call_recording_accept">Aceitar</string>

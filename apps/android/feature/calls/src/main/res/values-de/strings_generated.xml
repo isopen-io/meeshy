@@ -1,5 +1,8 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="call_control_capture">Anruf festhalten</string>
+    <string name="call_control_capture_caption">Aufnahme</string>
+    <string name="call_control_capture_hint">Macht den Bildschirm frei, um eine Collage zu wählen und den Anruf festzuhalten</string>
     <string name="call_control_flip_camera">Vorder-/Rückkamera wechseln</string>
     <string name="call_control_flip_camera_caption">Wechseln</string>
     <string name="call_control_flip_camera_hint">Wechselt zwischen Front- und Rückkamera</string>
@@ -18,6 +21,18 @@
     <string name="call_decline_reply_meeting">Ich bin in einem Meeting.</string>
     <string name="call_decline_reply_write_me">Schreib mir, ich antworte gleich.</string>
     <string name="call_decline_title">Mit Nachricht ablehnen</string>
+    <string name="call_frames_mood_corporate">Business</string>
+    <string name="call_frames_mood_deconnecte">Abgeschaltet</string>
+    <string name="call_frames_mood_distingue">Vornehm</string>
+    <string name="call_frames_mood_elegant">Elegant</string>
+    <string name="call_frames_mood_fantastique">Fantastisch</string>
+    <string name="call_frames_mood_feerique">Märchenhaft</string>
+    <string name="call_frames_mood_futuriste">Futuristisch</string>
+    <string name="call_frames_mood_glauque">Düster</string>
+    <string name="call_frames_mood_hors_norme">Außergewöhnlich</string>
+    <string name="call_frames_mood_jovial">Fröhlich</string>
+    <string name="call_frames_mood_morbide">Morbid</string>
+    <string name="call_frames_mood_signature">Markenzeichen</string>
     <string name="call_journal_cancel">Abbrechen</string>
     <string name="call_journal_clear_action">Löschen</string>
     <string name="call_journal_clear_all">Alle löschen</string>
@@ -30,6 +45,20 @@
     <string name="call_journal_search_empty">Kein Anruf entspricht „%s“</string>
     <string name="call_journal_search_empty_hint">Das Protokoll umfasst die letzten drei Monate.</string>
     <string name="call_journal_search_placeholder">Anruf suchen</string>
+    <string name="call_live_frame_accept">Übernehmen</string>
+    <string name="call_live_frame_answer_accepted">%s hat deinen Rahmen übernommen</string>
+    <string name="call_live_frame_answer_accepted_anonymous">Dein Gegenüber hat deinen Rahmen übernommen</string>
+    <string name="call_live_frame_answer_declined">%s behält die eigene Ansicht</string>
+    <string name="call_live_frame_answer_declined_anonymous">Dein Gegenüber behält die eigene Ansicht</string>
+    <string name="call_live_frame_caption">Rahmen</string>
+    <string name="call_live_frame_decline">Nein, danke</string>
+    <string name="call_live_frame_hold_hint">Behält diesen Rahmen während des ganzen Anrufs um beide Videos und schlägt ihn deinem Gegenüber vor</string>
+    <string name="call_live_frame_label">Live-Rahmen</string>
+    <string name="call_live_frame_none">Kein Rahmen</string>
+    <string name="call_live_frame_not_proposed">Der Rahmen ist bei dir aktiv, konnte aber nicht vorgeschlagen werden</string>
+    <string name="call_live_frame_proposal">%1$s schlägt dir den Rahmen „%2$s“ vor</string>
+    <string name="call_live_frame_proposal_anonymous">Dein Gegenüber schlägt dir den Rahmen „%s“ vor</string>
+    <string name="call_live_frame_surface">Rahmen %s um beide Videos</string>
     <string name="call_open_conversation">Unterhaltung</string>
     <string name="call_open_conversation_hint">Öffnet die Unterhaltung, während der Anruf aktiv bleibt</string>
     <string name="call_recording_accept">Zustimmen</string>

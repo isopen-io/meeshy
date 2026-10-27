@@ -1,5 +1,8 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="call_control_capture">Capture the call</string>
+    <string name="call_control_capture_caption">Capture</string>
+    <string name="call_control_capture_hint">Clears the screen to pick a montage and capture the call</string>
     <string name="call_control_flip_camera">Switch front/back camera</string>
     <string name="call_control_flip_camera_caption">Flip</string>
     <string name="call_control_flip_camera_hint">Switches between the front and back camera</string>
@@ -18,6 +21,18 @@
     <string name="call_decline_reply_meeting">I’m in a meeting.</string>
     <string name="call_decline_reply_write_me">Text me, I’ll reply soon.</string>
     <string name="call_decline_title">Decline with a message</string>
+    <string name="call_frames_mood_corporate">Corporate</string>
+    <string name="call_frames_mood_deconnecte">Unplugged</string>
+    <string name="call_frames_mood_distingue">Distinguished</string>
+    <string name="call_frames_mood_elegant">Elegant</string>
+    <string name="call_frames_mood_fantastique">Fantasy</string>
+    <string name="call_frames_mood_feerique">Enchanted</string>
+    <string name="call_frames_mood_futuriste">Futuristic</string>
+    <string name="call_frames_mood_glauque">Murky</string>
+    <string name="call_frames_mood_hors_norme">Offbeat</string>
+    <string name="call_frames_mood_jovial">Cheerful</string>
+    <string name="call_frames_mood_morbide">Morbid</string>
+    <string name="call_frames_mood_signature">Signature</string>
     <string name="call_journal_cancel">Cancel</string>
     <string name="call_journal_clear_action">Clear</string>
     <string name="call_journal_clear_all">Clear all</string>
@@ -30,6 +45,20 @@
     <string name="call_journal_search_empty">No call matches “%s”</string>
     <string name="call_journal_search_empty_hint">The log covers the last three months.</string>
     <string name="call_journal_search_placeholder">Search calls</string>
+    <string name="call_live_frame_accept">Apply</string>
+    <string name="call_live_frame_answer_accepted">%s applied your frame</string>
+    <string name="call_live_frame_answer_accepted_anonymous">The other person applied your frame</string>
+    <string name="call_live_frame_answer_declined">%s keeps their own view</string>
+    <string name="call_live_frame_answer_declined_anonymous">The other person keeps their own view</string>
+    <string name="call_live_frame_caption">Frame</string>
+    <string name="call_live_frame_decline">No thanks</string>
+    <string name="call_live_frame_hold_hint">Keeps this frame around both videos for the whole call, and offers it to the other person</string>
+    <string name="call_live_frame_label">Live frame</string>
+    <string name="call_live_frame_none">No frame</string>
+    <string name="call_live_frame_not_proposed">The frame is applied on your side but couldn\'t be offered</string>
+    <string name="call_live_frame_proposal">%1$s suggests the “%2$s” frame</string>
+    <string name="call_live_frame_proposal_anonymous">The other person suggests the “%s” frame</string>
+    <string name="call_live_frame_surface">%s frame around both videos</string>
     <string name="call_open_conversation">Conversation</string>
     <string name="call_open_conversation_hint">Opens the conversation while keeping the call active</string>
     <string name="call_recording_accept">Accept</string>
