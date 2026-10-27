@@ -70,7 +70,7 @@ extension StoryViewerView {
         StoryPlaybackCauses(
             explicitPause: isLongPressPaused,
             reacting: showEmojiStrip || showFullEmojiPicker || reactionFlight != nil,
-            gestureInFlight: gestureAxis != 0 || isScrubbingRail || isTransitioning
+            gestureInFlight: drag.isInFlight || isScrubbingRail || isTransitioning
                 || isDismissing || showGroupIntro,
             coveredByScreen: isPaused,
             interrupted: isCallInterrupting || isGameMomentShown,

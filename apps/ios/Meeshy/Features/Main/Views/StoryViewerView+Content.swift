@@ -213,7 +213,7 @@ extension StoryViewerView {
         // voie de récupération naturelle. La rétablir ici la préserve — sinon
         // taper pour avancer changeait bien de slide, mais la lecture restait
         // figée jusqu'à un changement de GROUPE ou la sortie du lecteur.
-        gestureAxis = 0
+        drag.releaseAxis()
         startTimer()
     }
 

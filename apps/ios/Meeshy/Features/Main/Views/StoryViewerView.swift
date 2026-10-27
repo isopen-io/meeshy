@@ -204,43 +204,11 @@ struct StoryViewerView: View {
     /// Posée par le drag horizontal (réversible mi-geste) et par
     /// `groupTransition` (tap/auto-advance), nettoyée au snap-back/commit.
     @State var neighborPreviewDirection: Int = 0 // internal for cross-file extension access
-    @State var gestureAxis: Int = 0 // internal for cross-file extension access  // 0=undecided, 1=horizontal, 2=vertical
-    /// Valeur de `hasActiveReaderFeature` FIGÉE à la décision d'axe vertical du
-    /// drag parent. Le relâchement ne peut PAS relire l'état vivant : l'overlay
-    /// gestuel du canvas consomme la surface ouverte dès le touch-down (il appelle
-    /// `dismissActiveReaderFeature()`), donc au touch-up `hasActiveReaderFeature`
-    /// est déjà `false` et le drag concluait `.dismissViewer` — l'utilisateur qui
-    /// glissait vers le bas pour refermer son overlay perdait la story avec.
-    @State var hadActiveFeatureAtDragStart: Bool = false // internal for cross-file extension access
-    /// Jeton de purge de l'état gestuel du canvas (cf. `resetGestureTracking()`).
-    /// Incrémenté sur les chemins NON NOMINAUX — snap-back, transition de groupe,
-    /// sortie du lecteur — parce que SwiftUI n'appelle pas `onEnded` quand un
-    /// recognizer concurrent emporte la séquence : sans purge, `gestureAxis`
-    /// restait collé (la décision d'axe est sautée par `if gestureAxis == 0`) et
-    /// l'overlay de Layer 6 traitait tous les touchers suivants comme un drag en
-    /// cours — plus aucun tap de navigation, plus aucun long-press.
-    @State var gestureResetToken: Int = 0 // internal for cross-file extension access
-    /// Posé par `StoryGestureOverlayView` quand le TOUCH-DOWN du toucher courant
-    /// a servi à refermer une surface du reader.
-    ///
-    /// Complément indispensable de `hadActiveFeatureAtDragStart` : cette
-    /// photographie-là est prise à la décision d'axe du drag, donc APRÈS 15 pt de
-    /// déplacement — l'enfant a déjà refermé la surface au premier contact et la
-    /// photographie vaut `false`. Sans ce drapeau, un glissement bas de plus de
-    /// 120 pt parti du canvas concluait `.dismissViewer` : l'utilisateur perdait
-    /// la story alors qu'il refermait un strip.
-    ///
-    /// Consommé (remis à `false`) par le `onEnded` du drag et par
-    /// `resetGestureTracking()`, et réarmé à chaque touch-down de l'enfant : il ne
-    /// peut donc pas neutraliser le geste SUIVANT.
-    @State var readerFeatureConsumedByTouch: Bool = false // internal for cross-file extension access
-    /// **La barre de réactions a revendiqué le glissé en cours** — posé par elle
-    /// selon `StoryReactionStripGesture`, lu par `unifiedDragGesture`, purgé par
-    /// `resetGestureTracking()` et à la fermeture de la barre.
-    @State var reactionStripOwnsDrag: Bool = false // internal for cross-file extension access
+    /// Axis, frozen surface state, claims and purge token of the parent drag
+    /// (`StoryReaderDragTracker`, #13135).
+    @State var drag = StoryReaderDragTracker()
     /// Cadre `.global` de la barre ouverte (`StoryReactionStripFrameKey`, #9062).
     @State var reactionStripFrame: CGRect? // internal for cross-file extension access
-    @State var composerOwnsDrag: Bool = false // #8431 — le glissé né sur le composeur
     /// Cadres `.global` des composants posés sur la scène (`StoryReaderChromeFramesKey`, #11045).
     @State var readerChromeFrames: [CGRect] = [] // internal for cross-file extension access
     /// Bord SUPÉRIEUR (coordonnées `.global`) de la surface scrollable ouverte,
@@ -475,7 +443,7 @@ struct StoryViewerView: View {
             scrollableSurfaceTopY: $scrollableSurfaceTopY,
             reactionStripFrame: $reactionStripFrame,
             readerChromeFrames: $readerChromeFrames,
-            reactionStripOwnsDrag: $reactionStripOwnsDrag,
+            reactionStripOwnsDrag: $drag.reactionStripOwnsDrag,
             hasScrollableSurface: hasScrollableReaderSurface,
             showEmojiStrip: showEmojiStrip
         ))
@@ -693,10 +661,10 @@ struct StoryViewerView: View {
             isFullscreenStorySession: $isFullscreenStorySession,
             isLongPressPaused: $isLongPressPaused,
             isCanvasPlaybackPaused: shouldPauseTimer, loopPass: storyLoopPass,
-            gestureResetToken: gestureResetToken,
-            readerFeatureConsumedByTouch: $readerFeatureConsumedByTouch,
-            reactionStripOwnsDrag: $reactionStripOwnsDrag,
-            composerOwnsDrag: $composerOwnsDrag,
+            gestureResetToken: drag.resetToken,
+            readerFeatureConsumedByTouch: $drag.featureConsumedByTouch,
+            reactionStripOwnsDrag: $drag.reactionStripOwnsDrag,
+            composerOwnsDrag: $drag.composerOwnsDrag,
             keyboard: keyboard,
             triggerStoryReaction: { emoji, frame in
                 triggerStoryReaction(emoji, from: frame)

@@ -902,6 +902,7 @@
 		386404170218450B94491168 /* MediaGalleryStageGeometryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C04FC2DFEE6A44F75DBEC04 /* MediaGalleryStageGeometryTests.swift */; };
 		386C238633B4B556BFDFCF6C /* GameGuideTargetTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12E602608CE955373B847E34 /* GameGuideTargetTests.swift */; };
 		38C04E3E8D861804AAAF47A0 /* RootView+NotificationNavContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C0B86B513BFB3FAFC13B7BE /* RootView+NotificationNavContext.swift */; };
+		38F83A3101BB2E67B70BFD84 /* StoryReaderDragTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFF90D8EB5F16B132DA8ADD5 /* StoryReaderDragTracker.swift */; };
 		390674BE9B35FB5D5AADB6B9 /* WebRTCTypesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C1C322A5004BD04C4BDA35A /* WebRTCTypesTests.swift */; };
 		3919BB9B371EF7801770600E /* AdaptiveHorizontalPagerPinningTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D64E1A52329CBDBA1190A46 /* AdaptiveHorizontalPagerPinningTests.swift */; };
 		391EC92DD3B5907E9F756873 /* TranscriptionRetryScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA37708088983C1CA8A5B217 /* TranscriptionRetryScheduler.swift */; };
@@ -3530,6 +3531,7 @@
 		DC73DB66FA8EEDAE4C0C5C5C /* BridgeFingerprintTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEE83F2F34E5A01B0BCB5EC0 /* BridgeFingerprintTests.swift */; };
 		DC8C2DCF438CB516FF2D0B22 /* ConversationListView+Tail.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00BAEA93A2AA131D9A10A3EC /* ConversationListView+Tail.swift */; };
 		DCAD72823E2568B3C750810E /* CallActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF479B93D688C488F5D4760C /* CallActivityAttributes.swift */; };
+		DCB69F8831AACD5055CD4872 /* StoryReaderDragTrackerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D4422FB25937FB96C263253 /* StoryReaderDragTrackerTests.swift */; };
 		DCBB830035636E8EA4A2366E /* ComposerTrailingRailTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7507574DE20626720006CA2 /* ComposerTrailingRailTests.swift */; };
 		DCDA6797EFE3D02FC5C4562F /* EndToEndSessionBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D4793733A4F7B7308491424 /* EndToEndSessionBridge.swift */; };
 		DCE1CE998B69413BAA04A657 /* RiverLaneResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 726280041957FFB8C4214AB7 /* RiverLaneResolver.swift */; };
@@ -6195,6 +6197,7 @@
 		7D1E6B9BF11CC5FC478865B1 /* ReelRepostEmbedCell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReelRepostEmbedCell.swift; sourceTree = "<group>"; };
 		7D3640268650BEEE8B3FBD39 /* ComposerMountedView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerMountedView.swift; sourceTree = "<group>"; };
 		7D43CD46D034DDF32ADFF6FE /* BubbleFailedRetryBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BubbleFailedRetryBar.swift; sourceTree = "<group>"; };
+		7D4422FB25937FB96C263253 /* StoryReaderDragTrackerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryReaderDragTrackerTests.swift; sourceTree = "<group>"; };
 		7D4DAF5DC5215EC48A978EAE /* VoiceProfileWizardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceProfileWizardView.swift; sourceTree = "<group>"; };
 		7D64D2179DAB80E1FAF7E350 /* OutboxProtectedMediaReplayTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutboxProtectedMediaReplayTests.swift; sourceTree = "<group>"; };
 		7D674426B581D850405E32AE /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -8202,6 +8205,7 @@
 		FFCA755ABDADAD43E83B1E05 /* GamePhotoFlowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GamePhotoFlowView.swift; sourceTree = "<group>"; };
 		FFD5CE930160F895FFAD11CC /* ComposerCaptureStage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerCaptureStage.swift; sourceTree = "<group>"; };
 		FFE35EB51741DD3569F763C1 /* FeedViewStoryPullToRefreshGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedViewStoryPullToRefreshGuardTests.swift; sourceTree = "<group>"; };
+		FFF90D8EB5F16B132DA8ADD5 /* StoryReaderDragTracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryReaderDragTracker.swift; sourceTree = "<group>"; };
 		FFFC803B0ED32FFFC97F7416 /* ConversationDashboardView+Sentiment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ConversationDashboardView+Sentiment.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -8475,6 +8479,7 @@
 				567E553517BCEDB75361457D /* StoryReactionLedgerTests.swift */,
 				E2FA9BF0227D0D68D46340E8 /* StoryReactionStripGestureTests.swift */,
 				624EE4C37E5C1F5C0998958F /* StoryReaderChromeZoneTests.swift */,
+				7D4422FB25937FB96C263253 /* StoryReaderDragTrackerTests.swift */,
 				8EEEB36F89B143888BFA22AF /* StoryRepublishWiringGuardTests.swift */,
 				6EC883FE28A21462FF39C40F /* StoryScrubSelectionResolverTests.swift */,
 				07B9B81C3E2FAE461FB017B3 /* StorySessionInterruptionTests.swift */,
@@ -11835,6 +11840,7 @@
 				6F3C5ACA29AB09386A929270 /* StoryReaderCanvasLayout.swift */,
 				BA038E5BC464BB6919943876 /* StoryReaderContentRules.swift */,
 				87CA1AEFE1E2E946076C60E7 /* StoryReaderDragOwnership.swift */,
+				FFF90D8EB5F16B132DA8ADD5 /* StoryReaderDragTracker.swift */,
 				12ECEC200BCA2C3ABC10341C /* StoryReaderSurfaceRules.swift */,
 				C0A6566054CAE1DF7C738454 /* StoryRepostEmbedCell.swift */,
 				C43784C0CA6324D5857D8E4C /* StorySaveProgressRing.swift */,
@@ -15832,6 +15838,7 @@
 				A0AC237B86506FE45A47D748 /* StoryReaderCanvasLayout.swift in Sources */,
 				3E74742D767607AE6C2B5ECB /* StoryReaderContentRules.swift in Sources */,
 				28E05A97D51F0138903FB778 /* StoryReaderDragOwnership.swift in Sources */,
+				38F83A3101BB2E67B70BFD84 /* StoryReaderDragTracker.swift in Sources */,
 				0B3BCD7E76B6CA97E2BFAED5 /* StoryReaderSurfaceRules.swift in Sources */,
 				C142D1A68FAFCB5987170108 /* StoryRecompositionSeeding.swift in Sources */,
 				8D2A45C0450889CDF692DE61 /* StoryRepostEmbedCell.swift in Sources */,
@@ -17686,6 +17693,7 @@
 				4C3DCDED7B4FC075A4F41919 /* StoryReactionStripGestureTests.swift in Sources */,
 				C7A1DA88B2148CA949543580 /* StoryReaderCardPixelTests.swift in Sources */,
 				2CEB7D5B9AA95A2F5F09F348 /* StoryReaderChromeZoneTests.swift in Sources */,
+				DCB69F8831AACD5055CD4872 /* StoryReaderDragTrackerTests.swift in Sources */,
 				F6EB25758C6748AA7D88B478 /* StoryReaderSceneCardTests.swift in Sources */,
 				616B8BF485183C7D5BBB2343 /* StoryReaderScrimsTests.swift in Sources */,
 				DF6BCDD013AE066E20B254DB /* StoryRepostFlowTests.swift in Sources */,

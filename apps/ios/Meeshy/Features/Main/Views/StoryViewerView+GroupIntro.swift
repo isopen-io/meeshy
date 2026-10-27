@@ -31,7 +31,7 @@ extension StoryViewerView {
                 // Même jeton que l'overlay gestuel du canvas : il purge le
                 // mouchard de déplacement de l'interlude sur les chemins où
                 // SwiftUI n'a pas délivré la fin du geste.
-                gestureResetToken: gestureResetToken
+                gestureResetToken: drag.resetToken
             )
             .transition(.opacity)
             .zIndex(30)

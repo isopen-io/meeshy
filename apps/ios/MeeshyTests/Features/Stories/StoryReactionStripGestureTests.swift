@@ -202,7 +202,7 @@ final class StoryReactionStripGestureTests: XCTestCase {
         }
         let plat = compact(corps)
         XCTAssertTrue(
-            plat.contains("guard!reactionStripOwnsDragelse{return}"),
+            plat.contains("guard!drag.isClaimedElsewhere,"),
             "Sans cette sortie anticipée, le drag parent — monté en `.simultaneousGesture`, "
                 + "donc impossible à subordonner par priorité — continue de paginer sous le doigt."
         )
@@ -218,19 +218,19 @@ final class StoryReactionStripGestureTests: XCTestCase {
         }
         let plat = compact(corps)
         // #11045 : la barre ET les composants posés sur la scène cèdent ensemble,
-        // par `StoryReaderHorizontalYield.yields(`, qui consulte la barre.
-        guard let consultation = plat.range(of: "StoryReaderHorizontalYield.yields("),
-              let axe = plat.range(of: "gestureAxis=1") else {
-            return XCTFail("Le lecteur doit consulter `StoryReaderHorizontalYield.yields(` avant de poser `gestureAxis = 1`.")
-        }
+        // par `StoryReaderHorizontalYield.yields(`, qui consulte la barre — et le
+        // traqueur la consulte AVANT d'arrêter l'horizontal (`StoryReaderDragTrackerTests`).
+        XCTAssertTrue(plat.contains("horizontalYields:{StoryReaderHorizontalYield.yields("),
+                      "Le lecteur doit remettre `StoryReaderHorizontalYield.yields(` à la décision d'axe.")
+        var tracker = StoryReaderDragTracker()
+        XCTAssertEqual(tracker.track(dx: 40, dy: 0, featureAtStart: false, horizontalYields: { true }), .undecided,
+                       "La consultation doit PRÉCÉDER l'arrêt de l'axe horizontal.")
         let cession = try strippedSource(at: "Meeshy/Features/Main/Views/StoryReaderDragOwnership.swift")
         guard let yields = self.corps("static func yields(", dans: cession) else {
             return XCTFail("`StoryReaderHorizontalYield.yields` introuvable — la garde ne mesurerait rien.")
         }
         XCTAssertTrue(compact(yields).contains("StoryReactionStripGesture.yieldsHorizontalAxis(stripFrame:stripFrame,dragStart:dragStart)"),
                       "La cession consulte le cadre de la barre au point de départ.")
-        XCTAssertLessThan(consultation.lowerBound, axe.lowerBound,
-                          "La consultation doit PRÉCÉDER l'arrêt de l'axe horizontal.")
         XCTAssertTrue(plat.contains("stripFrame:reactionStripFrame"),
                       "Le cadre consulté est celui que publie la barre.")
         XCTAssertTrue(plat.contains("dragStart:value.startLocation"),
@@ -263,7 +263,7 @@ final class StoryReactionStripGestureTests: XCTestCase {
             return XCTFail("`resetGestureTracking` introuvable")
         }
         XCTAssertTrue(
-            compact(corps).contains("reactionStripOwnsDrag=false"),
+            compact(corps).contains("drag.reset()"),
             "Le filet anti-état-collant doit purger ce drapeau comme il purge les autres "
                 + "photographies de geste."
         )

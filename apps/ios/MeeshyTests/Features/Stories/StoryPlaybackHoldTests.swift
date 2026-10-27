@@ -120,7 +120,7 @@ final class StoryPlaybackHoldWiringTests: XCTestCase {
                                                        from: "var playbackCauses: StoryPlaybackCauses {")
         for term in ["explicitPause: isLongPressPaused",
                      "reactionFlight != nil", "showEmojiStrip", "showFullEmojiPicker",
-                     "gestureAxis != 0", "isScrubbingRail", "isTransitioning", "isDismissing", "showGroupIntro",
+                     "drag.isInFlight", "isScrubbingRail", "isTransitioning", "isDismissing", "showGroupIntro",
                      "coveredByScreen: isPaused",
                      "interrupted: isCallInterrupting || isGameMomentShown",
                      "isComposerEngaged", "hasComposerContent", "showTextEmojiPicker",

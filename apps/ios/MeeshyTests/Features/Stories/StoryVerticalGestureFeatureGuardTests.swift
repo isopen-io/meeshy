@@ -135,6 +135,22 @@ final class StoryVerticalGestureFeatureGuardTests: XCTestCase {
         return codeOnly(String(source[start.upperBound..<end.lowerBound]))
     }
 
+    private func verticalConclusionCode() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Views/StoryViewerView+Content+Gestures.swift")
+        let source = try String(contentsOf: url, encoding: .utf8)
+        guard let start = source.range(of: "private func concludeVerticalSwipe("),
+              let end = source.range(of: "\n    }", range: start.upperBound..<source.endIndex) else {
+            XCTFail("concludeVerticalSwipe introuvable")
+            return ""
+        }
+        return codeOnly(String(source[start.upperBound..<end.lowerBound]))
+    }
+
     /// L'ÉTAT DES SURFACES EST LU AU DÉBUT DU GESTE, PAS AU RELÂCHEMENT.
     ///
     /// L'overlay gestuel enfant consomme la surface ouverte dès le touch-down
@@ -150,8 +166,9 @@ final class StoryVerticalGestureFeatureGuardTests: XCTestCase {
             "déjà périmé, l'enfant a refermé la surface au touch-down."
         )
         XCTAssertTrue(
-            code.contains("hadActiveFeatureAtDragStart = hasActiveReaderFeature"),
-            "La valeur doit être photographiée à la décision d'axe du geste."
+            code.contains("featureAtStart: hasActiveReaderFeature"),
+            "La valeur doit être photographiée à la décision d'axe du geste " +
+            "(`StoryReaderDragTracker.track`, comportement : `StoryReaderDragTrackerTests`)."
         )
     }
 
@@ -241,15 +258,21 @@ final class StoryVerticalGestureFeatureGuardTests: XCTestCase {
     func test_verticalDecision_alsoHonoursTheFeatureConsumedByTheChildAtTouchDown() throws {
         let code = try dragGestureCode()
         XCTAssertTrue(
-            code.contains("hadActiveFeatureAtDragStart || readerFeatureConsumedByTouch"),
+            code.contains("let ended = drag.finish()"),
+            "Le relâchement lit les DEUX sources par `StoryReaderDragTracker.finish()`, " +
+            "qui les consomme (comportement : `StoryReaderDragTrackerTests`)."
+        )
+        XCTAssertTrue(
+            try verticalConclusionCode().contains("hasActiveFeature: hadActiveFeature"),
             "Sans le signal du touch-down de l'enfant, refermer une surface par " +
             "glissement éjecte l'utilisateur de la story."
         )
-        XCTAssertTrue(
-            code.contains("readerFeatureConsumedByTouch = false"),
-            "Le signal doit être CONSOMMÉ par le geste qui le lit, sinon il " +
-            "neutralise le geste suivant (le lecteur ne se fermerait plus)."
-        )
+        var tracker = StoryReaderDragTracker()
+        tracker.featureConsumedByTouch = true
+        _ = tracker.track(dx: 0, dy: 40, featureAtStart: false, horizontalYields: { false })
+        XCTAssertTrue(tracker.finish().hadActiveFeature)
+        XCTAssertFalse(tracker.featureConsumedByTouch,
+                       "Le signal doit être CONSOMMÉ par le geste qui le lit.")
     }
 
     /// Le signal ne peut pas non plus survivre à un geste dont SwiftUI n'a jamais
@@ -267,10 +290,14 @@ final class StoryVerticalGestureFeatureGuardTests: XCTestCase {
             return XCTFail("resetGestureTracking introuvable")
         }
         XCTAssertTrue(
-            codeOnly(String(source[start.upperBound..<end.lowerBound]))
-                .contains("readerFeatureConsumedByTouch = false"),
-            "Un signal collant rendrait le prochain swipe bas incapable de fermer le lecteur."
+            codeOnly(String(source[start.upperBound..<end.lowerBound])).contains("drag.reset()"),
+            "Le filet du lecteur passe par `StoryReaderDragTracker.reset()`."
         )
+        var tracker = StoryReaderDragTracker()
+        tracker.featureConsumedByTouch = true
+        tracker.reset()
+        XCTAssertFalse(tracker.featureConsumedByTouch,
+                       "Un signal collant rendrait le prochain swipe bas incapable de fermer le lecteur.")
     }
 
     /// LA PAUSE DU DRAG EST ÉTAT-DIRIGÉE, PAS ÉVÉNEMENTIELLE.
@@ -298,7 +325,7 @@ final class StoryVerticalGestureFeatureGuardTests: XCTestCase {
             return XCTFail("playbackCauses introuvable")
         }
         XCTAssertTrue(
-            codeOnly(String(source[start.upperBound..<end.lowerBound])).contains("gestureAxis != 0"),
+            codeOnly(String(source[start.upperBound..<end.lowerBound])).contains("drag.isInFlight"),
             "L'agrégat de pause doit porter le drag en cours, sinon plus rien ne gèle " +
             "la lecture pendant le geste."
         )
