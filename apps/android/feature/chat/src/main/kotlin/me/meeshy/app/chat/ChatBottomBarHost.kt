@@ -9,11 +9,6 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.dp
-import me.meeshy.sdk.model.composer.ComposerBottomClearance
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -65,10 +60,7 @@ private fun ChatSelectionBar(host: ChatHostContext) {
     val now = System.currentTimeMillis()
     val offer = remember(selected, canWrite) { SelectionOffer.of(selected, canWrite, now) }
     var confirmingDelete by remember { mutableStateOf(false) }
-    val density = LocalDensity.current
-    val safeBottomDp = with(density) { WindowInsets.navigationBars.getBottom(this).toDp().value }
     SelectionBar(
-        bottomClearance = ComposerBottomClearance.required(safeBottomDp).dp,
         count = selected.size,
         offer = offer,
         accentColor = host.accentColor,

@@ -9,6 +9,8 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -25,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -32,6 +35,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.chat.R
+import me.meeshy.sdk.model.composer.ComposerBottomClearance
 import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
@@ -137,6 +141,14 @@ private fun SelectionCircle(
     }
 }
 
+/** L'air sous la barre de sélection : `max(barre système, porte)`, la règle du composeur ([ComposerBottomClearance]). */
+@Composable
+internal fun selectionBarBottomClearance(): Dp {
+    val density = LocalDensity.current
+    val safeBottomDp = with(density) { WindowInsets.navigationBars.getBottom(this).toDp().value }
+    return ComposerBottomClearance.required(safeBottomDp).dp
+}
+
 /**
  * La barre d'action du mode sélection (#13294, iOS `selectionToolbar`) : Annuler, Supprimer, le
  * compteur (à partir de 2), puis les sorties que la loi des actions offre ([SelectionOffer]).
@@ -155,7 +167,7 @@ internal fun SelectionBar(
     onStar: () -> Unit,
     onForward: () -> Unit,
     modifier: Modifier = Modifier,
-    bottomClearance: Dp = 0.dp,
+    bottomClearance: Dp = selectionBarBottomClearance(),
 ) {
     ComposerGlassPlate(modifier = modifier.padding(bottom = bottomClearance)) {
         Row(

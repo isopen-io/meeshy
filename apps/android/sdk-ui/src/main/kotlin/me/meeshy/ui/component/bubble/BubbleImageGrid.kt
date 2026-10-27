@@ -2,12 +2,9 @@ package me.meeshy.ui.component.bubble
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -18,6 +15,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.unit.Constraints
+import kotlin.math.min
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -34,6 +34,7 @@ import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 
 private const val MAX_GRID_IMAGES = 4
+private val GRID_WIDTH = 252.dp
 
 /**
  * The image attachments of a bubble: a single image keeps its own aspect ratio (clamped), two to
@@ -56,7 +57,7 @@ internal fun BubbleImageGrid(
                 contentDescription = bubbleImageContentDescription(image, stringResource(R.string.bubble_image_description)),
                 contentScale = ContentScale.Crop,
                 modifier = modifier
-                    .width(252.dp)
+                    .width(GRID_WIDTH)
                     .aspectRatio(ratio)
                     .clip(shape)
                     .background(MeeshyPalette.Indigo500.copy(alpha = 0.08f))
@@ -69,30 +70,44 @@ internal fun BubbleImageGrid(
         else -> {
             val visible = images.take(MAX_GRID_IMAGES)
             val hiddenCount = images.size - visible.size
-            Column(
-                modifier = modifier.width(252.dp),
-                verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
-            ) {
-                visible.chunked(2).forEachIndexed { rowIndex, row ->
-                    Row(horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs)) {
-                        row.forEachIndexed { columnIndex, image ->
-                            val imageIndex = rowIndex * 2 + columnIndex
-                            BubbleImageCell(
-                                image = image,
-                                imageIndex = imageIndex,
-                                hiddenCount = if (hiddenCount > 0 && imageIndex == visible.lastIndex) hiddenCount else 0,
-                                shape = shape,
-                                onImageClick = onImageClick,
-                            )
-                        }
-                    }
+            BubbleImageTiles(modifier = modifier) {
+                visible.forEachIndexed { imageIndex, image ->
+                    BubbleImageCell(
+                        image = image,
+                        imageIndex = imageIndex,
+                        hiddenCount = if (hiddenCount > 0 && imageIndex == visible.lastIndex) hiddenCount else 0,
+                        shape = shape,
+                        onImageClick = onImageClick,
+                    )
                 }
             }
         }
     }
 }
 
-/** One 124dp cell of the multi-image grid; a positive [hiddenCount] overlays the "+N" badge. */
+/**
+ * Two square columns, 252 dp wide at most: a bubble narrowed by its row (selection gutter, split
+ * screen, a 360 dp phone) shrinks the cells instead of clipping the right column (#13376).
+ */
+@Composable
+private fun BubbleImageTiles(modifier: Modifier, content: @Composable () -> Unit) {
+    Layout(content = content, modifier = modifier) { measurables, constraints ->
+        val gap = MeeshySpacing.xs.roundToPx()
+        val full = GRID_WIDTH.roundToPx()
+        val width = if (constraints.hasBoundedWidth) min(full, constraints.maxWidth) else full
+        val cell = ((width - gap) / 2).coerceAtLeast(0)
+        val placeables = measurables.map { it.measure(Constraints.fixed(cell, cell)) }
+        val rows = (placeables.size + 1) / 2
+        val height = (rows * cell + (rows - 1).coerceAtLeast(0) * gap)
+        layout(width, height) {
+            placeables.forEachIndexed { index, placeable ->
+                placeable.placeRelative((index % 2) * (cell + gap), (index / 2) * (cell + gap))
+            }
+        }
+    }
+}
+
+/** One square cell of the multi-image grid, sized by [BubbleImageTiles]; a positive [hiddenCount] overlays the "+N" badge. */
 @Composable
 private fun BubbleImageCell(
     image: BubbleImage,
@@ -103,7 +118,7 @@ private fun BubbleImageCell(
 ) {
     Box(
         modifier = Modifier
-            .size(124.dp)
+            .fillMaxSize()
             .clip(shape)
             .background(MeeshyPalette.Indigo500.copy(alpha = 0.08f))
             .let { base ->
@@ -116,13 +131,13 @@ private fun BubbleImageCell(
             model = image.thumbnailUrl ?: image.url,
             contentDescription = bubbleImageContentDescription(image, stringResource(R.string.bubble_image_description)),
             contentScale = ContentScale.Crop,
-            modifier = Modifier.size(124.dp),
+            modifier = Modifier.fillMaxSize(),
         )
         if (hiddenCount > 0) {
             val hiddenLabel = stringResource(R.string.bubble_hidden_images, hiddenCount)
             Box(
                 modifier = Modifier
-                    .size(124.dp)
+                    .fillMaxSize()
                     .background(Color.Black.copy(alpha = 0.45f))
                     .clearAndSetSemantics { contentDescription = hiddenLabel },
                 contentAlignment = Alignment.Center,
