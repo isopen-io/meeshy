@@ -36,133 +36,99 @@ extension CallManager {
         reliabilityMonitorTask?.cancel()
         reliabilityMonitorTask = Task { @MainActor [weak self] in
             guard let self else { return }
-            var connectingSince: Date?
-            var didAttemptConnectingRestart = false
-            // Half-open detection state, keyed off `connectionEpoch` so it
-            // re-arms with a fresh RTP baseline after every (re)connect — even
-            // when a reconnection cycle completes entirely between two poll
-            // ticks (the old loop-local bool missed that and froze self-heal).
-            var halfOpenMonitor = HalfOpenMonitorState()
-            // `.reconnecting` watchdog state. `reconnectingWatchedAttempt` pins the
-            // attempt number whose budget clock `reconnectingSince` is timing; a
-            // change in attempt (any reconnection trigger advanced the counter)
-            // restarts the clock for the new attempt.
-            var reconnectingSince: Date?
-            var reconnectingWatchedAttempt: Int?
+            // Half-open detection is keyed off `connectionEpoch` so it re-arms
+            // with a fresh RTP baseline after every (re)connect — even when a
+            // reconnection cycle completes entirely between two poll ticks.
+            var watchdog = CallReliabilityWatchdog()
             let nanos = UInt64(QualityThresholds.rtpGatePollIntervalSeconds * 1_000_000_000)
-
             while !Task.isCancelled {
                 guard await cancellableSleep(for: .nanoseconds(nanos)), !Task.isCancelled else { return }
-
-                switch self.callState {
-                case .offering:
-                    // Offer envoyé, l'appelé SONNE encore (le join est
-                    // automatique à la sonnerie — un délai humain > 12s est
-                    // normal, pas une panne ICE : aucune remote description
-                    // n'existe, un ICE restart est impossible). L'horloge de
-                    // l'appel non répondu est le ring timeout 45s
-                    // (startOutgoingRingTimeout) + le reaper gateway 60s.
-                    // L'horloge ICE (.connecting) ne démarre qu'à l'answer.
-                    connectingSince = nil
-                    didAttemptConnectingRestart = false
-                    reconnectingSince = nil
-                    reconnectingWatchedAttempt = nil
-                case .connecting:
-                    reconnectingSince = nil
-                    reconnectingWatchedAttempt = nil
-                    if self.catchUpConnectedIfNeeded(trigger: ".connecting watchdog") {
-                        connectingSince = nil
-                        didAttemptConnectingRestart = false
-                        continue
-                    }
-                    // Appelé qui attend encore l'offre : l'horloge ne démarre
-                    // qu'à son arrivée, le minuteur d'offre tient cette phase.
-                    if self.isAwaitingRemoteOffer {
-                        connectingSince = nil
-                        didAttemptConnectingRestart = false
-                        break
-                    }
-                    let since = connectingSince ?? Date()
-                    connectingSince = since
-                    let elapsed = Date().timeIntervalSince(since)
-                    switch CallReliabilityPolicy.evaluateConnecting(
-                        secondsInConnecting: elapsed,
-                        didAttemptRestart: didAttemptConnectingRestart,
-                        failAfterSeconds: self.connectingFailBudget,
-                        awaitingRemoteOffer: self.isAwaitingRemoteOffer
-                    ) {
-                    case .waiting:
-                        break
-                    case .restartICE:
-                        didAttemptConnectingRestart = true
-                        Logger.calls.info(".connecting watchdog (\(Int(elapsed))s) → triggering ICE restart")
-                        self.attemptReconnection()
-                    case .fail:
-                        Logger.calls.error(".connecting watchdog (\(Int(elapsed))s) — failing call")
-                        self.failCall(String(localized: "call.error.timeout"))
-                        return
-                    }
-                case .connected:
-                    connectingSince = nil
-                    didAttemptConnectingRestart = false
-                    reconnectingSince = nil
-                    reconnectingWatchedAttempt = nil
-                    // Cheap pre-check: once this epoch settled (media confirmed
-                    // healthy OR the one allowed self-heal fired) skip the stats
-                    // fetch — ongoing transport faults surface via the PC-state
-                    // delegate, not by polling stats forever.
-                    guard halfOpenMonitor.needsEvaluation(epoch: self.connectionEpoch) else { break }
-                    guard let stats = await self.webRTCService.getStats() else { continue }
-                    switch halfOpenMonitor.evaluate(
-                        epoch: self.connectionEpoch,
-                        inboundPackets: stats.inboundPacketsReceived,
-                        outboundPackets: stats.outboundPacketsSent
-                    ) {
-                    case .healthy?:
-                        Logger.calls.debug("media bidirectional (inAudio=\(stats.inboundAudioPackets) inVideo=\(stats.inboundVideoPackets) out=\(stats.outboundPacketsSent))")
-                    case .waiting?, nil:
-                        break
-                    case .healHalfOpen?:
-                        Logger.calls.warning("half-open detected (inbound delta stalled, epoch \(self.connectionEpoch)) — auto ICE restart")
-                        self.attemptReconnection()
-                    }
-                case .reconnecting(let attempt):
-                    connectingSince = nil
-                    didAttemptConnectingRestart = false
-                    // Restart the budget clock whenever a new attempt begins (any
-                    // reconnection trigger advanced the counter).
-                    if attempt != reconnectingWatchedAttempt {
-                        reconnectingWatchedAttempt = attempt
-                        reconnectingSince = Date()
-                    }
-                    let since = reconnectingSince ?? Date()
-                    reconnectingSince = since
-                    let elapsed = Date().timeIntervalSince(since)
-                    switch CallReliabilityPolicy.evaluateReconnecting(secondsInAttempt: elapsed) {
-                    case .waiting:
-                        break
-                    case .retry:
-                        if self.catchUpConnectedIfNeeded(trigger: ".reconnecting watchdog") {
-                            reconnectingSince = nil
-                            reconnectingWatchedAttempt = nil
-                            break
-                        }
-                        // This attempt's ICE restart overran its budget without
-                        // reaching `.connected`. Escalate: `attemptReconnection`
-                        // advances the counter (or trips the cap → `.connectionLost`).
-                        // Clear the clock so the next tick re-arms for the new attempt.
-                        Logger.calls.warning(".reconnecting watchdog (\(Int(elapsed))s, attempt \(attempt)) — ICE restart stalled, escalating")
-                        reconnectingSince = nil
-                        reconnectingWatchedAttempt = nil
-                        self.attemptReconnection(escalate: true)
-                    }
-                default:
-                    connectingSince = nil
-                    reconnectingSince = nil
-                    reconnectingWatchedAttempt = nil
-                }
+                guard await self.superviseReliability(&watchdog) else { return }
             }
         }
+    }
+
+    /// One reliability tick. Returns `false` once the call has been failed
+    /// (the monitor stops).
+    private func superviseReliability(_ watchdog: inout CallReliabilityWatchdog) async -> Bool {
+        switch callState {
+        case .offering:
+            // Offer envoyé, l'appelé SONNE encore (le join est automatique à
+            // la sonnerie — un délai humain > 12s est normal, pas une panne
+            // ICE : aucune remote description n'existe, un ICE restart est
+            // impossible). L'horloge de l'appel non répondu est le ring
+            // timeout 45s (startOutgoingRingTimeout) + le reaper gateway 60s.
+            // L'horloge ICE (.connecting) ne démarre qu'à l'answer.
+            watchdog.offering()
+        case .connecting:
+            return superviseConnecting(&watchdog)
+        case .connected:
+            watchdog.connected()
+            await superviseHalfOpen(&watchdog)
+        case .reconnecting(let attempt):
+            superviseReconnecting(attempt: attempt, &watchdog)
+        default:
+            watchdog.otherState()
+        }
+        return true
+    }
+
+    private func superviseConnecting(_ watchdog: inout CallReliabilityWatchdog) -> Bool {
+        if catchUpConnectedIfNeeded(trigger: ".connecting watchdog") {
+            watchdog.reconnectingResolved()
+            watchdog.connectingCaughtUp()
+            return true
+        }
+        // Appelé qui attend encore l'offre : l'horloge ne démarre qu'à son
+        // arrivée, le minuteur d'offre tient cette phase.
+        switch watchdog.connecting(
+            now: Date(),
+            failAfterSeconds: connectingFailBudget,
+            awaitingRemoteOffer: isAwaitingRemoteOffer
+        ) {
+        case .waiting:
+            return true
+        case .restartICE(let elapsed):
+            Logger.calls.info(".connecting watchdog (\(Int(elapsed))s) → triggering ICE restart")
+            attemptReconnection()
+            return true
+        case .fail(let elapsed):
+            Logger.calls.error(".connecting watchdog (\(Int(elapsed))s) — failing call")
+            failCall(String(localized: "call.error.timeout"))
+            return false
+        }
+    }
+
+    /// Once this epoch settled (media confirmed healthy OR the one allowed
+    /// self-heal fired) the stats fetch is skipped — ongoing transport faults
+    /// surface via the PC-state delegate, not by polling stats forever.
+    private func superviseHalfOpen(_ watchdog: inout CallReliabilityWatchdog) async {
+        guard watchdog.halfOpenMonitor.needsEvaluation(epoch: self.connectionEpoch) else { return }
+        guard let stats = await webRTCService.getStats() else { return }
+        switch watchdog.halfOpenMonitor.evaluate(
+            epoch: self.connectionEpoch,
+            inboundPackets: stats.inboundPacketsReceived,
+            outboundPackets: stats.outboundPacketsSent
+        ) {
+        case .healthy?:
+            Logger.calls.debug("media bidirectional (inAudio=\(stats.inboundAudioPackets) inVideo=\(stats.inboundVideoPackets) out=\(stats.outboundPacketsSent))")
+        case .waiting?, nil:
+            break
+        case .healHalfOpen?:
+            Logger.calls.warning("half-open detected (inbound delta stalled, epoch \(self.connectionEpoch)) — auto ICE restart")
+            attemptReconnection()
+        }
+    }
+
+    private func superviseReconnecting(attempt: Int, _ watchdog: inout CallReliabilityWatchdog) {
+        guard case .stalled(let elapsed) = watchdog.reconnecting(attempt: attempt, now: Date()) else { return }
+        watchdog.reconnectingResolved()
+        if catchUpConnectedIfNeeded(trigger: ".reconnecting watchdog") { return }
+        // This attempt's ICE restart overran its budget without reaching
+        // `.connected`. Escalate: `attemptReconnection` advances the counter
+        // (or trips the cap → `.connectionLost`).
+        Logger.calls.warning(".reconnecting watchdog (\(Int(elapsed))s, attempt \(attempt)) — ICE restart stalled, escalating")
+        attemptReconnection(escalate: true)
     }
 
     /// #8270 — level catch-up of `.connected`. See

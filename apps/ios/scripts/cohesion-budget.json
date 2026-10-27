@@ -67,7 +67,6 @@
     "apps/ios/Meeshy/Features/Main/Services/CallManager+Answer.swift::CallManager.answerCall": 94,
     "apps/ios/Meeshy/Features/Main/Services/CallManager+Answer.swift::CallManager.answerCallReady": 82,
     "apps/ios/Meeshy/Features/Main/Services/CallManager+AudioSession.swift::CallManager.configureAudioSession": 92,
-    "apps/ios/Meeshy/Features/Main/Services/CallManager+Connection.swift::CallManager.startReliabilityMonitor": 132,
     "apps/ios/Meeshy/Features/Main/Services/CallManager+Connection.swift::CallManager.transitionToConnected": 138,
     "apps/ios/Meeshy/Features/Main/Services/CallManager+Hold.swift::CallManager.handleHold": 143,
     "apps/ios/Meeshy/Features/Main/Services/CallManager+IncomingCall.swift::CallManager.handleIncomingCallNotification": 114,
@@ -375,7 +374,7 @@
   "types": {
     "Meeshy::BubbleStandardLayout": 1663,
     "Meeshy::CallFrameRenderer": 2583,
-    "Meeshy::CallManager": 6550,
+    "Meeshy::CallManager": 6516,
     "Meeshy::CallView": 3317,
     "Meeshy::ComposerCaptureSession": 1638,
     "Meeshy::ConversationListView": 1748,

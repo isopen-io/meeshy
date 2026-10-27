@@ -46,10 +46,15 @@ final class CallAwaitingOfferPolicyTests: XCTestCase {
 
     func test_connectingWatchdog_restartsItsClock_whileTheOfferIsAwaited() throws {
         let source = try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager+Connection.swift")
-        XCTAssertTrue(source.contains("awaitingRemoteOffer: self.isAwaitingRemoteOffer"),
+        XCTAssertTrue(source.contains("awaitingRemoteOffer: isAwaitingRemoteOffer"),
                       "le chien de garde .connecting doit passer l'attente d'offre à sa politique")
-        XCTAssertTrue(source.contains("if self.isAwaitingRemoteOffer {\n                        connectingSince = nil"),
-                      "son horloge ne démarre qu'une fois l'offre reçue — sinon une offre arrivée à 20 s se fait couper à 25 s")
+        var watchdog = CallReliabilityWatchdog()
+        let start = Date(timeIntervalSince1970: 0)
+        _ = watchdog.connecting(now: start, failAfterSeconds: 25, awaitingRemoteOffer: false)
+        _ = watchdog.connecting(now: start.addingTimeInterval(20), failAfterSeconds: 25, awaitingRemoteOffer: true)
+        XCTAssertEqual(watchdog.connecting(now: start.addingTimeInterval(25), failAfterSeconds: 25, awaitingRemoteOffer: false),
+                       .waiting,
+                       "son horloge ne démarre qu'une fois l'offre reçue — sinon une offre arrivée à 20 s se fait couper à 25 s")
     }
 
     func test_aLateOffer_disarmsTheOfferTimeout() throws {
