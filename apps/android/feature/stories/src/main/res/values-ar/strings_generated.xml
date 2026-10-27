@@ -20,6 +20,10 @@
     <string name="composer_audience_sub_private">أنت وحدك — لا شيء يُنشر</string>
     <string name="composer_audience_sub_public">الجميع، بمن فيهم غير المتابعين</string>
     <string name="composer_audience_title">الجمهور</string>
+    <string name="composer_audio_delete_action">حذف الصوت</string>
+    <string name="composer_capture_sound_mute">كتم الصوت</string>
+    <string name="composer_capture_sound_unmute">إعادة تشغيل الصوت</string>
+    <string name="composer_capture_tool_sound">الصوت</string>
     <string name="composer_object_editor_adjust_blur">التمويه</string>
     <string name="composer_object_editor_adjust_brightness">السطوع</string>
     <string name="composer_object_editor_adjust_contrast">التباين</string>
@@ -36,6 +40,7 @@
     <string name="composer_publish_as_storyAndReel">نشر القصة والريل</string>
     <string name="composer_socle_audience">الجمهور</string>
     <string name="composer_socle_publish">نشر</string>
+    <string name="composer_sound_background_a11y">صوت الخلفية</string>
     <string name="my_stories_archive_empty_subtitle">ستنضم قصصك المنتهية الصلاحية إلى هذا الأرشيف.</string>
     <string name="my_stories_archive_empty_title">لا يوجد أرشيف</string>
     <string name="my_stories_back">رجوع</string>
@@ -166,6 +171,7 @@
     <string name="stories_visibility_only">فقط…</string>
     <string name="stories_visibility_private">أنا فقط</string>
     <string name="stories_visibility_public">عام</string>
+    <string name="story_composer_cancel">إلغاء</string>
     <string name="story_composer_fab_badge">%d عنصر نشط</string>
     <string name="story_composer_fab_badge_none">لا توجد عناصر</string>
     <string name="story_composer_fab_hint_close">انقر مرتين للإغلاق.</string>
@@ -175,6 +181,7 @@
     <string name="story_composer_grabber_hint_dismiss">اسحب لأسفل للتصغير أو الإغلاق.</string>
     <string name="story_composer_grabber_hint_resize">اسحب لأعلى للتكبير، ولأسفل للتصغير أو الإغلاق.</string>
     <string name="story_composer_redo">إعادة</string>
+    <string name="story_composer_soundLibrary">المكتبة</string>
     <string name="story_composer_undo">تراجع</string>
     <string name="story_media_accessibility">إمكانية الوصول</string>
     <string name="story_media_alt_a11yHint">يصف هذا الوسائط للأشخاص الذين يستخدمون VoiceOver.</string>
@@ -198,6 +205,53 @@
     </plurals>
     <string name="story_send_search_hint">ابحث عن محادثة...</string>
     <string name="story_send_sent">أُرسل</string>
+    <string name="story_sound_library_clearSearch">مسح البحث</string>
+    <string name="story_sound_library_emptyMine">ستظهر أصواتك هنا بمجرد نشرك قصة تحتوي على صوت أصلي.</string>
+    <string name="story_sound_library_emptySearch">لا يوجد صوت يطابق هذا البحث.</string>
+    <string name="story_sound_library_emptyTrending">لا توجد أصوات عامة بعد.</string>
+    <string name="story_sound_library_mine">أصواتي</string>
+    <string name="story_sound_library_play">تشغيل</string>
+    <plurals name="story_sound_library_playCount">
+        <item quantity="zero">لا مشاهدات</item>
+        <item quantity="one">مشاهدة واحدة</item>
+        <item quantity="two">مشاهدتان</item>
+        <item quantity="few">%d مشاهدات</item>
+        <item quantity="many">%d مشاهدة</item>
+        <item quantity="other">%d مشاهدة</item>
+    </plurals>
+    <plurals name="story_sound_library_postCount">
+        <item quantity="zero">لا منشورات</item>
+        <item quantity="one">منشور واحد</item>
+        <item quantity="two">منشوران</item>
+        <item quantity="few">%d منشورات</item>
+        <item quantity="many">%d منشورًا</item>
+        <item quantity="other">%d منشور</item>
+    </plurals>
+    <string name="story_sound_library_preparing">جارٍ التحضير…</string>
+    <string name="story_sound_library_remove">إزالة من مكتبتي</string>
+    <string name="story_sound_library_removeConfirm">إزالة</string>
+    <string name="story_sound_library_removeFailed">تعذّرت إزالة الصوت. حاول مرة أخرى.</string>
+    <string name="story_sound_library_removeMessageUnused">سيختفي هذا الصوت من مكتبتك ولن يمكن إضافته إلى أي منشور.</string>
+    <plurals name="story_sound_library_removeMessageUsed">
+        <item quantity="zero">لا توجد منشورات تستخدمه. سيختفي من مكتبتك ولن يمكن إضافته إلى منشور جديد.</item>
+        <item quantity="one">لا يزال منشور واحد يستخدمه وسيواصل تشغيله. سيختفي من مكتبتك ولن يمكن إضافته إلى منشور جديد.</item>
+        <item quantity="two">لا يزال منشوران يستخدمانه وسيواصلان تشغيله. سيختفي من مكتبتك ولن يمكن إضافته إلى منشور جديد.</item>
+        <item quantity="few">لا تزال %d منشورات تستخدمه وستواصل تشغيله. سيختفي من مكتبتك ولن يمكن إضافته إلى منشور جديد.</item>
+        <item quantity="many">لا يزال %d منشورًا يستخدمه وسيواصل تشغيله. سيختفي من مكتبتك ولن يمكن إضافته إلى منشور جديد.</item>
+        <item quantity="other">لا يزال %d منشور يستخدمه وسيواصل تشغيله. سيختفي من مكتبتك ولن يمكن إضافته إلى منشور جديد.</item>
+    </plurals>
+    <string name="story_sound_library_removeTitle">إزالة هذا الصوت من مكتبتك؟</string>
+    <string name="story_sound_library_rename">إعادة تسمية</string>
+    <string name="story_sound_library_renameConfirm">حفظ</string>
+    <string name="story_sound_library_renameHint">سيكون هذا العنوان مرئيًا لكل من يكتشف هذا الصوت. اتركه فارغًا للعودة إلى التسمية الافتراضية.</string>
+    <string name="story_sound_library_renamePlaceholder">العنوان</string>
+    <string name="story_sound_library_renameTitle">تسمية هذا الصوت</string>
+    <string name="story_sound_library_search">ابحث عن صوت أو منشئ</string>
+    <string name="story_sound_library_stop">إيقاف</string>
+    <string name="story_sound_library_title">اختر صوتًا</string>
+    <string name="story_sound_library_trending">الرائجة</string>
+    <string name="story_sound_library_untitled">صوت أصلي</string>
+    <string name="story_sound_library_use">استخدام</string>
     <string name="story_tool_audio">صوت</string>
     <string name="story_tool_drawing">رسم</string>
     <string name="story_tool_media">وسائط</string>

@@ -48,3 +48,26 @@ class StoryAudioIdentityTest {
         assertThat(SoundCredit.label(track())).isEmpty()
     }
 }
+
+class SoundTraceBarsTest {
+    @Test
+    fun `without a measured waveform the bars are a sinusoid, never a flat line that would read as silence`() {
+        val bars = SoundTraceBars.heights(emptyList(), count = 14)
+        assertThat(bars).hasSize(14)
+        assertThat(bars.all { it in 0.35f..0.8f }).isTrue()
+        assertThat(bars.toSet().size).isGreaterThan(1)
+    }
+
+    @Test
+    fun `a measured waveform is sampled evenly and read linearly`() {
+        val samples = List(28) { if (it % 2 == 0) 1f else 0f }
+        val bars = SoundTraceBars.heights(samples, count = 14)
+        assertThat(bars).hasSize(14)
+        assertThat(bars.all { it == 1f }).isTrue()
+    }
+
+    @Test
+    fun `a bar never falls below the readable floor`() {
+        assertThat(SoundTraceBars.heights(listOf(0f, 0f), count = 2).all { it >= SoundTraceBars.FLOOR }).isTrue()
+    }
+}

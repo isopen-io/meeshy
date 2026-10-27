@@ -20,6 +20,10 @@
     <string name="composer_audience_sub_private">You alone — nothing is published</string>
     <string name="composer_audience_sub_public">Everyone, including non-followers</string>
     <string name="composer_audience_title">Audience</string>
+    <string name="composer_audio_delete_action">Delete sound</string>
+    <string name="composer_capture_sound_mute">Mute the sound</string>
+    <string name="composer_capture_sound_unmute">Turn the sound back on</string>
+    <string name="composer_capture_tool_sound">Sound</string>
     <string name="composer_object_editor_adjust_blur">Blur</string>
     <string name="composer_object_editor_adjust_brightness">Brightness</string>
     <string name="composer_object_editor_adjust_contrast">Contrast</string>
@@ -36,6 +40,7 @@
     <string name="composer_publish_as_storyAndReel">Publish story and reel</string>
     <string name="composer_socle_audience">Audience</string>
     <string name="composer_socle_publish">Publish</string>
+    <string name="composer_sound_background_a11y">Background sound</string>
     <string name="my_stories_archive_empty_subtitle">Your expired stories will join this archive.</string>
     <string name="my_stories_archive_empty_title">No archive</string>
     <string name="my_stories_back">Back</string>
@@ -158,6 +163,7 @@
     <string name="stories_visibility_only">Only…</string>
     <string name="stories_visibility_private">Only me</string>
     <string name="stories_visibility_public">Public</string>
+    <string name="story_composer_cancel">Cancel</string>
     <string name="story_composer_fab_badge">%d active item(s)</string>
     <string name="story_composer_fab_badge_none">No items</string>
     <string name="story_composer_fab_hint_close">Double tap to close.</string>
@@ -167,6 +173,7 @@
     <string name="story_composer_grabber_hint_dismiss">Drag down to shrink or close.</string>
     <string name="story_composer_grabber_hint_resize">Drag up to enlarge, down to shrink or close.</string>
     <string name="story_composer_redo">Redo</string>
+    <string name="story_composer_soundLibrary">Library</string>
     <string name="story_composer_undo">Undo</string>
     <string name="story_media_accessibility">Accessibility</string>
     <string name="story_media_alt_a11yHint">Describes this media to people using VoiceOver.</string>
@@ -186,6 +193,41 @@
     </plurals>
     <string name="story_send_search_hint">Search a conversation...</string>
     <string name="story_send_sent">Sent</string>
+    <string name="story_sound_library_clearSearch">Clear search</string>
+    <string name="story_sound_library_emptyMine">Your sounds will appear here as soon as you publish a story with original audio.</string>
+    <string name="story_sound_library_emptySearch">No sound matches this search.</string>
+    <string name="story_sound_library_emptyTrending">No public sound yet.</string>
+    <string name="story_sound_library_mine">My sounds</string>
+    <string name="story_sound_library_play">Play</string>
+    <plurals name="story_sound_library_playCount">
+        <item quantity="one">%d play</item>
+        <item quantity="other">%d plays</item>
+    </plurals>
+    <plurals name="story_sound_library_postCount">
+        <item quantity="one">%d post</item>
+        <item quantity="other">%d posts</item>
+    </plurals>
+    <string name="story_sound_library_preparing">Preparing…</string>
+    <string name="story_sound_library_remove">Remove from my library</string>
+    <string name="story_sound_library_removeConfirm">Remove</string>
+    <string name="story_sound_library_removeFailed">The sound couldn\'t be removed. Try again.</string>
+    <string name="story_sound_library_removeMessageUnused">This sound will disappear from your library and can no longer be added to a post.</string>
+    <plurals name="story_sound_library_removeMessageUsed">
+        <item quantity="one">%d post still uses it and will keep playing it. It will disappear from your library and can no longer be added to a new post.</item>
+        <item quantity="other">%d posts still use it and will keep playing it. It will disappear from your library and can no longer be added to a new post.</item>
+    </plurals>
+    <string name="story_sound_library_removeTitle">Remove this sound from your library?</string>
+    <string name="story_sound_library_rename">Rename</string>
+    <string name="story_sound_library_renameConfirm">Save</string>
+    <string name="story_sound_library_renameHint">This title will be visible to everyone who finds this sound. Leave it empty to restore the default label.</string>
+    <string name="story_sound_library_renamePlaceholder">Title</string>
+    <string name="story_sound_library_renameTitle">Name this sound</string>
+    <string name="story_sound_library_search">Search a sound or a creator</string>
+    <string name="story_sound_library_stop">Stop</string>
+    <string name="story_sound_library_title">Choose a sound</string>
+    <string name="story_sound_library_trending">Trending</string>
+    <string name="story_sound_library_untitled">Original sound</string>
+    <string name="story_sound_library_use">Use</string>
     <string name="story_tool_audio">Sound</string>
     <string name="story_tool_drawing">Drawing</string>
     <string name="story_tool_media">Media</string>

@@ -123,6 +123,16 @@ fun StoryComposerScreen(
 
     val imageAndVideo = PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)
 
+    var showSoundShelf by remember { mutableStateOf(false) }
+    if (showSoundShelf) {
+        SoundShelfSheet(
+            onUse = { sound ->
+                viewModel.onBorrowSound(sound)
+                showSoundShelf = false
+            },
+            onDismiss = { showSoundShelf = false },
+        )
+    }
     var showStickerPicker by remember { mutableStateOf(false) }
     if (showStickerPicker) {
         StickerPickerDialog(
@@ -348,6 +358,11 @@ fun StoryComposerScreen(
                             onFilterIntensityChange = viewModel::onFilterIntensityChange,
                             onSlideDurationChange = viewModel::onSlideDurationChange,
                             onSelectBackground = viewModel::onSlideBackgroundChange,
+                            audio = state.selectedSlideAudio,
+                            canAddSound = state.canBorrowSound,
+                            onOpenSoundShelf = { showSoundShelf = true },
+                            onToggleSoundMute = viewModel::onToggleSoundMute,
+                            onRemoveSound = viewModel::onRemoveSound,
                         )
                     }
                 },
@@ -364,6 +379,7 @@ fun StoryComposerScreen(
                         textCount = state.selectedSlideTextElements.size,
                         strokeCount = state.selectedSlideStrokes.size,
                         hasBackground = state.selectedSlideBackground != null,
+                        soundCount = state.selectedSlideAudio.size,
                     ),
                     onToolTap = viewModel::onBandToolTap,
                     onToolSwipeUp = viewModel::onBandToolSwipeUp,

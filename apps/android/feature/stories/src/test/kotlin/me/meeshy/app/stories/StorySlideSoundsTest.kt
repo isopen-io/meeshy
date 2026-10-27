@@ -80,4 +80,21 @@ class StorySlideSoundsTest {
         assertThat(snapshot.toDeck()!!.selectedSlide.audio).isEqualTo(withSound.selectedSlide.audio)
         assertThat(StoryComposerAutosave.deckIsPristine(withSound)).isFalse()
     }
+
+    @Test
+    fun `a full scene accepts a borrowed background only when it replaces a borrowed one`() {
+        fun stateWith(audio: List<StoryAudioPlayerObject>) = StoryComposerUiState(
+            deck = StorySlideDeck(slides = listOf(StorySlide(id = "a", audio = audio)), selectedId = "a"),
+        )
+        val fiveForeground = (1..5).map { StoryAudioPlayerObject(id = "r$it", isBackground = false) }
+        val fourPlusBackground = (1..4).map { StoryAudioPlayerObject(id = "r$it", isBackground = false) } +
+            StoryAudioPlayerObject(id = "bg", isBackground = true)
+        assertThat(stateWith(emptyList()).canBorrowSound).isTrue()
+        assertThat(stateWith(fiveForeground).canBorrowSound).isFalse()
+        val borrowedBackground = fourPlusBackground.map { if (it.id == "bg") it.copy(soundId = "s0") else it }
+        assertThat(stateWith(borrowedBackground).canBorrowSound).isTrue()
+        // un fond CAPTÉ n'est pas remplacé : il descend au premier plan, et la sixième piste n'a pas de place
+        assertThat(stateWith(fourPlusBackground).canBorrowSound).isFalse()
+        assertThat(stateWith(fourPlusBackground).selectedSlideBackgroundSound!!.id).isEqualTo("bg")
+    }
 }

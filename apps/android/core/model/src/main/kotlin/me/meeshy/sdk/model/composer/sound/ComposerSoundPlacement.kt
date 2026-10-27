@@ -47,17 +47,23 @@ object ComposerSoundPlacement {
         return background.id.takeIf { id -> audios.any { it.id == id } }
     }
 
-    fun borrow(audios: List<StoryAudioPlayerObject>, sound: ApiSound): SoundPlacement {
-        val current = background(audios)
-        if (current?.soundId == sound.id) return SoundPlacement.Placed(audios)
-        val superseded = supersededId(current, audios)?.let { id -> audios.first { it.id == id } }
-        val kept = audios.map { track ->
+    /** Un emprunt de plus est-il possible ? Même calcul que [borrow] : un fond emprunté se REMPLACE, un fond capté reste. */
+    fun canBorrow(audios: List<StoryAudioPlayerObject>): Boolean = keptBeforeBorrowing(audios, soundId = null).size < SceneObjectCaps.AUDIO
+
+    private fun keptBeforeBorrowing(audios: List<StoryAudioPlayerObject>, soundId: String?): List<StoryAudioPlayerObject> {
+        val superseded = supersededId(background(audios), audios)?.let { id -> audios.first { it.id == id } }
+        return audios.map { track ->
             when {
                 track !== superseded -> track
                 StoryAudioIdentity.isRecording(track) -> track.copy(isBackground = false)
                 else -> null
             }
-        }.filterNotNull().filterNot { it.soundId == sound.id }
+        }.filterNotNull().filterNot { soundId != null && it.soundId == soundId }
+    }
+
+    fun borrow(audios: List<StoryAudioPlayerObject>, sound: ApiSound): SoundPlacement {
+        if (background(audios)?.soundId == sound.id) return SoundPlacement.Placed(audios)
+        val kept = keptBeforeBorrowing(audios, sound.id)
         if (kept.size >= SceneObjectCaps.AUDIO) return SoundPlacement.Refused
         return SoundPlacement.Placed(kept + BorrowedSoundPost.audioObject(sound.toBorrowed(), isBackground = true))
     }

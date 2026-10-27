@@ -8,18 +8,19 @@ class ComposerBandToolsTest {
     @Test
     fun `only tools with a panel are served, in canonical order`() {
         assertThat(ComposerBandTools.served).containsExactly(
-            StoryToolMode.MEDIA, StoryToolMode.TEXT, StoryToolMode.DRAWING, StoryToolMode.TEXTURE,
+            StoryToolMode.MEDIA, StoryToolMode.TEXT, StoryToolMode.DRAWING, StoryToolMode.AUDIO, StoryToolMode.TEXTURE,
         ).inOrder()
-        assertThat(ComposerBandTools.served).containsNoneOf(StoryToolMode.AUDIO, StoryToolMode.TIMELINE)
+        assertThat(ComposerBandTools.served).doesNotContain(StoryToolMode.TIMELINE)
     }
 
     @Test
     fun `badges count the elements each tool carries`() {
-        val badges = ComposerBandTools.badges(mediaCount = 2, textCount = 3, strokeCount = 0, hasBackground = true)
+        val badges = ComposerBandTools.badges(mediaCount = 2, textCount = 3, strokeCount = 0, hasBackground = true, soundCount = 1)
         assertThat(badges[StoryToolMode.MEDIA]).isEqualTo(2)
         assertThat(badges[StoryToolMode.TEXT]).isEqualTo(3)
         assertThat(badges[StoryToolMode.DRAWING]).isEqualTo(0)
         assertThat(badges[StoryToolMode.TEXTURE]).isEqualTo(1)
+        assertThat(badges[StoryToolMode.AUDIO]).isEqualTo(1)
     }
 
     @Test
