@@ -28,6 +28,8 @@ const visual = (file: File, upload: StudioVisualAsset['upload'] = { phase: 'uplo
   pose: IDENTITY_POSE,
 });
 
+const withoutFile = ({ file: _file, ...asset }: StudioVisualAsset): StudioVisualAsset => asset;
+
 const withBackground = (draft: StudioDraft, pageId: string, asset: StudioVisualAsset): StudioDraft => withPage(draft, pageId, (page) => ({ ...page, background: asset }));
 
 const intent: StudioOutboxIntent = { choice: { kind: 'POST', layout: null }, promoted: false, state: 'armed', keys: [] };
@@ -52,7 +54,7 @@ describe('les médias d’une création se retrouvent après un rechargement', (
     const file = photo('mer.jpg', 'image/jpeg');
     const ready = { phase: 'ready', postMediaId: 'pm-1', fileUrl: '2026/10/u/mer.jpg' } as const;
     const before = withBackground(emptyStudioDraft('fr'), 'page-1', visual(file, ready));
-    const fromSnapshot = withBackground(emptyStudioDraft('fr'), 'page-1', { ...visual(file, ready), file: undefined, previewUrl: 'https://gate/mer.jpg' } as StudioVisualAsset);
+    const fromSnapshot = withBackground(emptyStudioDraft('fr'), 'page-1', withoutFile({ ...visual(file, ready), previewUrl: 'https://gate/mer.jpg' }));
     const restored = draftWithOutbox(fromSnapshot, outboxSlotsOf(before), { makeUrl, language: 'fr' });
     expect(restored.pages[0]!.background!.upload).toEqual(ready);
     expect(restored.pages[0]!.background!.file).toBe(file);
@@ -80,7 +82,7 @@ describe('les médias d’une création se retrouvent après un rechargement', (
   test('un emplacement que le brouillon a REMPLI d’un autre média reste à ce média', () => {
     const before = withBackground(emptyStudioDraft('fr'), 'page-1', visual(photo('ancien.jpg', 'image/jpeg')));
     const other = { phase: 'ready', postMediaId: 'pm-9', fileUrl: '2026/10/u/autre.jpg' } as const;
-    const current = withBackground(emptyStudioDraft('fr'), 'page-1', { ...visual(photo('autre.jpg', 'image/jpeg'), other), file: undefined } as StudioVisualAsset);
+    const current = withBackground(emptyStudioDraft('fr'), 'page-1', withoutFile(visual(photo('autre.jpg', 'image/jpeg'), other)));
     const restored = draftWithOutbox(current, outboxSlotsOf(before), { makeUrl, language: 'fr' });
     expect(restored.pages[0]!.background!.upload).toEqual(other);
     expect(restored.pages[0]!.background!.file).toBeUndefined();
