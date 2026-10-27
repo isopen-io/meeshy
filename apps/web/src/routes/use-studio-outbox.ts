@@ -19,8 +19,8 @@ export type StudioOutboxSession = {
   readonly fail: () => void;
   /** L'auteur retire l'envoi : l'intention part, le brouillon et ses médias restent. */
   readonly disarm: () => void;
-  /** La publication est confirmée, ou l'auteur la SUPPRIME : plus rien sur l'appareil. */
-  readonly discard: () => void;
+  /** La publication est confirmée, ou l'auteur la SUPPRIME : plus rien sur l'appareil. Résolue une fois l'appareil vidé. */
+  readonly discard: () => Promise<void>;
 };
 
 /**
@@ -106,11 +106,11 @@ export function useStudioOutbox(params: {
   const arm = useCallback((intent: StudioPublishIntent) => note({ ...intent, state: 'armed' }), [note]);
   const fail = useCallback(() => note(intentRef.current === null ? null : { ...intentRef.current, state: 'failed' }), [note]);
   const disarm = useCallback(() => note(null), [note]);
-  const discard = useCallback(() => {
+  const discard = useCallback(async () => {
     intentRef.current = null;
     setUnsent(null);
     const { outbox: store, viewerId: viewer } = latest.current;
-    if (store !== null && viewer !== null) void store.clear(viewer);
+    if (store !== null && viewer !== null) await store.clear(viewer);
   }, []);
 
   return { unsent, durable, volatile: !durable && outboxSlotsOf(draft).length > 0, arm, fail, disarm, discard };

@@ -30,3 +30,34 @@ describe('la fin d’un compte efface ses publications non envoyées sans charge
     expect(caches).not.toContain("import('../stories/studio-outbox')");
   });
 });
+
+describe('une publication confirmée n’est jamais réécrite sur l’appareil par une écriture en retard', () => {
+  test('l’effacement annule les écritures demandées avant lui et pas encore faites', async () => {
+    const rows = memoryDeviceRecords();
+    const writes: string[] = [];
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    let first = true;
+    const records = {
+      load: rows.load,
+      save: async (key: string, value: unknown) => {
+        if (value !== undefined) writes.push(key);
+        if (first && value !== undefined) {
+          first = false;
+          await gate;
+        }
+        await rows.save(key, value);
+      },
+    };
+    const outbox = createStudioOutbox(records);
+    const inFlight = outbox.save('alice', { slots: [slot('a.jpg')], intent });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const late = outbox.save('alice', { slots: [slot('b.jpg')], intent: { ...intent, state: 'failed' } });
+    const cleared = outbox.clear('alice');
+    release();
+    await Promise.all([inFlight, late, cleared]);
+
+    expect(writes.filter((key) => key.includes('alice'))).toHaveLength(2);
+    expect(await createStudioOutbox(rows).load('alice')).toBeNull();
+  });
+});
