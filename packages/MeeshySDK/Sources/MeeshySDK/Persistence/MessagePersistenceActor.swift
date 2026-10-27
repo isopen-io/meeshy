@@ -160,10 +160,12 @@ public actor MessagePersistenceActor {
     @discardableResult
     public func purgeExhaustedOlderThan(days: Int = exhaustedRetentionDays) async throws -> Int {
         let cutoff = Date().addingTimeInterval(-TimeInterval(days) * 86_400)
+        let kept = OutboxKind.allCases.filter(\.isKeptUntilTheAuthorDecides).map(\.rawValue)
         return try await dbWriter.write { db in
             try OutboxRecord
                 .filter(Column("status") == OutboxStatus.exhausted.rawValue)
                 .filter(Column("createdAt") < cutoff)
+                .filter(!kept.contains(Column("kind")))
                 .deleteAll(db)
         }
     }
