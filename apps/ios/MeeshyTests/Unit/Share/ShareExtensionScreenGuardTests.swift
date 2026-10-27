@@ -57,10 +57,10 @@ final class ShareExtensionScreenGuardTests: XCTestCase {
             "ShareSheetCopy.swift", "ShareDurationRow.swift", "ShareSourcing.swift", "ShareStringsBundle.swift",
             "ShareSubject.swift", "ShareDirectorySnapshot.swift", "ShareRelayHandoff.swift", "EndToEndShareMemory.swift",
         ] {
-            XCTAssertTrue(paths.contains("Meeshy/Features/Main/Share/\(portable)"), "\(portable) doit être compilé dans l'extension.")
+            XCTAssertTrue(paths.contains("Meeshy/Features/Share/\(portable)"), "\(portable) doit être compilé dans l'extension.")
         }
         for appOnly in ["ShareDispatcher.swift", "ShareRecipientDirectory.swift", "ShareSheetHost+App.swift"] {
-            XCTAssertFalse(paths.contains("Meeshy/Features/Main/Share/\(appOnly)"), "\(appOnly) parle aux singletons de l'app.")
+            XCTAssertFalse(paths.contains("Meeshy/Features/Share/\(appOnly)"), "\(appOnly) parle aux singletons de l'app.")
         }
     }
 

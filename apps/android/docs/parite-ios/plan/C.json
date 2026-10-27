@@ -8202,7 +8202,7 @@
    "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/share/ShareRecipientDirectory.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Share/ShareRecipient.swift"
+   "apps/ios/Meeshy/Features/Share/ShareRecipient.swift"
   ],
   "feature_keys": [
    "ext-share-recipients-picker"
@@ -8242,7 +8242,7 @@
    "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/conversation/MessageForwardService.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Share/ShareDispatcher.swift"
+   "apps/ios/Meeshy/Features/Share/ShareDispatcher.swift"
   ],
   "feature_keys": [
    "ext-share-dispatcher-fanout"
@@ -8321,7 +8321,7 @@
    "apps/android/feature/chat/src/main/kotlin/me/meeshy/app/chat/share/ShareActionsZone.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Share/ShareSheetView+Actions.swift"
+   "apps/ios/Meeshy/Features/Share/ShareSheetView+Actions.swift"
   ],
   "feature_keys": [
    "ext-share-actions-zone"
@@ -8360,7 +8360,7 @@
    "apps/android/feature/chat/src/main/kotlin/me/meeshy/app/chat/share/ShareContentZone.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Share/ShareContentZone.swift"
+   "apps/ios/Meeshy/Features/Share/ShareContentZone.swift"
   ],
   "feature_keys": [
    "ext-share-content-zone"
@@ -8397,7 +8397,7 @@
    "apps/android/feature/chat/src/main/kotlin/me/meeshy/app/chat/share/ShareRecipientRow.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Share/ShareRecipientRow.swift"
+   "apps/ios/Meeshy/Features/Share/ShareRecipientRow.swift"
   ],
   "feature_keys": [
    "ext-share-recipients-picker"
@@ -8435,7 +8435,7 @@
    "apps/android/feature/chat/src/main/kotlin/me/meeshy/app/chat/share/ShareSendBar.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Share/ShareSendBar.swift"
+   "apps/ios/Meeshy/Features/Share/ShareSendBar.swift"
   ],
   "feature_keys": [
    "ext-share-send-bar-delivery-states"
@@ -8525,7 +8525,7 @@
    "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/share/ShareRequest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Share/ShareSheetView.swift"
+   "apps/ios/Meeshy/Features/Share/ShareSheetView.swift"
   ],
   "feature_keys": [
    "ext-share-sheet-shell"
@@ -8611,7 +8611,7 @@
    "apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/share/ShareRequestHolder.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Share/ShareSheetHost+App.swift"
+   "apps/ios/Meeshy/Features/Share/ShareSheetHost+App.swift"
   ],
   "feature_keys": [
    "ext-share-sheet-shell"
@@ -10624,7 +10624,7 @@
    "apps/android/feature/chat/src/main/kotlin/me/meeshy/app/chat/share/ShareSheetViewModel.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Share/ShareRelayHandoff.swift"
+   "apps/ios/Meeshy/Features/Share/ShareRelayHandoff.swift"
   ],
   "feature_keys": [
    "ext-share-relay-signin-e2ee"

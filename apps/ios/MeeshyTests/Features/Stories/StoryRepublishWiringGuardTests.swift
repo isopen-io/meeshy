@@ -100,7 +100,7 @@ final class StoryRepublishWiringGuardTests: XCTestCase {
         XCTAssertTrue(sidebar.contains("sharedContentWrapper = SharedContentWrapper(subject: .story("))
 
         let dispatcher = AppSourceGuard.stripComments(
-            try source("Meeshy/Features/Main/Share/ShareDispatcher.swift"))
+            try source("Meeshy/Features/Share/ShareDispatcher.swift"))
         XCTAssertTrue(dispatcher.contains("StoryDirectRepost.republish(storyId: card.contentId, as: StoryRepostDestination(target))"),
                       "La feuille Meeshy republie par l'écrivain du rail, jamais un second.")
 

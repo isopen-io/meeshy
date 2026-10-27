@@ -117,9 +117,9 @@ final class LivePresenceRepaintGuardTests: XCTestCase {
         "Features/Main/Views/StoryViewerView.swift": "face voisine du cube, résolue au basculement (directive 2026-07-10)",
         "Features/Main/Views/StoryViewerView+GroupIntro.swift": "interstitiel, résolu au basculement (directive 2026-07-10)",
         "Features/Contacts/DiscoverTab.swift": "politique des points de Découverte, hors de ce lot",
-        "Features/Main/Share/ShareSheetHost+App.swift": "écran de partage unique (#10947/#10948) — sa présence est l'affaire de son lot",
-        "Features/Main/Share/ShareSheetView.swift": "écran de partage unique (#10947/#10948) — sa présence est l'affaire de son lot",
-        "Features/Main/Share/ShareSheetViewModel.swift": "écran de partage unique (#10947/#10948) — sa présence est l'affaire de son lot",
+        "Features/Share/ShareSheetHost+App.swift": "écran de partage unique (#10947/#10948) — sa présence est l'affaire de son lot",
+        "Features/Share/ShareSheetView.swift": "écran de partage unique (#10947/#10948) — sa présence est l'affaire de son lot",
+        "Features/Share/ShareSheetViewModel.swift": "écran de partage unique (#10947/#10948) — sa présence est l'affaire de son lot",
     ]
 
     private static let presenceRead = #"knownPresenceState\(|presenceState\(for|resolvedState\(|servedPresence\(for|presenceMap\["#

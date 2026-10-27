@@ -140,7 +140,7 @@ final class MessageAuthorRingTests: XCTestCase {
         "Main/Views/ProfileOwnAvatar.swift": (1, "profil — le contour se pose AUTOUR de l'avatar (`.avatarRing`), comme sur la fiche de profil"),
         "Main/Views/ProfileDecorSheet.swift": (1, "sélecteur de contour — chaque tuile pose SON contour autour de l'avatar (`.avatarRing`)"),
         "MeeshyUI/Profile/UserProfileSheet+Header.swift": (2, "profil — le contour se pose AUTOUR de l'avatar (`.avatarRing`)"),
-        "Main/Share/ShareRecipientRow.swift": (2, "écran de partage unique en cours (#10947/#10948) — son contour est l'affaire de son lot"),
+        "Share/ShareRecipientRow.swift": (2, "écran de partage unique en cours (#10947/#10948) — son contour est l'affaire de son lot"),
         "Main/Views/PublicationViewersSheet.swift": (2, "vues d'une publication — la liste servie ne porte pas le contour (#10957)"),
         "Stories/Notifications/StoryExpiredContent.swift": (1, "notification de story expirée — l'acteur est un instantané sans contour (#10957)"),
         "MeeshyUI/Profile/UserProfileSheet+ConversationsTab.swift": (1, "entité — les conversations d'un profil"),

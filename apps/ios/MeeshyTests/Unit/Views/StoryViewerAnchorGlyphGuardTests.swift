@@ -105,7 +105,7 @@ final class StoryViewerAnchorGlyphGuardTests: XCTestCase {
     /// L'ANCRAGE : le glyphe de la pastille « Post » de la feuille Meeshy
     /// (`ShareSheetView.symbol(for:)`), qui republie la story en post (#12644).
     private func anchorGlyph() throws -> String {
-        let actions = try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Main/Share/ShareSheetView+Actions.swift")
+        let actions = try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Share/ShareSheetView+Actions.swift")
         let start = try XCTUnwrap(actions.range(of: "private static func symbol(for target: PublicationTarget) -> String {"),
                                   "La table des glyphes de publication a disparu de la feuille.")
         let line = try XCTUnwrap(actions[start.upperBound...].range(of: "case .post: return \""),
