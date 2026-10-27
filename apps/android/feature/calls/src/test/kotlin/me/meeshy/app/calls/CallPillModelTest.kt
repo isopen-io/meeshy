@@ -54,7 +54,7 @@ class CallPillModelTest {
         val items = CallPillModel.items(state(), offered(CallAction.Captions))
         val set = CallPillModel.available(state(), items) { it == CallAction.Captions }
         val rows = CallPillModel.rows(set, isCompactHeight = false)
-        assertThat(rows.flatMap { it.actions }).containsExactly(CallAction.Camera, CallAction.Captions).inOrder()
+        assertThat(rows.flatMap { it.actions }).containsExactly(CallAction.Camera, CallAction.FlipCamera, CallAction.Captions).inOrder()
         assertThat(CallAction.Journal in set).isFalse()
     }
 
@@ -73,7 +73,7 @@ class CallPillModelTest {
         val rows = CallPillModel.rows(set, isCompactHeight = true)
         assertThat(rows).hasSize(1)
         assertThat(rows.single().family).isNull()
-        assertThat(rows.single().actions).containsExactly(CallAction.Camera, CallAction.Captions).inOrder()
+        assertThat(rows.single().actions).containsExactly(CallAction.Camera, CallAction.FlipCamera, CallAction.Captions).inOrder()
     }
 
     @Test
