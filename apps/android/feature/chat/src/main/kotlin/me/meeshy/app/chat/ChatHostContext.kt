@@ -37,6 +37,8 @@ internal class ChatNavigationActions(
     val onOpenCitedPost: (postId: String) -> Unit = {},
     /** [ChatViewModel.callEntry]: which call buttons the header may show. */
     val callEntry: HeaderCallEntry? = null,
+    /** [ChatViewModel.mayInviteFriends]: whether the info sheet offers « Inviter mes amis ». */
+    val mayInviteFriends: Boolean = false,
     /**
      * La feuille « Partage de position » ouverte par le (i) du sélecteur de lieu. Elle vit dans
      * `:feature:settings`, que `:feature:chat` ne voit pas : l'application la fournit.

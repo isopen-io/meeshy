@@ -110,7 +110,7 @@ internal fun ConversationMediaHubSheet(
     LaunchedEffect(conversationId) { viewModel.start(conversationId) }
     var query by rememberSaveable { mutableStateOf("") }
     var viewerIndex by remember { mutableStateOf<Int?>(null) }
-    var videoUrl by remember { mutableStateOf<String?>(null) }
+    var video by remember { mutableStateOf<MediaHubLaunch.Video?>(null) }
     val audioPlayer = rememberChatAudioPlayer(conversationTitle)
     val haptics = rememberMeeshyHaptics()
     val context = LocalContext.current
@@ -137,7 +137,7 @@ internal fun ConversationMediaHubSheet(
             is MediaHubLaunch.GatewayFile ->
                 viewModel.carrier(item.messageId)?.attachments?.firstOrNull { it.id == item.attachment?.id }
                     ?.let { onOpenFile(item.messageId, it) }
-            is MediaHubLaunch.Video -> videoUrl = launch.url
+            is MediaHubLaunch.Video -> video = launch
             MediaHubLaunch.Refused -> Toast.makeText(context, R.string.chat_exit_blocked_title, Toast.LENGTH_SHORT).show()
             MediaHubLaunch.Ignored -> Unit
         }
@@ -240,7 +240,7 @@ internal fun ConversationMediaHubSheet(
         }
     }
 
-    videoUrl?.let { url -> MeeshyVideoViewer(mediaUrl = url, onDismiss = { videoUrl = null }) }
+    video?.let { v -> MeeshyVideoViewer(mediaUrl = v.url, onDismiss = { video = null }, secure = v.shieldsCapture) }
 
     val index = viewerIndex
     if (index != null && photos.isNotEmpty()) {
@@ -252,6 +252,7 @@ internal fun ConversationMediaHubSheet(
             thumbnailUrls = photos.map { it.attachment?.thumbnailUrl },
             altTexts = photos.map { it.attachment?.alt },
             exportable = photos.map { viewModel.rowExit(it, isEndToEnd).mayLeave },
+            secure = photos.any { viewModel.rowExit(it, isEndToEnd).shieldsCapture },
         )
     }
 }

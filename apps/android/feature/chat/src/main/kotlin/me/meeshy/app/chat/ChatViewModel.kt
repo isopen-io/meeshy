@@ -137,6 +137,11 @@ class ChatViewModel @Inject constructor(
      * call button (guest, global, broadcast…), `canStart == false` keeps only « Rejoindre ». */
     val callEntry: StateFlow<HeaderCallEntry?> = _callEntry.asStateFlow()
 
+    private val _mayInviteFriends = MutableStateFlow(false)
+
+    /** « Inviter mes amis » : le verdict de `ConversationActionPolicy.invite` (groupe modéré, publique, Global). */
+    val mayInviteFriends: StateFlow<Boolean> = _mayInviteFriends.asStateFlow()
+
     private val recipientCount = MutableStateFlow(0)
     private val typingCleanupJobs = mutableMapOf<String, Job>()
 
@@ -287,6 +292,10 @@ class ChatViewModel @Inject constructor(
                     viewerIsGuest = sessionRepository.currentUser.value?.isAnonymous == true,
                     directPeerUserId = conversation.otherParticipantUserId(currentUserId),
                 )
+                _mayInviteFriends.value = ConversationRowMenuCapabilities.make(
+                    conversation.copy(currentUserRole = conversation.currentUserRole ?: viewerRole),
+                    sessionRepository.currentUser.value,
+                ).invite
                 _state.update {
                     it.copy(
                         conversationTitle = conversation.displayTitle(currentUserId = currentUserId),
@@ -296,10 +305,6 @@ class ChatViewModel @Inject constructor(
                         mentionDisplayNames = MentionRoster.displayNames(roster),
                         slowModeSeconds = conversation.slowModeSeconds,
                         slowModeExempt = SlowModePolicy.isExemptRole(viewerRole),
-                        mayInviteFriends = ConversationRowMenuCapabilities.make(
-                            conversation.copy(currentUserRole = conversation.currentUserRole ?: viewerRole),
-                            sessionRepository.currentUser.value,
-                        ).invite,
                         encryptionMode = conversation.encryptionMode,
                         directPeerUserId = conversation.otherParticipantUserId(currentUserId),
                         composerLanguageSeed = sessionRepository.currentUser.value

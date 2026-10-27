@@ -171,7 +171,7 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
             add(ConversationInfoEntry(MeeshyIcons.PhotoLibrary, stringResource(R.string.media_hub_title), openFrom { sheets.media = true }))
             // Moderator+ viewers of a group get the admin surfaces: the share-link creator
             // and the conversation-settings sheet (write-role / announcement / slow-mode).
-            if (state.mayInviteFriends) {
+            if (host.navigation.mayInviteFriends) {
                 add(ConversationInfoEntry(MeeshyIcons.AddLink, stringResource(R.string.context_invite_friends), openFrom(host.navigation.onCreateShareLink)))
             }
             if (state.slowModeExempt) {

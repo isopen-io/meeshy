@@ -35,22 +35,24 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.SecureFlagPolicy
 import kotlinx.coroutines.delay
 import me.meeshy.ui.R
+import me.meeshy.ui.component.viewer.viewerDialogProperties
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshySpacing
 
 /**
  * Le lecteur vidéo plein écran de Meeshy : une vidéo se regarde ICI, pas dans l'application système. Il joue
  * [mediaUrl] (par le cache disque de [ReelVideoSurface]), son audible, en entier dans l'écran. Un toucher met en
- * pause / reprend ; la barre de progression et la croix s'effacent après quelques secondes de lecture. Un autre son
+ * pause / reprend ; la barre de progression et la croix s'effacent après quelques secondes de lecture. Avec [secure], la fenêtre est exclue des captures (FLAG_SECURE) et le média ne passe pas par le cache disque. Un autre son
  * (vocal, appel) qui prend le focus met la lecture en pause, comme partout ailleurs.
  */
 @Composable
-public fun MeeshyVideoViewer(mediaUrl: String, onDismiss: () -> Unit) {
+public fun MeeshyVideoViewer(mediaUrl: String, onDismiss: () -> Unit, secure: Boolean = false) {
     Dialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
+        properties = viewerDialogProperties(secure),
     ) {
         var handle by remember { mutableStateOf<ReelPlayerHandle?>(null) }
         var paused by remember { mutableStateOf(false) }
@@ -94,6 +96,7 @@ public fun MeeshyVideoViewer(mediaUrl: String, onDismiss: () -> Unit) {
                 fit = true,
                 onPlayer = { handle = it },
                 onAudioFocusLost = { paused = true; controlsShown = true },
+                cached = !secure,
             )
             AnimatedVisibility(visible = paused, enter = fadeIn(), exit = fadeOut()) {
                 Icon(

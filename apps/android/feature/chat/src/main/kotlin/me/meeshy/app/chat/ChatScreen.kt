@@ -57,6 +57,7 @@ fun ChatScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val callEntry by viewModel.callEntry.collectAsStateWithLifecycle()
+    val mayInviteFriends by viewModel.mayInviteFriends.collectAsStateWithLifecycle()
 
     // Re-probe the server for a still-active call each time the screen resumes
     // (returning from the call itself, an app relaunch mid-call) so the
@@ -113,6 +114,7 @@ fun ChatScreen(
             hasLocalLiveCall = hasLocalLiveCall,
             onOpenCitedPost = onOpenCitedPost,
             callEntry = callEntry,
+            mayInviteFriends = mayInviteFriends,
             locationSettingsSheet = locationSettingsSheet,
         ),
         header = header,
