@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -23,6 +24,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -57,6 +59,7 @@ internal fun CallDuoVideoStage(
     reduceMotion: Boolean,
     modifier: Modifier = Modifier,
     selfTileMemory: CallSelfTileMemory = CallSelfTileMemories.shared,
+    onSceneTap: (() -> Unit)? = null,
 ) {
     Box(modifier.fillMaxSize()) {
         if (!connected) {
@@ -81,6 +84,13 @@ internal fun CallDuoVideoStage(
                     avatarUrl = peerAvatarUrl,
                     modifier = Modifier.fillMaxSize(),
                     fit = fit,
+                )
+            }
+            // Le toucher de la scène vit ICI, SOUS la vignette : un détecteur posé sur la colonne du
+            // chrome, au-dessus, avalait tous les touchers et la vignette ne glissait ni ne permutait plus.
+            if (onSceneTap != null) {
+                Box(
+                    Modifier.fillMaxSize().pointerInput(onSceneTap) { detectTapGestures(onTap = { onSceneTap() }) },
                 )
             }
             if (state.isPeerMuted && !featuresLocal) {

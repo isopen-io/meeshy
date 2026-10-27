@@ -4,7 +4,6 @@ import android.content.Context
 import android.view.accessibility.AccessibilityManager
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -168,13 +167,7 @@ internal fun CallConnectedColumn(
         }
     }
 
-    BoxWithConstraints(
-        modifier.pointerInput(isVideoStage, explore) {
-            if (CallChromeVisibility.mayToggleByTap(isVideoStage, explore)) {
-                detectTapGestures(onTap = { chrome.onSceneTap(isVideoStage, explore) })
-            }
-        },
-    ) {
+    BoxWithConstraints(modifier) {
         val rows = CallPillModel.rows(available, CallGroupStageSizing.isCompactHeight(maxHeight.value))
         Column(
             modifier = Modifier.matchParentSize().padding(MeeshySpacing.xl),
