@@ -824,7 +824,7 @@ class StoryViewerViewModel @Inject constructor(
         if (fromObject != null) {
             return AudioTrack(
                 url = fromObject,
-                window = StorySourceWindow.clippingMs(match.sourceStart, match.sourceEnd),
+                window = StorySourceWindow.clippingMs(match?.sourceStart, match?.sourceEnd),
             )
         }
         if (!preferBackground) return null
