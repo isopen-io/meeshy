@@ -111,12 +111,12 @@ function makePresenceViewer(role: string) {
 }
 
 /**
- * La loi RÉELLE (`PresenceVisibilityService.resolveForTargets`) sur un prisma
+ * La loi RÉELLE (`PresenceVisibilityService.resolveForPresenceEvent`, qui s'appuie sur `resolveForTargets`) sur un prisma
  * stubé : aucune cible désactivée, aucun blocage, préférences par défaut, et
  * les seules amitiés acceptées sont celles passées ici. Un faux
  * `resolveForTargets` qui réécrirait ADMIN/MODERATOR ne prouverait rien.
  */
-function makePresenceLaw({ acceptedFriendsOfViewer = [] as string[] } = {}) {
+function makePresenceLaw({ acceptedFriendsOfViewer = [] as string[], blockedByViewer = [] as string[] } = {}) {
   const prisma = {
     user: {
       findMany: jest.fn<any>().mockImplementation(
@@ -125,7 +125,7 @@ function makePresenceLaw({ acceptedFriendsOfViewer = [] as string[] } = {}) {
             ? []
             : (args?.where?.id?.in ?? []).map((id: string) => ({ id, deactivatedAt: null })),
       ),
-      findUnique: jest.fn<any>().mockResolvedValue({ blockedUserIds: [] }),
+      findUnique: jest.fn<any>().mockResolvedValue({ blockedUserIds: blockedByViewer }),
     },
     friendRequest: {
       findMany: jest.fn<any>().mockResolvedValue(
@@ -140,7 +140,7 @@ function makePresenceLaw({ acceptedFriendsOfViewer = [] as string[] } = {}) {
 /** Une loi MOCKÉE, pour observer ce que le handler lui présente. */
 function makeMockLaw(visible: string[] = []) {
   return {
-    resolveForTargets: jest.fn<any>().mockImplementation(async (_viewer: unknown, ids: string[]) =>
+    resolveForPresenceEvent: jest.fn<any>().mockImplementation(async (_viewer: unknown, ids: string[]) =>
       new Map(ids.map((id) => [id, { showOnline: visible.includes(id), showLastSeenTimestamp: visible.includes(id) }])),
     ),
   };
@@ -154,7 +154,7 @@ function makeHandler({
   retractTyping = undefined as undefined | ((socket: any, conversationId: string) => Promise<void>),
   replayLiveLocations = undefined as undefined | ((socket: any, conversationId: string) => void),
   presenceViewer = makePresenceViewer('USER'),
-  presenceVisibility = makePresenceLaw() as Pick<PresenceVisibilityService, 'resolveForTargets'>,
+  presenceVisibility = makePresenceLaw() as Pick<PresenceVisibilityService, 'resolveForPresenceEvent'>,
 } = {}) {
   return new ConversationHandler({
     prisma,
@@ -917,6 +917,19 @@ describe('ConversationHandler', () => {
       expect(emittedStats(socket).onlineUsers).toEqual([SELF, FRIEND, STRANGER]);
     });
 
+    it('ADMIN qui a BLOQUÉ un participant : ce dernier sort de la liste — un blocage l’emporte sur le privilège dans un événement poussé (#13298)', async () => {
+      mockGetOrCompute.mockResolvedValue(makeStats());
+      const socket = makeSocket();
+      const handler = makeHandler({
+        presenceViewer: makePresenceViewer('ADMIN'),
+        presenceVisibility: makePresenceLaw({ blockedByViewer: [STRANGER.id] }),
+      });
+
+      await handler.sendConversationStatsToSocket(socket, CONV_ID);
+
+      expect(emittedStats(socket).onlineUsers).toEqual([SELF, FRIEND]);
+    });
+
     it('MODERATOR : un lecteur ordinaire — comme USER', async () => {
       mockGetOrCompute.mockResolvedValue(makeStats());
       const socket = makeSocket();
@@ -937,7 +950,7 @@ describe('ConversationHandler', () => {
       await handler.sendConversationStatsToSocket(socket, CONV_ID);
 
       expect(presenceViewer).toHaveBeenCalledWith(USER_ID);
-      expect(law.resolveForTargets).toHaveBeenCalledWith(
+      expect(law.resolveForPresenceEvent).toHaveBeenCalledWith(
         { userId: USER_ID, role: 'BIGBOSS' },
         [SELF.id, FRIEND.id, STRANGER.id],
       );
@@ -946,7 +959,7 @@ describe('ConversationHandler', () => {
     it('ne garde que ce que la loi marque showOnline — un id absent de la carte est retiré', async () => {
       mockGetOrCompute.mockResolvedValue(makeStats());
       const law = {
-        resolveForTargets: jest.fn<any>().mockResolvedValue(new Map([
+        resolveForPresenceEvent: jest.fn<any>().mockResolvedValue(new Map([
           [FRIEND.id, { showOnline: true, showLastSeenTimestamp: false }],
           [STRANGER.id, { showOnline: false, showLastSeenTimestamp: true }],
         ])),
@@ -967,7 +980,7 @@ describe('ConversationHandler', () => {
       }]]);
       const presenceViewer = makePresenceViewer('USER');
       const law = makePresenceLaw();
-      const resolveForTargets = jest.spyOn(law, 'resolveForTargets');
+      const resolveForPresenceEvent = jest.spyOn(law, 'resolveForPresenceEvent');
       const socket = makeSocket();
       const handler = makeHandler({
         connectedUsers, socketToUser: new Map([[SOCKET_ID, token]]), presenceViewer, presenceVisibility: law,
@@ -976,7 +989,7 @@ describe('ConversationHandler', () => {
       await handler.sendConversationStatsToSocket(socket, CONV_ID);
 
       expect(presenceViewer).not.toHaveBeenCalled();
-      expect(resolveForTargets).toHaveBeenCalledWith(null, [SELF.id, FRIEND.id, STRANGER.id]);
+      expect(resolveForPresenceEvent).toHaveBeenCalledWith(null, [SELF.id, FRIEND.id, STRANGER.id]);
       expect(emittedStats(socket).onlineUsers).toEqual([]);
     });
 
@@ -990,7 +1003,7 @@ describe('ConversationHandler', () => {
       await handler.sendConversationStatsToSocket(socket, CONV_ID);
 
       expect(presenceViewer).not.toHaveBeenCalled();
-      expect(law.resolveForTargets).not.toHaveBeenCalled();
+      expect(law.resolveForPresenceEvent).not.toHaveBeenCalled();
       expect(emittedStats(socket).onlineUsers).toEqual([]);
     });
 
