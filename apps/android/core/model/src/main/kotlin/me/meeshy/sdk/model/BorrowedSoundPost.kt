@@ -18,25 +18,25 @@ data class BorrowedSound(
  */
 object BorrowedSoundPost {
     fun effects(sound: BorrowedSound): StoryEffects =
-        StoryEffects(
-            audioPlayerObjects = listOf(
-                StoryAudioPlayerObject(
-                    id = "borrowed-${sound.id}",
-                    postMediaId = "",
-                    placement = "overlay",
-                    x = 0.5,
-                    y = 0.65,
-                    volume = 1.0f,
-                    waveformSamples = sound.waveform,
-                    isBackground = true,
-                    duration = sound.durationMs?.let { it / 1000f },
-                    name = sound.title.trim().takeIf { it.isNotEmpty() },
-                    mediaURL = sound.fileUrl,
-                    soundId = sound.id,
-                    soundAuthorUsername = sound.uploaderUsername,
-                    soundCreatedAt = sound.createdAt,
-                ),
-            ),
+        StoryEffects(audioPlayerObjects = listOf(audioObject(sound)))
+
+    /** La piste empruntée telle que le composeur la pose : `soundId` + `mediaURL` serveur, jamais un média de post. */
+    fun audioObject(sound: BorrowedSound, isBackground: Boolean = true): StoryAudioPlayerObject =
+        StoryAudioPlayerObject(
+            id = "borrowed-${sound.id}",
+            postMediaId = "",
+            placement = "overlay",
+            x = 0.5,
+            y = 0.65,
+            volume = 1.0f,
+            waveformSamples = sound.waveform,
+            isBackground = isBackground,
+            duration = sound.durationMs?.let { it / 1000f },
+            name = sound.title.trim().takeIf { it.isNotEmpty() },
+            mediaURL = sound.fileUrl,
+            soundId = sound.id,
+            soundAuthorUsername = sound.uploaderUsername,
+            soundCreatedAt = sound.createdAt,
         )
 
     /** Un son >= 3 s qualifie un RÉEL ; `forcePlainPost` reste respecté. */
