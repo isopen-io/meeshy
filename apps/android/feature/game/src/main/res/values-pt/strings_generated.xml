@@ -518,7 +518,9 @@
     <string name="game_missions_locked">No nível 5, seus ancestrais enviam toda noite um sonho em três atos, e uma Oferenda. Você está no nível %s.</string>
     <string name="game_missions_offline">Sem conexão: trocar um ato ou abrir a Oferenda volta com a conexão.</string>
     <string name="game_missions_prism_day">Dia do Prisma: um dos atos se passa num idioma diferente do seu.</string>
+    <string name="game_missions_prism_hour">Hora do Prisma: %1$s – %2$s — cada ato conta em dobro.</string>
     <string name="game_missions_title">O sonho desta noite</string>
+    <string name="game_photo_offer_start">Fotografar</string>
     <string name="game_progression_empty">Nenhuma atividade ainda. Envie uma mensagem, publique uma story… sua primeira medalha se acende no primeiro gesto.</string>
     <string name="game_progression_load_error">Não foi possível carregar o progresso</string>
     <string name="game_progression_loading">Carregando o progresso</string>

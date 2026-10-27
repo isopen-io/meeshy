@@ -518,7 +518,9 @@
     <string name="game_missions_locked">Au niveau 5, tes aïeux t’envoient chaque nuit un rêve en trois actes, et une Offrande. Tu es au niveau %s.</string>
     <string name="game_missions_offline">Hors ligne : changer un acte ou ouvrir l’Offrande reprendra en ligne.</string>
     <string name="game_missions_prism_day">Jour du Prisme : un des actes se joue dans une autre langue que la tienne.</string>
+    <string name="game_missions_prism_hour">Heure du Prisme : %1$s – %2$s — chaque acte compte double.</string>
     <string name="game_missions_title">Le rêve de cette nuit</string>
+    <string name="game_photo_offer_start">Photographier</string>
     <string name="game_progression_empty">Aucune activité pour l’instant. Envoie un message, publie une story… ta première médaille s’allume dès le premier geste.</string>
     <string name="game_progression_load_error">Impossible de charger la progression</string>
     <string name="game_progression_loading">Progression en cours de chargement</string>

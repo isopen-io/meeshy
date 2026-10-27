@@ -518,7 +518,9 @@
     <string name="game_missions_locked">At level 5, your ancestors send you a dream in three acts each night, and an Offering. You are at level %s.</string>
     <string name="game_missions_offline">Offline: changing an act or opening the Offering will resume online.</string>
     <string name="game_missions_prism_day">Prism Day: one of the acts is played in a language other than yours.</string>
+    <string name="game_missions_prism_hour">Prism Hour: %1$s – %2$s — every act counts double.</string>
     <string name="game_missions_title">Tonight’s dream</string>
+    <string name="game_photo_offer_start">Take the photo</string>
     <string name="game_progression_empty">No activity yet. Send a message, post a story… your first medal lights up with your very first move.</string>
     <string name="game_progression_load_error">Couldn’t load your progress</string>
     <string name="game_progression_loading">Loading your progress</string>
