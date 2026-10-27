@@ -69,6 +69,7 @@ const makeHarness = (params: { post: PostRow | null | Error; recipient: Recipien
       count: jest.fn().mockResolvedValue(0),
     },
     user: {
+      findFirst: jest.fn().mockResolvedValue(null),
       findUnique: jest.fn().mockImplementation(({ where }: any) =>
         Promise.resolve(
           where.id === ACTOR_ID

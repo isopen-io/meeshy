@@ -60,6 +60,7 @@ jest.mock('@meeshy/shared/prisma/client', () => {
     },
     user: {
       findUnique: jest.fn(),
+      findFirst: jest.fn().mockResolvedValue(null),
     },
     conversation: {
       findUnique: jest.fn(),

@@ -35,7 +35,7 @@ jest.mock('@meeshy/shared/prisma/client', () => {
       findMany: jest.fn(),
       count: jest.fn(),
     },
-    user: { findUnique: jest.fn() },
+    user: { findUnique: jest.fn(), findFirst: jest.fn().mockResolvedValue(null) },
     conversation: { findUnique: jest.fn() },
     message: { findUnique: jest.fn() },
     // Audience du post declaree PUBLIC : les notifications a destinataire unique du

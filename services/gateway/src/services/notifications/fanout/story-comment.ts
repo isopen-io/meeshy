@@ -10,6 +10,7 @@ import { getCommunityCoMemberIds } from '../../posts/communityVisibility';
 import { filterPostConsumers } from '../../posts/postAudience';
 import { truncateMessage } from '../notification-preview';
 import { FANOUT_ROW_CAP } from './row-cap';
+import { getBlockedUserIdsAmong } from '../../../utils/blocking';
 import type { FanoutDependencies } from './dependencies';
 
 /** Les trois lectures bornées qui composent les seaux d'un fan-out de fil. */
@@ -291,6 +292,24 @@ export async function createStoryCommentNotificationsBatch(
     candidateUserIds: previousCommenterIds,
   });
 
+  // #13350 — le blocage ne rompt pas l'amitié en base : une personne en
+  // relation de blocage avec l'AUTEUR de la story sort des deux seaux
+  // d'éventail, en une lecture groupée. La garde de dernier recours de
+  // `createNotification` ne compare le destinataire qu'à l'ACTEUR (le
+  // commentateur) ; le nom de l'auteur et l'extrait de son fil voyagent
+  // pourtant dans la charge. Une lecture qui échoue n'envoie rien à ces seaux.
+  const fanoutCandidates = [...new Set([...engagedAudience, ...friendAudience])];
+  let blockedWithAuthor: Set<string> | null;
+  try {
+    blockedWithAuthor = await getBlockedUserIdsAmong(deps.prisma, params.storyAuthorId, fanoutCandidates);
+  } catch (error) {
+    notificationLogger.error('Fan-out de commentaire restreint à l’auteur : blocage illisible', { postId: params.postId, error });
+    blockedWithAuthor = null;
+  }
+  const notBlockedWithAuthor = (id: string): boolean => blockedWithAuthor !== null && !blockedWithAuthor.has(id);
+  const engagedRecipients = engagedAudience.filter(notBlockedWithAuthor);
+  const friendRecipients = friendAudience.filter(notBlockedWithAuthor);
+
   const excerpt = params.commentExcerpt
     ? truncateMessage(params.commentExcerpt)
     : '';
@@ -308,7 +327,7 @@ export async function createStoryCommentNotificationsBatch(
   const authorName = postAuthor?.displayName?.trim()
     || postAuthor?.username?.trim()
     || '';
-  const langs = await deps.resolveRecipientLangs([authorId, ...engagedAudience, ...friendAudience]);
+  const langs = await deps.resolveRecipientLangs([authorId, ...engagedRecipients, ...friendRecipients]);
   const contextSubtitleFor = (lang: string): string => authorName
     ? notificationString(lang, 'comment.subtitleFrom', { postType: i18nPostType, author: authorName })
     : notificationString(lang, 'comment.subtitleBare', { postType: i18nPostType });
@@ -359,7 +378,7 @@ export async function createStoryCommentNotificationsBatch(
   }
 
   // 2. Previous commenters (thread participants) — skip mentioned users
-  for (const recipientId of engagedAudience) {
+  for (const recipientId of engagedRecipients) {
     if (excludeSet.has(recipientId)) continue;
     const rLang = langs.get(recipientId) ?? 'fr';
     tasks.push(
@@ -381,7 +400,7 @@ export async function createStoryCommentNotificationsBatch(
   }
 
   // 3. Friends of the story author (or community co-members) — skip mentioned users
-  for (const recipientId of friendAudience) {
+  for (const recipientId of friendRecipients) {
     if (excludeSet.has(recipientId)) continue;
     const rLang = langs.get(recipientId) ?? 'fr';
     tasks.push(
