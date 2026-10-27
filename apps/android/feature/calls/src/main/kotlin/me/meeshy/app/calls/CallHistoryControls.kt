@@ -10,6 +10,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -124,7 +125,8 @@ internal fun CallHistoryFilterRow(
         }
         Crossfade(targetState = canClear, label = "calls-clear-all") { shown ->
             if (shown) {
-                TextButton(onClick = onClearAll) {
+                // Marges réduites : sur un écran étroit (360 dp) les trois puces tiennent entières à gauche du bouton (#13379).
+                TextButton(onClick = onClearAll, contentPadding = PaddingValues(horizontal = MeeshySpacing.sm)) {
                     Text(
                         text = stringResource(R.string.call_journal_clear_all),
                         color = MeeshyPalette.Error,
