@@ -59,8 +59,12 @@ class StoryAudiencePickerViewModel @Inject constructor(
 
     private val selfId: String? get() = session.currentUser.value?.id
 
-    fun start(initialSelection: List<String>) {
-        val blocked = blocks.currentBlockedIds
+    /**
+     * [keepsBlocked] : sous EXCEPT la liste EXCLUT — un bloqué qui en sortirait redeviendrait
+     * destinataire ; il y reste donc, sans être proposé. Sous ONLY il est écarté.
+     */
+    fun start(initialSelection: List<String>, keepsBlocked: Boolean = false) {
+        val blocked = if (keepsBlocked) emptySet() else blocks.currentBlockedIds
         val kept = initialSelection.filter { it != selfId && it !in blocked }.distinct()
         _state.value = AudiencePickerState(selectedIds = kept)
         viewModelScope.launch {

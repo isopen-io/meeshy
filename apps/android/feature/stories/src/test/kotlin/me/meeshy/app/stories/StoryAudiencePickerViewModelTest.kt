@@ -119,6 +119,18 @@ class StoryAudiencePickerViewModelTest {
     }
 
     @Test
+    fun `une exclusion EXCEPT garde la personne bloquee depuis a l'ouverture et a la validation`() = runTest {
+        blocks.hydrate(listOf(me.meeshy.sdk.model.friend.BlockedUser(id = "b", username = "bob")))
+        val vm = viewModel()
+        vm.start(initialSelection = listOf("a", "b", "me"), keepsBlocked = true)
+
+        assertThat(vm.state.value.selectedIds).containsExactly("a", "b").inOrder()
+        assertThat(vm.state.value.results.map { it.id }).doesNotContain("b")
+        vm.onToggle("a")
+        assertThat(vm.state.value.selectedIds).containsExactly("b")
+    }
+
+    @Test
     fun `un cache froid donne une liste vide sans erreur`() = runTest {
         val vm = viewModel(cached = null)
         vm.start(emptyList())

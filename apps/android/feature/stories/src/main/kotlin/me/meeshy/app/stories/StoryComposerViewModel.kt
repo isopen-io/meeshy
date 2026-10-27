@@ -116,7 +116,7 @@ class StoryComposerViewModel @Inject constructor(
                     deck = deck,
                     draft = it.draft
                         .withVisibility(StoryVisibility.fromWire(reconciled.snapshot.visibility))
-                        .withVisibilityUserIds(reachable(reconciled.snapshot.visibilityUserIds))
+                        .withVisibilityUserIds(reachable(reconciled.snapshot.visibilityUserIds, StoryVisibility.fromWire(reconciled.snapshot.visibility)))
                         .withRepostOf(reconciled.snapshot.repostOfId),
                     errorMessage = if (reconciled.hasLoss) MEDIA_RESTORE_LOST else it.errorMessage,
                 ).mirrorDraftToSelection()
@@ -622,17 +622,22 @@ class StoryComposerViewModel @Inject constructor(
         draftStore.save(snapshot.copy(awaitingPublication = queued))
     }
 
-    /** Les personnes encore ciblables : ni soi, ni un compte bloqué depuis que le brouillon les a retenues. */
-    private fun reachable(ids: List<String>): List<String> {
-        val blocked = blocks.currentBlockedIds
+    /**
+     * La liste encore valable pour [visibility]. Sous ONLY, un compte bloqué depuis (et soi) n'est
+     * plus un destinataire. Sous EXCEPT, la liste EXCLUT : retirer un bloqué en ferait de nouveau
+     * un destinataire, donc seul soi en sort — une exclusion existante ne se perd jamais.
+     */
+    private fun reachable(ids: List<String>, visibility: StoryVisibility): List<String> {
         val selfId = sessionRepository.currentUser.value?.id
+        if (visibility != StoryVisibility.ONLY) return ids.filter { it != selfId }
+        val blocked = blocks.currentBlockedIds
         return ids.filter { it != selfId && it !in blocked }
     }
 
     private fun StoryComposerUiState.withAudiencePurged(): StoryComposerUiState {
         val blocked = blocks.currentBlockedIds
         val purged = draft.copy(
-            visibilityUserIds = reachable(draft.visibilityUserIds),
+            visibilityUserIds = reachable(draft.visibilityUserIds, draft.visibility),
             mentions = draft.mentions.filterNot { mention -> mention.userId?.let { it in blocked } == true },
         )
         return if (purged == draft) this else copy(draft = purged)
