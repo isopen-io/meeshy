@@ -22,7 +22,7 @@
     <string name="capture_shutter">Take a photo</string>
     <string name="capture_shutter_film">Film, hands-free</string>
     <plurals name="capture_segments">
-        <item quantity="one">%d segment</item>
-        <item quantity="other">%d segments</item>
+        <item quantity="one">%1$d segment</item>
+        <item quantity="other">%1$d segments</item>
     </plurals>
 </resources>
