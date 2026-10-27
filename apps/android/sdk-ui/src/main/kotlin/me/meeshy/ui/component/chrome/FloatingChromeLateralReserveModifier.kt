@@ -41,7 +41,7 @@ public fun Modifier.floatingChromeLateralReserve(yieldsBothSides: Boolean = fals
     val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     val density = LocalDensity.current.density
     val span = remember { mutableStateOf<RowSpan?>(null) }
-    val insets = remember(reserve) {
+    val insets = remember(reserve, yieldsBothSides) {
         derivedStateOf {
             span.value?.let { FloatingChromeLateralReserve.insets(reserve.bands, it.top, it.bottom, it.startGap, it.endGap, if (yieldsBothSides) Float.POSITIVE_INFINITY else it.width) }
                 ?: FloatingChromeLateralReserve.Insets.None

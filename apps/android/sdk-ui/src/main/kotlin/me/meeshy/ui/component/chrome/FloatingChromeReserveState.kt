@@ -18,19 +18,22 @@ import me.meeshy.sdk.model.chrome.FloatingChromeLateralReserve
  * les listes qui en dépendent.
  */
 @Stable
-public class FloatingChromeReserveState {
+public class FloatingChromeReserveState(
+    /** Bandes de départ : un aperçu ou un témoin pose des disques sans pouvoir les déplacer — seul le conteneur publie. */
+    initialBands: List<FloatingChromeLateralReserve.Band> = emptyList(),
+) {
     public var bottom: Dp by mutableStateOf(0.dp)
         internal set
 
     /** Les bandes latérales des disques (dp, repère de la fenêtre), lues par [floatingChromeLateralReserve]. */
-    public var bands: List<FloatingChromeLateralReserve.Band> by mutableStateOf(emptyList())
+    public var bands: List<FloatingChromeLateralReserve.Band> by mutableStateOf(initialBands)
         internal set
 
     internal fun publish(value: Dp) {
         if (bottom != value) bottom = value
     }
 
-    public fun publishBands(value: List<FloatingChromeLateralReserve.Band>) {
+    internal fun publishBands(value: List<FloatingChromeLateralReserve.Band>) {
         if (bands != value) bands = value
     }
 }

@@ -37,7 +37,7 @@ internal object RestingDiscs {
 
 /** Pose [content] à la hauteur des disques au repos, fenêtre de 360 dp. */
 internal fun ComposeContentTestRule.setContentBesideRestingDiscs(content: @Composable () -> Unit) {
-    val reserve = FloatingChromeReserveState().apply { publishBands(RestingDiscs.bands) }
+    val reserve = FloatingChromeReserveState(initialBands = RestingDiscs.bands)
     setContent {
         MeeshyTheme(darkTheme = false) {
             CompositionLocalProvider(LocalFloatingChromeReserve provides reserve) {
