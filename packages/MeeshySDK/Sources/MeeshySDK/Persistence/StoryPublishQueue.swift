@@ -329,11 +329,6 @@ public actor StoryPublishQueue {
     /// compter ferait boucler la passe à vide sur une file de claims.
     private static let maxItemsPerSweep = 10
     private static let queueFileName = "story_publish_queue.json"
-    /// Cap on the retry-able failure history (`failedItems`). Local media is
-    /// preserved for these items (unlike `items`, which drops media on any
-    /// terminal disposition) so the user can retry from `MyStoriesView` —
-    /// the cap bounds how much abandoned media can accumulate on disk.
-    private static let maxFailedItems = 20
     private static let failedQueueFileName = "story_publish_failed_queue.json"
 
     private var items: [StoryPublishQueueItem] = []
@@ -397,10 +392,12 @@ public actor StoryPublishQueue {
     @discardableResult
     public func enqueue(_ item: StoryPublishQueueItem) -> String {
         if items.count >= Self.maxQueueSize {
-            // Drop the oldest pending item to make room. The dropped item is
-            // surfaced as a permanent failure so the user is aware that their
-            // long-stale draft was abandoned.
-            let dropped = items.removeFirst()
+            // #13415 — la plus ancienne cède sa place dans la FILE, jamais sur
+            // l'appareil : elle passe dans l'historique des échecs, avec ses
+            // médias, où l'auteur la reprend ou la supprime.
+            var dropped = items.removeFirst()
+            dropped.lastError = "File d'envoi pleine"
+            addToFailedItems(dropped)
             publishFailed.send(StoryPublishFailure(
                 queueId: dropped.id,
                 tempStoryId: dropped.tempStoryId,
@@ -721,15 +718,11 @@ public actor StoryPublishQueue {
         }
     }
 
-    /// Appends a permanently-failed item to the retry-able history, dropping
-    /// the oldest entry (and its media) once `maxFailedItems` is exceeded —
-    /// same drop-oldest pattern as `enqueue`'s `maxQueueSize` guard.
+    /// Appends a permanently-failed item to the retry-able history. #13415 —
+    /// no cap: a story the author did not publish leaves the device only by
+    /// their gesture (`discardFailedItem`) or a successful retry.
     private func addToFailedItems(_ item: StoryPublishQueueItem) {
         failedItems.append(item)
-        if failedItems.count > Self.maxFailedItems {
-            let dropped = failedItems.removeFirst()
-            removeLocalMedia(of: dropped)
-        }
         saveFailedItemsToDisk()
     }
 

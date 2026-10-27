@@ -630,6 +630,9 @@ struct ThemedFeedOverlay: View {
                     .padding(.horizontal, MeeshySpacing.lg)
                     .accessibilityIdentifier("feed.composer.placeholder")
 
+                    // #13415 — les publications encore sur l'appareil, et leur reprise.
+                    UnsentPublicationsEntry(openComposer: { showFullComposer = true })
+
                     // Cache vide et chargement en cours : des cartes fantômes de
                     // la hauteur des vraies, jamais du fond nu. Même loi que
                     // l'hôte iPad (`FeedView`).

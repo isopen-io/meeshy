@@ -186,5 +186,7 @@ extension OutboxDispatcher {
                 logger.warning("createPost: failed to remove temp file \(path, privacy: .public): \(error.localizedDescription, privacy: .public)")
             }
         }
+        // #13415 — le dossier `pending-media/<cmid>` part avec ses fichiers, au succès seulement.
+        OfflineQueue.removeEmptyParentDirectories(of: uploadedLocalPaths)
         logger.info("createPost dispatched cmid=\(payload.clientMutationId, privacy: .public)")
     }}

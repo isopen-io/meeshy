@@ -613,6 +613,7 @@ struct FeedView: View {
                     // Composer placeholder
                     FeedComposerPlaceholder(onCompose: openComposer, onRecordAudio: openAudioComposer)
                         .padding(.bottom, MeeshySpacing.sm)
+                    UnsentPublicationsEntry(openComposer: openComposer)
 
                     // Error state
                     if let error = viewModel.error {

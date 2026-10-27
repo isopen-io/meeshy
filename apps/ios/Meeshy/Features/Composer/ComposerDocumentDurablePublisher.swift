@@ -115,6 +115,7 @@ enum ComposerDocumentDurablePublisher {
             return refuse()
         }
 
+        ComposerPublicationHandoff.record(intent.clientMutationId)
         HapticFeedback.success()
         return true
     }
