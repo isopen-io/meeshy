@@ -8,9 +8,10 @@ class CallPictureInPictureCoordinatorTest {
     private val video = CallSessionInfo("call-1", CallConfig(peerId = "u", peerName = "Alice", isVideo = true, isOutgoing = true))
     private val audio = CallSessionInfo("call-1", CallConfig(peerId = "u", peerName = "Alice", isVideo = false, isOutgoing = true))
     private var entered = 0
+    private var dismissed = 0
 
     private fun coordinator(supports: Boolean = true) = CallPictureInPictureCoordinator().apply {
-        attachActivity(supportsPip = supports) { entered++; true }
+        attachActivity(supportsPip = supports, enter = { entered++; true }, dismiss = { dismissed++ })
     }
 
     private fun CallPictureInPictureCoordinator.connected(info: CallSessionInfo = video) {
@@ -73,5 +74,29 @@ class CallPictureInPictureCoordinatorTest {
         pip.onTransition(CallState.Connected, CallState.Idle, video)
 
         assertThat(pip.inPip.value).isFalse()
+    }
+
+    @Test
+    fun `une activite lancee par l'application elle-meme n'ouvre pas la fenetre, le depart suivant si`() {
+        val pip = coordinator().apply { connected(); setCallScreenShown(true) }
+
+        pip.holdForInAppLaunch()
+        assertThat(pip.onUserLeaveHint()).isFalse()
+        assertThat(entered).isEqualTo(0)
+
+        pip.releaseInAppLaunch()
+        assertThat(pip.onUserLeaveHint()).isTrue()
+        assertThat(entered).isEqualTo(1)
+    }
+
+    @Test
+    fun `un appel qui finit pendant la fenetre la retire, un appel fini hors fenetre ne touche a rien`() {
+        val inWindow = coordinator().apply { connected(); setInPip(true) }
+        inWindow.onTransition(CallState.Connected, CallState.Idle, video)
+        assertThat(dismissed).isEqualTo(1)
+
+        val outside = coordinator().apply { connected() }
+        outside.onTransition(CallState.Connected, CallState.Idle, video)
+        assertThat(dismissed).isEqualTo(1)
     }
 }

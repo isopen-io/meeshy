@@ -33,6 +33,8 @@ class CallPictureInPictureCoordinator @Inject constructor() : CallFeatureControl
     @Volatile private var callScreenShown = false
     @Volatile private var deviceSupportsPip = false
     @Volatile private var enter: (() -> Boolean)? = null
+    @Volatile private var dismiss: (() -> Unit)? = null
+    @Volatile private var heldByInAppLaunch = false
 
     private val _inPip = MutableStateFlow(false)
 
@@ -42,22 +44,43 @@ class CallPictureInPictureCoordinator @Inject constructor() : CallFeatureControl
     override fun onTransition(previous: CallState, next: CallState, session: CallSessionInfo) {
         isVideoCall = session.config.isVideo
         isEstablished = next is CallState.Connected
-        if (next is CallState.Ended || next == CallState.Idle) _inPip.value = false
+        if (next is CallState.Ended || next == CallState.Idle) leaveWindow()
     }
 
     override fun onCleared() {
         isEstablished = false
-        _inPip.value = false
+        leaveWindow()
     }
 
-    fun attachActivity(supportsPip: Boolean, enter: () -> Boolean) {
+    /**
+     * [enter] fait entrer l'activité dans la fenêtre flottante ; [dismiss] la retire quand l'appel
+     * finit pendant qu'elle y est (iOS arrête son PiP avec l'appel) — sans lui, la fenêtre
+     * resterait ouverte sur l'écran d'en dessous.
+     */
+    fun attachActivity(supportsPip: Boolean, enter: () -> Boolean, dismiss: () -> Unit = {}) {
         deviceSupportsPip = supportsPip
         this.enter = enter
+        this.dismiss = dismiss
     }
 
     fun detachActivity() {
         enter = null
+        dismiss = null
         _inPip.value = false
+    }
+
+    /**
+     * L'activité lance une autre activité pour elle-même (consentement de partage d'écran,
+     * sélecteur, partage, lien) : `onUserLeaveHint` qui suit n'est pas un départ de
+     * l'utilisateur, la fenêtre flottante ne doit pas s'ouvrir par-dessus ce qu'on vient d'ouvrir.
+     */
+    fun holdForInAppLaunch() {
+        heldByInAppLaunch = true
+    }
+
+    /** L'activité est revenue au premier plan : le prochain départ est de nouveau celui de l'utilisateur. */
+    fun releaseInAppLaunch() {
+        heldByInAppLaunch = false
     }
 
     fun setCallScreenShown(shown: Boolean) {
@@ -79,7 +102,18 @@ class CallPictureInPictureCoordinator @Inject constructor() : CallFeatureControl
     fun requestEnter(): Boolean = enterIfAllowed()
 
     /** `onUserLeaveHint` : l'utilisateur quitte l'application pendant un appel vidéo. */
-    fun onUserLeaveHint(): Boolean = enterIfAllowed()
+    fun onUserLeaveHint(): Boolean {
+        if (heldByInAppLaunch) {
+            heldByInAppLaunch = false
+            return false
+        }
+        return enterIfAllowed()
+    }
+
+    private fun leaveWindow() {
+        if (_inPip.value) dismiss?.invoke()
+        _inPip.value = false
+    }
 
     private fun enterIfAllowed(): Boolean {
         val allowed = CallPictureInPicturePolicy.mayEnter(isVideoCall, isEstablished, callScreenShown, deviceSupportsPip)

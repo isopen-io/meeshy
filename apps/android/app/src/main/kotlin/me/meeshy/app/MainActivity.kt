@@ -98,6 +98,7 @@ class MainActivity : ComponentActivity() {
         callPictureInPicture.attachActivity(
             supportsPip = packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE),
             enter = ::enterCallPictureInPicture,
+            dismiss = { moveTaskToBack(false) },
         )
         setContent {
             val themeMode by themeViewModel.themeMode.collectAsStateWithLifecycle()
@@ -127,6 +128,18 @@ class MainActivity : ComponentActivity() {
             .setAspectRatio(Rational(CallPictureInPicturePolicy.ASPECT_WIDTH, CallPictureInPicturePolicy.ASPECT_HEIGHT))
             .build()
         return runCatching { enterPictureInPictureMode(params) }.getOrDefault(false)
+    }
+
+    @Deprecated("ComponentActivity deprecates it; every activity launch still funnels through it")
+    @Suppress("DEPRECATION")
+    override fun startActivityForResult(intent: Intent, requestCode: Int, options: Bundle?) {
+        callPictureInPicture.holdForInAppLaunch()
+        try {
+            super.startActivityForResult(intent, requestCode, options)
+        } catch (failure: RuntimeException) {
+            callPictureInPicture.releaseInAppLaunch()
+            throw failure
+        }
     }
 
     override fun onUserLeaveHint() {
@@ -159,6 +172,7 @@ class MainActivity : ComponentActivity() {
      */
     override fun onResume() {
         super.onResume()
+        callPictureInPicture.releaseInAppLaunch()
         lifecycleScope.launch {
             DynamicShortcutsPublisher.publish(
                 context = this@MainActivity,
