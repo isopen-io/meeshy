@@ -15,7 +15,14 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.ui.graphics.graphicsLayer
+import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -38,6 +45,10 @@ import me.meeshy.ui.theme.MeeshyTheme
 
 /** Nombre de pastilles visibles avant la pastille « +N » (iOS `BubbleReactionsOverlay.maxVisible`). */
 internal const val REACTIONS_MAX_VISIBLE: Int = 4
+
+/** Le rebond d'une pastille dont le compte ou la marque du lecteur change (iOS : ressort 0,32 s, amorti 0,55). */
+private const val REACTION_PULSE_PEAK: Float = 1.22f
+private const val REACTION_PULSE_DAMPING: Float = 0.55f
 
 /** Décalage vertical de la bande sous le bord de la bulle (iOS `restingOffset`). */
 internal val ReactionsRestingOffset = 18.dp
@@ -89,6 +100,17 @@ private fun ReactionChip(
 ) {
     val isDark = MeeshyTheme.isDark
     val shape = RoundedCornerShape(MeeshyRadius.pill)
+    val haptics = rememberMeeshyHaptics()
+    val pulse = remember { Animatable(1f) }
+    val firstFrame = remember { booleanArrayOf(true) }
+    LaunchedEffect(entry.count, entry.includesMe) {
+        if (firstFrame[0]) {
+            firstFrame[0] = false
+            return@LaunchedEffect
+        }
+        pulse.snapTo(REACTION_PULSE_PEAK)
+        pulse.animateTo(1f, spring(dampingRatio = REACTION_PULSE_DAMPING, stiffness = Spring.StiffnessMedium))
+    }
     val fill = when {
         entry.includesMe -> accent.copy(alpha = if (isDark) 0.70f else 0.50f)
         isDark -> MeeshyPalette.White.copy(alpha = 0.06f)
@@ -101,6 +123,7 @@ private fun ReactionChip(
     }
     Row(
         modifier = Modifier
+            .graphicsLayer { scaleX = pulse.value; scaleY = pulse.value }
             .height(22.dp)
             .let { base ->
                 if (entry.includesMe) base.shadow(4.dp, shape, ambientColor = accent, spotColor = accent) else base
@@ -113,8 +136,16 @@ private fun ReactionChip(
                     base
                 } else {
                     base.combinedClickable(
-                        onClick = onClick ?: {},
-                        onLongClick = onLongClick,
+                        onClick = {
+                            haptics.light()
+                            onClick?.invoke()
+                        },
+                        onLongClick = onLongClick?.let { longClick ->
+                            {
+                                haptics.medium()
+                                longClick()
+                            }
+                        },
                     ).semantics { role = Role.Button }
                 }
             }
