@@ -1626,3 +1626,6 @@ bare-specifier :feature:chat en chat_engagement_a11y_streak_days_one
 bare-specifier :feature:chat en chat_engagement_a11y_streak_days_other
 bare-specifier :feature:chat en chat_engagement_a11y_total_one
 bare-specifier :feature:chat en chat_engagement_a11y_total_other
+bare-specifier :feature:chat en riviere_bubble_reply_to
+bare-specifier :feature:chat en riviere_header_offscreen_left
+bare-specifier :feature:chat en riviere_header_offscreen_right
