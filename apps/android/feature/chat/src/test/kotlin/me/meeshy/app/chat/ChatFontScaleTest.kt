@@ -75,6 +75,34 @@ class ChatFontScaleTest {
     }
 
     @Test
+    fun `the typed text keeps following the system font beyond the chrome cap`() {
+        val typed = "Bonjour"
+        compose.setContent {
+            MeeshyTheme {
+                Column {
+                    listOf(1.3f, 2.0f).forEach { scale ->
+                        CompositionLocalProvider(LocalDensity provides Density(density = 1f, fontScale = scale)) {
+                            Box(Modifier.width(300.dp)) {
+                                ComposerInputCapsule(
+                                    value = TextFieldValue(typed),
+                                    onValueChange = {},
+                                    accentColor = Color.Red,
+                                    onSend = {},
+                                    showMic = false,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        val fields = compose.onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsActions.SetText))
+
+        assertThat(height(fields[1])).isGreaterThan(height(fields[0]))
+    }
+
+    @Test
     fun `the day pill does not grow with the system font`() {
         val millis = 1_760_434_200_000L
         compose.setContent {
