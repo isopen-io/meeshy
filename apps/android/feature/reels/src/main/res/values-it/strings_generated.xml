@@ -33,6 +33,7 @@
     <string name="reels_toast_pinned">Post fissato</string>
     <string name="reels_toast_report_failed">Errore durante la segnalazione del post</string>
     <string name="reels_toast_reported">Post segnalato</string>
+    <string name="reels_unlike">Non mi piace più</string>
     <string name="reels_unmute">Riattiva audio</string>
     <string name="reels_views">Visualizzazioni</string>
 </resources>

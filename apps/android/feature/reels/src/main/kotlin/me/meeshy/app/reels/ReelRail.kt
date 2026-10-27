@@ -57,7 +57,7 @@ internal fun ReelRail(
         Box {
             FullscreenActionButton(
                 icon = (if (reel.isLiked) FullscreenChromeSymbol.LikeActive else FullscreenChromeSymbol.Like).icon,
-                label = stringResource(R.string.reels_like),
+                label = stringResource(if (reel.isLiked) R.string.reels_unlike else R.string.reels_like),
                 onClick = { actions.onLike(reel.id) },
                 caption = count(reel.likeCount, locale),
                 accessibilityValue = reel.likeCount.takeIf { it > 0 }?.toString(),

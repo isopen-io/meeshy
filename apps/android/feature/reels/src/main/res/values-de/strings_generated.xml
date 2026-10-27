@@ -32,6 +32,7 @@
     <string name="reels_toast_pinned">Beitrag angeheftet</string>
     <string name="reels_toast_report_failed">Fehler beim Melden des Beitrags</string>
     <string name="reels_toast_reported">Beitrag gemeldet</string>
+    <string name="reels_unlike">Gefällt mir nicht mehr</string>
     <string name="reels_unmute">Stummschaltung aufheben</string>
     <string name="reels_views">Aufrufe</string>
 </resources>

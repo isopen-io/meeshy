@@ -33,6 +33,7 @@
     <string name="reels_toast_pinned">Publication épinglée</string>
     <string name="reels_toast_report_failed">Erreur lors du signalement</string>
     <string name="reels_toast_reported">Publication signalée</string>
+    <string name="reels_unlike">Je n\'aime plus</string>
     <string name="reels_unmute">Réactiver le son</string>
     <string name="reels_views">Vues</string>
 </resources>

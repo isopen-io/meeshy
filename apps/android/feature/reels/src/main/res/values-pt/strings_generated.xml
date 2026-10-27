@@ -33,6 +33,7 @@
     <string name="reels_toast_pinned">Publicação fixada</string>
     <string name="reels_toast_report_failed">Erro ao denunciar a publicação</string>
     <string name="reels_toast_reported">Publicação denunciada</string>
+    <string name="reels_unlike">Descurtir</string>
     <string name="reels_unmute">Ativar som</string>
     <string name="reels_views">Visualizações</string>
 </resources>
