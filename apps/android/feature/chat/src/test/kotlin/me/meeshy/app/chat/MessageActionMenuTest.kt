@@ -362,6 +362,7 @@ class MessageActionMenuTest {
         assertThat(MessageActionMenu.actions(ctx(hasPlace = false, hostedEntries = hosted))).doesNotContain(MessageAction.Map)
         assertThat(MessageActionMenu.actions(ctx(hasPlace = true))).doesNotContain(MessageAction.Map)
         assertThat(hostedDetailEntries(showReadReceipts = false)).contains(MessageAction.Map)
+        assertThat(hostedDetailEntries(showReadReceipts = false)).contains(MessageAction.ExportCard)
     }
 
     private val allHosted = setOf(

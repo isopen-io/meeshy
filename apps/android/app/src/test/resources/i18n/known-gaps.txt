@@ -1631,3 +1631,5 @@ bare-specifier :feature:chat en riviere_header_offscreen_right
 bare-specifier :feature:conversations en shareLink_arrivals_seeAll
 bare-specifier :feature:conversations en shareLink_arrivals_total
 bare-specifier :feature:chat en contact_card_a11y_label
+# Atelier « Imagine » (#13421) : le compteur de la galerie arrive en %d nu du catalogue iOS.
+bare-specifier :feature:chat en export_card_gallery_count
