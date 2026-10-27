@@ -183,4 +183,22 @@ class CaptureSessionReducerTest {
         val filming = run(CaptureSessionState(stage = CaptureStage.RECORDING), CaptureEvent.FlipTapped)
         assertThat(filming.effects).isEmpty()
     }
+
+    @Test
+    fun `a cancelled take is neither delivered nor lost and raises no warning`() {
+        val step = run(events = arrayOf(CaptureEvent.HoldBegan, CaptureEvent.HoldReleased, CaptureEvent.RecordingCancelled("video-1")))
+        assertThat(step.state.ledger.pending).isEmpty()
+        assertThat(step.state.ledger.hasLostTake).isFalse()
+        assertThat(step.effects.filterIsInstance<CaptureEffect.Haptic>()).isEmpty()
+    }
+
+    @Test
+    fun `a delivered photo settles its token and a failed one is reported lost`() {
+        val taken = run(events = arrayOf(CaptureEvent.ShutterTapped(1_000)))
+        val token = taken.state.ledger.pending.single()
+        assertThat(run(taken.state, CaptureEvent.PhotoDelivered(token)).state.ledger.delivered).containsExactly(token)
+        val failed = run(taken.state, CaptureEvent.PhotoFailed(token))
+        assertThat(failed.state.ledger.hasLostTake).isTrue()
+        assertThat(failed.effects).contains(CaptureEffect.Haptic(CaptureHaptic.WARNING))
+    }
 }
