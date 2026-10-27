@@ -150,6 +150,14 @@
     <string name="reading_mode_summary_title">Riepilogo</string>
     <string name="recentMedia_resolveFailed">Impossibile preparare questo contenuto — usa la libreria foto completa</string>
     <string name="recentMedia_resolveFailed_multiple">Non è stato possibile preparare %d media — usa l\'intera libreria foto</string>
+    <string name="riviere_bubble_actions">Altre opzioni</string>
+    <string name="riviere_bubble_open_in_thread">Apri nel filo</string>
+    <string name="riviere_bubble_reply_hint">Apre il messaggio citato</string>
+    <string name="riviere_bubble_reply_to">in risposta a %s</string>
+    <string name="riviere_header_offscreen_left">%d voci a sinistra</string>
+    <string name="riviere_header_offscreen_right">%d voci a destra</string>
+    <string name="riviere_header_you">Tu</string>
+    <string name="riviere_time_handle_label">Asse del tempo</string>
     <string name="sentiment_very_negative">Molto negativo</string>
     <string name="sentiment_very_positive">Molto positivo</string>
     <string name="share_target_cancel">Annulla</string>

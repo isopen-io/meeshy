@@ -42,6 +42,9 @@ import kotlinx.coroutines.launch
 import me.meeshy.feature.chat.R
 import me.meeshy.sdk.model.reading.focal.FocalMetrics
 import me.meeshy.sdk.model.reading.mode.ConversationReadingMode
+import me.meeshy.app.chat.river.RiverPaneState
+import me.meeshy.app.chat.river.RiverScreen
+import me.meeshy.sdk.model.reading.river.RiverModeGate
 import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.sdk.model.reading.focal.ScrollTimePillLaw
 import me.meeshy.ui.profile.LocalProfileSheetOpener
@@ -422,6 +425,20 @@ internal fun ChatListHost(
             exit = fadeOut(tween(modeFadeMs)),
         ) {
             LivingSummaryOverlay(host = host, topInset = topInset, bottomInset = bottomInset)
+        }
+        // La Rivière : même patron — une surcouche qui fond sur le fil, resté composé dessous. Son état
+        // est hissé ici : y revenir retrouve le curseur et les deux défilements. Le garde de mode
+        // (`RiverModeGate`) la tient fermée quand la conversation ou l'interrupteur ne l'offrent pas.
+        val riverPane = remember { RiverPaneState() }
+        val riverMode = host.readingMode?.state?.let {
+            it.mode == ConversationReadingMode.RIVER && RiverModeGate.isSelectable(it.capabilities)
+        } == true
+        AnimatedVisibility(
+            visible = riverMode,
+            enter = fadeIn(tween(modeFadeMs)),
+            exit = fadeOut(tween(modeFadeMs)),
+        ) {
+            RiverScreen(host = host, pane = riverPane, topInset = topInset, bottomInset = bottomInset)
         }
     }
 }
