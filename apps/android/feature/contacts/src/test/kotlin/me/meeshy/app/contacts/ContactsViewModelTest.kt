@@ -11,6 +11,7 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import me.meeshy.sdk.friend.BlockCache
 import me.meeshy.sdk.friend.FriendRepository
 import me.meeshy.sdk.friend.FriendRequestListRepository
 import me.meeshy.sdk.friend.FriendshipCache
@@ -67,6 +68,27 @@ class ContactsViewModelTest {
         assertThat(vm.state.value.receivedRequests).hasSize(1)
         assertThat(vm.state.value.sentRequests).hasSize(2)
         assertThat(vm.state.value.isLoadingRequests).isFalse()
+    }
+
+    @Test
+    fun `a blocked person is absent from both request lists and from the friendship cache`() = runTest {
+        val blocks = BlockCache().apply { setBlocked("bob", true) }
+        val cache = FriendshipCache()
+        coEvery { repository.receivedRequests(any(), any()) } returns NetworkResult.Success(
+            listOf(FriendRequest(id = "r1", status = "pending", senderId = "bob"), FriendRequest(id = "r2", status = "pending", senderId = "carol")),
+        )
+        coEvery { repository.sentRequests(any(), any()) } returns NetworkResult.Success(
+            listOf(FriendRequest(id = "s1", status = "pending", receiverId = "bob"), FriendRequest(id = "s2", status = "pending", receiverId = "dave")),
+        )
+        coEvery { requestListRepository.cachedReceived() } returns null
+        coEvery { requestListRepository.cachedSent() } returns null
+
+        val vm = ContactsViewModel(repository, requestListRepository, cache, blocks)
+
+        assertThat(vm.state.value.receivedRequests.map { it.id }).containsExactly("r2")
+        assertThat(vm.state.value.sentRequests.map { it.id }).containsExactly("s2")
+        assertThat(cache.currentSentPendingReceiverIds).doesNotContain("bob")
+        assertThat(cache.currentReceivedPendingSenderIds).doesNotContain("bob")
     }
 
     @Test

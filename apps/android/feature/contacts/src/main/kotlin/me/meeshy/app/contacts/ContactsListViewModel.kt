@@ -10,6 +10,8 @@ import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.cache.valueOrNull
+import me.meeshy.sdk.friend.BlockCache
+import me.meeshy.sdk.friend.BlockRepository
 import me.meeshy.sdk.friend.FriendListRepository
 import me.meeshy.sdk.friend.FriendRepository
 import me.meeshy.sdk.friend.FriendshipCache
@@ -87,6 +89,8 @@ class ContactsListViewModel @Inject constructor(
     private val sessionRepository: SessionRepository,
     private val statusBarCache: StatusBarCache,
     private val presenceStore: PresenceStore,
+    private val blockCache: BlockCache = BlockCache(),
+    private val blockRepository: BlockRepository? = null,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ContactsListUiState())
@@ -164,11 +168,15 @@ class ContactsListViewModel @Inject constructor(
 
     private suspend fun revalidate() {
         val currentUserId = sessionRepository.currentUserId.orEmpty()
+        blockRepository?.listBlocked()
         when (val graph = friendRepository.friendshipGraph(currentUserId)) {
             is NetworkResult.Success -> {
-                friendshipCache.hydrate(sent = graph.data.sent, received = graph.data.received)
+                val blockedIds = blockCache.currentBlockedIds
+                val sent = BlockedExclusion.requests(graph.data.sent, blockedIds)
+                val received = BlockedExclusion.requests(graph.data.received, blockedIds)
+                friendshipCache.hydrate(sent = sent, received = received)
                 lastReconciledFriendIds = friendshipCache.currentFriendIds
-                val friends = ContactList.fromAcceptedRequests(graph.data.received + graph.data.sent, currentUserId)
+                val friends = ContactList.fromAcceptedRequests(received + sent, currentUserId)
                 _state.update { it.copy(friends = withPresence(friends), isLoading = false, errorMessage = null) }
                 friendListRepository.persist(friends)
             }

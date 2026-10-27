@@ -13,6 +13,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import me.meeshy.sdk.friend.BlockCache
+import me.meeshy.sdk.friend.BlockRepository
 import me.meeshy.sdk.friend.FriendRepository
 import me.meeshy.sdk.friend.FriendRequestListRepository
 import me.meeshy.sdk.friend.FriendshipCache
@@ -38,6 +40,8 @@ class ContactsViewModel @Inject constructor(
     private val friendRepository: FriendRepository,
     private val friendRequestListRepository: FriendRequestListRepository,
     private val friendshipCache: FriendshipCache = FriendshipCache(),
+    private val blockCache: BlockCache = BlockCache(),
+    private val blockRepository: BlockRepository? = null,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ContactsUiState())
@@ -162,8 +166,10 @@ class ContactsViewModel @Inject constructor(
 
     private suspend fun fetchAndPublishRequests() {
         try {
-            val received = friendRepository.receivedRequests()
-            val sent = friendRepository.sentRequests()
+            blockRepository?.listBlocked()
+            val blockedIds = blockCache.currentBlockedIds
+            val received = friendRepository.receivedRequests().map { BlockedExclusion.requests(it, blockedIds) }
+            val sent = friendRepository.sentRequests().map { BlockedExclusion.requests(it, blockedIds) }
             if (received is NetworkResult.Success && sent is NetworkResult.Success) {
                 ownCacheChange { friendshipCache.hydrate(sent = sent.data, received = received.data) }
             }
