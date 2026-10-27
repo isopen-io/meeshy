@@ -18393,6 +18393,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = "me.meeshy.app.notification-service";
 				SDKROOT = iphoneos;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = nonisolated;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;
@@ -18453,6 +18454,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = "me.meeshy.app.notification-service";
 				SDKROOT = iphoneos;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = nonisolated;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
