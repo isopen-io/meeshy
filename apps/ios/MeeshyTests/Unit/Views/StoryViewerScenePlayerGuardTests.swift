@@ -28,7 +28,7 @@ import XCTest
 /// verte sur un fil coupé ; une garde par valeur fait l'inverse.
 final class StoryViewerScenePlayerGuardTests: XCTestCase {
 
-    private static let canvasFile = "Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift"
+    private static let canvasFile = "Meeshy/Features/Stories/Views/StoryViewerView+Canvas.swift"
 
     /// Ce qui manque à `MeeshyScenePlayer` (B4, contrat gelé) pour que le swap
     /// E4 soit seulement POSSIBLE. Message du `XCTSkip` de la famille A — il
@@ -329,7 +329,7 @@ final class StoryViewerScenePlayerGuardTests: XCTestCase {
         // le chemin ; seule la dernière assertion regarde encore le canvas, parce
         // que c'est lui qui doit continuer d'APPELER la couche.
         let canvas = try MyStoriesSourceCorpus.text(
-            of: "Meeshy/Features/Main/Views/StoryViewerView+CanvasCaption.swift")
+            of: "Meeshy/Features/Stories/Views/StoryViewerView+CanvasCaption.swift")
         XCTAssertTrue(
             canvas.contains("currentVoiceCaption == nil, let description = currentStoryDescription"),
             "L'overlay de description se peint sous le canvas gaté sur l'absence de transcription " +

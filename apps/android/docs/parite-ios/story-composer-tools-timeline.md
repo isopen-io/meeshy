@@ -3307,7 +3307,7 @@ Transposition Android : OutboxRepository + MediaUploadQueue existants (dépendan
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel+PublishIntent.swift`
+- `apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel+PublishIntent.swift`
 - `packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/ViewModel/TimelineViewModel+OfflinePublish.swift`
 
 </details>
@@ -3949,7 +3949,7 @@ Transposition Android : Équivalent déjà en place : slides précalculées dans
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/RenderableSlideCache.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/RenderableSlideCache.swift`
 
 </details>
 

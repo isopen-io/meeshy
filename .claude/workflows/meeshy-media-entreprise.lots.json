@@ -797,7 +797,7 @@
    "fichiers": [
     "apps/ios/Meeshy/Features/Main/Views/ReelPrewarm.swift",
     "apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Prefetch.swift",
-    "apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel+MediaPreload.swift"
+    "apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel+MediaPreload.swift"
    ],
    "depend": [
     "IL1"

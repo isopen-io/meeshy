@@ -192,10 +192,10 @@ Transposition Android : `Menu` → `DropdownMenu` ; `alert` → `AlertDialog` ; 
 
 <details><summary>Sources iOS (4)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/MyStoryActionMenu.swift`
-- `apps/ios/Meeshy/Features/Main/Views/MyStoriesDeleteAlerts.swift`
-- `apps/ios/Meeshy/Features/Main/Views/MyStoriesDeleteConfirmation.swift`
-- `apps/ios/Meeshy/Features/Main/Views/MyStoriesView.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/MyStoryActionMenu.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/MyStoriesDeleteAlerts.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/MyStoriesDeleteConfirmation.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/MyStoriesView.swift`
 
 </details>
 
@@ -222,10 +222,10 @@ Transposition Android : `RelativeDateTimeFormatter` → `DateUtils.getRelativeTi
 
 <details><summary>Sources iOS (4)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/MyStoryCard.swift`
-- `apps/ios/Meeshy/Features/Main/Views/MyStoryCardModelRules.swift`
-- `apps/ios/Meeshy/Features/Main/Views/MyStoryCardPresentation.swift`
-- `apps/ios/Meeshy/Features/Main/Views/MyStoryActionBar.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/MyStoryCard.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/MyStoryCardModelRules.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/MyStoryCardPresentation.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/MyStoryActionBar.swift`
 
 </details>
 
@@ -253,9 +253,9 @@ Transposition Android : `Picker(.segmented)` → `SingleChoiceSegmentedButtonRow
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/MyStoriesView.swift`
-- `apps/ios/Meeshy/Features/Main/Views/MyStoriesTab.swift`
-- `apps/ios/Meeshy/Features/Main/Views/MyStoriesSheetTargets.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/MyStoriesView.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/MyStoriesTab.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/MyStoriesSheetTargets.swift`
 
 </details>
 
@@ -707,9 +707,9 @@ Transposition Android : `StoryPublishQueue` → outbox Room + WorkManager exista
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/MyStoriesQueueRows.swift`
-- `apps/ios/Meeshy/Features/Main/Views/MyStoriesView.swift`
-- `apps/ios/Meeshy/Features/Main/Views/MyStoryCardPresentation.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/MyStoriesQueueRows.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/MyStoriesView.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/MyStoryCardPresentation.swift`
 
 </details>
 

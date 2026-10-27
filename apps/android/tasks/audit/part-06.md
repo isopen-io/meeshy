@@ -105,7 +105,7 @@ Scope: Main feature ViewModels (conversation, feed, social, story, voice, 2FA, p
 
 **Android-port note**: ViewModel + Room cache; status bubble popover → Compose `Popup`. Mood emoji grid trivial.
 
-## apps/ios/Meeshy/Features/Main/ViewModels/StoryExportShareViewModel.swift
+## apps/ios/Meeshy/Features/Stories/ViewModels/StoryExportShareViewModel.swift
 
 **Purpose**: Author-only "export story to MP4 and share externally" flow — NEVER touches the Meeshy backend.
 
@@ -117,7 +117,7 @@ Scope: Main feature ViewModels (conversation, feed, social, story, voice, 2FA, p
 
 **Android-port note**: MP4 baking → `MediaCodec`/`MediaMuxer` or a render pipeline; external share → `Intent.ACTION_SEND` with a `FileProvider` URI. Keep the strict rule: export output never uploaded to Meeshy.
 
-## apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift
+## apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel.swift
 
 **Purpose**: Story tray + multi-slide story publishing (online + offline-queue), with RAW publish (assets + JSON effects), background upload, retry, real-time.
 

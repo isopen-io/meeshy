@@ -7741,7 +7741,7 @@
   "ios_reference_files": [
    "packages/MeeshySDK/Sources/MeeshyUI/Fullscreen/FullscreenTopBar.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Theme/CanvasChromeScheme.swift",
-   "apps/ios/Meeshy/Features/Main/Views/RevealCircleShape.swift"
+   "apps/ios/Meeshy/Features/Stories/Views/RevealCircleShape.swift"
   ],
   "feature_keys": [
    "dst-canvas-chrome-scheme",

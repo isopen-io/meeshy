@@ -89,7 +89,7 @@ final class StoryVideoUploadFileTests: XCTestCase {
             .deletingLastPathComponent()
         return try String(
             contentsOf: racine.appendingPathComponent(
-                "Meeshy/Features/Main/ViewModels/StoryViewModel+PublicationUpload.swift"),
+                "Meeshy/Features/Stories/ViewModels/StoryViewModel+PublicationUpload.swift"),
             encoding: .utf8)
     }
 

@@ -528,7 +528,7 @@ git commit -m "feat(sdk): proportional media sizes, document font reference widt
 ### Task 8: StoryViewerView 9:16 container
 
 **Files:**
-- Modify: `apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift`
+- Modify: `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift`
 
 - [ ] **Step 1: Ensure StoryViewerView canvas is 9:16 centered in black ZStack**
 
@@ -547,6 +547,6 @@ Test: Open story viewer on both iPhone and iPad simulators. iPhone should look u
 - [ ] **Step 3: Commit**
 
 ```bash
-git add apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift
+git add apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift
 git commit -m "fix(ios): story viewer uses 9:16 canvas, centered on iPad"
 ```

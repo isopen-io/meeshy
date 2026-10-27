@@ -145,7 +145,7 @@ final class ReelSceneRoutingTests: XCTestCase {
     // MARK: - La pastille d'un son de PREMIER PLAN, surface par surface (#9737)
 
     private func view(_ name: String) throws -> String {
-        try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Main/Views/\(name)")
+        try MyStoriesSourceCorpus.text(of: AppSourceGuard.featureViewPath(name))
     }
 
     /// Le lecteur de réels, la carte de scène du fil, la mosaïque et la galerie

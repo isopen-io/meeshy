@@ -6029,9 +6029,9 @@
    "packages/MeeshySDK/Sources/MeeshySDK/Store/StoryDraftSummary.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Store/StoryDraftStore.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Store/StoryDraftAccessibility.swift",
-   "apps/ios/Meeshy/Features/Main/ViewModels/StoryDraftsViewModel.swift",
-   "apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel+Publication.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryDraft.swift"
+   "apps/ios/Meeshy/Features/Stories/ViewModels/StoryDraftsViewModel.swift",
+   "apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel+Publication.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryDraft.swift"
   ],
   "feature_keys": [
    "pco-story-drafts-multi",
@@ -11987,8 +11987,8 @@
   ],
   "ios_reference_files": [
    "packages/MeeshySDK/Sources/MeeshySDK/Services/SocialEventsV2Families.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Navigation.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryViewerEngagement.swift"
+   "apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Navigation.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryViewerEngagement.swift"
   ],
   "feature_keys": [
    "analytics-interaction-events",

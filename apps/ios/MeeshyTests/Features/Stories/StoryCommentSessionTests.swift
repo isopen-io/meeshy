@@ -399,7 +399,7 @@ final class StoryCommentSessionTests: XCTestCase {
     func test_theReaderEndsItsSessionWhenItDisappears() throws {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Views/StoryViewerView+Lifecycle.swift")
+            .appendingPathComponent("Meeshy/Features/Stories/Views/StoryViewerView+Lifecycle.swift")
         let source = try String(contentsOf: url, encoding: .utf8)
         guard let start = source.range(of: "func viewerWillDisappear()"),
               let end = source.range(of: "\n    }", range: start.upperBound..<source.endIndex) else {

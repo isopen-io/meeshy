@@ -906,7 +906,7 @@ Transposition Android : Shape animatableData vers GenericShape + animateFloatAsS
 <details><summary>Sources iOS (2)</summary>
 
 - `apps/ios/Meeshy/Features/Main/Views/FullScreenGate.swift`
-- `apps/ios/Meeshy/Features/Main/Views/RevealCircleShape.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/RevealCircleShape.swift`
 
 </details>
 

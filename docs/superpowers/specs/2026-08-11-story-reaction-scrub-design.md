@@ -97,14 +97,14 @@ Fichiers touchés :
   (anchor preferences résolues dans un `coordinateSpace` nommé fourni par l'appelant,
   remontées via callback `onTileFrames: ([Int: CGRect]) -> Void`). Aucun geste ni règle
   produit dans le SDK (SDK purity : paramètres opaques uniquement).
-- `apps/ios/Meeshy/Features/Main/Views/StoryLanguageQuickBar.swift` — mêmes deux
+- `apps/ios/Meeshy/Features/Stories/Views/StoryLanguageQuickBar.swift` — mêmes deux
   paramètres (survol + cadres).
-- `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift` — bouton cœur :
+- `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Sidebar.swift` — bouton cœur :
   tap → `triggerStoryReaction("❤️")` ; `LongPressGesture(minimumDuration: 0.25)`
   `.sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .named(…)))` →
   ouvre la barre + pilote le scrub. Bouton langue : tap conservé, même geste séquencé
   pour le scrub des drapeaux.
-- `apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift` + `+Canvas.swift` —
+- `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift` + `+Canvas.swift` —
   état `flyingReaction` (emoji, cadre départ, cadre arrivée) rendu en overlay du canvas ;
   suppression de `bigReactionPhase` et de son rendu ; `shouldPauseTimer` intègre
   `isScrubbing`.

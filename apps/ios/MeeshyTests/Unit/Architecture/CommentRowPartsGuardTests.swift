@@ -6,7 +6,7 @@ import XCTest
 /// as value — lives once, in `CommentLikeButton`, and neither row redeclares it.
 final class CommentRowPartsGuardTests: XCTestCase {
 
-    private let rows = ["Views/CommentRowView.swift", "Views/StoryCommentRowView.swift"]
+    private let rows = ["Views/CommentRowView.swift", "../Stories/Views/StoryCommentRowView.swift"]
 
     private func source(_ relative: String) throws -> String {
         let root = URL(fileURLWithPath: #filePath)

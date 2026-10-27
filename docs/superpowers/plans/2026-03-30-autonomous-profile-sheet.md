@@ -23,10 +23,10 @@
 | `apps/ios/Meeshy/Features/Main/Views/FeedPostCard.swift` | No change | Already minimal — now gets full functionality for free |
 | `apps/ios/Meeshy/Features/Main/Views/PostDetailView.swift` | No change | Already minimal |
 | `apps/ios/Meeshy/Features/Main/Views/FeedCommentsSheet.swift` | No change | Already minimal |
-| `apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift` | No change | Already minimal |
+| `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift` | No change | Already minimal |
 | `apps/ios/Meeshy/Features/Main/Views/AudioFullscreenView.swift` | No change | Already minimal |
 | `apps/ios/Meeshy/Features/Main/Views/GlobalSearchView.swift` | No change | Already minimal |
-| `apps/ios/Meeshy/Features/Main/Views/StoryTrayView.swift` | No change | Already minimal |
+| `apps/ios/Meeshy/Features/Stories/Views/StoryTrayView.swift` | No change | Already minimal |
 | `apps/ios/Meeshy/Features/Main/Views/BookmarksView.swift` | Check | May need simplification if it passes callbacks |
 
 ---

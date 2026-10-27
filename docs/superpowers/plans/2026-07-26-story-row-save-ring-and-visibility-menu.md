@@ -42,24 +42,24 @@ xcodebuild test -scheme MeeshySDK-Package \
 
 | Fichier | Responsabilité | Tâche |
 | --- | --- | --- |
-| `apps/ios/Meeshy/Features/Main/Services/StoryExportPreflight.swift` | **Créé.** Deux helpers purs partagés par les deux chemins d'export : résolution de la langue à graver et fabrication de l'identité du préambule. | 1 |
-| `apps/ios/Meeshy/Features/Main/ViewModels/StoryExportShareViewModel.swift` | **Modifié.** Délègue `prepare` et l'intro aux helpers ci-dessus (suppression de la duplication). | 1 |
-| `apps/ios/Meeshy/Features/Main/Services/StoryPhotoSaveService.swift` | **Créé.** Singleton d'état des sauvegardes en vol + orchestration bake → Photos → toast. Contient aussi `StorySaveProgressMapper` (pur). | 2 |
-| `apps/ios/Meeshy/Features/Main/Views/MyStoriesView.swift` | **Modifié.** Anneau dans `MyStoryRow`, câblage du menu « Enregistrer », sous-menu de visibilité, picker d'audience. Contient les résolveurs purs `MyStoryRowAccessibility` et `StoryVisibilityMenuResolver`. | 3, 6 |
-| `apps/ios/Meeshy/Features/Main/Views/StoryExportShareSheet.swift` | **Modifié.** Suppression du mode `.saveToPhotos` — redevient une sheet de partage pure. | 3 |
+| `apps/ios/Meeshy/Features/Stories/Services/StoryExportPreflight.swift` | **Créé.** Deux helpers purs partagés par les deux chemins d'export : résolution de la langue à graver et fabrication de l'identité du préambule. | 1 |
+| `apps/ios/Meeshy/Features/Stories/ViewModels/StoryExportShareViewModel.swift` | **Modifié.** Délègue `prepare` et l'intro aux helpers ci-dessus (suppression de la duplication). | 1 |
+| `apps/ios/Meeshy/Features/Stories/Services/StoryPhotoSaveService.swift` | **Créé.** Singleton d'état des sauvegardes en vol + orchestration bake → Photos → toast. Contient aussi `StorySaveProgressMapper` (pur). | 2 |
+| `apps/ios/Meeshy/Features/Stories/Views/MyStoriesView.swift` | **Modifié.** Anneau dans `MyStoryRow`, câblage du menu « Enregistrer », sous-menu de visibilité, picker d'audience. Contient les résolveurs purs `MyStoryRowAccessibility` et `StoryVisibilityMenuResolver`. | 3, 6 |
+| `apps/ios/Meeshy/Features/Stories/Views/StoryExportShareSheet.swift` | **Modifié.** Suppression du mode `.saveToPhotos` — redevient une sheet de partage pure. | 3 |
 | `apps/ios/Meeshy/Localizable.xcstrings` | **Modifié.** Nouvelles clés + renommage de `story.mine.viewers`. | 3, 6 |
 | `packages/MeeshySDK/Sources/MeeshySDK/Models/PostModels.swift` | **Modifié.** `APIPost.visibilityUserIds` décodé. | 4 |
 | `packages/MeeshySDK/Sources/MeeshySDK/Models/StoryModels.swift` | **Modifié.** `StoryItem.visibility` devient `var`, ajout de `visibilityUserIds`, propagation. | 4 |
 | `packages/MeeshySDK/Sources/MeeshySDK/Services/PostService.swift` | **Modifié.** `update(...)` transmet enfin `visibilityUserIds`. | 4 |
-| `apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift` | **Modifié.** `applyVisibility(storyId:visibility:userIds:)` avec rollback. | 5 |
+| `apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel.swift` | **Modifié.** `applyVisibility(storyId:visibility:userIds:)` avec rollback. | 5 |
 
 ---
 
 ## Task 1 : Helpers d'export partagés (langue + identité)
 
 **Files:**
-- Create: `apps/ios/Meeshy/Features/Main/Services/StoryExportPreflight.swift`
-- Modify: `apps/ios/Meeshy/Features/Main/ViewModels/StoryExportShareViewModel.swift` (méthodes `prepare` ~L71-85, `currentUserBrandIntro` ~L95-107, `init` ~L58-64)
+- Create: `apps/ios/Meeshy/Features/Stories/Services/StoryExportPreflight.swift`
+- Modify: `apps/ios/Meeshy/Features/Stories/ViewModels/StoryExportShareViewModel.swift` (méthodes `prepare` ~L71-85, `currentUserBrandIntro` ~L95-107, `init` ~L58-64)
 - Test: `apps/ios/MeeshyTests/Unit/Services/StoryExportPreflightTests.swift`
 
 **Interfaces:**
@@ -165,7 +165,7 @@ Attendu : **échec de compilation** — `cannot find 'StoryExportLanguageResolve
 
 - [ ] **Step 3: Écrire l'implémentation minimale**
 
-Créer `apps/ios/Meeshy/Features/Main/Services/StoryExportPreflight.swift` :
+Créer `apps/ios/Meeshy/Features/Stories/Services/StoryExportPreflight.swift` :
 
 ```swift
 import Foundation
@@ -239,7 +239,7 @@ Attendu : `StoryExportPreflightTests` **vert** (7 tests).
 
 - [ ] **Step 5: Rebrancher `StoryExportShareViewModel` sur les helpers**
 
-Dans `apps/ios/Meeshy/Features/Main/ViewModels/StoryExportShareViewModel.swift` :
+Dans `apps/ios/Meeshy/Features/Stories/ViewModels/StoryExportShareViewModel.swift` :
 
 Remplacer le corps de `prepare(story:)` par :
 
@@ -280,16 +280,16 @@ Attendu : `StoryExportShareViewModelTests` et `StoryExportBrandIntroTests` reste
 
 ```bash
 git checkout -- apps/ios/Meeshy.xcodeproj/project.pbxproj apps/ios/Meeshy.xcodeproj/xcshareddata/xcschemes/Meeshy.xcscheme 2>/dev/null || true
-git add apps/ios/Meeshy/Features/Main/Services/StoryExportPreflight.swift \
+git add apps/ios/Meeshy/Features/Stories/Services/StoryExportPreflight.swift \
         apps/ios/MeeshyTests/Unit/Services/StoryExportPreflightTests.swift
 git commit -m "refactor(ios/story): extrait la résolution de langue et l'identité d'export en helpers purs
 
 Le chemin « Enregistrer » va perdre sa sheet et doit résoudre la langue gravée
 tout seul, avec exactement la règle du chemin « Partager ». Deux implémentations
 divergentes graveraient des langues différentes selon le bouton." \
-  -- apps/ios/Meeshy/Features/Main/Services/StoryExportPreflight.swift \
+  -- apps/ios/Meeshy/Features/Stories/Services/StoryExportPreflight.swift \
      apps/ios/MeeshyTests/Unit/Services/StoryExportPreflightTests.swift \
-     apps/ios/Meeshy/Features/Main/ViewModels/StoryExportShareViewModel.swift
+     apps/ios/Meeshy/Features/Stories/ViewModels/StoryExportShareViewModel.swift
 ```
 
 ---
@@ -297,7 +297,7 @@ divergentes graveraient des langues différentes selon le bouton." \
 ## Task 2 : `StoryPhotoSaveService` — état et orchestration de la sauvegarde
 
 **Files:**
-- Create: `apps/ios/Meeshy/Features/Main/Services/StoryPhotoSaveService.swift`
+- Create: `apps/ios/Meeshy/Features/Stories/Services/StoryPhotoSaveService.swift`
 - Test: `apps/ios/MeeshyTests/Unit/Services/StoryPhotoSaveServiceTests.swift`
 
 **Interfaces:**
@@ -364,7 +364,7 @@ Attendu : échec de compilation, `cannot find 'StorySaveProgressMapper' in scope
 
 - [ ] **Step 3: Écrire le service complet**
 
-Créer `apps/ios/Meeshy/Features/Main/Services/StoryPhotoSaveService.swift` :
+Créer `apps/ios/Meeshy/Features/Stories/Services/StoryPhotoSaveService.swift` :
 
 ```swift
 import Foundation
@@ -821,7 +821,7 @@ L'état des sauvegardes en vol vit dans un singleton, pas dans un @StateObject d
 MyStoriesView : fermer la sheet détruisait le VM et le résultat tardif du bake
 partait en silence. Le bake occupe 0…90 % de la progression, l'écriture Photos
 les 10 % restants — sinon l'anneau afficherait 100 % avant que la vidéo existe." \
-  -- apps/ios/Meeshy/Features/Main/Services/StoryPhotoSaveService.swift \
+  -- apps/ios/Meeshy/Features/Stories/Services/StoryPhotoSaveService.swift \
      apps/ios/MeeshyTests/Unit/Services/StoryPhotoSaveServiceTests.swift
 ```
 
@@ -830,8 +830,8 @@ les 10 % restants — sinon l'anneau afficherait 100 % avant que la vidéo exist
 ## Task 3 : Anneau sur la ligne + suppression de la sheet de sauvegarde
 
 **Files:**
-- Modify: `apps/ios/Meeshy/Features/Main/Views/MyStoriesView.swift` (états ~L40-46, sheets ~L204-209, menu ~L310-314, `MyStoryRow` ~L422-515)
-- Modify: `apps/ios/Meeshy/Features/Main/Views/StoryExportShareSheet.swift` (enum `Mode` L16, `resolveActivityURL` L25-27, `adaptiveOnChange` L59-74, titre/sous-titre/CTA L43-45, L115-119, L200-202)
+- Modify: `apps/ios/Meeshy/Features/Stories/Views/MyStoriesView.swift` (états ~L40-46, sheets ~L204-209, menu ~L310-314, `MyStoryRow` ~L422-515)
+- Modify: `apps/ios/Meeshy/Features/Stories/Views/StoryExportShareSheet.swift` (enum `Mode` L16, `resolveActivityURL` L25-27, `adaptiveOnChange` L59-74, titre/sous-titre/CTA L43-45, L115-119, L200-202)
 - Modify: `apps/ios/MeeshyTests/Unit/Views/MyStoriesBulkDeleteGuardTests.swift` (test `test_resolveActivityURL_saveToPhotos_neverPresentsShareSheet` ~L91)
 - Modify: `apps/ios/Meeshy/Localizable.xcstrings`
 - Test: `apps/ios/MeeshyTests/Unit/Views/MyStoryRowSaveRingTests.swift`
@@ -903,7 +903,7 @@ Attendu : échec de compilation, `cannot find 'MyStoryRowAccessibility' in scope
 
 - [ ] **Step 3: Ajouter le composeur d'accessibilité**
 
-Dans `apps/ios/Meeshy/Features/Main/Views/MyStoriesView.swift`, juste avant `// MARK: - Row` (avant `private struct MyStoryRow`) :
+Dans `apps/ios/Meeshy/Features/Stories/Views/MyStoriesView.swift`, juste avant `// MARK: - Row` (avant `private struct MyStoryRow`) :
 
 ```swift
 // MARK: - Row accessibility
@@ -943,7 +943,7 @@ git checkout -- apps/ios/Meeshy.xcodeproj/project.pbxproj apps/ios/Meeshy.xcodep
 git commit -m "feat(ios/story): libellé VoiceOver de la ligne porte la progression de sauvegarde
 
 La ligne est children: .ignore — un anneau enfant serait invisible au rotor." \
-  -- apps/ios/Meeshy/Features/Main/Views/MyStoriesView.swift \
+  -- apps/ios/Meeshy/Features/Stories/Views/MyStoriesView.swift \
      apps/ios/MeeshyTests/Unit/Views/MyStoryRowSaveRingTests.swift
 ```
 
@@ -1086,7 +1086,7 @@ Supprimer `@State private var saveStory: StoryItem?` (L42) et le bloc `.sheet(it
 
 - [ ] **Step 8: Retirer le mode `.saveToPhotos` de la sheet de partage**
 
-Dans `apps/ios/Meeshy/Features/Main/Views/StoryExportShareSheet.swift` :
+Dans `apps/ios/Meeshy/Features/Stories/Views/StoryExportShareSheet.swift` :
 
 1. Supprimer l'enum `Mode`, la propriété `var mode: Mode = .share` et la fonction `resolveActivityURL(mode:sharedURL:)` (bloc L14-27).
 2. Remplacer le `.sheet(item:)` de partage (L75-78) par :
@@ -1158,8 +1158,8 @@ l'action a été déclenchée. Tap sur l'anneau = annulation.
 Le mode .saveToPhotos de StoryExportShareSheet n'a plus d'appelant et disparaît ;
 son invariant (la sauvegarde ne présente jamais la share sheet système) est
 devenu structurel et couvert par StoryPhotoSaveServiceTests." \
-  -- apps/ios/Meeshy/Features/Main/Views/MyStoriesView.swift \
-     apps/ios/Meeshy/Features/Main/Views/StoryExportShareSheet.swift \
+  -- apps/ios/Meeshy/Features/Stories/Views/MyStoriesView.swift \
+     apps/ios/Meeshy/Features/Stories/Views/StoryExportShareSheet.swift \
      apps/ios/MeeshyTests/Unit/Views/MyStoriesBulkDeleteGuardTests.swift \
      apps/ios/Meeshy/Localizable.xcstrings
 ```
@@ -1454,7 +1454,7 @@ en nil, aucune migration, pas de bump de storiesCacheKey)." \
 ## Task 5 : `StoryViewModel.applyVisibility` avec rollback
 
 **Files:**
-- Modify: `apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift` (ajout après `markViewed`, ~L707)
+- Modify: `apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel.swift` (ajout après `markViewed`, ~L707)
 - Test: `apps/ios/MeeshyTests/Unit/ViewModels/StoryVisibilityUpdateTests.swift`
 
 **Interfaces:**
@@ -1562,7 +1562,7 @@ Attendu : échec de compilation — `value of type 'StoryViewModel' has no membe
 
 - [ ] **Step 3: Implémenter `applyVisibility`**
 
-Dans `apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift`, juste après la fermeture de `markViewed(storyId:)` :
+Dans `apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel.swift`, juste après la fermeture de `markViewed(storyId:)` :
 
 ```swift
     /// Change le mode de visibilité d'une story (menu « Modifier la
@@ -1640,7 +1640,7 @@ git commit -m "feat(ios/story): applyVisibility — écriture optimiste et rollb
 Le checkmark du menu bouge immédiatement ; un échec réseau restaure le mode ET
 la liste d'audience d'avant. La story est relocalisée avant le rollback : elle
 a pu disparaître (suppression temps réel) pendant l'appel." \
-  -- apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift \
+  -- apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel.swift \
      apps/ios/MeeshyTests/Unit/ViewModels/StoryVisibilityUpdateTests.swift
 ```
 
@@ -1649,7 +1649,7 @@ a pu disparaître (suppression temps réel) pendant l'appel." \
 ## Task 6 : « Listing des vues » + sous-menu de visibilité
 
 **Files:**
-- Modify: `apps/ios/Meeshy/Features/Main/Views/MyStoriesView.swift` (états ~L40-50, sheets ~L196-224, `actionMenu(for:)` ~L293-332)
+- Modify: `apps/ios/Meeshy/Features/Stories/Views/MyStoriesView.swift` (états ~L40-50, sheets ~L196-224, `actionMenu(for:)` ~L293-332)
 - Modify: `apps/ios/Meeshy/Localizable.xcstrings` (clé `story.mine.viewers` + nouvelle clé `story.mine.visibility`)
 - Test: `apps/ios/MeeshyTests/Unit/Views/StoryVisibilityMenuResolverTests.swift`
 
@@ -1762,7 +1762,7 @@ Attendu : échec de compilation — `cannot find 'StoryVisibilityMenuResolver' i
 
 - [ ] **Step 3: Ajouter le résolveur**
 
-Dans `apps/ios/Meeshy/Features/Main/Views/MyStoriesView.swift`, juste après `enum MyStoryRowAccessibility` (Task 3) :
+Dans `apps/ios/Meeshy/Features/Stories/Views/MyStoriesView.swift`, juste après `enum MyStoryRowAccessibility` (Task 3) :
 
 ```swift
 // MARK: - Visibility menu
@@ -1984,7 +1984,7 @@ Sauf/Seulement ouvrent le picker pré-coché sur la sélection actuelle.
 
 Le mode courant porte un checkmark à la place de son icône plutôt qu'un Picker
 inline : sous iOS 26 un .tint(.clear) fait disparaître toutes les icônes d'un menu." \
-  -- apps/ios/Meeshy/Features/Main/Views/MyStoriesView.swift \
+  -- apps/ios/Meeshy/Features/Stories/Views/MyStoriesView.swift \
      apps/ios/Meeshy/Localizable.xcstrings \
      apps/ios/MeeshyTests/Unit/Views/StoryVisibilityMenuResolverTests.swift
 ```
@@ -2056,9 +2056,9 @@ Aucune tâche ne reste isolée sur une branche après validation.
 ## Task 7 : progression d'export partagée entre le reader et la liste
 
 **Files:**
-- Create: `apps/ios/Meeshy/Features/Main/Views/StorySaveProgressRing.swift`
-- Modify: `apps/ios/Meeshy/Features/Main/Views/MyStoriesView.swift` (`saveRing(progress:)` dans `MyStoryRow`)
-- Modify: `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift` (bouton export, ~L368-377)
+- Create: `apps/ios/Meeshy/Features/Stories/Views/StorySaveProgressRing.swift`
+- Modify: `apps/ios/Meeshy/Features/Stories/Views/MyStoriesView.swift` (`saveRing(progress:)` dans `MyStoryRow`)
+- Modify: `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Sidebar.swift` (bouton export, ~L368-377)
 - Test: `apps/ios/MeeshyTests/Unit/Views/StorySaveProgressRingTests.swift`
 
 **Interfaces:**
@@ -2163,7 +2163,7 @@ l'anneau sur la ligne ; puis l'inverse.
 ## Task 8 : commentaires d'une story depuis le listing
 
 **Files:**
-- Modify: `apps/ios/Meeshy/Features/Main/Views/MyStoriesView.swift`
+- Modify: `apps/ios/Meeshy/Features/Stories/Views/MyStoriesView.swift`
 - Modify: `apps/ios/Meeshy/Localizable.xcstrings`
 - Test: `apps/ios/MeeshyTests/Unit/Views/MyStoriesCommentsButtonTests.swift`
 
@@ -2320,7 +2320,7 @@ répétition de code.
 
 **Files:**
 - Modify: `packages/MeeshySDK/Sources/MeeshyUI/Story/TimelineExportFlow.swift`
-- Modify: `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift`
+- Modify: `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Sidebar.swift`
 - Test: `packages/MeeshySDK/Tests/MeeshyUITests/Story/Export/TimelineExportParityTests.swift`
 
 **Correction de conception (2026-07-26, après vérification).** Une première version de cette
@@ -2334,7 +2334,7 @@ les siennes sont SDK (`AuthManager` et `CacheCoordinator` dans MeeshySDK, `Meesh
 **Ce qu'on fait donc — réutiliser, pas recréer :**
 
 1. **Déplacer** `StoryExportIntroFactory` de
-   `apps/ios/Meeshy/Features/Main/Services/StoryExportPreflight.swift`
+   `apps/ios/Meeshy/Features/Stories/Services/StoryExportPreflight.swift`
    vers le SDK, à côté de son modèle :
    `packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryExportIntroFactory.swift`.
    API publique inchangée (`public enum StoryExportIntroFactory { public static func currentUser() async -> StoryExportIntroContent? }`).
@@ -2380,8 +2380,8 @@ doivent être présents dans les deux.
 ## Task 10 : le reader retrouve « Partager », la liste garde la sienne
 
 **Files:**
-- Modify: `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift`
-- Modify: `apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift` (réactive `showExportShareSheet`)
+- Modify: `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Sidebar.swift`
+- Modify: `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift` (réactive `showExportShareSheet`)
 - Test: `apps/ios/MeeshyTests/Unit/Views/StoryViewerExportRailTests.swift`
 
 **Le problème que ça corrige.** La Task 7 a fait passer le bouton « Exporter » du reader par
@@ -2419,7 +2419,7 @@ fusionné). L'anneau porte libellé + valeur, comme livré en Task 7.
 ## Task 11 : supprimer le compteur de commentaires inerte de la rangée de métriques
 
 **Files:**
-- Modify: `apps/ios/Meeshy/Features/Main/Views/MyStoriesView.swift` (`MyStoryRow`, rangée `metric(...)`)
+- Modify: `apps/ios/Meeshy/Features/Stories/Views/MyStoriesView.swift` (`MyStoryRow`, rangée `metric(...)`)
 - Test: `apps/ios/MeeshyTests/Unit/Views/MyStoriesCommentsButtonTests.swift` (garde de source à étendre)
 
 **Le doublon.** Depuis la Task 8, la ligne affiche le nombre de commentaires **deux fois** :

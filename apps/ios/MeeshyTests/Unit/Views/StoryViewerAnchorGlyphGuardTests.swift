@@ -47,8 +47,8 @@ final class StoryViewerAnchorGlyphGuardTests: XCTestCase {
     /// une garde qui ne compte plus qu'une des deux moitiés serait un VERT
     /// bien pire : elle ne pourrait plus voir la collision qu'elle existe pour
     /// interdire.
-    private static let sidebarFile = "Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift"
-    private static let headerFile = "Meeshy/Features/Main/Views/StoryViewerView+Header.swift"
+    private static let sidebarFile = "Meeshy/Features/Stories/Views/StoryViewerView+Sidebar.swift"
+    private static let headerFile = "Meeshy/Features/Stories/Views/StoryViewerView+Header.swift"
 
     private func source() throws -> String {
         try MyStoriesSourceCorpus.text(of: Self.sidebarFile)

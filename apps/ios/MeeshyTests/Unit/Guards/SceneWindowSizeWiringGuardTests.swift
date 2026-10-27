@@ -39,7 +39,7 @@ final class SceneWindowSizeWiringGuardTests: XCTestCase {
     }
 
     func test_theStoryViewer_readsItsWindow_notTheKeyWindow() throws {
-        let viewer = try source("Meeshy/Features/Main/Views/StoryViewerView.swift")
+        let viewer = try source("Meeshy/Features/Stories/Views/StoryViewerView.swift")
         XCTAssertTrue(viewer.contains("SceneWindowSize.resolve(sceneWindowSize, fallback: DeviceLayout.windowSize)"))
         XCTAssertFalse(viewer.contains("private var windowSize: CGSize { DeviceLayout.windowSize }"))
     }

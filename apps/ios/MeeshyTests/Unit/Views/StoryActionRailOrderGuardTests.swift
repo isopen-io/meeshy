@@ -17,7 +17,7 @@ import XCTest
 /// conserve).
 final class StoryActionRailOrderGuardTests: XCTestCase {
 
-    private static let sidebarPath = "Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift"
+    private static let sidebarPath = "Meeshy/Features/Stories/Views/StoryViewerView+Sidebar.swift"
 
     private func sidebarSource() throws -> String {
         AppSourceGuard.stripComments(try AppSourceGuard.unit(Self.sidebarPath))

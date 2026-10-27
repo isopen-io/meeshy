@@ -80,7 +80,7 @@ flush/reload + non-régression SWR) PUIS Inc.1 (upsertPatch site par site).
 - `packages/MeeshySDK/Sources/MeeshySDK/Cache/GRDBCacheStore.swift` : save:64,
   writeToL2:422 (deleteAll:431), upsert:151, upsertPatch:168, mergeUpdate:190,
   flushDirtyKeys:260, flushKeyToL2:593.
-- `apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift` : persistStoryCache
+- `apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel.swift` : persistStoryCache
   (11 call sites), storiesCacheKey "recent_tray_v2".
 - `packages/MeeshySDK/Sources/MeeshySDK/Cache/CacheCoordinator.swift:235` : store
   `stories` (encrypted: true, R9).

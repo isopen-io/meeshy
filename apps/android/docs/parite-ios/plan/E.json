@@ -588,8 +588,8 @@
   ],
   "ios_reference_files": [
    "packages/MeeshySDK/Sources/MeeshySDK/Services/StoryService.swift",
-   "apps/ios/Meeshy/Features/Main/Services/StoryInteractionService.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryReactionRecovery.swift"
+   "apps/ios/Meeshy/Features/Stories/Services/StoryInteractionService.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryReactionRecovery.swift"
   ],
   "feature_keys": [
    "srp-story-service-rest",
@@ -636,10 +636,10 @@
    "apps/android/feature/stories/src/main/res/values/strings_story_tray.xml"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/StoryTrayView.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryTrayView+RingCell.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryEntryMetrics.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryCoverURLMemo.swift"
+   "apps/ios/Meeshy/Features/Stories/Views/StoryTrayView.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryTrayView+RingCell.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryEntryMetrics.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryCoverURLMemo.swift"
   ],
   "feature_keys": [
    "srp-tray-rings"
@@ -693,10 +693,10 @@
    "apps/android/app/src/main/kotlin/me/meeshy/app/navigation/MeeshyApp.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryViewerContentView.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift"
+   "apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryViewerContentView.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Content.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Canvas.swift"
   ],
   "feature_keys": [
    "srp-viewer-shell-appearance",
@@ -875,9 +875,9 @@
    "apps/android/feature/stories/src/main/res/values/strings_story_rail.xml"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryViewerView+ActionButton.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryViewerParticipation.swift"
+   "apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Sidebar.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+ActionButton.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryViewerParticipation.swift"
   ],
   "feature_keys": [
    "srp-action-rail"
@@ -924,9 +924,9 @@
    "apps/android/feature/stories/src/main/kotlin/me/meeshy/app/stories/StorySessionInterruption.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/StoryViewerView+PlaybackHold.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StorySessionInterruption.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryPlaybackStallIndicator.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+PlaybackHold.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StorySessionInterruption.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryPlaybackStallIndicator.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryReaderTimerController.swift"
   ],
   "feature_keys": [
@@ -976,7 +976,7 @@
    "packages/MeeshySDK/Sources/MeeshySDK/Models/StoryTextLanguageAvailability.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Models/StoryPrismeMatch.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Models/StoryDerivedContent.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryReaderContentRules.swift"
+   "apps/ios/Meeshy/Features/Stories/Views/StoryReaderContentRules.swift"
   ],
   "feature_keys": [
    "srp-reader-prism-chain",
@@ -1036,11 +1036,11 @@
    "apps/android/app/src/main/AndroidManifest.xml"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/StoryViewerContainer.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryViewerScope.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryViewerPosition.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryPlaybackSkipResolver.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryPostRoomLedger.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryViewerContainer.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryViewerScope.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryViewerPosition.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryPlaybackSkipResolver.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryPostRoomLedger.swift",
    "apps/ios/Meeshy/Features/Stories/Notifications/StoryNotificationIntent.swift"
   ],
   "feature_keys": [
@@ -1258,11 +1258,11 @@
    "apps/android/feature/stories/src/main/res/values/strings_story_sentinel.xml"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryReaderCanvasLayout.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryReaderBackground.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryViewerView+CanvasScrims.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StorySentinelView.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Canvas.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryReaderCanvasLayout.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryReaderBackground.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+CanvasScrims.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StorySentinelView.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Story/StoryReaderLoadingOverlay.swift"
   ],
   "feature_keys": [
@@ -1307,10 +1307,10 @@
    "apps/android/feature/stories/src/main/kotlin/me/meeshy/app/stories/StoryViewerScreen.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/StoryGestureDecisions.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryGestureOverlayView.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Navigation.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryReaderSurfaceRules.swift"
+   "apps/ios/Meeshy/Features/Stories/Views/StoryGestureDecisions.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryGestureOverlayView.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Navigation.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryReaderSurfaceRules.swift"
   ],
   "feature_keys": [
    "srp-tap-zones-pause-gestures"
@@ -1355,10 +1355,10 @@
    "apps/android/feature/stories/src/main/res/values/strings_story_header.xml"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Header.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryViewerSheets.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryPrivatization.swift"
+   "apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Header.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Sidebar.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryViewerSheets.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryPrivatization.swift"
   ],
   "feature_keys": [
    "srp-header-identity-options-menu"
@@ -1402,8 +1402,8 @@
    "apps/android/feature/stories/src/main/res/values/strings_story_my_story.xml"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/StoryTrayActions.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryTrayView.swift"
+   "apps/ios/Meeshy/Features/Stories/Views/StoryTrayActions.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryTrayView.swift"
   ],
   "feature_keys": [
    "srp-tray-my-story-actions"
@@ -1444,9 +1444,9 @@
    "apps/android/feature/stories/src/main/kotlin/me/meeshy/app/stories/StoryViewerViewModel.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/StoryViewerCardTransform.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Lifecycle.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift"
+   "apps/ios/Meeshy/Features/Stories/Views/StoryViewerCardTransform.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Lifecycle.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift"
   ],
   "feature_keys": [
    "srp-viewer-shell-appearance"
@@ -1633,10 +1633,10 @@
    "apps/android/feature/stories/src/main/kotlin/me/meeshy/app/stories/StorySwipeResolver.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/StoryVerticalGestureDecisions.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryReaderDragOwnership.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content+Gestures.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryViewerView+ReaderState.swift"
+   "apps/ios/Meeshy/Features/Stories/Views/StoryVerticalGestureDecisions.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryReaderDragOwnership.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Content+Gestures.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+ReaderState.swift"
   ],
   "feature_keys": [
    "srp-drag-dismiss-fullscreen"
@@ -1701,9 +1701,9 @@
    "apps/android/feature/stories/src/test/kotlin/me/meeshy/app/stories/StoryTrayViewedStateTest.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel+Viewing.swift",
-   "apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModelRules.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryViewerEngagement.swift",
+   "apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel+Viewing.swift",
+   "apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModelRules.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryViewerEngagement.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Cache/StoryViewedLedger.swift"
   ],
   "feature_keys": [
@@ -2796,10 +2796,10 @@
    "apps/android/feature/stories/src/main/kotlin/me/meeshy/app/stories/StoryDraftMediaReconciler.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel+PublicationUpload.swift",
+   "apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel+PublicationUpload.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Services/StoryStickerUpload.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Services/StoryMediaAltMapping.swift",
-   "apps/ios/Meeshy/Features/Main/Services/StoryVideoUploadFile.swift"
+   "apps/ios/Meeshy/Features/Stories/Services/StoryVideoUploadFile.swift"
   ],
   "feature_keys": [
    "srp-publish-upload-media",
@@ -2859,7 +2859,7 @@
   "ios_reference_files": [
    "apps/ios/Meeshy/Features/Main/Services/MoodSpotlight/MoodReplySender.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Models/StoryReplyAdmission.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryViewerRequestOrigin.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryViewerRequestOrigin.swift",
    "apps/ios/Meeshy/Features/Navigation/Router+StoryReply.swift"
   ],
   "feature_keys": [
@@ -3148,10 +3148,10 @@
    "apps/android/feature/stories/src/main/kotlin/me/meeshy/app/stories/StoryCommentChase.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/StoryCommentThread.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryCommentsOverlayView.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content+Comments.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryViewerView+CommentMenu.swift"
+   "apps/ios/Meeshy/Features/Stories/Views/StoryCommentThread.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryCommentsOverlayView.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Content+Comments.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+CommentMenu.swift"
   ],
   "feature_keys": [
    "srp-comments-overlay-threads",
@@ -3199,9 +3199,9 @@
    "apps/android/feature/stories/src/main/res/values/strings_story_language.xml"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/StoryLanguageQuickBar.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryLanguageDetailView.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryReaderContentRules.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryLanguageQuickBar.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryLanguageDetailView.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryReaderContentRules.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Models/StoryTextLanguageAvailability.swift"
   ],
   "feature_keys": [
@@ -3302,8 +3302,8 @@
   ],
   "ios_reference_files": [
    "packages/MeeshySDK/Sources/MeeshySDK/Models/Story/StorySlidePublishMatter.swift",
-   "apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModelRules.swift",
-   "apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel+PublicationUpload.swift"
+   "apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModelRules.swift",
+   "apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel+PublicationUpload.swift"
   ],
   "feature_keys": [
    "srp-publish-format-extras"
@@ -3348,7 +3348,7 @@
    "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/viewer/MeeshyImageViewer.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/StoryRepostEmbedCell.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryRepostEmbedCell.swift",
    "apps/ios/Meeshy/Features/Main/Views/SceneZoomTransition.swift",
    "apps/ios/Meeshy/Features/Main/Views/FeedSceneAutoplay.swift",
    "apps/ios/Meeshy/Features/Main/Views/FeedPostCard.swift"
@@ -3491,11 +3491,11 @@
    "packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryStaticSnapshot.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryCoverCacheKey.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryRenderingContext+Bitmap.swift",
-   "apps/ios/Meeshy/Features/Main/Views/MyStoryThumbnailResolver.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/MyStoryThumbnailResolver.swift",
    "apps/ios/Meeshy/Features/Main/Views/PendingBannerDismissResolver.swift",
-   "apps/ios/Meeshy/Features/Main/ViewModels/StoryCoverRenderSignal.swift",
-   "apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel+MediaPreload.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryCoverURLMemo.swift"
+   "apps/ios/Meeshy/Features/Stories/ViewModels/StoryCoverRenderSignal.swift",
+   "apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel+MediaPreload.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryCoverURLMemo.swift"
   ],
   "feature_keys": [
    "scc-static-cover-snapshot",
@@ -3652,9 +3652,9 @@
   ],
   "ios_reference_files": [
    "packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/Layers/StoryLocationLayer.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryLocationReaderTapOverlay.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryLocationReaderTapOverlay.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryRenderer+AnimatedStickers.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Canvas+Layers.swift"
+   "apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Canvas+Layers.swift"
   ],
   "feature_keys": [
    "scc-location-pill",
@@ -3729,7 +3729,7 @@
   ],
   "ios_reference_files": [
    "apps/ios/Meeshy/Features/Composer/MeeshyComposerHost+Draft.swift",
-   "apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel+PublishIntent.swift",
+   "apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel+PublishIntent.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Persistence/StoryPublishQueue.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Persistence/StoryOfflineQueue.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Persistence/StoryPublishRetryPolicy.swift",
@@ -4012,7 +4012,7 @@
   ],
   "ios_reference_files": [
    "apps/ios/Meeshy/Features/Main/Views/SceneCaption.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryViewerView+CanvasCaption.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+CanvasCaption.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Models/StoryAudioTranscript.swift"
   ],
   "feature_keys": [
@@ -4062,11 +4062,11 @@
    "apps/android/feature/stories/src/main/res/values/strings_story_comments_overlay.xml"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/StoryCommentsOverlayView.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryCommentRowView.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryCommentsZone.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryCommentsOverlayHost.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryViewerView+CommentMenu.swift"
+   "apps/ios/Meeshy/Features/Stories/Views/StoryCommentsOverlayView.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryCommentRowView.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryCommentsZone.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryCommentsOverlayHost.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+CommentMenu.swift"
   ],
   "feature_keys": [
    "srp-comments-overlay-threads",
@@ -4116,9 +4116,9 @@
    "apps/android/feature/stories/src/main/res/values/strings_story_repost.xml"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryExportShareSheet.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryViewerSheets.swift"
+   "apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Sidebar.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryExportShareSheet.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryViewerSheets.swift"
   ],
   "feature_keys": [
    "srp-direct-repost",
@@ -4563,9 +4563,9 @@
    "packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryReaderTimerController.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryCanvasUIView+ReaderScrub.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/Layers/StoryBackgroundLayer+ReaderScrub.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryProgressBarsView.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryLiveProgressBars.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryPlaybackProgressClock.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryProgressBarsView.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryLiveProgressBars.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryPlaybackProgressClock.swift",
    "apps/ios/Meeshy/Features/Main/Views/SceneScrubTrack.swift"
   ],
   "feature_keys": [
@@ -4939,9 +4939,9 @@
    "apps/android/feature/stories/src/main/res/values/strings_story_comment_composer.xml"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/StoryViewerView+CanvasComposerBar.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryDraft.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryViewerView+RefusedComment.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+CanvasComposerBar.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryDraft.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+RefusedComment.swift",
    "apps/ios/Meeshy/Features/Main/Components/UniversalComposerBar.swift"
   ],
   "feature_keys": [
@@ -4992,11 +4992,11 @@
    "apps/android/feature/stories/src/main/res/values/strings_story_publish_feedback.xml"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel+UploadState.swift",
-   "apps/ios/Meeshy/Features/Main/ViewModels/StoryUploadProgressStore.swift",
-   "apps/ios/Meeshy/Features/Main/Services/StoryPublishService.swift",
-   "apps/ios/Meeshy/Features/Main/ViewModels/StoryOfflineMediaWriter.swift",
-   "apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel+PublishCopy.swift"
+   "apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel+UploadState.swift",
+   "apps/ios/Meeshy/Features/Stories/ViewModels/StoryUploadProgressStore.swift",
+   "apps/ios/Meeshy/Features/Stories/Services/StoryPublishService.swift",
+   "apps/ios/Meeshy/Features/Stories/ViewModels/StoryOfflineMediaWriter.swift",
+   "apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel+PublishCopy.swift"
   ],
   "feature_keys": [
    "srp-publish-upload-queue",
@@ -5045,10 +5045,10 @@
    "apps/android/feature/stories/src/main/res/values/strings_story_reaction.xml"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/StoryReactionRecovery.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content+Reactions.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryReactionFlightView.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryScrubSelectionResolver.swift"
+   "apps/ios/Meeshy/Features/Stories/Views/StoryReactionRecovery.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Content+Reactions.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryReactionFlightView.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryScrubSelectionResolver.swift"
   ],
   "feature_keys": [
    "srp-reactions-strip-flight"
@@ -5190,8 +5190,8 @@
   ],
   "ios_reference_files": [
    "packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryRenderer+RootTransitions.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryOpeningEntrance.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift"
+   "apps/ios/Meeshy/Features/Stories/Views/StoryOpeningEntrance.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Content.swift"
   ],
   "feature_keys": [
    "scc-slide-opening-closing-transitions",
@@ -6132,9 +6132,9 @@
    "apps/android/feature/stories/src/main/res/values/strings_story_a11y.xml"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/StoryCanvasAccessibility.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryProgressBarsView.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Navigation.swift"
+   "apps/ios/Meeshy/Features/Stories/Views/StoryCanvasAccessibility.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryProgressBarsView.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Navigation.swift"
   ],
   "feature_keys": [
    "srp-a11y-voiceover"
@@ -6178,9 +6178,9 @@
    "apps/android/feature/stories/src/main/res/values/strings_story_comment_attachments.xml"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/StoryViewerView+CanvasComposerBar.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryDraft.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryViewerView+RefusedComment.swift"
+   "apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+CanvasComposerBar.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryDraft.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+RefusedComment.swift"
   ],
   "feature_keys": [
    "srp-comment-composer-bar"
@@ -6223,9 +6223,9 @@
    "apps/android/feature/stories/src/main/res/values/strings_story_composer_fold.xml"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/StoryComposerFold.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryComposingFocus.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryViewerView+CanvasComposerLayer.swift"
+   "apps/ios/Meeshy/Features/Stories/Views/StoryComposerFold.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryComposingFocus.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+CanvasComposerLayer.swift"
   ],
   "feature_keys": [
    "srp-composer-fold-silence"
@@ -6273,11 +6273,11 @@
    "apps/android/feature/stories/src/main/res/values/strings_story_group_intro.xml"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/StoryGroupIntroOverlay.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryGroupIntroPolicy.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryAuthorIdentityCard.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryViewerView+GroupIntro.swift",
-   "apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModelRules.swift"
+   "apps/ios/Meeshy/Features/Stories/Views/StoryGroupIntroOverlay.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryGroupIntroPolicy.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryAuthorIdentityCard.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+GroupIntro.swift",
+   "apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModelRules.swift"
   ],
   "feature_keys": [
    "srp-group-intro-interlude",
@@ -6327,9 +6327,9 @@
    "apps/android/feature/stories/src/main/kotlin/me/meeshy/app/stories/StoryTrayReducer.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift",
-   "apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel+TrayRules.swift",
-   "apps/ios/Meeshy/Features/Main/ViewModels/StoryTrayProjection.swift",
+   "apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel.swift",
+   "apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel+TrayRules.swift",
+   "apps/ios/Meeshy/Features/Stories/ViewModels/StoryTrayProjection.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Models/StoryTrayPurge.swift"
   ],
   "feature_keys": [
@@ -6373,9 +6373,9 @@
    "apps/android/feature/stories/src/main/res/values/strings_story_upload.xml"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/StoryUploadPresentation.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryTrayView.swift",
-   "apps/ios/Meeshy/Features/Main/ViewModels/StoryUploadProgressStore.swift"
+   "apps/ios/Meeshy/Features/Stories/Views/StoryUploadPresentation.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryTrayView.swift",
+   "apps/ios/Meeshy/Features/Stories/ViewModels/StoryUploadProgressStore.swift"
   ],
   "feature_keys": [
    "srp-tray-upload-ring"
@@ -6566,15 +6566,15 @@
   "ios_reference_files": [
    "packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryExporter.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Story/StoryComposerViewModel+Export.swift",
-   "apps/ios/Meeshy/Features/Main/Services/StoryVideoExportService.swift",
-   "apps/ios/Meeshy/Features/Main/Services/StoryExportDressing.swift",
-   "apps/ios/Meeshy/Features/Main/Services/StoryExportPreflight.swift",
+   "apps/ios/Meeshy/Features/Stories/Services/StoryVideoExportService.swift",
+   "apps/ios/Meeshy/Features/Stories/Services/StoryExportDressing.swift",
+   "apps/ios/Meeshy/Features/Stories/Services/StoryExportPreflight.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Models/StorySlide+ExportTrigger.swift",
-   "apps/ios/Meeshy/Features/Main/Services/StoryPhotoSaveService.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StorySaveProgressRing.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryExportShareSheet.swift",
-   "apps/ios/Meeshy/Features/Main/ViewModels/StoryExportShareViewModel.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryViewerSheetItems.swift"
+   "apps/ios/Meeshy/Features/Stories/Services/StoryPhotoSaveService.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StorySaveProgressRing.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryExportShareSheet.swift",
+   "apps/ios/Meeshy/Features/Stories/ViewModels/StoryExportShareViewModel.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryViewerSheetItems.swift"
   ],
   "feature_keys": [
    "scc-export-mp4-pipeline",
@@ -6830,8 +6830,8 @@
   "ios_reference_files": [
    "apps/ios/Meeshy/Features/Composer/StoryEditComposer.swift",
    "apps/ios/Meeshy/Features/Composer/PostEditRoute.swift",
-   "apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel+PublicationUpload.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryTrayActions.swift",
+   "apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel+PublicationUpload.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryTrayActions.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Models/StorySlide+Preview.swift",
    "apps/ios/Meeshy/Features/Main/Components/EditPostSheet.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Services/PostEditPayload.swift"
@@ -7022,7 +7022,7 @@
   ],
   "ios_reference_files": [
    "apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Prefetch.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryViewerView+PrefetchPipeline.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+PrefetchPipeline.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryReaderPrefetcher.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Story/StoryReaderLoadingOverlay.swift",
    "packages/MeeshySDK/Sources/MeeshyUI/Story/StoryNeighborWindow.swift"
@@ -7072,7 +7072,7 @@
    "apps/android/feature/stories/src/main/kotlin/me/meeshy/app/stories/StoriesViewModel.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel+MediaPreload.swift",
+   "apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel+MediaPreload.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Models/StoryMediaStoreRouter.swift",
    "apps/ios/Meeshy/Features/Main/ViewModels/ConversationListViewModel+StoryPrefetch.swift"
   ],
@@ -7348,9 +7348,9 @@
    "apps/android/feature/stories/src/main/res/values/strings_story_sound.xml"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Canvas+Layers.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryVideoAudioProbe.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryPostMediaResolver.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Canvas+Layers.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryVideoAudioProbe.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryPostMediaResolver.swift",
    "packages/MeeshySDK/Sources/MeeshySDK/Models/StoryAudioAvailability.swift"
   ],
   "feature_keys": [
@@ -7395,9 +7395,9 @@
    "apps/android/feature/stories/src/main/kotlin/me/meeshy/app/stories/StoryDragLayer.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/StoryViewerView+CubeFace.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryViewerCardTransform.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryAuthorIdentityCard.swift"
+   "apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+CubeFace.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryViewerCardTransform.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryAuthorIdentityCard.swift"
   ],
   "feature_keys": [
    "srp-group-cube-transition"
@@ -7642,8 +7642,8 @@
    "apps/android/app/src/main/kotlin/me/meeshy/app/navigation/MeeshyApp.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Views/StoryTrayView.swift",
-   "apps/ios/Meeshy/Features/Main/Views/StoryEntryMetrics.swift"
+   "apps/ios/Meeshy/Features/Stories/Views/StoryTrayView.swift",
+   "apps/ios/Meeshy/Features/Stories/Views/StoryEntryMetrics.swift"
   ],
   "feature_keys": [
    "srp-tray-pinned-band"

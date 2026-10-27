@@ -16,8 +16,8 @@ import XCTest
 /// existe, et rien ne se voit.
 final class StoryViewerToastHostGuardTests: XCTestCase {
 
-    private static let containerPath = "Meeshy/Features/Main/Views/StoryViewerContainer.swift"
-    private static let viewerPath = "Meeshy/Features/Main/Views/StoryViewerView.swift"
+    private static let containerPath = "Meeshy/Features/Stories/Views/StoryViewerContainer.swift"
+    private static let viewerPath = "Meeshy/Features/Stories/Views/StoryViewerView.swift"
 
     func test_leConteneurMonteLHoteDesRetours() throws {
         let source = AppSourceGuard.stripComments(try AppSourceGuard.unit(Self.containerPath))

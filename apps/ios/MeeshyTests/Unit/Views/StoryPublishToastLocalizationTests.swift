@@ -49,7 +49,7 @@ final class StoryPublishToastLocalizationTests: XCTestCase {
     }
 
     func test_storyPublishToastKeys_useFrenchDefaultValues() throws {
-        let source = try Self.strippedSource(of: "Features/Main/ViewModels/StoryViewModel.swift")
+        let source = try Self.strippedSource(of: "Features/Stories/ViewModels/StoryViewModel.swift")
         XCTAssertGreaterThan(
             source.count, 400,
             "Source (unité) de StoryViewModel introuvable ou vide — cette garde ne mesurerait rien."

@@ -38,7 +38,7 @@ final class SkeletonColdStartGuardTests: XCTestCase {
         // `ConversationView` monte `ConversationMessageSkeleton` (cohésion) : c'est lui qui empile les bulles.
         ("Features/Main/Views/ConversationView+Skeleton.swift", "SkeletonMessageBubble"),
         ("Features/Main/Views/FeedView.swift",             "SkeletonFeedList"),
-        ("Features/Main/Views/StoryTrayView.swift",        "SkeletonStoryTrayRow"),
+        ("Features/Stories/Views/StoryTrayView.swift",        "SkeletonStoryTrayRow"),
         ("Features/Profile/Views/ProfileView.swift",          "SkeletonProfileHeader"),
     ]
 

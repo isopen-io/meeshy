@@ -90,21 +90,21 @@ _FeedPostCard/FeedViewModel/FeedModels/FeedView/PostDetailViewModel/FeedComments
 ## LANE: Stories — interactions, modèle & publication
 _Viewer, VM, modèles et service d'interaction stories : fichiers Story* exclusifs à cette lane. StatusEntry.timeAgo s'y greffe (même fichier StoryModels.swift que le merge lossy)._
 - [P1] Réaction story : changement d'emoji = 409 REACTION_LIMIT_REACHED jamais géré (catch avaleur) — UI optimiste garde l'emoji refusé et gonfle le compteur sans rollback. Remonter un Result + snapshot/rollback.
-  fichiers: apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift, apps/ios/Meeshy/Features/Main/Services/StoryInteractionService.swift (area stories)
+  fichiers: apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift, apps/ios/Meeshy/Features/Stories/Services/StoryInteractionService.swift (area stories)
 - [P1] Commentaires/réactions story en fire-and-forget sans OfflineQueue ni rollback (offline : succès affiché puis perte silencieuse) + échec d'upload du média de commentaire avalé par try? (commentaire publié sans média). Router par OfflineQueue + do/catch avec rollback du temp_.
-  fichiers: apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift (area stories)
+  fichiers: apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Content.swift (area stories)
 - [P2] mergingTextObjectTranslations reconstruit StoryItem en droppant viewedAt/updatedAt/impressionCount — perte persistée en cache à chaque story:translation-updated, régresse le curseur delta R8. Passer les 3 champs + test round-trip complet.
   fichiers: packages/MeeshySDK/Sources/MeeshySDK/Models/StoryModels.swift (area stories)
 - [P2] StatusEntry.timeAgo re-forge un temps relatif français non localisé et timeRemaining retourne 'expired' anglais en dur — utiliser RelativeTimeFormatter (même module, déjà utilisé par StoryItem).
   fichiers: packages/MeeshySDK/Sources/MeeshySDK/Models/StoryModels.swift (area sdk-purity)
 - [P2] Publish : un média foreground sans asset chargé est silencieusement sauté (ni log ni garde) → calque invisible chez tous les viewers. Symétriser avec la branche audio (log + throw/retrait de l'objet).
-  fichiers: apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift (area stories)
+  fichiers: apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel.swift (area stories)
 - [P2] Realtime asymétrique : reactionCount se re-dérive mid-slide mais pas commentCount, et l'overlay ouvert ne reçoit jamais les commentaires socket. Ajouter l'adaptiveOnChange miroir + onReceive(commentAdded).
-  fichiers: apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift, apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift (area stories)
+  fichiers: apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift, apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel.swift (area stories)
 - [P2] Notification story tapée hors-ligne → écran 'story expirée' pour une simple erreur réseau. Discriminer 404 vs erreur réseau (état offline + retry).
   fichiers: apps/ios/Meeshy/Features/Stories/Notifications/StoryNotificationTargetViewModel.swift (area stories)
 - [P3] Trois pipelines de publication morts et piégés : cover repost-composer (repostOfId perdu, slideImages mal keyés), publishStory/publishStorySingle (bypassent E5, nullifieraient les médias), handlePublishTap/StubOnlinePublisher/StoryVisibility divergent du gateway. Supprimer ou aligner.
-  fichiers: apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift, apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift, packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/ViewModel/TimelineViewModel+OfflinePublish.swift (area stories)
+  fichiers: apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift, apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel.swift, packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/ViewModel/TimelineViewModel+OfflinePublish.swift (area stories)
 
 ## LANE: Réels & moteur vidéo partagé
 _SharedAVPlayerManager + ses surfaces (ReelFeedVideoSurface, ReelsPlayerView, ConversationMediaGalleryView, ReelsViewModel) partagent l'état global player/session/mute : impossible de les séparer sans conflit. L'élection autoplay (FeedView) est en lane Feed._

@@ -298,7 +298,7 @@ final class VitrineReelTests: XCTestCase {
         XCTAssertTrue(envoi.contains("#else\n            let uploader = TusUploadManager(baseURL: baseURL)\n            #endif"))
         XCTAssertTrue(envoi.contains("try await VitrineReel.creerSiInstallee(body, televerses:"))
         XCTAssertTrue(envoi.contains("let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.requestWithHeaders("))
-        let story = try source("apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel+PublicationUpload.swift")
+        let story = try source("apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel+PublicationUpload.swift")
         XCTAssertFalse(story.contains("Vitrine"), "le réel ne passe pas par le canal de la scène : aucun crochet n'y vit")
     }
 

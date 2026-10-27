@@ -195,8 +195,8 @@ structure interne (memory, fluidité) sans changer la perception utilisateur.
 
 - Fix A surgical : commit forthcoming 2026-05-28 sur main
   - `packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryReaderRepresentable.swift` (isOutgoing param)
-  - `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift` (call-site isOutgoing: true)
-  - `apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift` (suppression p.activate)
+  - `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Canvas.swift` (call-site isOutgoing: true)
+  - `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift` (suppression p.activate)
   - `packages/MeeshySDK/Tests/MeeshyUITests/Story/Reader/StoryReaderRepresentableOutgoingTests.swift` (tests)
 - Architecture actuelle : `packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryReaderPrefetcher.swift`
 - Sources de double-lecture identifiées : conversation 2026-05-28 user @jcnm

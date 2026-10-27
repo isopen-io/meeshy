@@ -719,7 +719,7 @@ peint dedans (`SceneCard`) et autour (`SceneFloorView`) — directive porteur du
 > qui doit être mis sur tous l'écran à partir du bas de l'écran. »
 
 Le composant est celui du lecteur de stories, **réutilisé tel quel** (#6701,
-`apps/ios/Meeshy/Features/Main/Views/StoryViewerView+CanvasScrims.swift`) : deux
+`apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+CanvasScrims.swift`) : deux
 dégradés noirs **pleine largeur d'écran**, ancrés au haut et au **bas de
 l'ÉCRAN**, sourds au doigt, muets pour VoiceOver, et qui **suivent le chrome**
 (opacité 1 avec lui, 0 sans lui, au même ressort). Son nom garde « StoryReader »

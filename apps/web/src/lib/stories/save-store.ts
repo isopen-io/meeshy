@@ -3,7 +3,7 @@ import { percent } from './save-progress';
 /**
  * **LE JOB D'EXPORT D'UNE STORY, HORS DE REACT** (#7116) — miroir du
  * singleton `StoryPhotoSaveService` (`jobs: [storyId: Double]`,
- * `generations`, `apps/ios/Meeshy/Features/Main/Services/StoryPhotoSaveService.swift:36-366`) :
+ * `generations`, `apps/ios/Meeshy/Features/Stories/Services/StoryPhotoSaveService.swift:36-366`) :
  * « l'anneau doit survivre à la fermeture de la sheet et à la navigation,
  * donc l'état vit ici », jamais dans le `useState` d'un écran qui se démonte.
  *

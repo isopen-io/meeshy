@@ -82,13 +82,13 @@ final class SceneCardUnicityTests: XCTestCase {
     /// de valeurs ne peut faire.
     func test_leFondEtLeRayon_sontDeleguesALaSource_pasElisLocalement() throws {
         let lecteur = AppSourceGuard.stripComments(
-            try AppSourceGuard.unit("Meeshy/Features/Main/Views/StoryViewerView+ReaderCard.swift"))
+            try AppSourceGuard.unit("Meeshy/Features/Stories/Views/StoryViewerView+ReaderCard.swift"))
         XCTAssertTrue(lecteur.contains("readerSceneBackdrop") && lecteur.contains("SceneShape.cardedBackdrop"),
                       "le lecteur délègue son fond à la loi, jamais un littéral")
 
         let canvas = AppSourceGuard.stripComments(
-            try AppSourceGuard.unit("Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift",
-                                    alsoIncluding: ["Meeshy/Features/Main/Views/StoryReaderCanvasLayout.swift"]))
+            try AppSourceGuard.unit("Meeshy/Features/Stories/Views/StoryViewerView+Canvas.swift",
+                                    alsoIncluding: ["Meeshy/Features/Stories/Views/StoryReaderCanvasLayout.swift"]))
         XCTAssertTrue(canvas.contains("cardedCornerRadius: SceneShape.cardedCornerRadius"),
                       "le lecteur anime SON cadrage depuis le rayon de la loi, jamais un littéral")
 
@@ -187,8 +187,8 @@ final class SceneCardUnicityTests: XCTestCase {
     }
 
     private static let hotesPleinEcran: [(fichier: String, montage: String)] = [
-        ("Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift", ".readerCard(layout:"),
-        ("Meeshy/Features/Main/Views/StoryViewerView+ReaderCard.swift", "SceneCard(layout:"),
+        ("Meeshy/Features/Stories/Views/StoryViewerView+Canvas.swift", ".readerCard(layout:"),
+        ("Meeshy/Features/Stories/Views/StoryViewerView+ReaderCard.swift", "SceneCard(layout:"),
         ("Meeshy/Features/Main/Views/ConversationMediaGalleryView+ScenePage.swift", "SceneCard(layout:"),
     ]
 
@@ -207,7 +207,7 @@ final class SceneCardUnicityTests: XCTestCase {
         try AppSourceGuard.unit(
             relatif,
             alsoIncluding: relatif.hasSuffix("StoryViewerView+Canvas.swift")
-                ? ["Meeshy/Features/Main/Views/StoryReaderCanvasLayout.swift"] : [])
+                ? ["Meeshy/Features/Stories/Views/StoryReaderCanvasLayout.swift"] : [])
     }
 
     private static var corridors: MediaStageFraming.Corridors {

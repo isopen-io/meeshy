@@ -93,7 +93,7 @@ final class StoryOpeningParityTests: XCTestCase {
         URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Views/StoryViewerView+Content.swift")
+            .appendingPathComponent("Meeshy/Features/Stories/Views/StoryViewerView+Content.swift")
             .path
     }
 
@@ -101,7 +101,7 @@ final class StoryOpeningParityTests: XCTestCase {
         URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Views/StoryOpeningEntrance.swift")
+            .appendingPathComponent("Meeshy/Features/Stories/Views/StoryOpeningEntrance.swift")
             .path
     }
 

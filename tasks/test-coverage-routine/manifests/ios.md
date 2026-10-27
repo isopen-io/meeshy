@@ -104,7 +104,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `apps/ios/Meeshy/Features/Main/Models/MessageModels.swift`
 - [ ] `apps/ios/Meeshy/Features/Main/Models/Models.swift`
 - [ ] `apps/ios/Meeshy/Features/Main/Models/PostModels.swift`
-- [ ] `apps/ios/Meeshy/Features/Main/Models/StoryModels.swift`
+- [ ] `apps/ios/Meeshy/Features/Stories/Models/StoryModels.swift`
 
 ## Features/Main/Navigation  (1/3 have a test)
 
@@ -163,9 +163,9 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `apps/ios/Meeshy/Features/Main/Services/Sleeping.swift`
 - [~] `apps/ios/Meeshy/Features/Main/Services/StarredMessagesStore.swift`
 - [~] `apps/ios/Meeshy/Features/Main/Services/StatusBubbleController.swift`
-- [~] `apps/ios/Meeshy/Features/Main/Services/StoryInteractionService.swift`
-- [~] `apps/ios/Meeshy/Features/Main/Services/StoryPublishService.swift`
-- [~] `apps/ios/Meeshy/Features/Main/Services/StoryVideoExportService.swift`
+- [~] `apps/ios/Meeshy/Features/Stories/Services/StoryInteractionService.swift`
+- [~] `apps/ios/Meeshy/Features/Stories/Services/StoryPublishService.swift`
+- [~] `apps/ios/Meeshy/Features/Stories/Services/StoryVideoExportService.swift`
 - [~] `apps/ios/Meeshy/Features/Main/Services/TaskTimeout.swift`
 - [~] `apps/ios/Meeshy/Features/Main/Services/ThermalStateMonitor.swift`
 - [~] `apps/ios/Meeshy/Features/Main/Services/ThreadRepliesLoader.swift`
@@ -213,8 +213,8 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [~] `apps/ios/Meeshy/Features/Main/ViewModels/ReelsViewModel.swift`
 - [~] `apps/ios/Meeshy/Features/Main/ViewModels/SharePickerViewModel.swift`
 - [~] `apps/ios/Meeshy/Features/Main/ViewModels/StatusViewModel.swift`
-- [~] `apps/ios/Meeshy/Features/Main/ViewModels/StoryExportShareViewModel.swift`
-- [~] `apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift`
+- [~] `apps/ios/Meeshy/Features/Stories/ViewModels/StoryExportShareViewModel.swift`
+- [~] `apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel.swift`
 - [ ] `apps/ios/Meeshy/Features/Main/ViewModels/SyncPillViewModel.swift`
 - [~] `apps/ios/Meeshy/Features/Settings/ViewModels/TwoFactorViewModel.swift`
 - [~] `apps/ios/Meeshy/Features/Profile/ViewModels/UserProfileViewModel.swift`
@@ -354,14 +354,14 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `apps/ios/Meeshy/Features/Profile/Views/StatsTimelineChart.swift`
 - [ ] `apps/ios/Meeshy/Features/Main/Views/StatusBarView.swift`
 - [ ] `apps/ios/Meeshy/Features/Main/Views/StatusComposerView.swift`
-- [ ] `apps/ios/Meeshy/Features/Main/Views/StoryExportShareSheet.swift`
-- [ ] `apps/ios/Meeshy/Features/Main/Views/StoryRepostEmbedCell.swift`
-- [ ] `apps/ios/Meeshy/Features/Main/Views/StoryTrayView.swift`
-- [ ] `apps/ios/Meeshy/Features/Main/Views/StoryViewerContainer.swift`
-- [ ] `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift`
-- [ ] `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift`
-- [ ] `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift`
-- [ ] `apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift`
+- [ ] `apps/ios/Meeshy/Features/Stories/Views/StoryExportShareSheet.swift`
+- [ ] `apps/ios/Meeshy/Features/Stories/Views/StoryRepostEmbedCell.swift`
+- [ ] `apps/ios/Meeshy/Features/Stories/Views/StoryTrayView.swift`
+- [ ] `apps/ios/Meeshy/Features/Stories/Views/StoryViewerContainer.swift`
+- [ ] `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Canvas.swift`
+- [ ] `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Content.swift`
+- [ ] `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Sidebar.swift`
+- [ ] `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift`
 - [ ] `apps/ios/Meeshy/Features/Settings/Views/SupportView.swift`
 - [ ] `apps/ios/Meeshy/Features/Settings/Views/TermsOfServiceView.swift`
 - [ ] `apps/ios/Meeshy/Features/Main/Views/ThemedConversationRow.swift`

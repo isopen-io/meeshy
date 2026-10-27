@@ -36,7 +36,7 @@ Expected: BUILD SUCCEEDED (attention : exit 1 possible sur build sans warning �
 ### Task 1 : Helper unique `storyRingState(forUserId:)`
 
 **Files:**
-- Modify: `apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift` (section `// MARK: - Lookup Methods`, après `hasUnviewedStories`, ~ligne 445)
+- Modify: `apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel.swift` (section `// MARK: - Lookup Methods`, après `hasUnviewedStories`, ~ligne 445)
 - Test: `apps/ios/MeeshyTests/Unit/ViewModels/StoryViewModelTests.swift` (fichier existant — réutiliser ses factories de `StoryGroup`/`StoryItem`)
 
 - [ ] **Step 1.1 : Écrire les tests qui échouent**
@@ -166,7 +166,7 @@ git add -A && git commit -m "feat(ios): StoryViewerRequest.singleGroup + startAt
 ### Task 3 : `MyStoryButton` routé via `StoryViewerCoordinator`
 
 **Files:**
-- Modify: `apps/ios/Meeshy/Features/Main/Views/StoryTrayView.swift:119-129` (state `showOwnStoryViewer` + son fullScreenCover, cover réel ~lignes 604-614)
+- Modify: `apps/ios/Meeshy/Features/Stories/Views/StoryTrayView.swift:119-129` (state `showOwnStoryViewer` + son fullScreenCover, cover réel ~lignes 604-614)
 
 - [ ] **Step 3.1 : Remplacer le chemin local par le coordinator**
 

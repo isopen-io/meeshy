@@ -15,7 +15,7 @@ final class MyStoriesFailedItemsGuardTests: XCTestCase {
     }
 
     func test_discardFailedItem_alsoClearsOptimisticPlaceholder() throws {
-        let viewSource = try source("Meeshy/Features/Main/Views/MyStoriesView.swift")
+        let viewSource = try source("Meeshy/Features/Stories/Views/MyStoriesView.swift")
 
         guard let range = viewSource.range(of: "private func discardFailedItem(_ item: StoryPublishQueueItem) {") else {
             XCTFail("MyStoriesView doit définir discardFailedItem(_:)")
@@ -36,7 +36,7 @@ final class MyStoriesFailedItemsGuardTests: XCTestCase {
     }
 
     func test_myStoriesView_showsFailedItemsSectionWhenNonEmpty() throws {
-        let viewSource = try source("Meeshy/Features/Main/Views/MyStoriesView.swift")
+        let viewSource = try source("Meeshy/Features/Stories/Views/MyStoriesView.swift")
 
         XCTAssertTrue(
             viewSource.contains("if !publishService.failedItems.isEmpty {"),

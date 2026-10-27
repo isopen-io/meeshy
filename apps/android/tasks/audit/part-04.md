@@ -600,7 +600,7 @@ Android-port note: Compose — host an overlay via a top-level `Box` + a
 `StateFlow<StatusEntry?>` in a shared ViewModel; position with the captured
 anchor offset. Republish gated to non-self entries. Direct conceptual port.
 
-## apps/ios/Meeshy/Features/Main/Services/StoryPublishService.swift
+## apps/ios/Meeshy/Features/Stories/Services/StoryPublishService.swift
 
 Purpose: App-side orchestrator for the `StoryPublishQueue` (SDK actor) — registers
 the publish handler, surfaces success/failure toasts, exposes a pending count.
@@ -622,7 +622,7 @@ becomes a repository/coordinator exposing `StateFlow<Int>` pendingCount and
 wiring success/failure to a snackbar/toast manager. Keep the executor-injection
 pattern (the actual upload pipeline lives in the Story ViewModel).
 
-## apps/ios/Meeshy/Features/Main/Services/StoryVideoExportService.swift
+## apps/ios/Meeshy/Features/Stories/Services/StoryVideoExportService.swift
 
 Purpose: Author-only Story → MP4 export orchestrator (for external sharing only;
 never touches the backend — stories publish RAW for per-viewer retranslation).

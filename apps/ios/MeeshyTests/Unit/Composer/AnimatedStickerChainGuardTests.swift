@@ -130,7 +130,7 @@ final class AnimatedStickerChainGuardTests: XCTestCase {
     /// un `pngData()` détruit l'original : le composer aura dit vrai, la
     /// publication non, et l'écart n'apparaît qu'une fois l'asset en ligne.
     func test_laPublication_envoieLesOctetsAnimesSousLeurPropreMime() throws {
-        let upload = try appSource("Meeshy/Features/Main/ViewModels/StoryViewModel+PublicationUpload.swift")
+        let upload = try appSource("Meeshy/Features/Stories/ViewModels/StoryViewModel+PublicationUpload.swift")
 
         XCTAssertTrue(upload.contains("AnimatedImageEligibility.container("),
                       "le mime doit venir du CONTENEUR : un GIF envoyé en `image/png` arrive mal étiqueté partout.")
