@@ -8,6 +8,8 @@ import dagger.hilt.components.SingletonComponent
 import dagger.multibindings.IntoMap
 import kotlinx.serialization.json.Json
 import me.meeshy.core.database.entity.OutboxEntity
+import me.meeshy.sdk.audio.AudioPreferencesSyncRepository
+import me.meeshy.sdk.model.AudioPreferenceSyncBody
 import me.meeshy.sdk.model.NotificationPreferenceSyncBody
 import me.meeshy.sdk.model.PrivacyPreferenceSyncBody
 import me.meeshy.sdk.model.UpdateProfileRequest
@@ -108,6 +110,27 @@ public class UpdatePrivacySettingsHandler @Inject constructor(
     }
 }
 
+/**
+ * `UPDATE_AUDIO_SETTINGS` : synchronise le bloc audio, même règle de refus. Un envoi épuisé replace
+ * le bloc sur la vérité de la passerelle (sauf si un choix plus récent attend) plutôt que de laisser
+ * l'écran montrer un réglage que la passerelle ne tient pas.
+ */
+public class UpdateAudioSettingsHandler @Inject constructor(
+    private val preferencesApi: PreferencesApi,
+    private val json: Json,
+    private val audioSync: Lazy<AudioPreferencesSyncRepository>,
+) : OutboxKindHandler {
+
+    override suspend fun send(row: OutboxEntity): SendResult =
+        json.withPayload<AudioPreferenceSyncBody>(row) { body ->
+            apiCall { preferencesApi.updateAudio(body) }.toPreferenceSendResult("Audio")
+        }
+
+    override suspend fun onExhausted(row: OutboxEntity) {
+        audioSync.get().refresh()
+    }
+}
+
 private val PREFERENCE_RETRYABLE = setOf(401, 408, 429)
 private val PREFERENCE_CLIENT_ERRORS = 400..499
 
@@ -141,4 +164,9 @@ public interface ProfileSettingsSendersModule {
     @IntoMap
     @OutboxKindKey(OutboxKind.UPDATE_PRIVACY_SETTINGS)
     public fun updatePrivacySettings(handler: UpdatePrivacySettingsHandler): OutboxKindHandler
+
+    @Binds
+    @IntoMap
+    @OutboxKindKey(OutboxKind.UPDATE_AUDIO_SETTINGS)
+    public fun updateAudioSettings(handler: UpdateAudioSettingsHandler): OutboxKindHandler
 }

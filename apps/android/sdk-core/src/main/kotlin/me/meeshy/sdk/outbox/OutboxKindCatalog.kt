@@ -41,6 +41,7 @@ public object OutboxKindCatalog {
         OutboxKind.UPDATE_PROFILE,
         OutboxKind.UPDATE_SETTINGS,
         OutboxKind.UPDATE_PRIVACY_SETTINGS,
+        OutboxKind.UPDATE_AUDIO_SETTINGS,
         OutboxKind.PUBLISH_STORY,
         OutboxKind.UPLOAD_MEDIA,
         OutboxKind.BLOCK_USER,
@@ -80,6 +81,7 @@ public object OutboxKindCatalog {
         OutboxKind.UPDATE_PROFILE,
         OutboxKind.UPDATE_SETTINGS,
         OutboxKind.UPDATE_PRIVACY_SETTINGS,
+        OutboxKind.UPDATE_AUDIO_SETTINGS,
         OutboxKind.PUBLISH_STORY,
         OutboxKind.UPLOAD_MEDIA,
         -> false

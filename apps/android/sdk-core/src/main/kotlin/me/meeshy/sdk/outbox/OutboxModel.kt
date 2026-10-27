@@ -29,6 +29,7 @@ public enum class OutboxKind {
     UNBOOKMARK_POST,
     RESPOND_FRIEND_REQUEST,
     REPORT_ATTACHMENT_STATUS,
+    UPDATE_AUDIO_SETTINGS,
 }
 
 /** Lifecycle of an outbox row; a succeeded mutation is deleted, never flagged. */
@@ -116,6 +117,7 @@ public object OutboxLaneMap {
         OutboxKind.UPDATE_PROFILE -> OutboxLaneAssignment.Shared(OutboxLanes.PROFILE)
         OutboxKind.UPDATE_SETTINGS -> OutboxLaneAssignment.Shared(OutboxLanes.SETTINGS)
         OutboxKind.UPDATE_PRIVACY_SETTINGS -> OutboxLaneAssignment.Shared(OutboxLanes.SETTINGS)
+        OutboxKind.UPDATE_AUDIO_SETTINGS -> OutboxLaneAssignment.Shared(OutboxLanes.SETTINGS)
         OutboxKind.PUBLISH_STORY -> OutboxLaneAssignment.Shared(OutboxLanes.STORY)
         OutboxKind.UPLOAD_MEDIA -> OutboxLaneAssignment.Shared(OutboxLanes.MEDIA)
 

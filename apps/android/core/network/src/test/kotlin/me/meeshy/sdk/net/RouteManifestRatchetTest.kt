@@ -49,7 +49,7 @@ class RouteManifestRatchetTest {
          * 265 : moins `GET /me/onboarding` et `PATCH /me/onboarding` (#13268 : le parcours d'accueil),
          * que porte `OnboardingApi.kt` depuis 76d43a11aa.
          */
-        const val TO_PORT_CEILING = 265
+        const val TO_PORT_CEILING = 264
         val VERB_STATUSES = setOf("hors-perimetre-mobile", "ops-only", "a-porter", "implementee-par-url-serveur")
     }
 

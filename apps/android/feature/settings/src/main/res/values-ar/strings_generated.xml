@@ -235,6 +235,7 @@
     <string name="settings_section_notifications">الإشعارات</string>
     <string name="settings_section_profile">الملف الشخصي</string>
     <string name="settings_section_tools">الأدوات</string>
+    <string name="settings_section_transcription">النسخ النصي</string>
     <string name="settings_security">الأمان</string>
     <string name="settings_share_links">روابط المشاركة</string>
     <string name="settings_starred_messages">الرسائل المفضّلة</string>
@@ -245,6 +246,9 @@
     <string name="settings_theme_light">فاتح</string>
     <string name="settings_theme_system">النظام</string>
     <string name="settings_title">الإعدادات</string>
+    <string name="settings_transcription_auto">النسخ النصي التلقائي</string>
+    <string name="settings_transcription_engine">محرك النسخ النصي</string>
+    <string name="settings_transcription_engine_a11y">محرك النسخ النصي</string>
     <string name="settings_version_label">الإصدار</string>
     <string name="support_info_build">الإصدار</string>
     <string name="support_info_platform">المنصة</string>

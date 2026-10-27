@@ -235,6 +235,7 @@
     <string name="settings_section_notifications">Notificações</string>
     <string name="settings_section_profile">Perfil</string>
     <string name="settings_section_tools">Ferramentas</string>
+    <string name="settings_section_transcription">Transcrição</string>
     <string name="settings_security">Segurança</string>
     <string name="settings_share_links">Links de compartilhamento</string>
     <string name="settings_starred_messages">Mensagens favoritas</string>
@@ -245,6 +246,9 @@
     <string name="settings_theme_light">Claro</string>
     <string name="settings_theme_system">Sistema</string>
     <string name="settings_title">Configurações</string>
+    <string name="settings_transcription_auto">Transcrição automática</string>
+    <string name="settings_transcription_engine">Motor de transcrição</string>
+    <string name="settings_transcription_engine_a11y">Motor de transcrição</string>
     <string name="settings_version_label">Versão</string>
     <string name="support_info_build">Build</string>
     <string name="support_info_platform">Plataforma</string>

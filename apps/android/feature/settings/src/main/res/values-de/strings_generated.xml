@@ -235,6 +235,7 @@
     <string name="settings_section_notifications">Mitteilungen</string>
     <string name="settings_section_profile">Profil</string>
     <string name="settings_section_tools">Werkzeuge</string>
+    <string name="settings_section_transcription">Transkription</string>
     <string name="settings_security">Sicherheit</string>
     <string name="settings_share_links">Freigabelinks</string>
     <string name="settings_starred_messages">Markierte Nachrichten</string>
@@ -245,6 +246,9 @@
     <string name="settings_theme_light">Hell</string>
     <string name="settings_theme_system">System</string>
     <string name="settings_title">Einstellungen</string>
+    <string name="settings_transcription_auto">Automatische Transkription</string>
+    <string name="settings_transcription_engine">Transkriptions-Engine</string>
+    <string name="settings_transcription_engine_a11y">Transkriptions-Engine</string>
     <string name="settings_version_label">Version</string>
     <string name="support_info_build">Build</string>
     <string name="support_info_platform">Plattform</string>

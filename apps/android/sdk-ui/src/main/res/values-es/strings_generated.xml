@@ -25,6 +25,7 @@
     <string name="focal_focus_add_reaction">Añadir una reacción</string>
     <string name="focal_focus_translation_detail">Detalles de la traducción</string>
     <string name="focal_row_you">Tú</string>
+    <string name="media_audio_transcribe">Transcribir</string>
     <string name="media_crop_a11y_handle_bottom">Borde inferior</string>
     <string name="media_crop_a11y_handle_bottomLeft">Esquina inferior izquierda</string>
     <string name="media_crop_a11y_handle_bottomRight">Esquina inferior derecha</string>

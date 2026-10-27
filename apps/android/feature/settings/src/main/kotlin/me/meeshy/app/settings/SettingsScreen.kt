@@ -169,6 +169,7 @@ fun SettingsScreen(
                     onOpenDeleteAccount = onOpenDeleteAccount,
                 )
                 AppearanceSection(state = state, viewModel = viewModel)
+                TranscriptionSection()
                 NotificationsSection(
                     state = state,
                     viewModel = viewModel,

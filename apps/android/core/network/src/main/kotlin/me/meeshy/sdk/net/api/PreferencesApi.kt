@@ -1,6 +1,7 @@
 package me.meeshy.sdk.net.api
 
 import me.meeshy.sdk.model.ApiCategory
+import me.meeshy.sdk.model.AudioPreferenceSyncBody
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.CategoryPatchBody
 import me.meeshy.sdk.model.CreateCategoryBody
@@ -49,6 +50,14 @@ interface PreferencesApi {
 
     @PATCH("me/preferences/privacy")
     suspend fun updatePrivacy(@Body body: PrivacyPreferenceSyncBody): ApiResponse<Unit>
+
+    /** Fusionne la transcription automatique dans le bloc audio (`PATCH /me/preferences/audio`). */
+    @PATCH("me/preferences/audio")
+    suspend fun updateAudio(@Body body: AudioPreferenceSyncBody): ApiResponse<Unit>
+
+    /** Relit le bloc audio ; seule la transcription automatique est lue (le décodeur indulgent ignore le reste). */
+    @GET("me/preferences/audio")
+    suspend fun getAudio(): ApiResponse<AudioPreferenceSyncBody>
 
     /**
      * Re-reads the stored notification block — the READ half of [updateNotification],

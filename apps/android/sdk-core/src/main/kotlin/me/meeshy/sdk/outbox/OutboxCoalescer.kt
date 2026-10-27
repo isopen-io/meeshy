@@ -66,6 +66,8 @@ public object OutboxCoalescer {
                 replaceSameKind(incoming, sameTarget, OutboxKind.UPDATE_SETTINGS)
             OutboxKind.UPDATE_PRIVACY_SETTINGS ->
                 replaceSameKind(incoming, sameTarget, OutboxKind.UPDATE_PRIVACY_SETTINGS)
+            OutboxKind.UPDATE_AUDIO_SETTINGS ->
+                replaceSameKind(incoming, sameTarget, OutboxKind.UPDATE_AUDIO_SETTINGS)
             OutboxKind.ADD_REACTION -> annihilateOpposite(incoming, sameTarget, OutboxKind.REMOVE_REACTION)
             OutboxKind.REMOVE_REACTION -> annihilateOpposite(incoming, sameTarget, OutboxKind.ADD_REACTION)
             OutboxKind.BLOCK_USER -> terminalToggle(incoming, sameTarget, OutboxKind.UNBLOCK_USER, OutboxKind.BLOCK_USER)
