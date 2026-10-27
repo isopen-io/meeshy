@@ -15,6 +15,7 @@ import me.meeshy.app.feed.PostDetailScreen
 import me.meeshy.app.feed.PostDetailViewModel
 import me.meeshy.app.navigation.Routes
 import me.meeshy.app.reels.ReelsScreen
+import me.meeshy.app.stories.MyStoriesScreen
 import me.meeshy.app.stories.StoryComposerScreen
 import me.meeshy.app.stories.StoryViewerScreen
 import me.meeshy.app.stories.StoryViewerViewModel
@@ -43,6 +44,13 @@ internal fun NavGraphBuilder.feedNavGraph(
             onOpenPost = { postId -> navController.navigate(Routes.postDetail(postId)) },
             onOpenProfile = { userId -> navController.navigate(Routes.profile(userId)) },
             onOpenHashtag = { tag -> navController.navigate(Routes.hashtag(tag)) },
+        )
+    }
+    composable(Routes.MY_STORIES) {
+        MyStoriesScreen(
+            onBack = { navController.popBackStack() },
+            onCreateStory = { navController.navigate(Routes.STORY_COMPOSER) },
+            onOpenStory = { userId -> navController.navigate(Routes.story(userId)) },
         )
     }
     composable(Routes.SAVED_POSTS) {

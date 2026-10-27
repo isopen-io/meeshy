@@ -65,6 +65,7 @@ fun StoryTray(
     onOpenStory: (String) -> Unit,
     modifier: Modifier = Modifier,
     onAddStory: () -> Unit = {},
+    onManageStories: () -> Unit = {},
     onShowProfile: ((String) -> Unit)? = null,
     moodEmojiOf: (String) -> String? = { null },
     viewModel: StoriesViewModel = hiltViewModel(),
@@ -107,6 +108,7 @@ fun StoryTray(
                             onOpen = { onOpenStory(selfRing.userId) },
                             onShowProfile = onShowProfile?.let { open -> { open(selfRing.userId) } },
                             onAdd = onAddStory,
+                            onManage = onManageStories,
                             onAppeared = impressions::onRingAppeared,
                         )
                     }

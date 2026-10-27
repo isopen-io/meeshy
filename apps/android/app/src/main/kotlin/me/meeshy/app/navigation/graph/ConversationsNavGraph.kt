@@ -74,6 +74,7 @@ internal fun NavGraphBuilder.conversationsNavGraph(
                 StoryTray(
                     onOpenStory = { userId -> navController.navigate(Routes.story(userId)) },
                     onAddStory = { navController.navigate(Routes.STORY_COMPOSER) },
+                    onManageStories = { navController.navigate(Routes.MY_STORIES) },
                     onShowProfile = { userId -> navController.navigate(Routes.profile(userId)) },
                     viewModel = storiesViewModel,
                 )

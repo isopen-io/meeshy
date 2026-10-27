@@ -23,7 +23,7 @@ class StoryTraySelfMenuTest {
     @Test
     fun `with a live story the menu offers to view it, then to add another`() {
         assertThat(StoryTraySelfMenu.actions(ring(count = 2)))
-            .containsExactly(StoryTraySelfAction.ViewMyStory, StoryTraySelfAction.AddStory)
+            .containsExactly(StoryTraySelfAction.ViewMyStory, StoryTraySelfAction.ManageStories, StoryTraySelfAction.AddStory)
             .inOrder()
     }
 

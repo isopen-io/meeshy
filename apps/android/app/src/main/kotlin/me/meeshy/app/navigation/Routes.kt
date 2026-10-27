@@ -128,6 +128,7 @@ object Routes {
         "https://${ProfileShareLink.WEB_HOST}/${ProfileShareLink.USER_SEGMENT}/{userId}"
     const val USER_POSTS = "profile/{userId}/posts"
     const val HASHTAG_RESULTS = "hashtag/{tag}"
+    const val MY_STORIES = "stories/mine"
     const val REPORT_USER = "report/{${ReportUserViewModel.USER_ID_ARG}}?${ReportUserViewModel.USERNAME_ARG}={${ReportUserViewModel.USERNAME_ARG}}"
     const val STORY_VIEWER = "story/{${StoryViewerViewModel.USER_ID_ARG}}"
     const val STORY_DEEP_LINK = "meeshy://$STORY_VIEWER"

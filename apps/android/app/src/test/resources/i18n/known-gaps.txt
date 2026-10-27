@@ -1522,3 +1522,7 @@ missing-key :feature:calls it call_waiting_subtitle
 bare-specifier :feature:calls en call_journal_search_empty
 bare-specifier :feature:calls en call_recording_ask
 bare-specifier :feature:calls en call_recording_ask_video
+bare-specifier :feature:feed en hashtag_results_empty
+bare-specifier :feature:stories en my_stories_card_expired
+bare-specifier :feature:stories en my_stories_delete_selected
+bare-specifier :feature:stories en my_stories_delete_selected_error

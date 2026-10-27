@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Collections
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.DropdownMenu
@@ -74,6 +75,7 @@ internal fun StoryRingCell(
     onShowProfile: (() -> Unit)?,
     onAppeared: (String?) -> Unit,
     onAdd: (() -> Unit)? = null,
+    onManage: (() -> Unit)? = null,
 ) {
     val haptics = rememberMeeshyHaptics()
     var menuOpen by remember { mutableStateOf(false) }
@@ -123,6 +125,7 @@ internal fun StoryRingCell(
                 onShowProfile = onShowProfile?.let { open -> { menuOpen = false; open() } },
                 selfActions = if (onAdd != null) StoryTraySelfMenu.actions(ring) else null,
                 onAdd = { menuOpen = false; onAdd?.invoke() },
+                onManage = { menuOpen = false; onManage?.invoke() },
             )
         }
         StoryCountDotsRow(
@@ -143,6 +146,7 @@ private fun StoryRingMenu(
     onShowProfile: (() -> Unit)?,
     selfActions: List<StoryTraySelfAction>? = null,
     onAdd: () -> Unit = {},
+    onManage: () -> Unit = {},
 ) {
     DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
         if (selfActions != null) {
@@ -152,6 +156,11 @@ private fun StoryRingMenu(
                         text = { Text(stringResource(R.string.stories_tray_view_my_story)) },
                         leadingIcon = { Icon(Icons.Filled.PlayArrow, contentDescription = null) },
                         onClick = onViewStories,
+                    )
+                    StoryTraySelfAction.ManageStories -> DropdownMenuItem(
+                        text = { Text(stringResource(R.string.stories_tray_manage)) },
+                        leadingIcon = { Icon(Icons.Filled.Collections, contentDescription = null) },
+                        onClick = onManage,
                     )
                     StoryTraySelfAction.AddStory -> DropdownMenuItem(
                         text = { Text(stringResource(R.string.stories_tray_add_story)) },
