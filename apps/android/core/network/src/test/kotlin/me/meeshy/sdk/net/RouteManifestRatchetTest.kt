@@ -46,8 +46,10 @@ class RouteManifestRatchetTest {
          * 267 : plus `POST /e2ee/conversations/:conversationId/signals` (#13142 : la route unique des
          * signaux chiffrés d'une conversation e2ee), servie par la passerelle et appelée par iOS ;
          * Android la portera avec ses signaux chiffrés (#13202).
+         * 265 : moins `GET /me/onboarding` et `PATCH /me/onboarding` (#13268 : le parcours d'accueil),
+         * que porte `OnboardingApi.kt` depuis 76d43a11aa.
          */
-        const val TO_PORT_CEILING = 267
+        const val TO_PORT_CEILING = 265
         val VERB_STATUSES = setOf("hors-perimetre-mobile", "ops-only", "a-porter", "implementee-par-url-serveur")
     }
 

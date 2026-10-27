@@ -94,7 +94,7 @@
     <string name="onboarding_contacts_offer_promise">No one gets contacted on your behalf.</string>
     <string name="onboarding_contacts_offer_title">Your friends might already be here</string>
     <string name="onboarding_contacts_settings">Find your friends: allow contacts access in Settings</string>
-    <string name="onboarding_email_address">Sent to %s</string>
+    <string name="onboarding_email_address">Sent to %1$s</string>
     <string name="onboarding_email_body">We sent you a link. Tap it in your inbox: your account is confirmed and all of Meeshy opens up.</string>
     <string name="onboarding_email_failed">The link couldn\'t be sent. Try again.</string>
     <string name="onboarding_email_resend">Resend the link</string>
@@ -102,14 +102,14 @@
     <string name="onboarding_email_title">Confirm your email address</string>
     <string name="onboarding_email_waiting">We\'ll move on as soon as your address is confirmed.</string>
     <string name="onboarding_friends_add">Add</string>
-    <string name="onboarding_friends_add_a11y">Add %s as a friend</string>
+    <string name="onboarding_friends_add_a11y">Add %1$s as a friend</string>
     <string name="onboarding_friends_added">Sent</string>
-    <string name="onboarding_friends_added_a11y">Request sent to %s</string>
+    <string name="onboarding_friends_added_a11y">Request sent to %1$s</string>
     <string name="onboarding_friends_badge">+%d each</string>
-    <string name="onboarding_friends_body">Add 3 people who vibe like you. When they accept, you both get at least +%d.</string>
+    <string name="onboarding_friends_body">Add 3 people who vibe like you. When they accept, you both get at least +%1$d.</string>
     <string name="onboarding_friends_failed">The request didn\'t go through. Try again.</string>
     <string name="onboarding_friends_more">See more profiles</string>
-    <string name="onboarding_friends_pending">At least +%d each once they accept</string>
+    <string name="onboarding_friends_pending">At least +%1$d each once they accept</string>
     <string name="onboarding_friends_row_a11y">%1$s, speaks %2$s</string>
     <string name="onboarding_friends_title">Find your crew</string>
     <string name="onboarding_gauge_level1">%1$d / %2$d sparks to reach level 1</string>
@@ -144,7 +144,7 @@
     <string name="onboarding_languages_demo_translated">Hi, how are you?</string>
     <string name="onboarding_languages_failed">Your language couldn\'t be saved. You can change it in your profile.</string>
     <string name="onboarding_languages_primary">Your language</string>
-    <string name="onboarding_languages_primary_a11y">Your language: %s. Change</string>
+    <string name="onboarding_languages_primary_a11y">Your language: %1$s. Change</string>
     <string name="onboarding_languages_secondary">A second language? (optional)</string>
     <string name="onboarding_languages_title">Your language, your world</string>
     <string name="onboarding_later">Later</string>
@@ -172,7 +172,7 @@
     <string name="onboarding_recap_points">Sparks</string>
     <string name="onboarding_recap_streak">Flame (days)</string>
     <string name="onboarding_recap_title">Nice one!</string>
-    <string name="onboarding_recap_tomorrow">Tomorrow, your Flame will have burned for %d days. No rush — come back whenever you like.</string>
+    <string name="onboarding_recap_tomorrow">Tomorrow, your Flame will have burned for %1$d days. No rush — come back whenever you like.</string>
     <plurals name="onboarding_reward_announce">
         <item quantity="one">Plus %d spark</item>
         <item quantity="other">Plus %d sparks</item>
