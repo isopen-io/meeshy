@@ -17,10 +17,15 @@ import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.media.MediaBlobStore
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.media.MediaUploadQueue
+import me.meeshy.sdk.model.PostMentionInput
 import me.meeshy.sdk.model.StoryDrawingStrokePoint
 import me.meeshy.sdk.model.StoryFilter
 import me.meeshy.sdk.model.UploadedMedia
+import me.meeshy.sdk.model.composer.AudienceCandidate
+import me.meeshy.sdk.model.composer.ComposerAudienceSelection
 import me.meeshy.sdk.model.composer.ComposerBandState
+import me.meeshy.sdk.model.composer.ComposerHashtags
+import me.meeshy.sdk.model.composer.MediaDescriptionLaw
 import me.meeshy.sdk.model.composer.StoryToolMode
 import me.meeshy.sdk.model.media.TusUploadContext
 import me.meeshy.sdk.model.scene.StoryBackgroundFraming
@@ -264,6 +269,47 @@ class StoryComposerViewModel @Inject constructor(
 
     fun onVisibilityChange(visibility: StoryVisibility) {
         _state.update { it.copy(draft = it.draft.withVisibility(visibility)) }
+    }
+
+    /** La liste « visible par » / « sauf » : l'appelant l'a déjà bornée aux personnes proposées. */
+    fun onAudienceUserIdsChange(ids: List<String>) {
+        _state.update { it.copy(draft = it.draft.withVisibilityUserIds(ids.distinct().take(ComposerAudienceSelection.MAX_USERS))) }
+    }
+
+    /** Nomme [person] dans la publication (rangée « Avec… »), une seule fois par pseudo. */
+    fun onAddMention(person: AudienceCandidate) {
+        _state.update { current ->
+            val mentions = current.draft.mentions
+            if (mentions.any { it.username.equals(person.username, ignoreCase = true) }) return@update current
+            current.copy(
+                draft = current.draft.copy(
+                    mentions = mentions + PostMentionInput(userId = person.id, username = person.username, display = MENTION_DISPLAY),
+                ),
+            )
+        }
+    }
+
+    fun onRemoveMention(username: String) {
+        _state.update { current ->
+            current.copy(draft = current.draft.copy(mentions = current.draft.mentions.filterNot { it.username.equals(username, ignoreCase = true) }))
+        }
+    }
+
+    fun onMediaAltChange(mediaId: String, text: String) {
+        _state.update { it.copy(draft = it.draft.copy(mediaAlt = MediaDescriptionLaw.with(it.draft.mediaAlt, mediaId, text))) }
+    }
+
+    fun onMediaCaptionChange(mediaId: String, text: String) {
+        _state.update { it.copy(draft = it.draft.copy(mediaCaption = MediaDescriptionLaw.with(it.draft.mediaCaption, mediaId, text))) }
+    }
+
+    fun onAllowSoundExtractionChange(allowed: Boolean) {
+        _state.update { it.copy(draft = it.draft.copy(allowSoundExtraction = allowed)) }
+    }
+
+    /** Retire [tag] du texte de TOUTES les slides : la balise EST dans la phrase, il n'y a pas de liste à côté. */
+    fun onRemoveHashtag(tag: String) = reduce { current ->
+        current.withDeckTransform { deck -> deck.mapSlideTexts { ComposerHashtags.removing(tag, it) } }
     }
 
     /**
@@ -516,7 +562,7 @@ class StoryComposerViewModel @Inject constructor(
             } else {
                 it.copy(deck = deck, attachments = it.attachments.filterNot { media -> media.id == id })
             }
-            next.mirrorDraftToSelection()
+            next.withDescriptionsPruned().mirrorDraftToSelection()
         }
         record()
         if (wasPending) cancelDurableUpload(id)
@@ -582,6 +628,11 @@ class StoryComposerViewModel @Inject constructor(
                 background = slide.background,
                 backgroundMedia = resolveBackgroundMedia(slide, current),
                 repostOfId = current.draft.repostOfId,
+                visibilityUserIds = current.draft.visibilityUserIds,
+                mentions = current.draft.mentions,
+                mediaAlt = current.draft.mediaAlt,
+                mediaCaption = current.draft.mediaCaption,
+                allowSoundExtraction = current.draft.allowSoundExtraction,
             )
             PublishPlan(
                 request = draft.toCreateStoryRequest(language),
@@ -637,6 +688,7 @@ class StoryComposerViewModel @Inject constructor(
             ?: LanguageResolver.FALLBACK_LANGUAGE
 
     internal companion object {
+        const val MENTION_DISPLAY = "NOTE"
         const val MEDIA_FAILED = "Couldn't attach that media"
         const val MEDIA_UNUSABLE = "That media couldn't be attached"
         const val MEDIA_LIMIT = "You can attach up to ${StoryComposerDraft.MAX_MEDIA} items"

@@ -6,7 +6,11 @@ import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.model.StoryDrawingStroke
 import me.meeshy.sdk.model.StoryFilter
 import me.meeshy.sdk.model.UploadedMedia
+import me.meeshy.sdk.model.composer.ComposerAudienceSelection
 import me.meeshy.sdk.model.composer.ComposerBandState
+import me.meeshy.sdk.model.composer.ComposerHashtags
+import me.meeshy.sdk.model.composer.MediaDescriptionLaw
+import me.meeshy.sdk.model.composer.StoryPublishTitle
 import me.meeshy.sdk.model.scene.StoryCanvasTransform
 import me.meeshy.sdk.model.scene.StoryColorMatrix
 import me.meeshy.sdk.model.scene.StoryFilterMatrix
@@ -99,8 +103,25 @@ data class StoryComposerUiState(
             deck.isWithinMediaLimit() &&
             deck.isWithinTextElementLimit() &&
             deck.isWithinStickerLimit() &&
+            ComposerAudienceSelection.isPublishable(draft.visibility, draft.visibilityUserIds) &&
             !isPublishing &&
             !isUploadingMedia
+
+    /** Les hashtags de la publication — DÉRIVÉS du texte de toutes les slides, jamais déclarés à côté. */
+    val hashtags: List<String>
+        get() = ComposerHashtags.tags(deck.slides.joinToString(" ") { it.text })
+
+    /** Ce que le bouton de publication nomme : la story, ou le nombre de stories (une par slide). */
+    val publishTitle: StoryPublishTitle
+        get() = StoryPublishTitle.of(slideCount = deck.publishableSlides.size, alsoAsReel = false)
+
+    /** Les médias de la slide sélectionnée sans texte alternatif — rappelés à l'auteur, jamais bloquants. */
+    val undescribedMediaIds: List<String>
+        get() = MediaDescriptionLaw.undescribed(deck.selectedSlide.mediaIds, draft.mediaAlt)
+
+    /** L'extraction du son ne se propose que si un média de la publication est une vidéo. */
+    val offersSoundExtraction: Boolean
+        get() = attachments.any { it.mimeType.startsWith("video/") }
 
     /**
      * The uploaded media of the **selected** slide, in slide order — the preview the
@@ -249,5 +270,16 @@ internal fun StoryComposerUiState.mirrorDraftToSelection(): StoryComposerUiState
         selectedTextElementId = if (stillSelected) elementId else null,
         selectedStickerId = if (stickerStillSelected) stickerId else null,
         drawingBoard = drawingBoard.resyncedTo(deck.selectedSlide.strokes),
+    )
+}
+
+/** Les descriptions ne survivent pas à leur média : retirer un média purge son alt et sa légende. */
+internal fun StoryComposerUiState.withDescriptionsPruned(): StoryComposerUiState {
+    val present = deck.slides.flatMap { it.mediaIds }
+    return copy(
+        draft = draft.copy(
+            mediaAlt = MediaDescriptionLaw.pruned(draft.mediaAlt, present),
+            mediaCaption = MediaDescriptionLaw.pruned(draft.mediaCaption, present),
+        ),
     )
 }

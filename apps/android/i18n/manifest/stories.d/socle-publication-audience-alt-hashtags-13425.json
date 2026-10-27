@@ -1,0 +1,219 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "composer.audience.title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.audience.apply",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.audience.scope",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.audience.mentions",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.audience.hashtags",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.audience.hashtag.remove",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.audience.mention.outside",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.audience.mention.inline",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.audience.mention.pinned",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.audience.mention.note",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.audience.mention.silent",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.audience.sub.public",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.audience.sub.community",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.audience.sub.friends",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.audience.sub.private",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.audience.sub.pick",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.audience.sub.count",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.publish.as.story",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.publish.as.storyAndReel",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.socle.audience",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.socle.publish",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "post.visibility.only",
+          "androidName": "stories_visibility_only",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "post.visibility.except",
+          "androidName": "stories_visibility_except",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.media.alt.label",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.media.alt.placeholder",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.media.alt.a11yHint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.media.caption.label",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.media.caption.placeholder",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.media.caption.a11yHint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.media.soundExtraction.label",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.media.soundExtraction.caption",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.media.soundExtraction.a11yHint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "audience.picker.only.title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "audience.picker.except.title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "audience.picker.search",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "common.cancel",
+          "androidName": "stories_audience_picker_cancel",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "common.done",
+          "androidName": "stories_audience_picker_done",
+          "status": "adopted"
+        },
+        {
+          "androidName": "stories_composer_publish_many",
+          "status": "android-only"
+        },
+        {
+          "androidName": "stories_audience_pick_empty",
+          "status": "android-only"
+        },
+        {
+          "androidName": "stories_audience_pick_title_mention",
+          "status": "android-only"
+        },
+        {
+          "androidName": "stories_audience_mention_add",
+          "status": "android-only"
+        },
+        {
+          "androidName": "stories_media_undescribed",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}
