@@ -23,6 +23,8 @@ import me.meeshy.sdk.model.PostMentionInput
 import me.meeshy.sdk.model.StoryDrawingStrokePoint
 import me.meeshy.sdk.model.StoryFilter
 import me.meeshy.sdk.model.UploadedMedia
+import me.meeshy.sdk.model.composer.ComposerObjectKind
+import me.meeshy.sdk.model.composer.SceneObjectMenu
 import me.meeshy.sdk.model.composer.AudienceCandidate
 import me.meeshy.sdk.model.composer.ComposerAudienceSelection
 import me.meeshy.sdk.model.composer.ComposerBandState
@@ -181,29 +183,52 @@ class StoryComposerViewModel @Inject constructor(
 
     fun onOpenElementMenu(id: String) = reduce { StoryComposerTextReducer.menuOpened(it, id) }
 
-    fun onDismissElementMenu() = reduce { StoryComposerTextReducer.menuDismissed(it) }
+    fun onDismissElementMenu() = reduce { StoryComposerSceneReducer.menuDismissed(it) }
+
+    /** Appui long sur un sticker : ouvre son menu, le sélectionne. */
+    fun onOpenStickerMenu(id: String) = reduce { StoryComposerSceneReducer.stickerMenuOpened(it, id) }
 
     /**
-     * Dispatches a chosen context-menu [action] to the existing per-element intent and then
-     * dismisses the menu. A disabled action or a stale menu is a safe no-op on the deck.
+     * Exécute l'[action] choisie sur l'objet dont le menu est ouvert, puis ferme le menu. Une action
+     * que la loi n'offre pas (ou un menu périmé) ne touche à rien : loi 4, un geste sans effet n'existe pas.
      */
-    fun onElementMenuAction(action: StoryElementAction) {
-        val menu = _state.value.elementContextMenu
-        if (menu != null && menu.isEnabled(action)) {
-            val id = menu.elementId
+    fun onSceneMenuAction(action: SceneObjectMenu.Action) {
+        val menu = _state.value.sceneContextMenu
+        if (menu != null && action in menu.actions) {
+            val id = menu.ref.id
+            val text = menu.ref.kind == ComposerObjectKind.TEXT
             when (action) {
-                StoryElementAction.EDIT -> onSelectTextElement(id)
-                StoryElementAction.DUPLICATE -> onDuplicateTextElement(id)
-                StoryElementAction.DELETE -> onRemoveTextElement(id)
-                StoryElementAction.SEND_TO_BACK,
-                StoryElementAction.MOVE_BACKWARD,
-                StoryElementAction.MOVE_FORWARD,
-                StoryElementAction.BRING_TO_FRONT,
-                -> action.zOrder?.let { onReorderTextElement(id, it) }
+                SceneObjectMenu.Action.EDIT -> onSelectTextElement(id)
+                SceneObjectMenu.Action.DUPLICATE -> if (text) onDuplicateTextElement(id) else onDuplicateSticker(id)
+                SceneObjectMenu.Action.DELETE -> if (text) onRemoveTextElement(id) else onRemoveSticker(id)
+                SceneObjectMenu.Action.BRING_FORWARD -> onReorderScene(menu.ref, StoryZOrder.TO_FRONT)
+                SceneObjectMenu.Action.SEND_BACKWARD -> onReorderScene(menu.ref, StoryZOrder.TO_BACK)
+                SceneObjectMenu.Action.TRIM,
+                SceneObjectMenu.Action.LEAVE_SCENE,
+                SceneObjectMenu.Action.SET_AS_BACKGROUND,
+                SceneObjectMenu.Action.REPLACE_BACKGROUND,
+                -> Unit
             }
         }
         onDismissElementMenu()
     }
+
+    private fun onReorderScene(ref: SceneObjectRef, op: StoryZOrder) =
+        if (ref.kind == ComposerObjectKind.TEXT) onReorderTextElement(ref.id, op)
+        else reduce { StoryComposerSceneReducer.stickerReordered(it, ref.id, op) }
+
+    fun onDuplicateSticker(id: String) {
+        val newId = newStickerId()
+        reduce { StoryComposerSceneReducer.stickerDuplicated(it, id, newId) }
+    }
+
+    /** Pose la fenêtre d'un objet (0 = permanent), depuis la frise ou l'inspecteur. */
+    fun onSceneObjectWindow(id: String, startSeconds: Float, durationSeconds: Float) =
+        reduce("window:$id") { StoryComposerSceneReducer.windowed(it, id, startSeconds, durationSeconds) }
+
+    fun onPlayheadMoved(seconds: Float) = _state.update { StoryComposerSceneReducer.playheadMoved(it, seconds) }
+
+    fun onFriseTrackSelected(id: String) = reduce { StoryComposerSceneReducer.trackSelected(it, id) }
 
     /** Drags element [id] by normalised deltas with magnetic snapping. */
     fun onTextElementMoved(id: String, dx: Float, dy: Float) = reduce("move:$id") { StoryComposerTextReducer.moved(it, id, dx, dy) }

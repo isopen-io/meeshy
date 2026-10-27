@@ -18,6 +18,7 @@ internal object ComposerBandTools {
         StoryToolMode.DRAWING,
         StoryToolMode.AUDIO,
         StoryToolMode.TEXTURE,
+        StoryToolMode.TIMELINE,
     )
 
     /** The tools of the row, in canonical order. */
@@ -30,6 +31,7 @@ internal object ComposerBandTools {
         strokeCount: Int,
         hasBackground: Boolean,
         soundCount: Int = 0,
+        timedCount: Int = 0,
     ): Map<StoryToolMode, Int> =
         mapOf(
             StoryToolMode.MEDIA to mediaCount,
@@ -37,6 +39,7 @@ internal object ComposerBandTools {
             StoryToolMode.DRAWING to strokeCount,
             StoryToolMode.AUDIO to soundCount,
             StoryToolMode.TEXTURE to if (hasBackground) 1 else 0,
+            StoryToolMode.TIMELINE to timedCount,
         )
 
     /**

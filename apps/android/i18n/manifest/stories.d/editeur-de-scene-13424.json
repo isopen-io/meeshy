@@ -1,0 +1,150 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        {
+          "catalog": "ui",
+          "iosKey": "story.canvas.action.edit",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.canvas.action.duplicate",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.canvas.action.bringForward",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.canvas.action.sendBackward",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.canvas.action.delete",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.canvas.action.leaveScene",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.chip.size",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.chip.rotation",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.chip.style",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.chip.align",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.chip.style.bold",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.chip.style.classic",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.chip.style.handwriting",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.chip.style.neon",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.chip.style.typewriter",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.chip.align.center",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.chip.align.left",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.chip.align.right",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.frise.panel",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.frise.entry",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.frise.exit",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.frise.ruler",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.frise.empty",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.frise.earlier",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.frise.later",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.frise.media",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.frise.sound",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.frise.place",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

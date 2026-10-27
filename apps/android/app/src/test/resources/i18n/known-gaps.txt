@@ -1633,3 +1633,7 @@ bare-specifier :feature:chat en chat_engagement_a11y_streak_days_one
 bare-specifier :feature:chat en chat_engagement_a11y_streak_days_other
 bare-specifier :feature:chat en chat_engagement_a11y_total_one
 bare-specifier :feature:chat en chat_engagement_a11y_total_other
+bare-specifier :feature:stories en composer_chip_align
+bare-specifier :feature:stories en composer_chip_rotation
+bare-specifier :feature:stories en composer_chip_size
+bare-specifier :feature:stories en composer_chip_style

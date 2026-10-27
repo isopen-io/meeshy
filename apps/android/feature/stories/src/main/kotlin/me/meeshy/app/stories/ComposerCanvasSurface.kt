@@ -39,6 +39,8 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import me.meeshy.feature.stories.R
 import me.meeshy.sdk.model.StoryDrawingStroke
+import me.meeshy.sdk.model.composer.ComposerObjectKind
+import me.meeshy.sdk.model.composer.SceneObjectMenu
 import me.meeshy.sdk.model.StoryDrawingStrokePoint
 import me.meeshy.sdk.model.scene.StoryCanvasTransform
 import me.meeshy.sdk.model.scene.StoryColorMatrix
@@ -63,7 +65,8 @@ internal fun StoryCanvasSurface(
     colorMatrix: StoryColorMatrix,
     textElements: List<StoryTextElement>,
     selectedElement: StoryTextElement?,
-    elementMenu: StoryElementContextMenu?,
+    sceneMenu: SceneObjectContextMenu?,
+    inlineEditEnabled: Boolean,
     stickers: List<StoryStickerElement>,
     selectedStickerId: String?,
     strokes: List<StoryDrawingStroke>,
@@ -74,17 +77,16 @@ internal fun StoryCanvasSurface(
     onTransform: (Float, Float, Float, Float, Float) -> Unit,
     onElementTap: (String) -> Unit,
     onElementLongPress: (String) -> Unit,
-    onElementMenuAction: (StoryElementAction) -> Unit,
-    onElementMenuDismiss: () -> Unit,
+    onSceneMenuAction: (SceneObjectMenu.Action) -> Unit,
+    onSceneMenuDismiss: () -> Unit,
     onElementDrag: (String, Float, Float) -> Unit,
     onElementDragEnd: () -> Unit,
     onElementTransform: (String, Float, Float) -> Unit,
-    onElementRemove: (String) -> Unit,
     onElementTextChange: (String) -> Unit,
     onStickerTap: (String) -> Unit,
+    onStickerLongPress: (String) -> Unit,
     onStickerDrag: (String, Float, Float) -> Unit,
     onStickerTransform: (String, Float, Float) -> Unit,
-    onStickerRemove: (String) -> Unit,
     onBackgroundTap: () -> Unit,
     snapFeedback: SnapFeedback?,
     modifier: Modifier = Modifier,
@@ -210,13 +212,14 @@ internal fun StoryCanvasSurface(
                 TextElementLayer(
                     element = element,
                     selected = element.id == selectedElement?.id,
-                    menu = elementMenu?.takeIf { it.elementId == element.id },
+                    menu = sceneMenu?.takeIf { it.ref.kind == ComposerObjectKind.TEXT && it.ref.id == element.id },
+                    inlineEditEnabled = inlineEditEnabled,
                     canvasWidthPx = canvasWidthPx,
                     canvasHeightPx = canvasHeightPx,
                     onTap = { onElementTap(element.id) },
                     onLongPress = { onElementLongPress(element.id) },
-                    onMenuAction = onElementMenuAction,
-                    onMenuDismiss = onElementMenuDismiss,
+                    onMenuAction = onSceneMenuAction,
+                    onMenuDismiss = onSceneMenuDismiss,
                     onDrag = { dxPx, dyPx ->
                         if (canvasWidthPx > 0f && canvasHeightPx > 0f) {
                             onElementDrag(element.id, dxPx / canvasWidthPx, dyPx / canvasHeightPx)
@@ -224,7 +227,6 @@ internal fun StoryCanvasSurface(
                     },
                     onDragEnd = onElementDragEnd,
                     onTransform = { zoom, rotationDeg -> onElementTransform(element.id, zoom, rotationDeg) },
-                    onRemove = { onElementRemove(element.id) },
                     onTextChange = onElementTextChange,
                 )
             }
@@ -232,16 +234,19 @@ internal fun StoryCanvasSurface(
                 StickerLayer(
                     sticker = sticker,
                     selected = sticker.id == selectedStickerId,
+                    menu = sceneMenu?.takeIf { it.ref.kind == ComposerObjectKind.STICKER && it.ref.id == sticker.id },
                     canvasWidthPx = canvasWidthPx,
                     canvasHeightPx = canvasHeightPx,
                     onTap = { onStickerTap(sticker.id) },
+                    onLongPress = { onStickerLongPress(sticker.id) },
+                    onMenuAction = onSceneMenuAction,
+                    onMenuDismiss = onSceneMenuDismiss,
                     onDrag = { dxPx, dyPx ->
                         if (canvasWidthPx > 0f && canvasHeightPx > 0f) {
                             onStickerDrag(sticker.id, dxPx / canvasWidthPx, dyPx / canvasHeightPx)
                         }
                     },
                     onTransform = { zoom, rotationDeg -> onStickerTransform(sticker.id, zoom, rotationDeg) },
-                    onRemove = { onStickerRemove(sticker.id) },
                 )
             }
             // Topmost: paints every committed stroke, and — only while isDrawingActive —

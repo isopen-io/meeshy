@@ -59,7 +59,7 @@ internal object StoryComposerTextReducer {
     /** Opens the long-press menu on [id], selecting it (inert when it is not on the selected slide). */
     fun menuOpened(state: StoryComposerUiState, id: String): StoryComposerUiState =
         if (state.deck.selectedSlide.elements.none { it.id == id }) state
-        else state.copy(elementMenuId = id, selectedTextElementId = id, selectedStickerId = null)
+        else state.copy(elementMenuId = id, stickerMenuId = null, selectedTextElementId = id, selectedStickerId = null)
 
     /** Dismisses the element context menu without touching the deck or the selection. */
     fun menuDismissed(state: StoryComposerUiState): StoryComposerUiState =
