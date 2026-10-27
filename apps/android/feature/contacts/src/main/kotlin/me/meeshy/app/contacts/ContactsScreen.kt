@@ -45,7 +45,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
+import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -113,9 +113,10 @@ fun ContactsScreen(
                 .fillMaxSize()
                 .padding(padding),
         ) {
-            TabRow(
+            ScrollableTabRow(
                 selectedTabIndex = selectedIndex,
                 containerColor = Color.Transparent,
+                edgePadding = 0.dp,
             ) {
                 tabs.forEachIndexed { index, tab ->
                     val badge = if (tab == ContactsTab.Requests) state.receivedRequests.size else 0
@@ -124,7 +125,7 @@ fun ContactsScreen(
                         onClick = { viewModel.selectTab(tab) },
                         text = {
                             BadgedBox(badge = { RequestsCountBadge(count = badge) }) {
-                                Text(stringResource(tab.labelRes))
+                                Text(stringResource(tab.labelRes), maxLines = 1, softWrap = false)
                             }
                         },
                     )
