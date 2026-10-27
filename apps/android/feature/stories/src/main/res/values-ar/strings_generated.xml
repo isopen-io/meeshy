@@ -176,6 +176,7 @@
     <string name="story_composer_grabber_hint_resize">اسحب لأعلى للتكبير، ولأسفل للتصغير أو الإغلاق.</string>
     <string name="story_composer_redo">إعادة</string>
     <string name="story_composer_undo">تراجع</string>
+    <string name="story_media_accessibility">إمكانية الوصول</string>
     <string name="story_media_alt_a11yHint">يصف هذا الوسائط للأشخاص الذين يستخدمون VoiceOver.</string>
     <string name="story_media_alt_label">النص البديل</string>
     <string name="story_media_alt_placeholder">صِف هذا الوسائط لبرنامج VoiceOver</string>
