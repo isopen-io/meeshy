@@ -84,4 +84,18 @@ class ReelVideoSurfaceAudioFocusTest {
         compose.waitForIdle()
         assertThat(lost).isEqualTo(1)
     }
+
+    @Test
+    fun `un appel qui sonne (perte passagere) fige aussi la lecture chez l'hote`() {
+        var lost = 0
+        show(isActive = true, muted = false, onAudioFocusLost = { lost++ })
+        val request = audioManager.lastAudioFocusRequest
+        val listener = request.listener
+            ?: request.audioFocusRequest.javaClass.getMethod("getOnAudioFocusChangeListener")
+                .invoke(request.audioFocusRequest) as AudioManager.OnAudioFocusChangeListener
+        listener.onAudioFocusChange(AudioManager.AUDIOFOCUS_LOSS_TRANSIENT)
+        shadowOf(Looper.getMainLooper()).idle()
+        compose.waitForIdle()
+        assertThat(lost).isEqualTo(1)
+    }
 }

@@ -39,6 +39,8 @@ private val VIDEO_AUDIO_ATTRIBUTES: AudioAttributes = AudioAttributes.Builder()
  * **Une seule lecture à la fois (#13399).** Une surface AUDIBLE qui joue prend le focus audio : un vocal du fil le
  * perd donc et se met en pause, comme la session audio unique d'iOS ; à l'inverse, un vocal qui démarre le lui
  * reprend, la vidéo se met en pause et [onAudioFocusLost] en prévient l'hôte (la minuterie d'une story se fige).
+ * Une perte PASSAGÈRE (appel qui sonne) prévient l'hôte de la même façon : il fige la lecture, qui ne repart qu'au
+ * toucher suivant.
  * Une surface MUETTE, ou préchargée en pause, ne touche jamais au focus.
  */
 @OptIn(UnstableApi::class)
@@ -150,6 +152,15 @@ fun ReelVideoSurface(
         val focusListener = object : Player.Listener {
             override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
                 if (!playWhenReady && reason == Player.PLAY_WHEN_READY_CHANGE_REASON_AUDIO_FOCUS_LOSS) {
+                    currentOnAudioFocusLost()
+                }
+            }
+
+            // Perte PASSAGÈRE (un appel qui sonne, une alarme) : ExoPlayer se tait sans toucher à playWhenReady et
+            // reprendrait seul au retour du focus, pendant que la minuterie de la story aurait continué. L'hôte
+            // fige donc la lecture comme pour une perte définitive : rien ne repart au milieu d'un appel.
+            override fun onPlaybackSuppressionReasonChanged(playbackSuppressionReason: Int) {
+                if (playbackSuppressionReason == Player.PLAYBACK_SUPPRESSION_REASON_TRANSIENT_AUDIO_FOCUS_LOSS) {
                     currentOnAudioFocusLost()
                 }
             }
