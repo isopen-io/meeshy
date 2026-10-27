@@ -3,6 +3,8 @@ package me.meeshy.app.contacts
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -146,7 +148,7 @@ class ContactsListViewModel @Inject constructor(
         val cached = friendListRepository.cachedSnapshot()
         _state.update {
             if (cached == null) it.copy(isLoading = true)
-            else it.copy(friends = withPresence(cached), isLoading = false)
+            else it.copy(friends = withPresence(BlockedExclusion.friends(cached, blockCache.currentBlockedIds)), isLoading = false)
         }
     }
 
@@ -168,8 +170,13 @@ class ContactsListViewModel @Inject constructor(
 
     private suspend fun revalidate() {
         val currentUserId = sessionRepository.currentUserId.orEmpty()
-        blockRepository?.listBlocked()
-        when (val graph = friendRepository.friendshipGraph(currentUserId)) {
+        val served = coroutineScope {
+            val blocks = async { blockRepository?.listBlocked() }
+            val graphCall = async { friendRepository.friendshipGraph(currentUserId) }
+            blocks.await()
+            graphCall.await()
+        }
+        when (val graph = served) {
             is NetworkResult.Success -> {
                 val blockedIds = blockCache.currentBlockedIds
                 val sent = BlockedExclusion.requests(graph.data.sent, blockedIds)

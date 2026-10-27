@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -166,10 +168,16 @@ class ContactsViewModel @Inject constructor(
 
     private suspend fun fetchAndPublishRequests() {
         try {
-            blockRepository?.listBlocked()
+            val (servedReceived, servedSent) = coroutineScope {
+                val blocks = async { blockRepository?.listBlocked() }
+                val receivedCall = async { friendRepository.receivedRequests() }
+                val sentCall = async { friendRepository.sentRequests() }
+                blocks.await()
+                receivedCall.await() to sentCall.await()
+            }
             val blockedIds = blockCache.currentBlockedIds
-            val received = friendRepository.receivedRequests().map { BlockedExclusion.requests(it, blockedIds) }
-            val sent = friendRepository.sentRequests().map { BlockedExclusion.requests(it, blockedIds) }
+            val received = servedReceived.map { BlockedExclusion.requests(it, blockedIds) }
+            val sent = servedSent.map { BlockedExclusion.requests(it, blockedIds) }
             if (received is NetworkResult.Success && sent is NetworkResult.Success) {
                 ownCacheChange { friendshipCache.hydrate(sent = sent.data, received = received.data) }
             }
