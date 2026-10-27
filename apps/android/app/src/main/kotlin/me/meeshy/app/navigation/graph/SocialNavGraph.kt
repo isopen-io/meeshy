@@ -53,6 +53,7 @@ internal fun NavGraphBuilder.socialNavGraph(
             onBack = { navController.popBackStack() },
             onViewPosts = { userId -> navController.navigate(Routes.userPosts(userId)) },
             onOpenFriendRequests = { navController.navigate(FriendRequestsDestinations.ROUTE) },
+            onOpenProgression = { navController.navigate(GameRoutes.PROGRESSION) },
         )
     }
     composable(
