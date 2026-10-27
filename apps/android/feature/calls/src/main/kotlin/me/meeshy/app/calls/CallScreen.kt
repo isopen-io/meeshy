@@ -24,6 +24,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import androidx.compose.runtime.CompositionLocalProvider
 import me.meeshy.feature.calls.R
 import me.meeshy.sdk.theme.DynamicColorGenerator
 import me.meeshy.ui.theme.MeeshySpacing
@@ -54,7 +57,12 @@ fun CallScreen(
     autoAnswer: Boolean = false,
     viewModel: CallViewModel = hiltViewModel(),
 ) {
-    val state by viewModel.state.collectAsStateWithLifecycle()
+    // L'écran voit un état à chrono GELÉ : un tic de 1 Hz ne le recompose pas. Le temps vivant
+    // voyage en `State` (LocalCallLiveSeconds) et n'est lu que par les feuilles qui l'affichent.
+    val state by remember(viewModel) { viewModel.state.map(CallUiState::withFrozenClock).distinctUntilChanged() }
+        .collectAsStateWithLifecycle(initialValue = viewModel.state.value.withFrozenClock())
+    val liveSeconds = remember(viewModel) { viewModel.state.map { it.durationSeconds }.distinctUntilChanged() }
+        .collectAsStateWithLifecycle(initialValue = viewModel.state.value.durationSeconds)
     val permissionGate = rememberCallPermissionGate(config.isVideo)
 
     LaunchedEffect(config.peerId, config.isOutgoing, config.isVideo) {
@@ -113,6 +121,7 @@ fun CallScreen(
     // L'écran d'appel est blanc sur un fond sombre ÉPINGLÉ, en thème clair comme en thème sombre :
     // on épingle aussi le thème pour que les jetons de texte et de surface des enfants restent clairs.
     MeeshyTheme(darkTheme = true) {
+        CompositionLocalProvider(LocalCallLiveSeconds provides liveSeconds) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -234,6 +243,7 @@ fun CallScreen(
                 toasts = extensions.toasts.toasts,
                 modifier = Modifier.align(Alignment.TopCenter).systemBarsPadding(),
             )
+        }
         }
     }
 }

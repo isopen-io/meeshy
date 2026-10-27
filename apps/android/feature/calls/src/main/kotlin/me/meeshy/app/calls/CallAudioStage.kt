@@ -68,7 +68,7 @@ internal fun CallAudioStage(
             fontWeight = FontWeight.SemiBold,
             color = CallPalette.Ink,
         )
-        state.durationLabel?.let { clock -> CallStageDuration(clock, state.durationSeconds) }
+        state.durationLabel?.let { clock -> CallStageDuration(clock, state.durationSeconds, live = state.hasLiveClock) }
         CallStagePills(state, signalingDegraded)
     }
 }
@@ -89,7 +89,9 @@ internal fun CallAvatarPair(name: String, peer: CallPeerVisual, size: Dp, modifi
 }
 
 @Composable
-private fun CallStageDuration(clock: String, seconds: Long) {
+private fun CallStageDuration(fixedClock: String, fixedSeconds: Long, live: Boolean) {
+    val seconds = liveOrFixedSeconds(live, LocalCallLiveSeconds.current, fixedSeconds)
+    val clock = if (live) clockLabel(seconds) else fixedClock
     val resources = LocalContext.current.resources
     val description = stringResource(R.string.call_duration_a11y)
     val spoken = remember(seconds, resources) { CallSpokenDuration.spoken(resources, seconds) }

@@ -167,6 +167,18 @@ data class CallUiState(
     /** La durée finale en secondes, pour que TalkBack la dise (« 2 minutes 5 secondes »). */
     val durationSeconds: Long = 0,
 ) {
+    /** Le chrono tourne : connecté, ou en reconnexion avec un média déjà établi. */
+    val hasLiveClock: Boolean
+        get() = status == CallStatus.CONNECTED || status == CallStatus.RECONNECTING
+
+    /**
+     * Le même état, chrono GELÉ : pendant que le chrono tourne, l'écran ne change plus à chaque
+     * seconde — seules les feuilles qui AFFICHENT le temps le lisent, par [LocalCallLiveSeconds].
+     * Sans cela, un tic de 1 Hz invalide tout l'écran d'appel (racine, scène, pilule).
+     */
+    fun withFrozenClock(): CallUiState =
+        if (hasLiveClock && durationLabel != null) copy(durationLabel = FROZEN_CLOCK, durationSeconds = 0) else this
+
     /** Accept / decline are only offered for an incoming, still-ringing call. */
     val showAnswerControls: Boolean
         get() = status == CallStatus.INCOMING
@@ -294,3 +306,6 @@ object CallPresenter {
         is CallState.Ended -> CallStatus.ENDED
     }
 }
+
+/** Le libellé posé à la place du temps vivant : constant, donc sans effet sur la recomposition. */
+internal const val FROZEN_CLOCK = "00:00"

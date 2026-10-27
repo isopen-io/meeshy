@@ -49,12 +49,7 @@ internal fun CallPeerBlock(state: CallUiState, accent: Color, videoStage: Boolea
             color = MeeshyTheme.tokens.textPrimary,
         )
         Spacer(Modifier.height(MeeshySpacing.sm))
-        Text(
-            text = statusLabel(state),
-            style = MaterialTheme.typography.bodyLarge,
-            color = MeeshyTheme.tokens.textSecondary,
-            textAlign = TextAlign.Center,
-        )
+        CallStatusText(state)
         state.connectionQuality?.let { quality ->
             Spacer(Modifier.height(MeeshySpacing.sm))
             ConnectionQualityBars(quality = quality, accent = accent)
@@ -102,13 +97,26 @@ internal fun CallCaption(text: String) {
     )
 }
 
+/** La ligne d'état : seule elle lit le chrono vivant, le reste de l'écran ne bouge pas chaque seconde. */
+@Composable
+private fun CallStatusText(state: CallUiState) {
+    Text(
+        text = statusLabel(state),
+        style = MaterialTheme.typography.bodyLarge,
+        color = MeeshyTheme.tokens.textSecondary,
+        textAlign = TextAlign.Center,
+    )
+}
+
 @Composable
 private fun statusLabel(state: CallUiState): String = when (state.status) {
     CallStatus.IDLE -> ""
     CallStatus.INCOMING -> stringResource(R.string.call_status_incoming)
     CallStatus.OUTGOING_RINGING -> stringResource(R.string.call_status_ringing)
     CallStatus.CONNECTING -> stringResource(R.string.call_status_connecting)
-    CallStatus.CONNECTED -> state.durationLabel ?: stringResource(R.string.call_status_connected)
+    CallStatus.CONNECTED -> state.durationLabel
+        ?.let { clockLabel(liveOrFixedSeconds(state.hasLiveClock, LocalCallLiveSeconds.current, state.durationSeconds)) }
+        ?: stringResource(R.string.call_status_connected)
     CallStatus.RECONNECTING -> stringResource(R.string.call_status_reconnecting, state.reconnectAttempt)
     CallStatus.ENDED -> {
         val base = endedLabel(state.endReason)
