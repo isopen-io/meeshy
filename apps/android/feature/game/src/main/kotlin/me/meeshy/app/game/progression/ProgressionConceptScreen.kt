@@ -34,6 +34,10 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.app.game.gameString
 import me.meeshy.feature.game.R
+import me.meeshy.app.game.pages.GameHiddenCard
+import me.meeshy.app.game.pages.rememberGameHidden
+import me.meeshy.sdk.model.game.pages.GamePage
+import me.meeshy.sdk.model.game.pages.GamePageLinks
 import me.meeshy.sdk.model.game.progression.ProgressionConcept
 import me.meeshy.sdk.model.game.progression.ProgressionConceptCard
 import me.meeshy.ui.accessibility.LocalReduceMotion
@@ -58,9 +62,11 @@ fun ProgressionConceptScreen(
     concept: ProgressionConcept,
     onBack: () -> Unit,
     onOpenConcept: (ProgressionConcept) -> Unit,
+    onOpenPage: (GamePage) -> Unit = {},
     viewModel: ProgressionViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val hidden = rememberGameHidden()
     val snapshot = state.snapshot
     val card = snapshot?.cards?.firstOrNull { it.concept == concept }
 
@@ -72,6 +78,10 @@ fun ProgressionConceptScreen(
     ) {
         state.plan.notices.filterNot { it == me.meeshy.sdk.model.game.progression.ProgressionNotice.Empty }
             .forEach { notice -> ProgressionNoticeView(notice, onRetry = viewModel::refresh) }
+        if (hidden.hidden) {
+            GameHiddenCard(onSettings = { onOpenPage(GamePage.Settings) })
+            return@GamePageScaffold
+        }
         if (state.plan.showsSkeleton) ProgressionSkeleton()
         if (snapshot != null) {
             if (card != null) ConceptHero(card, snapshot.game)
@@ -89,6 +99,12 @@ fun ProgressionConceptScreen(
             }
             if (concept == ProgressionConcept.Points) {
                 ConceptLink(stringResource(R.string.game_fiche_light_to_heritage)) { onOpenConcept(ProgressionConcept.Meesh) }
+            }
+            val pages = GamePageLinks.of(concept)
+            if (pages.isNotEmpty()) {
+                FicheSection(stringResource(R.string.game_fiche_more)) {
+                    pages.forEach { page -> ConceptLink(stringResource(pageLinkTitle(page))) { onOpenPage(page) } }
+                }
             }
         }
     }
@@ -208,3 +224,14 @@ private val HERO_EMBLEM = 72.dp
 private val GAUGE_HEIGHT = 8.dp
 private const val GAUGE_MILLIS = 600
 private const val TRACK_ALPHA = 0.2f
+
+/** Le titre du lien « Aller plus loin » d'une sous-page (iOS `ProgressionConceptLink.title`). */
+@androidx.annotation.StringRes
+private fun pageLinkTitle(page: GamePage): Int = when (page) {
+    GamePage.League -> R.string.game_concept_link_league
+    GamePage.Season -> R.string.game_concept_link_season
+    GamePage.Prestige -> R.string.game_concept_link_prestige
+    GamePage.Showcase -> R.string.game_concept_link_showcase
+    GamePage.Atlas -> R.string.game_concept_link_atlas
+    GamePage.Settings -> R.string.game2_door_settings
+}

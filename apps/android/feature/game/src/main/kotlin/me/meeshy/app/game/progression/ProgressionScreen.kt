@@ -9,6 +9,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import me.meeshy.app.game.pages.GameHiddenCard
+import me.meeshy.app.game.pages.GameSettingsDoor
+import me.meeshy.app.game.pages.rememberGameHidden
 import me.meeshy.feature.game.R
 import me.meeshy.sdk.model.game.progression.ProgressionConcept
 import me.meeshy.ui.motion.staggeredAppear
@@ -27,10 +30,12 @@ import me.meeshy.ui.theme.MeeshySpacing
 fun ProgressionScreen(
     onBack: () -> Unit,
     onOpenConcept: (ProgressionConcept) -> Unit,
+    onOpenSettings: () -> Unit = {},
     viewModel: ProgressionViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val snapshot = state.snapshot
+    val hidden = rememberGameHidden()
 
     GamePageScaffold(
         title = stringResource(R.string.game_progression_title),
@@ -38,7 +43,7 @@ fun ProgressionScreen(
         isRefreshing = state.isRefreshing,
         onRefresh = viewModel::refresh,
         trailing = {
-            snapshot?.standing?.takeUnless { it.isEmpty }?.let {
+            snapshot?.standing?.takeUnless { it.isEmpty || hidden.hidden }?.let {
                 ProgressionHeaderStanding(
                     standing = it,
                     onOpenRank = { onOpenConcept(ProgressionConcept.Glory) },
@@ -47,6 +52,10 @@ fun ProgressionScreen(
             }
         },
     ) {
+        if (hidden.hidden) {
+            GameHiddenCard(onSettings = onOpenSettings)
+            return@GamePageScaffold
+        }
         state.plan.notices.forEach { notice -> ProgressionNoticeView(notice, onRetry = viewModel::refresh) }
         if (state.plan.showsSkeleton) ProgressionSkeleton()
         if (snapshot != null) {
@@ -61,6 +70,7 @@ fun ProgressionScreen(
                         )
                     }
                 }
+                GameSettingsDoor(onOpenSettings)
             }
         }
     }
