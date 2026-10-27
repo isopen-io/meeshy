@@ -71,6 +71,7 @@ fun TileMapView(
     markers: List<GeoPoint> = emptyList(),
     marker: @Composable (GeoPoint) -> Unit = {},
     placeholder: Color = MaterialTheme.colorScheme.surfaceVariant,
+    showAttribution: Boolean = true,
 ) {
     val density = LocalDensity.current
     val context = LocalContext.current
@@ -132,16 +133,25 @@ fun TileMapView(
                 },
             ) { marker(point) }
         }
-        Text(
-            text = SlippyMap.attribution(style),
-            style = MaterialTheme.typography.labelSmall,
-            color = Color.Black.copy(alpha = 0.75f),
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .background(Color.White.copy(alpha = 0.6f))
-                .padding(horizontal = 4.dp),
-        )
+        if (showAttribution) MapAttribution(style, Modifier.align(Alignment.BottomEnd))
     }
+}
+
+/**
+ * Le crédit du fournisseur de tuiles (ODbL : toujours lisible). [TileMapView] le pose lui-même
+ * au coin de la carte ; un écran dont le bas est recouvert (carte du sélecteur de lieu) le pose
+ * lui-même au-dessus de ses encarts et passe `showAttribution = false`.
+ */
+@Composable
+fun MapAttribution(style: SharedMapStyle, modifier: Modifier = Modifier) {
+    Text(
+        text = SlippyMap.attribution(style),
+        style = MaterialTheme.typography.labelSmall,
+        color = Color.Black.copy(alpha = 0.75f),
+        modifier = modifier
+            .background(Color.White.copy(alpha = 0.6f))
+            .padding(horizontal = 4.dp),
+    )
 }
 
 private fun Modifier.mapGestures(
