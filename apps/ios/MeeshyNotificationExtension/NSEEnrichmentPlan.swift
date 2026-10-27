@@ -1,5 +1,5 @@
 import Foundation
-import MeeshySDK
+import MeeshyCore
 
 struct NSEAttachmentSource: Sendable, Equatable {
     let url: URL

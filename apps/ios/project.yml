@@ -356,7 +356,11 @@ targets:
       # MainActor, et ce commentaire dit pourquoi.
       SWIFT_DEFAULT_ACTOR_ISOLATION: nonisolated
     dependencies:
-      # NotificationService.swift imports MeeshySDK (and GRDB transitively).
+      # #13137 — le noyau LÉGER (sans Socket.IO ni WebRTC) : la NSE n'importe
+      # plus que lui, fichier par fichier ; MeeshySDK reste lié tant que
+      # NotificationService et NSEMessagePrePersister le lisent.
+      - package: MeeshySDK
+        product: MeeshyCore
       - package: MeeshySDK
         product: MeeshySDK
       # #12536 — la NSE déchiffrera sous le verrou du groupe d'apps (#12537).
@@ -399,6 +403,9 @@ targets:
       # (« Unable to find NSExtensionContextClass », mesuré au simulateur).
       ENABLE_DEBUG_DYLIB: NO
     dependencies:
+      # #13137 — les politiques partagées avec la NSE importent MeeshyCore.
+      - package: MeeshySDK
+        product: MeeshyCore
       - package: MeeshySDK
         product: MeeshySDK
       - sdk: UserNotificationsUI.framework
@@ -565,10 +572,10 @@ targets:
       # resurrected now that the sources are shared).
       - path: MeeshyNotificationExtension/NotificationPayloadHelpers.swift
       - path: MeeshyNotificationExtension/NSEDecryptor.swift
-      # NSEPreferencesGate importe MeeshySDK (modèle UserNotificationPreferences,
+      # NSEPreferencesGate importe MeeshyCore (modèle UserNotificationPreferences,
       # déjà lié au bundle de tests) + UserNotifications (data-only en test).
       - path: MeeshyNotificationExtension/NSEPreferencesGate.swift
-      # NSEAPIRequest importe MeeshySDK (ClientInfoProvider.identityHeaders) :
+      # NSEAPIRequest importe MeeshyCore (ClientInfoProvider.identityHeaders) :
       # c'est la requête que la NSE envoie, et ce qu'elle dépose est ce que
       # l'app peint au tap (#7804).
       - path: MeeshyNotificationExtension/NSEAPIRequest.swift
