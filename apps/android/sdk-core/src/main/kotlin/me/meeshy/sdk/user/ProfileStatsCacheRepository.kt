@@ -80,7 +80,28 @@ class ProfileStatsCacheRepository @Inject constructor(
         )
     }
 
+    /**
+     * L'activité de CE compte (écran des statistiques) : une clé par compte, donc la fenêtre d'un compte précédent
+     * ne se peint jamais sous un autre après un changement de session. Même contrat que [cachedTimeline] : `null`
+     * à froid ou illisible, `emptyList()` pour une fenêtre synchronisée et vide.
+     */
+    suspend fun cachedTimeline(userId: String): List<TimelinePoint>? {
+        val payload = dao.observe(timelineKey(userId)).first()?.payload ?: return null
+        return runCatching { MeeshyApi.json.decodeFromString<List<TimelinePoint>>(payload) }.getOrNull()
+    }
+
+    suspend fun persistTimeline(userId: String, points: List<TimelinePoint>) {
+        dao.upsert(
+            ProfileStatsCacheEntity(
+                cacheKey = timelineKey(userId),
+                payload = MeeshyApi.json.encodeToString(points),
+                cachedAt = SystemCacheClock.nowMillis(),
+            ),
+        )
+    }
+
     internal companion object {
+        fun timelineKey(userId: String): String = "profile_timeline:$userId"
         const val TIMELINE_KEY: String = "profile_timeline:me"
         fun statsKey(userId: String): String = "profile_stats:$userId"
     }

@@ -14,6 +14,7 @@ import me.meeshy.app.navigation.rememberProfileOpenerOverSheet
 import me.meeshy.app.navigation.sheetComposable
 import me.meeshy.app.notifications.NotificationsScreen
 import me.meeshy.app.profile.OwnProfileScreen
+import me.meeshy.app.profile.UserStatsScreen
 import me.meeshy.app.profile.ReportUserScreen
 import me.meeshy.app.profile.ReportUserViewModel
 
@@ -59,7 +60,11 @@ internal fun NavGraphBuilder.socialNavGraph(
             onViewPosts = { userId -> navController.navigate(Routes.userPosts(userId)) },
             onOpenFriendRequests = { navController.navigate(FriendRequestsDestinations.ROUTE) },
             onOpenProgression = { navController.navigate(GameRoutes.PROGRESSION) },
+            onOpenStats = { navController.navigate(ProfileRoutes.STATS) },
         )
+    }
+    composable(ProfileRoutes.STATS) {
+        UserStatsScreen(onBack = { navController.popBackStack() })
     }
     sheetComposable(
         route = Routes.USER_POSTS,

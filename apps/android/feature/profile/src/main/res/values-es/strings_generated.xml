@@ -109,4 +109,13 @@
     <string name="report_user_details_a11y">Detalles de la denuncia</string>
     <string name="report_user_submit_hint">Enviar denuncia por</string>
     <string name="report_user_success">Denuncia enviada</string>
+    <string name="user_stats_activity">ACTIVIDAD</string>
+    <string name="user_stats_badges">INSIGNIAS</string>
+    <string name="user_stats_conversations">Conversaciones</string>
+    <string name="user_stats_languages">Idiomas</string>
+    <string name="user_stats_member">Miembro</string>
+    <string name="user_stats_messages">Mensajes</string>
+    <string name="user_stats_requests">Solicitudes</string>
+    <string name="user_stats_title">Estadísticas</string>
+    <string name="user_stats_translations">Traducciones</string>
 </resources>

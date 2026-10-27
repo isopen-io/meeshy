@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="user_stats_error">تعذّر تحديث إحصاءاتك</string>
+    <string name="user_stats_member_days">%1$d يوم</string>
+    <string name="user_stats_offline">أنت غير متصل — هذه آخر إحصاءاتك المعروفة</string>
+</resources>
