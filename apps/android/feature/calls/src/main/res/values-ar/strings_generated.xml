@@ -57,4 +57,7 @@
     <string name="call_recording_stopped_timeout">لم يُجب الجميع: لا تسجيل</string>
     <string name="call_recording_unavailable">التسجيل غير متاح حاليًا</string>
     <string name="call_recording_waiting">بانتظار موافقة الجميع…</string>
+    <string name="call_zoom_hint">اسحب لأعلى أو لأسفل للتكبير. على الشاشة، اضغط بإصبعين على صورتك؛ انقر مرتين للعودة إلى 1×</string>
+    <string name="call_zoom_label">تكبير كاميرتي</string>
+    <string name="call_zoom_lens">تكبير %s</string>
 </resources>
