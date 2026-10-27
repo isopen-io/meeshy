@@ -63,8 +63,11 @@ class RouteManifestRatchetTest {
          * le nom de joute), que porte `GameApi.kt`, chacune avec son identifiant d'idempotence.
          * 240 : moins `GET /sounds/mine`, `GET /stories/audio`, `PATCH /sounds/:id` et `DELETE /sounds/:id`
          * (#13428 : l'étagère des sons du composeur), que porte `SoundLibraryApi.kt`.
+         * 237 : moins `GET /conversations/:conversationId/encryption-status`, `POST …/encryption` et
+         * `DELETE …/encryption` (#13463 : la fiche Chiffrement d'une conversation), que porte
+         * `ConversationEncryptionApi.kt`.
          */
-        const val TO_PORT_CEILING = 240
+        const val TO_PORT_CEILING = 237
         val VERB_STATUSES = setOf("hors-perimetre-mobile", "ops-only", "a-porter", "implementee-par-url-serveur")
     }
 
