@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- lot: notifications en cours (#13420) ; miroir des Live Activities iOS d'envoi et d'enregistrement. -->
+<resources>
+    <string name="ongoing_channel_name">أنشطة جارية</string>
+    <string name="ongoing_channel_description">تقدّم الإرسال والرسائل الصوتية قيد التسجيل</string>
+    <string name="ongoing_activity_public">نشاط جارٍ</string>
+    <string name="outbox_activity_story">جارٍ نشر قصة</string>
+    <string name="outbox_activity_media">جارٍ إرسال وسائط</string>
+    <string name="outbox_activity_message_with_media">جارٍ إرسال رسالة مع وسائط</string>
+    <string name="outbox_activity_sent">تم الإرسال</string>
+    <string name="outbox_activity_failed">فشل الإرسال</string>
+    <string name="outbox_activity_waiting_network">في انتظار الشبكة</string>
+    <string name="outbox_activity_remaining">%1$d متبقٍ</string>
+    <string name="voice_recording_activity_title">تسجيل صوتي</string>
+    <string name="voice_recording_activity_stop">إيقاف</string>
+</resources>

@@ -53,6 +53,9 @@ object NotificationChannelIds {
     const val CHANNEL_SOCIAL_V2: String = "meeshy_social_v2"
     const val CHANNEL_SYSTEM_V2: String = "meeshy_system_v2"
 
+    /** Les notifications en cours (envoi long, vocal en cours d'enregistrement) : discrètes, sans son. */
+    const val CHANNEL_ONGOING: String = "meeshy_ongoing"
+
     /**
      * Quiet delivery (no banner, no sound) — where a push lands when the preferences refuse an
      * alert in the background (quiet hours, muted type, system Do-Not-Disturb), the
