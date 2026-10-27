@@ -83,6 +83,34 @@ class CallLiveFrameControllerTest {
     }
 
     @Test
+    fun `un refus arrive apres que j'ai retire ma proposition ne dit rien`() = runTest {
+        val gate = kotlinx.coroutines.CompletableDeferred<Result<Unit>>()
+        coEvery { social.selectCallLiveFrame(any(), frame, any(), null) } coAnswers { gate.await() }
+        val controller = CallLiveFrameController(social, session, CoroutineScope(UnconfinedTestDispatcher(testScheduler)))
+        controller.onTransition(CallState.Idle, CallState.Connected, info)
+
+        controller.apply(frame)
+        controller.apply(null)
+        gate.complete(Result.failure(IllegalStateException("refus")))
+
+        assertThat(controller.notices.value).isNull()
+        assertThat(controller.state.value.frameId).isNull()
+        controller.onCleared()
+    }
+
+    @Test
+    fun `sans appel identifie, choisir un cadre ne change rien, comme iOS`() = runTest {
+        val controller = CallLiveFrameController(social, session, CoroutineScope(UnconfinedTestDispatcher(testScheduler)))
+        controller.onTransition(CallState.Idle, CallState.Connected, CallSessionInfo(callId = "", config = CallConfig.EMPTY))
+
+        controller.apply(frame)
+
+        assertThat(controller.state.value.frameId).isNull()
+        coVerify(exactly = 0) { social.selectCallLiveFrame(any(), any(), any(), any()) }
+        controller.onCleared()
+    }
+
+    @Test
     fun `la reponse de l'autre a ma proposition s'affiche`() = run { controller ->
         controller.apply(frame)
         incoming.tryEmit(CallLiveFrameSelected("call-1", "peer", frame, CallLiveFrameTexts(name = "Bob"), CallLiveFrameReply.ACCEPTED))

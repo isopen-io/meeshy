@@ -79,8 +79,11 @@ class CallLiveFrameController internal constructor(
 
     override fun onCleared() = reset()
 
-    /** Mon cadre s'applique tout de suite chez moi, puis se propose. `null` le retire. */
-    fun apply(frameId: String?) = run(CallLiveFrameMachine.apply(_state.value, frameId, myName()))
+    /** Mon cadre s'applique tout de suite chez moi, puis se propose. `null` le retire. Sans appel identifié, rien (iOS `guard let callId`). */
+    fun apply(frameId: String?) {
+        if (callId == null) return
+        run(CallLiveFrameMachine.apply(_state.value, frameId, myName()))
+    }
 
     fun accept() = run(CallLiveFrameMachine.accept(_state.value, myName()))
 
@@ -103,7 +106,7 @@ class CallLiveFrameController internal constructor(
             social.selectCallLiveFrame(target, outgoing.frameId, outgoing.texts, outgoing.reply).onFailure { error ->
                 Timber.w(error, "call-live-frame: refused")
                 val id = outgoing.frameId
-                if (outgoing.reply == null && id != null && callId == target) {
+                if (outgoing.reply == null && id != null && callId == target && _state.value.sentProposal == id) {
                     _state.value = CallLiveFrameMachine.proposalRefused(_state.value, id)
                     _notices.value = CallLiveFrameNotice.NotProposed
                 }
