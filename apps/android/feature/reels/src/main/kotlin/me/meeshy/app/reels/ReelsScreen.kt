@@ -12,6 +12,7 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -24,6 +25,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
@@ -178,6 +181,9 @@ private fun ReelsPager(
     // qui est une nouvelle liste a chaque like optimiste.
     val reelIds = reels.map { it.id }
     val currentOnSettled by rememberUpdatedState(onSettled)
+    // Hors premier plan (ON_STOP), aucun lecteur ne vit : les décodeurs sont rendus au système,
+    // la page affichée reprend à sa position au retour (voir ReelPage).
+    val lifecycleState by LocalLifecycleOwner.current.lifecycle.currentStateFlow.collectAsState()
     LaunchedEffect(pagerState, reelIds) {
         snapshotFlow { pagerState.currentPage }
             .distinctUntilChanged()
@@ -206,7 +212,10 @@ private fun ReelsPager(
         val isElected by remember(pagerState, page) { derivedStateOf { pagerState.currentPage == page } }
         val isSettled by remember(pagerState, page) { derivedStateOf { pagerState.settledPage == page } }
         val loadsMedia by remember(pagerState, page) {
-            derivedStateOf { page == pagerState.currentPage || page == pagerState.currentPage + 1 }
+            derivedStateOf {
+                lifecycleState.isAtLeast(Lifecycle.State.STARTED) &&
+                    (page == pagerState.currentPage || page == pagerState.currentPage + 1)
+            }
         }
         ReelPage(
             reel = reel,

@@ -5,6 +5,7 @@ import android.content.ClipboardManager
 import android.content.Context
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
@@ -93,11 +94,26 @@ private fun ReelMenuButton(
                         ReelMenu.Action.REPORT -> R.string.reels_menu_report
                     },
                 )
+                val tint = if (action == ReelMenu.Action.DELETE) MeeshyPalette.Error else androidx.compose.ui.graphics.Color.Unspecified
                 DropdownMenuItem(
+                    leadingIcon = {
+                        Icon(
+                            imageVector = when (action) {
+                                ReelMenu.Action.OPEN -> MeeshyIcons.OpenExternal
+                                ReelMenu.Action.COPY_TEXT -> MeeshyIcons.Copy
+                                ReelMenu.Action.SHARE -> MeeshyIcons.Share
+                                ReelMenu.Action.PIN -> MeeshyIcons.Pin
+                                ReelMenu.Action.DELETE -> MeeshyIcons.Delete
+                                ReelMenu.Action.REPORT -> MeeshyIcons.Warning
+                            },
+                            contentDescription = null,
+                            tint = if (action == ReelMenu.Action.DELETE) MeeshyPalette.Error else androidx.compose.material3.LocalContentColor.current,
+                        )
+                    },
                     text = {
                         Text(
                             text = label,
-                            color = if (action == ReelMenu.Action.DELETE) MeeshyPalette.Error else androidx.compose.ui.graphics.Color.Unspecified,
+                            color = tint,
                         )
                     },
                     onClick = {

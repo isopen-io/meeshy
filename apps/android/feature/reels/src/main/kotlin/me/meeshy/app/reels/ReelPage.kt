@@ -16,6 +16,7 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -72,13 +73,21 @@ internal fun ReelPage(
     val hasPlayable = stage.playableUrl != null
     var paused by rememberSaveable(reel.id) { mutableStateOf(false) }
     var player by remember { mutableStateOf<ReelPlayerHandle?>(null) }
+    // Position gardée quand le lecteur est libéré sans que la page cesse d'être élue (app en
+    // arrière-plan) : le lecteur recréé au retour y reprend. Une page quittée repart de zéro.
+    var resumeAtMs by rememberSaveable(reel.id) { mutableLongStateOf(0L) }
     val imagesState = rememberPagerState(pageCount = { reel.imageUrls.size })
     val showsCarousel = !stage.showsVideoSurface && reel.imageUrls.size > 1
     val accent = hexColor(DynamicColorGenerator.colorForName(reel.authorName ?: reel.id), MeeshyPalette.Indigo500)
     val currentChromeHidden by rememberUpdatedState(chromeHidden)
     val currentOnChromeHidden by rememberUpdatedState(onChromeHidden)
 
-    LaunchedEffect(isElected) { if (!isElected) paused = false }
+    LaunchedEffect(isElected) {
+        if (!isElected) {
+            paused = false
+            resumeAtMs = 0L
+        }
+    }
 
     val isPlaying = isElected && !paused && hasPlayable
     val playPauseFade = rememberFullscreenPlayPauseFade(isPlaying)
@@ -125,7 +134,14 @@ internal fun ReelPage(
                     showsPicture = stage.showsVideoSurface,
                     loads = loadsMedia,
                     paused = paused,
-                    onPlayer = { player = it },
+                    onPlayer = { handle ->
+                        if (handle == null) {
+                            resumeAtMs = player?.positionMs() ?: resumeAtMs
+                        } else if (resumeAtMs > 0L) {
+                            handle.seekTo(resumeAtMs)
+                        }
+                        player = handle
+                    },
                     fit = true,
                 )
             }
