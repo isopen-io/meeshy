@@ -109,7 +109,7 @@ class OwnProfileViewModel @Inject constructor(
     private var latestCmid: String? = null
 
     private var statsLoadedForId: String? = null
-    private var timelineLoaded = false
+    private var timelineLoadedForId: String? = null
 
     init {
         viewModelScope.launch {
@@ -121,7 +121,7 @@ class OwnProfileViewModel @Inject constructor(
                 user?.id?.takeIf { it.isNotBlank() }?.let {
                     paintMoodFromCache(it)
                     loadStatsOnce(it)
-                    loadTimelineOnce()
+                    loadTimelineOnce(it)
                 }
             }
         }
@@ -302,16 +302,18 @@ class OwnProfileViewModel @Inject constructor(
     }
 
     /**
-     * Fetches and projects my 30-day activity timeline exactly once, cache first.
+     * Fetches and projects my 30-day activity timeline exactly once per resolved session id,
+     * cache first — the cache row is keyed by [id], never shared between accounts.
      * `/users/me/stats/timeline` reports only the caller's own activity — this page
      * is its only consumer. Failure-inert, like the stats.
      */
-    private fun loadTimelineOnce() {
-        if (timelineLoaded) return
-        timelineLoaded = true
+    private fun loadTimelineOnce(id: String) {
+        if (id == timelineLoadedForId) return
+        if (timelineLoadedForId != null) _state.update { it.copy(timeline = null) }
+        timelineLoadedForId = id
         viewModelScope.launch {
             try {
-                statsCache.cachedTimeline()?.let { cached ->
+                statsCache.cachedTimeline(id)?.let { cached ->
                     StatsTimelineBuilder.build(cached)?.let { presentation ->
                         _state.update { it.copy(timeline = presentation) }
                     }
@@ -319,7 +321,7 @@ class OwnProfileViewModel @Inject constructor(
                 val result = userRepository.getUserStatsTimeline()
                 if (result is NetworkResult.Success) {
                     _state.update { it.copy(timeline = StatsTimelineBuilder.build(result.data)) }
-                    statsCache.persistTimeline(result.data)
+                    statsCache.persistTimeline(id, result.data)
                 }
             } catch (e: CancellationException) {
                 throw e

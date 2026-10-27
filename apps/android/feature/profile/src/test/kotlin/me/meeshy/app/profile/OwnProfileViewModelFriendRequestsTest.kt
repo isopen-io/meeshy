@@ -69,7 +69,7 @@ class OwnProfileViewModelFriendRequestsTest {
         coEvery { userRepo.getUserStatsTimeline(any()) } returns NetworkResult.Failure(ApiError("offline"))
         val statsCache = mockk<ProfileStatsCacheRepository>(relaxed = true)
         coEvery { statsCache.cachedStats(any()) } returns null
-        coEvery { statsCache.cachedTimeline() } returns null
+        coEvery { statsCache.cachedTimeline(any()) } returns null
         return OwnProfileViewModel(
             sessionRepository = session,
             userRepository = userRepo,
