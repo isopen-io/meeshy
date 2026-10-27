@@ -122,7 +122,7 @@ object StoryComposerAutosave {
             deck.slides.all {
                 it.transform.isIdentity && it.filter == null && it.durationSecondsPin == null &&
                     it.background == null && it.backgroundMediaId == null &&
-                    it.elements.isEmpty() && it.stickers.isEmpty() && it.strokes.isEmpty()
+                    it.elements.isEmpty() && it.stickers.isEmpty() && it.strokes.isEmpty() && it.audio.isEmpty()
             }
 
     private fun purgeOrNone(previous: StoryComposerDraftSnapshot?): StoryDraftPersist =
@@ -149,6 +149,7 @@ fun StorySlideDeck.toDraftSnapshot(
             backgroundLoop = it.backgroundLoop,
             elements = it.elements.map { element -> element.toDraftSnapshot() },
             stickers = it.stickers.map { sticker -> sticker.toDraftSnapshot() },
+            audio = it.audio,
         )
     },
     selectedId = selectedId,
@@ -187,6 +188,7 @@ fun StoryComposerDraftSnapshot.toDeck(): StorySlideDeck? {
                 background = it.background?.let(StoryBackgroundValue::parse),
                 backgroundMediaId = it.backgroundMediaId,
                 backgroundLoop = it.backgroundLoop,
+                audio = it.audio,
             )
         },
         selectedId = selectedId,
