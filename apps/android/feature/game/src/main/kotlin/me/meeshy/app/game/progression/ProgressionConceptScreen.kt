@@ -33,6 +33,9 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.app.game.gameString
+import me.meeshy.app.game.gestures.ConceptGestures
+import me.meeshy.app.game.gestures.GameGesturesViewModel
+import me.meeshy.app.game.gestures.conceptHasGestures
 import me.meeshy.feature.game.R
 import me.meeshy.app.game.pages.GameHiddenCard
 import me.meeshy.app.game.pages.rememberGameHidden
@@ -54,8 +57,8 @@ import me.meeshy.ui.theme.MeeshyTheme
  * servir ». La page est AUTONOME dans la pile : atteinte par un lien ou une notification, elle lit sa propre
  * progression, cache d'abord — aucun spinner ne s'ajoute.
  *
- * Les gestes du concept (frapper, ouvrir le coffre, changer une mission, protéger ou rallumer la Flamme) et ses
- * sous-pages (ligue, saison, vitrine, Atlas, Renaissance) sont des parties suivantes du lot jeu.
+ * « À toi de jouer » range les GESTES du concept (changer un acte, ouvrir l'Offrande, frapper, protéger ou rallumer la
+ * Flamme), pilotés par `GameGesturesViewModel` : une intention, la réponse de la passerelle, jamais un solde calculé ici.
  */
 @Composable
 fun ProgressionConceptScreen(
@@ -64,6 +67,7 @@ fun ProgressionConceptScreen(
     onOpenConcept: (ProgressionConcept) -> Unit,
     onOpenPage: (GamePage) -> Unit = {},
     viewModel: ProgressionViewModel = hiltViewModel(),
+    gestures: GameGesturesViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val hidden = rememberGameHidden()
@@ -96,6 +100,10 @@ fun ProgressionConceptScreen(
             }
             FicheSection(stringResource(R.string.game_fiche_use)) {
                 Sentence(stringResource(ConceptCopy.use(concept)))
+            }
+            val game = snapshot.game
+            if (game != null && conceptHasGestures(concept, game)) {
+                FicheSection(stringResource(R.string.game_concept_section_act)) { ConceptGestures(concept, game, gestures) }
             }
             if (concept == ProgressionConcept.Points) {
                 ConceptLink(stringResource(R.string.game_fiche_light_to_heritage)) { onOpenConcept(ProgressionConcept.Meesh) }

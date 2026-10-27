@@ -179,6 +179,17 @@
     <string name="game2_visibility_saving">Wird gespeichert…</string>
     <string name="game_actions_one">%s Aktion</string>
     <string name="game_actions_other">%s Aktionen</string>
+    <string name="game_chest_claimed">Eine neue Gabe wartet am Ende des nächsten Traums auf dich.</string>
+    <string name="game_chest_locked">Erfülle die drei Akte des Traums, damit sie erscheint.</string>
+    <string name="game_chest_open">Die Gabe öffnen</string>
+    <string name="game_chest_opening">Wird geöffnet…</string>
+    <string name="game_chest_reward_bonus_fifth">Bonus: +%s, ein Fünftel einer Meesh</string>
+    <string name="game_chest_reward_bonus_whole">Bonus: +%s, der Preis einer Meesh</string>
+    <string name="game_chest_reward_fragment">Ein Sternfragment</string>
+    <string name="game_chest_reward_freeze">Eine Hüterin für deine Flamme</string>
+    <string name="game_chest_reward_glory">+%s Ruhm</string>
+    <string name="game_chest_reward_points">+%s</string>
+    <string name="game_chest_title">Die Gabe</string>
     <string name="game_concept_atlas_how">Sende und erhalte eine Nachricht in einer Sprache: Der Stempel sitzt.</string>
     <string name="game_concept_atlas_name">Der Atlas</string>
     <string name="game_concept_atlas_tip_1">Schreib jemandem in einer anderen Sprache als deiner.</string>
@@ -224,6 +235,9 @@
     <string name="game_concept_elans_use">Sieh nach, welche Familien aktiv sind, und mach eine Aktion in einer fehlenden Familie. Solange der Schwung hält, lässt jede Aktion mehr Funken sprühen.</string>
     <string name="game_concept_elans_what">Ein Schwung ist ein Funken-Multiplikator. Er springt an, wenn du in diesen Tagen in mehreren Aktionsfamilien aktiv bist.</string>
     <string name="game_concept_elans_why">Ein Schwung vervielfacht die Funken deiner nächsten Aktionen.</string>
+    <string name="game_concept_fact_balance">Du hast</string>
+    <string name="game_concept_fact_cost">Nötig</string>
+    <string name="game_concept_fact_done">Abgeschlossen</string>
     <string name="game_concept_flame_how">Eine Aktion pro Tag nährt sie; eine Hüterin wacht einen Tag über sie.</string>
     <string name="game_concept_flame_name">Die Flamme</string>
     <string name="game_concept_flame_tip_1">Mach jeden Tag mindestens eine Aktion.</string>
@@ -293,6 +307,7 @@
     <string name="game_concept_season_use">Komm ein paar Schritte voran, dann hol dir jede erreichte Rast: Funken, ein Sternfragment, eine Hüterin. Die vollendete Reise bringt den Reisepokal. Das Siegel der Reise ist ein Sammelobjekt, das du mit Meeshes holst.</string>
     <string name="game_concept_season_what">Eine Reise dauert acht Wochen in einem Sprachland, mit vierzig Rasten und ihren kostenlosen Geschenken.</string>
     <string name="game_concept_season_why">Die Reise führt acht Wochen durch ein Sprachland, mit Pokal am Ende.</string>
+    <string name="game_concept_section_act">Du bist dran</string>
     <string name="game_concept_showcase_how">Jeder Pokal landet von selbst dort. Du bestimmst, wer sie sieht.</string>
     <string name="game_concept_showcase_name">Trophäen</string>
     <string name="game_concept_showcase_tip_1">Lande ganz oben in deinem Turnier, um einen Pokal zu gewinnen.</string>
@@ -402,6 +417,7 @@
     <string name="game_mission_create_invite_link_other">%s Einladungslinks erstellen</string>
     <string name="game_mission_cross_language_chat_one">Mit jemandem schreiben, der eine andere Sprache spricht</string>
     <string name="game_mission_cross_language_chat_other">Mit %s Personen schreiben, die eine andere Sprache sprechen</string>
+    <string name="game_mission_done">Erfüllt</string>
     <string name="game_mission_finished">Beendet</string>
     <string name="game_mission_generic">Ein Akt des Traums</string>
     <string name="game_mission_gold_replies_received">Antworten von %s verschiedenen Personen erhalten</string>
@@ -414,9 +430,12 @@
     <string name="game_mission_long_chat">%s Nachrichten senden</string>
     <string name="game_mission_missed">Verpasst</string>
     <string name="game_mission_personal">Für dich</string>
+    <string name="game_mission_prism">Prisma</string>
     <string name="game_mission_prism_foreign_exchange">%s Nachrichten in einer anderen Sprache als deiner schreiben</string>
     <string name="game_mission_prism_foreign_messages_one">Eine Nachricht in einer anderen Sprache als deiner schreiben</string>
     <string name="game_mission_prism_foreign_messages_other">%s Nachrichten in einer anderen Sprache als deiner schreiben</string>
+    <string name="game_mission_progress">%1$s / %2$s · %3$s</string>
+    <string name="game_mission_progress_glory">%1$s / %2$s · %3$s · +%4$s Ruhm</string>
     <string name="game_mission_publish_post_one">Einen Beitrag veröffentlichen</string>
     <string name="game_mission_publish_post_other">%s Beiträge veröffentlichen</string>
     <string name="game_mission_publish_reel_one">Ein Reel veröffentlichen</string>
@@ -432,6 +451,8 @@
     <string name="game_mission_reply_story_other">Auf %s Storys antworten</string>
     <string name="game_mission_reply_their_language_one">Jemandem in seiner Sprache antworten</string>
     <string name="game_mission_reply_their_language_other">%s-mal jemandem in seiner Sprache antworten</string>
+    <string name="game_mission_reroll">Tauschen · %s</string>
+    <string name="game_mission_reroll_a11y">Den Akt „%1$s“ für %2$s tauschen</string>
     <string name="game_mission_send_attachments_one">Einen Anhang senden</string>
     <string name="game_mission_send_attachments_other">%s Anhänge senden</string>
     <string name="game_mission_send_texts_one">%s Nachricht senden</string>
@@ -453,6 +474,9 @@
     <string name="game_mission_write_someone_new_one">Jemandem zum ersten Mal schreiben</string>
     <string name="game_mission_write_someone_new_other">%s Personen zum ersten Mal schreiben</string>
     <string name="game_missions_locked">Ab Level 5 schicken dir deine Ahnen jede Nacht einen Traum in drei Akten, und eine Gabe. Du bist auf Level %s.</string>
+    <string name="game_missions_offline">Offline: Einen Akt tauschen oder die Gabe öffnen geht mit der Verbindung weiter.</string>
+    <string name="game_missions_prism_day">Prisma-Tag: Einer der Akte spielt in einer anderen Sprache als deiner.</string>
+    <string name="game_missions_title">Der Traum dieser Nacht</string>
     <string name="game_progression_empty">Noch keine Aktivität. Schreib eine Nachricht, poste eine Story … deine erste Medaille leuchtet bei der ersten Aktion auf.</string>
     <string name="game_progression_load_error">Fortschritt konnte nicht geladen werden</string>
     <string name="game_progression_loading">Fortschritt wird geladen</string>
@@ -482,6 +506,9 @@
         <item quantity="other">%d Funken</item>
     </plurals>
     <string name="game_sparks_debt">Ein Schatten auf %s Funken</string>
+    <string name="game_spend_missing_reroll">Es fehlen %s, um diesen Akt zu tauschen.</string>
+    <string name="game_starFragments_one">%s Sternfragment</string>
+    <string name="game_starFragments_other">%s Sternfragmente</string>
     <plurals name="game_streak_record">
         <item quantity="one">Deine längste Flamme: %d Tag</item>
         <item quantity="other">Deine längste Flamme: %d Tage</item>
