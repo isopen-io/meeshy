@@ -381,6 +381,10 @@ data class StorySlideDeck(
      * other slide and the selection — untouched. The editor binds here so each slide
      * keeps its own caption as the user moves between slides.
      */
+    /** Réécrit le texte de CHAQUE slide (la publication est un seul niveau : retirer un hashtag les touche toutes). */
+    fun mapSlideTexts(transform: (String) -> String): StorySlideDeck =
+        copy(slides = slides.map { slide -> slide.copy(text = transform(slide.text)) })
+
     fun updateSelectedText(text: String): StorySlideDeck {
         val index = selectedIndex
         val next = slides.mapIndexed { i, slide -> if (i == index) slide.copy(text = text) else slide }
