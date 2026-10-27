@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- lot: notifications en cours (#13420) ; miroir des Live Activities iOS d'envoi et d'enregistrement. -->
+<resources>
+    <string name="ongoing_channel_name">Atividade em andamento</string>
+    <string name="ongoing_channel_description">Progresso dos envios e dos áudios em gravação</string>
+    <string name="ongoing_activity_public">Atividade em andamento</string>
+    <string name="outbox_activity_story">Publicando um story</string>
+    <string name="outbox_activity_media">Enviando uma mídia</string>
+    <string name="outbox_activity_message_with_media">Enviando uma mensagem com mídia</string>
+    <string name="outbox_activity_sent">Enviado</string>
+    <string name="outbox_activity_failed">Falha no envio</string>
+    <string name="outbox_activity_waiting_network">Aguardando a rede</string>
+    <string name="outbox_activity_remaining">%1$d restantes</string>
+    <string name="voice_recording_activity_title">Gravação de voz</string>
+    <string name="voice_recording_activity_stop">Parar</string>
+</resources>
