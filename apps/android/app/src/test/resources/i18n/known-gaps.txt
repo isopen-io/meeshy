@@ -1534,3 +1534,14 @@ bare-specifier :feature:stories en my_stories_card_expired
 bare-specifier :feature:stories en my_stories_delete_selected
 bare-specifier :feature:stories en my_stories_delete_selected_error
 bare-specifier :feature:feed en mood_spotlight_reply_placeholder
+bare-specifier :feature:auth en onboarding_global_reward
+bare-specifier :feature:auth en onboarding_story_reward
+bare-specifier :feature:chat en message_detail_edits_previous_one
+bare-specifier :feature:chat en message_detail_edits_previous_other
+bare-specifier :feature:chat en message_detail_edits_version_n
+bare-specifier :feature:chat en message_detail_sentiment_score
+bare-specifier :feature:conversations en links_affiliate_token_clicks
+bare-specifier :feature:conversations en links_affiliate_token_signups
+bare-specifier :feature:conversations en links_tracking_detail_last_click
+bare-specifier :feature:conversations en links_tracking_row_clicks
+bare-specifier :feature:conversations en links_tracking_row_uniques
