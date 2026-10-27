@@ -139,6 +139,7 @@ internal fun StoryForegroundLayer(
     playing: Boolean,
     muted: Boolean,
     modifier: Modifier = Modifier,
+    onAudioFocusLost: () -> Unit = {},
 ) {
     val animated = media.animated(playheadSeconds)
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
@@ -161,6 +162,7 @@ internal fun StoryForegroundLayer(
                 modifier = layerModifier,
                 sourceStartMs = media.sourceWindow?.startMs,
                 sourceEndMs = media.sourceWindow?.endMs,
+                onAudioFocusLost = onAudioFocusLost,
             )
         } else {
             AsyncImage(

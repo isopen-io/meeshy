@@ -12,6 +12,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.media3.common.AudioAttributes
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
@@ -21,12 +23,23 @@ import me.meeshy.ui.component.media.MeeshyMediaCache
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 
+/** Une vidéo qui parle est un média : même usage que le vocal du fil, contenu « film ». */
+private val VIDEO_AUDIO_ATTRIBUTES: AudioAttributes = AudioAttributes.Builder()
+    .setUsage(C.USAGE_MEDIA)
+    .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
+    .build()
+
 /**
  * SDK-pure vertical-reel video surface: an [ExoPlayer]-backed [PlayerView] that plays
  * [mediaUrl] looping and (by default) muted, cropped to fill the surface. It plays only
  * while [isActive] is true — the caller (the reels pager) sets exactly one page active
  * so the others stay paused and rewound. Opaque params only; the atom owns just the
  * player lifecycle (created for the current [mediaUrl], released on dispose).
+ *
+ * **Une seule lecture à la fois (#13399).** Une surface AUDIBLE qui joue prend le focus audio : un vocal du fil le
+ * perd donc et se met en pause, comme la session audio unique d'iOS ; à l'inverse, un vocal qui démarre le lui
+ * reprend, la vidéo se met en pause et [onAudioFocusLost] en prévient l'hôte (la minuterie d'une story se fige).
+ * Une surface MUETTE, ou préchargée en pause, ne touche jamais au focus.
  */
 @OptIn(UnstableApi::class)
 @Composable
@@ -68,6 +81,8 @@ fun ReelVideoSurface(
     onPlayer: (ReelPlayerHandle?) -> Unit = {},
     /** `true` : le média tient en entier dans la surface (iOS `resizeAspect`) au lieu de la remplir en rognant. */
     fit: Boolean = false,
+    /** Un autre son (un vocal, un appel) a pris le focus : la vidéo vient de se mettre en pause d'elle-même. */
+    onAudioFocusLost: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val mediaCache = remember(context) { MeeshyMediaCache.get(context) }
@@ -77,6 +92,7 @@ fun ReelVideoSurface(
         ExoPlayer.Builder(context)
             .setMediaSourceFactory(mediaCache.mediaSourceFactory(MediaCacheCategory.VIDEO, mediaUrl))
             .build().apply {
+            setAudioAttributes(VIDEO_AUDIO_ATTRIBUTES, !muted)
             // **La fenêtre est portée par le MediaItem, jamais par un `seekTo`
             // suivi d'une surveillance.** ExoPlayer coupe alors la source
             // lui-même : la position 0 du player EST le début de la fenêtre, la
@@ -108,6 +124,8 @@ fun ReelVideoSurface(
     // valeur passee au constructeur ne refleterait jamais un toggle ulterieur.
     LaunchedEffect(player, muted) {
         player?.volume = if (muted) 0f else 1f
+        // Le focus suit le son : audible, la lecture le prend ; muet, elle le rend et ne le redemande pas.
+        player?.setAudioAttributes(VIDEO_AUDIO_ATTRIBUTES, !muted)
     }
 
     // Hors premier plan (ON_STOP : touche Accueil, autre app), la lecture se suspend et
@@ -124,11 +142,21 @@ fun ReelVideoSurface(
 
     // Bail de lecture : la ressource jouée est à l'abri de l'éviction LRU tant que le player vit.
     val currentOnPlayer by rememberUpdatedState(onPlayer)
+    val currentOnAudioFocusLost by rememberUpdatedState(onAudioFocusLost)
     DisposableEffect(player) {
         val live = player ?: return@DisposableEffect onDispose { }
         val releaseLease = mediaCache.lease(mediaUrl)
         currentOnPlayer(ReelPlayerHandle(live))
+        val focusListener = object : Player.Listener {
+            override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+                if (!playWhenReady && reason == Player.PLAY_WHEN_READY_CHANGE_REASON_AUDIO_FOCUS_LOSS) {
+                    currentOnAudioFocusLost()
+                }
+            }
+        }
+        live.addListener(focusListener)
         onDispose {
+            live.removeListener(focusListener)
             currentOnPlayer(null)
             releaseLease()
             live.release()

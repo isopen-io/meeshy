@@ -134,6 +134,8 @@ internal fun ReelPage(
                     showsPicture = stage.showsVideoSurface,
                     loads = loadsMedia,
                     paused = paused,
+                    // Un vocal ou un appel a pris le son : le réel reste en pause, comme après un toucher.
+                    onAudioFocusLost = { paused = true },
                     onPlayer = { handle ->
                         if (handle == null) {
                             resumeAtMs = player?.positionMs() ?: resumeAtMs
