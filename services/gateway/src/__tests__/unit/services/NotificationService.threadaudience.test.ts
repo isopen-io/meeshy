@@ -49,7 +49,7 @@ jest.mock('@meeshy/shared/prisma/client', () => {
       createMany: jest.fn(),
     },
     notificationPreference: { findUnique: jest.fn(), create: jest.fn(), update: jest.fn() },
-    user: { findUnique: jest.fn(), findMany: jest.fn() },
+    user: { findUnique: jest.fn(), findMany: jest.fn(), findFirst: jest.fn().mockResolvedValue(null) },
     userPreferences: { findUnique: jest.fn() },
     post: { findFirst: jest.fn(), findUnique: jest.fn() },
     postComment: { findFirst: jest.fn(), findUnique: jest.fn() },

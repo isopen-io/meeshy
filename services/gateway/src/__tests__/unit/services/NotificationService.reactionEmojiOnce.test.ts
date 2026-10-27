@@ -19,6 +19,7 @@ function makeHarness(language: string) {
   const created: Array<{ title?: string | null; subtitle?: string | null; content: string }> = [];
   const prisma: any = {
     user: {
+      findFirst: async () => null,
       findUnique: async ({ where }: any) => ({
         id: where.id, username: 'grace', displayName: ACTOR, avatar: null, systemLanguage: language,
       }),

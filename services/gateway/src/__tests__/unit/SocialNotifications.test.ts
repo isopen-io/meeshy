@@ -85,7 +85,7 @@ function createMockPrisma() {
       groupBy: jest.fn(),
       createMany: jest.fn(),
     },
-    user: { findUnique: jest.fn() },
+    user: { findUnique: jest.fn(), findFirst: jest.fn().mockResolvedValue(null) },
     // Audience du post declaree PUBLIC : les notifications a destinataire unique du
     // fil (reponse, like, reaction sur commentaire) verifient desormais que le
     // destinataire peut encore voir le post. Ces fichiers portent sur le wording,

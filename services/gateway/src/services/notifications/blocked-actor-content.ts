@@ -18,6 +18,20 @@ const ACTOR_CONTENT_TYPES: ReadonlySet<NotificationType> = new Set<NotificationT
   'friend_new_post',
   'friend_new_mood',
   'friend_story_comment',
+  // Interactions sociales : l'acteur réagit, commente, répond ou republie.
+  // Commenter et réagir se refusent déjà entre l'acteur et l'AUTEUR du post
+  // (`isBlockedWithAny`), mais pas entre l'acteur et l'auteur d'un commentaire
+  // parent, un engagé antérieur du fil ou un ami de l'auteur (#13350, audit).
+  'post_like',
+  'story_reaction',
+  'status_reaction',
+  'post_comment',
+  'post_repost',
+  'comment_reply',
+  'comment_like',
+  'comment_reaction',
+  'story_new_comment',
+  'story_thread_reply',
 ]);
 
 export async function refusesBlockedActorContent(
