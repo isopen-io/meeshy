@@ -7,3 +7,6 @@ en
 fr
 es
 pt
+ar
+de
+it

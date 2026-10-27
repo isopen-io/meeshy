@@ -38,8 +38,8 @@ class LocalizationGuardTest {
     }
 
     @Test
-    fun `the shipped locales are English, French, Spanish and Portuguese`() {
-        assertThat(tree.shippedLocales).containsAtLeast("en", "fr", "es", "pt")
+    fun `the shipped locales are English, French, Spanish, Portuguese, Arabic, German and Italian`() {
+        assertThat(tree.shippedLocales).containsAtLeast("en", "fr", "es", "pt", "ar", "de", "it")
     }
 
     @Test
