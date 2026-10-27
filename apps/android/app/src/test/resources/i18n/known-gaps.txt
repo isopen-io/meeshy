@@ -1519,5 +1519,6 @@ missing-key :feature:calls it call_waiting_reject_a11y
 missing-key :feature:calls it call_waiting_reject_hint
 missing-key :feature:calls it call_waiting_subtitle
 # Générées à un seul spécificateur (voir plus haut).
+bare-specifier :feature:calls en call_journal_search_empty
 bare-specifier :feature:calls en call_recording_ask
 bare-specifier :feature:calls en call_recording_ask_video
