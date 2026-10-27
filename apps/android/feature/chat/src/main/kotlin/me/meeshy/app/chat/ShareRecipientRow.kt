@@ -99,7 +99,11 @@ private fun rowDetail(target: ForwardTarget, delivery: ShareDelivery?): String =
     ShareDelivery.Sent -> stringResource(R.string.share_status_sent)
     ShareDelivery.Queued -> stringResource(R.string.share_status_queued)
     is ShareDelivery.Failed -> "${shareFailureText(delivery.reason)} · ${stringResource(R.string.share_status_retry)}"
-    null -> if (target.memberCount > 0) stringResource(R.string.chat_forward_members, target.memberCount) else target.type
+    null -> when {
+        target.isDirect -> stringResource(R.string.share_detail_direct)
+        target.memberCount > 0 -> stringResource(R.string.chat_forward_members, target.memberCount)
+        else -> stringResource(R.string.share_detail_group_unsized)
+    }
 }
 
 @Composable

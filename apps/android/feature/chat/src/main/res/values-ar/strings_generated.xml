@@ -313,6 +313,8 @@
     <string name="share_caption_hint">أضف رسالة…</string>
     <string name="share_close">إغلاق</string>
     <string name="share_content_messages_kept">ما سيُرسَل · %1$d من %2$d رسائل</string>
+    <string name="share_detail_direct">محادثة</string>
+    <string name="share_detail_group_unsized">مجموعة</string>
     <string name="share_empty_body">ابحث عن شخص باسمه أو اسم المستخدم أو رقمه.</string>
     <string name="share_empty_title">لا أحد هنا بعد</string>
     <string name="share_error_generic">خطأ أثناء المشاركة</string>

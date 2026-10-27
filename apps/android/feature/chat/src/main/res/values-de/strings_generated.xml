@@ -309,6 +309,8 @@
     <string name="share_caption_hint">Nachricht hinzufügen…</string>
     <string name="share_close">Schließen</string>
     <string name="share_content_messages_kept">Was gesendet wird · %1$d von %2$d Nachrichten</string>
+    <string name="share_detail_direct">Unterhaltung</string>
+    <string name="share_detail_group_unsized">Gruppe</string>
     <string name="share_empty_body">Suche jemanden nach Name, Benutzername oder Nummer.</string>
     <string name="share_empty_title">Noch niemand hier</string>
     <string name="share_error_generic">Fehler beim Teilen</string>

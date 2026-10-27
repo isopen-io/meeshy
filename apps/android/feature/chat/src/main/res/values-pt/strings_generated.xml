@@ -310,6 +310,8 @@
     <string name="share_caption_hint">Adicionar uma mensagem…</string>
     <string name="share_close">Fechar</string>
     <string name="share_content_messages_kept">O que será enviado · %1$d de %2$d mensagens</string>
+    <string name="share_detail_direct">Conversa</string>
+    <string name="share_detail_group_unsized">Grupo</string>
     <string name="share_empty_body">Procure alguém pelo nome, usuário ou número.</string>
     <string name="share_empty_title">Ninguém aqui ainda</string>
     <string name="share_error_generic">Erro ao compartilhar</string>
