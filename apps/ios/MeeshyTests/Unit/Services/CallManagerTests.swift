@@ -3860,7 +3860,7 @@ final class CallManagerProximityMonitoringTests: XCTestCase {
         }
         let block = String(after[after.startIndex..<nextCase.lowerBound])
         XCTAssertTrue(
-            block.contains("self.screenShare.applyRemoteCamera(enabled: event.enabled)"),
+            block.contains("call.screenShare.applyRemoteCamera(enabled: event.enabled)"),
             "sanity: expected to be scoped to the callMediaToggled video branch"
         )
         XCTAssertTrue(
@@ -4257,7 +4257,7 @@ final class RejectDeferredReconciliationTests: XCTestCase {
         // reject arc eliminated.
         let source = try callManagerSource()
         XCTAssertTrue(
-            source.contains("self.emitCallReject(callId: entry.callId)"),
+            source.contains("call.emitCallReject(callId: entry.callId)"),
             "the connectionState reconciliation must route a deferred reject through " +
             "emitCallReject(callId:) — a plain replay loses reason=rejected."
         )
@@ -5926,7 +5926,7 @@ final class CallErrorNonFatalWhitelistTests: XCTestCase {
     func test_callErrorSink_appliesThePureDisposition_beforeAnyTeardown() throws {
         let source = try callManagerSource()
         guard let resolveRange = source.range(of: "CallErrorDisposition.resolve("),
-              let teardownRange = source.range(of: "self.failCall(message)") else {
+              let teardownRange = source.range(of: "call.failCall(message)") else {
             XCTFail("expected the disposition call and the call:error teardown to coexist"); return
         }
         XCTAssertLessThan(
@@ -5939,12 +5939,12 @@ final class CallErrorNonFatalWhitelistTests: XCTestCase {
     func test_callErrorSink_endsTheCallOnlyThroughTheSurfaceDisposition() throws {
         let source = try callManagerSource()
         guard let surfaceRange = source.range(of: "case .surface(let endsCall):"),
-              let teardownRange = source.range(of: "self.failCall(message)") else {
+              let teardownRange = source.range(of: "call.failCall(message)") else {
             XCTFail("expected the surface disposition and the call:error teardown to coexist"); return
         }
         XCTAssertLessThan(surfaceRange.lowerBound, teardownRange.lowerBound)
         XCTAssertTrue(
-            source.contains("if endsCall { self.failCall(message) }"),
+            source.contains("if endsCall { call.failCall(message) }"),
             "failCall must only run when the disposition says the error ends the call"
         )
     }
@@ -5956,7 +5956,7 @@ final class CallErrorNonFatalWhitelistTests: XCTestCase {
         }
         let tail = String(source[reconcileRange.upperBound...].prefix(400))
         XCTAssertTrue(
-            tail.contains("self.handleRemoteEnd(callId: callId)"),
+            tail.contains("call.handleRemoteEnd(callId: callId)"),
             "CALL_ENDED is a terminal-state reconciliation, not a failure — it must route through handleRemoteEnd"
         )
     }
@@ -6004,7 +6004,7 @@ final class LocalTeardownServerReconciliationTests: XCTestCase {
             "when the socket is up, the ACK-first path must be used"
         )
         XCTAssertTrue(
-            source.contains("let pending = self.pendingEndReconciliations"),
+            source.contains("let pending = call.pendingEndReconciliations"),
             "the socket connectionState observer must replay the deferred call:end on reconnect"
         )
     }
@@ -6440,11 +6440,11 @@ final class CallManagerPiPRemoteMuteSourceGuardTests: XCTestCase {
         // le PiP suit la valeur RÉSOLUE, jamais l'événement brut.
         XCTAssertTrue(
             body.contains("let videoEnabled = event.mediaType == \"screen\"")
-                && body.contains("self.remoteMedia = self.remoteMedia.applying(.video("),
+                && body.contains("call.remoteMedia = call.remoteMedia.applying(.video("),
             "The video case must still update remoteMedia.isVideoEnabled (drives the in-app pill's SwiftUI placeholder)"
         )
         XCTAssertTrue(
-            body.contains("self.pip.setRemoteVideoMuted(!self.isRemoteVideoEnabled)"),
+            body.contains("call.pip.setRemoteVideoMuted(!call.isRemoteVideoEnabled)"),
             "The video case must forward the inverse of event.enabled to the system PiP controller so it swaps " +
             "to a generic placeholder instead of freezing on the peer's last frame"
         )

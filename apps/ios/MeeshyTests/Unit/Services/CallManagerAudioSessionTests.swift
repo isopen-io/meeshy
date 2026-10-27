@@ -2483,7 +2483,7 @@ final class CallManagerIceCandidateBufferTests: XCTestCase {
             XCTFail("requestFreshTurnCredentials(callId:) not found in the CallManager unit"); return
         }
         XCTAssertTrue(
-            sink.contains("self.requestFreshTurnCredentials(callId: callId)"),
+            sink.contains("call.requestFreshTurnCredentials(callId: callId)"),
             "socket.didReconnect sink must request fresh TURN credentials after rejoining the call room")
         XCTAssertTrue(
             request.contains("emitRequestIceServers"),
@@ -2854,7 +2854,7 @@ final class CallManagerReconnectCallEndedRetryTests: XCTestCase {
             sinkBody.contains("ackResult.errorCode == \"CALL_ENDED\""),
             "socket.didReconnect must detect a CALL_ENDED ack rejection")
         XCTAssertTrue(
-            sinkBody.contains("self.handleRemoteEnd(callId: callId, rawReason: ackResult.endReason)"),
+            sinkBody.contains("call.handleRemoteEnd(callId: callId, rawReason: ackResult.endReason)"),
             "a CALL_ENDED ack rejection must forward the real endReason into " +
             "handleRemoteEnd — hardcoding a reason (or omitting it) would silently " +
             "defeat the retry offer for a transient cause, the exact defect this " +
@@ -4507,7 +4507,7 @@ final class CallManagerMediaServicesResetMonitoringTests: XCTestCase {
         // Find the private init body
         // #7955 — l'init ne prend plus de `WebRTCService` (construit au premier
         // appel) ; le monitoring, lui, démarre toujours à la naissance.
-        guard let initRange = source.range(of: "private init() {") else {
+        guard let initRange = source.range(of: "private init(") else {
             XCTFail("private init not found in CallManager.swift")
             return
         }
@@ -4842,17 +4842,17 @@ final class CallTranscriptionSymmetrySourceGuardTests: XCTestCase {
         let tail = String(source[sinkRange.upperBound...].prefix(1200))
 
         XCTAssertTrue(
-            tail.contains("self.listeningPeers.insert(event.speakerId)"),
+            tail.contains("call.listeningPeers.insert(event.speakerId)"),
             "Le sink doit suivre les auditeurs PAR IDENTITÉ : avec un simple booléen, " +
             "la fermeture d'UN pair dans un appel à trois éteint la capture et prive " +
             "celui qui lisait encore."
         )
         XCTAssertTrue(
-            tail.contains("self.remoteTranscriptionActive = !self.listeningPeers.isEmpty"),
+            tail.contains("call.remoteTranscriptionActive = !call.listeningPeers.isEmpty"),
             "Le drapeau publié n'est que la projection de l'ensemble des auditeurs."
         )
         XCTAssertTrue(
-            tail.contains("self.toggleTranscription()"),
+            tail.contains("call.toggleTranscription()"),
             "Le sink doit réconcilier la capture : sans cet appel, apprendre qu'un pair " +
             "écoute ne fait rien démarrer et le pair ne reçoit jamais rien."
         )

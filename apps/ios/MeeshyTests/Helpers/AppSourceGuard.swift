@@ -149,11 +149,19 @@ enum AppSourceGuard {
 
     /// Les couches nominales de l'écran de conversation vivent dans
     /// `ConversationLayers/` (LOT-10) : elles font partie de l'unité
-    /// `ConversationView`, comme ses extensions.
+    /// `ConversationView`, comme ses extensions. Les collaborateurs de
+    /// `CallManager` vivent dans `CallCollaborators/` (#11522) : les gardes de
+    /// l'appel les balaient avec lui, sans quoi chaque extraction éteindrait en
+    /// silence les gardes négatives de l'unité.
+    private static let layerFolders = [
+        "ConversationView": "ConversationLayers",
+        "CallManager": "CallCollaborators",
+    ]
+
     private static func layerURLs(of base: String, in dossier: URL) -> [URL] {
-        guard base == "ConversationView" else { return [] }
+        guard let folder = layerFolders[base] else { return [] }
         let couches = (try? FileManager.default.contentsOfDirectory(
-            at: dossier.appendingPathComponent("ConversationLayers"), includingPropertiesForKeys: nil)) ?? []
+            at: dossier.appendingPathComponent(folder), includingPropertiesForKeys: nil)) ?? []
         return couches
             .filter { $0.pathExtension == "swift" }
             .sorted { $0.lastPathComponent < $1.lastPathComponent }

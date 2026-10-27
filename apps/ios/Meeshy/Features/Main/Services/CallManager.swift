@@ -720,8 +720,11 @@ final class CallManager: ObservableObject, Sendable {
     var negotiationId = 0
 
     let answerActionHold: CallKitAnswerActionHoldProviding = CallKitAnswerActionHold()
+    /// Les écoutes `call:*` de la passerelle (`CallSignalingRouter`).
+    let signalingRouter: CallSignalingRouterProviding
 
-    private init() {
+    private init(signalingRouter: CallSignalingRouterProviding = CallSignalingRouter()) {
+        self.signalingRouter = signalingRouter
         // Survival controller is created with no actuator yet; `attach(self)` wires
         // it below once `self` is fully initialized (avoids a self-before-init use).
         self.videoSurvivalController = VideoSurvivalController()
@@ -790,7 +793,7 @@ final class CallManager: ObservableObject, Sendable {
             }
             .store(in: &cancellables)
 
-        setupSocketListeners()
+        signalingRouter.start(routingTo: self)
         startNetworkMonitoring()
         startAudioInterruptionMonitoring()
         startAudioRouteChangeMonitoring()

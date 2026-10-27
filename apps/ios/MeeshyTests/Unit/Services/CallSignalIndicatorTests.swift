@@ -575,7 +575,8 @@ final class CallHangupFastPathTests: XCTestCase {
         )
 
         let manager = try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
-        let gate = "guard self.transcriptionService.isShowingOverlay else { return }"
+        let gate = "guard call.transcriptionService.isShowingOverlay else { return }"
+        let channelGate = "guard self.transcriptionService.isShowingOverlay else { return }"
 
         guard let socketRange = manager.range(of: "socket.callTranslatedSegmentReceived") else {
             XCTFail("CallManager must subscribe to socket.callTranslatedSegmentReceived")
@@ -601,7 +602,7 @@ final class CallHangupFastPathTests: XCTestCase {
             .lowerBound ?? dataChannel.endIndex
         let channelRoute = String(dataChannel[channelRange.lowerBound ..< channelEnd])
         XCTAssertTrue(
-            channelRoute.contains(gate),
+            channelRoute.contains(channelGate),
             "The P2P (data channel) reception path must carry the SAME panel gate as the socket " +
             "sink — gating only one transport leaves the peer's words flowing in over the other."
         )

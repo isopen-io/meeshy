@@ -182,7 +182,7 @@ final class CallStackLazyInstantiationTests: XCTestCase {
         let manager = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift"))
         XCTAssertTrue(manager.contains("lazy var pip: PiPCallProviding = PiPCallController.shared"))
         XCTAssertFalse(manager.contains("private let webRTCService: WebRTCService"))
-        guard let initRange = manager.range(of: "private init() {"),
+        guard let initRange = manager.range(of: "private init("),
               let end = manager.range(of: "Logger.calls.info(\"CallManager initialized\")", range: initRange.upperBound..<manager.endIndex)
         else { return XCTFail("CallManager.init introuvable") }
         let initBody = manager[initRange.upperBound..<end.lowerBound]

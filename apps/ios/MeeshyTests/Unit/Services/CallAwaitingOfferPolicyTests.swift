@@ -101,15 +101,15 @@ final class CallAnsweredElsewhereTests: XCTestCase {
     }
 
     func test_yielding_tellsTheServerNothing_andReportsNoAnalytics() throws {
-        let source = try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager+Signaling.swift")
+        let source = try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallCollaborators/CallSignalingRouter.swift")
         guard let start = source.range(of: "private func observeAnsweredElsewhere("),
               let end = source.range(of: "private func observeRemoteMedia(", range: start.upperBound..<source.endIndex) else {
             return XCTFail("observeAnsweredElsewhere introuvable")
         }
         let sink = source[start.upperBound..<end.lowerBound]
-        XCTAssertTrue(sink.contains("CallResumePolicy.yieldsToAnotherDevice(callState: self.callState)"))
+        XCTAssertTrue(sink.contains("CallResumePolicy.yieldsToAnotherDevice(callState: call.callState)"))
         XCTAssertTrue(sink.contains("reason: .answeredElsewhere"))
-        XCTAssertTrue(sink.contains("self.endCallInternal(reason: .remote, reportsAnalytics: false)"))
+        XCTAssertTrue(sink.contains("call.endCallInternal(reason: .remote, reportsAnalytics: false)"))
         for forbidden in ["emitCallLeave", "abandonOnServer", "emitCallEnd", "failCall", "endCall()"] {
             XCTAssertFalse(sink.contains(forbidden), "\(forbidden) préviendrait le serveur")
         }

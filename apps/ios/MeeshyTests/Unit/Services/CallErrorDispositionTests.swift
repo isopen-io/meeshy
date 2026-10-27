@@ -123,7 +123,7 @@ final class CallAccessoryRequestLedgerTests: XCTestCase {
     }
 
     func test_callErrorSink_asksTheLedgerBeforeDeciding() throws {
-        let source = try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager+Signaling.swift")
+        let source = try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallCollaborators/CallSignalingRouter.swift")
         XCTAssertTrue(source.contains("CallAccessoryRequestLog.shared.request(answeredBy: event.callId)"))
         XCTAssertTrue(source.contains("answersAccessoryRequest: accessoryRequest != nil"))
     }

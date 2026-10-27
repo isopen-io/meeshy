@@ -163,7 +163,7 @@ extension CallManager {
 
     // Schedules a TURN credential refresh at 80% of the credential TTL.
     // Emits `call:request-ice-servers`; gateway responds with `call:ice-servers-refreshed`
-    // which `setupSocketListeners` applies via `webRTCService.updateIceServers`.
+    // which `CallSignalingRouter` applies via `webRTCService.updateIceServers`.
     func scheduleTURNCredentialRefresh(ttl: TimeInterval) {
         turnRefreshTask?.cancel()
         turnRefreshWatchdogTask?.cancel()
