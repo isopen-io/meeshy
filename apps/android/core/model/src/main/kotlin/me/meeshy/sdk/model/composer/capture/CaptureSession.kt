@@ -33,10 +33,13 @@ data class CaptureSessionState(
     val lastTap: CaptureLastTap? = null,
     val armedAtMs: Long? = null,
     val takeCounter: Int = 0,
+    val allowsPhoto: Boolean = true,
+    val allowsVideo: Boolean = true,
 ) {
     val gestureContext: CaptureGestureContext
         get() = CaptureGestureContext(
             stage = stage, holding = holding, locked = locked, pendingSegments = segments.size, frameChosen = false,
+            allowsPhoto = allowsPhoto, allowsVideo = allowsVideo,
         )
 
     val topRow: CaptureTopRow.Input
