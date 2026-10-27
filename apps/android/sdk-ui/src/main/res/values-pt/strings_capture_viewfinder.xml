@@ -23,6 +23,7 @@
     <string name="capture_shutter_film">Filmar, mãos livres</string>
     <plurals name="capture_segments">
         <item quantity="one">%1$d segmento</item>
+        <item quantity="many">%1$d segmentos</item>
         <item quantity="other">%1$d segmentos</item>
     </plurals>
 </resources>

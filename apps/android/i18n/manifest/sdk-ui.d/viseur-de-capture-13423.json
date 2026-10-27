@@ -17,6 +17,10 @@
           "status": "android-only"
         },
         {
+          "androidName": "capture_flash_auto_badge",
+          "status": "android-only"
+        },
+        {
           "androidName": "capture_flash_auto",
           "status": "android-only"
         },
