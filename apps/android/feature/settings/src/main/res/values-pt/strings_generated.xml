@@ -166,6 +166,11 @@
     <string name="settings_help_center">Central de ajuda</string>
     <string name="settings_interface_language">Idioma da interface</string>
     <string name="settings_interface_language_automatic">Automático</string>
+    <string name="settings_interface_lentille_list">Ativar a lista Lentille</string>
+    <string name="settings_interface_reading_modes">Ativar o modo de leitura</string>
+    <string name="settings_interface_reading_modes_subtitle">Quando desativado, as conversas abrem em Script.</string>
+    <string name="settings_interface_riviere_mode">Ativar o modo Rivière</string>
+    <string name="settings_interface_riviere_mode_hint">Disponível quando o modo de leitura está ativado.</string>
     <string name="settings_language_dialog_close">Fechar</string>
     <string name="settings_log_out">Sair</string>
     <string name="settings_logout_confirm_message">Tem certeza de que deseja sair?</string>

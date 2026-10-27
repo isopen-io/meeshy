@@ -70,12 +70,14 @@ internal fun NotificationToggleRow(
     enabled: Boolean = true,
     icon: ImageVector = MeeshyIcons.BellFilled,
     color: Color = MeeshyPalette.Warning,
+    subtitle: String? = null,
 ) {
     val haptics = rememberMeeshyHaptics()
     SettingsSwitchRow(
         icon = icon,
         title = label,
         color = color,
+        subtitle = subtitle,
         checked = checked,
         enabled = enabled,
         onCheckedChange = {

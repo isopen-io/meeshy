@@ -166,6 +166,11 @@
     <string name="settings_help_center">Hilfecenter</string>
     <string name="settings_interface_language">Sprache der Benutzeroberfläche</string>
     <string name="settings_interface_language_automatic">Automatisch</string>
+    <string name="settings_interface_lentille_list">Lentille-Liste aktivieren</string>
+    <string name="settings_interface_reading_modes">Lesemodus aktivieren</string>
+    <string name="settings_interface_reading_modes_subtitle">Wenn deaktiviert, öffnen sich Unterhaltungen in Script.</string>
+    <string name="settings_interface_riviere_mode">Rivière-Modus aktivieren</string>
+    <string name="settings_interface_riviere_mode_hint">Verfügbar, wenn der Lesemodus aktiviert ist.</string>
     <string name="settings_language_dialog_close">Schließen</string>
     <string name="settings_log_out">Abmelden</string>
     <string name="settings_logout_confirm_message">Möchtest du dich wirklich abmelden?</string>

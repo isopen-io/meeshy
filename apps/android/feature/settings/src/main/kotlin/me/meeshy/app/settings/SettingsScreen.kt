@@ -227,7 +227,7 @@ fun SettingsScreen(
 }
 
 @Composable
-private fun SettingsGroup(
+internal fun SettingsGroup(
     title: String,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     tint: Color,
@@ -337,6 +337,7 @@ private fun AppearanceSection(state: SettingsUiState, viewModel: SettingsViewMod
             onQueryChange = viewModel::setRegionalLanguageQuery,
             onSelect = viewModel::setRegionalLanguage,
         )
+        InterfaceFeatureRows(separatorTint = tint)
     }
 }
 
