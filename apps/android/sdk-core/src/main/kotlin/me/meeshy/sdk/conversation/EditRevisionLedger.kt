@@ -1,0 +1,29 @@
+package me.meeshy.sdk.conversation
+
+import javax.inject.Inject
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
+import me.meeshy.core.database.dao.EditRevisionDao
+import me.meeshy.core.database.entity.EditRevisionEntity
+import me.meeshy.sdk.cache.CacheClock
+import me.meeshy.sdk.model.EditHistoryProjection
+import me.meeshy.sdk.model.EditRevision
+
+/**
+ * Les versions antérieures des messages que CET appareil a modifiés (le serveur n'expose pas
+ * l'historique — comme `EditHistoryStore` sur iOS) : enregistrées au moment de l'édition
+ * optimiste, relues en flux par la fiche « Historique ».
+ */
+class EditRevisionLedger @Inject constructor(
+    private val dao: EditRevisionDao,
+    private val clock: CacheClock,
+) {
+    suspend fun record(messageId: String, previousContent: String?, newContent: String) {
+        if (!EditHistoryProjection.shouldRecord(previousContent, newContent)) return
+        val next = (dao.forMessage(messageId).maxOfOrNull { it.revision } ?: 0) + 1
+        dao.upsert(EditRevisionEntity(messageId, next, previousContent.orEmpty(), clock.nowMillis()))
+    }
+
+    fun observe(messageId: String): Flow<List<EditRevision>> =
+        dao.observe(messageId).map { rows -> rows.map { EditRevision(it.revision, it.content, it.editedAt) } }
+}

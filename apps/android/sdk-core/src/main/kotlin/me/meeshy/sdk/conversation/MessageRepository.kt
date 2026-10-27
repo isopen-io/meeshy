@@ -49,7 +49,12 @@ class MessageRepository internal constructor(
     ) : this(
         history = MessageHistoryReader(messageApi, database, messageDao, syncMetaDao, clock),
         sends = MessageSendCoordinator(database, messageDao, outboxRepository, clock),
-        mutations = MessageMutationWriter(CachedMessageUpdater(database, messageDao), outboxRepository, clock),
+        mutations = MessageMutationWriter(
+            CachedMessageUpdater(database, messageDao),
+            outboxRepository,
+            clock,
+            EditRevisionLedger(database.editRevisionDao(), clock),
+        ),
         enrichment = MessageEnrichmentWriter(CachedMessageUpdater(database, messageDao), translationApi),
         receipts = MessageReceiptWriter(database, messageDao),
     )

@@ -122,6 +122,23 @@ class MessageMutationWriterTest {
     }
 
     @Test
+    fun `an edit keeps the replaced text as a numbered revision stamped at the clock`() = runHarnessTest { harness ->
+        harness.seedSynced(message())
+        val ledgerWriter = MessageMutationWriter(
+            harness.updater, harness.outbox, harness.clock,
+            EditRevisionLedger(harness.database.editRevisionDao(), harness.clock),
+        )
+
+        ledgerWriter.editOptimistic("m1", "bonjour")
+        harness.clock.now += 1_000
+        ledgerWriter.editOptimistic("m1", "bonsoir")
+
+        val kept = harness.database.editRevisionDao().forMessage("m1")
+        assertThat(kept.map { it.revision to it.content }).containsExactly(1 to "salut", 2 to "bonjour").inOrder()
+        assertThat(kept[1].editedAt - kept[0].editedAt).isEqualTo(1_000)
+    }
+
+    @Test
     fun `a delete leaves a tombstone stamped at the clock instant and queues DELETE_MESSAGE`() = runHarnessTest { harness ->
         harness.seedSynced(
             message().copy(

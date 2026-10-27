@@ -229,6 +229,18 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
                 else -> localRoute.close(route)
             }
         },
+        extra = { route ->
+            val target = state.messages.firstOrNull { it.messageId == route.messageId }
+            if (target != null) {
+                val sheetModifier = Modifier.navigationBarsPadding()
+                when (route) {
+                    is MessageDetailRoute.Views -> MessageViewsSheet(target, state.conversationId, accentColor, sheetModifier)
+                    is MessageDetailRoute.History -> MessageHistorySheet(target, accentColor, sheetModifier)
+                    is MessageDetailRoute.Sentiment -> MessageSentimentSheet(target, accentColor, sheetModifier)
+                    else -> Unit
+                }
+            }
+        },
         reactions = {
             state.reactionDetails?.let { details ->
                 ReactionDetailsSheet(
@@ -357,4 +369,5 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
 }
 
 /** Detail/selection entries the chat host can serve today; each joins once its fiche renderer exists. */
-private val HOSTED_DETAIL_ENTRIES: Set<MessageAction> = emptySet()
+private val HOSTED_DETAIL_ENTRIES: Set<MessageAction> =
+    setOf(MessageAction.Views, MessageAction.History, MessageAction.Sentiment)
