@@ -24,6 +24,8 @@ data class EmailGateRequest(val reason: EmailGateReason, val email: String)
  * - La validation se présente PAR-DESSUS tout : l'écran qui attend sa réponse reste là, son brouillon avec lui.
  * - Toutes les demandes en cours partagent UNE présentation et UN verdict ([settle]).
  * - Une demande annulée (l'appel a été abandonné) se retire ; la dernière retirée referme la feuille.
+ * - Un « validé » ne vaut que pour le compte qui a posé la demande : après un changement de compte, l'action
+ *   de l'ancien compte reçoit son refus — rejouée, elle partirait sous les jetons du nouveau.
  */
 @Singleton
 class EmailVerificationGateController @Inject constructor(
@@ -32,7 +34,7 @@ class EmailVerificationGateController @Inject constructor(
 ) : EmailVerificationGating {
 
     private val lock = Any()
-    private val waiters = mutableListOf<CompletableDeferred<Boolean>>()
+    private val waiters = mutableListOf<Waiter>()
     private var provenUserId: String? = null
 
     private val _request = MutableStateFlow<EmailGateRequest?>(null)
@@ -48,14 +50,15 @@ class EmailVerificationGateController @Inject constructor(
         EmailProofRules.knownUnproven(sessions.currentUser.value, provenUserId)
 
     override suspend fun verifyEmail(reason: EmailGateReason): Boolean {
-        val email = EmailProofRules.address(sessions.currentUser.value) ?: return false
-        val waiter = CompletableDeferred<Boolean>()
+        val owner = sessions.currentUser.value
+        val email = EmailProofRules.address(owner) ?: return false
+        val waiter = Waiter(ownerId = owner?.id, verdict = CompletableDeferred())
         synchronized(lock) {
             if (_request.value == null) _request.value = EmailGateRequest(reason, email)
             waiters += waiter
         }
         return try {
-            waiter.await()
+            waiter.verdict.await()
         } catch (canceled: CancellationException) {
             synchronized(lock) {
                 waiters -= waiter
@@ -67,12 +70,15 @@ class EmailVerificationGateController @Inject constructor(
 
     /** Le verdict de la feuille : le code est validé (`true`), ou « Plus tard » / feuille glissée (`false`). */
     fun settle(verified: Boolean) {
+        val currentId = sessions.currentUser.value?.id
         val released = synchronized(lock) {
             if (_request.value == null && waiters.isEmpty()) return
-            if (verified) provenUserId = sessions.currentUser.value?.id
+            if (verified && waiters.any { it.ownerId == currentId }) provenUserId = currentId
             _request.value = null
             waiters.toList().also { waiters.clear() }
         }
-        released.forEach { it.complete(verified) }
+        released.forEach { it.verdict.complete(verified && it.ownerId == currentId) }
     }
+
+    private class Waiter(val ownerId: String?, val verdict: CompletableDeferred<Boolean>)
 }

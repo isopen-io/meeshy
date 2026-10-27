@@ -104,6 +104,22 @@ class EmailVerificationGateControllerTest {
     }
 
     @Test
+    fun `une validation tranchee apres un changement de compte ne rejoue pas l'action de l'ancien compte`() = runTest(StandardTestDispatcher()) {
+        val controller = controller()
+        var verdict: Boolean? = null
+
+        val job = launch { verdict = controller.verifyEmail(EmailGateReason.PUBLISH) }
+        advanceUntilIdle()
+        user.value = MeeshyUser(id = "u2", username = "bob", email = "b@mail.com")
+        controller.settle(true)
+        job.join()
+
+        assertThat(verdict).isFalse()
+        assertThat(controller.request.value).isNull()
+        assertThat(controller.emailKnownUnproven()).isTrue()
+    }
+
+    @Test
     fun `un verdict sans demande est sans effet`() = runTest(StandardTestDispatcher()) {
         val controller = controller()
 
