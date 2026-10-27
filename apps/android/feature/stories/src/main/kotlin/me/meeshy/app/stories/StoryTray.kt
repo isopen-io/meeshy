@@ -49,6 +49,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.stories.R
+import me.meeshy.ui.component.chrome.floatingChromeLateralReserve
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -87,48 +88,75 @@ fun StoryTray(
             )
         }
         if (!tray.isEmpty) {
-            LazyRow(
-                modifier = Modifier.heightIn(min = StoryEntryMetrics.height),
-                horizontalArrangement = Arrangement.spacedBy(StoryEntryMetrics.itemSpacing),
-                contentPadding = PaddingValues(
-                    horizontal = StoryEntryMetrics.paddingHorizontal,
-                    vertical = StoryEntryMetrics.paddingVertical,
-                ),
-            ) {
-                val selfRing = tray.self
-                if (selfRing != null) {
-                    item(key = "self", contentType = RING_CONTENT_TYPE) {
-                        StoryRingCell(
-                            ring = selfRing,
-                            label = stringResource(R.string.stories_my_story),
-                            cascadeIndex = 0,
-                            moodEmoji = moodEmojiOf(selfRing.userId),
-                            showAddBadge = true,
-                            onOpen = { onOpenStory(selfRing.userId) },
-                            onShowProfile = onShowProfile?.let { open -> { open(selfRing.userId) } },
-                            onAdd = onAddStory,
-                            onManage = onManageStories,
-                            onAppeared = impressions::onRingAppeared,
-                        )
-                    }
-                } else {
-                    item(key = "add", contentType = ADD_CONTENT_TYPE) {
-                        AddStoryItem(onClick = onAddStory, onManage = onManageStories)
-                    }
-                }
-                itemsIndexed(tray.others, key = { _, ring -> ring.userId }, contentType = { _, _ -> RING_CONTENT_TYPE }) { index, ring ->
-                    StoryRingCell(
-                        ring = ring,
-                        label = ring.displayName,
-                        cascadeIndex = index + 1,
-                        moodEmoji = moodEmojiOf(ring.userId),
-                        showAddBadge = false,
-                        onOpen = { onOpenStory(ring.userId) },
-                        onShowProfile = onShowProfile?.let { open -> { open(ring.userId) } },
-                        onAppeared = impressions::onRingAppeared,
-                    )
-                }
+            StoryTrayRail(
+                tray = tray,
+                moodEmojiOf = moodEmojiOf,
+                onOpenStory = onOpenStory,
+                onAddStory = onAddStory,
+                onManageStories = onManageStories,
+                onShowProfile = onShowProfile,
+                onAppeared = impressions::onRingAppeared,
+            )
+        }
+    }
+}
+
+/**
+ * La rangée d'anneaux : elle cède, de chaque côté, la place des disques flottants parqués à sa hauteur — « Votre story »
+ * ne reste pas sous le disque de gauche (#12497) ; les anneaux défilent dans ce qui reste.
+ */
+@Composable
+internal fun StoryTrayRail(
+    tray: StoryTrayPresentation,
+    moodEmojiOf: (String) -> String?,
+    onOpenStory: (String) -> Unit,
+    onAddStory: () -> Unit,
+    onManageStories: () -> Unit,
+    onShowProfile: ((String) -> Unit)?,
+    onAppeared: (String?) -> Unit,
+) {
+    LazyRow(
+        modifier = Modifier
+            .floatingChromeLateralReserve(yieldsBothSides = true)
+            .heightIn(min = StoryEntryMetrics.height),
+        horizontalArrangement = Arrangement.spacedBy(StoryEntryMetrics.itemSpacing),
+        contentPadding = PaddingValues(
+            horizontal = StoryEntryMetrics.paddingHorizontal,
+            vertical = StoryEntryMetrics.paddingVertical,
+        ),
+    ) {
+        val selfRing = tray.self
+        if (selfRing != null) {
+            item(key = "self", contentType = RING_CONTENT_TYPE) {
+                StoryRingCell(
+                    ring = selfRing,
+                    label = stringResource(R.string.stories_my_story),
+                    cascadeIndex = 0,
+                    moodEmoji = moodEmojiOf(selfRing.userId),
+                    showAddBadge = true,
+                    onOpen = { onOpenStory(selfRing.userId) },
+                    onShowProfile = onShowProfile?.let { open -> { open(selfRing.userId) } },
+                    onAdd = onAddStory,
+                    onManage = onManageStories,
+                    onAppeared = onAppeared,
+                )
             }
+        } else {
+            item(key = "add", contentType = ADD_CONTENT_TYPE) {
+                AddStoryItem(onClick = onAddStory, onManage = onManageStories)
+            }
+        }
+        itemsIndexed(tray.others, key = { _, ring -> ring.userId }, contentType = { _, _ -> RING_CONTENT_TYPE }) { index, ring ->
+            StoryRingCell(
+                ring = ring,
+                label = ring.displayName,
+                cascadeIndex = index + 1,
+                moodEmoji = moodEmojiOf(ring.userId),
+                showAddBadge = false,
+                onOpen = { onOpenStory(ring.userId) },
+                onShowProfile = onShowProfile?.let { open -> { open(ring.userId) } },
+                onAppeared = onAppeared,
+            )
         }
     }
 }

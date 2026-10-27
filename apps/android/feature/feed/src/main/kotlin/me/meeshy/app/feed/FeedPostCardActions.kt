@@ -49,11 +49,12 @@ internal fun PostStatsRow(
     onComments: () -> Unit,
     onRepost: () -> Unit,
     onQuote: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
     ) {
         val likeLabel = stringResource(if (post.isLiked) R.string.feed_unlike else R.string.feed_like)
         StatAction(

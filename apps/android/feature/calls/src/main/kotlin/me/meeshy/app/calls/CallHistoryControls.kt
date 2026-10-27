@@ -50,6 +50,7 @@ import me.meeshy.ui.theme.MeeshyControlSize
 import me.meeshy.ui.theme.MeeshyFontSize
 import me.meeshy.ui.theme.MeeshyOpacity
 import me.meeshy.ui.theme.MeeshyRadius
+import me.meeshy.ui.component.chrome.floatingChromeLateralReserve
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 
@@ -94,7 +95,10 @@ internal fun CallHistoryFilterRow(
 ) {
     val haptics = LocalHapticFeedback.current
     Row(
-        modifier = modifier.fillMaxWidth().padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.smPlus),
+        modifier = modifier
+            .fillMaxWidth()
+            .floatingChromeLateralReserve(yieldsBothSides = true)
+            .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.smPlus),
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
         verticalAlignment = Alignment.CenterVertically,
     ) {

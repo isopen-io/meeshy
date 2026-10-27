@@ -25,6 +25,7 @@ import me.meeshy.ui.component.rememberPresence
 import me.meeshy.ui.format.RelativeTimeFormat
 import me.meeshy.ui.format.rememberRelativeTimeStrings
 import me.meeshy.ui.format.shortDateTimeLabel
+import me.meeshy.ui.component.chrome.floatingChromeLateralReserve
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 
@@ -47,7 +48,7 @@ internal fun FeedPostCardHeader(
     onDelete: () -> Unit,
 ) {
     val unknownAuthor = stringResource(R.string.feed_unknown_author)
-    Row(verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.floatingChromeLateralReserve(yieldsBothSides = true), verticalAlignment = Alignment.CenterVertically) {
         val profileTap = Modifier.opensAuthorProfile(post.authorId, onOpenProfile)
         MeeshyAvatar(
             name = post.authorName ?: unknownAuthor,

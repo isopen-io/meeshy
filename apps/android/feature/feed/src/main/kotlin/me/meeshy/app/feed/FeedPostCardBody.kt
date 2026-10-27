@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -35,6 +36,7 @@ import me.meeshy.feature.feed.R
 import me.meeshy.sdk.model.text.HashtagLink
 import me.meeshy.ui.component.bubble.LanguageChip
 import me.meeshy.ui.component.bubble.RichMessageText
+import me.meeshy.ui.component.chrome.floatingChromeLateralReserve
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -49,22 +51,24 @@ internal fun FeedPostCardBody(
     onFlagTap: (String) -> Unit,
     onOpenHashtag: (String) -> Unit = {},
 ) {
-    if (post.content.isNotBlank()) {
-        Spacer(Modifier.height(MeeshySpacing.md))
-        HashtagAwareLinks(onOpenHashtag) {
-            SelectionContainer {
-                RichMessageText(
-                    text = post.content,
-                    color = MeeshyTheme.tokens.textPrimary,
-                    style = MaterialTheme.typography.bodyMedium,
-                )
+    Column(Modifier.floatingChromeLateralReserve()) {
+        if (post.content.isNotBlank()) {
+            Spacer(Modifier.height(MeeshySpacing.md))
+            HashtagAwareLinks(onOpenHashtag) {
+                SelectionContainer {
+                    RichMessageText(
+                        text = post.content,
+                        color = MeeshyTheme.tokens.textPrimary,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
             }
         }
-    }
 
-    if (post.languageStrip.isNotEmpty()) {
-        Spacer(Modifier.height(MeeshySpacing.xs))
-        PostLanguageStripRow(chips = post.languageStrip, onChipTap = onFlagTap)
+        if (post.languageStrip.isNotEmpty()) {
+            Spacer(Modifier.height(MeeshySpacing.xs))
+            PostLanguageStripRow(chips = post.languageStrip, onChipTap = onFlagTap)
+        }
     }
 }
 

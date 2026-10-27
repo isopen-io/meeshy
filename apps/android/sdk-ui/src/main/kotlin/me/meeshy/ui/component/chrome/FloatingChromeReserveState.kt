@@ -30,7 +30,7 @@ public class FloatingChromeReserveState {
         if (bottom != value) bottom = value
     }
 
-    internal fun publishBands(value: List<FloatingChromeLateralReserve.Band>) {
+    public fun publishBands(value: List<FloatingChromeLateralReserve.Band>) {
         if (bands != value) bands = value
     }
 }
