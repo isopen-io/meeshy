@@ -47,6 +47,7 @@ public data class BubbleLocation(
     val latitude: Double? = null,
     val longitude: Double? = null,
     val placeName: String? = null,
+    val address: String? = null,
 ) {
     /** True when both coordinates are present and the point can be shown/opened. */
     val hasCoordinates: Boolean get() = latitude != null && longitude != null
@@ -57,6 +58,17 @@ public data class BubbleLocation(
      * so the URI is safe to build in any locale. A non-blank [placeName] is added
      * as the standard `(label)` suffix.
      */
+    companion object {
+        /** Le lieu du message (`ApiMessage.location`, hissé par la passerelle depuis `metadata.location`). */
+        fun fromPlace(messageId: String, place: me.meeshy.sdk.model.SharedPlace): BubbleLocation = BubbleLocation(
+            attachmentId = "place:$messageId",
+            latitude = place.latitude,
+            longitude = place.longitude,
+            placeName = place.name?.trim()?.ifBlank { null },
+            address = place.address?.trim()?.ifBlank { null },
+        )
+    }
+
     val geoUri: String? get() {
         val lat = latitude ?: return null
         val lon = longitude ?: return null

@@ -97,6 +97,9 @@ public object BubbleContentBuilder {
             mediaBaseUrl = mediaBaseUrl,
             displayDensity = displayDensity,
         )
+        val messagePlace = message.location
+            ?.takeUnless { isDeleted || isEndToEndSealed }
+            ?.let { BubbleLocation.fromPlace(message.id, it) }
         val files = attachments.files
         val text = when {
             isDeleted || isEndToEndSealed -> ""
@@ -156,7 +159,7 @@ public object BubbleContentBuilder {
             clientMessageId = message.clientMessageId,
             images = attachments.images,
             files = files,
-            locations = attachments.locations,
+            locations = listOfNotNull(messagePlace) + attachments.locations,
             audios = attachments.audios,
             emojiOnlyCount = if (visibleAttachments.isEmpty()) {
                 EmojiDetector.emojiOnlyCount(text)
