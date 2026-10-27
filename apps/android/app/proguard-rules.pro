@@ -20,6 +20,12 @@
 -keepclassmembers class <2>$<3> {
     kotlinx.serialization.KSerializer serializer(...);
 }
+# Retrofit résout son convertisseur par serializer(java.lang.reflect.Type) sur la SIGNATURE GÉNÉRIQUE de la méthode
+# (ApiResponse<ChangePasswordResponse>). Un modèle que le code ne lit jamais (réponse ignorée) n'y figure qu'en
+# argument de type : R8 le retirait et réécrivait la signature en ApiResponse<Object>, et l'appel levait
+# « Serializer for class 'Any' is not found » — 64 routes en release (auth/me, me/preferences, notifications/counts,
+# users/register-device-token, users/me/password…). Les modèles @Serializable de l'application restent donc vivants.
+-keep,allowobfuscation,allowoptimization @kotlinx.serialization.Serializable class me.meeshy.**
 -if @kotlinx.serialization.Serializable class ** {
     public static ** INSTANCE;
 }
