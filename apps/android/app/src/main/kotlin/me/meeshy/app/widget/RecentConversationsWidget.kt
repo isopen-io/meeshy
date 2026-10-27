@@ -35,6 +35,7 @@ import me.meeshy.app.widget.kit.WidgetAvatarBitmap
 import androidx.glance.Image
 import androidx.glance.ImageProvider
 import me.meeshy.app.widget.kit.WidgetTheme
+import me.meeshy.app.widget.kit.widgetSurface
 import me.meeshy.app.widget.kit.WidgetReaderPrismStore
 import me.meeshy.app.widget.kit.widgetPreviewLabels
 import androidx.glance.appwidget.action.actionStartActivity as actionStartActivityIntent
@@ -49,8 +50,8 @@ import androidx.glance.appwidget.action.actionStartActivity as actionStartActivi
  * `navDeepLink` — see `MeeshyApp.Routes.CONVERSATION_SINGULAR_DEEP_LINK`); tapping
  * the empty state or the header opens the app.
  *
- * **Deliberately minimal**, same posture as `UnreadCountWidget`: static/OS-triggered
- * refresh only (no push-refresh-on-data-change), Room-only read (no network — a
+ * **Deliberately minimal**, same posture as `UnreadCountWidget`: repeint par
+ * [WidgetRepaintInitializer] à chaque changement du cache local, Room-only read (no network — a
  * disconnected device still renders whatever is cached, never blocks), no mark-read
  * quick action yet (iOS's own `MarkConversationReadIntent` is the natural next
  * sub-tranche once a Glance `ActionCallback` wiring precedent exists in this app).
@@ -81,7 +82,7 @@ private fun RecentConversationsWidgetContent(presentation: RecentConversationsWi
     Column(
         modifier = GlanceModifier
             .fillMaxSize()
-            .background(WidgetTheme.background)
+            .widgetSurface()
             .padding(12.dp),
     ) {
         Text(

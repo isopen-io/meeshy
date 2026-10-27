@@ -33,6 +33,7 @@ import me.meeshy.app.MainActivity
 import me.meeshy.app.R
 import me.meeshy.app.widget.kit.WidgetAvatarBitmap
 import me.meeshy.app.widget.kit.WidgetTheme
+import me.meeshy.app.widget.kit.widgetSurface
 import androidx.glance.Image
 import androidx.glance.ImageProvider
 
@@ -83,7 +84,7 @@ private fun FavoriteContactsWidgetContent(presentation: FavoriteContactsWidgetPr
     Column(
         modifier = GlanceModifier
             .fillMaxSize()
-            .background(WidgetTheme.background)
+            .widgetSurface()
             .padding(12.dp),
     ) {
         Text(
