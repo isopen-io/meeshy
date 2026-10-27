@@ -89,6 +89,22 @@ class StoryComposerPublicationViewModelTest {
     }
 
     @Test
+    fun `le brouillon garde jusqu'a la confirmation porte la liste nommee qui est partie`() = runTest {
+        val store = InMemoryStoryComposerDraftStore()
+        val vm = viewModel(draftStore = store)
+        vm.onTextChange("salut")
+        vm.onVisibilityChange(StoryVisibility.ONLY)
+        vm.onAudienceUserIdsChange(listOf("a", "b"))
+
+        vm.published()
+
+        val kept = store.load()
+        assertThat(kept?.awaitingPublication).containsExactly("cmid")
+        assertThat(kept?.visibility).isEqualTo("ONLY")
+        assertThat(kept?.visibilityUserIds).containsExactly("a", "b").inOrder()
+    }
+
+    @Test
     fun `ONLY sans personne ne se publie pas`() = runTest {
         val vm = viewModel()
         vm.onTextChange("salut")
