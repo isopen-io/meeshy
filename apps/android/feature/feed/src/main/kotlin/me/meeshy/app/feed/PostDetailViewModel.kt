@@ -19,6 +19,7 @@ import me.meeshy.sdk.model.ContentFetchFailure
 import me.meeshy.sdk.model.EngagementSessions
 import me.meeshy.sdk.model.EngagementSurface
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.PublicationViewersAccess
 import me.meeshy.sdk.model.QualifiedView
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
@@ -62,6 +63,8 @@ data class PostDetailUiState(
     /** Cause typee de l'echec du chargement (null = aucun echec) ; pilote [PostAbsenceReason]. */
     val loadFailure: ContentFetchFailure? = null,
     val translatingLanguages: Set<String> = emptySet(),
+    /** Le lecteur peut ouvrir la liste de qui a vu ce contenu (iOS `PublicationViewersAccess`). */
+    val canListViewers: Boolean = false,
     /**
      * The quote-repost composer currently open (the reader chose "Quote"), or `null` when
      * dismissed. Shares the [QuoteComposerState] value model with the feed so the sheet renders
@@ -547,6 +550,8 @@ class PostDetailViewModel @Inject constructor(
             errorMessage = st.error,
             loadFailure = st.failure ?: if (st.notFound) ContentFetchFailure.NOT_FOUND else null,
             translatingLanguages = st.translating,
+            canListViewers = post != null &&
+                PublicationViewersAccess.mayList(post.type, projected?.isAuthor == true, user?.role),
             quoteComposer = st.quoteComposer,
             isReposted = st.isReposted,
         )

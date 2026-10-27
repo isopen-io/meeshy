@@ -104,6 +104,7 @@
     </plurals>
     <string name="post_detail_back">Zurück</string>
     <string name="post_detail_title">Beitrag</string>
+    <string name="post_detail_viewers">Aufrufe</string>
     <string name="status_bar_add">Status</string>
     <string name="status_bar_expired">Abgelaufen</string>
     <string name="status_bar_me">Ich</string>

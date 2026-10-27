@@ -108,6 +108,7 @@
     </plurals>
     <string name="post_detail_back">Retour</string>
     <string name="post_detail_title">Publication</string>
+    <string name="post_detail_viewers">Vues</string>
     <string name="status_bar_add">Statut</string>
     <string name="status_bar_expired">Expiré</string>
     <string name="status_bar_me">Moi</string>

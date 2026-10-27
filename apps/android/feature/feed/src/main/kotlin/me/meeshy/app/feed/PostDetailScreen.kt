@@ -7,6 +7,7 @@ import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -108,9 +109,12 @@ fun PostDetailScreen(
     onOpenPost: (String) -> Unit = {},
     onOpenProfile: ((String) -> Unit)? = null,
     onOpenHashtag: (String) -> Unit = {},
+    viewersSheet: @Composable (postId: String, onDismiss: () -> Unit) -> Unit = { _, _ -> },
     viewModel: PostDetailViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    var viewersOpen by remember { mutableStateOf(false) }
+    if (viewersOpen) state.post?.id?.let { id -> viewersSheet(id) { viewersOpen = false } }
     val quickEmojis by viewModel.quickEmojis.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     val context = LocalContext.current
@@ -179,6 +183,7 @@ fun PostDetailScreen(
                         onOpenPost = onOpenPost,
                         onOpenProfile = onOpenProfile,
                         onOpenHashtag = onOpenHashtag,
+                        onOpenViewers = if (state.canListViewers) ({ viewersOpen = true }) else null,
                         onRepost = viewModel::repost,
                         onQuote = viewModel::beginQuote,
                         onLike = viewModel::toggleLike,
@@ -210,6 +215,7 @@ private fun PostDetailContent(
     onOpenPost: (String) -> Unit,
     onOpenProfile: ((String) -> Unit)?,
     onOpenHashtag: (String) -> Unit,
+    onOpenViewers: (() -> Unit)?,
     onRepost: () -> Unit,
     onQuote: () -> Unit,
     onLike: () -> Unit,
@@ -266,6 +272,7 @@ private fun PostDetailContent(
                             )
                         }
                         PostReachLine(post = post)
+                        onOpenViewers?.let { open -> ViewersEntry(onClick = open) }
                     }
                 }
 
@@ -337,6 +344,23 @@ private fun PostDetailContent(
 
         Spacer(Modifier.height(MeeshySpacing.lg))
         PostCommentsSection(onNotice = onCommentNotice)
+    }
+}
+
+/** « Vues » : l'entrée de la liste de qui a vu (ADMIN/BIGBOSS), même libellé qu'iOS. */
+@Composable
+private fun ViewersEntry(onClick: () -> Unit) {
+    val label = stringResource(R.string.post_detail_viewers)
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+        modifier = Modifier
+            .padding(top = MeeshySpacing.xs)
+            .clickable(onClick = onClick)
+            .semantics { role = Role.Button; contentDescription = label },
+    ) {
+        Icon(Icons.Filled.Visibility, contentDescription = null, tint = MeeshyTheme.tokens.textSecondary, modifier = Modifier.size(14.dp))
+        Text(text = label, style = MaterialTheme.typography.bodySmall, color = MeeshyTheme.tokens.textSecondary)
     }
 }
 

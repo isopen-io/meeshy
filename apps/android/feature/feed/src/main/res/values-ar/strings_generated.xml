@@ -120,6 +120,7 @@
     </plurals>
     <string name="post_detail_back">رجوع</string>
     <string name="post_detail_title">منشور</string>
+    <string name="post_detail_viewers">المشاهدات</string>
     <string name="status_bar_add">الحالة</string>
     <string name="status_bar_expired">منتهٍ</string>
     <string name="status_bar_me">أنا</string>

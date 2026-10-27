@@ -792,6 +792,12 @@
         },
         {
           "catalog": "app",
+          "iosKey": "story.viewer.views.title",
+          "androidName": "post_detail_viewers",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
           "iosKey": "hashtag.results.empty",
           "androidName": "hashtag_results_empty",
           "status": "adopted"

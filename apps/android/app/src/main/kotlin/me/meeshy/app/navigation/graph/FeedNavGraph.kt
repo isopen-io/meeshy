@@ -17,6 +17,7 @@ import me.meeshy.app.navigation.Routes
 import me.meeshy.app.reels.ReelsScreen
 import me.meeshy.app.stories.MyStoriesScreen
 import me.meeshy.app.stories.StoryComposerScreen
+import me.meeshy.app.stories.StoryViewersSheet
 import me.meeshy.app.stories.StoryViewerScreen
 import me.meeshy.app.stories.StoryViewerViewModel
 
@@ -81,6 +82,9 @@ internal fun NavGraphBuilder.feedNavGraph(
             onOpenPost = { postId -> navController.navigate(Routes.postDetail(postId)) },
             onOpenProfile = { userId -> navController.navigate(Routes.profile(userId)) },
             onOpenHashtag = { tag -> navController.navigate(Routes.hashtag(tag)) },
+            viewersSheet = { postId, onDismiss ->
+                StoryViewersSheet(storyId = postId, accentHex = "6366F1", onDismiss = onDismiss)
+            },
         )
     }
     composable(
