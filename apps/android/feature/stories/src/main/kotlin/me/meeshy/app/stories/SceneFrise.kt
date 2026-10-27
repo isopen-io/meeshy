@@ -233,6 +233,7 @@ private fun FriseTrackRow(
     val currentStored by rememberUpdatedState(stored)
     val currentCandidates by rememberUpdatedState(candidates)
     val currentSelect by rememberUpdatedState(onSelect)
+    val currentPlayhead by rememberUpdatedState(playheadSeconds)
     val currentCommit by rememberUpdatedState(onCommit)
     val dragEnabled = editable && laneWidthPx > 0
     Row(
@@ -275,7 +276,7 @@ private fun FriseTrackRow(
                             Modifier.dragBar(track.id, Grip.BODY, geometry, { currentStored }, { currentCandidates }, { live = it }, {
                                 live = null
                                 currentCommit(FriseBarDrag.stored(it, duration))
-                            }, onStart = { currentSelect(playheadSeconds) })
+                            }, onStart = { currentSelect(currentPlayhead) })
                         } else {
                             Modifier
                         },
