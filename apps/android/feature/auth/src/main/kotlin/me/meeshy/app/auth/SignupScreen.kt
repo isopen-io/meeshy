@@ -366,21 +366,11 @@ private fun LanguagePill(state: SignupUiState, viewModel: SignupViewModel) {
 @Composable
 private fun GlobalErrorBanner(error: SignupSubmitError?) {
     val text = when (error) {
-        null -> return
+        null, is SignupSubmitError.Field -> null
         SignupSubmitError.Network -> stringResource(R.string.signup_error_network)
         is SignupSubmitError.Global -> error.message ?: stringResource(R.string.signup_error_generic)
-        is SignupSubmitError.Field -> return
     }
-    Text(
-        text = text,
-        style = MaterialTheme.typography.bodySmall,
-        color = MeeshyTheme.tokens.error,
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(MeeshyRadius.sm))
-            .background(MeeshyTheme.tokens.error.copy(alpha = 0.10f))
-            .padding(MeeshySpacing.sm),
-    )
+    AuthErrorMessage(text = text, boxed = true)
 }
 
 /**

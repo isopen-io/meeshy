@@ -36,6 +36,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.SemanticsPropertyKey
 import androidx.compose.ui.semantics.SemanticsPropertyReceiver
 import androidx.compose.ui.semantics.error
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
@@ -76,6 +77,9 @@ internal val AuthFieldBorderKey: SemanticsPropertyKey<AuthFieldBorder> =
     SemanticsPropertyKey(name = "AuthFieldBorder")
 
 private var SemanticsPropertyReceiver.authFieldBorder: AuthFieldBorder by AuthFieldBorderKey
+
+/** Le cadre d'un champ d'accès (icône + saisie), pour les témoins de géométrie. */
+public const val AUTH_TEXT_FIELD_FRAME_TAG: String = "auth.textField.frame"
 
 private val ICON_SIZE = 18.dp
 private val FIELD_MIN_HEIGHT = 52.dp
@@ -130,6 +134,7 @@ public fun AuthTextField(
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(min = FIELD_MIN_HEIGHT)
+                .testTag(AUTH_TEXT_FIELD_FRAME_TAG)
                 .background(tokens.inputBackground, shape)
                 .border(BorderStroke(1.dp, borderColor), shape)
                 .padding(horizontal = MeeshySpacing.lg)

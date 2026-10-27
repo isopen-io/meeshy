@@ -36,6 +36,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.auth.R
 import me.meeshy.sdk.model.auth.EmailRecoveryStep
 import me.meeshy.ui.component.chrome.MeeshyBackground
+import me.meeshy.ui.component.auth.AuthActionButton
+import me.meeshy.ui.component.auth.AuthContentType
+import me.meeshy.ui.component.auth.AuthTextField
+import me.meeshy.ui.icons.MeeshyIcons
+import androidx.compose.ui.text.input.ImeAction
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -69,28 +74,23 @@ fun ForgotPasswordScreen(
                     label = stringResource(R.string.auth_forgot_never_had_label),
                     text = stringResource(R.string.auth_forgot_never_had_text),
                 )
-                OutlinedTextField(
+                AuthTextField(
                     value = state.email,
                     onValueChange = viewModel::setEmail,
-                    label = { Text(stringResource(R.string.auth_email_label)) },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-                    modifier = Modifier.fillMaxWidth(),
+                    title = stringResource(R.string.auth_email_label),
+                    icon = MeeshyIcons.Mail,
+                    contentType = AuthContentType.Email,
+                    imeAction = ImeAction.Go,
+                    onImeAction = { if (state.canSend) viewModel.send() },
+                    enabled = !state.isSubmitting,
                 )
-                state.errorMessage?.let {
-                    Text(text = it, color = MeeshyPalette.Error, style = MaterialTheme.typography.bodySmall)
-                }
-                Button(
+                AuthErrorMessage(text = state.errorMessage)
+                AuthActionButton(
+                    title = stringResource(R.string.auth_magic_send),
                     onClick = viewModel::send,
                     enabled = state.canSend,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    if (state.isSubmitting) {
-                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                    } else {
-                        Text(stringResource(R.string.auth_magic_send))
-                    }
-                }
+                    isLoading = state.isSubmitting,
+                )
             }
             EmailRecoveryStep.SENT -> {
                 SentConfirmation(
@@ -130,28 +130,23 @@ fun MagicLinkScreen(
                 label = stringResource(R.string.auth_magic_how_label),
                 text = stringResource(R.string.auth_magic_subtitle),
             )
-            OutlinedTextField(
+            AuthTextField(
                 value = state.email,
                 onValueChange = viewModel::setEmail,
-                label = { Text(stringResource(R.string.auth_email_label)) },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-                modifier = Modifier.fillMaxWidth(),
+                title = stringResource(R.string.auth_email_label),
+                icon = MeeshyIcons.Mail,
+                contentType = AuthContentType.Email,
+                imeAction = ImeAction.Go,
+                onImeAction = { if (state.canSend) viewModel.send() },
+                enabled = !state.isSubmitting,
             )
-            state.errorMessage?.let {
-                Text(text = it, color = MeeshyPalette.Error, style = MaterialTheme.typography.bodySmall)
-            }
-            Button(
+            AuthErrorMessage(text = state.errorMessage)
+            AuthActionButton(
+                title = stringResource(R.string.auth_magic_send),
                 onClick = viewModel::send,
                 enabled = state.canSend,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                if (state.isSubmitting) {
-                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                } else {
-                    Text(stringResource(R.string.auth_magic_send))
-                }
-            }
+                isLoading = state.isSubmitting,
+            )
         } else {
             SentConfirmation(
                 title = stringResource(R.string.auth_magic_sent_title),
