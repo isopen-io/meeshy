@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_decline_end_to_end_refused">Message non envoyé : cette conversation est chiffrée de bout en bout. Répondez depuis l’application Meeshy sur iPhone.</string>
+</resources>

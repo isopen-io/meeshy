@@ -14,6 +14,7 @@ import me.meeshy.sdk.e2ee.EndToEndRegimeLedger
 import me.meeshy.sdk.friend.OutboxFlushScheduler
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.session.SessionRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -33,8 +34,11 @@ class CallDeclineMessengerTest {
     private var flushed = 0
     private val flush = OutboxFlushScheduler { flushed++ }
 
+    private var refusalsShown = 0
+
     private fun messenger() = CallDeclineMessenger(
         messages, conversations, session, ledger, flush, CoroutineScope(Job()),
+        notifyRefusal = { refusalsShown++ },
     )
 
     @Test
@@ -73,6 +77,28 @@ class CallDeclineMessengerTest {
         assertThat(outcome).isEqualTo(CallDeclineOutcome.EndToEndRefused)
         coVerify(exactly = 0) { messages.sendOptimistic(any(), any(), any(), any()) }
         assertThat(flushed).isEqualTo(0)
+        assertThat(refusalsShown).isEqualTo(1)
+    }
+
+    @Test
+    fun `une conversation absente du cache est relue au serveur avant toute ecriture et refusee si chiffree`() = runTest {
+        coEvery { conversations.cachedById("c1") } returns null
+        coEvery { conversations.getById("c1") } returns NetworkResult.Success(ApiConversation(id = "c1", encryptionMode = "e2ee"))
+
+        val outcome = messenger().send("peer", "c1", "Salut")
+
+        assertThat(outcome).isEqualTo(CallDeclineOutcome.EndToEndRefused)
+        coVerify(exactly = 0) { messages.sendOptimistic(any(), any(), any(), any()) }
+        assertThat(refusalsShown).isEqualTo(1)
+    }
+
+    @Test
+    fun `une conversation absente du cache et relue en clair part par la file`() = runTest {
+        coEvery { conversations.cachedById("c1") } returns null
+        coEvery { conversations.getById("c1") } returns NetworkResult.Success(ApiConversation(id = "c1"))
+
+        assertThat(messenger().send("peer", "c1", "Salut")).isEqualTo(CallDeclineOutcome.Queued)
+        assertThat(refusalsShown).isEqualTo(0)
     }
 
     @Test

@@ -1,10 +1,14 @@
 package me.meeshy.app.calls
 
+import android.content.Context
+import android.widget.Toast
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.conversation.conversationOrNull
@@ -16,6 +20,8 @@ import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.EndToEndRegime
 import me.meeshy.sdk.model.call.CallDeclineReplyPlan
 import me.meeshy.sdk.model.call.CallDeclineReplyRule
+import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.feature.calls.R
 import me.meeshy.sdk.session.SessionRepository
 import timber.log.Timber
 import javax.inject.Inject
@@ -39,7 +45,9 @@ sealed interface CallDeclineOutcome {
  * au-delà de l'écran d'appel, qui se ferme dès le refus : l'envoi a sa propre portée.
  *
  * Fail-closed vers une conversation chiffrée de bout en bout — le registre du compte et le mode
- * de la ligne en cache sont lus AVANT toute écriture ; l'Android natif ne sait pas sceller.
+ * de la ligne en cache sont lus AVANT toute écriture, et une conversation absente du cache est
+ * relue au serveur ; l'Android natif ne sait pas sceller. Le refus est dit à l'utilisateur
+ * ([notifyRefusal], un toast : l'écran d'appel est déjà fermé — iOS `FeedbackToastManager`).
  */
 @Singleton
 class CallDeclineMessenger internal constructor(
@@ -49,6 +57,7 @@ class CallDeclineMessenger internal constructor(
     private val ledger: EndToEndRegimeLedger,
     private val flush: OutboxFlushScheduler,
     private val scope: CoroutineScope,
+    private val notifyRefusal: suspend () -> Unit,
 ) {
     @Inject
     constructor(
@@ -57,7 +66,16 @@ class CallDeclineMessenger internal constructor(
         session: SessionRepository,
         ledger: EndToEndRegimeLedger,
         flush: OutboxFlushScheduler,
-    ) : this(messages, conversations, session, ledger, flush, CoroutineScope(SupervisorJob() + Dispatchers.Default))
+        @ApplicationContext context: Context,
+    ) : this(
+        messages, conversations, session, ledger, flush,
+        CoroutineScope(SupervisorJob() + Dispatchers.Default),
+        notifyRefusal = {
+            withContext(Dispatchers.Main) {
+                Toast.makeText(context, R.string.call_decline_end_to_end_refused, Toast.LENGTH_LONG).show()
+            }
+        },
+    )
 
     /** Lance l'envoi hors de l'écran appelant ; le résultat n'attend personne. */
     fun sendInBackground(peerId: String, conversationId: String, text: String) {
@@ -78,6 +96,7 @@ class CallDeclineMessenger internal constructor(
         val plan = CallDeclineReplyRule.plan(true, target, text, language) ?: return CallDeclineOutcome.Failed
         if (isSealed(plan)) {
             Timber.w("decline reply refused before transport: end-to-end conversation")
+            notifyRefusal()
             return CallDeclineOutcome.EndToEndRefused
         }
         return try {
@@ -102,7 +121,10 @@ class CallDeclineMessenger internal constructor(
         return conversations.directConversationWith(peerId).conversationOrNull?.id
     }
 
-    private suspend fun isSealed(plan: CallDeclineReplyPlan): Boolean =
-        ledger.isSealed(plan.conversationId) ||
-            EndToEndRegime.isEndToEnd(conversations.cachedById(plan.conversationId)?.encryptionMode)
+    private suspend fun isSealed(plan: CallDeclineReplyPlan): Boolean {
+        if (ledger.isSealed(plan.conversationId)) return true
+        val known = conversations.cachedById(plan.conversationId)
+            ?: (conversations.getById(plan.conversationId) as? NetworkResult.Success)?.data
+        return EndToEndRegime.isEndToEnd(known?.encryptionMode)
+    }
 }

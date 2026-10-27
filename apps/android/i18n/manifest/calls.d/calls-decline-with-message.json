@@ -81,6 +81,10 @@
           "iosKey": "call.decline.reply.writeMe",
           "androidName": "call_decline_reply_write_me",
           "status": "adopted"
+        },
+        {
+          "androidName": "call_decline_end_to_end_refused",
+          "status": "android-only"
         }
       ]
     }
