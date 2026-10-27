@@ -72,7 +72,7 @@ internal class SheetReturnMemory {
 private fun NavBackStackEntry.toStackEntry(): StackEntry? {
     if (destination is NavGraph) return null
     val pattern = destination.route.orEmpty()
-    val filled = Regex("\\{([^}]+)}").replace(pattern) { match ->
+    val filled = Regex("\\{([^}]+)\\}").replace(pattern) { match ->
         Uri.encode(arguments?.get(match.groupValues[1])?.toString().orEmpty())
     }
     return StackEntry(
