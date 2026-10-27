@@ -12,10 +12,10 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.graphics.Color
 import me.meeshy.feature.game.R
 import me.meeshy.sdk.model.game.GameBlock
 import me.meeshy.sdk.model.game.GamePrestigeBlock
+import me.meeshy.ui.component.game.GameMaterial
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -62,7 +62,7 @@ private fun PrestigeSummary(prestige: GamePrestigeBlock, level: Int) {
                 Text(
                     "★",
                     style = MaterialTheme.typography.headlineMedium,
-                    color = if (index < prestige.stars) STAR_LIT else MeeshyTheme.tokens.textMuted.copy(alpha = STAR_OFF_ALPHA),
+                    color = if (index < prestige.stars) GameMaterial.GOLD.lineColor else MeeshyTheme.tokens.textMuted.copy(alpha = STAR_OFF_ALPHA),
                 )
             }
         }
@@ -81,5 +81,4 @@ private fun PrestigeSummary(prestige: GamePrestigeBlock, level: Int) {
     }
 }
 
-private val STAR_LIT = Color(0xFFE9B949)
 private const val STAR_OFF_ALPHA = 0.35f

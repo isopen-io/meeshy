@@ -58,14 +58,14 @@ import me.meeshy.ui.theme.MeeshyTheme
 
 /** La couleur de la gemme — les huit teintes de la planche, du gris de Quartz à l'irisé du Prisme (iOS `gemColor`). */
 internal fun gemColor(league: LeagueKey): Color = when (league) {
-    LeagueKey.Quartz -> Color(0xFFE5E7EB)
-    LeagueKey.Ambre -> Color(0xFFF59E0B)
-    LeagueKey.Jade -> Color(0xFF10B981)
-    LeagueKey.Saphir -> Color(0xFF3B82F6)
-    LeagueKey.Rubis -> Color(0xFFE11D48)
-    LeagueKey.Amethyste -> Color(0xFF8B5CF6)
-    LeagueKey.Diamant -> Color(0xFFBAE6FD)
-    LeagueKey.Prisme -> Color(0xFFA855F7)
+    LeagueKey.Quartz -> MeeshyPalette.Neutral400
+    LeagueKey.Ambre -> MeeshyPalette.Amber500
+    LeagueKey.Jade -> MeeshyPalette.SuccessDeep
+    LeagueKey.Saphir -> MeeshyPalette.Blue500
+    LeagueKey.Rubis -> MeeshyPalette.ErrorStrong
+    LeagueKey.Amethyste -> MeeshyPalette.Purple600
+    LeagueKey.Diamant -> MeeshyPalette.TileSky
+    LeagueKey.Prisme -> MeeshyPalette.Purple500
 }
 
 /** La couleur d'une zone : montée en vert, maintien en retrait, descente en rouge — et le mot la dit aussi. */
@@ -100,7 +100,7 @@ internal fun LeagueGem(league: LeagueKey, size: Dp, modifier: Modifier = Modifie
             drawLine(Color.White.copy(alpha = GEM_TABLE_ALPHA), Offset(10f * k, 26f * k), Offset(62f * k, 26f * k), strokeWidth = 1.4f * k)
         }
         SignatureMark(
-            color = GEM_INK,
+            color = MeeshyPalette.Violet950,
             style = SignatureStyle.Engraved,
             modifier = Modifier.size(size * (SIGNATURE_SIDE / GEM_BOX)).offset(y = size * (SIGNATURE_DROP / GEM_BOX)),
         )
@@ -138,9 +138,9 @@ internal fun ZoneLabel(zone: LeagueZone, modifier: Modifier = Modifier) {
 
 @Composable
 private fun cupTint(cup: LeagueCup): Color = when (cup) {
-    LeagueCup.Gold -> Color(0xFFD9A021)
-    LeagueCup.Silver -> Color(0xFF9AA4B2)
-    LeagueCup.Bronze -> Color(0xFFA9622C)
+    LeagueCup.Gold -> GameMaterial.GOLD.lineColor
+    LeagueCup.Silver -> GameMaterial.SILVER.lineColor
+    LeagueCup.Bronze -> GameMaterial.BRONZE.lineColor
 }
 
 /**
@@ -209,7 +209,6 @@ internal fun LeagueStandingRow(entry: LeagueWeekEntry, modifier: Modifier = Modi
 private const val GEM_BOX = 72f
 private const val SIGNATURE_SIDE = 26f
 private const val SIGNATURE_DROP = 2f
-private val GEM_INK = Color(0xFF1C1941)
 private const val GEM_EDGE_ALPHA = 0.3f
 private const val GEM_TABLE_ALPHA = 0.6f
 private const val MINUTE_MILLIS = 60_000L

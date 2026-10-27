@@ -33,6 +33,7 @@ import me.meeshy.sdk.model.game.GameUpcomingSeasonBlock
 import me.meeshy.sdk.model.game.SeasonRewardKind
 import me.meeshy.sdk.model.game.pages.SeasonPath
 import me.meeshy.sdk.model.game.pages.SeasonStepState
+import me.meeshy.ui.component.game.GameMaterial
 import me.meeshy.ui.component.game.SignatureMark
 import me.meeshy.ui.component.game.SignatureStyle
 import me.meeshy.ui.motion.staggeredAppear
@@ -208,18 +209,16 @@ private fun SealMark(step: Int, lit: Boolean, modifier: Modifier = Modifier) {
             Modifier
                 .size(44.dp)
                 .clip(androidx.compose.foundation.shape.CircleShape)
-                .background(if (lit) SEAL_GOLD else muted.copy(alpha = UNLIT_ALPHA))
+                .background(if (lit) GameMaterial.GOLD.lineColor else muted.copy(alpha = UNLIT_ALPHA))
                 .padding(MeeshySpacing.xs),
             contentAlignment = Alignment.Center,
         ) {
-            SignatureMark(color = if (lit) SEAL_INK else muted, style = if (lit) SignatureStyle.Engraved else SignatureStyle.Flat, modifier = Modifier.size(30.dp))
+            SignatureMark(color = if (lit) GameMaterial.GOLD.ink else muted, style = if (lit) SignatureStyle.Engraved else SignatureStyle.Flat, modifier = Modifier.size(30.dp))
         }
         Text(count(step), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Medium, color = muted)
     }
 }
 
-private val SEAL_GOLD = Color(0xFFE9B949)
-private val SEAL_INK = Color(0xFF6B4610)
 private const val MAX_STAGGER_ROW = 8
 private const val READY_ALPHA = 0.14f
 private const val DONE_ALPHA = 0.08f

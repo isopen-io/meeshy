@@ -129,7 +129,9 @@ fun LeagueScreen(
             LeagueTab.Mine -> mineSection(game, league, state, offline, viewModel)
             LeagueTab.Friends -> friendsSection(state, viewModel)
         }
-        game.duo?.let { duo -> item(key = "duo") { DuoCard(duo, levelRecord = game.level.shown.record) } }
+        game.duo?.takeIf { it.shownInReadOnlyPage }?.let { duo ->
+            item(key = "duo") { DuoCard(duo, levelRecord = game.level.shown.record) }
+        }
     }
 }
 
@@ -402,6 +404,12 @@ private fun friendName(friend: FriendRequestUser): String =
 // MARK: - L'alliance (lecture)
 
 /**
+ * Sans alliance cette semaine, la carte se tait : son seul contenu serait l'invitation d'un ami, un geste d'une partie
+ * suivante — la page ne promet rien qu'elle ne sache faire. Verrouillée, elle dit à quel niveau elle s'ouvre.
+ */
+private val GameDuoBlock.shownInReadOnlyPage: Boolean get() = !unlocked || status != DuoBlockStatus.None
+
+/**
  * L'alliance de la semaine, EN LECTURE : sa mission, la part de chacun, la récompense que la passerelle sert. Inviter,
  * accepter et quitter sont des gestes d'une partie suivante — cette carte n'en promet aucun.
  */
@@ -421,7 +429,7 @@ private fun DuoCard(duo: GameDuoBlock, levelRecord: Int) {
             DuoBlockStatus.Active, DuoBlockStatus.Completed -> DuoRunning(duo, partner)
             DuoBlockStatus.Abandoned -> GameNote(stringResource(R.string.game2_duo_abandoned))
             DuoBlockStatus.Expired -> GameNote(stringResource(R.string.game2_duo_expired))
-            DuoBlockStatus.None -> GameNote(stringResource(R.string.game2_duo_none))
+            DuoBlockStatus.None -> Unit
         }
     }
 }
