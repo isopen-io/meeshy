@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:settings": {
+      "resDir": "feature/settings/src/main/res",
+      "entries": [
+        { "catalog": "app", "iosKey": "settings.media.outgoing.header", "status": "adopted" },
+        { "catalog": "app", "iosKey": "settings.media.outgoing.location.title", "status": "adopted" },
+        { "catalog": "app", "iosKey": "settings.media.outgoing.location.subtitle", "status": "adopted" }
+      ]
+    }
+  }
+}

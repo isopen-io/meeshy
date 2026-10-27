@@ -181,6 +181,9 @@
     <string name="settings_media_capture_rendered_subtitle">Automatisch beim Bestätigen der Bearbeitung. Sonst sichert sie der Pfeil der Bearbeitung auf Wunsch.</string>
     <string name="settings_media_capture_rendered_title">Version mit Effekten und Rahmen sichern</string>
     <string name="settings_media_download">Automatischer Download</string>
+    <string name="settings_media_outgoing_header">Beim Senden</string>
+    <string name="settings_media_outgoing_location_subtitle">Standardmäßig wird die GPS-Position vor dem Senden aus jedem Foto entfernt.</string>
+    <string name="settings_media_outgoing_location_title">Fotostandort beibehalten</string>
     <string name="settings_new_message_notifications">Neue Nachrichten</string>
     <string name="settings_notif_cat_calls">Anrufe</string>
     <string name="settings_notif_cat_messages">Nachrichten</string>
