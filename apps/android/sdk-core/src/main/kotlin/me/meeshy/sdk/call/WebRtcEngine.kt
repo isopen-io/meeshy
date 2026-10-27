@@ -164,7 +164,7 @@ class WebRtcEngine internal constructor(
 
     fun setVideoEnabled(enabled: Boolean) = media.setVideoEnabled(enabled)
 
-    fun switchCamera() = media.switchCamera()
+    fun switchCamera(onSwitched: (isFront: Boolean?) -> Unit) = media.switchCamera(onSwitched)
 
     suspend fun createOffer(): SessionDescription = createSdp(isOffer = true)
 

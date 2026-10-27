@@ -131,9 +131,19 @@ internal class CallMediaSources(
         }
     }
 
-    /** Bascule entre la caméra avant et arrière (iOS `switchCamera`) ; sans effet sans capture en cours. */
-    fun switchCamera() {
-        runCatching { videoCapturer?.switchCamera(null) }
+    /**
+     * Bascule entre la caméra avant et arrière (iOS `switchCamera`). [onSwitched] reçoit, sur le
+     * fil de la caméra, la face désormais active, ou `null` si la bascule n'a pas eu lieu (aucune
+     * capture, une seule caméra, erreur du capteur).
+     */
+    fun switchCamera(onSwitched: (isFront: Boolean?) -> Unit) {
+        val capturer = videoCapturer ?: return onSwitched(null)
+        runCatching {
+            capturer.switchCamera(object : CameraVideoCapturer.CameraSwitchHandler {
+                override fun onCameraSwitchDone(isFrontCamera: Boolean) = onSwitched(isFrontCamera)
+                override fun onCameraSwitchError(errorDescription: String?) = onSwitched(null)
+            })
+        }.onFailure { onSwitched(null) }
     }
 
     /** Arrête la capture et dispose les sources ; à appeler AVANT de disposer le `PeerConnection`. */

@@ -345,8 +345,43 @@ class CallViewModelTest {
 
         vm.flipCamera()
 
-        verify(exactly = 1) { coordinator.switchCamera() }
+        verify(exactly = 1) { coordinator.switchCamera(any()) }
         verify(exactly = 0) { signalManager.emitToggleVideo(any(), any()) }
+    }
+
+    @Test
+    fun `a video call starts on the front camera, which mirrors the self preview`() = runTest {
+        val vm = vm()
+        vm.start(outgoingVideo)
+
+        assertThat(vm.state.value.isFrontCamera).isTrue()
+    }
+
+    @Test
+    fun `flipping turns to the rear camera at once and keeps it once the capturer confirms`() = runTest {
+        val done = slot<(Boolean?) -> Unit>()
+        every { coordinator.switchCamera(capture(done)) } returns Unit
+        val vm = vm()
+        vm.start(outgoingVideo)
+
+        vm.flipCamera()
+        assertThat(vm.state.value.isFrontCamera).isFalse()
+
+        done.captured(false)
+        assertThat(vm.state.value.isFrontCamera).isFalse()
+    }
+
+    @Test
+    fun `a camera switch the capturer refuses puts the front camera back`() = runTest {
+        val done = slot<(Boolean?) -> Unit>()
+        every { coordinator.switchCamera(capture(done)) } returns Unit
+        val vm = vm()
+        vm.start(outgoingVideo)
+
+        vm.flipCamera()
+        done.captured(null)
+
+        assertThat(vm.state.value.isFrontCamera).isTrue()
     }
 
     @Test
@@ -357,7 +392,7 @@ class CallViewModelTest {
 
         vm.flipCamera()
 
-        verify(exactly = 0) { coordinator.switchCamera() }
+        verify(exactly = 0) { coordinator.switchCamera(any()) }
     }
 
     @Test

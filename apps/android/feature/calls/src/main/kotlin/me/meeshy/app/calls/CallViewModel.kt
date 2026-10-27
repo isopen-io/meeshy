@@ -330,7 +330,15 @@ class CallViewModel @Inject constructor(
     /** Basculer la caméra avant/arrière (iOS `switchCamera`) : sans effet caméra coupée, jamais signalé. */
     fun flipCamera() {
         if (!media.isCameraOn) return
-        coordinator.switchCamera()
+        val before = media.isFrontCamera
+        media = media.copy(isFrontCamera = !before)
+        publish()
+        coordinator.switchCamera { isFront ->
+            viewModelScope.launch {
+                media = media.copy(isFrontCamera = isFront ?: before)
+                publish()
+            }
+        }
     }
 
     /** Settle a terminal call back to idle (dismissing the ended screen). */

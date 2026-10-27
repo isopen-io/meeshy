@@ -39,6 +39,7 @@ fun VideoRenderer(
         },
         update = { renderer ->
             renderer.setScalingType(scalingTypeFor(fit))
+            renderer.setMirror(mirror)
             val attached = renderer.tag as? VideoTrack
             if (attached !== track) {
                 attached?.removeSink(renderer)
