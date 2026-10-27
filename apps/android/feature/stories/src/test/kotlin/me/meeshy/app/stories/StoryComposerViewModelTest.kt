@@ -45,6 +45,7 @@ import me.meeshy.sdk.model.scene.StoryTextOutlineCycle
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.story.InMemoryStoryComposerDraftStore
 import me.meeshy.sdk.story.StoryComposerDraftStore
+import me.meeshy.sdk.story.StoryDraftConfirmation
 import me.meeshy.sdk.story.StoryRepository
 import org.junit.After
 import org.junit.Before
@@ -71,9 +72,10 @@ class StoryComposerViewModelTest {
         user: MeeshyUser? = MeeshyUser(id = "me", username = "me", systemLanguage = "en"),
         draftStore: StoryComposerDraftStore = InMemoryStoryComposerDraftStore(),
         blobStore: MediaBlobStore = mockk(relaxed = true),
+        confirmation: StoryDraftConfirmation = mockk(relaxed = true),
     ): StoryComposerViewModel {
         every { session.currentUser } returns MutableStateFlow(user)
-        return StoryComposerViewModel(repo, session, media, uploadQueue, workManager, draftStore, blobStore)
+        return StoryComposerViewModel(repo, session, media, uploadQueue, workManager, draftStore, blobStore, confirmation)
     }
 
     private fun offline(status: Int? = null): NetworkResult<List<UploadedMedia>> =
@@ -188,6 +190,52 @@ class StoryComposerViewModelTest {
     }
 
     @Test
+    fun `publish keeps the draft on the device, awaiting the confirmation of every story it queued`() = runTest {
+        val store = InMemoryStoryComposerDraftStore()
+        val vm = viewModel(draftStore = store)
+        vm.onTextChange("first")
+        vm.onAddSlide()
+        vm.onTextChange("second")
+        coEvery { repo.enqueuePublish(any(), any()) } returnsMany listOf("cmid_1", "cmid_2")
+
+        vm.publish()
+
+        val kept = store.load()
+        assertThat(kept?.awaitingPublication).containsExactly("cmid_1", "cmid_2").inOrder()
+        assertThat(kept?.slides?.map { it.text }).containsExactly("first", "second").inOrder()
+        assertThat(vm.state.value.draft.text).isEmpty()
+    }
+
+    @Test
+    fun `leaving the emptied composer after a publish does not erase the awaiting draft`() = runTest {
+        val store = InMemoryStoryComposerDraftStore()
+        val vm = viewModel(draftStore = store)
+        vm.onTextChange("on its way")
+        coEvery { repo.enqueuePublish(any(), any()) } returns "cmid_1"
+        vm.publish()
+
+        vm.persistDraft()
+
+        assertThat(store.load()?.awaitingPublication).containsExactly("cmid_1")
+    }
+
+    @Test
+    fun `opening the composer settles the awaiting draft and never restores it`() = runTest {
+        val awaiting = StoryComposerDraftSnapshot(
+            slides = listOf(StoryDraftSlideSnapshot(id = "s1", text = "on its way")),
+            selectedId = "s1",
+            awaitingPublication = listOf("cmid_1"),
+        )
+        val confirmation = mockk<StoryDraftConfirmation>(relaxed = true)
+        val vm = viewModel(draftStore = InMemoryStoryComposerDraftStore(awaiting), confirmation = confirmation)
+
+        vm.onEnterComposer()
+
+        coVerify(exactly = 1) { confirmation.settle(null) }
+        assertThat(vm.state.value.deck.selectedSlide.text).isEmpty()
+    }
+
+    @Test
     fun `publish on a blank draft does nothing`() = runTest {
         val vm = viewModel()
         vm.onTextChange("   ")
@@ -294,15 +342,15 @@ class StoryComposerViewModelTest {
     }
 
     @Test
-    fun `onMediaPicked surfaces an error and keeps the draft empty of media on a failure response`() = runTest {
+    fun `onMediaPicked keeps a refused media on the device instead of dropping it`() = runTest {
         val vm = viewModel()
         coEvery { media.upload(any()) } returns NetworkResult.Failure(ApiError("too large", httpStatus = 413))
+        coEvery { uploadQueue.enqueue(any(), any()) } returns "cmid_refused"
 
         vm.onMediaPicked(listOf(item()))
 
-        assertThat(vm.state.value.errorMessage).isEqualTo("too large")
         assertThat(vm.state.value.isUploadingMedia).isFalse()
-        assertThat(vm.state.value.draft.mediaIds).isEmpty()
+        assertThat(vm.state.value.draft.mediaIds).containsExactly("cmid_refused")
     }
 
     @Test
@@ -627,17 +675,19 @@ class StoryComposerViewModelTest {
         }
 
     @Test
-    fun `a permanent upload failure surfaces an error and is never queued`() = runTest {
-        val vm = viewModel()
-        coEvery { media.upload(any()) } returns offline(status = 413)
+    fun `a 4xx at attach time is queued durably, so the publication fails retryable instead of losing the media`() =
+        runTest {
+            val vm = viewModel()
+            val picked = item("photo.heic")
+            coEvery { media.upload(any()) } returns offline(status = 415)
+            coEvery { uploadQueue.enqueue(any(), any()) } returns "cmid_heic"
 
-        vm.onMediaPicked(listOf(item()))
+            vm.onMediaPicked(listOf(picked))
 
-        coVerify(exactly = 0) { uploadQueue.enqueue(any(), any()) }
-        assertThat(vm.state.value.pendingUploads).isEmpty()
-        assertThat(vm.state.value.errorMessage).isEqualTo("offline")
-        assertThat(vm.state.value.draft.mediaIds).isEmpty()
-    }
+            coVerify(exactly = 1) { uploadQueue.enqueue(picked, TusUploadContext.STORY) }
+            assertThat(vm.state.value.pendingUploads.map { it.cmid }).containsExactly("cmid_heic")
+            assertThat(vm.state.value.errorMessage).isNull()
+        }
 
     @Test
     fun `a multi-item offline pick durably queues every item as its own pending upload`() = runTest {
@@ -2911,7 +2961,7 @@ class StoryComposerViewModelTest {
     }
 
     @Test
-    fun `publish clears any stored draft`() = runTest {
+    fun `publish replaces any stored draft by the one it queued, kept until its confirmation`() = runTest {
         val stored = StoryComposerDraftSnapshot(
             slides = listOf(StoryDraftSlideSnapshot(id = "s1", text = "draft")),
             selectedId = "s1",
@@ -2923,7 +2973,8 @@ class StoryComposerViewModelTest {
 
         vm.publish()
 
-        assertThat(store.load()).isNull()
+        assertThat(store.load()?.slides?.single()?.text).isEqualTo("bonjour")
+        assertThat(store.load()?.awaitingPublication).containsExactly("cmid")
     }
 
     // ---- Draft restore: lost-media reconciliation -------------------------------------

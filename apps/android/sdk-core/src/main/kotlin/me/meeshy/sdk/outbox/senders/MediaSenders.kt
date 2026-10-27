@@ -22,7 +22,14 @@ import javax.inject.Inject
 /**
  * `UPLOAD_MEDIA`: uploads the durably-stored blob (resumable TUS when the row carries a
  * known upload context, the legacy attachment upload otherwise) and drops the bytes once
- * the row is no longer retryable. An exhausted upload drops them too.
+ * they are delivered.
+ *
+ * A PUBLICATION's bytes (post, reel, story, status — [PUBLICATION_CONTEXTS]) stay on the
+ * device after a failure (#13417): the author's work is only gone once the server confirmed
+ * it or the author discarded it, so a refused or exhausted upload keeps them for a retry
+ * from « Publications non envoyées » — the explicit discard ([me.meeshy.sdk.media.MediaUploadQueue.cancel])
+ * is what drops them. A chat or comment upload keeps its old rule: its bytes leave with
+ * the row once it is no longer retryable.
  */
 public class UploadMediaHandler @Inject constructor(
     private val mediaBlobStore: MediaBlobStore,
@@ -39,14 +46,21 @@ public class UploadMediaHandler @Inject constructor(
         } else {
             MediaUploadSender.send(item) { mediaRepository.upload(listOf(it)) }
         }
-        if (result !is SendResult.TransientFailure) {
+        if (result.dropsBytes(context)) {
             mediaBlobStore.remove(row.cmid)
         }
         return result
     }
 
     override suspend fun onExhausted(row: OutboxEntity) {
+        if (uploadContextOf(row) in PUBLICATION_CONTEXTS) return
         mediaBlobStore.remove(row.cmid)
+    }
+
+    private fun SendResult.dropsBytes(context: TusUploadContext?): Boolean = when (this) {
+        is SendResult.Success, is SendResult.SuccessWithId -> true
+        is SendResult.TransientFailure, is SendResult.Deferred -> false
+        is SendResult.PermanentFailure -> context !in PUBLICATION_CONTEXTS
     }
 
     /**
@@ -59,6 +73,10 @@ public class UploadMediaHandler @Inject constructor(
             ?.let { runCatching { json.decodeFromString<MediaUploadPayload>(it) }.getOrNull() }
             ?.uploadContext
             ?.let { TusUploadContext.fromWire(it) }
+
+    private companion object {
+        val PUBLICATION_CONTEXTS = setOf(TusUploadContext.POST, TusUploadContext.STORY, TusUploadContext.STATUS)
+    }
 }
 
 @Module

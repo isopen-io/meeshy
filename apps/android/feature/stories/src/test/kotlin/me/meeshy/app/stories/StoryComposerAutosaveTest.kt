@@ -122,6 +122,22 @@ class StoryComposerAutosaveTest {
         assertThat(action).isEqualTo(StoryDraftPersist.Clear)
     }
 
+    @Test
+    fun `an emptied composer never purges a draft still awaiting its publication`() {
+        val awaiting = textDeck("published").toDraftSnapshot(StoryVisibility.PUBLIC, null, "earlier")
+            .copy(awaitingPublication = listOf("cmid_a"))
+
+        val action = StoryComposerAutosave.resolve(
+            deck = blankDeck(),
+            visibility = StoryVisibility.PUBLIC,
+            repostOfId = null,
+            nowIso = now,
+            previous = awaiting,
+        )
+
+        assertThat(action).isEqualTo(StoryDraftPersist.None)
+    }
+
     // ---- resolve: a stroke-only deck must never purge a stored draft ----
 
     @Test
@@ -284,6 +300,17 @@ class StoryComposerAutosaveTest {
             selectedId = "s1",
         )
         assertThat(StoryComposerAutosave.restore(empty, deckIsPristine = true)).isNull()
+    }
+
+    @Test
+    fun `a draft awaiting its publication is never restored into a new composer`() {
+        val awaiting = StoryComposerDraftSnapshot(
+            slides = listOf(StoryDraftSlideSnapshot(id = "s1", text = "on its way")),
+            selectedId = "s1",
+            awaitingPublication = listOf("cmid_a"),
+        )
+
+        assertThat(StoryComposerAutosave.restore(awaiting, deckIsPristine = true)).isNull()
     }
 
     // ---- toDraftSnapshot / toDeck round-trip ----
