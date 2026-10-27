@@ -8,6 +8,7 @@ import android.graphics.RadialGradient
 import android.graphics.RectF
 import android.graphics.Shader
 import android.graphics.Typeface
+import android.os.Build
 import kotlin.math.hypot
 
 /** Une carte peinte : ses pixels, sa taille en pixels de la CARTE, ses zones et si elle a été coupée. */
@@ -29,11 +30,7 @@ object CardRenderer {
 
     /** Les polices de story d'iOS, portées sur les familles du système (aucune police n'est embarquée). */
     internal fun typeface(face: CardFace): Typeface = when (face) {
-        is CardFace.Native -> Typeface.create(
-            Typeface.DEFAULT,
-            face.weight.coerceIn(100, 900),
-            face.italic,
-        )
+        is CardFace.Native -> nativeFace(face.weight, face.italic)
         is CardFace.Story -> when (face.style) {
             StoryFace.BUBBLE -> Typeface.create("sans-serif-medium", Typeface.NORMAL)
             StoryFace.ELEGANT -> Typeface.create("serif", Typeface.NORMAL)
@@ -44,6 +41,24 @@ object CardRenderer {
             StoryFace.RETRO -> Typeface.create("monospace", Typeface.NORMAL)
             StoryFace.TAG -> Typeface.create("sans-serif-black", Typeface.ITALIC)
         }
+    }
+
+    /**
+     * La graisse exacte n'existe qu'à l'API 28 ; en deçà (minSdk 26), la famille du système ne
+     * connaît que normal et gras — on y projette la graisse, plutôt que de planter.
+     */
+    internal fun nativeFace(weight: Int, italic: Boolean, sdkInt: Int = Build.VERSION.SDK_INT): Typeface =
+        if (sdkInt >= Build.VERSION_CODES.P) {
+            Typeface.create(Typeface.DEFAULT, weight.coerceIn(100, 900), italic)
+        } else {
+            Typeface.create(Typeface.DEFAULT, legacyStyle(weight, italic))
+        }
+
+    internal fun legacyStyle(weight: Int, italic: Boolean): Int = when {
+        weight >= 600 && italic -> Typeface.BOLD_ITALIC
+        weight >= 600 -> Typeface.BOLD
+        italic -> Typeface.ITALIC
+        else -> Typeface.NORMAL
     }
 
     /** La mesure réelle : un `Paint` par police, résolu une fois. */
