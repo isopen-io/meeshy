@@ -34,38 +34,16 @@ extension OfflineQueue {
             records = []
         }
 
-        let decoder = JSONDecoder()
         for record in records {
             // "Not sent within the minute → offline": only rows stuck longer than
             // the threshold qualify; a just-enqueued row is still actively sending.
             guard record.createdAt <= cutoff else { continue }
-            let payload: CreatePostPayload
-            do {
-                payload = try decoder.decode(CreatePostPayload.self, from: record.payload)
-            } catch {
-                logger.error("recoverLastUnsentPost: skipping undecodable draft \(record.id, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            guard let draft = Self.recoveredPost(from: record) else {
+                logger.error("recoverLastUnsentPost: skipping undecodable draft \(record.id, privacy: .public)")
                 continue
             }
-            let resolvedType = (payload.type ?? "POST").uppercased()
-            guard normalizedTypes.contains(resolvedType) else { continue }
-
-            let urls: [URL] = (payload.localMediaPaths ?? []).compactMap { stored in
-                let path = Self.absoluteMediaPath(forStored: stored)
-                return FileManager.default.fileExists(atPath: path) ? URL(fileURLWithPath: path) : nil
-            }
-            return RecoveredOfflinePost(
-                clientMutationId: payload.clientMutationId,
-                content: payload.content,
-                visibility: payload.visibility,
-                originalLanguage: payload.originalLanguage,
-                type: resolvedType,
-                moodEmoji: payload.moodEmoji,
-                audioUrl: payload.audioUrl,
-                audioDuration: payload.audioDuration,
-                visibilityUserIds: payload.visibilityUserIds,
-                localMediaURLs: urls,
-                createdAt: record.createdAt
-            )
+            guard normalizedTypes.contains(draft.type) else { continue }
+            return draft
         }
         return nil
     }
