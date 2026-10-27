@@ -155,6 +155,9 @@
     <string name="recentMedia_resolveFailed_multiple">تعذّر تجهيز %d من الوسائط — استخدم مكتبة الصور كاملة</string>
     <string name="sentiment_very_negative">سلبي جدًا</string>
     <string name="sentiment_very_positive">إيجابي جدًا</string>
+    <string name="share_target_cancel">إلغاء</string>
+    <string name="share_target_loading">جارٍ تحميل المحادثات…</string>
+    <string name="share_target_preview_title">ما سيُرسَل</string>
     <string name="starred_more_options">المزيد من الخيارات</string>
     <string name="starred_remove">إزالة من المفضّلة</string>
     <string name="starred_remove_all">إزالة الكل</string>

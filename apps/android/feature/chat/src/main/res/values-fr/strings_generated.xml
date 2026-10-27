@@ -152,6 +152,9 @@
     <string name="recentMedia_resolveFailed_multiple">%d médias n\'ont pas pu être préparés — passez par la photothèque complète</string>
     <string name="sentiment_very_negative">Très négatif</string>
     <string name="sentiment_very_positive">Très positif</string>
+    <string name="share_target_cancel">Annuler</string>
+    <string name="share_target_loading">Chargement des conversations…</string>
+    <string name="share_target_preview_title">Ce qui part</string>
     <string name="starred_more_options">Plus d\'options</string>
     <string name="starred_remove">Retirer des favoris</string>
     <string name="starred_remove_all">Tout retirer</string>
