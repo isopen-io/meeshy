@@ -5,6 +5,7 @@ import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
+import androidx.navigation.navDeepLink
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -33,6 +34,16 @@ object LinksRoutes {
     const val COMMUNITY_DETAIL = "community-links/{${CommunityLinkDetailViewModel.COMMUNITY_ID_ARG}}"
     const val AFFILIATE = "affiliate?$CREATE_ARG={$CREATE_ARG}"
 
+    /**
+     * Le lien profond du hub (iOS `LinksHubView` : `https://meeshy.me/links`), sur les deux hôtes et le
+     * schéma propre — exactement ce que `DeepLinkParser` reconnaît comme `UserLinks`.
+     */
+    val HUB_DEEP_LINKS: List<String> = listOf(
+        "https://meeshy.me/$HUB",
+        "https://www.meeshy.me/$HUB",
+        "meeshy://$HUB",
+    )
+
     fun tracking(create: Boolean = false): String = "tracking-links?$CREATE_ARG=$create"
 
     fun trackingDetail(token: String): String = "tracking-links/$token"
@@ -49,7 +60,10 @@ object LinksRoutes {
  */
 class LinksDestinations @Inject constructor() : NavGraphContributor {
     override fun contribute(builder: NavGraphBuilder, navController: NavHostController) {
-        builder.composable(LinksRoutes.HUB) {
+        builder.composable(
+            route = LinksRoutes.HUB,
+            deepLinks = LinksRoutes.HUB_DEEP_LINKS.map { pattern -> navDeepLink { uriPattern = pattern } },
+        ) {
             LinksHubScreen(
                 onBack = { navController.popBackStack() },
                 onOpen = { entry ->

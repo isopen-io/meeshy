@@ -133,6 +133,16 @@
                 <data android:scheme="https" android:host="meeshy.me" android:pathPrefix="/post/" />
                 <data android:scheme="https" android:host="www.meeshy.me" android:pathPrefix="/post/" />
             </intent-filter>
+            <!-- App Link : le hub « Mes liens » (iOS LinksHubView, https://meeshy.me/links) ouvre
+                 LinksRoutes.HUB (LinksRoutes.HUB_DEEP_LINKS). meeshy://links passe par le filtre
+                 scheme-only plus haut. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="meeshy.me" android:path="/links" />
+                <data android:scheme="https" android:host="www.meeshy.me" android:path="/links" />
+            </intent-filter>
         </activity>
 
         <!-- "Share to Meeshy" target (feature-parity §O — text/URL lot 1, image/video lot 2,

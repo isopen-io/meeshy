@@ -3,6 +3,8 @@ package me.meeshy.app.navigation
 import com.google.common.truth.Truth.assertThat
 import java.io.File
 import me.meeshy.app.navigation.graph.LinksRoutes
+import me.meeshy.sdk.model.deeplink.DeepLinkDestination
+import me.meeshy.sdk.model.deeplink.DeepLinkParser
 import org.junit.Test
 
 class LinksRoutesTest {
@@ -30,5 +32,20 @@ class LinksRoutesTest {
     fun `le barreau Mes liens du menu ouvre le hub et non plus la seule liste de partage`() {
         val chrome = File("src/main/kotlin/me/meeshy/app/navigation/RootFloatingChrome.kt").readText()
         assertThat(chrome).contains("RootMenuLadderEntry.LINKS -> navigate(LinksRoutes.HUB)")
+    }
+
+    @Test
+    fun `chaque lien profond du hub est celui que le parseur lit comme Mes liens`() {
+        assertThat(LinksRoutes.HUB_DEEP_LINKS).isNotEmpty()
+        LinksRoutes.HUB_DEEP_LINKS.forEach { link ->
+            assertThat(DeepLinkParser.parse(link, "https://meeshy.me")).isEqualTo(DeepLinkDestination.UserLinks)
+        }
+    }
+
+    @Test
+    fun `le manifeste capture https meeshy me links pour l'app`() {
+        val manifest = File("src/main/AndroidManifest.xml").readText()
+        assertThat(manifest).contains("android:host=\"meeshy.me\" android:path=\"/links\"")
+        assertThat(manifest).contains("android:host=\"www.meeshy.me\" android:path=\"/links\"")
     }
 }
