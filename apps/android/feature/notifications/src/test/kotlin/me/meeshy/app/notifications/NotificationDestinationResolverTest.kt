@@ -37,6 +37,27 @@ class NotificationDestinationResolverTest {
         state = NotificationState(createdAt = "2026-01-01"),
     )
 
+    // --- Relation family (iOS RootNotificationNavigator : profil de l'expéditeur) ---
+
+    @Test
+    fun `every contact lifecycle type opens the actor profile like iOS`() {
+        listOf(
+            "friend_request", "contact_request", "friend_accepted", "contact_accepted",
+            "contact_joined", "contact_recently_active", "STATUS_UPDATE", "FRIEND_REQUEST",
+        ).forEach { type ->
+            val dest = NotificationDestinationResolver.resolve(notification(type, actorId = "u9"))
+
+            assertThat(dest).isEqualTo(NotificationDestination.Profile("u9"))
+        }
+    }
+
+    @Test
+    fun `a contact notification without an actor is a dead end rather than a wrong screen`() {
+        val dest = NotificationDestinationResolver.resolve(notification("contact_recently_active"))
+
+        assertThat(dest).isEqualTo(NotificationDestination.None)
+    }
+
     // --- Conversation family ---
 
     @Test

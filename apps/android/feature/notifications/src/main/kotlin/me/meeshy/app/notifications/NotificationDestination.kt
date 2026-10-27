@@ -62,6 +62,7 @@ public object NotificationDestinationResolver {
     /** Friend/contact lifecycle — opens the actor's profile, mirroring iOS's profile sheet. */
     private val RELATION_TYPES = setOf(
         "friend_request", "contact_request", "friend_accepted", "contact_accepted", "status_update",
+        "contact_joined", "contact_recently_active",
     )
 
     /**
