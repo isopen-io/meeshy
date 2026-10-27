@@ -18,10 +18,12 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import java.io.File
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import me.meeshy.ui.component.recording.LocalVoiceRecordingHost
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 
 private const val VOICE_MIME_TYPE = "audio/mp4"
@@ -48,6 +50,8 @@ internal fun rememberComposerVoice(
     val context = LocalContext.current
     val ioScope = rememberCoroutineScope()
     val haptics = rememberMeeshyHaptics()
+    val recordingHost = LocalVoiceRecordingHost.current
+    val publishedTake = remember { AtomicBoolean(false) }
     val capture = remember { ComposerVoiceCapture(File(context.cacheDir, "voice"), { MediaRecorderEngine(context) }) }
     var recording by remember { mutableStateOf(capture.session) }
 
@@ -62,15 +66,37 @@ internal fun rememberComposerVoice(
     }
 
     fun start() {
-        if (capture.start()) haptics.medium()
+        if (capture.start()) {
+            haptics.medium()
+            publishedTake.set(true)
+            recordingHost.publish(System.currentTimeMillis())
+        }
         recording = capture.session
+    }
+
+    fun finishTake() {
+        val take = capture.finish()
+        recording = capture.session
+        haptics.light()
+        deliver(take)
     }
 
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) start()
     }
     val latestDeliver by rememberUpdatedState(::deliver)
-    DisposableEffect(capture) { onDispose { latestDeliver(capture.abandon()) } }
+    DisposableEffect(capture) {
+        onDispose {
+            latestDeliver(capture.abandon())
+            if (publishedTake.getAndSet(false)) recordingHost.retire()
+        }
+    }
+    LaunchedEffect(recordingHost) {
+        recordingHost.stopRequests.collect { if (capture.session.isRecording) finishTake() }
+    }
+    LaunchedEffect(recording.isRecording) {
+        if (!recording.isRecording && publishedTake.getAndSet(false)) recordingHost.retire()
+    }
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) {
         if (capture.session.isRecording) {
             deliver(capture.abandon())
@@ -97,11 +123,6 @@ internal fun rememberComposerVoice(
             recording = capture.session
             haptics.light()
         },
-        finish = {
-            val take = capture.finish()
-            recording = capture.session
-            haptics.light()
-            deliver(take)
-        },
+        finish = ::finishTake,
     )
 }
