@@ -259,10 +259,10 @@ private fun HeaderTitleText(title: String, titleColor: Color, sizeSp: Float, bol
     )
 }
 
-/** Surface de l'en-tete : teinte opaque en haut, transparente au bord bas (le contenu passe dessous). */
+/** Surface de l'en-tete : quasi opaque sous le titre et la barre d'etat, fondue au seul bord bas (#13386). */
 private fun headerBrush(base: Color): Brush = Brush.verticalGradient(
-    0f to base.copy(alpha = 0.9f),
-    0.5f to base.copy(alpha = 0.7f),
+    0f to base.copy(alpha = CollapsibleHeaderMetrics.SURFACE_TOP_ALPHA),
+    CollapsibleHeaderMetrics.SURFACE_OPAQUE_UNTIL to base.copy(alpha = CollapsibleHeaderMetrics.SURFACE_BODY_ALPHA),
     1f to base.copy(alpha = 0f),
 )
 
