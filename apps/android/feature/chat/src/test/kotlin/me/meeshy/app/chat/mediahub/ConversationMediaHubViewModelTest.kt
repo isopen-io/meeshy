@@ -142,4 +142,24 @@ class ConversationMediaHubViewModelTest {
         assertThat(vm.state.value.activeQuery).isNull()
         assertThat(vm.state.value.items).hasSize(2)
     }
+
+    @Test
+    fun `les adresses servies en chemin sont rendues chargeables sur la passerelle configuree`() = runTest(dispatcher) {
+        val relative = ApiMessage(
+            id = "m9",
+            conversationId = "c1",
+            createdAt = "2026-10-01T10:09:00.000Z",
+            attachments = listOf(ApiMessageAttachment(id = "a9", mimeType = "image/png", fileUrl = "/api/v1/attachments/file/2026/10/p.png", thumbnailUrl = "/api/v1/attachments/file/2026/10/p_t.jpg")),
+        )
+        val index = ConversationMediaHubIndex().apply { merge("c1", ConversationMediaKind.VISUAL, listOf(relative), complete = true) }
+        val vm = sut(mockk(), index)
+
+        vm.start("c1")
+        advanceUntilIdle()
+
+        val piece = vm.state.value.items.single().attachment!!
+        assertThat(piece.url).isEqualTo("https://gate.meeshy.me/api/v1/attachments/file/2026/10/p.png")
+        assertThat(piece.thumbnailUrl).isEqualTo("https://gate.meeshy.me/api/v1/attachments/file/2026/10/p_t.jpg")
+        assertThat(vm.launchFor(vm.state.value.items.single().payload)).isInstanceOf(MediaHubLaunch.GatewayFile::class.java)
+    }
 }

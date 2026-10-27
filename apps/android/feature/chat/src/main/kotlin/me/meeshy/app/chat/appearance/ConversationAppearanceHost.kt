@@ -20,7 +20,9 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.ui.platform.LocalContext
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import me.meeshy.sdk.mediahub.BackgroundPhotoSource
 import me.meeshy.sdk.model.appearance.AppearanceCatalog
 import me.meeshy.sdk.model.appearance.ConversationAppearance
@@ -40,13 +42,14 @@ internal class ConversationAppearanceHost(
     val appearance: ConversationAppearance,
     val catalog: AppearanceCatalog?,
     val photoSource: (String) -> BackgroundPhotoSource,
+    val photoHeaders: (BackgroundPhotoSource) -> Map<String, String>,
     val isDark: Boolean,
 ) {
     val resolution: ConversationBackgroundResolution
         get() = catalog?.let { ConversationBackgroundResolution.resolve(appearance, isDark, it) } ?: ConversationBackgroundResolution.Signature
 
     companion object {
-        val NONE = ConversationAppearanceHost(null, ConversationAppearance.DEFAULT, null, { BackgroundPhotoSource(null, "") }, false)
+        val NONE = ConversationAppearanceHost(null, ConversationAppearance.DEFAULT, null, { BackgroundPhotoSource(null, "") }, { emptyMap() }, false)
     }
 }
 
@@ -64,7 +67,7 @@ internal fun rememberConversationAppearance(
         val accent = if (computedAccentHex == null) null else {
             ui.catalog?.let { ConversationBackgroundResolution.effectiveAccentHex(ui.appearance, computedAccentHex, isDark, it) } ?: computedAccentHex
         }
-        ConversationAppearanceHost(accent, ui.appearance, ui.catalog, viewModel::photoSource, isDark)
+        ConversationAppearanceHost(accent, ui.appearance, ui.catalog, viewModel::photoSource, viewModel::photoHeaders, isDark)
     }
 }
 
@@ -94,13 +97,19 @@ internal fun ConversationBackgroundLayer(host: ConversationAppearanceHost) {
 @Composable
 private fun PhotoLayer(photo: ConversationBackgroundResolution.Photo, host: ConversationAppearanceHost, modifier: Modifier) {
     val source = remember(photo.attachmentId) { host.photoSource(photo.attachmentId) }
+    val context = LocalContext.current
+    val request = remember(source) {
+        ImageRequest.Builder(context).data(source.fullUrl).apply {
+            host.photoHeaders(source).forEach { (name, value) -> addHeader(name, value) }
+        }.build()
+    }
     // Une pièce disparue, refusée ou chiffrée rend Signature : la couche s'efface plutôt que de peindre un fond mort.
     var failed by remember(photo.attachmentId) { mutableStateOf(false) }
     if (failed) return
     val backdrop = MeeshyTheme.tokens.backgroundPrimary
     Box(modifier.background(backdrop).clipToBounds()) {
         AsyncImage(
-            model = source.fullUrl,
+            model = request,
             contentDescription = null,
             contentScale = ContentScale.Crop,
             onError = { failed = true },

@@ -137,4 +137,29 @@ class ConversationMediaHubRulesTest {
         assertThat(hubPiece(emptyList(), video = true, thumb = null).tileUrl(300)).isNull()
         assertThat(hubPiece(emptyList(), video = true).tileUrl(300)).isEqualTo("https://cdn/thumb")
     }
+
+    @Test
+    fun `une piece chiffree de bout en bout par son mode est scellee meme sans le drapeau`() {
+        val sealed = ApiMessageAttachment(id = "e", mimeType = "image/png", fileUrl = "/api/v1/attachments/file/e.bin", encryptionMode = "e2ee")
+        val item = ConversationMediaHubRules.items(listOf(message("m1", attachments = listOf(sealed))), ConversationMediaKind.VISUAL, now, origin).single()
+
+        assertThat(item.attachment?.isEncrypted).isTrue()
+        assertThat(item.attachment?.tileUrl(140)).isNull()
+    }
+
+    @Test
+    fun `les adresses d une piece passent toutes par le resolveur, un lien reste tel quel`() {
+        val variant = MeeshyImageVariant(width = 160, height = 160, url = "v/160.webp", size = 10)
+        val photo = ApiMessageAttachment(id = "p", mimeType = "image/png", fileUrl = "/api/v1/attachments/file/p.png", thumbnailUrl = "t/p.jpg", imageVariants = listOf(variant))
+        val visual = ConversationMediaHubRules.items(listOf(message("m1", attachments = listOf(photo))), ConversationMediaKind.VISUAL, now, origin).single()
+        val link = ConversationMediaHubRules.items(listOf(message("m2", content = "voir https://example.org/a")), ConversationMediaKind.LINK, now, origin).single()
+        val resolve = { url: String -> "https://gate.test/$url".replace("test//", "test/") }
+
+        val resolved = visual.resolvingMedia(resolve).attachment!!
+
+        assertThat(resolved.url).isEqualTo("https://gate.test/api/v1/attachments/file/p.png")
+        assertThat(resolved.thumbnailUrl).isEqualTo("https://gate.test/t/p.jpg")
+        assertThat(resolved.variants.single().url).isEqualTo("https://gate.test/v/160.webp")
+        assertThat(link.resolvingMedia(resolve)).isEqualTo(link)
+    }
 }
