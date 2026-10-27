@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
@@ -133,6 +135,8 @@ internal fun MessageActionsSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         containerColor = MeeshyTheme.tokens.backgroundPrimary,
+        // La barre de navigation système (boutons ou geste) ne recouvre jamais la dernière action (#13378).
+        contentWindowInsets = { WindowInsets.navigationBars },
         dragHandle = {
             OverlayDragHandle(
                 accentColor = accentColor,
