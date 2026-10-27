@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Libellés de communauté que le catalogue iOS laisse en anglais en français (et en partie en es/it) : traduits ici, la source iOS reste à corriger (#13358). -->
+<resources>
+    <string name="community_add_channel_title">إضافة قناة</string>
+    <string name="community_detail_action_channel">قناة</string>
+    <string name="community_detail_channel_fallback_name">قناة</string>
+    <string name="community_detail_channels_empty_action">إنشاء قناة</string>
+    <string name="community_detail_channels_empty_subtitle">ستظهر المحادثات هنا</string>
+    <string name="community_detail_channels_empty_title">لا توجد قنوات بعد</string>
+    <string name="community_detail_posts_empty_subtitle">سيظهر تدفق المجتمع هنا</string>
+    <string name="community_detail_posts_empty_title">لا توجد منشورات بعد</string>
+    <string name="community_detail_stats_channels">القنوات</string>
+    <string name="community_detail_stats_members">الأعضاء</string>
+    <string name="community_detail_tab_channels">القنوات</string>
+    <string name="community_detail_tab_feed">التدفق</string>
+    <string name="community_invite_button">دعوة</string>
+    <string name="community_invite_empty_subtitle">جرّب مصطلح بحث آخر</string>
+    <string name="community_invite_empty_title">لم يُعثر على مستخدمين</string>
+    <string name="community_invite_recently_invited">مدعوّون مؤخرًا</string>
+    <string name="community_invite_search_placeholder">ابحث عن مستخدمين...</string>
+    <string name="community_invite_title">دعوة أعضاء</string>
+    <string name="community_members_empty_action">دعوة</string>
+    <string name="community_members_empty_subtitle">ادعُ أشخاصًا للانضمام إلى هذا المجتمع</string>
+    <string name="community_members_empty_title">لا يوجد أعضاء</string>
+    <string name="community_members_remove">إزالة</string>
+    <string name="community_members_section_admin">المسؤولون</string>
+    <string name="community_members_title">الأعضاء</string>
+    <string name="community_members_unknown_user">غير معروف</string>
+</resources>

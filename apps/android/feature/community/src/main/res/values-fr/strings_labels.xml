@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Libellés de communauté que le catalogue iOS laisse en anglais en français (et en partie en es/it) : traduits ici, la source iOS reste à corriger (#13358). -->
+<resources>
+    <string name="community_add_channel_title">Ajouter un canal</string>
+    <string name="community_detail_action_channel">Canal</string>
+    <string name="community_detail_channel_fallback_name">Canal</string>
+    <string name="community_detail_channels_empty_action">Créer un canal</string>
+    <string name="community_detail_channels_empty_subtitle">Les conversations apparaîtront ici</string>
+    <string name="community_detail_channels_empty_title">Aucun canal pour l\'instant</string>
+    <string name="community_detail_posts_empty_subtitle">Le fil de la communauté apparaîtra ici</string>
+    <string name="community_detail_posts_empty_title">Aucune publication pour l\'instant</string>
+    <string name="community_detail_stats_channels">Canaux</string>
+    <string name="community_detail_stats_members">Membres</string>
+    <string name="community_detail_tab_channels">Canaux</string>
+    <string name="community_detail_tab_feed">Fil</string>
+    <string name="community_invite_button">Inviter</string>
+    <string name="community_invite_empty_subtitle">Essayez un autre terme de recherche</string>
+    <string name="community_invite_empty_title">Aucun utilisateur trouvé</string>
+    <string name="community_invite_recently_invited">Invités récemment</string>
+    <string name="community_invite_search_placeholder">Rechercher des utilisateurs...</string>
+    <string name="community_invite_title">Inviter des membres</string>
+    <string name="community_members_empty_action">Inviter</string>
+    <string name="community_members_empty_subtitle">Invitez des personnes à rejoindre cette communauté</string>
+    <string name="community_members_empty_title">Aucun membre</string>
+    <string name="community_members_remove">Retirer</string>
+    <string name="community_members_section_admin">Administrateurs</string>
+    <string name="community_members_title">Membres</string>
+    <string name="community_members_unknown_user">Inconnu</string>
+</resources>
