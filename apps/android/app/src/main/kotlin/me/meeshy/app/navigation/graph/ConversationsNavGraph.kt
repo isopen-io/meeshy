@@ -34,6 +34,7 @@ import me.meeshy.app.navigation.CallRoute
 import me.meeshy.app.navigation.ChatRouteArgs
 import me.meeshy.app.navigation.ReportsConversationViewing
 import me.meeshy.app.navigation.Routes
+import me.meeshy.app.navigation.navigateKeepingSheet
 import me.meeshy.app.navigation.SheetStyle
 import me.meeshy.app.navigation.rememberProfileOpenerOverSheet
 import me.meeshy.app.navigation.sheetComposable
@@ -112,12 +113,12 @@ internal fun NavGraphBuilder.conversationsNavGraph(
         DashboardScreen(
             onBack = dismiss,
             onOpenConversation = { conversationId ->
-                navController.navigate(Routes.chat(conversationId))
+                navController.navigateKeepingSheet(Routes.chat(conversationId))
             },
             onNewConversation = { navController.navigate(Routes.NEW_CONVERSATION) },
             onGlobalSearch = { navController.navigate(Routes.GLOBAL_SEARCH) },
-            onShareLinks = { navController.navigate(Routes.MY_SHARE_LINKS) },
-            onContacts = { navController.navigate(Routes.CONTACTS) },
+            onShareLinks = { navController.navigateKeepingSheet(Routes.MY_SHARE_LINKS) },
+            onContacts = { navController.navigateKeepingSheet(Routes.CONTACTS) },
         )
     }
     sheetComposable(

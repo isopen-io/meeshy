@@ -9,6 +9,7 @@ import me.meeshy.app.contacts.ContactsScreen
 import me.meeshy.app.feed.UserPostsScreen
 import me.meeshy.app.navigation.ProfileRoutes
 import me.meeshy.app.navigation.Routes
+import me.meeshy.app.navigation.navigateKeepingSheet
 import me.meeshy.app.navigation.rememberProfileOpenerOverSheet
 import me.meeshy.app.navigation.sheetComposable
 import me.meeshy.app.notifications.NotificationsScreen
@@ -66,8 +67,8 @@ internal fun NavGraphBuilder.socialNavGraph(
     ) { _, dismiss ->
         UserPostsScreen(
             onBack = dismiss,
-            onPostClick = { postId -> navController.navigate(Routes.reels(seed = postId)) },
-            onOpenPost = { postId -> navController.navigate(Routes.postDetail(postId)) },
+            onPostClick = { postId -> navController.navigateKeepingSheet(Routes.reels(seed = postId)) },
+            onOpenPost = { postId -> navController.navigateKeepingSheet(Routes.postDetail(postId)) },
         )
     }
     sheetComposable(
