@@ -518,7 +518,9 @@
     <string name="game_missions_locked">En el nivel 5, tus ancestros te envían cada noche un sueño en tres actos, y una Ofrenda. Estás en el nivel %s.</string>
     <string name="game_missions_offline">Sin conexión: cambiar un acto o abrir la Ofrenda se reanudará en línea.</string>
     <string name="game_missions_prism_day">Día del Prisma: uno de los actos se juega en un idioma distinto al tuyo.</string>
+    <string name="game_missions_prism_hour">Hora del Prisma: %1$s – %2$s — cada acto cuenta doble.</string>
     <string name="game_missions_title">El sueño de esta noche</string>
+    <string name="game_photo_offer_start">Fotografiar</string>
     <string name="game_progression_empty">Aún no hay actividad. Envía un mensaje, publica una historia… tu primera medalla se enciende con el primer gesto.</string>
     <string name="game_progression_load_error">No se pudo cargar el progreso</string>
     <string name="game_progression_loading">Cargando el progreso</string>

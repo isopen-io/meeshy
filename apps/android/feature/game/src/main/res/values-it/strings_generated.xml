@@ -518,7 +518,9 @@
     <string name="game_missions_locked">Al livello 5, i tuoi antenati ti mandano ogni notte un sogno in tre atti, e un’Offerta. Sei al livello %s.</string>
     <string name="game_missions_offline">Offline: cambiare un atto o aprire l’Offerta riprenderà online.</string>
     <string name="game_missions_prism_day">Giorno del Prisma: uno degli atti si gioca in una lingua diversa dalla tua.</string>
+    <string name="game_missions_prism_hour">Ora del Prisma: %1$s – %2$s — ogni atto conta doppio.</string>
     <string name="game_missions_title">Il sogno di stanotte</string>
+    <string name="game_photo_offer_start">Fotografa</string>
     <string name="game_progression_empty">Nessuna attività per ora. Invia un messaggio, pubblica una storia… la tua prima medaglia si accende al primo gesto.</string>
     <string name="game_progression_load_error">Impossibile caricare i progressi</string>
     <string name="game_progression_loading">Caricamento dei progressi</string>

@@ -518,7 +518,9 @@
     <string name="game_missions_locked">Ab Level 5 schicken dir deine Ahnen jede Nacht einen Traum in drei Akten, und eine Gabe. Du bist auf Level %s.</string>
     <string name="game_missions_offline">Offline: Einen Akt tauschen oder die Gabe öffnen geht mit der Verbindung weiter.</string>
     <string name="game_missions_prism_day">Prisma-Tag: Einer der Akte spielt in einer anderen Sprache als deiner.</string>
+    <string name="game_missions_prism_hour">Prisma-Stunde: %1$s – %2$s — jeder Akt zählt doppelt.</string>
     <string name="game_missions_title">Der Traum dieser Nacht</string>
+    <string name="game_photo_offer_start">Fotografieren</string>
     <string name="game_progression_empty">Noch keine Aktivität. Schreib eine Nachricht, poste eine Story … deine erste Medaille leuchtet bei der ersten Aktion auf.</string>
     <string name="game_progression_load_error">Fortschritt konnte nicht geladen werden</string>
     <string name="game_progression_loading">Fortschritt wird geladen</string>

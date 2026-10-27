@@ -46,10 +46,11 @@ class GameGesturesViewModelTest {
     private val gestures = mockk<GameGestureRepository>()
     private val progress = mockk<EngagementProgressRepository>(relaxed = true)
     private val network = InMemoryNetworkMonitor(initialOnline = true)
+    private var timezone: kotlinx.coroutines.flow.Flow<String?> = kotlinx.coroutines.flow.flowOf(null)
 
     private fun viewModel(): GameGesturesViewModel {
         var next = 0
-        return GameGesturesViewModel(gestures, progress, network, GameIntentIds { "req-${++next}-xxxxxxxx" })
+        return GameGesturesViewModel(gestures, progress, network, GameIntentIds { "req-${++next}-xxxxxxxx" }, timezone)
     }
 
     private val replacement = GameMission(
@@ -457,5 +458,14 @@ class GameGesturesViewModelTest {
 
         coVerify(exactly = 0) { gestures.passPrestige(any()) }
         assertThat(vm.state.value.failures[GameGesture.Prestige]?.offline).isTrue()
+    }
+
+    @Test
+    fun `le fuseau du compte se lit sur la session, jamais sur l appareil`() = runTest {
+        timezone = kotlinx.coroutines.flow.flowOf("Pacific/Auckland")
+        val vm = viewModel()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect { } }
+
+        assertThat(vm.state.value.accountTimezone).isEqualTo("Pacific/Auckland")
     }
 }
