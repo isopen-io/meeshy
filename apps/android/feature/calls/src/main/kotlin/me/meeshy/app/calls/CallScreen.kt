@@ -14,6 +14,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -65,6 +66,12 @@ fun CallScreen(
         .collectAsStateWithLifecycle(initialValue = viewModel.state.value.durationSeconds)
     val permissionGate = rememberCallPermissionGate(config.isVideo)
     val declineReply: CallDeclineReplyViewModel = hiltViewModel()
+    val pipViewModel: CallPictureInPictureViewModel = hiltViewModel()
+    val inPip by pipViewModel.inPip.collectAsStateWithLifecycle()
+    DisposableEffect(pipViewModel) {
+        pipViewModel.callScreenShown(true)
+        onDispose { pipViewModel.callScreenShown(false) }
+    }
 
     LaunchedEffect(config.peerId, config.isOutgoing, config.isVideo) {
         if (config.isOutgoing) {
@@ -164,6 +171,7 @@ fun CallScreen(
                     videoStage = videoStage,
                     peer = peer,
                     modifier = content,
+                    inPip = inPip,
                 )
                 state.status == CallStatus.INCOMING -> IncomingCallScreen(
                     state = state,
@@ -230,7 +238,7 @@ fun CallScreen(
             // non-incoming call; the Activity-scoped CallViewModel keeps the call alive.
             if (CallPillPresenter.isMinimizable(state.status)) {
                 CallChromeFade(
-                    isVisible = chromeVisibility.isVisible(CallChromeElement.Header),
+                    isVisible = chromeVisibility.isVisible(CallChromeElement.Header) && !inPip,
                     onRevive = { chrome.onInteraction(CallChromeInteraction.Revive) },
                     modifier = Modifier.align(Alignment.TopStart).systemBarsPadding().padding(MeeshySpacing.sm),
                 ) {

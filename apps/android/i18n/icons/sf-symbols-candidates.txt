@@ -218,6 +218,8 @@ photo.on.rectangle.angled
 photo.stack
 pin
 pin.fill
+pip.enter
+pip.exit
 play.circle
 play.circle.fill
 play.fill

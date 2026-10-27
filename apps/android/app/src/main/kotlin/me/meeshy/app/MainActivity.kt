@@ -1,9 +1,12 @@
 package me.meeshy.app
 
+import android.app.PictureInPictureParams
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.os.Bundle
+import android.util.Rational
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -22,6 +25,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
+import me.meeshy.app.calls.CallPictureInPictureCoordinator
 import me.meeshy.app.navigation.LaunchExtras
 import me.meeshy.app.navigation.LaunchRouter
 import me.meeshy.app.navigation.MeeshyApp
@@ -32,6 +36,7 @@ import me.meeshy.app.theme.LanguageViewModel
 import me.meeshy.app.theme.ThemeViewModel
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.model.AppLanguage
+import me.meeshy.sdk.model.call.CallPictureInPicturePolicy
 import me.meeshy.sdk.model.resolveDarkMode
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.session.SessionRepository
@@ -73,6 +78,10 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var presenceStore: PresenceStore
 
+    /** Le Picture-in-Picture de l'appel vidéo : l'activité fournit le geste, le coordinateur la règle. */
+    @Inject
+    lateinit var callPictureInPicture: CallPictureInPictureCoordinator
+
     private var launchRoute by mutableStateOf<String?>(null)
     private val themeViewModel: ThemeViewModel by viewModels()
     private val languageViewModel: LanguageViewModel by viewModels()
@@ -86,6 +95,10 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         launchRoute = LaunchRouter.route(intent.launchExtras()) ?: LaunchRouter.routeForDeepLink(intent.dataString)
+        callPictureInPicture.attachActivity(
+            supportsPip = packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE),
+            enter = ::enterCallPictureInPicture,
+        )
         setContent {
             val themeMode by themeViewModel.themeMode.collectAsStateWithLifecycle()
             val languageCode by languageViewModel.languageCode.collectAsStateWithLifecycle()
@@ -107,6 +120,28 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    private fun enterCallPictureInPicture(): Boolean {
+        val params = PictureInPictureParams.Builder()
+            .setAspectRatio(Rational(CallPictureInPicturePolicy.ASPECT_WIDTH, CallPictureInPicturePolicy.ASPECT_HEIGHT))
+            .build()
+        return runCatching { enterPictureInPictureMode(params) }.getOrDefault(false)
+    }
+
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        callPictureInPicture.onUserLeaveHint()
+    }
+
+    override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        callPictureInPicture.setInPip(isInPictureInPictureMode)
+    }
+
+    override fun onDestroy() {
+        callPictureInPicture.detachActivity()
+        super.onDestroy()
     }
 
     override fun onNewIntent(intent: Intent) {

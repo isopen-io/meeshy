@@ -3,6 +3,8 @@
     <string name="call_control_flip_camera">Passa dalla fotocamera anteriore a quella posteriore</string>
     <string name="call_control_flip_camera_caption">Gira</string>
     <string name="call_control_flip_camera_hint">Passa dalla fotocamera anteriore a quella posteriore</string>
+    <string name="call_control_pip">Riduci in Picture-in-Picture</string>
+    <string name="call_control_react">Invia una reazione</string>
     <string name="call_decline_cancel">Annulla</string>
     <string name="call_decline_custom_label">Il tuo messaggio</string>
     <string name="call_decline_custom_placeholder">Scrivi un messaggio…</string>

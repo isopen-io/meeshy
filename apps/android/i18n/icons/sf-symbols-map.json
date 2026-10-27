@@ -1321,6 +1321,18 @@
    "reason": "Icons.Filled.PushPin; variante .fill rendue en Filled"
   },
   {
+   "symbol": "pip.enter",
+   "status": "mapped",
+   "role": "PictureInPicture",
+   "reason": "Icons.Outlined.PictureInPictureAlt"
+  },
+  {
+   "symbol": "pip.exit",
+   "status": "mapped",
+   "role": "PictureInPicture",
+   "reason": "Icons.Outlined.PictureInPictureAlt"
+  },
+  {
    "symbol": "play.circle",
    "status": "mapped",
    "role": "PlayCircle",
@@ -2567,6 +2579,10 @@
    "directional": false
   },
   "PhotoLibrary": {
+   "origin": "material",
+   "directional": false
+  },
+  "PictureInPicture": {
    "origin": "material",
    "directional": false
   },

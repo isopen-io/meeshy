@@ -132,16 +132,18 @@ internal fun CallConnectedColumn(
     videoStage: Boolean,
     peer: CallPeerVisual,
     modifier: Modifier = Modifier,
+    inPip: Boolean = false,
 ) {
     val extensions = viewModel.extensions
     val dispatcher = extensions.actions
     val explore = rememberCallTouchExploration()
     val chromeState by chrome.state.collectAsState()
     val visibility = chrome.visibility(callIsVideoStage(state), explore)
-    val controlsVisible = visibility.isVisible(CallChromeElement.Controls)
+    val controlsVisible = visibility.isVisible(CallChromeElement.Controls) && !inPip
     val isVideoStage = callIsVideoStage(state)
 
     val recordingViewModel: CallRecordingViewModel = hiltViewModel()
+    val reactionsViewModel: CallReactionsViewModel = hiltViewModel()
     val recording by recordingViewModel.state.collectAsStateWithLifecycle()
     val offered = remember(state, recording) { dispatcher.offered(state) }
     val items = remember(state, offered) { CallPillModel.items(state, offered) }
@@ -211,13 +213,15 @@ internal fun CallConnectedColumn(
                         onBackToMenu = chrome::backToMenu,
                         onClosePanel = chrome::close,
                         panelContent = { panel ->
-                            if (panel == CallScreenPanel.Record) {
-                                CallRecordingKindPanel(
+                            when (panel) {
+                                CallScreenPanel.Record -> CallRecordingKindPanel(
                                     onPick = { kind ->
                                         recordingViewModel.onEvent(CallRecordingUiEvent.Pick(kind))
                                         chrome.close()
                                     },
                                 )
+                                CallScreenPanel.React -> CallReactionsPanel(onReact = reactionsViewModel::react)
+                                else -> Unit
                             }
                         },
                     )

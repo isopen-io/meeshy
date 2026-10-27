@@ -229,6 +229,7 @@ import androidx.compose.material.icons.outlined.EmojiEmotions as OuEmojiEmotions
 import androidx.compose.material.icons.outlined.ErrorOutline as OuErrorOutline
 import androidx.compose.material.icons.outlined.FavoriteBorder as OuFavoriteBorder
 import androidx.compose.material.icons.outlined.Folder as OuFolder
+import androidx.compose.material.icons.outlined.PictureInPictureAlt as OuPictureInPictureAlt
 import androidx.compose.material.icons.outlined.Forum as OuForum
 import androidx.compose.material.icons.outlined.GridView as OuGridView
 import androidx.compose.material.icons.outlined.Group as OuGroup
@@ -445,6 +446,7 @@ public object MeeshyIcons {
     public val PhotoFilled: ImageVector get() = Icons.Filled.FiImage
     public val PhotoFilter: ImageVector get() = Icons.Filled.FiPhotoFilter
     public val PhotoLibrary: ImageVector get() = Icons.Filled.FiPhotoLibrary
+    public val PictureInPicture: ImageVector get() = Icons.Outlined.OuPictureInPictureAlt
     public val Pin: ImageVector get() = Icons.Outlined.OuPushPin
     public val PinFilled: ImageVector get() = Icons.Filled.FiPushPin
     public val Play: ImageVector get() = Icons.Filled.FiPlayArrow

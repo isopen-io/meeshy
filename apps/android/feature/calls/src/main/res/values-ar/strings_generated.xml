@@ -3,6 +3,8 @@
     <string name="call_control_flip_camera">التبديل بين الكاميرا الأمامية والخلفية</string>
     <string name="call_control_flip_camera_caption">قلب</string>
     <string name="call_control_flip_camera_hint">يبدّل بين الكاميرا الأمامية والخلفية</string>
+    <string name="call_control_pip">التصغير إلى صورة داخل صورة</string>
+    <string name="call_control_react">إرسال تفاعل</string>
     <string name="call_decline_cancel">إلغاء</string>
     <string name="call_decline_custom_label">رسالتك</string>
     <string name="call_decline_custom_placeholder">اكتب رسالة…</string>

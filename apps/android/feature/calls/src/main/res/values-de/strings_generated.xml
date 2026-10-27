@@ -3,6 +3,8 @@
     <string name="call_control_flip_camera">Vorder-/Rückkamera wechseln</string>
     <string name="call_control_flip_camera_caption">Wechseln</string>
     <string name="call_control_flip_camera_hint">Wechselt zwischen Front- und Rückkamera</string>
+    <string name="call_control_pip">Bild-in-Bild</string>
+    <string name="call_control_react">Eine Reaktion senden</string>
     <string name="call_decline_cancel">Abbrechen</string>
     <string name="call_decline_custom_label">Deine Nachricht</string>
     <string name="call_decline_custom_placeholder">Nachricht schreiben…</string>

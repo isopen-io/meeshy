@@ -3,6 +3,8 @@
     <string name="call_control_flip_camera">Basculer la caméra avant/arrière</string>
     <string name="call_control_flip_camera_caption">Retourner</string>
     <string name="call_control_flip_camera_hint">Bascule entre la caméra avant et arrière</string>
+    <string name="call_control_pip">Réduire en Picture-in-Picture</string>
+    <string name="call_control_react">Envoyer une réaction</string>
     <string name="call_decline_cancel">Annuler</string>
     <string name="call_decline_custom_label">Votre message</string>
     <string name="call_decline_custom_placeholder">Écrire un message…</string>
