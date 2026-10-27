@@ -45,6 +45,7 @@ internal fun FeedNotice.messageRes(): Int = when (this) {
     FeedNotice.REPORTED -> R.string.feed_notice_reported
     FeedNotice.PUBLISH_FAILED -> R.string.feed_notice_publish_failed
     FeedNotice.PUBLISHED -> R.string.feed_notice_published
+    FeedNotice.PUBLISH_QUEUED -> R.string.feed_notice_publish_queued
     FeedNotice.TRANSLATION_FAILED -> R.string.feed_notice_translation_failed
 }
 

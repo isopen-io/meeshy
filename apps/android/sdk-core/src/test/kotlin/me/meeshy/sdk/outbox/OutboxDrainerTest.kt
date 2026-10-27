@@ -238,7 +238,9 @@ class OutboxDrainerTest {
         OutboxDrainer(
             outbox,
             mapOf(OutboxKind.SEND_MESSAGE to sender, OutboxKind.PUBLISH_STORY to sender),
-            graftProducedId = PublishMediaWriteBack::graft,
+            graftProducedId = { dependent, placeholder, realId ->
+                PublishMediaWriteBack.graft(dependent.payload, placeholder, realId)
+            },
         )
 
     @Test

@@ -45,7 +45,13 @@ import me.meeshy.sdk.model.UploadedMedia
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.post.InMemoryPostComposerDraftStore
 import me.meeshy.sdk.post.PostRepository
+import me.meeshy.sdk.publication.PublicationOutbox
+import me.meeshy.sdk.media.MediaUploadQueue
+import me.meeshy.sdk.model.media.TusUploadContext
+import me.meeshy.sdk.net.api.CreatePostRequest
+import kotlinx.coroutines.test.advanceUntilIdle
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.SocialSocketManager
 import org.junit.After
@@ -74,6 +80,9 @@ class FeedViewModelTest {
     private val feedMediaUploader: FeedMediaUploader = mockk(relaxed = true)
     private val reportRepository: me.meeshy.sdk.report.ReportRepository = mockk(relaxed = true)
     private val workManager: androidx.work.WorkManager = mockk(relaxed = true)
+    private val publications: PublicationOutbox = mockk(relaxed = true)
+    private val composerDrafts = InMemoryPostComposerDraftStore()
+    private val mediaUploadQueue: MediaUploadQueue = mockk(relaxed = true)
     private val postCreated = MutableSharedFlow<SocketPostCreatedData>(extraBufferCapacity = 64)
     private val postDeleted = MutableSharedFlow<SocketPostDeletedData>(extraBufferCapacity = 64)
     private val postLiked = MutableSharedFlow<SocketPostLikedData>(extraBufferCapacity = 64)
@@ -105,7 +114,7 @@ class FeedViewModelTest {
         every { socialSocket.mediaCaptionTranslationUpdated } returns mediaCaptionTranslationUpdated
         every { socialSocket.postUpdated } returns postUpdated
         every { socialSocket.postReposted } returns postReposted
-        return FeedViewModel(repository, session, socialSocket, config, feedMediaUploader, reportRepository, workManager, engagement)
+        return FeedViewModel(repository, session, socialSocket, config, feedMediaUploader, reportRepository, workManager, engagement, publications, composerDrafts, mediaUploadQueue)
     }
 
     @Test
@@ -453,7 +462,7 @@ class FeedViewModelTest {
         every { socialSocket.mediaCaptionTranslationUpdated } returns mediaCaptionTranslationUpdated
         every { socialSocket.postUpdated } returns postUpdated
         every { socialSocket.postReposted } returns postReposted
-        return FeedViewModel(repository, session, socialSocket, config, feedMediaUploader, reportRepository, workManager, engagement)
+        return FeedViewModel(repository, session, socialSocket, config, feedMediaUploader, reportRepository, workManager, engagement, publications, composerDrafts, mediaUploadQueue)
     }
 
     @Test
@@ -1071,245 +1080,138 @@ class FeedViewModelTest {
         assertThat(vm.state.value.posts.single().commentCount).isEqualTo(2)
     }
 
-    // --- Create post (publishPost) ---
+    // --- Create post (publishPost): queued on the device, never lost (#13417) ---
 
     @Test
-    fun `publishPost sends the content, POST type and chosen visibility to the repository`() = runTest {
+    fun `publishPost queues the post on the device with every field the composer resolved`() = runTest {
         val vm = viewModel(me, flowOf(CacheResult.Empty))
-        coEvery {
-            repository.create(content = "hello world", type = "POST", visibility = "FRIENDS")
-        } returns NetworkResult.Success(post("new"))
-
-        vm.publishPost(content = "hello world", visibility = "FRIENDS")
-
-        coVerify(exactly = 1) {
-            repository.create(content = "hello world", type = "POST", visibility = "FRIENDS")
-        }
-    }
-
-    @Test
-    fun `a successfully published post is prepended to the feed immediately`() = runTest {
-        val vm = viewModel(me, flowOf(CacheResult.Fresh(listOf(post("1")), 0L)))
-        coEvery {
-            repository.create(content = "hi", type = "POST", visibility = "PUBLIC")
-        } returns NetworkResult.Success(post("new"))
-
-        vm.publishPost(content = "hi", visibility = "PUBLIC")
-
-        assertThat(vm.state.value.posts.map { it.id }).containsExactly("new", "1").inOrder()
-    }
-
-    @Test
-    fun `a successfully published post never raises the new-posts banner — it is already visible`() = runTest {
-        val vm = viewModel(me, flowOf(CacheResult.Fresh(listOf(post("1")), 0L)))
-        coEvery {
-            repository.create(content = "hi", type = "POST", visibility = "PUBLIC")
-        } returns NetworkResult.Success(post("new"))
-
-        vm.publishPost(content = "hi", visibility = "PUBLIC")
-
-        assertThat(vm.state.value.newPostsCount).isEqualTo(0)
-    }
-
-    @Test
-    fun `a publish failure surfaces the error message and leaves the feed untouched`() = runTest {
-        val vm = viewModel(me, flowOf(CacheResult.Fresh(listOf(post("1")), 0L)))
-        coEvery {
-            repository.create(content = "hi", type = "POST", visibility = "PUBLIC")
-        } returns NetworkResult.Failure(ApiError(message = "network down"))
-
-        vm.publishPost(content = "hi", visibility = "PUBLIC")
-
-        val s = vm.state.value
-        assertThat(s.notice).isEqualTo(FeedNotice.PUBLISH_FAILED)
-        assertThat(s.unpublishedDraft?.text).isEqualTo("hi")
-        assertThat(s.posts.map { it.id }).containsExactly("1")
-    }
-
-    @Test
-    fun `a publish exception surfaces its message and leaves the feed untouched`() = runTest {
-        val vm = viewModel(me, flowOf(CacheResult.Fresh(listOf(post("1")), 0L)))
-        coEvery {
-            repository.create(content = "hi", type = "POST", visibility = "PUBLIC")
-        } throws RuntimeException("boom")
-
-        vm.publishPost(content = "hi", visibility = "PUBLIC")
-
-        val s = vm.state.value
-        assertThat(s.notice).isEqualTo(FeedNotice.PUBLISH_FAILED)
-        assertThat(s.posts.map { it.id }).containsExactly("1")
-    }
-
-    @Test
-    fun `the server echo of a just-published post via the socket is not rendered twice`() = runTest {
-        val vm = viewModel(me, flowOf(CacheResult.Fresh(listOf(post("1")), 0L)))
-        coEvery {
-            repository.create(content = "hi", type = "POST", visibility = "PUBLIC")
-        } returns NetworkResult.Success(post("new"))
-        vm.publishPost(content = "hi", visibility = "PUBLIC")
-
-        // The gateway broadcasts `post:created` back to the author too.
-        postCreated.emit(SocketPostCreatedData(post("new")))
-
-        val s = vm.state.value
-        assertThat(s.posts.map { it.id }).containsExactly("new", "1").inOrder()
-        assertThat(s.newPostsCount).isEqualTo(0)
-    }
-
-    @Test
-    fun `publishPost with attached media sends the media ids alongside the content`() = runTest {
-        val vm = viewModel(me, flowOf(CacheResult.Empty))
-        coEvery {
-            repository.create(content = "hi", type = "POST", visibility = "PUBLIC", mediaIds = listOf("m1", "m2"))
-        } returns NetworkResult.Success(post("new"))
-
-        vm.publishPost(content = "hi", visibility = "PUBLIC", mediaIds = listOf("m1", "m2"))
-
-        coVerify(exactly = 1) {
-            repository.create(content = "hi", type = "POST", visibility = "PUBLIC", mediaIds = listOf("m1", "m2"))
-        }
-    }
-
-    @Test
-    fun `publishPost with blank text and only media sends a null content, not an empty string`() = runTest {
-        val vm = viewModel(me, flowOf(CacheResult.Empty))
-        coEvery {
-            repository.create(content = null, type = "POST", visibility = "PUBLIC", mediaIds = listOf("m1"))
-        } returns NetworkResult.Success(post("new"))
-
-        vm.publishPost(content = "", visibility = "PUBLIC", mediaIds = listOf("m1"))
-
-        coVerify(exactly = 1) {
-            repository.create(content = null, type = "POST", visibility = "PUBLIC", mediaIds = listOf("m1"))
-        }
-    }
-
-    @Test
-    fun `a media-only publish is prepended to the feed like any other`() = runTest {
-        val vm = viewModel(me, flowOf(CacheResult.Fresh(listOf(post("1")), 0L)))
-        coEvery {
-            repository.create(content = null, type = "POST", visibility = "PUBLIC", mediaIds = listOf("m1"))
-        } returns NetworkResult.Success(post("new"))
-
-        vm.publishPost(content = "   ", visibility = "PUBLIC", mediaIds = listOf("m1"))
-
-        assertThat(vm.state.value.posts.map { it.id }).containsExactly("new", "1").inOrder()
-    }
-
-    @Test
-    fun `publishPost sends the reel-classification type the caller resolved`() = runTest {
-        val vm = viewModel(me, flowOf(CacheResult.Empty))
-        coEvery {
-            repository.create(content = "check this out", type = "REEL", visibility = "PUBLIC", mediaIds = listOf("m1"))
-        } returns NetworkResult.Success(post("new"))
-
-        vm.publishPost(content = "check this out", visibility = "PUBLIC", mediaIds = listOf("m1"), type = "REEL")
-
-        coVerify(exactly = 1) {
-            repository.create(content = "check this out", type = "REEL", visibility = "PUBLIC", mediaIds = listOf("m1"))
-        }
-    }
-
-    @Test
-    fun `publishPost forwards the author's per-media alt text to the repository`() = runTest {
-        val vm = viewModel(me, flowOf(CacheResult.Empty))
-        coEvery {
-            repository.create(
-                content = "hi",
-                type = "POST",
-                visibility = "PUBLIC",
-                mediaIds = listOf("m1"),
-                mediaAlt = mapOf("m1" to "A red bicycle"),
-            )
-        } returns NetworkResult.Success(post("new"))
+        val place = SharedPlace(latitude = 48.8566, longitude = 2.3522)
 
         vm.publishPost(
-            content = "hi",
-            visibility = "PUBLIC",
-            mediaIds = listOf("m1"),
+            content = "check this out",
+            visibility = "FRIENDS",
+            mediaIds = listOf("m1", "cmid_offline"),
+            type = "REEL",
+            location = place,
+            language = "ja",
             mediaAlt = mapOf("m1" to "A red bicycle"),
         )
 
         coVerify(exactly = 1) {
-            repository.create(
-                content = "hi",
-                type = "POST",
-                visibility = "PUBLIC",
-                mediaIds = listOf("m1"),
-                mediaAlt = mapOf("m1" to "A red bicycle"),
+            publications.enqueuePost(
+                CreatePostRequest(
+                    content = "check this out",
+                    type = "REEL",
+                    visibility = "FRIENDS",
+                    mediaIds = listOf("m1", "cmid_offline"),
+                    originalLanguage = "ja",
+                    location = place,
+                    mediaAlt = mapOf("m1" to "A red bicycle"),
+                ),
+                null,
             )
         }
+        verify(exactly = 1) { workManager.enqueue(any<androidx.work.WorkRequest>()) }
     }
 
     @Test
-    fun `publishPost with no alt text forwards a null mediaAlt, never an empty map`() = runTest {
+    fun `a media-only post sends a null content, and no empty media list or alt map`() = runTest {
         val vm = viewModel(me, flowOf(CacheResult.Empty))
-        coEvery {
-            repository.create(content = "hi", type = "POST", visibility = "PUBLIC", mediaAlt = null)
-        } returns NetworkResult.Success(post("new"))
 
+        vm.publishPost(content = "   ", visibility = "PUBLIC", mediaIds = listOf("m1"))
         vm.publishPost(content = "hi", visibility = "PUBLIC")
 
         coVerify(exactly = 1) {
-            repository.create(content = "hi", type = "POST", visibility = "PUBLIC", mediaAlt = null)
+            publications.enqueuePost(CreatePostRequest(content = null, type = "POST", visibility = "PUBLIC", mediaIds = listOf("m1")), null)
+        }
+        coVerify(exactly = 1) {
+            publications.enqueuePost(CreatePostRequest(content = "hi", type = "POST", visibility = "PUBLIC"), null)
         }
     }
 
     @Test
-    fun `publishPost with no location forwards a null location to the repository`() = runTest {
+    fun `publishPost parks the composer draft with the post instead of erasing it`() = runTest {
         val vm = viewModel(me, flowOf(CacheResult.Empty))
-        coEvery {
-            repository.create(content = "hi", type = "POST", visibility = "PUBLIC", location = null)
-        } returns NetworkResult.Success(post("new"))
+        val draft = FeedComposerDraft(text = "bonjour").toSnapshot(nowMillis = 1L)
 
-        vm.publishPost(content = "hi", visibility = "PUBLIC")
+        vm.publishPost(content = "bonjour", visibility = "PUBLIC", draft = draft)
 
-        coVerify(exactly = 1) {
-            repository.create(content = "hi", type = "POST", visibility = "PUBLIC", location = null)
-        }
+        coVerify(exactly = 1) { publications.enqueuePost(any(), draft) }
     }
 
     @Test
-    fun `publishPost forwards an attached location to the repository verbatim`() = runTest {
-        val vm = viewModel(me, flowOf(CacheResult.Empty))
-        val place = SharedPlace(latitude = 48.8566, longitude = 2.3522)
-        coEvery {
-            repository.create(content = "hi", type = "POST", visibility = "PUBLIC", location = place)
-        } returns NetworkResult.Success(post("new"))
+    fun `a queued post says it is on its way, never that it is published, and the feed waits for the server`() =
+        runTest {
+            val vm = viewModel(me, flowOf(CacheResult.Fresh(listOf(post("1")), 0L)))
 
-        vm.publishPost(content = "hi", visibility = "PUBLIC", location = place)
+            vm.publishPost(content = "hi", visibility = "PUBLIC")
 
-        coVerify(exactly = 1) {
-            repository.create(content = "hi", type = "POST", visibility = "PUBLIC", location = place)
+            assertThat(vm.state.value.notice).isEqualTo(FeedNotice.PUBLISH_QUEUED)
+            assertThat(vm.state.value.posts.map { it.id }).containsExactly("1")
+            assertThat(vm.state.value.newPostsCount).isEqualTo(0)
         }
+
+    @Test
+    fun `a post that cannot even be queued keeps the text and visibility so the composer reopens on it`() = runTest {
+        val vm = viewModel(me, flowOf(CacheResult.Fresh(listOf(post("1")), 0L)))
+        coEvery { publications.enqueuePost(any(), any()) } throws IllegalStateException("disk full")
+
+        vm.publishPost(content = "bonjour", visibility = "FRIENDS")
+        val draft = vm.state.value.unpublishedDraft
+        vm.consumeUnpublishedDraft()
+
+        assertThat(vm.state.value.notice).isEqualTo(FeedNotice.PUBLISH_FAILED)
+        assertThat(draft?.text).isEqualTo("bonjour")
+        assertThat(draft?.visibility).isEqualTo(FeedPostVisibility.FRIENDS)
+        assertThat(vm.state.value.unpublishedDraft).isNull()
     }
 
     @Test
-    fun `publishPost with no language override forwards a null originalLanguage to the repository`() = runTest {
+    fun `a composer media the network refused is kept on the device under the post upload context`() = runTest {
         val vm = viewModel(me, flowOf(CacheResult.Empty))
-        coEvery {
-            repository.create(content = "hi", type = "POST", visibility = "PUBLIC", originalLanguage = null)
-        } returns NetworkResult.Success(post("new"))
+        val heic = MediaUploadItem(bytes = byteArrayOf(1), fileName = "a.heic", mimeType = "image/heic")
+        coEvery { mediaUploadQueue.enqueue(heic, TusUploadContext.POST) } returns "cmid_heic"
 
-        vm.publishPost(content = "hi", visibility = "PUBLIC")
-
-        coVerify(exactly = 1) {
-            repository.create(content = "hi", type = "POST", visibility = "PUBLIC", originalLanguage = null)
-        }
+        assertThat(vm.queueMedia(heic)).isEqualTo("cmid_heic")
     }
 
     @Test
-    fun `publishPost forwards the author's chosen language override to the repository verbatim`() = runTest {
-        val vm = viewModel(me, flowOf(CacheResult.Empty))
-        coEvery {
-            repository.create(content = "hi", type = "POST", visibility = "PUBLIC", originalLanguage = "ja")
-        } returns NetworkResult.Success(post("new"))
+    fun `removing a media still waiting on the device discards its upload and bytes, a served one is left`() =
+        runTest {
+            val vm = viewModel(me, flowOf(CacheResult.Empty))
 
-        vm.publishPost(content = "hi", visibility = "PUBLIC", language = "ja")
+            vm.discardQueuedMedia("cmid_00000000-0000-4000-8000-000000000000")
+            vm.discardQueuedMedia("665f1c2e9b1d8a0012345678")
 
-        coVerify(exactly = 1) {
-            repository.create(content = "hi", type = "POST", visibility = "PUBLIC", originalLanguage = "ja")
+            coVerify(exactly = 1) { mediaUploadQueue.cancel("cmid_00000000-0000-4000-8000-000000000000") }
+            coVerify(exactly = 0) { mediaUploadQueue.cancel("665f1c2e9b1d8a0012345678") }
         }
+
+    @Test
+    fun `the composer autosaves its draft, and an emptied composer clears it`() = runTest(dispatcher) {
+        val vm = viewModel(me, flowOf(CacheResult.Empty))
+
+        vm.persistComposerDraft(FeedComposerDraft(text = "brouillon"))
+        advanceUntilIdle()
+        assertThat(composerDrafts.loadEditing()?.text).isEqualTo("brouillon")
+        assertThat(vm.restorableDraft()?.text).isEqualTo("brouillon")
+
+        vm.persistComposerDraft(FeedComposerDraft(text = "  "))
+        advanceUntilIdle()
+        assertThat(composerDrafts.loadEditing()).isNull()
+        assertThat(vm.restorableDraft()).isNull()
+    }
+
+    @Test
+    fun `typing saves once a pause, not per keystroke`() = runTest(dispatcher) {
+        val vm = viewModel(me, flowOf(CacheResult.Empty))
+
+        vm.persistComposerDraft(FeedComposerDraft(text = "b"))
+        vm.persistComposerDraft(FeedComposerDraft(text = "bo"))
+        vm.persistComposerDraft(FeedComposerDraft(text = "bon"))
+        advanceUntilIdle()
+
+        assertThat(composerDrafts.loadEditing()?.text).isEqualTo("bon")
     }
 
     // --- Composer media upload (uploadMedia) ---
@@ -1446,35 +1348,6 @@ class FeedViewModelTest {
 
         assertThat(vm.state.value.loadFailed).isFalse()
         assertThat(vm.state.value.isSyncing).isFalse()
-    }
-
-    @Test
-    fun `a successful publish confirms with the published notice`() = runTest {
-        val vm = viewModel(me, flowOf(CacheResult.Fresh(listOf(post("1")), 0L)))
-        coEvery {
-            repository.create(content = "hi", type = "POST", visibility = "PUBLIC")
-        } returns NetworkResult.Success(post("new"))
-
-        vm.publishPost(content = "hi", visibility = "PUBLIC")
-
-        assertThat(vm.state.value.notice).isEqualTo(FeedNotice.PUBLISHED)
-        assertThat(vm.state.value.unpublishedDraft).isNull()
-    }
-
-    @Test
-    fun `a failed publish keeps the text and visibility so the composer can reopen on it`() = runTest {
-        val vm = viewModel(me, flowOf(CacheResult.Fresh(listOf(post("1")), 0L)))
-        coEvery {
-            repository.create(content = "bonjour", type = "POST", visibility = "FRIENDS")
-        } returns NetworkResult.Failure(ApiError(message = "down"))
-
-        vm.publishPost(content = "bonjour", visibility = "FRIENDS")
-        val draft = vm.state.value.unpublishedDraft
-        vm.consumeUnpublishedDraft()
-
-        assertThat(draft?.text).isEqualTo("bonjour")
-        assertThat(draft?.visibility).isEqualTo(FeedPostVisibility.FRIENDS)
-        assertThat(vm.state.value.unpublishedDraft).isNull()
     }
 
     @Test

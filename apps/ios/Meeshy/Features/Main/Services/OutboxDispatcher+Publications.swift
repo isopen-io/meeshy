@@ -26,31 +26,7 @@ extension OutboxDispatcher {
         // checkpoint resume fires on re-upload (same sha256 key), so a kill
         // mid-upload resumes from the saved offset.
         var resolvedMediaIds = payload.attachmentIds
-        var uploadedLocalPaths: [String] = []
-        // **Hissés hors du bloc**, comme `uploadedLocalPaths` juste au-dessus :
-        // la jointure « position d'origine → id serveur » se lit APRÈS l'upload,
-        // pour le corps de la requête (#4756).
-        var uploadedIds: [String] = []
-        // **L'URL SERVIE voyage avec l'id** (#5280). Le canvas ne référence
-        // pas seulement une ligne `PostMedia` : il porte aussi l'URL qu'il
-        // affiche. Adopter l'id sans l'URL laisserait le lecteur devant un
-        // `file://` que l'assainisseur annule — une scène sans image, pour un
-        // canvas pourtant cohérent.
-        var uploadedUrls: [String] = []
-        var uploadedSourceIndexes: [Int] = []
-        // **La PREMIÈRE panne d'upload, retenue pour la ligne** (#5830). Le
-        // `catch` par fichier ci-dessous journalise et poursuit — c'est voulu,
-        // un fichier ne doit pas condamner les autres — mais la ligne outbox
-        // n'en gardait AUCUNE trace : `lastError` ne portait que le 503
-        // générique, qui est le SYMPTÔME. Diagnostiquer le réel bloqué du
-        // 2026-09-08 a exigé de démonter la base de l'appareil ; l'utilisateur,
-        // lui, n'avait rien du tout.
-        var premierEchecUpload: Error?
-        // **Un fichier ABSENT du disque ne reviendra jamais** — à distinguer
-        // d'un upload qui a échoué. Le premier est permanent (les octets ont
-        // disparu), le second est transitoire (réseau, suspension, jeton). Les
-        // deux se soldent différemment plus bas.
-        var fichiersDisparus = 0
+        var montes = PublicationMediaUploads()
         if let pendingMediaPaths = payload.localMediaPaths, !pendingMediaPaths.isEmpty {
             let serverOrigin = MeeshyConfig.shared.serverOrigin
             guard let baseURL = URL(string: serverOrigin),
@@ -68,136 +44,32 @@ extension OutboxDispatcher {
             #else
             let uploader = TusUploadManager(baseURL: baseURL)
             #endif
-            // **Ce qu'une tentative PRÉCÉDENTE a déjà monté** (#5830), relu
-            // depuis la ligne elle-même. Sans cette carte, chaque rejeu
-            // repartait de l'index 0 et jetait tout ce que le précédent avait
-            // obtenu : une publication à trois médias dont aucune tentative ne
-            // pouvait tout finir d'un trait ne se publiait JAMAIS.
-            let dejaMontes = Dictionary(
-                (payload.uploadedMedia ?? []).map { ($0.sourceIndex, $0) },
-                uniquingKeysWith: { _, dernier in dernier }
-            )
-            for (index, stored) in pendingMediaPaths.enumerated() {
-                let absolutePath = OfflineQueue.absoluteMediaPath(forStored: stored)
-                if let acquis = dejaMontes[index] {
-                    uploadedIds.append(acquis.id)
-                    uploadedUrls.append(acquis.url)
-                    uploadedSourceIndexes.append(index)
-                    // Le fichier local reste à nettoyer APRÈS publication : il
-                    // a été monté, il n'est plus la source de vérité, mais il
-                    // ne se supprime qu'une fois le post créé — sinon un
-                    // échec plus bas laisserait la ligne sans ses octets et
-                    // sans son post.
-                    uploadedLocalPaths.append(absolutePath)
-                    logger.info("createPost: média \(index, privacy: .public) déjà monté, upload sauté")
-                    continue
-                }
-                // #10321 — l'auteur a pu retirer la publication entre deux montées.
-                try await OfflineQueue.shared.throwIfPublicationCancelled(outboxId: record.id)
-                guard FileManager.default.fileExists(atPath: absolutePath) else {
-                    logger.error("Post media file missing on dispatch, path=\(stored, privacy: .public)")
-                    fichiersDisparus += 1
-                    continue
-                }
-                do {
-                    // Le MIME **DÉCLARÉ** par le site d'envoi l'emporte ; la
-                    // dérivation depuis l'extension n'est que le REPLI des
-                    // lignes qui n'en portent pas. L'extension ne suffit pas :
-                    // un vocal importé en `.caf` / `.aiff` / `.opus` s'y
-                    // re-dérivait en `application/octet-stream`, et le gateway
-                    // ne reconnaît un média audio qu'à
-                    // `mimeType.startsWith('audio/')` — la transcription
-                    // embarquée était alors ignorée ET Whisper jamais
-                    // déclenché, pour un fichier que l'expéditeur savait
-                    // pourtant être une voix.
-                    let mime = payload.declaredMimeType(at: index)
-                        ?? MimeTypeResolver.mimeType(
-                            forExtension: URL(fileURLWithPath: absolutePath).pathExtension)
-                    let tusResult = try await uploader.uploadFile(
-                        fileURL: URL(fileURLWithPath: absolutePath),
-                        mimeType: mime,
-                        credential: .bearer(token),
-                        // POUR QUI ce fichier est téléversé — et sans lui, le
-                        // gateway crée un `MessageAttachment` puis répond 201
-                        // avec un id parfaitement valide. `PostService.createPost`
-                        // ne réclame ensuite que des `PostMedia` : il n'en
-                        // réclame AUCUN, ne journalise qu'un `logger.warn`, et le
-                        // post arrive publié et VIDE. Les trois chemins EN LIGNE
-                        // le passaient déjà ; seule la file durable ne le passait
-                        // pas, si bien que le média perdu ne l'était QUE hors
-                        // ligne — la condition la moins observée de toutes.
-                        uploadContext: "post"
-                    )
-                    uploadedIds.append(tusResult.id)
-                    uploadedUrls.append(tusResult.fileUrl)
-                    uploadedLocalPaths.append(absolutePath)
-                    // **L'INDEX D'ORIGINE voyage avec l'id** (#4756). C'est la
-                    // seule jointure possible entre ce que l'auteur a composé
-                    // et ce que le serveur vient de créer : la légende, l'alt
-                    // et les objets média du canvas sont tous clés par la
-                    // POSITION du fichier, jamais par un id qui n'existait pas
-                    // encore à la composition.
-                    //
-                    // Un upload qui ÉCHOUE est sauté (best-effort, `catch`
-                    // ci-dessous) : l'alignement avec `payload.localMediaPaths`
-                    // est alors rompu, et c'est précisément pourquoi l'index
-                    // s'enregistre ici plutôt que de se déduire de la longueur
-                    // des tableaux.
-                    uploadedSourceIndexes.append(index)
-                    // **Le fait est GRAVÉ sur la ligne, pas seulement dans
-                    // cette variable** (#5830) : c'est la seule chose qui
-                    // traverse une suspension de l'OS, une coupure réseau ou un
-                    // redémarrage. Sans elle, ces octets seraient re-montés au
-                    // prochain rejeu — et le rejeu suivant les re-monterait
-                    // encore, indéfiniment.
-                    await OfflineQueue.shared.recordUploadedPostMedia(
-                        outboxId: record.id,
-                        UploadedPostMedia(sourceIndex: index, id: tusResult.id, url: tusResult.fileUrl)
-                    )
-                } catch {
-                    if premierEchecUpload == nil { premierEchecUpload = error }
-                    logger.error("Post media TUS upload failed (best-effort skip): \(error.localizedDescription, privacy: .public)")
-                }
-            }
-            // **Une publication ne part pas AMPUTÉE d'un média que l'auteur
-            // pourra encore obtenir** (#5830). L'ancienne règle — « au moins un
-            // média monté suffit » — publiait un réel à trois scènes avec une
-            // seule image dès que deux uploads trébuchaient, définitivement et
-            // en silence. Elle n'était tenable que parce que rien ne
-            // convergeait : rejeter aurait bouclé sans fin. Maintenant que
-            // chaque succès est ACQUIS, rejeter converge — le rejeu ne monte
-            // plus que ce qui manque.
-            //
-            // Les deux causes ne se soldent donc pas pareil :
-            //  - un upload ÉCHOUÉ est transitoire ⇒ on relance la ligne, en
-            //    portant la cause RÉELLE plutôt qu'un compte à zéro ;
-            //  - un fichier DISPARU du disque est permanent ⇒ rejeter
-            //    bouclerait jusqu'à l'épuisement pour rien, on publie ce qui
-            //    reste (comportement historique), et l'absence est tracée.
-            if let cause = premierEchecUpload {
-                throw NSError(
-                    domain: "OutboxDispatcher",
-                    code: 503,
-                    userInfo: [
-                        NSLocalizedDescriptionKey: "Média \(uploadedIds.count)/\(pendingMediaPaths.count) monté — publication reportée : \(cause.localizedDescription)",
-                        NSUnderlyingErrorKey: cause
-                    ]
+            let outboxId = record.id
+            montes = try await PublicationMediaUploader.uploadAll(
+                storedPaths: pendingMediaPaths,
+                alreadyUploaded: payload.uploadedMedia ?? [],
+                declaredMimeType: { payload.declaredMimeType(at: $0) },
+                hooks: PublicationMediaUploader.Hooks(
+                    throwIfCancelled: { try await OfflineQueue.shared.throwIfPublicationCancelled(outboxId: outboxId) },
+                    recordUploaded: { await OfflineQueue.shared.recordUploadedPostMedia(outboxId: outboxId, $0) }
+                )
+            ) { fileURL, mimeType in
+                // POUR QUI ce fichier est téléversé (`uploadContext: "post"`) :
+                // sans lui, le gateway crée un `MessageAttachment` et le post
+                // arrive publié et VIDE (`OutboxUploadContextGuardTests`).
+                try await uploader.uploadFile(
+                    fileURL: fileURL,
+                    mimeType: mimeType,
+                    credential: .bearer(token),
+                    uploadContext: "post"
                 )
             }
-            guard !uploadedIds.isEmpty else {
-                throw NSError(
-                    domain: "OutboxDispatcher",
-                    code: 503,
-                    userInfo: [NSLocalizedDescriptionKey: fichiersDisparus > 0
-                        ? "Les \(fichiersDisparus) fichier(s) de cette publication ont disparu du disque"
-                        : "No media uploaded for offline post media dispatch"]
-                )
-            }
-            if fichiersDisparus > 0 {
-                logger.warning("createPost: publication amputée de \(fichiersDisparus, privacy: .public) fichier(s) disparu(s) — les octets n'existent plus, un rejeu ne les rendrait pas")
-            }
-            resolvedMediaIds = uploadedIds + payload.attachmentIds
+            resolvedMediaIds = montes.ids + payload.attachmentIds
         }
+        let uploadedIds = montes.ids
+        let uploadedUrls = montes.urls
+        let uploadedSourceIndexes = montes.sourceIndexes
+        let uploadedLocalPaths = montes.localPaths
 
         // **La carte « position d'origine → id serveur »** (#4756) — construite
         // une fois, lue par les deux consommateurs ci-dessous. Vide quand rien

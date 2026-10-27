@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef } from 'react';
 
 import type { ApiFailure } from '@/lib/api/http';
 import type { PostMediaUploadDeps } from '@/lib/api/post-media-upload';
-import { prepareImageForUpload } from '@/lib/media/prepare-image-upload';
+import { prepareImageForUpload, transcodeRefusedImage } from '@/lib/media/prepare-image-upload';
+import { sendWithFormatFallback } from '@/lib/media/refused-format-fallback';
 import { withPage, type StudioDraft } from '@/lib/stories/studio';
 import { pageWithSoundUpload, pageWithVisualUpload, type StudioDoor, type StudioPage, type StudioUploadState } from '@/lib/stories/studio-page';
 import { uploadStateOf, type PendingUpload } from '@/lib/stories/studio-publish';
@@ -68,15 +69,21 @@ export function useStudioUploads({
     abortRef.current[key] = controller;
     const pending: PendingUpload = Promise.all([import('@/lib/api/post-media-upload'), prepareImageForUpload(file)])
       .then(([{ uploadPostMedia }, prepared]) =>
-        uploadPostMedia({
-          ...upload,
-          file: prepared,
-          uploadContext: 'story',
-          signal: controller.signal,
-          onProgress: (progress) => {
-            if (!controller.signal.aborted) applyUpload(pageId, door, previewUrl, { phase: 'uploading', progress });
-          },
-        }),
+        // Un HEIC refusé (415) par un ancien serveur repart converti, si le navigateur sait le lire (#13416).
+        sendWithFormatFallback(
+          prepared,
+          (body) =>
+            uploadPostMedia({
+              ...upload,
+              file: body,
+              uploadContext: 'story',
+              signal: controller.signal,
+              onProgress: (progress) => {
+                if (!controller.signal.aborted) applyUpload(pageId, door, previewUrl, { phase: 'uploading', progress });
+              },
+            }),
+          transcodeRefusedImage,
+        ),
       )
       .catch((): ApiFailure => ({ ok: false, status: 0, error: 'Module de téléversement indisponible', code: 'NETWORK' }));
     pendingRef.current[key] = pending;

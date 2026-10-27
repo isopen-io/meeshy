@@ -693,6 +693,18 @@ class PostRepository @Inject constructor(
     }
 
     /**
+     * A post this device published through the outbox (#13417) joins the head of the feed
+     * cache at once, without waiting for a revalidation; a post the cache already holds (the
+     * `post:created` echo got there first) is left as it is. Inert before the feed's first
+     * sync: that sync brings the post itself.
+     */
+    fun adoptPublished(post: ApiPost) {
+        val cached = _feedCache.value ?: return
+        if (cached.any { it.id == post.id }) return
+        _feedCache.value = listOf(post) + cached
+    }
+
+    /**
      * Realtime post edit (`post:updated`, push side): the author edited a post and the
      * gateway broadcast the whole new post. Folds it onto the cached copy via
      * [PostUpdateMerge] — adopting the edit's authoritative fields while preserving the

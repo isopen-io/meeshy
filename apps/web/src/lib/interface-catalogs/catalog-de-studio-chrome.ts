@@ -147,6 +147,10 @@ const deStudioChrome = {
   'story.studio.edit.saving': 'Wird gespeichert…',
   'story.studio.edit.cancel': 'Änderungen verwerfen',
   'story.studio.publish.as.storyAndReel': 'Story und Reel veröffentlichen',
+  'story.studio.unsent': 'Beitrag nicht gesendet.',
+  'story.studio.unsent.retry': 'Erneut versuchen',
+  'story.studio.unsent.discard': 'Löschen',
+  'story.studio.volatile': 'Dieses Gerät kann deine Medien nicht speichern: Lade die Seite vor dem Veröffentlichen nicht neu.',
 } satisfies StudioChromeCatalogSlice;
 
 export default deStudioChrome;

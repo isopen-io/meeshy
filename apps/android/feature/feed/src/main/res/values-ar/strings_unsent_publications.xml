@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="feed_notice_publish_queued">منشورك قيد الإرسال</string>
+    <string name="feed_unsent_title">منشورات لم تُرسل</string>
+    <plurals name="feed_unsent_count">
+        <item quantity="zero">%1$d منشورات لم تُرسل</item>
+        <item quantity="one">منشور واحد لم يُرسل</item>
+        <item quantity="two">%1$d منشورات لم تُرسل</item>
+        <item quantity="few">%1$d منشورات لم تُرسل</item>
+        <item quantity="many">%1$d منشورات لم تُرسل</item>
+        <item quantity="other">%1$d منشورات لم تُرسل</item>
+    </plurals>
+    <string name="feed_unsent_open">عرض المنشورات التي لم تُرسل</string>
+    <string name="feed_unsent_sending">جارٍ الإرسال…</string>
+    <string name="feed_unsent_failed">تعذّر الإرسال</string>
+    <string name="feed_unsent_retry">إعادة المحاولة</string>
+    <string name="feed_unsent_reopen">إعادة الفتح</string>
+    <string name="feed_unsent_delete">حذف</string>
+    <string name="feed_unsent_delete_confirm_title">حذف هذا المنشور؟</string>
+    <string name="feed_unsent_delete_confirm_body">سيُحذف مع وسائطه من هذا الجهاز.</string>
+    <string name="feed_unsent_cancel">إلغاء</string>
+    <string name="feed_unsent_kind_post">منشور</string>
+    <string name="feed_unsent_kind_reel">ريل</string>
+    <string name="feed_unsent_kind_story">قصة</string>
+    <plurals name="feed_unsent_media_count">
+        <item quantity="zero">%1$d وسائط</item>
+        <item quantity="one">وسيط واحد</item>
+        <item quantity="two">%1$d وسائط</item>
+        <item quantity="few">%1$d وسائط</item>
+        <item quantity="many">%1$d وسائط</item>
+        <item quantity="other">%1$d وسائط</item>
+    </plurals>
+</resources>

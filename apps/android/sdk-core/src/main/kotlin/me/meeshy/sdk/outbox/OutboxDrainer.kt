@@ -66,6 +66,8 @@ public data class DrainReport(
  * grafted into every still-queued dependent's payload via [graftProducedId]
  * (placeholder = the prerequisite's own `cmid`) **before** the row is deleted, so
  * a publish queued offline with a placeholder media id delivers with the real one.
+ * The graft receives the dependent ROW, so the write-back of the dependent's own kind
+ * rewrites it — a post payload is never re-encoded as a story (#13417).
  *
  * [currentOwner], when set, enforces [OutboxAuthorGuard]: a row never leaves under another
  * account than its author — it is skipped (no attempt charged) until its author is signed in.
@@ -75,7 +77,7 @@ public class OutboxDrainer(
     private val outbox: OutboxRepository,
     private val senders: Map<OutboxKind, MutationSender>,
     private val onExhausted: suspend (OutboxEntity) -> Unit = {},
-    private val graftProducedId: (payload: String, placeholder: String, realId: String) -> String? =
+    private val graftProducedId: (dependent: OutboxEntity, placeholder: String, realId: String) -> String? =
         { _, _, _ -> null },
     private val currentOwner: (() -> String?)? = null,
     private val now: () -> Long = System::currentTimeMillis,
@@ -139,8 +141,8 @@ public class OutboxDrainer(
                     delivered++
                 }
                 is SendResult.SuccessWithId -> {
-                    outbox.rewriteDependents(row.cmid) { payload ->
-                        graftProducedId(payload, row.cmid, result.producedId)
+                    outbox.rewriteDependentRows(row.cmid) { dependent ->
+                        graftProducedId(dependent, row.cmid, result.producedId)
                     }
                     outbox.markSucceeded(row.cmid)
                     delivered++

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="user_stats_error">Couldn\'t refresh your statistics</string>
+    <string name="user_stats_member_days">%1$d d</string>
+    <string name="user_stats_offline">You\'re offline — these are your last known statistics</string>
+</resources>

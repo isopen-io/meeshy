@@ -88,6 +88,10 @@
     <string name="game2_league_name_saphir">Zafiro</string>
     <string name="game2_league_pseudonym_current">Juegas con el nombre %s.</string>
     <string name="game2_league_pseudonym_drawn">Tu nombre de justa se sortea: ni tu nombre ni tu usuario. Cambia con cada viaje.</string>
+    <string name="game2_league_pseudonym_hint_change">De 3 a 20 caracteres. Ni tu nombre ni tu usuario.</string>
+    <string name="game2_league_pseudonym_invalid">Este nombre de justa no es válido: de 3 a 20 caracteres, letras, números, punto, guion, guion bajo.</string>
+    <string name="game2_league_pseudonym_new">Nuevo nombre de justa</string>
+    <string name="game2_league_pseudonym_save">Cambiar de nombre de justa</string>
     <string name="game2_league_pseudonym_title">Tu nombre de justa</string>
     <string name="game2_league_rank_line">Puesto %1$s de %2$s</string>
     <string name="game2_league_snapshot">La clasificación de los demás se fija cada día a las 4 h: nadie ve quién está jugando ahora. Solo tu fila está en directo.</string>
@@ -165,6 +169,9 @@
     <string name="game2_settings_visibility_title">Quién ve qué</string>
     <string name="game2_showcase_awarded">Obtenido el %s</string>
     <string name="game2_showcase_empty">Tus trofeos te esperan. Las copas de justa y de viaje, los trofeos de Renacimiento y de Llama se colocan aquí a medida que los ganas.</string>
+    <string name="game2_showcase_move_down">Bajar: %s</string>
+    <string name="game2_showcase_move_up">Subir: %s</string>
+    <string name="game2_showcase_order_hint">Ordena tus trofeos: sube o baja cada uno un puesto.</string>
     <string name="game2_showcase_title">Tus trofeos</string>
     <string name="game2_showcase_visibility">Quién ve tus trofeos</string>
     <string name="game2_showcase_visibility_hint">Un visitante solo ve el mes de obtención, nunca la fecha exacta. «Solo yo» oculta tus trofeos a todos los demás.</string>
@@ -511,7 +518,9 @@
     <string name="game_missions_locked">En el nivel 5, tus ancestros te envían cada noche un sueño en tres actos, y una Ofrenda. Estás en el nivel %s.</string>
     <string name="game_missions_offline">Sin conexión: cambiar un acto o abrir la Ofrenda se reanudará en línea.</string>
     <string name="game_missions_prism_day">Día del Prisma: uno de los actos se juega en un idioma distinto al tuyo.</string>
+    <string name="game_missions_prism_hour">Hora del Prisma: %1$s – %2$s — cada acto cuenta doble.</string>
     <string name="game_missions_title">El sueño de esta noche</string>
+    <string name="game_photo_offer_start">Fotografiar</string>
     <string name="game_progression_empty">Aún no hay actividad. Envía un mensaje, publica una historia… tu primera medalla se enciende con el primer gesto.</string>
     <string name="game_progression_load_error">No se pudo cargar el progreso</string>
     <string name="game_progression_loading">Cargando el progreso</string>

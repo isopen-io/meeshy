@@ -74,4 +74,12 @@ class GameGestureLawsTest {
         assertThat(GamePathSegments.isSafe("a?b")).isFalse()
         assertThat(GamePathSegments.isSafe("")).isFalse()
     }
+
+    @Test
+    fun `un refus du contrat est definitif, une coupure ou un code inconnu ne jugent rien`() {
+        assertThat(GameRefusalLaw.isDefinitive("INSUFFICIENT_MEESHES")).isTrue()
+        assertThat(GameRefusalLaw.isDefinitive(GameRefusalLaw.OFFLINE_CODE)).isFalse()
+        assertThat(GameRefusalLaw.isDefinitive("INTERNAL_SERVER_ERROR")).isFalse()
+        assertThat(GameRefusalLaw.isDefinitive(null)).isFalse()
+    }
 }

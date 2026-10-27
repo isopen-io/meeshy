@@ -108,4 +108,34 @@ class MediaSendersTest {
         assertThat(result).isEqualTo(SendResult.PermanentFailure(MediaUploadSender.REASON_NO_MEDIA))
         coVerify(exactly = 1) { mediaBlobStore.remove("cmid-1") }
     }
+
+    @Test
+    fun `a publication upload that yields no usable media keeps its bytes until the author decides`() = runTest {
+        listOf("post", "story", "status").forEach { context ->
+            coEvery { mediaBlobStore.get("cmid-1") } returns item
+            coEvery { tusUploadRepository.upload(item, any()) } returns NetworkResult.Success(emptyList())
+
+            val result = handler().send(row(encodedPayload(MediaUploadPayload(uploadContext = context))))
+
+            assertThat(result).isEqualTo(SendResult.PermanentFailure(MediaUploadSender.REASON_NO_MEDIA))
+        }
+        coVerify(exactly = 0) { mediaBlobStore.remove(any()) }
+    }
+
+    @Test
+    fun `an exhausted publication upload keeps its bytes for a retry or an explicit discard`() = runTest {
+        listOf("post", "story", "status").forEach { context ->
+            handler().onExhausted(row(encodedPayload(MediaUploadPayload(uploadContext = context))))
+        }
+
+        coVerify(exactly = 0) { mediaBlobStore.remove(any()) }
+    }
+
+    @Test
+    fun `an exhausted chat or comment upload still drops its bytes`() = runTest {
+        handler().onExhausted(row())
+        handler().onExhausted(row(encodedPayload(MediaUploadPayload(uploadContext = "comment"))))
+
+        coVerify(exactly = 2) { mediaBlobStore.remove("cmid-1") }
+    }
 }

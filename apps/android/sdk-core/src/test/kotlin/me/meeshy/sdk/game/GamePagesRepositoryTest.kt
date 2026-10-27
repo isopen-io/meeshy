@@ -157,4 +157,67 @@ class GamePagesRepositoryTest {
             api.setVisibility(match { it.requestId == "req-12345678" && it.showcase == me && it.rank == me && it.treasury == me && it.atlas == me })
         }
     }
+
+    @Test fun `ranger la vitrine envoie l ordre complet avec son identifiant et rend l ordre de la passerelle`() = runTest {
+        coEvery { api.setShowcaseOrder(any()) } returns ApiResponse(
+            success = true,
+            data = buildJsonObject { put("order", kotlinx.serialization.json.JsonArray(listOf(JsonPrimitive("b"), JsonPrimitive("a")))) },
+        )
+
+        val outcome = repository().setShowcaseOrder("req-12345678", listOf("b", "a"))
+
+        assertThat((outcome as GameWriteOutcome.Done).value.order).containsExactly("b", "a").inOrder()
+        coVerify { api.setShowcaseOrder(match { it.requestId == "req-12345678" && it.order == listOf("b", "a") }) }
+    }
+
+    @Test fun `regler une facette n envoie que celle-la`() = runTest {
+        coEvery { api.setVisibility(any()) } returns ApiResponse(
+            success = true,
+            data = buildJsonObject {
+                put("visibility", buildJsonObject { put("showcase", "me"); put("rank", "me"); put("treasury", "me"); put("atlas", "friends") })
+            },
+        )
+
+        val outcome = repository().setVisibility(
+            me.meeshy.sdk.model.game.ShowcaseVisibilityRequest("req-12345678", atlas = ShowcaseVisibility.Friends),
+        )
+
+        assertThat((outcome as GameWriteOutcome.Done).value.visibility.atlas).isEqualTo(ShowcaseVisibility.Friends)
+        coVerify { api.setVisibility(match { it.atlas == ShowcaseVisibility.Friends && it.showcase == null && it.rank == null && it.treasury == null }) }
+    }
+
+    @Test fun `l alliance s invite, s accepte et se quitte par l identifiant de la passerelle`() = runTest {
+        coEvery { api.inviteToDuo(any()) } returns ApiResponse(
+            success = true,
+            data = buildJsonObject { put("status", "invited"); put("duoId", "duo1"); put("weekKey", "2026-10-26") },
+        )
+        coEvery { api.acceptDuo("duo1", any()) } returns ApiResponse(success = true, data = buildJsonObject { put("status", "active"); put("duoId", "duo1") })
+        coEvery { api.abandonDuo("duo1", any()) } returns ApiResponse(success = true, data = buildJsonObject { put("status", "abandoned"); put("duoId", "duo1") })
+        val repository = repository()
+
+        val invited = repository.inviteToDuo("req-1234567a", "friend1")
+        val accepted = repository.acceptDuo("req-1234567b", "duo1")
+        val left = repository.abandonDuo("req-1234567c", "duo1")
+
+        assertThat((invited as GameWriteOutcome.Done).value.duoId).isEqualTo("duo1")
+        assertThat((accepted as GameWriteOutcome.Done).value.status).isEqualTo("active")
+        assertThat((left as GameWriteOutcome.Done).value.status).isEqualTo("abandoned")
+        coVerify { api.inviteToDuo(match { it.requestId == "req-1234567a" && it.friendId == "friend1" }) }
+    }
+
+    @Test fun `un identifiant d alliance qui ne passe pas dans un chemin ne part pas`() = runTest {
+        val outcome = repository().acceptDuo("req-12345678", "../x")
+
+        assertThat(outcome).isEqualTo(GameWriteOutcome.Refused(code = null, offline = false))
+        coVerify(exactly = 0) { api.acceptDuo(any(), any()) }
+    }
+
+    @Test fun `changer le nom de joute rend le nom de la passerelle et un refus garde son code`() = runTest {
+        coEvery { api.setLeaguePseudonym(any()) } returns ApiResponse(success = true, data = buildJsonObject { put("pseudonym", "Aube_7") })
+
+        val outcome = repository().setLeaguePseudonym("req-12345678", "Aube_7")
+
+        assertThat((outcome as GameWriteOutcome.Done).value.pseudonym).isEqualTo("Aube_7")
+        coVerify { api.setLeaguePseudonym(match { it.requestId == "req-12345678" && it.pseudonym == "Aube_7" }) }
+    }
 }

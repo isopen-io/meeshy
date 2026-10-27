@@ -115,6 +115,7 @@ fun CreateShareLinkScreen(
     onBack: () -> Unit,
     onCreated: () -> Unit,
     onNewConversation: () -> Unit = {},
+    createOnOpen: Boolean = false,
     viewModel: CreateShareLinkViewModel = hiltViewModel(),
     pickerViewModel: ShareLinkPickerViewModel = hiltViewModel(),
 ) {
@@ -122,6 +123,11 @@ fun CreateShareLinkScreen(
     val pickerState by pickerViewModel.state.collectAsStateWithLifecycle()
     val haptics = rememberMeeshyHaptics()
     var showPicker by rememberSaveable { mutableStateOf(false) }
+
+    val defaultInviteMessage = stringResource(R.string.invite_defaultMessage)
+    LaunchedEffect(viewModel, createOnOpen) {
+        if (createOnOpen) viewModel.createOnOpen(defaultInviteMessage)
+    }
 
     LaunchedEffect(viewModel) {
         viewModel.effects.collect { effect ->
@@ -132,7 +138,11 @@ fun CreateShareLinkScreen(
     }
 
     state.createdJoinUrl?.let { joinUrl ->
-        CreatedShareLinkSheet(joinUrl = joinUrl, onDone = onCreated)
+        CreatedShareLinkSheet(
+            joinUrl = joinUrl,
+            onDone = onCreated,
+            onCustomize = viewModel::customize.takeIf { createOnOpen },
+        )
     }
 
     if (showPicker) {

@@ -46,4 +46,12 @@ class OutboxKindCatalogTest {
             assertThat(OutboxKindCatalog.fromDiskValue(OutboxKindCatalog.metaFor(it).diskValue)).isEqualTo(it)
         }
     }
+
+    @Test
+    fun `a queued post keeps the sync indicator on and is never garbage collected`() {
+        val meta = OutboxKindCatalog.metaFor(OutboxKind.CREATE_POST)
+
+        assertThat(meta.countsForSyncIndicator).isTrue()
+        assertThat(meta.terminalDisposable).isFalse()
+    }
 }

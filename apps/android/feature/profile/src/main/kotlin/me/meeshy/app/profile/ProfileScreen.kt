@@ -413,7 +413,7 @@ internal fun ProfileTimelineSection(timeline: StatsTimelinePresentation) {
  * [StatsTimelineBuilder], so this Composable only maps `0f..1f` heights to pixels.
  */
 @Composable
-private fun ActivitySparkline(
+internal fun ActivitySparkline(
     bars: List<TimelineBar>,
     color: Color,
     modifier: Modifier = Modifier,

@@ -117,4 +117,35 @@ class GameApiRoutesTest {
         assertThat(http.only.path).isEqualTo("/api/v1/me/game/season/steps/12/claim")
         assertThat(http.only.body).isEqualTo("""{"requestId":"req-12345678"}""")
     }
+
+    @Test
+    fun `ranger la vitrine met l ordre et son identifiant`() = runTest {
+        val http = RecordingHttp()
+
+        game(http).setShowcaseOrder(me.meeshy.sdk.model.game.ShowcaseOrderRequest("req-12345678", listOf("a", "b")))
+
+        assertThat(http.only.method).isEqualTo("PUT")
+        assertThat(http.only.path).isEqualTo("/api/v1/me/game/showcase/order")
+        assertThat(http.only.body).isEqualTo("""{"requestId":"req-12345678","order":["a","b"]}""")
+    }
+
+    @Test
+    fun `le nom de joute se met et l alliance s invite puis s accepte et s abandonne sur le duo nomme`() = runTest {
+        val http = RecordingHttp()
+        val api = game(http)
+
+        api.setLeaguePseudonym(me.meeshy.sdk.model.game.LeaguePseudonymRequest("req-12345678", "Aube_7"))
+        api.inviteToDuo(me.meeshy.sdk.model.game.DuoInviteRequest("req-12345678", "u1"))
+        api.acceptDuo("duo1", GameWriteRequest("req-12345678"))
+        api.abandonDuo("duo1", GameWriteRequest("req-12345678"))
+
+        assertThat(http.requests.map { it.method to it.path }).containsExactly(
+            "PUT" to "/api/v1/me/game/league/pseudonym",
+            "POST" to "/api/v1/me/game/duo/invite",
+            "POST" to "/api/v1/me/game/duo/duo1/accept",
+            "POST" to "/api/v1/me/game/duo/duo1/abandon",
+        ).inOrder()
+        assertThat(http.requests[0].body).isEqualTo("""{"requestId":"req-12345678","pseudonym":"Aube_7"}""")
+        assertThat(http.requests[1].body).isEqualTo("""{"requestId":"req-12345678","friendId":"u1"}""")
+    }
 }

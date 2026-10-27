@@ -1,5 +1,7 @@
 package me.meeshy.app.chat
 
+import me.meeshy.sdk.model.ApiMessageAttachment
+import me.meeshy.sdk.model.conversationlist.ConversationRowMenuCapabilities
 import me.meeshy.sdk.model.composer.look.ComposerLookPerson
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
@@ -134,6 +136,11 @@ class ChatViewModel @Inject constructor(
     /** The header's call entry ([HeaderCallEntry.resolve], iOS parity): `null` hides every
      * call button (guest, global, broadcast…), `canStart == false` keeps only « Rejoindre ». */
     val callEntry: StateFlow<HeaderCallEntry?> = _callEntry.asStateFlow()
+
+    private val _mayInviteFriends = MutableStateFlow(false)
+
+    /** « Inviter mes amis » : le verdict de `ConversationActionPolicy.invite` (groupe modéré, publique, Global). */
+    val mayInviteFriends: StateFlow<Boolean> = _mayInviteFriends.asStateFlow()
 
     private val recipientCount = MutableStateFlow(0)
     private val typingCleanupJobs = mutableMapOf<String, Job>()
@@ -285,6 +292,10 @@ class ChatViewModel @Inject constructor(
                     viewerIsGuest = sessionRepository.currentUser.value?.isAnonymous == true,
                     directPeerUserId = conversation.otherParticipantUserId(currentUserId),
                 )
+                _mayInviteFriends.value = ConversationRowMenuCapabilities.make(
+                    conversation.copy(currentUserRole = conversation.currentUserRole ?: viewerRole),
+                    sessionRepository.currentUser.value,
+                ).invite
                 _state.update {
                     it.copy(
                         conversationTitle = conversation.displayTitle(currentUserId = currentUserId),
@@ -686,6 +697,10 @@ class ChatViewModel @Inject constructor(
      * completed file to a share sheet instead of opening it. */
     fun onFileAttachmentShare(messageId: String, attachmentId: String? = null) =
         fileDownload.share(messageId, attachmentId)
+
+    /** « Ouvrir » une pièce du hub média : le circuit du fil, pour un porteur que le fil n'a pas chargé. */
+    fun onHubFileOpen(messageId: String, attachment: ApiMessageAttachment) =
+        fileDownload.openProvided(messageId, attachment)
 
     fun dismissFileDownload() = fileDownload.dismiss()
 
