@@ -211,3 +211,27 @@ class ChatListItemsTest {
         assertThat(items.filterIsInstance<ChatListItem.UnreadSeparator>()).hasSize(1)
     }
 }
+
+class LayoutKeysTest {
+
+    private fun message(id: String, cmid: String? = null) =
+        ChatListItem.Message(bubble(id, "2026-10-27T10:00:00Z").copy(clientMessageId = cmid))
+
+    @Test
+    fun `a sent bubble keeps its layout key when the ack rekeys its id`() {
+        val pending = layoutKeys(listOf(message("cid_1", cmid = "cid_1")))
+        val acked = layoutKeys(listOf(message("srv9", cmid = "cid_1")))
+        assertThat(acked).isEqualTo(pending)
+    }
+
+    @Test
+    fun `a received bubble is keyed by its message id`() {
+        assertThat(layoutKeys(listOf(message("srv1")))).containsExactly("m-srv1")
+    }
+
+    @Test
+    fun `a repeated key is made unique so the lazy list never crashes`() {
+        val keys = layoutKeys(listOf(message("a", "c"), message("b", "c"), message("c")))
+        assertThat(keys.toSet()).hasSize(3)
+    }
+}

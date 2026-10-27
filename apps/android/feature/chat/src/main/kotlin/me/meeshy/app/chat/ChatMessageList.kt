@@ -23,7 +23,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.animation.core.FiniteAnimationSpec
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -60,6 +64,7 @@ internal fun ChatMessageList(
     // La pastille garde son dernier jour le temps de son fondu de sortie (iOS : 0,18 s).
     var lastPinnedDay by remember { mutableStateOf(pinnedDayMillis) }
     if (pinnedDayMillis != null) lastPinnedDay = pinnedDayMillis
+    val rowKeys = remember(renderedItems) { layoutKeys(renderedItems) }
     Box(modifier = modifier) {
         LazyColumn(
             state = listState,
@@ -73,8 +78,10 @@ internal fun ChatMessageList(
             // at the visual TOP — so the "loading older history" spinner
             // goes AFTER `items(renderedItems)` (not before, as it did
             // pre-flip) to land above the oldest currently-loaded message.
-            items(renderedItems, key = { it.key }) { item ->
-                itemContent(item)
+            itemsIndexed(renderedItems, key = { index, _ -> rowKeys[index] }) { _, item ->
+                Box(Modifier.fillMaxWidth().animateItem(fadeInSpec = ARRIVAL_SPEC, placementSpec = PLACEMENT_SPEC, fadeOutSpec = ARRIVAL_SPEC)) {
+                    itemContent(item)
+                }
             }
             if (isLoadingOlder) {
                 item(key = "loading-older") {
@@ -135,3 +142,9 @@ private fun Modifier.topEdgeVeil(statusBarHeight: Dp, bandHeight: Dp): Modifier 
                 blendMode = BlendMode.DstIn,
             )
         }
+
+/** L'arrivée d'une bulle : le fondu de 0,18 s des animations non modales d'iOS (`easeOut(0.18)`). */
+private val ARRIVAL_SPEC: FiniteAnimationSpec<Float> = tween(PINNED_DAY_FADE_MS, easing = LinearOutSlowInEasing)
+
+/** Les bulles voisines glissent à leur place avec la même durée, jamais d'un saut. */
+private val PLACEMENT_SPEC: FiniteAnimationSpec<IntOffset> = tween(PINNED_DAY_FADE_MS, easing = LinearOutSlowInEasing)

@@ -121,3 +121,25 @@ object MessageDayLabel {
     private fun String.firstLetterUppercased(locale: Locale): String =
         replaceFirstChar { if (it.isLowerCase()) it.titlecase(locale) else it.toString() }
 }
+
+/**
+ * Les clés de MISE EN PAGE de la liste, une par ligne : celles que `LazyColumn` suit pour animer
+ * l'arrivée et le déplacement des bulles. Une bulle envoyée est RECLÉE à l'accusé (`cid_…` → id
+ * serveur) : suivie par `messageId`, elle se retirerait puis se réinsérerait, donc clignoterait à
+ * chaque envoi. Son `clientMessageId` ne change jamais, il la désigne donc tout au long. Les
+ * recherches par `messageId` (saut, focale) gardent [ChatListItem.key]. Une clé répétée ferait
+ * planter la liste : la répétition reprend un suffixe.
+ */
+internal fun layoutKeys(items: List<ChatListItem>): List<String> {
+    val seen = HashSet<String>(items.size)
+    return items.map { item ->
+        val base = when (item) {
+            is ChatListItem.Message -> "m-" + (item.bubble.clientMessageId ?: item.bubble.messageId)
+            else -> item.key
+        }
+        var candidate = base
+        var n = 1
+        while (!seen.add(candidate)) candidate = "$base#${n++}"
+        candidate
+    }
+}
