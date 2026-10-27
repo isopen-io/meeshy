@@ -99,10 +99,16 @@ final class StoryCaptionOverlayWiringGuardTests: XCTestCase {
             }
             let bloc = Self.braceBlock(in: source, from: range.lowerBound)
             XCTAssertTrue(
-                bloc.contains("isCaptionExpanded = false"),
+                bloc.contains("storyPositionDidChange()"),
                 "changer de \(axe) doit replier la légende — sans quoi la lecture gèle sur la story suivante (#4474)"
             )
         }
+        let lifecycle = try Self.strippedSource(at: "Meeshy/Features/Main/Views/StoryViewerView+Lifecycle.swift")
+        guard let shared = lifecycle.range(of: "func storyPositionDidChange() {") else {
+            throw GuardIsBlind(description: "`storyPositionDidChange()` introuvable")
+        }
+        XCTAssertTrue(Self.braceBlock(in: lifecycle, from: shared.lowerBound).contains("isCaptionExpanded = false"),
+                      "le changement de story replie la légende (#4474)")
     }
 
     /// **La story REFUSE le voile du composant** (directive porteur 2026-09-02).

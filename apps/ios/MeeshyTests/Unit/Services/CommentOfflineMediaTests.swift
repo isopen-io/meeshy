@@ -327,7 +327,7 @@ final class CommentOfflineMediaWiringGuardTests: XCTestCase {
                       "Le fil partagé re-téléverserait ce que l'envoi direct a déjà monté.")
         for host in ["Features/Main/Views/FeedCommentsSheet.swift",
                      "Features/Main/ViewModels/PostDetailViewModel+CommentSend.swift",
-                     "Features/Main/Views/StoryViewerView+Content.swift"] {
+                     "Features/Main/Views/StoryCommentSession.swift"] {
             let code = try source(host)
             XCTAssertTrue(code.contains(".deliver(payload, media: "),
                           "\(host) n'envoie pas par le fil partagé (#13133).")

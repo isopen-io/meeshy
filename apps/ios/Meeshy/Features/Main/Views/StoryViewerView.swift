@@ -388,11 +388,6 @@ struct StoryViewerView: View {
         .adaptiveOnChange(of: StoryViewerPosition.shapes(of: groups)) { old, new in reanchorPosition(from: old, to: new) }
         .adaptiveOnChange(of: currentStoryIndex) { oldValue, _ in
             guard !isReanchoringSameStory else { return }
-            // **La légende se replie à CHAQUE changement de story.** Laissée
-            // dépliée, elle garde `shouldPauseTimer` vrai sur la story SUIVANTE
-            // — qui ne repart alors jamais. Une pause dont la cause a disparu
-            // de l'écran est un gel, pas une pause (#4474).
-            isCaptionExpanded = false
             // Pas de haptic au changement de slide : ce onChange fire pour
             // TOUTE navigation (auto-advance compris) et doublait le tick du
             // point de geste — 2 à 3 vibrations par slide qui ralentissaient
@@ -411,11 +406,7 @@ struct StoryViewerView: View {
                     )
                 )
             }
-            skipUnplayableStoriesIfNeeded()
-            isContentReady = false
-            refreshPrefetchWindowAndTimer()
-            engagement.holdPostRoom(of: currentStory)
-            engagement.transition(to: currentStory)
+            storyPositionDidChange()
         }
         // Interstitiel d'identité inter-groupes — au-dessus du canvas ET des
         // contrôles (identité pleine pendant ~500 ms, tap droite/double-tap =
@@ -449,16 +440,7 @@ struct StoryViewerView: View {
         ))
         .adaptiveOnChange(of: currentGroupIndex) { oldValue, _ in
             guard !isReanchoringSameStory else { return }
-            // **La légende se replie à CHAQUE changement de story.** Laissée
-            // dépliée, elle garde `shouldPauseTimer` vrai sur la story SUIVANTE
-            // — qui ne repart alors jamais. Une pause dont la cause a disparu
-            // de l'écran est un gel, pas une pause (#4474).
-            isCaptionExpanded = false
-            skipUnplayableStoriesIfNeeded()
-            isContentReady = false
-            refreshPrefetchWindowAndTimer()
-            engagement.holdPostRoom(of: currentStory)
-            engagement.transition(to: currentStory)
+            storyPositionDidChange()
             presentGroupIntroIfNeeded()
             // APRÈS la décision d'interlude : si un interlude s'affiche, la
             // garde de `markCurrentViewed` bloque et c'est `dismissGroupIntro`
@@ -466,12 +448,6 @@ struct StoryViewerView: View {
             // story affichable) le nouveau groupe est visible tout de suite et
             // se marque ici. Point unique pour les switches de groupe.
             markCurrentViewed()
-        }
-        .onReceive(SocialSocketManager.shared.commentReactionAdded.receive(on: DispatchQueue.main)) { event in
-            commentSession.applyReaction(event)
-        }
-        .onReceive(SocialSocketManager.shared.commentReactionRemoved.receive(on: DispatchQueue.main)) { event in
-            commentSession.applyReaction(event)
         }
         // Realtime story reactions (it.23) : le `StoryViewModel` applique le delta
         // `story:reacted`/`story:unreacted` sur l'item (`storyGroups` @Published). On
@@ -487,23 +463,6 @@ struct StoryViewerView: View {
         // moved the visible count until the user swiped away and back.
         .adaptiveOnChange(of: currentStory?.commentCount) { _, newCount in
             commentSession.count = newCount ?? 0
-        }
-        // The counter mirror above keeps the number honest, but the comments
-        // OVERLAY itself (when open) never received the new comment's content —
-        // only a full close/reopen picked it up. Mirrors
-        // `PostDetailViewModel.subscribeToSocket`'s `commentAdded` sink.
-        .onReceive(SocialSocketManager.shared.commentAdded.receive(on: DispatchQueue.main)) { data in
-            commentSession.applyAdded(data, languages: resolvedViewerLanguageChain)
-        }
-        // Édition en temps réel : remplace la ligne EN PLACE dans l'overlay
-        // (contenu, effets, traductions régénérées) — idempotent par id.
-        .onReceive(SocialSocketManager.shared.commentUpdated.receive(on: DispatchQueue.main)) { data in
-            commentSession.applyUpdated(data, languages: resolvedViewerLanguageChain)
-        }
-        // Traduction de commentaire arrivée : pose `translatedContent` dans
-        // l'overlay si la langue est préférée (chaîne du Prisme du viewer).
-        .onReceive(SocialSocketManager.shared.commentTranslationUpdated.receive(on: DispatchQueue.main)) { data in
-            commentSession.applyTranslationUpdated(data, languages: resolvedViewerLanguageChain)
         }
     }
 

@@ -314,47 +314,17 @@ extension StoryViewerView {
     func sendComment(text: String, effectFlags: Int? = nil, parentId: String? = nil, pendingMedia: PendingCommentMedia? = nil, location: SharedPlace? = nil) {
         guard (!text.isEmpty || pendingMedia != nil), let story = currentStory else { return }
         EngagementTracker.shared.recordAction(.commented, surface: .storyViewer)
-
-        // La ligne optimiste est keyée par le cmid : envoyé au REST ET réutilisé
-        // par le repli outbox, il fait dédoublonner le serveur (MutationLog) et
-        // revient dans l'écho `comment:added` pour une réconciliation par id.
-        let currentUser = AuthManager.shared.currentUser
-        let tempCommentId = ClientMutationId.generate()
-        let language = composerLanguage
         let medias = [pendingMedia].compactMap { $0 }
-        commentSession.insertOptimistic(.optimistic(
-            id: tempCommentId, by: currentUser, content: text, parentId: parentId,
-            effectFlags: effectFlags, originalLanguage: language, media: medias.map(\.optimistic),
-            location: location,
-            fallbackName: String(localized: "story.tray.me", defaultValue: "Moi", bundle: .main)))
-
-        // La charge est bâtie UNE fois, avec son auteur relevé avant toute
-        // attente : l'envoi direct et la file portent la même (#9743).
-        let payload = CreateCommentPayload(
-            clientMutationId: tempCommentId, postId: story.id,
-            parentCommentId: parentId, content: text,
-            originalLanguage: language, authorId: currentUser?.id ?? "",
-            location: location, effectFlags: effectFlags,
-            mobileTranscription: pendingMedia?.mobileTranscription
-        )
+        let payload = commentSession.stage(StoryCommentDraft(
+            storyId: story.id, text: text, effectFlags: effectFlags, parentId: parentId,
+            media: medias, location: location, language: composerLanguage
+        ), author: AuthManager.shared.currentUser)
         Task {
             StoryInteractionService().noteComment(storyId: story.id)
-            switch await commentSession.thread.deliver(payload, media: medias, for: .story(story.id)) {
-            case .delivered:
-                break
-            case .entrusted:
-                observeStoryCommentOutcome(cmid: tempCommentId, tempId: tempCommentId, parentId: parentId)
-            case .refused(let cause):
-                commentSession.uncountRefused(storyId: story.id)
-                _ = DailyGestureLimitNotice.surface(cause)
-                returnRefusedStoryComment(storyId: story.id, text: text, medias: medias)
-            case .unqueued:
-                commentSession.uncountRefused(storyId: story.id)
+            if await !commentSession.deliver(payload, media: medias) {
                 returnRefusedStoryComment(storyId: story.id, text: text, medias: medias)
             }
         }
-
-        // Dismiss composer and give feedback
         DispatchQueue.main.async {
             HapticFeedback.success()
             self.dismissComposer()
@@ -394,31 +364,6 @@ extension StoryViewerView {
     ///   test ; sans cette entrée la garde n'est pas vérifiable. Production :
     ///   `nil`, sauf `dismissGroupIntro` qui passe `false` — à cet instant
     ///   l'interlude vient d'être retiré et la story est révélée.
-    /// Annule l'insert optimiste si l'outbox finit par abandonner ce
-    /// commentaire (le serveur le refuse durablement). Sans ça, une ligne
-    /// `temp_` resterait à l'écran pour toujours : l'écho `comment:added`
-    /// qu'elle attend n'arrivera jamais pour une mutation abandonnée.
-    /// Miroir de `FeedCommentsSheet.observeCreateCommentOutcome`.
-    private func observeStoryCommentOutcome(cmid: String, tempId: String, parentId: String?) {
-        Task { @MainActor in
-            let stream = await OfflineQueue.shared.outcomeStream(for: cmid)
-            for await event in stream {
-                if case .exhausted = event {
-                    commentSession.rollBack(id: tempId, parentId: parentId)
-                    await OfflineQueue.shared.cancelCreateComment(clientMutationId: cmid, ownerId: CommentPublisher.currentAccountId())
-                    FeedbackToastManager.shared.showError(
-                        // Clé du feed réutilisée : message identique, et le
-                        // catalogue est verrouillé à 100 % de couverture — une
-                        // clé jumelle serait sept traductions redondantes.
-                        String(localized: "feed.comments.send_error",
-                               defaultValue: "Erreur lors de l'envoi du commentaire",
-                               bundle: .main)
-                    )
-                }
-            }
-        }
-    }
-
     func markCurrentViewed(isIntroVisible: Bool? = nil) {
         // L'interlude d'identité est OPAQUE et occupe tout l'écran : tant qu'il
         // est affiché, la story n'a rien montré. Marquer ici gonflait le

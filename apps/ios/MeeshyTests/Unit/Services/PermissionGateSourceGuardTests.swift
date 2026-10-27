@@ -538,9 +538,9 @@ final class PermissionGateSourceGuardTests: XCTestCase {
     }
 
     func test_storyViewer_submitComment_declaresTheComposerLanguageOnBothPaths() throws {
-        let src = try source("Meeshy/Features/Main/Views/StoryViewerView+Content.swift")
+        let src = try source("Meeshy/Features/Main/Views/StoryCommentSession.swift")
 
-        let offline = try body(from: "let payload = CreateCommentPayload(",
+        let offline = try body(from: "return CreateCommentPayload(",
                                to: "try await CommentMediaDelivery.entrust(", in: src)
         XCTAssertTrue(offline.contains("originalLanguage: language"),
                       "Le repli hors-ligne d'un commentaire de story doit porter la langue déclarée.")
@@ -549,7 +549,7 @@ final class PermissionGateSourceGuardTests: XCTestCase {
         // ENTIER était satisfaite par le repli qu'on vient de vérifier — la
         // garde restait VERTE sur un chemin direct neutralisé, donc elle
         // n'assurait rien. Une garde de source ne vaut que par sa fenêtre.
-        let direct = try body(from: "let payload = CreateCommentPayload(",
+        let direct = try body(from: "return CreateCommentPayload(",
                               to: "CommentPublisher.live.publish(", in: src)
         XCTAssertTrue(direct.contains("originalLanguage: language,"),
                       "Le chemin direct de la story doit déclarer la même langue que son repli.")

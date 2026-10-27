@@ -238,8 +238,8 @@ final class CommentPublisherIsTheOnlyDoorGuardTests: XCTestCase {
     }
 
     func test_theStory_sendsThroughTheSharedThread() throws {
-        XCTAssertTrue(try source("Features/Main/Views/StoryViewerView+Content.swift")
-            .contains("commentSession.thread.deliver(payload, media: medias, for: .story(story.id))"))
+        XCTAssertTrue(try source("Features/Main/Views/StoryCommentSession.swift")
+            .contains("thread.deliver(payload, media: media, for: .story(payload.postId))"))
     }
 
     func test_theNotificationReply_sendsThroughThePublisher() throws {

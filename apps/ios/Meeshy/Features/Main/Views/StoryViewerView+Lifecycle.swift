@@ -64,6 +64,7 @@ extension StoryViewerView {
             appear = StoryViewerAppearance(scale: 1.0, cornerRadius: 0)
         }
         triggerInitialActionIfNeeded()
+        commentSession.observeRealtime(languages: { resolvedViewerLanguageChain })
         engagement.holdPostRoom(of: currentStory)
         if let story = currentStory {
             EngagementTracker.shared.begin(postId: story.id, contentType: .story, surface: .storyViewer)
@@ -98,6 +99,19 @@ extension StoryViewerView {
             NotificationToastManager.shared.onPostClosed(story.id)
         }
         Task { await EngagementTracker.shared.end(surface: .storyViewer) }
+    }
+
+    /// A new story is on screen, by slide or by group. **The caption folds back
+    /// at EVERY change**: left open, it keeps `shouldPauseTimer` true on the
+    /// NEXT story — which then never starts. A pause whose cause left the
+    /// screen is a freeze, not a pause (#4474).
+    func storyPositionDidChange() {
+        isCaptionExpanded = false
+        skipUnplayableStoriesIfNeeded()
+        isContentReady = false
+        refreshPrefetchWindowAndTimer()
+        engagement.holdPostRoom(of: currentStory)
+        engagement.transition(to: currentStory)
     }
 
     /// Avance la lecture au-delà des slides qu'on ne peut pas donner à voir.

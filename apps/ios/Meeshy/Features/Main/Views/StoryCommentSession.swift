@@ -49,6 +49,7 @@ final class StoryCommentSession: ObservableObject {
     private let deliverHeart: @MainActor (Bool, String, String) async -> Bool
     private let staleZeroDwell: Duration
     private var threadChanges: AnyCancellable?
+    private var realtime: Set<AnyCancellable> = []
 
     init(
         postService: PostServiceProviding = PostService.shared,
@@ -265,6 +266,95 @@ final class StoryCommentSession: ObservableObject {
         count = result.commentCount
     }
 
+    /// Stages an outgoing comment: its optimistic row, keyed by the cmid that
+    /// the REST call and the queue both carry, so the server deduplicates
+    /// (MutationLog) and the `comment:added` echo reconciles by id. The payload
+    /// is built ONCE with its author, read before any wait: the direct send and
+    /// the queue carry the same (#9743).
+    func stage(_ draft: StoryCommentDraft, author: MeeshyUser?) -> CreateCommentPayload {
+        let cmid = ClientMutationId.generate()
+        let language = draft.language
+        insertOptimistic(.optimistic(
+            id: cmid, by: author, content: draft.text, parentId: draft.parentId,
+            effectFlags: draft.effectFlags, originalLanguage: language, media: draft.media.map(\.optimistic),
+            location: draft.location,
+            fallbackName: String(localized: "story.tray.me", defaultValue: "Moi", bundle: .main)))
+        return CreateCommentPayload(
+            clientMutationId: cmid, postId: draft.storyId,
+            parentCommentId: draft.parentId, content: draft.text,
+            originalLanguage: language, authorId: author?.id ?? "",
+            location: draft.location, effectFlags: draft.effectFlags,
+            mobileTranscription: draft.media.first?.mobileTranscription
+        )
+    }
+
+    /// Sends a staged comment through the shared thread. `false`: nothing
+    /// carried it — its row and its count are gone, and the reader gives it
+    /// back to the composer.
+    func deliver(_ payload: CreateCommentPayload, media: [PendingCommentMedia]) async -> Bool {
+        switch await thread.deliver(payload, media: media, for: .story(payload.postId)) {
+        case .delivered:
+            return true
+        case .entrusted:
+            observeQueuedOutcome(of: payload)
+            return true
+        case .refused(let cause):
+            uncountRefused(storyId: payload.postId)
+            _ = DailyGestureLimitNotice.surface(cause)
+            return false
+        case .unqueued:
+            uncountRefused(storyId: payload.postId)
+            return false
+        }
+    }
+
+    /// Withdraws the optimistic row if the queue finally abandons the comment
+    /// (a lasting server refusal): the echo it waits for would never come.
+    /// Mirror of `FeedCommentsSheet.observeCreateCommentOutcome`.
+    private func observeQueuedOutcome(of payload: CreateCommentPayload) {
+        let cmid = payload.clientMutationId
+        let parentId = payload.parentCommentId
+        Task { @MainActor [weak self] in
+            let stream = await OfflineQueue.shared.outcomeStream(for: cmid)
+            for await event in stream {
+                guard case .exhausted = event else { continue }
+                self?.rollBack(id: cmid, parentId: parentId)
+                await OfflineQueue.shared.cancelCreateComment(clientMutationId: cmid, ownerId: CommentPublisher.currentAccountId())
+                // The feed key: same message, and the catalogue is locked at full coverage.
+                FeedbackToastManager.shared.showError(
+                    String(localized: "feed.comments.send_error",
+                           defaultValue: "Erreur lors de l'envoi du commentaire",
+                           bundle: .main)
+                )
+            }
+        }
+    }
+
+    // MARK: - Realtime
+
+    /// Subscribes the overlay to the socket once: hearts, added, edited and
+    /// translated comments, resolved in the reader's Prism (`languages`, read
+    /// at each event so a language override applies at once).
+    func observeRealtime(
+        socket: SocialSocketProviding = SocialSocketManager.shared,
+        languages: @escaping @MainActor () -> [String]
+    ) {
+        guard realtime.isEmpty else { return }
+        socket.commentReactionAdded.merge(with: socket.commentReactionRemoved)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] in self?.applyReaction($0) }
+            .store(in: &realtime)
+        socket.commentAdded.receive(on: DispatchQueue.main)
+            .sink { [weak self] in self?.applyAdded($0, languages: languages()) }
+            .store(in: &realtime)
+        socket.commentUpdated.receive(on: DispatchQueue.main)
+            .sink { [weak self] in self?.applyUpdated($0, languages: languages()) }
+            .store(in: &realtime)
+        socket.commentTranslationUpdated.receive(on: DispatchQueue.main)
+            .sink { [weak self] in self?.applyTranslationUpdated($0, languages: languages()) }
+            .store(in: &realtime)
+    }
+
     /// The pure core of the rollback: the failed row (root, or a reply routed
     /// back out of its parent's count) goes, and the count drops exactly once,
     /// symmetrically with `insertOptimistic`.
@@ -279,4 +369,15 @@ final class StoryCommentSession: ObservableObject {
             .withdrawingOptimistic(id, parentId: parentId).thread
         return (withdrawn.roots, withdrawn.replies, max(0, commentCount - 1))
     }
+}
+
+/// A comment the reader's composer sends on the story on screen.
+struct StoryCommentDraft {
+    let storyId: String
+    let text: String
+    let effectFlags: Int?
+    let parentId: String?
+    let media: [PendingCommentMedia]
+    let location: SharedPlace?
+    let language: String
 }

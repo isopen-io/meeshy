@@ -15,13 +15,15 @@ final class StoryCommentSessionTests: XCTestCase {
         var heartDelivered = true
     }
 
-    private func makeSUT() -> (StoryCommentSession, MockPostService, Fakes) {
+    private func makeSUT(
+        transport: CommentSendTransport = CommentSendTransport(publish: { _, _ in nil }, entrust: { _, _, _ in })
+    ) -> (StoryCommentSession, MockPostService, Fakes) {
         let mock = MockPostService()
         let fakes = Fakes()
         let sut = StoryCommentSession(
             postService: mock,
             store: CommentThreadStore(load: { fakes.cached[$0] ?? .empty }, save: { _, _ in }),
-            transport: CommentSendTransport(publish: { _, _ in nil }, entrust: { _, _, _ in }),
+            transport: transport,
             preferredLanguages: { ["fr"] },
             deliverHeart: { wasLiked, commentId, postId in
                 fakes.hearts.append((wasLiked, commentId, postId))
@@ -265,5 +267,91 @@ final class StoryCommentSessionTests: XCTestCase {
 
         XCTAssertTrue(sut.thread.roots.isEmpty)
         XCTAssertEqual(sut.count, 0)
+    }
+
+    // MARK: - Sending a comment
+
+    private static func draft(_ text: String = "bravo", parentId: String? = nil) -> StoryCommentDraft {
+        StoryCommentDraft(storyId: "s1", text: text, effectFlags: 4, parentId: parentId,
+                          media: [], location: nil, language: "de")
+    }
+
+    private struct Offline: Error {}
+
+    func test_stage_appendsTheOptimisticRow_countsIt_andKeysItByTheCmidOfThePayload() {
+        let (sut, _, fakes) = makeSUT()
+        sut.begin(storyId: "s1", payloadCount: 2, viewing: { fakes.viewed })
+
+        let payload = sut.stage(Self.draft(), author: nil)
+
+        XCTAssertEqual(sut.thread.roots.map(\.id), [payload.clientMutationId])
+        XCTAssertEqual(sut.thread.roots.first?.originalLanguage, "de", "the row carries the declared language")
+        XCTAssertEqual(sut.count, 3)
+        XCTAssertEqual(payload.postId, "s1")
+        XCTAssertEqual(payload.content, "bravo")
+        XCTAssertEqual(payload.originalLanguage, "de", "direct send and queue declare the composer language")
+        XCTAssertEqual(payload.effectFlags, 4)
+        XCTAssertEqual(payload.authorId, "")
+    }
+
+    func test_deliver_delivered_keepsTheRowAndTheCount() async {
+        let (sut, _, fakes) = makeSUT()
+        sut.begin(storyId: "s1", payloadCount: 0, viewing: { fakes.viewed })
+        let payload = sut.stage(Self.draft(), author: nil)
+
+        let carried = await sut.deliver(payload, media: [])
+
+        XCTAssertTrue(carried)
+        XCTAssertEqual(sut.count, 1)
+        XCTAssertEqual(sut.thread.roots.count, 1)
+    }
+
+    func test_deliver_nothingCarriesIt_withdrawsTheRow_uncountsIt_andGivesItBack() async {
+        let (sut, _, fakes) = makeSUT(transport: CommentSendTransport(
+            publish: { _, _ in throw Offline() }, entrust: { _, _, _ in throw Offline() }))
+        sut.begin(storyId: "s1", payloadCount: 0, viewing: { fakes.viewed })
+        let payload = sut.stage(Self.draft(), author: nil)
+
+        let carried = await sut.deliver(payload, media: [])
+
+        XCTAssertFalse(carried, "the view gives the comment back to the composer")
+        XCTAssertEqual(sut.count, 0)
+        XCTAssertTrue(sut.thread.roots.isEmpty)
+    }
+
+    func test_deliver_entrustedToTheQueue_keepsTheRowForTheEcho() async {
+        let (sut, _, fakes) = makeSUT(transport: CommentSendTransport(
+            publish: { _, _ in throw Offline() }, entrust: { _, _, _ in }))
+        sut.begin(storyId: "s1", payloadCount: 0, viewing: { fakes.viewed })
+        let payload = sut.stage(Self.draft(), author: nil)
+
+        let carried = await sut.deliver(payload, media: [])
+
+        XCTAssertTrue(carried)
+        XCTAssertEqual(sut.count, 1)
+    }
+
+    // MARK: - Realtime
+
+    func test_observeRealtime_appliesTheSocketCommentsAndHeartsOfTheViewedStory() async {
+        let (sut, _, fakes) = makeSUT()
+        let socket = MockSocialSocket()
+        sut.begin(storyId: "s1", payloadCount: 1, viewing: { fakes.viewed })
+        sut.observeRealtime(socket: socket, languages: { ["fr"] })
+        let added: SocketCommentAddedData = JSONStub.decode("""
+        {"postId":"s1","comment":{"id":"c-new","content":"Salut","createdAt":"2026-01-15T12:00:00.000Z","author":{"id":"other","username":"other"}},"commentCount":2}
+        """)
+        let heart: SocketCommentReactionUpdateEvent = JSONStub.decode("""
+        {"commentId":"c-new","postId":"s1","userId":"u9","emoji":"\u{2764}\u{FE0F}","action":"added","aggregation":{"emoji":"\u{2764}\u{FE0F}","count":2,"userIds":["u9"],"hasCurrentUser":false}}
+        """)
+
+        socket.commentAdded.send(added)
+        await settle()
+        socket.commentReactionAdded.send(heart)
+        await settle()
+
+        XCTAssertEqual(sut.thread.roots.map(\.id), ["c-new"])
+        XCTAssertEqual(sut.thread.roots.first?.likes, 2)
+        XCTAssertEqual(sut.count, 2)
     }
 }
