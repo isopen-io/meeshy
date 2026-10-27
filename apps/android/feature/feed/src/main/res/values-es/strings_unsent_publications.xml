@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="feed_notice_publish_queued">Tu publicación se está enviando</string>
+    <string name="feed_unsent_title">Publicaciones no enviadas</string>
+    <plurals name="feed_unsent_count">
+        <item quantity="one">%1$d publicación no enviada</item>
+        <item quantity="many">%1$d publicaciones no enviadas</item>
+        <item quantity="other">%1$d publicaciones no enviadas</item>
+    </plurals>
+    <string name="feed_unsent_open">Ver las publicaciones no enviadas</string>
+    <string name="feed_unsent_sending">Enviando…</string>
+    <string name="feed_unsent_failed">No se pudo enviar</string>
+    <string name="feed_unsent_retry">Reintentar</string>
+    <string name="feed_unsent_reopen">Reabrir</string>
+    <string name="feed_unsent_delete">Eliminar</string>
+    <string name="feed_unsent_delete_confirm_title">¿Eliminar esta publicación?</string>
+    <string name="feed_unsent_delete_confirm_body">Se eliminará de este dispositivo junto con sus archivos.</string>
+    <string name="feed_unsent_cancel">Cancelar</string>
+    <string name="feed_unsent_kind_post">Publicación</string>
+    <string name="feed_unsent_kind_reel">Reel</string>
+    <string name="feed_unsent_kind_story">Historia</string>
+    <plurals name="feed_unsent_media_count">
+        <item quantity="one">%1$d archivo</item>
+        <item quantity="many">%1$d archivos</item>
+        <item quantity="other">%1$d archivos</item>
+    </plurals>
+</resources>

@@ -582,4 +582,32 @@ class StoryComposerDraftSnapshotTest {
         val b = a.copy(slides = a.slides.map { it.copy(stickers = listOf(sticker())) })
         assertThat(a.sameContentAs(b)).isFalse()
     }
+
+    @Test
+    fun `a draft stored by a build that did not await publications decodes as a draft being composed`() {
+        val legacy = """{"slides":[{"id":"s1","text":"avant"}],"selectedId":"s1","visibility":"PUBLIC"}"""
+
+        val decoded = json.decodeFromString(StoryComposerDraftSnapshot.serializer(), legacy)
+
+        assertThat(decoded.awaitingPublication).isEmpty()
+        assertThat(decoded.isAwaitingPublication).isFalse()
+        assertThat(decoded.isWorthRestoring).isTrue()
+    }
+
+    @Test
+    fun `a draft awaiting its stories round-trips the rows it waits for`() {
+        val awaiting = StoryComposerDraftSnapshot(
+            slides = listOf(StoryDraftSlideSnapshot(id = "s1", text = "en route")),
+            selectedId = "s1",
+            awaitingPublication = listOf("cmid_a", "cmid_b"),
+        )
+
+        val decoded = json.decodeFromString(
+            StoryComposerDraftSnapshot.serializer(),
+            json.encodeToString(StoryComposerDraftSnapshot.serializer(), awaiting),
+        )
+
+        assertThat(decoded.awaitingPublication).containsExactly("cmid_a", "cmid_b").inOrder()
+        assertThat(decoded.isAwaitingPublication).isTrue()
+    }
 }

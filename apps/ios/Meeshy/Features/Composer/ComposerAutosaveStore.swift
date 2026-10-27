@@ -17,6 +17,10 @@ nonisolated protocol ComposerAutosaveProviding: AnyObject, Sendable {
     func delete(account: ComposerAutosaveAccount, slot: ComposerAutosaveSlot)
     func deleteAll()
     func waitForPendingWrites()
+    /// Déplace un tiroir ENTIER (instantané et médias), en remplaçant la cible.
+    func move(account: ComposerAutosaveAccount, from: ComposerAutosaveSlot, to: ComposerAutosaveSlot)
+    /// Les tiroirs de publication acceptée encore présents sous ce compte.
+    func publicationSlots(account: ComposerAutosaveAccount) -> [ComposerAutosaveSlot]
 }
 
 /// `Application Support/ComposerAutosave/<compte+environnement>/<slot>/` :
@@ -79,6 +83,32 @@ nonisolated final class ComposerAutosaveStore: ComposerAutosaveProviding, @unche
         queue.async { [self] in
             writtenBitmaps.removeAll()
             try? fileManager.removeItem(at: root)
+        }
+    }
+
+    func move(account: ComposerAutosaveAccount, from: ComposerAutosaveSlot, to: ComposerAutosaveSlot) {
+        queue.async { [self] in
+            let source = directory(account: account, slot: from)
+            let cible = directory(account: account, slot: to)
+            guard fileManager.fileExists(atPath: source.path) else { return }
+            forgetBitmaps(under: source)
+            forgetBitmaps(under: cible)
+            try? fileManager.removeItem(at: cible)
+            do {
+                try fileManager.moveItem(at: source, to: cible)
+            } catch {
+                logger.error("autosave: tiroir non déplacé — \(error.localizedDescription, privacy: .public)")
+            }
+        }
+    }
+
+    func publicationSlots(account: ComposerAutosaveAccount) -> [ComposerAutosaveSlot] {
+        queue.sync { [self] in
+            let compte = root.appendingPathComponent(account.directoryName, isDirectory: true)
+            let noms = (try? fileManager.contentsOfDirectory(atPath: compte.path)) ?? []
+            return noms.filter { $0.hasPrefix(ComposerAutosaveSlot.publicationPrefix) }
+                .sorted()
+                .map(ComposerAutosaveSlot.init(directoryName:))
         }
     }
 

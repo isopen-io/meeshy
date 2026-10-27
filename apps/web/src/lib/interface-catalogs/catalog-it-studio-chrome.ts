@@ -147,6 +147,10 @@ const itStudioChrome = {
   'story.studio.edit.saving': 'Salvataggio…',
   'story.studio.edit.cancel': 'Annulla le modifiche',
   'story.studio.publish.as.storyAndReel': 'Pubblica storia e reel',
+  'story.studio.unsent': 'Pubblicazione non inviata.',
+  'story.studio.unsent.retry': 'Riprova',
+  'story.studio.unsent.discard': 'Elimina',
+  'story.studio.volatile': 'Questo dispositivo non conserva i tuoi media: non ricaricare la pagina prima di pubblicare.',
 } satisfies StudioChromeCatalogSlice;
 
 export default itStudioChrome;

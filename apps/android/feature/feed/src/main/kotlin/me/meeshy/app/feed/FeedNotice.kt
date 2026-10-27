@@ -17,5 +17,6 @@ enum class FeedNotice(val isError: Boolean) {
     REPORTED(false),
     PUBLISH_FAILED(true),
     PUBLISHED(false),
+    PUBLISH_QUEUED(false),
     TRANSLATION_FAILED(true),
 }

@@ -98,7 +98,7 @@ data class StoryComposerUiState(
      * off-screen slide, or media/elements on an off-screen slide, all count.
      */
     val canPublish: Boolean
-        get() = (deck.hasText || deck.hasMedia || deck.hasTextElements || deck.hasStickers || deck.hasDrawing) &&
+        get() = (deck.hasText || deck.hasMedia || deck.hasTextElements || deck.hasStickers || deck.hasDrawing || deck.hasAudio) &&
             deck.isWithinTextLimit(StoryComposerDraft.MAX_CHARS) &&
             deck.isWithinMediaLimit() &&
             deck.isWithinTextElementLimit() &&

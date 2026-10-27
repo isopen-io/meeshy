@@ -100,6 +100,9 @@ data class StorySlideDeck(
     /** At least one slide carries a freehand-drawn stroke. */
     val hasDrawing: Boolean get() = slides.any { it.strokes.isNotEmpty() }
 
+    /** At least one slide carries a sound track (a borrowed or captured sound alone publishes). */
+    val hasAudio: Boolean get() = slides.any { it.audio.isNotEmpty() }
+
     /**
      * The slides that would each become a published story — those carrying real
      * content (non-blank text **or** attached media **or** a publishable text

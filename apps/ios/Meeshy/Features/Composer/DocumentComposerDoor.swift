@@ -322,7 +322,7 @@ struct DocumentComposerDoor: View {
         // story se composant désormais sur cette surface (routage 2026-09-01),
         // une déduction sur les mimes l'aurait publiée en POST : le composer
         // aurait montré des unités d'histoire et envoyé un billet.
-        await viewModel.publish(PublishIntent.document(
+        let intent = PublishIntent.document(
             localMedia: draft.localMedia,
             declaredType: draft.format.postType,
             forcePlainPost: draft.forcePlainPost,
@@ -346,7 +346,8 @@ struct DocumentComposerDoor: View {
             // que le canvas juste au-dessus : la porte jumelle passe la même
             // valeur au même rang.
             allowSoundExtraction: draft.allowSoundExtraction
-        ))
+        )
+        await viewModel.publish(intent)
 
         let issue = ComposerDocumentSendOutcome.reported(
             succeeded: viewModel.publishSuccess,
@@ -354,6 +355,7 @@ struct DocumentComposerDoor: View {
         )
         guard issue.isAccepted else { return refuse() }
 
+        ComposerPublicationHandoff.record(intent.clientMutationId)
         HapticFeedback.success()
         return true
     }

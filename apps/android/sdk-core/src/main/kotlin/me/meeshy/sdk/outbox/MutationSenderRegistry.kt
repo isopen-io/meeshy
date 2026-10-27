@@ -32,7 +32,8 @@ public class MutationSenderRegistry @Inject constructor(
 
     /**
      * A drainer over [outbox] wired with every registered sender, the exhaustion
-     * rollbacks, and the upload write-backs the handlers declare.
+     * rollbacks, and the upload write-backs the handlers declare — each dependent rewritten by
+     * the write-back of ITS kind, never by whichever payload shape happens to decode it.
      */
     public fun drainerFor(outbox: OutboxRepository): OutboxDrainer =
         OutboxDrainer(
@@ -40,9 +41,9 @@ public class MutationSenderRegistry @Inject constructor(
             senders = handlers,
             currentOwner = ownerSource?.let { source -> { source.currentOwnerId() } },
             onExhausted = { row -> this.onExhausted(row) },
-            graftProducedId = OutboxPayloadGrafts.firstOf(
-                *handlers.values.mapNotNull { it.payloadGraft }.toTypedArray(),
-            ),
+            graftProducedId = { dependent, placeholder, realId ->
+                dependent.kindEnum?.let { handlers[it] }?.payloadGraft?.invoke(dependent.payload, placeholder, realId)
+            },
             plaintextAdmission = plaintextAdmission ?: OutboxPlaintextAdmission.AdmitAll,
         )
 

@@ -152,6 +152,10 @@ const frStudioChrome = {
   'story.studio.edit.cancel': 'Abandonner la modification',
   // « Aussi en réel » (#9476) — la capsule nomme les DEUX formats qui partent.
   'story.studio.publish.as.storyAndReel': 'Publier la story et le réel',
+  'story.studio.unsent': 'Publication non envoyée.',
+  'story.studio.unsent.retry': 'Réessayer',
+  'story.studio.unsent.discard': 'Supprimer',
+  'story.studio.volatile': 'Cet appareil ne garde pas les médias : ne rechargez pas la page avant la publication.',
 } as const;
 
 export type StudioChromeCatalogSlice = Readonly<Record<keyof typeof frStudioChrome, string>>;

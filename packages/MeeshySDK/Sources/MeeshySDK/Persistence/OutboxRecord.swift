@@ -106,6 +106,19 @@ extension OutboxKind {
         }
     }
 
+    /// **Une publication non envoyée attend son AUTEUR, jamais une horloge**
+    /// (#13415, demande du porteur). Elle quitte l'appareil à la
+    /// confirmation du serveur ou par le geste explicite de l'auteur
+    /// (« Supprimer » dans « Publications non envoyées ») — aucune purge par
+    /// ancienneté ne la touche.
+    public var isKeptUntilTheAuthorDecides: Bool {
+        self == .createPost
+    }
+
+    public static var keptUntilTheAuthorDecides: [String] {
+        allCases.filter(\.isKeptUntilTheAuthorDecides).map(\.rawValue)
+    }
+
     /// **Une ligne TERMINALE de ce genre peut-elle être jetée sans rien perdre ?**
     /// (#5965)
     ///
