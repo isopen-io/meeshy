@@ -2216,7 +2216,7 @@ describe('MeeshySocketIOManager', () => {
         friendIds.map((id) => ({ senderId: id, receiverId: 'subject-side' })),
       );
       prisma.user.findMany.mockImplementation(async (args: any) =>
-        args?.where?.role ? adminIds.map((id: string) => ({ id })) : blockerIds.map((id: string) => ({ id })),
+        args?.where?.role ? adminIds.map((id: string) => ({ id })) : blockerIds.filter((id: string) => !args?.where?.id?.in || args.where.id.in.includes(id)).map((id: string) => ({ id })),
       );
     }
 
@@ -2456,14 +2456,16 @@ describe('MeeshySocketIOManager', () => {
     // administrateurs, un cran plus strict que `resolveForTargets`.
     // -----------------------------------------------------------------------
 
-    it("exclut le socket d'un AMI qui a bloqué le sujet", async () => {
+    // #13298 — l'AMI bloqueur n'est plus ADRESSÉ (`acceptedFriendIds`) ; `.except()` reste.
+    it("n'adresse plus un AMI qui a bloqué le sujet, et exclut toujours son socket", async () => {
       stubSubject();
-      stubPresenceRelations({ friendIds: ['user-blocker'], blockerIds: ['user-blocker'] });
+      stubPresenceRelations({ friendIds: ['user-blocker', 'user-friend'], blockerIds: ['user-blocker'] });
       (manager as any).userSockets.set('user-blocker', new Set(['sock-blocker']));
 
       await (manager as any)._broadcastUserStatus('user-subject', true, false);
 
-      expect(rec.rooms()).toContain(ROOMS.user('user-blocker'));
+      expect(rec.rooms()).not.toContain(ROOMS.user('user-blocker'));
+      expect(rec.rooms()).toContain(ROOMS.user('user-friend'));
       expect(rec.emissions.every((e) => e.excluded.includes('sock-blocker'))).toBe(true);
     });
 
@@ -2498,8 +2500,9 @@ describe('MeeshySocketIOManager', () => {
         where?: { id?: unknown };
       }>;
       expect(userFindManyArgs.length).toBeGreaterThan(0);
+      // Une borne `id: { in }` ne porte que sur les AMIS (blocage, #13298), jamais sur la population.
       for (const args of userFindManyArgs) {
-        expect(args.where?.id).toBeUndefined();
+        if (args.where?.id !== undefined) expect(args.where.id).toEqual({ in: ['user-friend'] });
       }
       // L'amitié se lit sur le seul sujet — jamais sur une liste de candidats.
       expect(prisma.friendRequest.findMany).toHaveBeenCalledWith(

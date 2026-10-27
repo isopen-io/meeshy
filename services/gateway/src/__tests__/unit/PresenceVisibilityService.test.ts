@@ -211,6 +211,12 @@ describe('PresenceVisibilityService.acceptedFriendIds', () => {
   function svcWithFriendships(rows: Array<{ senderId: string; receiverId: string }>) {
     const prisma = {
       friendRequest: { findMany: jest.fn<any>().mockResolvedValue(rows) },
+      // #13298 — la relation de blocage, vide ici (témoins dédiés :
+      // `presence-blocked-audience-13298.test.ts`).
+      user: {
+        findMany: jest.fn<any>().mockResolvedValue([]),
+        findUnique: jest.fn<any>().mockResolvedValue({ blockedUserIds: [] }),
+      },
     } as any;
     return { prisma, service: new PresenceVisibilityService(prisma, {} as any) };
   }

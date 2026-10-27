@@ -132,7 +132,7 @@ function mockFn<T>(v: T | Error): jest.Mock {
 function makePrisma(opts: PrismaOpts = {}) {
   return {
     user: {
-      findUnique: mockFn(opt(opts.userFindUnique, DB_USER)),
+      findUnique: mockFn(opt(opts.userFindUnique, DB_USER)), findMany: jest.fn(async () => []), // #13298 blocage
     },
     friendRequest: {
       findFirst: mockFn(opt(opts.friendRequestFindFirst, null)),

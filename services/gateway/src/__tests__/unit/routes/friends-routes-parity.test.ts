@@ -100,7 +100,7 @@ const DB_CONVERSATION = {
 
 function makePrisma() {
   return {
-    user: { findUnique: jest.fn().mockResolvedValue(DB_USER) },
+    user: { findUnique: jest.fn().mockResolvedValue(DB_USER), findMany: jest.fn().mockResolvedValue([]) },
     friendRequest: {
       findFirst: jest.fn().mockResolvedValue(null),
       // Même distinction qu'ailleurs dans le dépôt (#4162) : `select` → lecture

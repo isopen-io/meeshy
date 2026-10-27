@@ -1388,8 +1388,8 @@ export class MeeshySocketIOManager {
   /**
    * Applique la visibilité de présence de CHAQUE contact pour CE lecteur —
    * amitié acceptée, rôle du lecteur, blocage bidirectionnel et préférences,
-   * tenus ensemble par `PresenceVisibilityService.resolveForTargets`, la même
-   * porte que `GET /users/presence`.
+   * tenus ensemble par `PresenceVisibilityService.resolveForPresenceEvent` (porte
+   * de `GET /users/presence` + blocage plus fort que le privilège ADMIN, #13298).
    *
    * Directive produit (2026-08-25) : partager une conversation n'autorise plus
    * rien. Le prédécesseur (`_applyPresencePrefs`) n'appliquait que les
@@ -1412,7 +1412,7 @@ export class MeeshySocketIOManager {
     users: { userId: string; username: string; isOnline: boolean; lastActiveAt: Date | null }[],
   ): Promise<{ userId: string; username: string; isOnline: boolean; lastActiveAt: Date | null }[]> {
     if (users.length === 0) return users;
-    const visibility = await this.presenceVisibilityService.resolveForTargets(
+    const visibility = await this.presenceVisibilityService.resolveForPresenceEvent(
       viewer,
       users.map(u => u.userId),
     );
