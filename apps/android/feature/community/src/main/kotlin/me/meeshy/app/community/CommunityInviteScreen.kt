@@ -53,6 +53,7 @@ import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.sdk.model.UserPresence
 import me.meeshy.ui.component.rememberPresence
 import me.meeshy.ui.component.MeeshyEmptyState
+import me.meeshy.ui.component.chrome.MeeshyBackButton
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyMotion
@@ -84,13 +85,13 @@ fun CommunityInviteScreen(
     Box(Modifier.fillMaxSize().background(tokens.backgroundPrimary)) {
         Column(Modifier.fillMaxSize().statusBarsPadding().imePadding()) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = onDone) { Text(stringResource(R.string.community_common_done), color = tokens.textSecondary) }
+                MeeshyBackButton(onClick = onDone)
                 Text(
                     stringResource(R.string.community_invite_title), Modifier.weight(1f),
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = tokens.textPrimary,
                 )
-                Spacer(Modifier.width(72.dp))
+                TextButton(onClick = onDone) { Text(stringResource(R.string.community_common_done), color = tokens.textSecondary) }
             }
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp).clip(RoundedCornerShape(12.dp))

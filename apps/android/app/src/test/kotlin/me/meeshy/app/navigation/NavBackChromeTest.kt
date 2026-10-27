@@ -2,6 +2,7 @@ package me.meeshy.app.navigation
 
 import com.google.common.truth.Truth.assertThat
 import com.google.common.truth.Truth.assertWithMessage
+import me.meeshy.app.navigation.graph.CommunityRoutes
 import java.io.File
 import org.junit.Test
 
@@ -23,6 +24,10 @@ class NavBackChromeTest {
             "ArrowBack|CommunityRoundButton|FullscreenChromeSymbol\\.Back|SettingsDetailScaffold|SettingsSubScreen|" +
             "backArrowColor|MeeshyTopBar\\(.{0,200}onBack =",
         RegexOption.DOT_MATCHES_ALL,
+    )
+
+    private val closeMarkers = Regex(
+        "MeeshyIcons\\.(Close|Xmark)|onClose|onDone|onDismiss|onCancel|common_(cancel|done|ok)",
     )
 
     /** Chaque route déclarée dans un `composable(...)` du graphe, écrite comme dans la source (`Routes.X`, `Classe.ROUTE`). */
@@ -77,11 +82,50 @@ class NavBackChromeTest {
     }
 
     @Test
-    fun `an arrow route always names its evidence and a non arrow route never does`() {
+    fun `every screen names its evidence and a root never does`() {
         NavBackChrome.entries.forEach { entry ->
-            if (entry.chrome == BackChrome.ARROW) assertThat(entry.evidence).isNotNull()
-            else assertThat(entry.evidence).isNull()
+            if (entry.chrome == BackChrome.ROOT) assertThat(entry.evidence).isNull()
+            else assertWithMessage(entry.source).that(entry.evidence).isNotNull()
         }
+    }
+
+    @Test
+    fun `every sheet or full screen carries a cross or text buttons in its source, never as an arrow route`() {
+        val missing = NavBackChrome.entries.filter { it.chrome == BackChrome.MODAL }.filterNot { entry ->
+            val file = File(androidRoot, checkNotNull(entry.evidence))
+            file.isFile && closeMarkers.containsMatchIn(file.readText())
+        }
+        assertWithMessage(
+            "Feuille(s) sans croix ni bouton de fermeture : ${missing.map { "${it.source} -> ${it.evidence}" }}",
+        ).that(missing).isEmpty()
+    }
+
+    @Test
+    fun `the back chrome follows how iOS presents the screen`() {
+        val wrong = NavBackChrome.entries.filterNot { entry ->
+            when (entry.ios) {
+                IosPresentation.PUSH -> entry.chrome == BackChrome.ARROW
+                IosPresentation.PUSH_CLOSE -> entry.chrome == BackChrome.MODAL
+                IosPresentation.SHEET, IosPresentation.COVER ->
+                    entry.chrome == BackChrome.MODAL || entry.source in PENDING_SHEET
+                IosPresentation.NONE -> entry.chrome != BackChrome.MODAL
+            }
+        }
+        assertWithMessage(
+            "Rôle de retour contraire à la présentation iOS (écran poussé ⇒ flèche, feuille ⇒ boutons ou croix) : " +
+                wrong.map { "${it.source} : iOS ${it.ios}, Android ${it.chrome}" },
+        ).that(wrong).isEmpty()
+    }
+
+    @Test
+    fun `the sheets still shown as stacked screens only shrink`() {
+        val pending = NavBackChrome.entries
+            .filter { it.chrome == BackChrome.ARROW && it.ios in setOf(IosPresentation.SHEET, IosPresentation.COVER) }
+            .map { it.source }
+        assertWithMessage(
+            "Le cliquet #13369 ne grandit pas : un écran qu'iOS présente en feuille se présente en feuille sur Android. " +
+                "Une route convertie sort de PENDING_SHEET.",
+        ).that(pending).containsExactlyElementsIn(PENDING_SHEET)
     }
 
     @Test
@@ -91,13 +135,28 @@ class NavBackChromeTest {
         )
         assertThat(NavBackChrome.entries.filter { it.chrome == BackChrome.MODAL }.map { it.source }).containsExactly(
             "Routes.MOOD_SPOTLIGHT", "Routes.REELS", "Routes.STORY_VIEWER", "Routes.STORY_COMPOSER_ROUTE",
-            "Routes.REPORT_USER", "Routes.CALL", "CommunityRoutes.SETTINGS", "CommunityRoutes.INVITE",
+            "Routes.REPORT_USER", "Routes.CALL",
         )
+        assertThat(NavBackChrome.edgeSwipeBackEnabled(CommunityRoutes.SETTINGS)).isTrue()
+        assertThat(NavBackChrome.edgeSwipeBackEnabled(CommunityRoutes.INVITE)).isTrue()
         assertThat(NavBackChrome.edgeSwipeBackEnabled(Routes.CONVERSATIONS)).isFalse()
         assertThat(NavBackChrome.edgeSwipeBackEnabled(Routes.REELS)).isFalse()
         assertThat(NavBackChrome.edgeSwipeBackEnabled(Routes.CALLS)).isTrue()
         assertThat(NavBackChrome.edgeSwipeBackEnabled(Routes.NOTIFICATIONS)).isTrue()
         assertThat(NavBackChrome.edgeSwipeBackEnabled(null)).isFalse()
         assertThat(NavBackChrome.edgeSwipeBackEnabled("route-inconnue")).isFalse()
+    }
+
+    private companion object {
+        /** #13369 — feuilles sur iOS, encore écrans empilés sur Android. Ne fait que rétrécir. */
+        val PENDING_SHEET = setOf(
+            "Routes.FORGOT_PASSWORD", "Routes.MAGIC_LINK", "Routes.REGISTRATION", "Routes.GUEST_JOIN", "Routes.WORLD_ENTRY",
+            "Routes.SHARE_LINK_PICKER", "Routes.GLOBAL_SEARCH", "Routes.DASHBOARD", "Routes.CREATE_SHARE_LINK",
+            "Routes.NEW_CONVERSATION", "Routes.MY_STORIES", "Routes.NOTIFICATION_SETTINGS", "Routes.CHANGE_PASSWORD",
+            "Routes.TWO_FACTOR", "Routes.ACCOUNT_CONTACT", "Routes.SECURITY", "Routes.DELETE_ACCOUNT",
+            "Routes.MEDIA_DOWNLOAD", "Routes.MEDIA_CACHE", "Routes.DATA_EXPORT", "Routes.DIAGNOSTICS", "Routes.ABOUT",
+            "Routes.SUPPORT", "Routes.LICENSES", "Routes.LEGAL", "Routes.PRIVACY", "Routes.ACTIVE_SESSIONS",
+            "Routes.ENCRYPTED_DEVICES", "Routes.BLOCKED_USERS", "Routes.PROFILE_USER", "Routes.USER_POSTS",
+        )
     }
 }
