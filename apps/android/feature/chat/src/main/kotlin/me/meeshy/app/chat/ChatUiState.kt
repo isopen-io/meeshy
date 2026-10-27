@@ -14,9 +14,6 @@ import me.meeshy.sdk.model.LiveLocationEventFold
 import me.meeshy.sdk.model.LiveLocationSessions
 import me.meeshy.sdk.model.MessageEffects
 import me.meeshy.sdk.model.ParticipantPermissions
-import me.meeshy.sdk.model.PresenceState
-import me.meeshy.sdk.model.UserPresence
-import me.meeshy.sdk.model.UserStatusEvent
 import me.meeshy.sdk.model.call.ActiveCallSession
 import me.meeshy.ui.component.bubble.BubbleContent
 import me.meeshy.ui.component.bubble.MessageLanguageExplorer
@@ -107,13 +104,10 @@ data class ChatUiState(
      * or `null` if not this session. Advances the slow-mode cooldown. */
     val lastSelfSentAtMillis: Long? = null,
     /** The other participant's userId in a direct conversation (`null` for a group,
-     * or before the conversation has loaded) — the key [headerPresence] resolves
-     * against [presenceByUserId]. Port of iOS `ConversationView.headerPresenceState`'s
+     * or before the conversation has loaded) — the key the header resolves
+     * its presence dot from (`rememberPresence`). Port of iOS `ConversationView.headerPresenceState`'s
      * `conversation?.participantUserId` guard. */
     val directPeerUserId: String? = null,
-    /** Live `user:status`/`presence:snapshot` frames, keyed by userId — mirrors
-     * `ConversationListUiState.presenceByUserId`. */
-    val presenceByUserId: Map<String, UserStatusEvent> = emptyMap(),
     /** Mirrors the same `networkConditionMonitor` reading already threaded into
      * `toBubbles` (the per-message hourglass) — feeds the scroll-to-bottom control's
      * offline indicator ([ScrollControlContent.of]'s `isOffline`), port of iOS
@@ -209,19 +203,6 @@ data class ChatUiState(
      */
     val replyThreadOverlay: ReplyThreadOverlayModel? get() =
         replyThreadParentId?.let { ReplyThreadOverlay.of(it, messages.map { m -> m.toThreadMessage() }) }
-
-    /**
-     * The chat header's live presence dot, or `null` for a group conversation or before any
-     * presence data has arrived for the peer — mirrors
-     * `ConversationListUiState.presenceStateFor`. Port of iOS
-     * `ConversationView.headerPresenceState`; unlike iOS the Android header has no avatar to
-     * dot, so this drives a small standalone indicator instead (see `ChatScreen`).
-     */
-    fun headerPresence(nowEpochMillis: Long): PresenceState? {
-        val id = directPeerUserId ?: return null
-        val event = presenceByUserId[id] ?: return null
-        return UserPresence(isOnline = event.isOnline, lastActiveAt = event.lastActiveAt).state(nowEpochMillis)
-    }
 }
 
 /**

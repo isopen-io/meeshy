@@ -25,6 +25,7 @@ import androidx.compose.ui.res.stringResource
 import me.meeshy.feature.chat.R
 import me.meeshy.sdk.model.avatar.AvatarContext
 import me.meeshy.sdk.model.profile.ProfileSheetUser
+import me.meeshy.ui.component.rememberPresence
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.profile.LocalProfileSheetOpener
 
@@ -77,13 +78,14 @@ internal fun ChatHeaderHost(host: ChatHostContext) {
         expanded = !expanded
         memory.setExpanded(expanded, state.conversationId)
     }
+    val peerPresence = rememberPresence(state.directPeerUserId)
     val headerAvatar: @Composable (AvatarContext) -> Unit = { context ->
         ChatHeaderAvatar(
             name = title,
             door = door,
             accentColor = accentColor,
             imageUrl = header.avatarUrl,
-            presence = if (state.isGroup) null else state.headerPresence(System.currentTimeMillis()),
+            presence = if (state.isGroup) null else peerPresence,
             isUser = !state.isGroup,
             onOpenProfile = openProfile,
             onOpenDetails = openDetails,

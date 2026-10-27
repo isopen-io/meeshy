@@ -12,7 +12,6 @@ import me.meeshy.sdk.model.PresenceState
 import me.meeshy.sdk.model.StatusEntry
 import me.meeshy.sdk.model.StoryGroup
 import me.meeshy.sdk.model.UserPresence
-import me.meeshy.sdk.model.UserStatusEvent
 import me.meeshy.sdk.socket.SocketConnectionState
 import me.meeshy.sdk.theme.otherParticipantUserId
 import me.meeshy.ui.component.StoryRingState
@@ -67,13 +66,13 @@ data class ConversationListUiState(
      */
     val previewMessages: Map<String, List<LocalMessage>> = emptyMap(),
     /**
-     * Live `user:status`/`presence:snapshot` frames, keyed by userId — see
-     * [ConversationListViewModel.observePresence]. A userId absent here has no
+     * Mirror of the session's single presence map (`PresenceStore.entries`: `user:status`,
+     * `presence:snapshot` and typing activity), keyed by userId. A userId absent here has no
      * live presence data yet (a genuinely cold cache, not an error): `ApiConversation
      * .participants` carries no `isOnline`/`lastActiveAt` fields at all, so there is
      * no REST-fetched fallback to fall back to, unlike the Contacts roster.
      */
-    val presenceByUserId: Map<String, UserStatusEvent> = emptyMap(),
+    val presenceByUserId: Map<String, UserPresence> = emptyMap(),
     /**
      * Live mirror of [me.meeshy.sdk.lock.ConversationLockStore.lockedConversationIdsFlow] —
      * port of iOS `ConversationListView` observing `ConversationLockManager` directly so a
@@ -184,14 +183,12 @@ data class ConversationListUiState(
     /**
      * The live presence state for [conversation]'s other participant, or `null` for a
      * group/community/channel/bot conversation, or when nothing has arrived for them yet.
-     * A peer typing here is ALWAYS online, whatever the last presence frame said (product
-     * rule; parity iOS `LentilleConversationRow`: `typingUsername != nil ? .online`).
+     * A peer typing is dated active by the presence store (`typing:start` = proof of activity),
+     * so the dot reads green for 60 s then decays like any other — no hard-coded override.
      */
     fun presenceStateFor(conversation: ApiConversation, nowEpochMillis: Long): PresenceState? {
         val otherId = conversation.otherParticipantUserId(currentUserId) ?: return null
-        if (typers[conversation.id]?.containsKey(otherId) == true) return PresenceState.ONLINE
-        val event = presenceByUserId[otherId] ?: return null
-        return UserPresence(isOnline = event.isOnline, lastActiveAt = event.lastActiveAt).state(nowEpochMillis)
+        return presenceByUserId[otherId]?.state(nowEpochMillis)
     }
 
     /**

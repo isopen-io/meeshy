@@ -3,7 +3,7 @@ package me.meeshy.sdk.model.profile
 import com.google.common.truth.Truth.assertThat
 import java.time.Instant
 import me.meeshy.sdk.model.PresenceState
-import me.meeshy.sdk.model.UserStatusEvent
+import me.meeshy.sdk.model.UserPresence
 import org.junit.Test
 
 class ProfileLivePresenceTest {
@@ -11,7 +11,7 @@ class ProfileLivePresenceTest {
     private val now = Instant.parse("2026-10-24T12:00:00Z").toEpochMilli()
     private fun ago(seconds: Long): String = Instant.ofEpochMilli(now - seconds * 1_000L).toString()
     private fun live(isOnline: Boolean, lastActiveAt: String?) =
-        UserStatusEvent(userId = "u1", isOnline = isOnline, lastActiveAt = lastActiveAt)
+        UserPresence(isOnline = isOnline, lastActiveAt = lastActiveAt)
 
     @Test
     fun `l'entree temps reel gagne sur le cliche REST`() {

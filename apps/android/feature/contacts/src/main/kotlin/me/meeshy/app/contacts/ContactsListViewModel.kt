@@ -20,7 +20,7 @@ import me.meeshy.sdk.model.friend.ContactFilterCounts
 import me.meeshy.sdk.model.friend.ContactList
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.session.SessionRepository
-import me.meeshy.sdk.socket.MessageSocketManager
+import me.meeshy.sdk.socket.PresenceStore
 import me.meeshy.sdk.status.StatusBarCache
 import me.meeshy.sdk.status.StatusFeedMode
 import me.meeshy.sdk.status.statusForUser
@@ -86,7 +86,7 @@ class ContactsListViewModel @Inject constructor(
     private val friendshipCache: FriendshipCache,
     private val sessionRepository: SessionRepository,
     private val statusBarCache: StatusBarCache,
-    private val messageSocketManager: MessageSocketManager,
+    private val presenceStore: PresenceStore,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ContactsListUiState())
@@ -142,7 +142,7 @@ class ContactsListViewModel @Inject constructor(
         val cached = friendListRepository.cachedSnapshot()
         _state.update {
             if (cached == null) it.copy(isLoading = true)
-            else it.copy(friends = cached, isLoading = false)
+            else it.copy(friends = withPresence(cached), isLoading = false)
         }
     }
 
@@ -169,7 +169,7 @@ class ContactsListViewModel @Inject constructor(
                 friendshipCache.hydrate(sent = graph.data.sent, received = graph.data.received)
                 lastReconciledFriendIds = friendshipCache.currentFriendIds
                 val friends = ContactList.fromAcceptedRequests(graph.data.received + graph.data.sent, currentUserId)
-                _state.update { it.copy(friends = friends, isLoading = false, errorMessage = null) }
+                _state.update { it.copy(friends = withPresence(friends), isLoading = false, errorMessage = null) }
                 friendListRepository.persist(friends)
             }
             is NetworkResult.Failure -> _state.update {
@@ -188,24 +188,21 @@ class ContactsListViewModel @Inject constructor(
     }
 
     /**
-     * Overlays live `user:status`/`presence:snapshot` frames onto the roster's
-     * `isOnline`/`lastActiveAt` fields (see [PresenceOverlay]) — without this,
-     * a friend going online/offline never paints on this screen until the user
-     * leaves and re-enters it (the socket flows are hot with no replay, so this
-     * must be collecting before an event fires to see it — started in [init]).
+     * Superpose la carte de présence UNIQUE de la session ([PresenceStore.entries] : `user:status`,
+     * `presence:snapshot`, frappe) sur le carnet — sans cela un ami qui passe en ligne ne se
+     * peindrait qu'au prochain `/friends`. La carte est gardée en état : un carnet ouvert après le
+     * snapshot la voit déjà.
      */
     private fun observePresence() {
         viewModelScope.launch {
-            messageSocketManager.userStatus.collect { event ->
-                _state.update { it.copy(friends = PresenceOverlay.applyStatus(it.friends, event)) }
-            }
-        }
-        viewModelScope.launch {
-            messageSocketManager.presenceSnapshot.collect { snapshot ->
-                _state.update { it.copy(friends = PresenceOverlay.applySnapshot(it.friends, snapshot)) }
+            presenceStore.entries.collect { entries ->
+                _state.update { it.copy(friends = PresenceOverlay.apply(it.friends, entries)) }
             }
         }
     }
+
+    private fun withPresence(friends: List<FriendRequestUser>): List<FriendRequestUser> =
+        PresenceOverlay.apply(friends, presenceStore.entries.value)
 
     private fun onFriendshipCacheChanged() {
         val cacheIds = friendshipCache.currentFriendIds

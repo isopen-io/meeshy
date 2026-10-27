@@ -19,13 +19,13 @@ import org.junit.Test
 class ChatUiStateDefaultsTest {
 
     @Test
-    fun `the state keeps exactly its forty-nine stored fields`() {
+    fun `the state keeps exactly its forty-eight stored fields`() {
         val stored = ChatUiState::class.java.declaredFields
             .filterNot { it.isSynthetic || Modifier.isStatic(it.modifiers) }
             .map { it.name }
 
         assertThat(stored).containsExactlyElementsIn(STORED_FIELDS)
-        assertThat(stored).hasSize(49)
+        assertThat(stored).hasSize(48)
     }
 
     @Test
@@ -75,7 +75,6 @@ class ChatUiStateDefaultsTest {
             slowModeExempt = false,
             lastSelfSentAtMillis = null,
             directPeerUserId = null,
-            presenceByUserId = emptyMap(),
             isOffline = false,
             composerLanguage = ComposerLanguageState(),
             composerLanguageSeed = ComposerLanguage.DEFAULT,
@@ -99,7 +98,6 @@ class ChatUiStateDefaultsTest {
         assertThat(fresh.replyThreadOverlay).isNull()
         assertThat(fresh.showEncryptionDisclaimer).isFalse()
         assertThat(fresh.liveLocationBadges).isEmpty()
-        assertThat(fresh.headerPresence(nowEpochMillis = 0L)).isNull()
     }
 
     private companion object {
@@ -148,7 +146,6 @@ class ChatUiStateDefaultsTest {
             "slowModeExempt",
             "lastSelfSentAtMillis",
             "directPeerUserId",
-            "presenceByUserId",
             "isOffline",
             "composerLanguage",
             "composerLanguageSeed",

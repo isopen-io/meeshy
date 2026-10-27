@@ -35,7 +35,9 @@ import me.meeshy.sdk.model.AppLanguage
 import me.meeshy.sdk.model.resolveDarkMode
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.session.SessionRepository
+import me.meeshy.sdk.socket.PresenceStore
 import me.meeshy.ui.component.LocalMediaBaseUrl
+import me.meeshy.ui.component.LocalPresenceStore
 import me.meeshy.ui.theme.MeeshyTheme
 import java.util.Locale
 import javax.inject.Inject
@@ -67,6 +69,10 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var sessionRepository: SessionRepository
 
+    /** La carte de présence unique de la session : [LocalPresenceStore] la fournit aux avatars. */
+    @Inject
+    lateinit var presenceStore: PresenceStore
+
     private var launchRoute by mutableStateOf<String?>(null)
     private val themeViewModel: ThemeViewModel by viewModels()
     private val languageViewModel: LanguageViewModel by viewModels()
@@ -85,7 +91,10 @@ class MainActivity : ComponentActivity() {
             val languageCode by languageViewModel.languageCode.collectAsStateWithLifecycle()
             LocalizedContent(languageCode = languageCode) {
                 MeeshyTheme(darkTheme = themeMode.resolveDarkMode(isSystemInDarkTheme())) {
-                    CompositionLocalProvider(LocalMediaBaseUrl provides config.apiBaseUrl) {
+                    CompositionLocalProvider(
+                        LocalMediaBaseUrl provides config.apiBaseUrl,
+                        LocalPresenceStore provides presenceStore,
+                    ) {
                         ProvideRootSplash {
                             MeeshyApp(
                                 floatingButtonPositions = floatingButtonPositions,

@@ -2,7 +2,6 @@ package me.meeshy.sdk.model.profile
 
 import me.meeshy.sdk.model.PresenceState
 import me.meeshy.sdk.model.UserPresence
-import me.meeshy.sdk.model.UserStatusEvent
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
 
 /** La teinte du libellé « il y a X » de la fiche : vert actif, orange absent, gris au-delà. */
@@ -21,7 +20,7 @@ object ProfileLivePresence {
 
     /** L'état du point de l'avatar ; `null` = la passerelle n'a rien servi, aucun point. */
     fun state(
-        live: UserStatusEvent?,
+        live: UserPresence?,
         restIsOnline: Boolean?,
         restLastActiveAt: String?,
         nowEpochMillis: Long,
@@ -32,7 +31,7 @@ object ProfileLivePresence {
      * (la passerelle le tait aux observateurs non autorisés) : rien hors ligne sans date.
      */
     fun line(
-        live: UserStatusEvent?,
+        live: UserPresence?,
         restIsOnline: Boolean?,
         restLastActiveAt: String?,
         nowEpochMillis: Long,
@@ -47,7 +46,7 @@ object ProfileLivePresence {
         return ProfilePresenceLine(lastActive, tone)
     }
 
-    private fun presence(live: UserStatusEvent?, restIsOnline: Boolean?, restLastActiveAt: String?): UserPresence? {
+    private fun presence(live: UserPresence?, restIsOnline: Boolean?, restLastActiveAt: String?): UserPresence? {
         val restLast = restLastActiveAt?.takeIf { it.isNotBlank() }
         if (live != null) {
             return UserPresence(isOnline = live.isOnline, lastActiveAt = live.lastActiveAt?.takeIf { it.isNotBlank() } ?: restLast)

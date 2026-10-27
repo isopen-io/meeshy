@@ -4,7 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import kotlinx.coroutines.flow.Flow
 import me.meeshy.sdk.model.PresenceState
-import me.meeshy.sdk.model.UserStatusEvent
+import me.meeshy.sdk.model.UserPresence
 import me.meeshy.sdk.model.profile.ProfileCallRequest
 import me.meeshy.sdk.model.profile.ProfileLivePresence
 import me.meeshy.sdk.model.profile.ProfilePresenceLine
@@ -44,7 +44,7 @@ data class ProfileSheetEnvironment(
  */
 @Immutable
 data class ProfileLiveSigns(
-    val livePresence: UserStatusEvent? = null,
+    val livePresence: UserPresence? = null,
     val storyRing: StoryRingState = StoryRingState.None,
     val moodEmoji: String? = null,
     val moodText: String? = null,

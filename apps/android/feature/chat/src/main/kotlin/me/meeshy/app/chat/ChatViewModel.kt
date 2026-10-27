@@ -57,7 +57,6 @@ import me.meeshy.sdk.report.ReportRepository
 import me.meeshy.sdk.session.AnonymousSessionStore
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.MessageSocketManager
-import me.meeshy.sdk.socket.TypingPresenceRelay
 import me.meeshy.sdk.theme.accentHex
 import me.meeshy.sdk.theme.displayTitle
 import me.meeshy.sdk.theme.otherParticipantUserId
@@ -85,7 +84,6 @@ class ChatViewModel @Inject constructor(
     private val locallyHiddenStore: LocallyHiddenMessagesStore,
     private val starredStore: StarredMessagesStore,
     private val messageSocketManager: MessageSocketManager,
-    private val typingPresenceRelay: TypingPresenceRelay,
     private val workManager: WorkManager,
     private val config: MeeshyConfig,
     private val clock: CacheClock,
@@ -306,7 +304,6 @@ class ChatViewModel @Inject constructor(
             }
         }
 
-        observePresence()
 
         viewModelScope.launch {
             conversationRepository.conversationsStream().collect { result ->
@@ -498,33 +495,6 @@ class ChatViewModel @Inject constructor(
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
-        }
-    }
-
-    /**
-     * Overlays live `user:status`/`presence:snapshot` frames into
-     * [ChatUiState.presenceByUserId] — feeds the chat header's presence dot
-     * ([ChatUiState.headerPresence]). Mirrors [ConversationListViewModel]'s identically-named
-     * function; started eagerly (not lazily on first header render) since
-     * [MessageSocketManager]'s flows are hot `SharedFlow`s with no replay.
-     */
-    private fun observePresence() {
-        viewModelScope.launch {
-            messageSocketManager.userStatus.collect { event ->
-                _state.update { it.copy(presenceByUserId = it.presenceByUserId + (event.userId to event)) }
-            }
-        }
-        viewModelScope.launch {
-            typingPresenceRelay.forcedOnline.collect { event ->
-                _state.update { it.copy(presenceByUserId = it.presenceByUserId + (event.userId to event)) }
-            }
-        }
-        viewModelScope.launch {
-            messageSocketManager.presenceSnapshot.collect { snapshot ->
-                _state.update {
-                    it.copy(presenceByUserId = it.presenceByUserId + snapshot.users.associateBy { u -> u.userId })
-                }
-            }
         }
     }
 
