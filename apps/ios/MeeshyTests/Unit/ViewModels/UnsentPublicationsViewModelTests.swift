@@ -134,6 +134,8 @@ final class UnsentPublicationsViewModelTests: XCTestCase {
             self.composerIsFree = composerIsFree
         }
 
+        nonisolated deinit {}
+
         func parkedPublicationIds() -> Set<String> { parked }
         func discardDraft(of publicationId: String) {
             discarded.append(publicationId)

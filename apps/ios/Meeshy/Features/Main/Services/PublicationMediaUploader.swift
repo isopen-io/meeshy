@@ -98,6 +98,17 @@ nonisolated enum PublicationMediaUploader {
         return montes
     }
 
+    /// Au SUCCÈS seulement (#13415) : les fichiers montés quittent l'appareil,
+    /// puis le dossier `pending-media/<cmid>` qu'ils laissent vide.
+    static func discardUploadedFiles(_ paths: [String]) {
+        for path in paths {
+            do { try FileManager.default.removeItem(atPath: path) } catch {
+                logger.warning("createPost: failed to remove temp file \(path, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            }
+        }
+        OfflineQueue.removeEmptyParentDirectories(of: paths)
+    }
+
     /// Un refus que rejouer ne lèvera pas : le format (415 après repli JPEG)
     /// ou le droit d'un invité.
     static func isDefinitiveRefusal(_ error: Error) -> Bool {

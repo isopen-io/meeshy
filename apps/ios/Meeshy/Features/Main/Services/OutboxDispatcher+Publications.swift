@@ -181,12 +181,6 @@ extension OutboxDispatcher {
                 headers: ["X-Client-Mutation-Id": payload.clientMutationId]
             )
         }
-        for path in uploadedLocalPaths {
-            do { try FileManager.default.removeItem(atPath: path) } catch {
-                logger.warning("createPost: failed to remove temp file \(path, privacy: .public): \(error.localizedDescription, privacy: .public)")
-            }
-        }
-        // #13415 — le dossier `pending-media/<cmid>` part avec ses fichiers, au succès seulement.
-        OfflineQueue.removeEmptyParentDirectories(of: uploadedLocalPaths)
+        PublicationMediaUploader.discardUploadedFiles(uploadedLocalPaths)
         logger.info("createPost dispatched cmid=\(payload.clientMutationId, privacy: .public)")
     }}

@@ -21,6 +21,8 @@ final class UnsentPublicationsViewModel: ObservableObject {
         self.drafts = drafts
     }
 
+    nonisolated deinit {}
+
     var count: Int { publications.count }
 
     /// Relit la file — et retire le brouillon gardé d'une publication dont la

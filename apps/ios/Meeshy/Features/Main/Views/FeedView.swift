@@ -551,6 +551,15 @@ struct FeedView: View {
         HapticFeedback.light()
     }
 
+    /// La porte du composeur, puis les publications encore sur l'appareil (#13415).
+    private var composerPlaceholder: some View {
+        Group {
+            FeedComposerPlaceholder(onCompose: openComposer, onRecordAudio: openAudioComposer)
+                .padding(.bottom, MeeshySpacing.sm)
+            UnsentPublicationsEntry(openComposer: openComposer)
+        }
+    }
+
     private func openAudioComposer() {
         showAudioComposer = true
         HapticFeedback.light()
@@ -610,10 +619,7 @@ struct FeedView: View {
                         StoryTrayView(viewModel: storyViewModel)
                     }
 
-                    // Composer placeholder
-                    FeedComposerPlaceholder(onCompose: openComposer, onRecordAudio: openAudioComposer)
-                        .padding(.bottom, MeeshySpacing.sm)
-                    UnsentPublicationsEntry(openComposer: openComposer)
+                    composerPlaceholder
 
                     // Error state
                     if let error = viewModel.error {
