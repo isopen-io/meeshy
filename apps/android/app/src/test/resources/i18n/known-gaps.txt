@@ -1622,3 +1622,6 @@ bare-specifier :feature:chat en summary_header_partial_window
 bare-specifier :feature:chat en summary_header_people_count
 bare-specifier :feature:chat en chat_delete_confirm_title_many
 bare-specifier :feature:chat en chat_selection_count
+bare-specifier :feature:chat en riviere_bubble_reply_to
+bare-specifier :feature:chat en riviere_header_offscreen_left
+bare-specifier :feature:chat en riviere_header_offscreen_right
