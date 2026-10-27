@@ -63,8 +63,9 @@ internal fun NavGraphBuilder.socialNavGraph(
             onOpenStats = { navController.navigate(ProfileRoutes.STATS) },
         )
     }
-    composable(ProfileRoutes.STATS) {
-        UserStatsScreen(onBack = { navController.popBackStack() })
+    // iOS présente `UserStatsView` en `.sheet` depuis ma page et les Réglages : croix + glissé vers le bas (#13364).
+    sheetComposable(ProfileRoutes.STATS, navController) { _, dismiss ->
+        UserStatsScreen(onBack = dismiss)
     }
     sheetComposable(
         route = Routes.USER_POSTS,

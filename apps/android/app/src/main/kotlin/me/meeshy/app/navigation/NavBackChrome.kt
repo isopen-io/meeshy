@@ -135,7 +135,7 @@ internal object NavBackChrome {
         arrow("FriendRequestsDestinations.ROUTE", FriendRequestsDestinations.ROUTE, contacts),
         arrow("Routes.NOTIFICATIONS", Routes.NOTIFICATIONS, "$FEATURE/notifications/src/main/kotlin/me/meeshy/app/notifications/NotificationsScreen.kt"),
         arrow("ProfileRoutes.OWN", ProfileRoutes.OWN, profile("OwnProfileScreen.kt")),
-        arrow("ProfileRoutes.STATS", ProfileRoutes.STATS, profile("UserStatsScreen.kt")),
+        sheet("ProfileRoutes.STATS", ProfileRoutes.STATS, IosPresentation.SHEET, profile("UserStatsScreen.kt")),
         // La route n'a plus d'écran : elle ouvre la fiche (`UserProfileSheet`, une feuille Material) par l'ouvreur global, puis se retire.
         modal("Routes.PROFILE_USER", Routes.PROFILE_USER, IosPresentation.SHEET, profile("UserProfileSheet.kt")),
         sheet("Routes.USER_POSTS", Routes.USER_POSTS, IosPresentation.SHEET, feed("UserPostsScreen.kt")),
