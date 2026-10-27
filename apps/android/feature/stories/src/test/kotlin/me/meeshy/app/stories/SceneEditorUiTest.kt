@@ -1,5 +1,8 @@
 package me.meeshy.app.stories
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasClickAction
@@ -98,5 +101,55 @@ class SceneEditorUiTest {
         }
 
         compose.onAllNodesWithText("Add a text or a sticker", substring = true).assertCountEquals(1)
+    }
+
+    @Test
+    fun `un sticker rappelle le dernier rappel apres une recomposition`() {
+        var tapped = ""
+        var label by mutableStateOf("premier")
+        compose.setContent {
+            MeeshyTheme {
+                val current = label
+                StickerLayer(
+                    sticker = StoryStickerElement(id = "s1", emoji = "😀"),
+                    selected = false, menu = null,
+                    canvasWidthPx = 720f, canvasHeightPx = 1280f,
+                    onTap = { tapped = current }, onLongPress = {},
+                    onMenuAction = {}, onMenuDismiss = {},
+                    onDrag = { _, _ -> }, onTransform = { _, _ -> },
+                )
+            }
+        }
+
+        label = "second"
+        compose.waitForIdle()
+        compose.onNodeWithText("😀").performClick()
+
+        assertThat(tapped).isEqualTo("second")
+    }
+
+    @Test
+    fun `un texte rappelle le dernier rappel apres une recomposition`() {
+        var tapped = ""
+        var label by mutableStateOf("premier")
+        compose.setContent {
+            MeeshyTheme {
+                val current = label
+                TextElementLayer(
+                    element = StoryTextElement(id = "t1", text = "Bonjour"),
+                    selected = false, menu = null,
+                    canvasWidthPx = 720f, canvasHeightPx = 1280f,
+                    onTap = { tapped = current }, onLongPress = {},
+                    onMenuAction = {}, onMenuDismiss = {},
+                    onDrag = { _, _ -> }, onDragEnd = {}, onTransform = { _, _ -> },
+                )
+            }
+        }
+
+        label = "second"
+        compose.waitForIdle()
+        compose.onNodeWithText("Bonjour").performClick()
+
+        assertThat(tapped).isEqualTo("second")
     }
 }
