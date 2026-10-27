@@ -101,7 +101,12 @@ fun FeedScreen(
             // Composer placeholder (iOS parity: FeedView.composerPlaceholder, positioned
             // above the post list). Text-only first sub-slice (feature-parity §F) — tapping
             // it opens FeedComposerSheet; the pure FeedComposerDraft owns the publish rules.
-            FeedComposerPlaceholder(onClick = { composerDraft = FeedComposerDraft() })
+            FeedComposerPlaceholder(
+                onClick = { scope.launch { composerDraft = viewModel.restorableDraft() ?: FeedComposerDraft() } },
+            )
+            // « Publications non envoyées » (#13417): visible only while the device holds a
+            // publication the server has not confirmed; « Rouvrir » opens the composer on it.
+            UnsentPublicationsEntry(onReopen = { draft -> composerDraft = draft })
             val clipboard = LocalClipboardManager.current
             val linkCopied = stringResource(R.string.feed_link_copied)
             val shareContext = context
@@ -213,7 +218,7 @@ fun FeedScreen(
     composerDraft?.let { seed ->
         FeedComposerSheet(
             initialDraft = seed,
-            onPublish = { request ->
+            onPublish = { request, draft ->
                 viewModel.publishPost(
                     content = request.content,
                     visibility = request.visibility,
@@ -222,10 +227,14 @@ fun FeedScreen(
                     location = request.location,
                     language = request.language,
                     mediaAlt = request.mediaAlt,
+                    draft = draft.toSnapshot(System.currentTimeMillis()),
                 )
                 composerDraft = null
             },
             onDismiss = { composerDraft = null },
+            onDraftChange = viewModel::persistComposerDraft,
+            onQueueMedia = viewModel::queueMedia,
+            onRemoveMedia = viewModel::discardQueuedMedia,
             onUploadMedia = viewModel::uploadMedia,
             onMediaError = { message -> scope.launch { snackbar.showSnackbar(message) } },
         )

@@ -32,6 +32,7 @@ import me.meeshy.sdk.socket.SocialSocketManager
 import me.meeshy.sdk.story.FailedStoryPublish
 import me.meeshy.sdk.story.PendingStoryPublish
 import me.meeshy.sdk.story.StoryPublishQueue
+import me.meeshy.sdk.publication.PublicationOutbox
 import me.meeshy.sdk.story.StoryRepository
 import org.junit.After
 import org.junit.Before
@@ -94,6 +95,8 @@ class StoriesViewModelTest {
 
     private val workManager: WorkManager = mockk(relaxed = true)
 
+    private val publications: PublicationOutbox = mockk(relaxed = true)
+
     private val storyDeletedFlow = MutableSharedFlow<SocketStoryDeletedData>(extraBufferCapacity = 8)
     private val storyUpdatedFlow = MutableSharedFlow<SocketStoryUpdatedData>(extraBufferCapacity = 8)
     private val storyCreatedFlow = MutableSharedFlow<SocketStoryCreatedData>(extraBufferCapacity = 8)
@@ -123,7 +126,7 @@ class StoriesViewModelTest {
         repo: StoryRepository,
         session: SessionRepository = session(),
         social: SocialSocketManager = socialSocket(),
-    ) = StoriesViewModel(repo, session, MeeshyConfig(), workManager, social)
+    ) = StoriesViewModel(repo, session, MeeshyConfig(), workManager, social, publications)
 
     @Test
     fun `cold empty cache shows the skeleton with no tray`() = runTest(dispatcher) {
@@ -258,7 +261,7 @@ class StoriesViewModelTest {
                 queueOf(pending = listOf(pendingPublish("pending_1", "hello"))),
                 queueOf(),
             )
-            val vm = StoriesViewModel(repo, session(userId = "me"), MeeshyConfig(), workManager, socialSocket())
+            val vm = StoriesViewModel(repo, session(userId = "me"), MeeshyConfig(), workManager, socialSocket(), publications)
             advanceUntilIdle()
 
             assertThat(vm.state.value.tray.isEmpty).isTrue()
@@ -272,7 +275,7 @@ class StoriesViewModelTest {
             flowOf(CacheResult.Fresh(emptyList(), ageMillis = 0))
         every { repo.publishQueue() } returns
             flowOf(queueOf(pending = listOf(pendingPublish("pending_1", "hello"))))
-        val vm = StoriesViewModel(repo, session(userId = "me"), MeeshyConfig(), workManager, socialSocket())
+        val vm = StoriesViewModel(repo, session(userId = "me"), MeeshyConfig(), workManager, socialSocket(), publications)
         advanceUntilIdle()
 
         assertThat(vm.state.value.tray.self?.storyCount).isEqualTo(1)
@@ -291,7 +294,7 @@ class StoriesViewModelTest {
                 queueOf(pending = listOf(pendingPublish("pending_1", "hello"))),
                 queueOf(failed = listOf(failedPublish("c1", "pending_1", "hello"))),
             )
-            val vm = StoriesViewModel(repo, session(userId = "me"), MeeshyConfig(), workManager, socialSocket())
+            val vm = StoriesViewModel(repo, session(userId = "me"), MeeshyConfig(), workManager, socialSocket(), publications)
             advanceUntilIdle()
 
             assertThat(vm.state.value.failedPublishes.map { it.cmid }).containsExactly("c1")
@@ -332,7 +335,7 @@ class StoriesViewModelTest {
     }
 
     @Test
-    fun `discardPublish drops the failed row`() = runTest(dispatcher) {
+    fun `discardPublish drops the failed row with the media it kept on the device`() = runTest(dispatcher) {
         val repo = repositoryReturning(
             stream = flowOf(CacheResult.Fresh(emptyList(), ageMillis = 0)),
             queue = flowOf(queueOf(failed = listOf(failedPublish("c1", "pending_1")))),
@@ -343,7 +346,7 @@ class StoriesViewModelTest {
         vm.discardPublish("c1")
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { repo.discardPublish("c1") }
+        coVerify(exactly = 1) { publications.discard("c1") }
     }
 
     @Test

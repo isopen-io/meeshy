@@ -1,0 +1,62 @@
+package me.meeshy.app.feed
+
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import androidx.work.WorkManager
+import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
+import me.meeshy.sdk.outbox.OutboxFlushWorker
+import me.meeshy.sdk.publication.PublicationOutbox
+import me.meeshy.sdk.publication.UnsentPublication
+import javax.inject.Inject
+
+/**
+ * « Publications non envoyées » (#13417, iso iOS #13415): every post, reel and story the device
+ * holds and the server has not confirmed, read live from the outbox. A failed one is retried
+ * (its refused uploads with it), a failed post or reel reopens in the composer, and only the
+ * author's explicit « Supprimer » removes a publication and its media from the device.
+ */
+@HiltViewModel
+class UnsentPublicationsViewModel @Inject constructor(
+    private val publications: PublicationOutbox,
+    private val workManager: WorkManager,
+) : ViewModel() {
+
+    val items: StateFlow<List<UnsentPublication>> = publications.unsent()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), emptyList())
+
+    private val _reopened = MutableSharedFlow<FeedComposerDraft>(extraBufferCapacity = 1)
+
+    /** A failed post the author reopened: the composer opens on it. */
+    val reopened: SharedFlow<FeedComposerDraft> = _reopened.asSharedFlow()
+
+    init {
+        viewModelScope.launch { runCatching { publications.releaseSettledDrafts() } }
+    }
+
+    fun retry(cmid: String) {
+        viewModelScope.launch {
+            if (publications.retry(cmid)) workManager.enqueue(OutboxFlushWorker.buildRequest())
+        }
+    }
+
+    fun discard(cmid: String) {
+        viewModelScope.launch { publications.discard(cmid) }
+    }
+
+    fun reopen(cmid: String) {
+        viewModelScope.launch {
+            publications.reopenPost(cmid)?.let { _reopened.tryEmit(it.toComposerDraft()) }
+        }
+    }
+
+    private companion object {
+        const val STOP_TIMEOUT_MS = 5_000L
+    }
+}
