@@ -64,9 +64,9 @@ fun CommunityLinksScreen(
         if (state.refreshFailed && state.hasLoaded) item(key = "failed", contentType = "banner") { LinkRefreshFailedBanner(viewModel::refresh) }
         item(key = "stats", contentType = "stats") {
             Row(horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md)) {
-                LinkStatTile(MeeshyIcons.Groups, stats.totalCommunities, stringResource(R.string.links_community_stat_groups), accent, Modifier.weight(1f))
+                LinkStatTile(MeeshyIcons.Groups, stats.totalCommunities, R.plurals.links_count_groups, accent, Modifier.weight(1f))
                 LinkStatTile(MeeshyIcons.CheckCircleFilled, stats.activeCommunities, stringResource(R.string.links_community_stat_active), accent, Modifier.weight(1f))
-                LinkStatTile(MeeshyIcons.PersonFilled, stats.totalMembers, stringResource(R.string.links_community_stat_members), accent, Modifier.weight(1f))
+                LinkStatTile(MeeshyIcons.PersonFilled, stats.totalMembers, R.plurals.links_count_members, accent, Modifier.weight(1f))
             }
         }
         item(key = "section", contentType = "section") { LinksSectionTitle(stringResource(R.string.links_community_section_mine)) }
