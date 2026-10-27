@@ -455,12 +455,20 @@ final class CallManagerRTPGateTests: XCTestCase {
         // self-heal) is started during call setup and torn down on end.
         let source = try callManagerSource()
         XCTAssertTrue(
-            source.contains("startReliabilityMonitor()"),
+            source.contains("call.reliabilityMonitor.startReliabilityMonitor()"),
             "Reliability monitor must be started during call setup"
         )
+        guard let teardown = DeclarationBodyScanner.body(containing: "fileprivate func cancelCallScopedWork()", in: source),
+              let stop = DeclarationBodyScanner.body(containing: "func stopReliabilityMonitor()", in: source) else {
+            return XCTFail("cancelCallScopedWork or stopReliabilityMonitor not found in the CallManager unit")
+        }
         XCTAssertTrue(
-            source.contains("reliabilityMonitorTask?.cancel()"),
-            "endCallInternal must cancel the reliability monitor"
+            teardown.contains("reliabilityMonitor.stopReliabilityMonitor()"),
+            "endCallInternal's call-scoped teardown must stop the reliability monitor"
+        )
+        XCTAssertTrue(
+            stop.contains("reliabilityMonitorTask?.cancel()") && stop.contains("reliabilityMonitorTask = nil"),
+            "stopReliabilityMonitor must cancel and release the monitor task"
         )
     }
 
@@ -6566,7 +6574,7 @@ final class CallManagerRenegotiationSerializationTests: XCTestCase {
     func test_scheduleICERestart_awaitsVideoToggleTask() throws {
         let body = try body(
             from: "func scheduleICERestart(attempt: Int, backoffSeconds: Double) {",
-            to: "func armTurnCredentialsAfterConfigure",
+            to: "func flushPendingIceCandidates() {",
             in: try callManagerSource()
         )
         XCTAssertTrue(
@@ -6579,7 +6587,7 @@ final class CallManagerRenegotiationSerializationTests: XCTestCase {
     func test_scheduleICERestart_awaitsHoldVideoTask() throws {
         let body = try body(
             from: "func scheduleICERestart(attempt: Int, backoffSeconds: Double) {",
-            to: "func armTurnCredentialsAfterConfigure",
+            to: "func flushPendingIceCandidates() {",
             in: try callManagerSource()
         )
         XCTAssertTrue(
@@ -6592,7 +6600,7 @@ final class CallManagerRenegotiationSerializationTests: XCTestCase {
     func test_scheduleICERestart_awaitsSurvivalVideoTask() throws {
         let body = try body(
             from: "func scheduleICERestart(attempt: Int, backoffSeconds: Double) {",
-            to: "func armTurnCredentialsAfterConfigure",
+            to: "func flushPendingIceCandidates() {",
             in: try callManagerSource()
         )
         XCTAssertTrue(
@@ -6611,7 +6619,7 @@ final class CallManagerRenegotiationSerializationTests: XCTestCase {
     func test_scheduleICERestart_awaitsPreviousIceRestartTask() throws {
         let body = try body(
             from: "func scheduleICERestart(attempt: Int, backoffSeconds: Double) {",
-            to: "func armTurnCredentialsAfterConfigure",
+            to: "func flushPendingIceCandidates() {",
             in: try callManagerSource()
         )
         XCTAssertTrue(
@@ -6866,7 +6874,7 @@ final class CallManagerRenegotiationSerializationTests: XCTestCase {
     func test_scheduleICERestart_awaitsSignalOfferAnswerTask() throws {
         let body = try body(
             from: "func scheduleICERestart(attempt: Int, backoffSeconds: Double) {",
-            to: "func armTurnCredentialsAfterConfigure",
+            to: "func flushPendingIceCandidates() {",
             in: try callManagerSource()
         )
         XCTAssertTrue(
@@ -7069,7 +7077,7 @@ final class CallManagerRenegotiationSerializationTests: XCTestCase {
     func test_scheduleICERestart_awaitsCameraSwitchTask() throws {
         let body = try body(
             from: "func scheduleICERestart(attempt: Int, backoffSeconds: Double) {",
-            to: "func armTurnCredentialsAfterConfigure",
+            to: "func flushPendingIceCandidates() {",
             in: try callManagerSource()
         )
         XCTAssertTrue(

@@ -1,6 +1,6 @@
 import Foundation
 
-/// The clocks of `CallManager.startReliabilityMonitor` (#11522): one value per
+/// The clocks of `CallReliabilityMonitor.startReliabilityMonitor` (#11522): one value per
 /// monitor run, advanced once per poll tick for the state the call is in.
 ///
 /// - `.connecting`: the ICE/DTLS clock starts once the remote offer is in hand
