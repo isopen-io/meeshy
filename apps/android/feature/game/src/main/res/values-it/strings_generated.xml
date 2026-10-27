@@ -88,6 +88,10 @@
     <string name="game2_league_name_saphir">Zaffiro</string>
     <string name="game2_league_pseudonym_current">Giochi con il nome %s.</string>
     <string name="game2_league_pseudonym_drawn">Il tuo nome di torneo è estratto a sorte: né il tuo nome né il tuo nome utente. Cambia a ogni viaggio.</string>
+    <string name="game2_league_pseudonym_hint_change">Da 3 a 20 caratteri. Né il tuo nome né il tuo nome utente.</string>
+    <string name="game2_league_pseudonym_invalid">Questo nome di torneo non è valido: da 3 a 20 caratteri, lettere, cifre, punto, trattino, trattino basso.</string>
+    <string name="game2_league_pseudonym_new">Nuovo nome di torneo</string>
+    <string name="game2_league_pseudonym_save">Cambia nome di torneo</string>
     <string name="game2_league_pseudonym_title">Il tuo nome di torneo</string>
     <string name="game2_league_rank_line">Posto %1$s su %2$s</string>
     <string name="game2_league_snapshot">La classifica degli altri si fissa ogni giorno alle 4: nessuno vede chi sta giocando ora. Solo la tua riga è in diretta.</string>
@@ -165,6 +169,9 @@
     <string name="game2_settings_visibility_title">Chi vede cosa</string>
     <string name="game2_showcase_awarded">Ottenuto il %s</string>
     <string name="game2_showcase_empty">I tuoi trofei ti aspettano. Le coppe del torneo e del viaggio, i trofei di Rinascita e della Fiamma si sistemano qui man mano che li vinci.</string>
+    <string name="game2_showcase_move_down">Sposta giù: %s</string>
+    <string name="game2_showcase_move_up">Sposta su: %s</string>
+    <string name="game2_showcase_order_hint">Riordina i tuoi trofei: sposta ciascuno su o giù di un posto.</string>
     <string name="game2_showcase_title">I tuoi trofei</string>
     <string name="game2_showcase_visibility">Chi vede i tuoi trofei</string>
     <string name="game2_showcase_visibility_hint">Un visitatore vede solo il mese in cui l’hai ottenuto, mai la data esatta. «Solo io» nasconde i tuoi trofei a tutti gli altri.</string>

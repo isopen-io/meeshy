@@ -88,6 +88,10 @@
     <string name="game2_league_name_saphir">ياقوت أزرق</string>
     <string name="game2_league_pseudonym_current">تلعب باسم %s.</string>
     <string name="game2_league_pseudonym_drawn">اسمك في المبارزة يُسحب بالقرعة: لا اسمك ولا معرّفك. ويتغيّر مع كل رحلة.</string>
+    <string name="game2_league_pseudonym_hint_change">من 3 إلى 20 حرفًا. لا اسمك ولا معرّفك.</string>
+    <string name="game2_league_pseudonym_invalid">اسم المبارزة هذا غير صالح: من 3 إلى 20 حرفًا، حروف وأرقام ونقطة وشرطة وشرطة سفلية.</string>
+    <string name="game2_league_pseudonym_new">اسم مبارزة جديد</string>
+    <string name="game2_league_pseudonym_save">تغيير اسمك في المبارزة</string>
     <string name="game2_league_pseudonym_title">اسمك في المبارزة</string>
     <string name="game2_league_rank_line">المركز ⁦%1$s⁩ من ⁦%2$s⁩</string>
     <string name="game2_league_snapshot">يُجمَّد ترتيب الآخرين كل يوم عند الساعة 4 صباحًا: لا أحد يرى من يلعب الآن. سطرك وحده مباشر.</string>
@@ -165,6 +169,9 @@
     <string name="game2_settings_visibility_title">من يرى ماذا</string>
     <string name="game2_showcase_awarded">نُلت في %s</string>
     <string name="game2_showcase_empty">كؤوسك في انتظارك. كؤوس المبارزة والرحلة والانبعاث واللهب تُصفّ هنا كلما ربحتها.</string>
+    <string name="game2_showcase_move_down">خفض: %s</string>
+    <string name="game2_showcase_move_up">رفع: %s</string>
+    <string name="game2_showcase_order_hint">رتّب كؤوسك: ارفع كل كأس أو اخفضها مرتبة واحدة.</string>
     <string name="game2_showcase_title">كؤوسك</string>
     <string name="game2_showcase_visibility">من يرى كؤوسك</string>
     <string name="game2_showcase_visibility_hint">يرى الزائر شهر الحصول فقط، لا التاريخ الدقيق أبدًا. «أنا فقط» يخفي كؤوسك عن الجميع.</string>

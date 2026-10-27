@@ -88,6 +88,10 @@
     <string name="game2_league_name_saphir">Saphir</string>
     <string name="game2_league_pseudonym_current">Du spielst unter dem Namen %s.</string>
     <string name="game2_league_pseudonym_drawn">Dein Turniername wird zugelost: weder dein Name noch dein Benutzername. Er wechselt mit jeder Reise.</string>
+    <string name="game2_league_pseudonym_hint_change">3 bis 20 Zeichen. Weder dein Name noch dein Benutzername.</string>
+    <string name="game2_league_pseudonym_invalid">Dieser Turniername ist ungültig: 3 bis 20 Zeichen, Buchstaben, Ziffern, Punkt, Bindestrich, Unterstrich.</string>
+    <string name="game2_league_pseudonym_new">Neuer Turniername</string>
+    <string name="game2_league_pseudonym_save">Turniernamen ändern</string>
     <string name="game2_league_pseudonym_title">Dein Turniername</string>
     <string name="game2_league_rank_line">Platz %1$s von %2$s</string>
     <string name="game2_league_snapshot">Die Plätze der anderen werden täglich um 4 Uhr festgehalten: Niemand sieht, wer gerade spielt. Nur deine Zeile ist live.</string>
@@ -165,6 +169,9 @@
     <string name="game2_settings_visibility_title">Wer was sieht</string>
     <string name="game2_showcase_awarded">Erhalten am %s</string>
     <string name="game2_showcase_empty">Deine Trophäen warten auf dich. Die Pokale aus Turnier und Reise, die Trophäen der Wiedergeburt und der Flamme kommen hierher, sobald du sie gewinnst.</string>
+    <string name="game2_showcase_move_down">Nach unten: %s</string>
+    <string name="game2_showcase_move_up">Nach oben: %s</string>
+    <string name="game2_showcase_order_hint">Ordne deine Trophäen: Verschiebe jede um eine Stelle nach oben oder unten.</string>
     <string name="game2_showcase_title">Deine Trophäen</string>
     <string name="game2_showcase_visibility">Wer deine Trophäen sieht</string>
     <string name="game2_showcase_visibility_hint">Besucher sehen nur den Monat, nie das genaue Datum. „Nur ich“ verbirgt deine Trophäen vor allen anderen.</string>

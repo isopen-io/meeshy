@@ -88,6 +88,10 @@
     <string name="game2_league_name_saphir">Zafiro</string>
     <string name="game2_league_pseudonym_current">Juegas con el nombre %s.</string>
     <string name="game2_league_pseudonym_drawn">Tu nombre de justa se sortea: ni tu nombre ni tu usuario. Cambia con cada viaje.</string>
+    <string name="game2_league_pseudonym_hint_change">De 3 a 20 caracteres. Ni tu nombre ni tu usuario.</string>
+    <string name="game2_league_pseudonym_invalid">Este nombre de justa no es válido: de 3 a 20 caracteres, letras, números, punto, guion, guion bajo.</string>
+    <string name="game2_league_pseudonym_new">Nuevo nombre de justa</string>
+    <string name="game2_league_pseudonym_save">Cambiar de nombre de justa</string>
     <string name="game2_league_pseudonym_title">Tu nombre de justa</string>
     <string name="game2_league_rank_line">Puesto %1$s de %2$s</string>
     <string name="game2_league_snapshot">La clasificación de los demás se fija cada día a las 4 h: nadie ve quién está jugando ahora. Solo tu fila está en directo.</string>
@@ -165,6 +169,9 @@
     <string name="game2_settings_visibility_title">Quién ve qué</string>
     <string name="game2_showcase_awarded">Obtenido el %s</string>
     <string name="game2_showcase_empty">Tus trofeos te esperan. Las copas de justa y de viaje, los trofeos de Renacimiento y de Llama se colocan aquí a medida que los ganas.</string>
+    <string name="game2_showcase_move_down">Bajar: %s</string>
+    <string name="game2_showcase_move_up">Subir: %s</string>
+    <string name="game2_showcase_order_hint">Ordena tus trofeos: sube o baja cada uno un puesto.</string>
     <string name="game2_showcase_title">Tus trofeos</string>
     <string name="game2_showcase_visibility">Quién ve tus trofeos</string>
     <string name="game2_showcase_visibility_hint">Un visitante solo ve el mes de obtención, nunca la fecha exacta. «Solo yo» oculta tus trofeos a todos los demás.</string>
