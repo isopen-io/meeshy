@@ -18,6 +18,7 @@ import me.meeshy.ui.theme.hexColor
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -40,6 +41,7 @@ import androidx.compose.ui.unit.em
 import kotlin.math.roundToInt
 import me.meeshy.feature.stories.R
 import me.meeshy.sdk.model.scene.StoryTextDirection
+import me.meeshy.ui.haptics.rememberMeeshyHaptics
 
 /**
  * One on-canvas text element: positioned at its normalised ([StoryTextElement.x],
@@ -67,6 +69,12 @@ internal fun TextElementLayer(
     onTextChange: (String) -> Unit = {},
 ) {
     var sizePx by remember { mutableStateOf(IntSize.Zero) }
+    val haptics = rememberMeeshyHaptics()
+    val currentTap by rememberUpdatedState(onTap)
+    val currentLongPress by rememberUpdatedState(onLongPress)
+    val currentDrag by rememberUpdatedState(onDrag)
+    val currentDragEnd by rememberUpdatedState(onDragEnd)
+    val currentTransform by rememberUpdatedState(onTransform)
     Box(
         modifier = Modifier
             .offset {
@@ -85,12 +93,18 @@ internal fun TextElementLayer(
                 onMeasured(it)
             }
             .pointerInput(element.id) {
-                detectTapGestures(onLongPress = { onLongPress() }, onTap = { onTap() })
+                detectTapGestures(
+                    onLongPress = {
+                        haptics.medium()
+                        currentLongPress()
+                    },
+                    onTap = { currentTap() },
+                )
             }
             .pointerInput(element.id) {
                 detectTransformGestures { _, pan, zoom, rotation ->
-                    onDrag(pan.x, pan.y)
-                    onTransform(zoom, rotation)
+                    currentDrag(pan.x, pan.y)
+                    currentTransform(zoom, rotation)
                 }
             }
             .pointerInput(element.id) {
@@ -102,7 +116,7 @@ internal fun TextElementLayer(
                     do {
                         val event = awaitPointerEvent(PointerEventPass.Final)
                     } while (event.changes.any { it.pressed })
-                    onDragEnd()
+                    currentDragEnd()
                 }
             }
             .background(
