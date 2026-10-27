@@ -198,8 +198,6 @@
             </intent-filter>
         </service>
 
-        <!-- Bouton « Refuser » de la notification d'appel (CallStyle) -->
-        <receiver
         <!-- Boutons « Répondre » (saisie en ligne) et « Marquer comme lu » de la bannière d'un message -->
         <receiver
             android:name=".push.PushActionReceiver"
@@ -212,6 +210,8 @@
             android:name="com.google.firebase.messaging.default_notification_icon"
             android:resource="@drawable/ic_stat_meeshy" />
 
+        <!-- Bouton « Refuser » de la notification d'appel (CallStyle) -->
+        <receiver
             android:name=".push.DeclineCallReceiver"
             android:exported="false" />
 
