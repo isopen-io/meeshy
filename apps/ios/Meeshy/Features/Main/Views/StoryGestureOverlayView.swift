@@ -63,7 +63,7 @@ struct StoryGestureOverlayView: View {
     /// POURQUOI IL EXISTE : cette vue referme la surface active dès le
     /// TOUCH-DOWN (branche `hasActiveFeature` ci-dessous), alors que
     /// `unifiedDragGesture` exige 15 pt de déplacement avant son premier
-    /// `onChanged` — donc avant sa photographie `hadActiveFeatureAtDragStart`,
+    /// `onChanged` — donc avant la photographie de `StoryReaderDragTracker.track`,
     /// qui vaut déjà `false`. Un glissement bas de plus de 120 pt parti du
     /// canvas concluait alors `.dismissViewer` : l'utilisateur voulait refermer
     /// son strip et PERDAIT la story. Ce drapeau rend au parent l'information

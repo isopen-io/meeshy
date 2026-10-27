@@ -73,7 +73,7 @@ enum StoryReaderSurfaceRules {
     /// l'emoji picker) et son cadre n'est publié nulle part. Estimer sa hauteur
     /// ici dupliquerait des constantes d'un autre module, dont la dérive
     /// laisserait passer un geste NÉ DANS le `ScrollView` : `onEnded` jamais
-    /// délivré, `gestureAxis` collé à 2, lecture gelée. On préfère le
+    /// délivré, axe vertical collé, lecture gelée. On préfère le
     /// conservatisme jusqu'à ce que ces deux vues publient elles-mêmes la clé
     /// `StoryReaderScrollableSurfaceTopKey` depuis le parent de leur `ScrollView`
     /// (une ligne dans chacune, hors périmètre de ce lot).

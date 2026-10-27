@@ -78,7 +78,7 @@ nonisolated enum StoryReaderDragStartZone {
     /// ceux nés dans la story encore visible au-dessus restent au drag parent, qui
     /// peut ainsi refermer la surface d'un glissement. Bord INCONNU ⇒ tout lui
     /// revient (fail-safe : un swipe inerte vaut mieux qu'un `onEnded` jamais
-    /// délivré, qui laisse `gestureAxis` collé et la lecture gelée).
+    /// délivré, qui laisse l'axe de `StoryReaderDragTracker` collé et la lecture gelée).
     static func yieldsToScrollableSurface(hasScrollableSurface: Bool,
                                           surfaceTopY: CGFloat?,
                                           dragStartY: CGFloat) -> Bool {

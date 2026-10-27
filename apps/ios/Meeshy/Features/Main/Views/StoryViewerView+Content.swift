@@ -170,7 +170,7 @@ extension StoryViewerView {
         showFullEmojiPicker = false
         // Reset seam for a scrub whose .onEnded never fires (competing
         // recognizer / system interruption drops it, same hazard documented
-        // for gestureAxis above): without this, isScrubbingRail could stay
+        // for the drag axis, `StoryReaderDragTracker`): without this, isScrubbingRail could stay
         // stuck true and shouldPauseTimer would freeze the story forever.
         isScrubbingRail = false
         // Slide changed → the previous slide's reply target, rows and hearts
@@ -204,7 +204,7 @@ extension StoryViewerView {
         isPaused = false
         isLongPressPaused = false
         // Filet de récupération de l'axe de geste. Depuis que la pause du drag
-        // est ÉTAT-DIRIGÉE (`gestureAxis != 0` dans `shouldPauseTimer`), un axe
+        // est ÉTAT-DIRIGÉE (`drag.isInFlight` dans `shouldPauseTimer`), un axe
         // resté collé gèle la lecture — et SwiftUI ne délivre PAS `onEnded`
         // quand un recognizer concurrent (ScrollView du rail en repli
         // `ViewThatFits`, liste de commentaires) emporte la séquence. Avant ce

@@ -355,6 +355,15 @@ final class StoryCommentSession: ObservableObject {
             .store(in: &realtime)
     }
 
+    /// The reader left: its socket subscriptions and its `viewing` probe go.
+    /// Both close over the reader, which owns this session — kept, they formed
+    /// a cycle that outlived the exit and went on applying socket events. The
+    /// next appearance re-arms them (`begin`, `observeRealtime`).
+    func end() {
+        realtime.removeAll()
+        viewing = { nil }
+    }
+
     /// The pure core of the rollback: the failed row (root, or a reply routed
     /// back out of its parent's count) goes, and the count drops exactly once,
     /// symmetrically with `insertOptimistic`.

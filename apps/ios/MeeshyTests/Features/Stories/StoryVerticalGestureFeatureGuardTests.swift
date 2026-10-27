@@ -252,7 +252,7 @@ final class StoryVerticalGestureFeatureGuardTests: XCTestCase {
 
     /// L'overlay gestuel enfant referme la surface active dès le TOUCH-DOWN,
     /// alors que le drag parent n'ouvre son premier `onChanged` qu'à 15 pt : sa
-    /// photographie `hadActiveFeatureAtDragStart` vaut donc `false` et un
+    /// photographie (`StoryReaderDragTracker.track`) vaut donc `false` et un
     /// glissement bas de plus de 120 pt concluait `.dismissViewer` — la story
     /// perdue pour un strip refermé. Le relâchement doit lire les DEUX sources.
     func test_verticalDecision_alsoHonoursTheFeatureConsumedByTheChildAtTouchDown() throws {
@@ -304,7 +304,7 @@ final class StoryVerticalGestureFeatureGuardTests: XCTestCase {
     ///
     /// Un `pauseTimer()` posé à la décision d'axe exige un `resumeTimer()`
     /// symétrique — jamais appelé quand SwiftUI saute le `onEnded`. Adossée à
-    /// `gestureAxis`, la reprise redevient automatique dès que l'axe retombe à 0.
+    /// `drag.isInFlight`, la reprise redevient automatique dès que l'axe retombe à `.undecided`.
     func test_dragPause_isDrivenByGestureAxis_notByAPairedPauseCall() throws {
         let code = try dragGestureCode()
         XCTAssertFalse(

@@ -354,4 +354,89 @@ final class StoryCommentSessionTests: XCTestCase {
         XCTAssertEqual(sut.thread.roots.first?.likes, 2)
         XCTAssertEqual(sut.count, 2)
     }
+
+    func test_end_dropsTheSocketSubscriptions_andAnAppearanceReArmsThem() async {
+        let (sut, _, fakes) = makeSUT()
+        let socket = MockSocialSocket()
+        sut.begin(storyId: "s1", payloadCount: 1, viewing: { fakes.viewed })
+        sut.observeRealtime(socket: socket, languages: { ["fr"] })
+        let added: SocketCommentAddedData = JSONStub.decode("""
+        {"postId":"s1","comment":{"id":"c-new","content":"Salut","createdAt":"2026-01-15T12:00:00.000Z","author":{"id":"other","username":"other"}},"commentCount":5}
+        """)
+
+        sut.end()
+        socket.commentAdded.send(added)
+        await settle()
+        XCTAssertTrue(sut.thread.roots.isEmpty, "a reader that left writes nothing")
+        XCTAssertEqual(sut.count, 1)
+
+        sut.begin(storyId: "s1", payloadCount: 1, viewing: { fakes.viewed })
+        sut.observeRealtime(socket: socket, languages: { ["fr"] })
+        socket.commentAdded.send(added)
+        await settle()
+        XCTAssertEqual(sut.thread.roots.map(\.id), ["c-new"])
+        XCTAssertEqual(sut.count, 5)
+    }
+
+    func test_end_releasesWhatTheViewingProbeAndTheRealtimeLanguagesCaptured() {
+        final class ReaderState { let id = "s1" }
+        let (sut, _, _) = makeSUT()
+        let socket = MockSocialSocket()
+        weak var released: ReaderState?
+        do {
+            let reader = ReaderState()
+            released = reader
+            sut.begin(storyId: "s1", payloadCount: 0, viewing: { reader.id })
+            sut.observeRealtime(socket: socket, languages: { [reader.id] })
+        }
+        XCTAssertNotNil(released, "the session holds the reader while it reads")
+
+        sut.end()
+
+        XCTAssertNil(released, "the reader's state must not outlive its exit through the session it owns")
+    }
+
+    func test_theReaderEndsItsSessionWhenItDisappears() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Views/StoryViewerView+Lifecycle.swift")
+        let source = try String(contentsOf: url, encoding: .utf8)
+        guard let start = source.range(of: "func viewerWillDisappear()"),
+              let end = source.range(of: "\n    }", range: start.upperBound..<source.endIndex) else {
+            return XCTFail("viewerWillDisappear not found")
+        }
+        XCTAssertTrue(source[start.upperBound..<end.lowerBound].contains("commentSession.end()"))
+    }
+
+    func test_observeRealtime_removedHeartsEditsAndTranslationsReachTheViewedStory_inTheLanguagesOfTheEvent() async {
+        let (sut, _, fakes) = makeSUT()
+        let socket = MockSocialSocket()
+        var languages = ["fr"]
+        sut.begin(storyId: "s1", payloadCount: 1, viewing: { fakes.viewed })
+        sut.observeRealtime(socket: socket, languages: { languages })
+        sut.thread.roots = [Self.comment("c1", likes: 3)]
+        let removed: SocketCommentReactionUpdateEvent = JSONStub.decode("""
+        {"commentId":"c1","postId":"s1","userId":"u9","emoji":"\u{2764}\u{FE0F}","action":"removed","aggregation":{"emoji":"\u{2764}\u{FE0F}","count":1,"userIds":["u8"],"hasCurrentUser":false}}
+        """)
+        let updated: SocketCommentUpdatedData = JSONStub.decode("""
+        {"postId":"s1","comment":{"id":"c1","content":"Edited","originalLanguage":"en","createdAt":"2026-01-15T12:00:00.000Z","author":{"id":"other","username":"other"}}}
+        """)
+
+        socket.commentReactionRemoved.send(removed)
+        await settle()
+        XCTAssertEqual(sut.thread.roots.first?.likes, 1)
+
+        socket.commentUpdated.send(updated)
+        await settle()
+        XCTAssertEqual(sut.thread.roots.first?.content, "Edited")
+
+        languages = ["es"]
+        let translated: SocketCommentTranslationUpdatedData = JSONStub.decode("""
+        {"postId":"s1","commentId":"c1","language":"es","translation":{"text":"Editado"}}
+        """)
+        socket.commentTranslationUpdated.send(translated)
+        await settle()
+        XCTAssertEqual(sut.thread.roots.first?.translatedContent, "Editado",
+                       "the Prism chain is read at the event, so a language override applies at once")
+    }
 }

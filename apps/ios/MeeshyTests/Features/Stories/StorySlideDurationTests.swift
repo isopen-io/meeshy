@@ -17,5 +17,6 @@ final class StorySlideDurationTests: XCTestCase {
                               createdAt: Date(), expiresAt: nil, isViewed: false)
         XCTAssertEqual(StorySlideDuration.of(story),
                        story.toRenderableSlide(preferredLanguages: []).computedTotalDuration())
+        XCTAssertEqual(StorySlideDuration.of(story), 6.0, "a static slide lasts six seconds")
     }
 }

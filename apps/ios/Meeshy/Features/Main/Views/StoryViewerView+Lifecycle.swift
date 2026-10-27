@@ -78,13 +78,12 @@ extension StoryViewerView {
         // l'état du viewer, annule les préchargements et rend les canvases ;
         // le pipeline se ré-installe au prochain onAppear.
         playback.tearDown()
-        // Purge l'état gestuel transient : le lecteur peut être quitté au
-        // beau milieu d'un drag (dismiss, background, navigation externe) et
-        // le `onEnded` du recognizer ne viendra jamais. Sans ça, `gestureAxis`
-        // survivait à la vue et la réouverture démarrait avec un axe déjà
-        // décidé, court-circuitant tap et long-press.
+        // Purge l'état gestuel transient : quitté en plein drag, le lecteur
+        // ne reçoit jamais `onEnded`, et la réouverture démarrait avec un axe
+        // déjà décidé, court-circuitant tap et long-press.
         resetGestureTracking()
         groupIntro.cancelPending()
+        commentSession.end()
         delays.cancelAll()
         StoryMediaCoordinator.shared.deactivate()
         // RC4.5 — cut the reader audio engine on exit. `ReaderAudioMixer`
