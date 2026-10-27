@@ -145,11 +145,11 @@ final class RiverMetricsTests: XCTestCase {
     /// celui-là contre une future duplication accidentelle.
     func test_sourceGuard_neverDuplicatesLawSilenceWindowLiteral() throws {
         let sourceURL = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent() // Riviere/
+            .deletingLastPathComponent() // River/
             .deletingLastPathComponent() // Unit/
             .deletingLastPathComponent() // MeeshyTests/
             .deletingLastPathComponent() // apps/ios/
-            .appendingPathComponent("Meeshy/Features/Main/Riviere/Core/RiverMetrics.swift")
+            .appendingPathComponent("Meeshy/Features/River/Core/RiverMetrics.swift")
         let source = try String(contentsOf: sourceURL, encoding: .utf8)
         let codeLines = source
             .split(separator: "\n", omittingEmptySubsequences: false)

@@ -1082,7 +1082,7 @@ final class MessageExitOfferTests: XCTestCase {
     /// #11224 — la Rivière n'a plus de menu à elle : sa copie est celle du menu
     /// unifié, gardée par le transport. Elle n'écrit plus dans le presse-papiers.
     func test_river_neverCopiesByItself_theUnifiedMenuDoes() throws {
-        let code = try source("Riviere/View/RiverBubbleView.swift")
+        let code = try source("../River/View/RiverBubbleView.swift")
         XCTAssertFalse(code.contains("UIPasteboard"))
         XCTAssertTrue(code.contains("onLongPress(content.bubble.messageId)"))
     }

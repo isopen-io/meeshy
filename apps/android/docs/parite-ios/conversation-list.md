@@ -724,11 +724,11 @@ Transposition Android : Canvas SwiftUI -> Canvas/DrawScope Compose ; PreferenceK
 
 <details><summary>Sources iOS (5)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Riviere/View/RiverBubbleView.swift`
-- `apps/ios/Meeshy/Features/Main/Riviere/View/RiverLaneCanvas.swift`
-- `apps/ios/Meeshy/Features/Main/Riviere/View/RiverQuotedMediaFace.swift`
-- `apps/ios/Meeshy/Features/Main/Riviere/View/RiverRendering.swift`
-- `apps/ios/Meeshy/Features/Main/Riviere/View/RiverCoordinateSpace.swift`
+- `apps/ios/Meeshy/Features/River/View/RiverBubbleView.swift`
+- `apps/ios/Meeshy/Features/River/View/RiverLaneCanvas.swift`
+- `apps/ios/Meeshy/Features/River/View/RiverQuotedMediaFace.swift`
+- `apps/ios/Meeshy/Features/River/View/RiverRendering.swift`
+- `apps/ios/Meeshy/Features/River/View/RiverCoordinateSpace.swift`
 
 </details>
 
@@ -754,13 +754,13 @@ Transposition Android : Calendar/Locale -> java.time + DateTimeFormatter ; Obser
 
 <details><summary>Sources iOS (7)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Riviere/Core/RiverConversationMapping.swift`
-- `apps/ios/Meeshy/Features/Main/Riviere/Core/RiverColumnPacking.swift`
-- `apps/ios/Meeshy/Features/Main/Riviere/Core/RiverColumnLayout.swift`
-- `apps/ios/Meeshy/Features/Main/Riviere/Core/RiverTimeScale.swift`
-- `apps/ios/Meeshy/Features/Main/Riviere/Core/RiverNavigationController.swift`
-- `apps/ios/Meeshy/Features/Main/Riviere/Core/RiverModeGate.swift`
-- `apps/ios/Meeshy/Features/Main/Riviere/Core/RiverMetrics.swift`
+- `apps/ios/Meeshy/Features/River/Core/RiverConversationMapping.swift`
+- `apps/ios/Meeshy/Features/River/Core/RiverColumnPacking.swift`
+- `apps/ios/Meeshy/Features/River/Core/RiverColumnLayout.swift`
+- `apps/ios/Meeshy/Features/River/Core/RiverTimeScale.swift`
+- `apps/ios/Meeshy/Features/River/Core/RiverNavigationController.swift`
+- `apps/ios/Meeshy/Features/River/Core/RiverModeGate.swift`
+- `apps/ios/Meeshy/Features/River/Core/RiverMetrics.swift`
 
 </details>
 
@@ -784,10 +784,10 @@ Transposition Android : ScrollView([.horizontal,.vertical]) -> LazyColumn imbriq
 
 <details><summary>Sources iOS (4)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Riviere/View/RiverStreamHost.swift`
-- `apps/ios/Meeshy/Features/Main/Riviere/View/RiverConversationHost.swift`
-- `apps/ios/Meeshy/Features/Main/Riviere/View/RiverLaneHeaderStrip.swift`
-- `apps/ios/Meeshy/Features/Main/Riviere/View/RiverTimeHandle.swift`
+- `apps/ios/Meeshy/Features/River/View/RiverStreamHost.swift`
+- `apps/ios/Meeshy/Features/River/View/RiverConversationHost.swift`
+- `apps/ios/Meeshy/Features/River/View/RiverLaneHeaderStrip.swift`
+- `apps/ios/Meeshy/Features/River/View/RiverTimeHandle.swift`
 
 </details>
 

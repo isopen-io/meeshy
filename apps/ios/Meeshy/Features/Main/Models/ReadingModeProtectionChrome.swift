@@ -36,7 +36,7 @@ nonisolated enum ReadingModeProtectionChrome {
         case .bubbles:
             return "Features/Main/Views/Bubble/BubbleStandardLayout.swift"
         case .river:
-            return "Features/Main/Riviere/View/RiverBubbleView.swift"
+            return "Features/River/View/RiverBubbleView.swift"
         // Le Résumé ne rend pas de bulle : il ne montre AUCUN texte protégé
         // (le digest est une copie, qu'aucune échéance n'atteint). Il désigne
         // les messages protégés dans leur propre section, avec le même chrome.
@@ -61,7 +61,7 @@ nonisolated enum ReadingModeProtectionChrome {
         case .bubbles:
             return "Features/Main/Views/ThemedMessageBubble.swift"
         case .river:
-            return "Features/Main/Riviere/View/RiverBubbleView.swift"
+            return "Features/River/View/RiverBubbleView.swift"
         case .summary:
             return "Features/Main/Focal/Summary/SummaryProtectionsView.swift"
         }

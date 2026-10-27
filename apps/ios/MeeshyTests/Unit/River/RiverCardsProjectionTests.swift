@@ -47,7 +47,7 @@ final class RiverCardsProjectionTests: XCTestCase {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Riviere/View/RiverBubbleView.swift")
+            .appendingPathComponent("Meeshy/Features/River/View/RiverBubbleView.swift")
         let source = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
         XCTAssertTrue(source.contains("BubbleLinkEmbed("))
         XCTAssertTrue(source.contains("BubbleAttachmentView("))

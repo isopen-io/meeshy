@@ -56,7 +56,7 @@ struct RiverStreamHost: View {
     var laneWidth: CGFloat = RiverMetrics.Lane.widthReference
     /// Hauteur RÉELLE du pane, DITE par l'appelant (qui la mesure déjà pour
     /// borner la Rivière à l'écran). Sert l'unique ligne de lecture
-    /// (`focusRank`). Reçue plutôt que mesurée ici : `Riviere/View/` réutilise
+    /// (`focusRank`). Reçue plutôt que mesurée ici : `River/View/` réutilise
     /// les primitives de mesure existantes, il n'en déclare jamais une
     /// troisième (`RiverSourceGuardTests`).
     var paneHeight: CGFloat = 0

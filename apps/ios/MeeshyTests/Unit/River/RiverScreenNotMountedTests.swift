@@ -37,24 +37,24 @@ import XCTest
 /// `mode == .river`, en UN seul site. Retirer l'un des deux fait rougir.
 ///
 /// `RiverStreamHost` — la PEAU qui peint les couloirs — reste, lui,
-/// référencé nulle part hors de `Riviere/` : le fil ne connaît que la porte
+/// référencé nulle part hors de `River/` : le fil ne connaît que la porte
 /// (`RiverConversationHost`), jamais la peinture.
 final class RiverScreenNotMountedTests: XCTestCase {
 
     private static var meeshyRoot: URL {
         URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()   // .../Unit/Riviere
+            .deletingLastPathComponent()   // .../Unit/River
             .deletingLastPathComponent()   // .../Unit
             .deletingLastPathComponent()   // .../MeeshyTests
             .deletingLastPathComponent()   // .../apps/ios
             .appendingPathComponent("Meeshy")
     }
 
-    /// Tout `.swift` sous `Meeshy/`, HORS `Features/Main/Riviere/` (le
+    /// Tout `.swift` sous `Meeshy/`, HORS `Features/River/` (le
     /// producteur légitime) — découvert, jamais recopié.
     private func nonRiviereSwiftFiles() throws -> [URL] {
         var results: [URL] = []
-        let riviereRoot = Self.meeshyRoot.appendingPathComponent("Features/Main/Riviere")
+        let riviereRoot = Self.meeshyRoot.appendingPathComponent("Features/River")
         guard let enumerator = FileManager.default.enumerator(
             at: Self.meeshyRoot,
             includingPropertiesForKeys: [.isDirectoryKey],
@@ -77,11 +77,11 @@ final class RiverScreenNotMountedTests: XCTestCase {
 
     func test_guardDiscoversFiles_neverSilentlyEmpty() throws {
         let files = try nonRiviereSwiftFiles()
-        XCTAssertFalse(files.isEmpty, "Aucun fichier .swift découvert hors Riviere/ — vérifier le chemin de scan.")
+        XCTAssertFalse(files.isEmpty, "Aucun fichier .swift découvert hors River/ — vérifier le chemin de scan.")
     }
 
     /// `RiverStreamHost` — l'hôte de l'écran — n'apparaît NULLE PART hors de
-    /// `Riviere/` : aucun call site ne le monte encore.
+    /// `River/` : aucun call site ne le monte encore.
     func test_riverStreamHost_isReferencedNowhereOutsideRiviere() throws {
         for url in try nonRiviereSwiftFiles() {
             guard let code = try? String(contentsOf: url, encoding: .utf8) else { continue }
@@ -179,7 +179,7 @@ final class RiverScreenNotMountedTests: XCTestCase {
         )
     }
 
-    /// Le point d'entrée vit dans `Riviere/` (`RiverConversationHost`) : `RiverStreamHost`
+    /// Le point d'entrée vit dans `River/` (`RiverConversationHost`) : `RiverStreamHost`
     /// (la peau) reste référencé NULLE PART en dehors du dossier — le fil ne connaît
     /// que l'hôte de conversation, qui injecte le texte Prisme et possède la navigation.
     func test_theOnlyDoorIntoTheRiver_isTheConversationHost() throws {
@@ -187,6 +187,6 @@ final class RiverScreenNotMountedTests: XCTestCase {
             (try? String(contentsOf: url, encoding: .utf8))?.contains("RiverConversationHost(") == true
         }
         XCTAssertEqual(hits.map(\.lastPathComponent), ["ConversationView+ReaderLayers.swift"],
-                       "Le fil est l'unique site hors `Riviere/` qui monte l'hôte de conversation.")
+                       "Le fil est l'unique site hors `River/` qui monte l'hôte de conversation.")
     }
 }

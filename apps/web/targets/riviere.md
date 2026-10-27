@@ -21,7 +21,7 @@ mesure le `getBoundingClientRect()` de chacune (`apps/web/components/conversatio
 `:305-330`). Sur le fil de 500 messages que D-15 impose de tenir (`apps/web-v2/decisions.md:308-320`), c'est
 exactement le défaut que la virtualisation vient de corriger. **La Rivière entre au périmètre le jour où son tracé
 sait vivre sur une fenêtre virtualisée** — mécanisme qu'iOS possède déjà (`RiverCanvasRankPlacement`,
-`apps/ios/Meeshy/Features/Main/Riviere/View/RiverLaneCanvas.swift:38-51`) et que la peau legacy n'a pas.
+`apps/ios/Meeshy/Features/River/View/RiverLaneCanvas.swift:38-51`) et que la peau legacy n'a pas.
 
 ### 0.1 Les DONNÉES
 
@@ -122,7 +122,7 @@ d'arbitrage. **Découpable en quatre travaux** (§ 8.4).
 
 ## 1. Sources lues
 
-**iOS** — les 14 fichiers de `apps/ios/Meeshy/Features/Main/Riviere/` (4 284 l ; volumes par fichier en § 0.2), dont `Core/RiverLaneResolver.swift` **lu en entier** ; le montage et la porte : `Views/ConversationView.swift:540-600`, `:603`, `:1144`, `:1415-1512`, `:2029` ; `Focal/Core/ReadingModeOrchestrator.swift:142`, `:405-460` ; `Lentille/Mode/LentilleReadingModeContext.swift:45-99` ; `Lentille/Core/LentilleFeatureFlag.swift:1-80`.
+**iOS** — les 14 fichiers de `apps/ios/Meeshy/Features/River/` (4 284 l ; volumes par fichier en § 0.2), dont `Core/RiverLaneResolver.swift` **lu en entier** ; le montage et la porte : `Views/ConversationView.swift:540-600`, `:603`, `:1144`, `:1415-1512`, `:2029` ; `Focal/Core/ReadingModeOrchestrator.swift:142`, `:405-460` ; `Lentille/Mode/LentilleReadingModeContext.swift:45-99` ; `Lentille/Core/LentilleFeatureFlag.swift:1-80`.
 
 **Partagé** — `utils/river-lanes.ts` (1 044, **lu en entier**), `utils/reading-modes.ts:200-360`, `design/lentille-tokens.json` → `river`, `fixtures/reading-modes/river-*.vectors.json`, `__tests__/river-lanes.test.ts`, `__tests__/vectors/river-*.vectors.test.ts`, `types/conversation.ts:330`, `types/api-schemas/conversation.ts:244`, `package.json`. **Passerelle** — `routes/conversations/core-list.ts:571`, `:664-665` ; `core-detail.ts:118`, `:191`, `:208-233`. **Legacy web** — les 9 fichiers de `apps/web/components/conversations/riviere/` (1 252 l) + 952 l de témoins ; `apps/web/styles/lentille-tokens.css:160-205`. **v3.1** — `src/lib/reading-mode/{decision,catalog,metrics}.ts`, `src/routes/thread.tsx` (610), `decisions.md` (D-8 `:102`, D-13 `:208`, D-14 `:253`, D-15 `:308`, D-19 `:586`), `budgets.json`, `vite.config.ts:363-380`, `src/lib/api/{types,fixtures,prism}.ts`, `src/styles/ios.css:23` ; `.cache/web-v2-workflow/specs/thread.md` (`:24`, `:30-33`, `:69-74`, `:123-124`, `:225-229`).
 

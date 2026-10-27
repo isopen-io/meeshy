@@ -152,9 +152,9 @@ final class LongMessageExpansionTests: XCTestCase {
         XCTAssertFalse(host.contains("messageBubble.longMessageFocus(self.longMessageExpansion("),
                        "jamais lu sur `self` dans la fermeture de la cellule")
         XCTAssertTrue(host.contains("focalActions.onToggleExpanded"), "Script/Focal : la rangée remonte le geste à l'hôte")
-        let river = try source("Meeshy/Features/Main/Riviere/View/RiverStreamHost.swift")
+        let river = try source("Meeshy/Features/River/View/RiverStreamHost.swift")
         XCTAssertTrue(river.contains(".longMessageFocus(expansion(for: bubble.messageId)"), "Rivière : même dépliage, même effet")
-        let riverBubble = try source("Meeshy/Features/Main/Riviere/View/RiverBubbleView.swift")
+        let riverBubble = try source("Meeshy/Features/River/View/RiverBubbleView.swift")
         XCTAssertTrue(riverBubble.contains("BubbleExpandableText("), "Rivière : le texte long est tronqué comme ailleurs")
     }
 
@@ -232,7 +232,7 @@ final class LongMessageExpansionTests: XCTestCase {
             host.contains("LongMessageExpansionLaw.heightTiming(reduceMotion: UIAccessibility.isReduceMotionEnabled)"),
             "Bulles, Script, Focal : la hauteur joue le tempo partagé, coupé sous Réduire le mouvement"
         )
-        let river = try source("Meeshy/Features/Main/Riviere/View/RiverStreamHost.swift")
+        let river = try source("Meeshy/Features/River/View/RiverStreamHost.swift")
         XCTAssertTrue(river.contains("LongMessageExpansionLaw.heightTiming(reduceMotion: reduceMotion)"), "Rivière : même tempo, même courbe")
         XCTAssertFalse(river.contains(".easeInOut(duration: FocalMetrics.Focus.expandDuration)"), "Rivière : plus de courbe locale")
     }

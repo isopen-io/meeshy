@@ -113,7 +113,7 @@ final class ForwardAttributionSingleSiteTests: XCTestCase {
         for (peau, champ) in [
             ("Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout.swift", "content.forwardAttribution"),
             ("Meeshy/Features/Main/Focal/Row/FocalRow.swift", "content.forwardAttribution"),
-            ("Meeshy/Features/Main/Riviere/View/RiverBubbleView.swift", "content.forwardAttribution")
+            ("Meeshy/Features/River/View/RiverBubbleView.swift", "content.forwardAttribution")
         ] {
             let code = AppSourceGuard.stripComments(try AppSourceGuard.unit(peau))
             XCTAssertTrue(

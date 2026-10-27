@@ -19,7 +19,7 @@
 //
 // **`river` (R-131/R-133)** — section ajoutée avec son premier consommateur
 // DANS LE MÊME lot : `RiverMetrics.swift` (miroir Swift, comme
-// `LentilleMetrics`/`FocalMetrics`) et la peau `Riviere/View/` qui le
+// `LentilleMetrics`/`FocalMetrics`) et la peau `River/View/` qui le
 // consomme (`RiverBubbleView`, `RiverLaneCanvas`, `RiverLaneHeaderStrip`) —
 // c'est cette garde-ci qui interdirait de livrer les tokens SANS peau
 // (« token déclaré ⇒ token consommé », cf. workshop §7bis/§7ter « Reste à
@@ -81,7 +81,7 @@ const IOS_APP_ROOT = join(REPO_ROOT, 'apps/ios/Meeshy');
 const IOS_DEFINITION_FILES = [
   'Features/Main/Lentille/Core/LentilleMetrics.swift',
   'Features/Main/Focal/Core/FocalMetrics.swift',
-  'Features/Main/Riviere/Core/RiverMetrics.swift',
+  'Features/River/Core/RiverMetrics.swift',
 ].map((p) => join(IOS_APP_ROOT, p));
 
 

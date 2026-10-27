@@ -1020,7 +1020,7 @@ Rendu : Traits décoratifs, contenu prioritaire pour lecteurs d'écran (ordre DO
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Riviere/Core/RiverLaneResolver.swift`
+- `apps/ios/Meeshy/Features/River/Core/RiverLaneResolver.swift`
 
 </details>
 

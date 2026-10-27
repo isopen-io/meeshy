@@ -122,7 +122,7 @@ final class RiverRenderingMemoTests: XCTestCase {
     // MARK: - La peau ne réindexe plus
 
     func test_streamHost_buildsNoIndexAndNoScaleInItsBody() throws {
-        let path = "Meeshy/Features/Main/Riviere/View/RiverStreamHost.swift"
+        let path = "Meeshy/Features/River/View/RiverStreamHost.swift"
         let code = AppSourceGuard.stripComments(try AppSourceGuard.unit(path))
         XCTAssertFalse(code.isEmpty)
         for forbidden in ["Dictionary(uniqueKeysWithValues", "Dictionary(grouping", "RiverTimeScale.resolve("] {
