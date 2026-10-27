@@ -2,9 +2,8 @@ package me.meeshy.app.widget
 
 import me.meeshy.app.conversations.ConversationRowTime
 import me.meeshy.app.conversations.LastMessagePreviewLabels
-import me.meeshy.app.conversations.lastMessagePreview
+import me.meeshy.app.widget.kit.WidgetOutsidePreview
 import me.meeshy.sdk.model.ApiConversation
-import me.meeshy.sdk.model.resolvedLastMessagePreview
 import me.meeshy.sdk.theme.accentHex
 import me.meeshy.sdk.theme.displayTitle
 
@@ -32,7 +31,7 @@ internal data class RecentConversationRow(
  * `WidgetDataManager.publishConversations` (ordering: pinned first, then most
  * recently active) + `formatLastMessage` (a sender prefix only on non-direct
  * conversations). Reuses the existing `:sdk-core`/`:feature:conversations` SSOTs
- * ([ApiConversation.displayTitle], [ApiConversation.accentHex], [lastMessagePreview],
+ * ([ApiConversation.displayTitle], [ApiConversation.accentHex], [WidgetOutsidePreview],
  * [ConversationRowTime]) rather than re-implementing any of them.
  */
 internal data class RecentConversationsWidgetPresentation(
@@ -51,6 +50,8 @@ internal data class RecentConversationsWidgetPresentation(
             currentUserId: String?,
             previewLabels: LastMessagePreviewLabels,
             preferredLanguages: List<String> = emptyList(),
+            ephemeralLabel: String = "",
+            nowMillis: Long = System.currentTimeMillis(),
         ): RecentConversationsWidgetPresentation {
             val ordered = conversations.sortedWith(
                 compareByDescending<ApiConversation> { it.resolvedPreferences?.isPinned == true }
@@ -60,12 +61,14 @@ internal data class RecentConversationsWidgetPresentation(
                 RecentConversationRow(
                     id = conversation.id,
                     title = conversation.displayTitle(currentUserId),
-                    preview = lastMessagePreview(
-                        message = conversation.lastMessage,
+                    preview = WidgetOutsidePreview.text(
+                        conversation = conversation,
                         currentUserId = currentUserId,
                         showSender = conversation.type.lowercase() !in directConversationTypes,
                         labels = previewLabels,
-                        resolvedContent = conversation.resolvedLastMessagePreview(preferredLanguages),
+                        ephemeralLabel = ephemeralLabel,
+                        preferredLanguages = preferredLanguages,
+                        nowMillis = nowMillis,
                     ),
                     isUnread = conversation.unreadCount > 0,
                     isPinned = conversation.resolvedPreferences?.isPinned == true,

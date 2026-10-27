@@ -37,6 +37,7 @@ import androidx.glance.ImageProvider
 import me.meeshy.app.widget.kit.WidgetTheme
 import me.meeshy.app.widget.kit.widgetSurface
 import me.meeshy.app.widget.kit.WidgetReaderPrismStore
+import me.meeshy.app.widget.kit.widgetEphemeralLabel
 import me.meeshy.app.widget.kit.widgetPreviewLabels
 import androidx.glance.appwidget.action.actionStartActivity as actionStartActivityIntent
 
@@ -68,6 +69,7 @@ internal class RecentConversationsWidget : GlanceAppWidget() {
             currentUserId = currentUserId,
             previewLabels = labels,
             preferredLanguages = WidgetReaderPrismStore(context).load(),
+            ephemeralLabel = widgetEphemeralLabel(context),
         )
 
         provideContent {

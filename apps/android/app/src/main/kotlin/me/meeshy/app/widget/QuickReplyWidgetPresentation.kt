@@ -2,9 +2,8 @@ package me.meeshy.app.widget
 
 import me.meeshy.app.conversations.ConversationRowTime
 import me.meeshy.app.conversations.LastMessagePreviewLabels
-import me.meeshy.app.conversations.lastMessagePreview
+import me.meeshy.app.widget.kit.WidgetOutsidePreview
 import me.meeshy.sdk.model.ApiConversation
-import me.meeshy.sdk.model.resolvedLastMessagePreview
 import me.meeshy.sdk.theme.displayTitle
 
 /**
@@ -27,6 +26,8 @@ internal data class QuickReplyWidgetPresentation(
             currentUserId: String?,
             previewLabels: LastMessagePreviewLabels,
             preferredLanguages: List<String> = emptyList(),
+            ephemeralLabel: String = "",
+            nowMillis: Long = System.currentTimeMillis(),
         ): QuickReplyWidgetPresentation? {
             val ordered = conversations.sortedWith(
                 compareByDescending<ApiConversation> { it.resolvedPreferences?.isPinned == true }
@@ -36,12 +37,14 @@ internal data class QuickReplyWidgetPresentation(
             return QuickReplyWidgetPresentation(
                 conversationId = featured.id,
                 title = featured.displayTitle(currentUserId),
-                preview = lastMessagePreview(
-                    message = featured.lastMessage,
+                preview = WidgetOutsidePreview.text(
+                    conversation = featured,
                     currentUserId = currentUserId,
                     showSender = featured.type.lowercase() !in directConversationTypes,
                     labels = previewLabels,
-                    resolvedContent = featured.resolvedLastMessagePreview(preferredLanguages),
+                    ephemeralLabel = ephemeralLabel,
+                    preferredLanguages = preferredLanguages,
+                    nowMillis = nowMillis,
                 ),
             )
         }
