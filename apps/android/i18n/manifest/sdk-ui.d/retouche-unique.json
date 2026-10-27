@@ -291,6 +291,78 @@
           "iosKey": "call.effects.face.volcano",
           "androidName": "retouch_effect_volcano",
           "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.textEdit.tool.background",
+          "androidName": "retouch_text_background",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.textEdit.bg.glass",
+          "androidName": "retouch_text_bg_glass",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.textEdit.bg.black",
+          "androidName": "retouch_text_bg_black",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.textEdit.bg.black65",
+          "androidName": "retouch_text_bg_black65",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.textEdit.bg.white",
+          "androidName": "retouch_text_bg_white",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.textEdit.bg.white65",
+          "androidName": "retouch_text_bg_white65",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.textEdit.bg.indigo",
+          "androidName": "retouch_text_bg_indigo",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.textEdit.bg.indigo65",
+          "androidName": "retouch_text_bg_indigo65",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.textEdit.bg.pink",
+          "androidName": "retouch_text_bg_pink",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.textEdit.bg.green",
+          "androidName": "retouch_text_bg_green",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.textEdit.bg.amber",
+          "androidName": "retouch_text_bg_amber",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.textEdit.bg.red",
+          "androidName": "retouch_text_bg_red",
+          "status": "adopted"
         }
       ]
     }
