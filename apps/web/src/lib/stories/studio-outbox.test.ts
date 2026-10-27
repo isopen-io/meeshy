@@ -59,12 +59,22 @@ describe('les médias d’une création se retrouvent après un rechargement', (
   });
 
   test('une page que le brouillon n’a pas gardée revient, après celles qu’il a', () => {
-    const twoPages = withAddedPage(emptyStudioDraft('fr'), 'fr');
+    const written = withPage(emptyStudioDraft('fr'), 'page-1', (page) => ({ ...page, texts: [{ ...page.texts[0]!, text: 'Bonjour' }] }));
+    const twoPages = withAddedPage(written, 'fr');
     const second = twoPages.pages[1]!.id;
     const before = withBackground(twoPages, second, visual(photo()));
-    const restored = draftWithOutbox(emptyStudioDraft('fr'), outboxSlotsOf(before), { makeUrl, language: 'fr' });
+    const restored = draftWithOutbox(written, outboxSlotsOf(before), { makeUrl, language: 'fr' });
     expect(restored.pages.map((page) => page.id)).toEqual(['page-1', second]);
     expect(restored.pages[1]!.background?.file).toBeDefined();
+    expect(new Set(restored.pages.flatMap((page) => page.texts.map((layer) => layer.id))).size).toBe(2);
+  });
+
+  test('un brouillon effacé (il ne portait qu’un média non monté) revient sans page blanche devant', () => {
+    const twoPages = withAddedPage(emptyStudioDraft('fr'), 'fr');
+    const second = twoPages.pages[1]!.id;
+    const restored = draftWithOutbox(emptyStudioDraft('fr'), outboxSlotsOf(withBackground(twoPages, second, visual(photo()))), { makeUrl, language: 'fr' });
+    expect(restored.pages.map((page) => page.id)).toEqual([second]);
+    expect(restored.currentPage).toBe(second);
   });
 
   test('un emplacement que le brouillon a REMPLI d’un autre média reste à ce média', () => {
