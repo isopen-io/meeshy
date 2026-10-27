@@ -1,5 +1,8 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="call_control_capture">التقاط المكالمة</string>
+    <string name="call_control_capture_caption">التقاط</string>
+    <string name="call_control_capture_hint">يفرّغ الشاشة لاختيار مونتاج والتقاط المكالمة</string>
     <string name="call_control_flip_camera">التبديل بين الكاميرا الأمامية والخلفية</string>
     <string name="call_control_flip_camera_caption">قلب</string>
     <string name="call_control_flip_camera_hint">يبدّل بين الكاميرا الأمامية والخلفية</string>
@@ -18,6 +21,18 @@
     <string name="call_decline_reply_meeting">أنا في اجتماع.</string>
     <string name="call_decline_reply_write_me">راسلني، سأرد قريبًا.</string>
     <string name="call_decline_title">الرفض مع رسالة</string>
+    <string name="call_frames_mood_corporate">مؤسسي</string>
+    <string name="call_frames_mood_deconnecte">بلا اتصال</string>
+    <string name="call_frames_mood_distingue">راقٍ</string>
+    <string name="call_frames_mood_elegant">أنيق</string>
+    <string name="call_frames_mood_fantastique">خيالي</string>
+    <string name="call_frames_mood_feerique">ساحر</string>
+    <string name="call_frames_mood_futuriste">مستقبلي</string>
+    <string name="call_frames_mood_glauque">قاتم</string>
+    <string name="call_frames_mood_hors_norme">خارج المألوف</string>
+    <string name="call_frames_mood_jovial">مرح</string>
+    <string name="call_frames_mood_morbide">كئيب</string>
+    <string name="call_frames_mood_signature">بصمة</string>
     <string name="call_journal_cancel">إلغاء</string>
     <string name="call_journal_clear_action">مسح</string>
     <string name="call_journal_clear_all">مسح الكل</string>
@@ -30,6 +45,20 @@
     <string name="call_journal_search_empty">لا توجد مكالمة تطابق «%s»</string>
     <string name="call_journal_search_empty_hint">يغطي السجل الأشهر الثلاثة الأخيرة.</string>
     <string name="call_journal_search_placeholder">البحث عن مكالمة</string>
+    <string name="call_live_frame_accept">تطبيق</string>
+    <string name="call_live_frame_answer_accepted">طبّق %s إطارك</string>
+    <string name="call_live_frame_answer_accepted_anonymous">طبّق الطرف الآخر إطارك</string>
+    <string name="call_live_frame_answer_declined">يحتفظ %s بعرضه</string>
+    <string name="call_live_frame_answer_declined_anonymous">يحتفظ الطرف الآخر بعرضه</string>
+    <string name="call_live_frame_caption">إطار</string>
+    <string name="call_live_frame_decline">لا، شكرًا</string>
+    <string name="call_live_frame_hold_hint">يُبقي هذا الإطار حول الفيديوهين طوال المكالمة ويقترحه على الطرف الآخر</string>
+    <string name="call_live_frame_label">إطار مباشر</string>
+    <string name="call_live_frame_none">بلا إطار</string>
+    <string name="call_live_frame_not_proposed">تم تطبيق الإطار لديك، لكن تعذّر اقتراحه</string>
+    <string name="call_live_frame_proposal">يقترح %1$s الإطار «%2$s»</string>
+    <string name="call_live_frame_proposal_anonymous">يقترح الطرف الآخر الإطار «%s»</string>
+    <string name="call_live_frame_surface">إطار %s حول الفيديوهين</string>
     <string name="call_open_conversation">المحادثة</string>
     <string name="call_open_conversation_hint">يفتح المحادثة مع إبقاء المكالمة نشطة</string>
     <string name="call_recording_accept">قبول</string>

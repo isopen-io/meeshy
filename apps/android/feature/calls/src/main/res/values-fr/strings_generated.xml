@@ -1,5 +1,8 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="call_control_capture">Capturer l\'appel</string>
+    <string name="call_control_capture_caption">Capture</string>
+    <string name="call_control_capture_hint">Libère l\'écran pour choisir un montage et capturer l\'appel</string>
     <string name="call_control_flip_camera">Basculer la caméra avant/arrière</string>
     <string name="call_control_flip_camera_caption">Retourner</string>
     <string name="call_control_flip_camera_hint">Bascule entre la caméra avant et arrière</string>
@@ -18,6 +21,18 @@
     <string name="call_decline_reply_meeting">Je suis en réunion.</string>
     <string name="call_decline_reply_write_me">Écris-moi, je te réponds vite.</string>
     <string name="call_decline_title">Refuser avec un message</string>
+    <string name="call_frames_mood_corporate">Corporate</string>
+    <string name="call_frames_mood_deconnecte">Déconnecté</string>
+    <string name="call_frames_mood_distingue">Distingué</string>
+    <string name="call_frames_mood_elegant">Élégant</string>
+    <string name="call_frames_mood_fantastique">Fantastique</string>
+    <string name="call_frames_mood_feerique">Féerique</string>
+    <string name="call_frames_mood_futuriste">Futuriste</string>
+    <string name="call_frames_mood_glauque">Glauque</string>
+    <string name="call_frames_mood_hors_norme">Hors norme</string>
+    <string name="call_frames_mood_jovial">Jovial</string>
+    <string name="call_frames_mood_morbide">Morbide</string>
+    <string name="call_frames_mood_signature">Signature</string>
     <string name="call_journal_cancel">Annuler</string>
     <string name="call_journal_clear_action">Effacer</string>
     <string name="call_journal_clear_all">Tout effacer</string>
@@ -30,6 +45,20 @@
     <string name="call_journal_search_empty">Aucun appel ne correspond à « %s »</string>
     <string name="call_journal_search_empty_hint">Le journal couvre les trois derniers mois.</string>
     <string name="call_journal_search_placeholder">Rechercher un appel</string>
+    <string name="call_live_frame_accept">Appliquer</string>
+    <string name="call_live_frame_answer_accepted">%s a appliqué votre cadre</string>
+    <string name="call_live_frame_answer_accepted_anonymous">Votre correspondant a appliqué votre cadre</string>
+    <string name="call_live_frame_answer_declined">%s garde son affichage</string>
+    <string name="call_live_frame_answer_declined_anonymous">Votre correspondant garde son affichage</string>
+    <string name="call_live_frame_caption">Cadre</string>
+    <string name="call_live_frame_decline">Non merci</string>
+    <string name="call_live_frame_hold_hint">Garde ce cadre autour des deux vidéos pendant tout l\'appel, et le propose à votre correspondant</string>
+    <string name="call_live_frame_label">Cadre en direct</string>
+    <string name="call_live_frame_none">Aucun cadre</string>
+    <string name="call_live_frame_not_proposed">Le cadre est appliqué chez vous, mais n\'a pas pu être proposé</string>
+    <string name="call_live_frame_proposal">%1$s vous propose le cadre « %2$s »</string>
+    <string name="call_live_frame_proposal_anonymous">Votre correspondant vous propose le cadre « %s »</string>
+    <string name="call_live_frame_surface">Cadre %s autour des deux vidéos</string>
     <string name="call_open_conversation">Conversation</string>
     <string name="call_open_conversation_hint">Ouvre la conversation en gardant l\'appel actif</string>
     <string name="call_recording_accept">Accepter</string>

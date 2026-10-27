@@ -29,6 +29,7 @@ import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.sdk.model.call.CallChromeElement
 import me.meeshy.sdk.model.call.CallChromeInteraction
 import me.meeshy.sdk.model.call.CallChromeVisibility
+import me.meeshy.sdk.model.call.CallScreenMode
 import me.meeshy.sdk.model.call.CallStatusLabelLaw
 import me.meeshy.sdk.model.call.IncomingCallAnswer
 import me.meeshy.ui.theme.hexColor
@@ -120,6 +121,8 @@ fun CallScreen(
             CallBackAction.Close -> close()
         }
     }
+    val chromeState by chrome.state.collectAsStateWithLifecycle()
+    BackHandler(enabled = chromeState.layer.activeMode != null) { chrome.exitMode() }
 
     // L'écran d'appel est blanc sur un fond sombre ÉPINGLÉ, en thème clair comme en thème sombre :
     // on épingle aussi le thème pour que les jetons de texte et de surface des enfants restent clairs.
@@ -263,6 +266,17 @@ fun CallScreen(
             }
 
             CallOverlaySlotHost(extensions.overlays, CallOverlaySlot.Fullscreen, overlayContext, Modifier.fillMaxSize())
+
+            // Le mode « Capturer l'appel » : le choix du cadre en direct, qui libère l'écran de son chrome.
+            if (chromeState.layer.activeMode == CallScreenMode.Montage) {
+                val frameViewModel: CallLiveFrameViewModel = hiltViewModel()
+                CallLiveFramePicker(
+                    controller = frameViewModel.controller,
+                    peerName = state.peerName,
+                    onClose = chrome::exitMode,
+                    modifier = Modifier.align(Alignment.BottomCenter).systemBarsPadding(),
+                )
+            }
 
             CallToastHost(
                 toasts = extensions.toasts.toasts,
