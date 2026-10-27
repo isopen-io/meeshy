@@ -1,10 +1,10 @@
 package me.meeshy.ui.component
 
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.sdk.model.PresenceState
 import me.meeshy.sdk.socket.PresenceStore
 
@@ -20,6 +20,9 @@ val LocalPresenceStore = staticCompositionLocalOf<PresenceStore?> { null }
  * qui la contient. Il se recalcule avec le temps (60 s / 3 min / 5 min) sur l'horloge partagée de
  * [PresenceStore], et n'émet qu'au franchissement d'une marche.
  *
+ * La collecte suit le cycle de vie : écran en arrière-plan, plus d'abonné, l'horloge partagée
+ * s'arrête — aucun réveil toutes les 15 s quand personne ne regarde.
+ *
  * `null` = rien servi par la passerelle pour cet utilisateur : aucun point.
  */
 @Composable
@@ -30,6 +33,6 @@ fun rememberPresence(userId: String?): PresenceState? {
     val initial = remember(store, userId) {
         store.entries.value[userId]?.state(store.nowMillis())
     }
-    val state by flow.collectAsState(initial = initial)
+    val state by flow.collectAsStateWithLifecycle(initialValue = initial)
     return state
 }

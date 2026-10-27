@@ -17,4 +17,12 @@ object PresenceDecayClock {
     /** L'état de [presence] à [nowEpochMillis] ; `null` = aucune entrée servie, aucun point. */
     fun derive(presence: UserPresence?, nowEpochMillis: Long): PresenceState? =
         presence?.state(nowEpochMillis)
+
+    /**
+     * Vrai quand [state] est déjà celui que [presence] aura pour toujours (le temps seul ne le
+     * changera plus) : sans date d'activité lisible l'état est figé, et OFFLINE ne se quitte que par
+     * une nouvelle entrée. L'horloge cesse alors de réveiller cet abonné.
+     */
+    fun isSettled(presence: UserPresence, state: PresenceState?): Boolean =
+        presence.state(Long.MAX_VALUE) == state
 }

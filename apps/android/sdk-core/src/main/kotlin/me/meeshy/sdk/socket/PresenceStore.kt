@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.shareIn
+import kotlinx.coroutines.flow.transformWhile
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.core.common.DefaultDispatcher
@@ -37,6 +38,7 @@ internal class PresenceSources(
     val presenceSnapshot: Flow<PresenceSnapshotEvent>,
     val typingStarted: Flow<TypingEvent>,
     val connectionState: Flow<SocketConnectionState>,
+    val sessionUserId: Flow<String?> = kotlinx.coroutines.flow.emptyFlow(),
 )
 
 /**
@@ -76,6 +78,7 @@ class PresenceStore internal constructor(
             presenceSnapshot = messageSocketManager.presenceSnapshot,
             typingStarted = messageSocketManager.typingStarted,
             connectionState = socketManager.connectionState,
+            sessionUserId = sessionRepository.currentUser.map { it?.id },
         ),
         clock,
         { (sessionRepository.currentUserId ?: tokenStore.userId)?.takeIf { it.isNotBlank() } },
@@ -84,6 +87,10 @@ class PresenceStore internal constructor(
 
     private val scope = CoroutineScope(SupervisorJob() + dispatcher)
     private val _entries = MutableStateFlow<PresenceMap>(emptyMap())
+    private val ticking = MutableStateFlow(false)
+
+    /** Vrai tant que la boucle de l'horloge partagée tourne (au moins un abonné non figé). */
+    internal val isTicking: StateFlow<Boolean> = ticking.asStateFlow()
     private var started = false
 
     /** La carte unique `userId` -> présence servie. Vide tant que le serveur n'a rien servi. */
@@ -94,9 +101,14 @@ class PresenceStore internal constructor(
      * tous les abonnés, arrêtée quand plus personne n'écoute.
      */
     val decayTicks: Flow<Unit> = flow {
-        while (true) {
-            delay(tickMillis)
-            emit(Unit)
+        ticking.value = true
+        try {
+            while (true) {
+                delay(tickMillis)
+                emit(Unit)
+            }
+        } finally {
+            ticking.value = false
         }
     }.shareIn(scope, SharingStarted.WhileSubscribed())
 
@@ -113,6 +125,21 @@ class PresenceStore internal constructor(
             }
         }
         scope.launch { sources.connectionState.collect(::onConnectionState) }
+        scope.launch { sources.sessionUserId.collect(::onSessionUser) }
+    }
+
+    private var previousSessionUser: String? = null
+
+    /**
+     * La carte appartient au compte qui l'a reçue (miroir de `resetForLogout` iOS) : dès que le
+     * compte connu change — déconnexion ou bascule directe vers un autre —, elle est vidée. La
+     * coupure du socket ne suffit pas : `reconnectWithToken` enchaîne DISCONNECTED puis CONNECTING
+     * sous le même verrou, et un collecteur d'état conflaté ne voit que le second.
+     */
+    private fun onSessionUser(userId: String?) {
+        val previous = previousSessionUser
+        previousSessionUser = userId
+        if (previous != null && previous != userId) _entries.value = emptyMap()
     }
 
     private var previousConnection: SocketConnectionState = SocketConnectionState.DISCONNECTED
@@ -139,8 +166,14 @@ class PresenceStore internal constructor(
     fun presenceOf(userId: String): Flow<PresenceState?> =
         entryOf(userId).flatMapLatest { presence ->
             flow {
-                emit(PresenceDecayClock.derive(presence, clock.nowMillis()))
-                if (presence != null) decayTicks.collect { emit(PresenceDecayClock.derive(presence, clock.nowMillis())) }
+                val first = PresenceDecayClock.derive(presence, clock.nowMillis())
+                emit(first)
+                if (presence == null || PresenceDecayClock.isSettled(presence, first)) return@flow
+                decayTicks.transformWhile {
+                    val state = PresenceDecayClock.derive(presence, clock.nowMillis())
+                    emit(state)
+                    !PresenceDecayClock.isSettled(presence, state)
+                }.collect { emit(it) }
             }
         }.distinctUntilChanged()
 
