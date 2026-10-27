@@ -34,6 +34,25 @@ final class HEICUploadFallbackTests: XCTestCase {
         XCTAssertEqual(HEICDeliveryMemo.delivery(in: scenario.defaults, now: Scenario.now), .jpegCompatibility)
     }
 
+    /// #13414 — le refus est RETENU : pendant 24 h, un HEIC suivant part
+    /// directement en JPEG, sans un aller-retour refusé de plus.
+    func test_aRememberedRefusal_sendsTheJpegFirst_withoutResendingTheHeic() async throws {
+        let scenario = try Scenario(replies: [.served("image/jpeg")])
+        HEICDeliveryMemo.record(.refuses, in: scenario.defaults, now: Scenario.now)
+        let uploaded = try await scenario.run()
+        XCTAssertEqual(uploaded.mimeType, "image/jpeg")
+        XCTAssertEqual(scenario.sent.map(\.mimeType), ["image/jpeg"])
+        let variant = try XCTUnwrap(scenario.sent.last?.url)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: variant.path))
+    }
+
+    func test_aRememberedRefusal_withoutAVariant_stillSendsTheHeic() async throws {
+        let scenario = try Scenario(replies: [.served("image/jpeg")], variant: nil)
+        HEICDeliveryMemo.record(.refuses, in: scenario.defaults, now: Scenario.now)
+        _ = try await scenario.run()
+        XCTAssertEqual(scenario.sent.map(\.mimeType), ["image/heic"])
+    }
+
     func test_theJpegVariantBytesAreWhatThePreparerProduced_andTheTemporaryFileIsRemoved() async throws {
         let scenario = try Scenario(replies: [.refused, .served("image/jpeg")])
         _ = try await scenario.run()

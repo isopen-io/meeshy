@@ -5,7 +5,7 @@ import os
 /// Ce que la montée des médias d'une publication a obtenu, dans l'ordre de
 /// composition : l'id et l'URL servis, la POSITION d'origine (#4756) et le
 /// fichier local, qui ne s'efface qu'une fois le post créé.
-struct PublicationMediaUploads: Equatable, Sendable {
+nonisolated struct PublicationMediaUploads: Equatable, Sendable {
     var ids: [String] = []
     var urls: [String] = []
     var sourceIndexes: [Int] = []
@@ -42,6 +42,7 @@ nonisolated enum PublicationMediaUploader {
         )
         var montes = PublicationMediaUploads()
         var premierEchecUpload: Error?
+        var refusDefinitif: Error?
         var fichiersDisparus = 0
         for (index, stored) in storedPaths.enumerated() {
             let absolutePath = OfflineQueue.absoluteMediaPath(forStored: stored)
@@ -60,25 +61,27 @@ nonisolated enum PublicationMediaUploader {
             let mime = declaredMimeType(index)
                 ?? MimeTypeResolver.mimeType(forExtension: fileURL.pathExtension)
             do {
-                let tusResult = try await send(fileURL, mime)
+                let tusResult = try await HEICUploadFallback.upload(
+                    fileURL: fileURL, mimeType: mime, keepsLocation: keepsLocation,
+                    defaults: defaults, servedMimeType: { $0.mimeType }, send: send
+                )
                 montes.append(id: tusResult.id, url: tusResult.fileUrl, sourceIndex: index, localPath: absolutePath)
                 await hooks.recordUploaded(
                     UploadedPostMedia(sourceIndex: index, id: tusResult.id, url: tusResult.fileUrl)
                 )
             } catch {
                 if premierEchecUpload == nil { premierEchecUpload = error }
+                if refusDefinitif == nil, isDefinitiveRefusal(error) { refusDefinitif = error }
                 logger.error("Post media TUS upload failed (best-effort skip): \(error.localizedDescription, privacy: .public)")
             }
         }
-        if let cause = premierEchecUpload {
-            throw NSError(
-                domain: "OutboxDispatcher",
-                code: 503,
-                userInfo: [
-                    NSLocalizedDescriptionKey: "Média \(montes.ids.count)/\(storedPaths.count) monté — publication reportée : \(cause.localizedDescription)",
-                    NSUnderlyingErrorKey: cause
-                ]
-            )
+        // La cause RÉELLE remonte telle quelle (#13414) : la file distingue un
+        // jeton expiré ou une coupure (attente sans tentative brûlée) d'un
+        // refus définitif (415 après repli ⇒ échec gardé sur l'appareil).
+        // L'emballer en 503 faisait renvoyer cinq fois les mêmes octets.
+        if let cause = refusDefinitif ?? premierEchecUpload {
+            logger.error("createPost: média \(montes.ids.count, privacy: .public)/\(storedPaths.count, privacy: .public) monté — publication reportée : \(String(describing: cause), privacy: .public)")
+            throw cause
         }
         guard !montes.ids.isEmpty else {
             throw NSError(
@@ -94,10 +97,16 @@ nonisolated enum PublicationMediaUploader {
         }
         return montes
     }
+
+    /// Un refus que rejouer ne lèvera pas : le format (415 après repli JPEG)
+    /// ou le droit d'un invité.
+    static func isDefinitiveRefusal(_ error: Error) -> Bool {
+        error is UnsupportedImageFormatRefusal || error is GuestAttachmentRefusal
+    }
 }
 
-private extension PublicationMediaUploads {
-    mutating func append(id: String, url: String, sourceIndex: Int, localPath: String) {
+nonisolated extension PublicationMediaUploads {
+    fileprivate mutating func append(id: String, url: String, sourceIndex: Int, localPath: String) {
         ids.append(id)
         urls.append(url)
         sourceIndexes.append(sourceIndex)

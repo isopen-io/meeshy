@@ -86,7 +86,8 @@ public enum HEICDeliveryMemo {
 
 /// **Envoyer un HEIC, et repartir en JPEG q 0,92 si le serveur n'en veut pas.**
 ///
-/// Le HEIC part tel quel. Si le serveur le refuse (415 ou 400 de signature) ou le rend encore
+/// Le HEIC part tel quel — sauf pendant les 24 h d'un refus retenu, où le JPEG
+/// part d'emblée. Si le serveur le refuse (415 ou 400 de signature) ou le rend encore
 /// `image/heic`, UNE variante JPEG est préparée depuis le fichier et envoyée à
 /// sa place ; le refus est retenu (`HEICDeliveryMemo`) pour que les photos
 /// suivantes partent directement en JPEG. Un HEIC gardé non converti par le
@@ -100,6 +101,13 @@ public enum HEICUploadFallback {
         send: @Sendable (_ fileURL: URL, _ mimeType: String) async throws -> Uploaded
     ) async throws -> Uploaded {
         guard HEICDeliveryLaw.isHEIC(mimeType: mimeType) else { return try await send(fileURL, mimeType) }
+        // #13414 — un refus RETENU vaut pour ce fichier aussi : le JPEG part
+        // d'emblée, sans un aller-retour refusé de plus.
+        if HEICDeliveryMemo.delivery(in: defaults, now: now) == .jpegCompatibility,
+           let variant = await JPEGVariant.make(of: fileURL, keepsLocation: keepsLocation, preparer: preparer) {
+            defer { variant.remove() }
+            return try await send(variant.url, "image/jpeg")
+        }
         let first: Result<Uploaded, UnsupportedImageFormatRefusal>
         do {
             first = .success(try await send(fileURL, mimeType))
