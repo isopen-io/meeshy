@@ -60,7 +60,8 @@ class CallLiveFrameUiTest {
         ).first()
         rule.setContent { MeeshyTheme { CallLiveFramePicker(controller, peerName = "Bob", onClose = {}) } }
         rule.onNodeWithText("No frame").assertExists()
-        rule.onNode(androidx.compose.ui.test.hasContentDescription(first.name))
+        rule.onNode(androidx.compose.ui.test.hasContentDescription("Close")).assertExists()
+        rule.onNode(androidx.compose.ui.test.hasContentDescription("Minimize call")).assertDoesNotExist()
         rule.onNode(androidx.compose.ui.test.hasContentDescription(first.name)).performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick)
         rule.waitForIdle()
         assertThat(controller.state.value.frameId).isEqualTo(first.id)
