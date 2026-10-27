@@ -9,6 +9,7 @@ import me.meeshy.sdk.model.AttachmentProtectionVerdict
 import me.meeshy.sdk.model.ImageVariantPicker
 import me.meeshy.sdk.model.MeeshyImageVariant
 import me.meeshy.sdk.model.deeplink.ConversationLinkTarget
+import me.meeshy.sdk.model.isEndToEndBlob
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
 
 /** Une pièce telle que l'écran la rend : seulement des métadonnées, les octets ne se téléchargent qu'à l'ouverture. */
@@ -38,6 +39,13 @@ data class MediaHubAttachment(
         val fallback = thumbnailUrl ?: url
         return ImageVariantPicker.bestImageUrl(variants, fallback, width, targetWidthPx)
     }
+
+    /** Les adresses telles que la passerelle les sert (clé, chemin) rendues chargeables par [resolve] — le site unique du SDK. */
+    fun resolvingMedia(resolve: (String) -> String): MediaHubAttachment = copy(
+        url = resolve(url),
+        thumbnailUrl = thumbnailUrl?.let(resolve),
+        variants = variants.map { it.copy(url = resolve(it.url)) },
+    )
 }
 
 sealed interface MediaHubPayload {
@@ -57,6 +65,12 @@ data class MediaHubItem(
     val payload: MediaHubPayload,
 ) {
     val attachment: MediaHubAttachment? get() = (payload as? MediaHubPayload.Attachment)?.attachment
+
+    /** L'élément dont les adresses de pièce passent par [resolve] ; un lien ou un lieu reste tel quel. */
+    fun resolvingMedia(resolve: (String) -> String): MediaHubItem {
+        val piece = attachment ?: return this
+        return copy(payload = MediaHubPayload.Attachment(piece.resolvingMedia(resolve)))
+    }
 }
 
 /**
@@ -186,7 +200,7 @@ object ConversationMediaHubRules {
         sizeBytes = fileSize?.toLong(),
         durationMs = duration,
         isVideo = (mimeType ?: "").startsWith("video/", ignoreCase = true),
-        isEncrypted = isEncrypted == true,
+        isEncrypted = isEncrypted == true || isEndToEndBlob,
         alt = alt,
         width = width,
         variants = imageVariants.orEmpty(),

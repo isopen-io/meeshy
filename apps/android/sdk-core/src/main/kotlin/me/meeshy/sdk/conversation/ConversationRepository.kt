@@ -671,12 +671,14 @@ class ConversationRepository @Inject constructor(
         id: String,
         transform: (ApiConversationPreferences) -> ApiConversationPreferences,
     ): Boolean {
+        var appearanceChanged = false
         val snapshot = database.withTransaction {
             val row = conversationDao.find(id) ?: return@withTransaction null
             val conversation = MeeshyApi.json.decodeFromString<ApiConversation>(row.payload)
             val current = conversation.resolvedPreferences ?: ApiConversationPreferences()
             val next = transform(current)
             if (next == current) return@withTransaction null
+            appearanceChanged = next.appearance != current.appearance
             conversationDao.upsertAll(
                 listOf(
                     row.copy(
@@ -701,7 +703,7 @@ class ConversationRepository @Inject constructor(
                         customName = snapshot.customName,
                         reaction = snapshot.reaction,
                         tags = snapshot.tags,
-                        appearance = snapshot.appearance,
+                        appearance = if (appearanceChanged) snapshot.appearance else null,
                     ),
                 ),
             ),

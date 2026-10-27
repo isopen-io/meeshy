@@ -774,6 +774,46 @@ class ConversationRepositoryTest {
     }
 
     @Test
+    fun `an unrelated pref snapshot never resends a stored appearance the gateway would re-validate`() = runTest {
+        val stored = me.meeshy.sdk.model.appearance.ConversationAppearance.DEFAULT.withSolid("sky").toWire()
+        val repo = repository(
+            FakeConversationApi(
+                ApiResponse(
+                    success = true,
+                    data = listOf(ApiConversation(id = "c1", preferences = me.meeshy.sdk.model.ApiConversationPreferences(appearance = stored))),
+                ),
+            ),
+        )
+        repo.refresh()
+
+        repo.setPinnedOptimistic("c1", true)
+
+        val payload = me.meeshy.sdk.net.MeeshyApi.json.decodeFromString<me.meeshy.sdk.outbox.ConversationPrefsPayload>(
+            OutboxRepository(db, db.outboxDao()).deliverable(OutboxLanes.CONVERSATION_PREFS).single().payload,
+        )
+        assertThat(payload.isPinned).isTrue()
+        assertThat(payload.appearance).isNull()
+    }
+
+    @Test
+    fun `a pending appearance change survives a later pin that supersedes its snapshot`() = runTest {
+        val repo = repository(
+            FakeConversationApi(ApiResponse(success = true, data = listOf(ApiConversation(id = "c1")))),
+        )
+        repo.refresh()
+        val chosen = me.meeshy.sdk.model.appearance.ConversationAppearance.DEFAULT.withSolid("sky")
+
+        repo.setAppearanceOptimistic("c1", chosen)
+        repo.setPinnedOptimistic("c1", true)
+
+        val rows = OutboxRepository(db, db.outboxDao()).deliverable(OutboxLanes.CONVERSATION_PREFS)
+        assertThat(rows).hasSize(1)
+        val payload = me.meeshy.sdk.net.MeeshyApi.json.decodeFromString<me.meeshy.sdk.outbox.ConversationPrefsPayload>(rows.single().payload)
+        assertThat(payload.isPinned).isTrue()
+        assertThat(payload.appearance).isEqualTo(chosen.toWire())
+    }
+
+    @Test
     fun `successive pref mutations coalesce into one latest-wins snapshot`() = runTest {
         val repo = repository(
             FakeConversationApi(

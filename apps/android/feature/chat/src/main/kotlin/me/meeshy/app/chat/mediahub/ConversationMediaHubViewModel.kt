@@ -21,12 +21,14 @@ import me.meeshy.sdk.model.auth.ServerEnvironmentResolver
 import me.meeshy.sdk.model.mediahub.ConversationMediaHubRules
 import me.meeshy.sdk.model.mediahub.ConversationMediaKind
 import me.meeshy.sdk.model.mediahub.MediaHubItem
+import me.meeshy.sdk.model.mediahub.MediaHubPayload
 import me.meeshy.sdk.model.mediahub.MediaHubPhase
 import me.meeshy.sdk.model.mediahub.MediaHubSegment
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.session.SessionRepository
+import me.meeshy.sdk.util.resolveMediaUrl
 
 /** Ce que l'écran lit : le segment courant (ou sa recherche), projeté en éléments prêts à peindre. */
 @Immutable
@@ -54,8 +56,12 @@ class ConversationMediaHubViewModel @Inject constructor(
     config: MeeshyConfig,
 ) : ViewModel() {
 
+    private val apiBaseUrl: String = config.apiBaseUrl
+
     private val webOrigin: String =
         ServerEnvironmentResolver.webOrigin(ServerEnvironmentResolver.serverOrigin(config.apiBaseUrl))
+
+    private val resolveMedia: (String) -> String = { url -> resolveMediaUrl(url, apiBaseUrl) }
 
     private val _state = MutableStateFlow(MediaHubUiState())
     val state: StateFlow<MediaHubUiState> = _state.asStateFlow()
@@ -188,7 +194,8 @@ class ConversationMediaHubViewModel @Inject constructor(
         val segment = activeSearch?.second ?: segments[kind] ?: MediaHubSegment()
         _state.value = MediaHubUiState(
             selectedKind = kind,
-            items = ConversationMediaHubRules.items(segment.carriers, kind, System.currentTimeMillis(), webOrigin),
+            items = ConversationMediaHubRules.items(segment.carriers, kind, System.currentTimeMillis(), webOrigin)
+                .map { it.resolvingMedia(resolveMedia) },
             phase = segment.phase,
             canLoadMore = segment.canLoadMore,
             isLoadingMore = segment.isLoadingMore,
@@ -205,6 +212,9 @@ class ConversationMediaHubViewModel @Inject constructor(
 
     /** Hors ligne : la requête n'a pas atteint le serveur (aucun statut HTTP), à la différence d'un refus. */
     private fun ApiError.isOffline(): Boolean = httpStatus == null
+
+    /** Ce que devient l'appui sur un élément hors visionneuse : jamais une adresse ouverte telle quelle. */
+    internal fun launchFor(payload: MediaHubPayload): MediaHubLaunch = mediaHubLaunchFor(payload, apiBaseUrl, resolveMedia)
 
     /** Le porteur d'un élément affiché — pour les portillons de sortie et « aller au message ». */
     fun carrier(messageId: String): ApiMessage? =

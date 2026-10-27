@@ -1,6 +1,7 @@
 package me.meeshy.sdk.outbox
 
 import me.meeshy.core.database.entity.OutboxEntity
+import me.meeshy.sdk.net.MeeshyApi
 
 /** Outcome of coalescing an incoming mutation against the pending queue (ARCHITECTURE.md §5). */
 public sealed interface CoalesceDecision {
@@ -58,8 +59,11 @@ public object OutboxCoalescer {
             OutboxKind.EDIT_MESSAGE -> replaceSameKind(incoming, sameTarget, OutboxKind.EDIT_MESSAGE)
             OutboxKind.READ_RECEIPT -> terminalToggle(incoming, sameTarget, OutboxKind.MARK_UNREAD, OutboxKind.READ_RECEIPT)
             OutboxKind.MARK_UNREAD -> terminalToggle(incoming, sameTarget, OutboxKind.READ_RECEIPT, OutboxKind.MARK_UNREAD)
-            OutboxKind.UPDATE_CONVERSATION_PREFS ->
-                replaceSameKind(incoming, sameTarget, OutboxKind.UPDATE_CONVERSATION_PREFS)
+            OutboxKind.UPDATE_CONVERSATION_PREFS -> replaceSameKind(
+                carryAppearance(incoming, sameTarget.filter { it.kindEnum == OutboxKind.UPDATE_CONVERSATION_PREFS }),
+                sameTarget,
+                OutboxKind.UPDATE_CONVERSATION_PREFS,
+            )
             OutboxKind.UPDATE_PROFILE ->
                 replaceSameKind(incoming, sameTarget, OutboxKind.UPDATE_PROFILE)
             OutboxKind.UPDATE_SETTINGS ->
@@ -114,6 +118,20 @@ public object OutboxCoalescer {
             CoalesceDecision.Replace(superseded, incoming)
         }
     }
+
+    /**
+     * A prefs snapshot carries `appearance` only when it changed it ([ConversationPrefsPayload.appearance]); a later
+     * snapshot that supersedes a pending appearance change must not drop it, so the newest pending one is grafted on.
+     */
+    private fun carryAppearance(incoming: OutboxEntity, superseded: List<OutboxEntity>): OutboxEntity {
+        val next = decodePrefs(incoming.payload) ?: return incoming
+        if (next.appearance != null) return incoming
+        val carried = superseded.asReversed().firstNotNullOfOrNull { decodePrefs(it.payload)?.appearance } ?: return incoming
+        return incoming.copy(payload = MeeshyApi.json.encodeToString(ConversationPrefsPayload.serializer(), next.copy(appearance = carried)))
+    }
+
+    private fun decodePrefs(payload: String): ConversationPrefsPayload? =
+        runCatching { MeeshyApi.json.decodeFromString(ConversationPrefsPayload.serializer(), payload) }.getOrNull()
 
     private fun annihilateOpposite(
         incoming: OutboxEntity,

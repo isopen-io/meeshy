@@ -65,10 +65,12 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import java.util.Locale
+import androidx.compose.ui.graphics.toArgb
+import me.meeshy.app.chat.FileAttachmentIntentResolver
+import me.meeshy.app.chat.openChatLink
 import me.meeshy.feature.chat.R
 import me.meeshy.sdk.model.mediahub.ConversationMediaKind
 import me.meeshy.sdk.model.mediahub.MediaHubItem
-import me.meeshy.sdk.model.mediahub.MediaHubPayload
 import me.meeshy.sdk.model.mediahub.MediaHubPhase
 import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.ui.component.viewer.MeeshyImageViewer
@@ -117,14 +119,15 @@ internal fun ConversationMediaHubSheet(
     }
     fun open(item: MediaHubItem) {
         haptics.light()
-        when (val payload = item.payload) {
-            is MediaHubPayload.Attachment -> {
-                val attachment = payload.attachment
-                val index = photos.indexOfFirst { it.id == item.id }
-                if (index >= 0) viewerIndex = index else if (!attachment.isEncrypted) context.openUri(attachment.url)
-            }
-            is MediaHubPayload.Link -> context.openUri(payload.url)
-            is MediaHubPayload.Place -> context.openUri("geo:${payload.latitude},${payload.longitude}?q=${payload.latitude},${payload.longitude}")
+        val index = photos.indexOfFirst { it.id == item.id }
+        if (index >= 0) {
+            viewerIndex = index
+            return
+        }
+        when (val launch = viewModel.launchFor(item.payload)) {
+            is MediaHubLaunch.ChatLink -> openChatLink(context, launch.url, accentColor.toArgb())
+            is MediaHubLaunch.GatewayFile -> context.openGatewayFile(launch.url, launch.mimeType, item.attachment?.name)
+            MediaHubLaunch.Ignored -> Unit
         }
     }
 
@@ -337,8 +340,14 @@ private fun SegmentBar(selected: ConversationMediaKind, accent: Color, onSelect:
     }
 }
 
-private fun android.content.Context.openUri(uri: String) {
+/** Une pièce de la passerelle (https, origine vérifiée par [mediaHubLaunchFor]) confiée à l'app qui déclare son type. */
+private fun android.content.Context.openGatewayFile(url: String, mimeType: String?, name: String?) {
     runCatching {
-        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(uri)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        startActivity(
+            Intent(Intent.ACTION_VIEW)
+                .setDataAndType(Uri.parse(url), FileAttachmentIntentResolver.resolveMimeType(mimeType, name))
+                .addCategory(Intent.CATEGORY_BROWSABLE)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        )
     }
 }

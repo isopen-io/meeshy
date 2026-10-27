@@ -311,7 +311,12 @@ public data class ConversationPrefsPayload(
      * array the `explicitNulls = false` encoder never drops.
      */
     val tags: List<String>? = null,
-    /** The reader's personal background + accent (`ConversationAppearance.toWire`); `null` leaves it untouched server-side. */
+    /**
+     * The reader's personal background + accent (`ConversationAppearance.toWire`); `null` leaves it untouched
+     * server-side. Unlike the other fields it is NOT part of every snapshot: it rides only the snapshot that
+     * changed it (the gateway re-validates a background — pack owned, photo still readable — and a stale one
+     * would refuse an unrelated pin), and [OutboxCoalescer] carries it onto any snapshot that supersedes it.
+     */
     val appearance: kotlinx.serialization.json.JsonElement? = null,
 )
 

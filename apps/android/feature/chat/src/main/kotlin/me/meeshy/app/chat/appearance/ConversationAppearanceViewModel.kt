@@ -21,6 +21,8 @@ import me.meeshy.sdk.model.appearance.AppearanceDesignPack
 import me.meeshy.sdk.model.appearance.ConversationAppearance
 import me.meeshy.sdk.model.appearance.WallpaperPackOptions
 import me.meeshy.sdk.net.MeeshyConfig
+import me.meeshy.sdk.net.RequestCredential
+import me.meeshy.sdk.net.TokenStore
 
 @Immutable
 data class ConversationAppearanceUiState(
@@ -42,10 +44,11 @@ class ConversationAppearanceViewModel @Inject constructor(
     private val loader: AppearanceCatalogLoader,
     private val packRepository: WallpaperPackRepository,
     private val photos: ConversationBackgroundPhotos,
+    private val tokenStore: TokenStore,
     config: MeeshyConfig,
 ) : ViewModel() {
 
-    private val attachmentRouteBase: String = config.apiBaseUrl.trimEnd('/') + "/attachments"
+    private val apiBaseUrl: String = config.apiBaseUrl
 
     private val _state = MutableStateFlow(ConversationAppearanceUiState(catalog = loader.current))
     val state: StateFlow<ConversationAppearanceUiState> = _state.asStateFlow()
@@ -95,7 +98,15 @@ class ConversationAppearanceViewModel @Inject constructor(
     fun reset() = commit { ConversationAppearance.DEFAULT }
 
     fun photoSource(attachmentId: String): BackgroundPhotoSource =
-        photos.resolve(conversationId.orEmpty(), attachmentId, attachmentRouteBase)
+        photos.resolve(conversationId.orEmpty(), attachmentId, apiBaseUrl)
+
+    /**
+     * L'en-tête d'identité pour une [BackgroundPhotoSource.authenticated] — la route par identifiant de la passerelle
+     * refuse un chargement anonyme. Jamais posé sur une autre adresse.
+     */
+    fun photoHeaders(source: BackgroundPhotoSource): Map<String, String> =
+        if (!source.authenticated) emptyMap()
+        else RequestCredential.of(tokenStore)?.let { mapOf(it.header to it.value) }.orEmpty()
 
     private fun commit(change: (ConversationAppearance) -> ConversationAppearance) {
         val id = conversationId ?: return

@@ -26,6 +26,7 @@ import me.meeshy.sdk.model.appearance.AppearanceCatalog
 import me.meeshy.sdk.model.appearance.ConversationAppearance
 import me.meeshy.sdk.model.appearance.ConversationBackground
 import me.meeshy.sdk.net.MeeshyConfig
+import me.meeshy.sdk.net.TokenStore
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -58,7 +59,10 @@ class ConversationAppearanceViewModelTest {
         every { packs.cached } returns null
         coEvery { packs.refresh() } returns null
         val photos = ConversationBackgroundPhotos(ConversationMediaHubIndex())
-        return Fixture(stream, repository, photos, ConversationAppearanceViewModel(repository, loader, packs, photos, MeeshyConfig()))
+        val tokens = mockk<TokenStore>()
+        every { tokens.jwt } returns "jwt-1"
+        every { tokens.sessionToken } returns null
+        return Fixture(stream, repository, photos, ConversationAppearanceViewModel(repository, loader, packs, photos, tokens, MeeshyConfig()))
     }
 
     @Test
@@ -116,7 +120,37 @@ class ConversationAppearanceViewModelTest {
         val f = fixture()
         f.vm.start("c1")
         advanceUntilIdle()
-        assertThat(f.vm.photoSource("zz").fullUrl).endsWith("/attachments/zz")
+        val source = f.vm.photoSource("zz")
+        assertThat(source.fullUrl).isEqualTo("https://gate.meeshy.me/api/v1/attachments/zz")
+        assertThat(source.authenticated).isTrue()
+        assertThat(f.vm.photoHeaders(source)).containsExactly("Authorization", "Bearer jwt-1")
+    }
+
+    @Test
+    fun `l identite du lecteur ne part jamais vers une adresse de piece connue`() = runTest(dispatcher) {
+        val f = fixture()
+        f.vm.start("c1")
+        advanceUntilIdle()
+
+        f.vm.selectPhoto("a1", BackgroundPhotoSource("https://cdn/t", "https://cdn/full"))
+
+        assertThat(f.vm.photoHeaders(f.vm.photoSource("a1"))).isEmpty()
+    }
+
+    @Test
+    fun `une piece de l index se charge a son adresse resolue sur la passerelle`() = runTest(dispatcher) {
+        val index = ConversationMediaHubIndex().apply {
+            merge(
+                "c1",
+                me.meeshy.sdk.model.mediahub.ConversationMediaKind.VISUAL,
+                listOf(me.meeshy.sdk.model.ApiMessage(id = "m1", conversationId = "c1", attachments = listOf(me.meeshy.sdk.model.ApiMessageAttachment(id = "p1", mimeType = "image/png", fileUrl = "/api/v1/attachments/file/p.png")))),
+                complete = true,
+            )
+        }
+        val source = ConversationBackgroundPhotos(index).resolve("c1", "p1", MeeshyConfig().apiBaseUrl)
+
+        assertThat(source.fullUrl).isEqualTo("https://gate.meeshy.me/api/v1/attachments/file/p.png")
+        assertThat(source.authenticated).isFalse()
     }
 
     @Test
