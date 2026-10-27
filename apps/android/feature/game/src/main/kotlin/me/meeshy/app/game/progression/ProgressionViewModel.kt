@@ -8,6 +8,7 @@ import java.time.LocalDateTime
 import java.time.ZoneId
 import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -18,6 +19,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import me.meeshy.core.common.DefaultDispatcher
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.cache.valueOrNull
 import me.meeshy.sdk.engagement.EngagementProgressRepository
@@ -67,6 +69,7 @@ data class ProgressionUiState(
 @HiltViewModel
 class ProgressionViewModel @Inject constructor(
     private val repository: EngagementProgressRepository,
+    @DefaultDispatcher private val defaultDispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) : ViewModel() {
 
     private val failure = MutableStateFlow<ProgressionFailure?>(null)
@@ -76,7 +79,7 @@ class ProgressionViewModel @Inject constructor(
         repository.progress(onSyncError = { failure.value = classify(it) })
             .onEach { if (it is CacheResult.Fresh) failure.value = null }
             .map { result -> result to result.valueOrNull?.let(::derive) }
-            .flowOn(Dispatchers.Default),
+            .flowOn(defaultDispatcher),
         failure,
         refreshing,
     ) { (result, snapshot), failed, isRefreshing ->
