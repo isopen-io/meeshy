@@ -51,4 +51,14 @@ class CallHeaderBarTest {
         rule.onNodeWithContentDescription("Conversation").assertDoesNotExist()
         rule.onNodeWithContentDescription("Call duration").assertDoesNotExist()
     }
+
+    @Test
+    fun `un appel ne audio que le pair passe en video porte la puce du chrono, puisque le centre n'a plus le nom`() {
+        rule.setContent {
+            MeeshyTheme {
+                CallHeaderBar(connected(video = false), conversationId = "c1", showsMinimize = true, onMinimize = {}, isVideoStage = true)
+            }
+        }
+        rule.onNodeWithContentDescription("Call duration").assertExists()
+    }
 }
