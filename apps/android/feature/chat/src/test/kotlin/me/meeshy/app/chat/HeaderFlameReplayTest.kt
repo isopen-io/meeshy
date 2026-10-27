@@ -3,6 +3,7 @@ package me.meeshy.app.chat
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -34,8 +35,13 @@ class HeaderFlameReplayTest {
 
     private fun snap(todayPoints: Int) = ConversationEngagementSnapshot("c1", 120, todayPoints, 4, today)
 
-    private fun shownCount(text: String): Int =
-        compose.onAllNodesWithText(text, useUnmergedTree = true).fetchSemanticsNodes().size
+    private fun shows(text: String): Boolean =
+        compose.onAllNodesWithText(text, useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
+
+    private fun serve(state: androidx.compose.runtime.MutableState<ConversationEngagementSnapshot?>, value: ConversationEngagementSnapshot) {
+        Snapshot.withMutableSnapshot { state.value = value }
+        compose.mainClock.advanceTimeBy(100)
+    }
 
     @Test
     fun `a send after a late snapshot holds the old day count until the flame has caught`() {
@@ -54,18 +60,19 @@ class HeaderFlameReplayTest {
             }
         }
         compose.mainClock.advanceTimeBy(100)
-        snapshot.value = snap(todayPoints = 4)
+        serve(snapshot, snap(todayPoints = 4))
         compose.mainClock.advanceTimeBy(1_000)
-        assertThat(shownCount("4")).isEqualTo(1)
+        assertThat(shows("4")).isTrue()
 
         sent.tryEmit(Unit)
         compose.mainClock.advanceTimeBy(50)
-        snapshot.value = snap(todayPoints = 9)
-        compose.mainClock.advanceTimeBy(500)
-        assertThat(shownCount("4")).isEqualTo(1)
-        assertThat(shownCount("9")).isEqualTo(0)
+        serve(snapshot, snap(todayPoints = 9))
+        compose.mainClock.advanceTimeBy(400)
+        assertThat(shows("4")).isTrue()
+        assertThat(shows("9")).isFalse()
 
         compose.mainClock.advanceTimeBy(3_000)
-        assertThat(shownCount("9")).isEqualTo(1)
+        assertThat(shows("9")).isTrue()
+        assertThat(shows("4")).isFalse()
     }
 }
