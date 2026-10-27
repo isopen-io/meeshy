@@ -108,6 +108,7 @@
     <string name="game2_prestige_stars">Wiedergeburten: %1$s von %2$s</string>
     <string name="game2_prestige_title">Wiedergeburt</string>
     <string name="game2_retry">Erneut versuchen</string>
+    <string name="game2_season_claim">Rast %s abholen</string>
     <string name="game2_season_completed">Reise vollbracht: ein Pokal, eine datierte Medaille und %s Ruhm.</string>
     <string name="game2_season_heading">Reise %1$s · Woche %2$s von %3$s</string>
     <string name="game2_season_how">Jeder erfüllte Akt und jedes Bündnis bringen dich ein paar Schritte voran: %s Schritte führen zur nächsten Rast. Die ganze Reise ist kostenlos.</string>
@@ -117,6 +118,7 @@
     <string name="game2_season_reward_freeze">Eine Hüterin für deine Flamme</string>
     <string name="game2_season_reward_season_cup">Der Reisepokal</string>
     <string name="game2_season_seal_body">Das Siegel ist rein dekorativ: alle %s Rasten ein Sammelobjekt, ohne Einfluss auf das Spiel.</string>
+    <string name="game2_season_seal_buy">Siegel holen · %s</string>
     <string name="game2_season_seal_cosmetic">Siegel-Objekt</string>
     <string name="game2_season_seal_owned">Du hast das Siegel dieser Reise.</string>
     <string name="game2_season_seal_title">Das Siegel der Reise</string>
@@ -534,6 +536,7 @@
     <string name="game_spend_missing_freeze">Es fehlen %s, um eine Hüterin zu rufen.</string>
     <string name="game_spend_missing_relight">Es fehlen %s, um deine Flamme neu zu entzünden.</string>
     <string name="game_spend_missing_reroll">Es fehlen %s, um diesen Akt zu tauschen.</string>
+    <string name="game_spend_missing_seal">Es fehlen %s, um das Siegel der Reise zu holen.</string>
     <string name="game_starFragments_one">%s Sternfragment</string>
     <string name="game_starFragments_other">%s Sternfragmente</string>
     <plurals name="game_streak_record">
