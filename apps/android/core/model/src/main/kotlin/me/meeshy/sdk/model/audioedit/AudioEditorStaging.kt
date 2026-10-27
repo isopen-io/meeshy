@@ -86,12 +86,34 @@ public data class AudioEditorStaging(
         return !operation.isIdentity
     }
 
-    /** La fenêtre que l'aperçu boucle : la tranche gardée (rogner) ou la section retirée (couper). */
-    public fun previewRegion(duration: Double): ClosedFloatingPointRange<Double>? = when (tool) {
-        AudioEditorTool.TRIM -> trimStart..trimEnd
-        AudioEditorTool.SPLIT -> splitStart..splitEnd
-        else -> null
-    }?.takeIf { duration > 0 }
+    /** La fenêtre que l'aperçu boucle : la tranche gardée, seulement en rognant (couper s'écoute en entier). */
+    public fun previewRegion(duration: Double): ClosedFloatingPointRange<Double>? =
+        (trimStart..trimEnd).takeIf { tool == AudioEditorTool.TRIM && duration > 0 }
+
+    /** La vitesse de l'aperçu : celle armée, seulement quand l'outil Vitesse est ouvert. */
+    public val previewRate: Float get() = if (tool == AudioEditorTool.SPEED) speed.toFloat() else 1f
+
+    /** Poignée de début déplacée à [fraction] (0..1) de [duration] ; sans effet hors rogner / couper. */
+    public fun withSelectionStart(fraction: Double, duration: Double): AudioEditorStaging {
+        if (duration <= 0) return this
+        val value = fraction.coerceIn(0.0, 1.0) * duration
+        return when (tool) {
+            AudioEditorTool.TRIM -> copy(trimStart = minOf(value, trimEnd - MIN_TRIM))
+            AudioEditorTool.SPLIT -> copy(splitStart = minOf(maxOf(0.0, value), splitEnd - MIN_SPLIT))
+            else -> this
+        }
+    }
+
+    /** Poignée de fin déplacée à [fraction] (0..1) de [duration] ; sans effet hors rogner / couper. */
+    public fun withSelectionEnd(fraction: Double, duration: Double): AudioEditorStaging {
+        if (duration <= 0) return this
+        val value = fraction.coerceIn(0.0, 1.0) * duration
+        return when (tool) {
+            AudioEditorTool.TRIM -> copy(trimEnd = maxOf(value, trimStart + MIN_TRIM))
+            AudioEditorTool.SPLIT -> copy(splitEnd = minOf(maxOf(value, splitStart + MIN_SPLIT), duration))
+            else -> this
+        }
+    }
 
     private fun trimIsMeaningful(duration: Double): Boolean =
         trimEnd - trimStart >= MIN_TRIM && (trimStart > EDGE || trimEnd < duration - EDGE)
