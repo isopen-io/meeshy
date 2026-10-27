@@ -32,7 +32,7 @@ class TusUploadRepositoryTest {
     // (with the specific matching key) before calling repository() — see the resume tests below.
     private fun repository() = TusUploadRepository(api, checkpoints, OutgoingMediaSanitizer(InMemoryOutgoingPhotoLocationStore(), kotlinx.coroutines.Dispatchers.Unconfined))
 
-    private fun item(name: String = "story.jpg", mime: String = "image/jpeg") =
+    private fun item(name: String = "story.jpg", mime: String = "application/octet-stream") =
         MediaUploadItem(bytes = byteArrayOf(1, 2, 3), fileName = name, mimeType = mime)
 
     private fun locationResponse(location: String = "https://staging.meeshy.me/api/v1/uploads/abc123") =
@@ -104,11 +104,11 @@ class TusUploadRepositoryTest {
         coEvery { api.createUpload(capture(length), capture(metadata), any()) } returns locationResponse()
         coEvery { api.uploadData(any(), any(), any(), any()) } returns finishResponse(null)
 
-        repository().upload(item(name = "clip.jpg", mime = "image/jpeg"), TusUploadContext.POST)
+        repository().upload(item(name = "clip.jpg", mime = "application/octet-stream"), TusUploadContext.POST)
 
         assertThat(length.captured).isEqualTo(3L)
         assertThat(metadata.captured).isEqualTo(
-            TusUploadMetadata.headerValue("clip.jpg", "image/jpeg", TusUploadContext.POST),
+            TusUploadMetadata.headerValue("clip.jpg", "application/octet-stream", TusUploadContext.POST),
         )
     }
 
