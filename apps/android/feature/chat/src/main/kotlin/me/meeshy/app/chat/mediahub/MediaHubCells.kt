@@ -4,7 +4,9 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -20,11 +22,15 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -37,7 +43,9 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -78,13 +86,23 @@ internal fun ConversationMediaKind.label(): String = stringResource(
     },
 )
 
+@OptIn(ExperimentalFoundationApi::class)
 /** Une vignette carrée de la grille : appui = léger rebond (ressort), plus petite variante suffisante. */
 @Composable
-internal fun MediaHubVisualTile(item: MediaHubItem, description: String, accent: Color, onClick: () -> Unit, modifier: Modifier = Modifier) {
+internal fun MediaHubVisualTile(
+    item: MediaHubItem,
+    description: String,
+    accent: Color,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    onGoToMessage: (() -> Unit)? = null,
+) {
+    var menuOpen by remember { mutableStateOf(false) }
     val attachment = item.attachment ?: return
     val source = remember { MutableInteractionSource() }
     val pressed by source.collectIsPressedAsState()
     val scale by animateFloatAsState(if (pressed) 0.94f else 1f, spring(dampingRatio = 0.6f, stiffness = 500f), label = "tile-press")
+    val goToLabel = stringResource(R.string.media_hub_go_to_message)
     val widthPx = with(LocalDensity.current) { 140.dp.roundToPx() }
     val url = remember(attachment.id) { attachment.tileUrl(widthPx) }
     Box(
@@ -92,8 +110,17 @@ internal fun MediaHubVisualTile(item: MediaHubItem, description: String, accent:
             .aspectRatio(1f)
             .scale(scale)
             .background(MeeshyTheme.tokens.backgroundTertiary)
-            .clickable(interactionSource = source, indication = null, role = Role.Button, onClick = onClick)
-            .semantics { contentDescription = description },
+            .combinedClickable(
+                interactionSource = source,
+                indication = null,
+                role = Role.Button,
+                onClick = onClick,
+                onLongClick = onGoToMessage?.let { { menuOpen = true } },
+            )
+            .semantics {
+                contentDescription = description
+                onGoToMessage?.let { go -> customActions = listOf(CustomAccessibilityAction(goToLabel) { go(); true }) }
+            },
         contentAlignment = Alignment.Center,
     ) {
         when {
@@ -103,6 +130,15 @@ internal fun MediaHubVisualTile(item: MediaHubItem, description: String, accent:
         }
         if (attachment.isVideo && !attachment.isEncrypted) {
             Icon(MeeshyIcons.PlayCircleFilled, null, tint = Color.White, modifier = Modifier.size(30.dp).align(Alignment.Center))
+        }
+        if (onGoToMessage != null) {
+            DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                DropdownMenuItem(
+                    text = { Text(goToLabel) },
+                    leadingIcon = { Icon(MeeshyIcons.Reply, null) },
+                    onClick = { menuOpen = false; onGoToMessage() },
+                )
+            }
         }
     }
 }

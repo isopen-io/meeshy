@@ -33,6 +33,19 @@ internal class ChatFileDownloadController(
      */
     private val completedDownloads = mutableMapOf<String, FileAttachmentDownloadState.Completed>()
 
+    /**
+     * Les pièces d'un porteur que le fil n'a pas chargé (le hub « Médias, liens et documents » remonte tout
+     * l'historique) : elles entrent par le MÊME circuit, qui les retrouve ici par leur identifiant — y compris au
+     * « Réessayer » de l'overlay.
+     */
+    private val provided = mutableMapOf<String, ApiMessageAttachment>()
+
+    /** "Ouvrir" une pièce que le hub fournit : même téléchargement, même overlay, même ouverture que le fil. */
+    fun openProvided(messageId: String, attachment: ApiMessageAttachment) {
+        provided[attachment.id] = attachment
+        start(messageId, attachment.id, openWhenDone = true)
+    }
+
     /** "Ouvrir": download (if not already local) then open; see [start]. */
     fun open(messageId: String, attachmentId: String?) {
         start(messageId, attachmentId, openWhenDone = true)
@@ -123,9 +136,9 @@ internal class ChatFileDownloadController(
         val attachments = messages.value.firstOrNull { it.message.id == messageId }
             ?.message?.attachments
             ?.filterNot { it.isEndToEndBlob }
-            ?: return null
+            ?: return attachmentId?.let(provided::get)?.takeUnless { it.isEndToEndBlob }
         if (attachmentId != null) {
-            return attachments.firstOrNull { it.id == attachmentId }
+            return attachments.firstOrNull { it.id == attachmentId } ?: provided[attachmentId]?.takeUnless { it.isEndToEndBlob }
         }
         return attachments.firstOrNull { !it.isImage && !it.isLocation && !it.isAudio }
     }
