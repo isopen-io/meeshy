@@ -1,0 +1,770 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:game": {
+      "resDir": "feature/game/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "game2.door.league",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.door.showcase",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.door.atlas",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.door.atlas.count",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.door.prestige",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.offline.action",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.retry",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.unavailable",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.doors.label",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.visibility.field.showcase",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.visibility.field.rank",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.visibility.field.treasury",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.visibility.field.atlas",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.visibility.saving",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.door.settings",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.season.title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.season.heading",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.season.theme",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.season.stars.one",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.season.stars.other",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.season.how",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.season.to_next",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.season.steps_line",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.season.path",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.season.step",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.season.step.claimed",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.season.step.ready",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.season.step.locked",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.season.reward.fragment",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.season.reward.freeze",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.season.completed",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.season.none",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.season.upcoming",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.season.seal.title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.season.seal.body",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.season.seal.owned",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.season.seal.cosmetic",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.trophy.prestige",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.trophy.flame",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.trophy.plate.league",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.trophy.plate.season",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.trophy.plate.prestige",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.trophy.plate.flame",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.showcase.title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.showcase.empty",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.showcase.awarded",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.showcase.visibility",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.showcase.visibility_hint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.atlas.title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.atlas.intro",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.atlas.count",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.atlas.stamps",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.atlas.stamped_on",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.atlas.pending",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.atlas.pending.sent",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.atlas.pending.received",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.atlas.empty",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.atlas.privacy",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.atlas.visibility",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.prestige.title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.prestige.stars",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.prestige.locked",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.prestige.max",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.prestige.mee",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.prestige.meo",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.settings.title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.settings.celebrations.title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.settings.celebrations.body",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.settings.celebrations.switch",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.settings.hidden.title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.settings.hidden.body",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.settings.hidden.switch",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.settings.hidden.card",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.settings.hidden.show",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.settings.hidden.reopen_note",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.settings.notifications.title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.settings.notifications.body",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.settings.notifications.switch",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.settings.visibility.title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.settings.visibility.body",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.settings.league.title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.settings.league.on",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.settings.league.on_unnamed",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.settings.league.off",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.settings.friends_league.title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.settings.friends_league.body",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.settings.friends_league.switch",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.league.title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.league.tab.mine",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.league.closes",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.league.week",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.league.locked",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.league.minor",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.league.consent.title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.league.consent.shown",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.league.consent.who",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.league.consent.how",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.league.consent.risk",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.league.consent.withdraw_info",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.league.consent.accept",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.league.consent.leave",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.league.pseudonym.drawn",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.league.pseudonym.current",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.league.waiting",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.league.zone.promotion",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.league.zone.safe",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.league.zone.relegation",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.league.to_promotion",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.league.in_promotion",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.league.at_top",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.league.cup.gold",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.league.cup.silver",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.league.cup.bronze",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.league.snapshot",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.league.me",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.league.empty",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.league.friends.body",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.league.friends.empty",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.league.friends.unknown",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.duo.title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.duo.locked",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.duo.none",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.duo.invite",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.duo.pick",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.duo.no_friends",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.duo.invited.inviter",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.duo.invited.invitee",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.duo.accept",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.duo.decline",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.duo.cancel",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.duo.abandon",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.duo.progress.me",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.duo.progress.partner",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.duo.progress.common",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.duo.reward",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.duo.reward.doubled",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.duo.reward.hint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.duo.completed",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.duo.abandoned",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.duo.expired",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.league.pseudonym.title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.link.league",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.link.season",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.link.prestige",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.link.showcase",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.link.atlas",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.season.reward.season-cup",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.trophy.league-cup",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.trophy.season-cup",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.trophy.league-cup-month",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.trophy.plate.league-month",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.league.tab.friends",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}
