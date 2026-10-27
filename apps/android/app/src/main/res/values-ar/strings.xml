@@ -62,7 +62,7 @@
     <string name="call_incoming_video">مكالمة فيديو واردة</string>
     <string name="a11y_floating_menu">قائمة التنقّل</string>
     <string name="a11y_floating_menu_unread">القائمة، %1$d إشعارات معلّقة</string>
-    <string name="a11y_state_open">فتح</string>
+    <string name="a11y_state_open">مفتوح</string>
     <string name="a11y_edit_profile">تعديل الملف الشخصي</string>
 
     <!-- Widget écran d'accueil : compteur de non-lus -->

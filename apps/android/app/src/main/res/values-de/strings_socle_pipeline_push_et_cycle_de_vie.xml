@@ -5,6 +5,6 @@
     <string name="push_channel_social_description">Likes, Kommentare, Storys und Kontakte</string>
     <string name="push_channel_system_name">Konto und Sicherheit</string>
     <string name="push_channel_system_description">Sicherheitswarnungen, Meldungen und Servicenachrichten</string>
-    <string name="push_channel_silent_name">Stille Mitteilungen</string>
+    <string name="push_channel_silent_name">Stille Benachrichtigungen</string>
     <string name="push_channel_silent_description">Werden in Ruhezeiten oder bei stummgeschalteten Kategorien leise zugestellt</string>
 </resources>

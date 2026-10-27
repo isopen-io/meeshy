@@ -62,7 +62,7 @@
     <string name="call_incoming_video">Videochiamata in arrivo</string>
     <string name="a11y_floating_menu">Menu di navigazione</string>
     <string name="a11y_floating_menu_unread">Menu, %1$d notifiche in sospeso</string>
-    <string name="a11y_state_open">Apri</string>
+    <string name="a11y_state_open">Aperto</string>
     <string name="a11y_edit_profile">Modifica profilo</string>
 
     <!-- Widget écran d'accueil : compteur de non-lus -->

@@ -10,7 +10,7 @@
     <string name="tab_profile">Profil</string>
     <string name="tab_calls">Anrufe</string>
     <string name="menu_my_links">Meine Links</string>
-    <string name="menu_notifications">Mitteilungen</string>
+    <string name="menu_notifications">Benachrichtigungen</string>
     <string name="menu_discover">Entdecken</string>
     <string name="menu_contacts">Kontakte</string>
     <string name="menu_settings">Einstellungen</string>
@@ -37,9 +37,9 @@
     <string name="conversations_no_messages">Noch keine Nachrichten</string>
 
     <!-- Notifications screen -->
-    <string name="notifications_title">Mitteilungen</string>
+    <string name="notifications_title">Benachrichtigungen</string>
     <string name="notifications_mark_all_read">Alle als gelesen markieren</string>
-    <string name="notifications_empty">Keine Mitteilungen</string>
+    <string name="notifications_empty">Keine Benachrichtigungen</string>
 
     <!-- Feed screen -->
     <string name="feed_title">Feed</string>
@@ -61,8 +61,8 @@
     <string name="call_incoming_audio">Eingehender Anruf</string>
     <string name="call_incoming_video">Eingehender Videoanruf</string>
     <string name="a11y_floating_menu">Navigationsmenü</string>
-    <string name="a11y_floating_menu_unread">Menü, %1$d ausstehende Mitteilungen</string>
-    <string name="a11y_state_open">Öffnen</string>
+    <string name="a11y_floating_menu_unread">Menü, %1$d ausstehende Benachrichtigungen</string>
+    <string name="a11y_state_open">Geöffnet</string>
     <string name="a11y_edit_profile">Profil bearbeiten</string>
 
     <!-- Widget écran d'accueil : compteur de non-lus -->
