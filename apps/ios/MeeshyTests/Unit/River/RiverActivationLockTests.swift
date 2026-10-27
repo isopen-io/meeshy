@@ -66,7 +66,7 @@ final class RiverActivationLockTests: XCTestCase {
 
     private static var meeshyRoot: URL {
         URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()   // .../Unit/Riviere
+            .deletingLastPathComponent()   // .../Unit/River
             .deletingLastPathComponent()   // .../Unit
             .deletingLastPathComponent()   // .../MeeshyTests
             .deletingLastPathComponent()   // .../apps/ios
@@ -87,7 +87,7 @@ final class RiverActivationLockTests: XCTestCase {
     /// — jamais recopiée en supposant, toujours re-scannée.
     private func nonRiviereSwiftFiles() throws -> [URL] {
         var results: [URL] = []
-        let riviereRoot = Self.meeshyRoot.appendingPathComponent("Features/Main/Riviere")
+        let riviereRoot = Self.meeshyRoot.appendingPathComponent("Features/River")
         guard let enumerator = FileManager.default.enumerator(
             at: Self.meeshyRoot,
             includingPropertiesForKeys: [.isDirectoryKey],
@@ -117,9 +117,9 @@ final class RiverActivationLockTests: XCTestCase {
     /// **Le symbole a changé le 2026-08-21 (chantier Rivière iOS, lot 1) et
     /// ce verrou devait l'apprendre.** Il cherchait `RiverStreamHost` — la
     /// PEAU. Le point d'entrée réellement livré est `RiverConversationHost`,
-    /// qui vit dans `Riviere/View/` (avec la peau, dont il est l'assemblage)
+    /// qui vit dans `River/View/` (avec la peau, dont il est l'assemblage)
     /// et que `ConversationView` monte. Continuer de chercher `RiverStreamHost`
-    /// hors de `Riviere/` aurait rendu ce verrou AVEUGLE : il aurait répondu
+    /// hors de `River/` aurait rendu ce verrou AVEUGLE : il aurait répondu
     /// « aucun écran monté » alors que l'écran l'est, et refusé un défaut ON
     /// parfaitement sûr — un faux positif qui, la fois suivante, se serait
     /// fait désactiver plutôt que corriger. Ce qu'il vérifie est inchangé :
@@ -137,7 +137,7 @@ final class RiverActivationLockTests: XCTestCase {
 
     func test_guardDiscoversFiles_neverSilentlyEmpty() throws {
         let files = try nonRiviereSwiftFiles()
-        XCTAssertFalse(files.isEmpty, "Aucun fichier .swift découvert hors Riviere/ — vérifier le chemin de scan.")
+        XCTAssertFalse(files.isEmpty, "Aucun fichier .swift découvert hors River/ — vérifier le chemin de scan.")
     }
 
     func test_theLock_defaultIsOnAndNotMounted_mustNeverBothBeTrue() throws {

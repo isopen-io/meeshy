@@ -5,7 +5,7 @@ import XCTest
 /// `RiverStreamHost`, côté iOS.
 ///
 /// **Ré-preuve du gap (§0)** : `RiverStreamHost`/`RiverLaneCanvas` n'ont
-/// AUCUNE suite dédiée — `ls apps/ios/MeeshyTests/Unit/Riviere/` ne cite ni
+/// AUCUNE suite dédiée — `ls apps/ios/MeeshyTests/Unit/River/` ne cite ni
 /// `RiverStreamHostTests` ni `RiverLaneCanvasTests`. Attendu : ce sont des
 /// `View` SwiftUI/`Canvas`, non montables sans runtime UIKit complet (même
 /// discipline que `RiverBubbleLayout`, extrait POUR être testable — les vues
@@ -31,7 +31,7 @@ final class RiverStreamHostSourceGuardTests: XCTestCase {
 
     private static var iosRoot: URL {
         URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()   // .../Unit/Riviere
+            .deletingLastPathComponent()   // .../Unit/River
             .deletingLastPathComponent()   // .../Unit
             .deletingLastPathComponent()   // .../MeeshyTests
             .deletingLastPathComponent()   // .../apps/ios
@@ -39,7 +39,7 @@ final class RiverStreamHostSourceGuardTests: XCTestCase {
 
     private func source(_ relativePath: String) throws -> String {
         try String(
-            contentsOf: Self.iosRoot.appendingPathComponent("Meeshy/Features/Main/Riviere/View/\(relativePath)"),
+            contentsOf: Self.iosRoot.appendingPathComponent("Meeshy/Features/River/View/\(relativePath)"),
             encoding: .utf8
         )
     }

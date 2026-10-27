@@ -263,7 +263,7 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Views/MessageListViewController+Rows.swift",
         "apps/ios/Meeshy/Features/Main/ViewModels/ConversationViewModel.swift",  // 7
         "apps/ios/Meeshy/Features/Main/Views/StoryLanguageDetailView.swift",  // 7
-        "apps/ios/Meeshy/Features/Main/Riviere/View/RiverBubbleView.swift",  // 6
+        "apps/ios/Meeshy/Features/River/View/RiverBubbleView.swift",  // 6
         "apps/ios/Meeshy/Features/Main/ViewModels/VoiceProfileManageViewModel.swift",  // 6
         "apps/ios/Meeshy/Features/Main/Views/ConversationListHelpers.swift",  // 6
         "apps/ios/Meeshy/Features/Main/Views/ConversationListView+Rows.swift",  // 6
@@ -354,9 +354,9 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Focal/Row/FocalConversationStartRow.swift",  // 1
         "apps/ios/Meeshy/Features/Main/Focal/Row/FocalMetaRow.swift",  // 1
         "apps/ios/Meeshy/Features/Main/Navigation/Router+StoryReply.swift",  // 1
-        "apps/ios/Meeshy/Features/Main/Riviere/Core/RiverConversationMapping.swift",  // 1
-        "apps/ios/Meeshy/Features/Main/Riviere/View/RiverLaneHeaderStrip.swift",  // 1
-        "apps/ios/Meeshy/Features/Main/Riviere/View/RiverTimeHandle.swift",  // 1
+        "apps/ios/Meeshy/Features/River/Core/RiverConversationMapping.swift",  // 1
+        "apps/ios/Meeshy/Features/River/View/RiverLaneHeaderStrip.swift",  // 1
+        "apps/ios/Meeshy/Features/River/View/RiverTimeHandle.swift",  // 1
         "apps/ios/Meeshy/Features/Main/Services/ContactSyncService.swift",  // 1
         "apps/ios/Meeshy/Features/Main/Services/ConversationCreator.swift",  // 1
         "apps/ios/Meeshy/Features/Main/Services/WidgetDataManager.swift",  // 1

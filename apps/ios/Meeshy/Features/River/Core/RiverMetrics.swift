@@ -27,7 +27,7 @@ import SwiftUI
 /// sérialisé `1`.
 ///
 /// @see packages/shared/design/lentille-tokens.json → `river`
-/// @see apps/ios/Meeshy/Features/Main/Riviere/Core/RiverLaneResolver.swift (la LOI, jamais ici)
+/// @see apps/ios/Meeshy/Features/River/Core/RiverLaneResolver.swift (la LOI, jamais ici)
 /// @see tasks/lentille-workshop-execution.md R-131
 nonisolated public enum RiverMetrics {
 
@@ -137,7 +137,7 @@ nonisolated public enum RiverMetrics {
     /// Durées de PEAU propres à iOS — aucune cote de mouvement dans le JSON
     /// partagé à ce jour (même précédent que `FocalMetrics.FocusChip` : nommé
     /// en `Core` sans revendiquer de token). Nommées ici parce que la garde
-    /// R15 bannit leurs littéraux de `Riviere/View/` (`0.35` est un jeton de
+    /// R15 bannit leurs littéraux de `River/View/` (`0.35` est un jeton de
     /// loi surveillé).
     nonisolated public enum Motion {
         /// Glissade d'un cadrage demandé (citation, poignée du temps).

@@ -11,7 +11,7 @@ import XCTest
 ///
 /// **Le rendu est livré (2026-08-25).** `TypingIndicatorBubble` est passée
 /// `internal` — elle était `private`, donc à portée de FICHIER, donc invisible
-/// depuis `Riviere/View/` : il n'existait aucun moyen de monter la MÊME vue
+/// depuis `River/View/` : il n'existait aucun moyen de monter la MÊME vue
 /// sans en déclarer une seconde. `RiverStreamHost` reçoit désormais le roster
 /// de son hôte (`typingParticipants`, dit par `ConversationView` depuis
 /// `ConversationViewModel.typingUsernames`) et le rend en OVERLAY BAS du pane,
@@ -20,7 +20,7 @@ import XCTest
 /// Ce que cette suite verrouille, c'est le risque que le brief nomme et qui
 /// SURVIT au correctif : l'indicateur doit rester une DÉCORATION DE PEAU. Une
 /// voix qui n'a encore rien dit ne doit jamais faire naître un couloir — donc
-/// la frappe n'entre ni dans la LOI (`Riviere/Core/`), ni dans les entrées qui
+/// la frappe n'entre ni dans la LOI (`River/Core/`), ni dans les entrées qui
 /// la nourrissent (`RiverConversationMapping`), et la peau ne déclare pas son
 /// propre indicateur.
 ///
@@ -30,11 +30,11 @@ final class RiverTypingIndicatorTests: XCTestCase {
 
     private static var riviereRoot: URL {
         URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()   // .../Unit/Riviere
+            .deletingLastPathComponent()   // .../Unit/River
             .deletingLastPathComponent()   // .../Unit
             .deletingLastPathComponent()   // .../MeeshyTests
             .deletingLastPathComponent()   // .../apps/ios
-            .appendingPathComponent("Meeshy/Features/Main/Riviere")
+            .appendingPathComponent("Meeshy/Features/River")
     }
 
     private struct RiverSource {
@@ -66,12 +66,12 @@ final class RiverTypingIndicatorTests: XCTestCase {
         let skin = try sources(in: "View")
         XCTAssertFalse(
             law.isEmpty,
-            "Aucun fichier chargé depuis `Riviere/Core/` — une garde qui lit zéro fichier passe " +
+            "Aucun fichier chargé depuis `River/Core/` — une garde qui lit zéro fichier passe " +
             "TOUJOURS au vert sans rien vérifier."
         )
         XCTAssertFalse(
             skin.isEmpty,
-            "Aucun fichier chargé depuis `Riviere/View/` — même remarque."
+            "Aucun fichier chargé depuis `River/View/` — même remarque."
         )
     }
 
@@ -81,7 +81,7 @@ final class RiverTypingIndicatorTests: XCTestCase {
         for source in try sources(in: "Core") {
             XCTAssertFalse(
                 source.code.lowercased().contains("typing"),
-                "`Riviere/Core/\(source.name)` mentionne la frappe. La loi (`RiverLaneResolver` et " +
+                "`River/Core/\(source.name)` mentionne la frappe. La loi (`RiverLaneResolver` et " +
                 "ses entrées) ne connaît que des messages DITS : y injecter la frappe ferait naître " +
                 "un couloir pour une voix qui n'a encore rien dit, et ce couloir survivrait au " +
                 "`typing:stop`. L'indicateur est une décoration de la PEAU, jamais une entrée de la loi."
@@ -94,7 +94,7 @@ final class RiverTypingIndicatorTests: XCTestCase {
             for arguments in Self.argumentLists(after: "RiverConversationMapping.", in: source.code) {
                 XCTAssertFalse(
                     arguments.lowercased().contains("typing"),
-                    "`Riviere/View/\(source.name)` passe une frappe à `RiverConversationMapping` — " +
+                    "`River/View/\(source.name)` passe une frappe à `RiverConversationMapping` — " +
                     "c'est la porte d'entrée de la géométrie (`resolveGeometry`, `contents`, " +
                     "`fingerprint`). Le roster de frappe doit rester HORS de `lanesInput` : il " +
                     "décore le pane, il ne compose pas de couloir. Liste d'arguments incriminée : " +
@@ -157,7 +157,7 @@ final class RiverTypingIndicatorTests: XCTestCase {
                 guard trimmed.hasPrefix("struct ") || trimmed.hasPrefix("private struct ") else { continue }
                 XCTAssertFalse(
                     trimmed.lowercased().contains("typing"),
-                    "`Riviere/View/\(source.name)` déclare son propre indicateur de frappe " +
+                    "`River/View/\(source.name)` déclare son propre indicateur de frappe " +
                     "(« \(trimmed) »). La Rivière doit monter la MÊME vue que le fil " +
                     "(`TypingIndicatorBubble(isFlat: true)`), jamais une seconde : deux vues " +
                     "divergeraient sur les timings, le libellé et l'accessibilité, et la frappe " +

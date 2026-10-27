@@ -160,7 +160,7 @@ final class MessageMenuFollowupsTests: XCTestCase {
     // MARK: - #11224 — la Rivière ouvre le menu unifié
 
     func test_river_hasNoMenuOfItsOwn() throws {
-        let bubble = try source("Features/Main/Riviere/View/RiverBubbleView.swift")
+        let bubble = try source("Features/River/View/RiverBubbleView.swift")
         XCTAssertFalse(bubble.contains(".contextMenu"), "la Rivière ne compose plus son propre menu à trois actions")
         XCTAssertTrue(bubble.contains("MessagePressClaim.rowMinimumDuration"), "l'appui long d'une bulle dure ce que dure celui d'une rangée")
         XCTAssertTrue(bubble.contains("onLongPress(content.bubble.messageId)"), "l'appui long rend la main à l'hôte")
@@ -177,7 +177,7 @@ final class MessageMenuFollowupsTests: XCTestCase {
     }
 
     func test_river_isReadableWithoutTheLongPress_byVoiceOver() throws {
-        let bubble = try source("Features/Main/Riviere/View/RiverBubbleView.swift")
+        let bubble = try source("Features/River/View/RiverBubbleView.swift")
         XCTAssertTrue(bubble.contains("\"a11y.message.actions.long_press\""),
                       "VoiceOver ouvre le menu de la bulle par une action nommée, comme la rangée du Fil")
     }

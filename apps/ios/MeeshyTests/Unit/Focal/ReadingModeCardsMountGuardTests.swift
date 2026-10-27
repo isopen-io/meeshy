@@ -35,7 +35,7 @@ final class ReadingModeCardsMountGuardTests: XCTestCase {
     private let rowHosts = [
         "Views/Bubble/BubbleStandardLayout.swift",
         "Focal/Row/FocalRow.swift",
-        "Riviere/View/RiverBubbleView.swift",
+        "../River/View/RiverBubbleView.swift",
     ]
 
     func test_rowHosts_everyReadingModeHost_mountsTheLinkEmbed() throws {

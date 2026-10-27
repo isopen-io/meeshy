@@ -1,13 +1,13 @@
 import XCTest
 @testable import Meeshy
 
-/// Gardes source R-133 — la peau `Riviere/View/` (1) ne nomme aucune
+/// Gardes source R-133 — la peau `River/View/` (1) ne nomme aucune
 /// constante de LOI en dur (garde R15) et (2) ne recalcule/ne CONSTRUIT
 /// jamais elle-même une géométrie que seule `RiverLaneResolver` a le droit
 /// de produire.
 ///
 /// **Complément à `scripts/check-law-literals.sh`.** Le script couvre déjà
-/// `Riviere/**` (hors `Core/**`) pour la liste FIXE de littéraux d'AUTRES
+/// `River/**` (hors `Core/**`) pour la liste FIXE de littéraux d'AUTRES
 /// lois (focus-curve, scroll-activity, orchestrateur — `900/520/380/0.45/
 /// 0.82/…`). Il ne connaît PAS les constantes propres à `river-lanes.ts`
 /// (`RIVER_LANE_SILENCE_WINDOW_MS` = 1 800 000, `RIVER_MAX_LANES` = 7,
@@ -23,17 +23,17 @@ final class RiverSourceGuardTests: XCTestCase {
 
     private static var iosRoot: URL {
         URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()   // .../Unit/Riviere
+            .deletingLastPathComponent()   // .../Unit/River
             .deletingLastPathComponent()   // .../Unit
             .deletingLastPathComponent()   // .../MeeshyTests
             .deletingLastPathComponent()   // .../apps/ios
     }
 
     private static var viewDirectory: URL {
-        iosRoot.appendingPathComponent("Meeshy/Features/Main/Riviere/View")
+        iosRoot.appendingPathComponent("Meeshy/Features/River/View")
     }
 
-    /// Tout `.swift` de `Riviere/View/`, DÉCOUVERT au moment du test — jamais
+    /// Tout `.swift` de `River/View/`, DÉCOUVERT au moment du test — jamais
     /// une liste de noms recopiée (leçon 257 : un fichier neuf entre
     /// automatiquement dans le périmètre de la garde).
     private func viewSources() throws -> [(name: String, code: String)] {
@@ -60,7 +60,7 @@ final class RiverSourceGuardTests: XCTestCase {
         XCTAssertFalse(
             sources.isEmpty,
             "RiverSourceGuardTests n'a chargé AUCUN fichier depuis " +
-            "`\(Self.viewDirectory.path)` — vérifier `apps/ios/Meeshy/Features/Main/Riviere/View/`. " +
+            "`\(Self.viewDirectory.path)` — vérifier `apps/ios/Meeshy/Features/River/View/`. " +
             "Une garde qui charge zéro fichier passe TOUJOURS au vert sans rien vérifier."
         )
     }
@@ -110,7 +110,7 @@ final class RiverSourceGuardTests: XCTestCase {
 
     /// `RiverBubbleView` publie son cadre via `MessageFramePreferenceKey`
     /// (RÉUTILISÉ, la même primitive que le Fil) — un second `PreferenceKey`
-    /// de mesure de cadre dans `Riviere/View/` dupliquerait ce canal.
+    /// de mesure de cadre dans `River/View/` dupliquerait ce canal.
     /// `HorizontalScrollOffsetKey` (SDK, offset de défilement) reste
     /// autorisé : ce n'est pas un cadre de bulle.
     func test_noSecondFramePreferenceKey_inViewFiles() throws {
@@ -120,7 +120,7 @@ final class RiverSourceGuardTests: XCTestCase {
             XCTAssertFalse(
                 declaresOwnKey,
                 "\(source.name) déclare son PROPRE `PreferenceKey` (\(count) occurrence(s) du " +
-                "mot) — `Riviere/View/` doit réutiliser `MessageFramePreferenceKey` (cadre de " +
+                "mot) — `River/View/` doit réutiliser `MessageFramePreferenceKey` (cadre de " +
                 "bulle) et `HorizontalScrollOffsetKey` (offset de défilement, SDK), jamais en " +
                 "déclarer un troisième."
             )

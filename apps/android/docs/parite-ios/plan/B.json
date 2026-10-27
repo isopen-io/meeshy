@@ -2704,7 +2704,7 @@
    "apps/ios/Meeshy/Features/Main/Lentille/Core/GatewayBridgeProvider.swift",
    "apps/ios/Meeshy/Features/Main/Focal/Core/AgentAssistContracts.swift",
    "apps/ios/Meeshy/Features/Main/Lentille/Row/LentilleBridgeLine.swift",
-   "apps/ios/Meeshy/Features/Main/Riviere/Core/RiverLaneResolver.swift",
+   "apps/ios/Meeshy/Features/River/Core/RiverLaneResolver.swift",
    "apps/ios/Meeshy/Features/Main/Focal/Preferences/ConversationViewerIdentityResolver.swift",
    "apps/ios/Meeshy/Features/Main/Models/ReadingModeProtectionChrome.swift",
    "apps/ios/Meeshy/Features/Main/Focal/Preferences/ReadingModeController.swift"
@@ -11178,7 +11178,7 @@
    "core/model RiverLanesVectorParityTest: rejoue reading-modes/river-lanes.vectors.json",
    "core/model RiverHeadersVectorParityTest: river-headers.vectors.json",
    "core/model RiverStepVectorParityTest: river-step.vectors.json",
-   "core/model RiverColumnLayoutTest, RiverConversationMappingTest, RiverColumnPackingTest, RiverTimeScaleTest: ports de apps/ios/MeeshyTests/Unit/Riviere/*",
+   "core/model RiverColumnLayoutTest, RiverConversationMappingTest, RiverColumnPackingTest, RiverTimeScaleTest: ports de apps/ios/MeeshyTests/Unit/River/*",
    "core/model RiverModeGateTest: disponibilité selon capacités"
   ],
   "android_modules": [
@@ -11197,13 +11197,13 @@
    "apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/reading/river/RiverMetrics.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Riviere/Core/RiverConversationMapping.swift",
-   "apps/ios/Meeshy/Features/Main/Riviere/Core/RiverColumnPacking.swift",
-   "apps/ios/Meeshy/Features/Main/Riviere/Core/RiverColumnLayout.swift",
-   "apps/ios/Meeshy/Features/Main/Riviere/Core/RiverTimeScale.swift",
-   "apps/ios/Meeshy/Features/Main/Riviere/Core/RiverNavigationController.swift",
-   "apps/ios/Meeshy/Features/Main/Riviere/Core/RiverModeGate.swift",
-   "apps/ios/Meeshy/Features/Main/Riviere/Core/RiverMetrics.swift"
+   "apps/ios/Meeshy/Features/River/Core/RiverConversationMapping.swift",
+   "apps/ios/Meeshy/Features/River/Core/RiverColumnPacking.swift",
+   "apps/ios/Meeshy/Features/River/Core/RiverColumnLayout.swift",
+   "apps/ios/Meeshy/Features/River/Core/RiverTimeScale.swift",
+   "apps/ios/Meeshy/Features/River/Core/RiverNavigationController.swift",
+   "apps/ios/Meeshy/Features/River/Core/RiverModeGate.swift",
+   "apps/ios/Meeshy/Features/River/Core/RiverMetrics.swift"
   ],
   "feature_keys": [
    "cl-river-geometry-time-scale"
@@ -11548,13 +11548,13 @@
    "apps/android/feature/chat/src/main/kotlin/me/meeshy/app/chat/river/RiverBubbleView.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Riviere/View/RiverBubbleView.swift",
-   "apps/ios/Meeshy/Features/Main/Riviere/View/RiverLaneCanvas.swift",
-   "apps/ios/Meeshy/Features/Main/Riviere/View/RiverQuotedMediaFace.swift",
-   "apps/ios/Meeshy/Features/Main/Riviere/View/RiverRendering.swift",
-   "apps/ios/Meeshy/Features/Main/Riviere/View/RiverCoordinateSpace.swift",
+   "apps/ios/Meeshy/Features/River/View/RiverBubbleView.swift",
+   "apps/ios/Meeshy/Features/River/View/RiverLaneCanvas.swift",
+   "apps/ios/Meeshy/Features/River/View/RiverQuotedMediaFace.swift",
+   "apps/ios/Meeshy/Features/River/View/RiverRendering.swift",
+   "apps/ios/Meeshy/Features/River/View/RiverCoordinateSpace.swift",
    "apps/ios/Meeshy/Features/Main/Views/ConversationView+ReaderLayers.swift",
-   "apps/ios/Meeshy/Features/Main/Riviere/View/RiverConversationHost.swift"
+   "apps/ios/Meeshy/Features/River/View/RiverConversationHost.swift"
   ],
   "feature_keys": [
    "cl-river-bubbles-canvas",
@@ -11605,10 +11605,10 @@
    "apps/android/feature/chat/src/main/kotlin/me/meeshy/app/chat/ChatScreen.kt"
   ],
   "ios_reference_files": [
-   "apps/ios/Meeshy/Features/Main/Riviere/View/RiverStreamHost.swift",
-   "apps/ios/Meeshy/Features/Main/Riviere/View/RiverConversationHost.swift",
-   "apps/ios/Meeshy/Features/Main/Riviere/View/RiverLaneHeaderStrip.swift",
-   "apps/ios/Meeshy/Features/Main/Riviere/View/RiverTimeHandle.swift"
+   "apps/ios/Meeshy/Features/River/View/RiverStreamHost.swift",
+   "apps/ios/Meeshy/Features/River/View/RiverConversationHost.swift",
+   "apps/ios/Meeshy/Features/River/View/RiverLaneHeaderStrip.swift",
+   "apps/ios/Meeshy/Features/River/View/RiverTimeHandle.swift"
   ],
   "feature_keys": [
    "cl-river-stream-gestures"

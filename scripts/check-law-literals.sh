@@ -20,7 +20,7 @@
 # Skin files (rule R15, contract §5):
 #   - apps/ios/Meeshy/Features/Main/Lentille/** (except Core/** — hosts law mirrors)
 #   - apps/ios/Meeshy/Features/Main/Focal/** (except Core/** — hosts law mirrors)
-#   - apps/ios/Meeshy/Features/Main/Riviere/** (except Core/** — hosts law mirrors)
+#   - apps/ios/Meeshy/Features/River/** (except Core/** — hosts law mirrors)
 #
 # Le web n'a plus de racine de peau ICI : les peaux Lentille/Focal/Rivière du
 # legacy `apps/web` ont quitté le dépôt avec lui (#7668). La garde R15 de
@@ -29,7 +29,7 @@
 # aucune constante de LOI, le `Core` ne lit pas de pixels).
 #
 # The `Core/**` exclusion is TARGETED to the immediate `<skin-root>/Core/`
-# subtree of Lentille/Focal/Riviere ONLY — never a repo-wide `--exclude-dir=Core`,
+# subtree of Lentille/Focal/River ONLY — never a repo-wide `--exclude-dir=Core`,
 # which would silently skip every directory named `Core` anywhere under a skin
 # root (or, if ever pointed at the whole repo, anywhere in the monorepo).
 #
@@ -58,7 +58,7 @@ NC='\033[0m' # No Color
 declare -a SKIN_DIRS=(
   "apps/ios/Meeshy/Features/Main/Lentille"
   "apps/ios/Meeshy/Features/Main/Focal"
-  "apps/ios/Meeshy/Features/Main/Riviere"
+  "apps/ios/Meeshy/Features/River"
 )
 
 # Fichiers de peau ciblés nommément (pas tout leur dossier) : n'ajoute PAS de

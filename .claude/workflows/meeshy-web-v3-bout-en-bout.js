@@ -149,7 +149,7 @@ SOURCES DE VERITE, dans cet ordre — lis-les AVANT d'ecrire quoi que ce soit :
    hierarchie, etats et gestes de CHAQUE ecran se lisent dans le code SwiftUI — jamais dans la
    planche web de l'ancienne v3. Un ecran apps/web se specifie en CITANT les fichiers Swift qui
    font foi (Features/Main/Views/*, Features/Main/Lentille/*, Features/Main/Focal/*,
-   Features/Main/Riviere/*, Features/Main/Composer/*, Features/Stories/*, Features/Auth/*,
+   Features/River/*, Features/Main/Composer/*, Features/Stories/*, Features/Auth/*,
    Features/Contacts/*).
 2. ${V3}/decisions.md   les decisions D-1 a D-14 (et suivantes), OPPOSABLES : D-1 la v4 suit
    l'interface iOS ; D-2 runtime Preact, API React ; D-3 routeur maison (src/lib/router.tsx) ;

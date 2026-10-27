@@ -46,7 +46,7 @@ final class QuotedMediaFaceMountGuardTests: XCTestCase {
     /// #8283 — la Rivière monte les MÊMES atomes, par la MÊME règle, et ouvre
     /// le MÊME plein écran : aucune jumelle de face ni d'élection de pièce.
     func test_laRiviere_monteLesMemesFaces_etOuvreLeMemePleinEcran() throws {
-        let face = try source("Meeshy/Features/Main/Riviere/View/RiverQuotedMediaFace.swift")
+        let face = try source("Meeshy/Features/River/View/RiverQuotedMediaFace.swift")
         XCTAssertTrue(face.contains("QuotedReplyPresentation.mediaFace(for:"),
                       "la face se lit par la règle partagée, qui tranche la protection d'abord")
         XCTAssertTrue(face.contains("QuotedVideoPoster("))
@@ -54,15 +54,15 @@ final class QuotedMediaFaceMountGuardTests: XCTestCase {
         XCTAssertTrue(face.contains("reference.quotedAttachment"),
                       "le poster s'extrait de la pièce RECONSTRUITE, qui n'existe jamais pour un secret")
 
-        let mapping = try source("Meeshy/Features/Main/Riviere/Core/RiverConversationMapping.swift")
+        let mapping = try source("Meeshy/Features/River/Core/RiverConversationMapping.swift")
         XCTAssertTrue(mapping.contains("media: RiverQuotedMedia.resolve("),
                       "la projection alimente la face — une vue montée sur ses défauts ne rougit nulle part")
 
-        let bubble = try source("Meeshy/Features/Main/Riviere/View/RiverBubbleView.swift")
+        let bubble = try source("Meeshy/Features/River/View/RiverBubbleView.swift")
         XCTAssertTrue(bubble.contains("RiverQuotedMediaFace("))
-        let stream = try source("Meeshy/Features/Main/Riviere/View/RiverStreamHost.swift")
+        let stream = try source("Meeshy/Features/River/View/RiverStreamHost.swift")
         XCTAssertTrue(stream.contains("onQuotedMediaTap: quotedMediaTap"))
-        let host = try source("Meeshy/Features/Main/Riviere/View/RiverConversationHost.swift")
+        let host = try source("Meeshy/Features/River/View/RiverConversationHost.swift")
         XCTAssertTrue(host.contains("onOpenQuotedMedia: openQuotedMedia"),
                       "l'hôte remet l'ouverture à la peau")
         XCTAssertTrue(host.contains("onMediaTap(attachment)"),
@@ -79,7 +79,7 @@ final class QuotedMediaFaceMountGuardTests: XCTestCase {
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent()
         for path in [
-            "Meeshy/Features/Main/Riviere/View/RiverConversationHost.swift",
+            "Meeshy/Features/River/View/RiverConversationHost.swift",
             "Meeshy/Features/Main/Views/MessageListViewController+QuotedMedia.swift"
         ] {
             let code = AppSourceGuard.stripComments(
@@ -93,7 +93,7 @@ final class QuotedMediaFaceMountGuardTests: XCTestCase {
     /// sur place par le lecteur PARTAGÉ et sa capsule montre la lecture ; il
     /// n'ouvre plus le plein écran audio.
     func test_laRiviere_joueUnVocalCiteSurPlace_parLeLecteurPartage() throws {
-        let host = try source("Meeshy/Features/Main/Riviere/View/RiverConversationHost.swift")
+        let host = try source("Meeshy/Features/River/View/RiverConversationHost.swift")
         XCTAssertTrue(host.contains("case .playInPlace:"),
                       "l'hôte de la Rivière route l'audio cité vers la lecture sur place")
         XCTAssertTrue(host.contains("onPlayQuotedAudio?(reference)"),
@@ -101,10 +101,10 @@ final class QuotedMediaFaceMountGuardTests: XCTestCase {
         let conversation = try source("Meeshy/Features/Main/Views/ConversationView+ReaderLayers.swift")
         XCTAssertTrue(conversation.contains("onPlayQuotedAudio: { viewModel.toggleQuotedAudio($0) }"),
                       "la Rivière joue par le MÊME `toggleQuotedAudio` que le Fil — aucun second lecteur")
-        let face = try source("Meeshy/Features/Main/Riviere/View/RiverQuotedMediaFace.swift")
+        let face = try source("Meeshy/Features/River/View/RiverQuotedMediaFace.swift")
         XCTAssertTrue(face.contains("playbackMessageId: reference.messageId"),
                       "la capsule suit la lecture de SON message, comme dans les autres modes")
-        let bubble = try source("Meeshy/Features/Main/Riviere/View/RiverBubbleView.swift")
+        let bubble = try source("Meeshy/Features/River/View/RiverBubbleView.swift")
         XCTAssertTrue(bubble.contains("QuotedZoneAccessibility.mediaActionLabel(for: media.reference)"),
                       "VoiceOver nomme la zone « Écouter le message cité » pour un vocal, comme dans les autres modes")
     }

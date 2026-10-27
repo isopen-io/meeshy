@@ -20,7 +20,7 @@ final class RiverCatchUpWiringTests: XCTestCase {
 
     private static var iosRoot: URL {
         URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()   // .../Unit/Riviere
+            .deletingLastPathComponent()   // .../Unit/River
             .deletingLastPathComponent()   // .../Unit
             .deletingLastPathComponent()   // .../MeeshyTests
             .deletingLastPathComponent()   // .../apps/ios
@@ -35,7 +35,7 @@ final class RiverCatchUpWiringTests: XCTestCase {
     }
 
     private func riverConversationHostCode() throws -> String {
-        try normalized("Meeshy/Features/Main/Riviere/View/RiverConversationHost.swift")
+        try normalized("Meeshy/Features/River/View/RiverConversationHost.swift")
     }
 
     private func conversationViewCode() throws -> String {

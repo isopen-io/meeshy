@@ -453,11 +453,11 @@ final class RiverConversationMappingTests: XCTestCase {
     /// négligeable : plus aucune allocation.
     func test_fingerprint_buildsNoStringPerBodyPass() throws {
         let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()   // Riviere
+            .deletingLastPathComponent()   // River
             .deletingLastPathComponent()   // Unit
             .deletingLastPathComponent()   // MeeshyTests
             .deletingLastPathComponent()   // apps/ios
-            .appendingPathComponent("Meeshy/Features/Main/Riviere/Core/RiverConversationMapping.swift")
+            .appendingPathComponent("Meeshy/Features/River/Core/RiverConversationMapping.swift")
         let source = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
 
         let start = try XCTUnwrap(source.range(of: "static func fingerprint(messages:"),

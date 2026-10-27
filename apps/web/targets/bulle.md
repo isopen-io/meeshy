@@ -325,7 +325,7 @@ Le clip est le même : `.clipShape(RoundedRectangle(cornerRadius: 18))`
 **Aucune queue, aucun coin asymétrique, aucune variation de rayon selon la
 place dans une suite.** Les balayages qui l'établissent :
 `UnevenRoundedRectangle` n'apparaît que dans `MessageOverlayMenu.swift:1077,1155`,
-`MentionSuggestionPanel.swift:23` et `Riviere/View/RiverBubbleView.swift:496` —
+`MentionSuggestionPanel.swift:23` et `River/View/RiverBubbleView.swift:496` —
 jamais sous `Views/Bubble/` ; aucun `struct … : Shape` du dépôt ne dessine de
 becquet ; le mot `tail` sous `Views/Bubble/` ne désigne que la file d'attente
 audio (`audioQueueTail*`) et la fin d'une suite. Le rayon reste 18 en tête, au
@@ -1673,7 +1673,7 @@ protège la première bulle d'un nouveau venu.
      `LiquidRevealShape`, `RoundedCorner`, trois `Diamond`/`Triangle` de
      timeline et `CornerHandleShape` — **aucune n'est une queue de bulle**, et
      `RiverBubbleOutline` appartient au mode Rivière
-     (`Riviere/View/RiverBubbleView.swift:129`), pas à Bulles.
+     (`River/View/RiverBubbleView.swift:129`), pas à Bulles.
   2. `RoundedCorner` (`packages/MeeshySDK/Sources/MeeshyUI/Theme/ViewModifiers.swift:317`),
      le seul type capable d'un coin asymétrique, **n'a aucun site d'appel**.
   3. `UnevenRoundedRectangle` n'apparaît que dans `MessageOverlayMenu.swift`,

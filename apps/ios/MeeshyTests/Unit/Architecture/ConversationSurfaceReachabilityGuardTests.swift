@@ -608,7 +608,7 @@ final class ReadingModeProtectionChromeGuardTests: XCTestCase {
             "Features/Main/Views/Bubble/BubbleStandardLayout.swift",
             "Features/Main/Views/ThemedMessageBubble.swift",
             "Features/Main/Focal/Row/FocalRow.swift",
-            "Features/Main/Riviere/View/RiverBubbleView.swift",
+            "Features/River/View/RiverBubbleView.swift",
             "Features/Main/Focal/Summary/SummaryProtectionsView.swift",
         ]
         for path in watched {
